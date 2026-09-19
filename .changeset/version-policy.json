@@ -626,6 +626,18 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-wide Console application, environment, and transport state with an explicitly owned ConsoleClient and remove obsolete browser compatibility APIs under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "require-canonical-console-protocol.md",
+      "packages": [
+        "@zhin.js/console-protocol",
+        "@zhin.js/client",
+        "@zhin.js/host-http",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove Console RPC name, request-field, response-field, event-field, and send-result compatibility shapes so every boundary exposes one canonical protocol under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

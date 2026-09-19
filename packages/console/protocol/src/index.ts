@@ -47,8 +47,6 @@ export const CONSOLE_EVENT_RECOVERY_GAP_EVENT = 'zhin-console-event-recovery-gap
 export interface ConsoleEndpointEventData {
   readonly adapter: string;
   readonly endpointKey: string;
-  /** Human-facing endpoint alias retained in push payloads. */
-  readonly endpoint?: string;
 }
 
 export interface ConsoleEventActor {
@@ -56,9 +54,17 @@ export interface ConsoleEventActor {
   readonly name?: string;
 }
 
+export interface ConsoleEventParent {
+  readonly id: string;
+  readonly type: 'group' | 'guild';
+  readonly name?: string;
+}
+
 export interface ConsoleEventChannel {
   readonly id: string;
   readonly type: string;
+  readonly name?: string;
+  readonly parent?: ConsoleEventParent;
 }
 
 export interface ConsoleRequestEventData extends ConsoleEndpointEventData {
@@ -158,23 +164,43 @@ export interface ConsoleInboxNoticesQuery {
 
 export interface ConsoleInboxNoticeRow {
   readonly id: number;
-  readonly platform_notice_id: string;
-  readonly type: string;
-  readonly sub_type?: string;
-  readonly channel_id: string;
-  readonly channel_type?: string;
-  readonly operator_id?: string;
-  readonly operator_name?: string;
-  readonly target_id?: string;
-  readonly target_name?: string;
-  readonly payload: string;
-  readonly created_at: number;
-  readonly consumed: number;
-  readonly consumed_at?: number;
-  /** Realtime-view aliases shared with `notice.receive`. */
+  readonly platformNoticeId: string;
   readonly noticeType: string;
+  readonly subType?: string;
+  readonly channel: ConsoleEventChannel;
+  readonly operator?: ConsoleEventActor;
+  readonly target?: ConsoleEventActor;
+  readonly payload: string;
+  readonly timestamp: number;
+  readonly consumed: boolean;
+  readonly consumedAt?: number;
+}
+
+export interface ConsoleInboxRequestRow {
+  readonly id: number;
+  readonly platformRequestId: string;
+  readonly type: string;
+  readonly subType?: string;
+  readonly actor: ConsoleEventActor;
+  readonly comment?: string;
   readonly channel: ConsoleEventChannel;
   readonly timestamp: number;
+  readonly resolved: boolean;
+  readonly resolvedAt?: number;
+  readonly adapter?: string;
+  readonly endpointKey?: string;
+}
+
+export interface ConsoleInboxMessageRow {
+  readonly id: number;
+  readonly platformMessageId: string;
+  readonly sender: ConsoleEventActor;
+  readonly content: unknown;
+  readonly raw: unknown;
+  readonly timestamp: number;
+  readonly channel: ConsoleEventChannel;
+  readonly adapter?: string;
+  readonly endpointKey?: string;
 }
 
 export interface ConsoleInboxNoticesResult {
@@ -261,10 +287,7 @@ export type ConsoleEndpointPhase =
 
 export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing';
 
-/**
- * Forward-compatible Endpoint row shared by both Host implementations and the
- * Remote Console. Optional fields allow clients to consume older Hosts.
- */
+/** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
   readonly name: string;
   readonly adapter: string;
@@ -287,32 +310,6 @@ export const SIDE_EVENT_NAMES = {
   ...LOGIN_RPC,
 } as const;
 
-const PUSH_TYPE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  'endpoint:message': SIDE_EVENT_PUSH.MESSAGE_RECEIVE,
-  'endpoint:request': SIDE_EVENT_PUSH.REQUEST_RECEIVE,
-  'endpoint:notice': SIDE_EVENT_PUSH.NOTICE_RECEIVE,
-  'endpoint:lifecycle': SIDE_EVENT_PUSH.ENDPOINT_LIFECYCLE,
-});
-
-export function normalizeConsolePushType(type: unknown): string {
-  const value = String(type ?? '');
-  return PUSH_TYPE_ALIASES[value] ?? value;
-}
-
-export function normalizeConsolePushMessage<T extends { readonly type?: unknown }>(
-  message: T,
-): Readonly<T & { type: string }> {
-  const candidate = message as { readonly data?: unknown };
-  const data = isRecord(candidate.data)
-    ? normalizeConsolePushData(candidate.data)
-    : candidate.data;
-  return Object.freeze({
-    ...message,
-    type: normalizeConsolePushType(message.type),
-    ...(data === undefined ? {} : { data }),
-  });
-}
-
 export type ConsoleInboxEventKind = 'message' | 'request' | 'notice';
 
 export interface ConsoleInboxEvent {
@@ -323,26 +320,23 @@ export interface ConsoleInboxEvent {
   readonly payload: Readonly<Record<string, unknown>>;
 }
 
-/**
- * Normalize and classify a persistence-worthy push at the transport seam.
- * Callers never need to understand legacy event names or identity aliases.
- */
+/** Validate and classify a persistence-worthy canonical push. */
 export function parseConsoleInboxEvent(
   input: { readonly type?: unknown; readonly data?: unknown },
 ): ConsoleInboxEvent | null {
-  const message = normalizeConsolePushMessage(input);
-  if (!isRecord(message.data)) return null;
-  const kind = inboxKindForPushType(message.type);
+  const type = String(input.type ?? '');
+  if (!isRecord(input.data)) return null;
+  const kind = inboxKindForPushType(type);
   if (!kind) return null;
-  const adapter = nonEmptyString(message.data.adapter);
-  const endpointKey = nonEmptyString(message.data.endpointKey);
+  const adapter = nonEmptyString(input.data.adapter);
+  const endpointKey = nonEmptyString(input.data.endpointKey);
   if (!adapter || !endpointKey) return null;
   return Object.freeze({
-    type: message.type,
+    type,
     kind,
     adapter,
     endpointKey,
-    payload: message.data,
+    payload: Object.freeze({ ...input.data }),
   });
 }
 
@@ -353,90 +347,11 @@ function inboxKindForPushType(type: string): ConsoleInboxEventKind | null {
   return null;
 }
 
-function normalizeConsolePushData(
-  input: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  const data = { ...input };
-  aliasField(data, 'adapter', input.adapter, input.$adapter);
-  aliasField(
-    data,
-    'endpointKey',
-    input.endpointKey,
-    input.endpoint_id,
-    input.endpoint,
-    input.$endpoint,
-    input.bot,
-  );
-  aliasField(data, 'channelId', input.channelId, input.channel_id, input.$channel_id);
-  aliasField(data, 'channelType', input.channelType, input.channel_type, input.$channel_type);
-  return Object.freeze(data);
-}
-
-const RPC_TYPE_ALIASES: Readonly<Record<string, string>> = Object.freeze({
-  'endpoint:list': ENDPOINT_RPC.LIST,
-  'endpoint:info': ENDPOINT_RPC.INFO,
-  'endpoint:sendMessage': ENDPOINT_RPC.SEND_MESSAGE,
-  'endpoint:friends': ENDPOINT_RPC.FRIENDS,
-  'endpoint:groups': ENDPOINT_RPC.GROUPS,
-  'endpoint:channels': ENDPOINT_RPC.CHANNELS,
-  'endpoint:deleteFriend': ENDPOINT_RPC.DELETE_FRIEND,
-  'endpoint:groupMembers': ENDPOINT_RPC.GROUP_MEMBERS,
-  'endpoint:groupKick': ENDPOINT_RPC.GROUP_KICK,
-  'endpoint:groupMute': ENDPOINT_RPC.GROUP_MUTE,
-  'endpoint:groupAdmin': ENDPOINT_RPC.GROUP_ADMIN,
-  'endpoint:requests': SIDE_EVENT_RPC.REQUEST_LIST,
-  'endpoint:requestApprove': SIDE_EVENT_RPC.REQUEST_APPROVE,
-  'endpoint:requestReject': SIDE_EVENT_RPC.REQUEST_REJECT,
-  'endpoint:requestConsumed': SIDE_EVENT_RPC.REQUEST_CONSUMED,
-  'endpoint:noticeConsumed': SIDE_EVENT_RPC.NOTICE_CONSUMED,
-  'endpoint:inboxMessages': INBOX_RPC.MESSAGES,
-  'endpoint:inboxRequests': INBOX_RPC.REQUESTS,
-  'endpoint:inboxNotices': INBOX_RPC.NOTICES,
-});
-
 export interface ConsoleRpcMessage {
   readonly type?: unknown;
   readonly requestId?: unknown;
   readonly data?: unknown;
   readonly [key: string]: unknown;
-}
-
-export function normalizeConsoleRpcType(type: unknown): string {
-  const value = String(type ?? '');
-  return RPC_TYPE_ALIASES[value] ?? value;
-}
-
-/**
- * Canonicalize one Console request before authorization or dispatch.
- * Nested `data` wins over top-level compatibility fields.
- */
-export function normalizeConsoleRpcMessage(
-  input: ConsoleRpcMessage,
-): Readonly<Record<string, unknown> & { type: string }> {
-  const data = isRecord(input.data) ? input.data : {};
-  const merged: Record<string, unknown> = { ...input, ...data };
-  const payloadType = data.type;
-  aliasField(merged, '$adapter', data.$adapter, data.adapter, input.$adapter, input.adapter);
-  aliasField(merged, '$endpoint', data.$endpoint, data.endpointKey, data.endpoint,
-    input.$endpoint, input.endpointKey, input.endpoint);
-  aliasField(merged, '$id', data.$id, data.id, input.$id, input.id);
-  aliasField(merged, '$type', data.$type, payloadType, input.$type);
-  aliasField(merged, '$channel_id', data.$channel_id, data.channelId, data.channel_id, data.id,
-    input.$channel_id, input.channelId, input.channel_id, input.id);
-  aliasField(merged, '$channel_type', data.$channel_type, data.channelType, data.channel_type,
-    payloadType, input.$channel_type, input.channelType, input.channel_type);
-  aliasField(merged, '$content', data.$content, data.content, input.$content, input.content);
-  aliasField(merged, '$parent', data.$parent, data.parent, input.$parent, input.parent);
-  aliasField(merged, '$group_id', data.$group_id, data.groupId, data.group_id,
-    input.$group_id, input.groupId, input.group_id);
-  aliasField(merged, '$user_id', data.$user_id, data.userId, data.user_id,
-    input.$user_id, input.userId, input.user_id);
-  aliasField(merged, '$duration', data.$duration, data.duration, input.$duration, input.duration);
-  aliasField(merged, '$enable', data.$enable, data.enable, input.$enable, input.enable);
-  aliasField(merged, '$remark', data.$remark, data.remark, input.$remark, input.remark);
-  aliasField(merged, '$reason', data.$reason, data.reason, input.$reason, input.reason);
-  merged.type = normalizeConsoleRpcType(input.type);
-  return Object.freeze(merged as Record<string, unknown> & { type: string });
 }
 
 export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
@@ -498,31 +413,17 @@ export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
 ]);
 
 export function isDemoConsoleRpcAllowed(type: unknown): boolean {
-  const canonical = normalizeConsoleRpcType(type);
-  if (canonical.startsWith('db:')) return false;
-  if (DEMO_RPC_WRITE_BLOCKLIST.has(canonical)) return false;
-  return DEMO_RPC_ALLOWLIST.has(canonical);
+  const value = String(type ?? '');
+  if (value.startsWith('db:')) return false;
+  if (DEMO_RPC_WRITE_BLOCKLIST.has(value)) return false;
+  return DEMO_RPC_ALLOWLIST.has(value);
 }
 
 export function assertDemoConsoleRpcAllowed(type: unknown): string | null {
-  const canonical = normalizeConsoleRpcType(type);
-  return isDemoConsoleRpcAllowed(canonical)
+  const value = String(type ?? '');
+  return isDemoConsoleRpcAllowed(value)
     ? null
-    : `Demo scope: RPC "${canonical}" is forbidden`;
-}
-
-/** Stable response payload shared by legacy and Plugin Runtime Hosts. */
-export function endpointSendResult(messageId: unknown): Readonly<{
-  message_id: string;
-  messageId: string;
-}> {
-  const value = messageId == null ? '' : String(messageId);
-  return Object.freeze({ message_id: value, messageId: value });
-}
-
-function aliasField(target: Record<string, unknown>, key: string, ...values: unknown[]): void {
-  const value = values.find((candidate) => candidate !== undefined);
-  if (value !== undefined) target[key] = value;
+    : `Demo scope: RPC "${value}" is forbidden`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

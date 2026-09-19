@@ -3,7 +3,6 @@ import {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
 } from '../src/console-rpc-extended.js';
-import { normalizeConsoleRpcType } from '@zhin.js/console-protocol';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
   return {
@@ -254,7 +253,7 @@ describe('dispatchExtendedConsoleRpc', () => {
           makeCtx({ fullScope: false }),
         );
         expect(demo).toEqual({
-          error: `Demo scope: RPC "${normalizeConsoleRpcType(type)}" is forbidden`,
+          error: `Demo scope: RPC "${type}" is forbidden`,
         });
       }
     });
@@ -316,8 +315,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       const ctx = makeCtx(); // no databaseHost at all
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:inboxRequests',
-          { $adapter: 'icqq', $endpoint: '1234' },
+          'inbox.requests',
+          { adapter: 'icqq', endpointKey: '1234' },
           ctx,
         ),
       ).resolves.toEqual({ data: { requests: [], inboxEnabled: false } });
@@ -327,20 +326,20 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:inboxNotices',
-          { $adapter: 'icqq', $endpoint: '1234' },
+          'inbox.notices',
+          { adapter: 'icqq', endpointKey: '1234' },
           ctxThrow,
         ),
       ).resolves.toEqual({ data: { notices: [], inboxEnabled: false } });
     });
 
-    it('endpoint:requests returns only unresolved rows for the endpoint, oldest first', async () => {
+    it('request.list returns only unresolved rows for the endpoint, oldest first', async () => {
       const ctx = makeCtx({
         databaseHost: makeInboxDb({ unified_inbox_request: requestRows }),
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:requests',
-        { $adapter: 'icqq', $endpoint: '1234' },
+        'request.list',
+        { adapter: 'icqq', endpointKey: '1234' },
         ctx,
       );
       expect(result).toEqual({
@@ -350,31 +349,22 @@ describe('dispatchExtendedConsoleRpc', () => {
           requests: [
             {
               id: 1,
-              platform_request_id: 'req-1',
               platformRequestId: 'req-1',
               type: 'friend',
-              scene_type: undefined,
-              scene_id: '10001',
-              channel_id: '10001',
-              channel_type: undefined,
-              channel: { id: '10001', type: undefined },
-              sub_type: undefined,
+              subType: undefined,
               actor: { id: '10001', name: '张三' },
-              sender: { id: '10001', name: '张三' },
-              sender_id: '10001',
-              sender_name: '张三',
               comment: '加个好友',
-              created_at: 1000,
+              channel: { id: '10001', type: '' },
               timestamp: 1000,
-              resolved: 0,
-              resolved_at: undefined,
+              resolved: false,
+              resolvedAt: undefined,
             },
           ],
         },
       });
     });
 
-    it('endpoint:requests prefers management.listRequests when available', async () => {
+    it('request.list prefers management.listRequests when available', async () => {
       const listRequests = vi.fn().mockResolvedValue([
         {
           platform_request_id: 'live-1',
@@ -391,8 +381,8 @@ describe('dispatchExtendedConsoleRpc', () => {
         withEndpointManagement: async (_adapter, _endpointKey, run) => run({ listRequests }),
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:requests',
-        { $adapter: 'icqq', $endpoint: '1234' },
+        'request.list',
+        { adapter: 'icqq', endpointKey: '1234' },
         ctx,
       );
       expect(listRequests).toHaveBeenCalled();
@@ -402,14 +392,12 @@ describe('dispatchExtendedConsoleRpc', () => {
           source: 'endpoint',
           requests: [
             expect.objectContaining({
-              platform_request_id: 'live-1',
               platformRequestId: 'live-1',
               type: 'friend',
-              sender_id: '20002',
-              sender_name: '李四',
+              actor: {id: '20002', name: '李四'},
               comment: 'hi',
-              created_at: 2000,
-              resolved: 0,
+              timestamp: 2000,
+              resolved: false,
             }),
           ],
         },
@@ -471,8 +459,8 @@ describe('dispatchExtendedConsoleRpc', () => {
             channel: { id: '888', type: 'group' },
             payload: '{"welcome":true}',
             timestamp: 7000,
-            consumed: 0,
-            consumed_at: undefined,
+            consumed: false,
+            consumedAt: undefined,
           })],
         },
       });
@@ -514,19 +502,19 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(dispatchExtendedConsoleRpc(
         'login.submit',
-        { $id: 'login-1', $value: 'ok' },
+        { taskId: 'login-1', value: 'ok' },
         ctx,
       )).resolves.toEqual({ data: { success: true } });
       expect(submit).toHaveBeenCalledWith('login-1', 'ok');
     });
 
-    it('endpoint:inboxRequests pages newest first with limit/offset', async () => {
+    it('inbox.requests pages newest first with limit/offset', async () => {
       const ctx = makeCtx({
         databaseHost: makeInboxDb({ unified_inbox_request: requestRows }),
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxRequests',
-        { $adapter: 'icqq', $endpoint: '1234', $limit: 1, $offset: 1 },
+        'inbox.requests',
+        { adapter: 'icqq', endpointKey: '1234', limit: 1, offset: 1 },
         ctx,
       );
       const data = (result as { data: { requests: { id: number }[]; inboxEnabled: boolean } }).data;
@@ -534,7 +522,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(data.requests.map((r) => r.id)).toEqual([1]);
     });
 
-    it('endpoint:inboxRequests pushes sort/limit down to the model when supported', async () => {
+    it('inbox.requests pushes sort/limit down to the model when supported', async () => {
       const orderByCalls: Array<{ field: string; direction?: string }> = [];
       const limitCalls: number[] = [];
       const rows = requestRows.filter((row) => row.adapter === 'icqq' && row.endpoint_id === '1234');
@@ -554,8 +542,8 @@ describe('dispatchExtendedConsoleRpc', () => {
         databaseHost: { models: { get: () => ({ select: () => selection }) } },
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxRequests',
-        { $adapter: 'icqq', $endpoint: '1234', $limit: 5, $offset: 3 },
+        'inbox.requests',
+        { adapter: 'icqq', endpointKey: '1234', limit: 5, offset: 3 },
         ctx,
       );
       // sort/limit 下推：created_at DESC，limit = offset + limit
@@ -565,7 +553,7 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(data.inboxEnabled).toBe(true);
     });
 
-    it('endpoint:inboxMessages filters by channel, parent and before cursors', async () => {
+    it('inbox.messages filters by channel, parent and before cursors', async () => {
       const messageRows = [
         {
           id: 5,
@@ -605,30 +593,30 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
 
       const missing = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxMessages',
-        { $adapter: 'icqq', $endpoint: '1234' },
+        'inbox.messages',
+        { adapter: 'icqq', endpointKey: '1234' },
         ctx,
       );
       expect(missing).toEqual({
-        error: '$adapter, $endpoint, $channel_id, $channel_type required',
+        error: 'adapter, endpointKey, channelId, and channelType are required',
       });
 
       const all = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxMessages',
-        { $adapter: 'icqq', $endpoint: '1234', $channel_id: '888', $channel_type: 'group' },
+        'inbox.messages',
+        { adapter: 'icqq', endpointKey: '1234', channelId: '888', channelType: 'group' },
         ctx,
       );
       const allData = (all as { data: { messages: { id: number }[] } }).data;
       expect(allData.messages.map((m) => m.id)).toEqual([6, 5]);
 
       const beforeCursor = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxMessages',
+        'inbox.messages',
         {
-          $adapter: 'icqq',
-          $endpoint: '1234',
-          $channel_id: '888',
-          $channel_type: 'group',
-          $before_id: 6,
+          adapter: 'icqq',
+          endpointKey: '1234',
+          channelId: '888',
+          channelType: 'group',
+          beforeId: 6,
         },
         ctx,
       );
@@ -636,21 +624,21 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(cursorData.messages.map((m) => m.id)).toEqual([5]);
 
       const byParent = await dispatchExtendedConsoleRpc(
-        'endpoint:inboxMessages',
+        'inbox.messages',
         {
-          $adapter: 'icqq',
-          $endpoint: '1234',
-          $channel_id: '888',
-          $channel_type: 'group',
-          $parent: { type: 'guild', id: 'g-1' },
+          adapter: 'icqq',
+          endpointKey: '1234',
+          channelId: '888',
+          channelType: 'group',
+          parent: { type: 'guild', id: 'g-1' },
         },
         ctx,
       );
       const parentData = (byParent as {
-        data: { messages: { id: number; parent?: { type: string; id: string } }[] };
+        data: { messages: { id: number; channel: { parent?: { type: string; id: string } } }[] };
       }).data;
       expect(parentData.messages.map((m) => m.id)).toEqual([6]);
-      expect(parentData.messages[0]?.parent).toEqual({ type: 'guild', id: 'g-1' });
+      expect(parentData.messages[0]?.channel.parent).toEqual({ type: 'guild', id: 'g-1' });
     });
 
     it('inbox.recent returns routable cross-endpoint rows for Mobile Console', async () => {
@@ -684,16 +672,15 @@ describe('dispatchExtendedConsoleRpc', () => {
         })}),
       );
       expect(result).toEqual({data: {inboxEnabled: true, requests: [expect.objectContaining({
-        id: 9, adapter: 'icqq', endpoint_id: 'bot-c', platform_request_id: 'flag-9',
+        id: 9, adapter: 'icqq', endpointKey: 'bot-c', platformRequestId: 'flag-9',
         actor: {id: '10009', name: 'Carol'}, comment: '请求添加好友',
       })], messages: [
         expect.objectContaining({
-          id: 8, adapter: 'discord', endpoint_id: 'bot-b',
+          id: 8, adapter: 'discord', endpointKey: 'bot-b', platformMessageId: 'm8',
           channel: expect.objectContaining({type: 'channel', id: 'channel-b', name: 'general'}),
-          parent: {type: 'guild', id: 'guild-b'},
         }),
         expect.objectContaining({
-          id: 7, adapter: 'telegram', endpoint_id: 'bot-a',
+          id: 7, adapter: 'telegram', endpointKey: 'bot-a', platformMessageId: 'm7',
           channel: {type: 'private', id: 'chat-a', name: 'Alice'},
         }),
       ]}});
@@ -702,20 +689,20 @@ describe('dispatchExtendedConsoleRpc', () => {
 
   describe('endpoint request actions', () => {
     it('requestConsumed / noticeConsumed report 未接线 (full) and forbidden (demo)', async () => {
-      for (const type of ['endpoint:requestConsumed', 'endpoint:noticeConsumed']) {
+      for (const type of ['request.consumed', 'notice.consumed']) {
         const full = await dispatchExtendedConsoleRpc(
           type,
-          { $row_ids: [1] },
+          { rowIds: [1] },
           makeCtx(),
         );
         expect((full as { error: string }).error).toContain('未接线');
         const demo = await dispatchExtendedConsoleRpc(
           type,
-          { $row_ids: [1] },
+          { rowIds: [1] },
           makeCtx({ fullScope: false }),
         );
         expect(demo).toEqual({
-          error: `Demo scope: RPC "${normalizeConsoleRpcType(type)}" is forbidden`,
+          error: `Demo scope: RPC "${type}" is forbidden`,
         });
       }
     });
@@ -736,28 +723,28 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
 
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:requestConsumed', { $row_ids: [1, 2] }, ctx),
+        dispatchExtendedConsoleRpc('request.consumed', { rowIds: [1, 2] }, ctx),
       ).resolves.toEqual({ data: { success: true, updated: 2 } });
       expect(requestRows[0]?.consumed).toBe(1);
       expect(requestRows[1]?.consumed).toBe(1);
       expect(typeof requestRows[0]?.consumed_at).toBe('number');
 
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:noticeConsumed', { $row_ids: [7] }, ctx),
+        dispatchExtendedConsoleRpc('notice.consumed', { rowIds: [7] }, ctx),
       ).resolves.toEqual({ data: { success: true, updated: 1 } });
       expect(noticeRows[0]?.consumed).toBe(1);
     });
 
-    it('requestConsumed requires $row_ids and reports 未接线 when the table is missing', async () => {
+    it('request.consumed requires rowIds and reports 未接线 when the table is missing', async () => {
       const ctx = makeCtx({
         databaseHost: makeInboxDb({ unified_inbox_notice: [] }),
       });
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:requestConsumed', {}, ctx),
-      ).resolves.toEqual({ error: '$row_ids required' });
+        dispatchExtendedConsoleRpc('request.consumed', {}, ctx),
+      ).resolves.toEqual({ error: 'rowIds is required' });
       const missing = await dispatchExtendedConsoleRpc(
-        'endpoint:requestConsumed',
-        { $row_ids: [1] },
+        'request.consumed',
+        { rowIds: [1] },
         ctx,
       );
       expect((missing as { error: string }).error).toContain('未接线');
@@ -776,8 +763,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:requestApprove',
-          { $adapter: 'icqq', $endpoint: '1234', $id: 'req-1', $remark: '欢迎' },
+          'request.approve',
+          { adapter: 'icqq', endpointKey: '1234', platformRequestId: 'req-1', remark: '欢迎' },
           ctx,
         ),
       ).resolves.toEqual({ data: { success: true } });
@@ -786,8 +773,8 @@ describe('dispatchExtendedConsoleRpc', () => {
 
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:requestReject',
-          { $adapter: 'icqq', $endpoint: '1234', $id: 'req-2', $reason: 'spam' },
+          'request.reject',
+          { adapter: 'icqq', endpointKey: '1234', platformRequestId: 'req-2', reason: 'spam' },
           ctx,
         ),
       ).resolves.toEqual({ data: { success: true } });
@@ -798,28 +785,30 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('approve reports 未接线 when the endpoint lacks approval methods', async () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:requestApprove',
-        { $adapter: 'sandbox', $endpoint: 'bot', $id: 'req-1' },
+        'request.approve',
+        { adapter: 'sandbox', endpointKey: 'bot', platformRequestId: 'req-1' },
         ctx,
       );
       expect((result as { error: string }).error).toContain('请求审批未接线');
       expect((result as { error: string }).error).toContain('sandbox');
     });
 
-    it('approve requires $adapter/$endpoint/$id and is demo-forbidden', async () => {
+    it('approve requires its canonical endpoint address and request id', async () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:requestApprove',
-          { $adapter: 'icqq' },
+          'request.approve',
+          { adapter: 'icqq' },
           ctx,
         ),
-      ).resolves.toEqual({ error: '$adapter, $endpoint, $id required' });
+      ).resolves.toEqual({
+        error: 'adapter, endpointKey, and platformRequestId are required',
+      });
 
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:requestApprove',
-          { $adapter: 'icqq', $endpoint: '1', $id: 'r' },
+          'request.approve',
+          { adapter: 'icqq', endpointKey: '1', platformRequestId: 'r' },
           makeCtx({ fullScope: false }),
         ),
       ).resolves.toEqual({
@@ -840,8 +829,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:friends',
-          { $adapter: 'icqq', $endpoint: '1234' },
+          'endpoint.friends',
+          { adapter: 'icqq', endpointKey: '1234' },
           ctx,
         ),
       ).resolves.toEqual({
@@ -857,18 +846,18 @@ describe('dispatchExtendedConsoleRpc', () => {
 
     it('friends/groups/channels/groupMembers report 该平台不支持 without methods', async () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
-      const base = { $adapter: 'sandbox', $endpoint: 'bot' };
+      const base = { adapter: 'sandbox', endpointKey: 'bot' };
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:friends', base, ctx),
+        dispatchExtendedConsoleRpc('endpoint.friends', base, ctx),
       ).resolves.toEqual({ error: '当前适配器（sandbox）不支持好友列表' });
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:groups', base, ctx),
+        dispatchExtendedConsoleRpc('endpoint.groups', base, ctx),
       ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群列表' });
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:channels', base, ctx),
+        dispatchExtendedConsoleRpc('endpoint.channels', base, ctx),
       ).resolves.toEqual({ error: '当前适配器（sandbox）不支持频道列表' });
       await expect(
-        dispatchExtendedConsoleRpc('endpoint:groupMembers', { ...base, $group_id: '888' }, ctx),
+        dispatchExtendedConsoleRpc('endpoint.group_members', { ...base, groupId: '888' }, ctx),
       ).resolves.toEqual({ error: '当前适配器（sandbox）不支持群成员列表' });
     });
 
@@ -880,8 +869,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:groups',
-          { $adapter: 'icqq', $endpoint: '1234' },
+          'endpoint.groups',
+          { adapter: 'icqq', endpointKey: '1234' },
           ctx,
         ),
       ).resolves.toEqual({
@@ -901,8 +890,8 @@ describe('dispatchExtendedConsoleRpc', () => {
       });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:channels',
-          { $adapter: 'qq', $endpoint: 'bot' },
+          'endpoint.channels',
+          { adapter: 'qq', endpointKey: 'bot' },
           ctx,
         ),
       ).resolves.toEqual({
@@ -921,8 +910,8 @@ describe('dispatchExtendedConsoleRpc', () => {
         withEndpointManagement: async (_adapter, _endpointKey, run) => run({ listGroupMembers: getGroupMemberList }),
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:groupMembers',
-        { $adapter: 'icqq', $endpoint: '1234', $group_id: '888' },
+        'endpoint.group_members',
+        { adapter: 'icqq', endpointKey: '1234', groupId: '888' },
         ctx,
       );
       expect(result).toEqual({
@@ -939,8 +928,8 @@ describe('dispatchExtendedConsoleRpc', () => {
         }),
       });
       const result = await dispatchExtendedConsoleRpc(
-        'endpoint:friends',
-        { $adapter: 'icqq', $endpoint: '1' },
+        'endpoint.friends',
+        { adapter: 'icqq', endpointKey: '1' },
         ctx,
       );
       expect(result).toHaveProperty('data');
@@ -949,27 +938,27 @@ describe('dispatchExtendedConsoleRpc', () => {
     it('reports endpoint resolution failures', async () => {
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:friends',
-          { $adapter: 'icqq', $endpoint: '1234' },
+          'endpoint.friends',
+          { adapter: 'icqq', endpointKey: '1234' },
           makeCtx(),
         ),
       ).resolves.toEqual({ error: 'Endpoint registry is not configured' });
 
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:friends',
-          { $adapter: 'icqq', $endpoint: '9999' },
+          'endpoint.friends',
+          { adapter: 'icqq', endpointKey: '9999' },
           makeCtx({ withEndpointManagement: async () => null }),
         ),
       ).resolves.toEqual({ error: 'endpoint not found' });
 
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:friends',
+          'endpoint.friends',
           {},
           makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) }),
         ),
-      ).resolves.toEqual({ error: '$adapter and $endpoint required' });
+      ).resolves.toEqual({ error: 'adapter and endpointKey are required' });
     });
   });
 
@@ -982,36 +971,36 @@ describe('dispatchExtendedConsoleRpc', () => {
       unsupported: string;
     }> = [
       {
-        type: 'endpoint:groupKick',
-        data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001' },
+        type: 'endpoint.group_kick',
+        data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001' },
         method: 'kickGroupMember',
         expectedArgs: ['888', '10001'],
         unsupported: '当前适配器（icqq）不支持踢出群成员',
       },
       {
-        type: 'endpoint:groupMute',
-        data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001' },
+        type: 'endpoint.group_mute',
+        data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001' },
         method: 'muteGroupMember',
         expectedArgs: ['888', '10001', 600],
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
-        type: 'endpoint:groupMute',
-        data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001', $duration: 3600 },
+        type: 'endpoint.group_mute',
+        data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001', duration: 3600 },
         method: 'muteGroupMember',
         expectedArgs: ['888', '10001', 3600],
         unsupported: '当前适配器（icqq）不支持禁言群成员',
       },
       {
-        type: 'endpoint:groupAdmin',
-        data: { $adapter: 'icqq', $endpoint: '1', $group_id: '888', $user_id: '10001', $enable: false },
+        type: 'endpoint.group_admin',
+        data: { adapter: 'icqq', endpointKey: '1', groupId: '888', userId: '10001', enable: false },
         method: 'setGroupAdmin',
         expectedArgs: ['888', '10001', false],
         unsupported: '当前适配器（icqq）不支持设置群管理员',
       },
       {
-        type: 'endpoint:deleteFriend',
-        data: { $adapter: 'icqq', $endpoint: '1', $user_id: '10001' },
+        type: 'endpoint.delete_friend',
+        data: { adapter: 'icqq', endpointKey: '1', userId: '10001' },
         method: 'deleteFriend',
         expectedArgs: ['10001'],
         unsupported: '当前适配器暂不支持删除好友',
@@ -1046,7 +1035,7 @@ describe('dispatchExtendedConsoleRpc', () => {
         await expect(
           dispatchExtendedConsoleRpc(c.type, c.data, ctx),
         ).resolves.toEqual({
-          error: `Demo scope: RPC "${normalizeConsoleRpcType(c.type)}" is forbidden`,
+          error: `Demo scope: RPC "${c.type}" is forbidden`,
         });
       }
     });
@@ -1055,25 +1044,25 @@ describe('dispatchExtendedConsoleRpc', () => {
       const ctx = makeCtx({ withEndpointManagement: async (_adapter, _endpointKey, run) => run({}) });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:groupKick',
-          { $adapter: 'icqq', $endpoint: '1' },
+          'endpoint.group_kick',
+          { adapter: 'icqq', endpointKey: '1' },
           ctx,
         ),
-      ).resolves.toEqual({ error: '$adapter, $endpoint, $group_id required' });
+      ).resolves.toEqual({ error: 'adapter, endpointKey, and groupId are required' });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:groupKick',
-          { $adapter: 'icqq', $endpoint: '1', $group_id: '888' },
+          'endpoint.group_kick',
+          { adapter: 'icqq', endpointKey: '1', groupId: '888' },
           ctx,
         ),
-      ).resolves.toEqual({ error: '$user_id required' });
+      ).resolves.toEqual({ error: 'userId is required' });
       await expect(
         dispatchExtendedConsoleRpc(
-          'endpoint:deleteFriend',
-          { $adapter: 'icqq', $endpoint: '1' },
+          'endpoint.delete_friend',
+          { adapter: 'icqq', endpointKey: '1' },
           ctx,
         ),
-      ).resolves.toEqual({ error: '$adapter, $endpoint, $user_id required' });
+      ).resolves.toEqual({ error: 'adapter, endpointKey, and userId are required' });
     });
   });
 });

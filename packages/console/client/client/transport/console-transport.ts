@@ -13,7 +13,6 @@ import { fetchConsoleEventHistory } from '../console-events.js';
 import {
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   SIDE_EVENT_PUSH,
-  normalizeConsolePushMessage,
   parseConsoleSseFrame,
   type ConsoleEventData,
   type ConsoleEventEnvelope,
@@ -236,14 +235,14 @@ export class ConsoleTransport {
     if (event.eventId > 0
       && event.runtimeId === this.eventRuntimeId
       && event.eventId <= this.lastEventId) return;
-    const message = normalizeConsolePushMessage({
+    const message: ConsoleTransportMessage = Object.freeze({
       type: event.type,
       data: event.data,
       runtimeId: event.runtimeId,
       eventId: event.eventId || undefined,
       timestamp: event.timestamp,
       delivery: event.delivery,
-    }) as ConsoleTransportMessage;
+    });
     try {
       await applyConsoleEvent(message);
     } catch (error) {

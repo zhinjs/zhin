@@ -294,8 +294,8 @@ describe('installInboxMessageRecorder', () => {
     };
 
     const messages = await dispatchExtendedConsoleRpc(
-      'endpoint:inboxMessages',
-      { $adapter: 'icqq', $endpoint: '1234', $channel_id: '888', $channel_type: 'group' },
+      'inbox.messages',
+      { adapter: 'icqq', endpointKey: '1234', channelId: '888', channelType: 'group' },
       ctx,
     );
     expect(messages).toHaveProperty('data');
@@ -303,28 +303,28 @@ describe('installInboxMessageRecorder', () => {
     expect(messageData.inboxEnabled).toBe(true);
     expect(messageData.messages).toHaveLength(1);
     expect(messageData.messages[0]).toMatchObject({
-      platform_message_id: 'm-1',
-      sender_id: '10001',
+      platformMessageId: 'm-1',
+      sender: { id: '10001' },
       content: 'hello',
       channel: { id: '888', type: 'group' },
     });
 
     const requests = await dispatchExtendedConsoleRpc(
-      'endpoint:requests',
-      { $adapter: 'icqq', $endpoint: '1234' },
+      'request.list',
+      { adapter: 'icqq', endpointKey: '1234' },
       ctx,
     );
     const requestData = (requests as { data: { requests: Record<string, unknown>[] } }).data;
     expect(requestData.requests).toHaveLength(1);
     expect(requestData.requests[0]).toMatchObject({
-      platform_request_id: 'flag-1',
+      platformRequestId: 'flag-1',
       actor: { id: '10001', name: '张三' },
     });
 
     // consumed 写路径端到端：标记后行 consumed=1
     const consumed = await dispatchExtendedConsoleRpc(
-      'endpoint:requestConsumed',
-      { $row_ids: [1] },
+      'request.consumed',
+      { rowIds: [1] },
       ctx,
     );
     expect(consumed).toEqual({ data: { success: true, updated: 1 } });

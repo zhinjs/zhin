@@ -116,6 +116,11 @@ const checks = [
     description: 'Console 路由、运行时环境与网络连接必须归属显式 ConsoleClient 实例',
   },
   {
+    name: 'Console Protocol Boundaries',
+    command: 'pnpm check:console-protocol-boundaries',
+    description: 'Console 只接受 dot-named RPC 与顶层 camelCase payload，不恢复兼容归一化',
+  },
+  {
     name: 'IM Session SSOT',
     command: 'pnpm check:im-session-ssot',
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',

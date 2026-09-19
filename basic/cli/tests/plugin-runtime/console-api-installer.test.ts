@@ -1351,7 +1351,7 @@ describe('console SSE events', () => {
     expect(frames).not.toContain('event: endpoint:message');
     expect(frames).toContain('"adapter":"icqq"');
     expect(frames).toContain('"endpointKey":"icqq"');
-    expect(frames).toContain('"endpoint":"icqq"');
+    expect(frames).not.toContain('"endpoint":"icqq"');
     expect(frames).toContain('"sender":{"id":"alice"}');
     expect(frames).toContain('"content":"hello console"');
     expect(frames).toContain('"direction":"inbound"');

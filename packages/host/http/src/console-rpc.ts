@@ -3,8 +3,6 @@ import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
-  endpointSendResult,
-  normalizeConsoleRpcMessage,
 } from '@zhin.js/console-protocol';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended.js';
 
@@ -23,17 +21,14 @@ export interface ConversationAddress {
   readonly threadId?: string;
 }
 
-/** `$channel_type`/`$channel_id`/`$parent` wire 字段 → 会话地址（RPC 边界组帧）。 */
+/** Canonical Console wire fields → runtime conversation address. */
 function wireConversation(
   channelType: string,
   channelId: string,
   parent: unknown,
 ): ConversationAddress {
-  // console 旧 wire 允许 channel_id 自带场景前缀（`group:123`），解析结果优先
-  const prefixed = /^(private|group|channel|direct|c2c|temp):(.+)$/iu.exec(channelId);
-  const rawKind = channelType || prefixed?.[1] || 'private';
   const kind: ConversationAddress['kind'] =
-    rawKind === 'group' || rawKind === 'channel' ? rawKind : 'private';
+    channelType === 'group' || channelType === 'channel' ? channelType : 'private';
   const wire = parent && typeof parent === 'object'
     ? parent as { readonly type?: unknown; readonly id?: unknown }
     : undefined;
@@ -41,7 +36,7 @@ function wireConversation(
   const parentId = typeof wire?.id === 'string' && wire.id ? wire.id : undefined;
   return {
     kind,
-    id: prefixed ? prefixed[2]! : channelId,
+    id: channelId,
     ...(parentKind && parentId ? { parent: { kind: parentKind, id: parentId } } : {}),
   };
 }
@@ -165,7 +160,6 @@ export async function dispatchRuntimeConsoleRpc(
   const emit = (payload: RuntimeConsoleRpcReply) => {
     payloads.push(payload);
   };
-  message = normalizeConsoleRpcMessage(message);
   const type = String(message.type ?? '');
   const requestId = message.requestId as number | string | undefined;
 
@@ -244,9 +238,7 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'config:get': {
       try {
-        // 兼容 console UI 的 data:{plugin} / data:{key} 形状
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        const key = String(message.key ?? message.pluginName ?? data.pluginName ?? data.plugin ?? data.key ?? '');
+        const key = String(message.pluginName ?? '');
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
         emit({ requestId, data: key ? document[key] : document });
       } catch (error) {
@@ -471,10 +463,9 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'schema:get': {
       try {
-        // 兼容 console UI 的 data:{plugin} / data:{pluginName} 形状（SDK 发顶层 pluginName）
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        const candidate = message.pluginName ?? data.pluginName ?? data.plugin;
-        const pluginName = typeof candidate === 'string' ? candidate : undefined;
+        const pluginName = typeof message.pluginName === 'string'
+          ? message.pluginName
+          : undefined;
         const schema = ctx.getSchema ? await ctx.getSchema(pluginName) : null;
         emit({ requestId, data: schema });
       } catch (error) {
@@ -679,10 +670,10 @@ export async function dispatchRuntimeConsoleRpc(
     case 'endpoint.info': {
       try {
         const data = message as Record<string, unknown>;
-        const adapter = String(data.$adapter ?? '');
-        const endpointKey = String(data.$endpoint ?? '');
+        const adapter = String(data.adapter ?? '');
+        const endpointKey = String(data.endpointKey ?? '');
         if (!adapter || !endpointKey) {
-          emit({ requestId, error: '$adapter and $endpoint required' });
+          emit({ requestId, error: 'adapter and endpointKey are required' });
           return payloads;
         }
         if (!ctx.getEndpoint) {
@@ -706,16 +697,15 @@ export async function dispatchRuntimeConsoleRpc(
     case 'endpoint.send_message': {
       try {
         const data = message as Record<string, unknown>;
-        const adapter = String(data.$adapter ?? '');
-        const endpointKey = String(data.$endpoint ?? '');
-        const channelId = String(data.$channel_id ?? '');
-        const channelType = String(data.$channel_type ?? '');
-        const content = data.$content;
-        // channelType 可省：wireConversation 归一为 private（与旧 RPC 行为对齐）。
-        if (!adapter || !endpointKey || !channelId || content === undefined) {
+        const adapter = String(data.adapter ?? '');
+        const endpointKey = String(data.endpointKey ?? '');
+        const channelId = String(data.channelId ?? '');
+        const channelType = String(data.channelType ?? '');
+        const content = data.content;
+        if (!adapter || !endpointKey || !channelId || !channelType || content === undefined) {
           emit({
             requestId,
-            error: '$adapter, $endpoint, $channel_id, $content required',
+            error: 'adapter, endpointKey, channelId, channelType, and content are required',
           });
           return payloads;
         }
@@ -726,11 +716,10 @@ export async function dispatchRuntimeConsoleRpc(
         const result = await ctx.sendEndpointMessage({
           adapter,
           endpointKey,
-          conversation: wireConversation(channelType, channelId, data.$parent),
+          conversation: wireConversation(channelType, channelId, data.parent),
           content,
         });
-        // Legacy contract: { message_id }. Keep messageId for new callers.
-        emit({ requestId, data: endpointSendResult(result.messageId) });
+        emit({ requestId, data: { messageId: result.messageId } });
       } catch (error) {
         emit({
           requestId,

@@ -20,7 +20,6 @@
 /** 新 Runtime 统一收件箱表名（SSOT：@zhin.js/plugin-runtime inbox.js）。 */
 import {
   assertDemoConsoleRpcAllowed,
-  normalizeConsoleRpcType,
 } from '@zhin.js/console-protocol';
 
 const TABLE_MESSAGE = 'unified_inbox_message';
@@ -190,7 +189,6 @@ export async function dispatchExtendedConsoleRpc(
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult | undefined> {
   const d = data ?? {};
-  type = normalizeConsoleRpcType(type);
 
   if (!ctx.fullScope) {
     const denied = assertDemoConsoleRpcAllowed(type);
@@ -598,15 +596,13 @@ async function listInbox(
   key: 'requests' | 'notices',
   mapRow: (row: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
-  const limit = boundedIntegerField(d, 30, 1, 100, '$limit', 'limit');
-  const offset = boundedIntegerField(
-    d, 0, 0, MAX_INBOX_OFFSET, '$offset', 'offset',
-  );
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  if (!adapter || !endpointKey) return { error: 'adapter and endpointKey are required' };
+  const limit = boundedIntegerField(d, 30, 1, 100, 'limit');
+  const offset = boundedIntegerField(d, 0, 0, MAX_INBOX_OFFSET, 'offset');
   const unreadOnly = table === TABLE_NOTICE
-    && boolField(d, false, '$unread_only', 'unreadOnly', 'unread_only');
+    && boolField(d, false, 'unreadOnly');
   const { rows, enabled, offsetApplied } = await readInboxRows(ctx, table, {
     adapter,
     endpoint_id: endpointKey,
@@ -630,9 +626,9 @@ async function listPendingRequests(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  if (!adapter || !endpointKey) return { error: 'adapter and endpointKey are required' };
 
   if (ctx.withEndpointManagement) {
     try {
@@ -676,17 +672,17 @@ async function listInboxMessages(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  const channelId = strField(d, '$channel_id', 'channelId', 'channel_id');
-  const channelType = strField(d, '$channel_type', 'channelType', 'channel_type');
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  const channelId = strField(d, 'channelId');
+  const channelType = strField(d, 'channelType');
   if (!adapter || !endpointKey || !channelId || !channelType) {
-    return { error: '$adapter, $endpoint, $channel_id, $channel_type required' };
+    return { error: 'adapter, endpointKey, channelId, and channelType are required' };
   }
-  const limit = boundedIntegerField(d, 50, 1, 100, '$limit', 'limit');
-  const beforeTs = optionalNum(d, '$before_ts', 'beforeTs', 'before_ts');
-  const beforeId = optionalNum(d, '$before_id', 'beforeId', 'before_id');
-  const parent = normalizeParent(d.$parent ?? d.parent);
+  const limit = boundedIntegerField(d, 50, 1, 100, 'limit');
+  const beforeTs = optionalNum(d, 'beforeTs');
+  const beforeId = optionalNum(d, 'beforeId');
+  const parent = normalizeParent(d.parent);
 
   const where: Record<string, unknown> = {
     adapter,
@@ -707,17 +703,7 @@ async function listInboxMessages(
       && (beforeId == null || Number(row.id ?? 0) < beforeId))
     .sort((a, b) => Number(b.created_at ?? 0) - Number(a.created_at ?? 0))
     .slice(0, limit)
-    .map((row) => ({
-      id: row.id,
-      platform_message_id: row.platform_message_id,
-      sender_id: row.sender_id,
-      sender_name: row.sender_name,
-      content: row.content,
-      raw: row.raw,
-      created_at: row.created_at,
-      channel: channelFromStoredRow(row),
-      parent: parentFromStoredRow(row),
-    }));
+    .map(mapMessageRow);
   return { data: { messages, inboxEnabled: enabled } };
 }
 
@@ -731,7 +717,7 @@ async function listRecentInboxMessages(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const limit = boundedIntegerField(d, 50, 1, 100, '$limit', 'limit');
+  const limit = boundedIntegerField(d, 50, 1, 100, 'limit');
   const [messagePage, requestPage] = await Promise.all([
     readInboxRows(ctx, TABLE_MESSAGE, {}, {
       orderBy: {field: 'created_at', direction: 'DESC'}, limit,
@@ -745,53 +731,38 @@ async function listRecentInboxMessages(
     .sort((left, right) => Number(right.created_at ?? 0) - Number(left.created_at ?? 0))
     .slice(0, limit)
     .map(row => ({
-      id: row.id,
-      adapter: row.adapter,
-      endpoint_id: row.endpoint_id,
-      platform_message_id: row.platform_message_id,
-      sender_id: row.sender_id,
-      sender_name: row.sender_name,
-      content: row.content,
-      raw: row.raw,
-      created_at: row.created_at,
-      channel: channelFromStoredRow(row),
-      parent: parentFromStoredRow(row),
+      ...mapMessageRow(row),
+      adapter: String(row.adapter ?? ''),
+      endpointKey: String(row.endpoint_id ?? ''),
     }));
   const requests = requestPage.rows
     .filter(row => Number(row.resolved ?? 0) === 0)
     .slice()
     .sort((left, right) => Number(right.created_at ?? 0) - Number(left.created_at ?? 0))
     .slice(0, limit)
-    .map(row => ({...mapRequestRow(row), adapter: row.adapter, endpoint_id: row.endpoint_id}));
+    .map(row => ({
+      ...mapRequestRow(row),
+      adapter: String(row.adapter ?? ''),
+      endpointKey: String(row.endpoint_id ?? ''),
+    }));
   return {data: {messages, requests, inboxEnabled: messagePage.enabled || requestPage.enabled}};
 }
 
 function mapRequestRow(row: Record<string, unknown>): Record<string, unknown> {
-  const actorId = row.actor_id;
-  const actorName = row.actor_name ?? undefined;
-  const sceneId = row.scene_id;
-  const sceneType = row.scene_type ?? undefined;
   return {
     id: row.id,
-    platform_request_id: row.platform_request_id,
-    // console endpoint-detail 期望的 camelCase/扁平别名（SSE 推送路径同款形状）
     platformRequestId: row.platform_request_id,
     type: row.type,
-    scene_type: sceneType,
-    scene_id: sceneId,
-    channel_id: sceneId,
-    channel_type: sceneType,
-    channel: { id: sceneId, type: sceneType },
-    sub_type: row.sub_type ?? undefined,
-    actor: { id: actorId, name: actorName },
-    sender: { id: actorId, name: actorName },
-    sender_id: actorId,
-    sender_name: actorName,
+    subType: row.sub_type ?? undefined,
+    actor: actorFromStoredRow(row, 'actor'),
     comment: row.comment ?? undefined,
-    created_at: row.created_at,
+    channel: {
+      id: String(row.scene_id ?? ''),
+      type: String(row.scene_type ?? ''),
+    },
     timestamp: row.created_at,
-    resolved: row.resolved,
-    resolved_at: row.resolved_at ?? undefined,
+    resolved: Boolean(row.resolved),
+    resolvedAt: row.resolved_at ?? undefined,
   };
 }
 
@@ -802,28 +773,41 @@ function mapNoticeRow(row: Record<string, unknown>): Record<string, unknown> {
   const sceneType = row.scene_type == null ? undefined : String(row.scene_type);
   return {
     id: row.id,
-    platform_notice_id: row.platform_notice_id,
-    type: row.type,
+    platformNoticeId: row.platform_notice_id,
     noticeType: row.type,
-    scene_type: sceneType,
-    scene_id: sceneId,
-    channel_id: sceneId,
-    channel_type: sceneType,
     channel: { id: sceneId, type: sceneType ?? '' },
-    sub_type: row.sub_type ?? undefined,
-    actor_id: actorId,
-    actor_name: actorName,
-    // console endpoint-detail 期望的操作人字段别名
-    operator_id: actorId,
-    operator_name: actorName,
-    target_id: row.target_id ?? undefined,
-    target_name: row.target_name ?? undefined,
+    subType: row.sub_type ?? undefined,
+    ...(actorId == null ? {} : {operator: {id: String(actorId), ...(actorName == null ? {} : {name: String(actorName)})}}),
+    ...(row.target_id == null ? {} : {target: {
+      id: String(row.target_id),
+      ...(row.target_name == null ? {} : {name: String(row.target_name)}),
+    }}),
     payload: row.payload,
-    created_at: row.created_at,
     timestamp: row.created_at,
-    consumed: row.consumed,
-    consumed_at: row.consumed_at ?? undefined,
+    consumed: Boolean(row.consumed),
+    consumedAt: row.consumed_at ?? undefined,
   };
+}
+
+function mapMessageRow(row: Record<string, unknown>): Record<string, unknown> {
+  return {
+    id: row.id,
+    platformMessageId: row.platform_message_id,
+    sender: actorFromStoredRow(row, 'sender'),
+    content: row.content,
+    raw: row.raw,
+    timestamp: row.created_at,
+    channel: channelFromStoredRow(row),
+  };
+}
+
+function actorFromStoredRow(
+  row: Record<string, unknown>,
+  field: 'actor' | 'sender',
+): {id: string; name?: string} {
+  const id = String(row[`${field}_id`] ?? '');
+  const name = row[`${field}_name`];
+  return name == null ? {id} : {id, name: String(name)};
 }
 
 // ---------------------------------------------------------------- consumed 标记
@@ -837,13 +821,8 @@ async function markInboxConsumed(
   ctx: ConsoleRpcExtendedCtx,
   table: string,
 ): Promise<ExtendedRpcResult> {
-  const ids = numArrayField(d, '$row_ids', 'row_ids', 'rowIds', '$ids', 'ids');
-  // console UI 单条已读发 data:{id}，归一为数组
-  if (ids.length === 0) {
-    const single = Number(d.id ?? d.$id);
-    if (Number.isFinite(single) && single > 0) ids.push(single);
-  }
-  if (ids.length === 0) return { error: '$row_ids required' };
+  const ids = numArrayField(d, 'rowIds');
+  if (ids.length === 0) return { error: 'rowIds is required' };
   const model = getInboxModel(ctx, table);
   if (!model || typeof model.update !== 'function') return { error: CONSUMED_NOT_WIRED };
   const now = Date.now();
@@ -864,11 +843,11 @@ async function actOnRequest(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  const requestId = strField(d, '$id', 'id', 'platformRequestId', 'platform_request_id', 'requestId');
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  const requestId = strField(d, 'platformRequestId');
   if (!adapter || !endpointKey || !requestId) {
-    return { error: '$adapter, $endpoint, $id required' };
+    return { error: 'adapter, endpointKey, and platformRequestId are required' };
   }
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const approve = type === 'request.approve';
@@ -880,8 +859,8 @@ async function actOnRequest(
       };
     }
     const extra = approve
-      ? strField(d, '$remark', 'remark')
-      : strField(d, '$reason', 'reason');
+      ? strField(d, 'remark')
+      : strField(d, 'reason');
     await method.call(management, requestId, extra || undefined);
     const model = getInboxModel(ctx, TABLE_REQUEST);
     if (model && typeof model.update === 'function') {
@@ -914,9 +893,9 @@ function submitLogin(
 ): ExtendedRpcResult {
   const assist = ctx.loginAssist;
   if (!assist) return { error: '登录辅助未接线（LoginAssist 未挂载）' };
-  const id = strField(d, '$id', 'id', 'taskId');
-  if (!id) return { error: '$id required' };
-  const raw = d.$value ?? d.value ?? d.ticket ?? d.code ?? '';
+  const id = strField(d, 'taskId');
+  if (!id) return { error: 'taskId is required' };
+  const raw = d.value ?? '';
   const value = typeof raw === 'string' || (raw && typeof raw === 'object')
     ? raw as string | Record<string, unknown>
     : String(raw ?? '');
@@ -931,9 +910,9 @@ function cancelLogin(
 ): ExtendedRpcResult {
   const assist = ctx.loginAssist;
   if (!assist) return { error: '登录辅助未接线（LoginAssist 未挂载）' };
-  const id = strField(d, '$id', 'id', 'taskId');
-  if (!id) return { error: '$id required' };
-  const reason = strField(d, '$reason', 'reason') || 'cancelled';
+  const id = strField(d, 'taskId');
+  if (!id) return { error: 'taskId is required' };
+  const reason = strField(d, 'reason') || 'cancelled';
   const ok = assist.cancel(id, reason);
   if (!ok) return { error: `login task not found: ${id}` };
   return { data: { success: true } };
@@ -990,11 +969,11 @@ async function listGroupMembers(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  const groupId = strField(d, '$group_id', 'groupId', 'group_id');
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  const groupId = strField(d, 'groupId');
   if (!adapter || !endpointKey || !groupId) {
-    return { error: '$adapter, $endpoint, $group_id required' };
+    return { error: 'adapter, endpointKey, and groupId are required' };
   }
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const method = management.listGroupMembers;
@@ -1021,23 +1000,23 @@ async function groupWriteOp(
   ctx: ConsoleRpcExtendedCtx,
   spec: GroupWriteSpec,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  const groupId = strField(d, '$group_id', 'groupId', 'group_id');
-  const userId = strField(d, '$user_id', 'userId', 'user_id');
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  const groupId = strField(d, 'groupId');
+  const userId = strField(d, 'userId');
   if (!adapter || !endpointKey || !groupId) {
-    return { error: '$adapter, $endpoint, $group_id required' };
+    return { error: 'adapter, endpointKey, and groupId are required' };
   }
   if (spec.requireUser && !userId) {
-    return { error: '$user_id required' };
+    return { error: 'userId is required' };
   }
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const method = management[spec.method];
     if (!method) {
       return { error: `当前适配器（${adapter}）不支持${spec.unsupported}` };
     }
-    const durationRaw = d.$duration ?? d.duration;
-    const enableRaw = d.$enable ?? d.enable;
+    const durationRaw = d.duration;
+    const enableRaw = d.enable;
     const args = spec.buildArgs(groupId, userId, {
       duration: typeof durationRaw === 'number' && Number.isFinite(durationRaw)
         ? durationRaw
@@ -1053,11 +1032,11 @@ async function deleteFriend(
   d: Record<string, unknown>,
   ctx: ConsoleRpcExtendedCtx,
 ): Promise<ExtendedRpcResult> {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  const userId = strField(d, '$user_id', 'userId', 'user_id');
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  const userId = strField(d, 'userId');
   if (!adapter || !endpointKey || !userId) {
-    return { error: '$adapter, $endpoint, $user_id required' };
+    return { error: 'adapter, endpointKey, and userId are required' };
   }
   return withLiveEndpoint(ctx, adapter, endpointKey, async (management) => {
     const method = management.deleteFriend;
@@ -1071,21 +1050,16 @@ async function deleteFriend(
 
 // ---------------------------------------------------------------- helpers
 
-function strField(d: Record<string, unknown>, ...keys: string[]): string {
-  for (const key of keys) {
-    const value = d[key];
-    if (typeof value === 'string' && value.trim()) return value.trim();
-    if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  }
+function strField(d: Record<string, unknown>, key: string): string {
+  const value = d[key];
+  if (typeof value === 'string' && value.trim()) return value.trim();
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return '';
 }
 
-function numField(d: Record<string, unknown>, fallback: number, ...keys: string[]): number {
-  for (const key of keys) {
-    const parsed = Number(d[key]);
-    if (d[key] != null && Number.isFinite(parsed)) return parsed;
-  }
-  return fallback;
+function numField(d: Record<string, unknown>, fallback: number, key: string): number {
+  const parsed = Number(d[key]);
+  return d[key] != null && Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function boundedIntegerField(
@@ -1093,40 +1067,31 @@ function boundedIntegerField(
   fallback: number,
   minimum: number,
   maximum: number,
-  ...keys: string[]
+  key: string,
 ): number {
-  const value = numField(d, fallback, ...keys);
+  const value = numField(d, fallback, key);
   if (!Number.isFinite(value)) return fallback;
   return Math.min(maximum, Math.max(minimum, Math.trunc(value)));
 }
 
-function boolField(d: Record<string, unknown>, fallback: boolean, ...keys: string[]): boolean {
-  for (const key of keys) {
-    const value = d[key];
-    if (typeof value === 'boolean') return value;
-  }
-  return fallback;
+function boolField(d: Record<string, unknown>, fallback: boolean, key: string): boolean {
+  const value = d[key];
+  return typeof value === 'boolean' ? value : fallback;
 }
 
-function optionalNum(d: Record<string, unknown>, ...keys: string[]): number | undefined {
-  for (const key of keys) {
-    if (d[key] == null) continue;
-    const parsed = Number(d[key]);
-    if (Number.isFinite(parsed)) return parsed;
-  }
-  return undefined;
+function optionalNum(d: Record<string, unknown>, key: string): number | undefined {
+  if (d[key] == null) return undefined;
+  const parsed = Number(d[key]);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-/** 数字数组字段（$row_ids 等）：取首个数组值，收敛为有限数字。 */
-function numArrayField(d: Record<string, unknown>, ...keys: string[]): number[] {
-  for (const key of keys) {
-    const value = d[key];
-    if (!Array.isArray(value)) continue;
-    return value
-      .map((item) => Number(item))
-      .filter((item) => Number.isFinite(item));
-  }
-  return [];
+/** Parse one canonical numeric-array field into finite positive ids. */
+function numArrayField(d: Record<string, unknown>, key: string): number[] {
+  const value = d[key];
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => Number(item))
+    .filter((item) => Number.isFinite(item));
 }
 
 async function withLiveEndpoint(
@@ -1149,9 +1114,9 @@ async function withLiveEndpoint(
 function requireEndpointAddress(
   d: Record<string, unknown>,
 ): { adapter: string; endpointKey: string } | { error: string } {
-  const adapter = strField(d, '$adapter', 'adapter');
-  const endpointKey = strField(d, '$endpoint', 'endpointKey', 'endpoint');
-  if (!adapter || !endpointKey) return { error: '$adapter and $endpoint required' };
+  const adapter = strField(d, 'adapter');
+  const endpointKey = strField(d, 'endpointKey');
+  if (!adapter || !endpointKey) return { error: 'adapter and endpointKey are required' };
   return { adapter, endpointKey };
 }
 
