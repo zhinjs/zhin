@@ -1,0 +1,7 @@
+---
+"@zhin.js/plugin-60s": minor
+"@zhin.js/tool": minor
+"@zhin.js/agent": minor
+---
+
+Make `agent/tools/$*.ts` available to the owner-aware Tool Feature, preserve tool tags and keywords through Agent projection, and replace the 60s plugin's process-global API base registration stack with an owner-scoped `SixtySClient` used by every command and Agent Tool.

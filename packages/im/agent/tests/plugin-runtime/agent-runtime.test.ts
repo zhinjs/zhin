@@ -277,9 +277,17 @@ describe('Agent CapabilityIngress', () => {
   });
 
   it('preserves fail-closed approval semantics in the production Tool projection', async () => {
-    const fixture = await createFixture({ approval: 'on-risk' });
+    const fixture = await createFixture({
+      approval: 'on-risk',
+      tags: ['lookup'],
+      keywords: ['find'],
+    });
     const [capability] = (await new CapabilityIngress().read(fixture.snapshot, rootPluginId())).tools;
-    expect(capabilityToTool(capability!, invocation()).approval).toBe('on-risk');
+    expect(capabilityToTool(capability!, invocation())).toMatchObject({
+      approval: 'on-risk',
+      tags: ['lookup'],
+      keywords: ['find'],
+    });
     await fixture.mcp.stop();
   });
 
@@ -685,6 +693,8 @@ async function createFixture(access: {
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   readonly approval?: 'never' | 'on-risk' | 'always';
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
 } = {}) {
   const root = rootPluginId();

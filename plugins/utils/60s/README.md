@@ -22,6 +22,8 @@ plugins:
     apiBase: https://60s.viki.moe  # 可选，默认官方地址
 ```
 
+每个插件实例拥有独立的 API Client。配置更新由当前 generation 的 Client 即时读取，多个实例不会共享或覆盖运行时地址。
+
 ## 功能列表
 
 | 命令 | 别名 | 说明 |

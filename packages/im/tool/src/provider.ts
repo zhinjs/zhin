@@ -14,6 +14,10 @@ const toolFeature = defineFeatureProvider({
       id: 'tools-ts',
       directory: 'tools',
       recursive: false,
+    }), typeScriptModules({
+      id: 'agent-tools-ts',
+      directory: 'agent/tools',
+      recursive: false,
     })],
     validate: parseAgentToolDefinition,
   },

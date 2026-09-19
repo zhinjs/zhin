@@ -1,4 +1,5 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
+import { sixtySClientToken } from '../../src/client.js';
 import { z } from 'zod';
 
 export default defineAgentTool<{ ip?: string }>({
@@ -6,8 +7,8 @@ export default defineAgentTool<{ ip?: string }>({
   inputSchema: z.object({ ip: z.string().optional() }),
   keywords: ["ip", "IP", "IP查询", "ip查询"],
   tags: ["网络", "查询", "IP"],
-  async execute(input) {
+  async execute(input, context) {
     const handler = (await import('../../src/handlers/ip-query.js')).default;
-    return handler(input);
+    return handler(context.use(sixtySClientToken), input);
   },
 });

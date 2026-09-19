@@ -121,6 +121,11 @@ const checks = [
     description: 'Console 只接受 dot-named RPC 与顶层 camelCase payload，不恢复兼容归一化',
   },
   {
+    name: '60s Runtime Boundaries',
+    command: 'pnpm check:sixty-s-runtime-boundaries',
+    description: '60s API transport 必须归属当前 Plugin owner，不使用进程级注册栈',
+  },
+  {
     name: 'IM Session SSOT',
     command: 'pnpm check:im-session-ssot',
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',

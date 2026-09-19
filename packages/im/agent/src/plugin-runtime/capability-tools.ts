@@ -29,6 +29,8 @@ export function capabilityToTool(
     platforms: tool.platforms ? [...tool.platforms] : undefined,
     scopes: tool.scopes ? [...tool.scopes] : undefined,
     permissions: tool.permissions ? [...tool.permissions] : undefined,
+    tags: tool.tags ? [...tool.tags] : undefined,
+    keywords: tool.keywords ? [...tool.keywords] : undefined,
     hidden: tool.hidden,
     approval: tool.approval,
     async execute(args) {

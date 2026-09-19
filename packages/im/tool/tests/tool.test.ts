@@ -33,7 +33,7 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
-  it('brands definitions and discovers only flat tools/$*.ts', async () => {
+  it('brands definitions and discovers flat tools/$*.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
@@ -70,6 +70,30 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['send_user_like']);
   });
 
+  it('discovers plugin AI tools from agent/tools with the same owner context', async () => {
+    const definition = defineAgentTool({
+      description: 'Get current news',
+      tags: ['news'],
+      keywords: ['today'],
+      execute: () => 'ok',
+    });
+    const host = new MemoryHost({
+      '/project/agent/tools': [
+        { name: '$news.ts', kind: 'file' },
+      ],
+    }, new Map([['/project/agent/tools/$news.ts', { default: definition }]]));
+    const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+    const [descriptor] = new ToolIndex(slots, createSnapshot(slots, createToken('unused').id)).list();
+
+    expect(descriptor).toMatchObject({
+      name: 'news',
+      tags: ['news'],
+      keywords: ['today'],
+    });
+  });
+
   it('keeps immutable visibility, permit, and approval metadata in the Tool index', () => {
     const root = rootPluginId();
     const definition = defineAgentTool({
@@ -77,6 +101,8 @@ describe('Tool Feature', () => {
       platforms: ['qq'],
       scopes: ['group'],
       permissions: ['platform(qq,scene_admin)'],
+      tags: ['moderation'],
+      keywords: ['admin'],
       hidden: true,
       approval: 'always',
       execute: () => 'ok',
@@ -95,6 +121,8 @@ describe('Tool Feature', () => {
       platforms: ['qq'],
       scopes: ['group'],
       permissions: ['platform(qq,scene_admin)'],
+      tags: ['moderation'],
+      keywords: ['admin'],
       hidden: true,
       approval: 'always',
     });

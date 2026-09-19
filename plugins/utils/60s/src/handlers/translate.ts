@@ -1,9 +1,10 @@
-import { asRecord, asString, fetchApi } from '../api.js';
+import { asRecord, asString } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function (args: { text: string; to?: string }) {
+export default async function (client: SixtySClient, args: { text: string; to?: string }) {
   const params: Record<string, string> = { text: args.text };
   if (args.to) params.to = args.to;
-  const data = await fetchApi('/fanyi', params);
+  const data = await client.fetch('/fanyi', params);
   const source = asRecord(data.source);
   const target = asRecord(data.target);
   const srcText = asString(source.text) || args.text;

@@ -1,10 +1,11 @@
-import { asArray, asRecord, asString, fetchApi } from '../api.js';
+import { asArray, asRecord, asString } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function (args: { from?: string; to?: string }) {
+export default async function (client: SixtySClient, args: { from?: string; to?: string }) {
   const params: Record<string, string> = {};
   if (args.from) params.from = args.from.toUpperCase();
   if (args.to) params.to = args.to.toUpperCase();
-  const data = await fetchApi(
+  const data = await client.fetch(
     '/exchange-rate',
     Object.keys(params).length ? params : undefined,
   );

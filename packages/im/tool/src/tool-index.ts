@@ -27,6 +27,8 @@ export interface ToolDescriptor {
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly hidden?: boolean;
   readonly source: string;
 }
@@ -137,6 +139,8 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     platforms: definition.platforms,
     scopes: definition.scopes,
     permissions: definition.permissions,
+    tags: definition.tags,
+    keywords: definition.keywords,
     hidden: definition.hidden,
     source: entry.source,
   });

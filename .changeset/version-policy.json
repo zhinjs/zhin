@@ -638,6 +638,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove Console RPC name, request-field, response-field, event-field, and send-result compatibility shapes so every boundary exposes one canonical protocol under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-sixty-s-api-client.md",
+      "packages": [
+        "@zhin.js/plugin-60s",
+        "@zhin.js/tool",
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Route agent/tools through the owner-aware Tool Feature and replace the process-global 60s API base registration stack with an explicit owner-scoped client resource under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

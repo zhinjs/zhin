@@ -1,4 +1,5 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
+import { sixtySClientToken } from '../../src/client.js';
 import { z } from 'zod';
 
 export default defineAgentTool<{ province?: string }>({
@@ -6,8 +7,8 @@ export default defineAgentTool<{ province?: string }>({
   inputSchema: z.object({ province: z.string().optional() }),
   keywords: ["油价", "汽油", "柴油", "fuel"],
   tags: ["生活", "油价", "价格"],
-  async execute(input) {
+  async execute(input, context) {
     const handler = (await import('../../src/handlers/fuel-price.js')).default;
-    return handler(input);
+    return handler(context.use(sixtySClientToken), input);
   },
 });

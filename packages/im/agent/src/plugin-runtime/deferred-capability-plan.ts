@@ -292,6 +292,8 @@ export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
     },
     source: tool.source,
     permissions: tool.permissions,
+    tags: tool.tags ? [...tool.tags] : undefined,
+    keywords: tool.keywords ? [...tool.keywords] : undefined,
     approval: tool.approval,
     execute: async () => {
       throw new Error(`AgentCore must execute capability ${tool.name} through ToolExecutionAuthority`);

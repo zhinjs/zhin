@@ -1,4 +1,5 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
+import { sixtySClientToken } from '../../src/client.js';
 import { z } from 'zod';
 
 export default defineAgentTool({
@@ -6,8 +7,8 @@ export default defineAgentTool({
   inputSchema: z.object({}),
   keywords: ["段子", "笑话", "搞笑", "joke", "duanzi"],
   tags: ["娱乐", "笑话", "段子"],
-  async execute() {
+  async execute(_input, context) {
     const handler = (await import('../../src/handlers/duanzi.js')).default;
-    return handler();
+    return handler(context.use(sixtySClientToken));
   },
 });

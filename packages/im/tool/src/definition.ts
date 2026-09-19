@@ -123,6 +123,8 @@ export interface AgentToolDefinition<
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly hidden?: boolean;
   execute(
     input: TInput,
@@ -187,6 +189,8 @@ export function defineAgentTool<
   }
   validateStringList('platforms', definition.platforms);
   validateStringList('permissions', definition.permissions);
+  validateStringList('tags', definition.tags);
+  validateStringList('keywords', definition.keywords);
   if (definition.scopes !== undefined && !Array.isArray(definition.scopes)) {
     throw new TypeError('Agent Tool scopes must be an array');
   }
@@ -198,6 +202,8 @@ export function defineAgentTool<
     platforms: freezeList(typeof adapter === 'string' ? [adapter] : definition.platforms),
     scopes: freezeList(definition.scopes),
     permissions: freezeList(definition.permissions),
+    tags: freezeList(definition.tags),
+    keywords: freezeList(definition.keywords),
     $feature: toolBrand,
     approval,
   }) as Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
@@ -219,6 +225,8 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
       && definition.approval !== 'always')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)
+    || !validStringList(definition.tags)
+    || !validStringList(definition.keywords)
     || (definition.scopes !== undefined && !Array.isArray(definition.scopes))
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')

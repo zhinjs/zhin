@@ -1,7 +1,8 @@
-import { asArray, asRecord, fetchApi } from '../api.js';
+import { asArray, asRecord } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function () {
-  const data = await fetchApi('/gold-price');
+export default async function (client: SixtySClient) {
+  const data = await client.fetch('/gold-price');
   const lines = ['💰 今日金价', ''];
   if (data.date) lines.push(`📅 ${data.date}`);
   const metals = asArray(data.metals);

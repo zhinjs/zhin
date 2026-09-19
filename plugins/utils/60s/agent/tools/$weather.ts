@@ -1,4 +1,5 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
+import { sixtySClientToken } from '../../src/client.js';
 import { z } from 'zod';
 
 export default defineAgentTool<{ city: string }>({
@@ -6,8 +7,8 @@ export default defineAgentTool<{ city: string }>({
   inputSchema: z.object({ city: z.string() }),
   keywords: ["天气", "气温", "温度", "下雨", "晴天", "阴天", "weather"],
   tags: ["天气", "生活", "查询"],
-  async execute(input) {
+  async execute(input, context) {
     const handler = (await import('../../src/handlers/weather.js')).default;
-    return handler(input);
+    return handler(context.use(sixtySClientToken), input);
   },
 });

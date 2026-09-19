@@ -20,6 +20,7 @@ describe('build-plugin-runtime-entries', () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-build-'));
     temporary.push(root);
     await mkdir(join(root, 'commands/gh'), { recursive: true });
+    await mkdir(join(root, 'agent/tools'), { recursive: true });
     await mkdir(join(root, 'tools'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: '@test/plugin',
@@ -35,6 +36,10 @@ describe('build-plugin-runtime-entries', () => {
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(
+      join(root, 'agent/tools/$lookup.ts'),
+      "import value from '../../src/value.js';\nexport default value as number;\n",
+    );
+    await writeFile(
       join(root, 'tools/$status.ts'),
       "import value from '../src/value.js';\nexport default value as number;\n",
     );
@@ -43,12 +48,15 @@ describe('build-plugin-runtime-entries', () => {
 
     expect(outputs.map((path) => path.slice(root.length + 1))).toEqual([
       'plugin.js',
+      'agent/tools/$lookup.js',
       'commands/gh/$status.js',
       'tools/$status.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
       .toContain('./lib/value.js');
     expect(await readFile(join(root, 'commands/gh/$status.js'), 'utf8'))
+      .toContain('../../lib/value.js');
+    expect(await readFile(join(root, 'agent/tools/$lookup.js'), 'utf8'))
       .toContain('../../lib/value.js');
     expect(await readFile(join(root, 'tools/$status.js'), 'utf8'))
       .toContain('../lib/value.js');
