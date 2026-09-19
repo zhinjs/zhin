@@ -31,6 +31,7 @@ describe('Console Host module boundary', () => {
     const supportingModules = [
       'agent-console.ts',
       'agent-introspection.ts',
+      'asset-server.ts',
       'agent-routes.ts',
       'configuration.ts',
       'configuration-document.ts',
@@ -43,6 +44,7 @@ describe('Console Host module boundary', () => {
       'http-response.ts',
       'inbox.ts',
       'login-assist-binding.ts',
+      'page-renderer.ts',
       'portfolio-sponsor-routes.ts',
       'plugin-routes.ts',
       'plugin-schema.ts',

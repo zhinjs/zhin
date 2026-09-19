@@ -21,6 +21,14 @@ export function writeJson(response: ServerResponse, status: number, body: unknow
   response.end(payload);
 }
 
+export function writeHtml(response: ServerResponse, html: string): void {
+  response.writeHead(200, {
+    'content-type': 'text/html; charset=utf-8',
+    'content-length': Buffer.byteLength(html),
+  });
+  response.end(html);
+}
+
 export function writeSse(
   response: ServerResponse,
   type: string,
