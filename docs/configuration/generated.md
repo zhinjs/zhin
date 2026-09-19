@@ -567,9 +567,8 @@ outline: [2, 3]
 | `plugins.process-monitor.notifyOnRestart` | boolean | 否 | `true` | 正常重启时通知 |
 | `plugins.process-monitor.notifyOnCrash` | boolean | 否 | `true` | 异常崩溃重启时通知 |
 | `plugins.process-monitor.notifyChannels` | array&lt;object&gt; | 否 | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
-| `plugins.process-monitor.notifyChannels[].type` | string: `"user"`, `"group"`, `"webhook"` | 是 | — | — |
+| `plugins.process-monitor.notifyChannels[].type` | string: `"webhook"` | 是 | — | — |
 | `plugins.process-monitor.notifyChannels[].target` | string | 是 | — | — |
-| `plugins.process-monitor.notifyChannels[].platform` | string | 否 | — | — |
 
 ### blackjack
 

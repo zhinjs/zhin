@@ -488,6 +488,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global iLink context-token and cooldown maps with endpoint-owned state classes so adapter instances have explicit lifecycle and cannot leak transient session state across owners."
+    },
+    {
+      "changeset": "own-process-monitor-runtime.md",
+      "packages": [
+        "@zhin.js/process-monitor"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace module-global process monitor state and test reset APIs with an owner-scoped class resource, and remove configuration and documentation for notification capabilities that do not exist."
     }
   ]
 }

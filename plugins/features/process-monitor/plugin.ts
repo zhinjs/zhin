@@ -1,7 +1,7 @@
 import { definePlugin } from 'zhin.js';
 import {
-  resolveProcessMonitorConfig,
-  startProcessMonitor,
+  ProcessMonitor,
+  processMonitorToken,
   type ProcessMonitorConfig,
 } from './src/monitor.js';
 
@@ -17,8 +17,9 @@ export default definePlugin<ProcessMonitorConfig>({
     displayName: 'Process Monitor',
   },
   setup(context) {
-    const config = resolveProcessMonitorConfig(context.config.get());
-    const dispose = startProcessMonitor(config);
-    context.lifecycle.add(dispose);
+    const monitor = new ProcessMonitor(context.config.get());
+    context.resources.provide(processMonitorToken, monitor);
+    monitor.start();
+    context.lifecycle.add(() => monitor.dispose());
   },
 });

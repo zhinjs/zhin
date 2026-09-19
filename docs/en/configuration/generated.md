@@ -567,9 +567,8 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.process-monitor.notifyOnRestart` | boolean | no | `true` | 正常重启时通知 |
 | `plugins.process-monitor.notifyOnCrash` | boolean | no | `true` | 异常崩溃重启时通知 |
 | `plugins.process-monitor.notifyChannels` | array&lt;object&gt; | no | `[]` | 通知渠道（slice-1 仅 webhook 生效） |
-| `plugins.process-monitor.notifyChannels[].type` | string: `"user"`, `"group"`, `"webhook"` | yes | — | — |
+| `plugins.process-monitor.notifyChannels[].type` | string: `"webhook"` | yes | — | — |
 | `plugins.process-monitor.notifyChannels[].target` | string | yes | — | — |
-| `plugins.process-monitor.notifyChannels[].platform` | string | no | — | — |
 
 ### blackjack
 
