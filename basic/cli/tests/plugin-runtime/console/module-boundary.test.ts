@@ -37,6 +37,8 @@ describe('Console Host module boundary', () => {
       'projection.ts',
       'system-log.ts',
       'workroom-routes.ts',
+      'workroom-run-routes.ts',
+      'workroom-governance-routes.ts',
     ];
     const violations: string[] = [];
     for (const file of supportingModules) {
