@@ -565,6 +565,12 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.wechat-mp.endpoints[].appSecret` | string | yes | — | WeChat MP app secret |
 | `plugins.wechat-mp.endpoints[].token` | string | yes | — | WeChat MP callback token |
 | `plugins.wechat-mp.endpoints[].encodingAESKey` | string | no | — | WeChat MP encoding AES key |
+| `plugins.wechat-mp.endpoints[].path` | string | no | — | — |
+| `plugins.wechat-mp.endpoints[].encrypt` | boolean | no | — | — |
+| `plugins.wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | no | — | — |
+| `plugins.wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | no | — | — |
+| `plugins.wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | no | — | — |
+| `plugins.wechat-mp.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.wechat-mp.endpoints[].id` | string | yes | — | WeChat MP bot name |
 | `plugins.wechat-mp.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

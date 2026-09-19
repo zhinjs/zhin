@@ -20,7 +20,7 @@ export {
   type TokenResponse,
   type WeChatAPIResponse,
   type WeChatMessage,
-  type WeChatMpAdapterConfig,
+  type WeChatMpEndpointConfig,
   type WeChatWireSegment,
 } from './protocol.js';
 

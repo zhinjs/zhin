@@ -16,7 +16,7 @@ function gateway(): OutboundMessageService {
 
 function config() {
   return resolveWeChatMpConfig({
-    name: 'mgmt-bot',
+    id: 'mgmt-bot',
     appId: 'wx-app',
     appSecret: 'sec',
     token: 'tok',

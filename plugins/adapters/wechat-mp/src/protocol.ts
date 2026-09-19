@@ -8,11 +8,12 @@ import type { IncomingMessage } from 'node:http';
 import * as xml2js from 'xml2js';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
-export interface WeChatMpAdapterConfig {
-  readonly id?: string;
-  readonly appId?: string;
-  readonly appSecret?: string;
-  readonly token?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface WeChatMpEndpointConfig {
+  readonly id: string;
+  readonly appId: string;
+  readonly appSecret: string;
+  readonly token: string;
   readonly encodingAESKey?: string;
   readonly path?: string;
   readonly encrypt?: boolean;
@@ -29,10 +30,6 @@ export interface WeChatMpAdapterConfig {
   readonly replyMode?: 'passive' | 'customer_service';
   /** 被动回复等待入站处理的最长时间（毫秒），默认 4500 */
   readonly passiveReplyTimeoutMs?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: wechat-mp`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedWeChatMpConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedWeChatMpConfig {
@@ -89,28 +86,17 @@ export interface WeChatWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveWeChatMpConfig(config: WeChatMpAdapterConfig = {}): ResolvedWeChatMpConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'wechat-mp');
-  const appId = config.appId ?? entry?.appId ?? process.env.WECHAT_APP_ID;
-  const appSecret = config.appSecret ?? entry?.appSecret ?? process.env.WECHAT_APP_SECRET;
-  const token = config.token ?? entry?.token ?? process.env.WECHAT_TOKEN;
-  if (!appId || !appSecret || !token) {
-    throw new TypeError(
-      'WeChat MP adapter requires appId + appSecret + token (plugins.<key> or endpoints with context: wechat-mp)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.WECHAT_BOT_NAME
-    || 'wechat-mp-bot';
-  const path = config.path ?? entry?.path ?? '/wechat/webhook';
-  const encodingAESKey = config.encodingAESKey ?? entry?.encodingAESKey;
-  const encrypt = config.encrypt ?? entry?.encrypt ?? false;
-  const encryptMode = config.encryptMode ?? entry?.encryptMode ?? (encrypt ? 'compatible' : 'plain');
-  const replyMode = config.replyMode ?? entry?.replyMode ?? 'passive';
-  const passiveReplyTimeoutMs = config.passiveReplyTimeoutMs
-    ?? entry?.passiveReplyTimeoutMs
-    ?? 4500;
+export function resolveWeChatMpConfig(config: WeChatMpEndpointConfig): ResolvedWeChatMpConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const appId = requiredEndpointField(config.appId, 'appId');
+  const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
+  const token = requiredEndpointField(config.token, 'token');
+  const path = optionalEndpointField(config.path) ?? '/wechat/webhook';
+  const encodingAESKey = optionalEndpointField(config.encodingAESKey);
+  const encrypt = config.encrypt ?? false;
+  const encryptMode = config.encryptMode ?? (encrypt ? 'compatible' : 'plain');
+  const replyMode = config.replyMode ?? 'passive';
+  const passiveReplyTimeoutMs = config.passiveReplyTimeoutMs ?? 4500;
   return {
     context: 'wechat-mp',
     id,
@@ -124,6 +110,21 @@ export function resolveWeChatMpConfig(config: WeChatMpAdapterConfig = {}): Resol
     replyMode,
     passiveReplyTimeoutMs,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'appId' | 'appSecret' | 'token',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`WeChat MP endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function queryParam(value: string | null | undefined): string {

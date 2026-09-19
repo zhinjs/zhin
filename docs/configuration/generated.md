@@ -565,6 +565,12 @@ outline: [2, 3]
 | `plugins.wechat-mp.endpoints[].appSecret` | string | 是 | — | WeChat MP app secret |
 | `plugins.wechat-mp.endpoints[].token` | string | 是 | — | WeChat MP callback token |
 | `plugins.wechat-mp.endpoints[].encodingAESKey` | string | 否 | — | WeChat MP encoding AES key |
+| `plugins.wechat-mp.endpoints[].path` | string | 否 | — | — |
+| `plugins.wechat-mp.endpoints[].encrypt` | boolean | 否 | — | — |
+| `plugins.wechat-mp.endpoints[].encryptMode` | string: `"plain"`, `"compatible"`, `"secure"` | 否 | — | — |
+| `plugins.wechat-mp.endpoints[].replyMode` | string: `"passive"`, `"customer_service"` | 否 | — | — |
+| `plugins.wechat-mp.endpoints[].passiveReplyTimeoutMs` | number | 否 | — | — |
+| `plugins.wechat-mp.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.wechat-mp.endpoints[].id` | string | 是 | — | WeChat MP bot name |
 | `plugins.wechat-mp.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

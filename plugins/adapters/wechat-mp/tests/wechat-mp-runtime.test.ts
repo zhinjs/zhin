@@ -16,6 +16,7 @@ import {
   formatInboundId,
   isEncryptedEchostr,
   resolveWeChatMpConfig,
+  type WeChatMpEndpointConfig,
   verifySignature,
 } from '../src/protocol.js';
 import {
@@ -29,7 +30,7 @@ const OFFICIAL_SAMPLE_APP_ID = ['wx', '5823', 'bf96', 'd3bd', '56c7'].join('');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
 
 const baseConfig = resolveWeChatMpConfig({
-  name: 'verify-bot',
+  id: 'verify-bot',
   appId: OFFICIAL_SAMPLE_APP_ID,
   appSecret: 'secret',
   token: 'QDG6eK',
@@ -58,13 +59,14 @@ function mockFetchOk(): ReturnType<typeof vi.fn> {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
 describe('wechat-mp protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveWeChatMpConfig({
-      name: 'bot',
+      id: 'bot',
       appId: 'wx',
       appSecret: 'sec',
       token: 'tok',
@@ -72,6 +74,26 @@ describe('wechat-mp protocol helpers', () => {
     expect(resolved.path).toBe('/wechat/webhook');
     expect(resolved.replyMode).toBe('passive');
     expect(resolved.encryptMode).toBe('plain');
+  });
+
+  it('requires one expanded endpoint config without environment or nested fallbacks', () => {
+    vi.stubEnv('WECHAT_APP_ID', 'legacy-app');
+    vi.stubEnv('WECHAT_APP_SECRET', 'legacy-secret');
+    vi.stubEnv('WECHAT_TOKEN', 'legacy-token');
+    expect(() => resolveWeChatMpConfig({
+      id: 'bot',
+      appId: '',
+      appSecret: '',
+      token: '',
+    })).toThrow(/non-empty appId/);
+    expect(() => resolveWeChatMpConfig({
+      endpoints: [{
+        id: 'nested-bot',
+        appId: 'nested-app',
+        appSecret: 'nested-secret',
+        token: 'nested-token',
+      }],
+    } as unknown as WeChatMpEndpointConfig)).toThrow(/non-empty id/);
   });
 
   it('验证明文签名', () => {
@@ -185,7 +207,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       send: vi.fn(async () => 'sent'),
     };
     const config = resolveWeChatMpConfig({
-      name: 'bot',
+      id: 'bot',
       appId: 'wx-app',
       appSecret: 'sec',
       token: 'plain-token',
@@ -227,7 +249,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const config = resolveWeChatMpConfig({
-      name: 'bot',
+      id: 'bot',
       appId: 'wx-app',
       appSecret: 'sec',
       token: 'plain-token',
@@ -291,7 +313,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       gateway: { receive, send: vi.fn(async () => 'sent') },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -324,7 +346,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -378,7 +400,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -423,7 +445,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -465,7 +487,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -528,7 +550,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -580,7 +602,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -628,7 +650,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -679,7 +701,7 @@ describe('wechat-mp plugin runtime adapter', () => {
       },
       http,
       config: resolveWeChatMpConfig({
-        name: 'bot',
+        id: 'bot',
         appId: 'wx',
         appSecret: 'sec',
         token: 'tok',
@@ -727,7 +749,7 @@ describe('wechat-mp plugin runtime adapter', () => {
     });
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const config = resolveWeChatMpConfig({
-      name: 'bot',
+      id: 'bot',
       appId: 'wx-app',
       appSecret: 'sec',
       token: 'plain-token',
