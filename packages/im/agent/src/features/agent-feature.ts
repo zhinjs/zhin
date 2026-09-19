@@ -2,7 +2,7 @@
  * AgentFeature — 专长 / 子代理预设（装配面；ADR 0042）
  *
  * 不等同于配置 `agents[].match` 主绑定；主路径选用由 Agent Binding 决定。
- * Core `AgentPresetFeature` 仍保留；本 Feature 为 agent 包权威装配面。
+ * 本 Feature 是 Agent 预设的唯一装配面。
  */
 
 import { Feature, type FeatureJSON } from '@zhin.js/kernel';

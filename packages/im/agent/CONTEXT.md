@@ -66,7 +66,7 @@ _避免使用_：Orchestrator 直写、回合 SSOT
 
 **AgentFeature**:
 Agent Runtime 中的专长 / 子代理预设 Feature（对齐 `$*.agent.md`）；**不**替代配置里的主 Agent 选用。
-_避免使用_：AgentPresetFeature（作为唯一对外名）、主绑定 SSOT
+_避免使用_：主绑定 SSOT
 
 **MCPFeature**:
 Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具列表。

@@ -189,9 +189,9 @@ Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执�
 // 插件系统
 export { Plugin } from './plugin.js'  // classic runtime；后续切片继续删除
 
-// Feature 体系（Cron / Scheduler 来自 @zhin.js/kernel）
+// 基础机制（Cron / Scheduler 来自 @zhin.js/kernel）
 export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
-export { ToolFeature, SkillFeature, ScheduleFeature, DatabaseFeature, ... } from './built/*.js'
+export { ToolFeature, SkillFeature, DatabaseFeature, ... } from './built/*.js'
 
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'

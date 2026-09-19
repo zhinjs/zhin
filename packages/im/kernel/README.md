@@ -6,7 +6,7 @@ zhin 运行时内核，提供插件 DI、Feature 抽象、Schedule 调度引擎�
 
 ## 架构
 
-`@zhin.js/kernel` 位于 Zhin.js 分层底部，**不含 IM / Endpoint 概念**。上层 `@zhin.js/core` 继承本包的 `Feature`、`ScheduleFeature`、`Scheduler` 并扩展 IM 运行时：
+`@zhin.js/kernel` 位于 Zhin.js 分层底部，**不含 IM / Endpoint 概念**。上层 `@zhin.js/core` 继承本包的 `Feature`、`Scheduler` 等基础机制并扩展 IM 运行时：
 
 ```
 basic/ (@zhin.js/logger, schema, database, cli)
@@ -70,7 +70,7 @@ feature.on('add', (item, pluginName) => {
 
 ### ScheduleEngine（内存调度）
 
-插件侧推荐通过 `@zhin.js/core` 的 `ScheduleFeature` / `addSchedule` 注册任务；内核提供 `ScheduleEngine` 解析 cron / 农历 / 节假日等。
+内核提供 `ScheduleEngine` 解析 cron / 农历 / 节假日等；Plugin Runtime 插件通过 owner-scoped `scheduleHostToken` 注册任务，由 composition root 管理代际生命周期。
 
 ```typescript
 import { ScheduleEngine, getScheduleEngine } from '@zhin.js/kernel'

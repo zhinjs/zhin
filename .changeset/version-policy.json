@@ -243,6 +243,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Separate owner-scoped Command identity from global user routing and remove implicit dot-prefixed compatibility routes under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-inert-core-features.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove unmounted classic Core Feature registries after scheduling, Agent presets, and message admission moved to their current owner-scoped authorities."
     }
   ]
 }

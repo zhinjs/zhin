@@ -15,7 +15,7 @@ basic/ (@zhin.js/logger, schema, database, schedule, cli)
   ↓
 @zhin.js/kernel          ScheduleEngine 包装 CalendarScheduler
   ↓
-@zhin.js/core            Plugin.addSchedule
+@zhin.js/plugin-runtime  scheduleHostToken（owner-scoped）
   ↓
 @zhin.js/agent           ScheduleJobEngine、schedule_* 工具
 ```
