@@ -12,7 +12,6 @@ import { parseConfigWithZodSchema } from '../src/authoring/zod-schema.js';
 import { bridgeAuthoringConnection, bridgeAuthoringTool } from '../src/authoring/bridge.js';
 import { defineConnection } from '../src/authoring/define-connection.js';
 import {
-  collectPluginAgentRoots,
   discoverPluginAgentSurface,
   resolveAuthoringImportPath,
 } from '../src/discovery/agent-surface.js';
@@ -108,7 +107,6 @@ describe('agent authoring entry discovery', () => {
     try {
       const surface = await discoverPluginAgentSurface({
         pluginName: 'fixture',
-        plugin: {} as never,
         packageRoot: root,
         agentDir: path.join(root, 'agent'),
         evalsDir: path.join(root, 'evals'),
@@ -158,7 +156,7 @@ describe('discoverWorkspaceAgents fractal', () => {
     try {
       const { discoverWorkspaceAgents } = await import('../src/discovery/agents.js');
       const cwd = process.cwd();
-      const metas = await discoverWorkspaceAgents(null, tmp);
+      const metas = await discoverWorkspaceAgents(tmp);
       expect(metas.some((m) => m.name === 'researcher' && m.description.includes('Research'))).toBe(true);
       expect(process.cwd()).toBe(cwd);
     } finally {

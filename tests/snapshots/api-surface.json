@@ -202,7 +202,7 @@
     "export{defineAgentPromptSection,isPromptSectionIndex,PromptSectionIndex,promptSectionFeatureId,}from '@zhin.js/prompt-section';",
     "export{deliverScheduleToAdapter}from './assistant/deliver-schedule-to-adapter.js';",
     "export{demoteScheduleCreator}from './schedule-domain/security-harness.js';",
-    "export{discoverAllPluginAgentSurfaces,discoverPluginAgentSurface,collectPluginAgentRoots,}from './discovery/agent-surface.js';",
+    "export{discoverPluginAgentSurface,}from './discovery/agent-surface.js';",
     "export{discoverWorkspaceAgents,type AgentMeta,}from './discovery/agents.js';",
     "export{executeAgentTurn}from './turn/execute-agent-turn.js';",
     "export{filterImDeliveryContent}from './segment/filter-im-delivery.js';",

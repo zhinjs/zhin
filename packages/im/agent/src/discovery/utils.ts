@@ -8,7 +8,6 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Plugin } from '@zhin.js/core';
 
 /** 将 unknown 错误转为字符串 */
 export function errMsg(e: unknown): string {
@@ -71,38 +70,6 @@ export function buildStandardSkillDirs(): string[] {
 }
 
 /**
- * 从根插件树收集：各插件包目录下的 `skills/`（其下为 `<name>/SKILL.md`）
- *
- * 递归整棵子树（不仅一层子插件），避免适配器套在目录/聚合插件下时技能目录被漏扫。
- */
-export function collectPluginSkillSearchRoots(root: Plugin | null | undefined): string[] {
-  if (!root) return [];
-  const dirs: string[] = [];
-  const push = (d: string) => {
-    if (d && !dirs.includes(d)) dirs.push(d);
-  };
-  const fromPlugin = (p: Plugin) => {
-    if (!p?.filePath) return;
-    const dir = path.dirname(p.filePath);
-    push(path.join(dir, 'skills'));
-    // Also check package root when filePath is under src/ or lib/
-    const dirName = path.basename(dir);
-    if (dirName === 'src' || dirName === 'lib') {
-      push(path.join(path.dirname(dir), 'skills'));
-    }
-  };
-  const walk = (p: Plugin | null | undefined) => {
-    if (!p) return;
-    fromPlugin(p);
-    for (const child of (p.children || []) as Plugin[]) {
-      walk(child as Plugin);
-    }
-  };
-  walk(root);
-  return dirs;
-}
-
-/**
  * 技能发现与 activate_skill 查找共用：标准目录 + 已加载插件包 skills/
  */
 /** zhin-package 安装目录下的 skills 路径 */
@@ -126,12 +93,9 @@ export function collectZhinPackageSkillRoots(): string[] {
   return roots;
 }
 
-export function getSkillSearchDirectories(root?: Plugin | null): string[] {
+export function getSkillSearchDirectories(): string[] {
   const list = [...buildStandardSkillDirs()];
   for (const d of collectZhinPackageSkillRoots()) {
-    if (!list.includes(d)) list.push(d);
-  }
-  for (const d of collectPluginSkillSearchRoots(root ?? undefined)) {
     if (!list.includes(d)) list.push(d);
   }
   return list;

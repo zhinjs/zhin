@@ -4,7 +4,6 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Plugin } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import {
   AUTHORING_KIND,
@@ -35,7 +34,6 @@ const logger = getLogger('agent-surface');
 
 export interface PluginAgentRoots {
   pluginName: string;
-  plugin: Plugin;
   packageRoot: string;
   agentDir: string;
   evalsDir: string;
@@ -57,35 +55,6 @@ export function resolveAuthoringImportPath(packageRoot: string, sourcePath: stri
     if (fs.existsSync(libCandidate)) return libCandidate;
   }
   return sourcePath;
-}
-
-export function collectPluginAgentRoots(root: Plugin | null | undefined): PluginAgentRoots[] {
-  if (!root) return [];
-  const out: PluginAgentRoots[] = [];
-  const seen = new Set<string>();
-
-  const push = (p: Plugin) => {
-    if (!p?.filePath || !p.name) return;
-    const packageRoot = resolvePluginPackageRoot(p.filePath);
-    const key = `${p.name}:${packageRoot}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    out.push({
-      pluginName: p.name,
-      plugin: p,
-      packageRoot,
-      agentDir: path.join(packageRoot, 'agent'),
-      evalsDir: path.join(packageRoot, 'evals'),
-    });
-  };
-
-  const walk = (p: Plugin | null | undefined) => {
-    if (!p) return;
-    push(p);
-    for (const child of (p.children || []) as Plugin[]) walk(child as Plugin);
-  };
-  walk(root);
-  return out;
 }
 
 async function importAuthoringModule(filePath: string, packageRoot?: string): Promise<unknown> {
@@ -400,17 +369,6 @@ export async function discoverPluginAgentSurface(
     logger.warn(`Failed to discover agent surface for ${roots.pluginName}: ${errMsg(e)}`);
     return null;
   }
-}
-
-export async function discoverAllPluginAgentSurfaces(
-  root: Plugin | null | undefined,
-): Promise<DiscoveredPluginAgentSurface[]> {
-  const surfaces: DiscoveredPluginAgentSurface[] = [];
-  for (const r of collectPluginAgentRoots(root)) {
-    const surface = await discoverPluginAgentSurface(r);
-    if (surface) surfaces.push(surface);
-  }
-  return surfaces;
 }
 
 export function workspaceAgentsDir(): string {

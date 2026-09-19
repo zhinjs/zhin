@@ -680,9 +680,7 @@ export type {
   DefineAgentToolInput,
 } from './authoring/index.js';
 export {
-  discoverAllPluginAgentSurfaces,
   discoverPluginAgentSurface,
-  collectPluginAgentRoots,
 } from './discovery/agent-surface.js';
 export {
   discoverWorkspaceAgents,

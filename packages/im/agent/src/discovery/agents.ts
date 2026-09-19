@@ -8,12 +8,10 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Plugin } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import { workspaceRoot } from './utils.js';
 import {
   discoverWorkspaceFractalAgent,
-  resolvePluginPackageRoot,
 } from './agent-surface.js';
 import { isAuthoringDefinition, type AuthoringAgentDefinition } from '../authoring/types.js';
 import { normalizeToolDenylist } from '../authoring/disable-tool.js';
@@ -39,7 +37,6 @@ export interface AgentMeta {
   model?: string;
   provider?: string;
   maxIterations?: number;
-  ownerPlugin?: string;
   role?: string;
   contextMode?: SubagentContextMode;
   toolAliases?: Record<string, string>;
@@ -64,7 +61,6 @@ function agentMetaFromFractal(
   agentDir: string,
   def: AuthoringAgentDefinition | undefined,
   instructionsBody: string | undefined,
-  ownerPlugin?: string,
 ): AgentMeta | null {
   const description = def?.description;
   if (!description && !instructionsBody) return null;
@@ -80,7 +76,6 @@ function agentMetaFromFractal(
     disallowedTools: normalizeToolDenylist(def?.disallowedTools),
     filePath: agentFile,
     maxIterations: def?.maxIterations,
-    ownerPlugin,
     role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
     contextMode: def?.contextMode,
   };
@@ -88,7 +83,6 @@ function agentMetaFromFractal(
 
 async function discoverFractalAgentsInDir(
   agentsDir: string,
-  ownerPlugin?: string,
 ): Promise<AgentMeta[]> {
   const agents: AgentMeta[] = [];
   if (!fs.existsSync(agentsDir)) return agents;
@@ -111,7 +105,6 @@ async function discoverFractalAgentsInDir(
       agentDir,
       def,
       fractal.instructionsBody,
-      ownerPlugin,
     );
     if (meta) agents.push(meta);
   }
@@ -119,10 +112,9 @@ async function discoverFractalAgentsInDir(
 }
 
 /**
- * 扫描 agents/ 分形目录，发现 workspace / plugin workspace agents
+ * 扫描 workspace agents/ 分形目录。
  */
 export async function discoverWorkspaceAgents(
-  root?: Plugin | null,
   projectRoot = workspaceRoot(),
 ): Promise<AgentMeta[]> {
   const agents: AgentMeta[] = [];
@@ -134,23 +126,8 @@ export async function discoverWorkspaceAgents(
     path.join(projectRoot, 'data', 'agents'),
   ];
 
-  const dirToPlugin = new Map<string, string>();
-  if (root) {
-    const addPluginDir = (p: Plugin) => {
-      if (!p?.filePath) return;
-      const packageRoot = resolvePluginPackageRoot(p.filePath);
-      const d = path.join(packageRoot, 'agents');
-      if (!agentDirs.includes(d)) agentDirs.push(d);
-      dirToPlugin.set(d, p.name);
-    };
-    addPluginDir(root);
-    for (const child of (root.children || []) as Plugin[]) {
-      addPluginDir(child as Plugin);
-    }
-  }
-
   for (const agentsDir of agentDirs) {
-    const found = await discoverFractalAgentsInDir(agentsDir, dirToPlugin.get(agentsDir));
+    const found = await discoverFractalAgentsInDir(agentsDir);
     for (const meta of found) {
       if (seenNames.has(meta.name)) {
         logger.debug(`Agent '${meta.name}' 已由先序目录加载，跳过: ${meta.filePath}`);

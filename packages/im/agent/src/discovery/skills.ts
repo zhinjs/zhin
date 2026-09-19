@@ -9,7 +9,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import type { Plugin } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import { getSkillSearchDirectories } from './utils.js';
 
@@ -37,7 +36,6 @@ export interface SkillMeta {
   /** 缺失的依赖描述（如 "CLI: ffmpeg", "ENV: API_KEY") */
   requiresMissing?: string[];
   /** 所属插件名（从 skills/ 目录归属推断） */
-  ownerPlugin?: string;
 }
 
 // ============================================================================
@@ -46,28 +44,11 @@ export interface SkillMeta {
 
 /**
  * 扫描技能目录，发现 SKILL.md 技能文件
- * @param root 根插件（可选）：用于追加插件包内 `skills/` 扫描，与 `activate_skill` 查找路径一致
  */
-export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<SkillMeta[]> {
+export async function discoverWorkspaceSkills(): Promise<SkillMeta[]> {
   const skills: SkillMeta[] = [];
   const seenNames = new Set<string>();
-  const skillDirs = getSkillSearchDirectories(root ?? undefined);
-
-  // Build dir → pluginName mapping for attribution
-  const dirToPlugin = new Map<string, string>();
-  if (root) {
-    const mapPlugin = (p: Plugin) => {
-      if (!p?.filePath) return;
-      const dir = path.dirname(p.filePath);
-      dirToPlugin.set(path.join(dir, 'skills'), p.name);
-      const dirName = path.basename(dir);
-      if (dirName === 'src' || dirName === 'lib') {
-        dirToPlugin.set(path.join(path.dirname(dir), 'skills'), p.name);
-      }
-    };
-    mapPlugin(root);
-    for (const child of (root.children || []) as Plugin[]) mapPlugin(child);
-  }
+  const skillDirs = getSkillSearchDirectories();
 
   for (const skillsDir of skillDirs) {
     if (!fs.existsSync(skillsDir)) continue;
@@ -154,7 +135,6 @@ export async function discoverWorkspaceSkills(root?: Plugin | null): Promise<Ski
           always: Boolean(metadata.always),
           available,
           requiresMissing: requiresMissing.length > 0 ? requiresMissing : undefined,
-          ownerPlugin: dirToPlugin.get(skillsDir),
         });
         logger.debug(`Skill发现成功: ${metadata.name}, tools: ${JSON.stringify(metadata.tools || [])}, platforms: ${JSON.stringify(metadata.platforms || '(all)')}`);
       } catch (e) {

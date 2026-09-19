@@ -80,7 +80,7 @@ export function createRuntimeZhinAgent(
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
     getMcpRegistry: () => null,
     resolveAgentMeta: async (name) => {
-      const metas = await discoverWorkspaceAgents(null, projectRoot);
+      const metas = await discoverWorkspaceAgents(projectRoot);
       return metas.find((meta) => meta.name === name) ?? null;
     },
     getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
@@ -125,7 +125,7 @@ async function seedResourceHubAgentPresets(
   projectRoot: string,
 ): Promise<number> {
   try {
-    const metas = await discoverWorkspaceAgents(null, projectRoot);
+    const metas = await discoverWorkspaceAgents(projectRoot);
     for (const meta of metas) {
       if (resourceHub.subagents.getPreset(meta.name)) continue;
       resourceHub.addAgentPreset({
@@ -135,7 +135,6 @@ async function seedResourceHubAgentPresets(
         tools: meta.toolNames,
         model: meta.model,
         filePath: meta.filePath,
-        pluginName: meta.ownerPlugin,
       });
     }
     if (metas.length > 0) {

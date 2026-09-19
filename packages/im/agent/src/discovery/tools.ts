@@ -9,7 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import type { Plugin, ToolParametersSchema, ToolScope, SenderRole } from '@zhin.js/core';
+import type { ToolParametersSchema, ToolScope, SenderRole } from '@zhin.js/core';
 import { getLogger } from '@zhin.js/logger';
 import { getDataDir } from './utils.js';
 
@@ -79,7 +79,6 @@ export interface ToolMeta {
   /** body 内容（无 handler 时作为 prompt 模板） */
   templateBody?: string;
   /** 所属插件名（从 tools/ 目录归属推断） */
-  ownerPlugin?: string;
 }
 
 // ============================================================================
@@ -87,39 +86,14 @@ export interface ToolMeta {
 // ============================================================================
 
 /**
- * 从根插件树收集：根插件与直接子插件包目录下的 `tools/`
+ * 获取所有 workspace tool 搜索目录。
  */
-export function collectPluginToolSearchRoots(root: Plugin | null | undefined): string[] {
-  if (!root) return [];
-  const dirs: string[] = [];
-  const push = (d: string) => { if (d && !dirs.includes(d)) dirs.push(d); };
-  const fromPlugin = (p: Plugin) => {
-    if (!p?.filePath) return;
-    const dir = path.dirname(p.filePath);
-    push(path.join(dir, 'tools'));
-    const dirName = path.basename(dir);
-    if (dirName === 'src' || dirName === 'lib') {
-      push(path.join(path.dirname(dir), 'tools'));
-    }
-  };
-  fromPlugin(root);
-  for (const child of (root.children || []) as Plugin[]) fromPlugin(child);
-  return dirs;
-}
-
-/**
- * 获取所有 tool 搜索目录（标准目录 + 插件包 tools/）
- */
-export function getToolSearchDirectories(root?: Plugin | null): string[] {
-  const list = [
+export function getToolSearchDirectories(): string[] {
+  return [
     path.join(process.cwd(), 'tools'),
     path.join(os.homedir(), '.zhin', 'tools'),
     path.join(getDataDir(), 'tools'),
   ];
-  for (const d of collectPluginToolSearchRoots(root ?? undefined)) {
-    if (!list.includes(d)) list.push(d);
-  }
-  return list;
 }
 
 // ============================================================================
@@ -129,26 +103,10 @@ export function getToolSearchDirectories(root?: Plugin | null): string[] {
 /**
  * 扫描 tools/ 目录，发现 *.tool.md 文件
  */
-export async function discoverWorkspaceTools(root?: Plugin | null): Promise<ToolMeta[]> {
+export async function discoverWorkspaceTools(): Promise<ToolMeta[]> {
   const tools: ToolMeta[] = [];
   const seenNames = new Set<string>();
-  const toolDirs = getToolSearchDirectories(root);
-
-  // Build dir → pluginName mapping for attribution
-  const dirToPlugin = new Map<string, string>();
-  if (root) {
-    const mapPlugin = (p: Plugin) => {
-      if (!p?.filePath) return;
-      const dir = path.dirname(p.filePath);
-      dirToPlugin.set(path.join(dir, 'tools'), p.name);
-      const dirName = path.basename(dir);
-      if (dirName === 'src' || dirName === 'lib') {
-        dirToPlugin.set(path.join(path.dirname(dir), 'tools'), p.name);
-      }
-    };
-    mapPlugin(root);
-    for (const child of (root.children || []) as Plugin[]) mapPlugin(child);
-  }
+  const toolDirs = getToolSearchDirectories();
 
   for (const toolsDir of toolDirs) {
     if (!fs.existsSync(toolsDir)) continue;
@@ -216,7 +174,6 @@ export async function discoverWorkspaceTools(root?: Plugin | null): Promise<Tool
           handler: metadata.handler,
           filePath: toolMdPath,
           templateBody: !metadata.handler && body ? body : undefined,
-          ownerPlugin: dirToPlugin.get(toolsDir),
         });
         logger.debug(`Tool发现成功: ${metadata.name}`);
       } catch (e) {
