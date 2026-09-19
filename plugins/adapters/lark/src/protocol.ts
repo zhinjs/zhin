@@ -10,20 +10,16 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('lark');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface LarkAdapterConfig {
-  readonly id?: string;
-  readonly appId?: string;
-  readonly appSecret?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface LarkEndpointConfig {
+  readonly id: string;
+  readonly appId: string;
+  readonly appSecret: string;
   readonly encryptKey?: string;
   readonly verificationToken?: string;
   readonly webhookPath?: string;
   readonly apiBaseUrl?: string;
   readonly isFeishu?: boolean;
-  /** Transitional: legacy root `endpoints[]` with `context: lark`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedLarkConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedLarkConfig {
@@ -108,31 +104,20 @@ export interface LarkSendBody {
   readonly content: string;
 }
 
-export function resolveLarkConfig(config: LarkAdapterConfig = {}): ResolvedLarkConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'lark');
-  const appId = config.appId ?? entry?.appId ?? process.env.LARK_APP_ID;
-  const appSecret = config.appSecret ?? entry?.appSecret ?? process.env.LARK_APP_SECRET;
-  if (!appId || !appSecret) {
-    throw new TypeError(
-      'Lark adapter requires appId + appSecret (plugins.<key> or endpoints with context: lark)',
-    );
-  }
-  const isFeishu = config.isFeishu ?? entry?.isFeishu ?? true;
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.LARK_BOT_NAME
-    || 'lark-bot';
-  const webhookPath = normalizeWebhookPath(
-    config.webhookPath ?? entry?.webhookPath ?? '/lark/webhook',
-  );
+export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const appId = requiredEndpointField(config.appId, 'appId');
+  const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
+  const isFeishu = config.isFeishu ?? true;
+  const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/lark/webhook');
   const defaultBase = isFeishu
     ? 'https://open.feishu.cn/open-apis'
     : 'https://open.larksuite.com/open-apis';
   const apiBaseUrl = (
-    config.apiBaseUrl ?? entry?.apiBaseUrl ?? defaultBase
+    config.apiBaseUrl ?? defaultBase
   ).replace(/\/$/, '');
-  const encryptKey = config.encryptKey ?? entry?.encryptKey;
-  const verificationToken = config.verificationToken ?? entry?.verificationToken;
+  const encryptKey = config.encryptKey;
+  const verificationToken = config.verificationToken;
   return {
     context: 'lark',
     id,
@@ -144,6 +129,16 @@ export function resolveLarkConfig(config: LarkAdapterConfig = {}): ResolvedLarkC
     apiBaseUrl,
     isFeishu,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'appId' | 'appSecret',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Lark endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function normalizeWebhookPath(path: string): string {

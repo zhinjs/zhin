@@ -306,6 +306,10 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.lark.endpoints[].appSecret` | string | yes | — | Lark app secret |
 | `plugins.lark.endpoints[].encryptKey` | string | no | — | Lark encrypt key |
 | `plugins.lark.endpoints[].verificationToken` | string | no | — | Lark verification token |
+| `plugins.lark.endpoints[].webhookPath` | string | no | — | — |
+| `plugins.lark.endpoints[].apiBaseUrl` | string | no | — | — |
+| `plugins.lark.endpoints[].isFeishu` | boolean | no | — | — |
+| `plugins.lark.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.lark.endpoints[].id` | string | yes | — | Lark bot name |
 | `plugins.lark.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

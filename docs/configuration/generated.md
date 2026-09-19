@@ -306,6 +306,10 @@ outline: [2, 3]
 | `plugins.lark.endpoints[].appSecret` | string | 是 | — | Lark app secret |
 | `plugins.lark.endpoints[].encryptKey` | string | 否 | — | Lark encrypt key |
 | `plugins.lark.endpoints[].verificationToken` | string | 否 | — | Lark verification token |
+| `plugins.lark.endpoints[].webhookPath` | string | 否 | — | — |
+| `plugins.lark.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `plugins.lark.endpoints[].isFeishu` | boolean | 否 | — | — |
+| `plugins.lark.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.lark.endpoints[].id` | string | 是 | — | Lark bot name |
 | `plugins.lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

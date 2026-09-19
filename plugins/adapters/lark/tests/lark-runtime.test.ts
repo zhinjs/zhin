@@ -90,6 +90,7 @@ afterEach(async () => {
 describe('lark protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveLarkConfig({
+      id: 'lark-bot',
       appId: 'cli_x',
       appSecret: 'sec',
     });
@@ -97,6 +98,24 @@ describe('lark protocol helpers', () => {
     expect(resolved.apiBaseUrl).toBe('https://open.feishu.cn/open-apis');
     expect(resolved.id).toBe('lark-bot');
     expect(resolved.isFeishu).toBe(true);
+  });
+
+  it('requires expanded endpoint identity and app credentials', () => {
+    expect(() => resolveLarkConfig({
+      id: ' ',
+      appId: 'cli_x',
+      appSecret: 'sec',
+    })).toThrow('Lark endpoint requires a non-empty id');
+    expect(() => resolveLarkConfig({
+      id: 'lark-bot',
+      appId: ' ',
+      appSecret: 'sec',
+    })).toThrow('Lark endpoint requires a non-empty appId');
+    expect(() => resolveLarkConfig({
+      id: 'lark-bot',
+      appId: 'cli_x',
+      appSecret: ' ',
+    })).toThrow('Lark endpoint requires a non-empty appSecret');
   });
 
   it('verifies SHA256 signatures', () => {

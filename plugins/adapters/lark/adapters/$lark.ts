@@ -6,14 +6,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { LarkEndpoint } from '../src/endpoint.js';
 import {
   resolveLarkConfig,
-  type LarkAdapterConfig,
+  type LarkEndpointConfig,
 } from '../src/protocol.js';
 import { larkRuntimeStateToken } from '../src/lark-runtime-state.js';
 
 export { LarkEndpoint } from '../src/endpoint.js';
 export type { LarkEndpointOptions, LarkFetch } from '../src/endpoint.js';
 
-export default defineAdapter<LarkAdapterConfig>({
+export default defineAdapter<LarkEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // image 段 canonical MediaRef 经 /im/v1/images 物化为 image_key
