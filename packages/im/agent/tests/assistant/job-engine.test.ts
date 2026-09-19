@@ -3,11 +3,13 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ScheduleJobEngine } from '../../src/assistant/job-engine.js';
+import { createNotificationRouter } from '../../src/assistant/notification-router.js';
 import { ScheduleJobStore } from '../../src/assistant/job-store.js';
 import { JobWorker } from '../../src/assistant/job-worker.js';
 import type { TaskExecutor } from '../../src/task-executor.js';
 
 describe('ScheduleJobEngine', () => {
+  const router = createNotificationRouter({ resolveAdapter: () => undefined });
   let dataDir: string;
 
   beforeEach(async () => {
@@ -30,7 +32,7 @@ describe('ScheduleJobEngine', () => {
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
 
-    const engine = new ScheduleJobEngine({ store, worker });
+    const engine = new ScheduleJobEngine({ store, worker, router });
     await engine.load();
 
     await engine.addJob({
@@ -64,7 +66,7 @@ describe('ScheduleJobEngine', () => {
     const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
-    const engine = new ScheduleJobEngine({ store, worker });
+    const engine = new ScheduleJobEngine({ store, worker, router });
 
     await engine.addJob({
       id: 'sched-owner',
@@ -99,7 +101,7 @@ describe('ScheduleJobEngine', () => {
     const executor = { execute } as unknown as TaskExecutor;
     const store = new ScheduleJobStore({ dataDir });
     const worker = new JobWorker({ executor });
-    const engine = new ScheduleJobEngine({ store, worker });
+    const engine = new ScheduleJobEngine({ store, worker, router });
 
     await engine.addJob({
       id: 'sched-plan',

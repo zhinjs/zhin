@@ -13,7 +13,7 @@ export interface ScheduleJobEngineOptions {
   store: ScheduleJobStore;
   worker: JobWorker;
   notifyOnFailure?: boolean;
-  router?: NotificationRouter;
+  router: NotificationRouter;
   defaultNotify?: import('./types.js').JobNotify;
 }
 
@@ -22,7 +22,7 @@ export class ScheduleJobEngine {
   private worker: JobWorker;
   private disposes = new Map<string, () => void>();
   private notifyOnFailure: boolean;
-  private router?: NotificationRouter;
+  private router: NotificationRouter;
   private defaultNotify?: import('./types.js').JobNotify;
 
   constructor(options: ScheduleJobEngineOptions) {
@@ -74,7 +74,7 @@ export class ScheduleJobEngine {
       lastError: result.success ? undefined : result.error,
     });
 
-    if (!result.success && this.router && (job.notifyOnFailure ?? this.notifyOnFailure)) {
+    if (!result.success && (job.notifyOnFailure ?? this.notifyOnFailure)) {
       const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
       if (notify.channel !== 'silent' && notify.channel !== 'log') {
         const msg = `[任务失败] ${job.label || jobId}: ${result.error || 'unknown error'}`;

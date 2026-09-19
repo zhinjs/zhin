@@ -107,7 +107,6 @@ export function createAssistantScheduleRuntime(
     config: agent.config,
     activity: createScheduleActivityPort(agent),
     dataDir,
-    resolveAdapter: () => undefined,
     router: notificationRouter,
     defaultNotify,
   });

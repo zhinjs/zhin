@@ -4,6 +4,7 @@ import {
   parseScheduleJobCreator,
 } from '../../src/assistant/job-creator.js';
 import { createTaskExecutor } from '../../src/task-executor.js';
+import { createNotificationRouter } from '../../src/assistant/notification-router.js';
 
 describe('schedule job creator', () => {
   it('captures the authenticated canonical principal without IM inference', () => {
@@ -51,7 +52,7 @@ describe('task executor schedule creator', () => {
           durationMs: 1, securityDenials: [], success: true, outputLength: 14, outputStripped: [],
         },
       })) },
-      resolveAdapter: () => undefined,
+      router: createNotificationRouter({ resolveAdapter: () => undefined }),
     });
 
     const result = await executor.preview('daily weather', {

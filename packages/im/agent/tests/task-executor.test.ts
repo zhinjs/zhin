@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTaskExecutor } from '../src/task-executor.js';
-import { imNotifyToSendOptions } from '../src/assistant/notification-router.js';
+import {
+  createNotificationRouter,
+  imNotifyToSendOptions,
+} from '../src/assistant/notification-router.js';
 import type { ScheduleJob } from '../src/assistant/types.js';
 
 function job(notify: ScheduleJob['notify']): ScheduleJob {
@@ -23,6 +26,10 @@ function domainResult(output = 'hello') {
   };
 }
 
+function silentRouter() {
+  return createNotificationRouter({ resolveAdapter: () => undefined });
+}
+
 describe('task executor outbound seam', () => {
   it('converts im notify through the queue IM field contract shape', () => {
     expect(imNotifyToSendOptions({
@@ -39,7 +46,7 @@ describe('task executor outbound seam', () => {
     const execute = vi.fn(async () => domainResult());
     const executor = createTaskExecutor({
       domain: { execute },
-      resolveAdapter: () => ({ sendMessage }),
+      router: createNotificationRouter({ resolveAdapter: () => ({ sendMessage }) }),
     });
 
     const result = await executor.execute(job({
@@ -64,7 +71,7 @@ describe('task executor outbound seam', () => {
     const executor = createTaskExecutor({
       activity: { publish },
       domain: { execute: vi.fn(async () => domainResult()) },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
 
     await executor.execute(scheduled);
@@ -88,7 +95,7 @@ describe('task executor outbound seam', () => {
     const executor = createTaskExecutor({
       activity: { publish: (event) => { phases.push(event.phase); } },
       domain: { execute },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
 
     const first = executor.execute(scheduled);
@@ -110,8 +117,8 @@ describe('task executor outbound seam', () => {
     });
     const secondDomain = vi.fn(async () => domainResult('second'));
     const notify = { channel: 'silent' as const };
-    const firstExecutor = createTaskExecutor({ domain: { execute: firstDomain }, resolveAdapter: () => undefined });
-    const secondExecutor = createTaskExecutor({ domain: { execute: secondDomain }, resolveAdapter: () => undefined });
+    const firstExecutor = createTaskExecutor({ domain: { execute: firstDomain }, router: silentRouter() });
+    const secondExecutor = createTaskExecutor({ domain: { execute: secondDomain }, router: silentRouter() });
 
     const first = firstExecutor.execute(job(notify));
     await vi.waitFor(() => expect(firstDomain).toHaveBeenCalledTimes(1));
@@ -129,7 +136,7 @@ describe('task executor outbound seam', () => {
         await new Promise<void>((resolve) => { release = resolve; });
         return domainResult();
       }) },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
     const running = executor.execute(job({ channel: 'silent' }));
     await vi.waitFor(() => expect(release).toBeTypeOf('function'));
@@ -150,7 +157,7 @@ describe('task executor outbound seam', () => {
         await new Promise<void>((resolve) => { release = resolve; });
         return domainResult();
       }) },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
     const running = executor.execute(job({ channel: 'silent' }));
     await vi.waitFor(() => expect(release).toBeTypeOf('function'));
@@ -175,7 +182,7 @@ describe('task executor outbound seam', () => {
           return domainResult();
         }),
       },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
     holder.executor = executor;
 
@@ -203,7 +210,7 @@ describe('task executor outbound seam', () => {
     });
     const executor = createTaskExecutor({
       domain: { execute },
-      resolveAdapter: () => undefined,
+      router: silentRouter(),
     });
     const scheduled = job({ channel: 'silent' });
 
@@ -231,7 +238,7 @@ describe('task executor outbound seam', () => {
           return domainResult('late');
         }),
       },
-      resolveAdapter: () => ({ sendMessage }),
+      router: createNotificationRouter({ resolveAdapter: () => ({ sendMessage }) }),
     });
     const owner = new AbortController();
     const execution = executor.execute(job({

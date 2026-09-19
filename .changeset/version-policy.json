@@ -314,6 +314,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove dead deprecated aliases and fail-only migration shims so Core and Agent expose one canonical ownership model under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "require-schedule-notification-router.md",
+      "packages": [
+        "@zhin.js/agent",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Require one composition-root-owned Schedule notification router and remove the duplicate adapter resolver construction path under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
