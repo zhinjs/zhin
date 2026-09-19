@@ -218,7 +218,7 @@ ai:
 
 | Category | Tools |
 |----------|-------|
-| Execution | `bash`, `run_deferred_task` |
+| Execution | `bash` |
 | File | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
 | Network | `web_search`, `web_fetch` |
 | Interaction | `ask_user` |

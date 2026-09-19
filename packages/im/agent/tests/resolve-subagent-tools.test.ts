@@ -21,7 +21,6 @@ describe('resolveSubagentAgentTools', () => {
     makeTool('generate_image', ['画', 'draw', 'image', 'picture']),
     makeTool('analyze_media', ['vision', 'image', '识图']),
     makeTool('spawn_task'),
-    makeTool('tool_search'),
     makeTool('unlisted_sensitive_tool'),
   ];
 
@@ -35,7 +34,6 @@ describe('resolveSubagentAgentTools', () => {
     const names = tools.map(t => t.name);
     expect(names).toContain('generate_image');
     expect(names).not.toContain('spawn_task');
-    expect(names).not.toContain('tool_search');
     expect(names).not.toContain('unlisted_sensitive_tool');
   });
 

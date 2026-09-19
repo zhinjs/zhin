@@ -128,7 +128,7 @@ export function restrictWorkroomAgentCapabilities(
   workroomTurn: boolean,
 ): AgentCapabilities {
   if (!workroomTurn) return capabilities;
-  const forbidden = new Set(['spawn_task', 'run_deferred_task']);
+  const forbidden = new Set(['spawn_task']);
   return Object.freeze({
     ...capabilities,
     tools: Object.freeze(capabilities.tools.filter(tool => !forbidden.has(tool.name))),

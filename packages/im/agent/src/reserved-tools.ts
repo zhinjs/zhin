@@ -19,8 +19,6 @@ export const RESERVED_TOOL_NAMES = [
   'load_skill',
   'install_skill',
   'ask_user',
-  'tool_search',
-  'run_deferred_task',
   'user_profile',
   'spawn_task',
   'schedule_list',

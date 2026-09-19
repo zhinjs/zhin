@@ -12,8 +12,6 @@ export const SUBAGENT_BLOCKED_TOOL_NAMES = new Set<string>([
   'discover',
   'install_skill',
   'spawn_task',
-  'tool_search',
-  'run_deferred_task',
 ]);
 
 const BLOCKED = SUBAGENT_BLOCKED_TOOL_NAMES;

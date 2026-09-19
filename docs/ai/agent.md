@@ -260,7 +260,7 @@ ai:
 
 | 类别 | 工具 |
 |------|------|
-| 执行 | `bash`、`run_deferred_task` |
+| 执行 | `bash` |
 | 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
 | 网络 | `web_search`、`web_fetch` |
 | 交互 | `ask_user` |

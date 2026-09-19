@@ -47,7 +47,7 @@ export function buildDeferredAutoContinueUserMessage(
     `任务【${taskId}】· ${label}`,
     `Worker 状态：${status}。`,
     '请根据上下文中 `[Deferred worker 完成]` 的 Worker 输出继续推进任务（含答题、提交、后续 API 调用）；无需等待用户输入。',
-    '若任务已全部完成，向用户简要汇报结果；否则继续调用工具（含 run_deferred_task）执行下一步。',
+    '若任务已全部完成，向用户简要汇报结果；否则继续调用当前可用工具或 spawn_task 执行下一步。',
     '不要向用户重复粘贴 Worker 的完整原始输出。',
   ].join('\n');
   return createUserMessage(text);

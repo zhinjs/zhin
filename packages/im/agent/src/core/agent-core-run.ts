@@ -748,7 +748,6 @@ export async function* runAgentLoopTextTurnRun(
     await host.getActiveTurnTracker()?.waitForPendingSubagents();
   }
   const delegatedOnly = shouldSuppressReplyForSpawnDelegation(toolCalls)
-    && !toolCalls.some(tc => tc.tool === 'run_deferred_task')
     && !toolCalls.some(tc =>
       tc.tool === 'generate_image'
       && tc.result

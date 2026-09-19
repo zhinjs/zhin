@@ -138,7 +138,7 @@ describe('COMPACTABLE_TOOLS', () => {
   it('should contain expected tool types', () => {
     const expected = [
       'file_read', 'read_file', 'bash', 'grep', 'web_fetch', 'list_dir',
-      'activate_skill', 'tool_search', 'run_deferred_task',
+      'load_skill', 'load_tool', 'discover',
     ];
     for (const tool of expected) {
       expect(COMPACTABLE_TOOLS.has(tool)).toBe(true);

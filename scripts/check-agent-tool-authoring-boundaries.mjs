@@ -98,6 +98,8 @@ for (const removedToolRegistryApi of [
   'WebFetchBuiltinTool',
   'TodoReadBuiltinTool',
   'TodoWriteBuiltinTool',
+  'RunDeferredTaskBuiltinTool',
+  'createRunDeferredTaskTool',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -122,9 +124,22 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/todo-read-tool.ts',
   'packages/im/agent/src/builtin/todo-write-tool.ts',
   'packages/im/agent/src/builtin/generate-image-tool.ts',
+  'packages/im/agent/src/builtin/run-deferred-task-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');
+}
+
+const retiredOrchestrationNames = ['tool_search', 'run_deferred_task'];
+for (const file of files) {
+  const fileName = relative(file);
+  if (!fileName.endsWith('.ts')) continue;
+  if (!fileName.startsWith('packages/im/agent/src/') && !fileName.startsWith('basic/cli/src/')) continue;
+  const content = fs.readFileSync(file, 'utf8');
+  for (const name of retiredOrchestrationNames) {
+    const match = new RegExp(`\\b${name}\\b`, 'u').exec(content);
+    if (match) report(file, `retired orchestration protocol restored: ${name}`, lineOf(content, match.index));
+  }
 }
 
 const coreManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages/im/core/package.json'), 'utf8'));

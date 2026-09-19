@@ -58,10 +58,9 @@ describe('Workroom Orchestrator turn routing', () => {
       projectId: 'project:zhin', agentDefinitionId: 'software.orchestrator',
     })).toBe('workroom:project%3Azhin:orchestrator:software.orchestrator');
     const spawn = { name: 'spawn_task' };
-    const deferred = { name: 'run_deferred_task' };
     const work = { name: 'workroom_orchestrator_plan_propose' };
     const capabilities = {
-      generation: 1, owner: rootPluginId(), tools: [spawn, deferred, work],
+      generation: 1, owner: rootPluginId(), tools: [spawn, work],
       skills: [], agents: [], mcp: [], promptSections: [],
     } as never;
     expect(restrictWorkroomAgentCapabilities(capabilities, true).tools).toEqual([work]);
