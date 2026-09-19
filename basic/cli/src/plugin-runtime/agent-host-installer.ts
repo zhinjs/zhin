@@ -19,18 +19,8 @@ import {
   type AudioTranscriptionPort,
   type TurnRequest,
   FileJournalStore,
-  resolveWorkroomBotIdentity,
-  workroomProjectionBindingKey,
-  FileHumanIngressProposalRepository,
-  FileHumanIngressApplicationRepository,
-  HumanIngressApplicationService,
   type HumanIngressOrchestratorProposalPort,
   type WorkroomPlanGateAuthorityPort,
-  ConversationEventHumanIngressSourceReader,
-  ProductionHumanIngressOrchestratorPort,
-  createPlanGateHumanIngressControlPort,
-  FileInteractionSpaceBindingRepository,
-  InteractionSpaceRouter,
   ProjectKnowledgeRegistry,
 } from '@zhin.js/agent';
 import {
@@ -43,14 +33,8 @@ import {
   type AgentCapabilities,
   type WorkroomRunControlCommand,
   type TurnIntentResolver,
-  createGenerationHumanIngressPlanningPort,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
-  workroomHumanIngressPlanningToken,
-  createProjectionHumanIngressTargetResolver,
-  workroomProjectionCatalogBindingDigest,
-  digestWorkroomCatalogProjectBinding,
-  createWorkroomDataLifecycleHumanIngressControlPort,
   type AgentHostWorkroomProfileControlPort,
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostEffectSponsorControlPort,
@@ -62,8 +46,6 @@ import {
   workroomAssignmentKnowledgeContextToken,
   WorkroomAssignmentKnowledgeContextProjector,
   installWorkroomEffectResources,
-  createPortfolioSponsorHumanIngressControlPort,
-  portfolioSponsorCommandToken,
   type WorkroomEffectClockPort,
   type WorkroomEffectBlockerPolicyPort,
   type WorkroomDataLifecycleConsoleControlPort,
@@ -74,28 +56,11 @@ import {
 } from '@zhin.js/agent/runtime';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import { WorkroomExecutionCoordinator } from './workroom-execution-coordinator.js';
+import { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordinator.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
-import { conversationRefKey } from '@zhin.js/im-contract';
 import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
-import {
-  WorkroomHumanIngressPreRoute,
-  createCatalogWorkroomSpace,
-  resolveWorkroomHumanIntent,
-  type WorkroomAgentTurnContinuation,
-} from './workroom-human-ingress-route.js';
-import {
-  assertWorkroomCatalogMatchesGeneration,
-  catalogSpaceSourceDigest,
-  classifyWorkroomIngressSource,
-  createSponsorProjectionControlTargetResolver,
-  ensureCatalogWorkroomProjectionBinding,
-  resolveCatalogSponsorProjectionConversation,
-  resolveCatalogWorkroomProjectionConversation,
-  resolveIndexedProjectionReply,
-  sponsorRoomProjectId,
-} from './workroom-projection.js';
 import {
   renderTriggerError,
   resolveRuntimeAgentTrigger,
@@ -126,7 +91,6 @@ import {
 import { observeAgentTurnTrace } from './agent-runtime-factory.js';
 import {
   resolveAgentHostMcpServers,
-  resolveAssistantConfigDocument,
   type AgentHostAIConfig as AIConfig,
   type WorkroomStorageMode,
 } from './agent-host-config.js';
@@ -135,8 +99,6 @@ import {
   flattenOutputElements,
   isClearCommand,
   preprocessInboundTurn,
-  resolveStableSenderId,
-  stringMetadata,
 } from './agent-turn-content.js';
 import {
   publishAgentToolFeatures,
@@ -632,306 +594,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       portfolioSponsorControl,
     } = executionCoordinator;
     portfolioSponsorConsoleControl.current = portfolioSponsorControl;
-    const interactionSpaceBindings = new FileInteractionSpaceBindingRepository(
-      join(workroomStateRoot, 'interaction-space-bindings'),
-    );
-    const humanIngressProposals = new FileHumanIngressProposalRepository(
-      join(workroomStateRoot, 'workroom-human-ingress'),
-    );
-    const humanIngressApplications = new FileHumanIngressApplicationRepository(
-      join(workroomStateRoot, 'workroom-human-ingress-application'),
-    );
-    const interactionSpaceRouter = new InteractionSpaceRouter(interactionSpaceBindings);
-    const productionHumanIngressPort = new ProductionHumanIngressOrchestratorPort({
-      sources: new ConversationEventHumanIngressSourceReader(() => options.im.conversationEvents),
-      kernel: workroomKernel,
-      resolveProject: async projectId => {
-        const snapshot = await workroomCatalog.read();
-        const definition = snapshot.definitions[projectId];
-        if (!definition || definition.enabled === false || !definition.conversation) return null;
-        const agent = definition.conversation.agent;
-        if (!definition.members.some(member => member.agent === agent && member.role === 'orchestrator')) {
-          throw new Error(`Workroom Catalog ${projectId} has no valid Orchestrator binding`);
-        }
-        const projectDigest = digestWorkroomCatalogProjectBinding(definition);
-        return Object.freeze({
-          orchestratorAgentDefinitionId: agent,
-          projectRevision: snapshot.revision,
-          projectDigest,
-          orchestratorAuthorityDigest: `sha256:${createHash('sha256').update(JSON.stringify({
-            projectId,
-            projectRevision: snapshot.revision,
-            projectDigest,
-            agentDefinitionId: agent,
-            role: 'orchestrator',
-          })).digest('hex')}`,
-        });
-      },
-      authorizeProjectSource: async ({ projectId, proposal, source }) => {
-        if (proposal.space === 'sponsor_room') {
-          const snapshot = await workroomCatalog.read();
-          const definition = snapshot.definitions[projectId];
-          const configured = definition?.sponsorConversation;
-          if (!definition || definition.enabled === false || !configured) return false;
-          const projectionState = await projectionRepository.read();
-          const binding = projectionState.bindings[
-            workroomProjectionBindingKey(projectId, 'sponsor_room')
-          ];
-          if (!binding) return false;
-          const replyEntry = proposal.projectionReply
-            ? projectionState.messageIndex[proposal.projectionReply.messageKey]
-            : undefined;
-          if (proposal.projectionReply && (!replyEntry
-            || replyEntry.projectionId !== proposal.projectionReply.projectionId
-            || replyEntry.target.projectId !== proposal.projectionReply.projectId
-            || replyEntry.bindingRevision !== proposal.projectionReply.bindingRevision
-            || digestInstallerValue(replyEntry.target) !== proposal.projectionReply.targetDigest)) {
-            return false;
-          }
-          return proposal.projectId === projectId
-            && proposal.bindingDigest === catalogSpaceSourceDigest(
-              projectId, 'sponsor_room', configured,
-            )
-            && proposal.bindingRevision === binding.bindingRevision
-            && binding.catalogBindingDigest === workroomProjectionCatalogBindingDigest(definition)
-            && conversationRefKey(source.event.conversation) === conversationRefKey(binding.conversation);
-        }
-        const decision = await interactionSpaceRouter.resolve({
-          conversation: source.event.conversation,
-          conversationSequence: source.sequence,
-        });
-        return decision.status === 'resolved'
-          && decision.source === 'binding'
-          && decision.projectId === projectId
-          && decision.space === proposal.space
-          && decision.bindingRevision === proposal.bindingRevision
-          && decision.bindingDigest === proposal.bindingDigest;
-      },
-      planning: resources.has(workroomHumanIngressPlanningToken)
-        ? createGenerationHumanIngressPlanningPort(() =>
-            resources.has(workroomHumanIngressPlanningToken)
-              ? resources.use(workroomHumanIngressPlanningToken)
-              : undefined)
-        : undefined,
-      controls: createPortfolioSponsorHumanIngressControlPort({
-        resolve: () => resources.has(portfolioSponsorCommandToken)
-          ? resources.use(portfolioSponsorCommandToken)
-          : undefined,
-        generationSignal: signal,
-        fallback: createWorkroomDataLifecycleHumanIngressControlPort({
-          resolve: () => dataLifecycleConsoleControl.current,
-          generationSignal: signal,
-          fallback: createPlanGateHumanIngressControlPort(workroomKernel),
-        }),
-      }),
-      afterPlanAdmission: input => profileRunPinWriter.afterPlanAdmission(input, signal),
+    const humanIngressCoordinator = await WorkroomHumanIngressCoordinator.create({
+      signal,
+      resources,
+      lifecycle,
+      im: options.im,
+      port: options.workroomHumanIngressPort,
+      runtime: workroomFoundation,
+      profiles: profileCoordinator,
+      persistence,
+      execution: executionCoordinator,
+      dataLifecycleControl: dataLifecycleConsoleControl,
     });
-    const humanIngressApplication = new HumanIngressApplicationService({
-      proposals: humanIngressProposals,
-      applications: humanIngressApplications,
-      port: options.workroomHumanIngressPort ?? productionHumanIngressPort,
-      onError: (error, request) => logger.error(formatCompact({
-        op: 'workroom_human_ingress_application',
-        projectId: request.identity.projectId,
-        proposalId: request.identity.proposalId,
-        attempt: request.attempt,
-        error: error instanceof Error ? error.message : String(error),
-      })),
-    });
-    let humanIngressRetryTimer: ReturnType<typeof setTimeout> | undefined;
-    let humanIngressRetryAt: number | undefined;
-    const scheduleHumanIngressRetry = (retryAt: number) => {
-      if (signal.aborted) return;
-      if (humanIngressRetryAt !== undefined && humanIngressRetryAt <= retryAt) return;
-      if (humanIngressRetryTimer) clearTimeout(humanIngressRetryTimer);
-      humanIngressRetryAt = retryAt;
-      humanIngressRetryTimer = setTimeout(() => {
-        humanIngressRetryTimer = undefined;
-        humanIngressRetryAt = undefined;
-        if (signal.aborted) return;
-        void recoverHumanIngress().catch(error => {
-          if (signal.aborted) return;
-          logger.error(formatCompact({
-            op: 'workroom_human_ingress_recovery',
-            error: error instanceof Error ? error.message : String(error),
-          }));
-          scheduleHumanIngressRetry(Date.now() + 5_000);
-        });
-      }, Math.max(0, retryAt - Date.now()));
-      humanIngressRetryTimer.unref?.();
-    };
-    lifecycle.add(() => {
-      if (humanIngressRetryTimer) clearTimeout(humanIngressRetryTimer);
-      humanIngressRetryTimer = undefined;
-      humanIngressRetryAt = undefined;
-    });
-    const drainHumanIngressProject = async (projectId: string) => {
-      const results = await humanIngressApplication.drain(projectId);
-      for (const result of results) {
-        if (result.status === 'retry_scheduled') scheduleHumanIngressRetry(result.retryAt);
-        if (result.status === 'waiting') scheduleHumanIngressRetry(result.wakeAt);
-      }
-      return results;
-    };
-    recoverHumanIngress = async () => {
-      const catalog = await workroomCatalog.read();
-      for (const projectId of Object.keys(catalog.definitions).sort()) {
-        await drainHumanIngressProject(projectId);
-      }
-    };
-    if (!persistence.pendingActivation) await recoverHumanIngress();
-    const projectionReplyTargets = new WeakMap<Message, Message['message']>();
-    const projectionMentionTargets = new WeakMap<Message, Readonly<{
-      agentDefinitionId: string;
-      candidates: readonly NonNullable<Message['message']>[];
-    }>>();
-    const workroomHumanIngress = new WorkroomHumanIngressPreRoute({
-      bindings: interactionSpaceBindings,
-      bindingRouter: interactionSpaceRouter,
-      proposals: humanIngressProposals,
-      application: Object.freeze({ drain: drainHumanIngressProject }),
-      sourceEvents: () => options.im.conversationEvents,
-      resolveIntent: resolveWorkroomHumanIntent,
-      createTargetResolver: (message, intent, decision) =>
-        decision.space === 'sponsor_room' && intent === 'control'
-          ? createSponsorProjectionControlTargetResolver({
-              projectionRepository,
-              message,
-              intent,
-            })
-          : createProjectionHumanIngressTargetResolver({
-              resolver: projectionReplyResolver,
-              ...(projectionReplyTargets.get(message)
-                ? { replyTo: projectionReplyTargets.get(message)! }
-                : message.replyTo
-                  ? { replyTo: { conversation: message.conversation, id: message.replyTo.id } }
-                : {}),
-              ...(projectionMentionTargets.get(message)
-                ? { mention: projectionMentionTargets.get(message)! }
-                : {}),
-              intent,
-            }),
-      onWorkroomResolved: async (message, decision) => {
-        const catalog = await workroomCatalog.read();
-        await ensureCatalogWorkroomProjectionBinding({
-          repository: projectionRepository,
-          catalog,
-          projectId: decision.projectId,
-          conversation: message.conversation,
-          interactionBindingRevision: decision.bindingRevision,
-          endpoints: options.im.listEndpoints(),
-        });
-      },
-      principalOwner: String(rootPluginId()),
-      resolveCatalogSpace: async message => {
-        const adapter = capabilityLocalName(String(message.conversation.endpoint.id));
-        const endpoint = adapterLiveEndpointId(message);
-        const repository = adapter === 'github'
-          ? stringMetadata(message.metadata, 'repo')
-          : undefined;
-        const kind = repository
-          ? 'repository' as const
-          : message.conversation.kind === 'group' || message.conversation.kind === 'channel'
-            ? message.conversation.kind
-            : null;
-        if (!kind) return null;
-        const catalogSnapshot = await workroomCatalog.read();
-        const explicitProjectId = sponsorRoomProjectId(message.content);
-        const projectionState = await projectionRepository.read();
-        const replyEntry = resolveIndexedProjectionReply(message, projectionState.messageIndex);
-        // Cross-Endpoint replies carry the inbound Endpoint in Message.replyTo,
-        // while the durable projection index is keyed by the speaking Bot's
-        // original Endpoint. Preserve that canonical ref for target resolution.
-        if (replyEntry) projectionReplyTargets.set(message, replyEntry.message);
-        const repliedProjectId = replyEntry?.target.projectId;
-        if (explicitProjectId && repliedProjectId && explicitProjectId !== repliedProjectId) {
-          return Object.freeze({ status: 'rejected' as const, reason: 'project_conflict' as const });
-        }
-        let identity: ReturnType<typeof resolveWorkroomBotIdentity>;
-        try {
-          identity = resolveWorkroomBotIdentity(catalogSnapshot.definitions, {
-          adapter,
-          endpoint,
-          kind,
-          id: repository ?? message.conversation.id,
-          ...(explicitProjectId ?? repliedProjectId
-            ? { projectId: explicitProjectId ?? repliedProjectId }
-            : {}),
-          });
-        } catch (error) {
-          if (error instanceof Error && /explicit Project/u.test(error.message)) {
-            return Object.freeze({ status: 'rejected' as const, reason: 'project_required' as const });
-          }
-          throw error;
-        }
-        if (!identity) return null;
-        const definition = catalogSnapshot.definitions[identity.projectId];
-        const configured = identity.space === 'workroom'
-          ? definition?.conversation
-          : definition?.sponsorConversation;
-        if (!definition || !configured) {
-          throw new Error(`Workroom Catalog ${identity.projectId} has no collaboration space`);
-        }
-        const sourceDecision = classifyWorkroomIngressSource(definition, {
-          adapter,
-          endpoint,
-          senderId: String(message.sender?.id ?? ''),
-          space: identity.space,
-          mentioned: message.mentioned === true || message.metadata.mentioned === true,
-          // Generic message metadata is not identity authority. Adapter-owned
-          // self filtering and exact configured numeric Bot principals remain
-          // the trusted echo suppression paths.
-          ...(replyEntry ? {
-            replySpeakerAgent: replyEntry.speaker.agentDefinitionId,
-            replySpeakerRole: replyEntry.speaker.role,
-          } : {}),
-        });
-        if (sourceDecision !== 'accept') {
-          return Object.freeze({ status: 'ignored' as const, reason: sourceDecision });
-        }
-        if (!replyEntry && identity.space === 'workroom' && identity.role !== 'orchestrator'
-          && (message.mentioned === true || message.metadata.mentioned === true)) {
-          const candidates = Object.values(projectionState.messageIndex)
-            .filter(entry => entry.target.projectId === identity.projectId
-              && entry.target.agentDefinitionId === identity.agent
-              && entry.target.taskKey != null
-              && entry.target.assignmentId != null)
-            .map(entry => entry.message);
-          projectionMentionTargets.set(message, Object.freeze({
-            agentDefinitionId: identity.agent,
-            candidates: Object.freeze(candidates),
-          }));
-        }
-        const sponsorBinding = identity.space === 'sponsor_room'
-          ? projectionState.bindings[workroomProjectionBindingKey(
-              identity.projectId, 'sponsor_room',
-            )]
-          : undefined;
-        if (identity.space === 'sponsor_room') {
-          if (!sponsorBinding
-            || sponsorBinding.catalogBindingDigest !== workroomProjectionCatalogBindingDigest(definition)
-            || conversationRefKey(sponsorBinding.conversation) !== conversationRefKey(message.conversation)) {
-            return Object.freeze({ status: 'rejected' as const, reason: 'binding_unavailable' as const });
-          }
-          if (replyEntry && replyEntry.bindingRevision !== sponsorBinding.bindingRevision) {
-            return Object.freeze({ status: 'rejected' as const, reason: 'stale_binding' as const });
-          }
-        }
-        const sourceRef = `workroom-catalog:${encodeURIComponent(identity.projectId)}:${identity.space}`;
-        return createCatalogWorkroomSpace({
-          projectId: identity.projectId,
-          // Every human message enters the Orchestrator-owned Project Inbox.
-          // identity.agent may be the member Bot Endpoint that received it.
-          agentDefinitionId: configured.agent,
-          space: identity.space,
-          sourceRef,
-          sourceDigest: catalogSpaceSourceDigest(identity.projectId, identity.space, configured),
-          ...(identity.space === 'sponsor_room'
-            ? { bindingRevision: sponsorBinding!.bindingRevision }
-            : {}),
-        });
-      },
-    });
+    recoverHumanIngress = () => humanIngressCoordinator.recover();
 
     resources.provide(ingressRouteToken, Object.freeze({
       preRoute: async (
@@ -939,9 +614,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         _lease: import('@zhin.js/plugin-runtime').SnapshotLease,
         _requester: PluginId,
         conversationSequence: number | undefined,
-      ) => await workroomHumanIngress.preRoute(message, conversationSequence),
+      ) => await humanIngressCoordinator.preRoute(message, conversationSequence),
       shouldRouteBeforeDispatch: (message: Message) =>
-        workroomHumanIngress.hasAgentTurn(message)
+        humanIngressCoordinator.hasAgentTurn(message)
         && resolveRuntimeAgentTrigger(message, service.getTriggerConfig(), true) != null,
       route: async (
         message: Message,
@@ -951,7 +626,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ) => {
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
-      const workroomAgentTurn = workroomHumanIngress.takeAgentTurn(message);
+      const workroomAgentTurn = humanIngressCoordinator.takeAgentTurn(message);
       const matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
@@ -1262,9 +937,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
   };
 }
 
-function digestInstallerValue(value: unknown): string {
-  return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
-}
 
 async function loadBootstrap(projectRoot: string): Promise<string> {
   const parts: string[] = [];
