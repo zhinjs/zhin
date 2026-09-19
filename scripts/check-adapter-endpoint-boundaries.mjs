@@ -11,7 +11,6 @@ const directEnvironmentConsumers = new Set([
   'plugins/adapters/github/src/gh-client.ts',
   'plugins/adapters/github/src/protocol.ts',
   'plugins/adapters/github/src/workspace-manager.ts',
-  'plugins/adapters/icqq/src/protocol.ts',
   'plugins/adapters/weixin-ilink/src/credentials.ts',
   'plugins/adapters/weixin-ilink/src/login.ts',
   'plugins/adapters/weixin-ilink/src/protocol.ts',

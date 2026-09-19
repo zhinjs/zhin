@@ -7,7 +7,7 @@ import { IcqqEndpoint } from '../src/endpoint.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import {
   resolveIcqqConfig,
-  type IcqqAdapterConfig,
+  type IcqqEndpointConfig,
 } from '../src/protocol.js';
 
 export { IcqqEndpoint } from '../src/endpoint.js';
@@ -19,7 +19,7 @@ declare module '@zhin.js/core' {
   }
 }
 
-export default defineAdapter<IcqqAdapterConfig>({
+export default defineAdapter<IcqqEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall', 'reaction'],
   segments: {

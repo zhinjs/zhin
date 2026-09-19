@@ -5,7 +5,7 @@ export {
   icqqInboundConversation,
   icqqOutboundTarget,
   type ActionResult,
-  type IcqqAdapterConfig,
+  type IcqqEndpointConfig,
   type IcqqInboundMessage,
   type IcqqWireSegment,
   type ParsedIcqqSendTarget,

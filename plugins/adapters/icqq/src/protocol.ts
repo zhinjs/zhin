@@ -1,4 +1,3 @@
-import { pickCredential } from 'zhin.js/adapter';
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
@@ -231,9 +230,9 @@ export const Actions = {
   GET_NOTIFY: "get_notify",
 } as const;
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface IcqqAdapterConfig {
-  readonly id?: string;
+/** One expanded ICQQ endpoint configuration produced by AdapterIndex. */
+export interface IcqqEndpointConfig {
+  readonly id: string;
   readonly autoReconnect?: boolean;
   readonly outboundMedia?: 'file' | 'base64';
   readonly password?: string;
@@ -247,24 +246,6 @@ export interface IcqqAdapterConfig {
   readonly autoServer?: boolean;
   readonly qqnt?: boolean;
   readonly ntLogin?: boolean;
-  /** Transitional: legacy root `endpoints[]` with `context: icqq`. */
-  readonly endpoints?: ReadonlyArray<{
-    readonly context?: string;
-    readonly id?: string;
-    readonly autoReconnect?: boolean;
-    readonly outboundMedia?: 'file' | 'base64';
-    readonly password?: string;
-    readonly platform?: number;
-    readonly ver?: string;
-    readonly dataDir?: string;
-    readonly signApiAddr?: string;
-    readonly ignoreSelf?: boolean;
-    readonly resend?: boolean;
-    readonly cacheGroupMember?: boolean;
-    readonly autoServer?: boolean;
-    readonly qqnt?: boolean;
-    readonly ntLogin?: boolean;
-  }>;
 }
 
 export interface ResolvedIcqqConfig {
@@ -311,27 +292,24 @@ export type ParsedIcqqSendTarget =
   | { readonly kind: 'temp'; readonly groupId: number; readonly userId: number }
   | { readonly kind: 'channel'; readonly guildId: string; readonly channelId: string };
 
-export function resolveIcqqConfig(config: IcqqAdapterConfig = {}): ResolvedIcqqConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'icqq');
-  const id = pickCredential(config.id, entry?.id, process.env.ICQQ_ACCOUNT);
+export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfig {
+  const id = typeof config.id === 'string' ? config.id.trim() : '';
   if (!/^\d+$/.test(id)) {
-    throw new TypeError(
-      'ICQQ adapter requires numeric id (QQ uin) via plugins.<key>.id or ICQQ_ACCOUNT',
-    );
+    throw new TypeError('ICQQ endpoint requires a numeric id (QQ uin)');
   }
-  const autoReconnect = config.autoReconnect ?? entry?.autoReconnect ?? true;
-  const outboundMedia = config.outboundMedia ?? entry?.outboundMedia;
-  const password = config.password ?? entry?.password;
-  const platform = config.platform ?? entry?.platform ?? 2;
-  const ver = config.ver ?? entry?.ver ?? '9.1.70';
-  const dataDir = config.dataDir ?? entry?.dataDir ?? `data/icqq/${id}`;
-  const signApiAddr = config.signApiAddr ?? entry?.signApiAddr;
-  const ignoreSelf = config.ignoreSelf ?? entry?.ignoreSelf ?? true;
-  const resend = config.resend ?? entry?.resend;
-  const cacheGroupMember = config.cacheGroupMember ?? entry?.cacheGroupMember ?? true;
-  const autoServer = config.autoServer ?? entry?.autoServer ?? true;
-  const qqnt = config.qqnt ?? entry?.qqnt;
-  const ntLogin = config.ntLogin ?? entry?.ntLogin;
+  const autoReconnect = config.autoReconnect ?? true;
+  const outboundMedia = config.outboundMedia;
+  const password = config.password;
+  const platform = config.platform ?? 2;
+  const ver = config.ver ?? '9.1.70';
+  const dataDir = config.dataDir ?? `data/icqq/${id}`;
+  const signApiAddr = config.signApiAddr;
+  const ignoreSelf = config.ignoreSelf ?? true;
+  const resend = config.resend;
+  const cacheGroupMember = config.cacheGroupMember ?? true;
+  const autoServer = config.autoServer ?? true;
+  const qqnt = config.qqnt;
+  const ntLogin = config.ntLogin;
   return {
     context: 'icqq',
     id,

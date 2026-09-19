@@ -11,13 +11,6 @@ export interface IcqqSenderInfo {
   title?: string;
 }
 
-export interface IcqqEndpointConfig {
-  context: "icqq";
-  name: `${number}`;
-  autoReconnect?: boolean;
-  outboundMedia?: "file" | "base64";
-}
-
 export interface FriendInfo {
   user_id: number;
   nickname: string;

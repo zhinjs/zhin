@@ -258,6 +258,7 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.icqq.endpoints[].autoServer` | boolean | no | — | 是否自动选择最优服务器 |
 | `plugins.icqq.endpoints[].qqnt` | boolean | no | — | 是否使用 QQNT 协议 |
 | `plugins.icqq.endpoints[].ntLogin` | boolean | no | — | 是否使用 NT 登录方式 |
+| `plugins.icqq.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
 | `plugins.icqq.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀）。endpoints[i] 可逐项覆盖 |
 
 ### kook

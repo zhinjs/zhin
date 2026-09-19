@@ -62,6 +62,10 @@ plugins:
       - id: "${ICQQ_ACCOUNT_3}"
 ```
 
+`AdapterIndex` 会先合并插件实例默认值与 endpoint 覆盖值，再把一份完整配置交给
+ICQQ adapter。协议层只接受这份展开后的 endpoint 配置，不读取环境变量，也不再次解析
+嵌套的 `endpoints`。环境变量替换由 composition root 在配置加载阶段完成。
+
 ## Send conversation
 
 | 类型 | conversation |

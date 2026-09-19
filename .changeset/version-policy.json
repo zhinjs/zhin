@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-icqq-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-icqq"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove ICQQ endpoint configuration and environment compatibility surfaces and expose one canonical direct-Client configuration contract under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-onebot12-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-onebot12"

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5d55ca8cc5a0f064 -->
+<!-- sync-adapter-docs:sha256=38dd7f46802b83f5 -->
 
 # @zhin.js/adapter-icqq
 
@@ -73,6 +73,10 @@ plugins:
       - id: "${ICQQ_ACCOUNT_2}"
       - id: "${ICQQ_ACCOUNT_3}"
 ```
+
+`AdapterIndex` 会先合并插件实例默认值与 endpoint 覆盖值，再把一份完整配置交给
+ICQQ adapter。协议层只接受这份展开后的 endpoint 配置，不读取环境变量，也不再次解析
+嵌套的 `endpoints`。环境变量替换由 composition root 在配置加载阶段完成。
 
 ## Send conversation
 
