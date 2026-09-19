@@ -15,10 +15,9 @@ import {
   type RuntimeSnapshot,
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
-import {
-  registerConsoleApiRoutes,
-} from '../../../src/plugin-runtime/console/api.js';
+import { registerConsoleRoutes } from '../../../src/plugin-runtime/console/api-routes.js';
 import { isKnownConversationSession } from '../../../src/plugin-runtime/console/conversation-session.js';
+import { ConsoleMessageBindings } from '../../../src/plugin-runtime/console/message-bindings.js';
 import {
   resolveGenerationAgentConsole,
   resolveGenerationAgentIntrospection,
@@ -194,12 +193,13 @@ async function startHost(options: {
       : {}),
   });
   hosts.push(host);
-  registerConsoleApiRoutes({
+  registerConsoleRoutes({
     http: host,
     consoleRuntime: stubConsoleRuntime(),
     projectRoot: options.projectRoot,
     apiBase: '/api',
     im: stubIm(),
+    eventHub: createConsoleEventHub(),
     snapshot: options.snapshot,
     primaryConfigDocument: options.primaryConfigDocument,
     snapshots: options.snapshots,
@@ -1254,9 +1254,10 @@ describe('console SSE events', () => {
       },
     } as unknown as ImRuntime;
     const hub = createConsoleEventHub();
+    const releaseMessageBinding = new ConsoleMessageBindings({ hub }).acquire(im);
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    registerConsoleApiRoutes({
+    registerConsoleRoutes({
       http: host,
       consoleRuntime: stubConsoleRuntime(),
       projectRoot,
@@ -1349,13 +1350,14 @@ describe('console SSE events', () => {
     ]);
 
     reader.cancel().catch(() => undefined);
+    releaseMessageBinding();
   });
 
   it('publishes config:updated over SSE after config:set RPC', async () => {
     const hub = createConsoleEventHub();
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    registerConsoleApiRoutes({
+    registerConsoleRoutes({
       http: host,
       consoleRuntime: stubConsoleRuntime(),
       projectRoot,

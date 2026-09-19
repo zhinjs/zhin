@@ -29,6 +29,7 @@ describe('Console Host module boundary', () => {
     const consoleSources = await readdir(consoleRoot, { withFileTypes: true });
     expect(consoleSources.some(entry => entry.name === 'projection.ts')).toBe(false);
     expect(consoleSources.some(entry => entry.name === 'agent-introspection.ts')).toBe(false);
+    expect(consoleSources.some(entry => entry.name === 'api.ts')).toBe(false);
   });
 
   it('keeps supporting modules independent from the HTTP API orchestrator', async () => {
@@ -37,6 +38,7 @@ describe('Console Host module boundary', () => {
       'agent-config-projection.ts',
       'agent-feature-projection.ts',
       'agent-runtime-resolver.ts',
+      'api-routes.ts',
       'asset-server.ts',
       'agent-routes.ts',
       'configuration.ts',
@@ -53,6 +55,7 @@ describe('Console Host module boundary', () => {
       'http-response.ts',
       'inbox.ts',
       'login-assist-binding.ts',
+      'message-bindings.ts',
       'page-renderer.ts',
       'portfolio-sponsor-routes.ts',
       'plugin-routes.ts',
@@ -78,7 +81,7 @@ describe('Console Host module boundary', () => {
     const violations: string[] = [];
     for (const file of supportingModules) {
       const source = await readFile(new URL(`../../../src/plugin-runtime/console/${file}`, import.meta.url), 'utf8');
-      if (/(?:from\s+|import\()['"]\.\/api\.js['"]/u.test(source)) violations.push(file);
+      if (/(?:from\s+|import\()['"]\.\/api-installer\.js['"]/u.test(source)) violations.push(file);
     }
     expect(violations).toEqual([]);
   });

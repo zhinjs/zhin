@@ -10,7 +10,7 @@ import {
 import {
   buildInboxMessageRow,
   conversationToInboxChannel,
-  installInboxMessageRecorder,
+  InboxMessageRecorder,
 } from '../../../src/plugin-runtime/console/inbox.js';
 
 /** 内存假 DatabaseHost：行存 Map，select/insert/update 按 where 等值匹配。 */
@@ -200,14 +200,14 @@ describe('buildInboxMessageRow', () => {
   });
 });
 
-describe('installInboxMessageRecorder', () => {
+describe('InboxMessageRecorder', () => {
   it('writes inbound and outbound events into unified_inbox_message', async () => {
     const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
-    const { im, emit } = fakeIm('1234');
-    installInboxMessageRecorder(im, host);
+    const { im } = fakeIm('1234');
+    const recorder = new InboxMessageRecorder(im, host);
 
-    emit(inboundEvent());
-    emit(inboundEvent({ direction: 'outbound', sender: undefined, timestamp: 1_700_000_000_001 }));
+    recorder.record(inboundEvent());
+    recorder.record(inboundEvent({ direction: 'outbound', sender: undefined, timestamp: 1_700_000_000_001 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const table = rows.get(INBOX_TABLE_MESSAGE)!;
@@ -218,42 +218,26 @@ describe('installInboxMessageRecorder', () => {
     expect(table[1]).toMatchObject({ sender_id: '1234' });
   });
 
-  it('subscribes only once per ImRuntime', () => {
-    const { host } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
-    const { im, listenerCount } = fakeIm('1234');
-    installInboxMessageRecorder(im, host);
-    installInboxMessageRecorder(im, host);
-    expect(listenerCount()).toBe(1);
-  });
-
   it('does not cache the localName fallback while the endpoint is not ready', async () => {
     const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE]);
-    const listeners = new Set<(event: RuntimeMessageEvent) => void>();
     let endpointId: string | null = null;
     let getEndpointCalls = 0;
     const im = {
-      onMessage(listener: (event: RuntimeMessageEvent) => void) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
-      },
       getEndpoint: () => {
         getEndpointCalls += 1;
         return endpointId ? { name: endpointId } : null;
       },
     } as unknown as ImRuntime;
-    const emit = (event: RuntimeMessageEvent) => {
-      for (const listener of listeners) listener(event);
-    };
-    installInboxMessageRecorder(im, host);
+    const recorder = new InboxMessageRecorder(im, host);
 
     // 启动早期 endpoint 未就绪：回退 localName，但不写缓存。
-    emit(inboundEvent({ timestamp: 1_700_000_000_000 }));
+    recorder.record(inboundEvent({ timestamp: 1_700_000_000_000 }));
     // endpoint 上线后：应解析出 live 名而不是被固化的回退值。
     endpointId = '8596238';
-    emit(inboundEvent({ timestamp: 1_700_000_000_001 }));
+    recorder.record(inboundEvent({ timestamp: 1_700_000_000_001 }));
     // 命中后写缓存：之后即使 getEndpoint 不再可用也用缓存值。
     endpointId = null;
-    emit(inboundEvent({ timestamp: 1_700_000_000_002 }));
+    recorder.record(inboundEvent({ timestamp: 1_700_000_000_002 }));
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const table = rows.get(INBOX_TABLE_MESSAGE)!;
@@ -263,9 +247,9 @@ describe('installInboxMessageRecorder', () => {
 
   it('end-to-end: rows written by the recorder are readable via console-rpc-extended', async () => {
     const { host, rows } = fakeDatabaseHost([INBOX_TABLE_MESSAGE, INBOX_TABLE_REQUEST]);
-    const { im, emit } = fakeIm('1234');
-    installInboxMessageRecorder(im, host);
-    emit(inboundEvent());
+    const { im } = fakeIm('1234');
+    const recorder = new InboxMessageRecorder(im, host);
+    recorder.record(inboundEvent());
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     rows.get(INBOX_TABLE_REQUEST)!.push({

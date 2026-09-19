@@ -4,17 +4,6 @@ import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { writeJson, writeSse } from './http-response.js';
 import { listPages } from './entry-projection.js';
 
-const messageBridgeInstallations = new WeakSet<ImRuntime>();
-
-export function installMessageEventBridge(
-  im: ImRuntime | undefined,
-  hub: ConsoleEventHub,
-): void {
-  if (!im || typeof im.onMessage !== 'function' || messageBridgeInstallations.has(im)) return;
-  messageBridgeInstallations.add(im);
-  im.onMessage(event => publishMessageEvent(hub, event));
-}
-
 export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
   const localName = String(event.conversation.endpoint.id).split('\0').pop()
     ?? String(event.conversation.endpoint.id);

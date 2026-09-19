@@ -8,27 +8,27 @@ import {
 
 const logger = getLogger('console-inbox');
 
-/** 已挂收件箱写订阅的 ImRuntime（installResources 按 generation 重跑，订阅只挂一次）。 */
-const inboxRecorderInstallations = new WeakSet<ImRuntime>();
+/** Converts IM messages to durable inbox rows while owning endpoint identity caching. */
+export class InboxMessageRecorder {
+  readonly #im: ImRuntime;
+  readonly #databaseHost: DatabaseHost;
+  readonly #endpointIds = new Map<string, string>();
 
-/**
- * ImRuntime onMessage → unified_inbox_message 写路径。
- * 订阅去重与 Console API 消息桥一致（WeakSet 按 ImRuntime 实例）。
- */
-export function installInboxMessageRecorder(im: ImRuntime, databaseHost: DatabaseHost): void {
-  if (inboxRecorderInstallations.has(im)) return;
-  inboxRecorderInstallations.add(im);
-  const endpointIds = new Map<string, string>();
-  im.onMessage((event) => {
+  constructor(im: ImRuntime, databaseHost: DatabaseHost) {
+    this.#im = im;
+    this.#databaseHost = databaseHost;
+  }
+
+  record(event: RuntimeMessageEvent): void {
     const row = buildInboxMessageRow(event, (capabilityId) =>
-      resolveEndpointId(im, capabilityId, endpointIds));
-    void insertInboxRow(databaseHost, INBOX_TABLE_MESSAGE, row).catch((error: unknown) => {
+      resolveEndpointId(this.#im, capabilityId, this.#endpointIds));
+    void insertInboxRow(this.#databaseHost, INBOX_TABLE_MESSAGE, row).catch((error: unknown) => {
       logger.warn(formatCompact({
         op: 'inbox_message_insert',
         error: error instanceof Error ? error.message : String(error),
       }));
     });
-  });
+  }
 }
 
 /**
