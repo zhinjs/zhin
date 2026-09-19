@@ -17,6 +17,7 @@ import type { ApprovalPort } from '../session/approval-port.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredTurnState } from '../turn/deferred-turn-state.js';
+import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
 import type {
   HostEventEmitter,
@@ -35,6 +36,7 @@ export interface AgentSessionHost {
   agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
   contextRepository: ContextRepository;
   sessionSystem: SessionSystem | null;
+  readonly compactionRuntime: AgentCompactionRuntime;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(
     sessionId: string,

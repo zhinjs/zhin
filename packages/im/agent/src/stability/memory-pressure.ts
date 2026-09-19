@@ -2,7 +2,7 @@
  * ADR 0014 P2-1 — 关键全局 Map / RSS 内存压力监控
  */
 import { formatCompact, Logger, getLogger } from '@zhin.js/logger';
-import { getCompactionStateCount, evictCompactionStatesIfOverPressure } from '../memory/compaction-runtime.js';
+import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import {
   getPendingOrchestrationCount,
   evictPendingOrchestrationIfOverPressure,
@@ -27,32 +27,34 @@ export interface StabilityMetricSnapshot {
 }
 
 export interface StabilityMonitorOptions {
+  compactionRuntime: AgentCompactionRuntime;
   intervalMs?: number;
   logger?: Logger;
   collectors?: StabilityMetricCollector[];
   includeRss?: boolean;
 }
 
-const DEFAULT_COLLECTORS: StabilityMetricCollector[] = [
-  {
+function defaultCollectors(compactionRuntime: AgentCompactionRuntime): StabilityMetricCollector[] {
+  return [{
     name: 'compactionStates',
-    collect: getCompactionStateCount,
+    collect: () => compactionRuntime.stateCount,
     threshold: 4000,
-    evict: evictCompactionStatesIfOverPressure,
+    evict: () => compactionRuntime.evictIfOverPressure(),
   },
   {
     name: 'pendingOrchestration',
     collect: getPendingOrchestrationCount,
     threshold: 100,
     evict: evictPendingOrchestrationIfOverPressure,
-  },
-];
+  }];
+}
 
 export async function collectStabilityMetrics(
+  compactionRuntime: AgentCompactionRuntime,
   options: { includeRss?: boolean } = {},
 ): Promise<StabilityMetricSnapshot> {
   const snapshot: StabilityMetricSnapshot = {
-    compactionStates: getCompactionStateCount(),
+    compactionStates: compactionRuntime.stateCount,
     pendingOrchestration: getPendingOrchestrationCount(),
   };
 
@@ -63,10 +65,10 @@ export async function collectStabilityMetrics(
   return snapshot;
 }
 
-export function startStabilityMonitor(options: StabilityMonitorOptions = {}): () => void {
+export function startStabilityMonitor(options: StabilityMonitorOptions): () => void {
   const log = options.logger ?? defaultLogger;
   const intervalMs = options.intervalMs ?? 60_000;
-  const collectors = options.collectors ?? DEFAULT_COLLECTORS;
+  const collectors = options.collectors ?? defaultCollectors(options.compactionRuntime);
   const includeRss = options.includeRss !== false;
 
   const timer = setInterval(() => {
@@ -83,7 +85,7 @@ export function startStabilityMonitor(options: StabilityMonitorOptions = {}): ()
         }
 
         if (includeRss) {
-          const metrics = await collectStabilityMetrics({ includeRss: true });
+          const metrics = await collectStabilityMetrics(options.compactionRuntime, { includeRss: true });
           log.debug(formatCompact({ op: 'stability', ...metrics }));
         }
       } catch (err) {

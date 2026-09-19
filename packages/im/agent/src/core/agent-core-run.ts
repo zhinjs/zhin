@@ -15,7 +15,6 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
-import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
@@ -539,7 +538,7 @@ export async function* runAgentLoopTextTurnRun(
     },
     convertToLlm: (messages: AgentMessage[]) => messages,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
         model: llmModel,
@@ -549,7 +548,7 @@ export async function* runAgentLoopTextTurnRun(
         loopHooks,
       }) : messages,
     onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
         model: llmModel,

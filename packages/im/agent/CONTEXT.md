@@ -512,7 +512,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Session System | `src/session/` | agent | origin-neutral session store + explicit transport-provided `ApprovalPort` |
 | Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-resource-hub egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
-| Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
+| Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；`ZhinAgent` 独占一个 `AgentCompactionRuntime`，压缩状态不跨 Host 共享 |
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
 | Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
 | Workroom Kernel | `src/workroom/` | agent | versioned Journal + pure replay/decision；不并入 Subagent |

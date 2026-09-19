@@ -3,7 +3,6 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { beginTurnSession, type SessionIODeps } from '../session/session-io.js';
 import type { MemoryStore, MemorySystemConfig } from './contracts.js';
 import { ContextRepositoryMemoryStore } from './context-repository-store.js';
-import { manualCompactSession } from './compaction-runtime.js';
 import { AiCompactionStrategy } from './ai-compaction-strategy.js';
 export class MemorySystem {
   private stores = new Map<string, MemoryStore>();
@@ -56,7 +55,7 @@ export class MemorySystem {
     const modelId = host.config.chatModel || provider.models[0] || '';
     const llmModel = getLlmTransportModel(provider.name, modelId);
     const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
-    return manualCompactSession(host.contextRepository, {
+    return host.compactionRuntime.compactSession(host.contextRepository, {
       host,
       sessionId,
       model: llmModel,

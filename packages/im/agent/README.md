@@ -134,7 +134,7 @@ packages/im/agent/src/
   session/       Session System — Agent session/history；IM conversation context 由 ConversationEventStore 游标提供
   event/         Event System — Agent turn 域事件（不替代 Kernel RunEvent）
   skill/         Skill System — SkillRegistry 统一出口
-  memory/        Memory System — Port → ContextRepository + compaction
+  memory/        Memory System — Port → ContextRepository + host-owned compaction runtime
   subagent/      Subagent System — SubagentSystem + ImResultSink
   context/       Context System — builder/injector 链、tail limit
   prompt/        系统提示词、assembly、workspace 模板
@@ -238,7 +238,7 @@ useContext('ai', async (ai) => {
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
-| 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
+| 压缩与 Bootstrap | `compactSession`；`@zhin.js/agent/memory` 导出实例级 `AgentCompactionRuntime`；`estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `AgentResourceHub`、`HookRegistry`、`aiHookRuntimeBus` |
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
