@@ -91,11 +91,6 @@ export function formatAiHandlerTurnTable(
   });
 }
 
-/** @deprecated 使用 formatAiHandlerTurnTable */
-export function formatAiHandlerCompleteLog(metrics: ZhinAgentTurnMetrics, totalMs: number): string {
-  return formatAiHandlerTurnTable(metrics, totalMs);
-}
-
 /** OutputElement[] → 日志预览文本 */
 export function formatOutputElementsPreview(elements: OutputElement[]): string | undefined {
   const text = elements.map((el) => {
@@ -104,11 +99,6 @@ export function formatOutputElementsPreview(elements: OutputElement[]): string |
     return '';
   }).join('\n').trim();
   return text || undefined;
-}
-
-/** @deprecated 使用 formatCompactUsage from @zhin.js/logger */
-export function formatZhinAgentTurnUsage(usage: Usage, subagentUsage?: Usage): string {
-  return formatCompactUsage(usage, subagentUsage);
 }
 
 export function formatAiHandlerFallbackLog(totalMs: number, path?: string): string {

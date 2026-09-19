@@ -180,15 +180,4 @@ function scheduleLockKey(job: ScheduleJob, notify: import('./assistant/types.js'
   return `im:${scene.platform}:${scene.endpointKey}:${scene.kind}:${scene.sceneId}`;
 }
 
-/**
- * @deprecated Task executors now own and drain their own scene locks through
- * `executor.dispose()`. Retained only to provide explicit migration guidance;
- * calling it now rejects because no process-global lock owner exists.
- */
-export async function drainTaskExecutorLocks(_timeoutMs: number): Promise<void> {
-  throw new Error(
-    'Global TaskExecutor lock draining is no longer supported; retain the executor and await executor.dispose()',
-  );
-}
-
 export type TaskExecutor = ReturnType<typeof createTaskExecutor>;

@@ -110,7 +110,7 @@ export type {
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from '../turn/turn-metrics.js';
 export { PromptAccessDeniedError } from '../turn/prompt-access.js';
 export type { AgentTurnConfiguration } from '../turn/agent-turn-context.js';
-export { formatAiHandlerCompleteLog, formatAiHandlerTurnTable, formatZhinAgentTurnUsage } from '../turn/turn-metrics.js';
+export { formatAiHandlerTurnTable } from '../turn/turn-metrics.js';
 export * from '../prompt/prompt-builder.js';
 export * from '../prompt/templates.js';
 export * from '../turn/task-continuation.js';

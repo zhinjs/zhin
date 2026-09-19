@@ -171,12 +171,3 @@ export async function loadAgentInstructionsBody(agentDir: string): Promise<strin
   const content = await fs.promises.readFile(instructionsPath, 'utf-8');
   return content.trim();
 }
-
-/** @deprecated 使用 loadAgentInstructionsBody */
-export async function loadAgentMarkdownBody(filePath: string): Promise<string> {
-  if (filePath.endsWith('agent.ts') || filePath.endsWith('agent.js')) {
-    return loadAgentInstructionsBody(path.dirname(filePath));
-  }
-  const content = await fs.promises.readFile(filePath, 'utf-8');
-  return content.replace(/^---\s*\n[\s\S]*?\n---\s*(?:\n|$)/, '').trim();
-}

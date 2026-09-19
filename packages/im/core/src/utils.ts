@@ -176,14 +176,6 @@ export namespace segment {
     });
   }
 
-  /**
-   * @deprecated 使用 {@link keyboard} + {@link button}；文本请用 `segment.text` 单独发送
-   */
-  export function interactive(data: KeyboardSegmentData & { text?: SendContent }) {
-    const { text: _text, rows, fallback } = data;
-    return keyboard(rows, { fallback });
-  }
-
   export function from(content: SendContent): SendContent {
     if (!Array.isArray(content)) content = [content];
     const toString = (template: string | MessageElement) => {

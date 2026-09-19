@@ -52,7 +52,7 @@ function agentMessageToText(message: AgentMessage): string {
   return '';
 }
 
-/** @deprecated 主路径使用 contextRepository 原生 messages；保留供兼容调用。 */
+/** 将原生会话消息投影为需要内联历史的 prompt 文本。 */
 export function buildUserMessageWithHistory(history: AgentMessage[], currentContent: string): string {
   if (history.length === 0) return currentContent;
   const roleLabel = (role: string) => (role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'System');

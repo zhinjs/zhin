@@ -303,6 +303,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove ambiguous Agent Tool authoring aliases and retain one explicit convention-entry API under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-deprecated-api-aliases.md",
+      "packages": [
+        "@zhin.js/core",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove dead deprecated aliases and fail-only migration shims so Core and Agent expose one canonical ownership model under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

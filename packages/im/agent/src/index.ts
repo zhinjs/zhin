@@ -341,7 +341,6 @@ export {
   loadAssistantProfileFile,
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
-  syncProfileCronRoutinesToStore,
   pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
@@ -556,7 +555,7 @@ export type {
 } from './outbound/send-proactive.js';
 export { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 export type { DeliverScheduleToAdapterInput } from './assistant/deliver-schedule-to-adapter.js';
-export { createTaskExecutor, drainTaskExecutorLocks } from './task-executor.js';
+export { createTaskExecutor } from './task-executor.js';
 export type {
   TaskExecutor,
   TaskExecutionOptions,

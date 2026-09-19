@@ -43,7 +43,6 @@ export {
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
-  syncProfileCronRoutinesToStore,
   pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,

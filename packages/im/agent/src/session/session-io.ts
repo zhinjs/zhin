@@ -91,17 +91,6 @@ export function resolveTurnUserMessage(
   return { content, extra: hasExtra ? extra : undefined, llmMessage };
 }
 
-/** @deprecated 使用 `resolveTurnUserMessage` */
-export function formatUserContentForSession(
-  commMessage: AgentTurnMessage,
-  rawContent: string,
-): string {
-  const { llmMessage } = resolveTurnUserMessage(commMessage, rawContent);
-  if (llmMessage.role !== 'user') return rawContent;
-  const block = llmMessage.content.find((b) => b.type === 'text');
-  return block?.type === 'text' ? block.text : rawContent;
-}
-
 export function buildAgentSessionCreateInput(
   sessionKey: string,
 ): CreateAgentSessionInput {

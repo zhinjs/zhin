@@ -12,7 +12,6 @@ import {
   classifyBashFileOperation,
   checkBashFilePermission,
   formatFilePermissionMessage,
-  buildFileRolePrompt,
 } from '../../src/security/file-role-policy.js';
 
 describe('checkFilePermission', () => {
@@ -91,6 +90,7 @@ describe('checkFilePermission', () => {
     expect(result.needsConfirmation).toBe(true);
   });
 });
+
 
 describe('isDangerousFileOperation', () => {
   it('delete 操作始终危险', () => {
@@ -210,27 +210,5 @@ describe('formatFilePermissionMessage', () => {
     const result = checkFilePermission('owner', 'read');
     const msg = formatFilePermissionMessage(result, 'read_file');
     expect(msg).toBe('');
-  });
-});
-
-describe('buildFileRolePrompt', () => {
-  it('owner 角色提示词包含完整权限说明', () => {
-    const prompt = buildFileRolePrompt('owner');
-    expect(prompt).toContain('Owner');
-    expect(prompt).toContain('创建');
-    expect(prompt).toContain('二次确认');
-  });
-
-  it('admin 角色提示词包含限制说明', () => {
-    const prompt = buildFileRolePrompt('admin');
-    expect(prompt).toContain('Admin');
-    expect(prompt).toContain('删除');
-    expect(prompt).toContain('Owner');
-  });
-
-  it('user 角色提示词包含只读说明', () => {
-    const prompt = buildFileRolePrompt('user');
-    expect(prompt).toContain('User');
-    expect(prompt).toContain('读取');
   });
 });

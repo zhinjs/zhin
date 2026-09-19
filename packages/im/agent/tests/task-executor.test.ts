@@ -166,11 +166,6 @@ describe('task executor outbound seam', () => {
     await Promise.all([running, first, second]);
   });
 
-  it('legacy global drain fails explicitly instead of reporting a false successful drain', async () => {
-    const { drainTaskExecutorLocks } = await import('../src/task-executor.js');
-    await expect(drainTaskExecutorLocks(10)).rejects.toThrow(/executor\.dispose/i);
-  });
-
   it('fails fast when an injected execution callback awaits its own executor disposal', async () => {
     const holder: { executor?: ReturnType<typeof createTaskExecutor> } = {};
     const executor = createTaskExecutor({
