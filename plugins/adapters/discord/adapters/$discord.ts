@@ -9,7 +9,7 @@ import {
 } from '../src/endpoint.js';
 import {
   resolveDiscordConfig,
-  type DiscordAdapterConfig,
+  type DiscordEndpointConfig,
 } from '../src/protocol.js';
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 
@@ -24,7 +24,7 @@ export type {
   DiscordInteractionsEndpointOptions,
 } from '../src/endpoint.js';
 
-export default defineAdapter<DiscordAdapterConfig>({
+export default defineAdapter<DiscordEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: (context) => context.config.connection === 'interactions'
     ? ['recall']

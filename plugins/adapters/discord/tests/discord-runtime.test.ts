@@ -205,13 +205,14 @@ describe('discord protocol helpers', () => {
   });
 
   it('resolves plugin config with gateway default', () => {
-    const resolved = resolveDiscordConfig({ token: 'tok' });
+    const resolved = resolveDiscordConfig({ id: 'discord-bot', token: 'tok' });
     expect(resolved.connection).toBe('gateway');
     expect(resolved.id).toBe('discord-bot');
   });
 
   it('selects interactions mode when configured', () => {
     const resolved = resolveDiscordConfig({
+      id: 'discord-bot',
       token: 'tok',
       connection: 'interactions',
       applicationId: 'app',
@@ -608,6 +609,7 @@ describe('discord plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
       name: 'discord',
       config: {
+        id: 'discord',
         token: 'tok',
         connection: 'interactions',
         applicationId: 'app',
@@ -641,6 +643,7 @@ describe('discord plugin runtime adapter', () => {
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       http,
       config: resolveDiscordConfig({
+        id: 'discord',
         token: 'tok',
         connection: 'interactions',
         applicationId: 'app',

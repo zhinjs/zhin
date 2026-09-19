@@ -1,7 +1,4 @@
-/**
- * Discord Gateway protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
- * Canonicalization is owned by gateway/core before endpoint.send.
- */
+/** Discord Gateway protocol helpers. Canonicalization is owned by Core. */
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
 import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
@@ -10,40 +7,27 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('discord');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface DiscordAdapterConfig {
-  readonly id?: string;
-  readonly token?: string;
+export interface DiscordActivity {
+  readonly name: string;
+  readonly type: 'PLAYING' | 'STREAMING' | 'LISTENING' | 'WATCHING' | 'COMPETING';
+  readonly url?: string;
+}
+
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface DiscordEndpointConfig {
+  readonly id: string;
+  readonly token: string;
   /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */
   readonly connection?: 'gateway' | 'interactions';
   readonly intents?: readonly number[];
   readonly enableSlashCommands?: boolean;
   readonly globalCommands?: boolean;
-  readonly defaultActivity?: {
-    readonly name: string;
-    readonly type: 'PLAYING' | 'STREAMING' | 'LISTENING' | 'WATCHING' | 'COMPETING';
-    readonly url?: string;
-  };
+  readonly defaultActivity?: DiscordActivity;
   readonly slashCommands?: readonly Record<string, unknown>[];
   /** Interactions-only fields. */
   readonly applicationId?: string;
   readonly publicKey?: string;
   readonly interactionsPath?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: discord`. */
-  readonly endpoints?: ReadonlyArray<{
-    readonly context?: string;
-    readonly id?: string;
-    readonly token?: string;
-    readonly connection?: 'gateway' | 'interactions';
-    readonly intents?: readonly number[];
-    readonly enableSlashCommands?: boolean;
-    readonly globalCommands?: boolean;
-    readonly defaultActivity?: DiscordAdapterConfig['defaultActivity'];
-    readonly slashCommands?: readonly Record<string, unknown>[];
-    readonly applicationId?: string;
-    readonly publicKey?: string;
-    readonly interactionsPath?: string;
-  }>;
 }
 
 export interface ResolvedDiscordGatewayConfig {
@@ -54,7 +38,7 @@ export interface ResolvedDiscordGatewayConfig {
   readonly intents?: readonly number[];
   readonly enableSlashCommands: boolean;
   readonly globalCommands: boolean;
-  readonly defaultActivity?: DiscordAdapterConfig['defaultActivity'];
+  readonly defaultActivity?: DiscordActivity;
   readonly slashCommands?: readonly Record<string, unknown>[];
 }
 
@@ -140,33 +124,14 @@ export interface DiscordOutboundBody {
   readonly components?: ReadonlyArray<DiscordOutboundActionRow>;
 }
 
-export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): ResolvedDiscordConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'discord' || !item.context);
-  const token = (typeof config.token === 'string' && config.token)
-    || (typeof entry?.token === 'string' && entry.token)
-    || process.env.DISCORD_BOT_TOKEN
-    || '';
-  if (!token) {
-    throw new TypeError(
-      'Discord adapter requires token (plugins.<key>.token or endpoints with context: discord)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.DISCORD_BOT_NAME
-    || 'discord-bot';
-  const connection = config.connection
-    ?? entry?.connection
-    ?? 'gateway';
+export function resolveDiscordConfig(config: DiscordEndpointConfig): ResolvedDiscordConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const connection = config.connection ?? 'gateway';
 
   if (connection === 'interactions') {
-    const applicationId = config.applicationId || entry?.applicationId || '';
-    const publicKey = config.publicKey || entry?.publicKey || '';
-    if (!applicationId || !publicKey) {
-      throw new TypeError(
-        'Discord connection:interactions requires applicationId and publicKey',
-      );
-    }
+    const applicationId = requiredEndpointField(config.applicationId, 'applicationId');
+    const publicKey = requiredEndpointField(config.publicKey, 'publicKey');
     return {
       context: 'discord',
       connection: 'interactions',
@@ -174,7 +139,7 @@ export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): Resolve
       token,
       applicationId,
       publicKey,
-      interactionsPath: config.interactionsPath || entry?.interactionsPath || '/discord/interactions',
+      interactionsPath: config.interactionsPath || '/discord/interactions',
     };
   }
 
@@ -183,13 +148,22 @@ export function resolveDiscordConfig(config: DiscordAdapterConfig = {}): Resolve
     connection: 'gateway',
     id,
     token,
-    intents: config.intents ?? entry?.intents,
-    enableSlashCommands: config.enableSlashCommands === true
-      || entry?.enableSlashCommands === true,
-    globalCommands: config.globalCommands === true || entry?.globalCommands === true,
-    defaultActivity: config.defaultActivity ?? entry?.defaultActivity,
-    slashCommands: config.slashCommands ?? entry?.slashCommands,
+    intents: config.intents,
+    enableSlashCommands: config.enableSlashCommands === true,
+    globalCommands: config.globalCommands === true,
+    defaultActivity: config.defaultActivity,
+    slashCommands: config.slashCommands,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'token' | 'applicationId' | 'publicKey',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Discord endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function resolveChannelKind(channelType: number | string | undefined): 'private' | 'group' | 'channel' {
@@ -430,7 +404,7 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
 }
 
 export function activityTypeCode(
-  type: NonNullable<DiscordAdapterConfig['defaultActivity']>['type'],
+  type: DiscordActivity['type'],
 ): number {
   const map = {
     PLAYING: 0,

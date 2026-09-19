@@ -9,7 +9,6 @@ const errors = [];
 const legacyAdapterConsumers = new Set();
 const directEnvironmentConsumers = new Set([
   'plugins/adapters/dingtalk/src/protocol.ts',
-  'plugins/adapters/discord/src/protocol.ts',
   'plugins/adapters/email/src/protocol.ts',
   'plugins/adapters/github/src/gh-client.ts',
   'plugins/adapters/github/src/protocol.ts',

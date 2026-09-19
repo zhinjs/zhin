@@ -134,10 +134,23 @@ outline: [2, 3]
 | `plugins.discord.interactionsPath` | string | 否 | `"/discord/interactions"` | POST path on httpHostToken when connection is interactions. |
 | `plugins.discord.master` | string \| number | 否 | — | 框架 master（Discord user snowflake；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `plugins.discord.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `plugins.discord.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/token 必填，其余字段覆盖实例默认值 |
 | `plugins.discord.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Discord user snowflake）；覆盖顶层 master |
 | `plugins.discord.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.discord.endpoints[].token` | string | 是 | — | Discord bot token |
+| `plugins.discord.endpoints[].connection` | string: `"gateway"`, `"interactions"` | 否 | — | — |
+| `plugins.discord.endpoints[].intents` | array&lt;number&gt; | 否 | — | — |
+| `plugins.discord.endpoints[].enableSlashCommands` | boolean | 否 | — | — |
+| `plugins.discord.endpoints[].globalCommands` | boolean | 否 | — | — |
+| `plugins.discord.endpoints[].defaultActivity` | object | 否 | — | — |
+| `plugins.discord.endpoints[].defaultActivity.name` | string | 是 | — | — |
+| `plugins.discord.endpoints[].defaultActivity.type` | string: `"PLAYING"`, `"STREAMING"`, `"LISTENING"`, `"WATCHING"`, `"COMPETING"` | 是 | — | — |
+| `plugins.discord.endpoints[].defaultActivity.url` | string | 否 | — | — |
+| `plugins.discord.endpoints[].slashCommands` | array&lt;object&gt; | 否 | — | — |
+| `plugins.discord.endpoints[].applicationId` | string | 否 | — | — |
+| `plugins.discord.endpoints[].publicKey` | string | 否 | — | — |
+| `plugins.discord.endpoints[].interactionsPath` | string | 否 | — | — |
+| `plugins.discord.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.discord.endpoints[].id` | string | 是 | — | Discord bot name |
 | `plugins.discord.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

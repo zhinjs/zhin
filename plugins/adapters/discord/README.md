@@ -42,7 +42,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 | **Gateway（默认）** | 本地/生产均可；discord.js 连接 Gateway，无需公网 HTTPS |
 | **host-http** | Gateway **不需要**；Interactions webhook 延期至下一棒 |
 
-必填字段（`endpoints[i]`）：`name`、`token`。
+必填字段（`endpoints[i]`）：`id`、`token`。
 
 ## 最小配置
 
@@ -52,7 +52,7 @@ plugins:
   discord:
     # connection: gateway   # 默认
     endpoints:
-      - name: my-discord-bot
+      - id: my-discord-bot
         token: ${DISCORD_BOT_TOKEN}
 ```
 
@@ -62,8 +62,7 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `DISCORD_BOT_TOKEN` | Bot Token |
-| `DISCORD_BOT_NAME` | 可选，默认 endpoint 名 |
+| `DISCORD_BOT_TOKEN` | YAML 示例中 `token` 引用的 Bot Token |
 
 ## Interactions（HTTP）
 
