@@ -1,37 +1,47 @@
-import type { SpeechPipelineForRichSegment } from './rich-segments/types.js';
 import { createWarnOnce, resetWarnOnceForTests } from '@zhin.js/logger';
 import { importOptionalPeerPackage } from './optional-peer-import.js';
 
 /** 动态 import 时使用的包名（与 @zhin.js/speech package.json 一致） */
 export const SPEECH_PACKAGE = '@zhin.js/speech';
 
+export interface SpeechPipelinePort {
+  transcribe(input: { data: Buffer; mimeType?: string }): Promise<string>;
+  synthesize(input: {
+    text: string;
+    voice?: string;
+    format?: 'mp3' | 'wav';
+    speed?: number;
+    provider?: string;
+  }): Promise<{ data: Buffer; format: 'mp3' | 'wav' }>;
+}
+
 export interface LoadSpeechPipelineOptions {
   getConfig?: () => Record<string, unknown> | undefined;
   warn?: (message: string) => void;
 }
 
-let cached: SpeechPipelineForRichSegment | null | undefined;
+let cached: SpeechPipelinePort | null | undefined;
 const speechPeerWarnOnce = createWarnOnce('speech');
 
 /** zhin 启动时已创建 pipeline 时注入 */
-export function seedSpeechPipeline(pipeline: SpeechPipelineForRichSegment): void {
+export function seedSpeechPipeline(pipeline: SpeechPipelinePort): void {
   cached = pipeline;
 }
 
 /** 动态加载 @zhin.js/speech；未安装时 warn 一次并返回 undefined */
 export async function loadSpeechPipeline(
   opts?: LoadSpeechPipelineOptions,
-): Promise<SpeechPipelineForRichSegment | undefined> {
+): Promise<SpeechPipelinePort | undefined> {
   if (cached !== undefined) {
     return cached ?? undefined;
   }
 
   try {
     const mod = await importOptionalPeerPackage<{
-      createSpeechPipeline: (config?: Record<string, unknown>) => SpeechPipelineForRichSegment;
+      createSpeechPipeline: (config?: Record<string, unknown>) => SpeechPipelinePort;
     }>(SPEECH_PACKAGE);
     const speechConfig = opts?.getConfig?.()?.speech as Record<string, unknown> | undefined;
-    cached = mod.createSpeechPipeline(speechConfig) as SpeechPipelineForRichSegment;
+    cached = mod.createSpeechPipeline(speechConfig) as SpeechPipelinePort;
     return cached;
   } catch {
     speechPeerWarnOnce(
@@ -48,5 +58,3 @@ export function resetSpeechLoaderForTests(): void {
   cached = undefined;
   resetWarnOnceForTests('speech');
 }
-
-export type { SpeechPipelineForRichSegment };

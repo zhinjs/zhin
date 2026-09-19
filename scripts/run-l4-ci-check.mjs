@@ -29,7 +29,7 @@ const l4CiTestFiles = [
   'examples/full-bot/tests/provider-gateway-contract.test.ts',
   'examples/full-bot/tests/multimodal-peers-contract.test.ts',
   'examples/qq-games-bot/tests/runtime-contract.test.ts',
-  'packages/im/core/tests/multimodal-chain-contract.test.ts',
+  'packages/im/core/tests/plugin-runtime/outbound-segments.test.ts',
 ];
 
 // 防再犯：列出的测试文件必须真实存在，否则 vitest 会静默把缺失路径当过滤器跳过

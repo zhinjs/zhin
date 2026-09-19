@@ -233,9 +233,7 @@
     "export * from './built/interactive-segments/index.js'",
     "export * from './built/login-assist.js'",
     "export * from './built/message-enrich.js'",
-    "export * from './built/outbound-media-contract.js'",
     "export * from './built/outbound-media-utils.js'",
-    "export * from './built/rich-segments/index.js'",
     "export * from './built/roles.js'",
     "export * from './built/segment-contract/index.js'",
     "export * from './built/tool-access.js'",
@@ -261,7 +259,7 @@
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
     "export{ScheduleEngine,Scheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
-    "export{loadHtmlRenderer,seedHtmlRenderer,HTML_RENDERER_PACKAGE}from './built/html-renderer-loader.js'",
-    "export{loadSpeechPipeline,seedSpeechPipeline,SPEECH_PACKAGE}from './built/speech-loader.js'"
+    "export{loadSpeechPipeline,seedSpeechPipeline,SPEECH_PACKAGE}from './built/speech-loader.js'",
+    "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"
   ]
 }

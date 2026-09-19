@@ -103,7 +103,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 
 | 检查 | 说明 |
 | --- | --- |
-| Rich Segment Adapters（`pnpm check:rich-segments`） | outboundRichSegmentPolicy 声明与契约测试 |
+| Outbound Media Policies（`pnpm check:outbound-media-policies`） | segments.outboundMedia 声明与契约测试 |
 | AI Outbound Adapters（`pnpm check:ai-outbound`） | aiOutboundExtensions 声明与契约测试 |
 | Interactive Segments（`pnpm check:interactive-segments`） | interactivePolicy 声明与契约测试 |
 | Segment Adapters（`pnpm check:segments`） | defineAdapter segments 声明契约（sandbox 必须达标） |

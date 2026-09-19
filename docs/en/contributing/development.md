@@ -94,7 +94,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 
 | Check | Description |
 | --- | --- |
-| Rich Segment Adapters (`pnpm check:rich-segments`) | outboundRichSegmentPolicy declaration and contract tests |
+| Outbound Media Policies (`pnpm check:outbound-media-policies`) | segments.outboundMedia declarations and contract tests |
 | AI Outbound Adapters (`pnpm check:ai-outbound`) | aiOutboundExtensions declaration and contract tests |
 | Interactive Segments (`pnpm check:interactive-segments`) | interactivePolicy declaration and contract tests |
 | Segment Adapters (`pnpm check:segments`) | defineAdapter segments declaration contract (sandbox must pass) |

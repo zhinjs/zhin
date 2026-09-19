@@ -20,5 +20,5 @@
 - **Agent Runtime -> Core IM Runtime**：Agent 工具和回复在 IM 边界使用 Core 的 `Tool`、`Message`、`SendOptions` 概念。
 - **Console Runtime -> Core IM Runtime**：ConsoleTopology 从 Page/Layout Feature projection 派生；适配器插件继续拥有平台相关的数据路由。
 - **Console Runtime -> Agent Runtime**：面向 Agent 的控制台页面可以查看或操作 Agent Runtime 状态，但页面注册仍归 Console Runtime 管。
-- **Toolkit Runtime -> Core IM Runtime**：Rich Segment（html/tts）与 optional capability loader 在 `renderSendMessage` 首步生效；未安装 peer 时降级 text，不撑大 IM 核心体积。
+- **Toolkit Runtime -> Core IM Runtime**：composition root 将 HtmlRenderer Host 安装为 generation resource；Core 的统一出站规范化链路按 Endpoint 媒体能力渲染或降级 HTML，不在 Core 维护 optional peer loader。
 - **Scaffold Wizard -> 用户项目**：`zhin setup` / `create-zhin-app` 写入配置并诊断 AI / speech / html-renderer 依赖，逻辑不在 CLI 内重复实现。

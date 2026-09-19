@@ -2,10 +2,10 @@
 /**
  * 校验 IM adapter 的 defineAdapter segments.outboundMedia 声明（富媒体段出站协商）。
  * 探测点：plugins/adapters/<name>/adapters/*.ts（defineAdapter 约定入口；
- * 旧探测点 src/adapter.ts 与 outboundRichSegmentPolicy 已不存在）。
+ * 旧探测点 src/adapter.ts 已不存在）。
  * 契约：声明 `segments: { outboundMedia: ['url'|'path'|'base64'|'upload', ...] }`；
  * 未迁移的 adapter 列入 OUTBOUND_MEDIA_PENDING 豁免（Wave 2 渐进收敛）。
- * 用法：node scripts/check-rich-segment-adapters.mjs [adaptersRoot]（测试可传 fixture 目录）
+ * 用法：node scripts/check-outbound-media-policies.mjs [adaptersRoot]（测试可传 fixture 目录）
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -43,11 +43,11 @@ for (const name of entries) {
 }
 
 if (errors.length > 0) {
-  console.error('check:rich-segments failed:\n');
+  console.error('check:outbound-media-policies failed:\n');
   for (const e of errors) console.error(`  • ${e}`);
   process.exit(1);
 }
 
 console.log(
-  `check:rich-segments passed (${entries.length} adapter dirs; pending: ${OUTBOUND_MEDIA_PENDING.size}).\n`,
+  `check:outbound-media-policies passed (${entries.length} adapter dirs; pending: ${OUTBOUND_MEDIA_PENDING.size}).\n`,
 );

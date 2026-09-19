@@ -548,6 +548,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global LLM provider, transport, resolver, and model-cache state with owner-scoped runtimes and remove the old global APIs under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-rich-segment-runtime.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the disconnected classic Rich Segment classes, mutable registry, optional-peer loaders, and adapter policy facade so generation-owned outbound normalization is the sole rendering authority under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

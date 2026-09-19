@@ -72,7 +72,7 @@
     "check:platform-auth": "node scripts/check-platform-auth.mjs",
     "check:l4": "node scripts/run-l4-check.mjs",
     "check:l4-ci": "node scripts/run-l4-ci-check.mjs",
-    "check:rich-segments": "node scripts/check-rich-segment-adapters.mjs",
+    "check:outbound-media-policies": "node scripts/check-outbound-media-policies.mjs",
     "check:ai-outbound": "node scripts/check-ai-outbound-adapters.mjs",
     "check:interactive-segments": "node scripts/check-interactive-segment-adapters.mjs",
     "check:segments": "node scripts/check-segment-adapters.mjs",

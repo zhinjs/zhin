@@ -31,10 +31,6 @@ import {
 } from "./types.js";
 import { Message } from "./message.js";
 import { formatSegmentPreview } from "./built/segment-contract/preview.js";
-import { HtmlSegment } from "./built/rich-segments/html-segment.js";
-import { MarkdownSegment } from "./built/rich-segments/markdown-segment.js";
-import { QrcodeSegment } from "./built/rich-segments/qrcode-segment.js";
-import { TtsSegment } from "./built/rich-segments/tts-segment.js";
 import { KeyboardSegment } from "./built/interactive-segments/keyboard-segment.js";
 import { ButtonSpec, normalizeKeyboardRows, type KeyboardRowInput } from "./built/interactive-segments/button-spec.js";
 import type { ButtonData, KeyboardFallback, KeyboardSegmentData } from "./built/interactive-segments/types.js";
@@ -115,7 +111,7 @@ export namespace segment {
     return segment("face", { id, text });
   }
 
-  /** 出站 HTML 卡片段（Adapter policy 决定 image/text/origin） */
+  /** 出站 HTML 卡片段（统一出站链路决定渲染或文本降级）。 */
   export function htmlCard(options: {
     html: string;
     text?: string;
@@ -123,18 +119,22 @@ export namespace segment {
     backgroundColor?: string;
     fileName?: string;
   }) {
-    return new HtmlSegment(options);
+    return segment("html", options);
   }
 
   /** Short alias for {@link htmlCard}. */
   export const html = htmlCard;
 
-  /** 出站 Markdown 段（Adapter policy 决定 image/text/origin） */
-  export function markdown(content: string, options: Omit<MarkdownSegment['data'], 'content'> = {}) {
-    return new MarkdownSegment({ content, ...options });
+  /** 出站 Markdown 段。 */
+  export function markdown(content: string, options: {
+    width?: number;
+    backgroundColor?: string;
+    fileName?: string;
+  } = {}) {
+    return segment("markdown", { content, ...options });
   }
 
-  /** 二维码出站段（Adapter policy 决定 image/text/origin） */
+  /** 二维码出站段。 */
   export function qrcode(
     text: string,
     options: {
@@ -144,16 +144,16 @@ export namespace segment {
       small?: boolean;
     } = {},
   ) {
-    return new QrcodeSegment({ text, ...options });
+    return segment("qrcode", { text, ...options });
   }
 
-  /** TTS 出站段（Adapter policy 决定 audio/text/origin） */
+  /** TTS 出站段。 */
   export function tts(options: {
     text: string;
     voice?: string;
     provider?: string;
   }) {
-    return new TtsSegment(options);
+    return segment("tts", options);
   }
 
   /** 键盘按钮单元（与 {@link keyboard} 组合布局） */

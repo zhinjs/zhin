@@ -226,8 +226,8 @@ const checks = [
     description: 'zhin.features 引用的包须出现在 peerDependencies（runtime 1.0.12+）',
   },
   {
-    name: 'Rich Segment Adapters',
-    command: 'pnpm check:rich-segments',
+    name: 'Outbound Media Policies',
+    command: 'pnpm check:outbound-media-policies',
     description: '各 adapter 在 adapters/*.ts 声明 segments.outboundMedia（或豁免）',
   },
   {

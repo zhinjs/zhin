@@ -27,7 +27,7 @@ pnpm add @zhin.js/speech @zhin.js/html-renderer   # 按需
 zhin doctor --fix
 ```
 
-排查 stage 日志见 [AI 内容链可观测](../../docs/advanced/ai-content-chain.md)；Adapter 矩阵见 [Rich Segment 适配器](../../docs/essentials/rich-segment-adapters.md)。
+排查 stage 日志见 [AI 内容链可观测](../../docs/advanced/ai-content-chain.md)；消息段渲染与 Adapter 媒体能力见 [消息流](../../docs/concepts/message-flow.md)。
 
 ## 快速开始
 

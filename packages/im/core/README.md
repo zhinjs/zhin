@@ -96,7 +96,8 @@ export default defineAdapter({
 
 ```text
 Message.$reply / OutboundMessageService
-  → segment render
+  → component render
+  → canonical segment normalization
   → before.sendMessage middleware
   → AdapterIndex.send
   → Endpoint.send
@@ -104,7 +105,7 @@ Message.$reply / OutboundMessageService
 
 任何平台发送都必须经过这条链路。
 
-## 富消息段
+## 语义消息段
 
 业务代码可以返回 `segment.html()`、`segment.markdown()`、`segment.qrcode()` 等语义段。Adapter 定义通过 `segments` 声明交互模式和媒体能力；Core 按当前 Endpoint 能力渲染，平台 Endpoint 只处理最终 payload。
 
@@ -118,7 +119,7 @@ return segment.html({
 })
 ```
 
-Rich Segment kind 与 renderer 是 Core 契约。新增 kind 需要同时定义语义、渲染结果和 Adapter capability，不通过可变全局 registry 注入。
+这些 helper 只创建 canonical `{ type, data }` 消息段。Core 的统一出站规范化链路负责 HTML 渲染、Markdown 策略、交互降级和媒体协商；能力来自当前 generation 的资源与 Adapter definition，不存在第二套消息段类、registry 或 loader。
 
 ## 主要入口
 
