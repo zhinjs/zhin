@@ -8,7 +8,6 @@ import {
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
-  AgentResourceHub,
   type AssistantConfig,
   type ApprovalPort,
   type AudioTranscriptionPort,
@@ -16,23 +15,16 @@ import {
   type WorkroomPlanGateAuthorityPort,
 } from '@zhin.js/agent';
 import {
-  CapabilityIngress,
   AgentRuntime,
   type TurnIntentResolver,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
-  createSelfDeliveryProjectForHost,
-  workroomDeliveryProviderToken,
-  selfDeliveryProjectToken,
   type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
-import { WorkroomExecutionCoordinator } from './workroom-execution-coordinator.js';
-import { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordinator.js';
-import { WorkroomKnowledgeCoordinator } from './workroom-knowledge-coordinator.js';
-import { WorkroomEffectCoordinator } from './workroom-effect-coordinator.js';
 import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
 import { AgentHostPublicationCoordinator } from './agent-host-publication-coordinator.js';
+import { WorkroomHostCoordinator } from './workroom-host-coordinator.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -48,13 +40,8 @@ import {
   publishAgentToolFeatures,
   type HostAgentTool,
 } from './agent-tool-feature-publisher.js';
-import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
 import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
-import { WorkroomDataGovernanceCoordinator } from './workroom-data-governance-coordinator.js';
-import { WorkroomProfileCoordinator } from './workroom-profile-coordinator.js';
-import { WorkroomPlanningCoordinator } from './workroom-planning-coordinator.js';
-import { WorkroomAcceptanceCoordinator } from './workroom-acceptance-coordinator.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
@@ -144,7 +131,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
-    const listGenerationBindings = () => agentFoundation.listBindings();
     const workroomFoundation = new WorkroomRuntimeFoundation({
       generation,
       signal,
@@ -153,56 +139,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       planningDisclosure: options.workroomPlanningDisclosurePort,
       dynamicPlanningPolicy: options.workroomDynamicPlanningPolicyPort,
     });
-    const {
-      journal: workroomJournal,
-      catalog: workroomCatalog,
-      kernel: workroomKernel,
-      consoleProjectionAuthority,
-    } = workroomFoundation;
-    let recoverHumanIngress = async (): Promise<void> => {};
-    const persistence = new WorkroomPersistenceCoordinator({
-      projectRoot: options.projectRoot,
-      config: aiConfig,
-      fixedStorageMode: options.workroomStorageMode,
-      resources,
-      handoff,
-      service,
-      agent: zhinAgent,
-      semanticMemory,
-      journal: workroomJournal,
-      journalPayloads: workroomFoundation.journalPayloads.payloads,
-      catalog: workroomCatalog,
-      listAgentNames: () => listGenerationBindings().map(binding => binding.name),
-      resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
-      recoverHumanIngress: () => recoverHumanIngress(),
-    });
-    const dataGovernanceCoordinator = await WorkroomDataGovernanceCoordinator.create({
-      projectRoot: options.projectRoot,
-      generation,
-      signal,
-      resources,
-      usesDatabase: persistence.usesDatabase,
-      foundation: workroomFoundation,
-      localAuthority: options.workroomLocalDataGovernance,
-    });
-    if (dataGovernanceCoordinator.storage) {
-      persistence.bindDataGovernanceStorage(dataGovernanceCoordinator.storage);
-    }
-    await persistence.prepare();
-    dataGovernanceCoordinator.registerHandoff(handoff);
-    const {
-      assignmentAuthorityGrants,
-      overlayPackPromotions,
-      portfolioControlOutbox,
-      stateRoot: workroomStateRoot,
-    } = persistence;
-    const {
-      lifecycle: dataLifecycle,
-      localAuthority: localDataGovernance,
-      governedOutbound,
-    } = dataGovernanceCoordinator;
-
-    const ingress = new CapabilityIngress();
     const bootstrapText = await loadBootstrap(options.projectRoot);
 
     // Register before any await so a cancelled generation cannot leak Agent
@@ -229,127 +165,27 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       bootstrapText,
     });
 
-    const presetCount = await agentFoundation.seedPresets();
-
-    const binding = service.getBindingRegistry().requireZhinBinding();
-    publicationCoordinator.bindDataLifecycle(dataLifecycle?.console);
-    const effectCoordinator = new WorkroomEffectCoordinator({
+    const workroom = await WorkroomHostCoordinator.create({
       projectRoot: options.projectRoot,
       generation,
       signal,
       resources,
       lifecycle,
       handoff,
-      runtime: workroomFoundation,
-    });
-    const effectComposition = effectCoordinator.composition;
-    const profileCoordinator = new WorkroomProfileCoordinator({
-      projectRoot: options.projectRoot,
-      stateRoot: workroomStateRoot,
-      generation,
-      signal,
-      resources,
       snapshots: options.snapshots,
-      journal: workroomJournal,
-      catalog: workroomCatalog,
-      trustedPackPublishers: options.workroomTrustedPackPublishers,
-      listBindings: listGenerationBindings,
-    });
-    const {
-      composition: profileComposition,
-      profiles: projectProfiles,
-      runPinWriter: profileRunPinWriter,
-      acceptanceSource: acceptanceProfileSource,
-    } = profileCoordinator;
-    if (options.selfDelivery) {
-      if (options.selfDelivery.deliveryProvider) {
-        if (resources.has(workroomDeliveryProviderToken)) throw new Error('Self-delivery Delivery provider conflicts with existing Host provider');
-        resources.provide(workroomDeliveryProviderToken, options.selfDelivery.deliveryProvider);
-      }
-      resources.provide(selfDeliveryProjectToken, createSelfDeliveryProjectForHost({
-        directory: join(workroomStateRoot, 'self-delivery-issues'),
-        configuration: options.selfDelivery,
-        kernel: workroomKernel,
-        catalog: workroomCatalog,
-        profiles: projectProfiles,
-        pins: profileRunPinWriter,
-        signal,
-      }));
-    }
-    const planningCoordinator = new WorkroomPlanningCoordinator({
       config: aiConfig,
-      generation,
-      signal,
-      snapshots: profileCoordinator.snapshots,
-      service,
-      runtime: workroomFoundation,
-      profiles: profileCoordinator,
-      governance: dataGovernanceCoordinator,
-      workroomTrustedPackPublishers: options.workroomTrustedPackPublishers,
-      listBindings: listGenerationBindings,
-    });
-    publicationCoordinator.bindWorkroomProfiles(planningCoordinator.consoleControl);
-    const knowledgeCoordinator = new WorkroomKnowledgeCoordinator({
-      stateRoot: workroomStateRoot,
-      generation,
-      signal,
-      resources,
-      lifecycle,
-      runtime: workroomFoundation,
-      profiles: profileCoordinator,
-      governance: dataGovernanceCoordinator,
-      persistence,
-    });
-    const ephemeralAssignmentContext = knowledgeCoordinator.ephemeralAssignmentContext;
-    publicationCoordinator.bindWorkroomKnowledge(knowledgeCoordinator.consoleControl);
-    const acceptanceCoordinator = new WorkroomAcceptanceCoordinator({
-      projectRoot: options.projectRoot,
-      stateRoot: workroomStateRoot,
-      generation,
-      signal,
-      resources,
-      lifecycle,
-      handoff,
-      runtime: workroomFoundation,
-      profiles: profileCoordinator,
-      governance: dataGovernanceCoordinator,
-      effect: effectComposition,
-      ephemeralAssignmentContext,
-    });
-    publicationCoordinator.bindEffectSponsor(acceptanceCoordinator.effectSponsorControl);
-    const executionCoordinator = new WorkroomExecutionCoordinator({
-      projectRoot: options.projectRoot,
-      generation,
-      signal,
-      resources,
-      lifecycle,
-      handoff,
-      snapshots: profileCoordinator.snapshots,
+      storageMode: options.workroomStorageMode,
       im: options.im,
       selfDelivery: options.selfDelivery,
-      ingress,
       agent: agentFoundation,
-      runtime: workroomFoundation,
-      profiles: profileCoordinator,
-      governance: dataGovernanceCoordinator,
-      persistence,
-      acceptance: acceptanceCoordinator,
+      foundation: workroomFoundation,
+      publication: publicationCoordinator,
+      resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
+      humanIngressPort: options.workroomHumanIngressPort,
+      trustedPackPublishers: options.workroomTrustedPackPublishers,
+      localDataGovernance: options.workroomLocalDataGovernance,
     });
-    const { portfolioSponsorControl } = executionCoordinator;
-    publicationCoordinator.bindPortfolioSponsor(portfolioSponsorControl);
-    const humanIngressCoordinator = await WorkroomHumanIngressCoordinator.create({
-      signal,
-      resources,
-      lifecycle,
-      im: options.im,
-      port: options.workroomHumanIngressPort,
-      runtime: workroomFoundation,
-      profiles: profileCoordinator,
-      persistence,
-      execution: executionCoordinator,
-      resolveDataLifecycleControl: () => publicationCoordinator.resolveDataLifecycle(),
-    });
-    recoverHumanIngress = () => humanIngressCoordinator.recover();
+    const binding = service.getBindingRegistry().requireZhinBinding();
 
     resources.provide(ingressRouteToken, new AgentTurnIngressRoute({
       projectRoot: options.projectRoot,
@@ -360,10 +196,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveTurnIntent: options.resolveTurnIntent,
       resolveEndpointOwner: options.resolveEndpointOwner,
       resolveEndpointTrusted: options.resolveEndpointTrusted,
-      ingress,
+      ingress: workroom.ingress,
       agent: agentFoundation,
-      execution: executionCoordinator,
-      humanIngress: humanIngressCoordinator,
+      execution: workroom.execution,
+      humanIngress: workroom.humanIngress,
     }));
 
     const providers = service.listProviders();
@@ -379,10 +215,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     logger.info(
       `ready | ${binding.name}@${binding.providerAlias}/${binding.model}`
       + ` | providers: ${providers.length}`
-      + ` | presets: ${presetCount}`
+      + ` | presets: ${workroom.presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
-      + ` | persistence: ${persistence.pendingActivation ? 'pending_activate' : 'file'}`,
+      + ` | persistence: ${workroom.persistence.pendingActivation ? 'pending_activate' : 'file'}`,
     );
     logger.debug(
       `ready detail | providers: ${providers.join(',')}`
