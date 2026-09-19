@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveSandboxTurnPolicy } from '../../src/plugin-runtime/sandbox-turn-policy.js';
+import { resolveSandboxTurnPolicy } from '../../../../src/plugin-runtime/agent/turn/sandbox-policy.js';
 
 describe('sandbox per-session Turn policy', () => {
   it('maps workspace-write into a bounded workspace and interactive shell policy', () => {

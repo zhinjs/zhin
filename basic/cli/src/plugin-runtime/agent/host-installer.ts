@@ -21,29 +21,29 @@ import {
   type WorkroomPlanningDisclosurePort,
   type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
-import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
-import { AgentHostPublicationCoordinator } from './agent-host-publication-coordinator.js';
+import { AgentTurnIngressRoute } from './turn/ingress-route.js';
+import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
 import {
   WorkroomHostCoordinator,
   WorkroomRuntimeFoundation,
   type LocalWorkroomDataGovernanceAuthority,
-} from './workroom/module.js';
+} from '../workroom/module.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
 import {
   createRuntimeApprovalPort,
-} from './agent-turn-request.js';
+} from './turn/request.js';
 import {
   resolveAgentHostMcpServers,
   type AgentHostAIConfig as AIConfig,
   type WorkroomStorageMode,
-} from './agent-host-config.js';
+} from './config.js';
 import {
   publishAgentToolFeatures,
   type HostAgentTool,
-} from './agent-tool-feature-publisher.js';
-import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
+} from './tool-feature-publisher.js';
+import { AgentRuntimeFoundation } from './runtime-foundation.js';
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;

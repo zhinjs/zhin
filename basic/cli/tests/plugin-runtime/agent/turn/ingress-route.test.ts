@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AgentTurnIngressRoute } from '../../src/plugin-runtime/agent-turn-ingress-route.js';
+import { AgentTurnIngressRoute } from '../../../../src/plugin-runtime/agent/turn/ingress-route.js';
 
 describe('AgentTurnIngressRoute', () => {
   it('adapts the durable Workroom pre-route through the IngressRoute interface', async () => {

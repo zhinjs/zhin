@@ -22,12 +22,12 @@ import {
   resolveWorkroomDisclosureBootstrap,
   resolveWorkroomPlanningPolicyPublication,
   type AgentHostAIConfig,
-} from '../agent-host-config.js';
+} from '../agent/config.js';
 import {
   createWorkroomBootstrapAcceptancePolicy,
   createWorkroomPlanningBootstrapArtifacts,
 } from './planning-bootstrap.js';
-import type { AgentRuntimeFoundation } from '../agent-runtime-foundation.js';
+import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';
 import type { WorkroomProfileCoordinator } from './profile-coordinator.js';
 import type { WorkroomRuntimeFoundation } from './runtime-foundation.js';

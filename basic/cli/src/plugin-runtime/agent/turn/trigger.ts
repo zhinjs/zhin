@@ -1,7 +1,7 @@
 import type { AITriggerConfig } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core/runtime';
 import type { AgentCapabilities } from '@zhin.js/agent/runtime';
-import type { WorkroomTurnContinuation } from './agent-workroom-port.js';
+import type { WorkroomTurnContinuation } from '../workroom-port.js';
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
 const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';

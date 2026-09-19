@@ -13,7 +13,7 @@ import {
   resolveWorkroomPlanningPolicyPublication,
   resolveWorkroomStorageMode,
   resolveWorkroomTrustedPackPublishers,
-} from '../../src/plugin-runtime/agent-host-config.js';
+} from '../../../src/plugin-runtime/agent/config.js';
 
 describe('Agent Host Workroom configuration', () => {
   it('resolves only explicitly configured project-local knowledge directories', () => {

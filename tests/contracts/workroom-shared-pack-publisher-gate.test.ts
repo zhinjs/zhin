@@ -5,7 +5,7 @@ describe('Workroom shared Pack publisher authority gate', () => {
   it('never upgrades an HTTP principal to control-plane Root', async () => {
     const [installer, profileCoordinator, planningCoordinator] = await Promise.all([
       readFile(new URL(
-        '../../basic/cli/src/plugin-runtime/agent-host-installer.ts',
+        '../../basic/cli/src/plugin-runtime/agent/host-installer.ts',
         import.meta.url,
       ), 'utf8'),
       readFile(new URL(

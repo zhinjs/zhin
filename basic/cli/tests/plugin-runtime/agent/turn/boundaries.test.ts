@@ -15,7 +15,7 @@ import {
   resolveRuntimeTurnIntent,
   resolveSnapshotTurnIntentResolver,
   runtimeApprovalPolicy,
-} from '../../src/plugin-runtime/agent-turn-request.js';
+} from '../../../../src/plugin-runtime/agent/turn/request.js';
 import {
   renderTriggerError,
   resolveTriggerTimeoutMs,
@@ -23,12 +23,12 @@ import {
   routeSpecialistAgent,
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
-} from '../../src/plugin-runtime/agent-turn-trigger.js';
-import { resolveWorkroomOrchestratorConversation } from '../../src/plugin-runtime/agent-workroom-port.js';
+} from '../../../../src/plugin-runtime/agent/turn/trigger.js';
+import { resolveWorkroomOrchestratorConversation } from '../../../../src/plugin-runtime/agent/workroom-port.js';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
-} from '../../src/plugin-runtime/start-command.js';
+} from '../../../../src/plugin-runtime/start-command.js';
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 

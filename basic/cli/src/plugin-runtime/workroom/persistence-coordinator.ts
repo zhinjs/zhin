@@ -34,7 +34,7 @@ import {
   resolveWorkroomStorageMode,
   type AgentHostAIConfig,
   type WorkroomStorageMode,
-} from '../agent-host-config.js';
+} from '../agent/config.js';
 import { assertWorkroomCatalogMatchesGeneration } from './projection.js';
 
 type RootResourceContext = Parameters<RootResourceInstaller>[0];

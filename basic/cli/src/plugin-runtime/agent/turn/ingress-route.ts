@@ -23,14 +23,14 @@ import {
   type RuntimeSnapshot,
   type SnapshotLease,
 } from '@zhin.js/plugin-runtime';
-import { observeAgentTurnTrace } from './agent-runtime-factory.js';
-import type { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
+import { observeAgentTurnTrace } from '../runtime-factory.js';
+import type { AgentRuntimeFoundation } from '../runtime-foundation.js';
 import {
   completedOutput,
   flattenOutputElements,
   isClearCommand,
   preprocessInboundTurn,
-} from './agent-turn-content.js';
+} from './content.js';
 import {
   renderTriggerError,
   resolveRuntimeAgentTrigger,
@@ -39,7 +39,7 @@ import {
   routeSpecialistAgent,
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
-} from './agent-turn-trigger.js';
+} from './trigger.js';
 import {
   adapterLiveEndpointId,
   capabilityLocalName,
@@ -56,9 +56,9 @@ import {
   resolveTrustedForRuntimeMessage,
   runtimeImSessionKey,
   type RuntimeSenderRoles,
-} from './agent-turn-request.js';
-import type { AgentWorkroomPort } from './agent-workroom-port.js';
-import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
+} from './request.js';
+import type { AgentWorkroomPort } from '../workroom-port.js';
+import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 
 const logger = getLogger('agent');
 

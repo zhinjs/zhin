@@ -12,14 +12,14 @@ import {
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { AgentHostAIConfig, WorkroomStorageMode } from '../agent-host-config.js';
-import type { AgentHostPublicationCoordinator } from '../agent-host-publication-coordinator.js';
-import type { AgentRuntimeFoundation } from '../agent-runtime-foundation.js';
+import type { AgentHostAIConfig, WorkroomStorageMode } from '../agent/config.js';
+import type { AgentHostPublicationCoordinator } from '../agent/publication-coordinator.js';
+import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import {
   resolveWorkroomOrchestratorConversation,
   type AgentWorkroomPort,
   type WorkroomTurnContinuation,
-} from '../agent-workroom-port.js';
+} from '../agent/workroom-port.js';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-data-governance.js';
 import { WorkroomAcceptanceCoordinator } from './acceptance-coordinator.js';
 import { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';

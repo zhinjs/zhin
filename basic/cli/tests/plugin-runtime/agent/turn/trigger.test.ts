@@ -5,7 +5,7 @@ import type { AITriggerConfig } from '@zhin.js/core';
 import {
   matchAiTrigger,
   resolveRuntimeAgentTrigger,
-} from '../../src/plugin-runtime/agent-turn-trigger.js';
+} from '../../../../src/plugin-runtime/agent/turn/trigger.js';
 
 const adapter = capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq');
 

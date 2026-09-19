@@ -15,9 +15,9 @@ import {
   type WorkroomRunControlCommand,
 } from '@zhin.js/agent/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { observeAgentTurnTrace } from './agent-runtime-factory.js';
-import type { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
-import type { WorkroomRuntimeFoundation } from './workroom/module.js';
+import { observeAgentTurnTrace } from './runtime-factory.js';
+import type { AgentRuntimeFoundation } from './runtime-foundation.js';
+import type { WorkroomRuntimeFoundation } from '../workroom/module.js';
 
 type RootResources = Parameters<RootResourceInstaller>[0]['resources'];
 

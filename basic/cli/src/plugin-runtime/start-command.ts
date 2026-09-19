@@ -387,18 +387,17 @@ async function loadConfiguredAgentHost(
 ): Promise<ConfiguredAgentHost | undefined> {
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
-  const [module, configModule] = await Promise.all([
-    import('./agent-host-installer.js'),
-    import('./agent-host-config.js'),
+  const [agentHost, workroom] = await Promise.all([
+    import('./agent/module.js'),
+    import('./workroom/module.js'),
   ]);
-  const { createLocalWorkroomDataGovernanceAuthority } = await import('./workroom/module.js');
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
-  const initialAi = await configModule.resolveAiConfig(document);
-  const workroomStorageMode = configModule.resolveWorkroomStorageMode(initialAi);
-  const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
+  const initialAi = await agentHost.resolveAiConfig(document);
+  const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
+  const runtime = new agentHost.AgentRuntime({ coordinator: new agentHost.AgentTurnCoordinator() });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<
-    typeof createLocalWorkroomDataGovernanceAuthority
+    typeof workroom.createLocalWorkroomDataGovernanceAuthority
   > | undefined;
   const configured: ConfiguredAgentHost = {
     bindings: (snapshot) => {
@@ -412,17 +411,17 @@ async function loadConfiguredAgentHost(
     },
     install: (options) => {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
-      localWorkroomDataGovernance ??= createLocalWorkroomDataGovernanceAuthority({
+      localWorkroomDataGovernance ??= workroom.createLocalWorkroomDataGovernanceAuthority({
         stateRoot: join(options.projectRoot, '.zhin'),
       });
-      return module.installAgentHost({
+      return agentHost.installAgentHost({
         ...options,
         runtime,
         snapshots: snapshotReader,
         workroomStorageMode,
-        workroomTrustedPackPublishers: configModule.resolveWorkroomTrustedPackPublishers(initialAi),
+        workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
-        extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
+        extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },
   };

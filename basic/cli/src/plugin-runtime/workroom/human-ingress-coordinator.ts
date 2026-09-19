@@ -29,8 +29,8 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { conversationRefKey } from '@zhin.js/im-contract';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { adapterLiveEndpointId, capabilityLocalName } from '../agent-turn-request.js';
-import { stringMetadata } from '../agent-turn-content.js';
+import { adapterLiveEndpointId, capabilityLocalName } from '../agent/turn/request.js';
+import { stringMetadata } from '../agent/turn/content.js';
 import type { WorkroomExecutionCoordinator } from './execution-coordinator.js';
 import {
   WorkroomHumanIngressPreRoute,

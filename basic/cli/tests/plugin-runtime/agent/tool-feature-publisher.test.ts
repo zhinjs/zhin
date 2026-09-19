@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AIService } from '@zhin.js/agent';
-import { publishAgentToolFeatures } from '../../src/plugin-runtime/agent-tool-feature-publisher.js';
+import { publishAgentToolFeatures } from '../../../src/plugin-runtime/agent/tool-feature-publisher.js';
 
 describe('Agent Tool feature publisher', () => {
   it('projects Host, runtime, and native tools through one generation callback', () => {

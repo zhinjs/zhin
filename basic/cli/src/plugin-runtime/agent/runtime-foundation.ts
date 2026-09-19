@@ -18,8 +18,8 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {
   resolveAgentHostKnowledgeDirectory,
   type AgentHostAIConfig,
-} from './agent-host-config.js';
-import { createRuntimeZhinAgent } from './agent-runtime-factory.js';
+} from './config.js';
+import { createRuntimeZhinAgent } from './runtime-factory.js';
 import {
   createAssistantHomeRuntime,
   createAssistantScheduleRuntime,

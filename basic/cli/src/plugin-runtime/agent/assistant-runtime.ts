@@ -37,7 +37,7 @@ import {
   type AgentTraceRecorder,
   type AssistantRuntimeHandle,
 } from '@zhin.js/agent/runtime';
-import { createRuntimeProactiveOutbound, observeAgentTurnTrace } from './agent-runtime-factory.js';
+import { createRuntimeProactiveOutbound, observeAgentTurnTrace } from './runtime-factory.js';
 
 const logger = getLogger('agent');
 

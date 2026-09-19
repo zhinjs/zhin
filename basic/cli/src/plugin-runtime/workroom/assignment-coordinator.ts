@@ -39,7 +39,7 @@ import {
 } from '@zhin.js/agent/runtime';
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import type { AgentRuntimeFoundation } from '../agent-runtime-foundation.js';
+import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import {
   createLocalWorkroomAssignmentGrantProvider,
   LOCAL_WORKROOM_RESOURCE_REQUIREMENTS,

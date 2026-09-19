@@ -7,7 +7,7 @@ import {
   preprocessInboundTurn,
   resolveStableSenderId,
   stringMetadata,
-} from '../../src/plugin-runtime/agent-turn-content.js';
+} from '../../../../src/plugin-runtime/agent/turn/content.js';
 
 describe('Agent turn content boundary', () => {
   it('uses authenticated sender identity and canonical string metadata', () => {
