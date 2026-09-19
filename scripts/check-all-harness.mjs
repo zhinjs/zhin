@@ -3,7 +3,8 @@
  * 综合 harness 检查脚本
  * 运行所有 harness 检查并生成报告
  *
- * 并行执行独立检查，按 CPU 核心数限制并发。
+ * 并行执行只读检查，按 CPU 核心数限制并发；会原地构建 workspace
+ * 产物的检查单独串行，避免测试读取半写入的 lib/ 文件。
  * 设 HARNESS_SEQUENTIAL=1 回退到串行模式（调试用）。
  */
 import { exec } from 'node:child_process';
@@ -21,6 +22,12 @@ const concurrency = sequential ? 1 : Math.min(availableParallelism(), 4);
 const HEAVY_CHECKS = new Set([
   'Unit Tests', 'Install Size (IM core)', 'Lint', 'Type Check',
   'Plugin Runtime Migration Verify', 'L4-CI (deterministic subset)', 'Stable Smoke',
+]);
+
+const EXCLUSIVE_CHECKS = new Set([
+  // check:install-size runs workspace builds before packing. Running it beside
+  // native-import tests can expose partially rewritten lib/ modules.
+  'Install Size (IM core)',
 ]);
 
 const checks = [
@@ -353,13 +360,17 @@ async function main() {
     console.log('HARNESS_SKIP_TEST=1 — skipping Unit Tests (expect a separate coverage/test job)\n');
   }
 
-  const heavy = checks.filter((c) => HEAVY_CHECKS.has(c.name));
+  const exclusive = checks.filter((c) => EXCLUSIVE_CHECKS.has(c.name));
+  const heavy = checks.filter((c) => (
+    HEAVY_CHECKS.has(c.name) && !EXCLUSIVE_CHECKS.has(c.name)
+  ));
   const light = checks.filter((c) => !HEAVY_CHECKS.has(c.name));
 
   const mode = sequential ? 'sequential' : `parallel (concurrency=${concurrency})`;
   console.log(`Running ${checks.length} harness checks [${mode}]...`);
   console.log(`  Phase 1: ${light.length} lightweight checks`);
-  console.log(`  Phase 2: ${heavy.length} heavyweight checks\n`);
+  console.log(`  Phase 2: ${heavy.length} parallel-safe heavyweight checks`);
+  console.log(`  Phase 3: ${exclusive.length} exclusive workspace build checks\n`);
 
   const totalStart = performance.now();
 
@@ -369,7 +380,10 @@ async function main() {
   console.log('\n── Phase 2: heavyweight ──');
   const heavyResults = await runPool(heavy, Math.min(concurrency, 2));
 
-  const results = [...lightResults, ...heavyResults];
+  console.log('\n── Phase 3: exclusive workspace builds ──');
+  const exclusiveResults = await runPool(exclusive, 1);
+
+  const results = [...lightResults, ...heavyResults, ...exclusiveResults];
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(1);
   const cpuTotal = results.reduce((s, r) => s + parseFloat(r.elapsed), 0).toFixed(1);
   const allPassed = results.every((r) => r.status === 'PASSED');
