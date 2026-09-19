@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 import listCommand from '../commands/wechat-mp/endpoint/$list.js';
 import addCommand from '../commands/wechat-mp/endpoint/add/$[id].js';
 import removeCommand from '../commands/wechat-mp/endpoint/remove/$[id].js';
@@ -14,20 +12,10 @@ import { wechatMpRuntimeStateToken } from '../src/wechat-mp-runtime-state.js';
  * packages/im/adapter/tests/endpoint-commands.test.ts）。
  */
 
-let root: string;
+let store: MemoryEndpointConfigurationStore;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'wechat-mp-cmd-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  delete process.env.WECHAT_MP_BOT1_APP_ID;
-  delete process.env.WECHAT_MP_BOT1_APP_SECRET;
-  delete process.env.WECHAT_MP_BOT1_TOKEN;
-  fs.rmSync(root, { recursive: true, force: true });
+  store = new MemoryEndpointConfigurationStore();
 });
 
 function fakeContext(overrides: Record<string, unknown> = {}) {
@@ -36,6 +24,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
     state,
     use: (token: unknown) => {
       if (token === wechatMpRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -60,11 +49,11 @@ describe('wechat-mp endpoint command definitions', () => {
     })) as string;
 
     expect(text).toContain('✅');
-    const envContent = fs.readFileSync(path.join(root, '.env'), 'utf-8');
+    const envContent = store.environmentText();
     expect(envContent).toContain('WECHAT_MP_BOT1_APP_ID=wx-1');
     expect(envContent).toContain('WECHAT_MP_BOT1_APP_SECRET=sec-1');
     expect(envContent).toContain('WECHAT_MP_BOT1_TOKEN=tok-1');
-    const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
+    const config = store.configurationText('wechat-mp');
     expect(config).toContain('${WECHAT_MP_BOT1_APP_ID}');
   });
 
@@ -92,7 +81,7 @@ describe('wechat-mp endpoint command definitions', () => {
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('id: bot1');
+    expect(store.configurationText('wechat-mp')).not.toContain('id: bot1');
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {

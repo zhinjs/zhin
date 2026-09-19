@@ -230,6 +230,11 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 - `<adapter> endpoint remove <name>`：从配置移除（重启生效，`.env` 键保留待手动清理）。
 - 特殊 add 流程（如 QQ 扫码绑定）经 `spec.bindFlow` 钩子接管 add 命令；QQ 因此多出第四个命令 `qq endpoint cancel`。
 
+命令本身只依赖 `EndpointConfigurationStore`，不读取文件系统。官方 CLI 在 composition root
+提供 `endpointConfigurationStoreToken`，负责当前 YAML 配置文件与 `.env` 的持久化。自行组装
+`RootRuntime` 且启用这些命令时，必须提供同一端口的实现。`plugins` 必须是对象映射；旧数组
+形态不会在运行时自动转换，应先执行显式迁移。
+
 接入一个适配器只需四步（以 telegram 为例）：
 
 ```ts

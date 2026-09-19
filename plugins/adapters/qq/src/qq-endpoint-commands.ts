@@ -6,20 +6,21 @@
  * qqEndpointCommands 供 commands/qq/endpoint/ 下的命令文件默认导出。
  */
 import {
+  buildEndpointEnvKey,
   createEndpointCommands,
   endpointCommandForbidden,
+  endpointConfigurationStoreToken,
   extractEndpointCommandReply,
   formatEndpointList,
   isEndpointOperator,
   removeEndpointById,
   type ConfiguredEndpointEntry,
   type EndpointCommandReply,
+  type EndpointConfigurationStore,
 } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
 import { QQ_BOT_KIND_PROMPT, qqCommandSessionKey } from './qq-bot-kind-prompt.js';
 import { startQqBindFlow } from './qq-bind-flow.js';
-import { persistQqCredentialsToEnv } from './qq-bind-persist.js';
-import { addQqEndpointToConfig, listQqEndpointEntries } from './qq-endpoint-config.js';
 import { defaultQqEndpointIntentFields, type QqBotKind } from './qq-intents.js';
 import {
   qqRuntimeStateToken,
@@ -56,10 +57,13 @@ function busyFooter(state: QqRuntimeState): string | undefined {
 }
 
 /** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
-export function runQqEndpointList(state: QqRuntimeState, projectRoot?: string): string {
+export function runQqEndpointList(
+  state: QqRuntimeState,
+  store: EndpointConfigurationStore,
+): string {
   return formatEndpointList(qqEndpointListSpec, {
     running: state.endpoints.values(),
-    configured: listQqEndpointEntries(projectRoot),
+    configured: store.list('qq'),
     footer: busyFooter(state),
   });
 }
@@ -73,25 +77,25 @@ const qqEndpointListSpec = {
 function writeEndpointWithBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
-  projectRoot?: string,
+  store: EndpointConfigurationStore,
 ): string {
-  const envKeys = persistQqCredentialsToEnv(
-    pending.endpointId,
-    pending.appId,
-    pending.appSecret,
-    projectRoot,
-  );
+  const appidKey = buildEndpointEnvKey('qq', pending.endpointId, 'appid');
+  const secretKey = buildEndpointEnvKey('qq', pending.endpointId, 'secret');
   const intentFields = defaultQqEndpointIntentFields(botKind);
-  const filePath = addQqEndpointToConfig(
-    {
+  const { filePath } = store.add({
+    adapterKey: 'qq',
+    entry: {
       id: pending.endpointId,
-      appid: envKeys.appidRef,
-      secret: envKeys.secretRef,
+      appid: `\${${appidKey}}`,
+      secret: `\${${secretKey}}`,
       botKind: intentFields.botKind,
       intents: [...intentFields.intents],
     },
-    projectRoot,
-  );
+    environment: {
+      [appidKey]: pending.appId,
+      [secretKey]: pending.appSecret,
+    },
+  });
   return (
     `✅ 已按 botKind=${intentFields.botKind} 将 endpoint「${pending.endpointId}」写入 .env 与 ${filePath}。\n` +
     `intents: ${intentFields.intents.join(', ')}。\n` +
@@ -106,9 +110,9 @@ function writeEndpointWithBotKind(
 export function completeQqPendingBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
-  projectRoot?: string,
+  store: EndpointConfigurationStore,
 ): string {
-  return writeEndpointWithBotKind(pending, botKind, projectRoot);
+  return writeEndpointWithBotKind(pending, botKind, store);
 }
 
 /**
@@ -121,7 +125,7 @@ export function runQqEndpointAdd(
   state: QqRuntimeState,
   id: string | undefined,
   reply: QqCommandReply,
-  projectRoot?: string,
+  store: EndpointConfigurationStore,
   input?: unknown,
 ): Promise<string> {
   if (state.bindFlow || state.pendingBotKind) {
@@ -176,7 +180,7 @@ export function runQqEndpointAdd(
                     sessionKey: '',
                   },
                   'public',
-                  projectRoot,
+                  store,
                 ) +
                 '\n（当前会话无法交互选择公/私域；私域请手动改配置。）',
               );
@@ -227,9 +231,9 @@ export function runQqEndpointCancel(state: QqRuntimeState): string {
 export function runQqEndpointRemove(
   _state: QqRuntimeState,
   id: string,
-  projectRoot?: string,
+  store: EndpointConfigurationStore,
 ): string {
-  return removeEndpointById(qqEndpointListSpec, id, projectRoot);
+  return removeEndpointById(qqEndpointListSpec, id, store);
 }
 
 /**
@@ -247,5 +251,11 @@ export const qqEndpointCommands = createEndpointCommands({
   addDescription:
     '手机 QQ 扫码绑定机器人：确认公域/私域后一次性写入 .env 与 zhin.config.yml（重启生效）',
   bindFlow: ({ id, reply, input, use }) =>
-    runQqEndpointAdd(use(qqRuntimeStateToken), id, reply, undefined, input),
+    runQqEndpointAdd(
+      use(qqRuntimeStateToken),
+      id,
+      reply,
+      use(endpointConfigurationStoreToken),
+      input,
+    ),
 }, defineCommand);

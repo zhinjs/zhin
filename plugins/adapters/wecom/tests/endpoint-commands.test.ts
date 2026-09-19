@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 import listCommand from '../commands/wecom/endpoint/$list.js';
 import addCommand from '../commands/wecom/endpoint/add/$[id].js';
 import removeCommand from '../commands/wecom/endpoint/remove/$[id].js';
@@ -14,21 +12,10 @@ import { wecomRuntimeStateToken } from '../src/wecom-runtime-state.js';
  * packages/im/adapter/tests/endpoint-commands.test.ts）。
  */
 
-let root: string;
+let store: MemoryEndpointConfigurationStore;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'wecom-cmd-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  delete process.env.WECOM_BOT1_CORP_ID;
-  delete process.env.WECOM_BOT1_AGENT_SECRET;
-  delete process.env.WECOM_BOT1_TOKEN;
-  delete process.env.WECOM_BOT1_ENCODING_AESKEY;
-  fs.rmSync(root, { recursive: true, force: true });
+  store = new MemoryEndpointConfigurationStore();
 });
 
 function fakeContext(overrides: Record<string, unknown> = {}) {
@@ -37,6 +24,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
     state,
     use: (token: unknown) => {
       if (token === wecomRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -61,10 +49,10 @@ describe('wecom endpoint command definitions', () => {
     })) as string;
 
     expect(text).toContain('✅');
-    const envContent = fs.readFileSync(path.join(root, '.env'), 'utf-8');
+    const envContent = store.environmentText();
     expect(envContent).toContain('WECOM_BOT1_CORP_ID=ww-1');
     expect(envContent).toContain('WECOM_BOT1_ENCODING_AESKEY=aes-1');
-    const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
+    const config = store.configurationText('wecom');
     expect(config).toContain('${WECOM_BOT1_CORP_ID}');
   });
 
@@ -92,7 +80,7 @@ describe('wecom endpoint command definitions', () => {
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('id: bot1');
+    expect(store.configurationText('wecom')).not.toContain('id: bot1');
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {

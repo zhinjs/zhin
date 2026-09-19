@@ -3,6 +3,18 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "move-endpoint-config-to-root.md",
+      "packages": [
+        "@zhin.js/adapter",
+        "@zhin.js/cli",
+        "@zhin.js/adapter-qq",
+        "@zhin.js/adapter-icqq"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove direct project-file persistence and legacy plugins-array promotion from Adapter runtime code under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "clean-agent-runtime-surface.md",
       "packages": [
         "@zhin.js/agent"

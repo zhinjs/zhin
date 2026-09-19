@@ -1,30 +1,24 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import {
+  createEndpointRuntimeState,
+  endpointConfigurationStoreToken,
+} from 'zhin.js/adapter';
 import listCommand from '../commands/icqq/endpoint/$list.js';
 import addCommand from '../commands/icqq/endpoint/add/$[[id]].js';
 import removeCommand from '../commands/icqq/endpoint/remove/$[id].js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 
 /**
  * commands/ 下的命令定义冒烟 + add（bindFlow 引导式登记）/ remove 基本行为
  * （通用套件逻辑见 packages/im/adapter/tests/endpoint-commands.test.ts）。
  */
 
-let root: string;
+let store: MemoryEndpointConfigurationStore;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'icqq-cmd-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  fs.rmSync(root, { recursive: true, force: true });
+  store = new MemoryEndpointConfigurationStore();
 });
 
 function fakeContext(overrides: Record<string, unknown> = {}) {
@@ -33,6 +27,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
     state,
     use: (token: unknown) => {
       if (token === icqqRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -65,8 +60,7 @@ describe('icqq endpoint command definitions', () => {
 
     expect(text).toContain('✅');
     expect(text).toContain('重启');
-    const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(config).toContain('id: "8596238"');
+    expect(store.list('icqq')).toEqual([{ id: '8596238' }]);
   });
 
   it('add 重名时报添加失败', () => {
@@ -94,7 +88,7 @@ describe('icqq endpoint command definitions', () => {
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('8596238');
+    expect(store.list('icqq')).toEqual([]);
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {

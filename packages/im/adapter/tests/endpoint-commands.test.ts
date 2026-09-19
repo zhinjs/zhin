@@ -1,11 +1,7 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { defineCommand, parseCommandDefinition } from '@zhin.js/command';
 import {
   addEndpointFromKeyValues,
-  addEndpointToConfig,
   buildEndpointEnvKey,
   createDurableEndpointCommandReply,
   createEndpointCommands,
@@ -15,27 +11,17 @@ import {
   extractEndpointCommandReply,
   formatEndpointList,
   isEndpointOperator,
-  listConfiguredEndpoints,
-  persistEndpointEnvValues,
   removeEndpointById,
-  removeEndpointFromConfig,
   type EndpointCommandUse,
   type EndpointCommandsSpec,
 } from '../src/endpoint-commands.js';
+import {
+  endpointConfigurationStoreToken,
+  type AddConfiguredEndpointRequest,
+  type ConfiguredEndpointEntry,
+  type EndpointConfigurationStore,
+} from '../src/endpoint-configuration.js';
 import { outboundHostToken } from '@zhin.js/plugin-runtime';
-
-let root: string;
-
-beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'endpoint-commands-'));
-});
-
-afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
-  delete process.env.DEMO_MY_BOT_TOKEN;
-  delete process.env.DEMO_MY_BOT_BASE_URL;
-  delete process.env.ZHIN_PROJECT_ROOT;
-});
 
 const demoSpec: EndpointCommandsSpec = {
   adapterKey: 'demo',
@@ -47,10 +33,34 @@ const demoSpec: EndpointCommandsSpec = {
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 };
 
-function writeConfig(content: string): string {
-  const filePath = path.join(root, 'zhin.config.yml');
-  fs.writeFileSync(filePath, content);
-  return filePath;
+class MemoryEndpointConfigurationStore implements EndpointConfigurationStore {
+  readonly entries = new Map<string, ConfiguredEndpointEntry[]>();
+  readonly environment = new Map<string, string>();
+  readonly filePath = '/project/zhin.config.yml';
+
+  list(adapterKey: string): readonly ConfiguredEndpointEntry[] {
+    return this.entries.get(adapterKey) ?? [];
+  }
+
+  add(request: AddConfiguredEndpointRequest) {
+    const entries = this.entries.get(request.adapterKey) ?? [];
+    if (entries.some((entry) => entry.id === request.entry.id)) {
+      throw new Error(`配置中已存在 ${request.adapterKey} endpoint「${request.entry.id}」`);
+    }
+    entries.push(request.entry);
+    this.entries.set(request.adapterKey, entries);
+    for (const [key, value] of Object.entries(request.environment)) {
+      this.environment.set(key, value);
+    }
+    return { filePath: this.filePath };
+  }
+
+  remove(adapterKey: string, endpointId: string) {
+    const entries = this.entries.get(adapterKey) ?? [];
+    const next = entries.filter((entry) => entry.id !== endpointId);
+    this.entries.set(adapterKey, next);
+    return { removed: next.length !== entries.length, filePath: this.filePath };
+  }
 }
 
 describe('isEndpointOperator', () => {
@@ -159,103 +169,11 @@ describe('buildEndpointEnvKey', () => {
   });
 });
 
-describe('persistEndpointEnvValues', () => {
-  it('.env 不存在时创建并同步 process.env', () => {
-    persistEndpointEnvValues({ DEMO_MY_BOT_TOKEN: 'tok-1' }, root);
-
-    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toBe('DEMO_MY_BOT_TOKEN=tok-1\n');
-    expect(process.env.DEMO_MY_BOT_TOKEN).toBe('tok-1');
-  });
-
-  it('已有键时更新而不是追加，保留其它行', () => {
-    fs.writeFileSync(path.join(root, '.env'), 'OTHER=keep\nDEMO_MY_BOT_TOKEN=old\n');
-
-    persistEndpointEnvValues({ DEMO_MY_BOT_TOKEN: 'new' }, root);
-
-    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toBe('OTHER=keep\nDEMO_MY_BOT_TOKEN=new\n');
-  });
-});
-
-describe('config yaml 读写', () => {
-  it('配置文件不存在时新建并写入 plugins.<key>.endpoints', () => {
-    const filePath = addEndpointToConfig('demo', { id: 'bot1', token: '${DEMO_BOT1_TOKEN}' }, root);
-
-    expect(filePath).toBe(path.join(root, 'zhin.config.yml'));
-    expect(listConfiguredEndpoints('demo', root)).toEqual([
-      { id: 'bot1', token: '${DEMO_BOT1_TOKEN}' },
-    ]);
-  });
-
-  it('保留已有注释与其它配置，仅追加 endpoints 项', () => {
-    const filePath = writeConfig(
-      [
-        '# 顶层注释',
-        'log_level: info',
-        'plugins:',
-        '  demo:',
-        '    # demo 注释',
-        '    endpoints:',
-        '      - id: old-bot',
-        '        token: "${DEMO_OLD_BOT_TOKEN}"',
-        '',
-      ].join('\n'),
-    );
-
-    addEndpointToConfig('demo', { id: 'new-bot', token: 't' }, root);
-
-    const text = fs.readFileSync(filePath, 'utf-8');
-    expect(text).toContain('# 顶层注释');
-    expect(text).toContain('# demo 注释');
-    expect(listConfiguredEndpoints('demo', root).map((e) => e.id)).toEqual(['old-bot', 'new-bot']);
-  });
-
-  it('id 重复时报错且不写文件', () => {
-    const filePath = writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: dup, token: t }\n');
-    const before = fs.readFileSync(filePath, 'utf-8');
-
-    expect(() => addEndpointToConfig('demo', { id: 'dup', token: 'x' }, root)).toThrow(/已存在/);
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe(before);
-  });
-
-  it('plugins 为 legacy 空数组时替换为 map；非空数组拒绝写入', () => {
-    writeConfig('plugins: []\n');
-    addEndpointToConfig('demo', { id: 'bot1', token: 't' }, root);
-    expect(listConfiguredEndpoints('demo', root).map((e) => e.id)).toEqual(['bot1']);
-
-    writeConfig('plugins:\n  - "@zhin.js/adapter-sandbox"\n');
-    expect(() => addEndpointToConfig('demo', { id: 'bot1', token: 't' }, root)).toThrow(/数组形态/);
-  });
-
-  it('不同 adapterKey 互不干扰', () => {
-    writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: a, token: t }\n');
-
-    addEndpointToConfig('other', { id: 'b' }, root);
-
-    expect(listConfiguredEndpoints('demo', root).map((e) => e.id)).toEqual(['a']);
-    expect(listConfiguredEndpoints('other', root).map((e) => e.id)).toEqual(['b']);
-  });
-
-  it('removeEndpointFromConfig：按 id 移除；不存在 removed: false 且文件不变', () => {
-    const filePath = writeConfig(
-      'plugins:\n  demo:\n    endpoints:\n      - { id: a, token: "1" }\n      - { id: b, token: "2" }\n',
-    );
-
-    expect(removeEndpointFromConfig('demo', 'a', root).removed).toBe(true);
-    expect(listConfiguredEndpoints('demo', root).map((e) => e.id)).toEqual(['b']);
-
-    const before = fs.readFileSync(filePath, 'utf-8');
-    expect(removeEndpointFromConfig('demo', 'missing', root).removed).toBe(false);
-    expect(fs.readFileSync(filePath, 'utf-8')).toBe(before);
-  });
-});
-
 describe('formatEndpointList', () => {
   it('运行中 + 配置中两段，空列表占位，footer 追加', () => {
-    writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: conf-bot, token: "${DEMO_CONF_BOT_TOKEN}" }\n');
-
     const text = formatEndpointList(demoSpec, {
       running: [{ id: 'run-bot', mode: 'ws' }, { id: 'no-mode' }],
-      configured: listConfiguredEndpoints('demo', root),
+      configured: [{ id: 'conf-bot', token: '${DEMO_CONF_BOT_TOKEN}' }],
       footer: '⚠️ 提示行',
     });
 
@@ -268,10 +186,9 @@ describe('formatEndpointList', () => {
   });
 
   it('空列表占位提示', () => {
-    writeConfig('plugins: {}\n');
     const text = formatEndpointList(demoSpec, {
       running: [],
-      configured: listConfiguredEndpoints('demo', root),
+      configured: [],
     });
     expect(text.match(/（无）/g)).toHaveLength(2);
   });
@@ -279,62 +196,71 @@ describe('formatEndpointList', () => {
 
 describe('addEndpointFromKeyValues', () => {
   it('kv 解析：env 字段写 .env + ${REF}，其余内联', () => {
+    const store = new MemoryEndpointConfigurationStore();
     const text = addEndpointFromKeyValues(
       demoSpec,
       'my-bot',
       ['token=tok-9', 'baseUrl=https://api.example.com'],
-      root,
+      store,
     );
 
     expect(text).toContain('✅');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toContain('DEMO_MY_BOT_TOKEN=tok-9');
-    expect(listConfiguredEndpoints('demo', root)).toEqual([
+    expect(store.environment.get('DEMO_MY_BOT_TOKEN')).toBe('tok-9');
+    expect(store.list('demo')).toEqual([
       { id: 'my-bot', token: '${DEMO_MY_BOT_TOKEN}', baseUrl: 'https://api.example.com' },
     ]);
   });
 
   it('缺少必填字段 / 未知字段 / 非 kv 参数 / 空值分别报错', () => {
-    expect(addEndpointFromKeyValues(demoSpec, 'b', [], root)).toContain('缺少必填字段：token');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token=t', 'ghost=x'], root)).toContain('未知字段「ghost」');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token'], root)).toContain('不是 key=value 形式');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token='], root)).toContain('值不能为空');
+    const store = new MemoryEndpointConfigurationStore();
+    expect(addEndpointFromKeyValues(demoSpec, 'b', [], store)).toContain('缺少必填字段：token');
+    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token=t', 'ghost=x'], store)).toContain('未知字段「ghost」');
+    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token'], store)).toContain('不是 key=value 形式');
+    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token='], store)).toContain('值不能为空');
   });
 
   it('重名时返回添加失败且不写 .env', () => {
-    writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: dup, token: t }\n');
+    const store = new MemoryEndpointConfigurationStore();
+    store.entries.set('demo', [{ id: 'dup', token: 't' }]);
 
-    const text = addEndpointFromKeyValues(demoSpec, 'dup', ['token=x'], root);
+    const text = addEndpointFromKeyValues(demoSpec, 'dup', ['token=x'], store);
 
     expect(text).toContain('添加失败');
     expect(text).toContain('已存在');
-    expect(fs.existsSync(path.join(root, '.env'))).toBe(false);
+    expect(store.environment.size).toBe(0);
   });
 
   it('value 含 = 时按首个 = 切分', () => {
-    addEndpointFromKeyValues(demoSpec, 'eq-bot', ['token=a=b=c'], root);
-    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toContain('DEMO_EQ_BOT_TOKEN=a=b=c');
+    const store = new MemoryEndpointConfigurationStore();
+    addEndpointFromKeyValues(demoSpec, 'eq-bot', ['token=a=b=c'], store);
+    expect(store.environment.get('DEMO_EQ_BOT_TOKEN')).toBe('a=b=c');
   });
 });
 
 describe('removeEndpointById', () => {
   it('空 id 提示用法；不存在提示未找到；存在则移除并提示重启', () => {
-    writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: a, token: "1" }\n');
+    const store = new MemoryEndpointConfigurationStore();
+    store.entries.set('demo', [{ id: 'a', token: '1' }]);
 
-    expect(removeEndpointById(demoSpec, '  ', root)).toContain('用法：demo endpoint remove <id>');
-    expect(removeEndpointById(demoSpec, 'ghost', root)).toContain('不存在');
-    expect(removeEndpointById(demoSpec, 'a', root)).toContain('重启');
-    expect(listConfiguredEndpoints('demo', root)).toEqual([]);
+    expect(removeEndpointById(demoSpec, '  ', store)).toContain('用法：demo endpoint remove <id>');
+    expect(removeEndpointById(demoSpec, 'ghost', store)).toContain('不存在');
+    expect(removeEndpointById(demoSpec, 'a', store)).toContain('重启');
+    expect(store.list('demo')).toEqual([]);
   });
 });
 
 describe('createEndpointCommands', () => {
   const stateToken = defineEndpointRuntimeStateToken('demo-cmd');
 
-  function fakeContext(overrides: Record<string, unknown> = {}) {
+  function fakeContext(
+    overrides: Record<string, unknown> = {},
+    store = new MemoryEndpointConfigurationStore(),
+  ) {
     return {
       use: (token: unknown) => {
         if (token === stateToken) return createEndpointRuntimeState();
+        if (token === endpointConfigurationStoreToken) return store;
         throw new Error(`unexpected token: ${String(token)}`);
       },
       params: Object.freeze({}),
@@ -356,8 +282,8 @@ describe('createEndpointCommands', () => {
   });
 
   it('list execute 输出运行中 + 配置清单（不经权限）', () => {
-    process.env.ZHIN_PROJECT_ROOT = root;
-    writeConfig('plugins:\n  demo:\n    endpoints:\n      - { id: conf, token: t }\n');
+    const store = new MemoryEndpointConfigurationStore();
+    store.entries.set('demo', [{ id: 'conf', token: 't' }]);
     const state = createEndpointRuntimeState();
     state.endpoints.set('running', { id: 'running', mode: 'ws' });
     const commands = createEndpointCommands({
@@ -367,6 +293,7 @@ describe('createEndpointCommands', () => {
     const context = {
       use: (token: unknown) => {
         if (token === stateToken) return state;
+        if (token === endpointConfigurationStoreToken) return store;
         throw new Error('unexpected token');
       },
     } as never;
@@ -378,8 +305,7 @@ describe('createEndpointCommands', () => {
   });
 
   it('add/remove 经 master 权限门禁', async () => {
-    process.env.ZHIN_PROJECT_ROOT = root;
-    writeConfig('plugins: {}\n');
+    const store = new MemoryEndpointConfigurationStore();
     const commands = createEndpointCommands(demoSpec, defineCommand);
     const forbidden = endpointCommandForbidden('Demo');
     const denied = fakeContext({
@@ -390,16 +316,16 @@ describe('createEndpointCommands', () => {
 
     expect(commands.add.execute(denied)).toBe(forbidden);
     expect(commands.remove.execute(denied)).toBe(forbidden);
-    expect(listConfiguredEndpoints('demo', root)).toEqual([]);
+    expect(store.list('demo')).toEqual([]);
 
     const allowed = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'alice' } },
       params: { id: 'x' },
       args: ['token=t'],
-    });
+    }, store);
     expect(commands.add.execute(allowed)).toContain('✅');
-    expect(listConfiguredEndpoints('demo', root).map((e) => e.id)).toEqual(['x']);
+    expect(store.list('demo').map((e) => e.id)).toEqual(['x']);
   });
 
   it('add 无 id 时返回用法', () => {
@@ -408,8 +334,7 @@ describe('createEndpointCommands', () => {
   });
 
   it('bindFlow 钩子接管 add（忽略 kv）', async () => {
-    process.env.ZHIN_PROJECT_ROOT = root;
-    writeConfig('plugins: {}\n');
+    const store = new MemoryEndpointConfigurationStore();
     const seen: unknown[] = [];
     const commands = createEndpointCommands({
       ...demoSpec,
@@ -422,11 +347,11 @@ describe('createEndpointCommands', () => {
     const result = await commands.add.execute(fakeContext({
       params: { id: 'bot' },
       args: ['token=should-be-ignored'],
-    }));
+    }, store));
 
     expect(result).toBe('custom-flow');
     expect(seen).toEqual(['bot', 'function']);
-    expect(listConfiguredEndpoints('demo', root)).toEqual([]);
+    expect(store.list('demo')).toEqual([]);
   });
 });
 

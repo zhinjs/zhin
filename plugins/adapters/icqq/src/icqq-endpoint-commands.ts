@@ -1,4 +1,4 @@
-import { addEndpointToConfig, createEndpointCommands } from 'zhin.js/adapter';
+import { createEndpointCommands, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
 import { icqqRuntimeStateToken } from './icqq-runtime-state.js';
 
@@ -8,7 +8,7 @@ export const icqqEndpointCommands = createEndpointCommands({
   running: (use) => use(icqqRuntimeStateToken).endpoints.values(),
   describeEntry: () => 'direct（直连 @icqqjs/icqq）',
   addDescription: '登记 ICQQ endpoint（重启 zhin 生效）',
-  bindFlow: ({ id }) => {
+  bindFlow: ({ id, use }) => {
     if (!id) {
       return '用法：icqq endpoint add <uin>（uin 为纯数字 QQ 号）';
     }
@@ -16,7 +16,11 @@ export const icqqEndpointCommands = createEndpointCommands({
       return 'icqq endpoint 名必须是纯数字 QQ 号（uin）';
     }
     try {
-      const filePath = addEndpointToConfig('icqq', { id });
+      const { filePath } = use(endpointConfigurationStoreToken).add({
+        adapterKey: 'icqq',
+        entry: { id },
+        environment: {},
+      });
       return (
         `✅ endpoint「${id}」已追加到 ${filePath} 的 plugins.icqq.endpoints。\n` +
         `重启 zhin 后生效。`

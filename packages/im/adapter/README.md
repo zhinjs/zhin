@@ -46,7 +46,8 @@ export default defineAdapter({
 | `adapter-index.ts` | 展开配置并编排一代 Endpoint；框架内部 |
 | `endpoint-{client,control,content,management}.ts` | 四个相互独立的可选端口 |
 | `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
-| `endpoint-commands.ts` | Endpoint 配置命令与运行态投影 |
+| `endpoint-configuration.ts` | Endpoint 配置持久化端口；不包含文件系统实现 |
+| `endpoint-commands.ts` | Endpoint 配置命令语义与运行态投影；通过端口持久化 |
 
 核心 import 依赖固定为：
 
@@ -84,11 +85,16 @@ AdapterIndex 和 generation lifecycle 管理。
 Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool 或 Host 查找当前 Endpoint
 时，应解析当前 generation 的 AdapterIndex/Resource View，不能建立 second source of truth。
 
-旧 `@zhin.js/core` 的 `Adapter` class 同时承担集合、消息管线、发送和 Registry，属于兼容
-外壳，不是 Plugin Runtime 的 authoring model。新代码不得依赖、继承或伪造该 class；运行
+已移除的 `@zhin.js/core` `Adapter` class 曾同时承担集合、消息管线、发送和 Registry。
+新代码不得重新引入、继承或伪造该 class；运行
 期协作应依赖 `OutboundMessageService`、`OutboundHost`、`EndpointControl` 等窄 Interface。
 `pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
 Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
+
+Endpoint 管理命令只依赖 `EndpointConfigurationStore`。项目配置文件定位、YAML 注释保留和
+`.env` 写入由 CLI composition root 的实现负责，并以根 Resource 注入。平台适配器不得直接
+导入 `node:fs`、`node:path` 或 YAML 库来修改项目配置；非 canonical 的 `plugins` 结构直接
+报错，由显式迁移命令处理。
 
 ## Transport Contract
 

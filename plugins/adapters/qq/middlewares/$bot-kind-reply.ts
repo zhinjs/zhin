@@ -1,5 +1,6 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { CommandMessage } from 'zhin.js/command';
+import { endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import {
   completeQqPendingBotKind,
 } from '../src/qq-endpoint-commands.js';
@@ -48,7 +49,11 @@ export default defineMiddleware<CommandMessage>({
     }
 
     try {
-      const text = completeQqPendingBotKind(pending, botKind);
+      const text = completeQqPendingBotKind(
+        pending,
+        botKind,
+        context.use(endpointConfigurationStoreToken),
+      );
       state.pendingBotKind = null;
       await context.input.$reply?.(text);
     } catch (error) {

@@ -1,9 +1,7 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
+import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 import listCommand from '../commands/milky/endpoint/$list.js';
 import addCommand from '../commands/milky/endpoint/add/$[id].js';
 import removeCommand from '../commands/milky/endpoint/remove/$[id].js';
@@ -14,18 +12,10 @@ import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
  * packages/im/adapter/tests/endpoint-commands.test.ts）。
  */
 
-let root: string;
+let store: MemoryEndpointConfigurationStore;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'milky-cmd-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  delete process.env.MILKY_BOT1_ACCESS_TOKEN;
-  fs.rmSync(root, { recursive: true, force: true });
+  store = new MemoryEndpointConfigurationStore();
 });
 
 function fakeContext(overrides: Record<string, unknown> = {}) {
@@ -34,6 +24,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
     state,
     use: (token: unknown) => {
       if (token === milkyRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -58,8 +49,8 @@ describe('milky endpoint command definitions', () => {
     })) as string;
 
     expect(text).toContain('✅');
-    expect(fs.readFileSync(path.join(root, '.env'), 'utf-8')).toContain('MILKY_BOT1_ACCESS_TOKEN=sec-1');
-    const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
+    expect(store.environmentText()).toContain('MILKY_BOT1_ACCESS_TOKEN=sec-1');
+    const config = store.configurationText('milky');
     expect(config).toContain('baseUrl: http://127.0.0.1:8080');
     expect(config).toContain('${MILKY_BOT1_ACCESS_TOKEN}');
   });
@@ -89,7 +80,7 @@ describe('milky endpoint command definitions', () => {
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('bot1');
+    expect(store.configurationText('milky')).not.toContain('bot1');
   });
 
   it('配置 master 后非 master 拒绝 add/remove', () => {

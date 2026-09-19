@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
 import { YamlConfigDocument } from '@zhin.js/config-yaml';
+import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -38,6 +39,7 @@ import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
+import { YamlEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
@@ -147,6 +149,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
   const consoleEventHub = createConsoleEventHub();
+  const endpointConfigurationStore = new YamlEndpointConfigurationStore({
+    projectRoot: options.root,
+    configFile,
+  });
   const host = new RootHost({
     projectRoot: options.root,
     config,
@@ -164,6 +170,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     disabledPluginInstanceKeys: pluginLifecycle.disabled,
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
+      context.resources.provide(endpointConfigurationStoreToken, endpointConfigurationStore);
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);

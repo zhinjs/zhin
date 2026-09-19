@@ -230,6 +230,13 @@ The key points of this pattern: use `config` (plugin configuration) to get the d
 - `<adapter> endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
 - Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq endpoint cancel`.
 
+The commands depend only on `EndpointConfigurationStore`; they do not access the
+filesystem. The official CLI provides `endpointConfigurationStoreToken` at the
+composition root and persists the active YAML file plus `.env`. Custom
+`RootRuntime` compositions that enable these commands must provide the same port.
+`plugins` must be an object map; legacy arrays are rejected and require an
+explicit migration.
+
 Integrating an adapter requires only four steps (using telegram as an example):
 
 ```ts

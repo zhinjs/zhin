@@ -5,6 +5,7 @@
     "export * from './definition.js';",
     "export * from './endpoint-client.js';",
     "export * from './endpoint-commands.js';",
+    "export * from './endpoint-configuration.js';",
     "export * from './endpoint-content.js';",
     "export * from './endpoint-control.js';",
     "export * from './endpoint-lifecycle.js';",

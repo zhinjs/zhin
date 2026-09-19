@@ -1,36 +1,27 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  endpointConfigurationStoreToken,
+} from 'zhin.js/adapter';
 import { parseCommandDefinition } from 'zhin.js/command';
 import listCommand from '../commands/qq/endpoint/$list.js';
 import addCommand from '../commands/qq/endpoint/add/$[[id]].js';
 import cancelCommand from '../commands/qq/endpoint/$cancel.js';
 import removeCommand from '../commands/qq/endpoint/remove/$[id].js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 
 /**
  * commands/ 下的命令定义冒烟：模块可加载、defineCommand 形态合法、
  * execute 能用最小 CommandContext 跑通（bind flow 的完整路径见 qq-endpoint-commands.test.ts）。
  */
 
-let root: string;
-
-beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'qq-cmd-defs-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  fs.rmSync(root, { recursive: true, force: true });
-});
+const emptyStore = new MemoryEndpointConfigurationStore();
 
 function fakeContext(state = createQqRuntimeState()) {
   return {
     use: (token: unknown) => {
       if (token === qqRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return emptyStore;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -68,7 +59,7 @@ describe('qq endpoint command definitions', () => {
     expect(cancelCommand.execute(fakeContext())).toContain('没有进行中');
   });
 
-  it('remove execute 读取 ZHIN_PROJECT_ROOT 下的配置', () => {
+  it('remove execute 通过根级配置 Store 处理空 id', () => {
     expect(removeCommand.execute(fakeContext())).toContain('用法');
   });
 });

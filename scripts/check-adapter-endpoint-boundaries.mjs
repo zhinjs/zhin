@@ -4,8 +4,21 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
+const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
 const legacyAdapterConsumers = new Set();
+
+for (const file of typescriptFiles(adapterFeatureRoot)) {
+  const relative = path.relative(repoRoot, file).split(path.sep).join('/');
+  const source = fs.readFileSync(file, 'utf8');
+  if (/from\s+['"](?:node:(?:fs|path)|yaml)['"]/u.test(source)
+    || /\b(?:process\.cwd|ZHIN_PROJECT_ROOT|ZHIN_CONFIG)\b/u.test(source)) {
+    errors.push(
+      `${relative}: platform-neutral Adapter code must use EndpointConfigurationStore; `
+      + 'project files and YAML belong to the composition root',
+    );
+  }
+}
 
 for (const file of typescriptFiles(adaptersRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
