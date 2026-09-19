@@ -7,14 +7,14 @@ const semver = require('semver') as SemverModule;
 
 export const runtimeEngineVersion = '1.0.0';
 
-export class PackageCompatibilityError extends Error {
+export class PackageContractError extends Error {
   constructor(
     readonly packageName: string,
     readonly contract: 'engine' | 'feature-api',
     message: string,
   ) {
-    super(`Incompatible ${contract} for ${packageName}: ${message}`);
-    this.name = 'PackageCompatibilityError';
+    super(`Invalid ${contract} contract for ${packageName}: ${message}`);
+    this.name = 'PackageContractError';
   }
 }
 
@@ -26,7 +26,7 @@ export function assertPackageEngine(
   if (!range) return;
   assertRange(pkg.name, 'engine', range);
   if (!semver.satisfies(engineVersion, range, { includePrerelease: true })) {
-    throw new PackageCompatibilityError(
+    throw new PackageContractError(
       pkg.name,
       'engine',
       `requires ${range}, Runtime provides ${engineVersion}`,
@@ -43,7 +43,7 @@ export function assertFeatureApi(
     ? feature.packageJson.zhin.featureApi
     : undefined;
   if (actual && !semver.valid(actual)) {
-    throw new PackageCompatibilityError(
+    throw new PackageContractError(
       feature.name,
       'feature-api',
       `declares invalid featureApi version ${actual}`,
@@ -52,14 +52,14 @@ export function assertFeatureApi(
   if (!reference.api) return;
   assertRange(owner.name, 'feature-api', reference.api);
   if (!actual) {
-    throw new PackageCompatibilityError(
+    throw new PackageContractError(
       feature.name,
       'feature-api',
       `must declare a valid featureApi version for ${owner.name}'s ${reference.api} requirement`,
     );
   }
   if (!semver.satisfies(actual, reference.api, { includePrerelease: true })) {
-    throw new PackageCompatibilityError(
+    throw new PackageContractError(
       feature.name,
       'feature-api',
       `${owner.name} requires ${reference.api}, provider declares ${actual}`,
@@ -69,11 +69,11 @@ export function assertFeatureApi(
 
 function assertRange(
   packageName: string,
-  contract: PackageCompatibilityError['contract'],
+  contract: PackageContractError['contract'],
   range: string,
 ): void {
   if (!semver.validRange(range)) {
-    throw new PackageCompatibilityError(packageName, contract, `invalid semver range ${range}`);
+    throw new PackageContractError(packageName, contract, `invalid semver range ${range}`);
   }
 }
 

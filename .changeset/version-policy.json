@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "name-package-contracts.md",
+      "packages": [
+        "@zhin.js/runtime"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the misleading compatibility module and old public error name under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-canonical-plugin-config.md",
       "packages": [
         "@zhin.js/plugin-runtime",

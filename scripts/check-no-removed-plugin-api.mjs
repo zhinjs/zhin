@@ -65,6 +65,7 @@ const violations = [];
 collect(pluginRoots, /\b(?:usePlugin|getPlugin)\s*\(/u, violations);
 collect(allRuntimeRoots, /\b(?:getHostRootPlugin|setHostRootPlugin)\s*\(/u, violations);
 collect(allRuntimeRoots, /\b(?:createGenerationStore|GenerationStoreContext)\b/u, violations);
+collect(allRuntimeRoots, /\bPackageCompatibilityError\b|['"]\.\/compatibility\.js['"]/u, violations);
 
 if (violations.length > 0) {
   console.error('Removed runtime APIs are forbidden in production source:\n');

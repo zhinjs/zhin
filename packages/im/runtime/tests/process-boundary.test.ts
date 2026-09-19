@@ -9,7 +9,7 @@ import commandFeature, {
   defineCommand,
 } from '@zhin.js/command';
 import {
-  PackageCompatibilityError,
+  PackageContractError,
   RootProcessRestartExecutor,
   RootRuntime,
   type ModuleRuntime,
@@ -232,7 +232,7 @@ describe('Root/process boundary', () => {
 
     await writeFeatureManifest(project, '2.0.0');
     await expect(hmr.enqueue(join(project, 'packages/command/package.json')))
-      .rejects.toBeInstanceOf(PackageCompatibilityError);
+      .rejects.toBeInstanceOf(PackageContractError);
 
     expect(runtime.snapshot).toBe(started);
     expect(restarts).toEqual([]);

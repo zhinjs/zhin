@@ -293,7 +293,6 @@
     "export{default}from './provider.js';"
   ],
   "runtime": [
-    "export * from './compatibility.js';",
     "export * from './config-composer.js';",
     "export * from './config-document.js';",
     "export * from './config-patch-planner.js';",
@@ -306,6 +305,7 @@
     "export * from './module-runtime.js';",
     "export * from './native-development-runtime.js';",
     "export * from './node-discovery-host.js';",
+    "export * from './package-contract.js';",
     "export * from './package-resolver.js';",
     "export * from './platform-features.js';",
     "export * from './primary-config.js';",

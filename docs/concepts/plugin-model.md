@@ -25,7 +25,7 @@
 }
 ```
 
-字段由 `@zhin.js/runtime` 的 manifest 解析器（`packages/im/runtime/src/manifest.ts`）严格校验，任何字段不合法都会抛出 `ManifestValidationError` 并列出全部问题。
+字段由 `@zhin.js/runtime` 的 manifest 解析器（`packages/im/runtime/src/manifest.ts`）严格校验，任何字段不合法都会抛出 `ManifestValidationError` 并列出全部问题。解析完成后，`package-contract` 模块校验当前 engine 与 Feature API 的 semver 契约，违反契约时抛出 `PackageContractError`。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
