@@ -500,6 +500,10 @@ outline: [2, 3]
 | `plugins.slack.endpoints[].token` | string | 是 | — | Bot User OAuth Token (xoxb-...) |
 | `plugins.slack.endpoints[].signingSecret` | string | 否 | — | Required for HTTP Events API (socketMode: false) |
 | `plugins.slack.endpoints[].appToken` | string | 否 | — | App-Level Token (xapp-...) for Socket Mode |
+| `plugins.slack.endpoints[].socketMode` | boolean | 否 | — | — |
+| `plugins.slack.endpoints[].webhookPath` | string | 否 | — | — |
+| `plugins.slack.endpoints[].clientPingTimeout` | number | 否 | — | — |
+| `plugins.slack.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.slack.endpoints[].id` | string | 是 | — | Slack bot name |
 | `plugins.slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

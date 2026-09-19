@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=6eab728f14fe8cfe -->
+<!-- sync-adapter-docs:sha256=ce20f8fd7659f8c7 -->
 
 # @zhin.js/adapter-slack
 
@@ -64,21 +64,21 @@ plugins:
   slack:
     socketMode: true          # 默认 true，可省略
     endpoints:
-      - name: my-slack-bot
+      - id: my-slack-bot
         token: ${SLACK_BOT_TOKEN}
         appToken: ${SLACK_APP_TOKEN}
 ```
 
-多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
 plugins:
   slack:
     endpoints:
-      - name: team-a
+      - id: team-a
         token: ${SLACK_BOT_TOKEN_A}
         appToken: ${SLACK_APP_TOKEN_A}
-      - name: team-b
+      - id: team-b
         token: ${SLACK_BOT_TOKEN_B}
         appToken: ${SLACK_APP_TOKEN_B}
 ```
@@ -91,7 +91,7 @@ plugins:
     socketMode: false
     webhookPath: /slack/events   # 可选，默认 /slack/events
     endpoints:
-      - name: my-slack-bot
+      - id: my-slack-bot
         token: ${SLACK_BOT_TOKEN}
         signingSecret: ${SLACK_SIGNING_SECRET}
 ```
@@ -103,10 +103,9 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 
 | 变量 | 说明 |
 |------|------|
-| `SLACK_BOT_TOKEN` / `SLACK_TOKEN` | Bot User OAuth Token（`xoxb-...`） |
-| `SLACK_APP_TOKEN` | App-Level Token（Socket Mode，`xapp-...`） |
-| `SLACK_SIGNING_SECRET` | Signing Secret（HTTP 模式） |
-| `SLACK_BOT_NAME` | 可选 endpoint 名称 |
+| `SLACK_BOT_TOKEN` | 示例中由 YAML `${SLACK_BOT_TOKEN}` 引用的 Bot User OAuth Token；变量名可自行定义 |
+| `SLACK_APP_TOKEN` | 示例中由 YAML `${SLACK_APP_TOKEN}` 引用的 App-Level Token；变量名可自行定义 |
+| `SLACK_SIGNING_SECRET` | 示例中由 YAML `${SLACK_SIGNING_SECRET}` 引用的 Signing Secret；变量名可自行定义 |
 
 ## 消息格式
 

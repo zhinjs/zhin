@@ -6,14 +6,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { SlackEndpoint } from '../src/endpoint.js';
 import {
   resolveSlackConfig,
-  type SlackAdapterConfig,
+  type SlackEndpointConfig,
 } from '../src/protocol.js';
 import { slackRuntimeStateToken } from '../src/slack-runtime-state.js';
 
 export { SlackEndpoint } from '../src/endpoint.js';
 export type { SlackEndpointOptions, SlackSocketLike, SlackWebClientLike } from '../src/endpoint.js';
 
-export default defineAdapter<SlackAdapterConfig>({
+export default defineAdapter<SlackEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall', 'edit', 'reaction'],
   // 媒体段（canonical MediaRef）：kind=url 直发（image 走 attachment image_url，

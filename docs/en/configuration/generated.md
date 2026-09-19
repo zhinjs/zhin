@@ -500,6 +500,10 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.slack.endpoints[].token` | string | yes | — | Bot User OAuth Token (xoxb-...) |
 | `plugins.slack.endpoints[].signingSecret` | string | no | — | Required for HTTP Events API (socketMode: false) |
 | `plugins.slack.endpoints[].appToken` | string | no | — | App-Level Token (xapp-...) for Socket Mode |
+| `plugins.slack.endpoints[].socketMode` | boolean | no | — | — |
+| `plugins.slack.endpoints[].webhookPath` | string | no | — | — |
+| `plugins.slack.endpoints[].clientPingTimeout` | number | no | — | — |
+| `plugins.slack.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.slack.endpoints[].id` | string | yes | — | Slack bot name |
 | `plugins.slack.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
