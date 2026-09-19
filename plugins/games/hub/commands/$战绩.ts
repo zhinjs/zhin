@@ -1,15 +1,16 @@
 import { defineCommand } from 'zhin.js/command';
 import {
   channelKey,
-  getUserGameStats,
-  getRuntimeGame,
+  gameFeatureId,
   messageFromCommandInput,
+  type GameIndex,
+  type UserGameStats,
 } from '@zhin.js/game-kit';
 
-function formatStats(stats: Awaited<ReturnType<typeof getUserGameStats>>): string {
+function formatStats(index: GameIndex, stats: UserGameStats[]): string {
   if (!stats.length) return '暂无战绩记录，快去 `/游戏` 开一局吧！';
   const lines = stats.map((s) => {
-    const g = getRuntimeGame(s.gameId);
+    const g = index.get(s.gameId);
     const title = g ? `${g.icon} ${g.title}` : s.gameId;
     return `• ${title}：${s.wins} 胜 ${s.losses} 负${s.draws ? ` ${s.draws} 平` : ''}（${s.games} 局，得分 ${s.totalScore}）`;
   });
@@ -18,9 +19,10 @@ function formatStats(stats: Awaited<ReturnType<typeof getUserGameStats>>): strin
 
 export default defineCommand({
   description: '查看本人在本群的游戏战绩',
-  async execute({ input }) {
+  async execute({ input, project }) {
+    const index = project<GameIndex>(gameFeatureId);
     const message = messageFromCommandInput(input);
-    const stats = await getUserGameStats(message.$sender.id, channelKey(message));
-    return formatStats(stats);
+    const stats = await index.getUserStats(message.$sender.id, channelKey(message));
+    return formatStats(index, stats);
   },
 });

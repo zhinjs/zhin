@@ -71,5 +71,3 @@ export class GameEventBus {
     this.#listeners.clear();
   }
 }
-
-export const gameEvents = new GameEventBus();

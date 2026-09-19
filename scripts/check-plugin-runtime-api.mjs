@@ -7,6 +7,7 @@ const repoRoot = path.resolve(import.meta.dirname, '..');
 const snapshotPath = path.join(repoRoot, 'tests/snapshots/plugin-runtime-api.json');
 const migratedRoots = [
   ['plugin-runtime', 'packages/im/plugin-runtime/src'],
+  ['game-kit', 'packages/game-kit/src'],
   ['feature-kit', 'packages/im/feature-kit/src'],
   ['adapter', 'packages/im/adapter/src'],
   ['command', 'packages/im/command/src'],

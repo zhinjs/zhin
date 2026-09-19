@@ -101,6 +101,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove latest-generation stores and implicit module-global runtime selection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "project-game-capabilities.md",
+      "packages": [
+        "@zhin.js/game-kit"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the public process-global game registry with an owner-directed generation Feature projection under the zero-compatibility architecture refactor."
     }
   ]
 }

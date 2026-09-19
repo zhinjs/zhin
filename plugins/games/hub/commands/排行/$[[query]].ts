@@ -1,15 +1,14 @@
 import { defineCommand } from 'zhin.js/command';
 import {
   channelKey,
-  getGameLeaderboard,
-  getRuntimeGame,
-  getRuntimeGames,
+  gameFeatureId,
   messageFromCommandInput,
   type LeaderboardEntry,
+  type GameIndex,
 } from '@zhin.js/game-kit';
 
-function formatLeaderboard(gameId: string, entries: LeaderboardEntry[]): string {
-  const g = getRuntimeGame(gameId);
+function formatLeaderboard(index: GameIndex, gameId: string, entries: LeaderboardEntry[]): string {
+  const g = index.get(gameId);
   const title = g ? `${g.icon} ${g.title}` : gameId;
   if (!entries.length) {
     return `${title} 在本群暂无排行，发送 \`/游戏\` 开始第一局！`;
@@ -23,9 +22,10 @@ function formatLeaderboard(gameId: string, entries: LeaderboardEntry[]): string 
 export default defineCommand({
   description: '查看本群某游戏排行榜',
   params: { query: { type: 'string', default: '' } },
-  async execute({ input, params }) {
+  async execute({ input, params, project }) {
+    const index = project<GameIndex>(gameFeatureId);
     const query = String(params.query ?? '').trim();
-    const games = getRuntimeGames();
+    const games = index.list();
     if (!games.length) return '暂无已注册游戏。';
     const firstGame = games[0];
     if (!firstGame) return '暂无已注册游戏。';
@@ -44,7 +44,7 @@ export default defineCommand({
       gameId = hit.id;
     }
     const message = messageFromCommandInput(input);
-    const board = await getGameLeaderboard(gameId, channelKey(message));
-    return formatLeaderboard(gameId, board);
+    const board = await index.getLeaderboard(gameId, channelKey(message));
+    return formatLeaderboard(index, gameId, board);
   },
 });

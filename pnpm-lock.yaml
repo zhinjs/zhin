@@ -1016,6 +1016,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../im/feature-kit
       '@zhin.js/html-renderer':
         specifier: workspace:^
         version: link:../toolkit/html-renderer

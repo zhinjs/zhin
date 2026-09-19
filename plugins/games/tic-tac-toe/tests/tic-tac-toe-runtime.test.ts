@@ -81,6 +81,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
       resources: resources as never,
       lifecycle,
       handoff: {} as never,
+      addGame: vi.fn(),
     });
     const message = {
       $adapter: 'sandbox',

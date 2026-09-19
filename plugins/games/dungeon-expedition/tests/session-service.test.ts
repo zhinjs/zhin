@@ -1,8 +1,7 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   SessionRevisionConflictError,
   createInMemoryGameDb,
-  gameSessionCoordinator,
   type GameMessageLike,
 } from '@zhin.js/game-kit';
 import {
@@ -19,9 +18,6 @@ const message: GameMessageLike = {
 };
 
 describe('dungeon SessionService', () => {
-  beforeEach(() => {
-    gameSessionCoordinator.clear();
-  });
 
   it('deduplicates concurrent adapter retries', async () => {
     const service = createService();

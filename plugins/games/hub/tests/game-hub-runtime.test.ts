@@ -1,216 +1,105 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
+import { childPluginId, createCapabilitySlot, rootPluginId } from 'zhin.js';
 import {
-  formatRuntimeGamesHelp,
-  getRuntimeGame,
-  registerRuntimeGame,
-  resetRuntimeGamesForTests,
-  resetGameRecordsForTests,
+  defineGame,
+  gameFeatureId,
+  GameIndex,
   smokeGameMessage,
+  type GameRecordPort,
+  type RuntimeRegisteredGame,
+  type GameSessionProvider,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
 import gamesCommand from '../commands/games/$[[action]].ts';
 import statsCommand from '../commands/$战绩.ts';
 import leaderboardCommand from '../commands/排行/$[[query]].ts';
 
-const emptyCtx = {
-  owner: {} as never,
-  generation: 0,
-  config: {},
-  use: () => {
-    throw new Error('unused');
-  },
-  args: [] as string[],
-  params: {} as Record<string, string | number | boolean>,
-  input: undefined as never,
+function index(games: RuntimeRegisteredGame[] = [], records?: Partial<GameRecordPort>): GameIndex {
+  const port: GameRecordPort = {
+    record: async () => undefined,
+    getUserStats: async () => [],
+    getLeaderboard: async () => [],
+    ...records,
+  };
+  const session = (gameId: string): GameSessionProvider => ({
+    gameId,
+    getActiveForUser: async () => null,
+    bindAvailability: () => undefined,
+  });
+  return new GameIndex(games.map((game) => createCapabilitySlot({
+    owner: childPluginId(rootPluginId(), game.id),
+    feature: gameFeatureId,
+    localName: game.id,
+    source: 'test',
+    origin: 'setup',
+    definition: defineGame(game, port, session(game.id)),
+  })));
+}
+
+function commandContext(games: GameIndex) {
+  return {
+    owner: {} as never,
+    generation: 1,
+    config: {},
+    signal: new AbortController().signal,
+    use: () => { throw new Error('unused'); },
+    project: (feature: unknown) => {
+      if (feature === gameFeatureId) return games;
+      throw new Error('unexpected feature');
+    },
+    args: [] as string[],
+    params: {} as Record<string, string | number | boolean>,
+    input: undefined as never,
+  };
+}
+
+const guess: RuntimeRegisteredGame = {
+  id: 'guess', title: '猜数字', icon: '🔢', description: '1~100 七步猜中神秘数',
+  commandPrefix: '/猜数', quickStart: '开始', aliases: ['guess'],
 };
 
 describe('@zhin.js/plugin-game-hub runtime', () => {
-  beforeEach(() => {
-    resetRuntimeGamesForTests();
-  });
-
-  afterEach(() => {
-    resetRuntimeGamesForTests();
-  });
-
-  it('defines a valid Plugin Runtime entry', () => {
+  it('defines a valid Plugin Runtime entry and commands', () => {
     expect(plugin.name).toBe('game-hub');
-  });
-
-  it('brands games command', () => {
     expect(parseCommandDefinition(gamesCommand)).toBe(gamesCommand);
-  });
-
-  it('returns empty help when no games are registered', async () => {
-    const text = await gamesCommand.execute({ ...emptyCtx, params: {} });
-    expect(String(text)).toContain('暂无已加载的游戏插件');
-  });
-
-  it('lists registered games and resolves action hint', async () => {
-    const dispose = registerRuntimeGame({
-      id: 'guess',
-      title: '猜数字',
-      icon: '🔢',
-      description: '1~100 七步猜中神秘数',
-      commandPrefix: '/猜数',
-      quickStart: '开始',
-    });
-    try {
-      expect(getRuntimeGame('guess')?.title).toBe('猜数字');
-      const help = await gamesCommand.execute({ ...emptyCtx, params: {} });
-      expect(String(help)).toContain('猜数字');
-      expect(String(help)).toContain('/猜数');
-
-      const hint = await gamesCommand.execute({ ...emptyCtx, params: { action: 'guess' } });
-      expect(String(hint)).toContain('/猜数 开始');
-    } finally {
-      dispose();
-    }
-  });
-
-  it('formatRuntimeGamesHelp matches command default output', async () => {
-    registerRuntimeGame({
-      id: 'dice',
-      title: '骰子对决',
-      icon: '🎲',
-      description: '掷骰比大小',
-      commandPrefix: '/骰子',
-    });
-    const fromCommand = await gamesCommand.execute({ ...emptyCtx, params: {} });
-    expect(String(fromCommand)).toBe(formatRuntimeGamesHelp());
-  });
-
-  it('does not let an old generation unregister its replacement', () => {
-    const disposePrevious = registerRuntimeGame({
-      id: 'guess',
-      title: 'old',
-      icon: '',
-      description: '',
-      commandPrefix: '/guess',
-    });
-    const disposeNext = registerRuntimeGame({
-      id: 'guess',
-      title: 'next',
-      icon: '',
-      description: '',
-      commandPrefix: '/guess',
-    });
-
-    disposePrevious();
-    expect(getRuntimeGame('guess')?.title).toBe('next');
-    disposeNext();
-    expect(getRuntimeGame('guess')).toBeUndefined();
-  });
-
-  it('restores the old game when replacement preparation rolls back', () => {
-    const disposePrevious = registerRuntimeGame({
-      id: 'guess', title: 'old', icon: '', description: '', commandPrefix: '/guess',
-    });
-    const disposeNext = registerRuntimeGame({
-      id: 'guess', title: 'next', icon: '', description: '', commandPrefix: '/guess',
-    });
-
-    disposeNext();
-    expect(getRuntimeGame('guess')?.title).toBe('old');
-    disposePrevious();
-  });
-});
-
-describe('/战绩 command', () => {
-  beforeEach(() => {
-    resetRuntimeGamesForTests();
-    resetGameRecordsForTests();
-  });
-
-  afterEach(() => {
-    resetRuntimeGamesForTests();
-    resetGameRecordsForTests();
-  });
-
-  it('brands as a valid command definition', () => {
     expect(parseCommandDefinition(statsCommand)).toBe(statsCommand);
-  });
-
-  it('returns empty-state message when no records exist', async () => {
-    const text = await statsCommand.execute({
-      ...emptyCtx,
-      params: {},
-      input: smokeGameMessage() as never,
-    });
-    expect(String(text)).toContain('暂无战绩记录');
-  });
-});
-
-describe('/排行 command', () => {
-  beforeEach(() => {
-    resetRuntimeGamesForTests();
-    resetGameRecordsForTests();
-  });
-
-  afterEach(() => {
-    resetRuntimeGamesForTests();
-    resetGameRecordsForTests();
-  });
-
-  it('brands as a valid command definition', () => {
     expect(parseCommandDefinition(leaderboardCommand)).toBe(leaderboardCommand);
   });
 
-  it('returns no-games message when registry is empty', async () => {
-    const text = await leaderboardCommand.execute({
-      ...emptyCtx,
-      params: {},
-      input: smokeGameMessage() as never,
-    });
-    expect(String(text)).toContain('暂无已注册游戏');
+  it('reads the generation GameIndex for help and action hints', async () => {
+    const empty = await gamesCommand.execute({ ...commandContext(index()), params: {} });
+    expect(String(empty)).toContain('暂无已加载的游戏插件');
+    const context = commandContext(index([guess]));
+    expect(String(await gamesCommand.execute({ ...context, params: {} }))).toContain('猜数字');
+    expect(String(await gamesCommand.execute({ ...context, params: { action: 'guess' } })))
+      .toContain('/猜数 开始');
   });
 
-  it('returns empty leaderboard for a registered game with no records', async () => {
-    registerRuntimeGame({
-      id: 'guess',
-      title: '猜数字',
-      icon: '🔢',
-      description: '猜中数字',
-      commandPrefix: '/猜数',
+  it('aggregates stats through the selected game record port', async () => {
+    const games = index([guess], {
+      getUserStats: async () => [{
+        gameId: 'guess', wins: 2, losses: 1, draws: 0, totalScore: 8, games: 3,
+      }],
     });
-    const text = await leaderboardCommand.execute({
-      ...emptyCtx,
-      params: {},
-      input: smokeGameMessage() as never,
-    });
-    expect(String(text)).toContain('暂无排行');
-  });
-
-  it('resolves game by query string', async () => {
-    registerRuntimeGame({
-      id: 'guess',
-      title: '猜数字',
-      icon: '🔢',
-      description: '猜中数字',
-      commandPrefix: '/猜数',
-    });
-    const text = await leaderboardCommand.execute({
-      ...emptyCtx,
-      params: { query: '猜数字' },
-      input: smokeGameMessage() as never,
+    const text = await statsCommand.execute({
+      ...commandContext(games), input: smokeGameMessage() as never,
     });
     expect(String(text)).toContain('猜数字');
+    expect(String(text)).toContain('2 胜 1 负');
   });
 
-  it('reports not-found for unknown game query', async () => {
-    registerRuntimeGame({
-      id: 'guess',
-      title: '猜数字',
-      icon: '🔢',
-      description: '猜中数字',
-      commandPrefix: '/猜数',
+  it('queries the selected game leaderboard and diagnoses unknown games', async () => {
+    const games = index([guess], {
+      getLeaderboard: async () => [{ userId: 'u1', userName: 'User', wins: 1, totalScore: 2, games: 1 }],
     });
     const text = await leaderboardCommand.execute({
-      ...emptyCtx,
-      params: { query: '扫雷' },
-      input: smokeGameMessage() as never,
+      ...commandContext(games), params: { query: '猜数字' }, input: smokeGameMessage() as never,
     });
-    expect(String(text)).toContain('未找到游戏「扫雷」');
+    expect(String(text)).toContain('User');
+    const missing = await leaderboardCommand.execute({
+      ...commandContext(games), params: { query: '扫雷' }, input: smokeGameMessage() as never,
+    });
+    expect(String(missing)).toContain('未找到游戏「扫雷」');
   });
 });
