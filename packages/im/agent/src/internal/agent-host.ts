@@ -2,7 +2,7 @@
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
+import type { AIProvider, Usage, OutputElement, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -33,8 +33,7 @@ import type {
 
 /** session 域：会话/上下文存储与会话事件。 */
 export interface AgentSessionHost {
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   sessionSystem: SessionSystem | null;
   readonly compactionRuntime: AgentCompactionRuntime;

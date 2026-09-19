@@ -19,7 +19,7 @@ export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
-  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
+  | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
@@ -51,7 +51,6 @@ export function applyZhinAgentConfigure(
   if (deps.memorySystem !== undefined) target.memorySystem = deps.memorySystem;
   if (deps.sessionSystem !== undefined) target.sessionSystem = deps.sessionSystem;
   if (deps.eventSystem !== undefined) target.eventSystem = deps.eventSystem;
-  if (deps.imSessionStore !== undefined) target.imSessionStore = deps.imSessionStore;
   if (deps.agentSessionStore !== undefined) target.agentSessionStore = deps.agentSessionStore;
   if (deps.contextRepository !== undefined) target.contextRepository = deps.contextRepository;
   if (deps.modelRegistry !== undefined) {

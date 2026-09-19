@@ -13,11 +13,8 @@ import {
   type AgentEvent,
   type OutputElement,
   type ModelRegistry,
-  type AgentSessionStore,
+  type AgentSessionRepository,
   type ContextRepository,
-  type IMSessionStore,
-  type MemoryAgentSessionStore,
-  MemoryIMSessionStore,
   createMemoryContextRepository,
   RateLimiter,
 } from '@zhin.js/ai';
@@ -144,8 +141,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   config: Required<ZhinAgentConfig>;
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
   private readonly runtimeModules: ZhinAgentRuntimeModules;
-  readonly imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
@@ -288,7 +284,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   sharePersistenceWith(target: ZhinAgent): void {
     target.configure({
-      imSessionStore: this.imSessionStore,
       agentSessionStore: this.agentSessionStore,
       contextRepository: this.contextRepository,
     });

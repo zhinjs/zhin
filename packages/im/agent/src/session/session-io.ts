@@ -1,8 +1,8 @@
-import { type MemoryAgentSessionStore, type AgentSessionStore, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, createUserMessage, renderUserMessageForLlm, type AgentMessageExtra, type AgentMessageSenderExtra, type UserMessage } from '@zhin.js/ai';
+import { type AgentSessionRepository, type ContextRepository, type CreateAgentSessionInput, type AgentMessage, createUserMessage, renderUserMessageForLlm, type AgentMessageExtra, type AgentMessageSenderExtra, type UserMessage } from '@zhin.js/ai';
 import { type AgentTurnMessage, type Message, formatSenderRolesForLabel, resolveSceneFieldsFromMessage, senderRolesFromMessage, stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import { CURRENT_MESSAGE_MARKER } from '../config/index.js';
 export interface SessionIODeps {
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
 }
 

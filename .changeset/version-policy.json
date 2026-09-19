@@ -497,6 +497,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace module-global process monitor state and test reset APIs with an owner-scoped class resource, and remove configuration and documentation for notification capabilities that do not exist."
+    },
+    {
+      "changeset": "remove-duplicate-im-session-store.md",
+      "packages": [
+        "@zhin.js/ai",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unused IM-specific session store and process-global epoch counters so AgentSessionRepository becomes the sole origin-neutral session lifecycle contract under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

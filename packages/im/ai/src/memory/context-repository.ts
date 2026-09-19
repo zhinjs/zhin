@@ -10,7 +10,10 @@ import { agentMessageRowToLlm, serializeAgentMessage, type AgentMessageRow, type
 import type { AgentMessageExtra } from './sender-extra.js';
 
 import { findKeepRecentStartIndex } from '../compaction/agent-message-tokens.js';
-import { AgentSessionStore, MemoryAgentSessionStore } from './agent-session-store.js';
+import {
+  MemoryAgentSessionStore,
+  type AgentSessionRepository,
+} from './agent-session-store.js';
 import { branchSummaryAsUserMessage } from './branch-summarization.js';
 import {
   buildActivePathRows,
@@ -166,7 +169,7 @@ function resolveSaveSummaryOptions(
 export class DatabaseContextRepository implements ContextRepository {
   private readonly messageModel: MessageDbModel;
   private readonly summaryModel: SummaryDbModel;
-  private readonly sessionStore: AgentSessionStore;
+  private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
@@ -174,7 +177,7 @@ export class DatabaseContextRepository implements ContextRepository {
   constructor(
     messageModel: MessageDbModel,
     summaryModel: SummaryDbModel,
-    sessionStore: AgentSessionStore,
+    sessionStore: AgentSessionRepository,
     config: ContextRepositoryConfig = {},
   ) {
     this.messageModel = messageModel;
@@ -396,13 +399,13 @@ export class DatabaseContextRepository implements ContextRepository {
 export class MemoryContextRepository implements ContextRepository {
   private readonly messages = new Map<string, AgentMessageRow[]>();
   private readonly summaries = new Map<string, AgentSummaryRecord[]>();
-  private readonly sessionStore: MemoryAgentSessionStore;
+  private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
   constructor(
-    sessionStore: MemoryAgentSessionStore,
+    sessionStore: AgentSessionRepository,
     config: ContextRepositoryConfig = {},
   ) {
     this.sessionStore = sessionStore;

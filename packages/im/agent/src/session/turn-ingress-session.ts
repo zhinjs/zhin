@@ -3,9 +3,8 @@ import {
   renderUserMessageForLlm,
   type AgentMessageExtra,
   type AgentMessageSenderExtra,
-  type AgentSessionStore,
+  type AgentSessionRepository,
   type CreateAgentSessionInput,
-  type MemoryAgentSessionStore,
   type UserMessage,
 } from '@zhin.js/ai';
 import { CURRENT_MESSAGE_MARKER } from '../config/index.js';
@@ -72,7 +71,7 @@ export function buildTurnSessionCreateInput(
 }
 
 export async function beginIngressTurnSession(
-  deps: { agentSessionStore: AgentSessionStore | MemoryAgentSessionStore },
+  deps: { agentSessionStore: AgentSessionRepository },
   turn: TurnIngress,
 ): Promise<{ sessionKey: string; sessionId: string }> {
   const record = await deps.agentSessionStore.getOrCreateActive(

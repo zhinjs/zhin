@@ -1,10 +1,7 @@
 import type {
   AIProvider,
-  AgentSessionStore,
+  AgentSessionRepository,
   ContextRepository,
-  IMSessionStore,
-  MemoryAgentSessionStore,
-  MemoryIMSessionStore,
   ModelRegistry,
 } from '@zhin.js/ai';
 import type { AgentCore } from '../core/agent-core.js';
@@ -28,8 +25,7 @@ export interface ZhinAgentDependencies {
   memorySystem?: MemorySystem;
   sessionSystem?: SessionSystem;
   eventSystem?: EventSystem;
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   modelRegistry: ModelRegistry;
   providerResolver: (alias: string) => AIProvider;

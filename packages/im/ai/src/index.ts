@@ -182,17 +182,6 @@ export type {
 export { resolveAgentScopedSessionId } from './memory/agent-scoped-session.js';
 export type { AgentMemoryScope } from './memory/agent-scoped-session.js';
 
-export {
-  IMSessionStore,
-  MemoryIMSessionStore,
-  createSessionEpochId,
-} from './memory/im-session-store.js';
-export type {
-  IMSessionRecord,
-  CreateIMSessionInput,
-  IMSessionStoreConfig,
-} from './memory/im-session-store.js';
-
 // ── Context & Compaction ──
 export {
   DEFAULT_CONTEXT_TOKENS,
@@ -340,9 +329,11 @@ export type { AppendMessagesOptions } from './memory/context-repository.js';
 export {
   AgentSessionStore,
   MemoryAgentSessionStore,
-  createAgentSessionEpochId,
 } from './memory/agent-session-store.js';
-export type { AgentSessionStoreConfig } from './memory/agent-session-store.js';
+export type {
+  AgentSessionRepository,
+  AgentSessionStoreConfig,
+} from './memory/agent-session-store.js';
 export { PersistenceUnavailableError } from './memory/persistence-error.js';
 
 export {
