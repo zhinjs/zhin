@@ -11,18 +11,14 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('dingtalk');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface DingTalkAdapterConfig {
-  readonly id?: string;
-  readonly appKey?: string;
-  readonly appSecret?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface DingTalkEndpointConfig {
+  readonly id: string;
+  readonly appKey: string;
+  readonly appSecret: string;
   readonly webhookPath?: string;
   readonly robotCode?: string;
   readonly apiBaseUrl?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: dingtalk`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedDingTalkConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedDingTalkConfig {
@@ -114,26 +110,13 @@ export interface DingTalkSendBody {
   readonly robotCode?: string;
 }
 
-export function resolveDingTalkConfig(config: DingTalkAdapterConfig = {}): ResolvedDingTalkConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'dingtalk');
-  const appKey = config.appKey ?? entry?.appKey ?? process.env.DINGTALK_APP_KEY;
-  const appSecret = config.appSecret ?? entry?.appSecret ?? process.env.DINGTALK_APP_SECRET;
-  if (!appKey || !appSecret) {
-    throw new TypeError(
-      'DingTalk adapter requires appKey + appSecret (plugins.<key> or endpoints with context: dingtalk)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.DINGTALK_BOT_NAME
-    || 'dingtalk-bot';
-  const webhookPath = normalizeWebhookPath(
-    config.webhookPath ?? entry?.webhookPath ?? '/dingtalk/webhook',
-  );
-  const apiBaseUrl = (
-    config.apiBaseUrl ?? entry?.apiBaseUrl ?? 'https://oapi.dingtalk.com'
-  ).replace(/\/$/, '');
-  const robotCode = config.robotCode ?? entry?.robotCode;
+export function resolveDingTalkConfig(config: DingTalkEndpointConfig): ResolvedDingTalkConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const appKey = requiredEndpointField(config.appKey, 'appKey');
+  const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
+  const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/dingtalk/webhook');
+  const apiBaseUrl = (config.apiBaseUrl ?? 'https://oapi.dingtalk.com').replace(/\/$/, '');
+  const robotCode = config.robotCode;
   return {
     context: 'dingtalk',
     id,
@@ -143,6 +126,16 @@ export function resolveDingTalkConfig(config: DingTalkAdapterConfig = {}): Resol
     ...(robotCode ? { robotCode } : {}),
     apiBaseUrl,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'appKey' | 'appSecret',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`DingTalk endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function normalizeWebhookPath(path: string): string {

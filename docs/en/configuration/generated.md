@@ -109,8 +109,10 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
 | `plugins.dingtalk.endpoints[].appKey` | string | yes | — | Dingtalk app key |
 | `plugins.dingtalk.endpoints[].appSecret` | string | yes | — | Dingtalk app secret |
-| `plugins.dingtalk.endpoints[].webhookPath` | string | yes | — | Dingtalk webhook path |
-| `plugins.dingtalk.endpoints[].robotCode` | string | yes | — | Dingtalk robot code |
+| `plugins.dingtalk.endpoints[].webhookPath` | string | no | — | Dingtalk webhook path |
+| `plugins.dingtalk.endpoints[].robotCode` | string | no | — | Dingtalk robot code |
+| `plugins.dingtalk.endpoints[].apiBaseUrl` | string | no | — | — |
+| `plugins.dingtalk.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.dingtalk.endpoints[].id` | string | yes | — | Dingtalk bot name |
 | `plugins.dingtalk.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

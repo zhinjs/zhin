@@ -109,8 +109,10 @@ outline: [2, 3]
 | `plugins.dingtalk.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.dingtalk.endpoints[].appKey` | string | 是 | — | Dingtalk app key |
 | `plugins.dingtalk.endpoints[].appSecret` | string | 是 | — | Dingtalk app secret |
-| `plugins.dingtalk.endpoints[].webhookPath` | string | 是 | — | Dingtalk webhook path |
-| `plugins.dingtalk.endpoints[].robotCode` | string | 是 | — | Dingtalk robot code |
+| `plugins.dingtalk.endpoints[].webhookPath` | string | 否 | — | Dingtalk webhook path |
+| `plugins.dingtalk.endpoints[].robotCode` | string | 否 | — | Dingtalk robot code |
+| `plugins.dingtalk.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `plugins.dingtalk.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.dingtalk.endpoints[].id` | string | 是 | — | Dingtalk bot name |
 | `plugins.dingtalk.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

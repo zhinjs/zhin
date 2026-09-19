@@ -35,7 +35,7 @@ pnpm add @zhin.js/adapter-dingtalk
 3. 设置消息接收 URL 为 `https://your-domain/dingtalk/webhook`
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`name`、`appKey`、`appSecret`、`webhookPath`、`robotCode`。
+必填字段（`endpoints[i]`）：`id`、`appKey`、`appSecret`。
 
 ## 最小配置
 
@@ -45,7 +45,7 @@ plugins:
   dingtalk:
     apiBaseUrl: https://oapi.dingtalk.com # 可选，顶层共享
     endpoints:
-      - name: my-dingtalk-bot
+      - id: my-dingtalk-bot
         appKey: ${DINGTALK_APP_KEY}
         appSecret: ${DINGTALK_APP_SECRET}
         robotCode: ${DINGTALK_ROBOT_CODE}
@@ -58,9 +58,9 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `DINGTALK_APP_KEY` | 应用 AppKey |
-| `DINGTALK_APP_SECRET` | 应用 AppSecret |
-| `DINGTALK_ROBOT_CODE` | RobotCode（主动发送 `/robot/send`） |
+| `DINGTALK_APP_KEY` | 示例中由 YAML `${DINGTALK_APP_KEY}` 引用的 AppKey；变量名可自行定义 |
+| `DINGTALK_APP_SECRET` | 示例中由 YAML `${DINGTALK_APP_SECRET}` 引用的 AppSecret；变量名可自行定义 |
+| `DINGTALK_ROBOT_CODE` | 示例中由 YAML `${DINGTALK_ROBOT_CODE}` 引用的 RobotCode；变量名可自行定义 |
 
 ## 消息类型映射
 

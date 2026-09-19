@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-dingtalk-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-dingtalk"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove DingTalk endpoint configuration compatibility and require the canonical AdapterIndex projection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-lark-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-lark"

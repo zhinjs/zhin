@@ -6,14 +6,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { DingTalkEndpoint } from '../src/endpoint.js';
 import {
   resolveDingTalkConfig,
-  type DingTalkAdapterConfig,
+  type DingTalkEndpointConfig,
 } from '../src/protocol.js';
 import { dingtalkRuntimeStateToken } from '../src/dingtalk-runtime-state.js';
 
 export { DingTalkEndpoint } from '../src/endpoint.js';
 export type { DingTalkEndpointOptions, DingTalkFetch } from '../src/endpoint.js';
 
-export default defineAdapter<DingTalkAdapterConfig>({
+export default defineAdapter<DingTalkEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // 钉钉机器人媒体消息仅消费远程 URL；Markdown 走原生 msgtype；
   // 无按钮交互面，交互段降级纯文本。
