@@ -1,228 +1,141 @@
 # @zhin.js/core
 
-## Plugin Runtime 子路径
+`@zhin.js/core` 负责组合 Zhin 的 IM 领域：规范化消息、入站分发、出站渲染、交互语义，以及 Plugin Runtime 的 IM Host。它消费独立 Feature 包产生的 generation snapshot，不拥有平台连接或能力注册表。
 
-新的 owner-aware IM 能力已经并入 Core，作为 Plugin Runtime 的正式领域接口：
+架构与消息链路分别见：
 
-- `@zhin.js/core/runtime`
+- [分层架构](../../../docs/concepts/architecture.md)
+- [消息流](../../../docs/concepts/message-flow.md)
+- [公开 API 分级](../../../docs/contributing/public-api-surface.md)
 
-`@zhin.js/adapter`、`@zhin.js/command`、`@zhin.js/component` 与
-`@zhin.js/middleware` 提供纯 definition、约定发现 provider 和 generation projection；
-Core Runtime 只消费它们发布的 snapshot。
-命令只通过 `@zhin.js/command` 的 definition、约定发现和 generation projection 进入运行时；
-classic `MessageCommand` / `CommandFeature` 已删除。
+## 边界
 
-Zhin.js **IM/多通道运行时**包：Plugin、Adapter、**Endpoint**、MessageDispatcher 与统一出站链。**AI 编排（ZhinAgent、工具安全、MCP）在 [`@zhin.js/agent`](../agent/README.md)**；本包仅 selective re-export `@zhin.js/ai` 的 Provider / Agent 原语供插件直接使用。
+| 职责 | 所属包 |
+|------|--------|
+| Adapter 声明、Endpoint 生命周期与 `AdapterIndex` | `@zhin.js/adapter` |
+| Command 声明与 `CommandIndex` | `@zhin.js/command` |
+| Middleware / Component / Handler 声明 | 对应 Feature 包 |
+| generation、snapshot、资源与插件生命周期 | `@zhin.js/plugin-runtime` |
+| 消息规范化、渲染、分发与 IM Runtime | `@zhin.js/core` |
+| Agent 编排、工具安全与 MCP | `@zhin.js/agent` |
+| 进程装配 | `@zhin.js/cli` |
 
-领域词汇见 [CONTEXT.md](./CONTEXT.md)；入站/出站流程见 [消息如何流转](../../docs/essentials/message-flow.md)。
+Core 不提供第二套 Adapter 基类、Endpoint 类型或进程级注册表。平台插件统一从 `zhin.js/adapter` 导入 `defineAdapter` 与 `Endpoint<TClient>`。
 
-## 核心概念
+## Plugin Runtime
 
-### Plugin（插件）— Plugin Runtime
-
-唯一启动路径：`zhin runtime start`。`plugin.ts` 必须 default-export `definePlugin()`；能力按约定目录发现。
+应用入口使用 `definePlugin()`，能力入口放在约定目录中。只有 `$` 开头的文件会被发现，其他文件可作为同目录 helper 安全复用。
 
 ```typescript
 // plugin.ts
-import { definePlugin } from '@zhin.js/plugin-runtime'
+import { definePlugin } from 'zhin.js'
 
 export default definePlugin({
   name: 'hello-bot',
-  metadata: { displayName: 'Hello Bot' },
   setup(context) {
-    context.lifecycle.add(() => { /* cleanup */ })
+    context.lifecycle.add(() => {
+      // release plugin-owned resources
+    })
   },
 })
 ```
 
 ```typescript
-// commands/hello/$[name].ts
-import { defineCommand } from '@zhin.js/command'
+// commands/$hello.ts
+import { defineCommand } from 'zhin.js/command'
 
 export default defineCommand({
   description: '打招呼',
-  params: {
-    name: { type: 'string' },
-  },
-  execute({ params }) {
-    return `Hello, ${params.name}!`
+  execute() {
+    return 'Hello!'
   },
 })
 ```
 
-> **已移除**：`usePlugin()` / `getPlugin()` / `bootstrapNode`（`zhin.js/node`）以及 `MessageCommand` / `CommandFeature` 不再导出；唯一入口为 `definePlugin` + `zhin runtime start`。见 [public-api-surface](../../docs/contributing/public-api-surface.md)。
+运行时入口是 `zhin runtime start`。Core 的 `@zhin.js/core/runtime` 子路径供 CLI composition root 装配 IM Host，不是插件侧 service locator。
 
-本包仍提供 IM 运行时契约（Message / Adapter / Endpoint）；创作面在 Feature 包与 `@zhin.js/plugin-runtime`。
+## Adapter 与 Endpoint
 
-### Feature（特性抽象）
-
-约定式 Feature（Command / Middleware / Component / Adapter…）由独立包提供 definition + 约定发现；Core Runtime 消费 snapshot。
-
-classic Command 注册表已删除。命令能力由 `CommandIndex` 从当前 generation snapshot 投影。
+Adapter 定义选择并创建 Endpoint；Endpoint 独占账号连接、平台 Client 和 IO。当前 generation 的 `AdapterIndex` 持有实例并提供发送、控制与 Client 查询。
 
 ```typescript
-const toolFeature = plugin.inject('tool')
-const off = toolFeature.on('add', (tool, pluginName) => {
-  console.log(`工具 ${tool.name} 已注册 (来自 ${pluginName})`)
-})
-toolFeature.on('remove', (tool) => {
-  console.log(`工具 ${tool.name} 已移除`)
+// adapters/$example.ts
+import { Endpoint, defineAdapter } from 'zhin.js/adapter'
+
+class ExampleEndpoint extends Endpoint<ExampleClient> {
+  readonly client = new ExampleClient()
+
+  async start(signal: AbortSignal) {
+    // connect transport; bind cancellation to signal
+  }
+
+  async stop() {
+    // idempotent cleanup
+  }
+
+  async send(request) {
+    return this.client.send(request.conversation.id, request.payload)
+  }
+}
+
+export default defineAdapter({
+  capabilities: ['inbound', 'outbound'],
+  create() {
+    return new ExampleEndpoint()
+  },
 })
 ```
 
-### 出站消息段：`segment.html`
+平台管理、撤回、编辑、reaction 与 typing 通过 Endpoint 的显式 capability/control 端口暴露。Agent 和业务层读取当前 generation 的能力投影，不扫描实例方法，也不维护自己的 Endpoint 目录。
 
-业务插件可返回 **`html` 消息段**，由出站链统一处理转图或文本回退：
+## 消息链路
+
+入站由 Endpoint 发出结构化事件，Core Runtime 完成身份附加、消息规范化和 generation 准入，然后依次执行 Middleware、Command、Handler 与可选 Agent 路由。
+
+出站统一经过：
+
+```text
+Message.$reply / OutboundMessageService
+  → segment render
+  → before.sendMessage middleware
+  → AdapterIndex.send
+  → Endpoint.send
+```
+
+任何平台发送都必须经过这条链路。
+
+## 富消息段
+
+业务代码可以返回 `segment.html()`、`segment.markdown()`、`segment.qrcode()` 等语义段。Adapter 定义通过 `segments` 声明交互模式和媒体能力；Core 按当前 Endpoint 能力渲染，平台 Endpoint 只处理最终 payload。
 
 ```typescript
 import { segment } from '@zhin.js/core'
 
 return segment.html({
-  html: '<div>…</div>',  // 必填：Satori 可渲染的 HTML
-  text: undefined,        // 可选：显式回退文本（覆盖自动剥离）
+  html: '<div>status</div>',
+  text: 'status',
   width: 540,
-  backgroundColor: '#d8dce3',
-  fileName: 'card.png',
 })
-
-// Markdown 段（QQ 等平台 policy 为 origin 时透传）
-return segment.markdown('# Title\n\nBody')
 ```
 
-出站富媒体段（`qrcode` / `html` / `markdown`）在 **`Adapter.renderSendMessage` 首步** 按各 Adapter 的 **`outboundRichSegmentPolicy`** 统一渲染为 `image` / `text` / `origin`：
+Rich Segment kind 与 renderer 是 Core 契约。新增 kind 需要同时定义语义、渲染结果和 Adapter capability，不通过可变全局 registry 注入。
 
-| 渲染模式 | 含义 |
-|---------|------|
-| `image` | 转为 `image` 段（qrcode 生成 PNG；html/markdown 经 `@zhin.js/html-renderer` 动态转图，未安装则降级 text） |
-| `text` | 剥离为纯文本段 |
-| `origin` | 原样透传，由 Endpoint 解释（如 QQ markdown、process 终端二维码） |
+## 主要入口
 
-默认策略：`qrcode: image`，`html: text`，`markdown: text`。QQ / KOOK 等适配器 override static policy。
+- `@zhin.js/core`：Message、场景、消息段、渲染与通用 IM 契约。
+- `@zhin.js/core/runtime`：IM Runtime 的 composition ports 与实现。
+- `@zhin.js/core/tool-zod`：Tool schema 与 Zod 转换。
+- `@zhin.js/core/jsx-runtime`：消息 JSX runtime。
 
-- 安装 **`@zhin.js/html-renderer`** 且 policy 为 `html: 'image'` 时，core 在首步动态 import 并转 PNG。
-- policy 为 `html: 'text'` 时等价于 **`coerceHtmlSegmentsToText`** / **`htmlToFallbackText`**。
-- 日志预览：`[html-card]`、`[qrcode]`、`[markdown]` + 摘要（前 80 字）。
+插件作者通常从 `zhin.js` 及其 Feature 子路径导入；只有框架装配代码直接依赖 `@zhin.js/core/runtime`。
 
-#### Rich Segment 边界
-
-Rich Segment kind 是 Core 出站契约的一部分，由不可变 registry 一次性构造。可选渲染能力由每次发送创建的 render context 按已知 ID 懒加载；插件不修改进程级 kind 或 loader 注册表。新增 kind 需要同时定义语义段、渲染模式和 Adapter policy，因此作为 Core 契约变更提交。
-
-```typescript
-import { Adapter } from '@zhin.js/core';
-
-// 使用内置 segment.tts；Adapter policy 决定 audio/text/origin
-// segment.tts({ text: '你好' })
-class MyAdapter extends Adapter {
-  static override outboundRichSegmentPolicy = {
-    tts: 'audio',
-    qrcode: 'image',
-  };
-}
-```
-
-**分工**：Rich Segment 负责「语义段 → 标准 IM 段」；Endpoint `materializeOutboundMedia` 负责「已有 audio/video/file → 平台上传」。
-
-### Adapter（适配器）
-
-经典 `Adapter` 类仅供尚未迁移的 Core 内部代码使用，不再提供进程级静态注册表。新适配器使用 `zhin.js/adapter` 的 `defineAdapter()` 声明，并由当前 generation 的 `AdapterIndex` 发现和装配。
-
-平台管理能力由 Endpoint 显式实现并声明，Agent 通过当前 generation 的能力投影访问；不在 Adapter 类上注册工具或维护全局实例。
-
-**群管理能力自动检测：** 适配器基类声明了 `ISceneManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
-
-```typescript
-class IcqqAdapter extends Adapter<IcqqEndpoint> {
-  // 覆写标准群管方法
-  async kickMember(endpointId: string, sceneId: string, userId: string) {
-    const endpoint = this.endpoints.get(endpointId)
-    if (!endpoint) throw new Error(`Endpoint ${endpointId} 不存在`)
-    return endpoint.kickMember(Number(sceneId), Number(userId), false)
-  }
-  async muteMember(endpointId: string, sceneId: string, userId: string, duration = 600) { /* ... */ }
-  async setAdmin(endpointId: string, sceneId: string, userId: string, enable = true) { /* ... */ }
-  // ...共覆写 7 个标准方法
-
-  async start() {
-    this.registerIcqqPlatformTools()  // 头衔、公告、戳一戳等平台特有工具
-    await super.start()               // 自动检测 → 生成标准 Tool → 与平台工具一起注册 Skill
-  }
-}
-```
-
-### MessageDispatcher（消息路由）
-
-三阶段消息处理管线：
-
-```
-消息到达 → Guardrail（守卫） → AI Trigger → AI Handler
-```
-
-- **Guardrail** — 鉴权、速率限制、黑名单等前置检查
-- **AI Trigger** — 判断 classic Adapter 入站是否交给 AI
-- **AI Handler** — 由 `@zhin.js/agent` 注册；Plugin Runtime 命令由 `MessageDispatcher` / `CommandIndex` 独立处理
-
-### AI 与 @zhin.js/agent
-
-Core **不包含** ZhinAgent 实现。IM 侧的 AI 对话、工具收集、执行策略、MCP 客户端与 `ctx.ai` / `ctx.agent` 挂载均在 **`@zhin.js/agent`**（主包 `zhin.js` 会 `initAgentModule()` 并 re-export）。
-
-本包从 `@zhin.js/ai` selective re-export 以下内容，供插件或适配器在不依赖 agent 层时使用：
-
-| 类别 | 示例导出 |
-|------|----------|
-| Provider | `AIProvider` 接口、`createSdkProviderAdapter`（AI SDK 传输） |
-| Agent 原语 | `ModelRegistry`、`agentLoop` |
-| 会话 / 上下文 | `ConversationEventStore`（IM 事实）与 Agent 的 `ContextRepository`（模型会话） |
-| 压缩 / 限流 / 输出 | `compactSession`、`RateLimiter`、`parseOutput`、`CostTracker` |
-
-完整 Agent 能力与配置见 [`@zhin.js/agent`](../agent/README.md) 与 [AI 模块](https://zhin.js.org/advanced/ai)。
-
-## 主要导出
-
-入口为 [`src/index.ts`](./src/index.ts)。摘要如下（非完整列表）：
-
-```typescript
-// 插件系统
-export { Plugin } from './plugin.js'  // classic runtime；后续切片继续删除
-
-// 基础机制（Cron / Scheduler 来自 @zhin.js/kernel）
-export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
-export { canAccessTool, ... } from './built/*.js'
-
-// 消息路由
-export { createMessageDispatcher } from './built/dispatcher.js'
-
-// 适配器与消息
-export { Adapter, Message, Endpoint, segment, ... } from './'
-
-// 富媒体出站段
-export {
-  resolveRichSegments,
-  DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY,
-  QrcodeSegment,
-  HtmlSegment,
-  MarkdownSegment,
-} from './built/rich-segments/index.js'
-export type { RichSegmentKind, RichRenderMode, OutboundRichSegmentPolicy } from './built/rich-segments/types.js'
-
-// HTML 出站回退（legacy；policy html:'text' 时等价）
-export { htmlToFallbackText, coerceHtmlSegmentsToText, registerHtmlSegmentFallback } from './built/*.js'
-
-// AI 原语（来自 @zhin.js/ai，非 ZhinAgent）
-export {
-  AIProvider, createSdkProviderAdapter, ModelRegistry,
-  ContextRepository, ContextManager, compactSession, ...
-} from '@zhin.js/ai'
-```
-
-> ZhinAgent、`initAgentModule`、`AIService`、ExecPolicy、编排 Registry 等请从 **`zhin.js`** 或 **`@zhin.js/agent`** 引入。
-
-## 安装
+## 验证
 
 ```bash
-pnpm add @zhin.js/core
+pnpm --filter @zhin.js/core build
+pnpm exec vitest run packages/im/core/tests packages/im/adapter/tests
+pnpm check:architecture
 ```
-
-> 通常不需要直接安装此包。使用 `zhin.js` 主入口包即可自动引入。
 
 ## 许可证
 

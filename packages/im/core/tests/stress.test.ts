@@ -9,58 +9,14 @@
  * 5. 内存泄漏检测 — 循环注册/注销后资源是否完整释放
  * 6. 事件系统风暴 — 大量 dispatch/broadcast 并发
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Plugin } from '../src/plugin.js';
-import { Adapter } from '../src/adapter.js';
-import { Endpoint } from '../src/endpoint.js';
 import { Message, MessageBase } from '../src/message.js';
 import { compose } from '../src/utils.js';
 import { createMessageDispatcher, type MessageDispatcherService } from '../src/built/dispatcher.js';
-import type { MessageMiddleware, SendOptions } from '../src/types.js';
+import type { MessageMiddleware } from '../src/types.js';
 
 // ────────────────────────── helpers ──────────────────────────
-
-class StressEndpoint implements Endpoint< any> {
-  $id: string;
-  $config: any;
-  $connected = false;
-  sendCount = 0;
-
-  constructor(public adapter: Adapter, config: any) {
-    this.$config = config;
-    this.$id = config.id || 'stress-bot';
-  }
-
-  $formatMessage(event: any): Message<any> {
-    const base: MessageBase = {
-      $id: `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      $adapter: 'test' as any,
-      $endpoint: this.$id,
-      $content: [{ type: 'text', data: { text: event.text ?? '' } }],
-      $sender: { id: event.senderId ?? 'user-1', name: 'StressUser' },
-      $channel: { id: event.channelId ?? 'ch-1', type: 'group' },
-      $timestamp: Date.now(),
-      $raw: event.text ?? '',
-      $reply: vi.fn(async () => 'reply-id'),
-      $recall: vi.fn(async () => {}),
-    };
-    return Message.from(event, base);
-  }
-
-  async $connect() { this.$connected = true; }
-  async $disconnect() { this.$connected = false; }
-  async $sendMessage(_options: SendOptions): Promise<string> {
-    this.sendCount++;
-    return `sent-${this.sendCount}`;
-  }
-  async $recallMessage() {}
-}
-
-class StressAdapter extends Adapter<StressEndpoint> {
-  createEndpoint(config: any): StressEndpoint {
-    return new StressEndpoint(this, config);
-  }
-}
 
 function makeMsg(text: string, overrides: Partial<Message<any>> = {}): Message<any> {
   return {
@@ -145,73 +101,7 @@ describe('Stress: Middleware compose 吞吐', () => {
   });
 });
 
-// ────────────────────── 2. 消息洪水 ──────────────────────
-
-describe('Stress: Adapter 消息洪水', () => {
-  let plugin: Plugin;
-  let adapter: StressAdapter;
-
-  beforeEach(async () => {
-    plugin = new Plugin('/stress/adapter.ts');
-    adapter = new StressAdapter(plugin, 'test' as any, [{ id: 'flood-bot' }]);
-    await adapter.start();
-  });
-
-  afterEach(async () => {
-    await adapter.stop();
-  });
-
-  it('500 条消息并发 emit，不应丢消息或崩溃', async () => {
-    // 默认 max=0（不限制），所以 500 条全部应被接受
-    const received: string[] = [];
-
-    // 直接监听 adapter 的 message.receive（经过 emit 中的 super.emit 传递）
-    adapter.on('message.receive', (msg: Message<any>) => {
-      received.push(msg.$id);
-    });
-
-    const bot = adapter.endpoints.get('flood-bot')!;
-    const messages: Message<any>[] = [];
-    for (let i = 0; i < 500; i++) {
-      messages.push(bot.$formatMessage({ text: `flood-${i}`, id: `flood-${i}` }));
-    }
-
-    // 一次性 emit 全部消息（模拟洪水）
-    for (const msg of messages) {
-      adapter.emit('message.receive', msg);
-    }
-
-    // 等待异步处理完成
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    console.log(`[消息洪水] 发送 500, 接收到 ${received.length}`);
-    expect(received.length).toBe(500);
-  });
-
-  it('并发 sendMessage 不应丢失或串台', async () => {
-    const bot = adapter.endpoints.get('flood-bot')! as StressEndpoint;
-    const promises: Promise<string>[] = [];
-
-    for (let i = 0; i < 200; i++) {
-      promises.push(
-        adapter.sendMessage({
-          context: 'test',
-          endpoint: 'flood-bot',
-          content: [{ type: 'text', data: { text: `send-${i}` } }],
-          id: 'ch-1',
-          type: 'group',
-        })
-      );
-    }
-
-    const results = await Promise.all(promises);
-    console.log(`[并发发送] 200 条，bot.sendCount = ${bot.sendCount}`);
-    expect(results.length).toBe(200);
-    expect(bot.sendCount).toBe(200);
-  });
-});
-
-// ────────────────────── 3. Dispatcher 并发竞争 ──────────────────────
+// ────────────────────── 2. Dispatcher 并发竞争 ──────────────────────
 
 describe('Stress: Dispatcher 并发', () => {
   let service: MessageDispatcherService;
@@ -519,18 +409,6 @@ describe('Stress: 边界场景', () => {
     expect(error!.message).toBe('next() called multiple times');
   });
 
-  it('大量 Adapter bot 并发 connect/disconnect', async () => {
-    const plugin = new Plugin('/stress/many-bots.ts');
-    const configs = Array.from({ length: 50 }, (_, i) => ({ id: `bot-${i}` }));
-    const adapter = new StressAdapter(plugin, 'test' as any, configs);
-
-    await adapter.start();
-    expect(adapter.endpoints.size).toBe(50);
-
-    await adapter.stop();
-    expect(adapter.endpoints.size).toBe(0);
-  });
-
   it('Dispatcher dispatch 空消息不应崩溃', async () => {
     const ctx = createMessageDispatcher();
     const service = ctx.value;
@@ -556,69 +434,4 @@ describe('Stress: 边界场景', () => {
     expect(leaf.root).toBe(root);
   });
 
-  it('Adapter 超过并发上限时丢弃消息并告警', async () => {
-    const plugin = new Plugin('/stress/backpressure.ts');
-    const adapter = new StressAdapter(plugin, 'test' as any, [{ id: 'bp-bot' }]);
-    await adapter.start();
-
-    const originalMax = Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
-    // 显式启用背压限制
-    Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES = 5;
-
-    const bot = adapter.endpoints.get('bp-bot')!;
-    const received: string[] = [];
-    adapter.on('message.receive', (msg: Message<any>) => {
-      received.push(msg.$id);
-    });
-
-    // 构造阻塞消息：注入一个慢 dispatcher
-    plugin.provide({
-      name: 'dispatcher' as any,
-      value: {
-        dispatch: async () => {
-          // 模拟耗时处理
-          await new Promise(r => setTimeout(r, 500));
-        },
-      },
-    });
-
-    // 快速 emit 20 条消息，应该只有前 5 条被接受
-    for (let i = 0; i < 20; i++) {
-      const msg = bot.$formatMessage({ text: `bp-${i}`, id: `bp-${i}` });
-      adapter.emit('message.receive', msg);
-    }
-
-    // 等待处理完成
-    await new Promise(r => setTimeout(r, 3000));
-
-    console.log(`[背压] 发送 20, 接收 ${received.length}, 丢弃 ${20 - received.length}`);
-    expect(received.length).toBeLessThan(20);
-    expect(received.length).toBeGreaterThan(0);
-
-    Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES = originalMax;
-    await adapter.stop();
-  });
-
-  it('背压默认关闭（limit=0），不限制并发', async () => {
-    const plugin = new Plugin('/stress/no-limit.ts');
-    const adapter = new StressAdapter(plugin, 'test' as any, [{ id: 'nl-bot' }]);
-    await adapter.start();
-
-    // 默认 limit=0，不限制
-    expect(Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES).toBe(0);
-
-    const bot = adapter.endpoints.get('nl-bot')!;
-    let accepted = 0;
-    for (let i = 0; i < 50; i++) {
-      if (adapter.emit('message.receive', bot.$formatMessage({ text: `nl-${i}`, id: `nl-${i}` }))) {
-        accepted++;
-      }
-    }
-
-    // 全部接受，没有丢弃
-    expect(accepted).toBe(50);
-
-    await new Promise(r => setTimeout(r, 200));
-    await adapter.stop();
-  });
 });

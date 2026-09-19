@@ -15,12 +15,6 @@ describe('Zhin Package Exports', () => {
     expect(typeof Plugin).toBe('function')
   })
 
-  it('should export Adapter', async () => {
-    const { Adapter } = await import('../src/index')
-    expect(Adapter).toBeDefined()
-    expect(typeof Adapter).toBe('function')
-  })
-
   it('should export Message', async () => {
     const { Message } = await import('../src/index')
     expect(Message).toBeDefined()

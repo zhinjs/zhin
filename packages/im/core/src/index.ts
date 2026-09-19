@@ -2,13 +2,8 @@
  * Canonical IM messages, Endpoints, rendering, and plugin-facing core types.
  * @module @zhin.js/core
  */
-// ── 经典运行时兼容面 ─────────────────────────────────────────────────
-// 新插件使用 zhin.js/{adapter,command,component,middleware,handler} 子路径。
-export * from './endpoint.js'
-export * from './endpoint-capabilities.js'
 export * from './plugin.js'
 export * from './component.js'
-export * from './adapter.js'
 export * from './message.js'
 export * from './im-scene.js'
 export * from './notice.js'
@@ -43,16 +38,11 @@ export { loadHtmlRenderer, seedHtmlRenderer, HTML_RENDERER_PACKAGE } from './bui
 export { loadSpeechPipeline, seedSpeechPipeline, SPEECH_PACKAGE } from './built/speech-loader.js'
 export * from './built/outbound-media-utils.js'
 export * from './built/outbound-media-contract.js'
-export * from './built/interactive-segment-contract.js'
 export * from './built/segment-contract/index.js'
 export type { SegmentMediaRef } from './built/segment-contract/media.js'
 export * from './built/generic-segment-mapper.js'
 export * from './built/inbound-runner.js'
 export type { RunInboundMessageOptions, InboundRunResult } from './built/inbound-runner.js'
-export * from './built/connect-endpoint-instance.js'
-export type { ConnectEndpointInstanceOptions } from './built/connect-endpoint-instance.js'
-export * from './built/endpoint-lifecycle.js'
-export type { EndpointLifecycleKind, EndpointLifecyclePayload } from './built/endpoint-lifecycle.js'
 export * from './built/management-command-guard.js'
 export * from './built/html-to-text.js'
 export * from './built/html-segment-fallback.js'

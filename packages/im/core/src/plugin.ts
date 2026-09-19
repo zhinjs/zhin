@@ -19,7 +19,6 @@ import {
 } from "./built/interactive-segments/handlers.js";
 import type { InteractiveHandler } from "./built/interactive-segments/types.js";
 
-import type { Adapters } from "./adapter.js";
 import { Feature, PluginBase, BaseContext, PluginBaseLifecycle, resolvePluginResolveDir as _resolvePluginResolveDir, pluginCreateRequire as _pluginCreateRequire, getFileHash, watchFile, registerExtension, unregisterExtensions, installExtensionProxy, type PluginLike } from '@zhin.js/kernel';
 
 
@@ -664,9 +663,6 @@ export namespace Plugin {
     "message.receive": [import('./message.js').Message];
     "endpoint.login.pending": [import('./built/login-assist.js').PendingLoginTask];
     "endpoint.login.expired": [import('./built/login-assist.js').PendingLoginTask];
-    'endpoint.connect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
-    'endpoint.disconnect': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
-    'endpoint.error': [import('./built/endpoint-lifecycle.js').EndpointLifecyclePayload];
     "request.receive": [import('./request.js').Request];
     "notice.receive": [import('./notice.js').Notice];
     "system.receive": [import('./system-event.js').SystemEvent];
@@ -676,7 +672,7 @@ export namespace Plugin {
    * 服务类型扩展点
    * 各个 Context 通过 declare module 扩展此接口
    */
-  export interface Contexts extends Adapters {}
+  export interface Contexts {}
 
   /**
    * Service 扩展方法类型
