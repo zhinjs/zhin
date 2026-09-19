@@ -815,8 +815,9 @@ describe('console REST routes', () => {
         },
       }]])]]),
     } as unknown as RuntimeSnapshot;
+    const release = vi.fn();
     const snapshots = {
-      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+      acquire: () => ({ value: snapshot, active: true, release }),
     } as unknown as SnapshotReader;
     const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
 
@@ -838,6 +839,7 @@ describe('console REST routes', () => {
     const unboundBody = await unbound.json() as { data?: { principalId?: string } };
     expect(unboundBody.data?.principalId).toBeUndefined();
     expect(readCatalog).toHaveBeenCalledTimes(2);
+    expect(release).toHaveBeenCalledTimes(2);
   });
 
   it('keeps Sponsor controls typed and injects the token principal without accepting forged identity', async () => {

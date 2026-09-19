@@ -55,6 +55,7 @@ describe('Console Host module boundary', () => {
       'plugin-schema.ts',
       'plugin-projection.ts',
       'rpc-route.ts',
+      'rpc-context.ts',
       'runtime-snapshot.ts',
       'system-log.ts',
       'system-projection.ts',
