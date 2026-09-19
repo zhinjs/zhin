@@ -40,7 +40,6 @@ describe('WorkroomPersistenceCoordinator', () => {
       journalPayloads: {} as never,
       catalog,
       listAgentNames: () => [],
-      resolveDataGovernanceStorage: () => undefined,
       recoverHumanIngress: async () => undefined,
     });
 
@@ -67,7 +66,6 @@ describe('WorkroomPersistenceCoordinator', () => {
       journalPayloads: {} as never,
       catalog: new ActivatableWorkroomCatalog(),
       listAgentNames: () => [],
-      resolveDataGovernanceStorage: () => undefined,
       recoverHumanIngress: async () => undefined,
     });
 

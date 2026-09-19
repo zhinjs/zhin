@@ -55,7 +55,6 @@ export interface WorkroomPersistenceCoordinatorOptions {
   readonly catalog: ActivatableWorkroomCatalog;
   readonly listAgentNames: () => readonly string[];
   readonly resolveConfiguredEndpointKeys?: () => Promise<ReadonlySet<string>>;
-  readonly resolveDataGovernanceStorage: () => DataGovernanceStorage | undefined;
   readonly recoverHumanIngress: () => Promise<void>;
 }
 
@@ -69,6 +68,7 @@ export class WorkroomPersistenceCoordinator {
   readonly usesDatabase: boolean;
 
   #pendingActivation = false;
+  #dataGovernanceStorage?: DataGovernanceStorage;
   readonly #fileProjectKnowledgeJournal: FileProjectKnowledgeJournal;
   readonly #fileOverlayPackPromotions: FileOverlayPackPromotionRepository;
   readonly #filePortfolioControlOutbox: FilePortfolioControlOutboxRepository;
@@ -93,6 +93,13 @@ export class WorkroomPersistenceCoordinator {
 
   get pendingActivation(): boolean {
     return this.#pendingActivation;
+  }
+
+  bindDataGovernanceStorage(storage: DataGovernanceStorage): void {
+    if (this.#dataGovernanceStorage) {
+      throw new Error('Workroom data governance storage is already bound');
+    }
+    this.#dataGovernanceStorage = storage;
   }
 
   async prepare(): Promise<void> {
@@ -171,7 +178,7 @@ export class WorkroomPersistenceCoordinator {
 
     const catalogSnapshot = await this.options.catalog.read();
     const projectIds = Object.keys(catalogSnapshot.definitions).sort();
-    const governanceStorage = this.options.resolveDataGovernanceStorage();
+    const governanceStorage = this.#dataGovernanceStorage;
     if (governanceStorage) {
       await governanceStorage.activateDatabase({
         database: raw,

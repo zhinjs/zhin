@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises';
-import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -59,7 +58,6 @@ import {
   createFullAgentTurnEngine,
   AgentRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
-  createCatalogGovernedConsoleDisclosureAuthority,
   createGovernedPortfolioSponsorProjectionReader,
   type AgentCapabilities,
   type WorkroomRunControlCommand,
@@ -118,16 +116,11 @@ import {
   createAgentCoreWorkroomLocalTurnPort,
   structuredTaskReportPrompt,
   bindWorkroomCapabilityRealization,
-  installWorkroomDataGovernanceResources,
   createWorkroomDataGovernanceBootstrapCandidate,
   WorkroomDataGovernanceAuthorityWriter,
   digestWorkroomCatalogProjectBinding,
-  resolveWorkroomDataGovernanceRootAuthorities,
-  createGenerationOwnedWorkroomDataGovernanceStorage,
   assertAcceptanceProjectionDataGovernanceAuthority,
-  createFileWorkroomDataLifecycleRuntime,
   createWorkroomDataLifecycleHumanIngressControlPort,
-  createGenerationOwnedWorkroomGovernedOutboundComposition,
   installWorkroomProfileAuthorityResources,
   createCatalogWorkroomProfilePublisherAuthority,
   createWorkroomProfileGenerationView,
@@ -165,7 +158,6 @@ import {
   workroomAcceptanceProjectionPayloadToken,
   workroomAcceptanceProjectionSourceAuthorityToken,
   type WorkroomAcceptanceProjectionAuthorityPort,
-  type WorkroomAcceptanceProjectionSourceAuthorityPort,
   type WorkroomRiskHeaderProducerAuthorityPort,
   type WorkroomEphemeralContextRoutePort,
   type WorkroomEphemeralContextReleaseCapabilityPort,
@@ -206,7 +198,6 @@ import {
   type PortfolioClockAuthorityPort,
   type WorkroomEffectClockPort,
   type WorkroomEffectBlockerPolicyPort,
-  type WorkroomPayloadLifecycleIndexPort,
   type WorkroomDataLifecycleConsoleControlPort,
   type PortfolioSponsorProjection,
   createSelfDeliveryProjectForHost,
@@ -301,6 +292,7 @@ import {
 import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
 import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
+import { WorkroomDataGovernanceCoordinator } from './workroom-data-governance-coordinator.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -419,9 +411,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       consoleProjectionAuthority,
     } = workroomFoundation;
     const rememberedSandboxApprovals = new Map<string, Set<string>>();
-    let dataGovernanceStorage: ReturnType<
-      typeof createGenerationOwnedWorkroomDataGovernanceStorage
-    > | undefined;
     let recoverHumanIngress = async (): Promise<void> => {};
     const persistence = new WorkroomPersistenceCoordinator({
       projectRoot: options.projectRoot,
@@ -437,18 +426,35 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       catalog: workroomCatalog,
       listAgentNames: () => listGenerationBindings().map(binding => binding.name),
       resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
-      resolveDataGovernanceStorage: () => dataGovernanceStorage,
       recoverHumanIngress: () => recoverHumanIngress(),
     });
+    const dataGovernanceCoordinator = await WorkroomDataGovernanceCoordinator.create({
+      projectRoot: options.projectRoot,
+      generation,
+      signal,
+      resources,
+      usesDatabase: persistence.usesDatabase,
+      foundation: workroomFoundation,
+      localAuthority: options.workroomLocalDataGovernance,
+    });
+    if (dataGovernanceCoordinator.storage) {
+      persistence.bindDataGovernanceStorage(dataGovernanceCoordinator.storage);
+    }
     await persistence.prepare();
+    dataGovernanceCoordinator.registerHandoff(handoff);
     const {
       assignmentAuthorityGrants,
       projectKnowledgeJournal,
       overlayPackPromotions,
       portfolioControlOutbox,
       stateRoot: workroomStateRoot,
-      usesDatabase: useDatabase,
     } = persistence;
+    const {
+      runtime: dataGovernanceRuntime,
+      lifecycle: dataLifecycle,
+      localAuthority: localDataGovernance,
+      governedOutbound,
+    } = dataGovernanceCoordinator;
 
     const ingress = new CapabilityIngress();
     const bootstrapText = await loadBootstrap(options.projectRoot);
@@ -544,138 +550,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const presetCount = await agentFoundation.seedPresets();
 
     const binding = service.getBindingRegistry().requireZhinBinding();
-    mkdirSync(workroomStateRoot, { recursive: true });
-    const rootDataGovernance = await resolveWorkroomDataGovernanceRootAuthorities({
-      resources,
-      generation,
-      requester: rootPluginId(),
-      signal,
-    });
-    const localDataGovernance = rootDataGovernance
-      ? undefined
-      : options.workroomLocalDataGovernance;
-    const dataGovernanceCryptography = rootDataGovernance?.cryptography
-      ?? localDataGovernance?.cryptography;
-    const dataGovernanceVerification = rootDataGovernance?.governance
-      ?? localDataGovernance?.verification;
-    if (dataGovernanceCryptography) {
-      dataGovernanceStorage = createGenerationOwnedWorkroomDataGovernanceStorage({
-        stateRoot: workroomStateRoot,
-        generation,
-        cryptography: dataGovernanceCryptography,
-      });
-      if (!useDatabase) await dataGovernanceStorage.activateFile();
-    }
-    const lifecycleAuthorities = rootDataGovernance?.lifecycle
-      ?? localDataGovernance?.lifecycle;
-    const dataLifecycle = dataGovernanceStorage && lifecycleAuthorities
-      ? createFileWorkroomDataLifecycleRuntime({
-          stateRoot: workroomStateRoot,
-          generation,
-          signal,
-          journal: dataGovernanceStorage.lifecycle,
-          clock: lifecycleAuthorities.clock,
-          authority: lifecycleAuthorities.authority,
-          subjects: lifecycleAuthorities.subjects,
-          deletion: lifecycleAuthorities.deletion,
-          receipts: lifecycleAuthorities.receipts,
-          objects: Object.freeze({
-            resolve: async (
-              handle: Parameters<
-                Parameters<typeof createFileWorkroomDataLifecycleRuntime>[0]['objects']['resolve']
-              >[0],
-              operationSignal: AbortSignal,
-            ) =>
-              await dataGovernanceStorage?.vault.resolveLifecycleObject?.(handle, operationSignal),
-          }),
-          ...(lifecycleAuthorities.console
-            ? {
-                consoleAuthority: lifecycleAuthorities.console,
-                consoleDisclosure: createCatalogGovernedConsoleDisclosureAuthority({
-                  catalog: workroomCatalog,
-                  governance: workroomFoundation.governance,
-                }),
-              }
-            : {}),
-        })
-      : undefined;
     dataLifecycleConsoleControl.current = dataLifecycle?.console;
-    const dataGovernanceRuntime = installWorkroomDataGovernanceResources({
-      projectRoot: options.projectRoot,
-      generation,
-      signal,
-      resources,
-      ...(dataGovernanceCryptography ? { cryptography: dataGovernanceCryptography } : {}),
-      ...(dataGovernanceVerification ? { governance: dataGovernanceVerification } : {}),
-      ...(dataGovernanceStorage ? { vault: dataGovernanceStorage.vault } : {}),
-      ...(dataLifecycle && lifecycleAuthorities
-        ? {
-            payloadLifecycleIndex: Object.freeze({
-              register: async (
-                input: Parameters<WorkroomPayloadLifecycleIndexPort['register']>[0],
-                operationSignal: AbortSignal,
-              ) => {
-                const state = await dataLifecycle.control.register({
-                  version: 1,
-                  operationId: input.operationId,
-                  authenticatedPrincipalId: lifecycleAuthorities.registrationPrincipalId,
-                  handle: input.handle,
-                }, operationSignal);
-                return Object.freeze({ digest: state.digest });
-              },
-            }),
-          }
-        : {}),
-      ...(lifecycleAuthorities ? { payloadPurge: lifecycleAuthorities.orphanPurge } : {}),
-      payloadPublicationVerifier: Object.freeze({
-        async verify(
-          intent: Parameters<NonNullable<
-            Parameters<typeof installWorkroomDataGovernanceResources>[0]['payloadPublicationVerifier']
-          >['verify']>[0],
-          operationSignal: AbortSignal,
-        ) {
-          operationSignal.throwIfAborted();
-          if (intent.consumer === 'journal_header') {
-            const verification = workroomJournal.verifyGovernedPayloadPublication
-              ? await workroomJournal.verifyGovernedPayloadPublication(intent)
-              : Object.freeze({ status: 'unknown' as const });
-            return verification.status === 'missing'
-              ? Object.freeze({ status: 'unknown' as const })
-              : verification;
-          }
-          if (intent.consumer === 'evidence_header'
-            || intent.consumer === 'task_report_header') {
-            return await workroomReports.verifyGovernedPayloadPublication(intent);
-          }
-          return Object.freeze({ status: 'unknown' as const });
-        },
-      }),
-      acceptanceProjectionSources: Object.freeze({
-        async resolve(
-          input: Parameters<WorkroomAcceptanceProjectionSourceAuthorityPort['resolve']>[0],
-          operationSignal: AbortSignal,
-        ) {
-          if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) return undefined;
-          return await resources.use(workroomAcceptanceProjectionSourceAuthorityToken)
-            .resolve(input, operationSignal);
-        },
-      }),
-    });
-    workroomFoundation.bindDataGovernance(dataGovernanceRuntime);
-    handoff.add({
-      activateNext: async operationSignal => {
-        const catalog = await workroomCatalog.read();
-        await dataGovernanceRuntime.reconcilePayloadPurges(
-          Object.keys(catalog.definitions).sort(),
-          operationSignal,
-        );
-      },
-    });
-    const governedOutbound = createGenerationOwnedWorkroomGovernedOutboundComposition({
-      generation,
-      signal,
-      runtime: dataGovernanceRuntime,
-    });
     const emergencyEffectBlockerPolicyBody = Object.freeze({
       kind: 'root_emergency_fallback' as const,
       ref: 'root-emergency-effect-blocker-policy:1',
@@ -1422,6 +1297,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }),
       signal,
     );
+    dataGovernanceCoordinator.bindReportPayloadVerifier(workroomReports);
     if (!resources.has(workroomAcceptedReportReaderToken)) {
       resources.provide(workroomAcceptedReportReaderToken, workroomReports);
     }
