@@ -8,8 +8,8 @@ import {
 import { writeJson } from './http-response.js';
 import {
   ConsoleRpcRequestScope,
-  type ConsoleRpcComposition,
 } from './rpc-context.js';
+import type { ConsoleRpcComposition } from './rpc-composition.js';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;

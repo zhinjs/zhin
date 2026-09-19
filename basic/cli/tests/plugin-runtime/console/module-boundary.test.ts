@@ -58,6 +58,8 @@ describe('Console Host module boundary', () => {
       'plugin-projection.ts',
       'rpc-route.ts',
       'rpc-context.ts',
+      'rpc-composition.ts',
+      'rpc-extended-context.ts',
       'runtime-snapshot.ts',
       'system-log.ts',
       'system-projection.ts',
@@ -68,6 +70,7 @@ describe('Console Host module boundary', () => {
       'workroom-run-query-routes.ts',
       'workroom-run-routes.ts',
       'workroom-governance-routes.ts',
+      'workroom-catalog-rpc.ts',
     ];
     const violations: string[] = [];
     for (const file of supportingModules) {
