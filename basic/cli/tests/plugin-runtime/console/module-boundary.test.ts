@@ -38,6 +38,7 @@ describe('Console Host module boundary', () => {
       'inbox.ts',
       'portfolio-sponsor-routes.ts',
       'projection.ts',
+      'rpc-route.ts',
       'system-log.ts',
       'workroom-routes.ts',
       'workroom-run-routes.ts',
