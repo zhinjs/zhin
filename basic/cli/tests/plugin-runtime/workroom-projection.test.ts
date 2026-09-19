@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { MemoryWorkroomProjectionRepository } from '@zhin.js/agent';
+import { MemoryWorkroomProjectionRepository, workroomProjectionMessageKey } from '@zhin.js/agent';
 import {
   assertWorkroomCatalogMatchesGeneration,
   classifyWorkroomIngressSource,
+  createSponsorProjectionControlTargetResolver,
   createCatalogSponsorRoomProjectionBinding,
   createCatalogWorkroomProjectionBinding,
   ensureCatalogWorkroomProjectionBinding,
@@ -117,6 +118,49 @@ describe('Workroom projection reply provenance', () => {
       conversation,
       replyTo: { conversation, id: 'same' },
     }, { a: { message }, b: { message: { ...message } } })).toBeUndefined();
+  });
+
+  it('binds Sponsor control to the exact current projection reply', async () => {
+    const conversation = {
+      endpoint: { id: 'sponsor-cap', adapter: 'root' },
+      kind: 'group' as const,
+      id: 'sponsor-room',
+    };
+    const messageKey = workroomProjectionMessageKey({
+      conversation,
+      id: 'projection-message',
+    });
+    const resolver = createSponsorProjectionControlTargetResolver({
+      projectionRepository: {
+        read: async () => ({
+          messageIndex: {
+            [messageKey]: {
+              projectionId: 'projection-1',
+              bindingRevision: 4,
+              target: { projectId: 'zhin', kind: 'portfolio' },
+            },
+          },
+        }),
+      } as never,
+      message: {
+        conversation,
+        replyTo: { conversation, id: 'projection-message' },
+      } as Message,
+      intent: 'control',
+    });
+
+    await expect(resolver.resolve({
+      decision: { projectId: 'zhin', bindingRevision: 4 },
+    } as never)).resolves.toMatchObject({
+      status: 'unaddressed',
+      intent: 'control',
+      projectionReply: {
+        projectionId: 'projection-1',
+        projectId: 'zhin',
+        bindingRevision: 4,
+        messageKey,
+      },
+    });
   });
 });
 

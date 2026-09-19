@@ -33,14 +33,11 @@ import {
   type WorkroomMemberRole,
   FileJournalStore,
   resolveWorkroomBotIdentity,
-  workroomProjectionMessageKey,
   workroomProjectionBindingKey,
   FileHumanIngressProposalRepository,
   FileHumanIngressApplicationRepository,
   HumanIngressApplicationService,
   type HumanIngressOrchestratorProposalPort,
-  type HumanIngressTargetResolverPort,
-  type HumanIngressTargetResolutionRequest,
   WorkroomPlanningClarificationError,
   type WorkroomPlanGateAuthorityPort,
   ConversationEventHumanIngressSourceReader,
@@ -287,11 +284,14 @@ import {
 } from './workroom-human-ingress-route.js';
 import {
   assertWorkroomCatalogMatchesGeneration,
+  catalogSpaceSourceDigest,
   classifyWorkroomIngressSource,
+  createSponsorProjectionControlTargetResolver,
   ensureCatalogWorkroomProjectionBinding,
   resolveCatalogSponsorProjectionConversation,
   resolveCatalogWorkroomProjectionConversation,
   resolveIndexedProjectionReply,
+  sponsorRoomProjectId,
 } from './workroom-projection.js';
 import {
   renderTriggerError,
@@ -3303,112 +3303,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       + ` | tools: ${(options.extraTools ?? []).map((tool) => tool.name).join(',') || '-'}`,
     );
   };
-}
-
-/** Portfolio Sponsor Rooms require the Project to be explicit in typed control text. */
-function sponsorRoomProjectId(content: string): string | undefined {
-  const text = content.trim();
-  const lifecycle = /^\/control\s+data-lifecycle\s+project\s+([a-z0-9][a-z0-9_-]{0,63})(?:\s|$)/iu.exec(text);
-  if (lifecycle?.[1]) return lifecycle[1].toLowerCase();
-  const portfolio = /^\/control\s+portfolio\s+\S+\s+project\s+([a-z0-9][a-z0-9_-]{0,63})(?:\s|$)/iu.exec(text);
-  return portfolio?.[1]?.toLowerCase();
-}
-
-function catalogSpaceSourceDigest(
-  projectId: string,
-  space: 'workroom' | 'sponsor_room',
-  configured: Readonly<{
-    adapter: string;
-    endpoint: string;
-    kind: 'group' | 'channel' | 'repository';
-    id: string;
-    agent: string;
-  }>,
-): string {
-  const binding = [
-    projectId,
-    configured.adapter,
-    configured.endpoint,
-    configured.kind,
-    configured.id,
-    configured.agent,
-  ];
-  return `sha256:${createHash('sha256').update(JSON.stringify(
-    space === 'workroom' ? binding : [projectId, space, ...binding.slice(1)],
-  )).digest('hex')}`;
-}
-
-function createSponsorProjectionControlTargetResolver(options: Readonly<{
-  projectionRepository: Pick<FileWorkroomProjectionRepository, 'read'>;
-  message: Message;
-  intent: 'control';
-}>): HumanIngressTargetResolverPort {
-  return Object.freeze({
-    async resolve(request: HumanIngressTargetResolutionRequest) {
-      const resolverRef = 'sponsor-projection-message-index:v1';
-      if (!options.message.replyTo) {
-        return Object.freeze({
-          ...request,
-          status: 'unaddressed' as const,
-          intent: options.intent,
-          resolverRef,
-          resolverDigest: digestInstallerValue({
-            resolverRef,
-            intent: options.intent,
-            status: 'unaddressed',
-          }),
-        });
-      }
-      const messageKey = workroomProjectionMessageKey({
-        conversation: options.message.conversation,
-        id: options.message.replyTo.id,
-      });
-      const state = await options.projectionRepository.read();
-      const entry = state.messageIndex[messageKey];
-      if (!entry || entry.target.projectId !== request.decision.projectId
-        || entry.bindingRevision !== request.decision.bindingRevision) {
-        const candidateRefs = entry ? [entry.projectionId] : [];
-        return Object.freeze({
-          ...request,
-          status: 'clarification_required' as const,
-          intent: options.intent,
-          resolverRef,
-          resolverDigest: digestInstallerValue({
-            resolverRef,
-            intent: options.intent,
-            status: 'clarification_required',
-            messageKey,
-            candidateRefs,
-          }),
-          reason: entry && entry.target.projectId !== request.decision.projectId
-            ? 'cross_project_target' as const
-            : 'target_not_found' as const,
-          candidateRefs: Object.freeze(candidateRefs),
-        });
-      }
-      const projectionReply = Object.freeze({
-        version: 1 as const,
-        projectionId: entry.projectionId,
-        projectId: entry.target.projectId,
-        bindingRevision: entry.bindingRevision,
-        messageKey,
-        targetDigest: digestInstallerValue(entry.target),
-      });
-      return Object.freeze({
-        ...request,
-        status: 'unaddressed' as const,
-        intent: options.intent,
-        resolverRef,
-        resolverDigest: digestInstallerValue({
-          resolverRef,
-          intent: options.intent,
-          status: 'unaddressed',
-          projectionReply,
-        }),
-        projectionReply,
-      });
-    },
-  });
 }
 
 function digestInstallerValue(value: unknown): string {
