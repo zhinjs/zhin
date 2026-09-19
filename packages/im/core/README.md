@@ -124,14 +124,9 @@ class MyAdapter extends Adapter {
 
 ### Adapter（适配器）
 
-适配器将不同聊天平台接入 Zhin.js，统一消息收发接口。
+经典 `Adapter` 类仅供尚未迁移的 Core 内部代码使用，不再提供进程级静态注册表。新适配器使用 `zhin.js/adapter` 的 `defineAdapter()` 声明，并由当前 generation 的 `AdapterIndex` 发现和装配。
 
-```typescript
-// 适配器通过 Adapter.register 静态注册
-Adapter.register('my-platform', MyAdapter)
-```
-
-每个适配器可以通过 `addTool()` 注册平台特有工具，标准群管操作通过覆写 `ISceneManagement` 方法自动注册。
+平台管理能力由 Endpoint 显式实现并声明，Agent 通过当前 generation 的能力投影访问；不在 Adapter 类上注册工具或维护全局实例。
 
 **群管理能力自动检测：** 适配器基类声明了 `ISceneManagement` 接口中的可选方法（`kickMember`、`muteMember`、`banMember` 等），子类只需覆写自己平台支持的方法，`start()` 会自动检测哪些方法已实现，生成对应的 Tool 并注册为"群聊管理"Skill。目前所有 9 个 IM 适配器（ICQQ、OneBot11、QQ 官方、Telegram、Discord、KOOK、Slack、钉钉、飞书）均已采用此模式：
 

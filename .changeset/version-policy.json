@@ -363,6 +363,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unmounted classic ProcessAdapter and its process-global stdin helpers after local interaction moved to Sandbox and CLI Host ownership under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-adapter-registry.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unused process-global classic Adapter factory registry so generation-owned AdapterIndex remains the sole adapter discovery and instance authority under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

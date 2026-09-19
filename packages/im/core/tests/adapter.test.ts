@@ -752,27 +752,3 @@ describe('Adapter Core Functionality', () => {
     })
   })
 })
-
-describe('Adapter Registry', () => {
-  it('should have a Registry Map', () => {
-    expect(Adapter.Registry).toBeInstanceOf(Map)
-  })
-
-  it('should register adapter factory', () => {
-    const factory = MockAdapter as any
-    Adapter.register('mock', factory)
-    
-    expect(Adapter.Registry.has('mock')).toBe(true)
-    expect(Adapter.Registry.get('mock')).toBe(factory)
-  })
-
-  it('should allow multiple adapter registrations', () => {
-    const factory1 = MockAdapter as any
-    const factory2 = MockAdapter as any
-    
-    Adapter.register('adapter1', factory1)
-    Adapter.register('adapter2', factory2)
-    
-    expect(Adapter.Registry.size).toBeGreaterThanOrEqual(2)
-  })
-})

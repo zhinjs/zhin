@@ -429,13 +429,6 @@ export interface Adapters {}
 /** Per-adapter live Endpoint class map for HandlerContext.$endpoint() typing. */
 export interface AdapterEndpoints {}
 export namespace Adapter {
-  export type Factory<R extends Adapter = Adapter> = {
-    new (
-    plugin: Plugin,
-    name: string,
-    config: Adapter.EndpointConfig<Adapter.InferEndpoint<R>>[]
-  ):R
-  };
   export interface Lifecycle {
     'message.receive': [Message];
     'message.private.receive': [Message];
@@ -445,11 +438,6 @@ export namespace Adapter {
     'request.receive': [Request];
     'call.recallMessage': [string, string];
   }
-  /**
-   * 适配器工厂注册表
-   * 灵感来源于 zhinjs/next 的 Adapter.Registry
-   */
-  export const Registry = new Map<string, Factory>();
   export type InferEndpoint<R extends Adapter=Adapter> = R extends Adapter<infer T>
     ? T
     : never;
@@ -457,17 +445,4 @@ export namespace Adapter {
   export type EndpointMessage<T extends Endpoint> = T extends Endpoint<infer _L, infer R>
     ? R
     : never;
-  /**
-   * 注册适配器工厂
-   *
-   * @param name 适配器名称
-   * @param factory 适配器工厂函数
-   * @example
-   * ```typescript
-   * Adapter.register('icqq', IcqqAdapter);
-   * ```
-   */
-  export function register(name: string, factory: Factory) {
-    Registry.set(name, factory);
-  }
 }
