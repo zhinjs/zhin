@@ -9,7 +9,7 @@ const files = [
   'packages/host/http/src/console-rpc.ts',
   'packages/host/http/src/console-rpc-extended.ts',
   'packages/console/client/client/transport/console-transport.ts',
-  'basic/cli/src/plugin-runtime/console-api-installer.ts',
+  'basic/cli/src/plugin-runtime/console/api.ts',
 ];
 const forbidden = [
   [/\bnormalizeConsole(?:PushType|PushMessage|RpcType|RpcMessage)\b/u, 'Console compatibility normalizer'],

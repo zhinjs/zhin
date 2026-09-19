@@ -4,7 +4,7 @@ import {
   DEFAULT_SYSTEM_LOG_CONFIG,
   SystemLogDatabaseTransport,
   mapFormattedLevel,
-} from '../../src/plugin-runtime/log-transport.js';
+} from '../../../src/plugin-runtime/console/system-log.js';
 
 /** 内存假 DatabaseHost：支持 $lt / $in 操作符，覆盖 cleanup 查询路径。 */
 function fakeDatabaseHost(started = true): {

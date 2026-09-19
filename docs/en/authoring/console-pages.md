@@ -73,7 +73,7 @@ First, the output: each page is bundled into `<owner>-<localName>-<contentHash>.
 
 Next, the bare import problem. Browsers cannot resolve bare imports like `import 'react'`, so imports in the whitelist `ALLOWED_ESM_CANONICAL` (`react`, `react-dom`, `react-dom/client`, `react/jsx-runtime(-dev)`, `react-router`, `react-router-dom`) are rewritten to `/esm/<enc>.mjs`, built on demand and proxied by the Host, ensuring the entire Console has only one React instance; canonical imports outside the whitelist return 403.
 
-Host routes are mounted in `basic/cli/src/plugin-runtime/console-host-installer.ts`: `GET /console` is the page index, `GET /console/api/pages` returns the page list, `GET /*` catch-all matches routes to pages and returns the page shell (containing importmap and module mount script), returning 404 for no match and 403 for insufficient permissions. Page modules are loaded in the browser via `import(moduleUrl)`, with the default export mounted to `#root`.
+Host routes are mounted in `basic/cli/src/plugin-runtime/console/host.ts`: `GET /console` is the page index, `GET /console/api/pages` returns the page list, `GET /*` catch-all matches routes to pages and returns the page shell (containing importmap and module mount script), returning 404 for no match and 403 for insufficient permissions. Page modules are loaded in the browser via `import(moduleUrl)`, with the default export mounted to `#root`.
 
 ## sandbox Adapter Page Instance
 

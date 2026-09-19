@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
-const hostSource = 'basic/cli/src/plugin-runtime/console-api-installer.ts';
+const hostSource = 'basic/cli/src/plugin-runtime/console/configuration.ts';
 const hostReferencePath = 'packages/im/runtime/src/host-config-schema.json';
 const hostReference = JSON.parse(fs.readFileSync(path.join(repoRoot, hostReferencePath), 'utf8'));
 const hostRuntimeSource = fs.readFileSync(path.join(repoRoot, hostSource), 'utf8');

@@ -22,11 +22,15 @@ import {
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
 } from '@zhin.js/runtime';
-import { createConsoleHostModules, installConsoleHttp } from './console-host-installer.js';
-import { installConsoleApi } from './console-api-installer.js';
+import {
+  createConsoleHostModules,
+  installConsoleApi,
+  installConsoleHttp,
+  installSystemLogStore,
+  resolveSystemLogConfig,
+} from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
-import { installSystemLogStore, resolveSystemLogConfig } from './log-transport.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
@@ -110,7 +114,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
   databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
-  // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
+  // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
   defineInboxTables(databaseHost);
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。

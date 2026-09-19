@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { httpHostToken } from '@zhin.js/host-http';
-import { installConsoleHttp } from '../../src/plugin-runtime/console-host-installer.js';
+import { installConsoleHttp } from '../../../src/plugin-runtime/console/host.js';
 
 describe('Console topology Host endpoint', () => {
   it('serializes a route resolution from one Console topology view', async () => {

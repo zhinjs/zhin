@@ -73,7 +73,7 @@ flowchart LR
 
 再看裸导入问题。浏览器不解析 `import 'react'` 这类裸导入，因此白名单 `ALLOWED_ESM_CANONICAL`（`react`、`react-dom`、`react-dom/client`、`react/jsx-runtime(-dev)`、`react-router`、`react-router-dom`）内的导入被改写为 `/esm/<enc>.mjs`，由 Host 按需构建并代理，保证整个 Console 只有一份 React 实例；白名单外的 canonical 返回 403。
 
-Host 路由挂在 `basic/cli/src/plugin-runtime/console-host-installer.ts`：`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，`GET /*` catch-all 按路由匹配页面并返回页面 shell（内含 importmap 与模块挂载脚本），未命中 404、权限不足 403。页面模块在浏览器里以 `import(moduleUrl)` 加载，取默认导出挂载到 `#root`。
+Host 路由挂在 `basic/cli/src/plugin-runtime/console/host.ts`：`GET /console` 是页面索引，`GET /console/api/pages` 返回页面清单，`GET /*` catch-all 按路由匹配页面并返回页面 shell（内含 importmap 与模块挂载脚本），未命中 404、权限不足 403。页面模块在浏览器里以 `import(moduleUrl)` 加载，取默认导出挂载到 `#root`。
 
 ## sandbox 适配器的 page 实例
 

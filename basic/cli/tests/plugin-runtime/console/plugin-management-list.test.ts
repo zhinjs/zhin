@@ -1,8 +1,8 @@
 import {mkdtemp, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
-import {buildManagedPluginList} from '../../src/plugin-runtime/console-api-installer.js';
-import {createPluginLifecycleStore} from '../../src/plugin-runtime/plugin-lifecycle-store.js';
+import {buildManagedPluginList} from '../../../src/plugin-runtime/console/api.js';
+import {createPluginLifecycleStore} from '../../../src/plugin-runtime/plugin-lifecycle-store.js';
 
 describe('Console managed plugin list', () => {
   it('keeps a declared disabled plugin visible and manageable while absent from the snapshot', async () => {

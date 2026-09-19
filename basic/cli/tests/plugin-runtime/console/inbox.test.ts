@@ -11,7 +11,7 @@ import {
   buildInboxMessageRow,
   conversationToInboxChannel,
   installInboxMessageRecorder,
-} from '../../src/plugin-runtime/inbox-installer.js';
+} from '../../../src/plugin-runtime/console/inbox.js';
 
 /** 内存假 DatabaseHost：行存 Map，select/insert/update 按 where 等值匹配。 */
 function fakeDatabaseHost(tableNames: string[]): {

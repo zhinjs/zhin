@@ -13,7 +13,7 @@ const inboxRecorderInstallations = new WeakSet<ImRuntime>();
 
 /**
  * ImRuntime onMessage → unified_inbox_message 写路径。
- * 订阅去重与 console-api-installer 的消息桥一致（WeakSet 按 ImRuntime 实例）。
+ * 订阅去重与 Console API 消息桥一致（WeakSet 按 ImRuntime 实例）。
  */
 export function installInboxMessageRecorder(im: ImRuntime, databaseHost: DatabaseHost): void {
   if (inboxRecorderInstallations.has(im)) return;

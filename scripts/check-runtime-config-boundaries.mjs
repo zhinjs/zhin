@@ -9,7 +9,7 @@ const canonicalConsumers = [
   'basic/cli/src/commands/packages.ts',
   'basic/cli/src/commands/setup.ts',
   'basic/cli/src/commands/uninstall.ts',
-  'basic/cli/src/plugin-runtime/console-api-installer.ts',
+  'basic/cli/src/plugin-runtime/console/configuration.ts',
   'basic/cli/src/plugin-runtime/start-command.ts',
   'packages/toolkit/scaffold-wizard/src/apply.ts',
   'packages/toolkit/scaffold-wizard/src/optional-peers.ts',

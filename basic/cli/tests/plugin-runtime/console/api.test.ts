@@ -27,18 +27,14 @@ import {
   buildPluginFeatures,
   buildPluginListItem,
   displayConsolePath,
-  flattenConfigDocument,
   getSystemStatusData,
-  jsonSchemaToConsoleSchema,
   isKnownConversationSession,
   listSnapshotPlugins,
   listGenerationPromptSections,
   registerConsoleApiRoutes,
   resolveGenerationAgentIntrospection,
   resolveGenerationAgentConsole,
-  setProjectConfigKey,
-  writeConfigKey,
-} from '../../src/plugin-runtime/console-api-installer.js';
+} from '../../../src/plugin-runtime/console/api.js';
 
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
@@ -1440,182 +1436,5 @@ describe('console SSE events', () => {
     expect(frames).toContain('"keys":["port"]');
 
     reader.cancel().catch(() => undefined);
-  });
-});
-
-describe('config document flatten / write namespace', () => {
-  it('flattens plugins.<key> to top-level for Console config:get-all', () => {
-    const flat = flattenConfigDocument({
-      http: { port: 8086 },
-      plugins: {
-        sandbox: { endpoints: [{ name: 'bot' }] },
-        icqq: { name: '123' },
-      },
-    });
-    expect(flat.http).toEqual({ port: 8086 });
-    expect(flat.sandbox).toEqual({ endpoints: [{ name: 'bot' }] });
-    expect(flat.icqq).toEqual({ name: '123' });
-    expect(flat.plugins).toBeUndefined();
-  });
-
-  it('prefers top-level host keys over same-named plugins.<key>', () => {
-    const flat = flattenConfigDocument({
-      ai: { providers: { openai: {} } },
-      plugins: {
-        ai: { pluginConfig: true },
-        sandbox: { endpoints: [] },
-      },
-    });
-    // instanceKey 叫 ai 时不得覆盖顶层 host 的 ai 键
-    expect(flat.ai).toEqual({ providers: { openai: {} } });
-    expect(flat.sandbox).toEqual({ endpoints: [] });
-  });
-
-  it('does not pollute the prototype when flattening documents with __proto__ keys', () => {
-    const document = JSON.parse('{"plugins": {"__proto__": {"polluted": true}}}');
-    const flat = flattenConfigDocument(document);
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(Object.prototype.hasOwnProperty.call(flat, '__proto__')).toBe(false);
-  });
-
-  it('writes host keys to top-level and plugins under plugins.*', () => {
-    const document: Record<string, unknown> = { plugins: { sandbox: {} } };
-    writeConfigKey(document, 'http', { port: 9 });
-    writeConfigKey(document, 'sandbox', { endpoints: [] });
-    writeConfigKey(document, 'new-plugin', { enabled: true });
-    expect(document.http).toEqual({ port: 9 });
-    expect((document.plugins as Record<string, unknown>).sandbox).toEqual({ endpoints: [] });
-    expect((document.plugins as Record<string, unknown>)['new-plugin']).toEqual({ enabled: true });
-  });
-
-  it('rejects __proto__/constructor/prototype as config keys', () => {
-    const document: Record<string, unknown> = {};
-    for (const key of ['__proto__', 'constructor', 'prototype']) {
-      expect(() => writeConfigKey(document, key, { polluted: true })).toThrow(/Invalid config key/);
-    }
-    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(document.plugins).toBeUndefined();
-  });
-
-  it('treats prototype-inherited names (toString) as plugin keys, not top-level keys', () => {
-    const document: Record<string, unknown> = {};
-    writeConfigKey(document, 'toString', { enabled: true });
-    // 'toString' in document 为 true（原型链），但不得写到顶层
-    expect(Object.prototype.hasOwnProperty.call(document, 'toString')).toBe(false);
-    expect((document.plugins as Record<string, unknown>).toString).toEqual({ enabled: true });
-  });
-
-  it('rejects plugins arrays instead of promoting legacy configuration', () => {
-    const document: Record<string, unknown> = { plugins: ['sandbox', 'icqq'] };
-    expect(() => writeConfigKey(document, 'sandbox', { endpoints: [{ name: 'bot' }] }))
-      .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
-    expect(document.plugins).toEqual(['sandbox', 'icqq']);
-  });
-
-  it('serializes concurrent setProjectConfigKey writes without losing keys', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-lock-'));
-    tempRoots.push(root);
-    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  a: {}\n');
-
-    // 无锁时两次 读-改-写 基于同一份旧文档，后写覆盖先写（丢一个键）。
-    await Promise.all([
-      setProjectConfigKey(root, 'a', { x: 1 }),
-      setProjectConfigKey(root, 'b', { y: 2 }),
-      setProjectConfigKey(root, 'c', { z: 3 }),
-    ]);
-
-    const saved = await readFile(join(root, 'zhin.config.yml'), 'utf8');
-    const parsed = parseYaml(saved) as { plugins: Record<string, unknown> };
-    expect(parsed.plugins.a).toEqual({ x: 1 });
-    expect(parsed.plugins.b).toEqual({ y: 2 });
-    expect(parsed.plugins.c).toEqual({ z: 3 });
-
-    // 失败不断链：后续写仍可成功。
-    await expect(setProjectConfigKey(root, '__proto__', { polluted: true }))
-      .rejects.toThrow(/Invalid config key/);
-    await setProjectConfigKey(root, 'd', { ok: true });
-    const after = parseYaml(await readFile(join(root, 'zhin.config.yml'), 'utf8')) as {
-      plugins: Record<string, unknown>;
-    };
-    expect(after.plugins.d).toEqual({ ok: true });
-  });
-
-});
-
-describe('jsonSchemaToConsoleSchema', () => {
-  it('converts object properties to Console Schema object map', () => {
-    const consoleSchema = jsonSchemaToConsoleSchema({
-      type: 'object',
-      properties: {
-        name: { type: 'string', description: 'QQ uin' },
-        autoReconnect: { type: 'boolean', default: true },
-        endpoints: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { name: { type: 'string' } },
-            required: ['name'],
-          },
-        },
-      },
-      required: ['name'],
-    });
-    expect(consoleSchema).toMatchObject({
-      type: 'object',
-      object: {
-        name: { type: 'string', key: 'name', description: 'QQ uin', required: true },
-        autoReconnect: { type: 'boolean', key: 'autoReconnect', default: true },
-        endpoints: {
-          type: 'list',
-          key: 'endpoints',
-          inner: {
-            type: 'object',
-            object: {
-              name: { type: 'string', key: 'name', required: true },
-            },
-            // dual-emit for PluginConfigForm nested list items
-            dict: {
-              name: { type: 'string', key: 'name', required: true },
-            },
-            properties: {
-              name: { type: 'string', key: 'name', required: true },
-            },
-          },
-        },
-      },
-      // top-level dual-emit
-      dict: expect.any(Object),
-      properties: expect.any(Object),
-    });
-    expect(consoleSchema?.dict).toEqual(consoleSchema?.object);
-    expect(consoleSchema?.properties).toEqual(consoleSchema?.object);
-  });
-
-  it('maps enum to options and integer to number', () => {
-    const consoleSchema = jsonSchemaToConsoleSchema({
-      type: 'object',
-      properties: {
-        outboundMedia: { type: 'string', enum: ['file', 'base64'] },
-        port: { type: 'integer', minimum: 1, maximum: 65535 },
-      },
-    });
-    expect(consoleSchema?.object).toMatchObject({
-      outboundMedia: {
-        type: 'string',
-        options: [
-          { label: 'file', value: 'file' },
-          { label: 'base64', value: 'base64' },
-        ],
-      },
-      port: { type: 'number', min: 1, max: 65535 },
-    });
-  });
-
-  it('passes through already-converted Console Schema JSON', () => {
-    const input = {
-      type: 'object',
-      object: { name: { type: 'string', key: 'name' } },
-    };
-    expect(jsonSchemaToConsoleSchema(input)).toEqual(input);
   });
 });
