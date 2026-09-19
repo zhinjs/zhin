@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "own-weixin-ilink-state.md",
+      "packages": [
+        "@zhin.js/adapter-weixin-ilink"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace Weixin iLink environment and module-function state ownership with one endpoint-owned state store under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-github-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-github"

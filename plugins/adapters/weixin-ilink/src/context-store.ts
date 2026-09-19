@@ -1,16 +1,23 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveStateDir } from './credentials.js';
+import type { WeixinIlinkStateStore } from './credentials.js';
 import { logger } from './ilink-logger.js';
 
 const PERSIST_DEBOUNCE_MS = 500;
 
 /** Endpoint-owned context-token repository with account-scoped persistence. */
 export class WeixinContextTokenStore {
+  readonly state: WeixinIlinkStateStore;
   readonly #tokens = new Map<string, string>();
   #persistTimer?: ReturnType<typeof setTimeout>;
 
-  constructor(readonly accountId: string) {}
+  constructor(state: WeixinIlinkStateStore) {
+    this.state = state;
+  }
+
+  get accountId(): string {
+    return this.state.endpointId;
+  }
 
   get(userId: string): string | undefined {
     const value = this.#tokens.get(userId);
@@ -68,7 +75,7 @@ export class WeixinContextTokenStore {
   }
 
   #filePath(): string {
-    return path.join(resolveStateDir(), 'context-tokens', `${this.accountId}.context-tokens.json`);
+    return this.state.contextTokensPath();
   }
 
   #schedulePersist(): void {

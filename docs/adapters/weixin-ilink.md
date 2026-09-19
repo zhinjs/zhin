@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f2cc3aebbb79acf1 -->
+<!-- sync-adapter-docs:sha256=7510ae8846f8cc8c -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -40,25 +40,30 @@ plugins:
     # botAgent: "Zhin.js/1.0.0"
     # longPollTimeoutMs: 35000
     # baseUrl: https://ilinkai.weixin.qq.com
+    # dataDir: data/weixin-ilink
     endpoints:
-      - name: my-wechat
-        # botToken: "..."                 # 或环境变量 WEIXIN_ILINK_TOKEN
+      - id: my-wechat
+        # botToken: "..."                 # 可选；不填则读取状态文件或扫码
 ```
 
-`botToken` 也可保存在侧车文件（不进 git）：
+`AdapterIndex` 会把实例默认值与 endpoint 覆盖值合并后再调用 adapter。协议层只接受这份
+展开后的 endpoint 配置，不读取环境变量，也不再次解析嵌套 `endpoints`。
+
+Endpoint 通过一个 `WeixinIlinkStateStore` 统一拥有凭据、长轮询 cursor、context token 和媒体文件。
+`botToken` 也可保存在 `dataDir` 下的状态文件（不进 git）：
 
 ```
-data/weixin-ilink/<bot-name>.json
+data/weixin-ilink/<id>/credentials.json
 ```
 
 ## 登录流程
 
 1. 首次启动无凭证时，调用 `get_bot_qrcode` 并在日志中打印二维码内容
 2. 用户用微信扫码确认
-3. 后台轮询 `get_qrcode_status` 直至 `confirmed`，写入 `data/weixin-ilink/<name>.json`
+3. 后台轮询 `get_qrcode_status` 直至 `confirmed`，写入 `dataDir/<id>/credentials.json`
 4. 调用 `notifyStart` 后进入长轮询
 
-> Console 扫码面板（旧 `loginAssist` + host-router）已从生产路径移除；优先用 `botToken` / 侧车凭证。
+> Console 扫码面板（旧 `loginAssist` + host-router）已从生产路径移除；优先用 `botToken` / Endpoint 状态凭证。
 
 ## 出站说明
 

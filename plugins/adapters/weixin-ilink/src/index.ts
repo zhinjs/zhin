@@ -6,7 +6,6 @@ export {
   segmentLocalPath,
   sleep,
   type ResolvedWeixinIlinkConfig,
-  type WeixinIlinkAdapterConfig,
   type WeixinIlinkEndpointConfig,
   type WeixinInboundMediaPaths,
   type WeixinMessageWithMedia,
@@ -14,7 +13,10 @@ export {
 } from './protocol.js';
 
 export type { WeixinMessage, MessageItem } from './ilink-types.js';
-export type { WeixinIlinkCredentials } from './credentials.js';
+export {
+  WeixinIlinkStateStore,
+  type WeixinIlinkCredentials,
+} from './credentials.js';
 export {
   IlinkClientMetadata,
   sanitizeBotAgent,

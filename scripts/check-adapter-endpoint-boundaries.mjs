@@ -7,11 +7,7 @@ const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
 const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
 const legacyAdapterConsumers = new Set();
-const directEnvironmentConsumers = new Set([
-  'plugins/adapters/weixin-ilink/src/credentials.ts',
-  'plugins/adapters/weixin-ilink/src/login.ts',
-  'plugins/adapters/weixin-ilink/src/protocol.ts',
-]);
+const directEnvironmentConsumers = new Set();
 const observedDirectEnvironmentConsumers = new Set();
 
 for (const file of typescriptFiles(adapterFeatureRoot)) {

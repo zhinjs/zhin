@@ -626,13 +626,20 @@ outline: [2, 3]
 | `plugins.weixin-ilink.baseUrl` | string | 否 | `"https://ilinkai.weixin.qq.com"` | — |
 | `plugins.weixin-ilink.cdnBaseUrl` | string | 否 | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `plugins.weixin-ilink.longPollTimeoutMs` | number | 否 | `35000` | — |
+| `plugins.weixin-ilink.dataDir` | string | 否 | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
 | `plugins.weixin-ilink.master` | string \| number | 否 | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `plugins.weixin-ilink.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `plugins.weixin-ilink.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.weixin-ilink.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
 | `plugins.weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
-| `plugins.weixin-ilink.endpoints[].botToken` | string | 是 | — | iLink bot token (prefer env WEIXIN_ILINK_TOKEN or sidecar credential file) |
+| `plugins.weixin-ilink.endpoints[].botToken` | string | 否 | — | iLink bot token; omit to load endpoint state or start QR login |
 | `plugins.weixin-ilink.endpoints[].id` | string | 是 | — | Weixin iLink bot name |
+| `plugins.weixin-ilink.endpoints[].botAgent` | string | 否 | — | — |
+| `plugins.weixin-ilink.endpoints[].baseUrl` | string | 否 | — | — |
+| `plugins.weixin-ilink.endpoints[].cdnBaseUrl` | string | 否 | — | — |
+| `plugins.weixin-ilink.endpoints[].longPollTimeoutMs` | number | 否 | — | — |
+| `plugins.weixin-ilink.endpoints[].dataDir` | string | 否 | — | Endpoint state root |
+| `plugins.weixin-ilink.endpoints[].commandPrefix` | string | 否 | — | 本 endpoint 的命令前缀 |
 | `plugins.weixin-ilink.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### process-monitor

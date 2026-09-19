@@ -1,14 +1,13 @@
 /**
- * Resolve iLink bot credentials (env / config / sidecar file / QR login).
+ * Resolve iLink bot credentials (config / endpoint state / QR login).
  * No legacy Plugin / loginAssist dependency — QR URL is logged for manual scan.
  */
 import { apiGetFetch, apiPostFetch } from './ilink-api.js';
-import { DEFAULT_API_BASE_URL, type IlinkClientMetadata } from './ilink-meta.js';
+import type { IlinkClientMetadata } from './ilink-meta.js';
 import { logger } from './ilink-logger.js';
 import {
-  loadCredentials,
-  saveCredentials,
   type WeixinIlinkCredentials,
+  type WeixinIlinkStateStore,
 } from './credentials.js';
 import type { ResolvedWeixinIlinkConfig } from './protocol.js';
 
@@ -113,36 +112,38 @@ function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
 export async function resolveCredentials(
   config: ResolvedWeixinIlinkConfig,
   metadata: IlinkClientMetadata,
+  state: WeixinIlinkStateStore,
   signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
-  const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
-  if (envToken) {
-    const stored = loadCredentials(config.id);
+  const configuredToken = config.botToken?.trim();
+  if (configuredToken) {
+    const stored = state.loadCredentials();
     return {
-      botToken: envToken,
+      botToken: configuredToken,
       ilinkUserId: stored?.ilinkUserId,
       ilinkBotId: stored?.ilinkBotId,
-      baseUrl: config.baseUrl ?? stored?.baseUrl ?? DEFAULT_API_BASE_URL,
+      baseUrl: config.baseUrl,
     };
   }
 
-  const stored = loadCredentials(config.id);
+  const stored = state.loadCredentials();
   if (stored?.botToken) {
     return {
       ...stored,
-      baseUrl: config.baseUrl ?? stored.baseUrl ?? DEFAULT_API_BASE_URL,
+      baseUrl: config.baseUrl,
     };
   }
 
-  return loginWithQr(config, metadata, signal);
+  return loginWithQr(config, metadata, state, signal);
 }
 
 export async function loginWithQr(
   config: ResolvedWeixinIlinkConfig,
   metadata: IlinkClientMetadata,
+  state: WeixinIlinkStateStore,
   signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
-  const apiBaseUrl = config.baseUrl ?? DEFAULT_API_BASE_URL;
+  const apiBaseUrl = config.baseUrl;
   const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE, metadata);
   const qrcodeUrl = qr.qrcode_img_content || qr.qrcode;
 
@@ -169,7 +170,7 @@ export async function loginWithQr(
         throw new Error('扫码成功但未返回 bot_token');
       }
       const creds: WeixinIlinkCredentials = {
-        botToken: status.bot_token ?? loadCredentials(config.id)?.botToken ?? '',
+        botToken: status.bot_token ?? state.loadCredentials()?.botToken ?? '',
         ilinkUserId: status.ilink_user_id,
         ilinkBotId: status.ilink_endpoint_id,
         baseUrl: status.baseurl ?? currentBaseUrl,
@@ -177,7 +178,7 @@ export async function loginWithQr(
       if (!creds.botToken) {
         throw new Error('binded_redirect 但本地无有效 bot_token');
       }
-      saveCredentials(config.id, creds);
+      state.saveCredentials(creds);
       return creds;
     }
 

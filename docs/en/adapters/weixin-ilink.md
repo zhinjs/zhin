@@ -40,22 +40,25 @@ plugins:
     # botAgent: "Zhin.js/1.0.0"
     # longPollTimeoutMs: 35000
     # baseUrl: https://ilinkai.weixin.qq.com
+    # dataDir: data/weixin-ilink
     endpoints:
-      - name: my-wechat
-        # botToken: "..."                 # or environment variable WEIXIN_ILINK_TOKEN
+      - id: my-wechat
+        # botToken: "..."                 # Optional; otherwise load state or scan QR
 ```
 
-`botToken` can also be saved in a sidecar file (not committed to git):
+`AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables or inspect nested `endpoints`.
+
+Each Endpoint owns one `WeixinIlinkStateStore` for credentials, the long-poll cursor, context tokens, and media. `botToken` can also be saved under `dataDir` (not committed to git):
 
 ```
-data/weixin-ilink/<bot-name>.json
+data/weixin-ilink/<id>/credentials.json
 ```
 
 ## Login Flow
 
 1. On first start without credentials, calls `get_bot_qrcode` and prints QR code content in logs
 2. User scans the QR code with WeChat to confirm
-3. Background polls `get_qrcode_status` until `confirmed`, writes to `data/weixin-ilink/<name>.json`
+3. Background polls `get_qrcode_status` until `confirmed`, then writes `dataDir/<id>/credentials.json`
 4. Calls `notifyStart` and enters long polling
 
 ## Outbound Notes

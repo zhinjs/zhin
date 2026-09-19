@@ -626,13 +626,20 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.weixin-ilink.baseUrl` | string | no | `"https://ilinkai.weixin.qq.com"` | — |
 | `plugins.weixin-ilink.cdnBaseUrl` | string | no | `"https://novac2c.cdn.weixin.qq.com/c2c"` | — |
 | `plugins.weixin-ilink.longPollTimeoutMs` | number | no | `35000` | — |
+| `plugins.weixin-ilink.dataDir` | string | no | `"data/weixin-ilink"` | Endpoint state root for credentials, cursors, context tokens, and media |
 | `plugins.weixin-ilink.master` | string \| number | no | — | 框架 master（Weixin user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `plugins.weixin-ilink.trusted` | array&lt;string \| number&gt; | no | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
 | `plugins.weixin-ilink.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.weixin-ilink.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（Weixin user id）；覆盖顶层 master |
 | `plugins.weixin-ilink.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
-| `plugins.weixin-ilink.endpoints[].botToken` | string | yes | — | iLink bot token (prefer env WEIXIN_ILINK_TOKEN or sidecar credential file) |
+| `plugins.weixin-ilink.endpoints[].botToken` | string | no | — | iLink bot token; omit to load endpoint state or start QR login |
 | `plugins.weixin-ilink.endpoints[].id` | string | yes | — | Weixin iLink bot name |
+| `plugins.weixin-ilink.endpoints[].botAgent` | string | no | — | — |
+| `plugins.weixin-ilink.endpoints[].baseUrl` | string | no | — | — |
+| `plugins.weixin-ilink.endpoints[].cdnBaseUrl` | string | no | — | — |
+| `plugins.weixin-ilink.endpoints[].longPollTimeoutMs` | number | no | — | — |
+| `plugins.weixin-ilink.endpoints[].dataDir` | string | no | — | Endpoint state root |
+| `plugins.weixin-ilink.endpoints[].commandPrefix` | string | no | — | 本 endpoint 的命令前缀 |
 | `plugins.weixin-ilink.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### process-monitor

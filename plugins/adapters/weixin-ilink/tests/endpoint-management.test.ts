@@ -10,36 +10,47 @@ import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
   WeixinContextTokenStore,
 } from '../src/context-store.js';
-import { resolveWeixinIlinkConfig } from '../src/protocol.js';
+import { WeixinIlinkStateStore } from '../src/credentials.js';
+import {
+  resolveWeixinIlinkConfig,
+  type ResolvedWeixinIlinkConfig,
+} from '../src/protocol.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
-const baseConfig = resolveWeixinIlinkConfig({
-  id: 'test-ilink-mgmt',
-  botToken: 'test-token',
-  longPollTimeoutMs: 1000,
-});
+let baseConfig: ResolvedWeixinIlinkConfig;
+let dataDir: string;
+
+function contextTokens(endpointId = baseConfig.id): WeixinContextTokenStore {
+  return new WeixinContextTokenStore(new WeixinIlinkStateStore(endpointId, dataDir));
+}
 
 function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
-function makeEndpoint(contextTokens = new WeixinContextTokenStore(baseConfig.id)): WeixinIlinkEndpoint {
+function makeEndpoint(tokens = contextTokens()): WeixinIlinkEndpoint {
   return bindTestEndpoint(new WeixinIlinkEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
     gateway: gateway(),
     config: baseConfig,
     resolveCredentials: async () => ({ botToken: 'tok' }),
-    contextTokens,
+    contextTokens: tokens,
   }), gateway(), undefined);
 }
 
 beforeEach(() => {
-  vi.stubEnv('ZHIN_DATA_DIR', fs.mkdtempSync(path.join(os.tmpdir(), 'weixin-ilink-mgmt-')));
+  dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weixin-ilink-mgmt-'));
+  baseConfig = resolveWeixinIlinkConfig({
+    id: 'test-ilink-mgmt',
+    botToken: 'test-token',
+    longPollTimeoutMs: 1000,
+    dataDir,
+  });
 });
 
 afterEach(() => {
-  vi.unstubAllEnvs();
+  fs.rmSync(dataDir, { recursive: true, force: true });
 });
 
 describe('weixin-ilink endpoint management', () => {
@@ -51,11 +62,11 @@ describe('weixin-ilink endpoint management', () => {
   });
 
   it('listFriends：从 context_token 存储推导对端，nickname 用 user_id 占位并注明来源', async () => {
-    const contextTokens = new WeixinContextTokenStore(baseConfig.id);
-    contextTokens.set('wxid_alice', 'token-a');
-    contextTokens.set('wxid_bob', 'token-b');
-    const endpoint = makeEndpoint(contextTokens);
-    const other = new WeixinContextTokenStore('other-account');
+    const tokens = contextTokens();
+    tokens.set('wxid_alice', 'token-a');
+    tokens.set('wxid_bob', 'token-b');
+    const endpoint = makeEndpoint(tokens);
+    const other = contextTokens('other-account');
     other.set('wxid_other', 'token-x');
 
     const friends = await endpoint.management.listFriends!();
@@ -64,7 +75,7 @@ describe('weixin-ilink endpoint management', () => {
       { user_id: 'wxid_alice', nickname: 'wxid_alice', remark: 'ilink: 从会话 context_token 推导，非通讯录' },
       { user_id: 'wxid_bob', nickname: 'wxid_bob', remark: 'ilink: 从会话 context_token 推导，非通讯录' },
     ]);
-    contextTokens.clear();
+    tokens.clear();
     other.clear();
   });
 

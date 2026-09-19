@@ -16,10 +16,8 @@ import type { CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop } from './ilink-api.js';
 import { IlinkClientMetadata } from './ilink-meta.js';
 import {
-  loadSyncBuf,
-  resolveStateDir,
-  saveSyncBuf,
   type WeixinIlinkCredentials,
+  WeixinIlinkStateStore,
 } from './credentials.js';
 import { resolveCredentials } from './login.js';
 import {
@@ -70,6 +68,7 @@ export interface WeixinIlinkEndpointOptions {
   readonly resolveCredentials?: (
     config: ResolvedWeixinIlinkConfig,
     metadata: IlinkClientMetadata,
+    state: WeixinIlinkStateStore,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   /** Test / internal: override network side effects. */
@@ -77,6 +76,7 @@ export interface WeixinIlinkEndpointOptions {
   readonly notifyStop?: WeixinIlinkNotifyStop;
   readonly getUpdates?: WeixinIlinkGetUpdates;
   readonly sendText?: WeixinIlinkSendText;
+  readonly state?: WeixinIlinkStateStore;
   readonly contextTokens?: WeixinContextTokenStore;
   readonly sessionGuard?: IlinkSessionGuard;
 }
@@ -89,12 +89,14 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   readonly #resolveCredentials: (
     config: ResolvedWeixinIlinkConfig,
     metadata: IlinkClientMetadata,
+    state: WeixinIlinkStateStore,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   readonly #notifyStart: WeixinIlinkNotifyStart;
   readonly #notifyStop: WeixinIlinkNotifyStop;
   readonly #getUpdates: WeixinIlinkGetUpdates;
   readonly #sendText: WeixinIlinkSendText;
+  readonly #state: WeixinIlinkStateStore;
   readonly #contextTokens: WeixinContextTokenStore;
   readonly #sessionGuard: IlinkSessionGuard;
   readonly #metadata: IlinkClientMetadata;
@@ -125,7 +127,9 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     this.#notifyStop = options.notifyStop ?? notifyStop;
     this.#getUpdates = options.getUpdates ?? getUpdates;
     this.#sendText = options.sendText ?? sendMessageWeixin;
-    this.#contextTokens = options.contextTokens ?? new WeixinContextTokenStore(options.config.id);
+    this.#state = options.state
+      ?? new WeixinIlinkStateStore(options.config.id, options.config.dataDir);
+    this.#contextTokens = options.contextTokens ?? new WeixinContextTokenStore(this.#state);
     this.#sessionGuard = options.sessionGuard ?? new IlinkSessionGuard(options.config.id);
     this.#metadata = new IlinkClientMetadata({ botAgent: options.config.botAgent });
     this.client = new WeixinIlinkClient(
@@ -151,6 +155,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
       this.#creds = await this.#resolveCredentials(
         this.#options.config,
         this.#metadata,
+        this.#state,
         this.#loginAbort.signal,
       );
       this.#contextTokens.restore();
@@ -248,7 +253,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
       throw new Error(`missing context_token for peer ${target}`);
     }
 
-    const outboundDir = path.join(resolveStateDir(), 'media', 'outbound');
+    const outboundDir = this.#state.mediaDirectory('outbound');
     const wire = formatOutboundSegments(payload);
     const materialized = await materializeOutboundMedia(wire, outboundDir);
     const segments = Array.isArray(materialized) ? materialized : [materialized];
@@ -330,8 +335,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   async #pollLoop(abortSignal: AbortSignal): Promise<void> {
     if (!this.#creds?.botToken) return;
 
-    const endpointId = this.#options.config.id;
-    let getUpdatesBuf = loadSyncBuf(endpointId);
+    let getUpdatesBuf = this.#state.loadSyncBuf();
     let nextTimeoutMs = this.#options.config.longPollTimeoutMs;
     let consecutiveFailures = 0;
 
@@ -386,7 +390,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
         }
         if (nextBuf) {
           getUpdatesBuf = nextBuf;
-          saveSyncBuf(endpointId, getUpdatesBuf);
+          this.#state.saveSyncBuf(getUpdatesBuf);
         }
       } catch (err) {
         if (abortSignal.aborted) return;
@@ -469,7 +473,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (buffer.length > maxBytes) {
       throw new Error(`media exceeds max size ${maxBytes}`);
     }
-    const dir = path.join(resolveStateDir(), 'media', subdir);
+    const dir = this.#state.mediaDirectory(subdir);
     fs.mkdirSync(dir, { recursive: true });
     const resolvedMime = contentType ?? sniffMimeFromBuffer(buffer);
     const ext = originalFilename
@@ -503,7 +507,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   }
 
   #sweepInboundMedia(): void {
-    const dir = path.join(resolveStateDir(), 'media', 'inbound');
+    const dir = this.#state.mediaDirectory('inbound');
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });

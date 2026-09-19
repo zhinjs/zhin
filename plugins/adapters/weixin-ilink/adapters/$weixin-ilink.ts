@@ -5,7 +5,7 @@ import { defineAdapter } from 'zhin.js/adapter';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
   resolveWeixinIlinkConfig,
-  type WeixinIlinkAdapterConfig,
+  type WeixinIlinkEndpointConfig,
 } from '../src/protocol.js';
 import { weixinIlinkRuntimeStateToken } from '../src/weixin-ilink-runtime-state.js';
 
@@ -18,7 +18,7 @@ export type {
   WeixinIlinkSendText,
 } from '../src/endpoint.js';
 
-export default defineAdapter<WeixinIlinkAdapterConfig>({
+export default defineAdapter<WeixinIlinkEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['typing'],
   // 所有媒体（url 下载 / base64 落盘 / 本地 path）统一物化后走 CDN 上传（sendWeixinMediaFile），

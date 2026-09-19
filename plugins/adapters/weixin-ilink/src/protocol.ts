@@ -3,24 +3,20 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
 
-import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef, type ConversationRef, type Segment } from '@zhin.js/im-contract';
 import { bodyFromItemList } from './weixin-inbound.js';
 import { DEFAULT_API_BASE_URL, DEFAULT_CDN_BASE_URL } from './ilink-meta.js';
 import type { WeixinMessage } from './ilink-types.js';
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface WeixinIlinkAdapterConfig {
-  readonly id?: string;
+/** One expanded Weixin iLink endpoint configuration produced by AdapterIndex. */
+export interface WeixinIlinkEndpointConfig {
+  readonly id: string;
   readonly botAgent?: string;
   readonly baseUrl?: string;
   readonly cdnBaseUrl?: string;
   readonly longPollTimeoutMs?: number;
   readonly botToken?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: weixin-ilink`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedWeixinIlinkConfig> & {
-    readonly context?: string;
-  }>;
+  readonly dataDir?: string;
 }
 
 export interface ResolvedWeixinIlinkConfig {
@@ -31,9 +27,8 @@ export interface ResolvedWeixinIlinkConfig {
   readonly cdnBaseUrl: string;
   readonly longPollTimeoutMs: number;
   readonly botToken?: string;
+  readonly dataDir: string;
 }
-
-export type WeixinIlinkEndpointConfig = ResolvedWeixinIlinkConfig;
 
 export interface WeixinWireSegment {
   readonly type: string;
@@ -54,30 +49,27 @@ export type WeixinMessageWithMedia = WeixinMessage & {
 const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
 
 export function resolveWeixinIlinkConfig(
-  config: WeixinIlinkAdapterConfig = {},
+  config: WeixinIlinkEndpointConfig,
 ): ResolvedWeixinIlinkConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'weixin-ilink');
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.WEIXIN_ILINK_BOT_NAME
-    || 'weixin-ilink-bot';
-  const botToken = pickCredential(
-    typeof config.botToken === 'string' ? config.botToken.trim() : config.botToken,
-    typeof entry?.botToken === 'string' ? entry.botToken.trim() : entry?.botToken,
-    process.env.WEIXIN_ILINK_TOKEN?.trim(),
-  );
+  const id = typeof config.id === 'string' ? config.id.trim() : '';
+  if (!/^[A-Za-z0-9_.-]+$/u.test(id)) {
+    throw new TypeError('Weixin iLink endpoint id must use letters, numbers, dot, underscore, or hyphen');
+  }
+  const botToken = typeof config.botToken === 'string'
+    ? config.botToken.trim() || undefined
+    : undefined;
+  const dataDir = config.dataDir?.trim() || 'data/weixin-ilink';
   // No throw here: missing botToken is resolved later by resolveCredentials()
   // (sidecar credentials file / QR login) during endpoint.start().
   return {
     context: 'weixin-ilink',
     id,
-    botAgent: config.botAgent ?? entry?.botAgent,
-    baseUrl: config.baseUrl ?? entry?.baseUrl ?? DEFAULT_API_BASE_URL,
-    cdnBaseUrl: config.cdnBaseUrl ?? entry?.cdnBaseUrl ?? DEFAULT_CDN_BASE_URL,
-    longPollTimeoutMs: config.longPollTimeoutMs
-      ?? entry?.longPollTimeoutMs
-      ?? DEFAULT_LONG_POLL_TIMEOUT_MS,
+    botAgent: config.botAgent,
+    baseUrl: config.baseUrl ?? DEFAULT_API_BASE_URL,
+    cdnBaseUrl: config.cdnBaseUrl ?? DEFAULT_CDN_BASE_URL,
+    longPollTimeoutMs: config.longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS,
     botToken,
+    dataDir,
   };
 }
 
