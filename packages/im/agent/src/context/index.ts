@@ -41,7 +41,6 @@ export {
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
-  clearAgentsInstructionCache,
 } from './agents-instruction.js';
 
 export { resolveModel, resolveModelCandidates } from './model-resolver.js';

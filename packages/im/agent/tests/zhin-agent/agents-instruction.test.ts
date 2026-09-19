@@ -5,9 +5,7 @@ import * as os from 'node:os';
 import {
   collectAgentsInstructionChain,
   buildAgentsEnvelopeContext,
-  clearAgentsInstructionCache,
 } from '../../src/context/agents-instruction.js';
-import { clearBootstrapCache } from '../../src/bootstrap.js';
 
 describe('agents-instruction', () => {
   let tmpDir: string;
@@ -16,15 +14,11 @@ describe('agents-instruction', () => {
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-agents-'));
     prevCwd = process.cwd();
-    clearAgentsInstructionCache();
-    clearBootstrapCache();
   });
 
   afterEach(() => {
     process.chdir(prevCwd);
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    clearAgentsInstructionCache();
-    clearBootstrapCache();
   });
 
   it('缺文件时返回空链', async () => {

@@ -8,10 +8,9 @@
  *   TOOLS.md   — tool usage guidelines (read-only)
  *
  * Key design:
- *   1. mtime-based file cache to avoid redundant disk reads
- *   2. Missing files are silently skipped
- *   3. Per-file and total size limits to prevent prompt injection
- *   4. Unified ContextFile format for system prompt injection
+ *   1. Missing files are silently skipped
+ *   2. Per-file and total size limits prevent prompt injection
+ *   3. Unified ContextFile format for system prompt injection
  */
 
 import * as fs from 'node:fs';
@@ -65,38 +64,15 @@ export interface ContextFile {
 }
 
 // ============================================================================
-// 文件缓存（基于 mtime）
+// 文件读取
 // ============================================================================
 
-const fileCache = new Map<string, { content: string; mtimeMs: number }>();
-
-/**
- * 读文件，带 mtime 缓存
- */
-async function readFileWithCache(filePath: string): Promise<string> {
+async function readContextFile(filePath: string): Promise<string> {
   try {
-    const stats = await fs.promises.stat(filePath);
-    const mtimeMs = stats.mtimeMs;
-    const cached = fileCache.get(filePath);
-
-    if (cached && cached.mtimeMs === mtimeMs) {
-      return cached.content;
-    }
-
-    const content = await fs.promises.readFile(filePath, 'utf-8');
-    fileCache.set(filePath, { content, mtimeMs });
-    return content;
+    return await fs.promises.readFile(filePath, 'utf-8');
   } catch {
-    fileCache.delete(filePath);
     throw new Error(`Failed to read file: ${filePath}`);
   }
-}
-
-/**
- * 清除文件缓存（热重载时调用）
- */
-export function clearBootstrapCache(): void {
-  fileCache.clear();
 }
 
 // ============================================================================
@@ -134,7 +110,7 @@ export async function loadBootstrapFiles(
     let found = false;
     for (const filePath of [rootPath, dataPath]) {
       try {
-        const content = await readFileWithCache(filePath);
+        const content = await readContextFile(filePath);
         result.push({ name, path: filePath, content, missing: false });
         found = true;
         break; // 找到就不再搜索
@@ -255,7 +231,7 @@ export async function loadContextFiles(
 
     let content: string;
     try {
-      content = (await readFileWithCache(filePath)).trim();
+      content = (await readContextFile(filePath)).trim();
     } catch {
       continue; // 缺失/不可读：静默跳过
     }

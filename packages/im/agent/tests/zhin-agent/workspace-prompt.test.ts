@@ -2,22 +2,17 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as os from 'node:os';
-import {
-  resolveWorkspacePrompt,
-  clearWorkspacePromptCache,
-} from '../../src/prompt/workspace-prompt.js';
+import { resolveWorkspacePrompt } from '../../src/prompt/workspace-prompt.js';
 
 describe('workspace-prompt', () => {
   let tmpDir: string;
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-ws-prompt-'));
-    clearWorkspacePromptCache();
   });
 
   afterEach(() => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
-    clearWorkspacePromptCache();
   });
 
   it('包内 fallback 可加载 orchestrator', () => {

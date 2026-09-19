@@ -158,12 +158,10 @@ export type {
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
-  clearAgentsInstructionCache,
 } from './context/agents-instruction.js';
 export type { AgentsInstructionEntry } from './context/agents-instruction.js';
 export {
   resolveWorkspacePrompt,
-  clearWorkspacePromptCache,
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
@@ -449,7 +447,7 @@ export * from './workroom/assignment-authority-grant-repository.js';
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
   buildStableContextFiles, buildStableBootstrapSection,
-  loadSoulPersona, loadToolsGuide, loadAgentsMemory, clearBootstrapCache,
+  loadSoulPersona, loadToolsGuide, loadAgentsMemory,
   STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
 export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';

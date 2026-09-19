@@ -458,6 +458,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove dead classic Agent file discovery and Group Suite module-global fallbacks so Plugin Runtime features and owner-scoped resources are the only tool, skill, database, and transient-state authorities under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-process-global-prompt-caches.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove process-global prompt and workspace caches plus their reset APIs so context assembly always reads the current owner workspace without hidden cross-runtime state under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
