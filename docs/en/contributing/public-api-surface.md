@@ -58,7 +58,7 @@ Three tiers:
 
 | API | Stability | Source Package | One-liner |
 |-----|-----------|----------------|-----------|
-| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | Generation-scoped Tool/Skill/SubAgent/MCP/Hook capability registration; owns no Workroom Run/Task/Assignment state |
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | Generation-scoped Skill/SubAgent/MCP/Hook support resources; Tools enter `ToolIndex` only through `context.addTool()` |
 
 ### Removed Legacy Hooks
 

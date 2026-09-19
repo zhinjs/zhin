@@ -149,7 +149,6 @@ only registers providers and projects capabilities; it does not expose direct `e
 | Class | Purpose |
 |---|---|
 | `BuiltinToolService` | Adapts QuestionPort interaction for custom Host compositions |
-| `ToolRegistryAsService` | Explicitly bridges a generation-owned `ToolRegistry` |
 | `SkillRegistryAsService` | Explicitly bridges a generation-owned `SkillRegistry` and reads Skill documents |
 
 The standard Agent Host does not publish these adapters globally. Built-in Tool and Skill
@@ -161,7 +160,7 @@ capabilities continue to use Feature projection, preserving one visibility and l
 |---|---|
 | Regular Tool or Skill in an npm plugin | Feature directory or `addTool` / `addSkill` |
 | Manifest ownership and file-level HMR | Feature |
-| Root Host remote provider or existing registry | Capability Seam |
+| Root Host remote provider | Capability Seam |
 | Bypassing approval or direct execution by name | Unsupported; use a Turn capability |
 
 See also: [Plugin Model](./plugin-model.md) · [Generation Lifecycle](./generation-lifecycle.md) ·

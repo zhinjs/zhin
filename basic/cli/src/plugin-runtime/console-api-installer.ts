@@ -221,7 +221,7 @@ function createAgentRuntimeResolver(
       },
       bindings: () => listIntrospectionBindings(projectRoot),
       tools: () => {
-        // 静态目录（snapshot ToolIndex，约定式 tools/*.ts）+ orchestrator 回合内装载的实时工具（去重）
+        // ToolIndex is the sole generation-owned Tool catalog.
         const seen = new Map<string, Record<string, unknown>>();
         const snap = getSnapshot?.();
         if (snap) {
@@ -237,17 +237,6 @@ function createAgentRuntimeResolver(
                 description: tool.description ?? '',
               });
             }
-          }
-        }
-        const introspection = resolveAgentIntrospection(getSnapshot);
-        if (introspection) {
-          for (const tool of introspection.listTools()) {
-            if (tool.hidden || seen.has(tool.name)) continue;
-            seen.set(tool.name, {
-              name: tool.name,
-              source: 'agent',
-              description: (tool as { description?: string }).description ?? '',
-            });
           }
         }
         return [...seen.values()];

@@ -508,7 +508,7 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
 |----------|----------|----------|------------|
 | Agent Core | `src/core/` | agent | **委托** `@zhin.js/ai` `agentLoop`；禁止自有 LLM 迭代（ADR 0009） |
-| Tool System | `src/tool/` | agent | 组合 `AgentResourceHub` 能力注册表、builtin 与 MCP 生命周期；不拥有 Workroom 状态 |
+| Tool System | `src/tool/` | agent | 消费 generation `ToolIndex`、builtin 与 MCP capability；不拥有第二套 Tool 注册表或 Workroom 状态 |
 | Session System | `src/session/` | agent | origin-neutral session store + explicit transport-provided `ApprovalPort` |
 | Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-resource-hub egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |

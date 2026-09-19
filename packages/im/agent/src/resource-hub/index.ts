@@ -1,8 +1,7 @@
 /**
- * AgentResourceHub — the central AI capability resource registry.
+ * AgentResourceHub — generation-owned Agent support resources.
  *
- * Manages five resource types:
- *   - tools: AgentTool / ZhinTool / Tool
+ * Manages four resource types:
  *   - skills: Skill
  *   - subagents: SubAgentDef / AgentPreset
  *   - mcps: McpServerEntry (MCP client connections)
@@ -12,12 +11,9 @@
  *
  * Usage:
  *   const agent = root.inject('agent') as AgentResourceHub;
- *   agent.addTool(myTool);
  *   agent.addSkill(mySkill, { agentId: 'cs-bot' });
  */
 
-import type { AgentTool } from '@zhin.js/ai';
-import { ToolRegistry, type ToolLike } from './tool-registry.js';
 import { SkillRegistry } from './skill-registry.js';
 import { SubAgentRegistry } from './subagent-registry.js';
 import { McpRegistry, type McpConnection } from './mcp-registry.js';
@@ -30,7 +26,6 @@ import type {
   Skill,
   SubAgentDef,
   AgentPreset,
-  Tool,
   McpServerEntry,
   AIHook,
   AIHookEvent,
@@ -39,8 +34,6 @@ import type {
 
 /** @public @experimental Plugin-facing generation-scoped Agent capability registry. */
 export class AgentResourceHub {
-  /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
-  readonly tools = new ToolRegistry();
   /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
   readonly skills = new SkillRegistry();
   /** @internal Runtime-owned storage; use the AgentResourceHub methods below. */
@@ -58,16 +51,6 @@ export class AgentResourceHub {
   constructor() {
     this.agentStreamBus = createAgentStreamBus();
     this.agentStreamBus.registerSink(createHookStreamSink(this.hooks));
-  }
-
-  // ── Tool shortcuts ──
-
-  addTool(tool: Tool | AgentTool | ToolLike, scope?: ResourceScope, source?: string): () => void {
-    return this.tools.addTool(tool, scope, source);
-  }
-
-  removeTool(name: string, scope?: ResourceScope): boolean {
-    return this.tools.removeTool(name, scope);
   }
 
   // ── Skill shortcuts ──
@@ -132,10 +115,6 @@ export class AgentResourceHub {
 
   // ── Query shortcuts ──
 
-  getToolsForAgent(agentId?: string): AgentTool[] {
-    return agentId ? this.tools.getForAgent(agentId) : this.tools.getAll();
-  }
-
   getSkillsForAgent(agentId?: string): Skill[] {
     return agentId ? this.skills.getForAgent(agentId) : this.skills.getAll();
   }
@@ -152,7 +131,6 @@ export class AgentResourceHub {
 
   /** @internal Generation Host lifecycle; plugins dispose only their returned registrations. */
   dispose(): void {
-    this.tools.dispose();
     this.skills.dispose();
     this.subagents.dispose();
     this.mcps.dispose();
@@ -163,9 +141,7 @@ export class AgentResourceHub {
 
 // Re-export everything consumers need
 export { ResourceRegistry } from './resource-registry.js';
-export { ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo, canAccessTool } from './tool-registry.js';
-export type { ToolInput } from './tool-registry.js';
-export { normalizeTool, sharedToolSelection } from './tool-selection.js';
+export { canAccessTool, normalizeTool, sharedToolSelection } from './tool-selection.js';
 export type { CollectToolsContext } from './tool-selection.js';
 export { SkillRegistry } from './skill-registry.js';
 export { SubAgentRegistry } from './subagent-registry.js';

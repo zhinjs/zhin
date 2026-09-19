@@ -140,7 +140,7 @@ packages/im/agent/src/
   prompt/        系统提示词、assembly、workspace 模板
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
-  resource-hub/  Tool / Skill capability orchestration（不拥有 Workroom facts）
+  resource-hub/  Skill / SubAgent / MCP / Hook support resources
   workroom/      Workroom Kernel — versioned Journal + pure replay/decision
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
@@ -148,7 +148,7 @@ packages/im/agent/src/
 
 普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；标准 Host 已装配 generation-owned Scheduler、Executor、Reviewer authority/view 与 Sponsor typed control，但不会发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作。Reviewer verdict 只能由独立 claimed Reviewer Assignment 的认证提交产生；Sponsor decision 只能经 Catalog/Profile 绑定的认证 typed control 进入，普通 discussion 不能改变状态。缺少受治理 Acceptance Projection source、可信 Risk Header、typed Check、Artifact/Effect facts 或 Context provider 时会形成可恢复的持久 blocker，而不是降级验收。
 
-`AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
+`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 或 Workroom Run/Task/Assignment 状态。Tool 只通过 `agent/tools/$*.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排只能通过 Workroom Kernel 与专用 typed ports。
 
 Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
 `subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
@@ -243,7 +243,7 @@ useContext('ai', async (ai) => {
 | IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentSystem` |
-| 能力资源 | `AgentResourceHub`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
+| 支持资源 | `AgentResourceHub`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
 | MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
 | 限流 | `RateLimiter` |
 | 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
@@ -259,7 +259,7 @@ declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
       ai: AIService              // 会话、Provider、ZhinAgent、runAgent 等
-      agent: AgentResourceHub    // 工具/技能/子代理/MCP 条目/Hook 注册表
+      agent: AgentResourceHub    // 技能/子代理/MCP 条目/Hook 注册表
     }
   }
 }
@@ -268,7 +268,7 @@ declare module '@zhin.js/core' {
 | Context | 用途 |
 |---------|------|
 | `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
-| `ctx.agent` | `AgentResourceHub` 能力注册：`ctx.agent.addTool(...)`、`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；内置注册走 `root.inject('agent')`，不承担 Workroom 状态编排 |
+| `ctx.agent` | `AgentResourceHub` 支持资源注册：`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；Tool 使用 `context.addTool()`，不承担 Workroom 状态编排 |
 
 主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
 

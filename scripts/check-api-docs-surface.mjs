@@ -49,7 +49,7 @@ const expectedSurface = new Map([
     'AIHook', 'AIHookEvent', 'AIHookHandler', 'JsonSchema', 'McpConnection',
     'McpPrompt', 'McpResource', 'McpServerEntry', 'Message', 'PropertySchema',
     'ResourceScope', 'Skill', 'SubAgentDef', 'Tool', 'ToolParametersSchema',
-    'AIHookEventType', 'ToolApprovalMode', 'ToolApprovalPolicy', 'ToolLike',
+    'AIHookEventType', 'ToolApprovalMode', 'ToolApprovalPolicy',
     'ToolScope', 'ToolToModelOutputFn', 'ToolToModelOutputInput',
   ]],
   ['zhin.js/command', [
@@ -95,10 +95,10 @@ for (const [module, expected] of expectedSurface) {
 const expectedMembers = new Map([
   ['@zhin.js/host-http.HttpHost', ['address', 'listRoutes', 'route', 'ws']],
   ['zhin.js/agent.AgentResourceHub', [
-    'addAgentPreset', 'addHook', 'addMcp', 'addSkill', 'addSubAgent', 'addTool',
+    'addAgentPreset', 'addHook', 'addMcp', 'addSkill', 'addSubAgent',
     'connectMcp', 'createHookEvent', 'disconnectMcp', 'getHooksForEvent',
-    'getSkillsForAgent', 'getSubAgentsForAgent', 'getToolsForAgent', 'removeHook',
-    'removeMcp', 'removeSkill', 'removeSubAgent', 'removeTool', 'triggerHook',
+    'getSkillsForAgent', 'getSubAgentsForAgent', 'removeHook',
+    'removeMcp', 'removeSkill', 'removeSubAgent', 'triggerHook',
   ]],
   ['zhin.js/core/runtime.Message', [
     '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',

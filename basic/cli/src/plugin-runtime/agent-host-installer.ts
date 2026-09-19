@@ -873,11 +873,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         },
       }),
       introspection: Object.freeze({
-        listTools: () => resourceHub.tools.getAll().map((tool) => Object.freeze({
-          name: tool.name,
-          description: tool.description,
-          hidden: 'hidden' in tool && tool.hidden === true,
-        })),
         listMcpServers: () => resourceHub.mcps.getAll().map((entry) => Object.freeze({
           name: entry.name,
           connected: resourceHub.mcps.isConnected(entry.name),

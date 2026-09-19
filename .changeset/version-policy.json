@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-resource-hub-tool-registry.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unused ResourceHub Tool registry and its public compatibility surface so generation ToolIndex remains the only Agent Tool authority under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "centralize-tool-input-schema.md",
       "packages": [
         "@zhin.js/tool",

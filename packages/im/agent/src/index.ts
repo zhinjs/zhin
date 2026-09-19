@@ -1,8 +1,9 @@
 /**
- * AI Agent orchestration hub.
+ * AI Agent runtime and generation-owned support resources.
  *
- * Provides AgentResourceHub as the central registry for
- * tools, skills, subagents, mcps, and hooks.
+ * Agent Tools are owned by `@zhin.js/tool` and published through the
+ * generation ToolIndex. AgentResourceHub owns skills, subagents, MCP
+ * connections, and hooks.
  * @module @zhin.js/agent
  */
 
@@ -188,7 +189,6 @@ export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
 export { capabilitySeamToken } from './seam/index.js';
 export { BuiltinToolService } from './builtins/builtin-tool-service.js';
 export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
-export { ToolRegistryAsService } from './tool/tool-registry-as-service.js';
 
 export { SubagentSystem } from './subagent/index.js';
 export { SubagentRuntime } from './subagent/subagent-runtime.js';
@@ -615,7 +615,6 @@ export type { ISceneManagement, SceneManagementMethodSpec } from './common-adapt
 export { AgentResourceHub } from './resource-hub/index.js';
 export {
   ResourceRegistry,
-  ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo,
   canAccessTool,
   normalizeTool, sharedToolSelection,
   SkillRegistry,
@@ -625,7 +624,7 @@ export {
   createAIHookEvent,
 } from './resource-hub/index.js';
 export type {
-  ToolInput, McpConnection,
+  McpConnection,
   ResourceScope, ResourceEntry,
   Tool, Message, SenderRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,

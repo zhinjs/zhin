@@ -116,7 +116,7 @@ function testAgentHost(): AgentHostPort {
         usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
       }),
     },
-    introspection: { listTools: () => [], listMcpServers: () => [] },
+    introspection: { listMcpServers: () => [] },
     console: { sessionTree: {} as never, orchestration: {} as never, assistant: null },
   };
 }

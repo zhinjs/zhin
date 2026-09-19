@@ -58,7 +58,7 @@
 
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
-| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Tool/Skill/SubAgent/MCP/Hook 能力注册；不拥有 Workroom Run/Task/Assignment 状态 |
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Skill/SubAgent/MCP/Hook 支持资源；Tool 只通过 `context.addTool()` 进入 `ToolIndex` |
 
 ### Removed Legacy Hooks
 

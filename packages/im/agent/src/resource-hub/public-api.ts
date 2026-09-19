@@ -13,7 +13,6 @@ export type {
   ToolToModelOutputInput,
 } from '@zhin.js/ai';
 export type { McpConnection } from './mcp-registry.js';
-export type { ToolLike } from './tool-registry.js';
 export type {
   AgentPreset,
   AIHook,

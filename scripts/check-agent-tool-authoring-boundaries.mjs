@@ -80,6 +80,32 @@ if (agentManifest.exports?.['./tools']) {
   report(path.join(repoRoot, 'packages/im/agent/package.json'), 'removed ./tools export restored');
 }
 
+const agentIndexPath = path.join(repoRoot, 'packages/im/agent/src/index.ts');
+const agentIndex = fs.readFileSync(agentIndexPath, 'utf8');
+for (const removedToolRegistryApi of [
+  'ToolRegistryAsService',
+  'ToolRegistry',
+  'ZhinTool',
+  'defineTool',
+  'extractParamInfo',
+]) {
+  const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
+  if (match) {
+    report(
+      agentIndexPath,
+      `removed ResourceHub Tool API restored: ${removedToolRegistryApi}`,
+      lineOf(agentIndex, match.index),
+    );
+  }
+}
+for (const removedRegistryPath of [
+  'packages/im/agent/src/resource-hub/tool-registry.ts',
+  'packages/im/agent/src/tool/tool-registry-as-service.ts',
+]) {
+  const target = path.join(repoRoot, removedRegistryPath);
+  if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');
+}
+
 const coreManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages/im/core/package.json'), 'utf8'));
 if (coreManifest.exports?.['./tool-zod']) {
   report(path.join(repoRoot, 'packages/im/core/package.json'), 'removed ./tool-zod export restored');

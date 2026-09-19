@@ -417,7 +417,7 @@ describe('generation-owned Agent introspection', () => {
   it('resolves the read-only port only from the snapshot root resource', () => {
     const root = rootPluginId();
     const token = { id: tokenId('zhin.host.agent') };
-    const introspection = { listTools: () => [], listMcpServers: () => [] };
+    const introspection = { listMcpServers: () => [] };
     const snapshot = {
       root,
       resources: new Map([[root, new Map([[token.id, { introspection }]])]]),

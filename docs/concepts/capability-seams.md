@@ -146,7 +146,6 @@ Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直
 | 类 | 用途 |
 |---|---|
 | `BuiltinToolService` | 把 QuestionPort 的交互能力适配为 ToolService；仅用于自定义 Host 组合 |
-| `ToolRegistryAsService` | 显式桥接 generation-owned `ToolRegistry`；不会由 Agent Host 自动全局发布 |
 | `SkillRegistryAsService` | 显式桥接 generation-owned `SkillRegistry`，并读取 Skill 文档 |
 
 这些适配器不会自动注册。框架内置 Tool / Skill 仍走 Feature projection，避免形成第二套可见性和
@@ -158,7 +157,7 @@ Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直
 |---|---|
 | npm 插件中的普通 Tool / Skill | Feature 约定目录或 `addTool` / `addSkill` |
 | 需要 manifest、owner 关系和文件级 HMR | Feature |
-| Root Host 接入远程 Provider 或已有 registry | Capability Seam |
+| Root Host 接入远程 Provider | Capability Seam |
 | 需要绕过审批或直接按名称执行 | 不支持；使用 Turn capability |
 
 相关文档：[插件模型](./plugin-model.md) · [Generation 生命周期](./generation-lifecycle.md) ·
