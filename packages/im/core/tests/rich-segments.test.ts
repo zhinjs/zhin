@@ -4,6 +4,9 @@ import {
   HtmlSegment,
   MarkdownSegment,
   QrcodeSegment,
+  RichSegment,
+  RichSegmentRegistry,
+  RICH_SEGMENT_MODE,
   TtsSegment,
   markdownToPlainText,
   resolveRichSegments,
@@ -103,6 +106,10 @@ describe('RichSegment classes', () => {
 });
 
 describe('resolveRichSegments', () => {
+  it('publishes an immutable default policy', () => {
+    expect(Object.isFrozen(DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY)).toBe(true);
+  });
+
   it('applies default policy (qrcode image, html text)', async () => {
     const resolved = await resolveRichSegments(
       [segment.qrcode('url'), segment.html({ html: '<div>Hi</div>' })],
@@ -156,19 +163,8 @@ describe('segment factories return RichSegment instances', () => {
   });
 });
 
-describe('richSegmentRegistry extension', () => {
-  it('registers custom kind and resolves policy mode', async () => {
-    const {
-      RichSegment,
-      registerRichSegmentKind,
-      richSegmentRegistry,
-      resetBuiltinRichSegmentKindsForTests,
-      resolveRichSegments,
-      RICH_SEGMENT_MODE,
-    } = await import('../src/built/rich-segments/index.js');
-
-    resetBuiltinRichSegmentKindsForTests();
-
+describe('RichSegmentRegistry', () => {
+  it('builds an isolated immutable kind catalog', async () => {
     class EchoSegment extends RichSegment<{ label: string }> {
       readonly segmentType = 'echo';
       async render(mode: string) {
@@ -177,21 +173,28 @@ describe('richSegmentRegistry extension', () => {
       }
     }
 
-    registerRichSegmentKind({
+    const registry = new RichSegmentRegistry([{
       kind: 'echo',
       defaultMode: RICH_SEGMENT_MODE.TEXT,
       modes: [RICH_SEGMENT_MODE.ORIGIN, RICH_SEGMENT_MODE.TEXT, 'shout'],
       wrap: (data) => new EchoSegment({ label: String(data.label ?? '') }),
-    });
-
-    const resolved = await resolveRichSegments(
-      { type: 'echo', data: { label: 'hi' } },
-      { echo: 'shout' },
-    );
+    }]);
+    const rich = registry.wrap('echo', { label: 'hi' });
+    const resolved = await rich.render(registry.resolveMode({ echo: 'shout' }, 'echo'));
     expect(resolved).toMatchObject({ type: 'text', data: { text: '[echo:shout] hi' } });
-    expect(richSegmentRegistry.has('echo')).toBe(true);
+    expect(registry.has('echo')).toBe(true);
+    expect(Object.isFrozen(registry.list())).toBe(true);
+  });
 
-    resetBuiltinRichSegmentKindsForTests();
+  it('rejects duplicate kinds during construction', () => {
+    const definition = {
+      kind: 'echo',
+      defaultMode: 'text',
+      modes: ['text'],
+      wrap: () => new TtsSegment({ text: 'echo' }),
+    };
+    expect(() => new RichSegmentRegistry([definition, definition]))
+      .toThrow('Duplicate rich segment kind: echo');
   });
 
   it('falls back to kind defaultMode for invalid policy mode', async () => {

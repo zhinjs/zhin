@@ -65,7 +65,7 @@ Dispatcher 作用域内的回复润色逻辑，但仍必须流经 `before.sendMe
 _避免使用_：send shortcut、adapter override
 
 **HTML Segment**:
-出站 `type: 'html'` 等 Rich Segment：registry + policy + optional capability loader；增 kind 用 `registerRichSegmentKind`，增转码能力用 `registerRichSegmentCapabilityLoader`。
+出站 `type: 'html'` 等 Rich Segment：不可变 kind registry + Adapter policy + 每次发送的 optional capability context；新增 kind 属于 Core 出站契约变更。
 _避免使用_：双格式 text+html 回退；Endpoint 层重复做 semantic 转换
 
 **Primary Config**:

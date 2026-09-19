@@ -1,6 +1,6 @@
 import type { MessageElement, SendContent } from '../../types.js';
 import { isRichSegment, richSegmentKind } from './base.js';
-import { richSegmentRegistry } from './registry.js';
+import { richSegmentRegistry } from './builtins.js';
 import { type OutboundRichSegmentPolicy, type RichSegmentRenderContext, RICH_SEGMENT_MODE } from './types.js';
 import { CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
 function asArray(content: SendContent): (string | MessageElement)[] {

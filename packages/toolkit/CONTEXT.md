@@ -26,8 +26,8 @@ _避免使用_：与 zhin.js JSX 插件组件混用
 
 ## 关系
 
-- **Speech Pipeline** 经 `registerRichSegmentCapabilityLoader('speech')` 注入 Rich Segment 渲染上下文；未安装时 `TtsSegment` 降级 `text`。
-- **Html Renderer** 同理注册 `html-renderer` loader；`registerAiTextAsImageOutput` 另挂 `before.sendMessage` 做 AI 纯文本转图。
+- **Speech Pipeline** 由 Rich Segment 渲染上下文按 `speech` capability ID 懒加载；未安装时 `TtsSegment` 降级 `text`。
+- **Html Renderer** 同理由渲染上下文按 `html-renderer` ID 懒加载；`registerAiTextAsImageOutput` 另挂 `before.sendMessage` 做 AI 纯文本转图。
 - **Scaffold Wizard** 的 `diagnoseOptionalPeers` 读取 `speech:`、`htmlRenderer:`、`ai.multimodal.audio.strategy` 与 adapter context 列表。
 - **Satori HTML** 输出交给 **Html Renderer** 或业务自行 `render()`；不绕过 `Adapter.sendMessage`。
 

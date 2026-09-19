@@ -120,6 +120,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove duplicate Core permission implementations and process-global platform permit state under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "freeze-rich-segment-runtime.md",
+      "packages": [
+        "@zhin.js/core"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove process-global Rich Segment mutation APIs under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

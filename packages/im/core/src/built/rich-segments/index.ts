@@ -3,10 +3,7 @@ import './builtins.js';
 export * from './types.js';
 export * from './registry.js';
 export * from './capabilities.js';
-export {
-  DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY,
-  resetBuiltinRichSegmentKindsForTests,
-} from './builtins.js';
+export { DEFAULT_OUTBOUND_RICH_SEGMENT_POLICY } from './builtins.js';
 export * from './base.js';
 export * from './qrcode-segment.js';
 export * from './html-segment.js';

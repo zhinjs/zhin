@@ -110,32 +110,19 @@ return segment.markdown('# Title\n\nBody')
 - policy 为 `html: 'text'` 时等价于 **`coerceHtmlSegmentsToText`** / **`htmlToFallbackText`**。
 - 日志预览：`[html-card]`、`[qrcode]`、`[markdown]` + 摘要（前 80 字）。
 
-#### 扩展新 Rich Segment（长期方案）
+#### Rich Segment 边界
 
-内置 kind 通过 **`richSegmentRegistry`** 注册；optional 能力通过 **`registerRichSegmentCapabilityLoader`** 注入（与 `@zhin.js/html-renderer` 同模式）。
+Rich Segment kind 是 Core 出站契约的一部分，由不可变 registry 一次性构造。可选渲染能力由每次发送创建的 render context 按已知 ID 懒加载；插件不修改进程级 kind 或 loader 注册表。新增 kind 需要同时定义语义段、渲染模式和 Adapter policy，因此作为 Core 契约变更提交。
 
 ```typescript
-import {
-  RichSegment,
-  registerRichSegmentKind,
-  registerRichSegmentCapabilityLoader,
-  RICH_SEGMENT_MODE,
-  segment,
-} from '@zhin.js/core';
+import { Adapter } from '@zhin.js/core';
 
-// 1. 内置 capability：speech（@zhin.js/speech）已注册，tts kind 已内置
-// 可选：注册 ffmpeg 等
-registerRichSegmentCapabilityLoader('media-pipeline', async (opts) => {
-  const { createMediaPipeline } = await import('@zhin.js/media-pipeline');
-  return createMediaPipeline(opts.getConfig?.());
-});
-
-// 2. 使用内置 segment.tts（Adapter policy 决定 audio/text/origin）
+// 使用内置 segment.tts；Adapter policy 决定 audio/text/origin
 // segment.tts({ text: '你好' })
 class MyAdapter extends Adapter {
   static override outboundRichSegmentPolicy = {
     tts: 'audio',
-    qrcode: 'image', // 其余 kind 用 registry 默认值
+    qrcode: 'image',
   };
 }
 ```

@@ -6,16 +6,18 @@ import type {
 export class RichSegmentRegistry {
   readonly #kinds = new Map<string, RichSegmentKindDefinition>();
 
-  register(definition: RichSegmentKindDefinition): void {
-    if (this.#kinds.has(definition.kind)) {
-      throw new Error(`Rich segment kind already registered: ${definition.kind}`);
+  constructor(definitions: readonly RichSegmentKindDefinition[]) {
+    for (const definition of definitions) {
+      if (this.#kinds.has(definition.kind)) {
+        throw new Error(`Duplicate rich segment kind: ${definition.kind}`);
+      }
+      if (!definition.modes.includes(definition.defaultMode)) {
+        throw new Error(
+          `Rich segment ${definition.kind}: defaultMode "${definition.defaultMode}" not in modes`,
+        );
+      }
+      this.#kinds.set(definition.kind, freezeDefinition(definition));
     }
-    if (!definition.modes.includes(definition.defaultMode)) {
-      throw new Error(
-        `Rich segment ${definition.kind}: defaultMode "${definition.defaultMode}" not in modes`,
-      );
-    }
-    this.#kinds.set(definition.kind, definition);
   }
 
   has(kind: string): boolean {
@@ -26,8 +28,8 @@ export class RichSegmentRegistry {
     return this.#kinds.get(kind);
   }
 
-  list(): RichSegmentKindDefinition[] {
-    return [...this.#kinds.values()];
+  list(): readonly RichSegmentKindDefinition[] {
+    return Object.freeze([...this.#kinds.values()]);
   }
 
   buildDefaultPolicy(): OutboundRichSegmentPolicy {
@@ -35,7 +37,7 @@ export class RichSegmentRegistry {
     for (const def of this.#kinds.values()) {
       policy[def.kind] = def.defaultMode;
     }
-    return policy;
+    return Object.freeze(policy);
   }
 
   resolveMode(policy: OutboundRichSegmentPolicy, kind: string): string {
@@ -55,16 +57,15 @@ export class RichSegmentRegistry {
     return def.wrap(data);
   }
 
-  /** 测试隔离：清空后需重新 register builtins */
-  clearForTests(): void {
-    this.#kinds.clear();
-  }
 }
 
 export const RICH_SEGMENT_FALLBACK_MODE = 'origin';
 
-export const richSegmentRegistry = new RichSegmentRegistry();
-
-export function registerRichSegmentKind(definition: RichSegmentKindDefinition): void {
-  richSegmentRegistry.register(definition);
+function freezeDefinition(
+  definition: RichSegmentKindDefinition,
+): Readonly<RichSegmentKindDefinition> {
+  return Object.freeze({
+    ...definition,
+    modes: Object.freeze([...definition.modes]),
+  });
 }

@@ -1,7 +1,7 @@
 import type { MessageElement } from '../../types.js';
 import type { ContentChainLogFields } from '@zhin.js/logger';
 
-/** 内置 kind 常量（外部可增删，registry 为 SSOT） */
+/** 内置 kind 常量（registry 为 SSOT） */
 export const BUILTIN_RICH_SEGMENT_KINDS = {
   QRCODE: 'qrcode',
   HTML: 'html',
@@ -11,6 +11,14 @@ export const BUILTIN_RICH_SEGMENT_KINDS = {
 
 export type BuiltinRichSegmentKind =
   (typeof BUILTIN_RICH_SEGMENT_KINDS)[keyof typeof BUILTIN_RICH_SEGMENT_KINDS];
+
+const BUILTIN_RICH_SEGMENT_KIND_VALUES: readonly string[] = Object.freeze(
+  Object.values(BUILTIN_RICH_SEGMENT_KINDS),
+);
+
+export function isBuiltinRichSegmentKind(value: string): value is BuiltinRichSegmentKind {
+  return BUILTIN_RICH_SEGMENT_KIND_VALUES.includes(value);
+}
 
 /** 通用 mode 名；各 kind 在 registry 中声明支持的子集 */
 export const RICH_SEGMENT_MODE = {
@@ -52,7 +60,7 @@ export interface SpeechPipelineForRichSegment {
 export type RichSegmentCapabilityId = 'html-renderer' | 'speech' | 'media-pipeline' | string;
 
 export interface RichSegmentRenderContext {
-  /** 按 id 懒加载能力（core 或 optional 包 register loader） */
+  /** 按 id 懒加载当前渲染上下文提供的能力 */
   resolveCapability: <T>(id: RichSegmentCapabilityId) => Promise<T | undefined>;
   /** 可选：rich_segment stage 结构化日志 */
   logContentChain?: (fields: ContentChainLogFields) => void;
