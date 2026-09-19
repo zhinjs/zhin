@@ -48,7 +48,7 @@ _避免使用_：tool collection、tool filtering
 在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。每次执行只接收 canonical Tool Execution Context（origin / principal / session / trace / signal / policy），不得读取 IM Message 第二参数。执行前必须统一经过 `runTurnToolPolicies`；文件 CRUD、敏感路径和 Bash 命令不得在 Tool 实现内另建策略链。网络 transport 的每个真实 hop 必须消费同一 context policy，禁止依赖 ALS 或执行域特判。
 _避免使用_：tool glue、runtime helper
 
-文件 Tool 的 workspace authority 属于 Turn policy。策略门面必须 canonicalize 现存目标、symlink 与不存在写目标的最近父目录，并把批准后的绝对路径交给 ToolFeature；实现不得重新读取 `process.cwd()`、展开 `~` 或用 shell 模拟 glob/grep。
+文件 Tool 的 workspace authority 属于 Turn policy。策略门面必须 canonicalize 现存目标、symlink 与不存在写目标的最近父目录，并把批准后的绝对路径交给当前 generation 的 Tool capability；实现不得重新读取 `process.cwd()`、展开 `~` 或用 shell 模拟 glob/grep。
 
 网络 Tool 只使用 Turn-scoped `TurnNetworkClient`。它必须逐 redirect hop 授权 URL、解析并拒绝所有非公网地址，再把 HTTPS SNI/Host 保持为原域名而将 socket 固定连接到已审核 IP；禁止先检查后交给另一套 DNS resolver、`redirect: follow`、ALS network policy 或工具内手写 SSRF 分支。
 
@@ -60,8 +60,8 @@ TODO capability 以 canonical session key 为唯一地址，由 `TodoStore` 哈�
 Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。
 _避免使用_：tool service 真相源、双注册、registry bag
 
-**ToolFeature** / **SkillFeature**:
-Core IM 中的能力 Feature；插件与文件发现在装配期写入此处。
+**Tool / Skill Feature projection**:
+`@zhin.js/tool` / `@zhin.js/skill` 把插件 setup 与显式约定入口投影成 generation-owned `ToolIndex` / `SkillIndex`。
 _避免使用_：Orchestrator 直写、回合 SSOT
 
 **AgentFeature**:
@@ -73,7 +73,7 @@ Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具
 _避免使用_：已连接工具池、MCP host server
 
 **Capability Ingress**:
-把 Capability Feature（及常驻核心）按需装入 **Agent Resource Hub** 的 seam；Boot 装 reserved/builtin，入站按 `canAccessTool`（platforms / scopes / permissions）装载并按可达投影缓存；换出上一轮 on-demand 条目（有活动回合持有时延迟到 lease 释放再清除）。实现类为 `FeatureCapabilityIngress`（`src/ingress/`），与 `@zhin.js/agent/runtime` 的 Plugin Runtime `CapabilityIngress`（`src/plugin-runtime/`）区分。
+`src/plugin-runtime/capability-ingress.ts` 直接读取当前 generation 的 Tool / Skill / Agent / MCP projection，执行 platform / scope / permission 准入，并生成不可变的回合能力快照。回合执行不经过经典 Core registry 或可变 bridge。
 _避免使用_：双写 bridge、mount 全量同步、作者侧第二套 adapter/scene/role 声明语言
 
 **Tool Ingress**:
@@ -482,7 +482,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 ## 示例对话
 
 > **开发者：** “我可以直接注册一个模型函数作为 **AgentTool** 吗？”
-> **领域专家：** “装配期写入 **ToolFeature**（或 `defineAgentTool` 发现）。**Capability Ingress** 再装入 **Agent Resource Hub**；**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
+> **领域专家：** “用 `defineAgentTool` 或 `setup({ addTool })` 写入 Tool Feature；Plugin Runtime 投影生成 `ToolIndex`，**Capability Ingress** 从当前 generation 读取并完成准入，再交给回合执行权威。”
 
 ## 已标记歧义
 

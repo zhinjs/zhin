@@ -703,12 +703,3 @@ export {
   MCPFeature,
 } from './features/index.js';
 export type { McpFeatureEntry } from './features/index.js';
-export {
-  FeatureCapabilityIngress,
-  createFeatureCapabilityIngress,
-} from './ingress/index.js';
-export type {
-  CapabilityFeatureBundle,
-  IngressTurnContext,
-  IngressTurnLease,
-} from './ingress/index.js';

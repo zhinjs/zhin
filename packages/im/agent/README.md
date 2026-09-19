@@ -44,7 +44,7 @@ runner 或其他 generation。这是迁移完成后的唯一权威契约，不�
 `asPrivate` 取得内部状态。根入口也不再导出 classic `ToolRuntime`、builtin policy resolver、
 数据库激活或运行时内省函数，避免插件作者依赖生产 `TurnToolRuntime` 之外的第二套执行权威。
 
-`ask_user` 也是 generation-owned ToolFeature：工具只拿当前 Turn 的 `QuestionPort`，
+`ask_user` 也是 generation-owned Tool capability：工具只拿当前 Turn 的 `QuestionPort`，
 Root-owned `InteractionRouter` 用 canonical session + authenticated subject 匹配后续回复。
 IM adapter 在 middleware/command/Agent fallback 前 claim 回复；Router 不保存 `Message`、
 Adapter 或过期回复句柄。HTTP/A2A 等入口若要支持交互，必须显式提供自己的 QuestionPort；

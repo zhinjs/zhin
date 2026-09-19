@@ -116,6 +116,8 @@ Three tiers:
 |------|-----------|--------|-----------|
 | Legacy `usePlugin()` / `getPlugin()` plugin system | `removed` | Deleted from source and the public surface | The only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / classic `CommandFeature` | `removed` | Deleted from source and the public surface | Commands use `defineCommand` and Runtime `CommandIndex` |
+| Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
+| Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
 | `Adapter` class / Core `Endpoint` type | `deprecated` | Exported from the root facade only for classic-runtime compatibility | New adapters import `defineAdapter` and the Plugin Runtime `Endpoint` from `zhin.js/adapter` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |

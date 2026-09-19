@@ -12,7 +12,7 @@
  * 发现逻辑已拆分到 discovery/skills.ts、agents.ts、tools.ts
  */
 
-import type { ToolInput } from '@zhin.js/core';
+import type { Tool } from '@zhin.js/core';
 import { getDataDir } from './discovery/utils.js';
 import { createReadFileTool } from './builtin/read-file-tool.js';
 import { createWriteFileTool } from './builtin/write-file-tool.js';
@@ -36,10 +36,10 @@ export interface BuiltinToolsOptions {
 /**
  * 创建所有内置系统工具
  */
-export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
+export function createBuiltinTools(options: BuiltinToolsOptions): Tool[] {
   const DATA_DIR = getDataDir();
 
-  const tools: ToolInput[] = [];
+  const tools: Tool[] = [];
 
   tools.push(createReadFileTool());
   tools.push(createAnalyzeMediaTool());

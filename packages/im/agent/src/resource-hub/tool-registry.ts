@@ -2,7 +2,7 @@
  * ToolRegistry — unified tool management with common/specialized support.
  *
  * Owns registry state and delegates tool semantics to tool-selection:
- *   - core/built/tool.ts (ToolFeature, ZhinTool, permission checking)
+ *   - Tool normalization and permission checking
  *   - ai/tool-filter.ts + tool-search-cache.ts (relevance filtering)
  */
 

@@ -122,7 +122,7 @@ Loading state is persisted per session (`DeferredToolSessionSnapshot`), with an 
 
 The Anthropic SDK channel marks unloaded tools with `deferLoading`; other channels only deliver the loaded set.
 
-`ask_user` is a framework-provided, generation-owned ToolFeature rather than Plugin Prompt middleware.
+`ask_user` is a framework-provided, generation-owned Tool capability rather than Plugin Prompt middleware.
 It requests input through the current Turn's `QuestionPort` and matches replies by canonical session and authenticated subject. Plugin tools that need the same interaction must depend on `ToolExecutionContext.question` and handle an absent port. Unattended Turns, including Schedule, do not receive this port and must not fall back to global Message, Adapter, or user queues.
 
 ## skills and agents/$*.agent.md

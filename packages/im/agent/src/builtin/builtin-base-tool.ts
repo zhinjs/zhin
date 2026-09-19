@@ -1,5 +1,5 @@
 /**
- * 内置系统工具基类 — 产出与 {@link ToolFeature} / {@link normalizeTool} 兼容的 {@link Tool}，
+ * 内置系统工具基类 — 产出可由 {@link normalizeTool} 消费的 {@link Tool}，
  * 便于将核心逻辑写在可单测的 `run` 中（见 PRD #389 / issue #390）。
  */
 import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
@@ -9,7 +9,7 @@ export abstract class BuiltinBaseTool {
   abstract readonly description: string;
   abstract readonly parameters: ToolParametersSchema;
 
-  /** 与 ZhinTool 链式 API 对齐 */
+  /** Tool catalog metadata. */
   readonly tags: string[] = [];
   readonly keywords: string[] = [];
   readonly kind?: string;
@@ -24,7 +24,7 @@ export abstract class BuiltinBaseTool {
   abstract run(args: Record<string, unknown>, commMessage?: Message): Promise<ToolResult>;
 
   /**
-   * 注册到 ToolFeature；带 `source` 以便 `normalizeTool` 识别为 IM 工具形态并绑定 context。
+   * 带 `source` 以便 `normalizeTool` 识别为 IM 工具形态并绑定 context。
    */
   toTool(): Tool {
     const tool: Tool = {

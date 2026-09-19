@@ -132,7 +132,7 @@ export class AIService {
   }
 
   /**
-   * IM / ZhinAgent 流水线用的常驻 Tool 实例（未经 normalize；与 ToolFeature 工具合并后由 collectRelevantTools 绑定 context）。
+   * IM / ZhinAgent 流水线用的常驻 Tool 实例（未经 normalize；由 collectRelevantTools 绑定 context）。
    */
   getResidentToolsAsTools(): Tool[] {
     return [createWebSearchTool()];

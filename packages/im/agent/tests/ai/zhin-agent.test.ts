@@ -4,8 +4,8 @@
  * 测试 collectTools 逻辑、handleMessage 端到端流程、会话管理等
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AgentEventBus, ZhinAgent } from '@zhin.js/agent';
-import { SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
+import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
+import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 
@@ -114,7 +114,7 @@ describe('ZhinAgent', () => {
 
   describe('依赖注入', () => {
     it('configure({ skillRegistry }) 应正常工作', () => {
-      const registry = new SkillFeature();
+      const registry = new SkillRegistry();
       expect(() => agent.configure({ skillRegistry: registry })).not.toThrow();
     });
 
@@ -259,7 +259,7 @@ describe('ZhinAgent', () => {
 
   describe('collectTools 去重', () => {
     it('应优先使用 Skill 中的工具', async () => {
-      const registry = new SkillFeature();
+      const registry = new SkillRegistry();
       
       // 注册一个 Skill 包含 tool_a
       registry.add({
@@ -268,7 +268,7 @@ describe('ZhinAgent', () => {
         tools: [makeTool('tool_a', '来自 skill 的工具', { keywords: ['天气'] })],
         keywords: ['天气'],
         pluginName: 'p1',
-      }, 'p1');
+      }, undefined, 'p1');
 
       agent.configure({ skillRegistry: registry });
 

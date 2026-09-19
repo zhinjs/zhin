@@ -262,13 +262,11 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
  * 统一的 Tool 定义
  * 可同时用于：
  * - AI Agent 工具调用
- * - 自动生成 Command
  * - MCP 工具暴露
  * 
  * @example
  * ```typescript
- * // 使用 defineTool 获得类型安全
- * const weatherTool = defineTool<{ city: string }>({
+ * const weatherTool: Tool<{ city: string }> = {
  *   name: 'weather',
  *   description: '查询天气',
  *   parameters: {
@@ -281,9 +279,8 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
  *   execute: async (args) => {
  *     return `${args.city} 的天气是晴天`;  // args.city 有类型提示
  *   },
- * });
+ * };
  * 
- * plugin.addTool(weatherTool);  // 无需类型断言
  * ```
  */
 /**
@@ -310,14 +307,6 @@ export type FileRole = 'owner' | 'admin' | 'user';
  */
 export type ToolResult = string | void | null | undefined | { text: string } | { data: unknown; format?: string } | Record<string, unknown> | unknown[];
 
-/** 工具关联的聊天命令配置（可选；需自行 addCommand 注册） */
-export interface ToolCommandConfig {
-  pattern: string;
-  alias?: string[];
-  usage?: string | string[];
-  examples?: string | string[];
-}
-
 /**
  * 统一的 Tool 定义（支持泛型参数类型推断）。
  *
@@ -325,15 +314,15 @@ export interface ToolCommandConfig {
  *
  * @example
  * ```typescript
- * // 无泛型 — 兼容旧代码
+ * // 无泛型
  * const tool: Tool = { name: 'ping', ... };
  *
- * // 有泛型 — 通过 defineTool 获得类型安全
- * const tool = defineTool<{ city: string }>({
+ * // 有泛型
+ * const tool: Tool<{ city: string }> = {
  *   name: 'weather',
  *   parameters: { type: 'object', properties: { city: { type: 'string', description: '城市' } }, required: ['city'] },
  *   execute: async (args) => args.city, // args.city 有类型提示
- * });
+ * };
  * ```
  */
 export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
@@ -363,10 +352,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 触发关键词（用户消息包含这些词时优先选择此工具） */
   keywords?: string[];
   
-  /** 
-   * 权限要求（旧版，保留兼容）
-   * 执行此工具需要的权限列表
-   */
+  /** 执行此工具需要满足的权限列表。 */
   permissions?: string[];
 
   /** Per-tool approval policy; `on-risk` remains fail-closed at Agent boundaries. */
@@ -403,27 +389,8 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
   kind?: string;
 
-  /**
-   * 可选：关联的 IM 命令模式（历史字段；需自行 addCommand 注册聊天命令）。
-   * `false` 表示明确不暴露为命令。
-   */
-  command?: ToolCommandConfig | false;
 }
 
-
-export namespace Tool {
-  /**
-   * 参数信息
-   */
-  export interface ParamInfo {
-    name: string;
-    type: string;
-    required: boolean;
-    description?: string;
-    default?: any;
-    enum?: any[];
-  }
-}
 
 // ============================================================================
 // 插件清单（plugin.yml）

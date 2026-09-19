@@ -274,6 +274,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unmounted classic database registry, module-global lifecycle hook, and inactive online bot_id compatibility migration in favor of the generation-owned Database Host."
+    },
+    {
+      "changeset": "remove-classic-tool-skill-authority.md",
+      "packages": [
+        "@zhin.js/core",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove unmounted classic Tool and Skill registries plus their unused mutable Agent ingress after generation-owned Feature projections became the sole runtime authority."
     }
   ]
 }

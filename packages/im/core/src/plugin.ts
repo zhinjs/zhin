@@ -332,7 +332,6 @@ export class Plugin extends PluginBase implements PluginLike {
     // #middlewares includes the terminal pass-through middleware.
     const userMiddlewareCount = this.#middlewares.length - 1;
     if (userMiddlewareCount > 0) result.push({ name: 'middleware', count: userMiddlewareCount });
-    // Tool count is now tracked via ToolFeature, not Plugin#tools
     return result;
   }
 
