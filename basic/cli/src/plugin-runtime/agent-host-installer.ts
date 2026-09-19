@@ -121,13 +121,8 @@ import {
   digestWorkroomCatalogProjectBinding,
   assertAcceptanceProjectionDataGovernanceAuthority,
   createWorkroomDataLifecycleHumanIngressControlPort,
-  installWorkroomProfileAuthorityResources,
-  createCatalogWorkroomProfilePublisherAuthority,
-  createWorkroomProfileGenerationView,
   digestWorkroomProfileCatalogProject,
   WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
-  JournalWorkroomRunProfilePinAuthority,
-  KernelPlanAdmissionRunProfilePinWriter,
   type AgentHostWorkroomProfileControlPort,
   type WorkroomPlanningBootstrapCommand,
   type WorkroomPlanningSetupStatus,
@@ -145,7 +140,6 @@ import {
   FileWorkroomAcceptanceProjectionRepository,
   FileWorkroomKernelRiskHeaderRepository,
   ImmutableWorkroomTypedCheckRegistry,
-  PinnedProfileWorkroomAcceptanceProjectionSource,
   WorkroomAcceptanceProfileProjectionRuntime,
   WorkroomAuthenticatedArtifactRiskProducer,
   WorkroomArtifactRiskHeaderResolver,
@@ -293,6 +287,7 @@ import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinat
 import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
 import { WorkroomDataGovernanceCoordinator } from './workroom-data-governance-coordinator.js';
+import { WorkroomProfileCoordinator } from './workroom-profile-coordinator.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -618,45 +613,24 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         effectComposition.runtime.start();
       },
     });
-    if (!options.snapshots) {
-      throw new Error('Workroom Profile authority requires the process-owned SnapshotReader');
-    }
-    const runProfilePinAuthority = new JournalWorkroomRunProfilePinAuthority({
-      generation,
-      journal: workroomJournal,
-    });
-    const profileAuthority = createCatalogWorkroomProfilePublisherAuthority({
-      catalog: workroomCatalog,
-      trustedPackPublishers: options.workroomTrustedPackPublishers ?? [],
-      decisionDirectory: join(workroomStateRoot, 'workroom-profile-authority-decisions'),
-    });
-    const profileComposition = installWorkroomProfileAuthorityResources({
+    const profileCoordinator = new WorkroomProfileCoordinator({
       projectRoot: options.projectRoot,
+      stateRoot: workroomStateRoot,
       generation,
       signal,
-      snapshots: options.snapshots,
       resources,
-      authority: profileAuthority,
-      runPinAuthority: runProfilePinAuthority,
-      resolveGenerationView: snapshot => {
-        const authority = createWorkroomGenerationAuthoritySnapshotFromRuntime(
-          snapshot,
-          listGenerationBindings(),
-        );
-        return createWorkroomProfileGenerationView({
-          generation: authority.generation,
-          tools: authority.tools.map(tool => ({ id: tool.name, digest: tool.digest })),
-          skills: authority.skills.map(skill => ({ id: skill.name, digest: skill.digest })),
-          agents: authority.agents.map(agent => ({ id: agent.id, digest: agent.digest })),
-        });
-      },
+      snapshots: options.snapshots,
+      journal: workroomJournal,
+      catalog: workroomCatalog,
+      trustedPackPublishers: options.workroomTrustedPackPublishers,
+      listBindings: listGenerationBindings,
     });
-    const projectProfiles = profileComposition.profiles;
-    const profileRunPinWriter = new KernelPlanAdmissionRunProfilePinWriter({
-      authority: runProfilePinAuthority,
+    const {
+      composition: profileComposition,
       profiles: projectProfiles,
-      runPins: profileComposition.runPins,
-    });
+      runPinWriter: profileRunPinWriter,
+      acceptanceSource: acceptanceProfileSource,
+    } = profileCoordinator;
     if (options.selfDelivery) {
       if (options.selfDelivery.deliveryProvider) {
         if (resources.has(workroomDeliveryProviderToken)) throw new Error('Self-delivery Delivery provider conflicts with existing Host provider');
@@ -671,13 +645,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         pins: profileRunPinWriter,
         signal,
       }));
-    }
-    const acceptanceProfileSource = new PinnedProfileWorkroomAcceptanceProjectionSource({
-      profiles: projectProfiles,
-      catalog: workroomCatalog,
-    });
-    if (!resources.has(workroomAcceptanceProjectionSourceAuthorityToken)) {
-      resources.provide(workroomAcceptanceProjectionSourceAuthorityToken, acceptanceProfileSource);
     }
     const trustedPackPublishers = new Set(options.workroomTrustedPackPublishers ?? []);
     const resolveDisclosureBootstrap = (definition: WorkroomDefinition | undefined) =>
