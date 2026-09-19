@@ -292,7 +292,7 @@ async function main() {
 
     // 显示 AI 配置信息
     if (options.ai?.enabled) {
-      const agentProvider = options.ai.agentProvider ?? options.ai.defaultProvider;
+      const agentProvider = options.ai.agentProvider;
       console.log('');
       console.log(chalk.blue('🤖 AI 智能体配置：'));
       console.log(`  ${chalk.gray('提供商:')} ${chalk.cyan(agentProvider || 'N/A')}`);

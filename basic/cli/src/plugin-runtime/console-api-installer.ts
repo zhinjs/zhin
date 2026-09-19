@@ -33,7 +33,6 @@ import {
   type ConsoleEventHub,
   type HttpHost,
   type RuntimeConsolePage,
-  type RuntimeEndpointSummary,
 } from '@zhin.js/host-http';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import type { LoginAssist } from '@zhin.js/core';
@@ -1756,9 +1755,11 @@ export type ConsoleStatsData = {
   readonly runtime: 'node' | 'unknown';
 };
 
+type EndpointStatusView = Pick<ReturnType<ImRuntime['listEndpoints']>[number], 'status'>;
+
 export function buildConsoleStats(
   pluginCount: number,
-  endpoints: readonly Pick<RuntimeEndpointSummary, 'status'>[],
+  endpoints: readonly EndpointStatusView[],
 ): ConsoleStatsData {
   const status = getSystemStatusData();
   const heapUsed = typeof status.memory.heapUsed === 'number' ? status.memory.heapUsed : 0;
@@ -1785,7 +1786,7 @@ export type ConsolePluginFeature = {
 
 /**
  * listEndpoints 返回形态：无 owner，用 adapter 平台类型（`@scope/adapter-icqq` → `icqq`）归属插件。
- * 与 ImRuntime.listEndpoints / RuntimeEndpointSummary 对齐。
+ * 与 ImRuntime.listEndpoints 的当前输出对齐。
  */
 export type ConsoleEndpointHint = {
   readonly name: string;

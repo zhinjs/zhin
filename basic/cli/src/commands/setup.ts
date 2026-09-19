@@ -238,8 +238,7 @@ export const setupCommand = new Command('setup')
       if (depsChanged || featuresChanged) {
         console.log(chalk.gray('  ✓ 已更新 package.json 依赖/features 清单，请运行 pnpm install'));
         if (wizardOptions.ai?.enabled) {
-          const agentProvider = wizardOptions.ai.agentProvider ?? wizardOptions.ai.defaultProvider;
-          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(agentProvider)}`));
+          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(wizardOptions.ai.agentProvider)}`));
         }
       }
 

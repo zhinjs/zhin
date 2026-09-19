@@ -16,6 +16,13 @@ const canonicalConsumers = [
   'packages/toolkit/scaffold-wizard/src/project-config-plan.ts',
   'packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts',
 ];
+const canonicalAiConsumers = [
+  'basic/cli/src/commands/onboard.ts',
+  'basic/cli/src/commands/setup.ts',
+  'packages/toolkit/create-zhin/src/index.ts',
+  'packages/toolkit/scaffold-wizard/src/ai.ts',
+  'packages/toolkit/scaffold-wizard/src/project-deps.ts',
+];
 
 const violations = [];
 for (const relative of canonicalConsumers) {
@@ -28,12 +35,19 @@ for (const relative of canonicalConsumers) {
   }
 }
 
+for (const relative of canonicalAiConsumers) {
+  const source = fs.readFileSync(path.join(repoRoot, relative), 'utf8');
+  if (/\bdefaultProvider\b/u.test(source)) {
+    violations.push(`${relative}: normal setup and diagnosis paths must use agentProvider or ai.agents`);
+  }
+}
+
 if (violations.length > 0) {
   console.error(`Runtime configuration boundary check failed:\n${violations.map((item) => `- ${item}`).join('\n')}`);
   process.exitCode = 1;
 } else {
   console.log(
     'Runtime configuration boundary check passed '
-    + '(plugins is an instanceKey map; legacy arrays remain migration/diagnostic input only).',
+    + '(canonical Plugin and AI configuration only; legacy fields remain explicit migration input).',
   );
 }

@@ -104,8 +104,8 @@ export type RuntimeConsoleRpcContext = {
   getSchema?(pluginName?: string): Promise<unknown>;
   getAllSchemas?(): Promise<Record<string, unknown>>;
   /** Optional Adapter endpoint Console surface (Sandbox / Remote Console). */
-  listEndpoints?(): Promise<readonly RuntimeEndpointSummary[]>;
-  getEndpoint?(adapter: string, endpointKey: string): Promise<RuntimeEndpointSummary | null>;
+  listEndpoints?(): Promise<readonly ConsoleEndpointSummary[]>;
+  getEndpoint?(adapter: string, endpointKey: string): Promise<ConsoleEndpointSummary | null>;
   sendEndpointMessage?(input: RuntimeEndpointSendInput): Promise<{ messageId: string }>;
   /** Optional Database host surface (CLI wires DatabaseHost from plugin-runtime). */
   dbInfo?(): Promise<RuntimeDatabaseInfo> | RuntimeDatabaseInfo;
@@ -121,11 +121,6 @@ export type RuntimeConsoleRpcContext = {
   /** Extended RPC surface（cron/schedule、endpoint 社交/inbox），fullScope 由 authScope 推导。 */
   extended?: Omit<ConsoleRpcExtendedCtx, 'fullScope'>;
 };
-
-export type RuntimeEndpointPhase = NonNullable<ConsoleEndpointSummary['phase']>;
-
-/** @deprecated Prefer `ConsoleEndpointSummary` from `@zhin.js/console-protocol`. */
-export type RuntimeEndpointSummary = ConsoleEndpointSummary;
 
 export type RuntimeDatabaseInfo = {
   readonly dialect: string | null;

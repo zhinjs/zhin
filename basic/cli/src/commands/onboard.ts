@@ -160,7 +160,6 @@ function printSummary(state: NonNullable<Awaited<ReturnType<typeof loadExistingS
   }
   if (state.config.ai?.enabled !== false) {
     const provider = state.config.ai?.agents?.zhin?.provider
-      ?? state.config.ai?.defaultProvider
       ?? '未指定';
     console.log(chalk.gray('  AI: ') + chalk.cyan(provider));
   }

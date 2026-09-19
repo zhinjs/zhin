@@ -61,19 +61,3 @@ export function loadActivityFeedbackServiceConfig(
     ...raw,
   };
 }
-
-/** @deprecated 使用 ActivityFeedbackPolicy */
-export function resolveActivityFeedbackForTarget(
-  service: ActivityFeedbackServiceConfig,
-  platform: string,
-  endpointKey: string,
-): ActivityFeedbackConfig | undefined {
-  if (service.enabled === false) {
-    return { enabled: false };
-  }
-  return mergeActivityFeedbackLayers(
-    service.defaults,
-    service.platforms?.[platform],
-    service.endpoints?.[`${platform}:${endpointKey}`],
-  );
-}

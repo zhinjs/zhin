@@ -46,7 +46,7 @@ export {
   listAIDependencyNames,
   formatAIDependencyHint,
   isAiEnabledInConfig,
-  resolveDefaultProviderFromConfig,
+  resolveAgentProviderFromConfig,
   getRequiredAIDependenciesForConfig,
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,

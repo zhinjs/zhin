@@ -5,8 +5,6 @@ import { formatEnvValue } from './env.js';
 export interface AISetupConfig {
   enabled: boolean;
   agentProvider?: string;
-  /** @deprecated Use agentProvider. Kept for one compatibility cycle. */
-  defaultProvider?: string;
   providers?: Record<string, {
     sdk?: string;
     apiKey?: string;
@@ -134,9 +132,8 @@ function defaultModelForProvider(driver: string): string {
   return entry?.defaultModel ?? '';
 }
 
-export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'defaultProvider' | 'providers'>): string {
+export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'providers'>): string {
   return config.agentProvider
-    ?? config.defaultProvider
     ?? Object.keys(config.providers ?? {})[0]
     ?? 'openai';
 }

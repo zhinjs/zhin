@@ -67,18 +67,6 @@ describe('create-zhin ai config', () => {
     expect(toml).not.toContain('defaultProvider')
   })
 
-  it('accepts legacy defaultProvider input without emitting it', () => {
-    const json = `{${generateAIConfigJSON({
-      enabled: true,
-      defaultProvider: 'ollama',
-      providers: { ollama: { host: 'http://127.0.0.1:11434' } },
-    })}}`
-    const parsed = JSON.parse(json)
-
-    expect(parsed.ai.defaultProvider).toBeUndefined()
-    expect(parsed.ai.providers.ollama.sdk).toBe('ollama')
-    expect(parsed.ai.agents.zhin.provider).toBe('ollama')
-  })
 })
 
 describe('openai-compatible providers baseUrl', () => {

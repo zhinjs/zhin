@@ -3,6 +3,18 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-deprecated-runtime-aliases.md",
+      "packages": [
+        "@zhin.js/scaffold-wizard",
+        "@zhin.js/host-http",
+        "@zhin.js/service-activity-feedback",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove deprecated public aliases and require the canonical contracts under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "name-package-contracts.md",
       "packages": [
         "@zhin.js/runtime"

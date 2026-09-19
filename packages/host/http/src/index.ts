@@ -55,7 +55,6 @@ export {
   type RuntimeConsoleRpcMessage,
   type RuntimeConsoleRpcReply,
   type RuntimeEndpointSendInput,
-  type RuntimeEndpointSummary,
 } from './console-rpc.js';
 export {
   buildProjectFileTree,
