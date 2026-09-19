@@ -1,22 +1,17 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
 import middleware from '../middlewares/$repeater.ts';
 import statusCommand from '../commands/$repeater-status.ts';
 import {
-  getRepeaterEngine,
   RepeaterEngine,
-  resetRepeaterEngine,
   resolveGroupId,
   resolveRepeaterConfig,
 } from '../src/engine.js';
+import { repeaterEngineToken } from '../src/runtime.js';
 
 describe('@zhin.js/plugin-repeater', () => {
-  beforeEach(() => {
-    resetRepeaterEngine();
-  });
-
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('repeater');
   });
@@ -64,12 +59,18 @@ describe('@zhin.js/plugin-repeater', () => {
     engine.dispose();
   });
 
-  it('drops the shared singleton when disposed', () => {
-    const first = getRepeaterEngine();
-    expect(getRepeaterEngine()).toBe(first);
+  it('keeps engine state isolated between runtime owners', () => {
+    const first = new RepeaterEngine();
+    const second = new RepeaterEngine();
+    const config = resolveRepeaterConfig({ threshold: 2 });
+    const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo' };
+    first.tick({ ...base, sender: 'a' }, config);
+    first.tick({ ...base, sender: 'b' }, config);
+
+    expect(first.totalRepeats).toBe(1);
+    expect(second.totalRepeats).toBe(0);
     first.dispose();
-    const second = getRepeaterEngine();
-    expect(second).not.toBe(first);
+    second.dispose();
   });
 
   it('middleware wires runtime Message conversation into the engine (regression)', async () => {
@@ -78,6 +79,7 @@ describe('@zhin.js/plugin-repeater', () => {
     const replies: unknown[] = [];
     const next = vi.fn(async () => {});
     const handle = middleware.handle;
+    const engine = new RepeaterEngine();
     const makeContext = (senderId: string, kind: 'group' | 'private' = 'group') => ({
       input: {
         conversation: {
@@ -93,6 +95,10 @@ describe('@zhin.js/plugin-repeater', () => {
         },
       },
       config: { threshold: 3, cooldown: 1_000, maxLength: 200 },
+      use: (token: unknown) => {
+        expect(token).toBe(repeaterEngineToken);
+        return engine;
+      },
     }) as unknown as Parameters<typeof handle>[0];
 
     await handle(makeContext('a'), next);
@@ -109,6 +115,7 @@ describe('@zhin.js/plugin-repeater', () => {
     await handle(makeContext('d', 'private'), next);
     expect(next).toHaveBeenCalledTimes(3);
     expect(replies).toEqual(['echo']);
+    engine.dispose();
   });
 
   it('prunes cooldown entries by configured cooldown, not the default', () => {

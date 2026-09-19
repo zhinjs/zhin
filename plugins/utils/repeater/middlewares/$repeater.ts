@@ -1,10 +1,10 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 import {
-  getRepeaterEngine,
   resolveRepeaterConfig,
   type RepeaterConfig,
 } from '../src/engine.js';
+import { repeaterEngineToken } from '../src/runtime.js';
 
 /**
  * Runtime `Message` 是 conversation 原生：`conversation.kind/id` 直接喂给引擎
@@ -16,7 +16,7 @@ export default defineMiddleware<Message, RepeaterConfig>({
   target: 'inbound',
   async handle(context, next) {
     const config = resolveRepeaterConfig(context.config);
-    const engine = getRepeaterEngine();
+    const engine = context.use(repeaterEngineToken);
     const result = engine.tick({
       conversation: {
         kind: context.input.conversation.kind,

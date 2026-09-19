@@ -1,5 +1,6 @@
 import { definePlugin } from 'zhin.js';
-import { getRepeaterEngine } from './src/engine.js';
+import { RepeaterEngine } from './src/engine.js';
+import { repeaterEngineToken } from './src/runtime.js';
 
 export default definePlugin({
   name: 'repeater',
@@ -7,7 +8,8 @@ export default definePlugin({
     displayName: 'Repeater',
   },
   setup(context) {
-    const engine = getRepeaterEngine();
-    context.lifecycle.add(() => engine.dispose());
+    const engine = new RepeaterEngine();
+    context.resources.provide(repeaterEngineToken, engine);
+    return () => engine.dispose();
   },
 });

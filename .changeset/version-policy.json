@@ -579,6 +579,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global music selection and QR login maps with generation-owned runtime classes under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-repeater-engine.md",
+      "packages": [
+        "@zhin.js/plugin-repeater"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the process-wide Repeater singleton and reset helper with a generation-owned runtime resource under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
