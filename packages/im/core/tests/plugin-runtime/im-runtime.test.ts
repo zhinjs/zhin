@@ -57,7 +57,6 @@ import {
   type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
-import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -1660,7 +1659,6 @@ describe('IM Runtime', () => {
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
       middleware: false,
     });
-    resetKeyboardFallbackStoreForTests();
     const handled: string[] = [];
     fixture.im.registerInteractiveHandler('hub:', async (message) => {
       handled.push(message.content);
@@ -1699,7 +1697,7 @@ describe('IM Runtime', () => {
     expect(outbound.payload[1]?.data.text).toContain('1. 井字棋');
     expect(outbound.payload[1]?.data.text).toContain('2. 猜数字');
 
-    // 数字回跳 → 中央 fallback map → handler
+    // 数字回跳 → 当前 runtime 的 fallback map → handler
     const digit = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
@@ -1737,9 +1735,75 @@ describe('IM Runtime', () => {
     });
     expect(miss.matched).toBe(false);
 
-    resetKeyboardFallbackStoreForTests();
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it('scopes keyboard fallback state to its owning ImRuntime and generation', async () => {
+    const first = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const second = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const secondCalls: string[] = [];
+    const firstCalls: string[] = [];
+    first.im.registerInteractiveHandler('hub:', (message) => {
+      firstCalls.push(message.content);
+      return true;
+    });
+    second.im.registerInteractiveHandler('hub:', (message) => {
+      secondCalls.push(message.content);
+      return true;
+    });
+    const conversation = {
+      endpoint: { id: String(first.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'shared-room',
+    };
+
+    await first.im.send({
+      conversation,
+      requester: rootPluginId(),
+      content: raw([{
+        type: 'keyboard',
+        data: {
+          rows: [[{ id: 'g1', label: '井字棋', payload: 'hub:h1:g_ttt' }]],
+          fallback: { hint: '回复数字', map: { '1': 'hub:h1:g_ttt' } },
+        },
+      }]),
+    });
+
+    await expect(receive(second.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: false });
+    expect(secondCalls).toEqual([]);
+
+    await expect(receive(first.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: true, command: 'interactive' });
+    expect(firstCalls).toEqual(['1']);
+
+    const current = first.store.current;
+    first.store.commit(0, {
+      snapshot: snapshotState(current),
+      dispose: () => undefined,
+    });
+    await expect(receive(first.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: false });
+    expect(firstCalls).toEqual(['1']);
+
+    await first.adapters.stop();
+    await first.store.close();
+    await second.adapters.stop();
+    await second.store.close();
   });
 
   it('does not let a candidate interactive handler shadow the committed generation', async () => {

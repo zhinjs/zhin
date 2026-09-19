@@ -437,6 +437,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove process-global ScheduleEngine and Scheduler accessors so each Assistant runtime owns and disposes its scheduling state under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-interactive-runtime-state.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the duplicate classic interactive registry and process-global keyboard fallback store so each ImRuntime exclusively owns generation-scoped interaction state under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

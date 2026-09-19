@@ -359,7 +359,7 @@ describe('resolveOutboundInteractivePolicy', () => {
     }
   });
 
-  it('非法声明值忽略，未知平台回退 text（旧轨默认）', () => {
+  it('非法声明值忽略，未知平台回退 text', () => {
     expect(resolveOutboundInteractivePolicy(
       'adapter:test' as never,
       mockSnapshot({

@@ -86,7 +86,6 @@ import {
   resolveOutboundMediaPolicy,
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
-import { keyboardFallbackStore } from '../../built/interactive-segments/fallback-store.js';
 import {
   assertUserInteractionRequest,
   parseUserInteractionAnswer,
@@ -95,13 +94,7 @@ import {
   type UserInteractionProgress,
   type UserInteractionView,
 } from '../../built/user-interaction.js';
-import {
-  findRuntimeInteractiveHandler,
-  resolveRuntimeInteractivePayload,
-  runtimeInteractiveConversationKey,
-  type RegisteredRuntimeInteractiveHandler,
-  type RuntimeInteractiveHandler,
-} from './interactive.js';
+import { RuntimeInteractiveRouter } from './interactive.js';
 
 const logger = getLogger('im');
 
@@ -204,9 +197,7 @@ export class ImRuntime implements OutboundMessageService {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
-  readonly #interactiveHandlers: Array<RegisteredRuntimeInteractiveHandler & {
-    readonly admission?: GenerationAdmissionGate;
-  }> = [];
+  readonly #interactive = new RuntimeInteractiveRouter<GenerationAdmissionGate>();
   readonly #interactionClaims = new Map<string, UserInteractionClaim>();
   readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
@@ -350,21 +341,19 @@ export class ImRuntime implements OutboundMessageService {
    * 注册 interactive action 回跳 handler（prefix 最长匹配；返回注销函数）。
    * 在 Command dispatch 之前路由：action 段 / 数字回跳 / 指令预填 payload。
    */
-  registerInteractiveHandler(prefix: string, handler: RuntimeInteractiveHandler): () => void {
+  registerInteractiveHandler(
+    prefix: string,
+    handler: (message: Message) => Promise<boolean> | boolean,
+  ): () => void {
     return this.#registerInteractiveHandler(prefix, handler);
   }
 
   #registerInteractiveHandler(
     prefix: string,
-    handler: RuntimeInteractiveHandler,
+    handler: (message: Message) => Promise<boolean> | boolean,
     admission?: GenerationAdmissionGate,
   ): () => void {
-    const entry = Object.freeze({ prefix, handler, admission });
-    this.#interactiveHandlers.push(entry);
-    return () => {
-      const index = this.#interactiveHandlers.indexOf(entry);
-      if (index >= 0) this.#interactiveHandlers.splice(index, 1);
-    };
+    return this.#interactive.register(prefix, handler, admission);
   }
 
   // ==========================================================================
@@ -379,7 +368,7 @@ export class ImRuntime implements OutboundMessageService {
     const key = this.#interactionConversationKey(message);
     const claim = this.#interactionClaims.get(key);
     if (!claim) return false;
-    claim.resolve(resolveRuntimeInteractivePayload(message) ?? message.content);
+    claim.resolve(this.#interactive.resolvePayload(message) ?? message.content);
     return true;
   }
 
@@ -1148,7 +1137,16 @@ export class ImRuntime implements OutboundMessageService {
           terminalEntered = true;
           let payload: unknown;
           try {
-            payload = await prepareOutboundPayload(envelope.payload, request.conversation, snapshot, true);
+            payload = await prepareOutboundPayload(
+              envelope.payload,
+              request.conversation,
+              snapshot,
+              (map) => this.#interactive.rememberFallback(
+                request.conversation,
+                snapshot.generation,
+                map,
+              ),
+            );
           } catch {
             receipt = rejectedReceipt('outbound_payload_rejected');
             return;
@@ -1228,7 +1226,7 @@ export class ImRuntime implements OutboundMessageService {
   }
 
   /**
-   * interactive 回跳分发（Command dispatch 之前）：action 段 / 中央 fallback
+   * interactive 回跳分发（Command dispatch 之前）：action 段 / owner fallback
    * 数字回跳 / 指令预填 payload → prefix 最长匹配 handler。
    */
   async #dispatchInteractive(
@@ -1236,15 +1234,7 @@ export class ImRuntime implements OutboundMessageService {
     requester: PluginId,
     admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult | undefined> {
-    if (this.#interactiveHandlers.length === 0) return undefined;
-    const payload = resolveRuntimeInteractivePayload(message);
-    if (!payload) return undefined;
-    const handler = findRuntimeInteractiveHandler(
-      this.#interactiveHandlers.filter((entry) => !entry.admission || entry.admission === admission),
-      payload,
-    );
-    if (!handler) return undefined;
-    const handled = await handler(message);
+    const handled = await this.#interactive.dispatch(message, admission);
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
@@ -1418,7 +1408,7 @@ async function prepareOutboundPayload(
   rendered: unknown,
   conversation: ConversationRef,
   snapshot: RuntimeSnapshot,
-  finalizeInteractive = false,
+  rememberInteractiveFallback?: (map: Record<string, string>) => void,
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
   const directHtml = isDirectHtmlConsumer(snapshot, adapter);
@@ -1431,14 +1421,11 @@ async function prepareOutboundPayload(
     : await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
       mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
     });
-  if (finalizeInteractive) {
+  if (rememberInteractiveFallback) {
     payload = applyOutboundInteractivePolicy(
       payload,
       resolveOutboundInteractivePolicy(adapter, snapshot),
-      (map) => keyboardFallbackStore.remember(
-        runtimeInteractiveConversationKey(conversation),
-        map,
-      ),
+      rememberInteractiveFallback,
     );
   }
   if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);

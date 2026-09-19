@@ -1,18 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { segment } from '../src/utils.js';
 import {
   resolveKeyboardSegments,
-  registerInteractiveHandler,
-  resetInteractiveHandlersForTests,
-  ensureInteractiveMiddleware,
   collectKeyboardFallbackMaps,
   getActionFromMessage,
   isActionMessage,
   actionSegment,
   stripInteractiveCommandText,
   resolvePayloadFromText,
-  keyboardFallbackStore,
-  resetKeyboardFallbackStoreForTests,
 } from '../src/built/interactive-segments/index.js';
 import { Message } from '../src/message.js';
 
@@ -42,20 +37,8 @@ describe('resolveKeyboardSegments', () => {
   });
 });
 
-describe('registerInteractiveHandler', () => {
-  beforeEach(() => resetInteractiveHandlersForTests());
-
-  it('matches longest prefix', async () => {
-    const calls: string[] = [];
-    registerInteractiveHandler('ttt:', async (msg) => {
-      calls.push(Message.actionPayload(msg) ?? '');
-      return true;
-    });
-    registerInteractiveHandler('ttt:bot:', async () => {
-      calls.push('bot');
-      return true;
-    });
-
+describe('action segments', () => {
+  it('reads action payloads', () => {
     const msg = Message.from(
       {},
       {
@@ -106,32 +89,6 @@ describe('stripInteractiveCommandText / resolvePayloadFromText', () => {
   });
 });
 
-
-describe('KeyboardFallbackStore（中央 fallback 存储）', () => {
-  beforeEach(() => resetKeyboardFallbackStoreForTests());
-
-  it('remember / mapFor / resolve 数字回跳', () => {
-    keyboardFallbackStore.remember('ch-1', { '1': 'hub:h1:g_ttt', '2': 'hub:h1:g_rps' });
-    expect(keyboardFallbackStore.mapFor('ch-1')).toEqual({ '1': 'hub:h1:g_ttt', '2': 'hub:h1:g_rps' });
-    expect(keyboardFallbackStore.resolve('ch-1', '2')).toBe('hub:h1:g_rps');
-    expect(keyboardFallbackStore.resolve('ch-1', '9')).toBeUndefined();
-    expect(keyboardFallbackStore.resolve('missing', '1')).toBeUndefined();
-  });
-
-  it('后写覆盖先写（最近一张键盘生效）', () => {
-    keyboardFallbackStore.remember('ch-1', { '1': 'hub:h1:g_ttt' });
-    keyboardFallbackStore.remember('ch-1', { '1': 'ttt:s1:4' });
-    expect(keyboardFallbackStore.resolve('ch-1', '1')).toBe('ttt:s1:4');
-  });
-
-  it('TTL 过期即失效；空 map 忽略', () => {
-    keyboardFallbackStore.remember('ch-1', { '1': 'hub:h1:g_ttt' }, -1);
-    expect(keyboardFallbackStore.mapFor('ch-1')).toBeUndefined();
-    keyboardFallbackStore.remember('ch-2', {});
-    expect(keyboardFallbackStore.mapFor('ch-2')).toBeUndefined();
-  });
-});
-
 describe('collectKeyboardFallbackMaps', () => {
   it('显式 fallback.map 优先，无显式时按按钮顺序自动编号', () => {
     const content = [
@@ -152,68 +109,5 @@ describe('collectKeyboardFallbackMaps', () => {
     ]);
     expect(collectKeyboardFallbackMaps('plain')).toEqual([]);
     expect(collectKeyboardFallbackMaps(undefined)).toEqual([]);
-  });
-});
-
-describe('interactive 文本回跳中间件（旧轨）', () => {
-  beforeEach(() => {
-    resetInteractiveHandlersForTests();
-    resetKeyboardFallbackStoreForTests();
-  });
-
-  function textMessage(raw: string) {
-    return Message.from({}, {
-      $id: '1',
-      $adapter: 'sandbox',
-      $endpoint: 'b',
-      $sender: { id: 'u1' },
-      $channel: { id: 'c', type: 'group' },
-      $content: [{ type: 'text', data: { text: raw } }],
-      $raw: raw,
-      $timestamp: Date.now(),
-    });
-  }
-
-  function installMiddleware() {
-    let installed: ((msg: never, next: () => Promise<void>) => Promise<void>) | undefined;
-    ensureInteractiveMiddleware((mw) => { installed = mw as never; });
-    return {
-      run: (msg: ReturnType<typeof textMessage>) =>
-        new Promise<boolean>((resolve) => {
-          void installed!(msg as never, async () => { resolve(false); })
-            .then(() => resolve(true));
-        }),
-    };
-  }
-
-  it('裸数字经中央 fallback map 路由到注册 handler', async () => {
-    const calls: string[] = [];
-    registerInteractiveHandler('hub:', async () => { calls.push('hub'); return true; });
-    keyboardFallbackStore.remember('sandbox-b-group:c', { '1': 'hub:h1:g_ttt' });
-    const { run } = installMiddleware();
-
-    expect(await run(textMessage('1'))).toBe(true);
-    expect(calls).toEqual(['hub']);
-  });
-
-  it('指令预填直出 payload 同样路由（prefix 最长匹配）', async () => {
-    const calls: string[] = [];
-    registerInteractiveHandler('hub:', async () => { calls.push('hub'); return true; });
-    registerInteractiveHandler('hub:bot:', async () => { calls.push('hub:bot'); return true; });
-    const { run } = installMiddleware();
-
-    expect(await run(textMessage('@mybot hub:bot:s1'))).toBe(true);
-    expect(calls).toEqual(['hub:bot']);
-  });
-
-  it('无映射 / 无匹配 handler 时放行 next', async () => {
-    registerInteractiveHandler('hub:', async () => true);
-    const { run } = installMiddleware();
-
-    expect(await run(textMessage('1'))).toBe(false);
-    expect(await run(textMessage('普通文本'))).toBe(false);
-    // 有映射但 handler 返回 false 也放行
-    keyboardFallbackStore.remember('sandbox-b-group:c', { '1': 'other:s:1' });
-    expect(await run(textMessage('1'))).toBe(false);
   });
 });

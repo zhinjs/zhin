@@ -1,6 +1,5 @@
 export * from './contracts.js';
 export * from './im-runtime.js';
-export * from './interactive.js';
 export * from './login-assist-host.js';
 export * from './message-bus.js';
 export * from './message-dispatcher.js';
