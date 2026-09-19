@@ -22,8 +22,6 @@ export {
 // ── Schedule engine ──
 export {
   ScheduleEngine,
-  getScheduleEngine,
-  setScheduleEngine,
   resolveSolarJob,
   resolveLunarJob,
   resolveHolidayJob,
@@ -43,7 +41,7 @@ export type {
 export type { HolidayInput, ScatterInput, FestivalName } from '@zhin.js/schedule';
 
 // ── Scheduler ──
-export { Scheduler, getScheduler, setScheduler } from './scheduler/index.js';
+export { Scheduler } from './scheduler/index.js';
 export type {
   Schedule,
   JobPayload,

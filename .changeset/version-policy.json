@@ -425,6 +425,18 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove plugin.yml build detection, package-name guessing, and the dead Core PluginManifest type so package.json#zhin is the only plugin manifest authority under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-assistant-schedule-engine.md",
+      "packages": [
+        "@zhin.js/kernel",
+        "@zhin.js/core",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove process-global ScheduleEngine and Scheduler accessors so each Assistant runtime owns and disposes its scheduling state under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

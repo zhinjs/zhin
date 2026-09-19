@@ -121,6 +121,7 @@ Three tiers:
 | Classic Core `Adapter` / `Endpoint` runtime | `removed` | Classes, capability state, lifecycle helpers, and dedicated tests were deleted | Adapters use `defineAdapter`, `Endpoint<TClient>`, and the generation-owned `AdapterIndex` from `zhin.js/adapter` |
 | Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | The Plugin tree, string DI, prototype extension registry, and self-tests were deleted | Lifecycle belongs to `@zhin.js/plugin-runtime`; discovery and projection belong to `@zhin.js/feature-kit` |
+| Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` and `get/setScheduler` were deleted | Each `ScheduleJobEngine` owns and disposes its scheduler; Host scheduling uses a generation-owned token |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |

@@ -48,11 +48,7 @@ export * from '@zhin.js/logger'
 export { Schema } from '@zhin.js/schema'
 export {
   ScheduleEngine,
-  getScheduleEngine,
-  setScheduleEngine,
   Scheduler,
-  getScheduler,
-  setScheduler,
 } from '@zhin.js/kernel'
 export type {
   Schedule,
