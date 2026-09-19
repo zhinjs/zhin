@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createWorkroomGovernedDispatchReason,
-} from '../../src/plugin-runtime/workroom-governed-dispatch-reasons.js';
+} from '../../src/workroom/governed-dispatch-reasons.js';
 
 describe('Workroom governed dispatch reason adapter', () => {
   it.each([

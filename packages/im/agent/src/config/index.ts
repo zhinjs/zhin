@@ -3,7 +3,8 @@ export {
   normalizeProviderEntry,
   type NormalizedAiRoutingConfig,
 } from './normalize-ai-config.js';
-export { validateAiRoutingConfig, validateWorkroomDefinitions } from './validate-ai-config.js';
+export { validateAiRoutingConfig } from './validate-ai-config.js';
+export { validateWorkroomDefinitions } from '../workroom/validate-catalog.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
 export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';

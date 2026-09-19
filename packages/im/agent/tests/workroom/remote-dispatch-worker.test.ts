@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { WorkroomRemoteExecutorPort } from '../../src/plugin-runtime/workroom-remote-executor.js';
+import type { WorkroomRemoteExecutorPort } from '../../src/workroom/remote-executor.js';
 import { remoteDisclosureFixture } from './remote-disclosure-fixture.js';
 import {
   FileWorkroomRemoteDispatchOutboxRepository,

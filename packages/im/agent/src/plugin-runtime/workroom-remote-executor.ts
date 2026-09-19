@@ -3,23 +3,11 @@ import {
   assertWorkroomRemoteDispatchRetry,
   type WorkroomRemoteDispatchOutboxItem,
 } from '../workroom/remote-dispatch.js';
-
-/** Transport observation only; it cannot mutate or declare terminal Workroom state. */
-export interface WorkroomRemoteDispatchObservation {
-  readonly outcome: 'delivered' | 'outcome_unknown' | 'failed';
-  readonly receiptId: string;
-  readonly remoteTaskId?: string;
-  readonly remoteContextId?: string;
-  readonly reason?: string;
-}
-
-export interface WorkroomRemoteExecutorPort {
-  dispatch(
-    item: WorkroomRemoteDispatchOutboxItem,
-    signal: AbortSignal,
-    governedBody?: Uint8Array,
-  ): Promise<WorkroomRemoteDispatchObservation>;
-}
+import {
+  normalizeWorkroomRemoteDispatchObservation,
+  type WorkroomRemoteDispatchObservation,
+  type WorkroomRemoteExecutorPort,
+} from '../workroom/remote-executor.js';
 
 export interface GenerationWorkroomRemoteExecutorPort extends WorkroomRemoteExecutorPort {
   retry(
@@ -58,28 +46,4 @@ export function createGenerationWorkroomRemoteExecutorPort(
       return await dispatch(retry, signal);
     },
   } satisfies GenerationWorkroomRemoteExecutorPort);
-}
-
-export function normalizeWorkroomRemoteDispatchObservation(
-  value: WorkroomRemoteDispatchObservation,
-): WorkroomRemoteDispatchObservation {
-  if (!['delivered', 'outcome_unknown', 'failed'].includes(value?.outcome)
-    || typeof value?.receiptId !== 'string'
-    || !value.receiptId.trim()
-    || !isOptionalNonEmptyString(value.remoteTaskId)
-    || !isOptionalNonEmptyString(value.remoteContextId)
-    || !isOptionalNonEmptyString(value.reason)) {
-    throw new Error('Workroom Remote Executor returned an invalid transport observation');
-  }
-  return Object.freeze({
-    outcome: value.outcome,
-    receiptId: value.receiptId,
-    ...(value.remoteTaskId === undefined ? {} : { remoteTaskId: value.remoteTaskId }),
-    ...(value.remoteContextId === undefined ? {} : { remoteContextId: value.remoteContextId }),
-    ...(value.reason === undefined ? {} : { reason: value.reason }),
-  });
-}
-
-function isOptionalNonEmptyString(value: unknown): value is string | undefined {
-  return value === undefined || (typeof value === 'string' && value.trim().length > 0);
 }

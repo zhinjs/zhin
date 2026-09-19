@@ -22,6 +22,13 @@ import type {
 } from '../workroom/assignment-executor.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
 import {
+  assertWorkroomAssignmentAuthorityGrant,
+  type WorkroomAssignmentAuthorityGrant,
+  type WorkroomAssignmentAuthorityGrantPort,
+  type WorkroomAssignmentAuthorityGrantRequest,
+  type WorkroomCapabilityCeiling,
+} from '../workroom/assignment-authority.js';
+import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySupply,
   type WorkroomRoleCapabilityReferenceInput,
@@ -63,85 +70,6 @@ export interface WorkroomGenerationAuthoritySnapshot
 extends WorkroomGenerationAuthoritySnapshotInput {
   readonly version: 1;
   readonly digest: string;
-}
-
-export interface WorkroomCapabilityCeilingInput {
-  readonly id: string;
-  readonly revision: number;
-  readonly tools: readonly WorkroomRoleToolDescriptor[];
-  readonly skills: readonly WorkroomRoleSkillDescriptor[];
-}
-
-export interface WorkroomCapabilityCeiling extends WorkroomCapabilityCeilingInput {
-  readonly digest: string;
-}
-
-export interface WorkroomAssignmentAuthorityGrantInput {
-  readonly generation: number;
-  readonly projectId: string;
-  readonly runId: string;
-  readonly taskKey: string;
-  readonly taskRevision: number;
-  readonly assignmentId: string;
-  readonly assignmentRevision: number;
-  readonly attempt: number;
-  readonly fence: number;
-  readonly agentDefinitionId: string;
-  /** Absent only for a local-only grant. Remote issuance always requires it. */
-  readonly endpointId?: string;
-  /** Exact Card/auth/transport/capability join authorized by this grant. */
-  readonly endpointAuthorityDigest?: string;
-  readonly catalogRevision: string;
-  readonly catalogBindingDigest: string;
-  readonly profileRevisionId: string;
-  readonly profileDigest: string;
-  readonly principalId: string;
-  readonly role: AssignmentExecutorRole;
-  readonly capabilitySnapshotRef: string;
-  readonly capabilitySnapshotRevision: number;
-  readonly roleCapabilities: WorkroomCapabilityCeilingInput;
-  readonly taskCapabilities: WorkroomCapabilityCeilingInput;
-  readonly policyCapabilities: WorkroomCapabilityCeilingInput;
-  readonly plan: AssignmentExecutionSnapshotReference;
-  readonly contextPolicy: AssignmentExecutionSnapshotReference;
-  readonly policySnapshot: AssignmentExecutionSnapshotReference;
-  /** Optional in the untrusted/persisted shape; every issuance path rejects absence. */
-  readonly workspace?: AssignmentExecutionWorkspaceReference;
-  readonly contextView: Readonly<{ ref: string; hash: string }>;
-  readonly capabilityGrantRef: string;
-  /** Required for remote disclosure. Local sandbox execution may not disclose externally. */
-  readonly disclosureManifest?: GovernedDisclosureManifestSnapshot;
-  readonly remoteWorkspace?: WorkroomGithubWorkspaceReference;
-}
-
-export interface WorkroomAssignmentAuthorityGrant
-extends Omit<WorkroomAssignmentAuthorityGrantInput,
-  'roleCapabilities' | 'taskCapabilities' | 'policyCapabilities'> {
-  readonly version: 1;
-  readonly roleCapabilities: WorkroomCapabilityCeiling;
-  readonly taskCapabilities: WorkroomCapabilityCeiling;
-  readonly policyCapabilities: WorkroomCapabilityCeiling;
-  readonly digest: string;
-}
-
-export interface WorkroomAssignmentAuthorityGrantRequest {
-  readonly projectId: string;
-  readonly runId: string;
-  readonly taskKey: string;
-  readonly taskRevision: number;
-  readonly assignmentId: string;
-  readonly assignmentRevision: number;
-  readonly attempt: number;
-  readonly fence: number;
-  readonly requestedAgentDefinitionId: string;
-  readonly requestedEndpointId?: string;
-}
-
-/** Persistent authority grant reader. It never derives grants from request metadata. */
-export interface WorkroomAssignmentAuthorityGrantPort {
-  resolve(
-    input: WorkroomAssignmentAuthorityGrantRequest,
-  ): WorkroomAssignmentAuthorityGrant | undefined | Promise<WorkroomAssignmentAuthorityGrant | undefined>;
 }
 
 export interface WorkroomRemoteEndpointAuthority {
@@ -320,7 +248,7 @@ implements WorkroomRemoteAssignmentAuthorityPort, WorkroomLocalAssignmentAuthori
     const grantRequest = grantRequestFrom(input, requestedEndpointId);
     const grant = await this.options.grants.resolve(grantRequest);
     if (!grant) throw new Error('Remote Assignment issuance grant is unavailable');
-    const canonicalGrant = assertGrant(grant);
+    const canonicalGrant = assertWorkroomAssignmentAuthorityGrant(grant);
     assertGrantScope(canonicalGrant, grantRequest, {
       generation: this.#generation.generation,
       catalog,
@@ -455,30 +383,6 @@ export function digestWorkroomGenerationDescriptor(
   return digestGenerationDescriptor(kind, value);
 }
 
-export function createWorkroomAssignmentAuthorityGrant(
-  input: WorkroomAssignmentAuthorityGrantInput,
-): WorkroomAssignmentAuthorityGrant {
-  exactKeys(input, [
-    'generation', 'projectId', 'runId', 'taskKey', 'taskRevision',
-    'assignmentId', 'assignmentRevision', 'attempt', 'fence',
-    'agentDefinitionId', 'endpointId', 'endpointAuthorityDigest',
-    'catalogRevision', 'catalogBindingDigest', 'profileRevisionId', 'profileDigest',
-    'principalId', 'role', 'capabilitySnapshotRef', 'capabilitySnapshotRevision',
-    'roleCapabilities', 'taskCapabilities', 'policyCapabilities',
-    'plan', 'contextPolicy', 'policySnapshot', 'workspace', 'contextView',
-    'capabilityGrantRef', 'disclosureManifest', 'remoteWorkspace',
-  ], 'issuance grant');
-  const projection = deepFreeze({
-    version: 1 as const,
-    ...structuredClone(input),
-    roleCapabilities: createCeiling(input.roleCapabilities, 'roleCapabilities'),
-    taskCapabilities: createCeiling(input.taskCapabilities, 'taskCapabilities'),
-    policyCapabilities: createCeiling(input.policyCapabilities, 'policyCapabilities'),
-  });
-  validateGrantProjection(projection);
-  return deepFreeze({ ...projection, digest: digest(projection) });
-}
-
 export function digestWorkroomRemoteEndpointAuthority(
   authority: WorkroomRemoteEndpointAuthority,
 ): string {
@@ -493,91 +397,6 @@ function assertGenerationSnapshot(
     throw new Error('Workroom generation authority snapshot digest drift');
   }
   return canonical;
-}
-
-function assertGrant(value: WorkroomAssignmentAuthorityGrant): WorkroomAssignmentAuthorityGrant {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('Remote Assignment issuance grant is invalid');
-  }
-  const { version, digest: actualDigest, roleCapabilities, taskCapabilities, policyCapabilities, ...rest } = value;
-  if (version !== 1) throw new Error('Remote Assignment issuance grant version is unsupported');
-  const canonical = createWorkroomAssignmentAuthorityGrant({
-    ...rest,
-    roleCapabilities: ceilingInput(roleCapabilities),
-    taskCapabilities: ceilingInput(taskCapabilities),
-    policyCapabilities: ceilingInput(policyCapabilities),
-  });
-  if (actualDigest !== canonical.digest || canonicalWorkroomJson(value) !== canonicalWorkroomJson(canonical)) {
-    throw new Error('Remote Assignment issuance grant digest drift');
-  }
-  return canonical;
-}
-
-function createCeiling(input: WorkroomCapabilityCeilingInput, label: string): WorkroomCapabilityCeiling {
-  text(input.id, `${label}.id`);
-  positive(input.revision, `${label}.revision`);
-  const projection = {
-    id: input.id,
-    revision: input.revision,
-    tools: canonicalTools(input.tools, `${label}.tools`),
-    skills: canonicalSkills(input.skills, `${label}.skills`),
-  };
-  return deepFreeze({ ...projection, digest: digest(projection) });
-}
-
-function ceilingInput(value: WorkroomCapabilityCeiling): WorkroomCapabilityCeilingInput {
-  if (!value || typeof value !== 'object') throw new Error('Remote Assignment capability ceiling is invalid');
-  const { digest: actualDigest, ...input } = value;
-  const canonical = createCeiling(input, 'capability ceiling');
-  if (canonical.digest !== actualDigest) throw new Error('Remote Assignment capability ceiling digest drift');
-  return input;
-}
-
-function validateGrantProjection(input: Omit<WorkroomAssignmentAuthorityGrant, 'digest'>): void {
-  for (const [label, value] of Object.entries({
-    projectId: input.projectId, runId: input.runId, taskKey: input.taskKey,
-    assignmentId: input.assignmentId, agentDefinitionId: input.agentDefinitionId,
-    catalogRevision: input.catalogRevision, catalogBindingDigest: input.catalogBindingDigest,
-    profileRevisionId: input.profileRevisionId, profileDigest: input.profileDigest,
-    principalId: input.principalId, capabilitySnapshotRef: input.capabilitySnapshotRef,
-    capabilityGrantRef: input.capabilityGrantRef,
-  })) text(value, label);
-  if (input.endpointId !== undefined) text(input.endpointId, 'endpointId');
-  if (input.endpointAuthorityDigest !== undefined) {
-    sha(input.endpointAuthorityDigest, 'endpointAuthorityDigest');
-  }
-  for (const [label, value] of Object.entries({
-    generation: input.generation, taskRevision: input.taskRevision,
-    assignmentRevision: input.assignmentRevision, attempt: input.attempt,
-    fence: input.fence, capabilitySnapshotRevision: input.capabilitySnapshotRevision,
-  })) positive(value, label);
-  if (input.role !== 'executor' && input.role !== 'integration') {
-    throw new Error('Remote Assignment grant role is not executable');
-  }
-  reference(input.plan, 'plan');
-  reference(input.contextPolicy, 'contextPolicy');
-  reference(input.policySnapshot, 'policySnapshot');
-  if (input.workspace) {
-    text(input.workspace.leaseRef, 'workspace.leaseRef');
-    text(input.workspace.mountRef, 'workspace.mountRef');
-    text(input.workspace.baseRevision, 'workspace.baseRevision');
-    positive(input.workspace.fence, 'workspace.fence');
-  }
-  text(input.contextView.ref, 'contextView.ref');
-  sha(input.contextView.hash, 'contextView.hash');
-  if (input.disclosureManifest) {
-    text(input.disclosureManifest.request.operationId, 'disclosureManifest.request.operationId');
-    text(input.disclosureManifest.request.projectId, 'disclosureManifest.request.projectId');
-    text(input.disclosureManifest.request.sourceRef, 'disclosureManifest.request.sourceRef');
-    sha(input.disclosureManifest.request.sourceDigest, 'disclosureManifest.request.sourceDigest');
-    text(input.disclosureManifest.request.sinkRuleId, 'disclosureManifest.request.sinkRuleId');
-    text(input.disclosureManifest.request.principalId, 'disclosureManifest.request.principalId');
-    text(input.disclosureManifest.manifest.id, 'disclosureManifest.manifest.id');
-    sha(input.disclosureManifest.manifest.digest, 'disclosureManifest.manifest.digest');
-  }
-  sha(input.profileDigest, 'profileDigest');
-  catalogRevision(input.catalogRevision);
-  sha(input.catalogBindingDigest, 'catalogBindingDigest');
 }
 
 function assertGrantScope(

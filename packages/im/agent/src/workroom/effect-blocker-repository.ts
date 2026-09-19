@@ -7,10 +7,25 @@ import {
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
 import { DurableFileStore } from './durable-file-store.js';
-import type {
-  WorkroomEffectBlockerControlPort,
-  WorkroomEffectBlockerInput,
-} from '../plugin-runtime/workroom-effect-runtime.js';
+
+export interface WorkroomEffectBlockerInput {
+  readonly projectId: string;
+  readonly effectId: string;
+  readonly owner: string;
+  readonly policy: Readonly<{
+    kind: 'pinned_profile' | 'root_emergency_fallback';
+    ref: string;
+    digest: string;
+  }>;
+  readonly reason: string;
+  readonly deadline: number;
+  readonly allowedSuccessors: readonly ('retry' | 'reconcile' | 'cancel')[];
+}
+
+export interface WorkroomEffectBlockerControlPort {
+  block(input: WorkroomEffectBlockerInput): Promise<void>;
+  recover(projectId: string, effectId: string): Promise<void>;
+}
 
 export interface WorkroomEffectBlockerRecord {
   readonly version: 1;

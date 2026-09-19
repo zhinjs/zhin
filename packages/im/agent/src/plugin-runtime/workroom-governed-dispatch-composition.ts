@@ -1,6 +1,6 @@
 import type {
   WorkroomDisclosureManifestAuthorityPort,
-} from './workroom-data-governance-runtime.js';
+} from '../data-governance/disclosure-authority.js';
 
 export interface WorkroomGovernedDispatchGenerationBinding {
   readonly generation: number;

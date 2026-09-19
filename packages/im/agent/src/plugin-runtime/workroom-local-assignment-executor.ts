@@ -7,14 +7,14 @@ import {
   type AssignmentExecutionObservation,
   type AssignmentExecutorPort,
   type AssignmentProgressObservation,
-} from './assignment-executor.js';
+} from '../workroom/assignment-executor.js';
 import {
   createWorkroomDeferredCapabilityPlan,
   type DeferredCapabilityPlan,
   type WorkroomCapabilityRealization,
   type WorkroomDeferredCapabilityPlanOptions,
-} from '../plugin-runtime/deferred-capability-plan.js';
-import type { WorkroomRoleCapabilitySnapshot } from './role-capability-snapshot.js';
+} from './deferred-capability-plan.js';
+import type { WorkroomRoleCapabilitySnapshot } from '../workroom/role-capability-snapshot.js';
 
 export interface LocalModelProgressEvent {
   readonly version: 1;

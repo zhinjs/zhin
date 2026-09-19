@@ -8,6 +8,13 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove misplaced runtime internals from the Agent root API as part of the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "sharp-domain-boundaries.md",
+      "packages": ["@zhin.js/agent"],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Enforce owner-directed zero-compatibility domain boundaries and remove deprecated Workroom catalog aliases."
     }
   ]
 }

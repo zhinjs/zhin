@@ -118,3 +118,5 @@ flowchart BT
 ## 分层规则的推论
 
 写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。`kernel`、`ai` 不知道"群""私聊"这些 IM 概念；IM 概念只出现在 `core` 及以上。Host（`packages/host/http`、`mcp`、`a2a`）在 `core` 之上、由 CLI 装配，插件不直接依赖 Host 进程。
+
+`@zhin.js/agent` 内部也遵循单向边界：`workroom/`、`portfolio/`、`data-governance/` 拥有领域值对象、策略和端口，`plugin-runtime/` 负责把 generation-owned 能力适配到这些端口，`config/` 只负责配置解析。领域目录不得反向导入 `plugin-runtime/` 或 `config/`；该约束由 `pnpm check:architecture` 检查。

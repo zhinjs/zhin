@@ -38,16 +38,13 @@ export type {
   WorkroomAgentMemberDefinition,
   WorkroomConversationBindingDefinition,
   WorkroomDefinition,
-  WorkroomAgentMemberConfig,
-  WorkroomConversationBindingConfig,
-  WorkroomDefinitionConfig,
 } from './workroom/catalog-definition.js';
 export {
   resolveWorkroomBotIdentity,
   type WorkroomBotIdentityInput,
   type ResolvedWorkroomBotIdentity,
 } from './routing/workroom-bot-identity.js';
-export { validateWorkroomDefinitions } from './config/validate-ai-config.js';
+export { validateWorkroomDefinitions } from './workroom/validate-catalog.js';
 export type {
   IAgentTurnProcessor,
   IAgentSessionManager,
@@ -383,6 +380,7 @@ export * from './workroom/project-knowledge-registry.js';
 export * from './workroom/database-project-knowledge-journal.js';
 export * from './workroom/workroom-assignment-knowledge-context.js';
 export * from './workroom/assignment-executor.js';
+export * from './workroom/assignment-authority.js';
 export * from './workroom/assignment-observation-ingress.js';
 export * from './workroom/interaction-space-router.js';
 export * from './workroom/file-interaction-space-binding-repository.js';
@@ -397,7 +395,6 @@ export * from './workroom/plan-approval-control.js';
 export * from './workroom/plan-revision.js';
 export * from './workroom/scheduler-priority-control.js';
 export * from './workroom/file-human-ingress.js';
-export * from './workroom/local-assignment-executor.js';
 export * from './workroom/local-assignment-issuance.js';
 export * from './workroom/workroom-task-report-store.js';
 export * from './workroom/projection-outbox.js';

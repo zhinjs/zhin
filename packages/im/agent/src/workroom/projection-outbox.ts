@@ -10,11 +10,13 @@ import {
 } from './canonical-value.js';
 import type {
   GovernedDisclosureManifestRequest,
+  MaterializedDisclosureManifest,
+} from '../data-governance/disclosure-manifest.js';
+import type {
   GovernedDisclosureRevalidationResult,
   GovernedProjectionDisclosureResult,
-} from '../plugin-runtime/workroom-data-governance-runtime.js';
-import type { MaterializedDisclosureManifest } from '../data-governance/disclosure-manifest.js';
-import { createWorkroomGovernedDispatchReason } from '../plugin-runtime/workroom-governed-dispatch-reasons.js';
+} from '../data-governance/disclosure-authority.js';
+import { createWorkroomGovernedDispatchReason } from './governed-dispatch-reasons.js';
 import type { PortfolioSponsorProjection } from '../portfolio/sponsor-projection.js';
 
 export interface WorkroomProjectionConversation {

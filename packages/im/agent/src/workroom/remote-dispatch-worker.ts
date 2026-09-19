@@ -2,7 +2,7 @@ import {
   normalizeWorkroomRemoteDispatchObservation,
   type WorkroomRemoteDispatchObservation,
   type WorkroomRemoteExecutorPort,
-} from '../plugin-runtime/workroom-remote-executor.js';
+} from './remote-executor.js';
 import type {
   WorkroomRemoteDispatchOutboxProjection,
   WorkroomRemoteDispatchOutboxRepository,

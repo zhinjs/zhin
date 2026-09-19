@@ -15,7 +15,7 @@ import {
 import {
   LocalAssignmentExecutor,
   type LocalAssignmentCapabilityProjectionPort,
-} from '../../src/workroom/local-assignment-executor.js';
+} from '../../src/plugin-runtime/workroom-local-assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySnapshot,

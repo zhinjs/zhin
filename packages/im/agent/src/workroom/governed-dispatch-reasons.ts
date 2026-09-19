@@ -1,4 +1,4 @@
-import type { GovernedDisclosureBlockReason } from './workroom-data-governance-runtime.js';
+import type { GovernedDisclosureBlockReason } from '../data-governance/disclosure-authority.js';
 
 export type WorkroomGovernedDispatchRecoveryAction =
   | 'rematerialize'

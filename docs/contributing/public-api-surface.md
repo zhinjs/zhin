@@ -108,6 +108,7 @@
 | `defineFeatureProvider`（Feature Provider 协议） | `internal` | `@zhin.js/feature-kit` | 新增 feature 类型的协议，面向框架扩展者而非插件作者 |
 | `MessageDispatcher` | `internal` | `@zhin.js/core` | 消息分发器（`createMessageDispatcher` 装配，路由策略可配置） |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
+| Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host 安装器（database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol），装配细节随时可变 |

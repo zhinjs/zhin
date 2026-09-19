@@ -3,7 +3,7 @@ import type { DeferredCapabilityPlan } from './deferred-capability-plan.js';
 import type {
   LocalModelExecutionPort,
   LocalModelExecutionRequest,
-} from '../workroom/local-assignment-executor.js';
+} from './workroom-local-assignment-executor.js';
 import {
   createWorkroomEvidence,
   createWorkroomStructuredTaskReport,

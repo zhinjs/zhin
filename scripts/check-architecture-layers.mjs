@@ -444,3 +444,49 @@ if (reverseViolations.length) {
 }
 
 console.log('Harness assistant reverse-dependency check: OK.');
+
+// Workroom, Portfolio and Data Governance are domain modules. Their contracts
+// and policies must remain independent from Agent configuration and Plugin
+// Runtime composition. Runtime adapters may depend on these domains only in
+// the opposite direction.
+const agentDomainRoots = [
+  'packages/im/agent/src/workroom',
+  'packages/im/agent/src/portfolio',
+  'packages/im/agent/src/data-governance',
+];
+const agentRuntimeRoots = [
+  path.join(repoRoot, 'packages/im/agent/src/config'),
+  path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
+];
+const agentDomainViolations = [];
+
+for (const domainRoot of agentDomainRoots) {
+  const files = [];
+  walkTs(path.join(repoRoot, domainRoot), files);
+  for (const file of files) {
+    const content = fs.readFileSync(file, 'utf8');
+    for (const importPath of parseImports(content)) {
+      if (!importPath.startsWith('.')) continue;
+      const target = path.resolve(path.dirname(file), importPath);
+      const forbidden = agentRuntimeRoots.find(root => target === root || target.startsWith(`${root}${path.sep}`));
+      if (!forbidden) continue;
+      agentDomainViolations.push({
+        file: path.relative(repoRoot, file),
+        import: importPath,
+        reason: `${domainRoot} must not depend on ${path.relative(repoRoot, forbidden)}`,
+      });
+    }
+  }
+}
+
+if (agentDomainViolations.length) {
+  console.error('\nHarness Agent domain boundary check: FAILED\n');
+  for (const violation of agentDomainViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Agent domain boundary check: OK.');

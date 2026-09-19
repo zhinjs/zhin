@@ -4,6 +4,7 @@ import {
   assertWorkflowPlanProposal,
   assignmentAuthorityGrantKey,
   createAssignmentAuthorityGrantRecord,
+  createWorkroomAssignmentAuthorityGrant,
   createAtomicResourceBundleProfileCeiling,
   createPortfolioPolicySnapshot,
   createResourcePoolCatalogSnapshot,
@@ -19,10 +20,10 @@ import {
   type WorkroomCatalog,
   type WorkroomJournal,
   type WorkroomKernel,
+  type WorkroomAssignmentAuthorityGrantPort,
   type WorkflowPlanProposal,
 } from '@zhin.js/agent';
 import {
-  createWorkroomAssignmentAuthorityGrant,
   digestCanonicalWorkroomValue,
   digestWorkroomCatalogProjectBinding,
   portfolioAtomicBundleAuthorityToken,
@@ -30,7 +31,6 @@ import {
   portfolioPolicyAuthorityToken,
   workroomSchedulerPortfolioScopeAuthorityToken,
   workroomSchedulerPortfolioScopeBindingDigest,
-  type WorkroomAssignmentAuthorityGrantPort,
   type PortfolioAtomicBundleAuthorityPort,
   type PortfolioKernelCommandAuthorityPort,
   type PortfolioPolicyAuthorityPort,

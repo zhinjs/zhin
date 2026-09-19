@@ -38,6 +38,7 @@
     "export * from './workroom/accepted-source-projector.js';",
     "export * from './workroom/assignment-authority-grant-application.js';",
     "export * from './workroom/assignment-authority-grant-repository.js';",
+    "export * from './workroom/assignment-authority.js';",
     "export * from './workroom/assignment-executor.js';",
     "export * from './workroom/assignment-observation-ingress.js';",
     "export * from './workroom/catalog.js';",
@@ -63,7 +64,6 @@
     "export * from './workroom/kernel-contracts.js';",
     "export * from './workroom/legacy-embedded-payload-migration.js';",
     "export * from './workroom/legacy-run-offline-migration.js';",
-    "export * from './workroom/local-assignment-executor.js';",
     "export * from './workroom/local-assignment-issuance.js';",
     "export * from './workroom/plan-approval-control.js';",
     "export * from './workroom/plan-revision.js';",
@@ -136,7 +136,7 @@
     "export type{TurnEvent,TurnUsage,TurnStartEvent,ChunkEvent,CapabilityResolutionEvent,IterationStartEvent,ToolCallEvent as TurnToolCallEvent,ToolResultEvent,ThinkingEvent,TurnEndEvent,TurnErrorEvent,TurnBudgetExceededEvent,SubagentStartEvent,SubagentProgressEvent,SubagentEndEvent,McpConnectEvent,McpToolCallEvent,}from './event/turn-event.js';",
     "export type{TurnEventObserver,TurnEventSource}from './turn/execute-agent-turn.js';",
     "export type{TypingIndicatorType,TypingIndicatorConfig,TypingIndicatorOptions,TypingIndicator,TypingIndicatorAdapter,}from './typing-indicator/index.js';",
-    "export type{WorkroomMemberRole,WorkroomAssignmentRouteDefinition,WorkroomSpaceKind,WorkroomAgentMemberDefinition,WorkroomConversationBindingDefinition,WorkroomDefinition,WorkroomAgentMemberConfig,WorkroomConversationBindingConfig,WorkroomDefinitionConfig,}from './workroom/catalog-definition.js';",
+    "export type{WorkroomMemberRole,WorkroomAssignmentRouteDefinition,WorkroomSpaceKind,WorkroomAgentMemberDefinition,WorkroomConversationBindingDefinition,WorkroomDefinition,}from './workroom/catalog-definition.js';",
     "export type{WorkspacePromptRole}from './prompt/workspace-prompt.js';",
     "export type{ZhinAgentConfig,OnChunkCallback,}from './config/index.js';",
     "export{AGENT_ROLE_CONFIGS}from './resource-hub/role-configs.js';",
@@ -224,7 +224,7 @@
     "export{resolveWorkspacePrompt,clearWorkspacePromptCache,}from './prompt/workspace-prompt.js';",
     "export{seamIntegrationToken,capabilitySeamToken}from './seam/index.js';",
     "export{stampToolGeneration,}from './tool/tool-system.js';",
-    "export{validateWorkroomDefinitions}from './config/validate-ai-config.js';"
+    "export{validateWorkroomDefinitions}from './workroom/validate-catalog.js';"
   ],
   "@zhin.js/core": [
     "export * from './adapter.js'",
