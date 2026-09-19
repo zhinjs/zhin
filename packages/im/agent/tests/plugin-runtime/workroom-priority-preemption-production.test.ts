@@ -8,7 +8,7 @@ import {
   createWorkroomDeferredCapabilityPlan,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import {
-  createCatalogWorkroomPriorityAuthority,
+  CatalogWorkroomPriorityAuthority,
   workroomPriorityAuthorityReference,
 } from '../../src/plugin-runtime/workroom-priority-authority.js';
 import {
@@ -117,7 +117,7 @@ describe('Workroom priority and preemption production composition', () => {
       catalogRevision: sha('a'), projectDigest: digestCanonicalWorkroomValue(definition),
       orchestratorAgentDefinitionId: 'agent:orchestrator',
     };
-    const authority = createCatalogWorkroomPriorityAuthority({
+    const authority = new CatalogWorkroomPriorityAuthority({
       read: async () => ({ revision: sha('a'), definitions: { project: definition } }),
     });
     const sponsorRef = workroomPriorityAuthorityReference({

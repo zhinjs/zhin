@@ -29,6 +29,13 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace anonymous Host factories with an explicit class hierarchy under the owner-directed architecture refactor."
+    },
+    {
+      "changeset": "class-based-agent-authorities.md",
+      "packages": ["@zhin.js/agent"],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace stateful anonymous runtime authority factories with explicit classes under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

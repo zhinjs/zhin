@@ -8,7 +8,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { AgentCore } from '../core/agent-core.js';
-import { turnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
@@ -180,7 +180,7 @@ async function* runInteractiveTurn(
       turnContext: context.turn,
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
-      toolExecution: turnToolExecutionAuthority(toolRuntime),
+      toolExecution: new TurnToolExecutionAuthority(toolRuntime),
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,
@@ -347,7 +347,7 @@ async function* runScheduleTurn(
       turnContext: context.turn,
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
-      toolExecution: turnToolExecutionAuthority(toolRuntime),
+      toolExecution: new TurnToolExecutionAuthority(toolRuntime),
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,

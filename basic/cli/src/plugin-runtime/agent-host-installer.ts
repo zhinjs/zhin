@@ -167,8 +167,8 @@ import {
   createCatalogWorkroomPlanGateAuthority,
   createGenerationWorkroomPlanGateAuthority,
   workroomPlanGateAuthorityToken,
-  createCatalogWorkroomPriorityAuthority,
-  createGenerationWorkroomPriorityAuthority,
+  CatalogWorkroomPriorityAuthority,
+  GenerationWorkroomPriorityAuthority,
   workroomPriorityAuthorityToken,
   createGenerationHumanIngressPlanningPort,
   createGenerationOwnedDynamicPlanningProvider,
@@ -934,7 +934,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     if (!resources.has(workroomPriorityAuthorityToken)) {
       resources.provide(
         workroomPriorityAuthorityToken,
-        createCatalogWorkroomPriorityAuthority(workroomCatalog),
+        new CatalogWorkroomPriorityAuthority(workroomCatalog),
       );
     }
     if (options.workroomHumanIngressPlanningPort
@@ -971,7 +971,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         resources.has(workroomPlanGateAuthorityToken)
           ? resources.use(workroomPlanGateAuthorityToken)
           : undefined),
-      priorityAuthority: createGenerationWorkroomPriorityAuthority(() =>
+      priorityAuthority: new GenerationWorkroomPriorityAuthority(() =>
         resources.has(workroomPriorityAuthorityToken)
           ? resources.use(workroomPriorityAuthorityToken)
           : undefined),

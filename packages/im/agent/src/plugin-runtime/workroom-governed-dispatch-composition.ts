@@ -29,7 +29,7 @@ export function createGenerationOwnedWorkroomGovernedOutboundComposition(options
   }
   return Object.freeze({
     projection: options.runtime.disclosureManifest,
-    remote: createGenerationOwnedWorkroomGovernedDispatchPort({
+    remote: new GenerationOwnedWorkroomGovernedDispatchAuthority({
       generation: options.generation,
       signal: options.signal,
       resolve: () => Object.freeze({
@@ -40,25 +40,33 @@ export function createGenerationOwnedWorkroomGovernedOutboundComposition(options
   });
 }
 
-export function createGenerationOwnedWorkroomGovernedDispatchPort(options: Readonly<{
+export interface GenerationOwnedWorkroomGovernedDispatchOptions {
   generation: number;
   signal: AbortSignal;
   resolve(): WorkroomGovernedDispatchGenerationBinding | undefined;
-}>): Pick<WorkroomDisclosureManifestAuthorityPort, 'revalidate'> {
-  if (!Number.isSafeInteger(options.generation) || options.generation < 1) {
-    throw new Error('Workroom governed dispatch generation is invalid');
+}
+
+export class GenerationOwnedWorkroomGovernedDispatchAuthority
+implements Pick<WorkroomDisclosureManifestAuthorityPort, 'revalidate'> {
+  readonly #options: Readonly<GenerationOwnedWorkroomGovernedDispatchOptions>;
+
+  constructor(options: Readonly<GenerationOwnedWorkroomGovernedDispatchOptions>) {
+    if (!Number.isSafeInteger(options.generation) || options.generation < 1) {
+      throw new Error('Workroom governed dispatch generation is invalid');
+    }
+    this.#options = options;
   }
-  return Object.freeze({
-    revalidate: async (...args: Parameters<WorkroomDisclosureManifestAuthorityPort['revalidate']>) => {
-      options.signal.throwIfAborted();
-      const current = options.resolve();
-      if (!current) throw new Error('Workroom governed dispatch authority is unavailable');
-      if (current.generation !== options.generation) {
-        throw new Error('Workroom governed dispatch authority escaped its Root generation');
-      }
-      const operationSignal = args[1];
-      const signal = AbortSignal.any([options.signal, operationSignal]);
-      return await current.port.revalidate(args[0], signal);
-    },
-  });
+
+  async revalidate(...args: Parameters<WorkroomDisclosureManifestAuthorityPort['revalidate']>) {
+    const options = this.#options;
+    options.signal.throwIfAborted();
+    const current = options.resolve();
+    if (!current) throw new Error('Workroom governed dispatch authority is unavailable');
+    if (current.generation !== options.generation) {
+      throw new Error('Workroom governed dispatch authority escaped its Root generation');
+    }
+    const operationSignal = args[1];
+    const signal = AbortSignal.any([options.signal, operationSignal]);
+    return await current.port.revalidate(args[0], signal);
+  }
 }

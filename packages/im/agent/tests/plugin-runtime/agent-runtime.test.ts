@@ -47,7 +47,7 @@ import {
   turnJournalStoreToken,
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
-import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
@@ -312,7 +312,7 @@ describe('Agent CapabilityIngress', () => {
       await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
         status: 'completed', output: 'old:runner',
       });
-      await expect(turnToolExecutionAuthority(tools).execute({
+      await expect(new TurnToolExecutionAuthority(tools).execute({
         name: 'child__lookup',
         description: 'Lookup',
         parameters: { type: 'object', properties: {} },

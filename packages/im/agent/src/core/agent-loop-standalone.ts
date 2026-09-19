@@ -15,7 +15,7 @@ import {
   TOOLS_MUTATED_MARKER,
 } from '../tool-catalog/deferred-turn-controller.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
-import { createToolRuntime } from '../tool/tool-runtime.js';
+import { ToolRuntime } from '../tool/tool-runtime.js';
 import { resolveBuiltinToolPolicyInput } from '../tool/builtin-policy-extractors.js';
 const logger = getLogger('AgentLoopStandalone');
 
@@ -152,7 +152,7 @@ export async function runAgentLoopStandaloneTurn(
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
 
-  const toolRuntime = createToolRuntime({
+  const toolRuntime = new ToolRuntime({
     generation: 0,
     signal: signal ?? AbortSignal.timeout(600_000),
     sessionId,

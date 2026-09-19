@@ -11,7 +11,7 @@ import { isApprovalPortAvailable } from '../session/approval-port.js';
 import { runWithDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import { resolveBuiltinToolPolicyInput } from './builtin-policy-extractors.js';
 import { runToolApprovalGate } from './tool-approval-gate.js';
-import { createToolRuntime } from './tool-runtime.js';
+import { ToolRuntime } from './tool-runtime.js';
 
 export interface ToolExecutionAuthorityOptions {
   readonly host: ZhinAgentPrivate;
@@ -28,77 +28,80 @@ export interface ToolExecutionAuthorityOptions {
  * Adapter for the Tool definitions. AgentCore itself never
  * reads Message, policy configuration, or approval transports through this seam.
  */
-export function createToolExecutionAuthority(
-  options: ToolExecutionAuthorityOptions,
-): ToolExecutionAuthority {
-  const runtime = createToolRuntime({
-    generation: options.generation,
-    signal: options.signal,
-    sessionId: options.sessionId,
-    commMessage: options.message,
-    journal: options.journal
-      ? { append: (event) => { options.journal!.append(event); } }
-      : undefined,
-    config: options.host.config,
-    policyInputResolver: resolveBuiltinToolPolicyInput,
-  });
+export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
+  readonly #options: ToolExecutionAuthorityOptions;
+  readonly #runtime: ToolRuntime;
 
-  return Object.freeze({
-    async execute(
-      tool: AgentTool,
-      input: Readonly<Record<string, unknown>>,
-      toolUseId: string,
-    ): Promise<AgentCoreToolExecutionOutcome> {
-      const approvalDenied = options.rejectApproval && tool.approval && tool.approval !== 'never'
-        ? 'Error: unattended execution rejects tools that require approval'
-        : await runToolApprovalGate({
-          toolName: tool.name,
-          args: { ...input },
+  constructor(options: ToolExecutionAuthorityOptions) {
+    this.#options = options;
+    this.#runtime = new ToolRuntime({
+      generation: options.generation,
+      signal: options.signal,
+      sessionId: options.sessionId,
+      commMessage: options.message,
+      journal: options.journal
+        ? { append: (event) => { options.journal!.append(event); } }
+        : undefined,
+      config: options.host.config,
+      policyInputResolver: resolveBuiltinToolPolicyInput,
+    });
+  }
+
+  async execute(
+    tool: AgentTool,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+  ): Promise<AgentCoreToolExecutionOutcome> {
+    const options = this.#options;
+    const approvalDenied = options.rejectApproval && tool.approval && tool.approval !== 'never'
+      ? 'Error: unattended execution rejects tools that require approval'
+      : await runToolApprovalGate({
+        toolName: tool.name,
+        args: { ...input },
+        sessionId: options.sessionId,
+        commMessage: options.message,
+        policy: tool.approval,
+        bus: options.host.resourceHub?.agentStreamBus,
+        port: isApprovalPortAvailable(options.host.approvalPort)
+          ? options.host.approvalPort
+          : undefined,
+        publishCtx: {
           sessionId: options.sessionId,
-          commMessage: options.message,
-          policy: tool.approval,
-          bus: options.host.resourceHub?.agentStreamBus,
-          port: isApprovalPortAvailable(options.host.approvalPort)
-            ? options.host.approvalPort
-            : undefined,
-          publishCtx: {
-            sessionId: options.sessionId,
-          },
-          onceStore: options.host.resourceHub?.approvalOnce,
-          journal: options.journal,
-          signal: options.signal,
-        });
-      if (approvalDenied) return Object.freeze({ status: 'denied', reason: approvalDenied });
+        },
+        onceStore: options.host.resourceHub?.approvalOnce,
+        journal: options.journal,
+        signal: options.signal,
+      });
+    if (approvalDenied) return Object.freeze({ status: 'denied', reason: approvalDenied });
 
-      try {
-        const execute = () => runWithCommMessage(options.message, () =>
-          runtime.execute(tool, { ...input }, { toolCallId: toolUseId }));
-        const outcome = options.deferredController
-          ? await runWithDeferredTurnController(options.deferredController, execute)
-          : await execute();
-        if (outcome.denied) {
-          return Object.freeze({ status: 'denied', reason: String(outcome.output) });
-        }
+    try {
+      const execute = () => runWithCommMessage(options.message, () =>
+        this.#runtime.execute(tool, { ...input }, { toolCallId: toolUseId }));
+      const outcome = options.deferredController
+        ? await runWithDeferredTurnController(options.deferredController, execute)
+        : await execute();
+      if (outcome.denied) {
+        return Object.freeze({ status: 'denied', reason: String(outcome.output) });
+      }
+      return Object.freeze({
+        status: 'completed',
+        output: outcome.output,
+        durationMs: outcome.durationMs,
+      });
+    } catch (error) {
+      if (options.signal.aborted) {
         return Object.freeze({
-          status: 'completed',
-          output: outcome.output,
-          durationMs: outcome.durationMs,
-        });
-      } catch (error) {
-        if (options.signal.aborted) {
-          return Object.freeze({
-            status: 'cancelled',
-            reason: options.signal.reason instanceof Error
-              ? options.signal.reason.message
-              : String(options.signal.reason ?? 'Tool execution cancelled'),
-          });
-        }
-        return Object.freeze({
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error),
-          retryable: false,
+          status: 'cancelled',
+          reason: options.signal.reason instanceof Error
+            ? options.signal.reason.message
+            : String(options.signal.reason ?? 'Tool execution cancelled'),
         });
       }
-    },
-  });
+      return Object.freeze({
+        status: 'failed',
+        error: error instanceof Error ? error.message : String(error),
+        retryable: false,
+      });
+    }
+  }
 }

@@ -143,11 +143,21 @@ function stableApprovalValue(value: unknown): string {
 }
 
 /** Adapts canonical capability execution to the full AgentCore seam. */
-export function turnToolExecutionAuthority(runtime: TurnToolRuntime): ToolExecutionAuthority {
-  return Object.freeze({
-    execute: (tool: AgentTool, input: Readonly<Record<string, unknown>>, toolUseId: string, cause?: ToolExecutionCause) =>
-      runtime.execute(tool.name, input, toolUseId, cause),
-  });
+export class TurnToolExecutionAuthority implements ToolExecutionAuthority {
+  readonly #runtime: TurnToolRuntime;
+
+  constructor(runtime: TurnToolRuntime) {
+    this.#runtime = runtime;
+  }
+
+  execute(
+    tool: AgentTool,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+    cause?: ToolExecutionCause,
+  ) {
+    return this.#runtime.execute(tool.name, input, toolUseId, cause);
+  }
 }
 
 function freezeToolExecutionCause(cause?: ToolExecutionCause): ToolExecutionCause | undefined {
