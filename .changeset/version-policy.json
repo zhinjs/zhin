@@ -393,6 +393,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the closed classic Adapter and Core Endpoint runtime so defineAdapter, Endpoint, and generation-owned AdapterIndex are the only platform integration model under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-core-plugin-runtime.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the closed classic Core Plugin, duplicate Dispatcher, and inbound pipeline so generation snapshots and ImRuntime are the only lifecycle and IM dispatch authorities under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

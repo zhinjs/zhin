@@ -106,7 +106,7 @@ Three tiers:
 | `CommandIndex` | `internal` | `@zhin.js/command` | Command projection, snapshot -> command routing table |
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex`, etc. | `internal` | Various feature packages | Other projections, all internal mechanisms |
 | `defineFeatureProvider` (Feature Provider protocol) | `internal` | `@zhin.js/feature-kit` | Protocol for adding new feature types, aimed at framework extenders, not plugin authors |
-| `MessageDispatcher` | `internal` | `@zhin.js/core` | Message dispatcher (`createMessageDispatcher` for assembly, routing strategy is configurable) |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `ImRuntime` |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host installers (database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol); assembly details may change at any time |
 
@@ -118,12 +118,13 @@ Three tiers:
 | `MessageCommand` / classic `CommandFeature` | `removed` | Deleted from source and the public surface | Commands use `defineCommand` and Runtime `CommandIndex` |
 | Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
-| `Adapter` class / Core `Endpoint` type | `deprecated` | Exported from the root facade only for classic-runtime compatibility | New adapters import `defineAdapter` and the Plugin Runtime `Endpoint` from `zhin.js/adapter` |
+| Classic Core `Adapter` / `Endpoint` runtime | `removed` | Classes, capability state, lifecycle helpers, and dedicated tests were deleted | Adapters use `defineAdapter`, `Endpoint<TClient>`, and the generation-owned `AdapterIndex` from `zhin.js/adapter` |
+| Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | No longer exported | Use `zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
-| `plugin.yml` plugin manifest | `deprecated` | Legacy `Plugin` and `zhin build` still read it (`packages/im/core/src/plugin.ts`, `basic/cli/src/libs/plugin-package-build.ts`) | Part of the legacy system, will be retired along with it; convention-based plugins use `package.json` as the source of truth |
+| `plugin.yml` plugin manifest | `deprecated` | Only legacy `zhin build` still reads it (`basic/cli/src/libs/plugin-package-build.ts`) | Convention-based plugins use `package.json`; the remaining build path will be retired separately |
 
 ## Decision Rules (Which Tier for New APIs)
 

@@ -41,30 +41,6 @@ export interface EditMessageOptions {
   content: SendContent;
 }
 
-/** 出站回复来源（指令 / AI / proactive），仅当经 MessageDispatcher.replyWithPolish 或 runWithOutboundPolish 发出时由框架填入异步上下文 */
-export type OutboundReplySource = 'command' | 'ai' | 'proactive'
-
-export type OutboundReplyTrigger = 'inbound' | 'proactive';
-
-export interface OutboundReplyStore {
-  message: Message
-  source: OutboundReplySource
-  trigger: OutboundReplyTrigger
-  proactiveSource?: string
-}
-
-/**
- * 出站润色上下文（`dispatcher.addOutboundPolish` 的 handler 签名的同构类型）。
- * 与 {@link Adapter.sendMessage} → `before.sendMessage` 同一管道；需 `message`/`source` 时见 `getOutboundReplyStore`（dispatcher 导出）。
- */
-export interface OutboundPolishContext {
-  message: Message
-  content: SendContent
-  source: OutboundReplySource
-}
-
-/** 返回 `SendContent` 则替换后续 `before.sendMessage` 与发送中的 content */
-export type OutboundPolishMiddleware = (ctx: OutboundPolishContext) => MaybePromise<SendContent | void>
 /**
  * 消息发送者信息
  */
@@ -119,17 +95,6 @@ export interface SendOptions extends MessageChannel{
   content:SendContent
   quoteId?: string
   threadId?: string
-}
-
-/** `Adapter.sendMessage` 成功发出后由 core 分发的载荷 */
-export interface MessageSendPayload {
-  adapter: string;
-  options: SendOptions;
-  messageId: string;
-  /** 经 `replyWithPolish` 发出时由 dispatcher 填入 */
-  replySource?: OutboundReplySource;
-  /** 触发回复的入站消息（replyWithPolish 时可用） */
-  replyMessage?: Message;
 }
 
 export interface ProcessMessage {

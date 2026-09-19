@@ -7,7 +7,6 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Plugin, Message } from '@zhin.js/core';
 import { createWriteFileTool, WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 
@@ -20,22 +19,6 @@ describe('WriteFileBuiltinTool', () => {
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-
-  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
-    const plugin = {
-      inject: (name: string) => {
-        if (name === 'icqq') {
-          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
-        }
-        if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist: [...execAllowlist] }) };
-        }
-        return undefined;
-      },
-      dispatch: vi.fn(),
-    } as unknown as Plugin;
-    (plugin as unknown as { root: Plugin }).root = plugin;
-  }
 
   it('toTool 元数据与 schema 完整', () => {
     const tool = createWriteFileTool();
@@ -72,7 +55,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
-    mockPlugin('owner1', [], []);
     const tool = createWriteFileTool();
     const fp = path.join(tmpDir, 'via-tool.txt');
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
@@ -83,7 +65,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('admin 且 write_file 不在 execAllowlist — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'blocked-by-role.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
@@ -93,7 +74,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('普通用户调用 write_file — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'deny-by-role.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
@@ -103,7 +83,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('master 调用 write_file 直接放行', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'owner-allowed.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
@@ -113,7 +92,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('非 master 写入 global 记忆路径 — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
-    mockPlugin('owner1', ['admin1'], ['write_file']);
     const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({
@@ -129,7 +107,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('master 可写入 global 记忆路径', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const memRoot = path.join(tmpDir, 'data', 'memory', 'global', 'MEMORY.md');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
@@ -139,7 +116,6 @@ describe('WriteFileBuiltinTool', () => {
   });
 
   it('admin 且 write_file 在 execAllowlist 时可直接执行', async () => {
-    mockPlugin('owner1', ['admin1'], ['write_file']);
     const fp = path.join(tmpDir, 'admin-allowlisted.txt');
     const inst = new WriteFileBuiltinTool();
     const ctx = mockCommMessage({

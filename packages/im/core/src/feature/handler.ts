@@ -21,7 +21,6 @@ import {
   type HandlerEventMap,
 } from '@zhin.js/handler';
 
-import type { Plugin } from '../plugin.js';
 import type { Message } from '../plugin-runtime/im/contracts.js';
 import type { Notice } from '../notice.js';
 import type { Request } from '../request.js';
@@ -35,13 +34,8 @@ import type {
   RegisteredAdapterName,
 } from '@zhin.js/adapter';
 
-type KnownKeys<T> = {
-  [K in keyof T as string extends K ? never : number extends K ? never : K]: T[K];
-};
-
 declare module '@zhin.js/handler' {
-  interface HandlerEventMap extends KnownKeys<Omit<Plugin.Lifecycle,
-    'message.receive' | 'notice.receive' | 'request.receive' | 'system.receive'>> {
+  interface HandlerEventMap {
     'message.receive': [event: EndpointEvent<Message>];
     'notice.receive': [event: EndpointEvent<Notice>];
     'request.receive': [event: EndpointEvent<Request>];

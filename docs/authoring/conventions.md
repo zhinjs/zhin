@@ -96,7 +96,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ — `defineHandler`
 
-按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/$receive.ts` → `notice.receive`）。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
+按 **Runtime 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/$receive.ts` → `notice.receive`）。`@zhin.js/core/feature/handler` 直接声明 canonical IM 事件表，写 `event: 'message.receive'` 时参数类型可推断，不再依赖另一套 Plugin 生命周期。
 
 依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。`ImRuntime` 会分发：
 

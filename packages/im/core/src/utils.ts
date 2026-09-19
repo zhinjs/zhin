@@ -45,8 +45,8 @@ import type { MediaRef } from "./built/segment-contract/types.js";
 /**
  * 组合中间件,洋葱模型
  *
- * 空中间件列表时必须仍调用 `next`——入站管线把 MessageDispatcher
- * 作为 terminal next 传入；吞掉 next 会导致命令/AI 永远不跑。
+ * 空中间件列表时仍调用 terminal `next`，使调用方可以组合自己的
+ * generation-owned dispatch stage。
  */
 export function compose(
   middlewares: MessageMiddleware[]

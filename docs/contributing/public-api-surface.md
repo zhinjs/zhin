@@ -106,7 +106,7 @@
 | `CommandIndex` | `internal` | `@zhin.js/command` | 命令 projection，快照 → 命令路由表 |
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex` 等 | `internal` | 各 feature 包 | 其余 projection，同属内部机制 |
 | `defineFeatureProvider`（Feature Provider 协议） | `internal` | `@zhin.js/feature-kit` | 新增 feature 类型的协议，面向框架扩展者而非插件作者 |
-| `MessageDispatcher` | `internal` | `@zhin.js/core` | 消息分发器（`createMessageDispatcher` 装配，路由策略可配置） |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `ImRuntime` 持有的 generation-owned 消息分发器 |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
 | Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
@@ -132,11 +132,12 @@
 | `Adapter.Registry` / `Adapter.register` / `Adapter.Factory` | `removed` | 进程级工厂注册表及其唯一自证测试已删除 | Adapter 定义与实例只由 generation-owned `AdapterIndex` 发现和持有 |
 | `Plugin.adapters` / `Plugin.injectAdapter` | `removed` | 经典 Plugin 的重复 Adapter 目录与 service-locator helper 已删除 | 当前 Endpoint 目录只能从 generation-owned `AdapterIndex` 查询 |
 | classic Core `Adapter` / `Endpoint` runtime | `removed` | 类、类型、capability WeakMap、连接与生命周期 helper 及专属测试已删除 | 唯一实现是 `zhin.js/adapter` 的 `defineAdapter`、`Endpoint<TClient>` 与 generation-owned `AdapterIndex` |
+| classic Core `Plugin` runtime | `removed` | Plugin 类、Context ALS、重复 Dispatcher 与入站管线均已删除 | 插件生命周期由 `@zhin.js/plugin-runtime` 的 generation snapshot 管理；IM 分发只走 `ImRuntime` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
-| `plugin.yml` 插件清单 | `deprecated` | legacy `Plugin` 与 `zhin build` 仍在读取（`packages/im/core/src/plugin.ts`、`basic/cli/src/libs/plugin-package-build.ts`） | 属 legacy 体系的一部分，随 legacy 一起退役；约定式插件以 `package.json` 为准 |
+| `plugin.yml` 插件清单 | `deprecated` | 仅 legacy `zhin build` 仍在读取（`basic/cli/src/libs/plugin-package-build.ts`） | 约定式插件以 `package.json` 为准；剩余构建入口另行退役 |
 
 ## 判定规则（新增 API 放哪档）
 

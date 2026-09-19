@@ -8,7 +8,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Plugin } from '@zhin.js/core';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
   runToolPolicies,
@@ -37,22 +36,6 @@ describe('policy-facade', () => {
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-
-  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
-    const plugin = {
-      inject: (name: string) => {
-        if (name === 'icqq') {
-          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
-        }
-        if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist }) };
-        }
-        return undefined;
-      },
-    } as unknown as Plugin;
-    (plugin as unknown as { root: Plugin }).root = plugin;
-    return plugin;
-  }
 
   describe('层顺序与 applies 条件', () => {
     it('edit_file 全链 7 层按序执行且全部通过', () => {
@@ -167,7 +150,6 @@ describe('policy-facade', () => {
 
   describe('deny 短路与 deniedBy', () => {
     it('普通用户 edit_file 在 role-gate 短路，后续层不执行', () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, 'a.txt');
       const result = runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx });
@@ -180,7 +162,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 未在 execAllowlist 时在 dangerous-tool-approval 短路（ZHIN_NEEDS_OWNER）', () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, 'a.txt');
       const result = runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx });
@@ -224,7 +205,6 @@ describe('policy-facade', () => {
     });
 
     it('master 访问敏感路径在 sensitive-path 产生 gate（list_dir，无权限矩阵层）', () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
       const fp = path.join(tmpDir, '.env');
       const result = runToolPolicies({ toolName: 'list_dir', filePath: fp, commMessage: ctx });
@@ -265,7 +245,6 @@ describe('policy-facade', () => {
 
   describe('edit_file 全链（门面侧验证；工具不再自行检查策略）', () => {
     it('trusted 未 allowlist：门面返回 ZHIN_NEEDS_OWNER', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, 'eq.txt');
       fs.writeFileSync(fp, 'before', 'utf-8');
@@ -278,7 +257,6 @@ describe('policy-facade', () => {
     });
 
     it('普通用户：门面返回 Error', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, 'eq2.txt');
       fs.writeFileSync(fp, 'before', 'utf-8');
@@ -376,7 +354,6 @@ describe('policy-facade', () => {
     });
 
     it('普通用户读敏感路径在 file-permission-matrix 拒绝（门面侧验证）', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, '.env');
 
@@ -388,7 +365,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 读敏感路径为 needsOwnerConfirmation gate（门面侧验证）', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, '.env');
 
@@ -410,7 +386,6 @@ describe('policy-facade', () => {
     });
 
     it('master 搜索敏感目录在 sensitive-path gate（门面侧验证）', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
       const fp = path.join(tmpDir, '.ssh');
 
@@ -430,7 +405,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 未 allowlist 时 gate（门面侧验证）', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
 
       const facadeMsg = toolPolicyResultToMessage(

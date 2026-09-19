@@ -2,7 +2,6 @@
  * Canonical IM messages, Endpoints, rendering, and plugin-facing core types.
  * @module @zhin.js/core
  */
-export * from './plugin.js'
 export * from './component.js'
 export * from './message.js'
 export * from './im-scene.js'
@@ -27,7 +26,6 @@ export * from './built/roles.js'
 export * from './im-session-id.js'
 export * from './built/ai-trigger.js'
 export * from './built/ai-access.js'
-export * from './built/dispatcher.js'
 export * from './built/login-assist.js'
 export * from './built/generated-qrcode.js'
 export * from './built/rich-segments/index.js'
@@ -41,9 +39,6 @@ export * from './built/outbound-media-contract.js'
 export * from './built/segment-contract/index.js'
 export type { SegmentMediaRef } from './built/segment-contract/media.js'
 export * from './built/generic-segment-mapper.js'
-export * from './built/inbound-runner.js'
-export type { RunInboundMessageOptions, InboundRunResult } from './built/inbound-runner.js'
-export * from './built/management-command-guard.js'
 export * from './built/html-to-text.js'
 export * from './built/html-segment-fallback.js'
 

@@ -4,7 +4,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
-import { type Plugin, type Message } from '@zhin.js/core';
 import {
   createWebFetchTool,
   WebFetchBuiltinTool,
@@ -19,21 +18,6 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
   vi.restoreAllMocks();
 });
-
-function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
-  const plugin = {
-    inject: (name: string) => {
-      if (name === 'icqq') {
-        return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
-      }
-      if (name === 'ai') {
-        return { getAgentConfig: () => ({ execAllowlist }) };
-      }
-      return undefined;
-    },
-  } as unknown as Plugin;
-  (plugin as unknown as { root: Plugin }).root = plugin;
-}
 
 describe('WebFetchBuiltinTool', () => {
   it('SSRF：拒绝 localhost', async () => {
@@ -86,7 +70,6 @@ describe('WebFetchBuiltinTool', () => {
   });
 
   it('toTool 元数据与 execute 路径', async () => {
-    mockPlugin('owner1', [], ['web_fetch']);
     vi.stubGlobal('fetch', async () => new Response('<html><body>OK</body></html>', { status: 200 }));
     const tool = createWebFetchTool();
     expect(tool.name).toBe('web_fetch');
@@ -98,7 +81,6 @@ describe('WebFetchBuiltinTool', () => {
   });
 
   it('admin 且 web_fetch 不在 execAllowlist — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('OK', { status: 200 })));
     const inst = new WebFetchBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
@@ -107,7 +89,6 @@ describe('WebFetchBuiltinTool', () => {
   });
 
   it('普通用户调用 web_fetch — 工具不再自行拒绝（由 ToolRuntime 处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('OK', { status: 200 })));
     const inst = new WebFetchBuiltinTool();
     const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });

@@ -7,7 +7,6 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Message, Plugin } from '@zhin.js/core';
 import { createEditFileTool, EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
 import { normalizeTool } from '../../src/resource-hub/tool-selection.js';
 
@@ -20,21 +19,6 @@ describe('EditFileBuiltinTool', () => {
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-
-  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
-    const plugin = {
-      inject: (name: string) => {
-        if (name === 'icqq') {
-          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
-        }
-        if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist }) };
-        }
-        return undefined;
-      },
-    } as unknown as Plugin;
-    (plugin as unknown as { root: Plugin }).root = plugin;
-  }
 
   it('toTool 元数据与 schema 完整', () => {
     const tool = createEditFileTool();
@@ -78,7 +62,6 @@ describe('EditFileBuiltinTool', () => {
   });
 
   it('execute 与 normalizeTool 绑定 context 时可调用', async () => {
-    mockPlugin('owner1', [], []);
     const tool = createEditFileTool();
     const fp = path.join(tmpDir, 'c.txt');
     fs.writeFileSync(fp, 'one two', 'utf-8');
@@ -94,7 +77,6 @@ describe('EditFileBuiltinTool', () => {
   });
 
   it('admin 且 edit_file 不在 execAllowlist — 工具本身不再拒绝（由 ToolRuntime 统一处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'role-edit.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();
@@ -105,7 +87,6 @@ describe('EditFileBuiltinTool', () => {
   });
 
   it('普通用户调用 edit_file — 工具本身不再拒绝（由 ToolRuntime 统一处理）', async () => {
-    mockPlugin('owner1', ['admin1'], []);
     const fp = path.join(tmpDir, 'role-edit-deny.txt');
     fs.writeFileSync(fp, 'before', 'utf-8');
     const inst = new EditFileBuiltinTool();

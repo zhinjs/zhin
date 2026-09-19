@@ -96,7 +96,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ -- `defineHandler`
 
-Register listeners by **Lifecycle event name** (no `next()` chain). Directory paths use `/` as the capability localName; when `event` is omitted, `/` maps to `.` for the event name (e.g. `handlers/notice/$receive.ts` → `notice.receive`). Importing from `@zhin.js/core/feature/handler` merges `Plugin.Lifecycle` into `HandlerEventMap`, so `event: 'message.receive'` gets typed arguments.
+Register listeners by **Runtime event name** (no `next()` chain). Directory paths use `/` as the capability localName; when `event` is omitted, `/` maps to `.` for the event name (e.g. `handlers/notice/$receive.ts` → `notice.receive`). `@zhin.js/core/feature/handler` declares the canonical IM event map directly, so `event: 'message.receive'` gets typed arguments without depending on a second Plugin lifecycle.
 
 Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. `ImRuntime` dispatches:
 
