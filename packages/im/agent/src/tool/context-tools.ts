@@ -22,7 +22,7 @@ export function createUserProfileTool(userId: string, profiles: UserProfileStore
         },
         value: {
           type: 'string',
-          description: '偏好值（仅 set 操作需要）。language / preferred_language 会影响回复与 web_search 的 Bing 市场语言。',
+          description: '偏好值（仅 set 操作需要）。language / preferred_language 会影响回复语言。',
         },
       },
       required: ['action'],

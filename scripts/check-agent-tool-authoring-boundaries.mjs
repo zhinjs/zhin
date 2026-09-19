@@ -104,6 +104,8 @@ for (const removedToolRegistryApi of [
   'createAnalyzeMediaTool',
   'KnowledgeSearchTool',
   'createKnowledgeSearchTool',
+  'WebSearchBuiltinTool',
+  'createWebSearchTool',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -131,9 +133,27 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/run-deferred-task-tool.ts',
   'packages/im/agent/src/builtin/analyze-media-tool.ts',
   'packages/im/agent/src/builtin/knowledge-search-tool.ts',
+  'packages/im/agent/src/builtin/web-search-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');
+}
+
+const agentServicePath = path.join(repoRoot, 'packages/im/agent/src/service.ts');
+const agentService = fs.readFileSync(agentServicePath, 'utf8');
+for (const removedImplicitToolApi of [
+  'getResidentToolsAsTools',
+  'useBuiltinTools',
+  'collectExternalTools',
+]) {
+  const match = new RegExp(`\\b${removedImplicitToolApi}\\b`, 'u').exec(agentService);
+  if (match) {
+    report(
+      agentServicePath,
+      `removed implicit AIService Tool API restored: ${removedImplicitToolApi}`,
+      lineOf(agentService, match.index),
+    );
+  }
 }
 
 const retiredToolNames = ['tool_search', 'run_deferred_task', 'analyze_media'];

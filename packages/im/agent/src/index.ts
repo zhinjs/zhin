@@ -200,20 +200,6 @@ export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-too
 
 export { BuiltinBaseTool } from './builtin/builtin-base-tool.js';
 export {
-  WebSearchBuiltinTool,
-  createWebSearchTool,
-  WEB_SEARCH_PARAMETERS,
-  MAX_WEB_SEARCH_COUNT,
-} from './builtin/web-search-tool.js';
-export {
-  WEB_SEARCH_LOCALE_EXTRA_KEY,
-  DEFAULT_WEB_SEARCH_MARKET,
-  normalizeWebSearchLocaleHint,
-  acceptLanguageForMarket,
-  resolveWebSearchMarketFromContext,
-} from './builtin/web-search-locale.js';
-export { bingSearchFetchHeaders, buildBingSearchUrl } from './builtin/bing-search-html.js';
-export {
   readSkillInstructions,
   LoadSkillBuiltinTool,
   createLoadSkillTool,
@@ -231,7 +217,6 @@ export {
 } from './tool/tool-system.js';
 export { FileJournalStore } from './journal/index.js';
 export { PersistentTurnJournal } from './journal/index.js';
-export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
 
 export {
   createScheduleTools,

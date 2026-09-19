@@ -7,7 +7,7 @@ import {
   resolveBingUrl,
   hostnameMatchesList,
   buildBingSearchUrl,
-} from '../../src/builtin/bing-search-html.js';
+} from '../../src/web/bing-search-html.js';
 
 describe('resolveBingUrl', () => {
   it('跳过相对路径', () => {

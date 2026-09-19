@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-implicit-service-web-tool.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the implicit classic web Tool and require explicit standalone capabilities under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "own-project-knowledge-search.md",
       "packages": [
         "@zhin.js/agent",

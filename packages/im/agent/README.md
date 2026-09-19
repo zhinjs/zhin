@@ -333,7 +333,6 @@ useContext('ai', async (ai) => {
     provider: 'openai',
     model: 'gpt-4o',
     systemPrompt: '你只负责代码审查与建议，不闲聊。',
-    useBuiltinTools: true,
   })
   const codeResult = await codeAgent.run('审查这段 TypeScript 的类型安全')
 
@@ -341,13 +340,14 @@ useContext('ai', async (ai) => {
     provider: 'ollama',
     model: 'qwen2.5',
     systemPrompt: '只做中英互译，不解释。',
-    useBuiltinTools: false,
-    collectExternalTools: false,
+    includeRegisteredTools: false,
   })
   const translated = await translateAgent.run('Hello world')
 })
 ```
 
+Standalone Agent 不隐式继承主 Agent 的 native Tool。能力必须通过 `tools` 显式传入，或先用
+`ai.registerTool()` 注册；`includeRegisteredTools: false` 可为单次 Agent 建立空白能力边界。
 适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
 
 ### 3. 一次调用、单次任务（不持有 Agent 实例）

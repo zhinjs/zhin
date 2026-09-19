@@ -5,7 +5,7 @@
  * 1. AI 服务初始化
  * 2. 工具服务功能
  * 3. AI 触发中间件
- * 4. 内置工具
+ * 4. 显式工具注册
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -39,7 +39,7 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   };
 });
 
-// Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
+// Import after mocking — AIService from agent; Tool/trigger contracts from core
 import { AIService } from '@zhin.js/agent';
 import { createSdkProviderAdapter } from '@zhin.js/ai';
 import { shouldTriggerAI, resolveSenderRoles, type AgentTool } from '@zhin.js/core';
@@ -178,16 +178,8 @@ describe('AI Service 集成测试', () => {
   });
 
   describe('工具管理', () => {
-    it('应该收集内置工具', () => {
-      const tools = aiService.collectAllTools();
-      expect(Array.isArray(tools)).toBe(true);
-      const names = tools.map(t => t.name);
-      expect(names).toEqual(['web_search']);
-    });
-
-    it('getResidentToolsAsTools 应包含 web_search', () => {
-      const resident = aiService.getResidentToolsAsTools();
-      expect(resident.map(t => t.name)).toEqual(['web_search']);
+    it('standalone agents do not receive implicit tools', () => {
+      expect(aiService.listRegisteredTools()).toEqual([]);
     });
 
     it('应该注册自定义工具', () => {
@@ -200,12 +192,34 @@ describe('AI Service 集成测试', () => {
 
       const dispose = aiService.registerTool(customTool);
       
-      const tools = aiService.collectAllTools();
+      const tools = aiService.listRegisteredTools();
       expect(tools.some(t => t.name === 'custom_tool')).toBe(true);
+      expect(Object.isFrozen(tools)).toBe(true);
       
       dispose();
-      const toolsAfter = aiService.collectAllTools();
+      const toolsAfter = aiService.listRegisteredTools();
       expect(toolsAfter.some(t => t.name === 'custom_tool')).toBe(false);
+    });
+
+    it('rejects ambiguous duplicate registrations', () => {
+      const tool: AgentTool = {
+        name: 'duplicate',
+        description: 'first',
+        parameters: { type: 'object', properties: {} },
+        execute: async () => 'result',
+      };
+      aiService.registerTool(tool);
+
+      expect(() => aiService.registerTool({ ...tool, description: 'second' }))
+        .toThrow('already registered');
+      expect(() => aiService.registerTool({ ...tool, name: ' duplicate ' }))
+        .toThrow('canonical name');
+      expect(() => aiService.createAgent({ tools: [tool] }))
+        .toThrow('Duplicate standalone Agent Tool');
+      expect(() => aiService.createAgent({
+        tools: [tool],
+        includeRegisteredTools: false,
+      })).not.toThrow();
     });
   });
 

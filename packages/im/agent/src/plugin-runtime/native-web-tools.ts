@@ -12,9 +12,9 @@ import {
   buildBingSearchUrl,
   extractBingResults,
   hostnameMatchesList,
-} from '../builtin/bing-search-html.js';
-import { DEFAULT_WEB_SEARCH_MARKET } from '../builtin/web-search-locale.js';
-import { ZHIN_WEB_USER_AGENT } from '../builtin/web-tool-utils.js';
+} from '../web/bing-search-html.js';
+import { DEFAULT_WEB_SEARCH_MARKET } from '../web/web-search-locale.js';
+import { ZHIN_WEB_USER_AGENT } from '../web/web-tool-utils.js';
 import {
   NodeNetworkTransport,
   TurnNetworkClient,

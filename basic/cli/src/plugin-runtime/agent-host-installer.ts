@@ -2248,8 +2248,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
               model: binding.model,
               systemPrompt: WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT,
               tools: [],
-              useBuiltinTools: false,
-              collectExternalTools: false,
+              includeRegisteredTools: false,
               maxIterations: 1,
               signal: operationSignal,
             });
