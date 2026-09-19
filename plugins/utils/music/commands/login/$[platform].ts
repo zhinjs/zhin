@@ -1,10 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
 import type { Message } from '@zhin.js/core/runtime';
 import {
-  startLogin,
-  pollLogin,
-  cancelLogin,
-  getActiveLogin,
   loginSessionKey,
   type QrLoginSource,
 } from '../../src/login/index.js';
@@ -29,9 +25,10 @@ export default defineCommand<unknown, string, Message>({
     const ids = resolveMessageIds(input!);
     if (!ids) return '无法识别会话信息，请在群聊或私聊中使用';
     const key = loginSessionKey(ids.endpointId, ids.conversationId, ids.senderId);
+    const runtime = use(musicRuntimeToken);
 
     if (platform === '取消' || platform === 'cancel') {
-      return cancelLogin(key) ? '已取消登录' : '没有进行中的登录会话';
+      return runtime.logins.cancel(key) ? '已取消登录' : '没有进行中的登录会话';
     }
 
     const source = QR_LOGIN_SOURCES[platform];
@@ -39,7 +36,7 @@ export default defineCommand<unknown, string, Message>({
       return `不支持的平台：${platform || '(空)'}\n支持：qq, netease`;
     }
 
-    const existing = getActiveLogin(key);
+    const existing = runtime.logins.get(key);
     if (existing) {
       return `正在进行 ${SOURCE_DISPLAY_NAME[existing.source]} 登录，请先完成或发送"音乐登录 取消"`;
     }
@@ -47,7 +44,7 @@ export default defineCommand<unknown, string, Message>({
     const sourceName = SOURCE_DISPLAY_NAME[source];
     let qrResult;
     try {
-      qrResult = await startLogin(source, key);
+      qrResult = await runtime.logins.start(source, key);
     } catch (err) {
       return `[${sourceName}] 获取二维码失败：${err instanceof Error ? err.message : String(err)}`;
     }
@@ -61,7 +58,7 @@ export default defineCommand<unknown, string, Message>({
       `\n二维码有效期 2 分钟，发送"音乐登录 取消"可中止`,
     ]);
 
-    const finalResult = await pollLogin(key, use(musicRuntimeToken).credentials, async (result) => {
+    const finalResult = await runtime.logins.poll(key, async (result) => {
       if (result.status === 'scanned') {
         await replyFn(`[${sourceName}] ${result.message}`);
       } else if (result.status === 'confirmed') {

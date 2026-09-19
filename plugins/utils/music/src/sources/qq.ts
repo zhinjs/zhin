@@ -15,11 +15,15 @@ function getHeaders(cookie?: string | null) {
 }
 
 export class QQMusicService implements MusicSearchService {
-  constructor(private readonly credentials: CredentialStore) {}
+  readonly #credentials: CredentialStore;
+
+  constructor(credentials: CredentialStore) {
+    this.#credentials = credentials;
+  }
 
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
-      const cookie = await this.credentials.get('qq', 'cookie');
+      const cookie = await this.#credentials.get('qq', 'cookie');
       const response = await fetch(MUSICU_API, {
         method: 'POST',
         headers: getHeaders(cookie),
@@ -110,7 +114,7 @@ export class QQMusicService implements MusicSearchService {
   }
 
   async getAudioUrl(id: string, mid?: string, mediaMid?: string): Promise<string> {
-    const cookie = await this.credentials.get('qq', 'cookie');
+    const cookie = await this.#credentials.get('qq', 'cookie');
     if (cookie) {
       try {
         const uin = /uin=o?(\d+)/.exec(cookie)?.[1] ?? '0';

@@ -2,7 +2,7 @@ import { defineCommand } from 'zhin.js/command';
 import type { Message } from '@zhin.js/core/runtime';
 import { searchMusic, formatSearchResults } from '../../src/music-lib.js';
 import { resolveSourceAlias, SOURCE_DISPLAY_NAME } from '../../src/config.js';
-import { sessionKey, resolveMessageIds, setPending } from '../../src/session.js';
+import { sessionKey, resolveMessageIds } from '../../src/session.js';
 import type { MusicSource } from '../../src/types.js';
 import { musicRuntimeToken } from '../../src/runtime.js';
 
@@ -62,7 +62,7 @@ export default defineCommand<MusicConfig, string, Message>({
     const ids = input ? resolveMessageIds(input) : null;
     if (ids) {
       const key = sessionKey(ids.endpointId, ids.conversationId, ids.senderId);
-      setPending(key, {
+      use(musicRuntimeToken).sessions.set(key, {
         results: result.results,
         source: result.source,
         keyword,

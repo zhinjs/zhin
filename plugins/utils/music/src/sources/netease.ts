@@ -4,7 +4,11 @@ import type { CredentialStore } from '../credential-store.js';
 
 /** 网易云音乐搜索服务 */
 export class NeteaseMusicService implements MusicSearchService {
-  constructor(private readonly credentials: CredentialStore) {}
+  readonly #credentials: CredentialStore;
+
+  constructor(credentials: CredentialStore) {
+    this.#credentials = credentials;
+  }
 
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
@@ -74,7 +78,7 @@ export class NeteaseMusicService implements MusicSearchService {
    * @returns 音频直链 URL
    */
   async getAudioUrl(id: string): Promise<string> {
-    const cookie = await this.credentials.get('netease', 'cookie');
+    const cookie = await this.#credentials.get('netease', 'cookie');
     if (cookie) {
       try {
         const response = await fetch(

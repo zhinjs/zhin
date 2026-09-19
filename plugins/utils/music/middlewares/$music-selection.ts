@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
-import { sessionKey, resolveMessageIds, getPending, clearPending } from '../src/session.js';
+import { sessionKey, resolveMessageIds } from '../src/session.js';
 import { shareMusicDetail, buildMusicShareSegment } from '../src/music-lib.js';
 import { SOURCE_DISPLAY_NAME } from '../src/config.js';
 import { musicRuntimeToken } from '../src/runtime.js';
@@ -21,14 +21,15 @@ export default defineMiddleware<Message>({
     }
 
     const key = sessionKey(ids.endpointId, ids.conversationId, ids.senderId);
-    const pending = getPending(key);
+    const runtime = context.use(musicRuntimeToken);
+    const pending = runtime.sessions.get(key);
     if (!pending) {
       await next();
       return;
     }
 
     if (raw === '取消') {
-      clearPending(key);
+      runtime.sessions.delete(key);
       await context.input.$reply('已取消点歌');
       return;
     }
@@ -39,12 +40,12 @@ export default defineMiddleware<Message>({
       return;
     }
 
-    clearPending(key);
+    runtime.sessions.delete(key);
     const selected = pending.results[num - 1]!;
     const sourceName = SOURCE_DISPLAY_NAME[selected.source] ?? selected.source;
 
     const detailResult = await shareMusicDetail(
-      context.use(musicRuntimeToken),
+      runtime,
       selected.id,
       selected.source,
     );

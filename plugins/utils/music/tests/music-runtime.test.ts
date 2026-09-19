@@ -14,12 +14,9 @@ import deleteCommand from '../commands/cookie/delete/$[source].ts';
 import { formatMusicInfo, resolveSourceAlias, SOURCE_DISPLAY_NAME } from '../src/config.js';
 import { formatSearchResults } from '../src/music-lib.js';
 import {
+  MusicSearchSessions,
   sessionKey,
   resolveMessageIds,
-  setPending,
-  getPending,
-  clearPending,
-  cleanExpired,
 } from '../src/session.js';
 import { QQMusicService } from '../src/sources/qq.js';
 import { KuwoMusicService } from '../src/sources/kuwo.js';
@@ -30,10 +27,9 @@ import {
   createInMemoryCredentialDb,
 } from '../src/credential-store.js';
 import {
+  QrLoginRuntime,
   loginSessionKey,
-  getActiveLogin,
-  cancelLogin,
-  cleanExpiredLogins,
+  type QrLoginProvider,
 } from '../src/login/index.js';
 import type { MusicInfo, MusicSource } from '../src/types.js';
 
@@ -167,40 +163,57 @@ describe('@zhin.js/plugin-music', () => {
     });
 
     it('stores and retrieves pending search', () => {
+      const sessions = new MusicSearchSessions();
       const search = {
         results: [{ id: '1', source: 'qq' as const, title: 'Test', url: '' }],
         source: 'qq' as const,
         keyword: 'test',
         timestamp: Date.now(),
       };
-      setPending(key, search);
-      const retrieved = getPending(key);
+      sessions.set(key, search);
+      const retrieved = sessions.get(key);
       expect(retrieved).toBeDefined();
       expect(retrieved!.keyword).toBe('test');
-      clearPending(key);
-      expect(getPending(key)).toBeUndefined();
+      sessions.delete(key);
+      expect(sessions.get(key)).toBeUndefined();
     });
 
     it('expires old sessions', () => {
-      setPending(key, {
+      const sessions = new MusicSearchSessions();
+      sessions.set(key, {
         results: [],
         source: 'qq',
         keyword: 'old',
         timestamp: Date.now() - 4 * 60 * 1000,
       });
-      expect(getPending(key)).toBeUndefined();
+      expect(sessions.get(key)).toBeUndefined();
     });
 
     it('cleanExpired removes stale entries', () => {
+      const sessions = new MusicSearchSessions();
       const staleKey = sessionKey('ep', 'g', 'stale');
-      setPending(staleKey, {
+      sessions.set(staleKey, {
         results: [],
         source: 'netease',
         keyword: 'stale',
         timestamp: Date.now() - 5 * 60 * 1000,
       });
-      cleanExpired();
-      expect(getPending(staleKey)).toBeUndefined();
+      sessions.pruneExpired();
+      expect(sessions.get(staleKey)).toBeUndefined();
+    });
+
+    it('isolates pending selections between runtime owners', () => {
+      const first = new MusicSearchSessions();
+      const second = new MusicSearchSessions();
+      first.set(key, {
+        results: [],
+        source: 'qq',
+        keyword: 'first',
+        timestamp: Date.now(),
+      });
+
+      expect(first.get(key)?.keyword).toBe('first');
+      expect(second.get(key)).toBeUndefined();
     });
   });
 
@@ -243,15 +256,60 @@ describe('@zhin.js/plugin-music', () => {
     });
 
     it('returns undefined for non-existent login', () => {
-      expect(getActiveLogin('nonexistent')).toBeUndefined();
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(logins.get('nonexistent')).toBeUndefined();
     });
 
     it('cancel returns false for non-existent session', () => {
-      expect(cancelLogin('nonexistent')).toBe(false);
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(logins.cancel('nonexistent')).toBe(false);
     });
 
     it('cleanExpiredLogins does not throw on empty map', () => {
-      expect(() => cleanExpiredLogins()).not.toThrow();
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(() => logins.pruneExpired()).not.toThrow();
+    });
+
+    it('isolates active logins between runtime owners', async () => {
+      const provider: QrLoginProvider = {
+        createQr: vi.fn(async () => ({
+          imageSegment: { type: 'image', data: { url: 'https://example.test/qr' } },
+          pollData: { token: 'one' },
+        })),
+        pollQr: vi.fn(async () => ({ status: 'waiting', message: 'waiting' })),
+      };
+      const providers = { qq: provider, netease: provider };
+      const first = new QrLoginRuntime(createCredentials(), providers);
+      const second = new QrLoginRuntime(createCredentials(), providers);
+      const key = loginSessionKey('ep', 'group', 'owner');
+
+      await first.start('qq', key);
+
+      expect(first.get(key)?.pollData).toEqual({ token: 'one' });
+      expect(second.get(key)).toBeUndefined();
+    });
+
+    it('does not resurrect an in-flight login after runtime disposal', async () => {
+      let resolveQr!: (value: Awaited<ReturnType<QrLoginProvider['createQr']>>) => void;
+      const provider: QrLoginProvider = {
+        createQr: () => new Promise((resolve) => { resolveQr = resolve; }),
+        pollQr: vi.fn(async () => ({ status: 'waiting', message: 'waiting' })),
+      };
+      const logins = new QrLoginRuntime(createCredentials(), {
+        qq: provider,
+        netease: provider,
+      });
+      const key = loginSessionKey('ep', 'group', 'owner');
+      const starting = logins.start('qq', key);
+
+      logins.dispose();
+      resolveQr({
+        imageSegment: { type: 'image', data: { url: 'https://example.test/qr' } },
+        pollData: { token: 'late' },
+      });
+
+      await expect(starting).rejects.toThrow('登录已取消');
+      expect(logins.get(key)).toBeUndefined();
     });
   });
 

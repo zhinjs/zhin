@@ -1,6 +1,6 @@
 import { definePlugin, databaseHostToken } from 'zhin.js';
-import { cleanExpired } from './src/session.js';
-import { cleanExpiredLogins } from './src/login/index.js';
+import { MusicSearchSessions } from './src/session.js';
+import { QrLoginRuntime } from './src/login/index.js';
 import {
   CredentialStore,
   createInMemoryCredentialDb,
@@ -32,15 +32,22 @@ export default definePlugin({
       return host;
     })() : createInMemoryCredentialDb();
     const credentials = new CredentialStore(db);
-    context.resources.provide(musicRuntimeToken, Object.freeze({
+    const runtime = Object.freeze({
       credentials,
       services: Object.freeze(createMusicServices(credentials)),
-    }));
+      sessions: new MusicSearchSessions(),
+      logins: new QrLoginRuntime(credentials),
+    });
+    context.resources.provide(musicRuntimeToken, runtime);
 
     const timer = setInterval(() => {
-      cleanExpired();
-      cleanExpiredLogins();
+      runtime.sessions.pruneExpired();
+      runtime.logins.pruneExpired();
     }, 60_000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      runtime.sessions.dispose();
+      runtime.logins.dispose();
+    };
   },
 });

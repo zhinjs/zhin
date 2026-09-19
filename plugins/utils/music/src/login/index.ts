@@ -5,11 +5,6 @@ import type { CredentialStore } from '../credential-store.js';
 
 export type { QrLoginSource, QrPollResult, QrLoginProvider } from './types.js';
 
-const providers: Record<QrLoginSource, QrLoginProvider> = {
-  qq: new QQLoginProvider(),
-  netease: new NeteaseLoginProvider(),
-};
-
 export interface QrLoginSession {
   source: QrLoginSource;
   pollData: Record<string, string>;
@@ -21,8 +16,6 @@ const LOGIN_TIMEOUT_MS = 2 * 60 * 1000;
 const POLL_INTERVAL_MS = 3_000;
 const MAX_POLLS = Math.ceil(LOGIN_TIMEOUT_MS / POLL_INTERVAL_MS);
 
-const activeLogins = new Map<string, QrLoginSession>();
-
 export function loginSessionKey(
   endpointId: string,
   conversationId: string,
@@ -31,106 +24,131 @@ export function loginSessionKey(
   return `login:${endpointId}:${conversationId}:${senderId}`;
 }
 
-export function getActiveLogin(key: string): QrLoginSession | undefined {
-  const session = activeLogins.get(key);
-  if (!session) return undefined;
-  if (Date.now() - session.timestamp > LOGIN_TIMEOUT_MS) {
-    activeLogins.delete(key);
-    return undefined;
-  }
-  return session;
-}
+/** Generation-owned QR login coordinator. */
+export class QrLoginRuntime {
+  readonly #active = new Map<string, QrLoginSession>();
+  readonly #providers: Readonly<Record<QrLoginSource, QrLoginProvider>>;
+  readonly #credentials: CredentialStore;
+  readonly #now: () => number;
+  readonly #sleep: (ms: number) => Promise<void>;
 
-export function cancelLogin(key: string): boolean {
-  const session = activeLogins.get(key);
-  if (!session) return false;
-  session.aborted = true;
-  activeLogins.delete(key);
-  return true;
-}
-
-export async function startLogin(
-  source: QrLoginSource,
-  key: string,
-): Promise<{ imageSegment: { type: 'image'; data: Record<string, unknown> } }> {
-  const existing = activeLogins.get(key);
-  if (existing && !existing.aborted) {
-    existing.aborted = true;
-  }
-
-  const provider = providers[source];
-  const result = await provider.createQr();
-
-  activeLogins.set(key, {
-    source,
-    pollData: result.pollData,
-    timestamp: Date.now(),
-    aborted: false,
-  });
-
-  return { imageSegment: result.imageSegment };
-}
-
-export async function pollLogin(
-  key: string,
-  credentials: CredentialStore,
-  onStatus: (result: QrPollResult) => Promise<void>,
-): Promise<QrPollResult> {
-  const session = activeLogins.get(key);
-  if (!session) {
-    return { status: 'error', message: '没有进行中的登录会话' };
-  }
-
-  const provider = providers[session.source];
-  let lastStatus = '';
-
-  try {
-    for (let i = 0; i < MAX_POLLS; i++) {
-      if (session.aborted) {
-        activeLogins.delete(key);
-        return { status: 'error', message: '登录已取消' };
-      }
-
-      const result = await provider.pollQr(session.pollData);
-
-      if (result.status !== lastStatus) {
-        lastStatus = result.status;
-        await onStatus(result);
-      }
-
-      if (result.status === 'confirmed') {
-        activeLogins.delete(key);
-        if (result.cookie) {
-          await credentials.set(session.source, 'cookie', result.cookie);
-        }
-        return result;
-      }
-      if (result.status === 'expired' || result.status === 'error') {
-        activeLogins.delete(key);
-        return result;
-      }
-
-      await new Promise<void>((r) => setTimeout(r, POLL_INTERVAL_MS));
-    }
-  } catch (err) {
-    console.error('[music-login] poll error:', err);
-    activeLogins.delete(key);
-    return {
-      status: 'error',
-      message: `轮询异常：${err instanceof Error ? err.message : String(err)}`,
+  constructor(
+    credentials: CredentialStore,
+    providers?: Readonly<Record<QrLoginSource, QrLoginProvider>>,
+    now: () => number = Date.now,
+    sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  ) {
+    this.#credentials = credentials;
+    this.#now = now;
+    this.#sleep = sleep;
+    this.#providers = providers ?? {
+      qq: new QQLoginProvider(),
+      netease: new NeteaseLoginProvider(),
     };
   }
 
-  activeLogins.delete(key);
-  return { status: 'expired', message: '登录超时，请重试' };
-}
-
-export function cleanExpiredLogins(): void {
-  const now = Date.now();
-  for (const [key, session] of activeLogins) {
-    if (now - session.timestamp > LOGIN_TIMEOUT_MS) {
+  get(key: string): QrLoginSession | undefined {
+    const session = this.#active.get(key);
+    if (!session) return undefined;
+    if (this.#now() - session.timestamp > LOGIN_TIMEOUT_MS) {
       session.aborted = true;
-      activeLogins.delete(key);
+      this.#active.delete(key);
+      return undefined;
     }
+    return session;
+  }
+
+  cancel(key: string): boolean {
+    const session = this.#active.get(key);
+    if (!session) return false;
+    session.aborted = true;
+    this.#active.delete(key);
+    return true;
+  }
+
+  async start(
+    source: QrLoginSource,
+    key: string,
+  ): Promise<{ imageSegment: { type: 'image'; data: Record<string, unknown> } }> {
+    const existing = this.#active.get(key);
+    if (existing && !existing.aborted) existing.aborted = true;
+    const session: QrLoginSession = {
+      source,
+      pollData: {},
+      timestamp: this.#now(),
+      aborted: false,
+    };
+    this.#active.set(key, session);
+
+    try {
+      const result = await this.#providers[source].createQr();
+      if (session.aborted || this.#active.get(key) !== session) {
+        throw new Error('登录已取消');
+      }
+      session.pollData = result.pollData;
+      return { imageSegment: result.imageSegment };
+    } catch (error) {
+      if (this.#active.get(key) === session) this.#active.delete(key);
+      throw error;
+    }
+  }
+
+  async poll(
+    key: string,
+    onStatus: (result: QrPollResult) => Promise<void>,
+  ): Promise<QrPollResult> {
+    const session = this.#active.get(key);
+    if (!session) return { status: 'error', message: '没有进行中的登录会话' };
+
+    const provider = this.#providers[session.source];
+    let lastStatus = '';
+    try {
+      for (let i = 0; i < MAX_POLLS; i++) {
+        if (session.aborted) {
+          this.#active.delete(key);
+          return { status: 'error', message: '登录已取消' };
+        }
+
+        const result = await provider.pollQr(session.pollData);
+        if (result.status !== lastStatus) {
+          lastStatus = result.status;
+          await onStatus(result);
+        }
+        if (result.status === 'confirmed') {
+          this.#active.delete(key);
+          if (result.cookie) await this.#credentials.set(session.source, 'cookie', result.cookie);
+          return result;
+        }
+        if (result.status === 'expired' || result.status === 'error') {
+          this.#active.delete(key);
+          return result;
+        }
+        await this.#sleep(POLL_INTERVAL_MS);
+      }
+    } catch (error) {
+      this.#active.delete(key);
+      return {
+        status: 'error',
+        message: `轮询异常：${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+
+    this.#active.delete(key);
+    return { status: 'expired', message: '登录超时，请重试' };
+  }
+
+  pruneExpired(): void {
+    const now = this.#now();
+    for (const [key, session] of this.#active) {
+      if (now - session.timestamp > LOGIN_TIMEOUT_MS) {
+        session.aborted = true;
+        this.#active.delete(key);
+      }
+    }
+  }
+
+  dispose(): void {
+    for (const session of this.#active.values()) session.aborted = true;
+    this.#active.clear();
   }
 }

@@ -80,10 +80,14 @@ export function createInMemoryCredentialDb(): CredentialDb {
 }
 
 export class CredentialStore {
-  constructor(private readonly db: CredentialDb) {}
+  readonly #db: CredentialDb;
+
+  constructor(db: CredentialDb) {
+    this.#db = db;
+  }
 
   private get model(): CredentialModel | null {
-    return this.db.models.get(MUSIC_CREDENTIALS_TABLE) ?? null;
+    return this.#db.models.get(MUSIC_CREDENTIALS_TABLE) ?? null;
   }
 
   async get(source: MusicSource, key: string): Promise<string | null> {

@@ -570,6 +570,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove process-global Speech loading, caching, and warn-once state and require composition-root-owned transcription injection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-music-session-state.md",
+      "packages": [
+        "@zhin.js/plugin-music"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-global music selection and QR login maps with generation-owned runtime classes under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

@@ -16,10 +16,7 @@ export { createMusicServices } from './sources/index.js';
 export {
   sessionKey,
   resolveMessageIds,
-  setPending,
-  getPending,
-  clearPending,
-  cleanExpired,
+  MusicSearchSessions,
   type PendingSearch,
 } from './session.js';
 export {
@@ -31,12 +28,8 @@ export {
 } from './credential-store.js';
 export { musicRuntimeToken, type MusicRuntime } from './runtime.js';
 export {
-  startLogin,
-  pollLogin,
-  cancelLogin,
-  getActiveLogin,
+  QrLoginRuntime,
   loginSessionKey,
-  cleanExpiredLogins,
   type QrLoginSource,
   type QrLoginSession,
   type QrPollResult,

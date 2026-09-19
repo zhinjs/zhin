@@ -31,14 +31,16 @@ export const ANALYZE_MEDIA_PARAMETERS: ToolParametersSchema = {
 };
 
 export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
+  readonly #transcriber?: AudioTranscriptionPort;
   readonly name = 'analyze_media';
   readonly description =
     'Analyze a local image, audio, or video file and return a readable summary (transcript/dimensions/format). Do not use read_file for media files.';
   readonly parameters = ANALYZE_MEDIA_PARAMETERS;
   readonly kind = 'file';
 
-  constructor(private readonly transcriber?: AudioTranscriptionPort) {
+  constructor(transcriber?: AudioTranscriptionPort) {
     super();
+    this.#transcriber = transcriber;
     this.tags.push('file', 'media');
     this.keywords.push('分析图片', '分析视频', '分析音频', 'analyze media', 'vision', '媒体');
   }
@@ -82,7 +84,7 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
 
       const payloads = await normalizeMediaRefsToPayloads([ref], mm.maxFileBytes);
       const pre = await preprocessInboundMedia(payloads, mm, undefined, {
-        transcriber: this.transcriber,
+        transcriber: this.#transcriber,
       });
       const lines = [
         `File: ${fp}`,
