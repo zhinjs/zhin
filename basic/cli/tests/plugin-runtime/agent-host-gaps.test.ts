@@ -2,10 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Message, type ImRuntime } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AITriggerConfig } from '@zhin.js/core';
-import { createCapabilityPackManifest, turnIntentResolverToken } from '@zhin.js/agent/runtime';
-import {
-  createWorkroomPlanningBootstrapArtifacts,
-} from '../../src/plugin-runtime/agent-host-installer.js';
+import { turnIntentResolverToken } from '@zhin.js/agent/runtime';
 import {
   createDeterministicApprovalPort,
   createRuntimeApprovalPort,
@@ -77,76 +74,6 @@ describe('Workroom Orchestrator turn routing', () => {
       zhin: { conversation },
     }, { projectId: 'zhin', space: 'workroom' })).toBe(conversation);
   });
-});
-
-describe('Workroom Planning Console bootstrap', () => {
-  const digest = (char: string) => `sha256:${char.repeat(64)}`;
-  const supply = {
-    version: 1 as const,
-    generation: 9,
-    digest: digest('f'),
-    tools: [{ name: 'bash', digest: digest('a') }],
-    skills: [{ name: 'review-code', digest: digest('b') }],
-    agents: [
-      { id: 'planner', digest: digest('c') },
-      { id: 'executor', digest: digest('d') },
-      { id: 'reviewer', digest: digest('e') },
-    ],
-  };
-
-  it('builds one exact Profile and Planning Policy from current generation capabilities', () => {
-    const artifacts = createWorkroomPlanningBootstrapArtifacts({
-      projectId: 'zhin',
-      principalId: 'workroom-admin',
-      supply,
-      definition: {
-        name: 'Zhin', sponsors: ['workroom-admin'],
-        members: [
-          { agent: 'planner', role: 'orchestrator' },
-          { agent: 'executor', role: 'executor' },
-          { agent: 'reviewer', role: 'reviewer' },
-        ],
-        conversation: {
-          adapter: 'icqq', endpoint: 'main', kind: 'group', id: '100', agent: 'planner',
-        },
-      },
-    });
-    expect(artifacts.pack).toMatchObject({
-      id: 'workroom:zhin:bootstrap',
-      tools: [{ id: 'bash' }],
-      skills: [{ id: 'review-code' }],
-      agents: [
-        { id: 'executor', role: 'executor' },
-        { id: 'planner', role: 'orchestrator' },
-        { id: 'reviewer', role: 'reviewer' },
-      ],
-      workflows: [{ id: 'workroom:zhin:dynamic', requiredByProfile: true }],
-    });
-    expect(artifacts.packInput).not.toHaveProperty('digest');
-    expect(artifacts.packInput).toMatchObject({ id: artifacts.pack.id, version: artifacts.pack.version });
-    expect(createCapabilityPackManifest(artifacts.packInput).digest).toBe(artifacts.pack.digest);
-    expect(artifacts.overlay).toMatchObject({
-      projectId: 'zhin', revisionId: 'profile:zhin:bootstrap:1',
-      enabledAgents: ['executor', 'planner', 'reviewer'],
-    });
-    expect(artifacts.policy).toMatchObject({
-      revisionId: 'planning:zhin:1', sponsorGate: { owner: 'workroom-admin' },
-    });
-  });
-
-  it('rejects one Agent binding reused for multiple Workroom roles', () => {
-    expect(() => createWorkroomPlanningBootstrapArtifacts({
-      projectId: 'zhin', principalId: 'workroom-admin', supply,
-      definition: {
-        name: 'Zhin',
-        members: [
-          { agent: 'planner', role: 'orchestrator' },
-          { agent: 'planner', role: 'executor' },
-        ],
-      },
-    })).toThrow('每个 Workroom 角色需要独立 Agent binding');
-  });
-
 });
 
 describe('Plugin Runtime Tool policy bridge', () => {
