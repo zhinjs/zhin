@@ -34,6 +34,7 @@ describe('Console Host module boundary', () => {
       'configuration.ts',
       'data-lifecycle-routes.ts',
       'effect-sponsor-routes.ts',
+      'events.ts',
       'http-response.ts',
       'inbox.ts',
       'portfolio-sponsor-routes.ts',

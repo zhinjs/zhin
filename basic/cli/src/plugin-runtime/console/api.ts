@@ -8,7 +8,7 @@ import {
   type ConsoleEventHub,
   type HttpHost,
 } from '@zhin.js/host-http';
-import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
+import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { LoginAssist } from '@zhin.js/core';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import { bindLoginAssistStdin } from './login-assist-stdin.js';
@@ -28,7 +28,8 @@ import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runt
 import { ConsoleConfigurationStore } from './configuration.js';
 import { installInboxMessageRecorder } from './inbox.js';
 import { registerAgentConsoleRoutes } from './agent-routes.js';
-import { normalizeBase, writeJson, writeSse } from './http-response.js';
+import { installMessageEventBridge, registerConsoleEventRoutes } from './events.js';
+import { normalizeBase, writeJson } from './http-response.js';
 import { createAgentRuntimeLeaseResolver } from './agent-console.js';
 import {
   buildConsoleEntriesBody,
@@ -112,44 +113,6 @@ function releaseLoginAssistBinding(assist: LoginAssist, binding: LoginAssistBind
 }
 
 
-/** 已挂消息桥的 ImRuntime（installResources 按 generation 重跑，订阅只挂一次）。 */
-const messageBridgeInstallations = new WeakSet<ImRuntime>();
-
-/**
- * ImRuntime 消息事件 → SSE 事件映射（对齐 console 前端消费形态；
- * content 只发截断预览，不发完整原始段）。
- */
-export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageEvent): void {
-  // CapabilityId 形如 `${owner}\0${feature}\0${localName}`；localName 即 endpoint 槽名。
-  const localName = String(event.conversation.endpoint.id).split('\0').pop()
-    ?? String(event.conversation.endpoint.id);
-  if (event.direction === 'inbound') {
-    const data = {
-      direction: 'inbound' as const,
-      adapter: localName,
-      endpointKey: localName,
-      sender: event.sender,
-      channelType: event.conversation.kind,
-      channelId: event.conversation.id,
-      content: event.contentPreview,
-      messageId: event.messageId,
-      timestamp: event.timestamp,
-    };
-    hub.publish('message.receive', data);
-    return;
-  }
-  hub.publish('message.receive', {
-    direction: 'outbound' as const,
-    adapter: localName,
-    endpointKey: localName,
-    requester: event.requester,
-    channelType: event.conversation.kind,
-    channelId: event.conversation.id,
-    content: event.contentPreview,
-    timestamp: event.timestamp,
-  });
-}
-
 export function installConsoleApi(options: {
   readonly console: ConsoleRuntime;
   readonly projectRoot: string;
@@ -228,12 +191,7 @@ export function registerConsoleApiRoutes(
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();
 
-  // 消息事件桥（demo scope 同样推送；content 仅截断预览）。
-  // installResources 每个 generation 都会重跑，订阅只挂一次，避免重复推送。
-  if (im && typeof im.onMessage === 'function' && !messageBridgeInstallations.has(im)) {
-    messageBridgeInstallations.add(im);
-    im.onMessage((event) => publishMessageEvent(hub, event));
-  }
+  installMessageEventBridge(im, hub);
 
   // 收件箱写路径：onMessage → unified_inbox_message（表由 start-command 在
   // createDatabaseHost 后 defineInboxTables 注册；此处仅订阅写入）。
@@ -396,66 +354,7 @@ export function registerConsoleApiRoutes(
     snapshots,
   });
 
-  http.route('GET', `${base}/events/history`, (_request, response, url) => {
-    const page = hub.history({
-      runtimeId: url.searchParams.get('runtimeId') ?? undefined,
-      after: Number(url.searchParams.get('after') ?? 0),
-      limit: Number(url.searchParams.get('limit') ?? 200),
-    });
-    writeJson(response, 200, { success: true, data: page });
-  }, {
-    summary: 'Console event history',
-    tags: ['console'],
-    description: 'Bounded resumable history for the current Console event runtime.',
-  });
-
-  http.route('GET', `${base}/events`, async (request, response, url) => {
-    const pages = await listPages(consoleRuntime);
-    const headerLastEventId = Array.isArray(request.headers['last-event-id'])
-      ? request.headers['last-event-id'][0]
-      : request.headers['last-event-id'];
-    const after = Number(
-      url.searchParams.get('after')
-      ?? url.searchParams.get('lastEventId')
-      ?? headerLastEventId
-      ?? 0,
-    );
-    const eventRuntimeId = url.searchParams.get('runtimeId') ?? undefined;
-    response.writeHead(200, {
-      'content-type': 'text/event-stream; charset=utf-8',
-      'cache-control': 'no-cache, no-transform',
-      connection: 'keep-alive',
-      'x-accel-buffering': 'no',
-      'x-zhin-event-runtime-id': hub.runtimeId,
-    });
-    // Snapshot frames intentionally have no event id: the resumable cursor is
-    // reserved for journalled hub events and can never collide with them.
-    writeSse(response, 'sync', { key: 'pages', value: pages });
-    writeSse(response, 'init-data', { timestamp: Date.now() });
-    const unsubscribe = hub.subscribe(response, {
-      runtimeId: eventRuntimeId,
-      after: Number.isSafeInteger(after) && after >= 0 ? after : 0,
-    });
-    const timer = setInterval(() => {
-      try {
-        response.write(': keepalive\n\n');
-      } catch {
-        clearInterval(timer);
-      }
-    }, 15_000);
-    request.once('close', () => {
-      clearInterval(timer);
-      unsubscribe();
-      try {
-        response.end();
-      } catch {
-        /* already closed */
-      }
-    });
-  }, {
-    summary: 'Console SSE stream',
-    tags: ['console'],
-  });
+  registerConsoleEventRoutes({ http, base, consoleRuntime, hub });
 
   registerAgentConsoleRoutes({ http, base, snapshots });
 
