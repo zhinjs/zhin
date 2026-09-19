@@ -1,4 +1,4 @@
-import { pluginOwnerResourceKey, rootPluginId, type PluginId } from './identity.js';
+import { pluginOwnerResourceKey, type PluginId } from './identity.js';
 import { createToken } from './token.js';
 
 /**
@@ -39,16 +39,12 @@ export interface PluginScheduleHost {
 
 const jobPrefix = '__zhin_plugin__';
 const jobSeparator = '__';
-const roots = new WeakMap<PluginScheduleHost, ScheduleHost>();
-
 export function qualifyPluginScheduleId(owner: PluginId, id: string): string {
   assertLogicalJobId(id);
-  if (owner === rootPluginId()) return id;
   return `${jobPrefix}${pluginOwnerResourceKey(owner)}${jobSeparator}${id}`;
 }
 
 export function unqualifyPluginScheduleId(owner: PluginId, id: string): string | undefined {
-  if (owner === rootPluginId()) return id.startsWith(jobPrefix) ? undefined : id;
   const prefix = `${jobPrefix}${pluginOwnerResourceKey(owner)}${jobSeparator}`;
   return id.startsWith(prefix) ? id.slice(prefix.length) : undefined;
 }
@@ -71,13 +67,7 @@ export function createPluginScheduleHost(owner: PluginId, host: ScheduleHost): P
       }));
     },
   });
-  roots.set(facade, host);
   return facade;
-}
-
-/** See unwrapPluginDatabaseHost: preserves legacy custom RootResource installers. */
-export function unwrapPluginScheduleHost(host: ScheduleHost | PluginScheduleHost): ScheduleHost {
-  return roots.get(host as PluginScheduleHost) ?? host;
 }
 
 function assertLogicalJobId(id: string): void {

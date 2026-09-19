@@ -14,14 +14,14 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `databaseHostToken`（`zhin.js`） | `PluginDatabaseHost`（按 owner 隔离表名） | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`；`select()` 须显式列名（不支持 `'*'`） |
+| `databaseHostToken`（`zhin.js`） | `PluginDatabaseHost`（包括 root 在内均按 owner 隔离表名） | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`；`select()` 须显式列名（不支持 `'*'`） |
 | `databaseRootHostToken`（`zhin.js`，仅 root） | `DatabaseHost` | 进程级宿主：Console 管理面、自定义 composition root 用 |
 
 ## 定时与日程
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（按 owner 隔离） | 注册/取消 cron 任务；与 `outboundMessageToken` 组合即可做定时推送 |
+| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（包括 root 在内均按 owner 隔离） | 注册/取消 cron 任务；与 `outboundMessageToken` 组合即可做定时推送 |
 | `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
 
 ## Agent

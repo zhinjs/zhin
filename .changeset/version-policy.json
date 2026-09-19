@@ -15,6 +15,13 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Enforce owner-directed zero-compatibility domain boundaries and remove deprecated Workroom catalog aliases."
+    },
+    {
+      "changeset": "uniform-owner-scopes.md",
+      "packages": ["@zhin.js/plugin-runtime"],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove legacy host unwrapping and root-owner namespace exceptions under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { pluginOwnerResourceKey, rootPluginId, type PluginId } from './identity.js';
+import { pluginOwnerResourceKey, type PluginId } from './identity.js';
 import { createToken } from './token.js';
 
 export interface DatabaseHostSelection {
@@ -124,22 +124,17 @@ export interface PluginDatabaseHost {
 
 const resourcePrefix = '__zhin_plugin__';
 const resourceSeparator = '__';
-const roots = new WeakMap<PluginDatabaseHost, DatabaseHost>();
-
 /**
  * Maps a plugin's logical resource name to its process-wide physical name.
- * Root keeps its historical bare names so existing projects do not need a
- * database migration merely to adopt scoped child plugins.
+ * Every owner, including the root plugin, uses the same private namespace.
  */
 export function qualifyPluginResourceName(owner: PluginId, name: string): string {
   assertLogicalResourceName(name);
-  if (owner === rootPluginId()) return name;
   return `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}${name}`;
 }
 
 /** Reverse `qualifyPluginResourceName` only when the name belongs to owner. */
 export function unqualifyPluginResourceName(owner: PluginId, name: string): string | undefined {
-  if (owner === rootPluginId()) return name.startsWith(resourcePrefix) ? undefined : name;
   const prefix = `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}`;
   return name.startsWith(prefix) ? name.slice(prefix.length) : undefined;
 }
@@ -168,20 +163,7 @@ export function createPluginDatabaseHost(
       },
     }),
   });
-  roots.set(facade, host);
   return facade;
-}
-
-/**
- * Recovers a process host from the standard root token or a scoped facade.
- * This keeps custom RootRuntime installers written against the pre-facade
- * token working while child scopes begin receiving tenant boundaries.
- */
-export function unwrapPluginDatabaseHost(
-  host: DatabaseHost | PluginDatabaseHost,
-): DatabaseHost | undefined {
-  if ('getRawDatabase' in host) return host;
-  return roots.get(host);
 }
 
 function assertLogicalResourceName(name: string): void {

@@ -99,12 +99,12 @@ describe('PluginScopeAssembler owner-scoped hosts', () => {
 
     await runtime.start();
     expect(tables).toEqual([
-      'sessions',
+      qualifyPluginResourceName(rootPluginId(), 'sessions'),
       qualifyPluginResourceName(alpha, 'sessions'),
       qualifyPluginResourceName(beta, 'sessions'),
     ]);
     expect(jobs).toEqual([
-      'cleanup',
+      qualifyPluginScheduleId(rootPluginId(), 'cleanup'),
       qualifyPluginScheduleId(alpha, 'cleanup'),
       qualifyPluginScheduleId(beta, 'cleanup'),
     ]);
