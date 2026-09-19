@@ -1,15 +1,15 @@
 # @zhin.js/command
 
-Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/*.ts(x)`，将插件树
+Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/$*.ts(x)`，将插件树
 路径与文件路径投影为命令，并用 `segment-matcher` 同时匹配纯文本和 canonical IM segments。
 
-静态命令文件名可为 ASCII kebab（`hello.ts`）或 Unicode 名（`赞我.ts`）；动态参数文件
-（`[name].ts` 等）仍限 ASCII。详见 [命令创作指南](../../../docs/authoring/commands.md)。
+静态命令入口可为 ASCII kebab（`$hello.ts`）或 Unicode 名（`$赞我.ts`）；动态参数入口
+（`$[name].ts` 等）仍限 ASCII。未加 `$` 的文件是普通同目录模块。详见 [命令创作指南](../../../docs/authoring/commands.md)。
 
 ## Authoring
 
 ```ts
-// commands/gh/issue/list.ts -> gh issue list
+// commands/gh/issue/$list.ts -> gh issue list
 // commands/$赞我.ts -> 赞我
 import { defineCommand } from 'zhin.js/command';
 

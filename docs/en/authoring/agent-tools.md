@@ -1,6 +1,6 @@
 ---
 title: Agent Tools and Skills
-description: tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and *.agent.md
+description: tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and $*.agent.md
 ---
 
 # Agent Tools and Skills
@@ -125,14 +125,14 @@ The Anthropic SDK channel marks unloaded tools with `deferLoading`; other channe
 `ask_user` is a framework-provided, generation-owned ToolFeature rather than Plugin Prompt middleware.
 It requests input through the current Turn's `QuestionPort` and matches replies by canonical session and authenticated subject. Plugin tools that need the same interaction must depend on `ToolExecutionContext.question` and handle an absent port. Unattended Turns, including Schedule, do not receive this port and must not fall back to global Message, Adapter, or user queues.
 
-## skills and agents/*.agent.md
+## skills and agents/$*.agent.md
 
 Skills and named Agents are also file conventions, discovered by the `@zhin.js/skill` and `@zhin.js/agent-feature` Features respectively.
 
-Skills go in `skills/<name>/SKILL.md` (one skill per subdirectory): the body is the instruction for the model, the first Markdown heading line serves as the description, and `load_skill` unlocks tools associated via `toolNames`. Named Agents use `agents/<name>.agent.md` (file name must be lowercase kebab, e.g., `agents/planner.agent.md`): the entire Markdown file is that Agent's instructions, and the first heading line serves as the description. See `examples/test-bot/agents/planner.agent.md` for a real-world example.
+Skills go in `skills/<name>/SKILL.md` (one skill per subdirectory): the body is the instruction for the model, the first Markdown heading line serves as the description, and `load_skill` unlocks tools associated via `toolNames`. Named Agent entries use `agents/$<name>.agent.md` (the name must be lowercase kebab, e.g., `agents/$planner.agent.md`): the entire Markdown file is that Agent's instructions, and the first heading line serves as the description. Files without `$` remain colocated reference material and are not registered. See `examples/test-bot/agents/$planner.agent.md` for a real-world example.
 
 ```markdown
-<!-- agents/planner.agent.md -->
+<!-- agents/$planner.agent.md -->
 # planner
 
 You are **planner** (coordinator): break down user goals, define acceptance

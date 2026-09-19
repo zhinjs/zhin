@@ -43,12 +43,14 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(pluginDir)).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'plugin.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'schema.json'))).toBe(true)
-    expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'commands', `$${pluginName}.ts`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(false)
     expect(
-      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'))
+      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '$[text].ts'))
     ).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'tests'))).toBe(true)
-    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `$${pluginName}.md`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`))).toBe(false)
     expect(await fs.pathExists(path.join(pluginDir, 'client'))).toBe(false)
     expect(await fs.pathExists(path.join(pluginDir, 'src', 'index.ts'))).toBe(false)
 
@@ -98,13 +100,13 @@ describe('CLI new command integration', () => {
 
     // Check commands（defineCommand + 动态段示例）
     const commandTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}.ts`),
+      path.join(pluginDir, 'commands', `$${pluginName}.ts`),
       'utf-8'
     )
     expect(commandTs).toContain('defineCommand')
     expect(commandTs).toContain('zhin.js/command')
     const echoTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '$[text].ts'),
       'utf-8'
     )
     expect(echoTs).toContain('params.text')
@@ -136,7 +138,7 @@ describe('CLI new command integration', () => {
     expect(gitignore).toContain('lib/')
     expect(await fs.pathExists(path.join(pluginDir, 'CHANGELOG.md'))).toBe(true)
 
-    const skillPath = path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`)
+    const skillPath = path.join(pluginDir, 'agent', 'skills', `$${pluginName}.md`)
     const skillMd = await fs.readFile(skillPath, 'utf-8')
     expect(skillMd).toContain(`name: ${pluginName}`)
     expect(skillMd).toContain('description:')
@@ -201,9 +203,10 @@ describe('CLI new command integration', () => {
 
     // adapters/<name>.ts：defineAdapter + Endpoint 骨架，入站经 Endpoint.emit
     const adapterTs = await fs.readFile(
-      path.join(pluginDir, 'adapters', `${adapterName}.ts`),
+      path.join(pluginDir, 'adapters', `$${adapterName}.ts`),
       'utf-8'
     )
+    expect(await fs.pathExists(path.join(pluginDir, 'adapters', `${adapterName}.ts`))).toBe(false)
     expect(adapterTs).toContain('defineAdapter')
     expect(adapterTs).toContain('zhin.js/adapter')
     expect(adapterTs).toContain('extends Endpoint')

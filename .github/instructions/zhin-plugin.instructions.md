@@ -19,14 +19,14 @@ applyTo: "plugins/**,examples/**"
 ## Convention directories
 
 ```text
-adapters/**/*.ts                 defineAdapter()      // import from zhin.js/adapter
-commands/**/*.ts                 defineCommand()      // import from zhin.js/command
-components/**/*.ts               defineComponent()    // import from zhin.js/component
-middlewares/**/*.ts              defineMiddleware()   // import from zhin.js/middleware
-handlers/**/*.ts                 defineHandler()      // import from zhin.js/handler; path `/` → event `.` when event omitted
+adapters/**/$*.ts                defineAdapter()      // import from zhin.js/adapter
+commands/**/$*.ts                defineCommand()      // import from zhin.js/command
+components/**/$*.ts              defineComponent()    // import from zhin.js/component
+middlewares/**/$*.ts             defineMiddleware()   // import from zhin.js/middleware
+handlers/**/$*.ts                defineHandler()      // import from zhin.js/handler; path `/` → event `.` when event omitted
 tools/*.ts                       defineAgentTool()
 skills/<name>/SKILL.md           Markdown Skill SSOT
-agents/<name>.agent.md           Markdown Agent SSOT
+agents/$<name>.agent.md          Markdown Agent SSOT
 mcp/*.ts                         defineMcp()
 pages/*.ts|tsx                   definePage()
 pages/$nav.tsx|$footer.tsx       layout overrides

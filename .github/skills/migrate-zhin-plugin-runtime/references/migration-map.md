@@ -12,7 +12,7 @@
 | `addTool()` / Tool registry | `tools/*.ts` + `defineAgentTool()` |
 | `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()`，或 `agent/schedules/*.ts` + `defineSchedule()` |
 | Skill registry | `agent/skills/<name>.md`（插件包**禁止**顶层 `skills/`，见 `check:no-package-skills`） |
-| Agent registry | `agents/<name>.agent.md` |
+| Agent registry | `agents/$<name>.agent.md` |
 | MCP registry | `mcp/*.ts` + MCP Feature definition |
 | Console entry route metadata | `pages/*.tsx` + `definePage()` |
 | 自定义 nav/footer 注册 | `pages/$nav.tsx` / `pages/$footer.tsx` |

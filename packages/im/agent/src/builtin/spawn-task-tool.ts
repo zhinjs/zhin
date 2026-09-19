@@ -26,7 +26,7 @@ function buildSpawnTaskDescription(allowedAgents?: string[]): string {
   if (allowedAgents?.length) {
     lines.push(`Allowed sub-agent types: ${allowedAgents.join(', ')}.`);
   } else {
-    lines.push('Allowed sub-agent types are defined in ai.agents and agents/*.agent.md.');
+    lines.push('Allowed sub-agent types are defined in ai.agents and agents/$*.agent.md.');
   }
   return lines.join(' ');
 }
@@ -44,7 +44,7 @@ export const SPAWN_TASK_PARAMETERS: ToolParametersSchema = {
     },
     agent: {
       type: 'string',
-      description: 'Sub-agent name (must exist in ai.agents and agents/<name>.agent.md; default subtask toolset).',
+      description: 'Sub-agent name (must exist in ai.agents and agents/$<name>.agent.md; default subtask toolset).',
     },
     wait: {
       type: 'boolean',

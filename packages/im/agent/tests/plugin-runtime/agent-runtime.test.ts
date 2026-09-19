@@ -719,12 +719,12 @@ async function createFixture(access: {
     owner: root,
     feature: agentFeatureId,
     localName: 'planner',
-    source: '/agents/planner.agent.md',
+    source: '/agents/$planner.agent.md',
     definition: parseAgentMarkdown('# Planner', validation(
       root,
       agentFeatureId,
       'planner',
-      '/agents/planner.agent.md',
+      '/agents/$planner.agent.md',
     )),
   });
   const mcpSlot = createCapabilitySlot({

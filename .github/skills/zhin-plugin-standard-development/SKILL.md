@@ -17,13 +17,13 @@ user-invocable: true
 
 | 目录 | API |
 |------|-----|
-| `commands/**/*.ts` | `defineCommand()`（路径即路由；Next.js 风格 `[name].ts` / `[[name]].ts` / `[...name].ts` 传参，类型与默认值在 `params` 中声明） |
-| `middlewares/*.ts` | `defineMiddleware()` |
-| `components/*.tsx` | `defineComponent()` |
-| `tools/*.ts` | `defineAgentTool()` |
-| `pages/*.tsx` | `definePage()`（`$nav.tsx` / `$footer.tsx` 布局） |
+| `commands/**/$*.ts` | `defineCommand()`（路径即路由；`$[name].ts` / `$[[name]].ts` / `$[...name].ts` 传参，类型与默认值在 `params` 中声明） |
+| `middlewares/**/$*.ts` | `defineMiddleware()` |
+| `components/**/$*.tsx` | `defineComponent()` |
+| `tools/$*.ts` | `defineAgentTool()` |
+| `pages/$*.tsx` | `definePage()`（`$nav.tsx` / `$footer.tsx` 布局） |
 | `skills/<name>/SKILL.md` | Markdown Skill |
-| `agents/<name>.agent.md` | Markdown Agent |
+| `agents/$<name>.agent.md` | Markdown Agent |
 
 DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 
@@ -71,15 +71,15 @@ DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 
 | 类型 | 重点 | 位置 |
 |------|------|------|
-| 命令 | `defineCommand`，路径即路由 | `commands/**/*.ts` |
-| 中间件 / 入站过滤 | `defineMiddleware`，`target: 'inbound'` | `middlewares/*.ts` |
-| 出站改写 | `target: 'outbound'` | `middlewares/*.ts` |
-| 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` 或 `agent/schedules/*.ts` |
-| 组件 | `defineComponent` | `components/*.tsx` |
-| AI 工具 | `defineAgentTool` | `tools/*.ts` |
+| 命令 | `defineCommand`，路径即路由 | `commands/**/$*.ts` |
+| 中间件 / 入站过滤 | `defineMiddleware`，`target: 'inbound'` | `middlewares/**/$*.ts` |
+| 出站改写 | `target: 'outbound'` | `middlewares/**/$*.ts` |
+| 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` 或 `agent/schedules/$*.ts` |
+| 组件 | `defineComponent` | `components/**/$*.tsx` |
+| AI 工具 | `defineAgentTool` | `tools/$*.ts` |
 | 服务 / DI | `resources.provide` | `plugin.ts` setup |
 | 数据库 | `databaseHostToken`，`start` 前 `define` 表 | `plugin.ts` setup |
-| Web | `definePage` | `pages/*.tsx` |
+| Web | `definePage` | `pages/$*.tsx` |
 
 多类型并存时先定主职责，再考虑拆分子包。
 
@@ -115,7 +115,7 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 ### 第 3 步：命令与中间件
 
 - 命令：路径是路由 SSOT；`execute` 读 `params` / `args` / `input`（含 session 字段若需要）
-- **子插件命令路径首段必须是静态段**：子插件命令名自动带插件路径前缀（如 `remind.add`），动态参数只能是路径最后一段且至多一个。`commands/[note].ts` 在 root 可用、在子插件启动期抛 `Invalid Command path`；子插件一律写 `commands/add/[note].ts`
+- 子插件命令自动带插件路径前缀。顶层动态入口 `commands/$[note].ts` 形成 `remind <note>`；需要静态动作时写 `commands/add/$[note].ts`，形成 `remind.add <note>`。动态参数至多一个且必须位于末段。
 - 中间件：洋葱模型，明确是否 `await next()`
 - 组件：消息渲染，不替代服务层
 - AI 工具：`inputSchema` 与 execute 入参一致；副作用边界清晰

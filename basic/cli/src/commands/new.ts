@@ -148,7 +148,7 @@ export const newCommand = new Command('new')
       logger.log(`  pnpm exec zhin pub ${name}`);
       logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
       logger.log('');
-      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/agent/skills/' + name + '.md（随 npm 包发布）');
+      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/agent/skills/$' + name + '.md（随 npm 包发布）');
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -566,12 +566,12 @@ ${readmeUse}
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
 - \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
-${kind === 'normal' ? '- `commands/`：命令模块（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：适配器模块（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：AI 技能（随 npm 包发布）
+${kind === 'normal' ? '- `commands/`：`$` 开头的命令入口（`defineCommand`），目录段 `$[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：`$` 开头的适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：\`$\` 开头的 AI 技能入口（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
 ## AI 技能（agent/skills）
 
-本包包含 \`agent/skills/${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter。
+本包包含 \`agent/skills/$${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter；未加 \`$\` 的文件可作为同目录引用资料。
 
 ## 开发
 
@@ -605,7 +605,7 @@ tools: []
 
 - 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
 `;
-  await fs.writeFile(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`), skillMdContent);
+  await fs.writeFile(path.join(pluginDir, 'agent', 'skills', `$${pluginName}.md`), skillMdContent);
 
   // 创建 CHANGELOG.md
   const changelogContent = `# ${packageName}

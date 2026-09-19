@@ -6,7 +6,7 @@
 //     tools/plugin-health.ts        ← 包顶层工具（@zhin.js/tool）
 //     agent/tools/run-code.ts       ← agent/ 授权面工具（@zhin.js/agent）
 //     agent/skills/<name>.md        ← Skill：标准 SKILL.md（frontmatter + 正文）
-//     agents/<name>.agent.md        ← Agent 预设：frontmatter + 正文作为 systemPrompt
+//     agents/$<name>.agent.md       ← Agent 预设：frontmatter + 正文作为 systemPrompt
 //
 // 注意：插件包禁止**顶层 skills/**，必须用 `agent/skills/*.md`（check:no-package-skills）。
 import { defineAgentTool } from '@zhin.js/tool';

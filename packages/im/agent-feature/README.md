@@ -1,16 +1,17 @@
 # @zhin.js/agent-feature
 
-下一代 Markdown Agent Feature。它从 `agents/<name>.agent.md` 构造 immutable Agent definition，不读取旧分形 `agent.ts`、`instructions.md` 或模块级 SubAgent registry。
+下一代 Markdown Agent Feature。它从 `agents/$<name>.agent.md` 构造 immutable Agent definition，不读取旧分形 `agent.ts`、`instructions.md` 或模块级 SubAgent registry。未加 `$` 的 Markdown 是普通同目录资料，不会注册为 Agent。
 
 ## 目录约定
 
 ```text
 agents/
-├── planner.agent.md
-└── reviewer.agent.md
+├── $planner.agent.md
+├── $reviewer.agent.md
+└── planning-notes.agent.md  # 普通资料，不会被发现
 ```
 
-Agent 目录只允许一级、精确 `.agent.md` 后缀。`planner.agent.md` 的 local name 是 `planner`；child Plugin 的 qualified name 自动包含 Plugin instance path。
+Agent 目录只允许一级；入口必须以 `$` 开头并使用精确 `.agent.md` 后缀。`$planner.agent.md` 的 local name 是 `planner`；child Plugin 的 qualified name 自动包含 Plugin instance path。
 
 ## Markdown 契约
 

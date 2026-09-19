@@ -30,7 +30,7 @@ flowchart LR
 | `tools/` | `$*.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `agent/prompt-sections/` | `$*.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
-| `agents/` | `*.agent.md` | 否 | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown 文本 |
+| `agents/` | `$*.agent.md` | 否 | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown 文本 |
 | `mcp/` | `$*.ts` | 否 | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
 | `pages/` | `$*.ts` / `$*.tsx`，`$nav` / `$footer` 为布局槽 | 否 | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | 页面构件 |
 
@@ -52,7 +52,7 @@ flowchart LR
 | `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/$music-search.ts` → `music-search`；`tools/$send_user_like.ts` → `send_user_like` |
 | `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
-| `agents/` | 文件名去掉 `.agent.md` 后缀 | `agents/planner.agent.md` → `planner` |
+| `agents/` | 文件名去掉 `$` 前缀与 `.agent.md` 后缀 | `agents/$planner.agent.md` → `planner` |
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/$my-server.ts` → `my-server` |
 | `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/$workroom.tsx` → `workroom`；`pages/$nav.tsx` → `nav` |
 
@@ -202,7 +202,7 @@ tools:
 ---
 ```
 
-`agents/<name>.agent.md` 是 Agent 人格/指令文件，如 `examples/multi-agent-room/agents/planner.agent.md`。
+`agents/$<name>.agent.md` 是 Agent 人格/指令入口，如 `examples/multi-agent-room/agents/$planner.agent.md`；未加 `$` 的 Markdown 可作为同目录资料，不会被注册。
 
 ### pages/ — Console 页面
 

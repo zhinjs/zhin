@@ -42,7 +42,7 @@ minimal-bot/
 ├── commands/$hello.ts         # /hello
 ├── commands/$card.ts          # /card -> component("status-card")
 ├── components/$status-card.ts # defineComponent(), compiler-free Satori h()
-├── agents/hello.agent.md     # optional Agent capability authoring example
+├── agents/$hello.agent.md    # optional Agent capability authoring example
 └── tools/$echo.ts             # optional defineAgentTool() example
 ```
 

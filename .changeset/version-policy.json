@@ -89,6 +89,16 @@
       "reason": "Adopt the owner-directed zero-compatibility explicit convention-entry model so colocated helper modules and top-level dynamic commands have unambiguous semantics."
     },
     {
+      "changeset": "finish-explicit-convention-entries.md",
+      "packages": [
+        "@zhin.js/agent-feature",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Complete the owner-directed explicit convention-entry model for Markdown Agents and generated plugin Agent skills under the zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-generation-stores.md",
       "packages": [
         "@zhin.js/plugin-runtime",

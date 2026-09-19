@@ -463,7 +463,7 @@ ${projectName}/
 │   └── $footer.tsx        # 最近插件页脚布局
 ├── tools/                 # AI 工具（启用 AI 后自动发现）
 ├── skills/                # SKILL.md 能力目录
-├── agents/                # *.agent.md Agent 目录
+├── agents/                # $*.agent.md Agent 入口目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
 ├── packages/              # 贡献给 Zhin 的 Feature workspace
 ├── package.json           # zhin 清单（protocol 1 / features / plugins）

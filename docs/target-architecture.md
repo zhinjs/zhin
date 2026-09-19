@@ -58,14 +58,14 @@ plugin-package/
   package.json                 # zhin manifest, package dependencies
   plugin.ts                    # default definePlugin()
   schema.json                  # only this Plugin's own config fields
-  commands/**/*.ts(x)
-  components/**/*.ts(x)
-  middlewares/**/*.ts
-  handlers/**/*.ts
-  tools/**/*.ts
+  commands/**/$*.ts(x)
+  components/**/$*.ts(x)
+  middlewares/**/$*.ts
+  handlers/**/$*.ts
+  tools/$*.ts
   skills/<name>/SKILL.md
-  agents/<name>.agent.md
-  pages/**/*.ts(x)
+  agents/$<name>.agent.md
+  pages/$*.ts(x)
   plugins/*                    # optional, one-level workspace children
   packages/*                   # optional Feature provider workspaces
 ```
@@ -117,16 +117,16 @@ disposal. Standard providers use the following conventions:
 
 | Feature | Convention | Runtime consumer |
 | --- | --- | --- |
-| Command | `commands/**/*.ts(x)` / `defineCommand()` | CommandIndex |
-| Component | `components/**/*.ts(x)` / `defineComponent()` | OutboundRenderer |
-| Middleware | `middlewares/**/*.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
-| Handler | `handlers/**/*.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
-| Adapter | `adapters/**/*.ts` / `defineAdapter()` | AdapterIndex |
-| Tool | `tools/**/*.ts` / `defineAgentTool()` | Agent capability catalog |
+| Command | `commands/**/$*.ts(x)` / `defineCommand()` | CommandIndex |
+| Component | `components/**/$*.ts(x)` / `defineComponent()` | OutboundRenderer |
+| Middleware | `middlewares/**/$*.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
+| Handler | `handlers/**/$*.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
+| Adapter | `adapters/**/$*.ts` / `defineAdapter()` | AdapterIndex |
+| Tool | `tools/$*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
-| Agent | `agents/<name>.agent.md` | Agent capability catalog |
+| Agent | `agents/$<name>.agent.md` | Agent capability catalog |
 | Prompt Section | `agent/prompt-sections/**/*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
-| Page | `pages/**/*.ts(x)` / `definePage()` | Console PageIndex |
+| Page | `pages/$*.ts(x)` / `definePage()` | Console PageIndex |
 | Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |
 
 The canonical capability identity is `(pluginId, featureId, localName)`. Display

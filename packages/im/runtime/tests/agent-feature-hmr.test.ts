@@ -82,7 +82,7 @@ describe('Agent Feature slot HMR', () => {
     };
     const toolSource = join(project, 'tools/$lookup.ts');
     const mcpSource = join(project, 'mcp/$memory.ts');
-    const agentSource = join(project, 'agents/planner.agent.md');
+    const agentSource = join(project, 'agents/$planner.agent.md');
     const promptSource = join(project, 'agent/prompt-sections/$project-rules.ts');
     let setups = 0;
     modules.set(pluginSource, {
@@ -270,7 +270,7 @@ async function createProject(): Promise<string> {
     'agent/prompt-sections/$project-rules.ts',
   ]) await touch(join(root, file));
   await touch(join(root, 'skills/research/SKILL.md'), '# Research v1\n\nResearch carefully.\n');
-  await touch(join(root, 'agents/planner.agent.md'), '# Planner v1\n\nPlan carefully.\n');
+  await touch(join(root, 'agents/$planner.agent.md'), '# Planner v1\n\nPlan carefully.\n');
   return realpath(root);
 }
 

@@ -79,7 +79,7 @@
 
 ### AI Agent 预设
 
-- 入口：标准 `agents/<name>.agent.md` 文件（框架自动发现）
+- 入口：标准 `agents/$<name>.agent.md` 文件（框架自动发现）
 - 适用：声明领域专长 Agent，主 Agent 可自动识别并委派
 - Frontmatter 字段：name, description, tools, model, provider, maxIterations 等
 - Body 部分作为 systemPrompt 注入
@@ -124,7 +124,7 @@
 
 ### 需要声明领域专长 Agent
 
-用 `agents/<name>.agent.md` 文件声明 Agent 预设，框架自动发现，不要在插件里自行创建独立的 AI 会话。
+用 `agents/$<name>.agent.md` 文件声明 Agent 预设，框架自动发现；未加 `$` 的文件只是同目录资料。不要在插件里自行创建独立的 AI 会话。
 
 ## 何时不该继续走本 skill
 

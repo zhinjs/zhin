@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { featureId } from '@zhin.js/plugin-runtime';
 import {
+  conventionEntryFileName,
   defineFeatureProvider,
   type SourceConvention,
 } from '@zhin.js/feature-kit';
@@ -16,9 +17,11 @@ const agentFiles: SourceConvention = {
     const entries = [...await context.host.list(directory)]
       .sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
-      if (entry.kind !== 'file' || !isAgentFile(entry.name)) continue;
+      if (entry.kind !== 'file') continue;
+      const entryName = conventionEntryFileName(entry.name);
+      if (!entryName || !isAgentFile(entryName)) continue;
       yield {
-        localName: entry.name.slice(0, -'.agent.md'.length),
+        localName: entryName.slice(0, -'.agent.md'.length),
         source: join(directory, entry.name),
         target: 'server',
       };

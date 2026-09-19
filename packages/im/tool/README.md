@@ -1,13 +1,14 @@
 # @zhin.js/tool
 
-下一代 Agent Tool Feature。它从 Plugin 或项目根的 `tools/<name>.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。
+下一代 Agent Tool Feature。它从 Plugin 或项目根的 `tools/$<name>.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。未加 `$` 的文件可作为同目录依赖模块。
 
 ## 目录与身份
 
 ```text
 tools/
-├── get-weather.ts
-└── search.ts
+├── $get-weather.ts
+├── $search.ts
+└── weather-client.ts  # 普通依赖模块
 ```
 
 Tool 目录只允许一级 `.ts` 文件。文件 basename 是 owner 内部使用的 local name；Agent turn 对模型发布 owner-qualified name。Root 的 `get-weather` 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录、TSX 和旧 `agent/tools` 不属于绿地接口。

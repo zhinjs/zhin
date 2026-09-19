@@ -113,7 +113,7 @@ describe('AgentMeta extended fields', () => {
     const meta: AgentMeta = {
       name: 'full-agent',
       description: 'Agent with all new fields',
-      filePath: '/agents/full-agent.agent.md',
+      filePath: '/agents/$full-agent.agent.md',
       toolNames: ['read_file'],
       disallowedTools: ['bash'],
       effort: 'high',

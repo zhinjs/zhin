@@ -30,7 +30,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | `tools/` | `$*.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `agent/prompt-sections/` | `$*.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
-| `agents/` | `*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
+| `agents/` | `$*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
 | `mcp/` | `$*.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
 | `pages/` | `$*.ts` / `$*.tsx`, with `$nav` / `$footer` layout slots | No | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | Page constructs |
 
@@ -52,7 +52,7 @@ Supplementary rules per directory:
 | `tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `tools/$music-search.ts` -> `music-search`; `tools/$send_user_like.ts` -> `send_user_like` |
 | `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/$rules.ts` -> `project/rules` |
 | `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
-| `agents/` | File name with `.agent.md` suffix removed | `agents/planner.agent.md` -> `planner` |
+| `agents/` | File name with `$` prefix and `.agent.md` suffix removed | `agents/$planner.agent.md` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/$my-server.ts` -> `my-server` |
 | `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/$workroom.tsx` -> `workroom`; `pages/$nav.tsx` -> `nav` |
 
@@ -188,7 +188,7 @@ tools:
 ---
 ```
 
-`agents/<name>.agent.md` is an Agent persona/instruction file, such as `examples/multi-agent-room/agents/planner.agent.md`.
+`agents/$<name>.agent.md` is an Agent persona/instruction entry, such as `examples/multi-agent-room/agents/$planner.agent.md`; Markdown without `$` remains colocated reference material and is not registered.
 
 ### pages/ -- Console Pages
 

@@ -110,12 +110,12 @@ Key `spawn_task` parameters:
 | Parameter | Description |
 |-----------|-------------|
 | `task` | Task description (goal, scope, expected output) |
-| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/*.agent.md` presets) |
+| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/$*.agent.md` presets) |
 | `wait` | When `true`, waits synchronously; result returns to the current turn via tool result |
 | `context` | `fork` (inject recent messages from parent session) / `fresh` (empty context) |
 | `tools` / `skills` | Declare tools and skills needed for the sub-task |
 
-Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Additionally, sub-agent presets can be declared as files using `agents/<name>.agent.md` (YAML frontmatter + description), auto-discovered and registered at startup.
+Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Additionally, sub-agent presets can be declared as files using `agents/$<name>.agent.md` (YAML frontmatter + description), auto-discovered and registered at startup.
 
 ## Workroom Kernel
 

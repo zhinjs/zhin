@@ -1,6 +1,6 @@
 ---
 title: Agent 工具与技能
-description: tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 *.agent.md
+description: tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 $*.agent.md
 ---
 
 # Agent 工具与技能
@@ -130,14 +130,14 @@ Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其�
 插件工具若需要同类交互，应依赖 `ToolExecutionContext.question`，且必须处理端口缺失。
 unattended Turn（例如 Schedule）不会注入该端口，不能回退到全局 Message、Adapter 或用户队列。
 
-## skills 与 agents/*.agent.md
+## skills 与 agents/$*.agent.md
 
 技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。
 
-技能放在 `skills/<name>/SKILL.md`（每个子目录一个技能）：正文即给模型的指令，第一个 Markdown 标题行作为描述，`load_skill` 加载后解锁 `toolNames` 关联的工具。命名 Agent 是 `agents/<name>.agent.md`（文件名必须小写 kebab，如 `agents/planner.agent.md`）：整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述。真实示例见 `examples/test-bot/agents/planner.agent.md`。
+技能放在 `skills/<name>/SKILL.md`（每个子目录一个技能）：正文即给模型的指令，第一个 Markdown 标题行作为描述，`load_skill` 加载后解锁 `toolNames` 关联的工具。命名 Agent 入口是 `agents/$<name>.agent.md`（名称必须小写 kebab，如 `agents/$planner.agent.md`）：整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述；未加 `$` 的文件不会被注册。真实示例见 `examples/test-bot/agents/$planner.agent.md`。
 
 ```markdown
-<!-- agents/planner.agent.md -->
+<!-- agents/$planner.agent.md -->
 # planner
 
 You are **planner** (协调者): break down user goals, define acceptance

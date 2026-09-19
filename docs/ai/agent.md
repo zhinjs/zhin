@@ -110,12 +110,12 @@ ai:
 | 参数 | 说明 |
 |------|------|
 | `task` | 任务描述（目标、范围、期望产出） |
-| `agent` | 子代理名（须在 `ai.agents` 或 `agents/*.agent.md` 预设中存在） |
+| `agent` | 子代理名（须在 `ai.agents` 或 `agents/$*.agent.md` 预设中存在） |
 | `wait` | `true` 时同步等待，结果经 tool result 回到当前回合 |
 | `context` | `fork`（注入父会话近期消息）/ `fresh`（空上下文） |
 | `tools` / `skills` | 声明子任务需要的工具与技能 |
 
-行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。另外，子代理预设可用 `agents/<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
+行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。另外，子代理预设可用 `agents/$<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
 
 ## Workroom Kernel
 

@@ -16,11 +16,12 @@ import agentFeature, {
 } from '../src/index.js';
 
 describe('Agent Feature', () => {
-  it('discovers only agents/<name>.agent.md', async () => {
-    const source = '/project/agents/planner.agent.md';
+  it('discovers only explicit agents/$<name>.agent.md entries', async () => {
+    const source = '/project/agents/$planner.agent.md';
     const host = new MemoryHost({
       '/project/agents': [
-        { name: 'planner.agent.md', kind: 'file' },
+        { name: '$planner.agent.md', kind: 'file' },
+        { name: 'helper.agent.md', kind: 'file' },
         { name: 'legacy.md', kind: 'file' },
         { name: 'nested', kind: 'directory' },
       ],
@@ -39,13 +40,13 @@ describe('Agent Feature', () => {
       owner: root,
       feature: agentFeatureId,
       localName: 'reviewer',
-      source: '/agents/reviewer.agent.md',
+      source: '/agents/$reviewer.agent.md',
     });
     const slot = createCapabilitySlot({
       owner: root,
       feature: agentFeatureId,
       localName: 'reviewer',
-      source: '/agents/reviewer.agent.md',
+      source: '/agents/$reviewer.agent.md',
       definition,
     });
     const value: RuntimeSnapshot = {
