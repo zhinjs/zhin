@@ -7,7 +7,7 @@ import {
   type ImRuntime,
 } from '@zhin.js/core/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AgentResourceHub,
   type AssistantConfig,
@@ -17,7 +17,6 @@ import {
   FileJournalStore,
   type HumanIngressOrchestratorProposalPort,
   type WorkroomPlanGateAuthorityPort,
-  ProjectKnowledgeRegistry,
 } from '@zhin.js/agent';
 import {
   agentHostToken,
@@ -34,12 +33,6 @@ import {
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostEffectSponsorControlPort,
   type AgentHostPortfolioSponsorControlPort,
-  createCatalogProjectKnowledgeSourceAuthority,
-  createGenerationWorkroomEphemeralAssignmentContext,
-  createP12WorkroomKnowledgeContentReader,
-  workroomEphemeralAssignmentContextToken,
-  workroomAssignmentKnowledgeContextToken,
-  WorkroomAssignmentKnowledgeContextProjector,
   installWorkroomEffectResources,
   type WorkroomEffectClockPort,
   type WorkroomEffectBlockerPolicyPort,
@@ -52,11 +45,11 @@ import {
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import { WorkroomExecutionCoordinator } from './workroom-execution-coordinator.js';
 import { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordinator.js';
+import { WorkroomKnowledgeCoordinator } from './workroom-knowledge-coordinator.js';
 import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
-import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
 import {
   createRuntimeApprovalPort,
 } from './agent-turn-request.js';
@@ -219,13 +212,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     dataGovernanceCoordinator.registerHandoff(handoff);
     const {
       assignmentAuthorityGrants,
-      projectKnowledgeJournal,
       overlayPackPromotions,
       portfolioControlOutbox,
       stateRoot: workroomStateRoot,
     } = persistence;
     const {
-      runtime: dataGovernanceRuntime,
       lifecycle: dataLifecycle,
       localAuthority: localDataGovernance,
       governedOutbound,
@@ -439,86 +430,19 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       listBindings: listGenerationBindings,
     });
     workroomProfileConsoleControl.current = planningCoordinator.consoleControl;
-    const knowledgeSourceAuthority = createCatalogProjectKnowledgeSourceAuthority({
-      catalog: workroomCatalog,
-      directory: join(workroomStateRoot, 'workroom-project-knowledge-authority'),
-    });
-    const projectKnowledge = new ProjectKnowledgeRegistry({
-      journal: projectKnowledgeJournal,
-      sourceAuthority: knowledgeSourceAuthority,
-      generationView: Object.freeze({
-        async withCurrent<TResult>(operation: Readonly<{
-          generation: number; operationId: string; signal: AbortSignal;
-        }>, use: () => TResult | Promise<TResult>): Promise<TResult> {
-          operation.signal.throwIfAborted();
-          if (operation.generation !== generation || !options.snapshots) {
-            throw new Error('Project Knowledge operation targets another Root generation');
-          }
-          const lease = options.snapshots.acquire();
-          try {
-            if (!options.snapshots.owns(lease) || lease.value.generation !== generation) {
-              throw new Error('Project Knowledge generation is no longer current');
-            }
-            return await use();
-          } finally {
-            lease.release();
-          }
-        },
-      }),
-    });
-    const ephemeralAssignmentContext = createGenerationWorkroomEphemeralAssignmentContext({
+    const knowledgeCoordinator = new WorkroomKnowledgeCoordinator({
+      stateRoot: workroomStateRoot,
       generation,
       signal,
+      resources,
+      lifecycle,
+      runtime: workroomFoundation,
+      profiles: profileCoordinator,
+      governance: dataGovernanceCoordinator,
+      persistence,
     });
-    const assignmentKnowledge = new WorkroomAssignmentKnowledgeContextProjector({
-      profiles: projectProfiles,
-      knowledge: projectKnowledge,
-      contentReader: createP12WorkroomKnowledgeContentReader({
-        governance: dataGovernanceRuntime.disclosureManifest,
-        signal,
-      }),
-      publisher: ephemeralAssignmentContext,
-    });
-    resources.provide(workroomEphemeralAssignmentContextToken, ephemeralAssignmentContext);
-    resources.provide(workroomAssignmentKnowledgeContextToken, assignmentKnowledge);
-    lifecycle.add(() => ephemeralAssignmentContext.dispose());
-    workroomKnowledgeConsoleControl.current = Object.freeze({
-      read: (projectId: string) => projectKnowledge.read(projectId),
-      publish: async (
-        command: Parameters<AgentHostWorkroomKnowledgeControlPort['publish']>[0],
-        authenticatedPrincipal: Parameters<AgentHostWorkroomKnowledgeControlPort['publish']>[1],
-      ) => {
-        const source = await knowledgeSourceAuthority.issueSponsorDecision({
-          operationId: command.operationId,
-          projectId: command.projectId,
-          principalId: authenticatedPrincipal.principalId,
-        });
-        return await projectKnowledge.publish({
-          ...structuredClone(command),
-          version: 1,
-          generation,
-          ownerPrincipalId: authenticatedPrincipal.principalId,
-          source,
-        }, signal);
-      },
-      rollback: async (
-        command: Parameters<AgentHostWorkroomKnowledgeControlPort['rollback']>[0],
-        authenticatedPrincipal: Parameters<AgentHostWorkroomKnowledgeControlPort['rollback']>[1],
-      ) => {
-        const source = await knowledgeSourceAuthority.issueSponsorDecision({
-          operationId: command.operationId,
-          projectId: command.projectId,
-          principalId: authenticatedPrincipal.principalId,
-        });
-        return await projectKnowledge.rollback({
-          ...structuredClone(command),
-          version: 1,
-          generation,
-          ownerPrincipalId: authenticatedPrincipal.principalId,
-          source,
-        }, signal);
-      },
-    });
+    const ephemeralAssignmentContext = knowledgeCoordinator.ephemeralAssignmentContext;
+    workroomKnowledgeConsoleControl.current = knowledgeCoordinator.consoleControl;
     const acceptanceCoordinator = new WorkroomAcceptanceCoordinator({
       projectRoot: options.projectRoot,
       stateRoot: workroomStateRoot,
