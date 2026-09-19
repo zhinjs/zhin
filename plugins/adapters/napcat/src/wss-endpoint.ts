@@ -2,9 +2,10 @@ import { Endpoint } from 'zhin.js/adapter';
 /**
  * NapCat reverse WSS endpoint — accepts inbound WebSocket from NapCat.
  */
-import { clearInterval } from 'node:timers';
 import {
+  createEndpointLifecycle,
   createRecallEndpointControl,
+  type EndpointLifecycle,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
@@ -38,7 +39,6 @@ import {
   callNapCatWsAction,
   handleNapCatWsMessage,
   rejectAllPending,
-  startNapCatHeartbeat,
 } from './ws-transport.js';
 import { NapCatWsEndpoint } from './ws-endpoint.js';
 import {
@@ -62,9 +62,10 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
   readonly management: EndpointManagement = createNapCatEndpointManagement(this.client);
   readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
   readonly content = createNapCatContentPort((action, params) => this.client.callApi(action, params));
+  readonly #connectionLifecycle: EndpointLifecycle;
   #ws?: NapCatWsSocket;
   #wsRelease?: () => void;
-  #heartbeatTimer?: NodeJS.Timeout;
+  #connectionTask = Promise.resolve();
   #requestId = { value: 0 };
   #pending = new Map<string, NapCatPendingAction>();
   #open = false;
@@ -74,6 +75,10 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     super();
     this.#logger = getAdapterLogger('napcat', options.config.id);
     this.#options = options;
+    this.#connectionLifecycle = createEndpointLifecycle({
+      name: `${options.config.id}:inbound`,
+      reconnect: false,
+    });
   }
 
   async start(): Promise<void> {
@@ -81,7 +86,15 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     this.#started = true;
     const handle = this.#options.http.ws(this.#options.config.path);
     this.#wsRelease = handle.onConnection((connection) => {
-      this.#acceptConnection(connection);
+      this.#connectionTask = this.#connectionTask
+        .then(() => this.#acceptConnection(connection))
+        .catch((error) => {
+          this.#logger.warn(formatCompact({
+            op: 'wss_connection_failed',
+            endpoint: this.#options.config.id,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        });
     });
     this.#logger.info(formatCompact({
       op: 'listen',
@@ -103,20 +116,11 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     this.#open = false;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
-    if (this.#heartbeatTimer) {
-      clearInterval(this.#heartbeatTimer);
-      this.#heartbeatTimer = undefined;
-    }
+    await this.#connectionTask;
+    await this.#connectionLifecycle.stop();
     rejectAllPending(this.#pending);
     this.#inboundDeduper.clear();
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-      this.#ws = undefined;
-    }
+    this.#ws = undefined;
     this.#started = false;
   }
 
@@ -192,40 +196,41 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     });
   }
 
-  #acceptConnection(connection: WsConnection): void {
+  async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!verifyNapCatAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }
     const socket = connection.socket as unknown as NapCatWsSocket;
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    this.#ws = socket;
-    this.#heartbeatTimer = startNapCatHeartbeat(
-      this.#ws,
-      this.#options.config.heartbeat_interval,
-      this.#heartbeatTimer,
-    );
-    socket.on('message', (data) => {
-      handleNapCatWsMessage(data, {
-        endpointId: this.#options.config.id,
-        pending: this.#pending,
-        admit: (event) => this.admit(event),
-      });
-    });
-    socket.on('close', () => {
-      if (this.#ws === socket) {
-        this.#ws = undefined;
-        if (this.#heartbeatTimer) {
-          clearInterval(this.#heartbeatTimer);
-          this.#heartbeatTimer = undefined;
+    await this.#connectionLifecycle.stop();
+    await this.#connectionLifecycle.start(async (lifecycleHandle) => {
+      this.#ws = socket;
+      lifecycleHandle.onForceClose(() => {
+        try {
+          socket.close();
+        } catch {
+          /* ignore */
         }
-      }
+      });
+      this.#connectionLifecycle.startHeartbeat(() => {
+        try {
+          socket.ping?.();
+        } catch {
+          /* ignore */
+        }
+      }, this.#options.config.heartbeat_interval);
+      socket.on('message', (data) => {
+        this.#connectionLifecycle.notifyHeartbeatAck();
+        handleNapCatWsMessage(data, {
+          endpointId: this.#options.config.id,
+          pending: this.#pending,
+          admit: (event) => this.admit(event),
+        });
+      });
+      socket.on('close', () => {
+        if (this.#ws === socket) this.#ws = undefined;
+        lifecycleHandle.notifyClosed(new Error('NapCat reverse WebSocket closed'));
+      });
     });
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,

@@ -4,7 +4,7 @@
 import { defineAdapter } from 'zhin.js/adapter';
 import { httpHostToken } from '@zhin.js/host-http';
 import { NapCatHttpEndpoint } from '../src/http-endpoint.js';
-import { resolveNapCatConfig, type NapCatAdapterConfig } from '../src/protocol.js';
+import { resolveNapCatConfig, type NapCatEndpointConfig } from '../src/protocol.js';
 import { NapCatWsEndpoint } from '../src/ws-endpoint.js';
 import { NapCatWssEndpoint } from '../src/wss-endpoint.js';
 import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
@@ -29,7 +29,7 @@ declare module '@zhin.js/core' {
   }
 }
 
-export default defineAdapter<NapCatAdapterConfig>({
+export default defineAdapter<NapCatEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体，file:// 本地路径由 NapCat 侧读盘；

@@ -143,13 +143,19 @@ You can also call `addHandler(localName, defineHandler(...))` in `setup`; it lan
 ```ts
 // plugins/adapters/napcat/adapters/$napcat.ts (excerpt)
 import { defineAdapter } from 'zhin.js/adapter';
+import { httpHostToken } from '@zhin.js/host-http';
 
-export default defineAdapter<NapCatAdapterConfig>({
+export default defineAdapter<NapCatEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   create(context) {
     const config = resolveNapCatConfig(context.config);
-    const gateway = context.use(outboundMessageToken);
-    return new NapCatWsEndpoint({ id: context.id, gateway, config });
+    if (config.connection === 'wss') {
+      return new NapCatWssEndpoint({ id: context.id, http: context.use(httpHostToken), config });
+    }
+    if (config.connection === 'http') {
+      return new NapCatHttpEndpoint({ id: context.id, http: context.use(httpHostToken), config });
+    }
+    return new NapCatWsEndpoint({ id: context.id, config });
   },
 });
 ```

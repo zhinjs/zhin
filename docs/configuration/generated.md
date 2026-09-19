@@ -373,11 +373,16 @@ outline: [2, 3]
 | `plugins.napcat.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.napcat.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
 | `plugins.napcat.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `plugins.napcat.endpoints[].connection` | string: `"ws"`, `"wss"`, `"http"` | 否 | — | — |
 | `plugins.napcat.endpoints[].url` | string | 否 | — | NapCat WebSocket URL (required for connection: ws) |
 | `plugins.napcat.endpoints[].path` | string | 否 | — | WS path for reverse-wss |
 | `plugins.napcat.endpoints[].http_url` | string | 否 | — | HTTP API base URL (connection: http outbound) |
 | `plugins.napcat.endpoints[].post_path` | string | 否 | — | HTTP POST event path (connection: http inbound) |
 | `plugins.napcat.endpoints[].access_token` | string | 否 | — | NapCat access token |
+| `plugins.napcat.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `plugins.napcat.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `plugins.napcat.endpoints[].poll_interval` | number | 否 | — | — |
+| `plugins.napcat.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.napcat.endpoints[].id` | string | 是 | — | NapCat bot name |
 | `plugins.napcat.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

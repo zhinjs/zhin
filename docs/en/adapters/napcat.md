@@ -55,10 +55,13 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: my-bot
+      - id: my-bot
         url: "ws://127.0.0.1:3001"
         access_token: "${NAPCAT_TOKEN}"
 ```
+
+AdapterIndex merges instance connection defaults into every endpoint. The protocol receives only
+one expanded endpoint config and does not infer endpoint ids from environment variables.
 
 The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-napcat` (`instanceKey: napcat`).
 

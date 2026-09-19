@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0a6c18c7ff2f0fc9 -->
+<!-- sync-adapter-docs:sha256=a12f4b9cf2767673 -->
 
 # @zhin.js/adapter-napcat
 
@@ -55,10 +55,13 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: my-bot
+      - id: my-bot
         url: "ws://127.0.0.1:3001"
         access_token: "${NAPCAT_TOKEN}"
 ```
+
+AdapterIndex 会把实例级连接默认值合并进每个 endpoint；协议实现只接收一份展开后的
+endpoint 配置，不会从环境变量推断 endpoint id。
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。
 

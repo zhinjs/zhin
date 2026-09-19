@@ -43,10 +43,13 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: my-bot
+      - id: my-bot
         url: "ws://127.0.0.1:3001"
         access_token: "${NAPCAT_TOKEN}"
 ```
+
+AdapterIndex 会把实例级连接默认值合并进每个 endpoint；协议实现只接收一份展开后的
+endpoint 配置，不会从环境变量推断 endpoint id。
 
 根插件 `zhin.plugins`（或项目图）需引用 `@zhin.js/adapter-napcat`（`instanceKey: napcat`）。
 
