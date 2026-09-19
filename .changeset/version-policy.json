@@ -344,6 +344,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove classic Plugin-tree Agent discovery and retain filesystem descriptors plus generation Feature providers under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-agent-classic-runtime-bridges.md",
+      "packages": [
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove dead classic Plugin and Adapter runtime bridges and require Agent platform feedback to depend on the explicit Endpoint control port under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

@@ -118,7 +118,7 @@
     "export type{ModelHarnessRow,ResolvedModelHarness,ModelHarnessConfig}from './config/model-harness.js';",
     "export type{NormalizableTool}from './tool-bridge.js';",
     "export type{OwnerApprovalAddress,OwnerApprovalCommandContext,ToolRequesterRole,}from './security/owner-approval-runtime.js';",
-    "export type{PlatformFeatures,BotWithEditing,}from './typing-indicator/adapter-integration.js';",
+    "export type{PlatformFeatures,}from './typing-indicator/adapter-integration.js';",
     "export type{PluginBeforeToolCallHandler,PluginAfterToolCallHandler,PluginTransformContextHandler,}from './plugin-loop-hooks.js';",
     "export type{ProactiveSendContext,ProactiveSendSource,ProactiveOutboundService,}from './outbound/send-proactive.js';",
     "export type{PromptAssemblyEntry,PromptAssemblySection,PromptSectionRegistry,}from './prompt/prompt-assembly-registry.js';",

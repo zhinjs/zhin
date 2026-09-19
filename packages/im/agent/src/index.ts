@@ -600,7 +600,6 @@ export {
 } from './typing-indicator/adapter-integration.js';
 export type {
   PlatformFeatures,
-  BotWithEditing,
 } from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──

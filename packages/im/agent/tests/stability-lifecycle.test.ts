@@ -1,15 +1,13 @@
 /**
  * ADR 0014 P2-2 — 稳定性生命周期集成测试
  */
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ZhinAgent } from '../src/zhin-agent/index.js';
 import { MemoryAgentSessionStore, type AIProvider } from '@zhin.js/ai';
 import { wireMockLlmApi } from './helpers/mock-llm-api.js';
 import { AgentCompactionRuntime } from '../src/memory/compaction-runtime.js';
 
 import { collectStabilityMetrics, startStabilityMonitor } from '../src/stability/memory-pressure.js';
-import { Adapter } from '@zhin.js/core';
-import { pruneAdapterRegistry } from '../src/stability/registry-cleanup.js';
 
 function mockProvider(): AIProvider & { dispose: ReturnType<typeof vi.fn> } {
   const dispose = vi.fn();
@@ -49,25 +47,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
       expect(store.sessionCount).toBe(1);
       store.dispose();
       expect(store.sessionCount).toBe(0);
-    });
-  });
-
-  describe('registry hot-reload', () => {
-    afterEach(() => {
-      Adapter.Registry.delete('test-adapter-stability');
-    });
-
-    it('pruneAdapterRegistry 保留指定名称', () => {
-      Adapter.register('test-adapter-stability', () => ({}) as never);
-      const keepSize = Adapter.Registry.size;
-      Adapter.register('to-prune', () => ({}) as never);
-      expect(Adapter.Registry.size).toBe(keepSize + 1);
-
-      pruneAdapterRegistry([...Adapter.Registry.keys()].filter((n) => n !== 'to-prune'));
-
-      expect(Adapter.Registry.has('to-prune')).toBe(false);
-      expect(Adapter.Registry.has('test-adapter-stability')).toBe(true);
-      Adapter.Registry.delete('to-prune');
     });
   });
 

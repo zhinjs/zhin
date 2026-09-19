@@ -1165,6 +1165,9 @@ importers:
 
   packages/im/agent:
     dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../adapter
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../agent-feature

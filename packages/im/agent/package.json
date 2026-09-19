@@ -120,6 +120,7 @@
     "clean": "rimraf lib && find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete 2>/dev/null || true"
   },
   "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/core": "workspace:*",

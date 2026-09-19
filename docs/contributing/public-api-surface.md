@@ -127,6 +127,7 @@
 | Schedule `resolveAdapter` delivery fallback | `removed` | `TaskExecutor` 与 `deliverScheduleToAdapter` 必须注入 `NotificationRouter` | Schedule 出站由 composition root 创建的 Router 独占路由与发送权威 |
 | classic adapter-derived Message generics | `removed` | `Message` / Side Event 的 adapter identity 为 Runtime 字符串 | canonical IM 契约不再反向依赖经典 `Adapter`、`Endpoint` 或 `ProcessAdapter` 类型注册表 |
 | classic Plugin tree Agent discovery | `removed` | workspace 扫描接收项目根；单包扫描接收目录描述符 | 插件 Agent 由 generation Feature provider 发现，不再递归经典 `Plugin` 对象树 |
+| Agent classic Plugin / Adapter runtime bridges | `removed` | 全局 Adapter registry 清理、未挂载 typing 示例与 `BotWithEditing` 已删除 | Agent 平台反馈依赖 `@zhin.js/adapter` 的 `EndpointControl` 端口；工具权限只读当前 turn 的显式消息上下文 |
 | `Adapter` 类 / Core `Endpoint` 类型 | `deprecated` | Root facade 仅为经典运行时兼容而导出 | 新适配器从 `zhin.js/adapter` 导入 `defineAdapter` 与 Plugin Runtime `Endpoint` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |

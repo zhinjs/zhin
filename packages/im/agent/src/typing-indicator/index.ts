@@ -9,7 +9,6 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import type { Plugin } from '@zhin.js/core';
 
 const logger = getLogger('TypingIndicator');
 

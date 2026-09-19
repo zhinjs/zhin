@@ -5,12 +5,7 @@ import path from 'node:path';
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
 const errors = [];
-const legacyAdapterConsumers = new Set([
-  'packages/im/agent/src/init/introspection-collectors.ts',
-  'packages/im/agent/src/security/owner-approve-always-store.ts',
-  'packages/im/agent/src/stability/registry-cleanup.ts',
-  'packages/im/agent/src/typing-indicator/integration.ts',
-]);
+const legacyAdapterConsumers = new Set();
 
 for (const file of typescriptFiles(adaptersRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
