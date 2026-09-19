@@ -28,12 +28,15 @@ describe('Console Host module boundary', () => {
     ].includes(name))).toEqual([]);
     const consoleSources = await readdir(consoleRoot, { withFileTypes: true });
     expect(consoleSources.some(entry => entry.name === 'projection.ts')).toBe(false);
+    expect(consoleSources.some(entry => entry.name === 'agent-introspection.ts')).toBe(false);
   });
 
   it('keeps supporting modules independent from the HTTP API orchestrator', async () => {
     const supportingModules = [
       'agent-console.ts',
-      'agent-introspection.ts',
+      'agent-config-projection.ts',
+      'agent-feature-projection.ts',
+      'agent-runtime-resolver.ts',
       'asset-server.ts',
       'agent-routes.ts',
       'configuration.ts',
