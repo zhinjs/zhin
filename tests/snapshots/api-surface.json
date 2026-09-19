@@ -176,7 +176,7 @@
     "export{TodoReadBuiltinTool,createTodoReadTool,TODO_READ_PARAMETERS,}from './builtin/todo-read-tool.js';",
     "export{TodoWriteBuiltinTool,createTodoWriteTool,TODO_WRITE_PARAMETERS,}from './builtin/todo-write-tool.js';",
     "export{ToolRegistryAsService}from './tool/tool-registry-as-service.js';",
-    "export{TypingIndicatorManager,ReactionTypingIndicator,MessageTypingIndicator,NoneTypingIndicator,ReactionTypingIndicatorAdapter,NativeTypingIndicatorAdapter,NativeTypingIndicator,GenericTypingIndicatorAdapter,getTypingIndicatorManager,provideTypingIndicatorManager,startTypingIndicator,stopTypingIndicator,}from './typing-indicator/index.js';",
+    "export{TypingIndicatorManager,ReactionTypingIndicator,MessageTypingIndicator,NoneTypingIndicator,ReactionTypingIndicatorAdapter,NativeTypingIndicatorAdapter,NativeTypingIndicator,GenericTypingIndicatorAdapter,}from './typing-indicator/index.js';",
     "export{UserProfileStore,AI_USER_PROFILE_MODEL}from './user-profile.js';",
     "export{WEB_SEARCH_LOCALE_EXTRA_KEY,DEFAULT_WEB_SEARCH_MARKET,normalizeWebSearchLocaleHint,acceptLanguageForMarket,resolveWebSearchMarketFromContext,}from './builtin/web-search-locale.js';",
     "export{WebFetchBuiltinTool,createWebFetchTool,WEB_FETCH_PARAMETERS,WEB_FETCH_DEFAULT_MAX_LENGTH,stripFetchedHtmlToText,}from './builtin/web-fetch-tool.js';",

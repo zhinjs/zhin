@@ -87,6 +87,20 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Adopt the owner-directed zero-compatibility explicit convention-entry model so colocated helper modules and top-level dynamic commands have unambiguous semantics."
+    },
+    {
+      "changeset": "remove-generation-stores.md",
+      "packages": [
+        "@zhin.js/plugin-runtime",
+        "@zhin.js/agent",
+        "@zhin.js/plugin-rss",
+        "@zhin.js/plugin-content-moderation",
+        "@zhin.js/plugin-music",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove latest-generation stores and implicit module-global runtime selection under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

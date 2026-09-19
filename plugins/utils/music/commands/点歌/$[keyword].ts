@@ -4,6 +4,7 @@ import { searchMusic, formatSearchResults } from '../../src/music-lib.js';
 import { resolveSourceAlias, SOURCE_DISPLAY_NAME } from '../../src/config.js';
 import { sessionKey, resolveMessageIds, setPending } from '../../src/session.js';
 import type { MusicSource } from '../../src/types.js';
+import { musicRuntimeToken } from '../../src/runtime.js';
 
 interface MusicConfig {
   defaultSource?: MusicSource;
@@ -20,7 +21,7 @@ export default defineCommand<MusicConfig, string, Message>({
     '酷我点歌': { keyword: '' },
     '酷狗点歌': { keyword: '' },
   },
-  async execute({ params, config, input }) {
+  async execute({ params, config, input, use }) {
     const rawKeyword = String(params.keyword ?? '').trim();
     if (!rawKeyword) {
       const sources = Object.values(SOURCE_DISPLAY_NAME).join('/');
@@ -53,7 +54,7 @@ export default defineCommand<MusicConfig, string, Message>({
     }
 
     const pageSize = (config as MusicConfig | undefined)?.pageSize ?? 5;
-    const result = await searchMusic(keyword, source, pageSize);
+    const result = await searchMusic(use(musicRuntimeToken), keyword, source, pageSize);
     if (result.total === 0) {
       return `[${SOURCE_DISPLAY_NAME[source]}] 未找到"${keyword}"相关歌曲`;
     }

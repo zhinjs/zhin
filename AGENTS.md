@@ -112,7 +112,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
 - 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限 composition root `basic/cli`（见上）。
-- 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例、latest-value stack 或 `createGenerationStore`（现存调用是待删除技术债）。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
+- 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例或 latest-value stack；`createGenerationStore` 已删除并由门禁禁止回归。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录里，并带独立 `package.json`。
 - 依赖策略受 `pnpm check:dependency-policy` 门禁约束；根 `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升，不要随手删改。

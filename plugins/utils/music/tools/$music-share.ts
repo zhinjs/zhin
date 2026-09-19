@@ -1,6 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { shareMusicDetail } from '../src/music-lib.js';
 import type { MusicSource } from '../src/types.js';
+import { musicRuntimeToken } from '../src/runtime.js';
 
 export default defineAgentTool<{
   id: string;
@@ -20,5 +21,6 @@ export default defineAgentTool<{
     required: ['id', 'source'],
   },
   approval: 'never',
-  execute: ({ id, source }) => shareMusicDetail(String(id), source),
+  execute: ({ id, source }, context) =>
+    shareMusicDetail(context.use(musicRuntimeToken), String(id), source),
 });

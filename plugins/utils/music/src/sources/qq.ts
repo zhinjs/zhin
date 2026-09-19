@@ -1,6 +1,6 @@
 import * as crypto from 'node:crypto';
 import type { MusicSearchService, MusicDetail, MusicInfo } from '../types.js';
-import { getCredential } from '../credential-store.js';
+import type { CredentialStore } from '../credential-store.js';
 
 const md5 = (text: string) => crypto.createHash('md5').update(text).digest('hex');
 
@@ -15,9 +15,11 @@ function getHeaders(cookie?: string | null) {
 }
 
 export class QQMusicService implements MusicSearchService {
+  constructor(private readonly credentials: CredentialStore) {}
+
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
-      const cookie = await getCredential('qq', 'cookie');
+      const cookie = await this.credentials.get('qq', 'cookie');
       const response = await fetch(MUSICU_API, {
         method: 'POST',
         headers: getHeaders(cookie),
@@ -108,7 +110,7 @@ export class QQMusicService implements MusicSearchService {
   }
 
   async getAudioUrl(id: string, mid?: string, mediaMid?: string): Promise<string> {
-    const cookie = await getCredential('qq', 'cookie');
+    const cookie = await this.credentials.get('qq', 'cookie');
     if (cookie) {
       try {
         const uin = /uin=o?(\d+)/.exec(cookie)?.[1] ?? '0';

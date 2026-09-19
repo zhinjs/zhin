@@ -10,6 +10,7 @@ import {
 } from '../../src/login/index.js';
 import { resolveMessageIds } from '../../src/session.js';
 import { SOURCE_DISPLAY_NAME } from '../../src/config.js';
+import { musicRuntimeToken } from '../../src/runtime.js';
 
 const QR_LOGIN_SOURCES: Record<string, QrLoginSource> = {
   qq: 'qq',
@@ -22,7 +23,7 @@ export default defineCommand<unknown, string, Message>({
     platform: { type: 'string', description: '音乐平台（qq / netease / 取消）' },
   },
   permit: ['role(master)'],
-  async execute({ params, input }) {
+  async execute({ params, input, use }) {
     const platform = String(params.platform ?? '').trim();
 
     const ids = resolveMessageIds(input!);
@@ -60,7 +61,7 @@ export default defineCommand<unknown, string, Message>({
       `\n二维码有效期 2 分钟，发送"音乐登录 取消"可中止`,
     ]);
 
-    const finalResult = await pollLogin(key, async (result) => {
+    const finalResult = await pollLogin(key, use(musicRuntimeToken).credentials, async (result) => {
       if (result.status === 'scanned') {
         await replyFn(`[${sourceName}] ${result.message}`);
       } else if (result.status === 'confirmed') {

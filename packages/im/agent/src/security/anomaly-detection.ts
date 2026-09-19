@@ -9,7 +9,6 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 
 const logger = getLogger('AnomalyDetector');
 
@@ -363,11 +362,8 @@ export const DEFAULT_DETECTION_RULES: DetectionRule[] = [
   },
 ];
 
-// ── 全局实例 ──────────────────────────────────────────────────────────
-
-const anomalyStore = createGenerationStore<AnomalyDetector>('zhin.agent.anomaly-detector');
-
-function createConfiguredDetector(): AnomalyDetector {
+/** Creates an isolated detector with the framework's default patterns and rules. */
+export function createDefaultAnomalyDetector(): AnomalyDetector {
   const detector = new AnomalyDetector();
   for (const pattern of DEFAULT_BEHAVIOR_PATTERNS) {
     detector.addPattern(pattern);
@@ -376,24 +372,4 @@ function createConfiguredDetector(): AnomalyDetector {
     detector.addRule(rule);
   }
   return detector;
-}
-
-export function getAnomalyDetector(): AnomalyDetector {
-  return anomalyStore.tryUse() ?? createConfiguredDetector();
-}
-
-export function provideAnomalyDetector(context: GenerationStoreContext): AnomalyDetector {
-  const detector = createConfiguredDetector();
-  anomalyStore.provide(context, detector);
-  return detector;
-}
-
-/** @deprecated 使用 provideAnomalyDetector 替代 */
-export function initAnomalyDetector(): AnomalyDetector {
-  return createConfiguredDetector();
-}
-
-/** 重置全局异常检测器（用于测试隔离） */
-export function resetAnomalyDetector(): void {
-  anomalyStore.clear();
 }

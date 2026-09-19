@@ -1,8 +1,9 @@
-import { musicServices } from './sources/index.js';
 import { sourceConfigMap, SOURCE_DISPLAY_NAME, formatDuration } from './config.js';
 import type { MusicInfo, MusicDetail, MusicSource } from './types.js';
+import type { MusicRuntime } from './runtime.js';
 
 export async function searchMusic(
+  runtime: MusicRuntime,
   keyword: string,
   source?: MusicSource,
   limit = 5,
@@ -14,7 +15,7 @@ export async function searchMusic(
   total: number;
 }> {
   const s: MusicSource = source ?? 'qq';
-  const service = musicServices[s];
+  const service = runtime.services[s];
   const results = await service.search(keyword, limit);
   return {
     success: true,
@@ -25,8 +26,8 @@ export async function searchMusic(
   };
 }
 
-export async function shareMusicDetail(id: string, source: MusicSource) {
-  const service = musicServices[source];
+export async function shareMusicDetail(runtime: MusicRuntime, id: string, source: MusicSource) {
+  const service = runtime.services[source];
   if (!service) {
     return { success: false as const, error: `不支持的音乐源: ${source}` };
   }

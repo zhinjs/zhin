@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
 import inbound from '../middlewares/$inbound.ts';
@@ -7,7 +7,6 @@ import {
   DEFAULT_ACTIONS,
   BUILTIN_LEXICON,
   findMatches,
-  getModerationEngine,
   HttpModerationProvider,
   isPublicHttpUrl,
   LocalLexiconProvider,
@@ -17,7 +16,6 @@ import {
   parseWordFile,
   redactOutboundPayload,
   redactText,
-  resetModerationEngine,
   resolveModerationConfig,
   shouldBypassInbound,
   shouldBypassOutbound,
@@ -25,9 +23,6 @@ import {
 import type { ProviderResult, ScanInput } from '../src/types.js';
 
 describe('@zhin.js/plugin-content-moderation', () => {
-  beforeEach(() => {
-    resetModerationEngine();
-  });
 
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('content-moderation');
@@ -336,10 +331,8 @@ describe('@zhin.js/plugin-content-moderation', () => {
     expect(recall).toHaveBeenCalledOnce();
   });
 
-  it('shared engine singleton resets', () => {
-    const first = getModerationEngine();
-    resetModerationEngine();
-    expect(getModerationEngine()).not.toBe(first);
+  it('keeps engine instances isolated by construction', () => {
+    expect(new ModerationEngine()).not.toBe(new ModerationEngine());
   });
 });
 

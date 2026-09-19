@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { listCredentials } from '../../src/credential-store.js';
+import { musicRuntimeToken } from '../../src/runtime.js';
 import { SOURCE_DISPLAY_NAME } from '../../src/config.js';
 import type { MusicSource } from '../../src/types.js';
 
@@ -7,8 +7,8 @@ export default defineCommand({
   description: '查看各平台凭证配置状态',
   alias: ['状态'],
   permit: ['role(master)'],
-  async execute() {
-    const allCreds = await listCredentials();
+  async execute({ use }) {
+    const allCreds = await use(musicRuntimeToken).credentials.list();
     const lines: string[] = ['--- 音乐凭证状态 ---'];
     for (const source of ['qq', 'netease', 'kuwo', 'kugou'] as MusicSource[]) {
       const name = SOURCE_DISPLAY_NAME[source];

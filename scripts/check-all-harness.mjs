@@ -213,7 +213,7 @@ const checks = [
   {
     name: 'Removed Plugin API',
     command: 'pnpm check:no-removed-plugin-api',
-    description: '生产源码不得调用已删除的 Plugin lookup API',
+    description: '生产源码不得调用已删除的 Plugin lookup 或 latest-generation store API',
   },
   {
     name: 'Plugin Runtime Migration Readiness',

@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { deleteCredential } from '../../../src/credential-store.js';
+import { musicRuntimeToken } from '../../../src/runtime.js';
 import { SOURCE_DISPLAY_NAME } from '../../../src/config.js';
 import type { MusicSource } from '../../../src/types.js';
 
@@ -10,7 +10,7 @@ export default defineCommand({
   alias: ['删除'],
   params: { source: { type: 'string', description: '音乐源（qq/netease/kuwo/kugou）' } },
   permit: ['role(master)'],
-  async execute({ params, args }) {
+  async execute({ params, args, use }) {
     const source = String(params.source ?? '').trim();
     const key = String(args[0] ?? '').trim();
 
@@ -21,7 +21,7 @@ export default defineCommand({
       return `格式：cookie delete ${source} <key>`;
     }
 
-    await deleteCredential(source as MusicSource, key);
+    await use(musicRuntimeToken).credentials.delete(source as MusicSource, key);
     return `[${SOURCE_DISPLAY_NAME[source as MusicSource]}] 凭证 ${key} 已删除`;
   },
 });

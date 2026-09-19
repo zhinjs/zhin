@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { getCredential } from '../../../src/credential-store.js';
+import { musicRuntimeToken } from '../../../src/runtime.js';
 import { SOURCE_DISPLAY_NAME } from '../../../src/config.js';
 import type { MusicSource } from '../../../src/types.js';
 
@@ -10,7 +10,7 @@ export default defineCommand({
   alias: ['查看'],
   params: { source: { type: 'string', description: '音乐源（qq/netease/kuwo/kugou）' } },
   permit: ['role(master)'],
-  async execute({ params, args }) {
+  async execute({ params, args, use }) {
     const source = String(params.source ?? '').trim();
     const key = String(args[0] ?? '').trim();
 
@@ -22,7 +22,7 @@ export default defineCommand({
     }
 
     const sourceName = SOURCE_DISPLAY_NAME[source as MusicSource];
-    const value = await getCredential(source as MusicSource, key);
+    const value = await use(musicRuntimeToken).credentials.get(source as MusicSource, key);
     if (!value) return `[${sourceName}] 凭证 ${key} 未设置`;
 
     const masked = value.length > 10

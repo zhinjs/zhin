@@ -1,7 +1,7 @@
 import { defineComponent } from 'zhin.js/component';
-import { musicServices } from '../src/sources/index.js';
 import { sourceConfigMap } from '../src/config.js';
 import type { MusicSource } from '../src/types.js';
+import { musicRuntimeToken } from '../src/runtime.js';
 
 interface ShareMusicProps {
   readonly platform: MusicSource;
@@ -9,8 +9,8 @@ interface ShareMusicProps {
 }
 
 export default defineComponent<ShareMusicProps>({
-  async render({ platform, musicId }) {
-    const service = musicServices[platform];
+  async render({ platform, musicId }, context) {
+    const service = context.use(musicRuntimeToken).services[platform];
     if (!service) return 'unsupported music source';
     const detail = await service.getDetail(musicId);
     return {

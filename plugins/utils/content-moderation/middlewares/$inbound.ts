@@ -4,11 +4,11 @@ import { outboundHostToken } from 'zhin.js';
 import {
   buildScanContext,
   extractFromTextAndSegments,
-  getModerationEngine,
   resolveModerationConfig,
   shouldBypassInbound,
   type ModerationConfig,
 } from '../src/index.js';
+import { moderationEngineToken } from '../src/runtime.js';
 
 /**
  * Inbound content moderation.
@@ -42,7 +42,7 @@ export default defineMiddleware<Message, ModerationConfig>({
 
     // 引擎由 plugin setup 按 generation 配置一次（configure 含 provider 重建与
     // 词库 readFileSync，不能留在每条消息的热路径）；这里只做判定。
-    const engine = getModerationEngine();
+    const engine = context.use(moderationEngineToken);
 
     const extracted = extractFromTextAndSegments(message.content, message.segments);
     if (!extracted.text && extracted.images.length === 0) {

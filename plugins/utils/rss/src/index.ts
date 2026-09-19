@@ -6,15 +6,8 @@ export {
   stripHtml,
 } from './feed.js';
 export type { FeedItem, RssConfig } from './feed.js';
-export {
-  getRssDb,
-  getRssSeen,
-  getRssSubs,
-  provideRssDb,
-  setRssDb,
-  ensureRssMemoryDb,
-  resetRssDb,
-} from './db-store.js';
+export { getRssSeen, getRssSubs } from './db-store.js';
+export { rssRuntimeToken, type RssRuntime, type RssOutboundPush } from './runtime.js';
 export { extractChannelInfo, SMOKE_CHANNEL } from './channel.js';
-export { checkSubscriptions, pollAllFeeds, formatNewItems, setRssOutboundPush } from './poll.js';
+export { checkSubscriptions, pollAllFeeds, formatNewItems } from './poll.js';
 export type { RssOutboundPush, CheckResult } from './poll.js';

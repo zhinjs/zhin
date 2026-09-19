@@ -46,8 +46,8 @@ import { DisposeStack } from './dispose';           // ❌
 共享连接、数据库和其他有状态对象必须在 setup 中通过 `context.resources.provide`
 发布，并由当前 operation 持有的 Generation View 解析。禁止新增模块级 `let` 单例、
 latest-value stack 或 `createGenerationStore`；这些形式会跨 Root 串扰，也会让 shadow
-candidate 在 commit 前可见。现存内部 `createGenerationStore` 调用属于待删除技术债，
-不得作为插件创作接口继续扩散。详见[模块状态](../authoring/module-state.md)。
+candidate 在 commit 前可见。`createGenerationStore` 已从公开 API 删除，门禁会阻止其
+重新进入生产源码。详见[模块状态](../authoring/module-state.md)。
 
 ## WS/SSE 端点：createEndpointLifecycle
 

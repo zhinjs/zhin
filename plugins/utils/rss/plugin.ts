@@ -4,16 +4,14 @@ import {
   outboundHostToken,
   scheduleHostToken,
 } from 'zhin.js';
-import { fetchFeed, resolveRssConfig, type RssConfig } from './src/feed.js';
+import { resolveRssConfig, type RssConfig } from './src/feed.js';
 import {
-  ensureRssMemoryDb,
-  getRssSubs,
-  provideRssDb,
+  createInMemoryRssDb,
   RSS_SEEN_TABLE,
   RSS_SUBS_TABLE,
 } from './src/db-store.js';
-import { setRssAgentDeps } from './src/rss-agent-deps.js';
-import { cleanOldSeen, pollAllFeeds, setRssOutboundPush } from './src/poll.js';
+import { cleanOldSeen, pollAllFeeds } from './src/poll.js';
+import { rssRuntimeToken, type RssOutboundPush } from './src/runtime.js';
 
 function defineRssTables(db: { define: (name: string, schema: Record<string, unknown>) => void }): void {
   db.define(RSS_SUBS_TABLE, {
@@ -49,18 +47,16 @@ export default definePlugin<RssConfig>({
   },
   setup(context) {
     const config = resolveRssConfig(context.config.get());
-    if (context.resources.has(databaseHostToken)) {
+    const db = context.resources.has(databaseHostToken) ? (() => {
       const host = context.resources.use(databaseHostToken);
       defineRssTables(host);
-      // provide 自动挂 lifecycle：代际结束反注册，避免悬挂到上一代的 host
-      provideRssDb(context, host);
-    } else {
-      ensureRssMemoryDb();
-    }
+      return host;
+    })() : createInMemoryRssDb();
 
+    let outboundPush: RssOutboundPush | null = null;
     if (context.resources.has(outboundHostToken)) {
       const outbound = context.resources.use(outboundHostToken);
-      setRssOutboundPush(async (input) => {
+      outboundPush = async (input) => {
         await outbound.send({
           adapter: input.adapterName,
           endpointKey: input.endpointKey,
@@ -70,17 +66,14 @@ export default definePlugin<RssConfig>({
           },
           content: input.content,
         });
-      });
-      context.lifecycle.add(() => setRssOutboundPush(null));
+      };
     }
-
-    setRssAgentDeps({
-      getSubs: () => getRssSubs() as { select: () => Promise<unknown[]> } | null,
-      fetchFeed: (url) => fetchFeed(url, config.timeout).then((f) => ({
-        title: f.title,
-        items: f.items.map((i) => ({ title: i.title, link: i.link })),
-      })),
+    const runtime = Object.freeze({
+      db,
+      config: Object.freeze({ ...config }),
+      outbound: outboundPush,
     });
+    context.resources.provide(rssRuntimeToken, runtime);
 
     if (!context.resources.has(scheduleHostToken)) return;
     const schedule = context.resources.use(scheduleHostToken);
@@ -89,7 +82,7 @@ export default definePlugin<RssConfig>({
       cron: config.pollCron,
       description: 'Poll RSS subscriptions',
       async execute() {
-        await pollAllFeeds(config);
+        await pollAllFeeds(runtime);
       },
     });
     const disposeClean = schedule.register({
@@ -97,7 +90,7 @@ export default definePlugin<RssConfig>({
       cron: '0 0 4 * * *',
       description: 'Clean seen records older than 7 days',
       async execute() {
-        await cleanOldSeen();
+        await cleanOldSeen(runtime);
       },
     });
     context.lifecycle.add(dispose);

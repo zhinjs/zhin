@@ -241,7 +241,6 @@
     "export * from './component-host.js';",
     "export * from './database-host.js';",
     "export * from './dispose.js';",
-    "export * from './generation-store.js';",
     "export * from './handoff.js';",
     "export * from './html-renderer.js';",
     "export * from './identity.js';",

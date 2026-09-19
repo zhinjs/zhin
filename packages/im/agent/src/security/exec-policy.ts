@@ -21,7 +21,6 @@ import {
   resolveToolRequesterRole,
   type ToolRequesterRole,
 } from './owner-approve-always-store.js';
-import { getAuditLogger } from './audit-logger.js';
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
@@ -611,14 +610,6 @@ export function checkExecPolicy(
   if (security === 'deny') {
     const result = { allowed: false, reason: '当前配置禁止执行 Shell 命令（execSecurity=deny）。如需开放请在配置中设置 ai.agent.execSecurity。' };
 
-    // 记录审计日志
-    try {
-      const auditLogger = getAuditLogger();
-      auditLogger.logExecPolicy(command, false, result.reason);
-    } catch {
-      // 忽略审计日志错误
-    }
-
     return result;
   }
 
@@ -636,12 +627,6 @@ export function checkExecPolicy(
   if (security !== 'full') {
     const unsafeReason = findUnsafeShellSyntax(cmd);
     if (unsafeReason) {
-      try {
-        const auditLogger = getAuditLogger();
-        auditLogger.logExecPolicy(cmd, false, unsafeReason);
-      } catch {
-        // 忽略审计日志错误
-      }
       return { allowed: false, reason: unsafeReason };
     }
   }
@@ -660,14 +645,6 @@ export function checkExecPolicy(
 
       // deny 立即返回（deny > ask 优先级）
       if (!result.allowed && !result.needsApproval) {
-        // 记录审计日志
-        try {
-          const auditLogger = getAuditLogger();
-          auditLogger.logExecPolicy(segment, false, result.reason);
-        } catch {
-          // 忽略审计日志错误
-        }
-
         return result;
       }
 
@@ -680,23 +657,7 @@ export function checkExecPolicy(
 
   // 有需要审批的段
   if (pendingApproval) {
-    // 记录审计日志
-    try {
-      const auditLogger = getAuditLogger();
-      auditLogger.logExecPolicy(cmd, false, pendingApproval.reason);
-    } catch {
-      // 忽略审计日志错误
-    }
-
     return pendingApproval;
-  }
-
-  // 记录成功的审计日志
-  try {
-    const auditLogger = getAuditLogger();
-    auditLogger.logExecPolicy(cmd, true);
-  } catch {
-    // 忽略审计日志错误
   }
 
   return { allowed: true };

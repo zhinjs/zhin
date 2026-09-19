@@ -1,9 +1,11 @@
 // plugins/utils/music/src/sources/netease.ts
 import type { MusicSearchService, MusicDetail, MusicInfo, Music163 } from '../types.js';
-import { getCredential } from '../credential-store.js';
+import type { CredentialStore } from '../credential-store.js';
 
 /** 网易云音乐搜索服务 */
 export class NeteaseMusicService implements MusicSearchService {
+  constructor(private readonly credentials: CredentialStore) {}
+
   async search(keyword: string, limit = 10): Promise<MusicInfo[]> {
     try {
       const searchUrl = `http://music.163.com/api/search/get/web?csrf_token=hlpretag=&hlposttag=&s=${encodeURIComponent(keyword)}&type=1&offset=0&total=true&limit=${limit}`
@@ -72,7 +74,7 @@ export class NeteaseMusicService implements MusicSearchService {
    * @returns 音频直链 URL
    */
   async getAudioUrl(id: string): Promise<string> {
-    const cookie = await getCredential('netease', 'cookie');
+    const cookie = await this.credentials.get('netease', 'cookie');
     if (cookie) {
       try {
         const response = await fetch(

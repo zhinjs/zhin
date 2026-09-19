@@ -15,7 +15,6 @@ export {
   type GenerationAdmissionBindable,
   type GenerationAdmissionSource,
 } from './admission.js';
-export * from './generation-store.js';
 export * from './handoff.js';
 /** @public 用户侧创作面：`definePlugin`（`plugin.ts` 约定入口，承诺 semver）。 */
 export * from './plugin.js';

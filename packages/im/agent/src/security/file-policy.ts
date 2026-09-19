@@ -13,7 +13,6 @@
 
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { getAuditLogger } from './audit-logger.js';
 import { getMemoryRoot } from '../memory-layers.js';
 
 // ── 设备路径阻止──────────────
@@ -199,14 +198,6 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
     if (normalizedCandidates.some(candidate => candidate.startsWith(prefix))) {
       const result = { allowed: false, reason: `拒绝访问系统敏感文件: ${prefix}` };
 
-      // 记录审计日志
-      try {
-        const auditLogger = getAuditLogger();
-        auditLogger.logFileAccess(filePath, false, result.reason);
-      } catch {
-        // 忽略审计日志错误
-      }
-
       return result;
     }
   }
@@ -217,14 +208,6 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
     if (SENSITIVE_DIR_NAMES.has(parts[i])) {
       const result = { allowed: false, reason: `拒绝访问敏感目录: ${parts[i]}` };
 
-      // 记录审计日志
-      try {
-        const auditLogger = getAuditLogger();
-        auditLogger.logFileAccess(filePath, false, result.reason);
-      } catch {
-        // 忽略审计日志错误
-      }
-
       return result;
     }
     // 对多级目录名做拼接检查（如 .config/gcloud）
@@ -232,14 +215,6 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
       const twoLevel = `${parts[i - 1]}/${parts[i]}`;
       if (SENSITIVE_DIR_NAMES.has(twoLevel)) {
         const result = { allowed: false, reason: `拒绝访问敏感目录: ${twoLevel}` };
-
-        // 记录审计日志
-        try {
-          const auditLogger = getAuditLogger();
-          auditLogger.logFileAccess(filePath, false, result.reason);
-        } catch {
-          // 忽略审计日志错误
-        }
 
         return result;
       }
@@ -256,14 +231,6 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
   ) {
     const result = { allowed: false, reason: '拒绝访问敏感目录: data' };
 
-    // 记录审计日志
-    try {
-      const auditLogger = getAuditLogger();
-      auditLogger.logFileAccess(filePath, false, result.reason);
-    } catch {
-      // 忽略审计日志错误
-    }
-
     return result;
   }
 
@@ -272,24 +239,8 @@ export function checkFileAccess(filePath: string, workspaceDir?: string): FileAc
     if (pattern.test(basename)) {
       const result = { allowed: false, reason: `拒绝访问敏感文件: ${basename} 可能包含密钥或凭据` };
 
-      // 记录审计日志
-      try {
-        const auditLogger = getAuditLogger();
-        auditLogger.logFileAccess(filePath, false, result.reason);
-      } catch {
-        // 忽略审计日志错误
-      }
-
       return result;
     }
-  }
-
-  // 记录成功的审计日志
-  try {
-    const auditLogger = getAuditLogger();
-    auditLogger.logFileAccess(filePath, true);
-  } catch {
-    // 忽略审计日志错误
   }
 
   return { allowed: true };

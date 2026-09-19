@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { setCredential } from '../../../src/credential-store.js';
+import { musicRuntimeToken } from '../../../src/runtime.js';
 import { SOURCE_DISPLAY_NAME } from '../../../src/config.js';
 import type { MusicSource } from '../../../src/types.js';
 
@@ -10,7 +10,7 @@ export default defineCommand({
   alias: ['设置'],
   params: { source: { type: 'string', description: '音乐源（qq/netease/kuwo/kugou）' } },
   permit: ['role(master)'],
-  async execute({ params, args }) {
+  async execute({ params, args, use }) {
     const source = String(params.source ?? '').trim();
     const [key, ...valueParts] = args.map(String);
 
@@ -21,7 +21,7 @@ export default defineCommand({
       return `格式：cookie set ${source} <key> <value>\n示例：cookie set netease cookie MUSIC_U=xxx`;
     }
 
-    await setCredential(source as MusicSource, key, valueParts.join(' '));
+    await use(musicRuntimeToken).credentials.set(source as MusicSource, key, valueParts.join(' '));
     return `[${SOURCE_DISPLAY_NAME[source as MusicSource]}] 凭证 ${key} 已保存`;
   },
 });

@@ -3,16 +3,17 @@ import { extractChannelInfo } from '../../src/channel.js';
 import { getRssSubs } from '../../src/db-store.js';
 import { resolveRssConfig, type RssConfig } from '../../src/feed.js';
 import { checkSubscriptions } from '../../src/poll.js';
+import { rssRuntimeToken } from '../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '手动触发检查 RSS 更新',
   params: { url: { type: 'string', default: '' } },
-  async execute({ params, config, input }) {
-    const Subs = getRssSubs();
+  async execute({ params, input, use }) {
+    const runtime = use(rssRuntimeToken);
+    const Subs = getRssSubs(runtime.db);
     if (!Subs) return 'RSS 数据库尚未就绪';
 
     const channel = extractChannelInfo(input);
-    const cfg = resolveRssConfig(config);
     const targetUrl = String(params.url ?? '').trim();
 
     let urls: string[];
@@ -35,7 +36,7 @@ export default defineCommand<RssConfig>({
       urls = [...new Set(rows.map((r) => String(r.url ?? '')).filter(Boolean))];
     }
 
-    const result = await checkSubscriptions({ urls, config: cfg });
+    const result = await checkSubscriptions(runtime, { urls });
     return result.text;
   },
 });

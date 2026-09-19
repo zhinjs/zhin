@@ -1,13 +1,13 @@
-import { defineAgentTool } from '@zhin.js/agent/tools';
+import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { getRssAgentDeps } from '../../src/rss-agent-deps.js';
+import { getRssSubs } from '../../src/db-store.js';
+import { rssRuntimeToken } from '../../src/runtime.js';
 
 export default defineAgentTool({
   description: '查询当前所有 RSS 订阅',
   inputSchema: z.object({}),
-  async execute() {
-    const { getSubs } = getRssAgentDeps();
-    const Subs = getSubs();
+  async execute(_input, context) {
+    const Subs = getRssSubs(context.use(rssRuntimeToken).db);
     if (!Subs) return 'RSS 数据库尚未就绪';
 
     const all = (await Subs.select()) as Array<{

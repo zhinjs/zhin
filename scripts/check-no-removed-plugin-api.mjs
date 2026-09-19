@@ -64,9 +64,10 @@ function collect(roots, pattern, violations) {
 const violations = [];
 collect(pluginRoots, /\b(?:usePlugin|getPlugin)\s*\(/u, violations);
 collect(allRuntimeRoots, /\b(?:getHostRootPlugin|setHostRootPlugin)\s*\(/u, violations);
+collect(allRuntimeRoots, /\b(?:createGenerationStore|GenerationStoreContext)\b/u, violations);
 
 if (violations.length > 0) {
-  console.error('Removed Plugin APIs are forbidden in production source:\n');
+  console.error('Removed runtime APIs are forbidden in production source:\n');
   for (const violation of violations) {
     console.error(`  ${violation.file}:${violation.line}  ${violation.text}`);
   }

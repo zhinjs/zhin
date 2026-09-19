@@ -590,10 +590,6 @@ export {
   NativeTypingIndicatorAdapter,
   NativeTypingIndicator,
   GenericTypingIndicatorAdapter,
-  getTypingIndicatorManager,
-  provideTypingIndicatorManager,
-  startTypingIndicator,
-  stopTypingIndicator,
 } from './typing-indicator/index.js';
 export type {
   TypingIndicatorType,

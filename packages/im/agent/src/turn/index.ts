@@ -134,8 +134,6 @@ export type { TurnContextBridgeState } from './turn-context-bridge.js';
 export {
   TaskContinuationManager,
   decomposeTask,
-  getContinuationManager,
-  initContinuationManager,
 } from './task-continuation.js';
 export type {
   TaskStatus,

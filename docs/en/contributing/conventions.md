@@ -39,8 +39,8 @@ Shared connections, databases, and other stateful objects must be provided throu
 `context.resources.provide` during setup and resolved from the Generation View held by the current
 operation. Do not add module-level `let` singletons, latest-value stacks, or
 `createGenerationStore`: they cross Root boundaries and can expose a shadow candidate before
-commit. Existing internal `createGenerationStore` calls are removal debt, not a plugin authoring
-surface. See [Module State](../authoring/module-state.md).
+commit. `createGenerationStore` has been removed from the public API, and the repository gate
+prevents it from returning to production source. See [Module State](../authoring/module-state.md).
 
 ## WS/SSE Endpoints: createEndpointLifecycle
 

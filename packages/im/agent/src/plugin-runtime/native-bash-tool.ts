@@ -6,7 +6,7 @@ import {
   type ToolInvocationPolicy,
 } from '@zhin.js/tool';
 import { classifyBashCommand } from '../security/file-policy.js';
-import { getSandbox, Sandbox } from '../security/sandbox.js';
+import { Sandbox, type SandboxConfig } from '../security/sandbox.js';
 
 export interface BashExecutionRequest {
   readonly command: string;
@@ -30,6 +30,12 @@ export interface BashExecutionPort {
 
 /** Executes one policy-authorized command using the exact Turn isolation boundary. */
 export class SandboxBashExecutionPort implements BashExecutionPort {
+  readonly #baseConfig: Readonly<Partial<SandboxConfig>>;
+
+  constructor(baseConfig: Partial<SandboxConfig> = {}) {
+    this.#baseConfig = Object.freeze({ ...baseConfig });
+  }
+
   async execute(request: BashExecutionRequest): Promise<BashExecutionResult> {
     request.signal.throwIfAborted();
     const filesystem = request.policy.filesystem;
@@ -43,9 +49,9 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
     }
 
     const sandbox = unrestricted
-      ? new Sandbox({ ...getSandbox().getConfig(), enabled: false })
+      ? new Sandbox({ ...this.#baseConfig, enabled: false })
       : new Sandbox({
-          ...getSandbox().getConfig(),
+          ...this.#baseConfig,
           enabled: true,
           workingDirectory: filesystem.workingDirectory ?? filesystem.workspaceRoot,
           enableNetwork: request.policy.network.enabled,

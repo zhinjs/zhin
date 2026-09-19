@@ -1,6 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { searchMusic } from '../src/music-lib.js';
 import type { MusicSource } from '../src/types.js';
+import { musicRuntimeToken } from '../src/runtime.js';
 
 export default defineAgentTool<{
   keyword: string;
@@ -22,6 +23,11 @@ export default defineAgentTool<{
     required: ['keyword'],
   },
   approval: 'never',
-  execute: ({ keyword, source, limit }) =>
-    searchMusic(String(keyword), source, typeof limit === 'number' ? limit : 5),
+  execute: ({ keyword, source, limit }, context) =>
+    searchMusic(
+      context.use(musicRuntimeToken),
+      String(keyword),
+      source,
+      typeof limit === 'number' ? limit : 5,
+    ),
 });

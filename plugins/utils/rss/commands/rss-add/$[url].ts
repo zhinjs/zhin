@@ -3,12 +3,14 @@ import { extractChannelInfo } from '../../src/channel.js';
 import { getRssSeen, getRssSubs } from '../../src/db-store.js';
 import { fetchFeed, resolveRssConfig, type RssConfig } from '../../src/feed.js';
 import { markItemsSeen } from '../../src/poll.js';
+import { rssRuntimeToken } from '../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '订阅一个 RSS/Atom 源',
   params: { url: { type: 'string' } },
-  async execute({ params, config, input }) {
-    const Subs = getRssSubs();
+  async execute({ params, config, input, use }) {
+    const runtime = use(rssRuntimeToken);
+    const Subs = getRssSubs(runtime.db);
     if (!Subs) return 'RSS 数据库尚未就绪，请稍后重试';
 
     const url = String(params.url ?? '').trim();
@@ -39,7 +41,7 @@ export default defineCommand<RssConfig>({
     try {
       const { title, items } = await fetchFeed(url, cfg.timeout);
       feedTitle = title;
-      await markItemsSeen(url, items);
+      await markItemsSeen(runtime, url, items);
     } catch (e) {
       return `无法解析该地址: ${(e as Error).message}\n请确认是有效的 RSS/Atom 源`;
     }

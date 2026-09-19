@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseComponentDefinition } from 'zhin.js/component';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
@@ -24,13 +24,10 @@ import {
 import { QQMusicService } from '../src/sources/qq.js';
 import { KuwoMusicService } from '../src/sources/kuwo.js';
 import { KugouMusicService } from '../src/sources/kugou.js';
-import { musicServices } from '../src/sources/index.js';
+import { createMusicServices } from '../src/sources/index.js';
 import {
-  getCredential,
-  setCredential,
-  deleteCredential,
-  listCredentials,
-  resetCredentialDb,
+  CredentialStore,
+  createInMemoryCredentialDb,
 } from '../src/credential-store.js';
 import {
   loginSessionKey,
@@ -39,6 +36,10 @@ import {
   cleanExpiredLogins,
 } from '../src/login/index.js';
 import type { MusicInfo, MusicSource } from '../src/types.js';
+
+function createCredentials(): CredentialStore {
+  return new CredentialStore(createInMemoryCredentialDb());
+}
 
 describe('@zhin.js/plugin-music', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -76,7 +77,7 @@ describe('@zhin.js/plugin-music', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     try {
-      const service = new QQMusicService();
+      const service = new QQMusicService(createCredentials());
       await expect(service.getLyric('some-mid')).resolves.toBe(lyric);
     } finally {
       vi.unstubAllGlobals();
@@ -132,6 +133,7 @@ describe('@zhin.js/plugin-music', () => {
 
   describe('music services registry', () => {
     it('has all four sources', () => {
+      const musicServices = createMusicServices(createCredentials());
       expect(musicServices.qq).toBeInstanceOf(QQMusicService);
       expect(musicServices.kuwo).toBeInstanceOf(KuwoMusicService);
       expect(musicServices.kugou).toBeInstanceOf(KugouMusicService);
@@ -254,37 +256,39 @@ describe('@zhin.js/plugin-music', () => {
   });
 
   describe('credential store', () => {
-    beforeEach(() => resetCredentialDb());
-
     it('stores and retrieves credentials', async () => {
-      await setCredential('qq', 'cookie', 'qqmusic_key=abc123');
-      const value = await getCredential('qq', 'cookie');
+      const store = createCredentials();
+      await store.set('qq', 'cookie', 'qqmusic_key=abc123');
+      const value = await store.get('qq', 'cookie');
       expect(value).toBe('qqmusic_key=abc123');
     });
 
     it('returns null for missing credentials', async () => {
-      expect(await getCredential('netease', 'cookie')).toBeNull();
+      expect(await createCredentials().get('netease', 'cookie')).toBeNull();
     });
 
     it('updates existing credentials', async () => {
-      await setCredential('netease', 'cookie', 'MUSIC_U=old');
-      await setCredential('netease', 'cookie', 'MUSIC_U=new');
-      expect(await getCredential('netease', 'cookie')).toBe('MUSIC_U=new');
+      const store = createCredentials();
+      await store.set('netease', 'cookie', 'MUSIC_U=old');
+      await store.set('netease', 'cookie', 'MUSIC_U=new');
+      expect(await store.get('netease', 'cookie')).toBe('MUSIC_U=new');
     });
 
     it('deletes credentials', async () => {
-      await setCredential('kuwo', 'token', 'abc');
-      await deleteCredential('kuwo', 'token');
-      expect(await getCredential('kuwo', 'token')).toBeNull();
+      const store = createCredentials();
+      await store.set('kuwo', 'token', 'abc');
+      await store.delete('kuwo', 'token');
+      expect(await store.get('kuwo', 'token')).toBeNull();
     });
 
     it('lists credentials by source', async () => {
-      await setCredential('qq', 'cookie', 'val1');
-      await setCredential('qq', 'token', 'val2');
-      await setCredential('netease', 'cookie', 'val3');
-      const qqCreds = await listCredentials('qq');
+      const store = createCredentials();
+      await store.set('qq', 'cookie', 'val1');
+      await store.set('qq', 'token', 'val2');
+      await store.set('netease', 'cookie', 'val3');
+      const qqCreds = await store.list('qq');
       expect(qqCreds).toHaveLength(2);
-      const allCreds = await listCredentials();
+      const allCreds = await store.list();
       expect(allCreds).toHaveLength(3);
     });
   });

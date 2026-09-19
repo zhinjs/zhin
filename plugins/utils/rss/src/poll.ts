@@ -1,26 +1,9 @@
 /**
  * Feed poll helpers: detect new items; optional OutboundHost push to subscribers.
  */
-import { fetchFeed, type FeedItem, type RssConfig } from './feed.js';
+import { fetchFeed, type FeedItem } from './feed.js';
 import { getRssSeen, getRssSubs } from './db-store.js';
-
-export type RssOutboundPush = (input: {
-  readonly adapterName: string;
-  readonly endpointKey: string;
-  readonly channelType: string;
-  readonly channelId: string;
-  readonly content: string;
-}) => Promise<void>;
-
-let _outboundPush: RssOutboundPush | null = null;
-
-export function setRssOutboundPush(push: RssOutboundPush | null): void {
-  _outboundPush = push;
-}
-
-export function getRssOutboundPush(): RssOutboundPush | null {
-  return _outboundPush;
-}
+import type { RssRuntime } from './runtime.js';
 
 function ts(): string {
   return new Date().toISOString();
@@ -40,8 +23,8 @@ export function formatNewItems(feedTitle: string, items: FeedItem[], maxItems: n
   return lines.join('\n');
 }
 
-export async function markItemsSeen(feedUrl: string, items: FeedItem[]): Promise<void> {
-  const Seen = getRssSeen();
+export async function markItemsSeen(runtime: RssRuntime, feedUrl: string, items: FeedItem[]): Promise<void> {
+  const Seen = getRssSeen(runtime.db);
   if (!Seen) return;
   for (const item of items) {
     const dup = await Seen.select().where({ feed_url: feedUrl, item_guid: item.guid });
@@ -62,9 +45,9 @@ export interface CheckResult {
   readonly pushed: number;
 }
 
-async function pushToSubscribers(feedUrl: string, content: string): Promise<number> {
-  const push = _outboundPush;
-  const Subs = getRssSubs();
+async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, content: string): Promise<number> {
+  const push = runtime.outbound;
+  const Subs = getRssSubs(runtime.db);
   if (!push || !Subs) return 0;
   const subscribers = await Subs.select().where({ url: feedUrl });
   let pushed = 0;
@@ -92,12 +75,11 @@ async function pushToSubscribers(feedUrl: string, content: string): Promise<numb
  * Check subscribed feeds for new items and mark them seen.
  * When OutboundHost is wired, pushes formatted text to each subscriber channel.
  */
-export async function checkSubscriptions(options: {
+export async function checkSubscriptions(runtime: RssRuntime, options: {
   urls: readonly string[];
-  config: RssConfig;
 }): Promise<CheckResult> {
-  const Seen = getRssSeen();
-  const Subs = getRssSubs();
+  const Seen = getRssSeen(runtime.db);
+  const Subs = getRssSubs(runtime.db);
   if (!Seen || !Subs) {
     return { text: 'RSS 数据库尚未就绪', totalNew: 0, pushed: 0 };
   }
@@ -108,7 +90,7 @@ export async function checkSubscriptions(options: {
 
   for (const url of options.urls) {
     try {
-      const { title, items } = await fetchFeed(url, options.config.timeout);
+      const { title, items } = await fetchFeed(url, runtime.config.timeout);
       const seenRows = await Seen.select().where({ feed_url: url });
       const seenGuids = new Set(seenRows.map((r) => String(r.item_guid ?? '')));
       const newItems = items.filter((item) => item.guid && !seenGuids.has(item.guid));
@@ -116,18 +98,18 @@ export async function checkSubscriptions(options: {
         parts.push(`${title || url}: 无新内容`);
         continue;
       }
-      await markItemsSeen(url, newItems);
+      await markItemsSeen(runtime, url, newItems);
       totalNew += newItems.length;
-      const body = formatNewItems(title || url, newItems, options.config.maxItems);
+      const body = formatNewItems(title || url, newItems, runtime.config.maxItems);
       parts.push(body);
-      pushed += await pushToSubscribers(url, body);
+      pushed += await pushToSubscribers(runtime, url, body);
     } catch (e) {
       parts.push(`${url}: 检查失败 — ${(e as Error).message}`);
     }
   }
 
   if (parts.length === 0) return { text: '没有可检查的订阅', totalNew: 0, pushed: 0 };
-  const pushNote = _outboundPush
+  const pushNote = runtime.outbound
     ? (pushed > 0 ? `，已推送 ${pushed} 个会话` : '，无出站推送')
     : '（未装配 OutboundHost，仅本地标记）';
   const header = totalNew > 0
@@ -139,8 +121,8 @@ export async function checkSubscriptions(options: {
 /**
  * Periodically clean seen records older than 7 days.
  */
-export async function cleanOldSeen(): Promise<void> {
-  const Seen = getRssSeen();
+export async function cleanOldSeen(runtime: RssRuntime): Promise<void> {
+  const Seen = getRssSeen(runtime.db);
   if (!Seen) return;
   try {
     const cutoff = new Date();
@@ -161,11 +143,11 @@ export async function cleanOldSeen(): Promise<void> {
 /**
  * Poll all unique feed URLs across subscriptions.
  */
-export async function pollAllFeeds(config: RssConfig): Promise<CheckResult> {
-  const Subs = getRssSubs();
+export async function pollAllFeeds(runtime: RssRuntime): Promise<CheckResult> {
+  const Subs = getRssSubs(runtime.db);
   if (!Subs) return { text: 'RSS 数据库尚未就绪', totalNew: 0, pushed: 0 };
   const all = await Subs.select();
   const urls = [...new Set(all.map((s) => String(s.url ?? '')).filter(Boolean))];
   if (urls.length === 0) return { text: '暂无任何 RSS 订阅', totalNew: 0, pushed: 0 };
-  return checkSubscriptions({ urls, config });
+  return checkSubscriptions(runtime, { urls });
 }

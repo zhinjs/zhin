@@ -2,12 +2,13 @@ import { defineCommand } from 'zhin.js/command';
 import { extractChannelInfo } from '../../src/channel.js';
 import { getRssSubs } from '../../src/db-store.js';
 import type { RssConfig } from '../../src/feed.js';
+import { rssRuntimeToken } from '../../src/runtime.js';
 
 export default defineCommand<RssConfig>({
   description: '取消一个 RSS 订阅',
   params: { url: { type: 'string' } },
-  async execute({ params, input }) {
-    const Subs = getRssSubs();
+  async execute({ params, input, use }) {
+    const Subs = getRssSubs(use(rssRuntimeToken).db);
     if (!Subs) return 'RSS 数据库尚未就绪';
 
     const url = String(params.url ?? '').trim();

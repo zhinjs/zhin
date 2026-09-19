@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { databaseHostToken } from 'zhin.js';
 import plugin from '../plugin.ts';
@@ -8,26 +8,35 @@ import addCommand from '../commands/rss-add/$[url].ts';
 import removeCommand from '../commands/rss-remove/$[url].ts';
 import checkCommand from '../commands/rss-check/$[[url]].ts';
 import { formatFeedPreview, resolveRssConfig, stripHtml } from '../src/feed.js';
-import { getRssDb, getRssSubs, resetRssDb, ensureRssMemoryDb } from '../src/db-store.js';
+import { createInMemoryRssDb, getRssSubs } from '../src/db-store.js';
+import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
 import { SMOKE_CHANNEL } from '../src/channel.js';
 
-const emptyCtx = {
-  owner: {} as never,
-  generation: 0,
-  config: {},
-  use: () => {
-    throw new Error('unused');
-  },
-  args: [],
-  params: {},
-  input: undefined,
-};
+function createRuntime(overrides: Partial<RssRuntime> = {}): RssRuntime {
+  return {
+    db: createInMemoryRssDb(),
+    config: resolveRssConfig({}),
+    outbound: null,
+    ...overrides,
+  };
+}
+
+function commandContext(runtime: RssRuntime) {
+  return {
+    owner: {} as never,
+    generation: 0,
+    config: {},
+    use: (token: unknown) => {
+      if (token === rssRuntimeToken) return runtime;
+      throw new Error('unexpected token');
+    },
+    args: [],
+    params: {},
+    input: undefined,
+  };
+}
 
 describe('@zhin.js/plugin-rss runtime', () => {
-  beforeEach(() => {
-    resetRssDb();
-    ensureRssMemoryDb();
-  });
 
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('rss');
@@ -48,6 +57,7 @@ describe('@zhin.js/plugin-rss runtime', () => {
   });
 
   it('rejects invalid preview url without network', async () => {
+    const emptyCtx = commandContext(createRuntime());
     const result = await previewCommand.execute({
       ...emptyCtx,
       params: { url: 'ftp://x' },
@@ -56,10 +66,12 @@ describe('@zhin.js/plugin-rss runtime', () => {
   });
 
   it('list is empty then add/remove work against memory store', async () => {
+    const runtime = createRuntime();
+    const emptyCtx = commandContext(runtime);
     const empty = await listCommand.execute({ ...emptyCtx });
     expect(String(empty)).toContain('没有订阅');
 
-    const Subs = getRssSubs()!;
+    const Subs = getRssSubs(runtime.db)!;
     await Subs.insert({
       url: 'https://example.com/feed.xml',
       feed_title: 'Example',
@@ -87,6 +99,7 @@ describe('@zhin.js/plugin-rss runtime', () => {
   });
 
   it('rss-add rejects bad url without network', async () => {
+    const emptyCtx = commandContext(createRuntime());
     const result = await addCommand.execute({
       ...emptyCtx,
       params: { url: 'not-a-url' },
@@ -95,39 +108,40 @@ describe('@zhin.js/plugin-rss runtime', () => {
   });
 
   it('rss-check with no subscriptions returns clear message', async () => {
+    const emptyCtx = commandContext(createRuntime());
     const result = await checkCommand.execute({ ...emptyCtx, params: {} });
     expect(String(result)).toContain('没有任何订阅');
   });
 
-  it('setup with databaseHostToken registers lifecycle cleanup for module _db', async () => {
-    const disposers: Array<() => void> = [];
+  it('setup provides an owner-scoped runtime backed by databaseHostToken', async () => {
     const fakeHost = { define: () => undefined } as never;
+    let provided: RssRuntime | undefined;
     const context = {
       config: { get: () => ({}) },
       resources: {
         has: (token: unknown) => token === databaseHostToken,
         use: () => fakeHost,
+        provide: (token: unknown, value: RssRuntime) => {
+          if (token === rssRuntimeToken) provided = value;
+        },
       },
-      lifecycle: { add: (d: () => void) => disposers.push(d) },
+      lifecycle: { add: () => undefined },
     };
 
     await (plugin as unknown as { setup: (ctx: unknown) => Promise<void> }).setup(context);
-    expect(getRssDb()).toBe(fakeHost);
-    expect(disposers.length).toBeGreaterThan(0);
-
-    disposers.forEach((d) => d());
-    // dispose 后不再悬挂到上一代 host，回落到新的内存库
-    expect(getRssDb()).not.toBe(fakeHost);
+    expect(provided?.db).toBe(fakeHost);
   });
 
   it('outbound push is invoked for subscribers when wired', async () => {
-    const { setRssOutboundPush, checkSubscriptions } = await import('../src/poll.js');
+    const { checkSubscriptions } = await import('../src/poll.js');
     const pushes: string[] = [];
-    setRssOutboundPush(async (input) => {
-      pushes.push(`${input.adapterName}:${input.channelId}:${input.content.slice(0, 20)}`);
+    const runtime = createRuntime({
+      config: resolveRssConfig({ timeout: 1000 }),
+      outbound: async (input) => {
+        pushes.push(`${input.adapterName}:${input.channelId}:${input.content.slice(0, 20)}`);
+      },
     });
-    try {
-      const Subs = getRssSubs()!;
+    const Subs = getRssSubs(runtime.db)!;
       // Unroutable loopback address + short timeout keeps this test offline and fast.
       const url = 'http://127.0.0.1:1/empty.xml';
       await Subs.insert({
@@ -142,14 +156,10 @@ describe('@zhin.js/plugin-rss runtime', () => {
         created_at: new Date().toISOString(),
       });
       // fetch will fail → no push; still verifies wiring does not throw
-      const result = await checkSubscriptions({
+      const result = await checkSubscriptions(runtime, {
         urls: [url],
-        config: resolveRssConfig({ timeout: 1000 }),
       });
       expect(result.totalNew).toBe(0);
       expect(pushes).toEqual([]);
-    } finally {
-      setRssOutboundPush(null);
-    }
   });
 });

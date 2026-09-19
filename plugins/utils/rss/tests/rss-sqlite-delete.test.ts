@@ -5,12 +5,14 @@
  * (no id column) to reproduce the production shape.
  */
 import { createRequire } from 'node:module';
-import { afterEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import removeCommand from '../commands/rss-remove/$[url].ts';
-import { RSS_SEEN_TABLE, RSS_SUBS_TABLE, resetRssDb, setRssDb, type RssModel } from '../src/db-store.js';
+import { RSS_SEEN_TABLE, RSS_SUBS_TABLE, type RssModel } from '../src/db-store.js';
 import type { RssRow } from '../src/memory-store.js';
 import { cleanOldSeen } from '../src/poll.js';
 import { SMOKE_CHANNEL } from '../src/channel.js';
+import { resolveRssConfig } from '../src/feed.js';
+import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
 
 const require = createRequire(import.meta.url);
 let DatabaseSync: (new (filename: string) => any) | null = null;
@@ -95,27 +97,27 @@ function createSqliteRssDb() {
   return { db, store: { models: { get: (name: string) => models.get(name) } } };
 }
 
-const emptyCtx = {
-  owner: {} as never,
-  generation: 0,
-  config: {},
-  use: () => {
-    throw new Error('unused');
-  },
-  args: [],
-  params: {},
-  input: undefined,
-};
+function createRuntime(db: ReturnType<typeof createSqliteRssDb>['store']): RssRuntime {
+  return { db, config: resolveRssConfig({}), outbound: null };
+}
+
+function commandContext(runtime: RssRuntime) {
+  return {
+    owner: {} as never,
+    generation: 0,
+    config: {},
+    use: (token: unknown) => token === rssRuntimeToken ? runtime : (() => { throw new Error('unexpected token'); })(),
+    args: [],
+    params: {},
+    input: undefined,
+  };
+}
 
 describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
-  afterEach(() => {
-    resetRssDb();
-  });
-
   it('rss-remove deletes by business keys, not id', async () => {
     const { db, store } = createSqliteRssDb();
     try {
-      setRssDb(store);
+      const runtime = createRuntime(store);
       const Subs = store.models.get(RSS_SUBS_TABLE)!;
       await Subs.insert({
         url: 'https://example.com/feed.xml',
@@ -130,7 +132,7 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
       });
 
       const result = await removeCommand.execute({
-        ...emptyCtx,
+        ...commandContext(runtime),
         params: { url: 'https://example.com/feed.xml' },
       });
       expect(String(result)).toContain('已取消订阅');
@@ -143,14 +145,14 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
   it('cleanOldSeen deletes expired rows by feed_url + item_guid', async () => {
     const { db, store } = createSqliteRssDb();
     try {
-      setRssDb(store);
+      const runtime = createRuntime(store);
       const Seen = store.models.get(RSS_SEEN_TABLE)!;
       const old = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
       const fresh = new Date().toISOString();
       await Seen.insert({ feed_url: 'https://a.com/f', item_guid: 'old-1', item_title: 't', seen_at: old });
       await Seen.insert({ feed_url: 'https://a.com/f', item_guid: 'new-1', item_title: 't', seen_at: fresh });
 
-      await cleanOldSeen();
+      await cleanOldSeen(runtime);
 
       const remaining = await Seen.select();
       expect(remaining.map((r) => r.item_guid)).toEqual(['new-1']);

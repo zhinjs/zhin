@@ -3,6 +3,7 @@ import type { Message } from '@zhin.js/core/runtime';
 import { sessionKey, resolveMessageIds, getPending, clearPending } from '../src/session.js';
 import { shareMusicDetail, buildMusicShareSegment } from '../src/music-lib.js';
 import { SOURCE_DISPLAY_NAME } from '../src/config.js';
+import { musicRuntimeToken } from '../src/runtime.js';
 
 export default defineMiddleware<Message>({
   target: 'inbound',
@@ -42,7 +43,11 @@ export default defineMiddleware<Message>({
     const selected = pending.results[num - 1]!;
     const sourceName = SOURCE_DISPLAY_NAME[selected.source] ?? selected.source;
 
-    const detailResult = await shareMusicDetail(selected.id, selected.source);
+    const detailResult = await shareMusicDetail(
+      context.use(musicRuntimeToken),
+      selected.id,
+      selected.source,
+    );
     if (!detailResult.success) {
       await context.input.$reply(
         `[${sourceName}] 获取"${selected.title}"播放信息失败：${detailResult.error}`,

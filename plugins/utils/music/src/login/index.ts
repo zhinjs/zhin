@@ -1,7 +1,7 @@
 import type { QrLoginProvider, QrLoginSource, QrPollResult } from './types.js';
 import { QQLoginProvider } from './qq.js';
 import { NeteaseLoginProvider } from './netease.js';
-import { setCredential } from '../credential-store.js';
+import type { CredentialStore } from '../credential-store.js';
 
 export type { QrLoginSource, QrPollResult, QrLoginProvider } from './types.js';
 
@@ -73,6 +73,7 @@ export async function startLogin(
 
 export async function pollLogin(
   key: string,
+  credentials: CredentialStore,
   onStatus: (result: QrPollResult) => Promise<void>,
 ): Promise<QrPollResult> {
   const session = activeLogins.get(key);
@@ -100,7 +101,7 @@ export async function pollLogin(
       if (result.status === 'confirmed') {
         activeLogins.delete(key);
         if (result.cookie) {
-          await setCredential(session.source, 'cookie', result.cookie);
+          await credentials.set(session.source, 'cookie', result.cookie);
         }
         return result;
       }
