@@ -53,11 +53,15 @@ export {
   mediaRefToInline,
   isMediaBlockRef,
   isMediaContentBlock,
+  AiHttpTransport,
+  createAiHttpTransport,
+  resolveAiProxyUrl,
 } from './llm/index.js';
 export type {
   PromptCacheRetention,
   ProviderGatewayPreset,
   ProviderMediaKind,
+  AiHttpTransportOptions,
 } from './llm/index.js';
 export type {
   Context,

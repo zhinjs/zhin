@@ -57,6 +57,7 @@ export interface AssistantMessageEventStream extends AsyncIterable<AssistantStre
 export interface RegisteredProvider {
   config: ProviderInstanceConfig;
   models: string[];
+  fetch?: typeof globalThis.fetch;
 }
 
 function languageModelKey(alias: string, modelId: string): string {
@@ -92,8 +93,11 @@ export class LlmApiRuntime implements LlmCompletionPort {
   readonly #apiProviders = new Map<ModelApi, ApiProviderRegistration>();
   readonly #providers = new Map<string, RegisteredProvider>();
   readonly #languageModels = new Map<string, LanguageModel>();
+  readonly #resolveLiveModels?: (alias: string) => string[];
 
-  constructor(private readonly resolveLiveModels?: (alias: string) => string[]) {}
+  constructor(resolveLiveModels?: (alias: string) => string[]) {
+    this.#resolveLiveModels = resolveLiveModels;
+  }
 
   registerApiProvider(registration: ApiProviderRegistration): this {
     this.#apiProviders.set(registration.api, registration);
@@ -104,15 +108,20 @@ export class LlmApiRuntime implements LlmCompletionPort {
     alias: string,
     config: ProviderInstanceConfig,
     models: string[] = [],
+    fetchFn?: typeof globalThis.fetch,
   ): this {
-    this.#providers.set(alias, { config, models: [...models] });
+    const keyPrefix = `${alias}::`;
+    for (const key of this.#languageModels.keys()) {
+      if (key.startsWith(keyPrefix)) this.#languageModels.delete(key);
+    }
+    this.#providers.set(alias, { config, models: [...models], fetch: fetchFn });
     return this;
   }
 
   model(providerAlias: string, modelId: string): Model {
     const entry = this.#providers.get(providerAlias);
     if (!entry) throw new Error(`Unknown provider alias: ${providerAlias}`);
-    const live = this.resolveLiveModels?.(providerAlias) ?? [];
+    const live = this.#resolveLiveModels?.(providerAlias) ?? [];
     const allowlist = entry.models.length > 0 ? entry.models : live;
     if (allowlist.length > 0 && !allowlist.includes(modelId)) {
       throw new Error(`Model ${modelId} not registered for provider ${providerAlias}`);
@@ -131,7 +140,7 @@ export class LlmApiRuntime implements LlmCompletionPort {
     if (existing) return existing;
     const entry = this.#providers.get(alias);
     if (!entry) return undefined;
-    const model = createLanguageModel(entry.config.sdk, entry.config, modelId);
+    const model = createLanguageModel(entry.config.sdk, entry.config, modelId, entry.fetch);
     this.#languageModels.set(key, model);
     return model;
   }

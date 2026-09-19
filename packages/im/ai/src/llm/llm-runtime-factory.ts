@@ -6,6 +6,7 @@ export interface SdkProviderEntry {
   alias: string;
   config: ProviderInstanceConfig;
   models: string[];
+  fetch: typeof globalThis.fetch;
 }
 
 /** Create one complete, owner-scoped AI SDK transport runtime. */
@@ -17,7 +18,7 @@ export function createLlmApiRuntime(
   const stream = createAiSdkStreamFn(runtime);
   runtime.registerApiProvider({ api: 'ai-sdk', stream, streamSimple: stream });
   for (const entry of entries) {
-    runtime.registerProvider(entry.alias, entry.config, entry.models);
+    runtime.registerProvider(entry.alias, entry.config, entry.models, entry.fetch);
   }
   return runtime;
 }

@@ -5,7 +5,6 @@
 import { createRequire } from 'node:module';
 import type { ImageModel, LanguageModel } from 'ai';
 import type { ProviderInstanceConfig } from './types/model.js';
-import { resolveProxyFetch } from './proxy-fetch.js';
 
 const requirePeer = createRequire(import.meta.url);
 
@@ -93,15 +92,15 @@ function buildHeaders(config: ProviderInstanceConfig): Record<string, string> | 
   return Object.keys(headers).length > 0 ? headers : undefined;
 }
 
-function sdkTransportExtras(): { fetch?: ReturnType<typeof resolveProxyFetch> } {
-  const fetch = resolveProxyFetch();
-  return fetch ? { fetch } : {};
+function sdkTransportExtras(fetchFn?: typeof globalThis.fetch): { fetch?: typeof globalThis.fetch } {
+  return fetchFn ? { fetch: fetchFn } : {};
 }
 
 function createOpenAiCompatibleProvider(
   config: ProviderInstanceConfig,
   baseURL: string,
   name: string,
+  fetchFn?: typeof globalThis.fetch,
 ) {
   const { createOpenAICompatible } = loadPeer<typeof import('@ai-sdk/openai-compatible')>(
     '@ai-sdk/openai-compatible',
@@ -111,7 +110,7 @@ function createOpenAiCompatibleProvider(
     baseURL,
     apiKey: config.apiKey ?? '',
     headers: buildHeaders(config),
-    ...sdkTransportExtras(),
+    ...sdkTransportExtras(fetchFn),
   });
 }
 
@@ -119,9 +118,10 @@ export function createLanguageModel(
   sdk: SdkId,
   config: ProviderInstanceConfig,
   modelId: string,
+  fetchFn?: typeof globalThis.fetch,
 ): LanguageModel {
   const headers = buildHeaders(config);
-  const transport = sdkTransportExtras();
+  const transport = sdkTransportExtras(fetchFn);
 
   switch (sdk) {
     case 'openai': {
@@ -179,6 +179,7 @@ export function createLanguageModel(
         config,
         resolveOllamaBaseUrl(config),
         'ollama',
+        fetchFn,
       );
       return compat(modelId);
     }
@@ -191,7 +192,12 @@ export function createLanguageModel(
       const baseURL = config.accountId && !trimUrl(config.baseUrl)
         ? raw
         : normalizeOpenAiCompatibleBaseUrl(raw);
-      const compat = createOpenAiCompatibleProvider(config, baseURL, 'openai-compatible');
+      const compat = createOpenAiCompatibleProvider(
+        config,
+        baseURL,
+        'openai-compatible',
+        fetchFn,
+      );
       return compat(modelId);
     }
     default: {
@@ -205,9 +211,10 @@ export function createImageModel(
   sdk: SdkId,
   config: ProviderInstanceConfig,
   modelId: string,
+  fetchFn?: typeof globalThis.fetch,
 ): ImageModel | null {
   const headers = buildHeaders(config);
-  const transport = sdkTransportExtras();
+  const transport = sdkTransportExtras(fetchFn);
 
   switch (sdk) {
     case 'openai': {
@@ -234,7 +241,12 @@ export function createImageModel(
       const baseURL = config.baseUrl?.trim()
         || (config.accountId ? resolveCloudflareBaseUrl(config) : undefined);
       if (!baseURL) return null;
-      const compat = createOpenAiCompatibleProvider(config, baseURL, 'openai-compatible');
+      const compat = createOpenAiCompatibleProvider(
+        config,
+        baseURL,
+        'openai-compatible',
+        fetchFn,
+      );
       return compat.imageModel(modelId);
     }
     default:

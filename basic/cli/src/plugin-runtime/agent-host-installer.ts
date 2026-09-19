@@ -454,11 +454,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       throw new Error('Agent Host rejected invalid AI configuration', { cause: error });
     }
     if (!service.isReady()) {
-      service.dispose();
+      await service.dispose();
       throw new Error('Agent Host requires at least one ready AI provider');
     }
     if (!service.getBindingRegistry().getBinding('zhin')) {
-      service.dispose();
+      await service.dispose();
       throw new Error('Agent Host requires a ready ai.agents.zhin binding');
     }
     lifecycle.add(() => service.dispose());

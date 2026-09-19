@@ -12,7 +12,7 @@ export interface CreateAgentSessionOptions {
 export interface AgentSessionHandle {
   service: AIService;
   prompt(text: string, options?: CreateServiceAgentOptions): Promise<ServiceAgentResult>;
-  dispose(): void;
+  dispose(): Promise<void>;
 }
 
 export function createAgentSession(options: CreateAgentSessionOptions = {}): AgentSessionHandle {
@@ -23,8 +23,8 @@ export function createAgentSession(options: CreateAgentSessionOptions = {}): Age
     async prompt(text, runOptions) {
       return service.runAgent(text, runOptions);
     },
-    dispose() {
-      service.dispose();
+    async dispose() {
+      await service.dispose();
     },
   };
 }

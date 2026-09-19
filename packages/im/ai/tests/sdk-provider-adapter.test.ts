@@ -1,10 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as proxyFetchModule from '../src/llm/proxy-fetch.js';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { AiHttpTransport } from '../src/llm/http-transport.js';
 import { createSdkProviderAdapter, fetchGoogleModels } from '../src/sdk-provider-adapter.js';
-
-beforeEach(() => {
-  vi.spyOn(proxyFetchModule, 'resolveProxyFetch').mockReturnValue(undefined);
-});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -89,5 +85,31 @@ describe('SdkProviderAdapter models', () => {
       baseUrl: 'https://proxy.example',
     })).resolves.toEqual(['gemini-2.5-pro']);
     vi.unstubAllGlobals();
+  });
+
+  it('keeps model discovery transport isolated between provider owners', async () => {
+    const leftFetch = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ id: 'left-model' }],
+    })));
+    const rightFetch = vi.fn(async () => new Response(JSON.stringify({
+      data: [{ id: 'right-model' }],
+    })));
+    const left = createSdkProviderAdapter('left', {
+      sdk: 'openai-compatible',
+      apiKey: 'left-key',
+      baseUrl: 'https://left.example/v1',
+    }, new AiHttpTransport({ fetch: leftFetch as typeof fetch }));
+    const right = createSdkProviderAdapter('right', {
+      sdk: 'openai-compatible',
+      apiKey: 'right-key',
+      baseUrl: 'https://right.example/v1',
+    }, new AiHttpTransport({ fetch: rightFetch as typeof fetch }));
+
+    await expect(left!.listModels()).resolves.toEqual(['left-model']);
+    await expect(right!.listModels()).resolves.toEqual(['right-model']);
+    expect(leftFetch).toHaveBeenCalledWith('https://left.example/v1/models', expect.anything());
+    expect(rightFetch).toHaveBeenCalledWith('https://right.example/v1/models', expect.anything());
+
+    await Promise.all([left!.dispose(), right!.dispose()]);
   });
 });

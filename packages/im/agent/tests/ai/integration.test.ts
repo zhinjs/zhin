@@ -60,8 +60,8 @@ describe('AI Service 集成测试', () => {
     });
   });
 
-  afterEach(() => {
-    aiService?.dispose();
+  afterEach(async () => {
+    await aiService?.dispose();
   });
 
   describe('服务初始化', () => {
@@ -82,7 +82,7 @@ describe('AI Service 集成测试', () => {
       expect(() => aiService.getProvider('nonexistent')).toThrow();
     });
 
-    it('应该根据配置初始化所有 Provider', () => {
+    it('应该根据配置初始化所有 Provider', async () => {
       const fullService = new AIService({
         providers: {
           openai: { sdk: 'openai', apiKey: 'sk-test' },
@@ -106,10 +106,10 @@ describe('AI Service 集成测试', () => {
       expect(providers).toContain('ollama');
       expect(providers).toHaveLength(6);
 
-      fullService.dispose();
+      await fullService.dispose();
     });
 
-    it('动态 Provider 加入既有 service-owned runtime', () => {
+    it('动态 Provider 加入既有 service-owned runtime', async () => {
       const runtime = aiService.getLlmRuntime();
       const provider = createSdkProviderAdapter('secondary', {
         sdk: 'openai',
@@ -118,7 +118,7 @@ describe('AI Service 集成测试', () => {
       });
       expect(provider).not.toBeNull();
 
-      aiService.registerProvider(provider!);
+      await aiService.registerProvider(provider!);
 
       expect(aiService.getLlmRuntime()).toBe(runtime);
       expect(runtime.model('secondary', 'gpt-secondary')).toMatchObject({
@@ -127,7 +127,7 @@ describe('AI Service 集成测试', () => {
       });
     });
 
-    it('应该只初始化有 apiKey 的 Provider', () => {
+    it('应该只初始化有 apiKey 的 Provider', async () => {
       const partialService = new AIService({
         providers: {
           openai: { sdk: 'openai', apiKey: 'sk-test' },
@@ -145,7 +145,7 @@ describe('AI Service 集成测试', () => {
       expect(providers).not.toContain('deepseek');
       expect(providers).toHaveLength(2);
 
-      partialService.dispose();
+      await partialService.dispose();
     });
   });
 
@@ -160,7 +160,7 @@ describe('AI Service 集成测试', () => {
       expect(config).toBeDefined();
     });
 
-    it('应该返回 access 配置', () => {
+    it('应该返回 access 配置', async () => {
       const svc = new AIService({
         providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
         agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
@@ -173,7 +173,7 @@ describe('AI Service 集成测试', () => {
         mode: 'whitelist',
         users: ['vip'],
       });
-      svc.dispose();
+      await svc.dispose();
     });
   });
 
@@ -210,8 +210,8 @@ describe('AI Service 集成测试', () => {
   });
 
   describe('dispose', () => {
-    it('应该正确清理资源', () => {
-      aiService.dispose();
+    it('应该正确清理资源', async () => {
+      await aiService.dispose();
       expect(aiService.listProviders()).toEqual([]);
     });
   });

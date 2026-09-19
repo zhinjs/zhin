@@ -49,9 +49,32 @@ for (const root of scanRoots) {
   }
 }
 
+const aiFiles = [];
+walkTs(path.join(repoRoot, 'packages/im/ai/src'), aiFiles);
+for (const file of aiFiles) {
+  const source = fs.readFileSync(file, 'utf8');
+  const relative = path.relative(repoRoot, file);
+  const mutableBinding = /^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.exec(source);
+  if (mutableBinding) {
+    violations.push({
+      file: relative,
+      line: source.slice(0, mutableBinding.index).split(/\r?\n/u).length,
+      text: 'module-level mutable AI runtime state',
+    });
+  }
+  const legacyProxy = /\b(?:resolveProxyFetch|cachedProxyUrl|cachedFetch)\b/u.exec(source);
+  if (legacyProxy) {
+    violations.push({
+      file: relative,
+      line: source.slice(0, legacyProxy.index).split(/\r?\n/u).length,
+      text: legacyProxy[0],
+    });
+  }
+}
+
 if (violations.length > 0) {
   console.error('Harness LLM runtime boundary check: FAILED\n');
-  console.error('Resolve transport models through the owning LlmApiRuntime; do not import getModel.\n');
+  console.error('Keep model and HTTP transport state inside its owning runtime or provider.\n');
   for (const violation of violations) {
     console.error(`  ${violation.file}:${violation.line}  ${violation.text}`);
   }

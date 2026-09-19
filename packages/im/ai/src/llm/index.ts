@@ -128,6 +128,12 @@ export {
   sdkSupportsImageGeneration,
 } from './sdk-registry.js';
 export type { SdkId } from './sdk-registry.js';
+export {
+  AiHttpTransport,
+  createAiHttpTransport,
+  resolveAiProxyUrl,
+  type AiHttpTransportOptions,
+} from './http-transport.js';
 
 export {
   SDK_DEFAULT_MODELS,

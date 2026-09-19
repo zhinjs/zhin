@@ -606,6 +606,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global iLink request metadata and logger mutation with immutable endpoint-owned request identity under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-ai-http-transport.md",
+      "packages": [
+        "@zhin.js/ai",
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-wide proxy resolution and fetch caching with provider-owned disposable HTTP transports under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

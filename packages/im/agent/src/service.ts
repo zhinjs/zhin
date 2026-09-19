@@ -4,7 +4,7 @@
  */
 
 import { type AITriggerConfig, type AIAccessConfig, type Tool } from '@zhin.js/core';
-import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type SdkProviderAdapter } from '@zhin.js/ai';
+import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
 import { normalizeTool } from './resource-hub/tool-selection.js';
@@ -157,10 +157,13 @@ export class AIService {
     return { ...this.imageGenerationGlobal, ...inst };
   }
 
-  registerProvider(provider: SdkProviderAdapter): void {
+  async registerProvider(provider: SdkProviderAdapter): Promise<void> {
+    const previous = this.providers.get(provider.name);
+    if (previous === provider) return;
+    if (previous instanceof SdkProviderAdapter) await previous.dispose();
     this.providers.set(provider.name, provider);
     const entry = sdkEntryFromProvider(provider);
-    this.llmRuntime.registerProvider(entry.alias, entry.config, entry.models);
+    this.llmRuntime.registerProvider(entry.alias, entry.config, entry.models, entry.fetch);
   }
   getProvider(name?: string): AIProvider {
     const providerName = name || this.defaultProvider;
@@ -267,7 +270,13 @@ export class AIService {
     return results;
   }
 
-  dispose(): void { this.providers.clear(); }
+  async dispose(): Promise<void> {
+    const providers = [...this.providers.values()];
+    this.providers.clear();
+    await Promise.all(providers.map((provider) => (
+      provider instanceof SdkProviderAdapter ? provider.dispose() : Promise.resolve()
+    )));
+  }
 }
 
 function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentResult {
