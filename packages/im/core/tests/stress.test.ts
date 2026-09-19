@@ -107,7 +107,7 @@ describe('Stress: Middleware compose 吞吐', () => {
   });
 
   it('单层中间件 10000 条消息基准', async () => {
-    const fn = compose<any>([async (_msg, next) => { await next(); }]);
+    const fn = compose([async (_msg, next) => { await next(); }]);
     const msg = makeMsg('baseline');
 
     const start = performance.now();
@@ -124,7 +124,7 @@ describe('Stress: Middleware compose 吞吐', () => {
     let errorCount = 0;
     let successCount = 0;
 
-    const fn = compose<any>([
+    const fn = compose([
       async (msg: Message<any>, next) => {
         if (msg.$raw === 'bomb') throw new Error('boom');
         await next();

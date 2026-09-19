@@ -13,7 +13,6 @@ export * from '@zhin.js/plugin-runtime';
 export { default as logger, formatCompact, formatCompactLog, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 
 declare module 'zhin.js' {
-  interface RegisteredAdapters {}
   interface Models {
     unified_inbox_message?: object;
     unified_inbox_request?: object;

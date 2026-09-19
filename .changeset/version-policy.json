@@ -324,6 +324,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Require one composition-root-owned Schedule notification router and remove the duplicate adapter resolver construction path under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "decouple-message-contracts-from-classic-adapters.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Decouple canonical IM message contracts from the classic Adapter and Endpoint registry under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

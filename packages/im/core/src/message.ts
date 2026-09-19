@@ -1,6 +1,5 @@
 import type {MessageElement, MessageSender, SendContent} from "./types.js";
 import { Component } from "./component.js";
-import { Adapters } from "./adapter.js";
 import { isActionMessage as isActionMessageImpl } from "./built/interactive-segments/action.js";
 /**
  * 消息组件类型：用于自定义消息结构
@@ -34,7 +33,7 @@ export type MessageType = 'group' | 'private' | 'channel'
  */
 export interface MessageBase {
     $id: string;
-    $adapter:keyof Adapters
+    $adapter:string
     $endpoint:string
     $content: MessageElement[];
     $sender: MessageSender;

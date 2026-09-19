@@ -2,7 +2,6 @@
  * Message enrich — 入站鉴权快照与合成通讯上下文
  */
 import { Message, type MessageChannel } from '../message.js';
-import type { Adapters } from '../adapter.js';
 import type { MessageElement, SendContent } from '../types.js';
 import type { SenderRole } from './roles.js';
 
@@ -27,7 +26,7 @@ export function senderRolesFromMessage(message: Message<any>): readonly SenderRo
 }
 
 export interface SyntheticMessageInput {
-  adapter: keyof Adapters | string;
+  adapter: string;
   endpoint: string;
   sender: {
     id: string;
@@ -50,7 +49,7 @@ export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnM
     { extra: input.extra },
     {
       $id: id,
-      $adapter: input.adapter as keyof Adapters,
+      $adapter: input.adapter,
       $endpoint: input.endpoint,
       $content: [] as MessageElement[],
       $sender: { ...input.sender },

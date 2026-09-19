@@ -27,10 +27,8 @@ export {
 
 // ── IM-specific utilities ──
 import {
-  AdapterMessage,
   MessageElement,
   MessageMiddleware,
-  RegisteredAdapter,
   SendContent,
 } from "./types.js";
 import { Message } from "./message.js";
@@ -50,11 +48,11 @@ import type { MediaRef } from "./built/segment-contract/types.js";
  * 空中间件列表时必须仍调用 `next`——入站管线把 MessageDispatcher
  * 作为 terminal next 传入；吞掉 next 会导致命令/AI 永远不跑。
  */
-export function compose<P extends RegisteredAdapter=RegisteredAdapter>(
-  middlewares: MessageMiddleware<P>[]
+export function compose(
+  middlewares: MessageMiddleware[]
 ) {
   return function (
-    message: Message<AdapterMessage<P>>,
+    message: Message,
     next: () => Promise<void> = () => Promise.resolve()
   ) {
     if (middlewares.length === 0) {

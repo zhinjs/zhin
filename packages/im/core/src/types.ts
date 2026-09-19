@@ -1,9 +1,6 @@
 import type { MessageChannel, Message, MessageComponent } from './message.js';
-import {Adapter, Adapters} from './adapter.js';
-import { Endpoint } from './endpoint.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
-import { ProcessAdapter } from './built/adapter-process.js';
 import type { SenderRole } from './built/roles.js';
 export type { SenderRole } from "./built/roles.js";
 
@@ -13,33 +10,10 @@ export interface Models extends Record<string,object>{
   User: User,
 }
 export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T>;
-export interface RegisteredAdapters extends Adapters {
-  process: ProcessAdapter;
-}
 /**
  * 获取对象所有value类型
  */
 export type ObjectItem<T extends object>=T[keyof T]
-/**
- * 已注册适配器名类型
- */
-export type RegisteredAdapter=Extract<keyof RegisteredAdapters, string>
-/**
- * 指定适配器的消息类型
- */
-export type AdapterMessage<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?EndpointMessage<R>:{}
-/**
- * 指定适配器的配置类型
- */
-export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:Endpoint.Config
-/**
- * Bot实例的配置类型
- */
-export type PlatformConfig<T>=T extends Endpoint<infer L,infer R>?R:Endpoint.Config
-/**
- * Bot实例的消息类型
- */
-export type EndpointMessage<T extends Endpoint>=T extends Endpoint<infer R>?R:{}
 /**
  * 消息段结构，支持 text/image/at/face 等类型
  */
@@ -131,7 +105,7 @@ export interface Group {
 }
 
 /** 消息中间件函数 */
-export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>;
+export type MessageMiddleware = (message: Message, next: () => Promise<void>) => MaybePromise<void>;
 
 
 /**

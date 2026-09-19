@@ -7,7 +7,7 @@
  * - 中间件系统、适配器管理、useContext 等
  */
 
-import { MessageMiddleware, RegisteredAdapter, MaybePromise, ArrayItem, SendOptions, MessageSendPayload, type PluginManifest } from './types.js';
+import { MessageMiddleware, MaybePromise, ArrayItem, SendOptions, MessageSendPayload, type PluginManifest } from './types.js';
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -85,13 +85,13 @@ export class Plugin extends PluginBase implements PluginLike {
   }
 
   // 默认中间件：将入站消息交给 compose 链末端的 MessageDispatcher（命令/AI 路由在 dispatcher 内完成）
-  #messageMiddleware: MessageMiddleware<RegisteredAdapter> = async (_message, next) => {
+  #messageMiddleware: MessageMiddleware = async (_message, next) => {
     await next();
   };
-  #middlewares: MessageMiddleware<RegisteredAdapter>[] = [this.#messageMiddleware];
+  #middlewares: MessageMiddleware[] = [this.#messageMiddleware];
 
-  get middleware(): MessageMiddleware<RegisteredAdapter> {
-    return compose<RegisteredAdapter>(this.#middlewares);
+  get middleware(): MessageMiddleware {
+    return compose(this.#middlewares);
   }
   /**
    * 构造函数
@@ -114,8 +114,8 @@ export class Plugin extends PluginBase implements PluginLike {
    * 添加中间件
    * 中间件用于处理消息流转
    */
-  addMiddleware<T extends RegisteredAdapter>(middleware: MessageMiddleware<T>, name?: string) {
-    this.#middlewares.push(middleware as MessageMiddleware<RegisteredAdapter>);
+  addMiddleware(middleware: MessageMiddleware, name?: string) {
+    this.#middlewares.push(middleware);
     const dispose = () => remove(this.#middlewares, middleware);
     this.onDispose(dispose);
     return dispose;

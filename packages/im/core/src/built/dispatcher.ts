@@ -20,7 +20,6 @@ import { isActionMessage } from './interactive-segments/action.js';
 import { Plugin, type Context } from '../plugin.js';
 import type {
   MessageMiddleware,
-  RegisteredAdapter,
   MaybePromise,
   SendContent,
   OutboundReplySource,
@@ -60,7 +59,7 @@ export type AITriggerMatcher = (message: Message<any>) => { triggered: boolean; 
  */
 export type GroupPassiveContextHandler = (message: Message<any>) => MaybePromise<void>;
 
-export type GuardrailMiddleware = MessageMiddleware<RegisteredAdapter>;
+export type GuardrailMiddleware = MessageMiddleware;
 
 /** Dispatcher outbound reply source. */
 export type ReplySource = OutboundReplySource;
