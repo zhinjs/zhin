@@ -6,33 +6,21 @@ import {
   type ImRuntime,
 } from '@zhin.js/core/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { rootPluginId, type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { type DisposeStack, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AgentResourceHub,
   type AssistantConfig,
   type ApprovalPort,
   type AudioTranscriptionPort,
-  type TurnRequest,
-  FileJournalStore,
   type HumanIngressOrchestratorProposalPort,
   type WorkroomPlanGateAuthorityPort,
 } from '@zhin.js/agent';
 import {
-  agentHostToken,
   CapabilityIngress,
-  turnJournalStoreToken,
-  agentTurnEngineToken,
-  createFullAgentTurnEngine,
   AgentRuntime,
-  type WorkroomRunControlCommand,
   type TurnIntentResolver,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
-  type AgentHostWorkroomProfileControlPort,
-  type AgentHostWorkroomKnowledgeControlPort,
-  type AgentHostEffectSponsorControlPort,
-  type AgentHostPortfolioSponsorControlPort,
-  type WorkroomDataLifecycleConsoleControlPort,
   createSelfDeliveryProjectForHost,
   workroomDeliveryProviderToken,
   selfDeliveryProjectToken,
@@ -44,13 +32,13 @@ import { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordi
 import { WorkroomKnowledgeCoordinator } from './workroom-knowledge-coordinator.js';
 import { WorkroomEffectCoordinator } from './workroom-effect-coordinator.js';
 import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
+import { AgentHostPublicationCoordinator } from './agent-host-publication-coordinator.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
 import {
   createRuntimeApprovalPort,
 } from './agent-turn-request.js';
-import { observeAgentTurnTrace } from './agent-runtime-factory.js';
 import {
   resolveAgentHostMcpServers,
   type AgentHostAIConfig as AIConfig,
@@ -150,15 +138,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const {
       service,
       agent: zhinAgent,
-      composition: composedRuntime,
       knowledgeIndex,
       semanticMemory,
-      traceRuntime,
-      schedule,
       scheduleTools,
       homeTools,
       assistantEnabled,
-      sessionTreeRuntime,
     } = agentFoundation;
     const listGenerationBindings = () => agentFoundation.listBindings();
     const workroomFoundation = new WorkroomRuntimeFoundation({
@@ -173,7 +157,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       journal: workroomJournal,
       catalog: workroomCatalog,
       kernel: workroomKernel,
-      runtime: workroomRuntime,
       consoleProjectionAuthority,
     } = workroomFoundation;
     let recoverHumanIngress = async (): Promise<void> => {};
@@ -236,84 +219,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       semanticMemory: semanticMemory ?? undefined,
     });
 
-    const resourceHub = zhinAgent.resourceHub;
-    if (!resourceHub) {
-      throw new Error('Agent Host requires a ready AgentResourceHub before generation publication');
-    }
-    const workroomProfileConsoleControl: { current?: AgentHostWorkroomProfileControlPort } = {};
-    const workroomKnowledgeConsoleControl: { current?: AgentHostWorkroomKnowledgeControlPort } = {};
-    const portfolioSponsorConsoleControl: {
-      current?: AgentHostPortfolioSponsorControlPort;
-    } = {};
-    const effectSponsorConsoleControl: {
-      current?: AgentHostEffectSponsorControlPort;
-    } = {};
-    const dataLifecycleConsoleControl: {
-      current?: WorkroomDataLifecycleConsoleControlPort;
-    } = {};
-
-    // Protocol Hosts (MCP/A2A) and Console consume this generation-owned port.
-    // The Scope is sealed after all Root installers finish, so publication must
-    // happen here rather than through a mutable process-global registry.
-    resources.provide(agentHostToken, Object.freeze({
-      protocol: Object.freeze({
-        listBindings: listGenerationBindings,
-        execute: (bindingName: string, request: TurnRequest) => {
-          const selected = service.getBindingRegistry().getBinding(bindingName);
-          if (!selected) throw new Error(`Agent binding not found: ${bindingName}`);
-          return options.runtime.execute(rootPluginId(), request, {
-            binding: selected,
-            mcpServers: selected.mcpServers,
-            ...(selected.name === 'zhin' ? {} : { agent: selected.name }),
-          }, observeAgentTurnTrace(traceRuntime, request));
-        },
-      }),
-      introspection: Object.freeze({
-        listMcpServers: () => resourceHub.mcps.getAll().map((entry) => Object.freeze({
-          name: entry.name,
-          connected: resourceHub.mcps.isConnected(entry.name),
-          toolCount: resourceHub.mcps.getToolsFromServer(entry.name).length,
-        })),
-      }),
-      console: Object.freeze({
-        sessionTree: sessionTreeRuntime,
-        workroom: workroomRuntime,
-        workroomControl: Object.freeze({
-          execute: (
-            command: WorkroomRunControlCommand,
-            authenticatedPrincipal: Readonly<{ principalId: string }>,
-          ) =>
-            workroomKernel.controlRun(command, authenticatedPrincipal),
-        }),
-        workroomCatalog,
-        listBindings: listGenerationBindings,
-        assistant: schedule.assistantRuntime,
-        trace: traceRuntime,
-        cancelSession: (sessionKey: string) => zhinAgent.cancelSession(sessionKey),
-        get workroomProfiles() { return workroomProfileConsoleControl.current; },
-        get workroomKnowledge() { return workroomKnowledgeConsoleControl.current; },
-        get portfolioSponsor() { return portfolioSponsorConsoleControl.current; },
-        get effectSponsor() { return effectSponsorConsoleControl.current; },
-        get dataLifecycle() { return dataLifecycleConsoleControl.current; },
-      }),
-    }));
-    resources.provide(
-      turnJournalStoreToken,
-      new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
-    );
-    resources.provide(agentTurnEngineToken, createFullAgentTurnEngine({
-      host: composedRuntime.host,
-      core: composedRuntime.agentCore,
-      sessionSystem: composedRuntime.sessionSystem,
-      contextSystem: composedRuntime.contextSystem,
-      loopHooks: service.loopHooks,
-      bootstrapContext: bootstrapText,
-    }));
+    const publicationCoordinator = new AgentHostPublicationCoordinator({
+      projectRoot: options.projectRoot,
+      signal,
+      resources,
+      processRuntime: options.runtime,
+      agent: agentFoundation,
+      workroom: workroomFoundation,
+      bootstrapText,
+    });
 
     const presetCount = await agentFoundation.seedPresets();
 
     const binding = service.getBindingRegistry().requireZhinBinding();
-    dataLifecycleConsoleControl.current = dataLifecycle?.console;
+    publicationCoordinator.bindDataLifecycle(dataLifecycle?.console);
     const effectCoordinator = new WorkroomEffectCoordinator({
       projectRoot: options.projectRoot,
       generation,
@@ -369,7 +288,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       workroomTrustedPackPublishers: options.workroomTrustedPackPublishers,
       listBindings: listGenerationBindings,
     });
-    workroomProfileConsoleControl.current = planningCoordinator.consoleControl;
+    publicationCoordinator.bindWorkroomProfiles(planningCoordinator.consoleControl);
     const knowledgeCoordinator = new WorkroomKnowledgeCoordinator({
       stateRoot: workroomStateRoot,
       generation,
@@ -382,7 +301,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       persistence,
     });
     const ephemeralAssignmentContext = knowledgeCoordinator.ephemeralAssignmentContext;
-    workroomKnowledgeConsoleControl.current = knowledgeCoordinator.consoleControl;
+    publicationCoordinator.bindWorkroomKnowledge(knowledgeCoordinator.consoleControl);
     const acceptanceCoordinator = new WorkroomAcceptanceCoordinator({
       projectRoot: options.projectRoot,
       stateRoot: workroomStateRoot,
@@ -397,7 +316,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       effect: effectComposition,
       ephemeralAssignmentContext,
     });
-    effectSponsorConsoleControl.current = acceptanceCoordinator.effectSponsorControl;
+    publicationCoordinator.bindEffectSponsor(acceptanceCoordinator.effectSponsorControl);
     const executionCoordinator = new WorkroomExecutionCoordinator({
       projectRoot: options.projectRoot,
       generation,
@@ -417,7 +336,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       acceptance: acceptanceCoordinator,
     });
     const { portfolioSponsorControl } = executionCoordinator;
-    portfolioSponsorConsoleControl.current = portfolioSponsorControl;
+    publicationCoordinator.bindPortfolioSponsor(portfolioSponsorControl);
     const humanIngressCoordinator = await WorkroomHumanIngressCoordinator.create({
       signal,
       resources,
@@ -428,7 +347,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       profiles: profileCoordinator,
       persistence,
       execution: executionCoordinator,
-      dataLifecycleControl: dataLifecycleConsoleControl,
+      resolveDataLifecycleControl: () => publicationCoordinator.resolveDataLifecycle(),
     });
     recoverHumanIngress = () => humanIngressCoordinator.recover();
 

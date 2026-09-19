@@ -63,9 +63,7 @@ export interface WorkroomHumanIngressCoordinatorOptions {
   readonly profiles: WorkroomProfileCoordinator;
   readonly persistence: WorkroomPersistenceCoordinator;
   readonly execution: WorkroomExecutionCoordinator;
-  readonly dataLifecycleControl: Readonly<{
-    current?: WorkroomDataLifecycleConsoleControlPort;
-  }>;
+  readonly resolveDataLifecycleControl: () => WorkroomDataLifecycleConsoleControlPort | undefined;
 }
 
 /** Owns durable human ingress authorization, proposal application, recovery, and turn handoff. */
@@ -175,7 +173,7 @@ export class WorkroomHumanIngressCoordinator {
           : undefined,
         generationSignal: signal,
         fallback: createWorkroomDataLifecycleHumanIngressControlPort({
-          resolve: () => options.dataLifecycleControl.current,
+          resolve: options.resolveDataLifecycleControl,
           generationSignal: signal,
           fallback: createPlanGateHumanIngressControlPort(workroomKernel),
         }),

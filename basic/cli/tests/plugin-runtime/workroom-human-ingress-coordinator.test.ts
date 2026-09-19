@@ -17,7 +17,7 @@ describe('WorkroomHumanIngressCoordinator', () => {
       profiles: {} as never,
       persistence: {} as never,
       execution: {} as never,
-      dataLifecycleControl: {},
+      resolveDataLifecycleControl: () => undefined,
     })).rejects.toThrow('generation replaced');
     expect(lifecycle.add).not.toHaveBeenCalled();
   });
