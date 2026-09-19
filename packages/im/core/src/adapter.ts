@@ -7,7 +7,6 @@ import {
 } from "./endpoint-capabilities.js";
 import { endpointControlOf } from "@zhin.js/adapter";
 import { connectEndpointInstance, disconnectEndpointInstance } from "./built/connect-endpoint-instance.js";
-import type { EndpointManager } from "./built/endpoint-manager.js";
 import { Plugin } from "./plugin.js";
 import { EventEmitter } from "node:events";
 import { Message } from "./message.js";
@@ -37,7 +36,6 @@ import { collectOutboundMediaKinds } from "./built/outbound-media-utils.js";
 import { segment } from "./utils.js";
 import { InboundMessagePipeline } from "./built/inbound-pipeline.js";
 import { formatCompact, truncatePreview, formatContentChainLog, CONTENT_CHAIN_STAGE } from '@zhin.js/logger';
-import type { Schema } from '@zhin.js/schema';
 /**
  * Adapter类：适配器抽象，管理多平台Bot实例。
  * 负责根据配置启动/关闭各平台机器人，统一异常处理。
@@ -79,13 +77,7 @@ export abstract class Adapter<
   static DEFAULT_MAX_CONCURRENT_MESSAGES = 0;
 
   get maxConcurrentMessages(): number {
-    try {
-      const configService = this.plugin?.root?.inject('config');
-      const appConfig = configService?.getPrimary?.<Record<string, unknown>>();
-      return (appConfig?.max_concurrent_messages as number | undefined) ?? Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
-    } catch {
-      return Adapter.DEFAULT_MAX_CONCURRENT_MESSAGES;
-    }
+    return (this.constructor as typeof Adapter).DEFAULT_MAX_CONCURRENT_MESSAGES;
   }
 
   /** 当前正在处理的消息数 */
@@ -190,15 +182,6 @@ export abstract class Adapter<
     }
   }
 
-  /** 运行时 Endpoint 管理（add/remove/edit/start/stop）；未实现则 core 尝试 endpointConfigSchema 通用向导 */
-  getEndpointManager?(): EndpointManager | null;
-
-  /** 通用 schema 驱动 add/edit 时的字段定义 */
-  getEndpointConfigSchema?(): Schema | undefined;
-
-  /** 热连接失败时是否建议重启进程 */
-  getEndpointNeedsRestart?(): boolean;
-
   /**
    * 出站富媒体能力（Publisher 按此过滤/降级；各 adapter 可覆盖）。
    */
@@ -222,6 +205,14 @@ export abstract class Adapter<
     return (this.constructor as typeof Adapter).outboundRichSegmentPolicy;
   }
 
+  /** 子类显式提供富媒体运行时配置，避免从全局服务定位器读取。 */
+  protected getRichSegmentRuntimeConfig(): {
+    htmlRenderer?: Record<string, unknown>;
+    speech?: Record<string, unknown>;
+  } | undefined {
+    return undefined;
+  }
+
   /**
    * 出站两阶段：
    * 1. resolveRichSegments — 语义段 → 标准 IM 段（image/audio/text）
@@ -236,13 +227,7 @@ export abstract class Adapter<
           options.content,
           this.getOutboundRichSegmentPolicy(),
           createRichSegmentRenderContext({
-            getConfig: () => {
-              const cfg = this.plugin.root.inject('config')?.getPrimary<{
-                htmlRenderer?: Record<string, unknown>;
-                speech?: Record<string, unknown>;
-              }>();
-              return cfg;
-            },
+            getConfig: () => this.getRichSegmentRuntimeConfig(),
             warn: (msg) => this.logger.warn(msg),
             logContentChain: (fields) => {
               this.logger.debug(formatContentChainLog({ ...fields, adapter: this.name }));

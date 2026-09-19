@@ -489,13 +489,8 @@ describe('Adapter Core Functionality', () => {
       })
 
       it('should drop message.receive when concurrency limit is reached', async () => {
-        plugin.$contexts.set('config', {
-          name: 'config',
-          description: 'mock config',
-          value: {
-            getPrimary: () => ({ max_concurrent_messages: 1 }),
-          },
-        } as any)
+        const originalMax = MockAdapter.DEFAULT_MAX_CONCURRENT_MESSAGES
+        MockAdapter.DEFAULT_MAX_CONCURRENT_MESSAGES = 1
         plugin.$contexts.set('dispatcher', {
           name: 'dispatcher',
           description: 'mock dispatcher',
@@ -511,6 +506,7 @@ describe('Adapter Core Functionality', () => {
         expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('backpressure_drop'))
 
         await vi.waitFor(() => expect(adapter.pendingMessages).toBe(0))
+        MockAdapter.DEFAULT_MAX_CONCURRENT_MESSAGES = originalMax
       })
 
       it('should restore pending count when inbound handling throws', async () => {

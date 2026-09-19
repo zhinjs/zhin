@@ -78,7 +78,7 @@ export type RuntimeConsoleRpcContext = {
   writeConfigYaml?(yaml: string): Promise<void>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
-   * Returns whether a process restart is required (always true without ConfigFeature).
+   * Returns whether a process restart is required.
    */
   setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */

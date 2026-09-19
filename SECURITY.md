@@ -108,12 +108,14 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 始终验证和清理用户输入
    - 使用 Schema 系统进行类型检查
    ```typescript
-   import { Schema, defineSchema } from 'zhin.js'
-   
-   defineSchema(Schema.object({
+   import { Schema } from '@zhin.js/schema'
+
+   const Input = Schema.object({
      url: Schema.string().pattern(/^https?:\/\//),  // 验证 URL 格式
      count: Schema.number().min(1).max(100)         // 限制数值范围
-   }))
+   })
+
+   const input = Input(untrustedInput)
    ```
 
 2. **防止注入攻击**
@@ -321,12 +323,14 @@ We currently do not have a formal bug bounty program, but we will:
    - Always validate and sanitize user input
    - Use Schema system for type checking
    ```typescript
-   import { Schema, defineSchema } from 'zhin.js'
-   
-   defineSchema(Schema.object({
+   import { Schema } from '@zhin.js/schema'
+
+   const Input = Schema.object({
      url: Schema.string().pattern(/^https?:\/\//),  // Validate URL format
      count: Schema.number().min(1).max(100)         // Limit numeric range
-   }))
+   })
+
+   const input = Input(untrustedInput)
    ```
 
 2. **Prevent Injection Attacks**
@@ -431,4 +435,3 @@ We plan to introduce in future versions:
 ---
 
 **Last Updated**: November 2025
-

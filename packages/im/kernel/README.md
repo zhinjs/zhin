@@ -36,8 +36,8 @@ import { PluginBase } from '@zhin.js/kernel'
 const root = new PluginBase({ name: 'my-app' })
 
 // 依赖注入
-root.provide(configService)
-const config = root.inject('config')
+root.provide(metricsService)
+const metrics = root.inject('metrics')
 
 // 加载子插件
 await root.loadPlugin('./plugins/analytics')

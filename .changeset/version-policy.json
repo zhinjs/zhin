@@ -253,6 +253,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove unmounted classic Core Feature registries after scheduling, Agent presets, and message admission moved to their current owner-scoped authorities."
+    },
+    {
+      "changeset": "remove-classic-config-authority.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove unmounted classic configuration and schema registries plus service-locator based Endpoint provisioning after Runtime and Adapter packages became the canonical authorities."
     }
   ]
 }

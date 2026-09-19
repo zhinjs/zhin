@@ -7,6 +7,6 @@
   {
     "id": 2,
     "prompt": "给插件加一个每天 9 点执行的定时任务，打印日志",
-    "expected": "addCron、declareConfig 或 Cron 表达式、清理函数"
+    "expected": "scheduleHostToken、6 段 Cron 表达式、lifecycle 清理"
   }
 ]

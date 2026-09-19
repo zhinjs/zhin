@@ -89,9 +89,7 @@
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
-    "segment-matcher": "^1.0.5",
-    "smol-toml": "^1.7.1",
-    "yaml": "^2.9.0"
+    "segment-matcher": "^1.0.5"
   },
   "peerDependencies": {
     "zod": "^4.0.0"
