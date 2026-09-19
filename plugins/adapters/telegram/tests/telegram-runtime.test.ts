@@ -116,10 +116,19 @@ afterEach(async () => {
 
 describe('telegram protocol helpers', () => {
   it('resolves plugin config with polling default', () => {
-    const resolved = resolveTelegramConfig({ token: 'tok' });
+    const resolved = resolveTelegramConfig({ id: 'telegram-bot', token: 'tok' });
     expect(resolved.mode).toBe('polling');
     expect(resolved.id).toBe('telegram-bot');
     expect(resolved.apiBaseUrl).toBe('https://api.telegram.org');
+  });
+
+  it('requires the expanded endpoint identity and token', () => {
+    expect(() => resolveTelegramConfig({ id: ' ', token: 'tok' })).toThrow(
+      'Telegram endpoint requires a non-empty id',
+    );
+    expect(() => resolveTelegramConfig({ id: 'telegram-bot', token: ' ' })).toThrow(
+      'Telegram endpoint requires a non-empty token',
+    );
   });
 
   it('builds webhook URL from domain and path', () => {
@@ -131,6 +140,7 @@ describe('telegram protocol helpers', () => {
 
   it('selects webhook mode only when polling is false', () => {
     const resolved = resolveTelegramConfig({
+      id: 'telegram-bot',
       token: 'tok',
       polling: false,
       webhook: { domain: 'https://bot.example.com' },
@@ -760,6 +770,7 @@ describe('telegram plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'telegram'),
       name: 'telegram',
       config: {
+        id: 'telegram',
         token: 'tok',
         polling: false,
         webhook: { domain: 'https://x.com' },

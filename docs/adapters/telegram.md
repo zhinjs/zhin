@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5c854a37d9146374 -->
+<!-- sync-adapter-docs:sha256=1d76a9675f9f2501 -->
 
 # @zhin.js/adapter-telegram
 
@@ -74,8 +74,8 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` | Bot Token |
-| `TELEGRAM_BOT_NAME` | 可选，默认 endpoint 名 |
+| `TELEGRAM_TOKEN` | 示例中由 YAML `${TELEGRAM_TOKEN}` 引用的 Bot Token；变量名可自行定义 |
+| `TELEGRAM_WEBHOOK_SECRET` | 示例中由 YAML `${TELEGRAM_WEBHOOK_SECRET}` 引用的 webhook secret；变量名可自行定义 |
 
 ## Webhook
 

@@ -11,10 +11,10 @@ import { escapeTelegramHtml, markdownToTelegramHtml } from './markdown-to-html.j
 
 const logger = getLogger('telegram');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface TelegramAdapterConfig {
-  readonly id?: string;
-  readonly token?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface TelegramEndpointConfig {
+  readonly id: string;
+  readonly token: string;
   /** Default true. `false` selects webhook mode (requires httpHostToken). */
   readonly polling?: boolean;
   readonly webhook?: {
@@ -24,14 +24,6 @@ export interface TelegramAdapterConfig {
   };
   readonly allowedUpdates?: readonly string[];
   readonly apiBaseUrl?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: telegram`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedTelegramConfig> & {
-    readonly context?: string;
-    readonly polling?: boolean;
-    readonly webhook?: TelegramAdapterConfig['webhook'];
-    readonly allowedUpdates?: readonly string[];
-    readonly apiBaseUrl?: string;
-  }>;
 }
 
 export interface ResolvedTelegramConfig {
@@ -245,40 +237,19 @@ export type TelegramOutboundAction =
     };
   };
 
-export function resolveTelegramConfig(config: TelegramAdapterConfig = {}): ResolvedTelegramConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'telegram');
-  const token = config.token
-    ?? entry?.token
-    ?? process.env.TELEGRAM_TOKEN
-    ?? process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) {
-    throw new TypeError(
-      'Telegram adapter requires token (plugins.<key>.token or endpoints with context: telegram)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.TELEGRAM_BOT_NAME
-    || 'telegram-bot';
-  const polling = config.polling ?? entry?.polling;
-  const webhookSource = config.webhook ?? entry?.webhook;
-  // Match legacy: polling defaults true; webhook only when polling === false.
+export function resolveTelegramConfig(config: TelegramEndpointConfig): ResolvedTelegramConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const polling = config.polling;
+  const webhookSource = config.webhook;
   const mode: 'polling' | 'webhook' = polling === false ? 'webhook' : 'polling';
-  const apiBaseUrl = (
-    config.apiBaseUrl
-    ?? entry?.apiBaseUrl
-    ?? 'https://api.telegram.org'
-  ).replace(/\/$/, '');
-  const allowedUpdates = config.allowedUpdates
-    ?? entry?.allowedUpdates
-    ?? ['message', 'callback_query'];
+  const apiBaseUrl = (config.apiBaseUrl ?? 'https://api.telegram.org').replace(/\/$/, '');
+  const allowedUpdates = config.allowedUpdates ?? ['message', 'callback_query'];
   const webhook = mode === 'webhook'
     ? {
       domain: webhookSource?.domain ?? '',
       path: normalizeWebhookPath(webhookSource?.path ?? '/telegram/webhook'),
-      secretToken: webhookSource?.secretToken
-        ?? process.env.TELEGRAM_WEBHOOK_SECRET
-        ?? undefined,
+      secretToken: webhookSource?.secretToken,
     }
     : undefined;
   return {
@@ -290,6 +261,13 @@ export function resolveTelegramConfig(config: TelegramAdapterConfig = {}): Resol
     apiBaseUrl,
     webhook,
   };
+}
+
+function requiredEndpointField(value: unknown, field: 'id' | 'token'): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Telegram endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function normalizeWebhookPath(path: string): string {

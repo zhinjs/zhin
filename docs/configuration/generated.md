@@ -519,6 +519,14 @@ outline: [2, 3]
 | `plugins.telegram.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（Telegram user id）；覆盖顶层 master |
 | `plugins.telegram.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.telegram.endpoints[].token` | string | 是 | — | Telegram bot token |
+| `plugins.telegram.endpoints[].polling` | boolean | 否 | — | — |
+| `plugins.telegram.endpoints[].webhook` | object | 否 | — | — |
+| `plugins.telegram.endpoints[].webhook.domain` | string | 否 | — | — |
+| `plugins.telegram.endpoints[].webhook.path` | string | 否 | — | — |
+| `plugins.telegram.endpoints[].webhook.secretToken` | string | 否 | — | — |
+| `plugins.telegram.endpoints[].allowedUpdates` | array&lt;string&gt; | 否 | — | — |
+| `plugins.telegram.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `plugins.telegram.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.telegram.endpoints[].id` | string | 是 | — | Telegram bot name |
 | `plugins.telegram.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

@@ -62,8 +62,8 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` | Bot Token |
-| `TELEGRAM_BOT_NAME` | 可选，默认 endpoint 名 |
+| `TELEGRAM_TOKEN` | 示例中由 YAML `${TELEGRAM_TOKEN}` 引用的 Bot Token；变量名可自行定义 |
+| `TELEGRAM_WEBHOOK_SECRET` | 示例中由 YAML `${TELEGRAM_WEBHOOK_SECRET}` 引用的 webhook secret；变量名可自行定义 |
 
 ## Webhook
 

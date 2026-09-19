@@ -6,14 +6,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { TelegramEndpoint } from '../src/endpoint.js';
 import {
   resolveTelegramConfig,
-  type TelegramAdapterConfig,
+  type TelegramEndpointConfig,
 } from '../src/protocol.js';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 
 export { TelegramEndpoint } from '../src/endpoint.js';
 export type { TelegramEndpointOptions, TelegramFetch } from '../src/endpoint.js';
 
-export default defineAdapter<TelegramAdapterConfig>({
+export default defineAdapter<TelegramEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // 媒体 url / file_id 直发，base64 / 本地路径经 multipart attach:// 上传物化；
