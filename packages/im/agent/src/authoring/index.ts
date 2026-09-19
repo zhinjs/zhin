@@ -2,8 +2,8 @@ export { defineAgent } from './define-agent.js';
 export type { DefineAgentInput } from './define-agent.js';
 export { disableTool, normalizeToolDenylist, isDisabledToolRef } from './disable-tool.js';
 export type { DisabledToolRef } from './disable-tool.js';
-export { defineAgentTool, defineTool } from './define-tool.js';
-export type { DefineAgentToolInput, DefineToolInput, AuthoringToolContext } from './define-tool.js';
+export { defineAgentTool } from './define-tool.js';
+export type { DefineAgentToolInput, AuthoringToolContext } from './define-tool.js';
 export {
   toolApprovalAlways,
   toolApprovalOnce,

@@ -12,12 +12,8 @@ export type DefineAgentToolInput<TInput = Record<string, unknown>> =
       > & { readonly adapter: TAdapter }
     }[RegisteredAdapterName];
 
-/** @deprecated Use {@link DefineAgentToolInput} */
-export type DefineToolInput<TInput = Record<string, unknown>> = DefineAgentToolInput<TInput>;
-
 /**
- * Define a file-based agent tool under `agent/tools/*.ts` (Eve-aligned authoring surface).
- * Prefer this over programmatic `plugin.addTool` for plugin-packaged AI tools.
+ * Define an explicit file-based Agent Tool entry under `agent/tools/$*.ts`.
  */
 export function defineAgentTool<TInput = Record<string, unknown>>(
   input: DefineAgentToolInput<TInput>,
@@ -36,13 +32,4 @@ export function defineAgentTool<TInput = Record<string, unknown>>(
     ...input,
     platforms: typeof adapter === 'string' ? [adapter] : input.platforms,
   };
-}
-
-/**
- * @deprecated Use {@link defineAgentTool}. Kept as a soft alias for existing plugins.
- */
-export function defineTool<TInput = Record<string, unknown>>(
-  input: DefineAgentToolInput<TInput>,
-): AuthoringToolDefinition<TInput, string | undefined> {
-  return defineAgentTool(input);
 }

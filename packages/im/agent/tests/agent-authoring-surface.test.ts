@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   defineAgent,
   defineAgentTool,
-  defineTool,
   namespaceAuthoringName,
   slotNameFromFile,
   isAuthoringDefinition,
@@ -37,8 +36,8 @@ describe('authoring define* helpers', () => {
     expect(def[AUTHORING_KIND]).toBe('agent');
   });
 
-  it('defineTool wraps zod schema', () => {
-    const def = defineTool({
+  it('defineAgentTool wraps zod schema', () => {
+    const def = defineAgentTool({
       description: 'echo',
       inputSchema: z.object({ x: z.string() }),
       async execute({ x }) { return x; },
