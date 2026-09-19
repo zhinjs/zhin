@@ -1,15 +1,15 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * WeixinIlinkEndpoint — lifecycle, long-poll inbound, outbound send.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type {
-  EndpointFriend,
-  EndpointControl,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  Endpoint,
+  type EndpointFriend,
+  type EndpointControl,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -23,16 +23,11 @@ import {
 } from './credentials.js';
 import { resolveCredentials } from './login.js';
 import {
-  listContextTokenUserIds,
-  restoreContextTokens,
-  setContextToken,
-  flushContextTokenPersist,
+  WeixinContextTokenStore,
 } from './context-store.js';
 import { WeixinConfigManager } from './ilink-config-cache.js';
 import {
-  getRemainingPauseMs,
-  isSessionPaused,
-  pauseSession,
+  IlinkSessionGuard,
   SESSION_EXPIRED_ERRCODE,
 } from './ilink-session-guard.js';
 import { downloadMediaFromItem } from './media-download.js';
@@ -81,6 +76,8 @@ export interface WeixinIlinkEndpointOptions {
   readonly notifyStop?: WeixinIlinkNotifyStop;
   readonly getUpdates?: WeixinIlinkGetUpdates;
   readonly sendText?: WeixinIlinkSendText;
+  readonly contextTokens?: WeixinContextTokenStore;
+  readonly sessionGuard?: IlinkSessionGuard;
 }
 
 export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
@@ -96,6 +93,8 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   readonly #notifyStop: WeixinIlinkNotifyStop;
   readonly #getUpdates: WeixinIlinkGetUpdates;
   readonly #sendText: WeixinIlinkSendText;
+  readonly #contextTokens: WeixinContextTokenStore;
+  readonly #sessionGuard: IlinkSessionGuard;
   #creds: WeixinIlinkCredentials | null = null;
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
@@ -123,11 +122,14 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     this.#notifyStop = options.notifyStop ?? notifyStop;
     this.#getUpdates = options.getUpdates ?? getUpdates;
     this.#sendText = options.sendText ?? sendMessageWeixin;
+    this.#contextTokens = options.contextTokens ?? new WeixinContextTokenStore(options.config.id);
+    this.#sessionGuard = options.sessionGuard ?? new IlinkSessionGuard(options.config.id);
     this.client = new WeixinIlinkClient(
       options.config,
       () => this.#creds,
       () => this.#configManager,
       this.#sendText,
+      this.#contextTokens,
     );
   }
 
@@ -143,7 +145,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
       // QR 登录最长 8 分钟：stop() 必须能打断
       this.#loginAbort = new AbortController();
       this.#creds = await this.#resolveCredentials(this.#options.config, this.#loginAbort.signal);
-      restoreContextTokens(this.#options.config.id);
+      this.#contextTokens.restore();
 
       await this.#notifyStart({
         baseUrl: this.client.apiBaseUrl,
@@ -191,7 +193,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     }
     this.#stopMediaSweep();
     // 防抖中的 context token 落盘，避免 stop 丢尾部写入
-    flushContextTokenPersist(this.#options.config.id);
+    this.#contextTokens.flush();
     if (this.#creds?.botToken) {
       try {
         await this.#notifyStop({ baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken });
@@ -283,7 +285,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (!this.#open) return;
     const userId = msg.from_user_id ?? '';
     if (msg.context_token && userId) {
-      setContextToken(this.#options.config.id, userId, msg.context_token);
+      this.#contextTokens.set(userId, msg.context_token);
     }
     const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
     const replyTo = weixinReplyTo(msg);
@@ -317,8 +319,8 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     let consecutiveFailures = 0;
 
     while (!abortSignal.aborted) {
-      if (isSessionPaused(endpointId)) {
-        await sleep(getRemainingPauseMs(endpointId), abortSignal);
+      if (this.#sessionGuard.paused) {
+        await sleep(this.#sessionGuard.remainingMs, abortSignal);
         continue;
       }
 
@@ -343,9 +345,9 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
           const sessionExpired =
             resp.errcode === SESSION_EXPIRED_ERRCODE || resp.ret === SESSION_EXPIRED_ERRCODE;
           if (sessionExpired) {
-            pauseSession(endpointId);
+            this.#sessionGuard.pause();
             consecutiveFailures = 0;
-            await sleep(getRemainingPauseMs(endpointId), abortSignal);
+            await sleep(this.#sessionGuard.remainingMs, abortSignal);
             continue;
           }
           consecutiveFailures += 1;
@@ -388,9 +390,6 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   async #handleInboundMessage(full: WeixinMessage): Promise<void> {
     void this.#emitPlatformEvent(`message.${full.message_type ?? 'unknown'}`, full);
     const fromUserId = full.from_user_id ?? '';
-    if (full.context_token && fromUserId) {
-      setContextToken(this.#options.config.id, fromUserId, full.context_token);
-    }
 
     const mediaOpts = await this.#downloadInboundMedia(full);
     this.admit({ ...full, _media: mediaOpts });
@@ -521,7 +520,7 @@ function createWeixinIlinkEndpointManagement(
     // "好友"只能从会话推导：凡持有 context_token 的对端（来过消息，含重启后从磁盘恢复的）
     // 即为可达私聊对端；昵称不可得，用 user_id 占位并在 remark 注明来源。
     async listFriends(): Promise<readonly EndpointFriend[]> {
-      return listContextTokenUserIds(requireClient().config.id).map((userId) => ({
+      return requireClient().reachableUserIds().map((userId) => ({
         user_id: userId,
         nickname: userId,
         remark: 'ilink: 从会话 context_token 推导，非通讯录',

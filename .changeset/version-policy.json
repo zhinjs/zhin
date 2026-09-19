@@ -479,6 +479,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove process-global evaluator caches and their reset and inspection APIs so each sandbox owns all proxy state and expression compilation has no hidden cross-runtime authority under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-weixin-ilink-session-state.md",
+      "packages": [
+        "@zhin.js/adapter-weixin-ilink"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-global iLink context-token and cooldown maps with endpoint-owned state classes so adapter instances have explicit lifecycle and cannot leak transient session state across owners."
     }
   ]
 }

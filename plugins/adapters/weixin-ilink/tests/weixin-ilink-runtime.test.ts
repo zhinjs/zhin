@@ -7,9 +7,7 @@ import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
-  setContextToken,
-  clearContextTokensForAccount,
-  flushContextTokenPersist,
+  WeixinContextTokenStore,
 } from '../src/context-store.js';
 import { saveSyncBuf } from '../src/credentials.js';
 import { MessageItemType, MessageState, MessageType } from '../src/ilink-types.js';
@@ -67,8 +65,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearContextTokensForAccount(baseConfig.id);
-  flushContextTokenPersist();
   vi.unstubAllEnvs();
   fs.rmSync(tmpDataDir, { recursive: true, force: true });
   vi.useRealTimers();
@@ -180,6 +176,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
       content: '你好',
       sender: expect.objectContaining({ id: 'user-1' }),
     }));
+    await endpoint.stop();
   });
 
   it('does not admit when closed', async () => {
@@ -247,7 +244,11 @@ describe('weixin-ilink plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    setContextToken(baseConfig.id, 'user-1', 'ctx-token');
+    endpoint.admit({
+      from_user_id: 'user-1',
+      context_token: 'ctx-token',
+      item_list: [],
+    });
 
     const messageId = await endpoint.send({ conversation: privateConversation('user-1'), payload: 'hello world' });
     expect(messageId).toBe('mid-1');
@@ -302,8 +303,9 @@ describe('weixin-ilink plugin runtime adapter', () => {
   });
 
   it('context token 防抖批量落盘', () => {
-    setContextToken(baseConfig.id, 'u1', 't1');
-    setContextToken(baseConfig.id, 'u2', 't2');
+    const store = new WeixinContextTokenStore(baseConfig.id);
+    store.set('u1', 't1');
+    store.set('u2', 't2');
     const file = path.join(
       tmpDataDir,
       'weixin-ilink',
@@ -312,10 +314,11 @@ describe('weixin-ilink plugin runtime adapter', () => {
     );
     // 防抖窗口内不落盘
     expect(fs.existsSync(file)).toBe(false);
-    flushContextTokenPersist(baseConfig.id);
+    store.flush();
     expect(fs.existsSync(file)).toBe(true);
     const tokens = JSON.parse(fs.readFileSync(file, 'utf-8')) as Record<string, string>;
     expect(tokens).toEqual({ u1: 't1', u2: 't2' });
+    store.clear();
   });
 
   it('start 时清扫超过 TTL 的入站媒体', async () => {

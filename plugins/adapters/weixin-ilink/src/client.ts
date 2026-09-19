@@ -1,4 +1,4 @@
-import { getContextToken } from './context-store.js';
+import type { WeixinContextTokenStore } from './context-store.js';
 import type { WeixinIlinkCredentials } from './credentials.js';
 import { sendTyping } from './ilink-api.js';
 import type { WeixinConfigManager } from './ilink-config-cache.js';
@@ -14,6 +14,7 @@ export class WeixinIlinkClient {
     private readonly resolveCredentials: () => WeixinIlinkCredentials | null,
     private readonly resolveConfigManager: () => WeixinConfigManager | undefined,
     private readonly sendTextImpl: typeof sendMessageWeixin,
+    private readonly contextTokens: WeixinContextTokenStore,
   ) {}
 
   get credentials(): WeixinIlinkCredentials {
@@ -35,7 +36,11 @@ export class WeixinIlinkClient {
   }
 
   contextToken(userId: string): string | undefined {
-    return getContextToken(this.config.id, userId);
+    return this.contextTokens.get(userId);
+  }
+
+  reachableUserIds(): string[] {
+    return this.contextTokens.userIds();
   }
 
   async sendText(to: string, text: string): Promise<{ messageId: string }> {

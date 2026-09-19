@@ -15,6 +15,12 @@ export {
 
 export type { WeixinMessage, MessageItem } from './ilink-types.js';
 export type { WeixinIlinkCredentials } from './credentials.js';
+export { WeixinContextTokenStore } from './context-store.js';
+export {
+  IlinkSessionGuard,
+  SESSION_EXPIRED_ERRCODE,
+  SESSION_PAUSE_DURATION_MS,
+} from './ilink-session-guard.js';
 
 export {
   WeixinIlinkClient,

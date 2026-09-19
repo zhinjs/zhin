@@ -1,287 +1,95 @@
-import fs from "node:fs";
-import path from "node:path";
-
-import { logger } from "./ilink-logger.js";
-import { generateId } from "./ilink-random.js";
+import { generateId } from './ilink-random.js';
 import { MessageItemType, type WeixinMessage, type MessageItem } from './ilink-types.js';
 
-import { resolveStateDir } from "./credentials.js";
-
-// ---------------------------------------------------------------------------
-// Context token store (in-process cache + disk persistence)
-// ---------------------------------------------------------------------------
-
-/**
- * contextToken is issued per-message by the Weixin getupdates API and must
- * be echoed verbatim in every outbound send. The in-memory map is the primary
- * lookup; a disk-backed file per account ensures tokens survive gateway restarts.
- */
-const contextTokenStore = new Map<string, string>();
-
-function contextTokenKey(accountId: string, userId: string): string {
-  return `${accountId}:${userId}`;
-}
-
-// ---------------------------------------------------------------------------
-// Disk persistence helpers
-// ---------------------------------------------------------------------------
-
-function resolveContextTokenFilePath(accountId: string): string {
-  return path.join(resolveStateDir(), "context-tokens", `${accountId}.context-tokens.json`);
-}
-
-/** Persist all context tokens for a given account to disk. */
-function persistContextTokens(accountId: string): void {
-  const prefix = `${accountId}:`;
-  const tokens: Record<string, string> = {};
-  for (const [k, v] of contextTokenStore) {
-    if (k.startsWith(prefix)) {
-      tokens[k.slice(prefix.length)] = v;
-    }
-  }
-  const filePath = resolveContextTokenFilePath(accountId);
-  try {
-    const dir = path.dirname(filePath);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(tokens, null, 0), "utf-8");
-  } catch (err) {
-    logger.warn(`persistContextTokens: failed to write ${filePath}: ${String(err)}`);
-  }
-}
-
-/**
- * 每条入站消息都会 setContextToken；全量同步写盘在消息高峰时是纯浪费。
- * 按 account 防抖合并，500ms 内多次写入只落盘一次。
- */
-const PERSIST_DEBOUNCE_MS = 500;
-const persistTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-function schedulePersistContextTokens(accountId: string): void {
-  const existing = persistTimers.get(accountId);
-  if (existing) clearTimeout(existing);
-  const timer = setTimeout(() => {
-    persistTimers.delete(accountId);
-    persistContextTokens(accountId);
-  }, PERSIST_DEBOUNCE_MS);
-  // 不让防抖定时器拖住进程退出
-  (timer as { unref?: () => void }).unref?.();
-  persistTimers.set(accountId, timer);
-}
-
-/** 立即落盘所有待写（endpoint stop / 测试用）。 */
-export function flushContextTokenPersist(accountId?: string): void {
-  for (const [id, timer] of [...persistTimers]) {
-    if (accountId !== undefined && id !== accountId) continue;
-    clearTimeout(timer);
-    persistTimers.delete(id);
-    persistContextTokens(id);
-  }
-}
-
-/**
- * Restore persisted context tokens for an account into the in-memory map.
- * Called once during gateway startAccount to survive restarts.
- */
-export function restoreContextTokens(accountId: string): void {
-  const filePath = resolveContextTokenFilePath(accountId);
-  try {
-    if (!fs.existsSync(filePath)) return;
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const tokens = JSON.parse(raw) as Record<string, string>;
-    let count = 0;
-    for (const [userId, token] of Object.entries(tokens)) {
-      if (typeof token === "string" && token) {
-        contextTokenStore.set(contextTokenKey(accountId, userId), token);
-        count++;
-      }
-    }
-    logger.info(`restoreContextTokens: restored ${count} tokens for account=${accountId}`);
-  } catch (err) {
-    logger.warn(`restoreContextTokens: failed to read ${filePath}: ${String(err)}`);
-  }
-}
-
-/** Remove all context tokens for a given account (memory + disk). */
-export function clearContextTokensForAccount(accountId: string): void {
-  const prefix = `${accountId}:`;
-  for (const k of [...contextTokenStore.keys()]) {
-    if (k.startsWith(prefix)) {
-      contextTokenStore.delete(k);
-    }
-  }
-  const filePath = resolveContextTokenFilePath(accountId);
-  try {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch (err) {
-    logger.warn(`clearContextTokensForAccount: failed to remove ${filePath}: ${String(err)}`);
-  }
-  logger.info(`clearContextTokensForAccount: cleared tokens for account=${accountId}`);
-}
-
-/** Store a context token for a given account+user pair (memory + debounced disk). */
-export function setContextToken(accountId: string, userId: string, token: string): void {
-  const k = contextTokenKey(accountId, userId);
-  logger.debug(`setContextToken: key=${k}`);
-  contextTokenStore.set(k, token);
-  schedulePersistContextTokens(accountId);
-}
-
-/** Retrieve the cached context token for a given account+user pair. */
-export function getContextToken(accountId: string, userId: string): string | undefined {
-  const k = contextTokenKey(accountId, userId);
-  const val = contextTokenStore.get(k);
-  logger.debug(
-    `getContextToken: key=${k} found=${val !== undefined} storeSize=${contextTokenStore.size}`,
-  );
-  return val;
-}
-
-/**
- * List all peer userIds that hold a context token for the given account
- * (memory map, already merged with the disk-backed file on restore).
- * Personal WeChat has no contact/profile API; this is the only peer catalog.
- */
-export function listContextTokenUserIds(accountId: string): string[] {
-  const prefix = `${accountId}:`;
-  const ids: string[] = [];
-  for (const k of contextTokenStore.keys()) {
-    if (k.startsWith(prefix)) ids.push(k.slice(prefix.length));
-  }
-  return ids;
-}
-
-/**
- * Find all accountIds that have an active contextToken for the given userId.
- * Used to infer the sending bot account from the recipient address when
- * accountId is not explicitly provided (e.g. cron delivery).
- *
- * Returns all matching accountIds (not just the first) so the caller can
- * detect ambiguity when multiple accounts have sessions with the same user.
- */
-export function findAccountIdsByContextToken(
-  accountIds: string[],
-  userId: string,
-): string[] {
-  return accountIds.filter((id) => contextTokenStore.has(contextTokenKey(id, userId)));
-}
-
-// ---------------------------------------------------------------------------
-// Message ID generation
-// ---------------------------------------------------------------------------
-
 function generateMessageSid(): string {
-  return generateId("openclaw-weixin");
+  return generateId('openclaw-weixin');
 }
 
-/** Inbound context passed to the OpenClaw core pipeline (matches MsgContext shape). */
 export type WeixinMsgContext = {
   Body: string;
   From: string;
   To: string;
   AccountId: string;
-  OriginatingChannel: "openclaw-weixin";
+  OriginatingChannel: 'openclaw-weixin';
   OriginatingTo: string;
   MessageSid: string;
   Timestamp?: number;
-  Provider: "openclaw-weixin";
-  ChatType: "direct";
-  /** Set by monitor after resolveAgentRoute so dispatchReplyFromConfig uses the correct session. */
+  Provider: 'openclaw-weixin';
+  ChatType: 'direct';
   SessionKey?: string;
   context_token?: string;
   MediaUrl?: string;
   MediaPath?: string;
   MediaType?: string;
-  /** Raw message body for framework command authorization. */
   CommandBody?: string;
-  /** Whether the sender is authorized to execute slash commands. */
   CommandAuthorized?: boolean;
 };
 
-/** Returns true if the message item is a media type (image, video, file, or voice). */
 export function isMediaItem(item: MessageItem): boolean {
-  return (
-    item.type === MessageItemType.IMAGE ||
-    item.type === MessageItemType.VIDEO ||
-    item.type === MessageItemType.FILE ||
-    item.type === MessageItemType.VOICE
-  );
+  return item.type === MessageItemType.IMAGE
+    || item.type === MessageItemType.VIDEO
+    || item.type === MessageItemType.FILE
+    || item.type === MessageItemType.VOICE;
 }
 
 export function bodyFromItemList(itemList?: MessageItem[]): string {
-  if (!itemList?.length) return "";
+  if (!itemList?.length) return '';
   for (const item of itemList) {
     if (item.type === MessageItemType.TEXT && item.text_item?.text != null) {
       return String(item.text_item.text);
     }
-    // 语音转文字：如果语音消息有 text 字段，直接使用文字内容
     if (item.type === MessageItemType.VOICE && item.voice_item?.text) {
       return item.voice_item.text;
     }
   }
-  return "";
+  return '';
 }
 
 export type WeixinInboundMediaOpts = {
-  /** Local path to decrypted image file. */
   decryptedPicPath?: string;
-  /** Local path to transcoded/raw voice file (.wav or .silk). */
   decryptedVoicePath?: string;
-  /** MIME type for the voice file (e.g. "audio/wav" or "audio/silk"). */
   voiceMediaType?: string;
-  /** Local path to decrypted file attachment. */
   decryptedFilePath?: string;
-  /** MIME type for the file attachment (guessed from file_name). */
   fileMediaType?: string;
-  /** Local path to decrypted video file. */
   decryptedVideoPath?: string;
 };
 
-/**
- * Convert a WeixinMessage from getUpdates to the inbound MsgContext for the core pipeline.
- * Media: only pass MediaPath (local file, after CDN download + decrypt).
- * We never pass MediaUrl — the upstream CDN URL is encrypted/auth-only.
- * Priority when multiple media types present: image > video > file > voice.
- */
 export function weixinMessageToMsgContext(
   msg: WeixinMessage,
   accountId: string,
   opts?: WeixinInboundMediaOpts,
 ): WeixinMsgContext {
-  const from_user_id = msg.from_user_id ?? "";
+  const fromUserId = msg.from_user_id ?? '';
   const ctx: WeixinMsgContext = {
     Body: bodyFromItemList(msg.item_list),
-    From: from_user_id,
-    To: from_user_id,
+    From: fromUserId,
+    To: fromUserId,
     AccountId: accountId,
-    OriginatingChannel: "openclaw-weixin",
-    OriginatingTo: from_user_id,
+    OriginatingChannel: 'openclaw-weixin',
+    OriginatingTo: fromUserId,
     MessageSid: generateMessageSid(),
     Timestamp: msg.create_time_ms,
-    Provider: "openclaw-weixin",
-    ChatType: "direct",
+    Provider: 'openclaw-weixin',
+    ChatType: 'direct',
   };
-  if (msg.context_token) {
-    ctx.context_token = msg.context_token;
-  }
+  if (msg.context_token) ctx.context_token = msg.context_token;
 
   if (opts?.decryptedPicPath) {
     ctx.MediaPath = opts.decryptedPicPath;
-    ctx.MediaType = "image/*";
+    ctx.MediaType = 'image/*';
   } else if (opts?.decryptedVideoPath) {
     ctx.MediaPath = opts.decryptedVideoPath;
-    ctx.MediaType = "video/mp4";
+    ctx.MediaType = 'video/mp4';
   } else if (opts?.decryptedFilePath) {
     ctx.MediaPath = opts.decryptedFilePath;
-    ctx.MediaType = opts.fileMediaType ?? "application/octet-stream";
+    ctx.MediaType = opts.fileMediaType ?? 'application/octet-stream';
   } else if (opts?.decryptedVoicePath) {
     ctx.MediaPath = opts.decryptedVoicePath;
-    ctx.MediaType = opts.voiceMediaType ?? "audio/wav";
+    ctx.MediaType = opts.voiceMediaType ?? 'audio/wav';
   }
-
   return ctx;
 }
 
-/** Extract the context_token from an inbound WeixinMsgContext. */
 export function getContextTokenFromMsgContext(ctx: WeixinMsgContext): string | undefined {
   return ctx.context_token;
 }

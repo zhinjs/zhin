@@ -8,9 +8,7 @@ import { listEndpointManagementCapabilities } from 'zhin.js/adapter';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
-  clearContextTokensForAccount,
-  flushContextTokenPersist,
-  setContextToken,
+  WeixinContextTokenStore,
 } from '../src/context-store.js';
 import { resolveWeixinIlinkConfig } from '../src/protocol.js';
 
@@ -26,12 +24,13 @@ function gateway(): OutboundMessageService {
   return { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') };
 }
 
-function makeEndpoint(): WeixinIlinkEndpoint {
+function makeEndpoint(contextTokens = new WeixinContextTokenStore(baseConfig.id)): WeixinIlinkEndpoint {
   return bindTestEndpoint(new WeixinIlinkEndpoint({
     id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
     gateway: gateway(),
     config: baseConfig,
     resolveCredentials: async () => ({ botToken: 'tok' }),
+    contextTokens,
   }), gateway(), undefined);
 }
 
@@ -40,8 +39,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  clearContextTokensForAccount(baseConfig.id);
-  flushContextTokenPersist();
   vi.unstubAllEnvs();
 });
 
@@ -54,11 +51,12 @@ describe('weixin-ilink endpoint management', () => {
   });
 
   it('listFriends：从 context_token 存储推导对端，nickname 用 user_id 占位并注明来源', async () => {
-    setContextToken(baseConfig.id, 'wxid_alice', 'token-a');
-    setContextToken(baseConfig.id, 'wxid_bob', 'token-b');
-    // 其他 account 的对端不应混入
-    setContextToken('other-account', 'wxid_other', 'token-x');
-    const endpoint = makeEndpoint();
+    const contextTokens = new WeixinContextTokenStore(baseConfig.id);
+    contextTokens.set('wxid_alice', 'token-a');
+    contextTokens.set('wxid_bob', 'token-b');
+    const endpoint = makeEndpoint(contextTokens);
+    const other = new WeixinContextTokenStore('other-account');
+    other.set('wxid_other', 'token-x');
 
     const friends = await endpoint.management.listFriends!();
 
@@ -66,7 +64,8 @@ describe('weixin-ilink endpoint management', () => {
       { user_id: 'wxid_alice', nickname: 'wxid_alice', remark: 'ilink: 从会话 context_token 推导，非通讯录' },
       { user_id: 'wxid_bob', nickname: 'wxid_bob', remark: 'ilink: 从会话 context_token 推导，非通讯录' },
     ]);
-    clearContextTokensForAccount('other-account');
+    contextTokens.clear();
+    other.clear();
   });
 
   it('listFriends：无会话记录时返回空列表', async () => {
