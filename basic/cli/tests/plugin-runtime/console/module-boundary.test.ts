@@ -26,4 +26,20 @@ describe('Console Host module boundary', () => {
       'login-assist-stdin.ts',
     ].includes(name))).toEqual([]);
   });
+
+  it('keeps supporting modules independent from the HTTP API orchestrator', async () => {
+    const supportingModules = [
+      'agent-console.ts',
+      'configuration.ts',
+      'inbox.ts',
+      'projection.ts',
+      'system-log.ts',
+    ];
+    const violations: string[] = [];
+    for (const file of supportingModules) {
+      const source = await readFile(new URL(`../../../src/plugin-runtime/console/${file}`, import.meta.url), 'utf8');
+      if (/(?:from\s+|import\()['"]\.\/api\.js['"]/u.test(source)) violations.push(file);
+    }
+    expect(violations).toEqual([]);
+  });
 });

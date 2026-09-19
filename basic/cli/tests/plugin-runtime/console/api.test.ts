@@ -21,6 +21,15 @@ import {
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
 import {
+  isKnownConversationSession,
+  registerConsoleApiRoutes,
+} from '../../../src/plugin-runtime/console/api.js';
+import {
+  listGenerationPromptSections,
+  resolveGenerationAgentConsole,
+  resolveGenerationAgentIntrospection,
+} from '../../../src/plugin-runtime/console/agent-console.js';
+import {
   buildConsoleEntriesBody,
   buildConsoleStats,
   buildPluginDetail,
@@ -28,13 +37,8 @@ import {
   buildPluginListItem,
   displayConsolePath,
   getSystemStatusData,
-  isKnownConversationSession,
   listSnapshotPlugins,
-  listGenerationPromptSections,
-  registerConsoleApiRoutes,
-  resolveGenerationAgentIntrospection,
-  resolveGenerationAgentConsole,
-} from '../../../src/plugin-runtime/console/api.js';
+} from '../../../src/plugin-runtime/console/projection.js';
 
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
