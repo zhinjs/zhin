@@ -478,7 +478,6 @@ export {
   formatMemoryPathsHint,
   resolveMemoryPromptOptions,
   DEFAULT_MEMORY_BUDGETS,
-  migrateLegacyMemoryFiles,
 } from './memory-layers.js';
 export type {
   MemoryLayerBudgets,

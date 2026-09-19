@@ -212,7 +212,7 @@
     "export{handleRuntimeManagementCommand,}from './init/runtime-management-commands.js';",
     "export{loadAssistantProfileFile,loadBootstrapWithProfile,syncProfileHeartbeatToStore,syncProfileCronRoutinesToStore,pruneStaleProfileCronJobs,mergeProfileDeviceAliases,validateAssistantProfile,resolveAssistantProfileConfig,ASSISTANT_PROFILE_VERSION,DEFAULT_PROFILE_FILENAME,PROFILE_HEARTBEAT_JOB_ID,PROFILE_MORNING_BRIEF_JOB_ID,PROFILE_BEDTIME_CHECK_JOB_ID,}from './assistant/index.js';",
     "export{loadBootstrapFiles,buildContextFiles,buildBootstrapContextSection,buildStableContextFiles,buildStableBootstrapSection,loadSoulPersona,loadToolsGuide,loadAgentsMemory,clearBootstrapCache,STABLE_BOOTSTRAP_FILENAMES,}from './bootstrap.js';",
-    "export{loadMemoryLayers,buildMemoryPrompt,safeSessionKey,getMemoryRoot,checkMemoryWritePath,classifyMemoryWritePath,formatMemoryPathsHint,resolveMemoryPromptOptions,DEFAULT_MEMORY_BUDGETS,migrateLegacyMemoryFiles,}from './memory-layers.js';",
+    "export{loadMemoryLayers,buildMemoryPrompt,safeSessionKey,getMemoryRoot,checkMemoryWritePath,classifyMemoryWritePath,formatMemoryPathsHint,resolveMemoryPromptOptions,DEFAULT_MEMORY_BUDGETS,}from './memory-layers.js';",
     "export{originFromMessage}from './builtin/spawn-task-tool.js';",
     "export{pluginToolToAgentTool,agentToolToLlmTool,agentToolsToLlmTools,}from './tool-bridge.js';",
     "export{preprocessInboundMedia,publishOutboundElements,resolveMultimodalConfig,resolveOutboundCapabilities,}from './media/index.js';",

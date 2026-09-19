@@ -13,7 +13,6 @@
 
 import * as path from 'node:path';
 import * as os from 'node:os';
-import { getMemoryRoot } from '../memory-layers.js';
 
 // ── 设备路径阻止──────────────
 
@@ -159,14 +158,16 @@ function getPolicyPathCandidates(filePath: string): string[] {
  * 是否为项目 data/memory 下的三层记忆路径（允许读写，仍受敏感文件名规则约束）。
  */
 export function isMemoryDataPath(filePath: string, workspaceDir?: string): boolean {
-  const cwd = workspaceDir || process.cwd();
-  const memoryRoot = path.resolve(getMemoryRoot(cwd));
-  const resolved = path.resolve(expandHome(filePath));
-  if (resolved === memoryRoot || resolved.startsWith(memoryRoot + path.sep)) {
-    return true;
+  const cwd = path.resolve(workspaceDir ?? process.cwd());
+  const memoryRoot = path.join(cwd, 'data', 'memory');
+  const expanded = expandHome(filePath);
+  const resolved = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(cwd, expanded);
+  const relative = path.relative(memoryRoot, resolved);
+  if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return false;
   }
-  const normalized = resolved.split(path.sep).join('/');
-  return normalized.includes('/data/memory/');
+  const [layer] = relative.split(path.sep);
+  return layer === 'global' || layer === 'platforms' || layer === 'sessions';
 }
 
 /** data/media 下 inbound/outbound 媒体缓存（允许读写，仍受敏感文件名规则约束） */

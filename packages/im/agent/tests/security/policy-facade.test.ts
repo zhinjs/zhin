@@ -367,6 +367,7 @@ describe('policy-facade', () => {
         toolName: 'write_file',
         filePath: fp,
         rawFilePath: fp,
+        workspaceDir: tmpDir,
         commMessage: ctx,
       });
       expect(result.allowed).toBe(true);

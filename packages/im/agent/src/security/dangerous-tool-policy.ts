@@ -154,8 +154,13 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
   };
 }
 
-export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: string, commMessage?: Message): DangerousToolDecision {
-  const base = checkFileAccess(filePath);
+export function checkSensitiveFilePathAccess(
+  toolName: FileToolName,
+  filePath: string,
+  commMessage?: Message,
+  workspaceDir?: string,
+): DangerousToolDecision {
+  const base = checkFileAccess(filePath, workspaceDir);
   const { role } = resolveRoleFromMessage(commMessage);
   if (base.allowed) {
     return { allowed: true, role };
@@ -192,6 +197,7 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
 export function checkBashSensitiveReadAccess(
   command: string,
   commMessage?: Message,
+  workspaceDir?: string,
 ): DangerousToolDecision {
   const paths = extractBashReadPaths(command);
   if (paths.length === 0) {
@@ -199,7 +205,7 @@ export function checkBashSensitiveReadAccess(
     return { allowed: true, role };
   }
   for (const filePath of paths) {
-    const decision = checkSensitiveFilePathAccess('read_file', filePath, commMessage);
+    const decision = checkSensitiveFilePathAccess('read_file', filePath, commMessage, workspaceDir);
     if (!decision.allowed) {
       return {
         ...decision,

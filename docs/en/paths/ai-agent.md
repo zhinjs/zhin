@@ -91,6 +91,8 @@ Three Markdown memory layers are read by default:
 
 Loading memory does not grant write access. Writes still pass through Turn file policy and Tools. Global and platform memory are owner-only; normal conversations use session notes.
 
+These three layer directories are the only valid layout. The runtime neither reads nor migrates root-level files such as `data/memory/MEMORY.md`, and file policy rejects unknown layers. Move retained content into the canonical directories explicitly before upgrading.
+
 ## 6. Accept the result in Console
 
 1. Check provider, binding, and runtime state in **Agent Overview**.

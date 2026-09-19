@@ -138,6 +138,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-global Agent compaction state and helper functions with a host-owned runtime under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-memory-path-compatibility.md",
+      "packages": [
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove implicit file-memory migration and legacy path fallback under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

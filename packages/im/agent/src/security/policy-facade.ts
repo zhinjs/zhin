@@ -67,6 +67,8 @@ export interface ToolPolicyInput {
    * （旧实现中权限矩阵在 expandHome 之前执行，为保持等价单独透传）。
    */
   rawFilePath?: string;
+  /** Workspace root used to resolve and authorize relative file paths. */
+  workspaceDir?: string;
   /** 覆盖从 toolName 推导的文件操作类型（edit_file→update，write_file→create） */
   fileOperation?: FileOperation;
   /** bash 命令（exec-policy 与 bash 三层用） */
@@ -365,7 +367,7 @@ function fromDangerousDecision(d: DangerousToolDecision): ToolPolicyDecision {
 function isPermittedMemoryToolWrite(input: ToolPolicyInput): boolean {
   const filePath = input.rawFilePath ?? input.filePath;
   if (!filePath || !isWriteAccess(input)) return false;
-  const decision = checkMemoryWritePath(filePath, input.commMessage);
+  const decision = checkMemoryWritePath(filePath, input.commMessage, input.workspaceDir);
   return decision.scope !== 'none' && decision.allowed;
 }
 
@@ -430,7 +432,9 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     name: 'bash-sensitive-read',
     priority: 25,
     applies: (input) => input.toolName === 'bash' && Boolean(input.command),
-    check: (input) => fromDangerousDecision(checkBashSensitiveReadAccess(input.command!, input.commMessage)),
+    check: (input) => fromDangerousDecision(
+      checkBashSensitiveReadAccess(input.command!, input.commMessage, input.workspaceDir),
+    ),
   },
   {
     name: 'file-permission-matrix',
@@ -493,7 +497,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     priority: 40,
     applies: (input) => isWriteAccess(input),
     check: (input) => {
-      const d = checkMemoryWritePath(input.filePath!, input.commMessage);
+      const d = checkMemoryWritePath(input.filePath!, input.commMessage, input.workspaceDir);
       return { allowed: d.allowed, reason: d.reason, payload: d };
     },
   },
@@ -503,7 +507,12 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     applies: (input) => Boolean(input.filePath),
     check: (input) =>
       fromDangerousDecision(
-        checkSensitiveFilePathAccess(input.toolName as FileToolName, input.filePath!, input.commMessage),
+        checkSensitiveFilePathAccess(
+          input.toolName as FileToolName,
+          input.filePath!,
+          input.commMessage,
+          input.workspaceDir,
+        ),
       ),
   },
   {
