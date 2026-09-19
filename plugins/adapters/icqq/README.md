@@ -136,11 +136,16 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 
 ## 架构
 
-- `plugin.ts` + `adapters/icqq.ts`（`defineAdapter`）
-- Client token：`src/client.ts`（直接引用 ICQQ `Client` / `EventMap`）
-- Endpoint：`src/endpoint.ts`（组合 ICQQ `Client`，负责账号 transport 与 Zhin lifecycle）
-- 协议常量 / 配置：`src/protocol.ts`
+- `plugin.ts` + `adapters/icqq.ts`：Plugin Runtime 入口与 `defineAdapter` 声明
+- `src/endpoint.ts`：组合 ICQQ `Client`，只协调账号 transport、Zhin lifecycle 与各能力端口
+- `src/content-resolver.ts`：保存已观察消息，并按深度和条数限制递归展开合并转发
+- `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息
+- `src/protocol.ts`：配置解析、会话映射与出站目标转换
+- `src/client.ts`：向插件作者暴露 ICQQ `Client` / `EventMap` 类型注册
 - Agent 工具：`tools/*.ts`；权限说明见 `agent/PERMITS.md`
+
+阅读适配器实现时从 `endpoint.ts` 看能力装配，再进入对应能力文件。包外代码只从
+`@zhin.js/adapter-icqq` 与 `zhin.js/adapter` 的公开入口导入，不依赖上述源码路径。
 
 ## Plugin Runtime 迁移说明
 

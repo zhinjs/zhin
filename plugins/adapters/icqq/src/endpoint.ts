@@ -17,18 +17,13 @@ import {
   type EndpointPendingRequest,
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
-import type { EndpointContentPort, EndpointContentResolveContext } from '@zhin.js/adapter';
+import type { EndpointContentPort } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent, SystemEvent, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
-import type {
-  ConversationMessage,
-  ConversationReference,
-  ForwardEntry,
-  MessageRef,
-  Segment,
-} from '@zhin.js/im-contract';
+import type { MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { runIcqqLoginAssistStep } from './icqq-login-assist.js';
+import { IcqqContentResolver } from './content-resolver.js';
 import {
   InboundMessageDeduper,
   findIcqqNestedMessageSource,
@@ -62,7 +57,6 @@ import {
   type ResolvedIcqqConfig,
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
-import { normalizeForwardMsgResponse } from './forward-msg.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -116,87 +110,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
   #heldInbound: IcqqInboundMessage[] = [];
   readonly #inflightInbound = new Set<Promise<void>>();
   readonly #inboundOwner = new AsyncLocalStorage<symbol>();
-  readonly #messageContent = new Map<string, ConversationMessage>();
-
-  readonly content: EndpointContentPort = Object.freeze({
-    resolve: async (reference: ConversationReference, context: EndpointContentResolveContext) => {
-      context.signal.throwIfAborted();
-      if (reference.kind === 'message') {
-        const cached = this.#messageContent.get(reference.message.id);
-        return cached
-          ? Object.freeze({ status: 'resolved' as const, reference, value: cached })
-          : Object.freeze({ status: 'not_found' as const, code: 'icqq_message_not_observed' });
-      }
-      if (reference.kind === 'forward') {
-        try {
-          const entries = await this.#resolveForwardEntries(
-            reference.forwardId,
-            context,
-            { remainingEntries: context.maxEntries, path: new Set<string>() },
-            0,
-          );
-          if (entries.length === 0) return Object.freeze({ status: 'not_found' as const, code: 'icqq_forward_not_found' });
-          return Object.freeze({ status: 'resolved' as const, reference, value: Object.freeze(entries) });
-        } catch (error) {
-          if (context.signal.aborted) throw error;
-          return Object.freeze({
-            status: 'failed' as const,
-            code: 'icqq_forward_fetch_failed',
-            message: error instanceof Error ? error.message : String(error),
-          });
-        }
-      }
-      if (reference.media.kind === 'url' || reference.media.kind === 'base64' || reference.media.kind === 'path') {
-        return Object.freeze({ status: 'resolved' as const, reference, value: reference.media });
-      }
-      return Object.freeze({ status: 'unsupported' as const, code: 'icqq_media_reference_unsupported' });
-    },
-  });
-
-  async #resolveForwardEntries(
-    forwardId: string,
-    context: EndpointContentResolveContext,
-    state: { remainingEntries: number; readonly path: Set<string> },
-    depth: number,
-  ): Promise<readonly ForwardEntry[]> {
-    context.signal.throwIfAborted();
-    if (state.remainingEntries <= 0 || state.path.has(forwardId)) return Object.freeze([]);
-    state.path.add(forwardId);
-    try {
-      // ICQQ does not expose a cancellable getForwardMsg API. Keep the caller's
-      // generation lease until the native operation actually settles, then honor
-      // cancellation before publishing any resolved content.
-      const raw = await this.client.getForwardMsg(forwardId);
-      context.signal.throwIfAborted();
-      const entries = normalizeForwardMsgResponse(raw).slice(0, state.remainingEntries);
-      state.remainingEntries -= entries.length;
-      const expanded: ForwardEntry[] = [];
-      for (const entry of entries) {
-        context.signal.throwIfAborted();
-        const segments: Segment[] = [];
-        for (const segment of entry.segments) {
-          if (segment.type !== 'forward' || depth >= context.maxDepth) {
-            segments.push(segment);
-            continue;
-          }
-          const nestedId = String((segment.data as { forward_id?: unknown }).forward_id ?? '').trim();
-          if (!nestedId || state.path.has(nestedId) || state.remainingEntries <= 0) {
-            segments.push(segment);
-            continue;
-          }
-          const nested = await this.#resolveForwardEntries(nestedId, context, state, depth + 1);
-          segments.push(Object.freeze({
-            ...segment,
-            data: Object.freeze({ ...segment.data, ...(nested.length > 0 ? { entries: nested } : {}) }),
-          }));
-        }
-        expanded.push(Object.freeze({ ...entry, segments: Object.freeze(segments) }));
-      }
-      return Object.freeze(expanded);
-    } finally {
-      state.path.delete(forwardId);
-    }
-  }
+  readonly #contentResolver: IcqqContentResolver;
+  readonly content: EndpointContentPort;
 
   readonly management: EndpointManagement = Object.freeze<EndpointManagement>({
     listFriends: async () =>
@@ -276,6 +191,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
     super();
     const nativeConfig = resolveNativeClientConfig(options.config);
     this.client = new ManagedIcqqClient(Number(options.config.id), nativeConfig);
+    this.#contentResolver = new IcqqContentResolver(this.client);
+    this.content = this.#contentResolver.port;
     this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
@@ -822,7 +739,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
     const quoteId = resolveIcqqQuoteIdFromEvent(data);
     const quoted = messageLookupFromIcqqSource(findIcqqNestedMessageSource(data));
     if (quoteId && quoted) {
-      this.#messageContent.set(quoteId, Object.freeze({
+      this.#contentResolver.remember(quoteId, Object.freeze({
         ref: Object.freeze({ conversation, id: quoteId }),
         ...(quoted.sender?.id ? { actor: Object.freeze({
           id: quoted.sender.id,

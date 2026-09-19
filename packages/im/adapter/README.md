@@ -33,6 +33,33 @@ export default defineAdapter({
 完整入门见 [适配器开发](../../../docs/authoring/adapters.md)，重连与心跳见
 [端点生命周期](../../../docs/authoring/endpoint-lifecycle.md)。
 
+## 源码地图
+
+适配器包保持单层目录，避免为了分类制造更深的相对路径；文件按稳定责任划分：
+
+| 文件 | 只负责 |
+| --- | --- |
+| `definition.ts` | `defineAdapter()`、能力声明和配置策略；作者入口 |
+| `endpoint-contract.ts` | Client、事件、消息与紧凑实现的纯类型契约；不含运行时状态 |
+| `endpoint.ts` | 可继承的 Endpoint 平台边界、身份绑定与代际事件准入 |
+| `managed-endpoint.ts` | 把 `{ client, connect, activate?, send }` 转成完整 Endpoint；框架内部 |
+| `adapter-index.ts` | 展开配置并编排一代 Endpoint；框架内部 |
+| `endpoint-{client,control,content,management}.ts` | 四个相互独立的可选端口 |
+| `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
+| `endpoint-commands.ts` | Endpoint 配置命令与运行态投影 |
+
+核心 import 依赖固定为：
+
+```text
+adapter-index → managed-endpoint → endpoint → endpoint-contract
+definition ─────────────────────→ endpoint
+definition ───────────────────────────────→ endpoint-contract
+```
+
+平台包只从 `zhin.js/adapter` 导入，不引用这些源码路径。阅读普通适配器时先看
+`definition.ts` 和 `endpoint-contract.ts`；只有实现自定义生命周期时才需要看
+`endpoint.ts`，`managed-endpoint.ts` 与 `adapter-index.ts` 属于 Runtime 装配细节。
+
 本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
 `lib/provider.js`；开发时可通过 conditional export 读取源码。
 

@@ -19,6 +19,15 @@ import { DisposeStack } from './dispose';           // ❌
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录内，并带独立 `package.json`。
 - `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升（undici、hono、tar、js-yaml、nodemailer 等），不要随手删改；新增依赖注意 `pnpm check:dependency-policy` 的约束。
 
+### 模块边界与源码布局
+
+- 对外导入只经过包的公开入口或已声明的子路径；禁止跨包导入另一个包的 `src/`。包内文件可以调整，但使用方的导入路径应保持稳定。
+- 默认使用一层、按能力命名的源码文件。只有一个能力已经形成独立入口、内部还有多个协作模块时，才建立子目录；不要先按 `types/`、`utils/`、`services/` 等泛化类别分层。
+- 按职责拥有的状态和决策拆分文件，而不是按行数拆分。一个模块应隐藏一组相关实现细节，并提供比内部实现更小的接口。
+- 纯契约模块可以依赖其他类型契约，但不能反向依赖生命周期、注册表或运行时编排。推荐依赖方向为“运行时编排 → 能力实现 → 边界契约”。
+- 避免新增 `utils.ts`、`common.ts`、`helpers.ts`。用能力命名模块，例如 `content-resolver.ts`、`endpoint-lifecycle.ts`，让调用方从文件名就能判断边界。
+- 包含多个主要模块的包，应在 README 提供“源码地图”，说明从哪个文件开始阅读，以及模块之间的单向依赖关系。
+
 ## 新插件：Plugin Runtime（默认）
 
 唯一启动路径是 `zhin runtime start`。新插件：
