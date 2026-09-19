@@ -22,7 +22,6 @@ import {
   FileWorkroomCatalog,
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
-  handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
   type AssistantConfig,
@@ -3039,7 +3038,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       }
 
       const approveReply = !workroomAgentTurn && /^\/approve(?:\s|$)/iu.test(message.content.trim())
-        ? handleRuntimeOwnerApproveCommand(
+        ? zhinAgent.ownerApprovals.handleCommand(
             {
               platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
               endpoint: turnAccess.origin.kind === 'im' ? turnAccess.origin.endpoint : '',

@@ -110,12 +110,13 @@ export {
 } from './security/exec-policy.js';
 export {
   OWNER_APPROVE_ALWAYS_TOOL,
-  handleRuntimeOwnerApproveCommand,
-  getEndpointMaster,
-  hasOwnerApproveAlways,
-  addOwnerApproveAlways,
-  formatBashApproveList,
-} from './security/owner-approve-always-store.js';
+  OwnerApprovalRuntime,
+} from './security/owner-approval-runtime.js';
+export type {
+  OwnerApprovalAddress,
+  OwnerApprovalCommandContext,
+  ToolRequesterRole,
+} from './security/owner-approval-runtime.js';
 export {
   handleRuntimeManagementCommand,
 } from './init/runtime-management-commands.js';

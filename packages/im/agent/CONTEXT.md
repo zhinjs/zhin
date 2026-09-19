@@ -518,6 +518,8 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | Workroom Kernel | `src/workroom/` | agent | versioned Journal + pure replay/decision；不并入 Subagent |
 | IM 装配 | `basic/cli` Plugin Runtime | composition root | canonical Turn ingress / reply Delivery；不承担 Agent 间通信 |
 
+`ZhinAgent` 同时拥有实例级 `AgentCompactionRuntime` 与 `OwnerApprovalRuntime`。后者是 `/approve always bash`、ICQQ 正则放行和 exec 策略读取的唯一权威；安全策略不从模块全局状态或经典 `Plugin` 树解析审批。
+
 ### 现状 → 理想模块映射
 
 | 理想模块 | 实现路径 | 公开入口 |

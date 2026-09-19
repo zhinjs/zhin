@@ -75,7 +75,6 @@ describe('stability lifecycle (ADR 0014 P2-2)', () => {
     it('collectStabilityMetrics 返回关键计数', async () => {
       const metrics = await collectStabilityMetrics(compactionRuntime, { includeRss: true });
       expect(metrics.compactionStates).toBeGreaterThanOrEqual(0);
-      expect(typeof metrics.pendingOrchestration).toBe('number');
       expect(metrics.rssMb).toBeGreaterThan(0);
     });
 

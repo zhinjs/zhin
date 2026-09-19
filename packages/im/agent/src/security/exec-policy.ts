@@ -7,20 +7,20 @@
  *   4. 复合命令拆分   — `&&` `||` `;` 与管道 `|` 逐段独立检查，deny 优先
  *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号的命令
  *   6. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   7. Owner 信号 — execApprovalMode=ask 时返回拒绝事实；后续放行只走显式 ApprovalPort 或 `/approve`
+ *   7. Owner 信号 — execApprovalMode=ask 时返回拒绝事实；一次性放行走 ApprovalPort，持久策略走 OwnerApprovalRuntime
  */
 
 import type { AgentTool } from '@zhin.js/ai';
 import type { ZhinAgentConfig, ExecApprovalMode } from '../config/index.js';
 import { classifyBashCommand } from './file-policy.js';
 import { validateNetworkCommandUrl } from './network-policy.js';
-import { getCurrentCommMessage } from './comm-message-context.js';
+import { getCurrentCommMessage, getCurrentOwnerApprovalRuntime } from './comm-message-context.js';
 import {
   isIcqqSensitiveSubcommand,
-  matchesBashOwnerExecBypass,
+  ownerApprovalAddressFromMessage,
   resolveToolRequesterRole,
   type ToolRequesterRole,
-} from './owner-approve-always-store.js';
+} from './owner-approval-runtime.js';
 
 // ── 预设命令白名单 ──────────────────────────────────────────────────
 
@@ -455,7 +455,9 @@ function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
   const commMessage = getCurrentCommMessage();
   if (!commMessage?.$adapter || !commMessage?.$endpoint) return false;
   try {
-    return matchesBashOwnerExecBypass(null, commMessage, normalizedSubCommand);
+    const runtime = getCurrentOwnerApprovalRuntime();
+    const address = ownerApprovalAddressFromMessage(commMessage);
+    return runtime && address ? runtime.matchesBashBypass(address, normalizedSubCommand) : false;
   } catch {
     // fail-closed: no bypass if check fails
     return false;

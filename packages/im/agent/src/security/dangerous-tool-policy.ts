@@ -4,7 +4,7 @@ import { getLogger } from '@zhin.js/logger';
 const logger = getLogger('DangerousToolPolicy');
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
-import type { ToolRequesterRole } from './owner-approve-always-store.js';
+import type { ToolRequesterRole } from './owner-approval-runtime.js';
 export interface DangerousToolDecision {
   allowed: boolean;
   needsOwnerApproval?: boolean;

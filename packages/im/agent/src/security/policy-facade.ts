@@ -44,7 +44,7 @@ import {
   type FileToolName,
 } from './dangerous-tool-policy.js';
 import { checkExecPolicyWithOptions, checkTurnExecPolicy, checkUnattendedExecPreset } from './exec-policy.js';
-import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
+import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approval-runtime.js';
 import {
   checkUrlNetworkAccess,
   extractUrlsFromCommand,

@@ -16,7 +16,6 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
-import * as utils from '../src/discovery/utils.js';
 import {
   isDangerousCommand,
   stripEnvVarPrefix,
@@ -33,7 +32,7 @@ import {
   EXEC_PRESETS,
 } from '../src/security/exec-policy.js';
 import type { ZhinAgentConfig } from '../src/config/index.js';
-import { addBashApproveRule } from '../src/security/owner-approve-always-store.js';
+import { OwnerApprovalRuntime, ownerApprovalAddressFromMessage } from '../src/security/owner-approval-runtime.js';
 import { runWithCommMessage } from '../src/security/comm-message-context.js';
 import type { AgentTool } from '@zhin.js/ai';
 
@@ -401,19 +400,25 @@ describe('checkExecPolicy', () => {
 
   it('allowlist: icqq 敏感在 bash 上下文中且 approve rule 正则匹配则放行', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-exec-icqq-'));
-    const getDataSpy = vi.spyOn(utils, 'getDataDir').mockReturnValue(tmpDir);
     const ctx = mockCommMessage({
       adapter: 'icqq',
       endpoint: 'bot1',
       extra: { endpointMaster: 'owner99' },
     });
-    expect(addBashApproveRule(null, ctx, '^icqq\\s+group\\s+kick\\b').ok).toBe(true);
+    const ownerApprovals = new OwnerApprovalRuntime(tmpDir);
+    expect(ownerApprovals.addBashRule(
+      ownerApprovalAddressFromMessage(ctx)!,
+      '^icqq\\s+group\\s+kick\\b',
+    ).ok).toBe(true);
     const config = makeConfig({ execAllowlist: [], execApprovalMode: 'ask' });
     try {
-      const r = runWithCommMessage(ctx, () => checkExecPolicy(config, 'icqq group kick 1 2'));
+      const r = runWithCommMessage(
+        ctx,
+        () => checkExecPolicy(config, 'icqq group kick 1 2'),
+        { ownerApprovals },
+      );
       expect(r.allowed).toBe(true);
     } finally {
-      getDataSpy.mockRestore();
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });

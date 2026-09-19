@@ -17,7 +17,7 @@ export * from './exec-policy.js';
 export * from './network-policy.js';
 export * from './audit-logger.js';
 export * from './comm-message-context.js';
-export * from './owner-approve-always-store.js';
+export * from './owner-approval-runtime.js';
 export * from './sandbox.js';
 export * from './anomaly-detection.js';
 export * from './file-role-policy.js';

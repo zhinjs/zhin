@@ -3,7 +3,7 @@ import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
 import type { AgentMessage, MediaContentBlock, OutputElement, UserMessage } from '@zhin.js/ai';
 import type { Message } from '../resource-hub/types.js';
 import { PromptAccessDeniedError } from './prompt-access.js';
-import { resolveToolRequesterRole } from '../security/owner-approve-always-store.js';
+import { resolveToolRequesterRole } from '../security/owner-approval-runtime.js';
 import { normalizePromptMessages } from './prompt-input.js';
 import { processTextTurn } from '../turn/turn-pipeline.js';
 import type { OnChunkCallback } from '../config/index.js';

@@ -75,8 +75,11 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
     if (approvalDenied) return Object.freeze({ status: 'denied', reason: approvalDenied });
 
     try {
-      const execute = () => runWithCommMessage(options.message, () =>
-        this.#runtime.execute(tool, { ...input }, { toolCallId: toolUseId }));
+      const execute = () => runWithCommMessage(
+        options.message,
+        () => this.#runtime.execute(tool, { ...input }, { toolCallId: toolUseId }),
+        { ownerApprovals: options.host.ownerApprovals },
+      );
       const outcome = options.deferredController
         ? await runWithDeferredTurnController(options.deferredController, execute)
         : await execute();

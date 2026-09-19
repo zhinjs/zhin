@@ -182,7 +182,7 @@ In addition to `contextPaths`, the global context files `~/.config/zhin/AGENTS.m
 
 `execPreset` preset allowlists widen progressively: `readonly` (ls/cat/grep/find etc.) -> `network` (adds curl/wget/ping etc.) -> `development` (adds npm/node/git/python etc.). Regardless of the mode, dangerous commands like `sudo`, `eval`, `dd`, `export` are always rejected, and operations like `rm -rf node_modules` are hard-blocked.
 
-The full check chain is: dangerous blocklist -> environment variable prefix stripping (`FOO=bar cmd` matches against `cmd`) -> wrapper stripping (`timeout 10 cmd`) -> compound command splitting (`&&`/`|` checked segment by segment) -> non-full mode rejects newlines / `$(...)` / backticks -> read-only commands auto-approved. When `execApprovalMode: ask`, commands exceeding permissions trigger **Owner approval**, where a master approves via `/approve` in IM; `allow` approves everything, `deny` rejects everything.
+The full check chain is: dangerous blocklist -> environment variable prefix stripping (`FOO=bar cmd` matches against `cmd`) -> wrapper stripping (`timeout 10 cmd`) -> compound command splitting (`&&`/`|` checked segment by segment) -> non-full mode rejects newlines / `$(...)` / backticks -> read-only commands auto-approved. With `execApprovalMode: ask`, the current Turn requests one-time Owner approval through its `ApprovalPort`. `/approve always bash` and `/approve rule <regex>` only manage persistent bypasses for that Endpoint. V1 approval files are not migrated online; rebuild retained rules explicitly before upgrading. `allow` approves everything and `deny` rejects everything.
 
 ## Next steps
 

@@ -181,7 +181,7 @@ ai:
 
 `execPreset` 预设白名单逐档放宽：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 类操作硬阻断。
 
-完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时越权命令触发 **Owner 审批**，由 master 在 IM 内 `/approve` 放行；`allow` 全部放行，`deny` 全部拒绝。
+完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时，当前 Turn 通过 `ApprovalPort` 请求一次性 Owner 审批；`/approve always bash` 与 `/approve rule <正则>` 只管理本 Endpoint 的持久放行。旧版 V1 审批文件不会在线迁移，升级前必须显式重建规则。`allow` 全部放行，`deny` 全部拒绝。
 
 ## 下一步
 

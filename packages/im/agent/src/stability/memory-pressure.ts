@@ -1,12 +1,8 @@
 /**
- * ADR 0014 P2-1 — 关键全局 Map / RSS 内存压力监控
+ * ADR 0014 P2-1 — 实例级 Agent 状态 / RSS 内存压力监控
  */
 import { formatCompact, Logger, getLogger } from '@zhin.js/logger';
 import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
-import {
-  getPendingOrchestrationCount,
-  evictPendingOrchestrationIfOverPressure,
-} from '../security/owner-approve-always-store.js';
 
 const defaultLogger = getLogger('StabilityMonitor');
 
@@ -21,7 +17,6 @@ export interface StabilityMetricCollector {
 
 export interface StabilityMetricSnapshot {
   compactionStates: number;
-  pendingOrchestration: number;
   rssMb?: number;
   [key: string]: number | undefined;
 }
@@ -40,12 +35,6 @@ function defaultCollectors(compactionRuntime: AgentCompactionRuntime): Stability
     collect: () => compactionRuntime.stateCount,
     threshold: 4000,
     evict: () => compactionRuntime.evictIfOverPressure(),
-  },
-  {
-    name: 'pendingOrchestration',
-    collect: getPendingOrchestrationCount,
-    threshold: 100,
-    evict: evictPendingOrchestrationIfOverPressure,
   }];
 }
 
@@ -55,7 +44,6 @@ export async function collectStabilityMetrics(
 ): Promise<StabilityMetricSnapshot> {
   const snapshot: StabilityMetricSnapshot = {
     compactionStates: compactionRuntime.stateCount,
-    pendingOrchestration: getPendingOrchestrationCount(),
   };
 
   if (options.includeRss !== false && typeof process.memoryUsage === 'function') {

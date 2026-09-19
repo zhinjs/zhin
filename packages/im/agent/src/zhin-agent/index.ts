@@ -31,6 +31,7 @@ import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { ContextSystem } from '../context/context-system.js';
 import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
 import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
+import { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
 import { AgentEventBus } from '../event/ai-event-bus.js';
@@ -158,6 +159,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();
+  readonly ownerApprovals = new OwnerApprovalRuntime();
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;
