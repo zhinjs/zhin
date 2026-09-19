@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-satori
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/satori.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$satori.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - `@zhin.js/host-http` — Webhook mode requires `httpHostToken` to register POST route
@@ -100,7 +100,7 @@ The SDK sends POST requests to `path`, with header `Satori-Opcode: 0` indicating
 
 ## AI Tools
 
-See `agent/skills/satori.md` for skill documentation.
+See `agent/skills/$satori.md` for skill documentation.
 
 ## Protocol Documentation
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=acb652bd61620344 -->
+<!-- sync-adapter-docs:sha256=bfdbe70ebe6f077c -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式薄入口 `adapters/dingtalk.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式薄入口 `adapters/$dingtalk.ts`（`defineAdapter`）
 - 实现：`src/endpoint.ts`（生命周期/出站/OpenAPI）、`src/webhook.ts`（验签入站）、`src/protocol.ts`
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）

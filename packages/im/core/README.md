@@ -36,7 +36,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/[name].ts
+// commands/hello/$[name].ts
 import { defineCommand } from '@zhin.js/command'
 
 export default defineCommand({

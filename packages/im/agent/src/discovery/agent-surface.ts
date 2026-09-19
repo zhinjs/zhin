@@ -111,7 +111,7 @@ function listTsFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   try {
     return fs.readdirSync(dir)
-      .filter((f) => f.endsWith('.ts') || f.endsWith('.js'))
+      .filter((f) => f.startsWith('$') && (f.endsWith('.ts') || f.endsWith('.js')))
       .map((f) => path.join(dir, f));
   } catch {
     return [];
@@ -122,7 +122,8 @@ function listSkillFiles(dir: string): string[] {
   if (!fs.existsSync(dir)) return [];
   try {
     return fs.readdirSync(dir)
-      .filter((f) => f.endsWith('.md') || f.endsWith('.ts') || f.endsWith('.js'))
+      .filter((f) => f.startsWith('$')
+        && (f.endsWith('.md') || f.endsWith('.ts') || f.endsWith('.js')))
       .map((f) => path.join(dir, f));
   } catch {
     return [];

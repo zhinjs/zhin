@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/wechat-mp.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$wechat-mp.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { httpHostToken } from '@zhin.js/host-http';

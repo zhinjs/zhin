@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/wecom.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$wecom.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / protocol).
  */
 import { defineAdapter } from 'zhin.js/adapter';

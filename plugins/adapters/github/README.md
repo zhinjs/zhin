@@ -84,7 +84,7 @@ plugins:
 | 路径 | 职责 |
 |------|------|
 | `plugin.ts` | 插件元数据；有 DatabaseHost 时定义 `github_oauth_users` |
-| `adapters/github.ts` | 薄 `defineAdapter` 入口（发现约定） |
+| `adapters/$github.ts` | 薄 `defineAdapter` 入口（发现约定） |
 | `src/endpoint.ts` | Endpoint 生命周期、出站、admit |
 | `src/webhook.ts` | HMAC 验签与事件分发 |
 | `src/oauth-users.ts` | OAuth 表 SSOT + token 查找 |

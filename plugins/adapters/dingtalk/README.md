@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式薄入口 `adapters/dingtalk.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式薄入口 `adapters/$dingtalk.ts`（`defineAdapter`）
 - 实现：`src/endpoint.ts`（生命周期/出站/OpenAPI）、`src/webhook.ts`（验签入站）、`src/protocol.ts`
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）

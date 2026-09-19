@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a748d3c6ac405b79 -->
+<!-- sync-adapter-docs:sha256=6eab728f14fe8cfe -->
 
 # @zhin.js/adapter-slack
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/slack.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$slack.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -129,7 +129,7 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/`（邀请、话题、反应、置顶、编辑等） |
-| 技能说明 | `agent/skills/slack.md` |
+| 技能说明 | `agent/skills/$slack.md` |
 
 ## 限制
 

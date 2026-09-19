@@ -142,7 +142,7 @@ export default definePlugin({
 
 ### 第 5 步：生成首个命令
 
-`commands/hello.ts`（文件路径即路由 `hello`）：
+`commands/$hello.ts`（文件路径即路由 `hello`）：
 
 ```typescript
 import { defineCommand } from 'zhin.js/command';

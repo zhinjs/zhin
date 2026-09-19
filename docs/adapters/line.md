@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2d76da43136b4f89 -->
+<!-- sync-adapter-docs:sha256=a38a94594b5c33b7 -->
 
 # @zhin.js/adapter-line
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-line
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/line.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$line.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -100,7 +100,7 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
-| 技能说明 | `agent/skills/line.md` |
+| 技能说明 | `agent/skills/$line.md` |
 
 ## 已知限制
 

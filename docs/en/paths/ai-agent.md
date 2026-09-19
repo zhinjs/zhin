@@ -39,7 +39,7 @@ ai:
 
 ## 3. Declare a Tool
 
-Create `tools/weather.ts`:
+Create `tools/$weather.ts`:
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
@@ -62,7 +62,7 @@ The file path supplies the local name. The Tool enters the generation catalog, t
 
 ## 4. Add plugin-owned context
 
-Create `agent/prompt-sections/product-language.ts`:
+Create `agent/prompt-sections/$product-language.ts`:
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';

@@ -23,7 +23,7 @@ describe('legacy capability migration', () => {
     expect(plan.changes).toEqual([expect.objectContaining({
       pattern: 'gh pr <title:text>',
       source,
-      target: join(root, 'commands/gh/pr/[title].ts'),
+      target: join(root, 'commands/gh/pr/$[title].ts'),
     })]);
     expect(plan.diagnostics.map((item) => item.message)).toEqual([
       'Command action captures source bindings: prefix',
@@ -62,7 +62,7 @@ describe('legacy capability migration', () => {
 
     expect(migrator.summarize(plan)).toEqual({ automatic: 1, manual: 0, errors: 1 });
     await expect(migrator.apply(plan)).rejects.toThrow('blocking errors');
-    await expect(readFile(join(root, 'commands/status.ts'), 'utf8')).rejects.toThrow();
+    await expect(readFile(join(root, 'commands/$status.ts'), 'utf8')).rejects.toThrow();
   });
 
   it('extracts stateless middleware and components into their feature directories', async () => {
@@ -90,12 +90,12 @@ addComponent(StatusCard);
       {
         kind: 'middleware',
         identity: 'request-audit',
-        target: join(root, 'middlewares/request-audit.ts'),
+        target: join(root, 'middlewares/$request-audit.ts'),
       },
       {
         kind: 'component',
         identity: 'status-card',
-        target: join(root, 'components/status-card.ts'),
+        target: join(root, 'components/$status-card.ts'),
       },
     ]);
     for (const change of plan.changes) {
@@ -107,11 +107,11 @@ addComponent(StatusCard);
     }
 
     await migrator.apply(plan);
-    await expect(readFile(join(root, 'middlewares/request-audit.ts'), 'utf8'))
+    await expect(readFile(join(root, 'middlewares/$request-audit.ts'), 'utf8'))
       .resolves.toContain('defineMiddleware');
-    await expect(readFile(join(root, 'components/status-card.ts'), 'utf8'))
+    await expect(readFile(join(root, 'components/$status-card.ts'), 'utf8'))
       .resolves.toContain('defineComponent');
-    const component = await readFile(join(root, 'components/status-card.ts'), 'utf8');
+    const component = await readFile(join(root, 'components/$status-card.ts'), 'utf8');
     expect(component).toContain('`first\nsecond:${props.label}`');
     expect(component).not.toContain('`first\n  second:${props.label}`');
   });

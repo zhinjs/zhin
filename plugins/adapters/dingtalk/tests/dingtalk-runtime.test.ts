@@ -13,7 +13,7 @@ import {
   type DingTalkMessage,
 } from '../src/protocol.js';
 import { dingtalkClient } from '../src/client.js';
-import defineDingTalkAdapter from '../adapters/dingtalk.js';
+import defineDingTalkAdapter from '../adapters/$dingtalk.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];

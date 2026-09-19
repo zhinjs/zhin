@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
-import statusCommand from '../commands/process-status.ts';
-import statusTool from '../tools/process-status.ts';
+import statusCommand from '../commands/$process-status.ts';
+import statusTool from '../tools/$process-status.ts';
 import {
   classifyStartup,
   formatProcessStatus,

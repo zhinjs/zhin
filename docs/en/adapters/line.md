@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-line
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/line.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$line.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
@@ -100,7 +100,7 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
 | Platform tools (2) | `agent/tools/` (`line_get_profile`, `line_get_group_members`) |
-| Skill documentation | `agent/skills/line.md` |
+| Skill documentation | `agent/skills/$line.md` |
 
 ## Known Limitations
 

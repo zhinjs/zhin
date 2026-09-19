@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4b066ad98cea6c9a -->
+<!-- sync-adapter-docs:sha256=73de60546ec6959e -->
 
 # @zhin.js/adapter-discord
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/discord.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$discord.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -87,7 +87,7 @@ plugins:
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（7 个） | `agent/tools/`（`discord_*`：角色、Embed、反应等） |
-| 技能说明 | `agent/skills/discord.md` |
+| 技能说明 | `agent/skills/$discord.md` |
 
 工具使用 Discord Snowflake ID 标识 `guild_id`、`user_id`、`channel_id`。
 

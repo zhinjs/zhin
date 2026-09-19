@@ -6,7 +6,7 @@ import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineSatoriAdapter from '../adapters/satori.js';
+import defineSatoriAdapter from '../adapters/$satori.js';
 import {
   SatoriWebhookEndpoint,
   SatoriWsEndpoint,

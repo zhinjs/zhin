@@ -77,7 +77,7 @@ Run `icqq login` first, then start Zhin.
 
 ## Architecture
 
-- `plugin.ts` + `adapters/icqq.ts` (`defineAdapter`)
+- `plugin.ts` + `adapters/$icqq.ts` (`defineAdapter`)
 - Protocol constants / configuration: `src/protocol.ts`
 - IPC client: `src/ipc-client.ts` (no host-http)
 - Console loginAssist / host-router deferred

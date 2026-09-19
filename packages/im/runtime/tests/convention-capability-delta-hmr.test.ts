@@ -20,7 +20,7 @@ afterEach(async () => {
 describe('Convention Capability delta HMR', () => {
   it('adds an unowned Command without rerunning Plugin setup or Adapter projection', async () => {
     const fixture = await createRuntime(['existing']);
-    const source = join(fixture.root, 'commands/added.ts');
+    const source = join(fixture.root, 'commands/$added.ts');
     await touch(source);
     fixture.modules.set(source, { default: command('added') });
 
@@ -35,7 +35,7 @@ describe('Convention Capability delta HMR', () => {
 
   it('removes a deleted Command Slot without rerunning Plugin setup or Adapter projection', async () => {
     const fixture = await createRuntime(['remove']);
-    const source = join(fixture.root, 'commands/remove.ts');
+    const source = join(fixture.root, 'commands/$remove.ts');
     await rm(source);
     fixture.modules.delete(source);
 
@@ -50,8 +50,8 @@ describe('Convention Capability delta HMR', () => {
 
   it('moves a Command from its old Slot ID to a newly discovered Slot ID', async () => {
     const fixture = await createRuntime(['old']);
-    const oldSource = join(fixture.root, 'commands/old.ts');
-    const nextSource = join(fixture.root, 'commands/new.ts');
+    const oldSource = join(fixture.root, 'commands/$old.ts');
+    const nextSource = join(fixture.root, 'commands/$new.ts');
     await rm(oldSource);
     await touch(nextSource);
     fixture.modules.delete(oldSource);
@@ -93,7 +93,7 @@ async function createRuntime(names: readonly string[]) {
   modules.set(join(root, 'packages/command/index.ts'), { default: commandFeature });
   modules.set(join(root, 'packages/adapter/index.ts'), { default: adapterFeature });
   for (const name of names) {
-    modules.set(join(root, `commands/${name}.ts`), { default: command(name) });
+    modules.set(join(root, `commands/$${name}.ts`), { default: command(name) });
   }
   const runtime = new RootRuntime({
     projectRoot: root,
@@ -163,7 +163,7 @@ async function createProject(names: readonly string[]): Promise<string> {
     touch(join(root, 'plugin.ts')),
     touch(join(root, 'packages/adapter/index.ts')),
     touch(join(root, 'packages/command/index.ts')),
-    ...names.map((name) => touch(join(root, `commands/${name}.ts`))),
+    ...names.map((name) => touch(join(root, `commands/$${name}.ts`))),
   ]);
   return realpath(root);
 }

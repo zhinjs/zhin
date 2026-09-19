@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/email.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$email.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { EmailEndpoint } from '../src/endpoint.js';

@@ -14,6 +14,7 @@ import { bridgeAuthoringConnection, bridgeAuthoringTool } from '../src/authoring
 import { defineConnection } from '../src/authoring/define-connection.js';
 import {
   collectPluginAgentRoots,
+  discoverPluginAgentSurface,
   resolveAuthoringImportPath,
 } from '../src/discovery/agent-surface.js';
 import path from 'node:path';
@@ -59,7 +60,7 @@ describe('authoring define* helpers', () => {
       runtimeName: 'fixture_read_account',
       slotName: 'read_account',
       pluginName: 'fixture',
-      filePath: '/fixture/agent/tools/read_account.ts',
+      filePath: '/fixture/agent/tools/$read_account.ts',
       definition,
     });
     const message = {
@@ -89,7 +90,34 @@ describe('namespaceAuthoringName', () => {
 
 describe('slotNameFromFile', () => {
   it('strips extension', () => {
-    expect(slotNameFromFile('/p/agent/tools/get_weather.ts')).toBe('get_weather');
+    expect(slotNameFromFile('/p/agent/tools/$get_weather.ts')).toBe('get_weather');
+  });
+});
+
+describe('agent authoring entry discovery', () => {
+  it('loads only $-marked files and leaves adjacent helpers importable', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-agent-surface-'));
+    const tools = path.join(root, 'agent', 'tools');
+    fs.mkdirSync(tools, { recursive: true });
+    fs.writeFileSync(path.join(tools, 'helper.js'), 'export const value = 1;\n');
+    fs.writeFileSync(path.join(tools, '$lookup.js'), [
+      "import { value } from './helper.js';",
+      "const KIND = Symbol.for('zhin.authoring.kind');",
+      "export default { [KIND]: 'tool', description: 'lookup', execute: () => value };",
+      '',
+    ].join('\n'));
+    try {
+      const surface = await discoverPluginAgentSurface({
+        pluginName: 'fixture',
+        plugin: {} as never,
+        packageRoot: root,
+        agentDir: path.join(root, 'agent'),
+        evalsDir: path.join(root, 'evals'),
+      });
+      expect(surface?.tools.map((tool) => tool.slotName)).toEqual(['lookup']);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -143,10 +171,10 @@ describe('discoverWorkspaceAgents fractal', () => {
 describe('resolveAuthoringImportPath', () => {
   it('prefers lib output when present', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-pkg-'));
-    const libTool = path.join(root, 'lib', 'agent', 'tools', 'sync.js');
+    const libTool = path.join(root, 'lib', 'agent', 'tools', '$sync.js');
     fs.mkdirSync(path.dirname(libTool), { recursive: true });
     fs.writeFileSync(libTool, 'export default {}');
-    const srcTool = path.join(root, 'agent', 'tools', 'sync.ts');
+    const srcTool = path.join(root, 'agent', 'tools', '$sync.ts');
     fs.mkdirSync(path.dirname(srcTool), { recursive: true });
     fs.writeFileSync(srcTool, 'export default {}');
     expect(resolveAuthoringImportPath(root, srcTool)).toBe(libTool);

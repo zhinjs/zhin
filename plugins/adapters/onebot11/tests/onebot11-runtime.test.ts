@@ -611,7 +611,7 @@ describe('onebot11 plugin runtime adapter', () => {
   });
 
   it('creates reverse-wss endpoint when httpHostToken provided', async () => {
-    const { default: adapter } = await import('../adapters/onebot11.js');
+    const { default: adapter } = await import('../adapters/$onebot11.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),

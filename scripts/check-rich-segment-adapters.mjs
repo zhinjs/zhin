@@ -28,7 +28,7 @@ for (const name of entries) {
   const entryDir = path.join(adaptersDir, name, 'adapters');
   if (!fs.existsSync(entryDir)) continue;
   const files = fs.readdirSync(entryDir)
-    .filter((f) => f.endsWith('.ts'))
+    .filter((f) => f.startsWith('$') && f.endsWith('.ts'))
     .map((f) => path.join(entryDir, f));
   if (files.length === 0) continue;
 

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ee76f715c5962852 -->
+<!-- sync-adapter-docs:sha256=245948a038c59636 -->
 
 # @zhin.js/adapter-icqq
 
@@ -148,7 +148,7 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 
 ## 架构
 
-- `plugin.ts` + `adapters/icqq.ts`：Plugin Runtime 入口与 `defineAdapter` 声明
+- `plugin.ts` + `adapters/$icqq.ts`：Plugin Runtime 入口与 `defineAdapter` 声明
 - `src/endpoint.ts`：组合 ICQQ `Client`，只协调账号 transport、Zhin lifecycle 与各能力端口
 - `src/content-resolver.ts`：保存已观察消息，并按深度和条数限制递归展开合并转发
 - `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息

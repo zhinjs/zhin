@@ -5,7 +5,7 @@ import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineNapCatAdapter from '../adapters/napcat.js';
+import defineNapCatAdapter from '../adapters/$napcat.js';
 import {
   NapCatHttpEndpoint,
   NapCatWssEndpoint,

@@ -14,6 +14,14 @@ export interface TypeScriptConventionOptions {
   readonly separator?: string;
 }
 
+export const conventionEntryPrefix = '$';
+
+/** Returns the filename without its explicit convention-entry marker. */
+export function conventionEntryFileName(value: string): string | undefined {
+  if (!value.startsWith(conventionEntryPrefix) || value.length === 1) return undefined;
+  return value.slice(conventionEntryPrefix.length);
+}
+
 /** Discovers stable, nested local names without assigning Feature semantics. */
 export function typeScriptModules(
   options: TypeScriptConventionOptions,
@@ -66,8 +74,10 @@ async function* discoverDirectory(
       );
       continue;
     }
-    if (entry.kind !== 'file' || !isModule(entry.name, tsx)) continue;
-    const localName = parse(entry.name).name;
+    if (entry.kind !== 'file') continue;
+    const moduleName = conventionEntryFileName(entry.name);
+    if (!moduleName || !isModule(moduleName, tsx)) continue;
+    const localName = parse(moduleName).name;
     if (discoveredNames.has(localName)) continue;
     const preferred = preferredSibling(
       entries,
@@ -110,6 +120,6 @@ function preferredSibling(
       .map((entry) => entry.name),
   );
   return extensions
-    .map((extension) => `${localName}.${extension}`)
+    .map((extension) => `${conventionEntryPrefix}${localName}.${extension}`)
     .find((name) => names.has(name));
 }

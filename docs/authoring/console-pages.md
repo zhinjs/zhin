@@ -9,10 +9,10 @@ description: pages/ 约定、@zhin.js/page 与 @zhin.js/layout、客户端构建
 
 ## pages/ 约定（@zhin.js/page）
 
-插件包根目录的 `pages/` 下，每个 `.tsx` / `.ts` 文件（小写 kebab 命名）是一个页面：**默认导出 React 组件**，并用命名导出 `meta` 声明元数据（`definePage` 来自 `@zhin.js/console-contract`）：
+插件包根目录的 `pages/` 下，只有 `$*.tsx` / `$*.ts` 文件（小写 kebab 命名）是页面：**默认导出 React 组件**，并用命名导出 `meta` 声明元数据（`definePage` 来自 `@zhin.js/console-contract`）。未加 `$` 的组件和工具文件不会成为页面，可以与页面放在同一目录：
 
 ```tsx
-// pages/index.tsx（plugins/adapters/sandbox）
+// pages/$index.tsx（plugins/adapters/sandbox）
 import { definePage } from '@zhin.js/console-contract';
 import SandboxChat from './SandboxChat';
 
@@ -44,9 +44,9 @@ export default function SandboxPage() {
 
 | 文件 | 所属插件 | 路由 |
 | --- | --- | --- |
-| `pages/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom.tsx` | root（应用） | `/p-workroom` |
-| `pages/index.tsx` | root（应用） | `/` |
+| `pages/$index.tsx` | `sandbox` | `/sandbox` |
+| `pages/$workroom.tsx` | root（应用） | `/p-workroom` |
+| `pages/$index.tsx` | root（应用） | `/` |
 
 即：`index` 映射到插件路径本身（不带叶子段），其它文件映射为 `p-<name>` 叶子。路由冲突（两个页面算出同一路由）在启动期报错。
 
@@ -60,7 +60,7 @@ export default function SandboxPage() {
 
 ```mermaid
 flowchart LR
-    A["pages/*.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild 打包)"]
+    A["pages/$*.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild 打包)"]
     B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
     B --> D["pages.manifest.json"]
     C --> E["GET /assets/client/*<br/>(immutable 缓存)"]
@@ -94,7 +94,7 @@ sandbox 适配器（`plugins/adapters/sandbox`）是这套机制的标准消费�
 }
 ```
 
-两个 Feature 各管一摊：`@zhin.js/adapter` 发现 `adapters/` 下的适配器（WebSocket `/sandbox` Endpoint）；`@zhin.js/page` 发现 `pages/index.tsx`，于是 Console 里出现 **`/sandbox` 聊天页**。`SandboxChat` 组件通过 WebSocket 连到 Host 的 `/sandbox`（base 与 token 见 `pages/sandboxTransport.ts`），收发消息走统一的 IM 链路——在页面里发消息等价于一个真实平台的入站消息，会经过中间件、命令匹配、AI 未命中处理。
+两个 Feature 各管一摊：`@zhin.js/adapter` 发现 `adapters/` 下的适配器（WebSocket `/sandbox` Endpoint）；`@zhin.js/page` 发现 `pages/$index.tsx`，于是 Console 里出现 **`/sandbox` 聊天页**。`SandboxChat` 组件通过 WebSocket 连到 Host 的 `/sandbox`（base 与 token 见 `pages/sandboxTransport.ts`），收发消息走统一的 IM 链路——在页面里发消息等价于一个真实平台的入站消息，会经过中间件、命令匹配、AI 未命中处理。
 
 这让「无真实平台调试」成为默认开发路径：`pnpm dev`（examples/minimal-bot）起的 Sandbox + Console 即可验证命令、组件渲染与 Agent 行为。页面对出站 html 段是内嵌渲染（sandbox 适配器直接消费 html，不做图片/文本归一化，见[中间件与组件](./middleware-components.md)）。
 

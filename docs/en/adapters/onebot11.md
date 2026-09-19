@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-onebot11
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/onebot11.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$onebot11.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -83,8 +83,8 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 | Category | Path |
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/set_title.ts` -> `onebot11_set_title` |
-| Skill documentation | `agent/skills/onebot11.md` |
+| Platform tools | `agent/tools/$set_title.ts` -> `onebot11_set_title` |
+| Skill documentation | `agent/skills/$onebot11.md` |
 
 ## Migration Notes (Plugin Runtime)
 

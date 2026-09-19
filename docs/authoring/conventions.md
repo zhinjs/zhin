@@ -1,6 +1,6 @@
 # 约定目录
 
-在插件包根目录下放一个 `commands/` 文件夹、往里丢一个 `.ts` 文件，命令就出现了——不用在任何地方注册。这组会被 Feature 发现机制自动扫描的目录就是**约定目录**：每个目录对应一个 Feature 包（feature provider），目录里的文件按命名规则映射为能力（capability）。发现流程：
+在插件包根目录下放一个 `commands/` 文件夹、往里放一个 `$hello.ts`，命令就出现了——不用在任何地方注册。这组会被 Feature 发现机制自动扫描的目录就是**约定目录**：每个目录对应一个 Feature 包（feature provider），只有 `$` 开头的文件会映射为能力（capability）。同目录的 `helper.ts`、类型和测试文件都是普通模块，可以被入口自由引用。发现流程：
 
 ```mermaid
 flowchart LR
@@ -22,48 +22,48 @@ flowchart LR
 
 | 目录 | 文件形态 | 递归 | target | Feature 包 | featureId | 默认导出 |
 | --- | --- | --- | --- | --- | --- | --- |
-| `commands/` | `.ts` / `.tsx`，支持动态参数文件 | 是（子目录拼层级） | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
-| `middlewares/` | `.ts` | 是 | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
-| `handlers/` | `.ts` | 是（`/` 分段；省略 `event` 时映为 `.` 事件名） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
-| `components/` | `.ts` / `.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
-| `adapters/` | `.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
-| `tools/` | `.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
-| `agent/prompt-sections/` | `.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
+| `commands/` | `$*.ts` / `$*.tsx`，支持动态参数文件 | 是（子目录拼层级） | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
+| `middlewares/` | `$*.ts` | 是 | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
+| `handlers/` | `$*.ts` | 是（`/` 分段；省略 `event` 时映为 `.` 事件名） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
+| `components/` | `$*.ts` / `$*.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
+| `adapters/` | `$*.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
+| `tools/` | `$*.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `agent/prompt-sections/` | `$*.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
 | `agents/` | `*.agent.md` | 否 | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown 文本 |
-| `mcp/` | `.ts` | 否 | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
-| `pages/` | `.ts` / `.tsx`，含 `$nav` / `$footer` 布局槽 | 否 | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | 页面构件 |
+| `mcp/` | `$*.ts` | 否 | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
+| `pages/` | `$*.ts` / `$*.tsx`，`$nav` / `$footer` 为布局槽 | 否 | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | 页面构件 |
 
 ## 命名规则
 
-通用段规则：目录名、普通文件名去扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）。不匹配的文件被跳过。
+`$` 只标记入口，不属于 `localName`。没有 `$` 的文件不会被发现，也不会被校验为 capability。入口去掉 `$` 和扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）；目录段沿用同一规则。
 
-**例外：`commands/`** 静态段还允许 Unicode 名（如 `赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`[name].ts` 等）仍限 ASCII。`tools/` 额外允许 ASCII snake（如 `send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
+**例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。`tools/` 额外允许 ASCII snake（如 `$send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
 
 各目录的补充规则：
 
 | 目录 | localName 推导 | 示例 |
 | --- | --- | --- |
-| `commands/` | 子目录与文件名用 `/` 拼接；静态段可为 ASCII kebab 或 Unicode 名（如 `赞我`）；动态参数文件用 Next.js 风格方括号声明形态并映射为 `$name` 段：`[name].ts(x)` 必需、`[[name]].ts(x)` 可选、`[...name].ts(x)` 捕获所有、`[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/lottery-today.ts` → `lottery-today`；`commands/赞我.ts` → `赞我`；`commands/lottery/[[game]].ts` → `lottery/$game` |
-| `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/keyword-reply.ts` → `keyword-reply` |
-| `handlers/` | 相对路径去扩展名，`/` 拼接为 capability localName；省略 `event` 时把 `/` 映成 `.` 作为 Lifecycle 事件名 | `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` |
-| `components/` | 相对路径去扩展名，`/` 拼接 | `components/share-music.ts` → `share-music` |
-| `adapters/` | 同上 | `adapters/napcat.ts` → `napcat` |
-| `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/music-search.ts` → `music-search`；`tools/send_user_like.ts` → `send_user_like` |
-| `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/rules.ts` → `project/rules` |
+| `commands/` | 子目录与文件名用 `/` 拼接；静态段可为 ASCII kebab 或 Unicode 名（如 `$赞我.ts`）；动态参数入口用 Next.js 风格方括号声明形态并映射为 `$name` 段：`$[name].ts(x)` 必需、`$[[name]].ts(x)` 可选、`$[...name].ts(x)` 捕获所有、`$[[...name]].ts(x)` 可选捕获所有；类型与默认值在 `defineCommand({ params })` 中声明 | `commands/$lottery-today.ts` → `lottery-today`；`commands/$赞我.ts` → `赞我`；`commands/lottery/$[[game]].ts` → `lottery/$game` |
+| `middlewares/` | 相对路径去扩展名，`/` 拼接 | `middlewares/$keyword-reply.ts` → `keyword-reply` |
+| `handlers/` | 相对路径去扩展名，`/` 拼接为 capability localName；省略 `event` 时把 `/` 映成 `.` 作为 Lifecycle 事件名 | `handlers/message/$receive.ts` → localName `message/receive` → event `message.receive` |
+| `components/` | 相对路径去扩展名，`/` 拼接 | `components/$share-music.ts` → `share-music` |
+| `adapters/` | 同上 | `adapters/$napcat.ts` → `napcat` |
+| `tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `tools/$music-search.ts` → `music-search`；`tools/$send_user_like.ts` → `send_user_like` |
+| `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
 | `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 文件名去掉 `.agent.md` 后缀 | `agents/planner.agent.md` → `planner` |
-| `mcp/` | 文件名去扩展名（不递归） | `mcp/my-server.ts` → `my-server` |
-| `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/workroom.tsx` → `workroom`；`pages/$nav.tsx` → `nav` |
+| `mcp/` | 文件名去扩展名（不递归） | `mcp/$my-server.ts` → `my-server` |
+| `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/$workroom.tsx` → `workroom`；`pages/$nav.tsx` → `nav` |
 
-命令动态参数文件的方括号语法写错会抛 `CommandPathSyntaxError`，提示 `expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)`；有默认值时文件名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。
+命令动态参数文件的方括号语法写错会抛 `CommandPathSyntaxError`，提示 `expected $[name].ts(x), $[[name]].ts(x), $[...name].ts(x) or $[[...name]].ts(x)`；有默认值时文件名必须用双方括号，且 `params` 中必须声明对应参数，否则同样报错。
 
 ## 各目录的最小形态
 
 ### commands/ — `defineCommand`
 
 ```ts
-// plugins/utils/lottery/commands/lottery-today.ts
+// plugins/utils/lottery/commands/$lottery-today.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand<LotteryConfig>({
@@ -78,7 +78,7 @@ export default defineCommand<LotteryConfig>({
 ### middlewares/ — `defineMiddleware`
 
 ```ts
-// plugins/utils/group-suite/middlewares/keyword-reply.ts（节选）
+// plugins/utils/group-suite/middlewares/$keyword-reply.ts（节选）
 import { defineMiddleware } from 'zhin.js/middleware';
 
 export default defineMiddleware<Message, GroupSuiteConfig>({
@@ -96,7 +96,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ — `defineHandler`
 
-按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/receive.ts` → `notice.receive`）。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
+按 **Lifecycle 事件名** 注册监听器（无 `next()` 链）。目录路径用 `/` 作为 capability localName；省略 `event` 时把路径中的 `/` 映成 `.` 得到事件名（如 `handlers/notice/$receive.ts` → `notice.receive`）。从 `@zhin.js/core/feature/handler` 导入时，`Plugin.Lifecycle` 已并入 `HandlerEventMap`，写 `event: 'message.receive'` 时参数类型可推断。
 
 依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。`ImRuntime` 会分发：
 
@@ -113,7 +113,7 @@ Handler 的 `this` 为 `HandlerContext`：
 与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
 
 ```ts
-// handlers/message/receive.ts
+// handlers/message/$receive.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -126,7 +126,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/request/receive.ts
+// handlers/request/$receive.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -138,7 +138,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/system/receive.ts — 登录扫码等
+// handlers/system/$receive.ts — 登录扫码等
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -155,7 +155,7 @@ export default defineHandler({
 ### adapters/ — `defineAdapter`
 
 ```ts
-// plugins/adapters/napcat/adapters/napcat.ts（节选）
+// plugins/adapters/napcat/adapters/$napcat.ts（节选）
 import { defineAdapter } from 'zhin.js/adapter';
 
 export default defineAdapter<NapCatAdapterConfig>({
@@ -173,7 +173,7 @@ export default defineAdapter<NapCatAdapterConfig>({
 ### tools/ — `defineAgentTool`
 
 ```ts
-// plugins/utils/music/tools/music-search.ts（节选）
+// plugins/utils/music/tools/$music-search.ts（节选）
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: number }>({
@@ -206,8 +206,8 @@ tools:
 
 ### pages/ — Console 页面
 
-`pages/*.tsx` 编译为浏览器产物，挂进 Remote Console；`examples/full-bot/pages/workroom.tsx` 是现成例子。`$nav.tsx` / `$footer.tsx` 由 `@zhin.js/layout` 消费，注入导航与页脚。
+`pages/$*.tsx` 编译为浏览器产物，挂进 Remote Console；`examples/full-bot/pages/$workroom.tsx` 是现成例子。`$nav.tsx` / `$footer.tsx` 由 `@zhin.js/layout` 消费，注入导航与页脚。
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/workroom.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。

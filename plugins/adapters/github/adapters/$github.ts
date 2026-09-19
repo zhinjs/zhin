@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/github.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$github.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / oauth / protocol).
  */
 import { defineAdapter, type AdapterContext } from 'zhin.js/adapter';

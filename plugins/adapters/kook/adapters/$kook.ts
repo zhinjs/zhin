@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/kook.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$kook.ts` → defineAdapter.
  * Implementation lives under `src/` (endpoint / webhook / ws / protocol).
  */
 import { defineAdapter } from 'zhin.js/adapter';

@@ -452,13 +452,13 @@ ${projectName}/
 ├── schema.json            # 根插件配置契约（JSON Schema）
 ├── ${configFilename}     # 顶层 http/database/ai + plugins.<instanceKey> 配置
 ├── commands/
-│   ├── hello.ts           # /hello 命令（defineCommand）
-│   └── card.ts            # /card -> component("status-card")
+│   ├── $hello.ts          # /hello 命令（defineCommand）
+│   └── $card.ts           # /card -> component("status-card")
 ├── components/
-│   └── status-card.ts     # defineComponent()，Satori 卡片
+│   └── $status-card.ts    # defineComponent()，Satori 卡片
 ├── middlewares/           # 消息中间件（约定目录）
 ├── pages/
-│   ├── index.tsx          # Console 页面（/）
+│   ├── $index.tsx         # Console 页面（/）
 │   ├── $nav.tsx           # 最近插件导航布局
 │   └── $footer.tsx        # 最近插件页脚布局
 ├── tools/                 # AI 工具（启用 AI 后自动发现）
@@ -513,7 +513,7 @@ pnpm dev
 
 ### 新增命令
 
-在 \`commands/\` 下创建 \`.ts\` 文件（默认导出 \`defineCommand\`）：
+在 \`commands/\` 下创建 \`$*.ts\` 入口文件（默认导出 \`defineCommand\`）。未加 \`$\` 的文件是普通模块，可以与命令入口放在同一目录并被导入：
 
 \`\`\`typescript
 import { defineCommand } from 'zhin.js/command';
@@ -526,7 +526,7 @@ export default defineCommand({
 
 ### Console 页面与布局
 
-在 \`pages/\` 下新增页面：\`index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
+在 \`pages/\` 下新增 \`$*.tsx\` 页面：\`$index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
 \`$nav.tsx\` 与 \`$footer.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
 页面元数据必须用 \`@zhin.js/console-contract\` 的 \`definePage\` 声明；默认示例不依赖 React 或浏览器构建工具。
 
@@ -539,7 +539,7 @@ npx zhin setup --adapters   # 选择平台并写入 plugins.<instanceKey> 配置
 ## 🤖 AI Agent
 
 如果初始化时启用了 AI，配置会写入 \`${configFilename}\` 的 \`ai:\` 段，API Key 会写入 \`.env\`。
-启用后 \`tools/\` 约定目录下的 \`defineAgentTool\` 工具会被 Agent 自动发现。
+启用后 \`tools/\` 约定目录下只有 \`$*.ts\` 中的 \`defineAgentTool\` 工具会被 Agent 自动发现。
 
 ## ✅ 验证项目
 
@@ -651,7 +651,7 @@ export default definePlugin({
 
   // pages/ follows the Feature conventions. These components deliberately
   // return text, keeping the initial IM project free of a browser UI runtime.
-  await fs.writeFile(path.join(projectPath, 'pages', 'index.tsx'),
+  await fs.writeFile(path.join(projectPath, 'pages', '$index.tsx'),
 `import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
@@ -678,8 +678,8 @@ export default function ProjectFooter({ owner }: FooterSlotProps) {
 }
 `);
 
-  // commands/hello.ts
-  await fs.writeFile(path.join(projectPath, 'commands', 'hello.ts'),
+  // commands/$hello.ts
+  await fs.writeFile(path.join(projectPath, 'commands', '$hello.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -692,8 +692,8 @@ export default defineCommand({
 });
 `);
 
-  // commands/card.ts（组件渲染示例，对齐 examples/minimal-bot）
-  await fs.writeFile(path.join(projectPath, 'commands', 'card.ts'),
+  // commands/$card.ts（组件渲染示例，对齐 examples/minimal-bot）
+  await fs.writeFile(path.join(projectPath, 'commands', '$card.ts'),
 `import { defineCommand } from 'zhin.js/command';
 import { component } from 'zhin.js/core/runtime';
 
@@ -712,8 +712,8 @@ export default defineCommand({
 });
 `);
 
-  // components/status-card.ts
-  await fs.writeFile(path.join(projectPath, 'components', 'status-card.ts'),
+  // components/$status-card.ts
+  await fs.writeFile(path.join(projectPath, 'components', '$status-card.ts'),
 `import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import {
@@ -760,10 +760,10 @@ export default defineComponent<StatusCardProps>({
 });
 `);
 
-  // tools/echo.ts（AI 启用时生成，defineAgentTool 约定目录）
+  // tools/$echo.ts（AI 启用时生成，defineAgentTool 约定目录）
   if (aiEnabled) {
     await fs.ensureDir(path.join(projectPath, 'tools'));
-    await fs.writeFile(path.join(projectPath, 'tools', 'echo.ts'),
+    await fs.writeFile(path.join(projectPath, 'tools', '$echo.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -824,7 +824,7 @@ export default defineAgentTool<{ message: string }>({
 `);
 
     // 生活助手命令与工具（工具需 AI 启用才挂载 @zhin.js/tool feature）
-    await fs.writeFile(path.join(projectPath, 'commands', 'remind.ts'),
+    await fs.writeFile(path.join(projectPath, 'commands', '$remind.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -835,7 +835,7 @@ export default defineCommand({
 
     if (aiEnabled) {
       await fs.ensureDir(path.join(projectPath, 'tools'));
-      await fs.writeFile(path.join(projectPath, 'tools', 'get_current_time.ts'),
+      await fs.writeFile(path.join(projectPath, 'tools', '$get_current_time.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 

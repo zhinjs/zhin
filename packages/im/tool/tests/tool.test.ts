@@ -33,7 +33,7 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
-  it('brands definitions and discovers only flat tools/*.ts', async () => {
+  it('brands definitions and discovers only flat tools/$*.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
@@ -42,10 +42,10 @@ describe('Tool Feature', () => {
     expect(parseAgentToolDefinition(definition)).toBe(definition);
     const host = new MemoryHost({
       '/project/tools': [
-        { name: 'weather.ts', kind: 'file' },
+        { name: '$weather.ts', kind: 'file' },
         { name: 'nested', kind: 'directory' },
       ],
-    }, new Map([['/project/tools/weather.ts', { default: definition }]]));
+    }, new Map([['/project/tools/$weather.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -60,9 +60,9 @@ describe('Tool Feature', () => {
     });
     const host = new MemoryHost({
       '/project/tools': [
-        { name: 'send_user_like.ts', kind: 'file' },
+        { name: '$send_user_like.ts', kind: 'file' },
       ],
-    }, new Map([['/project/tools/send_user_like.ts', { default: definition }]]));
+    }, new Map([['/project/tools/$send_user_like.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -85,7 +85,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'moderate',
-      source: '/tools/moderate.ts',
+      source: '/tools/$moderate.ts',
       definition,
     });
     const snapshot = createSnapshot([slot], createToken('unused').id);
@@ -137,7 +137,7 @@ describe('Tool Feature', () => {
       owner,
       feature: toolFeatureId,
       localName: 'lookup',
-      source: `/${owner}/tools/lookup.ts`,
+      source: `/${owner}/tools/$lookup.ts`,
       definition: defineAgentTool<{ query: string }>({
         description: `Lookup ${value}`,
         approval: 'never',
@@ -164,7 +164,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'network-policy',
-      source: '/tools/network-policy.ts',
+      source: '/tools/$network-policy.ts',
       definition: defineAgentTool({
         description: 'Inspect execution policy',
         approval: 'never',
@@ -189,7 +189,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'client-id',
-      source: '/tools/client-id.ts',
+      source: '/tools/$client-id.ts',
       definition: defineAgentTool<Record<string, never>>({
         adapter: 'tool-test',
         description: 'Read the native client',
@@ -218,7 +218,7 @@ describe('Tool Feature', () => {
       owner: child,
       feature: toolFeatureId,
       localName: 'history',
-      source: '/plugins/lottery/tools/history.ts',
+      source: '/plugins/lottery/tools/$history.ts',
       definition: defineAgentTool<{ game: string }>({
         description: 'Lottery history',
         approval: 'never',
@@ -240,7 +240,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'save',
-      source: '/tools/save.ts',
+      source: '/tools/$save.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Save value',
         approval: 'never',

@@ -39,7 +39,7 @@ ai:
 
 ## 3. 声明一个 Tool
 
-创建 `tools/weather.ts`：
+创建 `tools/$weather.ts`：
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
@@ -62,7 +62,7 @@ export default defineAgentTool<{ city: string }>({
 
 ## 4. 给插件补充业务上下文
 
-创建 `agent/prompt-sections/product-language.ts`：
+创建 `agent/prompt-sections/$product-language.ts`：
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';

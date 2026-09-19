@@ -170,7 +170,7 @@ try {
     return (await response.json()).data;
   };
   const previous = await details();
-  const command = path.join(project, 'commands', 'hello.ts');
+  const command = path.join(project, 'commands', '$hello.ts');
   await writeFile(command, (await readFile(command, 'utf8')).replace('你好！欢迎使用 Zhin.js！', 'candidate HMR accepted'));
   await waitFor(async () => (await details()).generation > previous.generation, 'command generation replacement');
   await requestHello(origin, token, 'candidate HMR accepted');

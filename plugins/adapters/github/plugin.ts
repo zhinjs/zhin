@@ -19,7 +19,7 @@ const GITHUB_SUBSCRIPTIONS_SCHEMA = {
 
 /**
  * Plugin Runtime GitHub adapter.
- * - Endpoint: `adapters/github.ts`
+ * - Endpoint: `adapters/$github.ts`
  * - OAuth user tokens: define `github_oauth_users` when DatabaseHost is present
  */
 export default definePlugin({

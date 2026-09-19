@@ -24,10 +24,10 @@ Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host�
 
 ### Plugin Runtime（新，`zhin runtime start`）
 
-- `@zhin.js/adapter` — 约定式 `adapters/sandbox.ts`
+- `@zhin.js/adapter` — 约定式 `adapters/$sandbox.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
-- `@zhin.js/page` + `pages/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
+- `@zhin.js/page` + `pages/$index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
 Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
 `ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页
@@ -97,7 +97,7 @@ Sandbox 使用 JSON 消息格式：
 
 ## AI 工具
 
-技能说明见 `agent/skills/sandbox.md`（本地沙箱调试约束）。
+技能说明见 `agent/skills/$sandbox.md`（本地沙箱调试约束）。
 
 
 ## 故障排查

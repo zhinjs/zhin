@@ -2,19 +2,19 @@ import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
-import checkinCommand from '../commands/checkin.ts';
-import mypointsCommand from '../commands/mypoints.ts';
-import rankCommand from '../commands/rank.ts';
-import keywordList from '../commands/keyword-list.ts';
-import keywordAdd from '../commands/keyword-add/[keyword].ts';
-import keywordMiddleware from '../middlewares/keyword-reply.ts';
-import teachCommand from '../commands/teach.ts';
-import teachListCommand from '../commands/teach-list/[[page]].ts';
-import forgetCommand from '../commands/forget.ts';
-import teachMiddleware from '../middlewares/teach-reply.ts';
-import statsCommand from '../commands/stats.ts';
-import mystatsCommand from '../commands/mystats.ts';
-import statsMiddleware from '../middlewares/stats-count.ts';
+import checkinCommand from '../commands/$checkin.ts';
+import mypointsCommand from '../commands/$mypoints.ts';
+import rankCommand from '../commands/$rank.ts';
+import keywordList from '../commands/$keyword-list.ts';
+import keywordAdd from '../commands/keyword-add/$[keyword].ts';
+import keywordMiddleware from '../middlewares/$keyword-reply.ts';
+import teachCommand from '../commands/$teach.ts';
+import teachListCommand from '../commands/teach-list/$[[page]].ts';
+import forgetCommand from '../commands/$forget.ts';
+import teachMiddleware from '../middlewares/$teach-reply.ts';
+import statsCommand from '../commands/$stats.ts';
+import mystatsCommand from '../commands/$mystats.ts';
+import statsMiddleware from '../middlewares/$stats-count.ts';
 import {
   addKeyword,
   listKeywords,

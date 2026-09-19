@@ -57,14 +57,14 @@ sequenceDiagram
 
 Two constraints: `next()` may be called at most once; calling it again throws `Middleware next() called more than once`. Not calling `next()` breaks the chain, and the terminal is not executed. `context` also carries `config` / `use(token)` / `owner` / `generation`, consistent with other capability contexts.
 
-For a real-world example, see `plugins/games/rps/middlewares/rps-choice.ts`: it recognizes game payload text (`rps:<session>:<choice>`) or numeric fallback ("1 Rock 2 Paper 3 Scissors"), processes and `$reply`s on match, otherwise calls `next()` to pass through to subsequent middleware and command dispatch.
+For a real-world example, see `plugins/games/rps/middlewares/$rps-choice.ts`: it recognizes game payload text (`rps:<session>:<choice>`) or numeric fallback ("1 Rock 2 Paper 3 Scissors"), processes and `$reply`s on match, otherwise calls `next()` to pass through to subsequent middleware and command dispatch.
 
 ## defineComponent
 
 `components/` is a convention directory (supporting `.tsx`). Each file default-exports `defineComponent(...)`:
 
 ```tsx
-// components/status-card.ts (distilled from examples/minimal-bot)
+// components/$status-card.ts (distilled from examples/minimal-bot)
 import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';

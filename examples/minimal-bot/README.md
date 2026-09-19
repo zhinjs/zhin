@@ -38,12 +38,12 @@ minimal-bot/
 ├── plugin.ts                 # definePlugin(), Root lifecycle entry
 ├── schema.json               # Root-owned configuration contract
 ├── zhin.config.yml           # plugin / plugins hierarchical config document
-├── adapters/terminal.ts      # defineAdapter(), stdin + stdout Endpoint
-├── commands/hello.ts         # /hello
-├── commands/card.ts          # /card -> component("status-card")
-├── components/status-card.ts # defineComponent(), compiler-free Satori h()
+├── adapters/$terminal.ts      # defineAdapter(), stdin + stdout Endpoint
+├── commands/$hello.ts         # /hello
+├── commands/$card.ts          # /card -> component("status-card")
+├── components/$status-card.ts # defineComponent(), compiler-free Satori h()
 ├── agents/hello.agent.md     # optional Agent capability authoring example
-└── tools/echo.ts             # optional defineAgentTool() example
+└── tools/$echo.ts             # optional defineAgentTool() example
 ```
 
 `package.json#zhin` is the topology SSOT. It mounts `@zhin.js/adapter`, `@zhin.js/command` and

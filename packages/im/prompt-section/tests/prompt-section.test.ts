@@ -24,7 +24,7 @@ describe('Prompt Section Feature', () => {
   });
 
   it('discovers agent/prompt-sections modules as generation-owned sections', async () => {
-    const source = '/project/agent/prompt-sections/project-rules.ts';
+    const source = '/project/agent/prompt-sections/$project-rules.ts';
     const definition = defineAgentPromptSection({
       title: 'Project rules',
       content: 'Prefer repository-local conventions.',
@@ -37,7 +37,7 @@ describe('Prompt Section Feature', () => {
     });
     const host = new MemoryHost({
       '/project/agent/prompt-sections': [
-        { name: 'project-rules.ts', kind: 'file' },
+        { name: '$project-rules.ts', kind: 'file' },
         { name: 'ignored.md', kind: 'file' },
       ],
     }, new Map([[source, { default: definition }]]));
@@ -74,14 +74,14 @@ describe('Prompt Section Feature', () => {
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/rules.ts',
+        source: '/project/agent/prompt-sections/$rules.ts',
         definition: rootDefinition,
       }),
       createCapabilitySlot({
         owner: child,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/plugins/child/agent/prompt-sections/rules.ts',
+        source: '/project/plugins/child/agent/prompt-sections/$rules.ts',
         definition: childDefinition,
       }),
     ];
@@ -100,14 +100,14 @@ describe('Prompt Section Feature', () => {
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/rules.ts',
+        source: '/project/agent/prompt-sections/$rules.ts',
         definition,
       }),
       createCapabilitySlot({
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/duplicate.ts',
+        source: '/project/agent/prompt-sections/$duplicate.ts',
         definition,
       }),
     ];

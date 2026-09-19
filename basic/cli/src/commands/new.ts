@@ -415,7 +415,7 @@ export default defineCommand({
   },
 });
 `;
-    await fs.writeFile(path.join(pluginDir, 'commands', `${pluginName}.ts`), commandTs, 'utf8');
+    await fs.writeFile(path.join(pluginDir, 'commands', `$${pluginName}.ts`), commandTs, 'utf8');
 
     const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
 
@@ -434,7 +434,7 @@ export default defineCommand({
 });
 `;
     await fs.writeFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '$[text].ts'),
       echoCommandTs,
       'utf8',
     );
@@ -442,7 +442,7 @@ export default defineCommand({
 
   if (kind === 'adapter') {
     const adapterTs = `/**
- * Convention entry: discover \`adapters/${pluginName}.ts\` → defineAdapter.
+ * Convention entry: discover \`adapters/$${pluginName}.ts\` → defineAdapter.
  * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
  */
 import { Endpoint, defineAdapter, type EndpointSendRequest } from 'zhin.js/adapter';
@@ -510,7 +510,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
   },
 });
 `;
-    await fs.writeFile(path.join(pluginDir, 'adapters', `${pluginName}.ts`), adapterTs, 'utf8');
+    await fs.writeFile(path.join(pluginDir, 'adapters', `$${pluginName}.ts`), adapterTs, 'utf8');
   }
 
   const readmeIntro =
@@ -662,7 +662,7 @@ async function generateTestFile(
     testContent = `import { describe, expect, it } from 'vitest';
 import { parseAdapterDefinition } from 'zhin.js/adapter';
 import plugin from '../plugin.ts';
-import adapter from '../adapters/${pluginName}.ts';
+import adapter from '../adapters/$${pluginName}.ts';
 
 describe('zhin.js-${pluginName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -729,8 +729,8 @@ describe('zhin.js-${pluginName}', () => {
     testContent = `import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
-import mainCommand from '../commands/${pluginName}.ts';
-import echoCommand from '../commands/${pluginName}-echo/[text].ts';
+import mainCommand from '../commands/$${pluginName}.ts';
+import echoCommand from '../commands/${pluginName}-echo/$[text].ts';
 
 describe('zhin.js-${pluginName}', () => {
   it('defines a valid Plugin Runtime entry', () => {

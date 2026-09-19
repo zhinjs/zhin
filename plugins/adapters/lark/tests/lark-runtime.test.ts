@@ -14,7 +14,7 @@ import {
   type LarkMessage,
 } from '../src/protocol.js';
 import { larkClient } from '../src/client.js';
-import defineLarkAdapter from '../adapters/lark.js';
+import defineLarkAdapter from '../adapters/$lark.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];

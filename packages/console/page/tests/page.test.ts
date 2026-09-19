@@ -12,7 +12,7 @@ describe('Page Feature', () => {
   it('discovers only flat ordinary TS/TSX pages through the client adapter', async () => {
     const loaded: string[] = [];
     const host = memoryHost(
-      ['home.tsx', 'service-status.ts', '$nav.tsx', '$other.tsx', 'Bad.tsx'],
+      ['$home.tsx', '$service-status.ts', '$nav.tsx', 'helper.tsx', 'Bad.tsx'],
       loaded,
     );
     const slots = await new FeatureDiscovery(host).discover(pageFeature, [{
@@ -21,7 +21,7 @@ describe('Page Feature', () => {
     }]);
 
     expect(slots.map((slot) => slot.localName)).toEqual(['home', 'service-status']);
-    expect(loaded).toEqual(['/app/pages/home.tsx', '/app/pages/service-status.ts']);
+    expect(loaded).toEqual(['/app/pages/$home.tsx', '/app/pages/$service-status.ts']);
     expect(slots[0]?.definition).toMatchObject({ title: 'Home', module: '/assets/home.js' });
   });
 
@@ -49,7 +49,7 @@ function memoryHost(files: readonly string[], loaded: string[]): DiscoveryHost {
     async loadModule<T>(): Promise<T> { throw new Error('Page source must not execute in Node'); },
     async loadClientModule<T>(source): Promise<T> {
       loaded.push(source);
-      const name = source.split('/').at(-1)?.split('.')[0];
+      const name = source.split('/').at(-1)?.split('.')[0]?.replace(/^\$/u, '');
       return { module: `/assets/${name}.js`, hash: `hash-${name}` } as T;
     },
     async readText(): Promise<string> { throw new Error('Not used'); },

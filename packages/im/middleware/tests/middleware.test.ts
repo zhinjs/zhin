@@ -43,13 +43,13 @@ describe('Middleware Feature', () => {
 
   it('discovers nested TypeScript files and ignores TSX middleware modules', async () => {
     const definition = defineMiddleware({ handle: (_context, next) => next() });
-    const source = '/project/middlewares/auth/guard.ts';
+    const source = '/project/middlewares/auth/$guard.ts';
     const host = new MemoryDiscoveryHost({
       '/project/middlewares': [
         { name: 'auth', kind: 'directory' },
-        { name: 'ignored.tsx', kind: 'file' },
+        { name: '$ignored.tsx', kind: 'file' },
       ],
-      '/project/middlewares/auth': [{ name: 'guard.ts', kind: 'file' }],
+      '/project/middlewares/auth': [{ name: '$guard.ts', kind: 'file' }],
     }, new Map([[source, { default: definition }]]));
 
     const slots = await new FeatureDiscovery(host).discover(middlewareFeature, [{
@@ -118,7 +118,7 @@ describe('Middleware Feature', () => {
       owner: root,
       feature: middlewareFeatureId,
       localName: 'broken',
-      source: '/middlewares/broken.ts',
+      source: '/middlewares/$broken.ts',
       definition,
     });
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
@@ -140,7 +140,7 @@ describe('Middleware Feature', () => {
       owner: root,
       feature: middlewareFeatureId,
       localName: 'native-client',
-      source: '/middlewares/native-client.ts',
+      source: '/middlewares/$native-client.ts',
       definition,
     });
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));

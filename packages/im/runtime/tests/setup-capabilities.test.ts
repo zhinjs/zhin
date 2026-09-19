@@ -101,7 +101,7 @@ describe('setup Feature registration', () => {
       owner,
       feature,
       localName: 'same',
-      source: '/project/commands/same.ts',
+      source: '/project/commands/$same.ts',
       definition: {},
     })).toThrow('Duplicate Capability Slot');
   });

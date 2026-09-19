@@ -16,7 +16,7 @@ afterEach(async () => {
 describe('NativeDevelopmentModuleRuntime', () => {
   it('uses URL revisions to reload one directly owned ESM definition', async () => {
     const root = await fixture();
-    const source = join(root, 'commands/status.js');
+    const source = join(root, 'commands/$status.js');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
     await writeFile(source, 'export default 1;\n');
     expect((await runtime.load<{ default: number }>(source)).default).toBe(1);
@@ -46,9 +46,9 @@ describe('NativeDevelopmentModuleRuntime', () => {
     const root = await fixture();
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
 
-    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status.ts'))).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'components/card.ts'))).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'tools/weather.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/$status.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'components/$card.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'tools/$weather.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'tools/shared/client.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'schema.json'))).toBe(false);
@@ -62,10 +62,10 @@ describe('NativeDevelopmentModuleRuntime', () => {
     expect(runtime.requiresProcessRestart(join(root, 'commands/_utils.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'commands/_utils/format.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'commands/utils.js'))).toBe(true);
-    expect(runtime.requiresProcessRestart(join(root, 'commands/format.json'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/$format.json'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'components/Card.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'commands/notes.md'))).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/$status.ts'))).toBe(false);
     await runtime.close();
   });
 
@@ -81,7 +81,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
 
   it('reports source changes without a third-party watcher', async () => {
     const root = await fixture();
-    const source = join(root, 'commands/status.ts');
+    const source = join(root, 'commands/$status.ts');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     const observed = new Promise<string>((resolve, reject) => {
       // fs events can be delayed for seconds when the harness runs suites in
@@ -112,7 +112,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
   it('watches a sibling workspace child Plugin root after the graph commits', async () => {
     const root = await fixture();
     const sibling = await fixture();
-    const source = join(sibling, 'commands/status.ts');
+    const source = join(sibling, 'commands/$status.ts');
     await writeFile(join(sibling, 'package.json'), JSON.stringify({
       name: '@test/sibling',
       type: 'module',
@@ -123,7 +123,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     runtime.updateWatchRoots([{ root: sibling, source: 'workspace' }]);
     expect(runtime.requiresProcessRestart(source)).toBe(false);
-    expect(runtime.requiresProcessRestart(join(root, 'node_modules/@test/plugin/commands/status.ts')))
+    expect(runtime.requiresProcessRestart(join(root, 'node_modules/@test/plugin/commands/$status.ts')))
       .toBe(true);
 
     const observed = new Promise<string>((resolve, reject) => {
@@ -150,7 +150,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     const root = await fixture();
     await mkdir(join(root, 'lib'), { recursive: true });
     const ignored = join(root, 'lib/bundle.js');
-    const source = join(root, 'commands/status.ts');
+    const source = join(root, 'commands/$status.ts');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     const reported: string[] = [];
     const observed = new Promise<void>((resolve, reject) => {
@@ -186,7 +186,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     const root = await fixture();
     await mkdir(join(root, 'data'), { recursive: true });
     const ignored = join(root, 'data/schedule-jobs.json');
-    const source = join(root, 'commands/status.ts');
+    const source = join(root, 'commands/$status.ts');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     const reported: string[] = [];
     const observed = new Promise<void>((resolve, reject) => {

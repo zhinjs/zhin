@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 describe('@zhin.js/adapter-icqq package', () => {
   it('should have plugin entry and adapter module', () => {
     expect(fs.existsSync(path.resolve(__dirname, '../plugin.ts'))).toBe(true);
-    expect(fs.existsSync(path.resolve(__dirname, '../adapters/icqq.ts'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../adapters/$icqq.ts'))).toBe(true);
     expect(fs.existsSync(path.resolve(__dirname, '../src/endpoint.ts'))).toBe(true);
     expect(fs.existsSync(path.resolve(__dirname, '../schema.json'))).toBe(true);
   });
@@ -24,7 +24,7 @@ describe('@zhin.js/adapter-icqq package', () => {
   });
 
   it('plugin tools live under tools/ and use @zhin.js/tool', () => {
-    const like = path.resolve(__dirname, '../tools/send_user_like.ts');
+    const like = path.resolve(__dirname, '../tools/$send_user_like.ts');
     expect(fs.existsSync(like)).toBe(true);
     const src = fs.readFileSync(like, 'utf8');
     expect(src).toContain("from '@zhin.js/tool'");
@@ -32,7 +32,7 @@ describe('@zhin.js/adapter-icqq package', () => {
   });
 
   it('send_user_like default-exports a branded @zhin.js/tool definition', async () => {
-    const like = path.resolve(__dirname, '../tools/send_user_like.ts');
+    const like = path.resolve(__dirname, '../tools/$send_user_like.ts');
     const mod = await import(pathToFileURL(like).href) as {
       default: { $feature: string; description: string; platforms?: readonly string[] };
     };

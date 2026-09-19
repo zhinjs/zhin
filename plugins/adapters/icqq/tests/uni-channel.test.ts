@@ -6,7 +6,7 @@ import type { OutboundMessageService } from '@zhin.js/core/runtime';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
-import defineIcqqAdapter from '../adapters/icqq.js';
+import defineIcqqAdapter from '../adapters/$icqq.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { resolveIcqqConfig } from '../src/protocol.js';
 import { createIcqqTestPorts } from './_icqq-mock.js';

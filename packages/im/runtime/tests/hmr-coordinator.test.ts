@@ -19,14 +19,14 @@ describe('HmrCoordinator', () => {
     const ownership = new SourceOwnershipIndex();
     ownership.addPackageRoot('/project/plugins/child', child);
     ownership.add({
-      source: '/project/plugins/child/commands/first.ts',
+      source: '/project/plugins/child/commands/$first.ts',
       role: 'capability',
       owner: child,
       capability: first,
       feature: command,
     });
     ownership.add({
-      source: '/project/plugins/child/commands/second.ts',
+      source: '/project/plugins/child/commands/$second.ts',
       role: 'capability',
       owner: child,
       capability: second,
@@ -51,8 +51,8 @@ describe('HmrCoordinator', () => {
       onReload(plan, durationMs) { reloadEvents.push({ plan, durationMs }); },
     });
 
-    const firstEvent = coordinator.enqueue('/project/plugins/child/commands/first.ts');
-    const secondEvent = coordinator.enqueue('/project/plugins/child/commands/second.ts');
+    const firstEvent = coordinator.enqueue('/project/plugins/child/commands/$first.ts');
+    const secondEvent = coordinator.enqueue('/project/plugins/child/commands/$second.ts');
     await Promise.all([firstEvent, secondEvent]);
 
     expect(plans).toHaveLength(1);
@@ -61,8 +61,8 @@ describe('HmrCoordinator', () => {
     expect(reloadEvents[0]?.durationMs).toBeGreaterThanOrEqual(0);
     expect(plans[0]?.slots).toEqual([first, second]);
     expect(modules.invalidated).toEqual([
-      '/project/plugins/child/commands/first.ts',
-      '/project/plugins/child/commands/second.ts',
+      '/project/plugins/child/commands/$first.ts',
+      '/project/plugins/child/commands/$second.ts',
     ]);
   });
 
@@ -112,7 +112,7 @@ describe('HmrCoordinator', () => {
   });
 
   it('routes a generation reload escalation through the process port', async () => {
-    const source = '/project/commands/status.ts';
+    const source = '/project/commands/$status.ts';
     const ownership = new SourceOwnershipIndex();
     ownership.add({
       source,
@@ -149,7 +149,7 @@ describe('HmrCoordinator', () => {
   });
 
   it('updates module watch roots only after a generation reload commits', async () => {
-    const source = '/project/commands/status.ts';
+    const source = '/project/commands/$status.ts';
     const initial = ownershipFor(source, '/project');
     const committed = ownershipFor(source, '/workspace/plugins/sibling');
     let ownership = initial;
@@ -176,7 +176,7 @@ describe('HmrCoordinator', () => {
   it('reports a failed reload and rejects every waiter in its batch', async () => {
     const ownership = new SourceOwnershipIndex();
     ownership.add({
-      source: '/project/commands/status.ts',
+      source: '/project/commands/$status.ts',
       role: 'capability',
       owner: root,
       capability: capabilityId(root, command, 'status'),
@@ -192,8 +192,8 @@ describe('HmrCoordinator', () => {
       onError(error) { reported.push(error); },
     });
 
-    const first = coordinator.enqueue('/project/commands/status.ts');
-    const second = coordinator.enqueue('/project/commands/status.ts');
+    const first = coordinator.enqueue('/project/commands/$status.ts');
+    const second = coordinator.enqueue('/project/commands/$status.ts');
 
     await expect(first).rejects.toBe(failure);
     await expect(second).rejects.toBe(failure);
@@ -201,7 +201,7 @@ describe('HmrCoordinator', () => {
   });
 
   it('waits for an in-flight reload before stop settles and rejects later work', async () => {
-    const source = '/project/commands/status.ts';
+    const source = '/project/commands/$status.ts';
     const ownership = ownershipFor(source, '/project');
     let finishReload!: () => void;
     const reloadBlocked = new Promise<void>((resolve) => { finishReload = resolve; });
@@ -235,7 +235,7 @@ describe('HmrCoordinator', () => {
   });
 
   it('reports post-commit observer failure without rejecting the reload', async () => {
-    const source = '/project/commands/status.ts';
+    const source = '/project/commands/$status.ts';
     const reported: unknown[] = [];
     const failure = new Error('console projection failed');
     const coordinator = new HmrCoordinator({

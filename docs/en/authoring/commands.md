@@ -5,10 +5,10 @@ description: commands/ file routing, execute context, return value rendering, ma
 
 # Commands (defineCommand)
 
-Create a `commands/` directory in your plugin package root and drop a `hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **The file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature (inherited via `platformFeatures` when depending on `zhin.js`); no manual registration needed. Authors import from `zhin.js/command` — **do not** `pnpm add @zhin.js/command`.
+Create a `commands/` directory in your plugin package root and drop a `$hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **A `$`-marked file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature (inherited via `platformFeatures` when depending on `zhin.js`); no manual registration needed. Files without `$` are ordinary modules that entries can import. Authors import from `zhin.js/command` — **do not** `pnpm add @zhin.js/command`.
 
 ```ts
-// commands/hello.ts
+// commands/$hello.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -34,7 +34,7 @@ export default definePlugin({
 ```
 
 `addCommand` and directory discovery share the same `CommandIndex`, manifest, conflict detection, and generation lifecycle.
-When commands grow in number, move the definition to a `commands/hello.ts` default export; the directory mode also narrows
+When commands grow in number, move the definition to a `commands/$hello.ts` default export; the directory mode also narrows
 HMR granularity to individual command files.
 
 ## File Routing
@@ -43,16 +43,16 @@ Command name = plugin tree path segments (instanceKey, without root, joined by `
 
 | File | Plugin | Command name |
 | --- | --- | --- |
-| `commands/hello.ts` | root | `hello` |
-| `commands/endpoint/list.ts` | `qq` | `qq.endpoint list` |
-| `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
-| `commands/foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
+| `commands/$hello.ts` | root | `hello` |
+| `commands/endpoint/$list.ts` | `qq` | `qq.endpoint list` |
+| `commands/endpoint/add/$[[name]].ts` | `qq` | `qq.endpoint add [name]` |
+| `commands/$foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
 
 First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`zhin.js`):
 
-- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello.ts`, `lottery-today.ts`)
-- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我.ts` (trigger word `赞我`)
-- Dynamic parameter files remain ASCII-only: `[name].ts` / `[[name]].ts`, etc.
+- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `$hello.ts`, `$lottery-today.ts`)
+- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `$赞我.ts` (trigger word `赞我`)
+- Dynamic parameter files remain ASCII-only: `$[name].ts` / `$[[name]].ts`, etc.
 
 `instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like.ts`).
 
@@ -60,14 +60,14 @@ Dynamic parameter segments use Next.js-style file names to declare their shape a
 
 | File name | Shape | Help display | params declaration |
 | --- | --- | --- | --- |
-| `[name].ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
-| `[[name]].ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `[...name].ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
-| `[[...name]].ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
+| `$[name].ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
+| `$[[name]].ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
+| `$[...name].ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
+| `$[[...name]].ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
 
-Consistency is validated at startup: when a `default` is present the file name must use double brackets (`[[name]]`), and a parameter shape in the file name without a matching `params` declaration both throw `CommandPathSyntaxError`.
+Consistency is validated at startup: when a `default` is present the file name must use double brackets (`$[[name]]`), and a parameter shape in the file name without a matching `params` declaration both throw `CommandPathSyntaxError`.
 
-**Child plugin constraint: the first command path segment must be static.** Child plugin commands are auto-prefixed by the plugin path (e.g. `remind.add`), and a dynamic parameter may only be the last segment (at most one) — so `commands/[note].ts` works in the root plugin but throws `Invalid Command path` at startup in a child plugin (no static segment to anchor to). In child plugins, always put dynamic parameters under a static directory: `commands/add/[note].ts` (command name `remind.add <note>`).
+A dynamic parameter may be the first segment. In a child plugin, `$[note].ts` is mounted after the plugin namespace as `remind <note>`; `commands/add/$[note].ts` becomes `remind.add <note>`. At the Root, `$[note].ts` can match one top-level segment. A command still allows only one dynamic segment, and it must be last.
 
 The element granularity of a catch-all array depends on `params.<name>.type`: `text` collects per message segment (plain-text input arrives as a single element); `word` / `string` split on whitespace into words; `number` / `integer` / `float` / `boolean` split into words and convert each one — any word that fails conversion makes the whole command not match; structured types such as `mention` / `image` collect per message segment.
 
@@ -81,9 +81,9 @@ The element granularity of a catch-all array depends on `params.<name>.type`: `t
 Structured IM parameters do not support default values. At runtime, `segment-matcher` matches directly on canonical segments,
 without first degrading image, mention, etc. to text; type mismatches are treated as "command not matched" during dispatch.
 
-Route conflict has two rules: **static priority** -- `list.ts` always wins over `[name].ts`, and among dynamic routes, those with more static segments (more specific) take priority; **same-shape rejection** -- duplicate registration of the same route shape reports an error at startup (`Duplicate runtime Command`).
+Route conflict has two rules: **static priority** -- `$list.ts` always wins over `$[name].ts`, and among dynamic routes, those with more static segments (more specific) take priority; **same-shape rejection** -- duplicate registration of the same route shape reports an error at startup (`Duplicate runtime Command`).
 
-Real-world example (`plugins/adapters/qq/commands/endpoint/remove/[name].ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
+Real-world example (`plugins/adapters/qq/commands/endpoint/remove/$[name].ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
 
 ```ts
 import { qqEndpointCommands } from '../../../src/qq-endpoint-commands.js';
@@ -149,7 +149,7 @@ Therefore `qq.endpoint remove mybot` matches `qq.endpoint remove <name>`, `args`
 Structured parameter example:
 
 ```ts
-// commands/upload/[asset].ts
+// commands/upload/$[asset].ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -236,7 +236,7 @@ Integrating an adapter requires only four steps (using telegram as an example):
 // 1. src/telegram-runtime-state.ts -- runtime endpoint registry token
 export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
 
-// 2. plugin.ts setup() -- provide state; register in adapters/telegram.ts create()
+// 2. plugin.ts setup() -- provide state; register in adapters/$telegram.ts create()
 context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
 // create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
 
@@ -250,7 +250,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/endpoint/{list.ts, add/[[name]].ts, remove/[name].ts}
+// 4. commands/endpoint/${list.ts, add/[[name]].ts, remove/[name].ts}
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 

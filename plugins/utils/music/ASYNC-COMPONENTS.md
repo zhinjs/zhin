@@ -2,7 +2,7 @@
 
 ## 概述
 
-Zhin 组件支持异步渲染（类似 Next.js 的异步组件）：组件的 `render` 可以返回 Promise，在组件内执行异步操作（API 调用、数据库查询等）。本插件的 `components/share-music.ts` 即示例。
+Zhin 组件支持异步渲染（类似 Next.js 的异步组件）：组件的 `render` 可以返回 Promise，在组件内执行异步操作（API 调用、数据库查询等）。本插件的 `components/$share-music.ts` 即示例。
 
 > 本文已更新为 Plugin Runtime 写法（`defineComponent` + 约定目录）。旧的 `addComponent` / `MessageCommand` 写法已下线。
 

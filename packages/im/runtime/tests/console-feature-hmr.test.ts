@@ -34,7 +34,7 @@ describe('Console Feature slot HMR', () => {
     const pluginSource = join(project, 'plugin.ts');
     const pageProvider = join(project, 'packages/page/index.ts');
     const layoutProvider = join(project, 'packages/layout/index.ts');
-    const pageSource = join(project, 'pages/status.tsx');
+    const pageSource = join(project, 'pages/$status.tsx');
     const navSource = join(project, 'pages/$nav.tsx');
     let setups = 0;
     modules.set(pluginSource, {
@@ -100,7 +100,7 @@ describe('Console Feature slot HMR', () => {
     const pluginSource = join(project, 'plugin.ts');
     const pageProvider = join(project, 'packages/page/index.ts');
     const layoutProvider = join(project, 'packages/layout/index.ts');
-    const pageSource = join(project, 'pages/status.tsx');
+    const pageSource = join(project, 'pages/$status.tsx');
     server.set(pluginSource, { default: definePlugin({ name: 'root' }) });
     server.set(pageProvider, { default: pageFeature });
     server.set(layoutProvider, { default: layoutFeature });
@@ -230,7 +230,7 @@ async function createProject(): Promise<string> {
     'plugin.ts',
     'packages/page/index.ts',
     'packages/layout/index.ts',
-    'pages/status.tsx',
+    'pages/$status.tsx',
     'pages/$nav.tsx',
   ]) await touch(join(root, file));
   return realpath(root);

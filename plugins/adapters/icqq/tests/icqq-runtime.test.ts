@@ -9,7 +9,7 @@ import type { EndpointEventGateway } from 'zhin.js/adapter';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
-import defineIcqqAdapter from '../adapters/icqq.js';
+import defineIcqqAdapter from '../adapters/$icqq.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import {
   formatOutboundBody,

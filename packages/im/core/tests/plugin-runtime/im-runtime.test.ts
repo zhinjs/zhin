@@ -670,7 +670,7 @@ describe('IM Runtime', () => {
       owner: child,
       feature: commandFeatureId,
       localName: 'status',
-      source: '/plugins/child/commands/status.ts',
+      source: '/plugins/child/commands/$status.ts',
       definition: defineCommand({ execute: () => 'child result' }),
     });
     const state: SnapshotState = {
@@ -730,7 +730,7 @@ describe('IM Runtime', () => {
       owner: root,
       feature: commandFeatureId,
       localName: 'zt',
-      source: '/commands/zt.ts',
+      source: '/commands/$zt.ts',
       definition: defineCommand({ execute: () => 'card' }),
     });
     const makeSnapshot = (config: Record<string, unknown>) => {
@@ -1259,7 +1259,7 @@ describe('IM Runtime', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq.ts',
+      source: '/adapters/$icqq.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         operations: ['recall'],
@@ -1958,7 +1958,7 @@ async function createFixture(
     owner: root,
     feature: middlewareFeatureId,
     localName: 'inbound',
-    source: '/middlewares/inbound.ts',
+    source: '/middlewares/$inbound.ts',
     definition: defineMiddleware<Message>({
       target: 'inbound',
       async handle({ input }, next) {
@@ -1973,7 +1973,7 @@ async function createFixture(
     owner: root,
     feature: middlewareFeatureId,
     localName: 'outbound',
-    source: '/middlewares/outbound.ts',
+    source: '/middlewares/$outbound.ts',
     definition: defineMiddleware<OutboundEnvelope>({
       target: 'outbound',
       async handle({ input }, next) {

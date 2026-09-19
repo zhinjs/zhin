@@ -3,10 +3,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[[id]].js';
-import cancelCommand from '../commands/endpoint/cancel.js';
-import removeCommand from '../commands/endpoint/remove/[id].js';
+import listCommand from '../commands/endpoint/$list.js';
+import addCommand from '../commands/endpoint/add/$[[id]].js';
+import cancelCommand from '../commands/endpoint/$cancel.js';
+import removeCommand from '../commands/endpoint/remove/$[id].js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 
 /**

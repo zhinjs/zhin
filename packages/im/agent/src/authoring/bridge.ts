@@ -20,7 +20,7 @@ export function namespaceAuthoringName(pluginName: string, slotName: string, bar
 
 export function slotNameFromFile(filePath: string): string {
   const base = filePath.split(/[/\\]/).pop() ?? filePath;
-  return base.replace(/\.(ts|js|md)$/i, '');
+  return base.replace(/^\$/u, '').replace(/\.(ts|js|md)$/i, '');
 }
 
 export function slotNameFromDir(dirPath: string): string {

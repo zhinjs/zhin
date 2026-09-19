@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/weixin-ilink.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$weixin-ilink.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';

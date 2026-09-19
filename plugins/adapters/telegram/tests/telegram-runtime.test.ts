@@ -23,7 +23,7 @@ import {
   type TelegramMessage,
 } from '../src/protocol.js';
 import { telegramClient } from '../src/client.js';
-import defineTelegramAdapter from '../adapters/telegram.js';
+import defineTelegramAdapter from '../adapters/$telegram.js';
 
 const adapterFeature = featureId('zhin.adapter');
 

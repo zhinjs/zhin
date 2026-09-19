@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f3e544a9db1457d3 -->
+<!-- sync-adapter-docs:sha256=bf9516b05a40f906 -->
 
 # @zhin.js/adapter-email
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-email
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/email.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$email.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`（`smtp` / `imap`）
@@ -99,7 +99,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/email.md`。
+技能说明见 `agent/skills/$email.md`。
 
 ## 文档链接
 

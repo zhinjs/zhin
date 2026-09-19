@@ -144,7 +144,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -180,7 +180,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'invalid-control',
-      source: '/adapters/invalid-control.ts',
+      source: '/adapters/$invalid-control.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         operations: ['edit', 'typing'],
@@ -197,7 +197,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'valid-control',
-      source: '/adapters/valid-control.ts',
+      source: '/adapters/$valid-control.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         operations: ['recall', 'edit', 'reaction', 'typing'],
@@ -222,7 +222,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'multi-mode',
-      source: '/adapters/multi-mode.ts',
+      source: '/adapters/$multi-mode.ts',
       definition: defineAdapter<{ mode: 'gateway' | 'webhook' }>({
         capabilities: ['inbound', 'outbound'],
         operations: (context) => context.config.mode === 'gateway'
@@ -272,7 +272,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'hidden-control',
-      source: '/adapters/hidden-control.ts',
+      source: '/adapters/$hidden-control.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         create: () => ({
@@ -289,7 +289,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'hidden-reaction-removal',
-      source: '/adapters/hidden-reaction-removal.ts',
+      source: '/adapters/$hidden-reaction-removal.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         create: () => ({
@@ -311,7 +311,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         create: () => ({ send: async (request) => {
@@ -342,7 +342,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'missing-send',
-      source: '/adapters/missing-send.ts',
+      source: '/adapters/$missing-send.ts',
       definition: defineAdapter({
         capabilities: ['outbound'],
         create: () => ({}),
@@ -358,7 +358,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'invalid-result',
-      source: '/adapters/invalid-result.ts',
+      source: '/adapters/$invalid-result.ts',
       definition: defineAdapterContract({
         capabilities: ['outbound'],
         create: () => null as never,
@@ -379,10 +379,10 @@ describe('Adapter Feature', () => {
       'capabilities',
     );
 
-    const source = '/project/adapters/discord/bot.ts';
+    const source = '/project/adapters/discord/$bot.ts';
     const host = new MemoryDiscoveryHost({
       '/project/adapters': [{ name: 'discord', kind: 'directory' }],
-      '/project/adapters/discord': [{ name: 'bot.ts', kind: 'file' }],
+      '/project/adapters/discord': [{ name: '$bot.ts', kind: 'file' }],
     }, new Map([[source, { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(adapterFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
@@ -398,7 +398,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapterContract({
         capabilities: ['outbound'],
         create(context) {
@@ -453,7 +453,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'invalid-connect',
-      source: '/adapters/invalid-connect.ts',
+      source: '/adapters/$invalid-connect.ts',
       definition: defineAdapterContract({
         capabilities: ['inbound'],
         create: () => ({
@@ -478,7 +478,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'cleanup-failure',
-      source: '/adapters/cleanup-failure.ts',
+      source: '/adapters/$cleanup-failure.ts',
       definition: defineAdapterContract({
         capabilities: ['inbound'],
         create: () => ({
@@ -508,7 +508,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'slow-connect',
-      source: '/adapters/slow-connect.ts',
+      source: '/adapters/$slow-connect.ts',
       definition: defineAdapterContract({
         capabilities: ['inbound'],
         create: () => ({
@@ -543,7 +543,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'a-good',
-      source: '/adapters/a-good.ts',
+      source: '/adapters/$a-good.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -556,7 +556,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'z-broken',
-      source: '/adapters/z-broken.ts',
+      source: '/adapters/$z-broken.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => { throw new Error('create failed'); },
@@ -577,7 +577,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'slow',
-      source: '/adapters/slow.ts',
+      source: '/adapters/$slow.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: () => ({
@@ -610,7 +610,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'a-healthy',
-      source: '/adapters/a-healthy.ts',
+      source: '/adapters/$a-healthy.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -623,7 +623,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'z-broken',
-      source: '/adapters/z-broken.ts',
+      source: '/adapters/$z-broken.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -652,7 +652,7 @@ describe('Adapter Feature', () => {
       owner: rootId,
       feature: adapterFeatureId,
       localName: 'broken-cleanup',
-      source: '/adapters/broken-cleanup.ts',
+      source: '/adapters/$broken-cleanup.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -691,7 +691,7 @@ describe('Adapter Feature', () => {
       owner: rootId,
       feature: adapterFeatureId,
       localName: 'waiting',
-      source: '/adapters/waiting.ts',
+      source: '/adapters/$waiting.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -739,7 +739,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'broken',
-      source: '/adapters/broken.ts',
+      source: '/adapters/$broken.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => { throw new TypeError('icqq requires uin'); },
@@ -756,7 +756,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create: () => ({
@@ -819,7 +819,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create(context) {
@@ -866,7 +866,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'native',
-      source: '/adapters/native.ts',
+      source: '/adapters/$native.ts',
       definition: defineAdapterContract({
         capabilities: ['inbound'],
         create: () => ({
@@ -917,7 +917,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'sandbox',
-      source: '/adapters/sandbox.ts',
+      source: '/adapters/$sandbox.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: () => ({
@@ -944,7 +944,7 @@ describe('Adapter Feature', () => {
       owner: childPluginId(root, 'icqq'),
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq-a.ts',
+      source: '/adapters/$icqq-a.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: () => ({
@@ -957,7 +957,7 @@ describe('Adapter Feature', () => {
       owner: childPluginId(root, 'icqq-2'),
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq-b.ts',
+      source: '/adapters/$icqq-b.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: () => ({
@@ -980,7 +980,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq.ts',
+      source: '/adapters/$icqq.ts',
       definition: defineAdapter({
         capabilities: ['inbound'],
         create(context) {
@@ -1014,7 +1014,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'memory',
-      source: '/adapters/memory.ts',
+      source: '/adapters/$memory.ts',
       definition: defineAdapter({ capabilities: ['inbound'], create: () => ({}) }),
     });
 
@@ -1034,7 +1034,7 @@ describe('Adapter Feature', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq.ts',
+      source: '/adapters/$icqq.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         create: (context) => ({

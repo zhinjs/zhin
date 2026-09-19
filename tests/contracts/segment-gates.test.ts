@@ -29,7 +29,7 @@ function makeFixture(adapters: Record<string, {
     if (spec.entry !== undefined) {
       const dir = path.join(root, name, 'adapters');
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, `${name}.ts`), spec.entry);
+      fs.writeFileSync(path.join(dir, `$${name}.ts`), spec.entry);
     } else {
       fs.mkdirSync(path.join(root, name), { recursive: true });
     }
@@ -63,7 +63,7 @@ export default defineAdapter({
 });
 `;
 
-describe('segment gate scripts（adapters/*.ts 探测点）', () => {
+describe('segment gate scripts（adapters/$*.ts 探测点）', () => {
   it('已声明 segments 的 adapter 通过三道段门禁', () => {
     const fixture = makeFixture({
       declared: { entry: DECLARED_ENTRY },

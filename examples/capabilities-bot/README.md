@@ -19,7 +19,7 @@ pnpm dev        # zhin runtime start
 
 | 能力 | 位置 |
 |------|------|
-| 实例视图 / 配置视图 | `plugin.ts` setup ①②；`commands/whoami.ts` |
+| 实例视图 / 配置视图 | `plugin.ts` setup ①②；`commands/$whoami.ts` |
 | schema.json（默认值 + 校验） | `schema.json` ↔ `zhin.config.yml` 的 `plugin:` 段 |
 | 数据库表 + 命令侧模型复用 | `plugin.ts` ③ ↔ `commands/stats/` |
 | 定时任务 + lifecycle 回收 | `plugin.ts` ④ |

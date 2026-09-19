@@ -29,7 +29,7 @@ pnpm add @zhin.js/adapter-wecom
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/wecom.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$wecom.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
@@ -122,7 +122,7 @@ Access Token is automatically refreshed 5 minutes before expiration.
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
 | Platform tools (4) | `agent/tools/` |
-| Skill documentation | `agent/skills/wecom.md` |
+| Skill documentation | `agent/skills/$wecom.md` |
 
 ## Platform Permissions (platform permit)
 

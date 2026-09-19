@@ -96,7 +96,7 @@ See `agent/tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_pr
 | Path | Responsibility |
 |------|----------------|
 | `plugin.ts` | Plugin metadata; defines `github_oauth_users` when DatabaseHost is available |
-| `adapters/github.ts` | Thin `defineAdapter` entry point (convention discovery) |
+| `adapters/$github.ts` | Thin `defineAdapter` entry point (convention discovery) |
 | `src/endpoint.ts` | Endpoint lifecycle, outbound, admit |
 | `src/webhook.ts` | HMAC signature verification and event dispatch |
 | `src/oauth-users.ts` | OAuth table SSOT + token lookup |

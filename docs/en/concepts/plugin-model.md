@@ -62,7 +62,7 @@ Example projects are private workspaces, so they can use `plugin.ts` as the entr
 After a plugin declares a dependency on a capability type via the `features` array, it can provide capability implementations following that Feature's conventions. For example, the sandbox adapter plugin (`@zhin.js/adapter-sandbox`) declares the `@zhin.js/adapter` capability and places a convention-based entry in the `adapters/` directory:
 
 ```ts
-// plugins/adapters/sandbox/adapters/sandbox.ts
+// plugins/adapters/sandbox/adapters/$sandbox.ts
 import { defineAdapter } from 'zhin.js/adapter';
 import { outboundMessageToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';

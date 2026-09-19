@@ -21,29 +21,29 @@
 | API | 稳定性 | 作者 import | 实现包 | 一句话 |
 |-----|--------|-------------|--------|--------|
 | `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
-| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
-| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
-| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
-| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
-| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/` 下默认导出；`/` → `.` 推断事件名） |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/`）；`zhin.js/agent`（`agent/tools/*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/$*.ts` 默认导出） |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/$*.ts` 默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/$*.ts(x)` 默认导出） |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/$*.ts` 默认导出） |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/**/$*.ts` 默认导出；`/` → `.` 推断事件名） |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/`）；`zhin.js/agent`（`agent/tools/$*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
 
-> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
+> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/$*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 
 ### 约定目录与文件
 
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
 | `plugin.ts` | `stable` | `zhin.js` | 插件根入口，默认导出 `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
-| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 适配器模块目录 |
-| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 中间件模块目录 |
-| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | Lifecycle 事件处理器目录（`/` 分段 localName，省略 `event` 时映为 `.`；当前运行时接线 `message.receive`） |
-| `tools/` | `experimental` | `@zhin.js/tool` | Agent 工具目录（`defineAgentTool`） |
-| `agent/tools` | `experimental` | `zhin.js/agent` authoring | 文件化 Agent 工具创作面 |
-| `agent/skills` | `experimental` | `@zhin.js/skill` / Agent 发现 | Agent 技能 Markdown（随 npm 包发布） |
-| `pages/` | `experimental` | `@zhin.js/console-page` | Console 页面模块目录 |
+| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 仅 `$` 文件是命令入口；支持 `$[name]` / `$[[name]]` / `$[...name]` 动态参数入口 |
+| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 仅 `$` 文件是适配器入口 |
+| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 仅 `$` 文件是中间件入口 |
+| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | 仅 `$` 文件是 Lifecycle 事件处理器入口（`/` 分段 localName，省略 `event` 时映为 `.`） |
+| `tools/` | `experimental` | `@zhin.js/tool` | 仅 `$` 文件是 Agent 工具入口（`defineAgentTool`） |
+| `agent/tools` | `experimental` | `zhin.js/agent` authoring | `$*.ts` 文件化 Agent 工具创作面 |
+| `agent/skills` | `experimental` | `@zhin.js/skill` / Agent 发现 | `$*.md` Agent 技能 Markdown（随 npm 包发布） |
+| `pages/` | `experimental` | `@zhin.js/console-page` | `$*.ts(x)` Console 页面模块目录；`$nav` / `$footer` 是布局槽 |
 
 ### Host Token（`context.resources.use(token)` 消费）
 

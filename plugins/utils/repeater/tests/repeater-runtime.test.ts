@@ -2,8 +2,8 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
-import middleware from '../middlewares/repeater.ts';
-import statusCommand from '../commands/repeater-status.ts';
+import middleware from '../middlewares/$repeater.ts';
+import statusCommand from '../commands/$repeater-status.ts';
 import {
   getRepeaterEngine,
   RepeaterEngine,

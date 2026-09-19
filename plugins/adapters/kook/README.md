@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-kook
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/kook.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$kook.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — Webhook 模式 POST 路由（WebSocket 不需要）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -89,7 +89,7 @@ Host 需注入 `httpHostToken`。Challenge（`type: 255`）会校验 `verify_tok
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/`（角色、黑名单等） |
-| 技能说明 | `agent/skills/kook.md` |
+| 技能说明 | `agent/skills/$kook.md` |
 
 ## 平台权限（platform permit）
 

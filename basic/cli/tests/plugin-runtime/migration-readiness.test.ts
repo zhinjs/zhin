@@ -73,7 +73,7 @@ addCommand(new MessageCommand('status').action(() => captured));
     ].join('\n'));
     expect(runMigrationGate(root).status).toBe(0);
 
-    await write(join(root, 'commands/status.ts'), [
+    await write(join(root, 'commands/$status.ts'), [
       'export default {',
       '  async execute() {',
       '    return getPlugin();',
@@ -83,7 +83,7 @@ addCommand(new MessageCommand('status').action(() => captured));
     ].join('\n'));
     const result = runMigrationGate(root);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain('commands/status.ts:3:12 legacy getPlugin() call in function scope');
+    expect(result.stderr).toContain('commands/$status.ts:3:12 legacy getPlugin() call in function scope');
   });
 
   it('repository gate requires a JavaScript manifest entry for published plugins', async () => {

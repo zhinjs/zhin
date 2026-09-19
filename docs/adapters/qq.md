@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3237b6c6b32cee78 -->
+<!-- sync-adapter-docs:sha256=3611fc8366209b24 -->
 
 # @zhin.js/adapter-qq
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/qq.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$qq.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -145,7 +145,7 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/`（频道、角色等） |
-| 技能说明 | `agent/skills/qq.md` |
+| 技能说明 | `agent/skills/$qq.md` |
 
 ## 平台 Client 与 QQ API
 

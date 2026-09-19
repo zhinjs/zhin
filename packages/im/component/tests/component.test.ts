@@ -31,12 +31,12 @@ describe('Component Feature', () => {
     const host = new MemoryDiscoveryHost({
       '/project/components': [{ name: 'forms', kind: 'directory' }],
       '/project/components/forms': [
-        { name: 'input.tsx', kind: 'file' },
-        { name: 'label.ts', kind: 'file' },
+        { name: '$input.tsx', kind: 'file' },
+        { name: '$label.ts', kind: 'file' },
       ],
     }, new Map([
-      ['/project/components/forms/input.tsx', { default: definition }],
-      ['/project/components/forms/label.ts', { default: definition }],
+      ['/project/components/forms/$input.tsx', { default: definition }],
+      ['/project/components/forms/$label.ts', { default: definition }],
     ]));
 
     const slots = await new FeatureDiscovery(host).discover(componentFeature, [{

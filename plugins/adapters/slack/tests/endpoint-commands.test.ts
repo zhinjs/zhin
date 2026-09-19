@@ -4,9 +4,9 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[id].js';
-import removeCommand from '../commands/endpoint/remove/[id].js';
+import listCommand from '../commands/endpoint/$list.js';
+import addCommand from '../commands/endpoint/add/$[id].js';
+import removeCommand from '../commands/endpoint/remove/$[id].js';
 import { slackRuntimeStateToken } from '../src/slack-runtime-state.js';
 
 /**

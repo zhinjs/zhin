@@ -1,6 +1,10 @@
 import { join, parse } from 'node:path';
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, type SourceConvention } from '@zhin.js/feature-kit';
+import {
+  conventionEntryFileName,
+  defineFeatureProvider,
+  type SourceConvention,
+} from '@zhin.js/feature-kit';
 import { parsePageArtifact } from './definition.js';
 import { PageIndex } from './page-index.js';
 
@@ -13,9 +17,13 @@ const pageFiles: SourceConvention = {
     const entries = [...await context.host.list(directory)]
       .sort((left, right) => left.name.localeCompare(right.name));
     for (const entry of entries) {
-      if (entry.kind !== 'file' || !isPageFile(entry.name)) continue;
+      if (entry.kind !== 'file') continue;
+      if (entry.name === '$nav.ts' || entry.name === '$nav.tsx'
+        || entry.name === '$footer.ts' || entry.name === '$footer.tsx') continue;
+      const entryName = conventionEntryFileName(entry.name);
+      if (!entryName || !isPageFile(entryName)) continue;
       yield {
-        localName: parse(entry.name).name,
+        localName: parse(entryName).name,
         source: join(directory, entry.name),
         target: 'client',
       };

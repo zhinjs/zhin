@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-line
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/line.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$line.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -88,7 +88,7 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
-| 技能说明 | `agent/skills/line.md` |
+| 技能说明 | `agent/skills/$line.md` |
 
 ## 已知限制
 

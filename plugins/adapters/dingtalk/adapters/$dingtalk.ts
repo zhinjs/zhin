@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/dingtalk.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$dingtalk.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { httpHostToken } from '@zhin.js/host-http';

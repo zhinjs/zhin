@@ -10,7 +10,7 @@ import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import defineDiscordAdapter from '../adapters/discord.js';
+import defineDiscordAdapter from '../adapters/$discord.js';
 import {
   DiscordGatewayEndpoint,
   DiscordInteractionsEndpoint,
@@ -602,7 +602,7 @@ describe('discord plugin runtime adapter', () => {
   });
 
   it('creates interactions endpoint when httpHostToken provided', async () => {
-    const { default: adapter } = await import('../adapters/discord.js');
+    const { default: adapter } = await import('../adapters/$discord.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'discord'),

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=be1917da893c6b20 -->
+<!-- sync-adapter-docs:sha256=850b2629e38883fa -->
 
 # @zhin.js/adapter-napcat
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-napcat
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/napcat.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$napcat.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -81,7 +81,7 @@ plugins:
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/*.ts` |
-| 技能说明 | `agent/skills/napcat.md` |
+| 技能说明 | `agent/skills/$napcat.md` |
 
 ## 迁移说明（Plugin Runtime）
 

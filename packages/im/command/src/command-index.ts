@@ -465,6 +465,7 @@ function runtimeSegments(owner: string, localName: string): string[] {
   const localSegments = localName.split('/');
   if (owner === 'root') return localSegments;
   const prefix = owner.slice('root/'.length).split('/').join('.');
+  if (localSegments[0]?.startsWith('$')) return [prefix, ...localSegments];
   return [`${prefix}.${localSegments[0]}`, ...localSegments.slice(1)];
 }
 
@@ -578,11 +579,10 @@ function assertParameterSegment(
   const dynamic = dynamicSegments[0] ?? (parameter ? `$${parameter.name}` : '$?');
   throw new Error(
     `Invalid Command path for ${source}: the dynamic segment "${dynamic}" must be the only dynamic `
-    + `segment and come after a static segment (child plugin commands are prefixed by the plugin `
-    + `path, so a dynamic first segment is never reachable). `
+    + `segment and be the final path segment. `
     + (parameter
-      ? `Hint: move the file under a static directory, e.g. "commands/add/[${parameter.name}:${parameter.type}].ts".`
-      : 'Hint: put the file under a static directory, e.g. "commands/add/<file>.ts".'),
+      ? `Hint: keep only one dynamic entry, e.g. "commands/add/$[${parameter.name}].ts".`
+      : 'Hint: keep only one dynamic entry at the end of the command path.'),
   );
 }
 

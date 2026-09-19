@@ -3,7 +3,7 @@ import {
   createMemoryGameServices,
   plainTextFromSendContent,
 } from '@zhin.js/game-kit';
-import middleware from '../middlewares/dungeon-choice.ts';
+import middleware from '../middlewares/$dungeon-choice.ts';
 import {
   createServices,
   type SessionService,

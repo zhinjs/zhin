@@ -21,7 +21,7 @@ pnpm dev
 
 ## 2. 添加一个命令
 
-创建 `commands/roll.ts`：
+创建 `commands/$roll.ts`：
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
@@ -32,7 +32,7 @@ export default defineCommand({
 });
 ```
 
-保存后发送 `/roll`。文件路径提供命令路由；例如 `commands/gh/issue.ts` 对应 `/gh issue`。
+保存后发送 `/roll`。文件路径提供命令路由；例如 `commands/gh/$issue.ts` 对应 `/gh issue`。
 
 ## 3. 添加主动通知
 

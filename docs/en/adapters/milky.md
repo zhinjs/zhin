@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-milky
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/milky.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$milky.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -84,7 +84,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 | Category | Path |
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
-| Skill documentation | `agent/skills/milky.md` |
+| Skill documentation | `agent/skills/$milky.md` |
 
 ## Documentation Links
 

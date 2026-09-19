@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/discord.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$discord.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -75,7 +75,7 @@ plugins:
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（7 个） | `agent/tools/`（`discord_*`：角色、Embed、反应等） |
-| 技能说明 | `agent/skills/discord.md` |
+| 技能说明 | `agent/skills/$discord.md` |
 
 工具使用 Discord Snowflake ID 标识 `guild_id`、`user_id`、`channel_id`。
 

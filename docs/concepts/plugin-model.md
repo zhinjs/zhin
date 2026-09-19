@@ -62,7 +62,7 @@
 插件通过 `features` 数组声明依赖某类能力后，就可以按该 Feature 的约定提供能力实现。例如沙箱适配器插件（`@zhin.js/adapter-sandbox`）声明了 `@zhin.js/adapter` 能力后，在包内 `adapters/` 目录放置约定式入口：
 
 ```ts
-// plugins/adapters/sandbox/adapters/sandbox.ts
+// plugins/adapters/sandbox/adapters/$sandbox.ts
 import { defineAdapter } from 'zhin.js/adapter';
 import { outboundMessageToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';

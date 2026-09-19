@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
+  'adapters', 'agent', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
 ]);
 
 /**
@@ -70,9 +70,15 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);
     const root = parts[capability];
-    if (root === 'pages') return false;
+    if (root === 'pages') return !isFlatCapabilityEntry(parts.slice(capability + 1));
     if (root === 'skills' || root === 'agents') return extname(normalized) !== '.md';
-    if (root === 'tools' || root === 'mcp') return parts.length !== capability + 2;
+    if (root === 'agent') {
+      const local = parts.slice(capability + 1);
+      return local[0] !== 'prompt-sections' || !isCapabilityEntry(local.slice(1));
+    }
+    if (root === 'tools' || root === 'mcp') {
+      return !isFlatCapabilityEntry(parts.slice(capability + 1));
+    }
     if (isCapabilityEntry(parts.slice(capability + 1))) return false;
     // Support files inside capability directories (e.g. commands/_utils.ts)
     // are not discovery entries: reloading the entry URL only bumps that
@@ -257,7 +263,11 @@ function isCapabilitySegment(value: string): boolean {
 }
 
 function isCapabilityModule(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*\.tsx?$/u.test(value);
+  return /^\$.+\.(?:tsx?|[cm]?js)$/u.test(value);
+}
+
+function isFlatCapabilityEntry(segments: readonly string[]): boolean {
+  return segments.length === 1 && isCapabilityModule(segments[0] ?? '');
 }
 
 function isExecutableSource(source: string): boolean {

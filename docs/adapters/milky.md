@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7ba8452148d55383 -->
+<!-- sync-adapter-docs:sha256=450dedeacc768867 -->
 
 # @zhin.js/adapter-milky
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-milky
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/milky.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$milky.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -90,7 +90,7 @@ plugins:
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
-| 技能说明 | `agent/skills/milky.md` |
+| 技能说明 | `agent/skills/$milky.md` |
 
 ## 文档链接
 

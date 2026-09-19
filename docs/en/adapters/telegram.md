@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-telegram
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/telegram.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$telegram.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -103,7 +103,7 @@ The next milestone will register a POST route via `httpHostToken`, instead of us
 | Kind | Path |
 |------|------|
 | Platform tools (10) | `agent/tools/` (invite / pin / admins / sticker / poll, etc.) |
-| Skill doc | `agent/skills/telegram.md` |
+| Skill doc | `agent/skills/$telegram.md` |
 
 ## Troubleshooting
 

@@ -9,10 +9,10 @@ Plugins can do more than send messages to groups -- they can contribute entire R
 
 ## pages/ Convention (@zhin.js/page)
 
-Under the `pages/` directory at the plugin package root, each `.tsx` / `.ts` file (lowercase kebab naming) is a page: **default-export a React component**, and use the named export `meta` to declare metadata (`definePage` from `@zhin.js/console-contract`):
+Under the plugin package root's `pages/` directory, only `$*.tsx` / `$*.ts` files (lowercase kebab naming) are pages: **default-export a React component**, and use the named export `meta` to declare metadata (`definePage` from `@zhin.js/console-contract`). Unprefixed components and helpers remain ordinary colocated modules:
 
 ```tsx
-// pages/index.tsx (plugins/adapters/sandbox)
+// pages/$index.tsx (plugins/adapters/sandbox)
 import { definePage } from '@zhin.js/console-contract';
 import SandboxChat from './SandboxChat';
 
@@ -44,9 +44,9 @@ Route = plugin path + page name (`pageRoute`, `packages/console/plugin-contract/
 
 | File | Plugin | Route |
 | --- | --- | --- |
-| `pages/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom.tsx` | root (application) | `/p-workroom` |
-| `pages/index.tsx` | root (application) | `/` |
+| `pages/$index.tsx` | `sandbox` | `/sandbox` |
+| `pages/$workroom.tsx` | root (application) | `/p-workroom` |
+| `pages/$index.tsx` | root (application) | `/` |
 
 That is: `index` maps to the plugin path itself (no leaf segment), while other files map to `p-<name>` leaf segments. Route conflicts (two pages computing the same route) report errors at startup.
 
@@ -60,7 +60,7 @@ Page/layout files have `target: client`, so they don't go through Node module lo
 
 ```mermaid
 flowchart LR
-    A["pages/*.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild bundling)"]
+    A["pages/$*.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild bundling)"]
     B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
     B --> D["pages.manifest.json"]
     C --> E["GET /assets/client/*<br/>(immutable cache)"]
@@ -94,7 +94,7 @@ The sandbox adapter (`plugins/adapters/sandbox`) is the canonical consumer of th
 }
 ```
 
-The two Features each handle their own domain: `@zhin.js/adapter` discovers the adapter under `adapters/` (WebSocket `/sandbox` Endpoint); `@zhin.js/page` discovers `pages/index.tsx`, so the Console gets a **`/sandbox` chat page**. The `SandboxChat` component connects via WebSocket to the Host's `/sandbox` (base and token from `pages/sandboxTransport.ts`), with message sending and receiving going through the unified IM pipeline -- sending a message in the page is equivalent to a real platform's inbound message, going through middleware, command matching, and AI unmatched handling.
+The two Features each handle their own domain: `@zhin.js/adapter` discovers the adapter under `adapters/` (WebSocket `/sandbox` Endpoint); `@zhin.js/page` discovers `pages/$index.tsx`, so the Console gets a **`/sandbox` chat page**. The `SandboxChat` component connects via WebSocket to the Host's `/sandbox` (base and token from `pages/sandboxTransport.ts`), with message sending and receiving going through the unified IM pipeline -- sending a message in the page is equivalent to a real platform's inbound message, going through middleware, command matching, and AI unmatched handling.
 
 This makes "debugging without a real platform" the default development path: `pnpm dev` (examples/minimal-bot) starts Sandbox + Console, which can verify commands, component rendering, and Agent behavior. Pages render outbound html segments inline (the sandbox adapter directly consumes html, skipping image/text normalization -- see [Middleware and Components](./middleware-components.md)).
 

@@ -12,9 +12,9 @@ List inputs, outputs, side effects, and acceptance before implementation. Choose
 
 | Need | Surface |
 | --- | --- |
-| Explicit text command | `commands/*.ts` |
-| Inbound orchestration | `middlewares/*.ts` / `handlers/*.ts` |
-| Rich message output | `components/*.tsx` |
+| Explicit text command | `commands/$*.ts` |
+| Inbound orchestration | `middlewares/$*.ts` / `handlers/$*.ts` |
+| Rich message output | `components/$*.tsx` |
 | Agent behavior | `agent/tools`, `agent/prompt-sections`, `agent/skills` |
 | Database, schedules, proactive delivery | `plugin.ts` + Host tokens |
 

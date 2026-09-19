@@ -9,7 +9,7 @@ export const meta = definePage({
 
 /**
  * Convention page entry (ADR 0046).
- * `pages/index.tsx` → `/sandbox` (plugin path; no `/p-` leaf).
+ * `pages/$index.tsx` → `/sandbox` (plugin path; no `/p-` leaf).
  * Agent workbench for testing scoped conversations, rich messages and execution traces.
  * WebSocket targets Host `/sandbox` via zhin_api_base + token (see sandboxTransport.ts).
  */

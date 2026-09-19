@@ -50,7 +50,7 @@ function listFiles(dir: string, ext: RegExp): string[] {
   if (!fs.existsSync(dir)) return [];
   try {
     return fs.readdirSync(dir)
-      .filter((f) => ext.test(f))
+      .filter((f) => f.startsWith('$') && ext.test(f))
       .map((f) => path.join(dir, f));
   } catch {
     return [];

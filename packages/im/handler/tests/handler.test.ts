@@ -112,11 +112,13 @@ function createSlot(
   definition: HandlerDefinition,
   owner = 'test-plugin' as PluginId,
 ): Readonly<CapabilitySlot<HandlerDefinition>> {
+  const segments = localName.split('/');
+  const file = segments.pop();
   return Object.freeze({
     id: `slot-${localName}` as never,
     owner,
     localName,
-    source: `/handlers/${localName}.ts`,
+    source: `/handlers/${segments.length > 0 ? `${segments.join('/')}/` : ''}$${file}.ts`,
     definition,
   });
 }
@@ -213,7 +215,7 @@ describe('HandlerIndex', () => {
     expect(descriptors[0]).toEqual({
       owner: 'test-plugin',
       name: 'foo/bar',
-      source: '/handlers/foo/bar.ts',
+      source: '/handlers/foo/$bar.ts',
       event: 'foo.bar',
     });
     expect((descriptors[0] as Record<string, unknown>).slot).toBeUndefined();
@@ -227,7 +229,7 @@ describe('HandlerIndex', () => {
     expect(index.list()).toEqual([{
       owner: 'test-plugin',
       name: 'notice/receive',
-      source: '/handlers/notice/receive.ts',
+      source: '/handlers/notice/$receive.ts',
       event: 'notice.receive',
     }]);
   });
@@ -263,12 +265,12 @@ describe('typeScriptModules for handlers', () => {
         { name: 'message', kind: 'directory' },
       ],
       'handlers/message': [
-        { name: 'receive.ts', kind: 'file' },
+        { name: '$receive.ts', kind: 'file' },
       ],
     });
 
     expect(sources).toEqual([
-      { localName: 'message/receive', source: '/workspace/plugin/handlers/message/receive.ts' },
+      { localName: 'message/receive', source: '/workspace/plugin/handlers/message/$receive.ts' },
     ]);
   });
 
@@ -281,14 +283,14 @@ describe('typeScriptModules for handlers', () => {
         { name: 'tool', kind: 'directory' },
       ],
       'handlers/ai/tool': [
-        { name: 'call.ts', kind: 'file' },
-        { name: 'result.ts', kind: 'file' },
+        { name: '$call.ts', kind: 'file' },
+        { name: '$result.ts', kind: 'file' },
       ],
     });
 
     expect(sources).toEqual([
-      { localName: 'ai/tool/call', source: '/workspace/plugin/handlers/ai/tool/call.ts' },
-      { localName: 'ai/tool/result', source: '/workspace/plugin/handlers/ai/tool/result.ts' },
+      { localName: 'ai/tool/call', source: '/workspace/plugin/handlers/ai/tool/$call.ts' },
+      { localName: 'ai/tool/result', source: '/workspace/plugin/handlers/ai/tool/$result.ts' },
     ]);
   });
 
@@ -300,7 +302,7 @@ describe('typeScriptModules for handlers', () => {
           return [{ name: 'sub', kind: 'directory' as const }];
         }
         if (directory === '/pkg/commands/sub') {
-          return [{ name: 'cmd.ts', kind: 'file' as const }];
+          return [{ name: '$cmd.ts', kind: 'file' as const }];
         }
         return [];
       },

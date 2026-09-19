@@ -31,7 +31,7 @@ pnpm check:l4
 
 - [ ] `GET /api/agent/workroom/runs?projectId=` 与 Journal replay 一致
 - [ ] `GET /api/agent/workroom/runs/:runId` 含 tasks + assignments
-- [ ] Remote Console「Workroom」页可查看 Run / Task / Assignment（`pages/workroom.tsx`）
+- [ ] Remote Console「Workroom」页可查看 Run / Task / Assignment（`pages/$workroom.tsx`）
 
 ## 手工验收
 

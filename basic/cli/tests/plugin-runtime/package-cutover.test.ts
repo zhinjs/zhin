@@ -13,8 +13,8 @@ afterEach(async () => {
 describe('package cutover', () => {
   it('derives providers and commits the entry and manifest as one retryable transition', async () => {
     const root = await fixture();
-    await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
-    await writeFile(join(root, 'middlewares/audit.ts'), legacyMiddlewareDefinition());
+    await writeFile(join(root, 'commands/$status.ts'), legacyCommandDefinition());
+    await writeFile(join(root, 'middlewares/$audit.ts'), legacyMiddlewareDefinition());
     await writeFile(join(root, 'components/card.tsx'), componentDefinition());
     const cutover = new PackageCutover();
     const plan = await cutover.plan(root);
@@ -62,7 +62,7 @@ describe('package cutover', () => {
 
   it('emits a publishable JavaScript package golden manifest for a public plugin', async () => {
     const root = await fixture({ private: false, scripts: { dev: 'zhin dev', build: 'zhin build' } });
-    await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
+    await writeFile(join(root, 'commands/$status.ts'), legacyCommandDefinition());
     const plan = await new PackageCutover().plan(root);
 
     expect({
@@ -169,7 +169,7 @@ describe('package cutover', () => {
         plugins: [],
       },
     });
-    await writeFile(join(root, 'commands/status.ts'), legacyCommandDefinition());
+    await writeFile(join(root, 'commands/$status.ts'), legacyCommandDefinition());
     await writeFile(join(root, 'plugin.ts'), [
       "import { definePlugin } from 'zhin.js';",
       '',

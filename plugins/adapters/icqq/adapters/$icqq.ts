@@ -1,5 +1,5 @@
 /**
- * Convention entry: discover `adapters/icqq.ts` → defineAdapter.
+ * Convention entry: discover `adapters/$icqq.ts` → defineAdapter.
  */
 import { defineAdapter } from 'zhin.js/adapter';
 import { loginAssistToken } from '@zhin.js/core/runtime';

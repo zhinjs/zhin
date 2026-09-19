@@ -4,7 +4,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import defineGithubAdapter from '../adapters/github.js';
+import defineGithubAdapter from '../adapters/$github.js';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { GhClient } from '../src/gh-client.js';
 import {

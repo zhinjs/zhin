@@ -18,7 +18,7 @@ const temporary: string[] = [];
 const hosts: Array<ReturnType<typeof createHttpHost>> = [];
 const sandboxPageSource = join(
   dirname(fileURLToPath(import.meta.url)),
-  '../pages/index.tsx',
+  '../pages/$index.tsx',
 );
 
 afterEach(async () => {
@@ -152,7 +152,7 @@ async function createProject(): Promise<string> {
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
   const pageFiles = [
-    'index.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts',
+    '$index.tsx', 'SandboxChat.tsx', 'RichTextEditor.tsx', 'sandboxTransport.ts',
     'agentTrace.ts', 'playgroundState.ts',
   ];
   for (const name of pageFiles) {

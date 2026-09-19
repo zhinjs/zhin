@@ -67,7 +67,7 @@ export default definePlugin({
 });
 ```
 
-快捷注册与 `commands/hello.ts`、`components/status.tsx` 的目录发现最终生成相同的
+快捷注册与 `commands/$hello.ts`、`components/$status.tsx` 的目录发现最终生成相同的
 `CapabilitySlot`。两者同名会在 prepare 阶段报 `Duplicate Capability Slot`；未挂载对应
 Feature 时也会拒绝启动。单文件入口修改会重建该插件 Scope，拆成约定目录后则可获得
 单能力文件级 HMR。
@@ -139,7 +139,7 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// Agent 工具：与 tools/*.ts 共用同一个候选 capability table
+// Agent 工具：与 tools/$*.ts 共用同一个候选 capability table
 context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
     approval: 'never',

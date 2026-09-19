@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import nextHello from '../commands/hello/[name].js';
-import statusCard from '../components/status-card.js';
+import nextHello from '../commands/hello/$[name].js';
+import statusCard from '../components/$status-card.js';
 import { legacyHello } from '../legacy/hello.js';
-import audit from '../middlewares/audit.js';
+import audit from '../middlewares/$audit.js';
 
 describe('dual-version migration tracer', () => {
   it('preserves command callback behavior across the compatibility boundary', async () => {

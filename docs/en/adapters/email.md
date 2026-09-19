@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-email
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/email.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/$email.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json` (`smtp` / `imap`)
@@ -99,7 +99,7 @@ It is recommended to use environment variables for storing email passwords. Do n
 
 ## AI Tools
 
-See `agent/skills/email.md` for skill documentation.
+See `agent/skills/$email.md` for skill documentation.
 
 ## Documentation Links
 

@@ -1,6 +1,6 @@
 ---
 title: Agent Tools and Skills
-description: tools/*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and *.agent.md
+description: tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and *.agent.md
 ---
 
 # Agent Tools and Skills
@@ -9,7 +9,7 @@ Want the model to search a song or check a lottery recommendation for the user? 
 
 ```mermaid
 flowchart LR
-    A["tools/*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
+    A["tools/$*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex projection"]
     D --> E[CapabilityIngress]
@@ -19,12 +19,12 @@ flowchart LR
     H --> I[Tool set callable by the model]
 ```
 
-## Path One: `tools/*.ts` Convention
+## Path One: `tools/$*.ts` Convention
 
-After mounting the `@zhin.js/tool` Feature, each `.ts` file under `tools/` (non-recursive) in the plugin package root default-exports `defineAgentTool(...)`:
+After mounting the `@zhin.js/tool` Feature, only `$*.ts` files directly under the plugin package root's `tools/` directory are discovered, and each default-exports `defineAgentTool(...)`. Unprefixed files such as `helper.ts` remain ordinary importable modules:
 
 ```ts
-// tools/echo.ts (examples/minimal-bot)
+// tools/$echo.ts (examples/minimal-bot)
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -148,15 +148,15 @@ my-plugin/
 ├── agent/
 │   ├── agent.ts           # defineAgent: description, keywords, toolNames, systemPrompt
 │   ├── instructions.md    # System prompt body
-│   ├── tools/*.ts         # defineAgentTool (from '@zhin.js/agent/tools')
+│   ├── tools/$*.ts         # defineAgentTool (from '@zhin.js/agent/tools')
 │   ├── skills/*.{md,ts}   # .md can have frontmatter (description / tools / always)
 │   └── subagents/<name>/  # Recursively isomorphic sub-Agents
 ```
 
-The difference from `@zhin.js/tool`'s `defineAgentTool`: the `@zhin.js/agent/tools` version's `execute(input, ctx)` receives `{ pluginName, runtimeName, filePath }` context as the second argument, `approval` supports `'always' | 'once' | 'never'` or a custom predicate, and it can configure `toModelOutput` to shape the text returned to the model. Real-world example: `plugins/utils/short-url/agent/tools/short_url.ts`.
+The difference from `@zhin.js/tool`'s `defineAgentTool`: the `@zhin.js/agent/tools` version's `execute(input, ctx)` receives `{ pluginName, runtimeName, filePath }` context as the second argument, `approval` supports `'always' | 'once' | 'never'` or a custom predicate, and it can configure `toModelOutput` to shape the text returned to the model. Real-world example: `plugins/utils/short-url/agent/tools/$short_url.ts`.
 
 ```ts
-// agent/tools/short_url.ts (plugins/utils/short-url, excerpt)
+// agent/tools/$short_url.ts (plugins/utils/short-url, excerpt)
 import { defineAgentTool } from '@zhin.js/agent/tools';
 import { z } from 'zod';
 
@@ -196,7 +196,7 @@ Declare both the dependency and the Feature:
 
 ### 2. Declare a context section
 
-Create `agent/prompt-sections/project-rules.ts` at the plugin root:
+Create `agent/prompt-sections/$project-rules.ts` at the plugin root:
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -227,7 +227,7 @@ The total budget is configured by `ai.agent.systemPromptMaxChars`.
 Open **Prompt Sections** in the Console capability catalog to inspect owner,
 source, generation, profiles, and budget policy. Introspection deliberately omits
 the prompt text because it can contain internal product policy. A runnable example
-is in `examples/full-bot/agent/prompt-sections/custom.ts`.
+is in `examples/full-bot/agent/prompt-sections/$custom.ts`.
 
 A Prompt Section changes model context; it **does not grant tool, data, or approval
 authority**. Those permissions still come from Tool Features, Runtime resources,

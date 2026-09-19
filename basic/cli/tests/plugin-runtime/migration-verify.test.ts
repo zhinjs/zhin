@@ -27,14 +27,14 @@ describe('MigrationVerifier', () => {
 
   it('builds and packs a publish cutover without installing dependencies', async () => {
     const root = await fixture(false);
-    await writeFile(join(root, 'commands/status.ts'), 'export default {};\n');
+    await writeFile(join(root, 'commands/$status.ts'), 'export default {};\n');
     await cutover(root);
     await fakeTypeScript(root, [
       "printf 'export default {}\\n' > plugin.js",
       "printf 'declare const plugin: unknown; export default plugin;\\n' > plugin.d.ts",
       'mkdir -p commands',
-      "printf 'export default {}\\n' > commands/status.js",
-      "printf 'declare const command: unknown; export default command;\\n' > commands/status.d.ts",
+      "printf 'export default {}\\n' > 'commands/$status.js'",
+      "printf 'declare const command: unknown; export default command;\\n' > 'commands/$status.d.ts'",
       'exit 0',
     ].join('\n'));
 
@@ -48,7 +48,7 @@ describe('MigrationVerifier', () => {
       'package/package.json',
       'package/plugin.js',
       'package/plugin.d.ts',
-      'package/commands/status.js',
+      'package/commands/$status.js',
     ]));
   });
 

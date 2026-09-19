@@ -79,7 +79,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | Plugin Agent Publish（`pnpm check:plugin-agent-publish`） | 带 `agent/` 的插件发布清单（files、prepublishOnly、peer 依赖） |
 | Publish Repository（`pnpm check:publish-repository`） | 可发布包 `repository.url` 匹配 github.com/zhinjs/zhin（npm provenance） |
 | Agent Tool Schema（`pnpm check:agent-tool-schema`） | `agent/tools` inputSchema 与 defineAgentTool/execute 类型一致 |
-| No Package-Root skills/（`pnpm check:no-package-skills`） | 插件包禁止顶层 `skills/`，须用 `agent/skills/*.md` |
+| No Package-Root skills/（`pnpm check:no-package-skills`） | 插件包禁止顶层 `skills/`，须用 `agent/skills/$*.md` |
 
 **IM 链路与运行时约定**
 

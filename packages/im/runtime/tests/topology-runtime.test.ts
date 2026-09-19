@@ -50,7 +50,7 @@ describe('Manifest topology transaction', () => {
     });
     modules.set(source('packages/command/index.ts'), { default: commandFeature });
     for (const owner of ['a', 'b', 'c']) {
-      modules.set(source(`plugins/${owner}/commands/status.ts`), {
+      modules.set(source(`plugins/${owner}/commands/$status.ts`), {
         default: defineCommand({ execute: ({ owner: contextOwner }) => contextOwner.id }),
       });
     }
@@ -243,11 +243,11 @@ async function createProject(): Promise<string> {
   for (const file of [
     'plugin.ts',
     'plugins/a/plugin.ts',
-    'plugins/a/commands/status.ts',
+    'plugins/a/commands/$status.ts',
     'plugins/b/plugin.ts',
-    'plugins/b/commands/status.ts',
+    'plugins/b/commands/$status.ts',
     'plugins/c/plugin.ts',
-    'plugins/c/commands/status.ts',
+    'plugins/c/commands/$status.ts',
     'plugins/broken/plugin.ts',
     'packages/command/index.ts',
   ]) await touch(join(root, file));

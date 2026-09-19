@@ -23,7 +23,8 @@ function walkTsTools(dir, visit) {
     const abs = path.join(dir, ent.name);
     if (ent.isDirectory()) {
       if (ent.name === 'tools' && path.basename(path.dirname(abs)) === 'agent') {
-        for (const file of fs.readdirSync(abs).filter((f) => f.endsWith('.ts'))) {
+        for (const file of fs.readdirSync(abs)
+          .filter((f) => f.startsWith('$') && f.endsWith('.ts'))) {
           visit(path.join(abs, file));
         }
       } else {

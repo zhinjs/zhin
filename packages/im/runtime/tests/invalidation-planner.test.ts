@@ -35,14 +35,14 @@ function ownership(): SourceOwnershipIndex {
     owner: root,
   });
   index.add({
-    source: '/project/plugins/child/commands/status.ts',
+    source: '/project/plugins/child/commands/$status.ts',
     role: 'capability',
     owner: child,
     capability: childCommand,
     feature: commandFeature,
   });
   index.add({
-    source: '/project/plugins/sibling/commands/status.ts',
+    source: '/project/plugins/sibling/commands/$status.ts',
     role: 'capability',
     owner: sibling,
     capability: siblingCommand,
@@ -76,7 +76,7 @@ function ownership(): SourceOwnershipIndex {
 describe('InvalidationPlanner', () => {
   it('keeps a direct Capability change at Slot scope', () => {
     const plan = new InvalidationPlanner(ownership()).plan([
-      '/project/plugins/child/commands/status.ts',
+      '/project/plugins/child/commands/$status.ts',
     ]);
 
     expect(plan).toMatchObject({
@@ -88,7 +88,7 @@ describe('InvalidationPlanner', () => {
 
   it('uses reverse importers to classify an otherwise untracked support module', () => {
     const dependencies: DependencyImpactPort = {
-      affectedSources: () => ['/project/plugins/child/commands/status.ts'],
+      affectedSources: () => ['/project/plugins/child/commands/$status.ts'],
     };
     const plan = new InvalidationPlanner(ownership(), dependencies).plan([
       '/project/plugins/child/shared/format.ts',
@@ -113,7 +113,7 @@ describe('InvalidationPlanner', () => {
   it('keeps manifest and Capability changes in one generation plan', () => {
     const plan = new InvalidationPlanner(ownership()).plan([
       '/project/package.json',
-      '/project/plugins/child/commands/status.ts',
+      '/project/plugins/child/commands/$status.ts',
     ]);
 
     expect(plan).toMatchObject({

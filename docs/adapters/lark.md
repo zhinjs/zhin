@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=badc7385025f5e84 -->
+<!-- sync-adapter-docs:sha256=e22375484b4a4c98 -->
 
 # @zhin.js/adapter-lark
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-lark
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/lark.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$lark.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）

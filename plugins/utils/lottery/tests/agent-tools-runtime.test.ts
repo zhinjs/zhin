@@ -5,13 +5,13 @@ import { createInMemoryLotteryDb } from '../src/memory-db.js';
 import { upsertDraws } from '../src/db.js';
 import { lotteryRuntimeToken, type LotteryRuntime } from '../src/runtime-state.js';
 import { resolveLotteryConfig } from '../src/config.js';
-import computeRecommend from '../tools/compute-recommend.js';
-import getModelState from '../tools/get-model-state.js';
-import history from '../tools/history.js';
-import listPending from '../tools/list-pending.js';
-import savePrediction from '../tools/save-prediction.js';
-import statsSnapshot from '../tools/stats-snapshot.js';
-import sync from '../tools/sync.js';
+import computeRecommend from '../tools/$compute-recommend.js';
+import getModelState from '../tools/$get-model-state.js';
+import history from '../tools/$history.js';
+import listPending from '../tools/$list-pending.js';
+import savePrediction from '../tools/$save-prediction.js';
+import statsSnapshot from '../tools/$stats-snapshot.js';
+import sync from '../tools/$sync.js';
 
 const TOOLS = [
   computeRecommend,

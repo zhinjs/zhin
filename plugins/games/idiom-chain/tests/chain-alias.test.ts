@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import middleware from '../middlewares/chain-alias.ts';
+import middleware from '../middlewares/$chain-alias.ts';
 import { CHAIN_HELP } from '../src/chain-command.js';
 import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionService } from '../src/session-service.js';

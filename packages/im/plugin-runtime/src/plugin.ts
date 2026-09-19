@@ -68,7 +68,7 @@ const pluginNamePattern = /^[a-z][a-z0-9-]*$/;
  * });
  * ```
  *
- * Put capabilities in convention files such as `commands/hello.ts`, each with
+ * Put capabilities in convention files such as `commands/$hello.ts`, each with
  * one default export.
  */
 export function definePlugin<TConfig = unknown>(

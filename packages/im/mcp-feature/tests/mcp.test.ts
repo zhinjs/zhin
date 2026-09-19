@@ -26,16 +26,16 @@ describe('MCP Feature', () => {
     expect(() => parseMcpDefinition({ create() {} })).toThrow('defineMcp');
   });
 
-  it('discovers only flat mcp/*.ts client definitions', async () => {
+  it('discovers only flat mcp/$*.ts client definitions', async () => {
     const definition = defineMcp({
       create: () => ({ listTools: () => [], callTool: () => undefined }),
     });
     const host = new MemoryHost({
       '/project/mcp': [
-        { name: 'memory.ts', kind: 'file' },
+        { name: '$memory.ts', kind: 'file' },
         { name: 'nested', kind: 'directory' },
       ],
-    }, new Map([['/project/mcp/memory.ts', { default: definition }]]));
+    }, new Map([['/project/mcp/$memory.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(mcpFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -50,7 +50,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'memory',
-      source: '/mcp/memory.ts',
+      source: '/mcp/$memory.ts',
       definition: defineMcp({
         create: () => ({
           start() { events.push('start'); },
@@ -116,7 +116,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'flaky',
-      source: '/mcp/flaky.ts',
+      source: '/mcp/$flaky.ts',
       definition: defineMcp({
         create: () => ({
           start() { events.push('start'); },
@@ -149,7 +149,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'server',
-      source: `/mcp/server-${tag}.ts`,
+      source: `/mcp/$server-${tag}.ts`,
       definition: defineMcp({
         create: () => ({
           start() { events.push(`${tag}:start`); },
@@ -190,7 +190,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'server',
-      source: `/mcp/server-${tag}.ts`,
+      source: `/mcp/$server-${tag}.ts`,
       definition: defineMcp({
         create: () => ({
           start() {

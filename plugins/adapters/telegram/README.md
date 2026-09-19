@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-telegram
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/telegram.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$telegram.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -116,7 +116,7 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 | Kind | Path |
 |------|------|
 | Platform tools (10) | `agent/tools/`（invite / pin / admins / sticker / poll 等） |
-| Skill doc | `agent/skills/telegram.md` |
+| Skill doc | `agent/skills/$telegram.md` |
 
 ## 故障排查
 

@@ -1,8 +1,8 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
-import inbound from '../middlewares/inbound.ts';
-import outbound from '../middlewares/outbound.ts';
+import inbound from '../middlewares/$inbound.ts';
+import outbound from '../middlewares/$outbound.ts';
 import {
   DEFAULT_ACTIONS,
   BUILTIN_LEXICON,

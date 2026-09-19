@@ -4,52 +4,89 @@
   "approvedNonPatchReleases": [
     {
       "changeset": "clean-agent-runtime-surface.md",
-      "packages": ["@zhin.js/agent"],
+      "packages": [
+        "@zhin.js/agent"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove misplaced runtime internals from the Agent root API as part of the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "sharp-domain-boundaries.md",
-      "packages": ["@zhin.js/agent"],
+      "packages": [
+        "@zhin.js/agent"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Enforce owner-directed zero-compatibility domain boundaries and remove deprecated Workroom catalog aliases."
     },
     {
       "changeset": "uniform-owner-scopes.md",
-      "packages": ["@zhin.js/plugin-runtime"],
+      "packages": [
+        "@zhin.js/plugin-runtime"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove legacy host unwrapping and root-owner namespace exceptions under the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "class-based-owner-hosts.md",
-      "packages": ["@zhin.js/plugin-runtime"],
+      "packages": [
+        "@zhin.js/plugin-runtime"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace anonymous Host factories with an explicit class hierarchy under the owner-directed architecture refactor."
     },
     {
       "changeset": "class-based-agent-authorities.md",
-      "packages": ["@zhin.js/agent"],
+      "packages": [
+        "@zhin.js/agent"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace stateful anonymous runtime authority factories with explicit classes under the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "strict-agent-host-contracts.md",
-      "packages": ["@zhin.js/cli"],
+      "packages": [
+        "@zhin.js/cli"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove Agent Host compatibility inputs and metadata authority fallbacks under the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "native-bash-tool-feature.md",
-      "packages": ["@zhin.js/agent"],
+      "packages": [
+        "@zhin.js/agent"
+      ],
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the classic Bash tool API and hidden authority channel under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "explicit-convention-entries.md",
+      "packages": [
+        "@zhin.js/feature-kit",
+        "@zhin.js/command",
+        "@zhin.js/adapter",
+        "@zhin.js/middleware",
+        "@zhin.js/handler",
+        "@zhin.js/component",
+        "@zhin.js/tool",
+        "@zhin.js/mcp-feature",
+        "@zhin.js/prompt-section",
+        "@zhin.js/page",
+        "@zhin.js/runtime",
+        "@zhin.js/agent",
+        "@zhin.js/cli",
+        "create-zhin-app",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Adopt the owner-directed zero-compatibility explicit convention-entry model so colocated helper modules and top-level dynamic commands have unambiguous semantics."
     }
   ]
 }

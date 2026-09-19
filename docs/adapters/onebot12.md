@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=d2bdee3ab75db8e4 -->
+<!-- sync-adapter-docs:sha256=a143008c9f882b85 -->
 
 # @zhin.js/adapter-onebot12
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-onebot12
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/onebot12.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$onebot12.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -85,7 +85,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/onebot12.md`。
+技能说明见 `agent/skills/$onebot12.md`。
 
 ## 文档链接
 

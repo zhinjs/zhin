@@ -46,7 +46,7 @@ my-bot/
 
 ## 4. Observe hot reload
 
-Change the reply in `commands/hello.ts`, save it, and send `/hello` again. New requests use the new generation; an in-flight request keeps its original snapshot.
+Change the reply in `commands/$hello.ts`, save it, and send `/hello` again. New requests use the new generation; an in-flight request keeps its original snapshot.
 
 ## Troubleshooting
 

@@ -16,7 +16,7 @@
  * 接入步骤（以 telegram 为例）：
  * 1. plugin.ts setup 里 `context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState())`，
  *    token 由 `defineEndpointRuntimeStateToken('telegram')` 创建。
- * 2. adapters/telegram.ts create() 里 `context.use(token).endpoints.set(config.id, { id, mode })`。
+ * 2. adapters/$telegram.ts create() 里 `context.use(token).endpoints.set(config.id, { id, mode })`。
  * 3. src 下 `export const telegramEndpointCommands = createEndpointCommands({ adapterKey: 'telegram', ... }, defineCommand)`
  *    （defineCommand 由调用方从 @zhin.js/command 传入——provider 包之间禁止互相 import，
  *    见 scripts/check-architecture-layers.mjs，故 defineCommand 走依赖注入）。

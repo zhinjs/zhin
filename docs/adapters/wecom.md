@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1b710cf177f86185 -->
+<!-- sync-adapter-docs:sha256=812e207cbdf7f537 -->
 
 # @zhin.js/adapter-wecom
 
@@ -29,7 +29,7 @@ pnpm add @zhin.js/adapter-wecom
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/wecom.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/$wecom.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -122,7 +122,7 @@ Access Token 在过期前 5 分钟自动刷新。
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（4 个） | `agent/tools/` |
-| 技能说明 | `agent/skills/wecom.md` |
+| 技能说明 | `agent/skills/$wecom.md` |
 
 ## 平台权限（platform permit）
 

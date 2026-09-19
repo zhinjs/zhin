@@ -12,9 +12,9 @@ title: 插件完整交付
 
 | 需求 | 入口 |
 | --- | --- |
-| 文本指令 | `commands/*.ts` |
-| 入站编排 | `middlewares/*.ts` / `handlers/*.ts` |
-| 富消息输出 | `components/*.tsx` |
+| 文本指令 | `commands/$*.ts` |
+| 入站编排 | `middlewares/$*.ts` / `handlers/$*.ts` |
+| 富消息输出 | `components/$*.tsx` |
 | Agent 行为 | `agent/tools`、`agent/prompt-sections`、`agent/skills` |
 | 数据库、定时任务、主动推送 | `plugin.ts` + Host token |
 

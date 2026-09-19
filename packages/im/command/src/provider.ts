@@ -1,6 +1,7 @@
 import { basename, join, parse, sep } from 'node:path';
 import { featureId, isCapabilityLocalSegment } from '@zhin.js/plugin-runtime';
 import {
+  conventionEntryFileName,
   defineFeatureProvider,
   type DiscoveryContext,
   type DiscoveredSource,
@@ -25,7 +26,7 @@ const commandFiles: SourceConvention = {
   async load(source, context) {
     const module = await context.host.loadModule<{ default?: unknown }>(source.source);
     const definition = parseCommandDefinition(module.default);
-    const file = parseCommandFile(basename(source.source));
+    const file = parseCommandEntryFile(basename(source.source));
     return bindCommandParameter(definition, resolveParameter(definition, file, source.source));
   },
 };
@@ -39,7 +40,7 @@ async function* discoverCommandDirectory(
     .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
   const files = entries.flatMap((entry) => {
     if (entry.kind !== 'file') return [];
-    const parsed = parseCommandFile(entry.name);
+    const parsed = parseCommandEntryFile(entry.name);
     return parsed ? [{ entry, parsed }] : [];
   });
   const preferJavaScript = context.packageRoot
@@ -63,7 +64,7 @@ async function* discoverCommandDirectory(
       continue;
     }
     if (entry.kind !== 'file') continue;
-    const file = parseCommandFile(entry.name);
+    const file = parseCommandEntryFile(entry.name);
     if (!file) continue;
     if (preferredFiles.get(file.localSegment) !== entry.name) continue;
     yield {
@@ -123,6 +124,11 @@ function parseCommandFile(value: string): ParsedCommandFile | undefined {
   return undefined;
 }
 
+function parseCommandEntryFile(value: string): ParsedCommandFile | undefined {
+  const entryName = conventionEntryFileName(value);
+  return entryName ? parseCommandFile(entryName) : undefined;
+}
+
 /** 把文件名形态与 `definition.params` 合并成完整参数定义。 */
 function resolveParameter(
   definition: CommandDefinition,
@@ -141,7 +147,7 @@ function resolveParameter(
   if (!hint.optional && schema.default !== undefined) {
     throw new CommandPathSyntaxError(
       source,
-      `params.${hint.name} has a default but the file is required: rename to [[${hint.name}]]`,
+      `params.${hint.name} has a default but the file is required: rename to $[[${hint.name}]]`,
     );
   }
   return {
@@ -166,7 +172,7 @@ function commandFilePriority(value: string, preferJavaScript: boolean): number {
 export class CommandPathSyntaxError extends TypeError {
   constructor(
     file: string,
-    detail = 'expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)',
+    detail = 'expected $[name].ts(x), $[[name]].ts(x), $[...name].ts(x) or $[[...name]].ts(x)',
   ) {
     super(`Invalid Command path ${file}: ${detail}`);
     this.name = 'CommandPathSyntaxError';

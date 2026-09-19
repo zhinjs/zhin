@@ -42,10 +42,10 @@ describe('IM Feature slot HMR', () => {
     const commandProvider = join(project, 'packages/command/index.ts');
     const middlewareProvider = join(project, 'packages/middleware/index.ts');
     const componentProvider = join(project, 'packages/component/index.ts');
-    const adapterSource = join(project, 'adapters/test.ts');
-    const commandSource = join(project, 'commands/ping.ts');
-    const middlewareSource = join(project, 'middlewares/trace.ts');
-    const componentSource = join(project, 'components/status.tsx');
+    const adapterSource = join(project, 'adapters/$test.ts');
+    const commandSource = join(project, 'commands/$ping.ts');
+    const middlewareSource = join(project, 'middlewares/$trace.ts');
+    const componentSource = join(project, 'components/$status.tsx');
     let setups = 0;
     const endpoints = { creates: 0, starts: 0, opens: 0, closes: 0, stops: 0 };
     modules.set(pluginSource, {
@@ -263,10 +263,10 @@ async function createProject(): Promise<string> {
     'packages/command/index.ts',
     'packages/middleware/index.ts',
     'packages/component/index.ts',
-    'adapters/test.ts',
-    'commands/ping.ts',
-    'middlewares/trace.ts',
-    'components/status.tsx',
+    'adapters/$test.ts',
+    'commands/$ping.ts',
+    'middlewares/$trace.ts',
+    'components/$status.tsx',
   ]) await touch(join(root, file));
   return realpath(root);
 }

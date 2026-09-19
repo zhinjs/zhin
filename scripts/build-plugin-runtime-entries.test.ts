@@ -31,11 +31,11 @@ describe('build-plugin-runtime-entries', () => {
       "import value from './src/value.js';\nexport default value satisfies number;\n",
     );
     await writeFile(
-      join(root, 'commands/gh/status.ts'),
+      join(root, 'commands/gh/$status.ts'),
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(
-      join(root, 'tools/status.ts'),
+      join(root, 'tools/$status.ts'),
       "import value from '../src/value.js';\nexport default value as number;\n",
     );
 
@@ -43,14 +43,14 @@ describe('build-plugin-runtime-entries', () => {
 
     expect(outputs.map((path) => path.slice(root.length + 1))).toEqual([
       'plugin.js',
-      'commands/gh/status.js',
-      'tools/status.js',
+      'commands/gh/$status.js',
+      'tools/$status.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
       .toContain('./lib/value.js');
-    expect(await readFile(join(root, 'commands/gh/status.js'), 'utf8'))
+    expect(await readFile(join(root, 'commands/gh/$status.js'), 'utf8'))
       .toContain('../../lib/value.js');
-    expect(await readFile(join(root, 'tools/status.js'), 'utf8'))
+    expect(await readFile(join(root, 'tools/$status.js'), 'utf8'))
       .toContain('../lib/value.js');
   });
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import middleware from '../middlewares/dice-choice.ts';
+import middleware from '../middlewares/$dice-choice.ts';
 import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionService } from '../src/session-service.js';
 

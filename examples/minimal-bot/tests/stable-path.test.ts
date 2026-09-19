@@ -26,7 +26,7 @@ import {
   createTerminalEndpoint,
   type TerminalClient,
   type TerminalEndpointOptions,
-} from '../adapters/terminal.js';
+} from '../adapters/$terminal.js';
 
 const botRoot = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const packageJson = JSON.parse(
@@ -49,7 +49,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
   it('loads the terminal source using native Node without the Vitest transformer', () => {
     expect(() => execFileSync(process.execPath, [
       '--experimental-strip-types', '--input-type=module', '-e',
-      "await import('./adapters/terminal.ts?zhin-generation=0')",
+      "await import('./adapters/$terminal.ts?zhin-generation=0')",
     ], { cwd: botRoot, env: { ...process.env, NODE_OPTIONS: '' }, stdio: 'pipe' })).not.toThrow();
   });
 
@@ -88,14 +88,14 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     expect(configText).toMatch(/plugins:\s*\{\}/);
     expect(fs.existsSync(path.join(botRoot, 'src', 'plugins'))).toBe(false);
 
-    for (const source of ['commands/hello.ts', 'commands/card.ts']) {
+    for (const source of ['commands/$hello.ts', 'commands/$card.ts']) {
       expect(fs.readFileSync(path.join(botRoot, source), 'utf8')).toContain('defineCommand');
     }
-    expect(fs.readFileSync(path.join(botRoot, 'components/status-card.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'components/$status-card.ts'), 'utf8'))
       .toContain('defineComponent');
-    expect(fs.readFileSync(path.join(botRoot, 'adapters/terminal.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'adapters/$terminal.ts'), 'utf8'))
       .toContain('defineAdapter');
-    expect(fs.readFileSync(path.join(botRoot, 'tools/echo.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'tools/$echo.ts'), 'utf8'))
       .toContain('defineAgentTool');
   });
 

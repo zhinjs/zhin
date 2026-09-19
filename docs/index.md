@@ -47,7 +47,7 @@ cd my-bot && pnpm dev
 打开 [console.zhin.dev](https://console.zhin.dev) →
 Sandbox → `/hello`。
 
-想拆成约定目录？`commands/hello.ts` 默认导出同一个
+想拆成约定目录？`commands/$hello.ts` 默认导出同一个
 `defineCommand(...)` 即可——见 [minimal-bot](/examples/#minimal-bot-stable-最小路径)。
 
 </template>
