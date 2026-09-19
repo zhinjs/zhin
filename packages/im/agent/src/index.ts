@@ -166,7 +166,7 @@ export {
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
-export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
+export { createSpawnTaskTool } from './spawn/spawn-task-tool.js';
 export * from './interaction/index.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
@@ -198,20 +198,6 @@ export type {
 } from './subagent/index.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
-export { BuiltinBaseTool } from './builtin/builtin-base-tool.js';
-export {
-  readSkillInstructions,
-  LoadSkillBuiltinTool,
-  createLoadSkillTool,
-  LOAD_SKILL_PARAMETERS,
-  type LoadSkillToolOptions,
-} from './builtin/load-skill-tool.js';
-export {
-  InstallSkillBuiltinTool,
-  createInstallSkillTool,
-  INSTALL_SKILL_PARAMETERS,
-  type InstallSkillToolOptions,
-} from './builtin/install-skill-tool.js';
 export {
   stampToolGeneration,
 } from './tool/tool-system.js';
@@ -433,7 +419,7 @@ export {
   AI_EVENT_NAMES,
   subscribeAIEventsOnTarget,
 } from './ai-event-subscriber.js';
-export { originFromMessage } from './builtin/spawn-task-tool.js';
+export { originFromMessage } from './spawn/spawn-task-tool.js';
 export type {
   AIEventFilter,
   AIEventHandlers,
@@ -551,7 +537,7 @@ export { AgentResourceHub } from './resource-hub/index.js';
 export {
   ResourceRegistry,
   canAccessTool,
-  normalizeTool, sharedToolSelection,
+  normalizeTool,
   SkillRegistry,
   SubAgentRegistry,
   McpRegistry,
@@ -580,8 +566,8 @@ export {
   filterToolNamesForRole,
   filterToolsForRole,
   isToolAllowedForRole,
-} from './builtin/five-agent/index.js';
-export type { FiveAgentRole } from './builtin/five-agent/index.js';
+} from './orchestration/five-agent/index.js';
+export type { FiveAgentRole } from './orchestration/five-agent/index.js';
 
 export {
   defineAgent,

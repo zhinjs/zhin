@@ -6,8 +6,8 @@ import type { Message } from '@zhin.js/core';
 import {
   createSpawnTaskTool,
   originFromMessage,
-  SpawnTaskBuiltinTool,
-} from '../../src/builtin/spawn-task-tool.js';
+  SpawnTaskTool,
+} from '../../src/spawn/spawn-task-tool.js';
 import type { SubagentSystem } from '../../src/subagent/index.js';
 
 function mockMessage(overrides: Partial<Message<any>> = {}): Message<any> {
@@ -20,7 +20,7 @@ function mockMessage(overrides: Partial<Message<any>> = {}): Message<any> {
   } as Message<any>;
 }
 
-describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
+describe('SpawnTaskTool / createSpawnTaskTool', () => {
   it('originFromMessage wraps the comm message', () => {
     const full = mockMessage();
     expect(originFromMessage(full)).toEqual({ message: full });
@@ -73,8 +73,8 @@ describe('SpawnTaskBuiltinTool / createSpawnTaskTool', () => {
   it('run rejects empty task without calling spawn', async () => {
     const spawn = vi.fn();
     const system = { spawn } as unknown as SubagentSystem;
-    const inst = new SpawnTaskBuiltinTool({} as Message<any>, system);
-    const out = await inst.run({ task: '' });
+    const inst = new SpawnTaskTool({} as Message<any>, system);
+    const out = await inst.execute({ task: '' });
     expect(out).toBe('请提供任务描述');
     expect(spawn).not.toHaveBeenCalled();
   });

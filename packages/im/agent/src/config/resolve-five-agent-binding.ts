@@ -1,4 +1,4 @@
-import type { FiveAgentRole } from '../builtin/five-agent/roles.js';
+import type { FiveAgentRole } from '../orchestration/five-agent/roles.js';
 import {
   type AgentBindingConfig,
   type ResolvedAgentBinding,

@@ -1,11 +1,8 @@
-/**
- * load_skill 内置工具单测
- */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { readSkillInstructions } from '../../src/builtin/load-skill-tool.js';
+import { SkillInstructionReader } from '../../src/skill/skill-instruction-reader.js';
 
 const SKILL_BODY = `---
 name: ninja
@@ -16,7 +13,7 @@ description: test skill
 Do the thing.
 `;
 
-describe('load_skill', () => {
+describe('SkillInstructionReader', () => {
   let tmp: string;
   beforeEach(() => {
     tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-load-skill-'));
@@ -25,15 +22,21 @@ describe('load_skill', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   });
 
-  it('readSkillInstructions 扫描目录下技能', async () => {
+  it('reads a discovered Skill into a typed result', async () => {
     const skillRoot = path.join(tmp, 'skills-root');
     const skillDir = path.join(skillRoot, 'ninja');
     fs.mkdirSync(skillDir, { recursive: true });
     fs.writeFileSync(path.join(skillDir, 'SKILL.md'), SKILL_BODY, 'utf-8');
-    const text = await readSkillInstructions('ninja', {
-      skillDirList: () => [skillRoot],
-      skillMaxChars: 4000,
+    const reader = new SkillInstructionReader({
+      directories: () => [skillRoot],
+      maxChars: 4000,
     });
-    expect(text).toContain('Do the thing');
+
+    await expect(reader.read('ninja')).resolves.toMatchObject({
+      status: 'found',
+      instructions: expect.stringContaining('Do the thing'),
+    });
+    await expect(reader.read('missing')).resolves.toEqual({ status: 'missing', name: 'missing' });
+    await expect(reader.read('../escape')).rejects.toThrow('canonical name');
   });
 });

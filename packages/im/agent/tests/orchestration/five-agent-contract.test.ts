@@ -7,8 +7,8 @@ import { describe, it, expect } from 'vitest';
 import {
   isToolAllowedForRole,
   filterToolNamesForRole,
-} from '../../src/builtin/five-agent/role-capability-policy.js';
-import { FiveAgentPromptRegistry } from '../../src/builtin/five-agent/index.js';
+} from '../../src/orchestration/five-agent/role-capability-policy.js';
+import { FiveAgentPromptRegistry } from '../../src/orchestration/five-agent/index.js';
 import { resolveFiveAgentRoleBinding } from '../../src/config/resolve-five-agent-binding.js';
 
 describe('role ACL', () => {

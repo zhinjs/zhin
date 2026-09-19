@@ -34,7 +34,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 
 ### Agent（minimal 配置：无 toolSearch、无 MCP）
 
-- [x] **spawn_task**：`packages/agent/tests/builtin/spawn-task-tool.test.ts`（含于 `pnpm check:stable`）
+- [x] **spawn_task**：`packages/im/agent/tests/spawn/spawn-task-tool.test.ts`（含于 `pnpm check:stable`）
 - [x] **Bootstrap**：工作区 `SOUL.md` / `TOOLS.md` / `AGENTS.md`（本目录；手测 / 启动日志）
 - [x] **exec allowlist**：`packages/agent/tests/exec-policy.test.ts`（含于 `pnpm check:stable`）
 - [x] **minimal-bot 配置契约**：`examples/minimal-bot/tests/stable-path.test.ts`（含于 `pnpm check:stable`）

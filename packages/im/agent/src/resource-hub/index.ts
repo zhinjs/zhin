@@ -141,8 +141,7 @@ export class AgentResourceHub {
 
 // Re-export everything consumers need
 export { ResourceRegistry } from './resource-registry.js';
-export { canAccessTool, normalizeTool, sharedToolSelection } from './tool-selection.js';
-export type { CollectToolsContext } from './tool-selection.js';
+export { canAccessTool, normalizeTool } from './tool-selection.js';
 export { SkillRegistry } from './skill-registry.js';
 export { SubAgentRegistry } from './subagent-registry.js';
 export { McpRegistry } from './mcp-registry.js';

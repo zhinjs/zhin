@@ -59,7 +59,7 @@ export function collectAgentsSkillsDirs(start = process.cwd()): string[] {
   return dirs;
 }
 
-/** Workspace / ~/.zhin / .agents/skills 根目录（与 activate_skill 扫描顺序一致的前缀） */
+/** Workspace / ~/.zhin / .agents/skills roots in canonical discovery order. */
 export function buildStandardSkillDirs(): string[] {
   const list = [
     path.join(workspaceRoot(), 'skills'),

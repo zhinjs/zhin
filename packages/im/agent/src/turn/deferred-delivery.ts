@@ -1,7 +1,7 @@
 import type { OutputElement } from '@zhin.js/ai';
 import { truncatePreview } from '@zhin.js/logger';
 import type { DeferredWorkerResult } from '../deferred-worker-runner.js';
-import { originFromMessage } from '../builtin/spawn-task-tool.js';
+import { originFromMessage } from '../spawn/spawn-task-tool.js';
 import type { Message } from '../resource-hub/types.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
 import type { SubagentResultSender } from '../subagent/index.js';

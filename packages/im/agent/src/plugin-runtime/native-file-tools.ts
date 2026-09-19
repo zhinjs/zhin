@@ -9,7 +9,7 @@ import {
   type ToolExecutionContext,
 } from '@zhin.js/tool';
 import { MAX_EDIT_FILE_SIZE, MAX_READ_FILE_SIZE, isFileStale } from '../security/file-policy.js';
-import { findActualStringInFile, preserveQuoteStyleInEdit } from '../builtin/file-edit-quote-utils.js';
+import { findActualStringInFile, preserveQuoteStyleInEdit } from './file-edit-quote-utils.js';
 
 export interface NativeFileToolFeature {
   readonly feature: typeof toolFeatureId;

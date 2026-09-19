@@ -1,16 +1,15 @@
 /**
  * spawn_task — 主会话将耗时任务派给后台子 agent（与 issue #396 对齐）
  */
-import { type Message, type Tool, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
+import { type Message, type ToolParametersSchema, type ToolResult } from '@zhin.js/core';
 import type { AgentTool } from '@zhin.js/ai';
 import type { SubagentSystem, SubagentOrigin } from '../subagent/index.js';
 import type { SubagentContextMode } from '../subagent-preset.js';
-import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { getActiveDeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
 import {
   assertSpawnAgentAllowed,
   type PermissionTaskRules,
-} from '../spawn/permission-task.js';
+} from './permission-task.js';
 export interface SpawnTaskToolOptions {
   /** 经 permission.task 过滤后可展示的子 agent 名 */
   allowedAgents?: string[];
@@ -82,7 +81,7 @@ function parseStringArray(value: unknown): string[] | undefined {
   return items.length > 0 ? items : undefined;
 }
 
-export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
+export class SpawnTaskTool {
   readonly name = 'spawn_task';
   readonly description: string;
   readonly parameters = SPAWN_TASK_PARAMETERS;
@@ -93,20 +92,23 @@ export class SpawnTaskBuiltinTool extends BuiltinBaseTool {
     private readonly manager: SubagentSystem,
     options?: SpawnTaskToolOptions,
   ) {
-    super();
     this.description = buildSpawnTaskDescription(options?.allowedAgents);
     this.permissionTaskRules = options?.permissionTaskRules;
-    this.tags.push('agent', 'async', 'task', '后台', '子任务');
-    this.keywords.push('后台', '异步', '子任务', 'spawn', 'background', '并行', '独立处理');
   }
 
-  toTool(): Tool {
-    const tool = super.toTool();
-    tool.source = 'builtin:context';
-    return tool;
+  definition(): AgentTool {
+    return {
+      name: this.name,
+      description: this.description,
+      parameters: this.parameters,
+      source: 'builtin:context',
+      tags: ['agent', 'async', 'task', '后台', '子任务'],
+      keywords: ['后台', '异步', '子任务', 'spawn', 'background', '并行', '独立处理'],
+      execute: (args) => this.execute(args),
+    };
   }
 
-  async run(args: Record<string, unknown>, _commMessage?: Message): Promise<ToolResult> {
+  async execute(args: Record<string, unknown>): Promise<ToolResult> {
     const task = args.task;
     const label = args.label;
     const agentName = args.agent;
@@ -159,9 +161,9 @@ export function createSpawnTaskTool(
   manager: SubagentSystem,
   options?: SpawnTaskToolOptions,
 ): AgentTool {
-  return new SpawnTaskBuiltinTool(
+  return new SpawnTaskTool(
     commMessage,
     manager,
     options,
-  ).toTool() as AgentTool;
+  ).definition();
 }

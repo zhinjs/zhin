@@ -23,13 +23,11 @@ plugins: {}
 #     zhin:
 #       provider: ds-main
 #       model: deepseek-chat
-#       toolSearch: false
 #       tools:
 #         - bash
 #         - read_file
 #         - write_file
 #         - web_search
-#         - activate_skill
 #   sessions:
 #     maxHistory: 200
 #     expireMs: 604800000

@@ -225,7 +225,7 @@ ai:
 | Task | `spawn_task`, `todo_read`, `todo_write` |
 | Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
 | Media | `generate_image`; inbound images go directly to vision-capable models |
-| Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |
+| Meta | `discover`, `load_tool`, `load_skill` |
 | Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
 
 File tools run only inside the project workspace explicitly authorized for the current Turn. Relative paths resolve from that workspace; absolute paths must still remain inside it; `~`, directory traversal, and symlinks targeting paths outside the workspace fail closed in the shared policy facade. Only the canonical path approved by policy reaches the current generation's Tool capability, and `glob` / `grep` do not spawn shell processes.

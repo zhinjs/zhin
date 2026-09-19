@@ -106,6 +106,13 @@ for (const removedToolRegistryApi of [
   'createKnowledgeSearchTool',
   'WebSearchBuiltinTool',
   'createWebSearchTool',
+  'BuiltinBaseTool',
+  'LoadSkillBuiltinTool',
+  'createLoadSkillTool',
+  'InstallSkillBuiltinTool',
+  'createInstallSkillTool',
+  'ToolSelection',
+  'sharedToolSelection',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -117,6 +124,7 @@ for (const removedToolRegistryApi of [
   }
 }
 for (const removedRegistryPath of [
+  'packages/im/agent/src/builtin',
   'packages/im/agent/src/resource-hub/tool-registry.ts',
   'packages/im/agent/src/tool/tool-registry-as-service.ts',
   'packages/im/agent/src/builtin-tools.ts',
@@ -134,6 +142,11 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/analyze-media-tool.ts',
   'packages/im/agent/src/builtin/knowledge-search-tool.ts',
   'packages/im/agent/src/builtin/web-search-tool.ts',
+  'packages/im/agent/src/builtin/builtin-base-tool.ts',
+  'packages/im/agent/src/builtin/load-skill-tool.ts',
+  'packages/im/agent/src/builtin/install-skill-tool.ts',
+  'packages/im/agent/src/builtin/spawn-task-tool.ts',
+  'packages/im/agent/src/skill/skill-load-opts.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');
@@ -156,7 +169,13 @@ for (const removedImplicitToolApi of [
   }
 }
 
-const retiredToolNames = ['tool_search', 'run_deferred_task', 'analyze_media'];
+const retiredToolNames = [
+  'tool_search',
+  'run_deferred_task',
+  'analyze_media',
+  'activate_skill',
+  'install_skill',
+];
 for (const file of files) {
   const fileName = relative(file);
   if (!fileName.endsWith('.ts')) continue;

@@ -758,7 +758,7 @@ ${task}
 ## You must not
 - Send messages directly to the user
 - Spawn further sub-tasks or delegate to other agents
-- Use orchestration tools (spawn_task, discover, install_skill)
+- Use orchestration tools (spawn_task, discover)
 
 ## Workspace
 Workspace path: ${this.workspace}

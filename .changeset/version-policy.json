@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-classic-agent-tool-rails.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the remaining classic Agent Tool rail, false Skill protocols, and catch-all builtin module under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-implicit-service-web-tool.md",
       "packages": [
         "@zhin.js/agent",

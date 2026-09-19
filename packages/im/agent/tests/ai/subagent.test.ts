@@ -67,12 +67,6 @@ function createMockTools(): AgentTool[] {
       execute: vi.fn(async () => 'should not be called'),
     },
     {
-      name: 'activate_skill',
-      description: '激活技能',
-      parameters: { type: 'object', properties: { name: { type: 'string' } } },
-      execute: vi.fn(async () => 'should not be called'),
-    },
-    {
       name: 'todo_write',
       description: '写计划',
       parameters: { type: 'object', properties: {} },

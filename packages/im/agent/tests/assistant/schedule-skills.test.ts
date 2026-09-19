@@ -3,16 +3,14 @@ import { rehydrateTurnActiveSkills } from '../../src/assistant/schedule-skills.j
 import { getTurnActiveSkillsFromContext, runInTurnContext } from '../../src/internal/turn-context.js';
 import { TurnTracker } from '../../src/turn/turn-tracker.js';
 import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
-import * as loadSkillTool from '../../src/builtin/load-skill-tool.js';
-import * as skillLoadOpts from '../../src/skill/skill-load-opts.js';
+import * as readerFactory from '../../src/skill/skill-instruction-reader-factory.js';
 
 beforeEach(() => {
-  vi.spyOn(loadSkillTool, 'readSkillInstructions').mockImplementation(
-    async (name: string) => `# Skill ${name}\nInstructions.`,
-  );
-  vi.spyOn(skillLoadOpts, 'buildSkillLoadOptsForAgent').mockReturnValue({
-    skillDirList: () => [],
-    skillMaxChars: 8000,
+  vi.spyOn(readerFactory, 'buildSkillInstructionReaderForAgent').mockReturnValue({
+    read: async (name: string) => ({
+      status: 'found',
+      instructions: `# Skill ${name}\nInstructions.`,
+    }),
   });
 });
 

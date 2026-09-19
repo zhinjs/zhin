@@ -10,7 +10,6 @@ import { DEFAULT_SUBAGENT_TOOL_NAMES } from './tool-selection.js';
 /** 仅主编排使用的工具，子 Agent 不可直接调用 */
 export const SUBAGENT_BLOCKED_TOOL_NAMES = new Set<string>([
   'discover',
-  'install_skill',
   'spawn_task',
 ]);
 
