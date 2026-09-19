@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-onebot11-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-onebot11"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove OneBot 11 endpoint configuration and heartbeat compatibility surfaces under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-milky-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-milky"

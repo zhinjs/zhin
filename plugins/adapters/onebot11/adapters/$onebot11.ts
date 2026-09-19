@@ -7,7 +7,7 @@ import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
 import {
   resolveOneBot11Config,
-  type OneBot11AdapterConfig,
+  type OneBot11EndpointConfig,
 } from '../src/protocol.js';
 import { onebot11RuntimeStateToken } from '../src/onebot11-runtime-state.js';
 
@@ -23,7 +23,7 @@ declare module '@zhin.js/core' {
   }
 }
 
-export default defineAdapter<OneBot11AdapterConfig>({
+export default defineAdapter<OneBot11EndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // OneBot file 参数原生消费 url / base64:// 媒体；无卡片交互面，交互段降级纯文本。

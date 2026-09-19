@@ -23,6 +23,8 @@ pnpm add @zhin.js/adapter-onebot11
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
+`AdapterIndex` 会把实例默认值与 `endpoints[]` 的逐项覆盖合并；协议层只接收一个已经展开的 endpoint 配置，不再读取嵌套 endpoint、旧 `type: ws_reverse` 别名或进程环境。
+
 每个 Endpoint 的 `$client` 是 `@imhelper/onebot-v11` 的 `OneBotV11Client`。业务代码直接调用
 `$client.call(action, params)` 和 Client 的公开平台能力；双工 WS 的 `echo` 响应由 Endpoint
 先行分流，只有事件帧进入 Client 的 `ingest()` 和公开事件流。
@@ -46,7 +48,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: ob11-bot
+      - id: ob11-bot
         url: "ws://127.0.0.1:6700"
         access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```

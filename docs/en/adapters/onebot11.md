@@ -35,6 +35,8 @@ pnpm add @zhin.js/adapter-onebot11
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
+`AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol receives one expanded endpoint configuration and no longer reads nested endpoint rows, the old `type: ws_reverse` alias, or process environment variables.
+
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`)
 Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg` (payload is rendered by gateway/core; no segment-mapper)
 
@@ -54,7 +56,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: ob11-bot
+      - id: ob11-bot
         url: "ws://127.0.0.1:6700"
         access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```

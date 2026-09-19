@@ -404,9 +404,13 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.onebot11.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.onebot11.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
 | `plugins.onebot11.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `plugins.onebot11.endpoints[].connection` | string: `"ws"`, `"wss"` | no | — | — |
 | `plugins.onebot11.endpoints[].url` | string | no | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `plugins.onebot11.endpoints[].path` | string | no | — | WS path for reverse-wss (connection: wss) |
 | `plugins.onebot11.endpoints[].access_token` | string | no | — | OneBot access token |
+| `plugins.onebot11.endpoints[].reconnect_interval` | number | no | — | — |
+| `plugins.onebot11.endpoints[].heartbeat_interval` | number | no | — | — |
+| `plugins.onebot11.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.onebot11.endpoints[].id` | string | yes | — | OneBot11 bot name |
 | `plugins.onebot11.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

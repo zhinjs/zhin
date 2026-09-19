@@ -57,18 +57,19 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   readonly content;
   #ws?: OneBot11WsSocket;
   #wsRelease?: () => void;
-  readonly #lifecycle: EndpointLifecycle;
+  readonly #connectionLifecycle: EndpointLifecycle;
+  #connectionTask = Promise.resolve();
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
+  #started = false;
 
   constructor(options: OneBot11WssEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('onebot11', options.config.id);
     this.#options = options;
-    this.#lifecycle = createEndpointLifecycle({
-      name: options.config.id,
+    this.#connectionLifecycle = createEndpointLifecycle({
+      name: `${options.config.id}:inbound`,
       reconnect: false,
-      heartbeat: { intervalMs: options.config.heartbeat_interval },
     });
     this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
     const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
@@ -84,6 +85,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   async start(): Promise<void> {
+    if (this.#started) return;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
       this.#logger.warn(formatCompact({
@@ -93,22 +95,19 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         error: 'missing access_token',
       }));
     }
-    await this.#lifecycle.start(async (lifecycleHandle) => {
-      const handle = this.#options.http.ws(this.#options.config.path);
-      this.#wsRelease = handle.onConnection((connection) => {
-        this.#acceptConnection(connection);
-      });
-      lifecycleHandle.onForceClose(() => {
-        this.#wsRelease?.();
-        this.#wsRelease = undefined;
-        try {
-          this.#ws?.close();
-        } catch {
-          /* ignore */
-        }
-        this.#ws = undefined;
-      });
+    const handle = this.#options.http.ws(this.#options.config.path);
+    this.#wsRelease = handle.onConnection((connection) => {
+      this.#connectionTask = this.#connectionTask
+        .then(() => this.#acceptConnection(connection))
+        .catch((error) => {
+          this.#logger.warn(formatCompact({
+            op: 'wss_connection_failed',
+            endpoint: this.#options.config.id,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        });
     });
+    this.#started = true;
     this.#logger.info(formatCompact({
       op: 'listen',
       endpoint: this.#options.config.id,
@@ -119,8 +118,13 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
 
   async stop(): Promise<void> {
     this.close();
-    await this.#lifecycle.stop();
+    this.#wsRelease?.();
+    this.#wsRelease = undefined;
+    await this.#connectionTask;
+    await this.#connectionLifecycle.stop();
     rejectAllPending(this.#pending);
+    this.#ws = undefined;
+    this.#started = false;
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -184,40 +188,47 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     }));
   }
 
-  #acceptConnection(connection: WsConnection): void {
+  async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }
     const socket = connection.socket as unknown as OneBot11WsSocket;
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    this.#ws = socket;
-    this.#lifecycle.startHeartbeat(() => {
-      try {
-        this.#ws?.ping?.();
-      } catch {
-        /* ignore */
-      }
-    });
-    socket.on('message', (data) => {
-      this.#lifecycle.notifyHeartbeatAck();
-      handleOneBot11WsMessage(data, {
-        endpointId: this.#options.config.id,
-        pending: this.#pending,
-        ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
+    await this.#connectionLifecycle.stop();
+    rejectAllPending(this.#pending, '连接已替换');
+    await this.#connectionLifecycle.start(async (lifecycleHandle) => {
+      this.#ws = socket;
+      lifecycleHandle.onForceClose(() => {
+        try {
+          socket.close();
+        } catch {
+          /* ignore */
+        }
+        if (this.#ws === socket) this.#ws = undefined;
       });
-    });
-    socket.on('close', () => {
-      if (this.#ws === socket) {
-        this.#ws = undefined;
-        this.#lifecycle.stopHeartbeat();
-      }
+      this.#connectionLifecycle.startHeartbeat(() => {
+        try {
+          socket.ping?.();
+        } catch {
+          /* ignore */
+        }
+      }, this.#options.config.heartbeat_interval);
+      socket.on('message', (data) => {
+        if (this.#ws !== socket) return;
+        this.#connectionLifecycle.notifyHeartbeatAck();
+        handleOneBot11WsMessage(data, {
+          endpointId: this.#options.config.id,
+          pending: this.#pending,
+          ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
+        });
+      });
+      socket.on('close', () => {
+        if (this.#ws === socket) {
+          this.#ws = undefined;
+          rejectAllPending(this.#pending);
+        }
+        lifecycleHandle.notifyClosed(new Error('OneBot11 reverse WebSocket closed'));
+      });
     });
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,

@@ -1,4 +1,4 @@
-import { clearInterval, clearTimeout, setInterval, setTimeout } from 'node:timers';
+import { clearTimeout, setTimeout } from 'node:timers';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   type OneBot11ActionRequest,
@@ -71,21 +71,6 @@ export function callOneBot11WsAction(
     pending.set(echo, { resolve, reject, timeout });
     ws.send(JSON.stringify(req));
   });
-}
-
-export function startOneBot11Heartbeat(
-  ws: OneBot11WsSocket | undefined,
-  intervalMs: number,
-  existingTimer?: NodeJS.Timeout,
-): NodeJS.Timeout {
-  if (existingTimer) clearInterval(existingTimer);
-  return setInterval(() => {
-    try {
-      ws?.ping?.();
-    } catch {
-      /* ignore */
-    }
-  }, intervalMs);
 }
 
 export function rejectAllPending(

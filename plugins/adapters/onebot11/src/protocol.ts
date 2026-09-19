@@ -8,31 +8,15 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot11');
 
-/** Transitional legacy endpoint row (`endpoints[]` with `context: onebot11`). */
-export interface OneBot11LegacyEndpointRow {
-  readonly context?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface OneBot11EndpointConfig {
   readonly connection?: 'ws' | 'wss';
-  /** Legacy alias: `type: 'ws' | 'ws_reverse'` */
-  readonly type?: string;
-  readonly id?: string;
+  readonly id: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
   readonly reconnect_interval?: number;
   readonly heartbeat_interval?: number;
-}
-
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface OneBot11AdapterConfig {
-  readonly connection?: 'ws' | 'wss';
-  readonly id?: string;
-  readonly access_token?: string;
-  readonly url?: string;
-  readonly path?: string;
-  readonly reconnect_interval?: number;
-  readonly heartbeat_interval?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: onebot11`. */
-  readonly endpoints?: ReadonlyArray<OneBot11LegacyEndpointRow>;
 }
 
 export interface OneBot11ConfigBase {
@@ -57,7 +41,6 @@ export interface OneBot11WssConfig extends OneBot11ConfigBase {
 }
 
 export type ResolvedOneBot11Config = OneBot11WsConfig | OneBot11WssConfig;
-export type OneBot11EndpointConfig = ResolvedOneBot11Config;
 
 export interface OneBot11Sender {
   readonly role?: string;
@@ -109,60 +92,57 @@ export interface OneBot11WireSegment {
 
 function normalizeConnection(
   connection: string | undefined,
-  legacyType: string | undefined,
 ): 'ws' | 'wss' {
   if (connection === 'ws' || connection === 'wss') return connection;
-  if (legacyType === 'ws_reverse' || legacyType === 'wss') return 'wss';
-  if (legacyType === 'ws') return 'ws';
   return 'ws';
 }
 
-export function resolveOneBot11Config(config: OneBot11AdapterConfig = {}): ResolvedOneBot11Config {
-  const entry = config.endpoints?.find((item) => item.context === 'onebot11');
-  const connection = normalizeConnection(
-    config.connection ?? entry?.connection,
-    entry?.type,
-  );
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.ONEBOT11_BOT_NAME
-    || 'onebot11-bot';
-  const access_token = config.access_token ?? entry?.access_token;
+export function resolveOneBot11Config(config: OneBot11EndpointConfig): ResolvedOneBot11Config {
+  const connection = normalizeConnection(config.connection);
+  const id = requiredEndpointField(config.id, 'id');
+  const access_token = optionalEndpointField(config.access_token);
 
   if (connection === 'ws') {
-    const url = config.url ?? entry?.url;
-    if (!url) {
-      throw new TypeError(
-        'OneBot11 connection:ws requires url (plugins.<key>.url or endpoints with context: onebot11)',
-      );
-    }
+    const url = requiredEndpointField(config.url, 'url');
     return {
       context: 'onebot11',
       connection: 'ws',
       id,
       access_token,
       url,
-      reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      reconnect_interval: config.reconnect_interval ?? 5000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   if (connection === 'wss') {
-    const path = config.path ?? entry?.path;
-    if (!path) {
-      throw new TypeError('OneBot11 connection:wss requires path');
-    }
+    const path = requiredEndpointField(config.path, 'path');
     return {
       context: 'onebot11',
       connection: 'wss',
       id,
       access_token,
       path,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   throw new TypeError(`Unknown OneBot11 connection: ${String(connection)}`);
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'url' | 'path',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`OneBot11 endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 /** 判断是否为消息事件（post_type=message） */
