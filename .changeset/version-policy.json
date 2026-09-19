@@ -353,6 +353,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove dead classic Plugin and Adapter runtime bridges and require Agent platform feedback to depend on the explicit Endpoint control port under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-classic-process-adapter.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unmounted classic ProcessAdapter and its process-global stdin helpers after local interaction moved to Sandbox and CLI Host ownership under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
