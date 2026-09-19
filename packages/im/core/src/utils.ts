@@ -13,8 +13,6 @@ const logger = getLogger('Middleware');
 export {
   evaluate,
   execute,
-  clearEvalCache,
-  getEvalCacheStats,
   getValueWithRuntime,
   compiler,
   remove,

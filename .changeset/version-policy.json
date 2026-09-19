@@ -468,6 +468,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove process-global prompt and workspace caches plus their reset APIs so context assembly always reads the current owner workspace without hidden cross-runtime state under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-kernel-eval-caches.md",
+      "packages": [
+        "@zhin.js/kernel",
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove process-global evaluator caches and their reset and inspection APIs so each sandbox owns all proxy state and expression compilation has no hidden cross-runtime authority under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

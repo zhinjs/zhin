@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import {
   compiler,
   evaluate,
@@ -6,8 +6,6 @@ import {
   remove,
   isEmpty,
   Time,
-  clearEvalCache,
-  getEvalCacheStats,
   getValueWithRuntime,
   sleep
 } from '../src/utils'
@@ -222,10 +220,6 @@ describe('Template Functionality', () => {
 })
 
 describe('evaluate and execute', () => {
-  beforeEach(() => {
-    clearEvalCache()
-  })
-
   it('should evaluate simple expressions', () => {
     expect(evaluate('1 + 1', {})).toBe(2)
     expect(evaluate('2 * 3', {})).toBe(6)
@@ -235,20 +229,10 @@ describe('evaluate and execute', () => {
     expect(evaluate('global.something', {})).toBeUndefined()
   })
 
-  it('should use cache for repeated expressions', () => {
+  it('should evaluate repeated expressions independently', () => {
     const expr = '1 + 1'
-    execute(expr, {})
-    execute(expr, {})
-    expect(getEvalCacheStats().size).toBe(1)
-  })
-
-  it('should limit cache size', () => {
-    clearEvalCache()
-    for (let i = 0; i < 150; i++) {
-      execute(`1 + ${i}`, {})
-    }
-    const stats = getEvalCacheStats()
-    expect(stats.size).toBeLessThanOrEqual(stats.maxSize)
+    expect(execute(`return ${expr}`, {})).toBe(2)
+    expect(execute(`return ${expr}`, {})).toBe(2)
   })
 
   it('should handle invalid expressions gracefully', () => {

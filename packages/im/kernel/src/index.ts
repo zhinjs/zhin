@@ -70,8 +70,6 @@ export {
 export {
   evaluate,
   execute,
-  clearEvalCache,
-  getEvalCacheStats,
   getValueWithRuntime,
   compiler,
   remove,
