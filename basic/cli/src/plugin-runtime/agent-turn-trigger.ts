@@ -1,9 +1,7 @@
 import type { AITriggerConfig } from '@zhin.js/core';
 import type { Message } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
-import { workroomProjectionBindingKey } from '@zhin.js/agent';
 import type { AgentCapabilities } from '@zhin.js/agent/runtime';
-import type { WorkroomAgentTurnContinuation } from './workroom-human-ingress-route.js';
+import type { WorkroomTurnContinuation } from './agent-workroom-port.js';
 
 const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
 const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
@@ -108,19 +106,9 @@ export function matchAiTrigger(
 }
 
 export function workroomOrchestratorSessionKey(
-  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'agentDefinitionId'>,
+  continuation: Pick<WorkroomTurnContinuation, 'projectId' | 'agentDefinitionId'>,
 ): string {
   return `workroom:${encodeURIComponent(continuation.projectId)}:orchestrator:${encodeURIComponent(continuation.agentDefinitionId)}`;
-}
-
-export function resolveWorkroomOrchestratorConversation(
-  bindings: Readonly<Record<string, Readonly<{ conversation: ConversationRef }>>>,
-  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'space'>,
-): ConversationRef | undefined {
-  return bindings[workroomProjectionBindingKey(
-    continuation.projectId,
-    continuation.space,
-  )]?.conversation;
 }
 
 export function restrictWorkroomAgentCapabilities(

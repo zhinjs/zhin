@@ -15,6 +15,11 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { AgentHostAIConfig, WorkroomStorageMode } from './agent-host-config.js';
 import type { AgentHostPublicationCoordinator } from './agent-host-publication-coordinator.js';
 import type { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
+import {
+  resolveWorkroomOrchestratorConversation,
+  type AgentWorkroomPort,
+  type WorkroomTurnContinuation,
+} from './agent-workroom-port.js';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import { WorkroomAcceptanceCoordinator } from './workroom-acceptance-coordinator.js';
 import { WorkroomDataGovernanceCoordinator } from './workroom-data-governance-coordinator.js';
@@ -51,12 +56,12 @@ export interface WorkroomHostCoordinatorOptions {
 }
 
 /** Composes one complete Workroom candidate behind a narrow Agent Host seam. */
-export class WorkroomHostCoordinator {
+export class WorkroomHostCoordinator implements AgentWorkroomPort {
   readonly ingress: CapabilityIngress;
   readonly persistence: WorkroomPersistenceCoordinator;
-  readonly execution: WorkroomExecutionCoordinator;
-  readonly humanIngress: WorkroomHumanIngressCoordinator;
   readonly presetCount: number;
+  readonly #execution: WorkroomExecutionCoordinator;
+  readonly #humanIngress: WorkroomHumanIngressCoordinator;
 
   private constructor(state: Readonly<{
     ingress: CapabilityIngress;
@@ -67,8 +72,8 @@ export class WorkroomHostCoordinator {
   }>) {
     this.ingress = state.ingress;
     this.persistence = state.persistence;
-    this.execution = state.execution;
-    this.humanIngress = state.humanIngress;
+    this.#execution = state.execution;
+    this.#humanIngress = state.humanIngress;
     this.presetCount = state.presetCount;
   }
 
@@ -225,5 +230,26 @@ export class WorkroomHostCoordinator {
       humanIngress,
       presetCount,
     });
+  }
+
+  preRoute(message: Parameters<AgentWorkroomPort['preRoute']>[0], conversationSequence: number | undefined): Promise<boolean> {
+    return this.#humanIngress.preRoute(message, conversationSequence);
+  }
+
+  hasAgentTurn(message: Parameters<AgentWorkroomPort['hasAgentTurn']>[0]): boolean {
+    return this.#humanIngress.hasAgentTurn(message);
+  }
+
+  takeAgentTurn(message: Parameters<AgentWorkroomPort['takeAgentTurn']>[0]): WorkroomTurnContinuation | undefined {
+    return this.#humanIngress.takeAgentTurn(message);
+  }
+
+  async resolveOrchestratorConversation(
+    continuation: WorkroomTurnContinuation,
+  ): Promise<Awaited<ReturnType<AgentWorkroomPort['resolveOrchestratorConversation']>>> {
+    return resolveWorkroomOrchestratorConversation(
+      (await this.#execution.projectionRepository.read()).bindings,
+      continuation,
+    );
   }
 }

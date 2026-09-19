@@ -198,8 +198,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveEndpointTrusted: options.resolveEndpointTrusted,
       ingress: workroom.ingress,
       agent: agentFoundation,
-      execution: workroom.execution,
-      humanIngress: workroom.humanIngress,
+      workroom,
     }));
 
     const providers = service.listProviders();

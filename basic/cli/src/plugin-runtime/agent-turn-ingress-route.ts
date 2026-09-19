@@ -35,7 +35,6 @@ import {
   renderTriggerError,
   resolveRuntimeAgentTrigger,
   resolveTriggerTimeoutMs,
-  resolveWorkroomOrchestratorConversation,
   restrictWorkroomAgentCapabilities,
   routeSpecialistAgent,
   withTriggerTimeout,
@@ -58,8 +57,7 @@ import {
   runtimeImSessionKey,
   type RuntimeSenderRoles,
 } from './agent-turn-request.js';
-import type { WorkroomExecutionCoordinator } from './workroom-execution-coordinator.js';
-import type { WorkroomHumanIngressCoordinator } from './workroom-human-ingress-coordinator.js';
+import type { AgentWorkroomPort } from './agent-workroom-port.js';
 import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
 
 const logger = getLogger('agent');
@@ -75,8 +73,7 @@ export interface AgentTurnIngressRouteOptions {
   readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   readonly ingress: CapabilityIngress;
   readonly agent: AgentRuntimeFoundation;
-  readonly execution: WorkroomExecutionCoordinator;
-  readonly humanIngress: WorkroomHumanIngressCoordinator;
+  readonly workroom: AgentWorkroomPort;
 }
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
@@ -91,11 +88,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     _requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
-    return await this.options.humanIngress.preRoute(message, conversationSequence);
+    return await this.options.workroom.preRoute(message, conversationSequence);
   }
 
   shouldRouteBeforeDispatch(message: Message): boolean {
-    return this.options.humanIngress.hasAgentTurn(message)
+    return this.options.workroom.hasAgentTurn(message)
       && resolveRuntimeAgentTrigger(
         message,
         this.options.agent.service.getTriggerConfig(),
@@ -115,12 +112,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const traceRuntime = options.agent.traceRuntime;
     const binding = service.getBindingRegistry().requireZhinBinding();
     const ingress = options.ingress;
-    const projectionRepository = options.execution.projectionRepository;
-    const humanIngressCoordinator = options.humanIngress;
+    const workroom = options.workroom;
     const rememberedSandboxApprovals = this.#rememberedSandboxApprovals;
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
-      const workroomAgentTurn = humanIngressCoordinator.takeAgentTurn(message);
+      const workroomAgentTurn = workroom.takeAgentTurn(message);
       const matched = resolveRuntimeAgentTrigger(message, trigger, workroomAgentTurn != null);
 
       const ownerId = resolveOwnerForRuntimeMessage(message, options.resolveEndpointOwner);
@@ -131,10 +127,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
         ? workroomOrchestratorSessionKey(workroomAgentTurn)
         : runtimeImSessionKey(turnAccess);
       const workroomReplyConversation = workroomAgentTurn
-        ? resolveWorkroomOrchestratorConversation(
-            (await projectionRepository.read()).bindings,
-            workroomAgentTurn,
-          )
+        ? await workroom.resolveOrchestratorConversation(workroomAgentTurn)
         : undefined;
       if (workroomAgentTurn && !workroomReplyConversation) {
         throw new Error(`Workroom ${workroomAgentTurn.projectId} has no current Orchestrator projection binding`);

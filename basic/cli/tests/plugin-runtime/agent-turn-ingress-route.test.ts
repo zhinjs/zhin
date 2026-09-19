@@ -10,8 +10,7 @@ describe('AgentTurnIngressRoute', () => {
       im: {} as never,
       ingress: {} as never,
       agent: {} as never,
-      execution: {} as never,
-      humanIngress: { preRoute } as never,
+      workroom: { preRoute } as never,
     });
     const message = {} as never;
 

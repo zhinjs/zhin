@@ -19,12 +19,12 @@ import {
 import {
   renderTriggerError,
   resolveTriggerTimeoutMs,
-  resolveWorkroomOrchestratorConversation,
   restrictWorkroomAgentCapabilities,
   routeSpecialistAgent,
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
 } from '../../src/plugin-runtime/agent-turn-trigger.js';
+import { resolveWorkroomOrchestratorConversation } from '../../src/plugin-runtime/agent-workroom-port.js';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
