@@ -28,7 +28,7 @@ import { registerConsoleEntryRoutes } from './entry-routes.js';
 import { installMessageEventBridge, registerConsoleEventRoutes } from './events.js';
 import { normalizeBase } from './http-response.js';
 import { ConsoleLoginAssistBindings } from './login-assist-binding.js';
-import { createAgentRuntimeLeaseResolver } from './agent-console.js';
+import { createAgentRuntimeLeaseResolver } from './agent-introspection.js';
 import { registerConsolePluginRoutes } from './plugin-routes.js';
 import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';

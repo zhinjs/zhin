@@ -24,8 +24,8 @@ import {
   registerConsoleApiRoutes,
 } from '../../../src/plugin-runtime/console/api.js';
 import { isKnownConversationSession } from '../../../src/plugin-runtime/console/conversation-session.js';
+import { listGenerationPromptSections } from '../../../src/plugin-runtime/console/agent-introspection.js';
 import {
-  listGenerationPromptSections,
   resolveGenerationAgentConsole,
   resolveGenerationAgentIntrospection,
 } from '../../../src/plugin-runtime/console/agent-console.js';
