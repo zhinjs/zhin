@@ -324,6 +324,9 @@ outline: [2, 3]
 | `plugins.line.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.line.endpoints[].channelSecret` | string | 是 | — | LINE channel secret |
 | `plugins.line.endpoints[].channelAccessToken` | string | 是 | — | LINE channel access token |
+| `plugins.line.endpoints[].webhookPath` | string | 否 | — | — |
+| `plugins.line.endpoints[].apiBaseUrl` | string | 否 | — | — |
+| `plugins.line.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.line.endpoints[].id` | string | 是 | — | LINE bot name |
 | `plugins.line.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

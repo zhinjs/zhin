@@ -63,12 +63,31 @@ afterEach(async () => {
 describe('line protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveLineConfig({
+      id: 'line-bot',
       channelSecret: 'sec',
       channelAccessToken: 'tok',
     });
     expect(resolved.webhookPath).toBe('/line/webhook');
     expect(resolved.apiBaseUrl).toBe('https://api.line.me');
     expect(resolved.id).toBe('line-bot');
+  });
+
+  it('requires expanded endpoint identity and credentials', () => {
+    expect(() => resolveLineConfig({
+      id: ' ',
+      channelSecret: 'sec',
+      channelAccessToken: 'tok',
+    })).toThrow('LINE endpoint requires a non-empty id');
+    expect(() => resolveLineConfig({
+      id: 'line-bot',
+      channelSecret: ' ',
+      channelAccessToken: 'tok',
+    })).toThrow('LINE endpoint requires a non-empty channelSecret');
+    expect(() => resolveLineConfig({
+      id: 'line-bot',
+      channelSecret: 'sec',
+      channelAccessToken: ' ',
+    })).toThrow('LINE endpoint requires a non-empty channelAccessToken');
   });
 
   it('verifies HMAC-SHA256 signatures', () => {

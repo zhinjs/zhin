@@ -324,6 +324,9 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.line.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
 | `plugins.line.endpoints[].channelSecret` | string | yes | — | LINE channel secret |
 | `plugins.line.endpoints[].channelAccessToken` | string | yes | — | LINE channel access token |
+| `plugins.line.endpoints[].webhookPath` | string | no | — | — |
+| `plugins.line.endpoints[].apiBaseUrl` | string | no | — | — |
+| `plugins.line.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.line.endpoints[].id` | string | yes | — | LINE bot name |
 | `plugins.line.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

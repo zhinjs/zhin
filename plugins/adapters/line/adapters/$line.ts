@@ -6,14 +6,14 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { LineEndpoint } from '../src/endpoint.js';
 import {
   resolveLineConfig,
-  type LineAdapterConfig,
+  type LineEndpointConfig,
 } from '../src/protocol.js';
 import { lineRuntimeStateToken } from '../src/line-runtime-state.js';
 
 export { LineEndpoint } from '../src/endpoint.js';
 export type { LineEndpointOptions, LineFetch } from '../src/endpoint.js';
 
-export default defineAdapter<LineAdapterConfig>({
+export default defineAdapter<LineEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // LINE Messaging API 媒体消息仅消费远程 URL；无按钮交互面，交互段降级纯文本。
   segments: {
