@@ -8,31 +8,16 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot12');
 
-/** Transitional legacy endpoint row (`endpoints[]` with `context: onebot12`). */
-export interface OneBot12LegacyEndpointRow {
-  readonly context?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface OneBot12EndpointConfig {
   readonly connection?: 'ws' | 'webhook' | 'wss';
-  readonly id?: string;
+  readonly id: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
   readonly api_url?: string;
   readonly reconnect_interval?: number;
   readonly heartbeat_interval?: number;
-}
-
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface OneBot12AdapterConfig {
-  readonly connection?: 'ws' | 'webhook' | 'wss';
-  readonly id?: string;
-  readonly access_token?: string;
-  readonly url?: string;
-  readonly path?: string;
-  readonly api_url?: string;
-  readonly reconnect_interval?: number;
-  readonly heartbeat_interval?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: onebot12`. */
-  readonly endpoints?: ReadonlyArray<OneBot12LegacyEndpointRow>;
 }
 
 export interface OneBot12ConfigBase {
@@ -53,7 +38,7 @@ export interface OneBot12WsConfig extends OneBot12ConfigBase {
 export interface OneBot12WebhookConfig extends OneBot12ConfigBase {
   readonly connection: 'webhook';
   readonly path: string;
-  readonly api_url?: string;
+  readonly api_url: string;
 }
 
 /** 反向 WebSocket：httpHostToken WS upgrade 入站/出站 */
@@ -64,7 +49,6 @@ export interface OneBot12WssConfig extends OneBot12ConfigBase {
 }
 
 export type ResolvedOneBot12Config = OneBot12WsConfig | OneBot12WebhookConfig | OneBot12WssConfig;
-export type OneBot12EndpointConfig = ResolvedOneBot12Config;
 
 export interface OneBot12Self {
   readonly platform: string;
@@ -118,66 +102,65 @@ export interface OneBot12WireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveOneBot12Config(config: OneBot12AdapterConfig = {}): ResolvedOneBot12Config {
-  const entry = config.endpoints?.find((item) => item.context === 'onebot12');
-  const connection = config.connection
-    ?? entry?.connection
-    ?? 'ws';
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.ONEBOT12_BOT_NAME
-    || 'onebot12-bot';
-  const access_token = config.access_token ?? entry?.access_token;
+export function resolveOneBot12Config(config: OneBot12EndpointConfig): ResolvedOneBot12Config {
+  const connection = config.connection ?? 'ws';
+  const id = requiredEndpointField(config.id, 'id');
+  const access_token = optionalEndpointField(config.access_token);
 
   if (connection === 'ws') {
-    const url = config.url ?? entry?.url;
-    if (!url) {
-      throw new TypeError(
-        'OneBot12 connection:ws requires url (plugins.<key>.url or endpoints with context: onebot12)',
-      );
-    }
+    const url = requiredEndpointField(config.url, 'url');
     return {
       context: 'onebot12',
       connection: 'ws',
       id,
       access_token,
       url,
-      reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      reconnect_interval: config.reconnect_interval ?? 5000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   if (connection === 'webhook') {
-    const path = config.path ?? entry?.path;
-    if (!path) {
-      throw new TypeError('OneBot12 connection:webhook requires path');
-    }
+    const path = requiredEndpointField(config.path, 'path');
+    const api_url = requiredEndpointField(config.api_url, 'api_url');
     return {
       context: 'onebot12',
       connection: 'webhook',
       id,
       access_token,
       path,
-      api_url: config.api_url ?? entry?.api_url,
+      api_url,
     };
   }
 
   if (connection === 'wss') {
-    const path = config.path ?? entry?.path;
-    if (!path) {
-      throw new TypeError('OneBot12 connection:wss requires path');
-    }
+    const path = requiredEndpointField(config.path, 'path');
     return {
       context: 'onebot12',
       connection: 'wss',
       id,
       access_token,
       path,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   throw new TypeError(`Unknown OneBot12 connection: ${String(connection)}`);
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'url' | 'path' | 'api_url',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`OneBot12 endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 /** 判断是否为消息事件（type=message） */

@@ -149,26 +149,11 @@ describe('onebot12 endpoint management wiring', () => {
     );
   });
 
-  it('webhook 未配置 api_url 时保留结构化调用错误及原始原因', async () => {
-    const config = resolveOneBot12Config({
+  it('webhook 未配置 api_url 时在创建 endpoint 前拒绝配置', () => {
+    expect(() => resolveOneBot12Config({
       connection: 'webhook',
       id: 'test-ob12',
       path: '/onebot12/webhook',
-    }) as OneBot12WebhookConfig;
-    const endpoint = bindTestEndpoint(new OneBot12WebhookEndpoint({
-      id: endpointKey,
-      gateway,
-      http: httpStub,
-      config,
-      callAction: vi.fn(),
-    }), gateway, undefined);
-    await expect(endpoint.management.listFriends?.()).rejects.toMatchObject({
-      name: 'ProtocolError',
-      protocol: 'onebot-v12',
-      operation: 'get_friend_list',
-      cause: expect.objectContaining({
-        message: expect.stringMatching(/api_url/),
-      }),
-    });
+    })).toThrow('non-empty api_url');
   });
 });

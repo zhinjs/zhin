@@ -428,10 +428,14 @@ outline: [2, 3]
 | `plugins.onebot12.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.onebot12.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
 | `plugins.onebot12.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `plugins.onebot12.endpoints[].connection` | string: `"ws"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `plugins.onebot12.endpoints[].url` | string | 否 | — | OneBot implementation WebSocket URL (required for connection: ws) |
 | `plugins.onebot12.endpoints[].path` | string | 否 | — | HTTP/WS path for webhook or reverse-wss |
 | `plugins.onebot12.endpoints[].api_url` | string | 否 | — | HTTP action endpoint for webhook outbound (required for connection: webhook send) |
 | `plugins.onebot12.endpoints[].access_token` | string | 否 | — | OneBot access token |
+| `plugins.onebot12.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `plugins.onebot12.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `plugins.onebot12.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.onebot12.endpoints[].id` | string | 是 | — | OneBot12 bot name |
 | `plugins.onebot12.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

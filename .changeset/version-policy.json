@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-onebot12-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-onebot12"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove OneBot 12 endpoint configuration compatibility, require complete Webhook capabilities, and centralize WebSocket transport ownership under the owner-directed architecture refactor."
+    },
+    {
       "changeset": "require-onebot11-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-onebot11"

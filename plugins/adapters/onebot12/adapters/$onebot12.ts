@@ -8,7 +8,7 @@ import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot12WssEndpoint } from '../src/wss-endpoint.js';
 import {
   resolveOneBot12Config,
-  type OneBot12AdapterConfig,
+  type OneBot12EndpointConfig,
 } from '../src/protocol.js';
 import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 
@@ -26,7 +26,7 @@ declare module '@zhin.js/core' {
   }
 }
 
-export default defineAdapter<OneBot12AdapterConfig>({
+export default defineAdapter<OneBot12EndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // 媒体段经 upload_file 物化为 file_id（spec 正式投递）；上传失败降级扩展字段透传。
