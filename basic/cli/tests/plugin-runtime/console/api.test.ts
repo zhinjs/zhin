@@ -21,9 +21,9 @@ import {
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
 import {
-  isKnownConversationSession,
   registerConsoleApiRoutes,
 } from '../../../src/plugin-runtime/console/api.js';
+import { isKnownConversationSession } from '../../../src/plugin-runtime/console/conversation-session.js';
 import {
   listGenerationPromptSections,
   resolveGenerationAgentConsole,

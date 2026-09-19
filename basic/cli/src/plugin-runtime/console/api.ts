@@ -7,16 +7,13 @@ import {
   type HttpHost,
 } from '@zhin.js/host-http';
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import type { LoginAssist } from '@zhin.js/core';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { bindLoginAssistStdin } from './login-assist-stdin.js';
 import {
   resolvePluginLifecycleFile,
   createPluginLifecycleStore,
   type PluginLifecycleStore,
 } from '../plugin-lifecycle-store.js';
 import {
-  INBOX_TABLE_MESSAGE,
   runtimeEventPublisherToken,
   type DatabaseHost,
   type RuntimeSnapshot,
@@ -24,84 +21,17 @@ import {
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller, RuntimeConfigDocument } from '@zhin.js/runtime';
 import { ConsoleConfigurationStore } from './configuration.js';
+import { isKnownConversationSession } from './conversation-session.js';
 import { installInboxMessageRecorder } from './inbox.js';
 import { registerAgentConsoleRoutes } from './agent-routes.js';
 import { registerConsoleEntryRoutes } from './entry-routes.js';
 import { installMessageEventBridge, registerConsoleEventRoutes } from './events.js';
 import { normalizeBase } from './http-response.js';
+import { ConsoleLoginAssistBindings } from './login-assist-binding.js';
 import { createAgentRuntimeLeaseResolver } from './agent-console.js';
 import { registerConsolePluginRoutes } from './plugin-routes.js';
 import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
-
-interface LoginAssistBinding {
-  readonly hub: ConsoleEventHub;
-  refs: number;
-  readonly dispose: () => void;
-}
-
-const loginAssistBindings = new WeakMap<LoginAssist, LoginAssistBinding>();
-
-function acquireLoginAssistBinding(assist: LoginAssist, hub: ConsoleEventHub): () => void {
-  const existing = loginAssistBindings.get(assist);
-  if (existing) {
-    if (existing.hub !== hub) {
-      throw new Error('LoginAssist cannot publish to multiple process Console hubs');
-    }
-    existing.refs += 1;
-    return () => releaseLoginAssistBinding(assist, existing);
-  }
-  const unsubPending = assist.subscribe('endpoint.login.pending', (task) => {
-    hub.publish('endpoint.login.pending', task);
-  });
-  const unsubExpired = assist.subscribe('endpoint.login.expired', (task) => {
-    hub.publish('endpoint.login.expired', task);
-  });
-  const unbindStdin = bindLoginAssistStdin(assist);
-  const binding: LoginAssistBinding = {
-    hub,
-    refs: 1,
-    dispose: () => {
-      unsubPending();
-      unsubExpired();
-      unbindStdin();
-    },
-  };
-  loginAssistBindings.set(assist, binding);
-  return () => releaseLoginAssistBinding(assist, binding);
-}
-
-/** Verifies canonical IM session keys against the durable Console inbox. */
-export async function isKnownConversationSession(
-  databaseHost: Pick<DatabaseHost, 'started' | 'models'>,
-  sessionKey: string,
-): Promise<boolean | undefined> {
-  if (!databaseHost.started) return undefined;
-  const first = sessionKey.indexOf(':');
-  const second = sessionKey.indexOf(':', first + 1);
-  const third = sessionKey.indexOf(':', second + 1);
-  if (first <= 0 || second <= first + 1 || third <= second + 1 || third >= sessionKey.length - 1) {
-    return false;
-  }
-  const model = databaseHost.models.get(INBOX_TABLE_MESSAGE);
-  if (!model) return undefined;
-  const rows = await model.select('id').where({
-    adapter: sessionKey.slice(0, first),
-    endpoint_id: sessionKey.slice(first + 1, second),
-    channel_type: sessionKey.slice(second + 1, third),
-    channel_id: sessionKey.slice(third + 1),
-  }).limit(1);
-  return rows.length > 0;
-}
-
-function releaseLoginAssistBinding(assist: LoginAssist, binding: LoginAssistBinding): void {
-  if (loginAssistBindings.get(assist) !== binding) return;
-  binding.refs -= 1;
-  if (binding.refs > 0) return;
-  loginAssistBindings.delete(assist);
-  binding.dispose();
-}
-
 
 export function installConsoleApi(options: {
   readonly console: ConsoleRuntime;
@@ -129,6 +59,7 @@ export function installConsoleApi(options: {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
   const hub = options.eventHub ?? createConsoleEventHub();
   const configuration = new ConsoleConfigurationStore(options.projectRoot);
+  const loginAssistBindings = new ConsoleLoginAssistBindings();
   return ({ resources, config, lifecycle }) => {
     const http = resources.use(httpHostToken);
     // Console SSE hub 同时作为 Root 级事件发布口（插件经 runtimeEventPublisherToken
@@ -138,7 +69,7 @@ export function installConsoleApi(options: {
 
     const loginAssist = options.im?.loginAssist;
     if (loginAssist) {
-      lifecycle.add(acquireLoginAssistBinding(loginAssist, hub));
+      lifecycle.add(loginAssistBindings.acquire(loginAssist, hub));
     }
 
     registerConsoleApiRoutes({
