@@ -518,6 +518,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove online compatibility migration for historical Agent SQLite schemas and require the current registered model set under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-inert-defaults-and-side-event-aliases.md",
+      "packages": [
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove unused composed side-event compatibility aliases and inert Agent defaults under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

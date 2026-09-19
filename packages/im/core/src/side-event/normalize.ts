@@ -1,11 +1,8 @@
 import { Notice, type NoticeBase } from '../notice.js';
 import { Request, type RequestBase } from '../request.js';
 import { SystemEvent, type SystemEventBase } from '../system-event.js';
-import {
-  composeSideEventName,
-  parseSideEventName,
-} from './base.js';
-import { KOOK_NOTICE_PARTS_MAP, ONEBOT_NOTICE_PARTS_MAP, SLACK_NOTICE_PARTS_MAP, type ComposedNoticeName, type ComposedRequestName, type SideEventParts } from './types.js';
+import { parseSideEventName } from './base.js';
+import { KOOK_NOTICE_PARTS_MAP, ONEBOT_NOTICE_PARTS_MAP, SLACK_NOTICE_PARTS_MAP, type SideEventParts } from './types.js';
 
 export type SideEventPlatform = 'onebot' | 'icqq' | 'napcat' | 'kook' | (string & {});
 
@@ -138,26 +135,6 @@ export function mapRequestParts(
     };
   }
   return { scene_type: raw, sub_type: subType ?? 'unknown' };
-}
-
-/** 组合完整 Notice 类型名（兼容旧 API） */
-export function mapNoticeType(
-  platform: SideEventPlatform,
-  raw: string,
-  options?: Parameters<typeof mapNoticeParts>[2],
-): ComposedNoticeName {
-  const parts = mapNoticeParts(platform, raw, options);
-  return composeSideEventName('notice', parts.scene_type, parts.sub_type) as ComposedNoticeName;
-}
-
-/** 组合完整 Request 类型名（兼容旧 API） */
-export function mapRequestType(
-  platform: SideEventPlatform,
-  raw: string,
-  subType?: string,
-): ComposedRequestName {
-  const parts = mapRequestParts(platform, raw, subType);
-  return composeSideEventName('request', parts.scene_type, parts.sub_type) as ComposedRequestName;
 }
 
 export function senderFromId(id: unknown, name?: string) {

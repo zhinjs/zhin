@@ -1,4 +1,4 @@
-import { mapNoticeParts, mapRequestParts, mapNoticeType, mapRequestType, resolveSideEventDedupeKey } from '../src/side-event/normalize.js';
+import { mapNoticeParts, mapRequestParts, resolveSideEventDedupeKey } from '../src/side-event/normalize.js';
 import { composeSideEventName, formatSideEventName } from '../src/side-event/base.js';
 
 describe('side-event normalize', () => {
@@ -8,7 +8,6 @@ describe('side-event normalize', () => {
         scene_type: 'group',
         sub_type: 'member_increase',
       });
-      expect(mapNoticeType('onebot', 'group_increase')).toBe('notice.group.member_increase');
     });
 
     it('OneBot friend_add → friend + increase', () => {
@@ -46,7 +45,6 @@ describe('side-event normalize', () => {
   describe('mapRequestParts', () => {
     it('friend → friend + add', () => {
       expect(mapRequestParts('onebot', 'friend')).toEqual({ scene_type: 'friend', sub_type: 'add' });
-      expect(mapRequestType('onebot', 'friend')).toBe('request.friend.add');
     });
 
     it('group invite → group + invite', () => {
