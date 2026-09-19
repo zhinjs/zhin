@@ -40,11 +40,13 @@ export class WorkroomProfileCoordinator {
   readonly profiles: ReturnType<typeof installWorkroomProfileAuthorityResources>['profiles'];
   readonly runPinWriter: KernelPlanAdmissionRunProfilePinWriter;
   readonly acceptanceSource: PinnedProfileWorkroomAcceptanceProjectionSource;
+  readonly snapshots: SnapshotReader;
 
   constructor(options: WorkroomProfileCoordinatorOptions) {
     if (!options.snapshots) {
       throw new Error('Workroom Profile authority requires the process-owned SnapshotReader');
     }
+    this.snapshots = options.snapshots;
     const runPinAuthority = new JournalWorkroomRunProfilePinAuthority({
       generation: options.generation,
       journal: options.journal,
@@ -58,7 +60,7 @@ export class WorkroomProfileCoordinator {
       projectRoot: options.projectRoot,
       generation: options.generation,
       signal: options.signal,
-      snapshots: options.snapshots,
+      snapshots: this.snapshots,
       resources: options.resources,
       authority,
       runPinAuthority,
