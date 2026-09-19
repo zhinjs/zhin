@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { outboundMessageToken, type ImRuntime } from '@zhin.js/core/runtime';
@@ -18,15 +17,12 @@ import {
   WorkroomPortfolioGrantAssignmentSaga,
   WorkroomPreemptionRuntime,
   WorkroomProjectionReplyResolver,
-  WorkroomProjectionRuntime,
-  WorkroomProjectionScheduler,
   WorkroomSchedulerRuntime,
   WorkroomSchedulerSupplyUnavailableError,
   WorkroomPortfolioSponsorRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogPortfolioSponsorCommandAuthority,
   createGovernedPortfolioSponsorProjectionReader,
-  createWorkroomProjectionOutboundMessageServicePort,
   createWorkroomRemoteCallbackRuntime,
   createWorkroomSchedulerKernelCommandPort,
   installWorkroomPortfolioControlWorker,
@@ -55,22 +51,18 @@ import {
   type PortfolioUsageGatewayAuthorityPort,
   type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
-import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {
   installLocalWorkroomPortfolioAuthorities,
 } from './local-workroom-portfolio.js';
-import {
-  ensureCatalogWorkroomProjectionBinding,
-  resolveCatalogSponsorProjectionConversation,
-  resolveCatalogWorkroomProjectionConversation,
-} from './workroom-projection.js';
 import type { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
 import { WorkroomAssignmentCoordinator } from './workroom-assignment-coordinator.js';
 import type { WorkroomAcceptanceCoordinator } from './workroom-acceptance-coordinator.js';
 import type { WorkroomDataGovernanceCoordinator } from './workroom-data-governance-coordinator.js';
 import type { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
 import type { WorkroomProfileCoordinator } from './workroom-profile-coordinator.js';
+import { WorkroomProjectionCoordinator } from './workroom-projection-coordinator.js';
 import type { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 
 const logger = getLogger('agent');
@@ -114,7 +106,6 @@ export class WorkroomExecutionCoordinator {
     const workroomKernel = options.runtime.kernel;
     const projectProfiles = options.profiles.profiles;
     const governedOutbound = options.governance.governedOutbound;
-    const dataLifecycle = options.governance.lifecycle;
     if (!resources.has(portfolioJournalRepositoryToken)) {
       resources.provide(
         portfolioJournalRepositoryToken,
@@ -217,68 +208,15 @@ export class WorkroomExecutionCoordinator {
       acceptance: options.acceptance,
     });
     const schedulerDispatch = assignmentCoordinator.dispatch;
-    const projectionRepository = new FileWorkroomProjectionRepository(
-      join(workroomStateRoot, 'workroom-projections'),
-    );
-    const projectionReplyResolver = new WorkroomProjectionReplyResolver({
-      repository: projectionRepository,
-      runState: Object.freeze({
-        read: async (projectId: string, runId: string) =>
-          await workroomKernel.read(projectId, runId),
-      }),
-    });
-    const projectionRuntime = new WorkroomProjectionRuntime({
-      catalog: workroomCatalog,
-      journal: workroomJournal,
-      repository: projectionRepository,
-      outbound: createWorkroomProjectionOutboundMessageServicePort(
-        resources.use(outboundMessageToken),
-        rootPluginId(),
-      ),
-      workerId: `workroom-projection:${randomUUID()}`,
-      leaseMs: 30_000,
-      maxRunsPerTick: 64,
-      maxDeliveriesPerTick: 32,
-      governance: governedOutbound.projection,
-      renewWorkroomBinding: async (projectId, catalog, operationSignal) => {
-        operationSignal.throwIfAborted();
-        const definition = catalog.definitions[projectId];
-        if (!definition) return;
-        const conversation = resolveCatalogWorkroomProjectionConversation(
-          definition,
-          options.im.listEndpoints(),
-        );
-        if (!conversation) return;
-        await ensureCatalogWorkroomProjectionBinding({
-          repository: projectionRepository,
-          catalog,
-          projectId,
-          conversation,
-          interactionBindingRevision: 1,
-          endpoints: options.im.listEndpoints(),
-        });
-      },
-      resolveSponsorConversation: (_projectId, definition) =>
-        resolveCatalogSponsorProjectionConversation(definition, options.im.listEndpoints()),
-      ...(dataLifecycle ? { lifecycleOverdue: dataLifecycle.overdue } : {}),
-      ...(portfolioSponsorProjectionSource
-        ? { portfolioSponsor: portfolioSponsorProjectionSource }
-        : {}),
-    });
-    const projectionScheduler = new WorkroomProjectionScheduler({
-      runtime: projectionRuntime,
-      intervalMs: 1_000,
-      onError: error => logger.error(formatCompact({
-        op: 'workroom_projection_tick',
-        error: error instanceof Error ? error.message : String(error),
-      })),
-    });
-    lifecycle.add(() => projectionScheduler.dispose());
-    handoff.add({
-      activateNext: signal => {
-        signal.throwIfAborted();
-        projectionScheduler.start();
-      },
+    const projectionCoordinator = new WorkroomProjectionCoordinator({
+      stateRoot: workroomStateRoot,
+      resources,
+      lifecycle,
+      handoff,
+      im: options.im,
+      runtime: options.runtime,
+      governance: options.governance,
+      portfolioSponsor: portfolioSponsorProjectionSource,
     });
     const workroomScheduler = new WorkroomSchedulerRuntime({
       journal: workroomJournal,
@@ -445,7 +383,7 @@ export class WorkroomExecutionCoordinator {
         governance: governedOutbound.remote,
       }),
     );
-    this.projectionRepository = projectionRepository;
-    this.projectionReplyResolver = projectionReplyResolver;
+    this.projectionRepository = projectionCoordinator.repository;
+    this.projectionReplyResolver = projectionCoordinator.replyResolver;
   }
 }
