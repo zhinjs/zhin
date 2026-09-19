@@ -10,7 +10,6 @@ describe('registerWorkroomConsole', () => {
     registerWorkroomConsole({
       React: React as never,
       addRoute,
-      addPage: addRoute,
       addTool,
     });
 

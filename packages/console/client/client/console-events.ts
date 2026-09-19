@@ -2,10 +2,11 @@ import type {
   ConsoleEventHistoryPage,
   ConsoleEventHistoryQuery,
 } from '@zhin.js/console-protocol';
-import { getStoredToken, resolveApiUrl } from './websocket/remote-settings.js';
+import { getToken, resolveApiUrl } from './console-utils/remoteApi.js';
 
 export interface FetchConsoleEventHistoryOptions {
   readonly signal?: AbortSignal;
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 /** Read a typed page from the Host's bounded Console event journal. */
@@ -17,11 +18,11 @@ export async function fetchConsoleEventHistory(
   if (query.runtimeId) params.set('runtimeId', query.runtimeId);
   if (query.after !== undefined) params.set('after', String(query.after));
   if (query.limit !== undefined) params.set('limit', String(query.limit));
-  const token = getStoredToken();
+  const token = getToken();
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   const suffix = params.size ? `?${params}` : '';
-  const response = await fetch(resolveApiUrl(`/api/events/history${suffix}`), {
+  const response = await (options.fetch ?? globalThis.fetch)(resolveApiUrl(`/api/events/history${suffix}`), {
     headers,
     signal: options.signal,
   });

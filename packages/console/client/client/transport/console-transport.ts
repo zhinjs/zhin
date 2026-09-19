@@ -1,6 +1,13 @@
-import { ConnectionState, WebSocketError, ConnectionError, MessageError, RequestTimeoutError, type WebSocketMessage, type WebSocketConfig, type WebSocketCallbacks } from './types';
-
-import { getApiBase, getStoredToken, resolveApiUrl } from "./remote-settings.js";
+import {
+  ConnectionState,
+  ConnectionError,
+  ConsoleTransportError,
+  MessageError,
+  type ConsoleTransportMessage,
+  type ConsoleTransportConfig,
+  type ConsoleTransportCallbacks,
+} from './types.js';
+import { getApiBase, getToken, resolveApiUrl } from '../console-utils/remoteApi.js';
 import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
@@ -28,18 +35,13 @@ export interface ConsoleEventRecoveryGap {
 }
 export type ConsoleEventRecoveryGapListener = (gap: ConsoleEventRecoveryGap) => void;
 
-export class WebSocketManager {
-  private ws: WebSocket | null = null;
-  private config: Required<WebSocketConfig>;
-  private callbacks: WebSocketCallbacks;
+export class ConsoleTransport {
+  private config: Required<ConsoleTransportConfig>;
+  private callbacks: ConsoleTransportCallbacks;
   private state: ConnectionState = ConnectionState.DISCONNECTED;
   private reconnectAttempts = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private requestId = 0;
-  private pendingRequests = new Map<
-    number,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }
-  >();
   private connectedListeners = new Set<(connected: boolean) => void>();
   private eventListeners = new Map<string, Set<ConsoleEventListener<string>>>();
   private recoveryGapListeners = new Set<ConsoleEventRecoveryGapListener>();
@@ -47,11 +49,12 @@ export class WebSocketManager {
   private eventRuntimeId = '';
   private lastEventId = 0;
   private durableCursorBlocked = false;
-  private useRestTransport = true;
+  private disposed = false;
+  private connectionGeneration = 0;
 
-  constructor(config: WebSocketConfig = {}, callbacks: WebSocketCallbacks = {}) {
+  constructor(config: ConsoleTransportConfig = {}, callbacks: ConsoleTransportCallbacks = {}) {
     this.config = {
-      url: this.buildWebSocketUrl(config.url),
+      fetch: config.fetch ?? globalThis.fetch,
       reconnectInterval: config.reconnectInterval ?? 3000,
       maxReconnectAttempts: config.maxReconnectAttempts ?? 10,
       requestTimeout: config.requestTimeout ?? 10000,
@@ -60,12 +63,14 @@ export class WebSocketManager {
   }
 
   onConnectionChange(listener: (connected: boolean) => void): () => void {
+    this.assertActive();
     this.connectedListeners.add(listener);
     return () => this.connectedListeners.delete(listener);
   }
 
   /** Subscribe by event name; known names infer their exact payload type. */
   onConsoleEvent<Type extends string>(type: Type, listener: ConsoleEventListener<Type>): () => void {
+    this.assertActive();
     let listeners = this.eventListeners.get(type);
     if (!listeners) {
       listeners = new Set();
@@ -81,6 +86,7 @@ export class WebSocketManager {
 
   /** Observe a non-resumable cursor so domain views can perform a full resync. */
   onConsoleEventRecoveryGap(listener: ConsoleEventRecoveryGapListener): () => void {
+    this.assertActive();
     this.recoveryGapListeners.add(listener);
     return () => this.recoveryGapListeners.delete(listener);
   }
@@ -90,28 +96,17 @@ export class WebSocketManager {
   }
 
   connect(): void {
-    if (this.useRestTransport) {
-      void this.connectRestSse();
-      return;
-    }
+    this.assertActive();
     if (this.state === ConnectionState.CONNECTED || this.state === ConnectionState.CONNECTING) return;
-    this.setState(ConnectionState.CONNECTING);
-    try {
-      this.ws = new WebSocket(this.config.url);
-      this.attachEventHandlers();
-    } catch (error) {
-      this.handleConnectionError(new ConnectionError("Failed to create WebSocket", error as Error));
-      this.setState(ConnectionState.RECONNECTING);
-      this.notifyConnection(false);
-      this.scheduleReconnect();
-    }
+    const generation = ++this.connectionGeneration;
+    void this.connectSse(generation);
   }
 
-  private async connectRestSse(): Promise<void> {
+  private async connectSse(generation: number): Promise<void> {
     // Host without http.token allows unauthenticated SSE (authenticateHttp
     // returns full when TokenRegistry is empty). Still open the stream so
     // local dev Console receives hmr:reload / message.receive broadcasts.
-    const token = getStoredToken();
+    const token = getToken();
     this.setState(ConnectionState.CONNECTING);
     this.sseAbort?.abort();
     this.sseAbort = new AbortController();
@@ -121,14 +116,19 @@ export class WebSocketManager {
       };
       if (token) headers.Authorization = `Bearer ${token}`;
       await this.recoverEventHistory(this.sseAbort.signal);
+      if (!this.isCurrentConnection(generation)) return;
       const params = new URLSearchParams();
       if (this.eventRuntimeId) params.set('runtimeId', this.eventRuntimeId);
       if (this.lastEventId > 0) params.set('after', String(this.lastEventId));
       const suffix = params.size ? `?${params}` : '';
-      const res = await fetch(resolveApiUrl(`/api/events${suffix}`), {
+      const res = await this.config.fetch(resolveApiUrl(`/api/events${suffix}`), {
         headers,
         signal: this.sseAbort.signal,
       });
+      if (!this.isCurrentConnection(generation)) {
+        await res.body?.cancel();
+        return;
+      }
       if (!res.ok || !res.body) {
         throw new ConnectionError(`SSE failed: HTTP ${res.status}`);
       }
@@ -136,28 +136,31 @@ export class WebSocketManager {
       this.reconnectAttempts = 0;
       this.notifyConnection(true);
       this.callbacks.onConnect?.();
-      void this.pumpSse(res.body);
+      void this.pumpSse(res.body, generation);
     } catch (error) {
+      if (!this.isCurrentConnection(generation)) return;
       if ((error as Error).name === "AbortError") return;
-      // Must set RECONNECTING (not ERROR) before scheduleReconnect — the timer
-      // only fires when state === RECONNECTING; handleConnectionError(ERROR)
-      // previously deadlocked reconnect after any transient SSE failure.
-      this.callbacks.onError?.(error as unknown as Event);
-      console.error("[Console transport] SSE connect error:", error);
+      // Reconnect timers only run while the transport remains in RECONNECTING.
+      const connectionError = error instanceof Error ? error : new Error(String(error));
+      this.callbacks.onError?.(connectionError);
+      console.error("[Console transport] SSE connect error:", connectionError);
       this.setState(ConnectionState.RECONNECTING);
       this.notifyConnection(false);
       this.scheduleReconnect();
     }
   }
 
-  private async pumpSse(body: ReadableStream<Uint8Array>): Promise<void> {
+  private async pumpSse(
+    body: ReadableStream<Uint8Array>,
+    generation: number,
+  ): Promise<void> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
     try {
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done || !this.isCurrentConnection(generation)) break;
         buffer += decoder.decode(value, { stream: true });
         const parts = buffer.split(/\r?\n\r?\n/u);
         buffer = parts.pop() ?? "";
@@ -179,9 +182,10 @@ export class WebSocketManager {
     } catch {
       /* closed */
     } finally {
-      if (this.state === ConnectionState.CONNECTED) {
+      if (this.isCurrentConnection(generation) && this.state === ConnectionState.CONNECTED) {
         this.notifyConnection(false);
         this.setState(ConnectionState.RECONNECTING);
+        this.callbacks.onDisconnect?.();
         this.scheduleReconnect();
       }
     }
@@ -199,7 +203,7 @@ export class WebSocketManager {
     }
     for (;;) {
       const query = { runtimeId, after, limit: 500 } satisfies ConsoleEventHistoryQuery;
-      const page = await fetchConsoleEventHistory(query, { signal });
+      const page = await fetchConsoleEventHistory(query, { signal, fetch: this.config.fetch });
       if (page.runtimeId !== runtimeId) {
         runtimeId = page.runtimeId;
         after = 0;
@@ -239,7 +243,7 @@ export class WebSocketManager {
       eventId: event.eventId || undefined,
       timestamp: event.timestamp,
       delivery: event.delivery,
-    }) as WebSocketMessage;
+    }) as ConsoleTransportMessage;
     try {
       await applyConsoleEvent(message);
     } catch (error) {
@@ -281,59 +285,27 @@ export class WebSocketManager {
   }
 
   disconnect(): void {
+    const wasConnected = this.state === ConnectionState.CONNECTED;
+    this.connectionGeneration += 1;
     this.clearReconnectTimer();
-    this.clearPendingRequests();
     this.sseAbort?.abort();
     this.sseAbort = null;
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
-    }
     this.setState(ConnectionState.DISCONNECTED);
     this.notifyConnection(false);
+    if (wasConnected) this.callbacks.onDisconnect?.();
   }
 
   send(message: unknown): void {
-    if (this.useRestTransport) {
-      void this.sendRequest(message);
-      return;
-    }
-    if (!this.isConnected()) throw new WebSocketError("WebSocket is not connected", "NOT_CONNECTED");
-    try {
-      this.ws!.send(JSON.stringify(message));
-    } catch (error) {
-      throw new MessageError("Failed to send message", error as Error);
-    }
+    this.assertActive();
+    void this.sendRequest(message);
   }
 
   async sendRequest<T = unknown>(message: unknown): Promise<T> {
-    if (this.useRestTransport) {
-      return this.sendRestRequest<T>(message);
-    }
-    if (!this.isConnected()) throw new WebSocketError("WebSocket is not connected", "NOT_CONNECTED");
-    return new Promise((resolve, reject) => {
-      const requestId = ++this.requestId;
-      const messageWithId = { ...(message as Record<string, unknown>), requestId };
-      const timer = setTimeout(() => {
-        this.pendingRequests.delete(requestId);
-        reject(new RequestTimeoutError(requestId));
-      }, this.config.requestTimeout);
-      this.pendingRequests.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
-      try {
-        this.ws!.send(JSON.stringify(messageWithId));
-      } catch (error) {
-        this.pendingRequests.delete(requestId);
-        clearTimeout(timer);
-        reject(new MessageError("Failed to send request", error as Error));
-      }
-    });
-  }
-
-  private async sendRestRequest<T>(message: unknown): Promise<T> {
+    this.assertActive();
     // Host may run without http.token (local smoke). Only require a token when
     // one is configured client-side; otherwise POST without Authorization and
     // let the Host accept (TokenRegistry empty → full scope).
-    const token = getStoredToken();
+    const token = getToken();
     const requestId = ++this.requestId;
     const body = { ...(message as Record<string, unknown>), requestId };
     try {
@@ -341,7 +313,7 @@ export class WebSocketManager {
         "Content-Type": "application/json",
       };
       if (token) headers.Authorization = `Bearer ${token}`;
-      const res = await fetch(resolveApiUrl("/api/console/request"), {
+      const res = await this.config.fetch(resolveApiUrl("/api/console/request"), {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -354,24 +326,30 @@ export class WebSocketManager {
         requestId?: number;
       };
       if (!res.ok || json.success === false) {
-        throw new WebSocketError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
+        throw new ConsoleTransportError(json.error ?? `HTTP ${res.status}`, "SERVER_ERROR");
       }
       return json.data as T;
     } catch (error) {
-      if (error instanceof WebSocketError) throw error;
+      if (error instanceof ConsoleTransportError) throw error;
       throw new MessageError("REST request failed", error as Error);
     }
   }
 
   isConnected(): boolean {
-    if (this.useRestTransport) {
-      return this.state === ConnectionState.CONNECTED;
-    }
-    return this.ws?.readyState === WebSocket.OPEN;
+    return this.state === ConnectionState.CONNECTED;
   }
 
   getState(): ConnectionState {
     return this.state;
+  }
+
+  dispose(): void {
+    if (this.disposed) return;
+    this.disconnect();
+    this.disposed = true;
+    this.connectedListeners.clear();
+    this.eventListeners.clear();
+    this.recoveryGapListeners.clear();
   }
 
   async getConfig(pluginName: string) {
@@ -409,7 +387,7 @@ export class WebSocketManager {
     return this.sendRequest<{ success: boolean; message?: string }>({ type: "env:save", filename, content });
   }
   async getFileTree() {
-    return this.sendRequest<{ tree: import("./types").FileTreeNode[] }>({ type: "files:tree" });
+    return this.sendRequest<{ tree: import("./types.js").FileTreeNode[] }>({ type: "files:tree" });
   }
   async readFile(filePath: string) {
     return this.sendRequest<{ content: string; size: number }>({ type: "files:read", filePath });
@@ -418,13 +396,13 @@ export class WebSocketManager {
     return this.sendRequest<{ success: boolean; message?: string }>({ type: "files:save", filePath, content });
   }
   async getDbInfo() {
-    return this.sendRequest<import("./types").DatabaseInfo>({ type: "db:info" });
+    return this.sendRequest<import("./types.js").DatabaseInfo>({ type: "db:info" });
   }
   async getDbTables() {
-    return this.sendRequest<{ tables: import("./types").TableInfo[] }>({ type: "db:tables" });
+    return this.sendRequest<{ tables: import("./types.js").TableInfo[] }>({ type: "db:tables" });
   }
   async dbSelect(table: string, page?: number, pageSize?: number, where?: unknown) {
-    return this.sendRequest<import("./types").SelectResult>({ type: "db:select", table, page, pageSize, where });
+    return this.sendRequest<import("./types.js").SelectResult>({ type: "db:select", table, page, pageSize, where });
   }
   async dbInsert(table: string, row: unknown) {
     return this.sendRequest<{ success: boolean }>({ type: "db:insert", table, row });
@@ -448,53 +426,14 @@ export class WebSocketManager {
     return this.sendRequest<{ success: boolean }>({ type: "db:kv:delete", table, key });
   }
   async kvGetEntries(table: string) {
-    return this.sendRequest<{ entries: import("./types").KvEntry[] }>({ type: "db:kv:entries", table });
-  }
-
-  private buildWebSocketUrl(customUrl?: string): string {
-    if (customUrl) return customUrl;
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    return `${protocol}//${window.location.host}/server`;
+    return this.sendRequest<{ entries: import("./types.js").KvEntry[] }>({ type: "db:kv:entries", table });
   }
 
   private setState(newState: ConnectionState): void {
     this.state = newState;
   }
 
-  private attachEventHandlers(): void {
-    if (!this.ws) return;
-    this.ws.onopen = () => this.handleConnectionOpen();
-    this.ws.onmessage = (event) => this.handleMessage(event);
-    this.ws.onclose = () => this.handleConnectionClose();
-    this.ws.onerror = (event) =>
-      this.handleConnectionError(new ConnectionError("WebSocket error", event as unknown as Error));
-  }
-
-  private handleConnectionOpen(): void {
-    this.setState(ConnectionState.CONNECTED);
-    this.reconnectAttempts = 0;
-    this.notifyConnection(true);
-    this.callbacks.onConnect?.();
-  }
-
-  private handleMessage(event: MessageEvent): void {
-    try {
-      const message = normalizeConsolePushMessage(
-        JSON.parse(event.data) as WebSocketMessage,
-      ) as WebSocketMessage;
-      if (message.requestId && this.pendingRequests.has(message.requestId)) {
-        this.handleRequestResponse(message);
-        return;
-      }
-      void applyConsoleEvent(message);
-      this.handleBroadcast(message);
-      this.callbacks.onMessage?.(message);
-    } catch (error) {
-      console.error("[WebSocket] Message parsing error:", error);
-    }
-  }
-
-  private handleBroadcast(message: WebSocketMessage): void {
+  private handleBroadcast(message: ConsoleTransportMessage): void {
     const t = message.type;
     if (
       t === SIDE_EVENT_PUSH.REQUEST_RECEIVE
@@ -516,37 +455,6 @@ export class WebSocketManager {
       setTimeout(() => window.location.reload(), 3000);
       return;
     }
-  }
-
-  private handleRequestResponse(message: WebSocketMessage): void {
-    const { requestId } = message;
-    const pending = this.pendingRequests.get(requestId!);
-    if (!pending) return;
-    this.pendingRequests.delete(requestId!);
-    clearTimeout(pending.timer);
-    if (message.error) {
-      pending.reject(new WebSocketError(message.error, "SERVER_ERROR"));
-    } else {
-      pending.resolve(message.data);
-    }
-  }
-
-  private handleConnectionClose(): void {
-    this.ws = null;
-    this.notifyConnection(false);
-    if (this.state === ConnectionState.DISCONNECTED) return;
-    this.setState(ConnectionState.RECONNECTING);
-    this.callbacks.onDisconnect?.();
-    this.scheduleReconnect();
-  }
-
-  private handleConnectionError(error: Error): void {
-    // Used by the legacy WS path. Do NOT clear the reconnect timer here —
-    // callers that still want to retry should set RECONNECTING then call
-    // scheduleReconnect(). Terminal failures go through scheduleReconnect's
-    // maxAttempts branch which sets ERROR.
-    console.error("[Console transport] Connection error:", error);
-    this.callbacks.onError?.(error as unknown as Event);
   }
 
   private scheduleReconnect(): void {
@@ -579,12 +487,12 @@ export class WebSocketManager {
     }
   }
 
-  private clearPendingRequests(): void {
-    for (const [, { reject, timer }] of this.pendingRequests) {
-      clearTimeout(timer);
-      reject(new WebSocketError("Connection closed", "CONNECTION_CLOSED"));
-    }
-    this.pendingRequests.clear();
+  private assertActive(): void {
+    if (this.disposed) throw new Error('ConsoleTransport has been disposed');
+  }
+
+  private isCurrentConnection(generation: number): boolean {
+    return !this.disposed && generation === this.connectionGeneration;
   }
 }
 

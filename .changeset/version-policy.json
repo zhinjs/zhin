@@ -616,6 +616,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace process-wide proxy resolution and fetch caching with provider-owned disposable HTTP transports under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-console-client-runtime.md",
+      "packages": [
+        "@zhin.js/client",
+        "@zhin.js/contract"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-wide Console application, environment, and transport state with an explicitly owned ConsoleClient and remove obsolete browser compatibility APIs under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

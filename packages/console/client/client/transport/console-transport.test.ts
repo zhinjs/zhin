@@ -6,8 +6,8 @@ vi.mock("../persistence/idb-store.js", () => ({
   applyConsoleEvent: (...args: unknown[]) => mockApplyConsoleEvent(...args),
 }));
 
-import { WebSocketManager } from "./manager.js";
-import { ConnectionState, type WebSocketMessage } from "./types.js";
+import { ConsoleTransport } from "./console-transport.js";
+import { ConnectionState } from "./types.js";
 
 function mockStorage(map: Record<string, string> = {}): Storage {
   return {
@@ -80,7 +80,7 @@ function mockConsoleTransport(sse: () => Response | Promise<Response>) {
   });
 }
 
-describe("WebSocketManager REST/SSE transport", () => {
+describe("ConsoleTransport REST/SSE transport", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockApplyConsoleEvent.mockClear();
@@ -97,7 +97,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     const fetchMock = mockConsoleTransport(() => sseResponse(200));
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager({ reconnectInterval: 100, maxReconnectAttempts: 3 });
+    const manager = new ConsoleTransport({ reconnectInterval: 100, maxReconnectAttempts: 3 });
     const states: boolean[] = [];
     manager.onConnectionChange((c) => states.push(c));
     manager.connect();
@@ -122,7 +122,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     const fetchMock = mockConsoleTransport(() => sseResponse(200));
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     manager.connect();
     await vi.advanceTimersByTimeAsync(0);
     await Promise.resolve();
@@ -144,7 +144,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager({
+    const manager = new ConsoleTransport({
       reconnectInterval: 100,
       maxReconnectAttempts: 5,
     });
@@ -176,7 +176,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     } as Response));
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     const data = await manager.getConfigYaml();
     expect(data.yaml).toContain("port");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
@@ -193,31 +193,10 @@ describe("WebSocketManager REST/SSE transport", () => {
     } as Response));
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     await manager.setConfig("sandbox", { endpoints: [] });
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer t");
-  });
-
-  it("normalizes legacy endpoint push names and payload aliases before callbacks", async () => {
-    installBrowserGlobals();
-    const received: WebSocketMessage[] = [];
-    const manager = new WebSocketManager({}, {
-      onMessage: (message) => received.push(message),
-    });
-
-    (manager as unknown as { handleMessage(event: MessageEvent): void }).handleMessage({
-      data: '{"type":"endpoint:message","data":{"$adapter":"sandbox","endpoint":"bot"}}',
-    } as MessageEvent);
-    await Promise.resolve();
-
-    expect(received).toEqual([expect.objectContaining({
-      type: "message.receive",
-      data: expect.objectContaining({ adapter: "sandbox", endpointKey: "bot" }),
-    })]);
-    expect(mockApplyConsoleEvent).toHaveBeenCalledWith(expect.objectContaining({
-      type: "message.receive",
-    }));
   });
 
   it("stops reconnecting after maxReconnectAttempts", async () => {
@@ -225,7 +204,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     const fetchMock = mockConsoleTransport(() => sseResponse(500, null));
     vi.stubGlobal("fetch", fetchMock);
 
-    const manager = new WebSocketManager({
+    const manager = new ConsoleTransport({
       reconnectInterval: 10,
       maxReconnectAttempts: 2,
     });
@@ -270,7 +249,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     ));
     vi.stubGlobal('fetch', fetchMock);
     const received: Array<{ eventId: number; delivery?: string }> = [];
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     manager.onConsoleEvent('message.receive', (event) => received.push({ eventId: event.eventId, delivery: event.delivery }));
     manager.connect();
     await vi.advanceTimersByTimeAsync(0);
@@ -301,7 +280,7 @@ describe("WebSocketManager REST/SSE transport", () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     const received: number[] = [];
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     manager.onConsoleEvent('message.receive', (event) => received.push(event.eventId));
     const recover = manager as unknown as { recoverEventHistory(signal: AbortSignal): Promise<void> };
     await recover.recoverEventHistory(new AbortController().signal);
@@ -320,7 +299,7 @@ describe("WebSocketManager REST/SSE transport", () => {
       return { ...body, data: { ...body.data, gap: true, oldestAvailableEventId: 8 } };
     };
     vi.stubGlobal('fetch', vi.fn(async () => response));
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     const gaps: unknown[] = [];
     manager.onConsoleEventRecoveryGap((gap) => gaps.push(gap));
     const recover = manager as unknown as { recoverEventHistory(signal: AbortSignal): Promise<void> };
@@ -340,10 +319,39 @@ describe("WebSocketManager REST/SSE transport", () => {
       data: { adapter: 'sandbox', endpointKey: 'bot', content: 'history' },
     };
     vi.stubGlobal('fetch', vi.fn(async () => eventHistoryResponse([historyEvent], 'runtime-a', 1)));
-    const manager = new WebSocketManager();
+    const manager = new ConsoleTransport();
     const recover = manager as unknown as { recoverEventHistory(signal: AbortSignal): Promise<void> };
     await recover.recoverEventHistory(new AbortController().signal);
 
     expect(Object.keys(stored).filter((key) => key.includes('event-cursor'))).toEqual([]);
+  });
+
+  it('makes disposal terminal and idempotent', () => {
+    const transport = new ConsoleTransport();
+    transport.dispose();
+    transport.dispose();
+
+    expect(transport.getState()).toBe(ConnectionState.DISCONNECTED);
+    expect(() => transport.connect()).toThrow('ConsoleTransport has been disposed');
+    expect(() => transport.onConnectionChange(() => {}))
+      .toThrow('ConsoleTransport has been disposed');
+  });
+
+  it('rejects a stale connection result after disposal', async () => {
+    installBrowserGlobals();
+    let resolveHistory!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => {
+      resolveHistory = resolve;
+    }));
+    const transport = new ConsoleTransport({ fetch: fetchMock });
+
+    transport.connect();
+    transport.dispose();
+    resolveHistory(eventHistoryResponse());
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(transport.getState()).toBe(ConnectionState.DISCONNECTED);
+    expect(fetchMock).toHaveBeenCalledOnce();
   });
 });

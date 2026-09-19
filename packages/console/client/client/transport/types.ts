@@ -10,23 +10,23 @@ export interface BaseMessage {
   error?: string;
 }
 
-export type WebSocketMessage = BaseMessage & { data?: unknown; [key: string]: unknown };
+export type ConsoleTransportMessage = BaseMessage & { data?: unknown; [key: string]: unknown };
 
-export interface WebSocketConfig {
-  url?: string;
+export interface ConsoleTransportConfig {
+  fetch?: typeof globalThis.fetch;
   reconnectInterval?: number;
   maxReconnectAttempts?: number;
   requestTimeout?: number;
 }
 
-export interface WebSocketCallbacks {
+export interface ConsoleTransportCallbacks {
   onConnect?: () => void;
   onDisconnect?: () => void;
-  onError?: (error: Event) => void;
-  onMessage?: (message: WebSocketMessage) => void;
+  onError?: (error: Error) => void;
+  onMessage?: (message: ConsoleTransportMessage) => void;
 }
 
-export interface UseWebSocketOptions {
+export interface UseConsoleTransportOptions {
   autoConnect?: boolean;
 }
 
@@ -38,30 +38,24 @@ export enum ConnectionState {
   ERROR = "error",
 }
 
-export class WebSocketError extends Error {
+export class ConsoleTransportError extends Error {
   constructor(
     message: string,
     public code: string,
     public originalError?: Error,
   ) {
     super(message);
-    this.name = "WebSocketError";
+    this.name = "ConsoleTransportError";
   }
 }
 
-export class RequestTimeoutError extends WebSocketError {
-  constructor(requestId: number) {
-    super(`Request ${requestId} timed out`, "REQUEST_TIMEOUT");
-  }
-}
-
-export class ConnectionError extends WebSocketError {
+export class ConnectionError extends ConsoleTransportError {
   constructor(message: string, originalError?: Error) {
     super(message, "CONNECTION_ERROR", originalError);
   }
 }
 
-export class MessageError extends WebSocketError {
+export class MessageError extends ConsoleTransportError {
   constructor(message: string, originalError?: Error) {
     super(message, "MESSAGE_ERROR", originalError);
   }

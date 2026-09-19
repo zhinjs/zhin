@@ -93,9 +93,9 @@ export type ConsoleClientEntry = Omit<ConsoleEntry, "serverPaths"> & {
 export type PluginAddRouteInput = {
   path: string;
   name: string;
-  element: unknown;
+  element: import('react').ReactNode;
   parent?: string | null;
-  icon?: unknown;
+  icon?: import('react').ReactNode | string;
   meta?: {
     hideInMenu?: boolean;
     order?: number;
@@ -109,7 +109,7 @@ export type PluginAddRouteInput = {
 export type PluginAddToolInput = {
   id?: string;
   name: string;
-  icon?: unknown;
+  icon?: import('react').ReactNode;
   parent?: string | null;
   path?: string;
 };
@@ -117,8 +117,6 @@ export type PluginAddToolInput = {
 export type PluginRegisterHostApi = {
   React: typeof import("react");
   addRoute(input: PluginAddRouteInput): void;
-  /** 与旧版控制台 register(api) 对齐，等价于 addRoute */
-  addPage(input: PluginAddRouteInput): void;
   addTool(input: PluginAddToolInput): string;
 };
 

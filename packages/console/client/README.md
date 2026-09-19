@@ -17,19 +17,18 @@ Peer：`react >= 18`（`createPluginRegisterHostApi` 需要 React 引用）。
 | 导出 | 用途 |
 |------|------|
 | `loadConsoleEntries` | 拉 `GET /entries`、动态 import 各 entry、调用 `register(hostApi)` |
-| `createPluginRegisterHostApi` | 由壳层的 `React` / `addRoute` / `addTool` 构造 `PluginRegisterHostApi` |
+| `createConsoleClient` | 创建一个拥有路由、工具、运行时环境与网络连接的 Console 实例 |
+| `ConsoleClientProvider` | 将 Console 实例提供给 `useConsoleTransport` 等 React hooks |
 | `apiFetch` | 相对 Host API Base 的 `fetch`，自动附加 `Authorization: Bearer` |
 | `getApiBase` / `getToken` | 读取登录页写入 `localStorage` 的 API Base 与 Token |
-| `app` | 路由与工具注册单例（`addRoute`、`addTool` 等） |
-| `configureConsole` / `getRuntimeEnv` | 运行时环境（development / production） |
 | `createRegistryStore` / `useRegistry` | 可选 registry store |
 | `ENDPOINT_RPC` / `INBOX_RPC` / `SIDE_EVENT_RPC` / `SIDE_EVENT_PUSH` | `@zhin.js/console-protocol` 的规范 RPC 与推送名称 |
 | `normalizeConsolePushType` / `normalizeConsolePushMessage` | 在 SDK 边界兼容旧 `endpoint:*` 推送并输出规范事件与 payload |
 | `parseConsoleInboxEvent` | 一次完成 Inbox 推送名称、身份别名和 message/request/notice 分类 |
 | `ConsoleEndpointSummary` / `EndpointManagementCapability` | Host 与 Remote Console 共享的 Endpoint wire 类型 |
 | `fetchConsoleEventHistory` | 按 `(runtimeId, eventId)` 拉取有界事件历史 |
-| `WebSocketManager.onConsoleEvent` | 订阅带 `live/history` 投递来源的强类型事件 |
-| `WebSocketManager.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
+| `ConsoleTransport.onConsoleEvent` | 订阅带 `live/history` 投递来源的强类型事件 |
+| `ConsoleTransport.onConsoleEventRecoveryGap` | 观察不可续接游标并触发领域全量重同步 |
 | `ConsoleInboxNoticesQuery` / `ConsoleInboxNoticesResult` | 以 `unreadOnly` 从持久 Inbox 重建未读通知 |
 
 类型与 Entry 契约来自 `@zhin.js/contract`。
@@ -43,16 +42,15 @@ Remote Console 壳层在登录后调用：
 ```tsx
 import React from "react";
 import {
-  app,
-  createPluginRegisterHostApi,
+  ConsoleClientProvider,
+  createConsoleClient,
   loadConsoleEntries,
 } from "@zhin.js/client";
 
-const hostApi = createPluginRegisterHostApi({
-  React,
-  addRoute: app.addRoute.bind(app),
-  addTool: app.addTool.bind(app),
+const client = createConsoleClient({
+  getRuntimeEnv: () => import.meta.env.DEV ? "development" : "production",
 });
+const hostApi = client.createPluginRegisterHostApi(React);
 
 await loadConsoleEntries({
   hostApi,
@@ -64,6 +62,12 @@ await loadConsoleEntries({
   onFetchError: (status) => console.error("entries fetch failed", status),
   onEmpty: () => console.warn("no console entries"),
 });
+
+// 壳层根组件必须为 hooks 提供同一个 client 所有者。
+export function ConsoleRoot({ children }: { children: React.ReactNode }) {
+  React.useEffect(() => () => client.dispose(), []);
+  return <ConsoleClientProvider client={client}>{children}</ConsoleClientProvider>;
+}
 ```
 
 `loadConsoleEntries` 内部：`fetchConsoleEntries` → `registerConsolePluginsFromEntries` → 各 entry 模块的 `register` 或 `default.register`。
@@ -99,18 +103,21 @@ const res = await apiFetch("/api/console/request", {
 
 401 时清除 Token 并派发 `zhin:auth-required`。
 
-辅助：`resolveApiUrl`、`resolveWebSocketUrl`（SSE `/api/events` 等）。
+辅助：`resolveApiUrl`。
 
 Client 在连接 `/api/events` 前先补拉 `/api/events/history`，再携带最新游标进入 SSE；Host 会原子重放 HTTP 与订阅之间产生的事件。游标只在 Inbox 持久化成功后推进，重复的 history/live 投递按 `(runtimeId, eventId)` 幂等写入 IndexedDB。`gap` 不会被吞掉，页面可订阅恢复缺口并改走领域 HTTP 全量投影。
 
-## `createPluginRegisterHostApi`
+## Console 实例所有权
 
-将壳层已有的 React 与路由/工具注册函数适配为契约中的 `PluginRegisterHostApi`（含 `addPage` 别名 → `addRoute`）：
+每个 Remote Console mount 创建一个 `ConsoleClient`。插件注册、React hooks 和卸载必须使用同一个实例，多个 mount 之间不会共享路由、工具、运行时环境或连接状态：
 
 ```ts
-import { createPluginRegisterHostApi } from "@zhin.js/client";
+import React from "react";
+import { createConsoleClient } from "@zhin.js/client";
 
-const hostApi = createPluginRegisterHostApi({ React, addRoute, addTool });
+const client = createConsoleClient();
+const hostApi = client.createPluginRegisterHostApi(React);
+await loadConsoleEntries({ hostApi });
 ```
 
 ## 低级 API

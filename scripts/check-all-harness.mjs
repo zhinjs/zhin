@@ -111,6 +111,11 @@ const checks = [
     description: '检查 Adapter definition 与 Endpoint instance 职责不混淆',
   },
   {
+    name: 'Console Client Boundaries',
+    command: 'pnpm check:console-client-boundaries',
+    description: 'Console 路由、运行时环境与网络连接必须归属显式 ConsoleClient 实例',
+  },
+  {
     name: 'IM Session SSOT',
     command: 'pnpm check:im-session-ssot',
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',

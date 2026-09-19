@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { getWebSocketManager } from "./instance";
-import type { UseWebSocketOptions } from "./types";
+import { useConsoleClient } from "../console-client-context.js";
+import type { UseConsoleTransportOptions } from "./types.js";
 
 /**
  * 每次连接会话只对同一 key 自动加载一次：失败后不再零退避死循环
@@ -20,9 +20,9 @@ function useAutoLoadOnce(connected: boolean, key: unknown, ready: boolean, fire:
   });
 }
 
-export function useWebSocket(options: UseWebSocketOptions = {}) {
+export function useConsoleTransport(options: UseConsoleTransportOptions = {}) {
   const { autoConnect = true } = options;
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
 
   useEffect(() => {
@@ -58,7 +58,7 @@ export function resolveKeyedValue<T>(
 
 export function useConfig(pluginName: string, options?: { autoLoad?: boolean; autoLoadSchema?: boolean }) {
   const { autoLoad = true, autoLoadSchema = true } = options ?? {};
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
   const [configEntry, setConfigEntry] = useState<{ key: string; value: unknown } | null>(null);
   const [schemaEntry, setSchemaEntry] = useState<{ key: string; value: unknown } | null>(null);
@@ -124,7 +124,7 @@ export function useConfig(pluginName: string, options?: { autoLoad?: boolean; au
 }
 
 export function useConfigYaml() {
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
   const [yaml, setYaml] = useState("");
   const [pluginKeys, setPluginKeys] = useState<string[]>([]);
@@ -175,9 +175,9 @@ export function useConfigYaml() {
 }
 
 export function useFiles() {
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
-  const [tree, setTree] = useState<import("./types").FileTreeNode[]>([]);
+  const [tree, setTree] = useState<import("./types.js").FileTreeNode[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -212,7 +212,7 @@ export function useFiles() {
 }
 
 export function useEnvFiles() {
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
   const [files, setFiles] = useState<Array<{ name: string; exists: boolean }>>([]);
   const [loading, setLoading] = useState(false);
@@ -259,10 +259,10 @@ export function useEnvFiles() {
 }
 
 export function useDatabase() {
-  const wsManager = getWebSocketManager();
+  const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
-  const [info, setInfo] = useState<import("./types").DatabaseInfo | null>(null);
-  const [tables, setTables] = useState<import("./types").TableInfo[]>([]);
+  const [info, setInfo] = useState<import("./types.js").DatabaseInfo | null>(null);
+  const [tables, setTables] = useState<import("./types.js").TableInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
