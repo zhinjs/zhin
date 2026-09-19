@@ -318,11 +318,9 @@ export class Plugin extends PluginBase implements PluginLike {
    * 从各个服务中获取数据
    */
   get features(): Plugin.Features {
-    const componentService = this.inject('component')
     const scheduleService = this.inject('schedule');
 
     return {
-      components: componentService ? componentService.getAllNames() : [],
       schedules: scheduleService ? scheduleService.items.map(s => s.id) : [],
       middlewares: this.#middlewares.map((m, i) => m.name || `middleware_${i}`),
     };
@@ -335,7 +333,6 @@ export class Plugin extends PluginBase implements PluginLike {
   getFeatures(): Array<{ name: string; count: number }> {
     const result: Array<{ name: string; count: number }> = [];
     const f = this.features;
-    if (f.components.length > 0) result.push({ name: 'component', count: f.components.length });
     if (f.schedules.length > 0) result.push({ name: 'schedule', count: f.schedules.length });
     // #middlewares includes the terminal pass-through middleware.
     const userMiddlewareCount = this.#middlewares.length - 1;
@@ -659,7 +656,6 @@ export namespace Plugin {
    * 插件提供的功能
    */
   export interface Features {
-    components: string[];
     schedules: string[];
     middlewares: string[];
   }

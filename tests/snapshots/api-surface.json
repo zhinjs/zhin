@@ -235,7 +235,6 @@
     "export * from './built/ai-trigger.js'",
     "export * from './built/authorization.js'",
     "export * from './built/common-adapter-tools.js'",
-    "export * from './built/component.js'",
     "export * from './built/config.js'",
     "export * from './built/connect-endpoint-instance.js'",
     "export * from './built/database.js'",
