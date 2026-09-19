@@ -146,7 +146,6 @@
     "export{AgentEventBus}from './event/ai-event-bus.js';",
     "export{AgentFeature,MCPFeature,}from './features/index.js';",
     "export{AgentResourceHub}from './resource-hub/index.js';",
-    "export{BashBuiltinTool,createBashTool,BASH_PARAMETERS,type BashExecAsync,}from './builtin/bash-tool.js';",
     "export{BuiltinBaseTool}from './builtin/builtin-base-tool.js';",
     "export{BuiltinToolService}from './builtins/builtin-tool-service.js';",
     "export{DEFAULT_CONFIG as ZHIN_AGENT_DEFAULT_CONFIG,DEFAULT_ALWAYS_LOADED_TOOLS,SECTION_SEP,}from './config/index.js';",

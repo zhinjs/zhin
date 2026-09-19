@@ -236,12 +236,6 @@ export {
   type GrepExecAsync,
 } from './builtin/grep-tool.js';
 export {
-  BashBuiltinTool,
-  createBashTool,
-  BASH_PARAMETERS,
-  type BashExecAsync,
-} from './builtin/bash-tool.js';
-export {
   WebSearchBuiltinTool,
   createWebSearchTool,
   WEB_SEARCH_PARAMETERS,

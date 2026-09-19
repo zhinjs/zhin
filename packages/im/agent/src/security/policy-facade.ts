@@ -1,13 +1,10 @@
 /**
  * 统一工具安全策略门面（policy facade）
  *
- * 背景：builtin 工具曾各自手写策略链且不一致（edit_file 七层、glob/list_dir 两层、
- * analyze_media 三层……），新工具容易漏层，新策略要改所有工具。
- *
  * 本模块把各策略层声明为一张按 priority 排序的策略表，`runToolPolicies` 依序执行，
  * 第一个终结决策（deny 或需 Owner 确认）即短路返回，`decisions` 记录已执行层。
  *
- * 层顺序（以 edit-file-tool 既有链路为基准）：
+ * 层顺序：
  *   role-gate → bash-command-safety → dangerous-tool-approval → bash-sensitive-read
  *   → file-permission-matrix（文件写类 + 显式 read）→ bash-file-permission
  *   → memory-write-path（写类且有 filePath）→ sensitive-path（有 filePath）
@@ -15,9 +12,8 @@
  *   → workspace-access（写类且有 filePath）
  *   → exec-policy（有 command 且给 config）
  *
- * 注意：memory-write-path / blocked-device-path / workspace-access 仅对写操作生效，
- * 这是为了严格保持 read 类工具（glob/list_dir/grep/analyze_media）迁移前的对外行为。
- * bash-tool 旧链不含 exec-policy，因此 bash 调用方不传 config，exec-policy 层不会激活。
+ * memory-write-path / blocked-device-path / workspace-access 仅对写操作生效；
+ * read 类工具由文件权限矩阵和显式 devicePathGuard 约束。
  */
 
 import type { Message } from '@zhin.js/core';
@@ -54,7 +50,6 @@ import {
   extractUrlsFromCommand,
   NETWORK_COMMAND_PATTERNS,
 } from './network-policy.js';
-import { attachTurnSandboxAuthority } from './turn-sandbox-authority.js';
 import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
@@ -188,7 +183,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
               status: 'approval_required',
               policy: 'exec-policy',
               reason: exec.reason ?? 'shell command requires approval',
-              input: withTurnSandboxAuthority(input.turn, authorizedInput),
+              input: authorizedInput,
             });
           }
           return Object.freeze({
@@ -226,7 +221,6 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
         });
       }
     }
-    authorizedInput = withTurnSandboxAuthority(input.turn, authorizedInput);
   }
   if (input.tool.approval !== 'never') {
     return Object.freeze({
@@ -237,26 +231,6 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     });
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
-}
-
-function withTurnSandboxAuthority(
-  turn: TurnIngress,
-  input: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  const filesystem = turn.policy.filesystem;
-  const workingDirectory = filesystem?.workingDirectory ?? filesystem?.workspaceRoot;
-  const access = filesystem?.access;
-  const isolated = turn.policy.shell?.isolation === 'required'
-    && (access === 'read-only' || access === 'workspace-write');
-  const unrestricted = turn.policy.shell?.isolation === 'none' && access === 'danger-full-access';
-  if (!workingDirectory || (!isolated && !unrestricted)) {
-    return input;
-  }
-  return attachTurnSandboxAuthority(input, {
-    workingDirectory,
-    access,
-    networkAccess: turn.policy.network?.enabled === true,
-  });
 }
 
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {

@@ -43,6 +43,7 @@
     "export * from './github-workroom-capability.js';",
     "export * from './host-mcp-projection.js';",
     "export * from './host-tool-projection.js';",
+    "export * from './native-bash-tool.js';",
     "export * from './native-file-tools.js';",
     "export * from './native-interaction-tools.js';",
     "export * from './native-semantic-memory-tools.js';",

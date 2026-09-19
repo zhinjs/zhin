@@ -30,7 +30,6 @@ import {
   AgentEventBus,
   AgentResourceHub,
   discoverWorkspaceAgents,
-  createBashTool,
   createScheduleJobStoreFromConfig,
   createScheduleTools,
   ScheduleJobEngine,
@@ -133,6 +132,7 @@ import {
   agentTurnEngineToken,
   createFullAgentTurnEngine,
   createNativeFileToolFeatures,
+  NativeBashToolFeature,
   createNativeWebToolFeatures,
   createNativeTodoToolFeatures,
   createNativeInteractionToolFeatures,
@@ -1213,7 +1213,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       zhinAgent.markMemoryPersistenceReady();
     }
 
-    const bashTool = createBashTool();
     const ingress = new CapabilityIngress();
     const bootstrapText = await loadBootstrap(options.projectRoot);
 
@@ -1228,14 +1227,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
 
     // extraTools (e.g. voice_stt / voice_tts) join the candidate ToolFeature.
-    // Native builtin file tools are projected via createNativeFileToolFeatures
-    // below — they are the SSOT and own the security context (workspaceRoot
-    // + execPreset). bash remains an explicit Tool projection consumed by
-    // subagent createRuntimeSubagentAgentTools.
-    for (const tool of [
-      ...(options.extraTools ?? []),
-      bashTool,
-    ]) {
+    // Host-provided tools join the same candidate ToolFeature projection.
+    for (const tool of options.extraTools ?? []) {
       if (!tool.description?.trim()) {
         throw new TypeError(`Host tool "${tool.name}" description cannot be empty`);
       }
@@ -1256,6 +1249,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     for (const tool of [...scheduleTools, ...homeTools]) {
       addFeature(toolFeatureId, tool.name, tool.definition);
     }
+    const nativeBash = new NativeBashToolFeature();
+    addFeature(nativeBash.feature, nativeBash.name, nativeBash.definition);
     for (const tool of createNativeFileToolFeatures()) {
       addFeature(tool.feature, tool.name, tool.definition);
     }
@@ -4099,14 +4094,15 @@ function createRuntimeZhinAgent(
 /**
  * Subagent tool pool — derived from the same generation projection as the
  * main turn so the ToolIndex is the single source of truth. Native builtin
- * tools (file / web) are projected via the same helpers the main agent uses;
- * bash stays on the legacy Tool path until its native projection lands.
+ * tools are projected from the same native ToolFeature definitions used by the main turn.
  */
 function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
-  const nativeFiles = createNativeFileToolFeatures();
-  const nativeWeb = createNativeWebToolFeatures();
-  const bash = createBashTool();
-  const fromNative: AgentTool[] = [...nativeFiles, ...nativeWeb].map((native) => ({
+  const nativeTools = [
+    new NativeBashToolFeature(),
+    ...createNativeFileToolFeatures(),
+    ...createNativeWebToolFeatures(),
+  ];
+  return nativeTools.map((native): AgentTool => ({
     name: native.name,
     description: native.definition.description,
     parameters: native.definition.inputSchema as JsonSchema,
@@ -4117,16 +4113,6 @@ function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
         execCtx,
       ),
   }));
-  return [
-    ...fromNative,
-    {
-      name: bash.name,
-      description: bash.description,
-      parameters: bash.parameters as JsonSchema,
-      source: 'builtin',
-      execute: bash.execute as (args: Record<string, unknown>) => Promise<unknown>,
-    },
-  ];
 }
 
 async function seedResourceHubAgentPresets(

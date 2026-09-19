@@ -2,7 +2,7 @@
  * AI 内置系统工具
  *
  * 文件工具:  read_file / write_file / edit_file / list_dir / glob / grep（builtin/* + BuiltinBaseTool）
- * Shell:     bash（builtin/bash-tool）
+ * Shell:     bash（Plugin Runtime native ToolFeature）
  * 网络:      web_search, web_fetch（builtin/web-*-tool）
  * 计划:      todo_read, todo_write（builtin/todo-*-tool）
  * 外部 MCP 工具由 generation MCPFeature 投影按 active binding 注入。
@@ -20,7 +20,6 @@ import { createEditFileTool } from './builtin/edit-file-tool.js';
 import { createListDirTool } from './builtin/list-dir-tool.js';
 import { createGlobTool } from './builtin/glob-tool.js';
 import { createGrepTool } from './builtin/grep-tool.js';
-import { createBashTool } from './builtin/bash-tool.js';
 import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { createWebFetchTool } from './builtin/web-fetch-tool.js';
 import { createTodoReadTool } from './builtin/todo-read-tool.js';
@@ -49,7 +48,6 @@ export function createBuiltinTools(options: BuiltinToolsOptions): ToolInput[] {
   tools.push(createListDirTool());
   tools.push(createGlobTool());
   tools.push(createGrepTool());
-  tools.push(createBashTool());
   tools.push(createWebSearchTool());
   tools.push(createWebFetchTool());
   tools.push(createTodoReadTool(DATA_DIR));

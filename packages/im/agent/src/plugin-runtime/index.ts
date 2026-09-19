@@ -2,6 +2,7 @@ export * from './agent-runtime.js';
 export * from './agent-host-port.js';
 export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';
+export * from './native-bash-tool.js';
 export { ZhinAgent } from '../zhin-agent/index.js';
 export type { AgentTurnConfiguration, AgentTurnRequest } from '../zhin-agent/index.js';
 export { composeZhinAgentRuntime } from '../init/compose-zhin-agent-runtime.js';

@@ -6,7 +6,6 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
-import { readTurnSandboxAuthority } from '../../src/security/turn-sandbox-authority.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
@@ -276,7 +275,7 @@ describe('TurnToolRuntime', () => {
     );
   });
 
-  it('injects a fail-closed isolation contract for workspace shell execution', async () => {
+  it('passes the fail-closed isolation contract through the typed execution context', async () => {
     const execute = vi.fn(async () => 'ok');
     const workspace = join(process.cwd(), 'packages');
     const { turn } = fixture({
@@ -295,12 +294,16 @@ describe('TurnToolRuntime', () => {
       .resolves.toMatchObject({ status: 'completed' });
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ cwd: workspace }), expect.any(Object));
     const authorizedInput = execute.mock.calls[0]?.[0];
-    expect(readTurnSandboxAuthority(authorizedInput)).toEqual({
-      workingDirectory: workspace,
-      access: 'workspace-write',
-      networkAccess: false,
+    const executionContext = execute.mock.calls[0]?.[1];
+    expect(executionContext?.policy).toMatchObject({
+      filesystem: {
+        workingDirectory: workspace,
+        access: 'workspace-write',
+      },
+      network: { enabled: false },
+      shell: { isolation: 'required' },
     });
-    expect(JSON.stringify(authorizedInput)).not.toContain('workspace-write');
+    expect(authorizedInput).toEqual({ command: 'node -e "console.log(1)"', cwd: workspace });
   });
 
   it('routes per-turn shell ask decisions through ApprovalPort', async () => {
