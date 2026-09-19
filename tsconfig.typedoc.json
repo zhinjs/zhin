@@ -77,9 +77,6 @@
       "@zhin.js/component": [
         "./packages/im/component/src/index.ts"
       ],
-      "@zhin.js/core/tool-zod": [
-        "./packages/im/core/src/tool-zod.ts"
-      ],
       "@zhin.js/core/runtime": [
         "./packages/im/core/src/plugin-runtime/im/index.ts"
       ],

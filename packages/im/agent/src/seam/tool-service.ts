@@ -6,7 +6,12 @@
  */
 
 import type { SeamProvider, SeamScope } from './seam-provider.js';
-import type { ToolInvocationContext, ToolApproval, ToolScope } from '@zhin.js/tool';
+import type {
+  ToolApproval,
+  ToolInputSchema,
+  ToolInvocationContext,
+  ToolScope,
+} from '@zhin.js/tool';
 
 /**
  * Tool 的 OpenAI 格式 Schema
@@ -16,7 +21,7 @@ export interface ToolSchema {
   function: {
     name: string;
     description: string;
-    parameters: unknown; // JSONSchema
+    parameters: ToolInputSchema;
   };
   /** Runtime policy metadata projected into the canonical Tool capability. */
   approval?: ToolApproval;

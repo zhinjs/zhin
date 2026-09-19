@@ -8,6 +8,7 @@ import type {
   OperationClientPort,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
 
@@ -116,7 +117,7 @@ export interface AgentToolDefinition<
   /** @internal Runtime feature brand. */
   readonly $feature: typeof toolBrand;
   readonly description: string;
-  readonly inputSchema?: unknown;
+  readonly inputSchema?: ToolInputSchema<TInput>;
   readonly approval: ToolApproval;
   /** Restrict this tool to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
@@ -174,6 +175,9 @@ export function defineAgentTool<
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Agent Tool execute must be a function');
   }
+  if (definition.inputSchema !== undefined && !isToolInputSchema(definition.inputSchema)) {
+    throw new TypeError('Agent Tool inputSchema must be an object JSON Schema or executable schema');
+  }
   const adapter = (definition as { readonly adapter?: unknown }).adapter;
   if (adapter !== undefined
     && (typeof adapter !== 'string' || adapter.trim() === '')) {
@@ -218,6 +222,7 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
     || typeof definition.description !== 'string'
     || !definition.description.trim()
     || typeof definition.execute !== 'function'
+    || (definition.inputSchema !== undefined && !isToolInputSchema(definition.inputSchema))
     || !validAdapterName((definition as { readonly adapter?: unknown }).adapter)
     || (definition.approval !== 'never'
       && definition.approval !== 'on-risk'

@@ -121,6 +121,7 @@ Three tiers:
 | Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
 | `@zhin.js/agent/tools` and the Agent authoring Tool bridge | `removed` | The subpath and duplicate definition/context/discovery were deleted | Author Tools through `@zhin.js/tool` and `agent/tools/$*.ts` |
+| `@zhin.js/core/tool-zod` | `removed` | The Core subpath and Zod 3 structural compatibility were deleted | `@zhin.js/tool` owns the single Zod 4 / JSON Schema input contract |
 | Classic Core `Adapter` / `Endpoint` runtime | `removed` | Classes, capability state, lifecycle helpers, and dedicated tests were deleted | Adapters use `defineAdapter`, `Endpoint<TClient>`, and the generation-owned `AdapterIndex` from `zhin.js/adapter` |
 | Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |
 | Kernel `PluginBase` / mutable `Feature` registry | `removed` | The Plugin tree, string DI, prototype extension registry, and self-tests were deleted | Lifecycle belongs to `@zhin.js/plugin-runtime`; discovery and projection belong to `@zhin.js/feature-kit` |

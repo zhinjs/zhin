@@ -125,6 +125,7 @@
 | Agent `FeatureCapabilityIngress` | `removed` | 源码与 public surface 均已删除 | Agent 只保留读取 Runtime snapshot 的 `CapabilityIngress` |
 | Agent `AgentFeature` / `MCPFeature` | `removed` | 源码与 public surface 均已删除 | Agent / MCP 声明统一由各自 Feature provider 投影为 generation-owned `AgentIndex` / `McpIndex` |
 | `@zhin.js/agent/tools` 与 Agent 作者侧 Tool bridge | `removed` | 子路径、重复 definition/context/discovery 均已删除 | Tool 创作统一使用 `@zhin.js/tool` 与 `agent/tools/$*.ts` |
+| `@zhin.js/core/tool-zod` | `removed` | Core 子路径与 Zod 3 结构兼容已删除 | Tool 输入 Schema 统一由 `@zhin.js/tool` 的 Zod 4 / JSON Schema 契约拥有 |
 | Core / Agent deprecated 同义 API | `removed` | 死别名、旧类型与始终失败的迁移函数已删除 | 使用 canonical Segment、Turn、Schedule、Prompt 与 executor-owned lifecycle API |
 | Schedule `resolveAdapter` delivery fallback | `removed` | `TaskExecutor` 与 `deliverScheduleToAdapter` 必须注入 `NotificationRouter` | Schedule 出站由 composition root 创建的 Router 独占路由与发送权威 |
 | classic adapter-derived Message generics | `removed` | `Message` / Side Event 的 adapter identity 为 Runtime 字符串 | canonical IM 契约不再反向依赖经典 `Adapter`、`Endpoint` 或 `ProcessAdapter` 类型注册表 |

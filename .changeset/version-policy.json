@@ -3,6 +3,17 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "centralize-tool-input-schema.md",
+      "packages": [
+        "@zhin.js/tool",
+        "@zhin.js/core",
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the duplicate Core Zod adapter and Zod 3 structural compatibility while centralizing the canonical Tool input Schema contract under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "own-weixin-ilink-state.md",
       "packages": [
         "@zhin.js/adapter-weixin-ilink"

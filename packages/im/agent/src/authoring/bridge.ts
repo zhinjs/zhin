@@ -1,4 +1,3 @@
-import { parseToolInputSchema, toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
 import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
@@ -53,12 +52,12 @@ export function bridgeAuthoringConnection(
   },
   configValue: unknown,
 ): { ok: true; entry: McpServerEntry } | { ok: false; error: string } {
-  const parsed = parseToolInputSchema<Record<string, unknown>>(
-    discovered.definition.configSchema,
-    configValue ?? {},
-  );
-  if (!parsed.ok) {
-    return { ok: false, error: `Connection "${discovered.slotName}": ${parsed.error}` };
+  const parsed = discovered.definition.configSchema.safeParse(configValue ?? {});
+  if (!parsed.success) {
+    const detail = parsed.error.issues
+      .map((issue) => `${issue.path.map(String).join('.') || 'root'}: ${issue.message}`)
+      .join('; ');
+    return { ok: false, error: `Connection "${discovered.slotName}": ${detail}` };
   }
   const built = discovered.definition.buildEntry(parsed.data);
   const entry: McpServerEntry = {

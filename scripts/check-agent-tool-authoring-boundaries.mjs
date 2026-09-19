@@ -51,6 +51,8 @@ for (const file of files) {
     : '';
   const oldImport = /(?:from\s+|import\(\s*)['"]@zhin\.js\/agent\/tools['"]/u.exec(content);
   if (oldImport) report(file, 'removed @zhin.js/agent/tools import', lineOf(content, oldImport.index));
+  const coreZodImport = /(?:from\s+|import\(\s*)['"]@zhin\.js\/core\/tool-zod['"]/u.exec(content);
+  if (coreZodImport) report(file, 'removed @zhin.js/core/tool-zod import', lineOf(content, coreZodImport.index));
 
   if (!/^\$.*\.ts$/u.test(path.basename(file))) continue;
   const packageRoot = findPackageRoot(file);
@@ -76,6 +78,11 @@ for (const packageRoot of packageRoots) {
 const agentManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages/im/agent/package.json'), 'utf8'));
 if (agentManifest.exports?.['./tools']) {
   report(path.join(repoRoot, 'packages/im/agent/package.json'), 'removed ./tools export restored');
+}
+
+const coreManifest = JSON.parse(fs.readFileSync(path.join(repoRoot, 'packages/im/core/package.json'), 'utf8'));
+if (coreManifest.exports?.['./tool-zod']) {
+  report(path.join(repoRoot, 'packages/im/core/package.json'), 'removed ./tool-zod export restored');
 }
 
 if (violations.length > 0) {

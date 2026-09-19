@@ -35,7 +35,11 @@ export default defineAgentTool<{ city: string }>({
 
 `defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`approval` 支持 `never`、`on-risk`、`once`、`always`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。
 
-`inputSchema` 保持 provider-neutral，可以是 JSON Schema 或模型 adapter 能理解的其它只读描述。本包不引入 Zod，也不在 ToolIndex 重复实现 schema validator。
+`inputSchema` 只有两种契约：根节点为 `object` 的 JSON Schema，或同时实现
+`safeParse()` 与 `toJSONSchema()` 的可执行 Schema。Zod 4 object 原生满足后一契约；Zod 3
+内部结构和仅靠字段形状模拟的对象不会被接受。`@zhin.js/tool` 是 Schema 准入、模型投影和
+执行前解析的唯一所有者；投影明确使用输入语义，因此默认值和 transform 不会被误写成模型
+必须提供的输出字段。本包不依赖 Core，也不把转换责任交给模型 adapter。
 
 单文件插件可用 `setup({ addTool })` 注册 `defineAgentTool(...)`。Tool Feature 必须已在
 插件 manifest 中挂载；注册结果与约定目录进入同一 ToolIndex。

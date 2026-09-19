@@ -125,7 +125,6 @@ return segment.html({
 
 - `@zhin.js/core`：Message、场景、消息段、渲染与通用 IM 契约。
 - `@zhin.js/core/runtime`：IM Runtime 的 composition ports 与实现。
-- `@zhin.js/core/tool-zod`：Tool schema 与 Zod 转换。
 - `@zhin.js/core/jsx-runtime`：消息 JSX runtime。
 
 插件作者通常从 `zhin.js` 及其 Feature 子路径导入；只有框架装配代码直接依赖 `@zhin.js/core/runtime`。

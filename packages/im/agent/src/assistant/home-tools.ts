@@ -2,6 +2,8 @@
 import {
   defineAgentTool,
   type AgentToolDefinition,
+  type ToolInputJsonObjectSchema,
+  type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
 import {
@@ -25,16 +27,16 @@ function toToolResult<T extends Record<string, unknown>>(result: HomeFacadeResul
 }
 
 function schema(
-  properties: Record<string, unknown> = {},
+  properties: Record<string, ToolInputJsonSchema> = {},
   required: readonly string[] = [],
-): Readonly<Record<string, unknown>> {
+): ToolInputJsonObjectSchema {
   return Object.freeze({ type: 'object', properties: Object.freeze(properties), required: Object.freeze([...required]) });
 }
 
 function registration(
   name: string,
   description: string,
-  inputSchema: Readonly<Record<string, unknown>>,
+  inputSchema: ToolInputJsonObjectSchema,
   execute: (input: Record<string, unknown>, context: ToolExecutionContext) => unknown | Promise<unknown>,
 ): HomeToolRegistration {
   return Object.freeze({

@@ -1,4 +1,5 @@
 import type { PluginId } from '@zhin.js/plugin-runtime';
+import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import type { TurnRequest } from '../turn/turn-ingress.js';
 
@@ -24,7 +25,7 @@ export function createConversationReferenceCapability(
         depth: { type: 'number', description: 'Nested forward depth, maximum 2' },
       },
       required: ['reference'],
-    },
+    } satisfies ToolInputJsonObjectSchema,
     approval: 'never',
     source: 'builtin:conversation-context',
     async execute<TInput = unknown, TResult = unknown>(input: TInput): Promise<TResult> {

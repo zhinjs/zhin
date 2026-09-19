@@ -11,11 +11,6 @@
       "development": "./src/index.ts",
       "import": "./lib/index.js"
     },
-    "./tool-zod": {
-      "types": "./lib/tool-zod.d.ts",
-      "development": "./src/tool-zod.ts",
-      "import": "./lib/tool-zod.js"
-    },
     "./queue-im-field-contract": {
       "types": "./lib/built/queue-im-field-contract.d.ts",
       "development": "./src/built/queue-im-field-contract.ts",
@@ -90,14 +85,6 @@
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5"
-  },
-  "peerDependencies": {
-    "zod": "^4.0.0"
-  },
-  "peerDependenciesMeta": {
-    "zod": {
-      "optional": true
-    }
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

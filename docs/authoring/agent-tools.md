@@ -42,7 +42,7 @@ export default defineAgentTool<{ message: string }>({
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
-| `inputSchema` | 否 | zod object 或 JSON Schema，驱动参数校验与 catalog 展示 |
+| `inputSchema` | 否 | Zod 4 object 或根节点为 `object` 的 JSON Schema；由 Tool Feature 统一投影并在执行前校验 |
 | `approval` | 否 | `'never' \| 'on-risk' \| 'always'`，默认 `'on-risk'` |
 | `platforms` | 否 | 限定适配器平台（如 `['icqq']`），空 = 全部 |
 | `scopes` | 否 | 限定会话场景 `'private' \| 'group' \| 'channel'`，空 = 全部 |

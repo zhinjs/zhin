@@ -3,6 +3,8 @@
  * Identity comes from the path; definitions do not carry name/id fields.
  */
 
+import type { z } from 'zod';
+
 
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
 
@@ -56,7 +58,7 @@ export interface AuthoringConnectionDefinition extends AuthoringMarker {
   [AUTHORING_KIND]: 'connection';
   description: string;
   transport: ConnectionTransport;
-  configSchema: unknown;
+  configSchema: z.ZodObject<z.ZodRawShape>;
   url?: string;
   command?: string;
   args?: string[];

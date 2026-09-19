@@ -1,5 +1,6 @@
 import {
   defineAgentTool,
+  requireToolInputSchema,
   toolFeatureId,
   type AgentToolDefinition,
   type ToolApproval,
@@ -34,7 +35,12 @@ export function projectHostTool(input: HostToolProjectionInput): HostToolProject
     name: input.name,
     definition: defineAgentTool<Record<string, unknown>, unknown>({
       description: input.description,
-      inputSchema: input.parameters,
+      inputSchema: input.parameters === undefined
+        ? undefined
+        : requireToolInputSchema<Record<string, unknown>>(
+            input.parameters,
+            `Host Tool ${input.name} parameters`,
+          ),
       approval: input.approval,
       platforms: input.platforms,
       scopes: input.scopes,

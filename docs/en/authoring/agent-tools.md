@@ -42,7 +42,7 @@ Definition fields (`packages/im/tool/src/definition.ts`):
 | Field | Required | Description |
 | --- | --- | --- |
 | `description` | Yes | Functional description for the model |
-| `inputSchema` | No | zod object or JSON Schema, drives parameter validation and catalog display |
+| `inputSchema` | No | A Zod 4 object or an object-root JSON Schema; the Tool Feature owns projection and pre-execution validation |
 | `approval` | No | `'never' \| 'on-risk' \| 'always'`, default `'on-risk'` |
 | `platforms` | No | Restrict to adapter platforms (e.g., `['icqq']`), empty = all |
 | `scopes` | No | Restrict to session scenes `'private' \| 'group' \| 'channel'`, empty = all |

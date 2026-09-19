@@ -273,6 +273,11 @@ describe('Tool Feature', () => {
         description: 'Save value',
         approval: 'never',
         inputSchema: {
+          toJSONSchema: () => ({
+            type: 'object',
+            properties: { value: { type: 'string', minLength: 1 } },
+            required: ['value'],
+          }),
           safeParse: (input: unknown) => {
             const value = (input as { value?: unknown })?.value;
             return typeof value === 'string' && value.length > 0

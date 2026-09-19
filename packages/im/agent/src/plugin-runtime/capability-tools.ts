@@ -3,7 +3,7 @@
  * 打上 snapshot generation 戳，ToolRuntime 在执行前校验戳与当前 turn 是否一致。
  */
 import type { Tool } from '@zhin.js/core';
-import { toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
+import { toolInputSchemaToParameters } from '@zhin.js/tool';
 import { stampToolGeneration } from '../tool/tool-system.js';
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
 import type { ToolInvocationContext } from '@zhin.js/tool';
@@ -23,7 +23,7 @@ export function capabilityToTool(
     parameters: {
       type: 'object',
       properties: (parameters.properties ?? {}) as Tool['parameters']['properties'],
-      required: parameters.required,
+      required: parameters.required ? [...parameters.required] : undefined,
     },
     source: String(tool.owner),
     platforms: tool.platforms ? [...tool.platforms] : undefined,

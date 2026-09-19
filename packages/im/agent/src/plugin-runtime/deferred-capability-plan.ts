@@ -5,7 +5,10 @@ import {
   type AgentTool,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
-import { toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
+import {
+  toolInputSchemaToParameters,
+  type ToolInputSchema,
+} from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
@@ -282,14 +285,11 @@ function projectSessionSnapshot(
 
 export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
   const parameters = toolInputSchemaToParameters(tool.inputSchema);
+  const modelParameters = structuredClone(parameters) as AgentTool['parameters'];
   return Object.freeze({
     name: tool.name,
     description: tool.description,
-    parameters: {
-      type: 'object',
-      properties: parameters.properties ?? {},
-      ...(parameters.required?.length ? { required: parameters.required } : {}),
-    },
+    parameters: modelParameters,
     source: tool.source,
     permissions: tool.permissions,
     tags: tool.tags ? [...tool.tags] : undefined,
@@ -368,7 +368,7 @@ function metaCapability(
   owner: AgentCapabilities['owner'],
   name: string,
   description: string,
-  inputSchema: unknown,
+  inputSchema: ToolInputSchema,
   execute: (input: unknown, context: ToolInvocationContext) => Promise<unknown>,
 ): ToolCapability {
   return Object.freeze({

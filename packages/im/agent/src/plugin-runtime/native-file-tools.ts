@@ -4,6 +4,8 @@ import {
   defineAgentTool,
   toolFeatureId,
   type AgentToolDefinition,
+  type ToolInputJsonObjectSchema,
+  type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
 import { MAX_EDIT_FILE_SIZE, MAX_READ_FILE_SIZE, isFileStale } from '../security/file-policy.js';
@@ -245,6 +247,9 @@ function slash(value: string): string {
   return value.split(path.sep).join('/');
 }
 
-function objectSchema(properties: Record<string, unknown>, required: readonly string[]): Readonly<Record<string, unknown>> {
+function objectSchema(
+  properties: Record<string, ToolInputJsonSchema>,
+  required: readonly string[],
+): ToolInputJsonObjectSchema {
   return Object.freeze({ type: 'object', properties: Object.freeze(properties), required: Object.freeze([...required]) });
 }

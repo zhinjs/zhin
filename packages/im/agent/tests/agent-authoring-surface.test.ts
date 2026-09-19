@@ -68,6 +68,15 @@ describe('agent authoring entry discovery', () => {
 });
 
 describe('connection schema bridge', () => {
+  it('requires a Zod 4 object schema', () => {
+    expect(() => defineConnection({
+      description: 'Invalid connection',
+      transport: 'stdio',
+      configSchema: z.string() as never,
+      buildEntry: () => ({}),
+    })).toThrow('Connection configSchema must be a Zod 4 object schema');
+  });
+
   it('validates config against zod schema', () => {
     const def = defineConnection({
       description: 'GitHub MCP',

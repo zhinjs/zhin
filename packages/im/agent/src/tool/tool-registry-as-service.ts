@@ -1,7 +1,7 @@
 /** Projects the generation-owned ResourceHub ToolRegistry into Capability Seam. */
 
 import type { AgentToolExecutionContext } from '@zhin.js/ai';
-import type { ToolInvocationContext } from '@zhin.js/tool';
+import { requireToolInputSchema, type ToolInvocationContext } from '@zhin.js/tool';
 import type { ToolRegistry } from '../resource-hub/tool-registry.js';
 import type { SeamScope } from '../seam/seam-provider.js';
 import type { ToolExecutionResult, ToolSchema, ToolService } from '../seam/tool-service.js';
@@ -19,7 +19,10 @@ export class ToolRegistryAsService implements ToolService {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: tool.parameters,
+        parameters: requireToolInputSchema(
+          tool.parameters,
+          `ResourceHub Tool ${tool.name} parameters`,
+        ),
       },
       approval: typeof tool.approval === 'string' ? tool.approval : 'on-risk',
       permissions: tool.permissions,
