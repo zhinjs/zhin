@@ -1,20 +1,8 @@
 /**
  * @zhin.js/kernel — 框架无关的运行时内核
  *
- * 提供通用的插件 DI 系统、Feature 抽象、
- * Cron 调度、错误体系和工具函数。
+ * 提供调度、错误体系、IM identity 和通用工具函数。
  */
-
-// ── Plugin types ──
-export type { PluginLike } from './plugin-types.js';
-
-// ── PluginBase ──
-export { PluginBase, pluginStorage, runtimeCwd, resolvePluginResolveDir, pluginCreateRequire, getFileHash, watchFile } from './plugin.js';
-export type { BaseContext, PluginBaseLifecycle, MaybePromise } from './plugin.js';
-
-// ── Feature ──
-export { Feature } from './feature.js';
-export type { FeatureJSON, FeatureListener } from './feature.js';
 
 // ── Errors ──
 export {
@@ -67,9 +55,6 @@ export type {
   IScheduler,
   SchedulerOptions,
 } from './scheduler/index.js';
-
-// ── Extension Registry ──
-export { registerExtension, unregisterExtensions, getExtension, hasExtension, installExtensionProxy } from './extension-registry.js';
 
 // ── IM identity (scene/session keys) ──
 export type {

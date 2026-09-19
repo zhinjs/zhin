@@ -403,6 +403,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the closed classic Core Plugin, duplicate Dispatcher, and inbound pipeline so generation snapshots and ImRuntime are the only lifecycle and IM dispatch authorities under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-kernel-plugin-compatibility.md",
+      "packages": [
+        "@zhin.js/kernel",
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unused Kernel PluginBase, mutable Feature registry, string DI, and prototype extensions so Plugin Runtime and Feature Kit are the only lifecycle and capability authorities under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

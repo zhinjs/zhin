@@ -52,11 +52,11 @@ Build pipeline (`turbo.json`): `build` depends on `^build` (topological), output
 ```
 basic/                      # @zhin.js/logger, schema, database, cli
   ↓
-packages/im/kernel          # Runtime kernel (no IM concepts)
+packages/im/kernel          # Scheduling, errors, identity, utilities
   ↓
 packages/im/ai              # AI engine (providers, agents, memory, compaction)
   ↓
-packages/im/core            # IM framework (Plugin, Adapter, Endpoint, Command, MessageDispatcher)
+packages/im/core            # Canonical IM runtime and message contracts
   ↓
 packages/im/agent           # Agent orchestration (ZhinAgent, security policies, MCP client)
   ↓
@@ -72,16 +72,16 @@ packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
 
 | Package | Path | Role |
 |---------|------|------|
-| kernel | `packages/im/kernel/src/` | PluginBase, Feature, Cron, Scheduler, error hierarchy |
+| kernel | `packages/im/kernel/src/` | ScheduleEngine, Scheduler, identity, utilities, error hierarchy |
 | ai | `packages/im/ai/src/` | Provider abstraction, Agent, ModelRegistry, Memory, Compaction, CostTracker |
-| core | `packages/im/core/src/` | Plugin (AsyncLocalStorage), Adapter, Endpoint, Command, MessageDispatcher |
+| core | `packages/im/core/src/` | ImRuntime, messages, side events, rendering, interaction |
 | agent | `packages/im/agent/src/` | ZhinAgent orchestrator, security (ExecPolicy, FilePolicy), MCP client |
 | host-router | `packages/host/router/src/` | Koa 监听、Router、Bearer/CORS |
 | host-api | `packages/host/api/src/` | Host 管理面 REST、Console 协议、entries |
 
 ### Outbound send chain (do not bypass)
 
-`Message.$reply` / `Adapter.sendMessage` → `renderSendMessage` → root plugin `before.sendMessage` → platform `Endpoint`. No parallel `Plugin#sendMessage` bypass.
+`Message.$reply` / Runtime outbound port → `OutboundRenderer` → outbound middleware → platform `Endpoint`. No parallel send path.
 
 ### Plugin system (Plugin Runtime — current)
 

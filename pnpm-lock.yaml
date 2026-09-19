@@ -1496,15 +1496,6 @@ importers:
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../../../basic/schedule
-      '@zhin.js/schema':
-        specifier: workspace:*
-        version: link:../../../basic/schema
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1700,9 +1691,6 @@ importers:
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../toolkit/html-renderer
-      '@zhin.js/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime

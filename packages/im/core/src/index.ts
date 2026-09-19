@@ -46,9 +46,7 @@ export * from './built/html-segment-fallback.js'
 export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 export { Schema } from '@zhin.js/schema'
-export type { PluginLike } from '@zhin.js/kernel'
 export {
-  Feature,
   ScheduleEngine,
   getScheduleEngine,
   setScheduleEngine,
@@ -57,8 +55,6 @@ export {
   setScheduler,
 } from '@zhin.js/kernel'
 export type {
-  FeatureJSON,
-  FeatureListener,
   Schedule,
   JobPayload,
   JobState,

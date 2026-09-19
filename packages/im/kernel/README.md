@@ -1,163 +1,76 @@
 # @zhin.js/kernel
 
-zhin 运行时内核，提供插件 DI、Feature 抽象、Schedule 调度引擎、错误体系和通用工具函数。
+Zhin 的框架无关基础机制包。它提供调度、错误、IM identity 与少量通用工具，不拥有 Plugin 生命周期、Feature discovery 或 IM Runtime。
 
-可用于 Web 后端、CLI 工具、自动化脚本等任意 Node.js 应用。
+## 模块边界
 
-## 架构
-
-`@zhin.js/kernel` 位于 Zhin.js 分层底部，**不含 IM / Endpoint 概念**。上层 `@zhin.js/core` 继承本包的 `Feature`、`Scheduler` 等基础机制并扩展 IM 运行时：
-
-```
-basic/ (@zhin.js/logger, schema, database, cli)
-  ↓
-@zhin.js/kernel          ← 本包
-  ↓
-@zhin.js/ai
-  ↓
-@zhin.js/core
-  ↓
-@zhin.js/agent
-  ↓
-zhin.js
+```text
+@zhin.js/plugin-runtime  → Plugin tree / Scope / generation
+@zhin.js/feature-kit     → Feature provider / discovery / projection
+@zhin.js/kernel          → schedule / errors / identity / utilities
+@zhin.js/core            → canonical IM Runtime
 ```
 
-详见 [架构文档索引](../../docs/architecture/README.md)、[架构概览](../../docs/architecture-overview.md) 与上层包 README（[`packages/README.md`](../../README.md)）。
+Kernel 与 Plugin Runtime 是并列的底层包。插件资源由 `Scope + Token` 管理，能力由 Feature provider 投影；Kernel 不维护第二套 Plugin 类、字符串 DI 或可变 Feature registry。
 
-## 核心模块
+## ScheduleEngine
 
-### PluginBase（插件基类）
+`ScheduleEngine` 负责解析 cron、农历、节假日和散列时间。Plugin Runtime 插件通过 owner-scoped `scheduleHostToken` 注册任务，由 composition root 管理 generation 生命周期。
 
-轻量级插件系统，支持依赖注入、生命周期管理、事件传播和插件树结构。
+```ts
+import { ScheduleEngine } from '@zhin.js/kernel';
 
-```typescript
-import { PluginBase } from '@zhin.js/kernel'
-
-const root = new PluginBase({ name: 'my-app' })
-
-// 依赖注入
-root.provide(metricsService)
-const metrics = root.inject('metrics')
-
-// 加载子插件
-await root.loadPlugin('./plugins/analytics')
-
-// 生命周期
-await root.start()
-await root.stop()
+const engine = new ScheduleEngine();
+engine.register(
+  { id: 'daily-report', kind: 'cron', cron: '0 9 * * *' },
+  () => sendDailyReport(),
+);
+engine.start();
 ```
 
-上层框架可在此基础上扩展自己的 Plugin 子类（实现 `PluginLike` 接口）。
+## Scheduler
 
-### Feature（特性抽象）
+`Scheduler` 提供带 `JobStore` 端口的持久化任务调度。
 
-所有可追踪、可序列化的插件功能的基类，提供统一的注册/注销、插件归属追踪、JSON 序列化和变更事件通知。
+```ts
+import { Scheduler } from '@zhin.js/kernel';
 
-```typescript
-import { Feature } from '@zhin.js/kernel'
-
-class MyFeature extends Feature<MyItem> {
-  constructor() {
-    super('my-feature')
-  }
-}
-
-const feature = new MyFeature()
-feature.on('add', (item, pluginName) => {
-  console.log(`${item.name} 已注册 (来自 ${pluginName})`)
-})
-```
-
-### ScheduleEngine（内存调度）
-
-内核提供 `ScheduleEngine` 解析 cron / 农历 / 节假日等；Plugin Runtime 插件通过 owner-scoped `scheduleHostToken` 注册任务，由 composition root 管理代际生命周期。
-
-```typescript
-import { ScheduleEngine, getScheduleEngine } from '@zhin.js/kernel'
-
-const engine = getScheduleEngine() ?? new ScheduleEngine()
-engine.register({ id: 'daily-report', kind: 'cron', cron: '0 9 * * *' }, () => {
-  console.log('每天 9:00 执行')
-})
-engine.start()
-```
-
-### Scheduler（任务调度器）
-
-支持持久化的定时任务调度系统，可自定义 `JobStore` 存储后端。
-
-```typescript
-import { Scheduler, getScheduler, setScheduler } from '@zhin.js/kernel'
-
-const scheduler = new Scheduler({ checkInterval: 60_000 })
+const scheduler = new Scheduler({ checkInterval: 60_000 });
 await scheduler.addJob({
   name: 'cleanup',
   schedule: { type: 'cron', cron: '0 3 * * *' },
-  callback: async () => { /* 清理逻辑 */ },
-})
-await scheduler.start()
+  callback: cleanup,
+});
+await scheduler.start();
 ```
 
-### 错误体系
+## 错误与工具
 
-结构化的错误层级，支持错误码、重试和熔断机制。
+错误层级包括 `ZhinError`、`ConfigError`、`ConnectionError`、`ValidationError`、`PermissionError` 与 `TimeoutError`，并提供 `RetryManager`、`CircuitBreaker`。
 
-```typescript
-import {
-  ZhinError, ConfigError, PluginError, ValidationError,
-  RetryManager, CircuitBreaker, ErrorManager,
-} from '@zhin.js/kernel'
+通用工具包括受限表达式求值、模板编译、时间常量和入口解析：
 
-// 带重试的操作
-const retry = new RetryManager({ maxRetries: 3, baseDelay: 1000 })
-await retry.execute(() => fetchData())
-
-// 熔断器
-const breaker = new CircuitBreaker({ failureThreshold: 5, resetTimeout: 30000 })
-await breaker.execute(() => callExternalService())
+```ts
+import { compiler, evaluate, resolveEntry, Time } from '@zhin.js/kernel';
 ```
 
-### 工具函数
-
-```typescript
-import {
-  evaluate,    // 安全表达式求值 (vm sandbox)
-  execute,     // 安全代码执行 (vm sandbox)
-  compiler,    // 模板编译 ({{ var }})
-  sleep,       // Promise 延时
-  Time,        // 时间常量 (Time.second, Time.minute, ...)
-  isEmpty,     // 空值检测
-  remove,      // 数组元素移除
-  resolveEntry // 插件入口解析
-} from '@zhin.js/kernel'
-```
+IM identity 使用 `resolveIMSceneIdForSession`、`resolveIMSceneSessionId` 和 `resolveIMSessionId`，避免不同上层包各自实现会话键规则。
 
 ## 主要导出
 
-| 导出 | 说明 |
+| 导出 | 职责 |
 |------|------|
-| `PluginBase` | 框架无关的插件基类 |
-| `pluginStorage` | AsyncLocalStorage 插件上下文 |
-| `PluginLike` | 最小插件接口（用于 Feature 等依赖） |
-| `Feature` | 特性抽象基类 |
-| `ScheduleEngine` | 内存调度引擎（cron / 农历 / 节假日等） |
-| `Scheduler` | 持久化任务调度器 |
-| `ZhinError` | 基础错误类 |
-| `ErrorManager` | 全局错误管理器 |
-| `RetryManager` | 重试管理器 |
-| `CircuitBreaker` | 熔断器 |
-| `evaluate` / `execute` | 安全沙盒求值/执行 |
-| `compiler` | 模板编译 |
-| `Time` | 时间常量 |
+| `ScheduleEngine` | 内存任务计划与日期规则解析 |
+| `Scheduler` | 持久化任务调度 |
+| `ZhinError` 及子类 | 结构化错误契约 |
+| `RetryManager` / `CircuitBreaker` | 失败恢复机制 |
+| `resolveIMSessionId` | canonical IM 会话 identity |
+| `evaluate` / `compiler` | 受限表达式和模板工具 |
 
 ## 安装
 
 ```bash
 pnpm add @zhin.js/kernel
 ```
-
-> 也可通过上层框架包间接引入。
-
-## 许可证
 
 MIT License

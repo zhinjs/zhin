@@ -133,6 +133,7 @@
 | `Plugin.adapters` / `Plugin.injectAdapter` | `removed` | 经典 Plugin 的重复 Adapter 目录与 service-locator helper 已删除 | 当前 Endpoint 目录只能从 generation-owned `AdapterIndex` 查询 |
 | classic Core `Adapter` / `Endpoint` runtime | `removed` | 类、类型、capability WeakMap、连接与生命周期 helper 及专属测试已删除 | 唯一实现是 `zhin.js/adapter` 的 `defineAdapter`、`Endpoint<TClient>` 与 generation-owned `AdapterIndex` |
 | classic Core `Plugin` runtime | `removed` | Plugin 类、Context ALS、重复 Dispatcher 与入站管线均已删除 | 插件生命周期由 `@zhin.js/plugin-runtime` 的 generation snapshot 管理；IM 分发只走 `ImRuntime` |
+| Kernel `PluginBase` / mutable `Feature` registry | `removed` | Plugin tree、字符串 DI、prototype extension registry 与自证测试已删除 | 生命周期统一属于 `@zhin.js/plugin-runtime`；能力发现和投影统一属于 `@zhin.js/feature-kit` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |

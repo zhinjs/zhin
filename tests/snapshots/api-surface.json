@@ -257,10 +257,9 @@
     "export * from '@zhin.js/logger'",
     "export type * from '@zhin.js/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
-    "export type{FeatureJSON,FeatureListener,Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
-    "export type{PluginLike}from '@zhin.js/kernel'",
+    "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
-    "export{Feature,ScheduleEngine,getScheduleEngine,setScheduleEngine,Scheduler,getScheduler,setScheduler,}from '@zhin.js/kernel'",
+    "export{ScheduleEngine,getScheduleEngine,setScheduleEngine,Scheduler,getScheduler,setScheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
     "export{loadHtmlRenderer,seedHtmlRenderer,HTML_RENDERER_PACKAGE}from './built/html-renderer-loader.js'",
     "export{loadSpeechPipeline,seedSpeechPipeline,SPEECH_PACKAGE}from './built/speech-loader.js'"
