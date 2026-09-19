@@ -1,34 +1,18 @@
 import { isDeepStrictEqual } from 'node:util';
-import { rootPluginId, type PluginId } from '@zhin.js/plugin-runtime';
 import {
-  ConfigComposer,
-  type ComposedConfig,
+  applyConfigPatches,
+  rootPluginId,
+  type ConfigPatch,
+  type PluginId,
   type RuntimeConfigDocument,
-} from './config-composer.js';
+} from '@zhin.js/plugin-runtime';
+import { ConfigComposer, type ComposedConfig } from './config-composer.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
-
-export type ConfigPatch =
-  | {
-      readonly op: 'set';
-      readonly path: readonly string[];
-      readonly value: unknown;
-    }
-  | {
-      readonly op: 'remove';
-      readonly path: readonly string[];
-    };
 
 export interface ConfigPatchPlan extends ComposedConfig {
   readonly candidate: RuntimeConfigDocument;
   readonly documentChanged: boolean;
   readonly roots: readonly PluginId[];
-}
-
-export class ConfigPatchPathError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'ConfigPatchPathError';
-  }
 }
 
 /** Validates a candidate document before deriving its minimal replacement forest. */
@@ -41,8 +25,7 @@ export class ConfigPatchPlanner {
     patches: readonly ConfigPatch[],
   ): Promise<ConfigPatchPlan> {
     const previous = await this.composer.compose(graph, current);
-    let candidate = structuredClone(current) as Record<string, unknown>;
-    for (const patch of patches) candidate = applyPatch(candidate, patch);
+    const candidate = applyConfigPatches(current, patches);
     const next = await this.composer.compose(graph, candidate);
     const changed = indexGraph(graph)
       .filter((node) => !isDeepStrictEqual(
@@ -52,145 +35,11 @@ export class ConfigPatchPlanner {
       .map((node) => node.id);
     return Object.freeze({
       ...next,
-      candidate: Object.freeze(candidate),
+      candidate,
       documentChanged: !isDeepStrictEqual(current, candidate),
       roots: Object.freeze(collapseRoots(changed)),
     });
   }
-}
-
-function applyPatch(
-  document: Record<string, unknown>,
-  patch: ConfigPatch,
-): Record<string, unknown> {
-  assertPath(patch.path);
-  if (patch.path.length === 0) {
-    if (patch.op === 'remove') {
-      throw new ConfigPatchPathError('The config document root cannot be removed');
-    }
-    return cloneDocument(patch.value);
-  }
-  if (patch.op === 'set') setValue(document, patch.path, structuredClone(patch.value));
-  else removeValue(document, patch.path);
-  return document;
-}
-
-function setValue(
-  document: Record<string, unknown>,
-  path: readonly string[],
-  value: unknown,
-): void {
-  let target: Record<string, unknown> | unknown[] = document;
-  for (const [index, segment] of path.slice(0, -1).entries()) {
-    const existing = readChild(target, segment, path.slice(0, index + 1));
-    if (existing === undefined) {
-      // Missing intermediates are always created as records; arrays only ever
-      // come from the existing document (numeric segments index into them).
-      const created: Record<string, unknown> = {};
-      (target as Record<string, unknown>)[segment] = created;
-      target = created;
-    } else {
-      target = requireContainer(existing, path.slice(0, index + 1));
-    }
-  }
-  writeChild(target, lastSegment(path), value, path);
-}
-
-function removeValue(document: Record<string, unknown>, path: readonly string[]): void {
-  let target: Record<string, unknown> | unknown[] = document;
-  for (const [index, segment] of path.slice(0, -1).entries()) {
-    const existing = readChild(target, segment, path.slice(0, index + 1));
-    if (existing === undefined) return;
-    target = requireContainer(existing, path.slice(0, index + 1));
-  }
-  const segment = lastSegment(path);
-  if (Array.isArray(target)) {
-    target.splice(arrayIndex(segment, target, path), 1);
-    return;
-  }
-  delete target[segment];
-}
-
-function cloneDocument(value: unknown): Record<string, unknown> {
-  return requireRecord(structuredClone(value), []);
-}
-
-function readChild(
-  container: Record<string, unknown> | unknown[],
-  segment: string,
-  path: readonly string[],
-): unknown {
-  if (Array.isArray(container)) return container[arrayIndex(segment, container, path)];
-  return container[segment];
-}
-
-function writeChild(
-  container: Record<string, unknown> | unknown[],
-  segment: string,
-  value: unknown,
-  path: readonly string[],
-): void {
-  if (Array.isArray(container)) {
-    container[arrayIndex(segment, container, path)] = value;
-    return;
-  }
-  container[segment] = value;
-}
-
-/** Resolves a numeric path segment against an array, rejecting non-numeric segments and out-of-bounds indexes. */
-function arrayIndex(
-  segment: string,
-  container: readonly unknown[],
-  path: readonly string[],
-): number {
-  if (!/^(0|[1-9]\d*)$/.test(segment)) {
-    throw new ConfigPatchPathError(
-      `Config path ${pointer(path)} requires an array index, got "${segment}"`,
-    );
-  }
-  const index = Number(segment);
-  if (index >= container.length) {
-    throw new ConfigPatchPathError(
-      `Config path ${pointer(path)} is out of bounds (array length ${container.length})`,
-    );
-  }
-  return index;
-}
-
-function requireContainer(
-  value: unknown,
-  path: readonly string[],
-): Record<string, unknown> | unknown[] {
-  if (!value || typeof value !== 'object') {
-    throw new ConfigPatchPathError(`Config path ${pointer(path)} is not an object`);
-  }
-  return value as Record<string, unknown> | unknown[];
-}
-
-function requireRecord(value: unknown, path: readonly string[]): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new ConfigPatchPathError(`Config path ${pointer(path)} is not an object`);
-  }
-  return value as Record<string, unknown>;
-}
-
-function assertPath(path: readonly string[]): void {
-  for (const segment of path) {
-    if (!segment || segment === '__proto__' || segment === 'prototype' || segment === 'constructor') {
-      throw new ConfigPatchPathError(`Unsafe config path segment: ${segment || '<empty>'}`);
-    }
-  }
-}
-
-function lastSegment(path: readonly string[]): string {
-  const segment = path[path.length - 1];
-  if (!segment) throw new ConfigPatchPathError('Config patch path is empty');
-  return segment;
-}
-
-function pointer(path: readonly string[]): string {
-  if (path.length === 0) return '/';
-  return `/${path.map((segment) => segment.replaceAll('~', '~0').replaceAll('/', '~1')).join('/')}`;
 }
 
 function indexGraph(graph: ProjectGraph): readonly PluginGraphNode[] {

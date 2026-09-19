@@ -29,7 +29,7 @@
 - 全仓库 TypeScript（ESM），测试 Vitest，Lint ESLint 10 + typescript-eslint，构建产物经 turbo 并行。
 - workspace 覆盖：`basic/*`、`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`packages/game-kit`、`plugins/{adapters,features,games,services,utils}/*`、`examples/*`、`docs`。
 - `basic/`：基础层（cli / database / logger / schedule / schema）。
-- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-yaml、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
+- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-file、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
 - `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、satori、html-renderer、speech。

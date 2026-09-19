@@ -159,7 +159,10 @@
     "export * from './provider.js';",
     "export{default}from './provider.js';"
   ],
-  "config-yaml": [
+  "config-file": [
+    "export * from './config-file-document.js';",
+    "export * from './create-config-document.js';",
+    "export * from './json-config-document.js';",
     "export * from './yaml-config-document.js';"
   ],
   "console-contract": [
@@ -281,6 +284,7 @@
     "export * from './outbound-sender.js';",
     "export * from './plugin-configuration.js';",
     "export * from './plugin.js';",
+    "export * from './root-config-document.js';",
     "export * from './root-config-file.js';",
     "export * from './root-controller.js';",
     "export * from './schedule-host.js';",
@@ -298,7 +302,6 @@
   ],
   "runtime": [
     "export * from './config-composer.js';",
-    "export * from './config-document.js';",
     "export * from './config-patch-planner.js';",
     "export * from './environment-store.js';",
     "export * from './environment.js';",

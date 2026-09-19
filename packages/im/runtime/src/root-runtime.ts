@@ -4,16 +4,22 @@ import {
   DisposeStack,
   GenerationHandoffStack,
   RootController,
+  ConfigDocumentDivergenceError,
   createSnapshotView,
   rootPluginId,
   type CapabilityId,
   type CapabilitySlot,
   type ControlErrorHandler,
+  type ConfigDocumentPort,
+  type ConfigDocumentSnapshot,
+  type ConfigPatch,
   type Dispose,
   type FeatureId,
   type GenerationCommitListener,
   type PluginId,
   type PreparedGeneration,
+  type PreparedConfigDocument,
+  type RuntimeConfigDocument,
   type RuntimeSnapshot,
   type SnapshotReader,
   type SnapshotState,
@@ -25,18 +31,8 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer, type RuntimeConfigDocument } from './config-composer.js';
-import {
-  ConfigDocumentDivergenceError,
-  type ConfigDocumentPort,
-  type ConfigDocumentSnapshot,
-  type PreparedConfigDocument,
-} from './config-document.js';
-import {
-  ConfigPatchPlanner,
-  type ConfigPatch,
-  type ConfigPatchPlan,
-} from './config-patch-planner.js';
+import { ConfigComposer } from './config-composer.js';
+import { ConfigPatchPlanner, type ConfigPatchPlan } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
 import {
   createEnvStore,

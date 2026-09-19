@@ -5,8 +5,8 @@ import type {
   DatabaseHost,
   RuntimeSnapshot,
   SnapshotReader,
+  RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import type { RuntimeConfigDocument } from '@zhin.js/runtime';
 import {
   createPluginLifecycleStore,
   resolvePluginLifecycleFile,

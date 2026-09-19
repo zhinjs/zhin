@@ -1,4 +1,4 @@
-import type { RuntimeConfigDocument } from '@zhin.js/runtime';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
   flattenConfigDocument,
   listConsoleConfigKeys,

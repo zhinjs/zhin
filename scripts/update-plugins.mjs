@@ -32,6 +32,8 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/agent',
   '@zhin.js/cli',
   '@zhin.js/client',
+  '@zhin.js/config-file',
+  '@zhin.js/config-yaml', // 已由格式无关的 config-file 包替代
   '@zhin.js/database',
   '@zhin.js/logger',
   '@zhin.js/schema',

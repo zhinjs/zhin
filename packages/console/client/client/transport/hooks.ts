@@ -167,7 +167,7 @@ export function useConfigYaml() {
     [wsManager],
   );
 
-  useAutoLoadOnce(connected, "config-yaml", !!yaml || loading, () => {
+  useAutoLoadOnce(connected, "config-source", !!yaml || loading, () => {
     load().catch(() => {});
   });
 

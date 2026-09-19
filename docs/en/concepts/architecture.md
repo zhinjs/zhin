@@ -82,7 +82,7 @@ The framework itself does not "start" anything -- each layer only provides mecha
 
 `zhin runtime start` (defined in `basic/cli/src/commands/runtime.ts`, assembly logic in `basic/cli/src/plugin-runtime/`) does the following:
 
-1. Wraps `zhin.config.yml` with `YamlConfigDocument` (`@zhin.js/config-yaml`) into a transactional `ConfigDocumentPort`;
+1. Wraps the single YAML/JSON Root config with `createConfigDocument` (`@zhin.js/config-file`) into a transactional `ConfigDocumentPort`;
 2. Creates `RootRuntime` (`@zhin.js/runtime`), injecting the module loader (in dev mode: `NativeDevelopmentModuleRuntime`), config port, and Root resource installer;
 3. Installs Host-level resources via `installResources`: HTTP Host, database, Agent Host (including AI fallback handler), Console API, etc.;
 4. After startup, attaches `HmrCoordinator` -- file changes trigger generation reloads or process restarts.

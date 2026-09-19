@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
@@ -19,8 +20,6 @@ const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
-export type RuntimeConfigDocument = Readonly<Record<string, unknown>>;
-
 export interface ComposedConfig {
   readonly effectiveSchema: JsonSchema;
   readonly document: RuntimeConfigDocument;

@@ -1,11 +1,10 @@
 import { readFile } from 'node:fs/promises';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
+import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
-  type ConfigDocumentPort,
   type RootResourceInstaller,
-  type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
 
 export interface SpeechHostConfig {

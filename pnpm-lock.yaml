@@ -128,9 +128,9 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../packages/im/component
-      '@zhin.js/config-yaml':
+      '@zhin.js/config-file':
         specifier: workspace:*
-        version: link:../../packages/im/config-yaml
+        version: link:../../packages/im/config-file
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
@@ -1330,11 +1330,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/im/config-yaml:
+  packages/im/config-file:
     dependencies:
-      '@zhin.js/runtime':
+      '@zhin.js/plugin-runtime':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../plugin-runtime
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -1342,9 +1342,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/plugin-runtime':
+      '@zhin.js/runtime':
         specifier: workspace:*
-        version: link:../plugin-runtime
+        version: link:../runtime
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

@@ -23,7 +23,7 @@ const repoRoot = path.resolve(__dirname, '..');
 // Plugin Runtime 新层（约定式插件运行时迁移引入）：
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
 // → 9 个 provider 包（adapter/command/component/middleware/handler/tool/skill/agent-feature/mcp-feature）
-// → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
+// → runtime（RootHost 装配）→ isolate / config-file（依赖 runtime，仅契约）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
 const providerLayerAllowed = [
@@ -56,7 +56,7 @@ const layers = {
   'packages/im/prompt-section': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section'] },
   'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
-  'packages/im/config-yaml': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
+  'packages/im/config-file': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
@@ -105,7 +105,7 @@ const packageNameToPath = {
   '@zhin.js/prompt-section': 'packages/im/prompt-section',
   '@zhin.js/runtime': 'packages/im/runtime',
   '@zhin.js/isolate': 'packages/im/isolate',
-  '@zhin.js/config-yaml': 'packages/im/config-yaml',
+  '@zhin.js/config-file': 'packages/im/config-file',
   '@zhin.js/interaction': 'packages/im/interaction',
   '@zhin.js/im-contract': 'packages/im/im-contract',
   '@zhin.js/console-protocol': 'packages/console/protocol',

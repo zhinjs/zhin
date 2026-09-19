@@ -6,11 +6,13 @@ import {
   type ModuleRuntime,
   type ProcessInvalidationPlan,
   type RootResourceInstaller,
-  type RuntimeConfigDocument,
   type RuntimeEnvironment,
-  type ConfigDocumentPort,
 } from '@zhin.js/runtime';
-import type { Dispose } from '@zhin.js/plugin-runtime';
+import type {
+  ConfigDocumentPort,
+  Dispose,
+  RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
 
 export interface RootHostOptions {
   readonly projectRoot: string;

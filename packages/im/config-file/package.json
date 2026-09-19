@@ -1,7 +1,7 @@
 {
-  "name": "@zhin.js/config-yaml",
+  "name": "@zhin.js/config-file",
   "version": "1.1.0",
-  "description": "Comment-preserving YAML ConfigDocument adapter for the Zhin Plugin Runtime",
+  "description": "Transactional YAML and JSON ConfigDocument adapters for the Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -18,16 +18,16 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --root ../../.. packages/im/config-yaml/tests",
-    "check:size": "node ../../../scripts/check-plugin-runtime-install-size.mjs @zhin.js/config-yaml"
+    "test": "vitest run --root ../../.. packages/im/config-file/tests",
+    "check:size": "node ../../../scripts/check-plugin-runtime-install-size.mjs @zhin.js/config-file"
   },
   "dependencies": {
-    "@zhin.js/runtime": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "yaml": "2.9.0"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
-    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*",
     "typescript": "^6.0.3"
   },
   "engines": {
@@ -37,7 +37,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
-    "directory": "packages/im/config-yaml"
+    "directory": "packages/im/config-file"
   },
   "publishConfig": {
     "access": "public",

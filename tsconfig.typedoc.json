@@ -95,8 +95,8 @@
       "@zhin.js/tool": [
         "./packages/im/tool/src/index.ts"
       ],
-      "@zhin.js/config-yaml": [
-        "./packages/im/config-yaml/src/index.ts"
+      "@zhin.js/config-file": [
+        "./packages/im/config-file/src/index.ts"
       ],
       "@zhin.js/feature-kit": [
         "./packages/im/feature-kit/src/index.ts"

@@ -7,8 +7,9 @@ import {
   ROOT_CONFIG_FILE_NAMES,
   rootConfigFormat,
   selectRootConfigFile,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS, type RuntimeConfigDocument } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { readPluginPackageMap } from './plugin-package-map.js';
 
 export async function readProjectConfigYaml(projectRoot: string): Promise<string> {

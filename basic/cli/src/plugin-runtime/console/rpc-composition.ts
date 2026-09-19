@@ -5,8 +5,7 @@ import type {
   ConsoleEventHub,
 } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import type { DatabaseHost, SnapshotReader } from '@zhin.js/plugin-runtime';
-import type { RuntimeConfigDocument } from '@zhin.js/runtime';
+import type { DatabaseHost, RuntimeConfigDocument, SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { PluginLifecycleStore } from '../plugin-lifecycle-store.js';
 
 export interface ConsoleRpcComposition {

@@ -2481,30 +2481,6 @@
       }
     },
     {
-      "name": "@zhin.js/config-yaml",
-      "displayName": "config-yaml",
-      "description": "Comment-preserving YAML ConfigDocument adapter for the Zhin Plugin Runtime",
-      "author": "GitHub Actions",
-      "isOfficial": true,
-      "category": "util",
-      "version": "1.0.18",
-      "npm": "https://www.npmjs.com/package/@zhin.js/config-yaml",
-      "github": "git+https://github.com/zhinjs/zhin.git",
-      "homepage": "https://github.com/zhinjs/zhin#readme",
-      "tags": [],
-      "lastUpdate": "2026-08-26T11:30:14.743Z",
-      "downloads": {
-        "weekly": 0,
-        "monthly": 0
-      },
-      "readme": "下一代 Runtime 的可选 YAML ConfigDocumentPort。它在 YAML AST 上应用结构化 patch，保留未触及节点的注释、引号、anchor/alias、${ENV} 字符串、键顺序、缩进和换行风格，并通过同目录临时文件加原子 rename 持久化。\n> 当前包属于 feature/next 绿地实现，版本仍为 0.0.0 且未作为稳定 API 发布。\n@zhin.j",
-      "license": "MIT",
-      "engines": {
-        "node": "^20.19.0 || >=22.12.0"
-      },
-      "peerDependencies": {}
-    },
-    {
       "name": "@zhin.js/mcp-feature",
       "displayName": "mcp-feature",
       "description": "Convention-based MCP client Feature for Zhin Plugin Runtime",
@@ -2579,12 +2555,12 @@
     }
   ],
   "stats": {
-    "total": 81,
-    "official": 81,
+    "total": 80,
+    "official": 80,
     "community": 0,
     "adapters": 20,
     "services": 5,
-    "utils": 55,
+    "utils": 54,
     "games": 0,
     "features": 1
   },

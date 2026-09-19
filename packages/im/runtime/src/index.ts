@@ -1,5 +1,4 @@
 export * from './config-composer.js';
-export * from './config-document.js';
 export * from './config-patch-planner.js';
 export * from './package-contract.js';
 export * from './environment.js';

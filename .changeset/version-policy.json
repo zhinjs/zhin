@@ -3,6 +3,18 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "make-root-config-files-transactional.md",
+      "packages": [
+        "@zhin.js/runtime",
+        "@zhin.js/plugin-runtime",
+        "@zhin.js/config-file",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the format-specific configuration package with one polymorphic YAML/JSON transaction module, move persistence contracts below Runtime, and make JSON participate in generation-safe persistence under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "unify-root-config-file-contract.md",
       "packages": [
         "@zhin.js/plugin-runtime",

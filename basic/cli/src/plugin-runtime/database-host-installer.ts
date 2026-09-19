@@ -12,12 +12,10 @@ import {
   type DatabaseHostConsole,
   type DatabaseHostModel,
   type DatabaseHostSelection,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import type {
-  ConfigDocumentPort,
-  RootResourceInstaller,
-  RuntimeConfigDocument,
-} from '@zhin.js/runtime';
+import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 const logger = getLogger('Database');
 

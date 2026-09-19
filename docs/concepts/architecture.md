@@ -83,7 +83,7 @@ flowchart BT
 
 `zhin runtime start`（定义在 `basic/cli/src/commands/runtime.ts`，装配逻辑在 `basic/cli/src/plugin-runtime/`）做的事：
 
-1. 用 `YamlConfigDocument`（`@zhin.js/config-yaml`）把 `zhin.config.yml` 包装成带事务的 `ConfigDocumentPort`；
+1. 用 `createConfigDocument`（`@zhin.js/config-file`）把唯一的 YAML/JSON Root 配置包装成带事务的 `ConfigDocumentPort`；
 2. 创建 `RootRuntime`（`@zhin.js/runtime`），注入模块加载器（开发模式为 `NativeDevelopmentModuleRuntime`）、配置端口和 Root 资源安装器；
 3. 通过 `installResources` 安装 Host 级资源：HTTP Host、数据库、Agent Host（含 AI 兜底处理器）、Console API 等；
 4. 启动后挂上 `HmrCoordinator`，文件变更触发 generation 重载或进程重启。

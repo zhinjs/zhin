@@ -3,9 +3,10 @@ import {
   defineSystemLogTable,
   insertSystemLogRow,
   SYSTEM_LOG_TABLE,
+  type ConfigDocumentPort,
   type DatabaseHost,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/runtime';
 
 /**
  * Plugin Runtime 系统日志落库（console logs 页数据源，对齐 legacy

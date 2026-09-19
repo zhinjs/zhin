@@ -27,7 +27,7 @@
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
-    "@zhin.js/config-yaml": "workspace:*",
+    "@zhin.js/config-file": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/database": "workspace:*",
     "@zhin.js/host-http": "workspace:*",

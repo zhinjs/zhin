@@ -1,8 +1,8 @@
-import { access, readFile } from 'node:fs/promises';
+import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
-import { YamlConfigDocument } from '@zhin.js/config-yaml';
+import { createConfigDocument } from '@zhin.js/config-file';
 import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
@@ -16,14 +16,13 @@ import {
   defineInboxTables,
   readPluginConfigurationMap,
   ROOT_CONFIG_FILE_NAMES,
-  rootConfigFormat,
   selectRootConfigFile,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
-  type ConfigDocumentPort,
-  type RuntimeConfigDocument,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -648,12 +647,5 @@ async function loadProjectConfig(
   }
   const file = selectRootConfigFile(existing);
   if (!file) return { config: Object.freeze({}), file: undefined };
-  if (rootConfigFormat(file) === 'yaml') {
-    return { config: new YamlConfigDocument(file), file };
-  }
-  const value = JSON.parse(await readFile(file, 'utf8')) as unknown;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${file} must contain an object`);
-  }
-  return { config: Object.freeze(value as RuntimeConfigDocument), file };
+  return { config: createConfigDocument(file), file };
 }

@@ -99,7 +99,7 @@ The command prefix is resolved by default based on the adapter instance that own
 
 ## Configuration Document Transactions and Rollback
 
-Runtime configuration changes (Console UI, `patchConfig` API) do not modify the file directly. Instead, they go through a two-phase transaction with the `ConfigDocumentPort` interface:
+Runtime configuration changes (Console UI, `patchConfig` API) do not modify the file directly. They use a two-phase transaction; the `ConfigDocumentPort` and structural patch semantics live in zero-dependency `@zhin.js/plugin-runtime`:
 
 ```ts
 interface ConfigDocumentPort {
@@ -112,13 +112,13 @@ interface PreparedConfigDocument {
 }
 ```
 
-Key implementation details of `YamlConfigDocument` (`@zhin.js/config-yaml`):
+`ConfigFileDocument` (`@zhin.js/config-file`) owns the transaction lifecycle shared by both formats:
 
 - **Optimistic concurrency**: Both `prepare` and `commit` re-read the file and verify the revision; if the file was modified externally after reading, a `ConfigDocumentConflictError` is thrown.
-- **Format preservation**: Patches are applied to the YAML AST before stringifying, preserving comments and indentation style (including CRLF); numeric segments in paths address array elements (`endpoints.0.url`), and dangerous segments like `__proto__` are rejected.
 - **Atomic write to disk**: `commit` first writes to a temporary file then uses `rename` to replace, preserving original file permissions.
 - **Consistency**: If the candidate document diverges from the runtime-validated candidate, a `ConfigDocumentDivergenceError` is thrown -- preferring failure over writing divergent configuration.
+- **Format polymorphism**: `YamlConfigDocument` patches the AST and preserves comments and indentation; `JsonConfigDocument` reuses Runtime structural patch semantics and preserves indentation and line endings.
 
-Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the `zhin.config.yml` on disk nor the in-memory runtime will be left in a half-updated state.
+Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the Root config on disk nor the in-memory runtime will be left in a half-updated state.
 
 Direct external editing of the configuration file is also supported: the config file itself is watched, and external modifications trigger a full reload using the disk content as the source of truth.

@@ -6,11 +6,8 @@ import type {
 } from '@zhin.js/agent';
 import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import {
-  expandEnvironmentValue,
-  type ConfigDocumentPort,
-  type RuntimeConfigDocument,
-} from '@zhin.js/runtime';
+import type { ConfigDocumentPort, RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import { expandEnvironmentValue } from '@zhin.js/runtime';
 
 export type AgentHostAIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]>;
 export type WorkroomStorageMode = 'database' | 'file';

@@ -44,7 +44,7 @@ import {
   primaryConfigToken,
   type PrimaryConfig,
 } from './primary-config.js';
-import type { RuntimeConfigDocument } from './config-composer.js';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 

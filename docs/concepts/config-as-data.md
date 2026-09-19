@@ -99,7 +99,7 @@ plugins:
 
 ## 配置文档事务与回滚
 
-运行时改配置（Console 界面、`patchConfig` API）不是直接改文件，而是一个两阶段事务，接口是 `ConfigDocumentPort`：
+运行时改配置（Console 界面、`patchConfig` API）不是直接改文件，而是一个两阶段事务。`ConfigDocumentPort` 与结构化 patch 语义定义在零依赖的 `@zhin.js/plugin-runtime`：
 
 ```ts
 interface ConfigDocumentPort {
@@ -112,13 +112,13 @@ interface PreparedConfigDocument {
 }
 ```
 
-`YamlConfigDocument`（`@zhin.js/config-yaml`）的实现要点：
+`ConfigFileDocument`（`@zhin.js/config-file`）封装两种格式共享的事务生命周期：
 
 - **乐观并发**：`prepare` 和 `commit` 都会重读文件并核对 revision；文件在读取后被外部改动则抛 `ConfigDocumentConflictError`。
-- **保格式**：patch 应用在 YAML AST 上再 stringify，注释与缩进风格（含 CRLF）保留；路径段里的数字寻址数组元素（`endpoints.0.url`），`__proto__` 等危险段被拒绝。
 - **原子落盘**：`commit` 先写临时文件再 `rename` 替换，保留原文件权限位。
 - **一致性**：候选文档与运行时校验过的候选不一致时抛 `ConfigDocumentDivergenceError`，宁可失败也不写分歧配置。
+- **格式多态**：`YamlConfigDocument` 在 AST 上应用 patch 并保留注释与缩进；`JsonConfigDocument` 复用 Runtime 的结构化 patch 语义并保留缩进与换行风格。
 
-事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 `zhin.config.yml` 和内存里的运行时都不会出现半更新状态。
+事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 Root 配置和内存里的运行时都不会出现半更新状态。
 
 外部直接编辑配置文件也可以：配置文件本身被 watch，外部修改会触发一次全量重载，以磁盘内容为准。
