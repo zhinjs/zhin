@@ -22,6 +22,13 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove legacy host unwrapping and root-owner namespace exceptions under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "class-based-owner-hosts.md",
+      "packages": ["@zhin.js/plugin-runtime"],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace anonymous Host factories with an explicit class hierarchy under the owner-directed architecture refactor."
     }
   ]
 }

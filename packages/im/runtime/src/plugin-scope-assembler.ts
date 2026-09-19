@@ -6,8 +6,8 @@ import {
   capabilityId,
   createGenerationAdmissionGate,
   createToken,
-  createPluginDatabaseHost,
-  createPluginScheduleHost,
+  PluginDatabaseHost,
+  PluginScheduleHost,
   databaseHostToken,
   databaseRootHostToken,
   featureId,
@@ -312,7 +312,7 @@ export class PluginScopeAssembler {
     if (database) {
       scope.provide(
         databaseHostToken,
-        createPluginDatabaseHost(owner, database),
+        new PluginDatabaseHost(owner, database),
       );
     }
     const schedule = scope.has(scheduleRootHostToken)
@@ -321,7 +321,7 @@ export class PluginScopeAssembler {
     if (schedule) {
       scope.provide(
         scheduleHostToken,
-        createPluginScheduleHost(owner, schedule),
+        new PluginScheduleHost(owner, schedule),
       );
     }
   }

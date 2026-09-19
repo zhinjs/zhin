@@ -1,4 +1,8 @@
-import { pluginOwnerResourceKey, type PluginId } from './identity.js';
+import type { PluginId } from './identity.js';
+import {
+  OwnerScopedResourceHost,
+  qualifyOwnedResourceName,
+} from './owner-scoped-resource-host.js';
 import { createToken } from './token.js';
 
 export interface DatabaseHostSelection {
@@ -111,64 +115,40 @@ export interface DatabaseHost {
  * the Runtime maps them to private physical table names before they reach the
  * process-wide DatabaseHost.
  */
-export interface PluginDatabaseHost {
-  readonly owner: PluginId;
-  readonly dialect: string;
-  readonly started: boolean;
-  define(name: string, definition: Record<string, unknown>): void;
-  tables(): readonly string[];
-  models: {
-    get(name: string): DatabaseHostModel | undefined;
-  };
-}
-
-const resourcePrefix = '__zhin_plugin__';
-const resourceSeparator = '__';
 /**
  * Maps a plugin's logical resource name to its process-wide physical name.
  * Every owner, including the root plugin, uses the same private namespace.
  */
 export function qualifyPluginResourceName(owner: PluginId, name: string): string {
-  assertLogicalResourceName(name);
-  return `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}${name}`;
+  return qualifyOwnedResourceName(owner, name);
 }
 
-/** Reverse `qualifyPluginResourceName` only when the name belongs to owner. */
-export function unqualifyPluginResourceName(owner: PluginId, name: string): string | undefined {
-  const prefix = `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}`;
-  return name.startsWith(prefix) ? name.slice(prefix.length) : undefined;
-}
+/** Owner-bound persistence facade without Console administration or raw DB access. */
+export class PluginDatabaseHost extends OwnerScopedResourceHost {
+  readonly models: { get(name: string): DatabaseHostModel | undefined };
 
-/** Creates a tenant facade without exposing Console administration or raw DB access. */
-export function createPluginDatabaseHost(
-  owner: PluginId,
-  host: DatabaseHost,
-): PluginDatabaseHost {
-  const facade = Object.freeze({
-    owner,
-    get dialect() { return host.dialect; },
-    get started() { return host.started; },
-    define(name: string, definition: Record<string, unknown>) {
-      host.define(qualifyPluginResourceName(owner, name), definition);
-    },
-    tables() {
-      return Object.freeze(host.tables().flatMap((name) => {
-        const logical = unqualifyPluginResourceName(owner, name);
-        return logical === undefined ? [] : [logical];
-      }));
-    },
-    models: Object.freeze({
-      get(name: string) {
-        return host.models.get(qualifyPluginResourceName(owner, name));
-      },
-    }),
-  });
-  return facade;
-}
+  constructor(owner: PluginId, private readonly host: DatabaseHost) {
+    super(owner);
+    this.models = Object.freeze({ get: (name: string) => this.host.models.get(this.qualify(name)) });
+  }
 
-function assertLogicalResourceName(name: string): void {
-  if (!name || name.startsWith(resourcePrefix)) {
-    throw new TypeError(`Invalid plugin resource name: ${name}`);
+  get dialect(): string {
+    return this.host.dialect;
+  }
+
+  get started(): boolean {
+    return this.host.started;
+  }
+
+  define(name: string, definition: Record<string, unknown>): void {
+    this.host.define(this.qualify(name), definition);
+  }
+
+  tables(): readonly string[] {
+    return Object.freeze(this.host.tables().flatMap((name) => {
+      const logical = this.unqualify(name);
+      return logical === undefined ? [] : [logical];
+    }));
   }
 }
 

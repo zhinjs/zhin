@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   childPluginId,
-  createPluginDatabaseHost,
-  createPluginScheduleHost,
+  PluginDatabaseHost,
+  PluginScheduleHost,
   qualifyPluginResourceName,
   rootPluginId,
   type DatabaseHost,
@@ -24,9 +24,9 @@ describe('owner-scoped host facades', () => {
       start: async () => undefined,
       stop: async () => undefined,
     } satisfies DatabaseHost;
-    const root = createPluginDatabaseHost(rootPluginId(), host);
-    const alpha = createPluginDatabaseHost(childPluginId(rootPluginId(), 'alpha'), host);
-    const beta = createPluginDatabaseHost(childPluginId(rootPluginId(), 'beta'), host);
+    const root = new PluginDatabaseHost(rootPluginId(), host);
+    const alpha = new PluginDatabaseHost(childPluginId(rootPluginId(), 'alpha'), host);
+    const beta = new PluginDatabaseHost(childPluginId(rootPluginId(), 'beta'), host);
 
     root.define('sessions', {});
     alpha.define('sessions', {});
@@ -60,7 +60,7 @@ describe('owner-scoped host facades', () => {
       stop: async () => undefined,
     } satisfies DatabaseHost;
 
-    expect(createPluginDatabaseHost(games, host).tables()).toEqual(['sessions']);
+    expect(new PluginDatabaseHost(games, host).tables()).toEqual(['sessions']);
   });
 
   it('isolates schedule ids and only lists jobs owned by the calling plugin', () => {
@@ -72,8 +72,8 @@ describe('owner-scoped host facades', () => {
       },
       list: () => [...jobs.values()],
     } satisfies ScheduleHost;
-    const alpha = createPluginScheduleHost(childPluginId(rootPluginId(), 'alpha'), host);
-    const beta = createPluginScheduleHost(childPluginId(rootPluginId(), 'beta'), host);
+    const alpha = new PluginScheduleHost(childPluginId(rootPluginId(), 'alpha'), host);
+    const beta = new PluginScheduleHost(childPluginId(rootPluginId(), 'beta'), host);
 
     const disposeAlpha = alpha.register({ id: 'cleanup', cron: '0 0 * * * *', execute: vi.fn() });
     beta.register({ id: 'cleanup', cron: '0 30 * * * *', execute: vi.fn() });

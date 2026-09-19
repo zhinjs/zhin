@@ -93,7 +93,7 @@ export {
   type DatabaseHostSelectResult,
   type DatabaseHostTable,
   type DatabaseHostType,
-  type PluginDatabaseHost,
+  PluginDatabaseHost,
 } from './database-host.js';
 export {
   outboundHostToken,
@@ -112,6 +112,6 @@ export {
 } from './outbound-host.js';
 export {
   scheduleHostToken,
-  type PluginScheduleHost,
+  PluginScheduleHost,
   type ScheduleJobRegistration,
 } from './schedule-host.js';

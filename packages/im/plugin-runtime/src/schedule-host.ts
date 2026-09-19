@@ -1,4 +1,8 @@
-import { pluginOwnerResourceKey, type PluginId } from './identity.js';
+import type { PluginId } from './identity.js';
+import {
+  OwnerScopedResourceHost,
+  qualifyOwnedResourceName,
+} from './owner-scoped-resource-host.js';
 import { createToken } from './token.js';
 
 /**
@@ -27,52 +31,33 @@ export interface ScheduleHost {
 }
 
 /** Scoped scheduling surface exposed to a Plugin setup function. */
-export interface PluginScheduleHost {
-  readonly owner: PluginId;
-  register(job: ScheduleJobRegistration): () => void;
+export function qualifyPluginScheduleId(owner: PluginId, id: string): string {
+  return qualifyOwnedResourceName(owner, id);
+}
+
+export class PluginScheduleHost extends OwnerScopedResourceHost {
+  constructor(owner: PluginId, private readonly host: ScheduleHost) {
+    super(owner);
+  }
+
+  register(job: ScheduleJobRegistration): () => void {
+    return this.host.register({ ...job, id: this.qualify(job.id), owner: this.owner });
+  }
+
   list(): readonly {
     readonly id: string;
     readonly cron: string;
     readonly description?: string;
-  }[];
-}
-
-const jobPrefix = '__zhin_plugin__';
-const jobSeparator = '__';
-export function qualifyPluginScheduleId(owner: PluginId, id: string): string {
-  assertLogicalJobId(id);
-  return `${jobPrefix}${pluginOwnerResourceKey(owner)}${jobSeparator}${id}`;
-}
-
-export function unqualifyPluginScheduleId(owner: PluginId, id: string): string | undefined {
-  const prefix = `${jobPrefix}${pluginOwnerResourceKey(owner)}${jobSeparator}`;
-  return id.startsWith(prefix) ? id.slice(prefix.length) : undefined;
-}
-
-export function createPluginScheduleHost(owner: PluginId, host: ScheduleHost): PluginScheduleHost {
-  const facade = Object.freeze({
-    owner,
-    register(job: ScheduleJobRegistration) {
-      return host.register({ ...job, id: qualifyPluginScheduleId(owner, job.id), owner });
-    },
-    list() {
-      return Object.freeze(host.list().flatMap((job) => {
-        const id = unqualifyPluginScheduleId(owner, job.id);
-        if (id === undefined) return [];
-        return [Object.freeze({
-          id,
-          cron: job.cron,
-          ...(job.description === undefined ? {} : { description: job.description }),
-        })];
-      }));
-    },
-  });
-  return facade;
-}
-
-function assertLogicalJobId(id: string): void {
-  if (!id || id.startsWith(jobPrefix)) {
-    throw new TypeError(`Invalid plugin schedule id: ${id}`);
+  }[] {
+    return Object.freeze(this.host.list().flatMap((job) => {
+      const id = this.unqualify(job.id);
+      if (id === undefined) return [];
+      return [Object.freeze({
+        id,
+        cron: job.cron,
+        ...(job.description === undefined ? {} : { description: job.description }),
+      })];
+    }));
   }
 }
 
