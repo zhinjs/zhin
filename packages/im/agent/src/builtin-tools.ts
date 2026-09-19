@@ -27,10 +27,13 @@ import { createTodoWriteTool } from './builtin/todo-write-tool.js';
 import { createInstallSkillTool } from './builtin/install-skill-tool.js';
 import { createAnalyzeMediaTool } from './builtin/analyze-media-tool.js';
 import { createKnowledgeSearchTool } from './builtin/knowledge-search-tool.js';
+import type { AudioTranscriptionPort } from './media/media-types.js';
 
 export interface BuiltinToolsOptions {
   /** 知识库目录（注册 knowledge_search 工具） */
   knowledgeDir?: string;
+  /** Host-owned speech boundary used by analyze_media for audio files. */
+  transcriber?: AudioTranscriptionPort;
 }
 
 /**
@@ -42,7 +45,7 @@ export function createBuiltinTools(options: BuiltinToolsOptions): Tool[] {
   const tools: Tool[] = [];
 
   tools.push(createReadFileTool());
-  tools.push(createAnalyzeMediaTool());
+  tools.push(createAnalyzeMediaTool(options.transcriber));
   tools.push(createWriteFileTool());
   tools.push(createEditFileTool());
   tools.push(createListDirTool());

@@ -1,6 +1,5 @@
-import { loadSpeechPipeline } from '@zhin.js/core';
-import { createWarnOnce, resetWarnOnceForTests, CONTENT_CHAIN_STAGE, type ContentChainLogFields } from '@zhin.js/logger';
-import type { MediaBinaryPayload, MultimodalConfig, PreprocessInboundResult } from './media-types.js';
+import { CONTENT_CHAIN_STAGE, type ContentChainLogFields } from '@zhin.js/logger';
+import type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, PreprocessInboundResult } from './media-types.js';
 import type { MediaContentBlock } from '@zhin.js/ai';
 import { payloadToVisionPart } from './media-normalize.js';
 import { spoolPayloadToFile } from './media-spool.js';
@@ -25,41 +24,18 @@ function describePayload(payload: MediaBinaryPayload): string {
 }
 
 export interface PreprocessInboundMediaDeps {
-  transcribe?: (payload: MediaBinaryPayload) => Promise<string>;
-  getConfig?: () => Record<string, unknown> | undefined;
+  transcriber?: AudioTranscriptionPort;
   warn?: (message: string) => void;
   logContentChain?: (fields: ContentChainLogFields) => void;
 }
 
-const speechWarnOnce = createWarnOnce('speech');
-const sttFailWarnOnce = createWarnOnce('stt-fail');
-
-/** 测试用：重置 warn-once 状态 */
-export function resetPreprocessInboundMediaForTests(): void {
-  resetWarnOnceForTests('speech');
-  resetWarnOnceForTests('stt-fail');
-}
-
-/** STT 转写单条音频载荷（deps.transcribe 优先，否则 @zhin.js/speech 可选管线）。 */
+/** STT 转写单条音频载荷。Speech implementation is supplied by the host. */
 export async function transcribeAudioPayload(
   payload: MediaBinaryPayload,
-  deps?: PreprocessInboundMediaDeps,
+  transcriber: AudioTranscriptionPort | undefined,
+  signal?: AbortSignal,
 ): Promise<string | undefined> {
-  const transcribeFn = deps?.transcribe;
-  if (transcribeFn) {
-    return transcribeFn(payload);
-  }
-
-  const pipeline = await loadSpeechPipeline({
-    getConfig: deps?.getConfig,
-    warn: (msg) => speechWarnOnce(deps?.warn, msg),
-  });
-  if (!pipeline) {
-    return undefined;
-  }
-
-  const data = Buffer.from(payload.base64, 'base64');
-  return pipeline.transcribe({ data, mimeType: payload.mimeType });
+  return transcriber?.transcribe(payload, signal);
 }
 
 /**
@@ -74,6 +50,7 @@ export async function preprocessInboundMedia(
   const payloads = [...input];
   const lines: string[] = [];
   const visionParts: MediaContentBlock[] = [];
+  let sttFallbackWarned = false;
 
   const inboundRoot = path.join(workspaceDir || process.cwd(), config.inboundDir);
 
@@ -104,7 +81,7 @@ export async function preprocessInboundMedia(
 
       if (config.audio.strategy === 'transcribe') {
         try {
-          const text = await transcribeAudioPayload(p, deps);
+          const text = await transcribeAudioPayload(p, deps?.transcriber);
           if (text?.trim()) {
             deps?.logContentChain?.({
               stage: CONTENT_CHAIN_STAGE.STT,
@@ -123,10 +100,10 @@ export async function preprocessInboundMedia(
           });
           // fall through to placeholder
         }
-        sttFailWarnOnce(
-          deps?.warn,
-          '语音转写失败或未安装 @zhin.js/speech，已降级为文本占位。安装: pnpm add @zhin.js/speech',
-        );
+        if (!sttFallbackWarned) {
+          deps?.warn?.('语音转写失败或未配置 Speech Host，已降级为文本占位。');
+          sttFallbackWarned = true;
+        }
         lines.push(describePayload(p));
         continue;
       }

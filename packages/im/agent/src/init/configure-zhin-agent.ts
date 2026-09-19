@@ -22,6 +22,7 @@ export type ConfigureZhinAgentTarget = Pick<
   | 'agentSessionStore' | 'contextRepository'
   | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
   | 'llmRuntime'
+  | 'audioTranscriber'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
@@ -64,6 +65,7 @@ export function applyZhinAgentConfigure(
     target.providerResolver = deps.providerResolver;
   }
   if (deps.llmRuntime !== undefined) target.llmRuntime = deps.llmRuntime;
+  if (deps.audioTranscriber !== undefined) target.audioTranscriber = deps.audioTranscriber;
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
     if (deps.activeBinding) {

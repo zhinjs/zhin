@@ -58,6 +58,7 @@ import { getActiveTurnTracker } from '../internal/turn-context.js';
 import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
@@ -154,6 +155,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
   llmRuntime: LlmApiRuntime;
+  audioTranscriber?: AudioTranscriptionPort;
   readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();

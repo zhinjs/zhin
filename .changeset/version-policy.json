@@ -558,6 +558,18 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the disconnected classic Rich Segment classes, mutable registry, optional-peer loaders, and adapter policy facade so generation-owned outbound normalization is the sole rendering authority under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "inject-speech-transcription.md",
+      "packages": [
+        "@zhin.js/core",
+        "@zhin.js/agent",
+        "@zhin.js/logger",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove process-global Speech loading, caching, and warn-once state and require composition-root-owned transcription injection under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

@@ -10,6 +10,7 @@ import { BuiltinBaseTool } from './builtin-base-tool.js';
 import { normalizeMediaRefsToPayloads } from '../media/media-normalize.js';
 import { preprocessInboundMedia } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 
 const MEDIA_EXT = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg',
@@ -36,7 +37,7 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
   readonly parameters = ANALYZE_MEDIA_PARAMETERS;
   readonly kind = 'file';
 
-  constructor() {
+  constructor(private readonly transcriber?: AudioTranscriptionPort) {
     super();
     this.tags.push('file', 'media');
     this.keywords.push('分析图片', '分析视频', '分析音频', 'analyze media', 'vision', '媒体');
@@ -80,7 +81,9 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
       }
 
       const payloads = await normalizeMediaRefsToPayloads([ref], mm.maxFileBytes);
-      const pre = await preprocessInboundMedia(payloads, mm);
+      const pre = await preprocessInboundMedia(payloads, mm, undefined, {
+        transcriber: this.transcriber,
+      });
       const lines = [
         `File: ${fp}`,
         `Size: ${(stat.size / 1024).toFixed(1)} KB`,
@@ -98,6 +101,6 @@ export class AnalyzeMediaBuiltinTool extends BuiltinBaseTool {
   }
 }
 
-export function createAnalyzeMediaTool(): Tool {
-  return new AnalyzeMediaBuiltinTool().toTool();
+export function createAnalyzeMediaTool(transcriber?: AudioTranscriptionPort): Tool {
+  return new AnalyzeMediaBuiltinTool(transcriber).toTool();
 }

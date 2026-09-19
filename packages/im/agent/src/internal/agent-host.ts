@@ -20,6 +20,7 @@ import type { DeferredTurnState } from '../turn/deferred-turn-state.js';
 import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
 import type { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -90,6 +91,7 @@ export interface ZhinAgentPrivate
   config: RequiredHostConfig;
   activeBinding: ResolvedAgentBinding | null;
   llmRuntime: LlmApiRuntime;
+  audioTranscriber?: AudioTranscriptionPort;
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;

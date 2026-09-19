@@ -1694,9 +1694,6 @@ importers:
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@zhin.js/speech':
-        specifier: workspace:*
-        version: link:../../toolkit/speech
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

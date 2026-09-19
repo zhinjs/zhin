@@ -106,6 +106,7 @@
     "export type{AgentsInstructionEntry}from './context/agents-instruction.js';",
     "export type{ApprovalPort,ApprovalRequestInput}from './session/approval-port.js';",
     "export type{AssistantConfig,AssistantDefaultsConfig,AssistantEventsConfig,AssistantProfileConfig,AssistantProfile,NotificationRouter,BootstrapAssistantHomeResult,HomeToolRegistration,ScheduleJob,ScheduleJobFile,ScheduleJobCreator,ScheduleJobExecutionPlan,ScheduleInvocationContext,AssistantEventRequest,AssistantEventResult,}from './assistant/index.js';",
+    "export type{AudioTranscriptionPort,MediaBinaryPayload,MultimodalConfig,OutboundMediaCapabilities}from './media/index.js';",
     "export type{AuthoringAgentDefinition,AuthoringToolDefinition,AuthoringSkillDefinition,AuthoringScheduleDefinition,AuthoringConnectionDefinition,AuthoringHookDefinition,AuthoringEvalDefinition,AuthoringToolContext,AuthoringEvalContext,DiscoveredPluginAgentSurface,DefineAgentToolInput,}from './authoring/index.js';",
     "export type{BootstrapFile,ContextFile}from './bootstrap.js';",
     "export type{DeliverScheduleToAdapterInput}from './assistant/deliver-schedule-to-adapter.js';",
@@ -113,7 +114,6 @@
     "export type{IAgentTurnProcessor,IAgentSessionManager,IAgentDiagnostics,IAgentConfigurator,}from './config/agent-interfaces.js';",
     "export type{ISceneManagement,SceneManagementMethodSpec}from './common-adapter-tools.js';",
     "export type{McpClientConnectionState,McpToolDefinition}from './mcp-client/index.js';",
-    "export type{MediaBinaryPayload,MultimodalConfig,OutboundMediaCapabilities}from './media/index.js';",
     "export type{MemoryLayerBudgets,MemoryPromptOptions,MemoryLayersInput,LoadedMemoryLayers,MemoryWriteScope,MemoryWriteDecision,}from './memory-layers.js';",
     "export type{ModelHarnessRow,ResolvedModelHarness,ModelHarnessConfig}from './config/model-harness.js';",
     "export type{NormalizableTool}from './tool-bridge.js';",
@@ -259,7 +259,6 @@
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
     "export{ScheduleEngine,Scheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
-    "export{loadSpeechPipeline,seedSpeechPipeline,SPEECH_PACKAGE}from './built/speech-loader.js'",
     "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"
   ]
 }

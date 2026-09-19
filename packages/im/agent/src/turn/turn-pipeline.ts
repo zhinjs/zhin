@@ -198,9 +198,11 @@ async function processTextTurnInner(
     });
     const inboundMedia = await resolveTurnMediaInjection(
       turnMedia,
-      undefined,
-      extras?.signal ?? new AbortController().signal,
-      turnCtx.modelInput,
+      {
+        signal: extras?.signal,
+        providerInput: turnCtx.modelInput,
+        transcriber: host.audioTranscriber,
+      },
     );
     turnCtx.userMessages = applyInboundMediaInjection(turnCtx.userMessages, inboundMedia);
     const {

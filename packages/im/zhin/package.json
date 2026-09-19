@@ -104,7 +104,6 @@
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/ai": "workspace:^",
     "@zhin.js/html-renderer": "workspace:^",
-    "@zhin.js/speech": "workspace:^",
     "@zhin.js/runtime": "workspace:^"
   },
   "peerDependenciesMeta": {
@@ -117,9 +116,6 @@
     "@zhin.js/html-renderer": {
       "optional": true
     },
-    "@zhin.js/speech": {
-      "optional": true
-    },
     "@zhin.js/runtime": {
       "optional": true
     }
@@ -130,7 +126,6 @@
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/html-renderer": "workspace:*",
     "@zhin.js/runtime": "workspace:*",
-    "@zhin.js/speech": "workspace:*",
     "typescript": "^6.0.3",
     "yaml": "^2.9.0"
   },

@@ -1,12 +1,12 @@
 import * as path from 'node:path';
-import { loadSpeechPipeline, type SegmentMediaRef } from '@zhin.js/core';
+import type { SegmentMediaRef } from '@zhin.js/core';
 import type { AIProvider, MediaContentBlock } from '@zhin.js/ai';
 import {
   normalizeMediaRefsToPayloads,
   payloadToVisionPart,
 } from './media-normalize.js';
 import { spoolPayloadToFile } from './media-spool.js';
-import type { AgentRunInput, AgentRunInputPart, MediaBinaryPayload, MultimodalConfig } from './media-types.js';
+import type { AgentRunInput, AgentRunInputPart, AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig } from './media-types.js';
 import { resolveMultimodalConfig } from './resolve-config.js';
 import { providerSupportsVision } from './vision-capability.js';
 
@@ -45,7 +45,12 @@ export interface SubagentInboundTask {
 export async function buildSubagentInboundTask(
   aiContent: string,
   mediaRefs: readonly SegmentMediaRef[],
-  opts?: { workspaceDir?: string; provider?: AIProvider; config?: MultimodalConfig },
+  opts?: {
+    workspaceDir?: string;
+    provider?: AIProvider;
+    config?: MultimodalConfig;
+    transcriber?: AudioTranscriptionPort;
+  },
 ): Promise<SubagentInboundTask> {
   const config = opts?.config ?? resolveMultimodalConfig();
   const payloads = await normalizeMediaRefsToPayloads(mediaRefs, config.maxFileBytes);
@@ -91,12 +96,8 @@ export async function buildSubagentInboundTask(
 
       if (config.audio.strategy === 'transcribe') {
         try {
-          const pipeline = await loadSpeechPipeline();
-          if (pipeline) {
-            const text = await pipeline.transcribe({
-              data: Buffer.from(p.base64, 'base64'),
-              mimeType: p.mimeType,
-            });
+          if (opts?.transcriber) {
+            const text = await opts.transcriber.transcribe(p);
             if (text?.trim()) {
               lines.push(`[语音转写] ${text.trim()}`);
               continue;

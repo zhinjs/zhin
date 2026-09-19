@@ -197,6 +197,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
           resolveConfiguredEndpointKeys: () => readConfiguredEndpointKeys(config),
           extraTools: speechHandle?.tools,
+          audioTranscriber: speechHandle,
           transcribeUrl: speechHandle
             ? (url) => speechHandle.transcribeUrl(url)
             : undefined,
@@ -369,6 +370,7 @@ interface ConfiguredAgentHost {
     readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
+    readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
   }): RootResourceInstaller;
 }

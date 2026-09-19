@@ -15,6 +15,7 @@ import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
@@ -30,6 +31,7 @@ export interface ZhinAgentDependencies {
   contextRepository: ContextRepository;
   modelRegistry: ModelRegistry;
   llmRuntime: LlmApiRuntime;
+  audioTranscriber: AudioTranscriptionPort;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

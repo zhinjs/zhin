@@ -26,6 +26,7 @@ import {
   publishOutboundElements,
   type AssistantConfig,
   type ApprovalPort,
+  type AudioTranscriptionPort,
   type TurnRequest,
   type WorkroomDefinition,
   type WorkroomMemberRole,
@@ -408,6 +409,8 @@ export interface InstallAgentHostOptions {
   readonly extraTools?: readonly AgentToolLike[];
   /** Optional inbound STT (Speech Host). */
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
+  /** Owner-scoped STT boundary for canonical turn media. */
+  readonly audioTranscriber?: AudioTranscriptionPort;
   /** Optional host approval override; IM turns otherwise use createRuntimeApprovalPort. */
   readonly approvalPort?: ApprovalPort;
   /** Trusted product-policy seam for explicit steer/follow-up/observe intent and authorization. */
@@ -560,6 +563,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.im,
         options.projectRoot,
         options.approvalPort,
+        options.audioTranscriber,
       );
       zhinAgent = created.agent;
       composedRuntime = created.runtime;

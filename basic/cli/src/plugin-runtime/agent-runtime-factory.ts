@@ -7,6 +7,7 @@ import {
   discoverWorkspaceAgents,
   publishOutboundElements,
   type ApprovalPort,
+  type AudioTranscriptionPort,
   type ProactiveOutboundService,
   type TurnEvent,
   type TurnRequest,
@@ -44,6 +45,7 @@ export function createRuntimeZhinAgent(
   im: ImRuntime,
   projectRoot: string,
   approvalPort?: ApprovalPort,
+  audioTranscriber?: AudioTranscriptionPort,
 ): {
   agent: ZhinAgent;
   events: AgentEventBus;
@@ -70,6 +72,7 @@ export function createRuntimeZhinAgent(
     resourceHub,
     providerResolver: (alias) => service.getProvider(alias),
     llmRuntime: service.getLlmRuntime(),
+    audioTranscriber,
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
     subagentSender: composed.deliverOutbound,

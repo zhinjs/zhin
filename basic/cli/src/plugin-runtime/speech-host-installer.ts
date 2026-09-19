@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { seedSpeechPipeline } from '@zhin.js/core';
+import type { AudioTranscriptionPort, MediaBinaryPayload } from '@zhin.js/agent';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -25,7 +25,7 @@ export interface SpeechHostTool {
   readonly source?: string;
 }
 
-export interface SpeechHostHandle {
+export interface SpeechHostHandle extends AudioTranscriptionPort {
   readonly tools: readonly SpeechHostTool[];
   readonly sttProvider: string;
   readonly ttsProvider: string;
@@ -56,7 +56,7 @@ export async function resolveSpeechConfig(
 
 /**
  * Optional Speech Host:
- * - top-level `speech:` → createSpeechPipeline + seedSpeechPipeline (TTS rich segment)
+ * - top-level `speech:` → create one host-owned Speech pipeline
  * - exposes voice_stt / voice_tts tools for Agent Host
  */
 export async function prepareSpeechHost(
@@ -71,7 +71,6 @@ export async function prepareSpeechHost(
       ) => SpeechPipelineLike;
     };
     const pipeline = mod.createSpeechPipeline(config, logger);
-    seedSpeechPipeline(pipeline as never);
     const tools = buildSpeechTools(pipeline);
     const sttProvider = typeof config.stt?.provider === 'string' ? config.stt.provider : 'ollama';
     const ttsProvider = typeof config.tts?.provider === 'string' ? config.tts.provider : 'edge';
@@ -79,6 +78,15 @@ export async function prepareSpeechHost(
       tools,
       sttProvider,
       ttsProvider,
+      async transcribe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<string | undefined> {
+        signal?.throwIfAborted();
+        const text = await pipeline.transcribe({
+          data: Buffer.from(payload.base64, 'base64'),
+          mimeType: payload.mimeType,
+        });
+        signal?.throwIfAborted();
+        return text.trim() || undefined;
+      },
       async transcribeUrl(audioUrl: string): Promise<string | null> {
         const url = audioUrl.trim();
         if (!url) return null;
@@ -110,11 +118,8 @@ export async function prepareSpeechHost(
 }
 
 export function installSpeechHost(handle: SpeechHostHandle | undefined): RootResourceInstaller {
-  return ({ lifecycle }) => {
+  return () => {
     if (!handle) return;
-    lifecycle.add(() => {
-      /* pipeline cache lives for process; restart clears via process exit */
-    });
     logger.info(
       `ready | stt: ${handle.sttProvider} | tts: ${handle.ttsProvider}`
       + ` | tools: ${handle.tools.map((tool) => tool.name).join(',')}`,

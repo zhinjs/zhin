@@ -121,6 +121,11 @@ const checks = [
     description: 'agent/zhin 运行时代码须经 owner-scoped LlmApiRuntime 解析模型',
   },
   {
+    name: 'Speech Runtime Boundaries',
+    command: 'pnpm check:speech-runtime-boundaries',
+    description: 'Speech 实现仅由 CLI composition root 装配，并以 owner-scoped 端口注入',
+  },
+  {
     name: 'Legacy AI Exports',
     command: 'pnpm check:legacy-ai-exports',
     description: '禁止 @zhin.js/ai 再导出 SessionManager / resolveIMSessionId* / convertLegacy* / getModel',

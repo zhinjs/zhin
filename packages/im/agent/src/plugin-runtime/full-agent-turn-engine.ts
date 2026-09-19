@@ -120,9 +120,12 @@ async function* runInteractiveTurn(
     : undefined;
   const media = await resolveTurnMediaInjection(
     context.turn.input.media,
-    context.turn.ports.references,
-    context.turn.signal,
-    providerInput,
+    {
+      references: context.turn.ports.references,
+      signal: context.turn.signal,
+      providerInput,
+      transcriber: host.audioTranscriber,
+    },
   );
   for (const [index, outcome] of media.outcomes.entries()) {
     yield Object.freeze({
