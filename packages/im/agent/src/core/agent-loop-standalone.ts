@@ -17,6 +17,7 @@ import {
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { ToolRuntime } from '../tool/tool-runtime.js';
 import { resolveBuiltinToolPolicyInput } from '../tool/builtin-policy-extractors.js';
+import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 const logger = getLogger('AgentLoopStandalone');
 
 function toolResultToAgentMessage(
@@ -133,18 +134,17 @@ export async function runAgentLoopStandaloneTurn(
   const initialTools = childDeferred
     ? [...tools.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
     : tools;
-  const legacyByName = new Map(initialTools.map((tool) => [tool.name, tool]));
+  const executableTools = new ExecutableToolRegistry(initialTools);
   let llmTools = agentToolsToLlmTools(initialTools);
 
   /** load_tool 命中后把 catalog 里的完整工具并入可执行集并重建 schema 列表 */
   const reloadDeferredTools = (): void => {
     if (!childDeferred) return;
     for (const name of childDeferred.loadedToolNames()) {
-      if (legacyByName.has(name)) continue;
       const tool = childDeferred.tool(name);
-      if (tool) legacyByName.set(name, tool);
+      if (tool) executableTools.addMissing([tool]);
     }
-    llmTools = agentToolsToLlmTools([...legacyByName.values()]);
+    llmTools = agentToolsToLlmTools(executableTools.list());
   };
 
   const toolCalls: ToolCallRecord[] = [];
@@ -161,17 +161,17 @@ export async function runAgentLoopStandaloneTurn(
   });
 
   const runTool = async (toolCall: ParsedToolCall) => {
-    const legacy = legacyByName.get(toolCall.name);
-    if (!legacy) {
+    const tool = executableTools.resolve(toolCall.name);
+    if (!tool) {
       return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
     }
     try {
       const exec = () => directExecution
         ? runWithDirectAgentExecution(commMessage, () =>
-            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+            toolRuntime.execute(tool, toolCall.arguments, { toolCallId: toolCall.id }),
           )
         : runWithCommMessage(commMessage, () =>
-            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+            toolRuntime.execute(tool, toolCall.arguments, { toolCallId: toolCall.id }),
           );
       const outcome = await exec();
       if (outcome.denied) {

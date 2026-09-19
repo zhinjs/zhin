@@ -35,6 +35,7 @@ import type { TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
+import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -468,7 +469,7 @@ export async function* runAgentLoopTextTurnRun(
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
 
-  const legacyByName = new Map(agentTools.map((t) => [t.name, t]));
+  const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
     ? agentToolsToLlmTools(agentTools)
     : buildLlmToolsForProvider(
@@ -506,8 +507,7 @@ export async function* runAgentLoopTextTurnRun(
       : applyExecPolicyToTools(execPolicyConfig, refreshed, {
           approvalMode: execPolicyConfig.execApprovalMode,
         });
-    legacyByName.clear();
-    for (const t of nextAgentTools) legacyByName.set(t.name, t);
+    executableTools.replace(nextAgentTools);
     llmTools = directTools
       ? agentToolsToLlmTools(nextAgentTools)
       : buildLlmToolsForProvider(
@@ -572,7 +572,7 @@ export async function* runAgentLoopTextTurnRun(
           type: 'preToolUse',
           toolName: resolvedName,
           toolInput: effectiveArgs,
-          toolSource: legacyByName.get(resolvedName)?.source,
+          toolSource: executableTools.resolve(resolvedName)?.source,
           sessionId,
           turn: input.turnContext,
         });
@@ -586,13 +586,13 @@ export async function* runAgentLoopTextTurnRun(
         }
       }
 
-      const legacy = legacyByName.get(resolvedName);
-      if (!legacy) {
+      const tool = executableTools.resolve(resolvedName);
+      if (!tool) {
         return toolResultToAgentMessage(toolCall, `工具「${resolvedName}」执行失败：工具不存在或所属插件未启用。`, true);
       }
 
       try {
-        const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id, cause);
+        const outcome = await input.toolExecution.execute(tool, effectiveArgs, toolCall.id, cause);
         if (outcome.status === 'cancelled') {
           const cancellation = signal?.reason instanceof Error
             ? signal.reason
@@ -604,7 +604,7 @@ export async function* runAgentLoopTextTurnRun(
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
-        const rawText = await applyToolToModelOutput(legacy, outcome.output, effectiveArgs);
+        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
 
         // PostToolUse interception
         let resultText = rawText;
