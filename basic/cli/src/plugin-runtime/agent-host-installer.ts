@@ -74,19 +74,11 @@ import {
   agentHostToken,
   agentEventBusToken,
   CapabilityIngress,
-  projectHostTool,
-  projectHostMcp,
-  toolFeatureId,
   turnJournalStoreToken,
   agentTurnEngineToken,
   createFullAgentTurnEngine,
-  createNativeAgentToolSuite,
   MarkdownKnowledgeIndex,
-  createNativeTodoToolFeatures,
-  createNativeInteractionToolFeatures,
-  createNativeSemanticMemoryToolFeatures,
   SemanticMemoryRuntime,
-  FileTodoStore,
   AgentRuntime,
   ZhinAgent,
   composeZhinAgentRuntime,
@@ -352,6 +344,10 @@ import {
   resolveStableSenderId,
   stringMetadata,
 } from './agent-turn-content.js';
+import {
+  publishAgentToolFeatures,
+  type HostAgentTool,
+} from './agent-tool-feature-publisher.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -360,23 +356,6 @@ requires must contain exactly tools, skills, integrations, authorities arrays. a
 Copy every requirement only from the matching supplied capability array: tools from tools, skills from skills, integrations from integrations, and authorities from authorities. Never classify a skill as a tool.
 Use only the supplied strategies, roles, capabilities and constraints. Include at least one required task.
 Do not output markdown, commentary, identity, authority, Project state, Sponsor lane, deadline, policy, assignment, or execution state.`;
-
-interface AgentToolLike {
-  readonly name: string;
-  readonly description: string;
-  readonly parameters: {
-    readonly type: 'object';
-    properties?: Record<string, unknown>;
-    required?: string[];
-  };
-  execute(args: Record<string, unknown>): Promise<unknown>;
-  readonly source?: string;
-  readonly platforms?: readonly string[];
-  readonly scopes?: readonly ('private' | 'group' | 'channel')[];
-  readonly permissions?: readonly string[];
-  readonly hidden?: boolean;
-  readonly approval?: 'always' | 'once' | 'never' | 'on-risk';
-}
 
 const logger = getLogger('agent');
 const BOOTSTRAP_FILES = ['SOUL.md', 'AGENTS.md', 'TOOLS.md'] as const;
@@ -406,7 +385,7 @@ export interface InstallAgentHostOptions {
   /** Candidate config Endpoint identities; never read from the old live ImRuntime projection. */
   readonly resolveConfiguredEndpointKeys?: () => Promise<ReadonlySet<string>>;
   /** Extra Host tools (e.g. Speech Host voice_stt / voice_tts). */
-  readonly extraTools?: readonly AgentToolLike[];
+  readonly extraTools?: readonly HostAgentTool[];
   /** Optional inbound STT (Speech Host). */
   readonly transcribeUrl?: (audioUrl: string) => Promise<string | null>;
   /** Owner-scoped STT boundary for canonical turn media. */
@@ -793,56 +772,16 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     // Register before any await so a cancelled generation cannot leak Agent
     // Resources. DisposeStack continues through later cleanup when one
     // Resource fails.
-    // Configured MCP joins the candidate's MCP projection. Its connection is
-    // opened by generation activation and closed by rollback/retirement.
-    for (const entry of mcpEntries) {
-      const projected = projectHostMcp(entry);
-      addFeature(projected.feature, projected.name, projected.definition);
-    }
-
-    // extraTools (e.g. voice_stt / voice_tts) join the candidate ToolFeature.
-    // Host-provided tools join the same candidate ToolFeature projection.
-    for (const tool of options.extraTools ?? []) {
-      if (!tool.description?.trim()) {
-        throw new TypeError(`Host tool "${tool.name}" description cannot be empty`);
-      }
-      const projected = projectHostTool({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-        approval: 'approval' in tool ? tool.approval : undefined,
-        platforms: tool.platforms,
-        scopes: tool.scopes,
-        permissions: tool.permissions,
-        hidden: tool.hidden,
-        execute: (input) => tool.execute(input) as unknown | Promise<unknown>,
-      });
-      addFeature(projected.feature, projected.name, projected.definition);
-    }
-
-    for (const tool of [...scheduleTools, ...homeTools]) {
-      addFeature(toolFeatureId, tool.name, tool.definition);
-    }
-    for (const tool of createNativeAgentToolSuite({
-      resolveProvider: (alias) => service.getProvider(alias),
-      resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+    publishAgentToolFeatures({
+      addFeature,
+      projectRoot: options.projectRoot,
+      service,
+      mcpServers: mcpEntries,
+      hostTools: options.extraTools,
+      runtimeTools: [...scheduleTools, ...homeTools],
       knowledgeIndex,
-    })) {
-      addFeature(toolFeatureId, tool.name, tool.definition);
-    }
-    for (const tool of createNativeTodoToolFeatures(
-      new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
-    )) {
-      addFeature(tool.feature, tool.name, tool.definition);
-    }
-    for (const tool of createNativeInteractionToolFeatures()) {
-      addFeature(tool.feature, tool.name, tool.definition);
-    }
-    if (semanticMemory) {
-      for (const tool of createNativeSemanticMemoryToolFeatures(semanticMemory)) {
-        addFeature(tool.feature, tool.name, tool.definition);
-      }
-    }
+      semanticMemory: semanticMemory ?? undefined,
+    });
 
     const resourceHub = zhinAgent.resourceHub;
     if (!resourceHub) {
