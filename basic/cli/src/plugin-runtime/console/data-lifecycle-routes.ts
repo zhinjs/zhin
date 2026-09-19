@@ -1,32 +1,29 @@
-import { readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { readJsonBody } from '@zhin.js/host-http';
 import type { WorkroomDataLifecycleConsoleCommand } from '@zhin.js/agent/runtime';
-import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
+import {
+  rejectWorkroomQueryFields,
+  requireWorkroomPrincipal,
+  type WorkroomRouteOptions,
+} from './workroom-request-policy.js';
 
-export interface RegisterDataLifecycleRoutesOptions {
-  readonly http: HttpHost;
-  readonly base: string;
-  readonly snapshots?: SnapshotReader;
-}
+const FORBIDDEN_QUERY_FIELDS = Object.freeze(['principalId', 'role', 'authority']);
 
 export function registerDataLifecycleRoutes(
-  options: RegisterDataLifecycleRoutesOptions,
+  options: WorkroomRouteOptions,
 ): void {
   const { http, base, snapshots } = options;
   http.route('GET', `${base}/agent/workroom/data-lifecycle`, async (
     _request, response, url, authScope, authenticatedPrincipal,
   ) => {
-    if (authScope !== 'full' || !authenticatedPrincipal) {
-      writeJson(response, 403, { success: false,
-        error: '需要绑定 principal 的 full scope 才能读取 Data Lifecycle' });
-      return;
-    }
-    if (url.searchParams.has('principalId') || url.searchParams.has('role')
-      || url.searchParams.has('authority')) {
-      writeJson(response, 400, { success: false, error: 'Data Lifecycle 身份与权威只能来自认证 token' });
-      return;
-    }
+    const principal = requireWorkroomPrincipal(
+      response, authScope, authenticatedPrincipal,
+      '需要绑定 principal 的 full scope 才能读取 Data Lifecycle',
+    );
+    if (!principal || rejectWorkroomQueryFields(
+      response, url, FORBIDDEN_QUERY_FIELDS, 'Data Lifecycle 身份与权威只能来自认证 token',
+    )) return;
     const projectId = url.searchParams.get('projectId')?.trim() ?? '';
     const objectId = url.searchParams.get('objectId')?.trim() ?? '';
     if (!projectId || !objectId) {
@@ -38,9 +35,7 @@ export function registerDataLifecycleRoutes(
         writeJson(response, 503, { success: false, error: 'Data Lifecycle 治理控制面尚未就绪' });
         return;
       }
-      const result = await dataLifecycle.read(
-        { projectId, objectId }, { principalId: authenticatedPrincipal.principalId },
-      );
+      const result = await dataLifecycle.read({ projectId, objectId }, principal);
       if (result.status === 'forbidden') {
         writeJson(response, 403, { success: false, error: '无权读取该 Data Lifecycle 对象' });
         return;
@@ -56,16 +51,13 @@ export function registerDataLifecycleRoutes(
   http.route('GET', `${base}/agent/workroom/data-lifecycle/overdue`, async (
     _request, response, url, authScope, authenticatedPrincipal,
   ) => {
-    if (authScope !== 'full' || !authenticatedPrincipal) {
-      writeJson(response, 403, { success: false,
-        error: '需要绑定 principal 的 full scope 才能读取 Data Lifecycle' });
-      return;
-    }
-    if (url.searchParams.has('principalId') || url.searchParams.has('role')
-      || url.searchParams.has('authority')) {
-      writeJson(response, 400, { success: false, error: 'Data Lifecycle 身份与权威只能来自认证 token' });
-      return;
-    }
+    const principal = requireWorkroomPrincipal(
+      response, authScope, authenticatedPrincipal,
+      '需要绑定 principal 的 full scope 才能读取 Data Lifecycle',
+    );
+    if (!principal || rejectWorkroomQueryFields(
+      response, url, FORBIDDEN_QUERY_FIELDS, 'Data Lifecycle 身份与权威只能来自认证 token',
+    )) return;
     const operationId = url.searchParams.get('operationId')?.trim() ?? '';
     const projectId = url.searchParams.get('projectId')?.trim() ?? '';
     if (!operationId || !projectId) {
@@ -77,9 +69,7 @@ export function registerDataLifecycleRoutes(
         writeJson(response, 503, { success: false, error: 'Data Lifecycle 治理控制面尚未就绪' });
         return;
       }
-      const result = await dataLifecycle.listOverdue(
-        { operationId, projectId }, { principalId: authenticatedPrincipal.principalId },
-      );
+      const result = await dataLifecycle.listOverdue({ operationId, projectId }, principal);
       if (result.status === 'forbidden') {
         writeJson(response, 403, { success: false, error: '无权读取该 Project 的 overdue lifecycle controls' });
         return;
@@ -95,11 +85,10 @@ export function registerDataLifecycleRoutes(
   http.route('POST', `${base}/agent/workroom/data-lifecycle/commands`, async (
     request, response, _url, authScope, authenticatedPrincipal,
   ) => {
-    if (authScope !== 'full' || !authenticatedPrincipal) {
-      writeJson(response, 403, { success: false,
-        error: '需要绑定 principal 的 full scope credential' });
-      return;
-    }
+    const principal = requireWorkroomPrincipal(
+      response, authScope, authenticatedPrincipal, '需要绑定 principal 的 full scope credential',
+    );
+    if (!principal) return;
     const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
     if (containsForbiddenDataLifecycleControlField(body)) {
       writeJson(response, 400, { success: false,
@@ -114,7 +103,7 @@ export function registerDataLifecycleRoutes(
       try {
         const result = await dataLifecycle.execute(
           body as unknown as WorkroomDataLifecycleConsoleCommand,
-          { principalId: authenticatedPrincipal.principalId },
+          principal,
           new AbortController().signal,
         );
         if (result.status === 'forbidden') {

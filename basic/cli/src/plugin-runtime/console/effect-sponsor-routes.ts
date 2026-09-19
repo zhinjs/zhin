@@ -1,32 +1,35 @@
-import { readJsonBody, type HttpHost } from '@zhin.js/host-http';
+import { readJsonBody } from '@zhin.js/host-http';
 import type { WorkroomEffectSponsorDecisionCommand } from '@zhin.js/agent/runtime';
-import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
+import {
+  rejectWorkroomBodyFields,
+  requireWorkroomPrincipal,
+  type WorkroomRouteOptions,
+} from './workroom-request-policy.js';
 
-export interface RegisterEffectSponsorRoutesOptions {
-  readonly http: HttpHost;
-  readonly base: string;
-  readonly snapshots?: SnapshotReader;
-}
+const FORBIDDEN_DECISION_FIELDS = Object.freeze([
+  'principalId', 'authenticatedPrincipalId', 'authority', 'discussion',
+]);
 
 export function registerEffectSponsorRoutes(
-  options: RegisterEffectSponsorRoutesOptions,
+  options: WorkroomRouteOptions,
 ): void {
   const { http, base, snapshots } = options;
   http.route('POST', `${base}/agent/workroom/effects/sponsor-decisions`, async (
     request, response, _url, authScope, authenticatedPrincipal,
   ) => {
-    if (authScope !== 'full' || !authenticatedPrincipal) {
-      writeJson(response, 403, { success: false, error: '需要绑定 principal 的 full scope credential' });
-      return;
-    }
+    const principal = requireWorkroomPrincipal(
+      response, authScope, authenticatedPrincipal, '需要绑定 principal 的 full scope credential',
+    );
+    if (!principal) return;
     const body = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
-    if (Object.hasOwn(body, 'principalId') || Object.hasOwn(body, 'authenticatedPrincipalId')
-      || Object.hasOwn(body, 'authority') || Object.hasOwn(body, 'discussion')) {
-      writeJson(response, 400, { success: false, error: 'Effect Sponsor decision 不能携带身份、权威或 discussion 字段' });
-      return;
-    }
+    if (rejectWorkroomBodyFields(
+      response,
+      body,
+      FORBIDDEN_DECISION_FIELDS,
+      'Effect Sponsor decision 不能携带身份、权威或 discussion 字段',
+    )) return;
     const command = parseEffectSponsorDecisionBody(body);
     if (!command) {
       writeJson(response, 400, {
@@ -41,9 +44,7 @@ export function registerEffectSponsorRoutes(
         return;
       }
       try {
-        const record = await effectSponsor.decide(command, {
-          principalId: authenticatedPrincipal.principalId,
-        });
+        const record = await effectSponsor.decide(command, principal);
         writeJson(response, 200, { success: true, data: record });
       } catch (error) {
         writeJson(response, 409, {

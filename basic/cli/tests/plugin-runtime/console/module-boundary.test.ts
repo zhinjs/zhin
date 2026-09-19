@@ -63,6 +63,9 @@ describe('Console Host module boundary', () => {
       'system-projection.ts',
       'system-routes.ts',
       'workroom-routes.ts',
+      'workroom-request-policy.ts',
+      'workroom-run-control-route.ts',
+      'workroom-run-query-routes.ts',
       'workroom-run-routes.ts',
       'workroom-governance-routes.ts',
     ];
