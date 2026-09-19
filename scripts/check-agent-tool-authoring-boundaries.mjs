@@ -88,6 +88,16 @@ for (const removedToolRegistryApi of [
   'ZhinTool',
   'defineTool',
   'extractParamInfo',
+  'createBuiltinTools',
+  'ReadFileBuiltinTool',
+  'WriteFileBuiltinTool',
+  'EditFileBuiltinTool',
+  'ListDirBuiltinTool',
+  'GlobBuiltinTool',
+  'GrepBuiltinTool',
+  'WebFetchBuiltinTool',
+  'TodoReadBuiltinTool',
+  'TodoWriteBuiltinTool',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -101,6 +111,16 @@ for (const removedToolRegistryApi of [
 for (const removedRegistryPath of [
   'packages/im/agent/src/resource-hub/tool-registry.ts',
   'packages/im/agent/src/tool/tool-registry-as-service.ts',
+  'packages/im/agent/src/builtin-tools.ts',
+  'packages/im/agent/src/builtin/read-file-tool.ts',
+  'packages/im/agent/src/builtin/write-file-tool.ts',
+  'packages/im/agent/src/builtin/edit-file-tool.ts',
+  'packages/im/agent/src/builtin/list-dir-tool.ts',
+  'packages/im/agent/src/builtin/glob-tool.ts',
+  'packages/im/agent/src/builtin/grep-tool.ts',
+  'packages/im/agent/src/builtin/web-fetch-tool.ts',
+  'packages/im/agent/src/builtin/todo-read-tool.ts',
+  'packages/im/agent/src/builtin/todo-write-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');

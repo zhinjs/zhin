@@ -233,14 +233,14 @@ useContext('ai', async (ai) => {
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`） |
-| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt / builtin-tools 等 |
+| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt 等 |
 | 安全策略 | `OwnerApprovalRuntime`；`checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
 | 压缩与 Bootstrap | `compactSession`；`@zhin.js/agent/memory` 导出实例级 `AgentCompactionRuntime`；`estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
 | Hook | `AgentResourceHub`、`HookRegistry`、`aiHookRuntimeBus` |
-| IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
+| 内置工具 | generation-owned definitions 见 `src/plugin-runtime/native-*-tools.ts`；回合统一经 `ToolIndex` / `TurnToolRuntime` 执行 |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentSystem` |
 | 支持资源 | `AgentResourceHub`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
@@ -492,7 +492,6 @@ src/
 │   ├── index.ts                     # AgentResourceHub class
 │   ├── types.ts                     # ResourceScope, Skill, SubAgentDef, AIHook…
 │   ├── resource-registry.ts
-│   ├── tool-registry.ts
 │   ├── skill-registry.ts
 │   ├── subagent-registry.ts
 │   ├── mcp-registry.ts
@@ -510,8 +509,7 @@ src/
 ├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
 ├── discovery/                       # 文件化资源发现（tools / skills / agents）
 ├── security/                        # exec-policy、file-policy
-├── builtin/                         # IM 内置工具
-├── builtin-tools.ts                 # createBuiltinTools() 聚合
+├── builtin/                         # 尚未迁移的服务级 / turn meta 工具实现
 │
 ├── defaults/                        # ★ 各注册表的默认资源
 │   ├── skills.ts                    # 默认 common skills

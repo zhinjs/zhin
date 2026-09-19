@@ -14,8 +14,6 @@ import {
   toolPolicyResultToMessage,
 } from '../../src/security/policy-facade.js';
 import type { ZhinAgentConfig } from '../../src/config/index.js';
-import { EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
-import { WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 
 function makeExecConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {
@@ -268,19 +266,6 @@ describe('policy-facade', () => {
       expect(facadeMsg).toBe('Error: 权限不足：当前策略不允许执行「edit_file」。');
     });
 
-    it('master 全链通过后工具正常写入（edit_file / write_file）', async () => {
-      const fp = path.join(tmpDir, 'eq3.txt');
-      fs.writeFileSync(fp, 'one two', 'utf-8');
-      const editOut = String(
-        await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'two', new_string: 'three' }),
-      );
-      expect(editOut).toContain('✅ Edited');
-      expect(fs.readFileSync(fp, 'utf-8')).toBe('one three');
-
-      const wp = path.join(tmpDir, 'eq4.txt');
-      const writeOut = String(await new WriteFileBuiltinTool().run({ file_path: wp, content: 'hello' }));
-      expect(writeOut).toBe(`✅ Wrote 5 bytes to ${wp}`);
-    });
   });
 
   describe('read_file 迁移等价', () => {

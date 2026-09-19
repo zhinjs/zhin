@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -39,6 +39,19 @@ describe('native file ToolFeatures', () => {
       path: workspace,
       pattern: 'answer = 42',
     }, invocation)).resolves.toContain('src/answer.ts:1');
+    await expect(index.execute(rootPluginId(), 'edit_file', {
+      file_path: join(workspace, 'src', 'answer.ts'),
+      old_string: 'answer = 42',
+      new_string: 'answer = 43',
+    }, invocation)).resolves.toContain('Edited');
+    await expect(readFile(join(workspace, 'src', 'answer.ts'), 'utf8'))
+      .resolves.toContain('answer = 43');
+    await expect(index.execute(rootPluginId(), 'write_file', {
+      file_path: join(workspace, 'src', 'created.ts'),
+      content: 'export const created = true;\n',
+    }, invocation)).resolves.toContain('Wrote 29 bytes');
+    await expect(readFile(join(workspace, 'src', 'created.ts'), 'utf8'))
+      .resolves.toBe('export const created = true;\n');
   });
 
   it('honors cancellation before filesystem I/O', async () => {

@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-classic-builtin-tool-duplicates.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove class-based Agent Tool duplicates after the production Host and tests moved to generation-owned Tool definitions under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-resource-hub-tool-registry.md",
       "packages": [
         "@zhin.js/agent",
