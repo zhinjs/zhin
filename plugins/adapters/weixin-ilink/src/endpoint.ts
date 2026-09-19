@@ -14,7 +14,7 @@ import {
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop } from './ilink-api.js';
-import { configureIlinkMeta } from './ilink-meta.js';
+import { IlinkClientMetadata } from './ilink-meta.js';
 import {
   loadSyncBuf,
   resolveStateDir,
@@ -69,6 +69,7 @@ export interface WeixinIlinkEndpointOptions {
   readonly config: ResolvedWeixinIlinkConfig;
   readonly resolveCredentials?: (
     config: ResolvedWeixinIlinkConfig,
+    metadata: IlinkClientMetadata,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   /** Test / internal: override network side effects. */
@@ -87,6 +88,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   readonly #options: WeixinIlinkEndpointOptions;
   readonly #resolveCredentials: (
     config: ResolvedWeixinIlinkConfig,
+    metadata: IlinkClientMetadata,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   readonly #notifyStart: WeixinIlinkNotifyStart;
@@ -95,6 +97,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   readonly #sendText: WeixinIlinkSendText;
   readonly #contextTokens: WeixinContextTokenStore;
   readonly #sessionGuard: IlinkSessionGuard;
+  readonly #metadata: IlinkClientMetadata;
   #creds: WeixinIlinkCredentials | null = null;
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
@@ -124,8 +127,10 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     this.#sendText = options.sendText ?? sendMessageWeixin;
     this.#contextTokens = options.contextTokens ?? new WeixinContextTokenStore(options.config.id);
     this.#sessionGuard = options.sessionGuard ?? new IlinkSessionGuard(options.config.id);
+    this.#metadata = new IlinkClientMetadata({ botAgent: options.config.botAgent });
     this.client = new WeixinIlinkClient(
       options.config,
+      this.#metadata,
       () => this.#creds,
       () => this.#configManager,
       this.#sendText,
@@ -141,19 +146,27 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (this.#started) return;
     this.#started = true;
     try {
-      configureIlinkMeta({ botAgent: this.#options.config.botAgent });
       // QR 登录最长 8 分钟：stop() 必须能打断
       this.#loginAbort = new AbortController();
-      this.#creds = await this.#resolveCredentials(this.#options.config, this.#loginAbort.signal);
+      this.#creds = await this.#resolveCredentials(
+        this.#options.config,
+        this.#metadata,
+        this.#loginAbort.signal,
+      );
       this.#contextTokens.restore();
 
       await this.#notifyStart({
         baseUrl: this.client.apiBaseUrl,
+        metadata: this.#metadata,
         token: this.#creds.botToken,
       });
 
       this.#configManager = new WeixinConfigManager(
-        { baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken },
+        {
+          baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
+          token: this.#creds.botToken,
+        },
         (msg) => this.#logger.debug(msg),
       );
 
@@ -196,7 +209,11 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     this.#contextTokens.flush();
     if (this.#creds?.botToken) {
       try {
-        await this.#notifyStop({ baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken });
+        await this.#notifyStop({
+          baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
+          token: this.#creds.botToken,
+        });
       } catch (err) {
         this.#logger.warn(formatCompact({
           op: 'notify_stop',
@@ -327,6 +344,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
       try {
         const resp = await this.#getUpdates({
           baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
           token: this.#creds.botToken,
           get_updates_buf: getUpdatesBuf,
           timeoutMs: nextTimeoutMs,

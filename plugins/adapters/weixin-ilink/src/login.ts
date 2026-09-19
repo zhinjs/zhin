@@ -3,7 +3,7 @@
  * No legacy Plugin / loginAssist dependency — QR URL is logged for manual scan.
  */
 import { apiGetFetch, apiPostFetch } from './ilink-api.js';
-import { buildBaseInfo, DEFAULT_API_BASE_URL } from './ilink-meta.js';
+import { DEFAULT_API_BASE_URL, type IlinkClientMetadata } from './ilink-meta.js';
 import { logger } from './ilink-logger.js';
 import {
   loadCredentials,
@@ -42,11 +42,19 @@ function getLocalBotTokenList(): string[] {
   return [];
 }
 
-async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<QRCodeResponse> {
+async function fetchQRCode(
+  apiBaseUrl: string,
+  botType: string,
+  metadata: IlinkClientMetadata,
+): Promise<QRCodeResponse> {
   const rawText = await apiPostFetch({
     baseUrl: apiBaseUrl,
+    metadata,
     endpoint: `ilink/bot/get_bot_qrcode?bot_type=${encodeURIComponent(botType)}`,
-    body: JSON.stringify({ local_token_list: getLocalBotTokenList(), base_info: buildBaseInfo() }),
+    body: JSON.stringify({
+      local_token_list: getLocalBotTokenList(),
+      base_info: metadata.buildBaseInfo(),
+    }),
     label: 'fetchQRCode',
   });
   return JSON.parse(rawText) as QRCodeResponse;
@@ -55,12 +63,14 @@ async function fetchQRCode(apiBaseUrl: string, botType: string): Promise<QRCodeR
 async function pollQRStatus(
   apiBaseUrl: string,
   qrcode: string,
+  metadata: IlinkClientMetadata,
   signal?: AbortSignal,
 ): Promise<StatusResponse> {
   try {
     const endpoint = `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`;
     const rawText = await apiGetFetch({
       baseUrl: apiBaseUrl,
+      metadata,
       endpoint,
       timeoutMs: QR_LONG_POLL_TIMEOUT_MS,
       label: 'pollQRStatus',
@@ -102,6 +112,7 @@ function sleepWithAbort(ms: number, signal?: AbortSignal): Promise<void> {
 
 export async function resolveCredentials(
   config: ResolvedWeixinIlinkConfig,
+  metadata: IlinkClientMetadata,
   signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
   const envToken = process.env.WEIXIN_ILINK_TOKEN?.trim() || config.botToken?.trim();
@@ -123,15 +134,16 @@ export async function resolveCredentials(
     };
   }
 
-  return loginWithQr(config, signal);
+  return loginWithQr(config, metadata, signal);
 }
 
 export async function loginWithQr(
   config: ResolvedWeixinIlinkConfig,
+  metadata: IlinkClientMetadata,
   signal?: AbortSignal,
 ): Promise<WeixinIlinkCredentials> {
   const apiBaseUrl = config.baseUrl ?? DEFAULT_API_BASE_URL;
-  const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE);
+  const qr = await fetchQRCode(apiBaseUrl, DEFAULT_ILINK_BOT_TYPE, metadata);
   const qrcodeUrl = qr.qrcode_img_content || qr.qrcode;
 
   logger.info(
@@ -144,7 +156,7 @@ export async function loginWithQr(
   while (Date.now() < deadline) {
     // stop() 的 AbortSignal：不打满 8 分钟，立即退出登录循环
     if (signal?.aborted) throw abortError();
-    const status = await pollQRStatus(currentBaseUrl, qr.qrcode, signal);
+    const status = await pollQRStatus(currentBaseUrl, qr.qrcode, metadata, signal);
 
     if (status.status === 'scaned_but_redirect' && status.redirect_host) {
       currentBaseUrl = status.redirect_host.startsWith('http')

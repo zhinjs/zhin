@@ -2,6 +2,7 @@ import type { WeixinContextTokenStore } from './context-store.js';
 import type { WeixinIlinkCredentials } from './credentials.js';
 import { sendTyping } from './ilink-api.js';
 import type { WeixinConfigManager } from './ilink-config-cache.js';
+import type { IlinkClientMetadata } from './ilink-meta.js';
 import type { ResolvedWeixinIlinkConfig } from './protocol.js';
 import { sendMessageWeixin } from './weixin-send.js';
 import { sendWeixinMediaFile } from './weixin-send-media.js';
@@ -9,26 +10,41 @@ import { defineEndpointClient } from 'zhin.js/adapter';
 
 /** Direct iLink API client backed by the Endpoint's live authenticated session. */
 export class WeixinIlinkClient {
+  readonly config: ResolvedWeixinIlinkConfig;
+  readonly #metadata: IlinkClientMetadata;
+  readonly #resolveCredentials: () => WeixinIlinkCredentials | null;
+  readonly #resolveConfigManager: () => WeixinConfigManager | undefined;
+  readonly #sendTextImpl: typeof sendMessageWeixin;
+  readonly #contextTokens: WeixinContextTokenStore;
+
   constructor(
-    readonly config: ResolvedWeixinIlinkConfig,
-    private readonly resolveCredentials: () => WeixinIlinkCredentials | null,
-    private readonly resolveConfigManager: () => WeixinConfigManager | undefined,
-    private readonly sendTextImpl: typeof sendMessageWeixin,
-    private readonly contextTokens: WeixinContextTokenStore,
-  ) {}
+    config: ResolvedWeixinIlinkConfig,
+    metadata: IlinkClientMetadata,
+    resolveCredentials: () => WeixinIlinkCredentials | null,
+    resolveConfigManager: () => WeixinConfigManager | undefined,
+    sendTextImpl: typeof sendMessageWeixin,
+    contextTokens: WeixinContextTokenStore,
+  ) {
+    this.config = config;
+    this.#metadata = metadata;
+    this.#resolveCredentials = resolveCredentials;
+    this.#resolveConfigManager = resolveConfigManager;
+    this.#sendTextImpl = sendTextImpl;
+    this.#contextTokens = contextTokens;
+  }
 
   get credentials(): WeixinIlinkCredentials {
-    const credentials = this.resolveCredentials();
+    const credentials = this.#resolveCredentials();
     if (!credentials?.botToken) throw new Error('weixin-ilink client not authenticated');
     return credentials;
   }
 
   get authenticated(): boolean {
-    return Boolean(this.resolveCredentials()?.botToken);
+    return Boolean(this.#resolveCredentials()?.botToken);
   }
 
   get apiBaseUrl(): string {
-    return this.resolveCredentials()?.baseUrl ?? this.config.baseUrl;
+    return this.#resolveCredentials()?.baseUrl ?? this.config.baseUrl;
   }
 
   get cdnBaseUrl(): string {
@@ -36,20 +52,25 @@ export class WeixinIlinkClient {
   }
 
   contextToken(userId: string): string | undefined {
-    return this.contextTokens.get(userId);
+    return this.#contextTokens.get(userId);
   }
 
   reachableUserIds(): string[] {
-    return this.contextTokens.userIds();
+    return this.#contextTokens.userIds();
   }
 
   async sendText(to: string, text: string): Promise<{ messageId: string }> {
     const contextToken = this.contextToken(to);
     if (!contextToken) throw new Error(`missing context_token for peer ${to}`);
-    return this.sendTextImpl({
+    return this.#sendTextImpl({
       to,
       text,
-      opts: { baseUrl: this.apiBaseUrl, token: this.credentials.botToken, contextToken },
+      opts: {
+        baseUrl: this.apiBaseUrl,
+        metadata: this.#metadata,
+        token: this.credentials.botToken,
+        contextToken,
+      },
     });
   }
 
@@ -60,18 +81,24 @@ export class WeixinIlinkClient {
       filePath,
       to,
       text,
-      opts: { baseUrl: this.apiBaseUrl, token: this.credentials.botToken, contextToken },
+      opts: {
+        baseUrl: this.apiBaseUrl,
+        metadata: this.#metadata,
+        token: this.credentials.botToken,
+        contextToken,
+      },
       cdnBaseUrl: this.cdnBaseUrl,
     });
   }
 
   async sendTyping(userId: string, status: number): Promise<boolean> {
-    const manager = this.resolveConfigManager();
+    const manager = this.#resolveConfigManager();
     if (!this.authenticated || !manager) return false;
     const cfg = await manager.getForUser(userId, this.contextToken(userId));
     if (!cfg.typingTicket) return false;
     await sendTyping({
       baseUrl: this.apiBaseUrl,
+      metadata: this.#metadata,
       token: this.credentials.botToken,
       body: { ilink_user_id: userId, typing_ticket: cfg.typingTicket, status },
     });

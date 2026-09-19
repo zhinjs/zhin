@@ -597,6 +597,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace the module-global renderer and reset API with a generation-owned Plugin Runtime resource under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "own-weixin-request-identity.md",
+      "packages": [
+        "@zhin.js/adapter-weixin-ilink"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace process-global iLink request metadata and logger mutation with immutable endpoint-owned request identity under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

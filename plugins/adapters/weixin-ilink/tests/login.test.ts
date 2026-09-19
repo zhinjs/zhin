@@ -21,6 +21,7 @@ vi.mock('../src/ilink-api.js', () => ({
 
 import { loadCredentials, saveCredentials } from '../src/credentials.js';
 import { apiGetFetch, apiPostFetch } from '../src/ilink-api.js';
+import { IlinkClientMetadata } from '../src/ilink-meta.js';
 import { resolveCredentials } from '../src/login.js';
 import { resolveWeixinIlinkConfig } from '../src/protocol.js';
 
@@ -28,6 +29,7 @@ const mockedLoadCredentials = vi.mocked(loadCredentials);
 const mockedSaveCredentials = vi.mocked(saveCredentials);
 const mockedApiGetFetch = vi.mocked(apiGetFetch);
 const mockedApiPostFetch = vi.mocked(apiPostFetch);
+const metadata = new IlinkClientMetadata({ version: '1.2.3' });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -59,7 +61,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
       ilinkUserId: 'u-sidecar',
     });
     const config = resolveWeixinIlinkConfig({ id: 'sidecar-bot' });
-    const creds = await resolveCredentials(config);
+    const creds = await resolveCredentials(config, metadata);
     expect(creds.botToken).toBe('sidecar-token');
     expect(mockedApiPostFetch).not.toHaveBeenCalled();
   });
@@ -67,7 +69,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
   it('falls back to QR login when no token anywhere (network mocked)', async () => {
     delete process.env.WEIXIN_ILINK_TOKEN;
     const config = resolveWeixinIlinkConfig({ id: 'qr-bot' });
-    const creds = await resolveCredentials(config);
+    const creds = await resolveCredentials(config, metadata);
     expect(creds.botToken).toBe('qr-token');
     expect(creds.ilinkUserId).toBe('user-1');
     expect(mockedApiPostFetch).toHaveBeenCalledTimes(1);
@@ -84,7 +86,7 @@ describe('weixin-ilink login fallback (no botToken)', () => {
     const config = resolveWeixinIlinkConfig({ id: 'qr-abort-bot' });
     const abort = new AbortController();
     const started = Date.now();
-    const promise = resolveCredentials(config, abort.signal);
+    const promise = resolveCredentials(config, metadata, abort.signal);
     setTimeout(() => abort.abort(), 50);
     await expect(promise).rejects.toThrow('扫码登录已取消');
     expect(Date.now() - started).toBeLessThan(5_000);

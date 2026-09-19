@@ -21,6 +21,10 @@ for (const file of typescriptFiles(adaptersRoot)) {
     errors.push(`${relative}: module-level Agent Endpoint registries are forbidden; resolve the current generation Client instead`);
   }
 
+  if (/^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(source)) {
+    errors.push(`${relative}: adapter runtime state must be owned by an Endpoint or Client, not a mutable module binding`);
+  }
+
   if (/-agent-deps\.ts$/u.test(relative) || /from\s+['"][^'"]*-agent-deps\.js['"]/u.test(source)) {
     errors.push(`${relative}: adapter-specific Agent dependency lookup is forbidden; use adapter + operation $client`);
   }
