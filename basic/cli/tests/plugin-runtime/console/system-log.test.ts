@@ -3,6 +3,7 @@ import { SYSTEM_LOG_TABLE, type DatabaseHost, type DatabaseHostModel } from '@zh
 import {
   DEFAULT_SYSTEM_LOG_CONFIG,
   SystemLogDatabaseTransport,
+  SystemLogStore,
   mapFormattedLevel,
 } from '../../../src/plugin-runtime/console/system-log.js';
 
@@ -110,7 +111,24 @@ describe('SystemLogDatabaseTransport', () => {
       { id: 3, level: 'info', name: 'a', message: 'r2', source: 'a', timestamp: new Date(Date.now() - 2000) },
       { id: 4, level: 'info', name: 'a', message: 'r3', source: 'a', timestamp: new Date(Date.now() - 1000) },
     );
-    await (transport as unknown as { cleanupOldLogs(): Promise<void> }).cleanupOldLogs();
+    await transport.prune();
     expect(rows.map((row) => row.message)).toEqual(['r2', 'r3']);
+  });
+});
+
+describe('SystemLogStore', () => {
+  it('owns transport registration and releases it exactly once', () => {
+    const { host } = fakeDatabaseHost();
+    const added: unknown[] = [];
+    const removed: unknown[] = [];
+    const store = new SystemLogStore(host, DEFAULT_SYSTEM_LOG_CONFIG, {
+      add: (transport) => added.push(transport),
+      remove: (transport) => removed.push(transport),
+    });
+
+    expect(added).toHaveLength(1);
+    store.dispose();
+    store.dispose();
+    expect(removed).toEqual(added);
   });
 });

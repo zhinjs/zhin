@@ -26,7 +26,7 @@ import {
   createConsoleHostModules,
   installConsoleApi,
   installConsoleHttp,
-  installSystemLogStore,
+  SystemLogStore,
   resolveSystemLogConfig,
 } from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
@@ -118,7 +118,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   defineInboxTables(databaseHost);
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
-  installSystemLogStore(databaseHost, await resolveSystemLogConfig(config));
+  const systemLogStore = new SystemLogStore(
+    databaseHost,
+    await resolveSystemLogConfig(config),
+  );
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
@@ -267,10 +270,14 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           scheduleHost.stop();
         } finally {
           try {
-            await databaseHost.stop();
+            systemLogStore.dispose();
           } finally {
-            pluginLifecycleStore.dispose();
-            complete();
+            try {
+              await databaseHost.stop();
+            } finally {
+              pluginLifecycleStore.dispose();
+              complete();
+            }
           }
         }
       }
@@ -283,6 +290,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     snapshot = await host.start();
   } catch (error) {
     await httpHost.close().catch(() => undefined);
+    systemLogStore.dispose();
     // Annotate schema validation failures with the source config file name.
     if (configFile && error instanceof ConfigValidationError) {
       throw new ConfigValidationError(error.issues, configFile);

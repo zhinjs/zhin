@@ -1,4 +1,4 @@
-import { addTransport, type LogTransport } from '@zhin.js/logger';
+import { addTransport, removeTransport, type LogTransport } from '@zhin.js/logger';
 import {
   defineSystemLogTable,
   insertSystemLogRow,
@@ -83,9 +83,9 @@ export class SystemLogDatabaseTransport implements LogTransport {
   /** 启动定时清理（立即执行一次；host 未启动时当次跳过）。 */
   startCleanup(): void {
     if (this.cleanupTimer) return;
-    void this.cleanupOldLogs();
+    void this.prune();
     this.cleanupTimer = setInterval(() => {
-      void this.cleanupOldLogs();
+      void this.prune();
     }, this.config.cleanupInterval * 60 * 60 * 1000);
     this.cleanupTimer.unref();
   }
@@ -97,7 +97,7 @@ export class SystemLogDatabaseTransport implements LogTransport {
     }
   }
 
-  private async cleanupOldLogs(): Promise<void> {
+  async prune(): Promise<void> {
     if (!this.host.started) return;
     const model = this.host.models.get(SYSTEM_LOG_TABLE);
     if (!model) return;
@@ -131,23 +131,40 @@ function toTime(value: unknown): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
-/** 已挂 transport 的 DatabaseHost（installResources 按 generation 重跑，transport 只挂一次）。 */
-const transportInstallations = new WeakSet<object>();
+export interface SystemLogTransportRegistry {
+  add(transport: LogTransport): void;
+  remove(transport: LogTransport): void;
+}
 
-/**
- * 装配系统日志落库：注册 SystemLog 表 + 给根 logger 挂 transport + 启动清理任务。
- * 幂等（按 DatabaseHost 实例去重）；表 define 必须在 host.start() 之前。
- */
-export function installSystemLogStore(
-  host: DatabaseHost,
-  config: SystemLogStoreConfig = DEFAULT_SYSTEM_LOG_CONFIG,
-): void {
-  defineSystemLogTable(host);
-  if (transportInstallations.has(host)) return;
-  transportInstallations.add(host);
-  const transport = new SystemLogDatabaseTransport(host, config);
-  addTransport(transport);
-  transport.startCleanup();
+const rootLoggerTransports: SystemLogTransportRegistry = Object.freeze({
+  add: addTransport,
+  remove: removeTransport,
+});
+
+/** Owns the database log transport and its cleanup timer for one process composition. */
+export class SystemLogStore {
+  readonly #transport: SystemLogDatabaseTransport;
+  readonly #registry: SystemLogTransportRegistry;
+  #disposed = false;
+
+  constructor(
+    host: DatabaseHost,
+    config: SystemLogStoreConfig = DEFAULT_SYSTEM_LOG_CONFIG,
+    registry: SystemLogTransportRegistry = rootLoggerTransports,
+  ) {
+    defineSystemLogTable(host);
+    this.#transport = new SystemLogDatabaseTransport(host, config);
+    this.#registry = registry;
+    this.#registry.add(this.#transport);
+    this.#transport.startCleanup();
+  }
+
+  dispose(): void {
+    if (this.#disposed) return;
+    this.#disposed = true;
+    this.#transport.stopCleanup();
+    this.#registry.remove(this.#transport);
+  }
 }
 
 /** 从 Runtime 配置文档读取 `log.*` 清理策略（对齐 legacy AppConfig.log），缺省用默认值。 */
