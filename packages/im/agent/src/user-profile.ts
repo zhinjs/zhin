@@ -12,7 +12,7 @@
  *   └──────────────────────────────────────────────────────────┘
  */
 
-import { getLogger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('UserProfile');
 

@@ -1,4 +1,5 @@
-import { getLogger, hasSenderRole, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+import { hasSenderRole, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('DangerousToolPolicy');
 import type { ZhinAgentConfig } from '../config/index.js';

@@ -7,7 +7,7 @@
  */
 
 import { type AgentTool, type ToolFilterOptions, isBuiltinToolSource, isReservedToolName } from '@zhin.js/ai';
-import { getLogger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { ResourceRegistry } from './resource-registry.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type {

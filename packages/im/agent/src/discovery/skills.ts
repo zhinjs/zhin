@@ -9,7 +9,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
-import { type Plugin, getLogger } from '@zhin.js/core';
+import type { Plugin } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { getSkillSearchDirectories } from './utils.js';
 
 const execAsync = promisify(exec);

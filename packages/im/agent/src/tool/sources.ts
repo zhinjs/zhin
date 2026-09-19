@@ -1,5 +1,6 @@
 import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
-import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
+import { canAccessTool, type Tool as CoreTool } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import type { PermissionHost } from '@zhin.js/permission';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';

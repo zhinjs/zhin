@@ -4,7 +4,8 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
+import { senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { getDataDir } from './bootstrap.js';
 
 /** 获取文件制长期记忆目录（data/memory），不存在则创建 */

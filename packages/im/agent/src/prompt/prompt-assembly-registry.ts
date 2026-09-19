@@ -1,6 +1,5 @@
-import { enforcePromptBudget } from './prompt-budget.js';
+import { enforcePromptBudget, type PromptRetention } from './prompt-budget.js';
 import type { PromptLayer } from './prompt-builder.js';
-import type { PromptRetention } from './prompt-budget.js';
 import type { RichSystemPromptContext } from './system-prompt.js';
 
 export type PromptSectionContent =

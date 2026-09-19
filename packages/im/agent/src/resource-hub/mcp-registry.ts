@@ -5,7 +5,7 @@
  * tools/resources/prompts into the agent's resource pool.
  */
 
-import { getLogger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import type { AgentTool } from '@zhin.js/ai';
 import { parseMcpQualifiedToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { McpClientManager } from '../mcp-client/index.js';

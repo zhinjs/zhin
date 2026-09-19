@@ -3,7 +3,8 @@
  */
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import { type Tool, type Message, type ToolParametersSchema, type ToolResult, getLogger } from '@zhin.js/core';
+import type { Tool, Message, ToolParametersSchema, ToolResult } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { errMsg } from '../discovery/utils.js';
 import { BuiltinBaseTool } from './builtin-base-tool.js';
 

@@ -1,7 +1,7 @@
 /**
  * JobWorker — 执行 Schedule Agent 任务（owned queue：重试 / 并发 / 死信）
  */
-import { getLogger } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { ScheduleExecutionQueue } from '../schedule-domain/schedule-execution-queue.js';
 import type { TaskExecutionResult, TaskExecutor } from '../task-executor.js';
 import { type AssistantQueueConfig, resolveAssistantQueueConfig } from './config.js';

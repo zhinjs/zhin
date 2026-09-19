@@ -1,8 +1,7 @@
 /**
  * Assistant Event Ingress — 外部事件入队并触发 Job 执行（M2）
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 import { type AssistantEventsConfig, resolveAssistantEventsConfig } from './config.js';
 import type { AssistantEventRequest, AssistantEventResult } from './event-types.js';
 import type { ScheduleJobEngine } from './job-engine.js';

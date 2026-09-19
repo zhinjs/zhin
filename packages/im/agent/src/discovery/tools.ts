@@ -9,7 +9,8 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { spawn } from 'node:child_process';
-import { type Plugin, type ToolParametersSchema, type ToolScope, type SenderRole, getLogger } from '@zhin.js/core';
+import type { Plugin, ToolParametersSchema, ToolScope, SenderRole } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { getDataDir } from './utils.js';
 
 const VALID_TOOL_SCOPES: readonly ToolScope[] = ['private', 'group', 'channel'];

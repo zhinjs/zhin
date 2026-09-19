@@ -11,8 +11,8 @@
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import * as path from 'node:path';
-import { type Message, getLogger } from '@zhin.js/core';
-import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
+import type { Message } from '@zhin.js/core';
+import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, type Usage, type ModelRegistry } from '@zhin.js/ai';
 import type { AgentRunInput, AgentRunInputPart } from '../media/media-types.js';
 import type { ResolvedAgentBinding } from '../config/types.js';

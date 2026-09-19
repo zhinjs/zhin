@@ -2,9 +2,9 @@
  * Tool selection — normalization, permission checks, context injection and relevance caching.
  */
 
-import { canAccessTool as coreCanAccessTool, resolveContextKey, type Message, getLogger } from '@zhin.js/core';
+import { canAccessTool as coreCanAccessTool, resolveContextKey, type Message } from '@zhin.js/core';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 import { type PermissionHost, toPermissionSubject } from '@zhin.js/permission';
-import { formatCompact } from '@zhin.js/logger';
 import { type AgentTool, type ToolFilterOptions, CachedToolFilter } from '@zhin.js/ai';
 import type { SkillRegistry } from './skill-registry.js';
 import type { Skill, Tool } from './types.js';

@@ -1,8 +1,7 @@
 /**
  * ScheduleJobEngine — schedule-jobs.json 持久化调度
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 import { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobWorker } from './job-worker.js';

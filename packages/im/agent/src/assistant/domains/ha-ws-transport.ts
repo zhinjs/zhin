@@ -2,8 +2,7 @@
  * HaWsTransport — HA WebSocket auth / subscribe / reconnect.
  * Inject createSocket for tests.
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 
 const logger = getLogger('ha-ws-transport');
 const RECONNECT_DELAY_MS = 10_000;

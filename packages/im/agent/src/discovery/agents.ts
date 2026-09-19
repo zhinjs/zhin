@@ -8,7 +8,8 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { type Plugin, getLogger } from '@zhin.js/core';
+import type { Plugin } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { workspaceRoot } from './utils.js';
 import {
   discoverWorkspaceFractalAgent,
