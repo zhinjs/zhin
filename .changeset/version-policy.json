@@ -3,6 +3,15 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-milky-endpoint-config.md",
+      "packages": [
+        "@zhin.js/adapter-milky"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove Milky endpoint configuration compatibility and require the canonical AdapterIndex projection under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "require-napcat-endpoint-config.md",
       "packages": [
         "@zhin.js/adapter-napcat"

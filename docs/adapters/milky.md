@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=450dedeacc768867 -->
+<!-- sync-adapter-docs:sha256=18f08cf94881bf45 -->
 
 # @zhin.js/adapter-milky
 
@@ -35,6 +35,8 @@ pnpm add @zhin.js/adapter-milky
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
 
+`AdapterIndex` 会把实例默认值与 `endpoints[]` 的逐项覆盖合并；协议层只接收一个已经展开的 endpoint 配置，不再读取嵌套 endpoint 或从进程环境推断 endpoint 身份。
+
 入站：`gateway.receive({ conversation: ConversationRef(kind: "private"|"group", id), message, content, sender, metadata })`  
 出站：`send({ conversation, payload })` → HTTP `send_private_message` / `send_group_message`（payload 已由 gateway/core 渲染；无 segment-mapper）
 
@@ -59,7 +61,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: milky-bot
+      - id: milky-bot
         baseUrl: "http://127.0.0.1:8080"
         access_token: "${MILKY_ACCESS_TOKEN}"
 ```

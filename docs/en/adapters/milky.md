@@ -35,6 +35,8 @@ pnpm add @zhin.js/adapter-milky
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
 
+`AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol layer receives one expanded endpoint configuration and does not inspect nested endpoint rows or infer endpoint identity from process environment variables.
+
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`; temp sessions carry the group in `parent`)
 Outbound: `send({ conversation, payload })` -> HTTP `send_private_message` / `send_group_message` (payload is rendered by gateway/core; no segment-mapper)
 
@@ -54,7 +56,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: milky-bot
+      - id: milky-bot
         baseUrl: "http://127.0.0.1:8080"
         access_token: "${MILKY_ACCESS_TOKEN}"
 ```

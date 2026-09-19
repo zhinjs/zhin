@@ -11,7 +11,7 @@ import {
 } from '../src/endpoint.js';
 import {
   resolveMilkyConfig,
-  type MilkyAdapterConfig,
+  type MilkyEndpointConfig,
 } from '../src/protocol.js';
 import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 
@@ -31,7 +31,7 @@ export type {
   MilkyWsSocket,
 } from '../src/endpoint.js';
 
-export default defineAdapter<MilkyAdapterConfig>({
+export default defineAdapter<MilkyEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // Milky 协议资源 uri 消费 http(s):// 与 base64:// 形式；无卡片交互面，交互段降级纯文本。

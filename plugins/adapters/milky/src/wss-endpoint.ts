@@ -56,17 +56,18 @@ export class MilkyWssEndpoint extends ClientEndpoint<MilkyClient> {
   #ws?: MilkyWsSocket;
   #wsRelease?: () => void;
   #clientSocketRelease?: () => void;
-  readonly #lifecycle: EndpointLifecycle;
+  readonly #connectionLifecycle: EndpointLifecycle;
+  #connectionTask = Promise.resolve();
+  #started = false;
 
   constructor(options: MilkyWssEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('milky', options.config.id);
     this.#options = options;
     this.#callApi = options.callApi ?? callApi;
-    this.#lifecycle = createEndpointLifecycle({
-      name: options.config.id,
+    this.#connectionLifecycle = createEndpointLifecycle({
+      name: `${options.config.id}:inbound`,
       reconnect: false,
-      heartbeat: { intervalMs: options.config.heartbeat_interval },
     });
     this.client = createMilkyEndpointClient(options.config, this.#callApi);
     this.management = createMilkyEndpointManagement({
@@ -82,23 +83,19 @@ export class MilkyWssEndpoint extends ClientEndpoint<MilkyClient> {
   }
 
   async start(): Promise<void> {
-    await this.#lifecycle.start(async (lifecycleHandle) => {
-      const handle = this.#options.http.ws(this.#options.config.path);
-      this.#wsRelease = handle.onConnection((connection) => {
-        this.#acceptConnection(connection);
-      });
-      lifecycleHandle.onForceClose(() => {
-        this.#wsRelease?.();
-        this.#wsRelease = undefined;
-        this.#clientSocketRelease?.();
-        this.#clientSocketRelease = undefined;
-        try {
-          this.#ws?.close();
-        } catch {
-          /* ignore */
-        }
-        this.#ws = undefined;
-      });
+    if (this.#started) return;
+    this.#started = true;
+    const handle = this.#options.http.ws(this.#options.config.path);
+    this.#wsRelease = handle.onConnection((connection) => {
+      this.#connectionTask = this.#connectionTask
+        .then(() => this.#acceptConnection(connection))
+        .catch((error) => {
+          this.#logger.warn(formatCompact({
+            op: 'wss_connection_failed',
+            endpoint: this.#options.config.id,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        });
     });
     this.#logger.info(formatCompact({
       op: 'listen',
@@ -110,7 +107,12 @@ export class MilkyWssEndpoint extends ClientEndpoint<MilkyClient> {
 
   async stop(): Promise<void> {
     this.close();
-    await this.#lifecycle.stop();
+    this.#wsRelease?.();
+    this.#wsRelease = undefined;
+    await this.#connectionTask;
+    await this.#connectionLifecycle.stop();
+    this.#ws = undefined;
+    this.#started = false;
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -187,36 +189,47 @@ export class MilkyWssEndpoint extends ClientEndpoint<MilkyClient> {
     });
   }
 
-  #acceptConnection(connection: WsConnection): void {
+  async #acceptConnection(connection: WsConnection): Promise<void> {
     if (!verifyMilkyAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }
     const socket = connection.socket as unknown as MilkyWsSocket;
-    if (this.#ws) {
-      try {
-        this.#ws.close();
-      } catch {
-        /* ignore */
-      }
-    }
-    this.#ws = socket;
-    this.#lifecycle.startHeartbeat(() => {
-      try {
-        if (this.#ws?.readyState === WS_OPEN) this.#ws.ping?.();
-      } catch {
-        /* ignore */
-      }
-    });
-    this.#clientSocketRelease?.();
-    this.#clientSocketRelease = this.client.acceptWebSocket(socket);
-    socket.on('close', () => {
-      this.#clientSocketRelease?.();
-      this.#clientSocketRelease = undefined;
-      if (this.#ws === socket) {
-        this.#ws = undefined;
-        this.#lifecycle.stopHeartbeat();
-      }
+    await this.#connectionLifecycle.stop();
+    await this.#connectionLifecycle.start(async (lifecycleHandle) => {
+      this.#ws = socket;
+      const releaseClientSocket = this.client.acceptWebSocket(socket);
+      this.#clientSocketRelease = releaseClientSocket;
+      lifecycleHandle.onForceClose(() => {
+        if (this.#clientSocketRelease === releaseClientSocket) {
+          releaseClientSocket();
+          this.#clientSocketRelease = undefined;
+        }
+        try {
+          socket.close();
+        } catch {
+          /* ignore */
+        }
+        if (this.#ws === socket) this.#ws = undefined;
+      });
+      this.#connectionLifecycle.startHeartbeat(() => {
+        try {
+          if (socket.readyState === WS_OPEN) socket.ping?.();
+        } catch {
+          /* ignore */
+        }
+      }, this.#options.config.heartbeat_interval);
+      socket.on('message', () => {
+        this.#connectionLifecycle.notifyHeartbeatAck();
+      });
+      socket.on('close', () => {
+        if (this.#clientSocketRelease === releaseClientSocket) {
+          releaseClientSocket();
+          this.#clientSocketRelease = undefined;
+        }
+        if (this.#ws === socket) this.#ws = undefined;
+        lifecycleHandle.notifyClosed(new Error('Milky reverse WebSocket closed'));
+      });
     });
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,

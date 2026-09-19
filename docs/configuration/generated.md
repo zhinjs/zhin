@@ -352,9 +352,13 @@ outline: [2, 3]
 | `plugins.milky.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.milky.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
 | `plugins.milky.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
+| `plugins.milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | 否 | — | — |
 | `plugins.milky.endpoints[].baseUrl` | string | 是 | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `plugins.milky.endpoints[].path` | string | 否 | — | Path for webhook / reverse-wss |
 | `plugins.milky.endpoints[].access_token` | string | 否 | — | Milky access token |
+| `plugins.milky.endpoints[].reconnect_interval` | number | 否 | — | — |
+| `plugins.milky.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `plugins.milky.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.milky.endpoints[].id` | string | 是 | — | Milky bot name |
 | `plugins.milky.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

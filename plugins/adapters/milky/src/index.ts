@@ -12,7 +12,6 @@ export {
   parseMessageReceiveData,
   resolveMilkyConfig,
   senderNickname,
-  type MilkyAdapterConfig,
   type MilkyApiClientOptions,
   type MilkyApiResponse,
   type MilkyConfigBase,

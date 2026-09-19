@@ -24,6 +24,7 @@ import {
   milkyInboundConversation,
   parseMessageReceiveData,
   resolveMilkyConfig,
+  type MilkyEndpointConfig,
   type MilkyEvent,
   type MilkyIncomingMessage,
   type MilkyWsConfig,
@@ -92,6 +93,7 @@ function createMockWs(): MilkyWsSocket & {
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close().catch(() => undefined)));
 });
 
@@ -111,21 +113,35 @@ describe('milky protocol helpers', () => {
     });
   });
 
-  it('resolves webhook path from legacy endpoints', () => {
+  it('resolves webhook path from the expanded endpoint config', () => {
     const resolved = resolveMilkyConfig({
-      endpoints: [{
-        context: 'milky',
-        connection: 'webhook',
-        id: 'hook',
-        baseUrl: 'http://127.0.0.1:8080',
-        path: '/milky/webhook',
-      }],
+      connection: 'webhook',
+      id: 'hook',
+      baseUrl: 'http://127.0.0.1:8080',
+      path: '/milky/webhook',
     });
     expect(resolved).toMatchObject({
       connection: 'webhook',
       id: 'hook',
       path: '/milky/webhook',
     });
+  });
+
+  it('does not infer endpoint config from process state or nested endpoint rows', () => {
+    vi.stubEnv('MILKY_BOT_NAME', 'environment-bot');
+    const nested = {
+      endpoints: [{
+        context: 'milky',
+        id: 'nested-bot',
+        baseUrl: 'http://127.0.0.1:8080',
+      }],
+    } as unknown as MilkyEndpointConfig;
+
+    expect(() => resolveMilkyConfig(nested)).toThrow('non-empty id');
+    expect(() => resolveMilkyConfig({
+      id: '   ',
+      baseUrl: 'http://127.0.0.1:8080',
+    })).toThrow('non-empty id');
   });
 
   it('builds inbound ConversationRef and content from message_receive', () => {
@@ -965,6 +981,102 @@ describe('milky ws lifecycle', () => {
     expect(pingCalls(ws)).toBe(pingsBeforeClose);
 
     await endpoint.stop();
+  });
+});
+
+describe('milky reverse ws lifecycle', () => {
+  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const releaseRoute = vi.fn();
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return releaseRoute;
+        },
+        close: vi.fn(),
+      })),
+    };
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new MilkyWssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveMilkyConfig({
+        connection: 'wss',
+        id: 'reverse-bot',
+        baseUrl: 'http://127.0.0.1:8080',
+        path: '/milky/ws',
+        heartbeat_interval: 20,
+      }) as never,
+      callApi: vi.fn(async () => ({})),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    await endpoint.start();
+    endpoint.open();
+    acceptConnection?.({
+      socket: ws,
+      request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
+      authScope: 'full',
+    });
+    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+
+    await endpoint.stop();
+    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
+    expect(ws.close).toHaveBeenCalled();
+    expect(releaseRoute).toHaveBeenCalledOnce();
+  });
+
+  it('ignores a replaced socket close without releasing the current client binding', async () => {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return vi.fn();
+        },
+        close: vi.fn(),
+      })),
+    };
+    const endpoint = bindTestEndpoint(new MilkyWssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'milky'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveMilkyConfig({
+        connection: 'wss',
+        id: 'replacement-bot',
+        baseUrl: 'http://127.0.0.1:8080',
+        path: '/milky/ws',
+      }) as never,
+      callApi: vi.fn(async () => ({})),
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    const releaseFirst = vi.fn();
+    const releaseSecond = vi.fn();
+    const acceptClientSocket = vi.spyOn(endpoint.client, 'acceptWebSocket')
+      .mockReturnValueOnce(releaseFirst)
+      .mockReturnValueOnce(releaseSecond);
+    const first = createMockWs();
+    const second = createMockWs();
+    const connection = (socket: MilkyWsSocket) => ({
+      socket,
+      request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
+      authScope: 'full',
+    });
+
+    await endpoint.start();
+    acceptConnection?.(connection(first));
+    await vi.waitFor(() => expect(acceptClientSocket).toHaveBeenCalledTimes(1));
+    acceptConnection?.(connection(second));
+    await vi.waitFor(() => expect(acceptClientSocket).toHaveBeenCalledTimes(2));
+    expect(releaseFirst).toHaveBeenCalledOnce();
+
+    first.emitClose(1000, 'late close');
+    expect(releaseSecond).not.toHaveBeenCalled();
+
+    await endpoint.stop();
+    expect(releaseSecond).toHaveBeenCalledOnce();
   });
 });
 

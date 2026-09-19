@@ -352,9 +352,13 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.milky.endpoints` | array&lt;object&gt; | yes | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
 | `plugins.milky.endpoints[].master` | string \| number | no | — | 本 endpoint 的框架 master（QQ uin）；覆盖顶层 master |
 | `plugins.milky.endpoints[].trusted` | array&lt;string \| number&gt; | no | — | 本 endpoint 的 trusted 列表 |
+| `plugins.milky.endpoints[].connection` | string: `"ws"`, `"sse"`, `"webhook"`, `"wss"` | no | — | — |
 | `plugins.milky.endpoints[].baseUrl` | string | yes | — | Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event |
 | `plugins.milky.endpoints[].path` | string | no | — | Path for webhook / reverse-wss |
 | `plugins.milky.endpoints[].access_token` | string | no | — | Milky access token |
+| `plugins.milky.endpoints[].reconnect_interval` | number | no | — | — |
+| `plugins.milky.endpoints[].heartbeat_interval` | number | no | — | — |
+| `plugins.milky.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.milky.endpoints[].id` | string | yes | — | Milky bot name |
 | `plugins.milky.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

@@ -12,7 +12,6 @@ const directEnvironmentConsumers = new Set([
   'plugins/adapters/github/src/protocol.ts',
   'plugins/adapters/github/src/workspace-manager.ts',
   'plugins/adapters/icqq/src/protocol.ts',
-  'plugins/adapters/milky/src/protocol.ts',
   'plugins/adapters/onebot11/src/protocol.ts',
   'plugins/adapters/onebot12/src/protocol.ts',
   'plugins/adapters/weixin-ilink/src/credentials.ts',
