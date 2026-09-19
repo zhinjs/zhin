@@ -16,10 +16,6 @@ import { rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, t
 import {
   AIService,
   AgentResourceHub,
-  ActivatableWorkroomJournal,
-  ActivatableWorkroomCatalog,
-  WorkroomKernel,
-  createCatalogWorkroomRunControlAuthority,
   handleRuntimeManagementCommand,
   publishOutboundElements,
   type AssistantConfig,
@@ -72,22 +68,14 @@ import {
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogGovernedConsoleDisclosureAuthority,
   createGovernedPortfolioSponsorProjectionReader,
-  createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
-  type WorkroomRuntimeHandle,
   type WorkroomRunControlCommand,
   type SessionTreeRuntimeHandle,
   type TurnIntentResolver,
-  createGenerationWorkroomAcceptancePolicyPort,
   workroomAcceptancePolicyDecisionToken,
-  createGenerationWorkroomAcceptanceAuthority,
   workroomAcceptanceAuthorityToken,
-  createCatalogWorkroomPlanGateAuthority,
-  createGenerationWorkroomPlanGateAuthority,
   workroomPlanGateAuthorityToken,
-  CatalogWorkroomPriorityAuthority,
-  GenerationWorkroomPriorityAuthority,
   workroomPriorityAuthorityToken,
   createGenerationHumanIngressPlanningPort,
   createGenerationOwnedDynamicPlanningProvider,
@@ -103,7 +91,6 @@ import {
   workroomPlanningDisclosureToken,
   createWorkroomRemoteCallbackRuntime,
   workroomRemoteCallbackRuntimeToken,
-  createGenerationWorkroomRemoteAssignmentAuthority,
   workroomRemoteAssignmentAuthorityToken,
   createWorkroomProjectionOutboundMessageServicePort,
   createProjectionHumanIngressTargetResolver,
@@ -126,7 +113,6 @@ import {
   workroomAssignmentAuthorityGrantRepositoryToken,
   workroomAssignmentGrantClaimPreviewToken,
   workroomLocalAssignmentAuthorityToken,
-  createGenerationWorkroomLocalAssignmentAuthority,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   type WorkroomGenerationAuthoritySnapshot,
@@ -150,7 +136,6 @@ import {
   assertAcceptanceProjectionDataGovernanceAuthority,
   createFileWorkroomDataLifecycleRuntime,
   createWorkroomDataLifecycleHumanIngressControlPort,
-  createGenerationOwnedWorkroomJournalPayloadPort,
   createGenerationOwnedWorkroomGovernedOutboundComposition,
   installWorkroomProfileAuthorityResources,
   createCatalogWorkroomProfilePublisherAuthority,
@@ -331,6 +316,7 @@ import {
   type HostAgentTool,
 } from './agent-tool-feature-publisher.js';
 import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
+import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -444,65 +430,21 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       ? new SemanticMemoryRuntime()
       : null;
     if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
-    const workroomJournal = new ActivatableWorkroomJournal();
-    const workroomJournalPayloads = createGenerationOwnedWorkroomJournalPayloadPort({
+    const workroomFoundation = new WorkroomRuntimeFoundation({
       generation,
       signal,
+      resources,
+      planGateAuthority: options.workroomPlanGateAuthority,
+      planningDisclosure: options.workroomPlanningDisclosurePort,
+      dynamicPlanningPolicy: options.workroomDynamicPlanningPolicyPort,
     });
-    const workroomCatalog = new ActivatableWorkroomCatalog();
-    if (!resources.has(workroomPlanGateAuthorityToken)) {
-      resources.provide(
-        workroomPlanGateAuthorityToken,
-        options.workroomPlanGateAuthority ?? createCatalogWorkroomPlanGateAuthority(workroomCatalog),
-      );
-    }
-    if (!resources.has(workroomPriorityAuthorityToken)) {
-      resources.provide(
-        workroomPriorityAuthorityToken,
-        new CatalogWorkroomPriorityAuthority(workroomCatalog),
-      );
-    }
-    if (options.workroomPlanningDisclosurePort
-      && !resources.has(workroomPlanningDisclosureToken)) {
-      resources.provide(workroomPlanningDisclosureToken, options.workroomPlanningDisclosurePort);
-    }
-    if (options.workroomDynamicPlanningPolicyPort
-      && !resources.has(workroomDynamicPlanningPolicyToken)) {
-      resources.provide(workroomDynamicPlanningPolicyToken, options.workroomDynamicPlanningPolicyPort);
-    }
-    const workroomKernel = new WorkroomKernel({
+    const {
       journal: workroomJournal,
-      acceptancePolicy: createGenerationWorkroomAcceptancePolicyPort(() =>
-        resources.has(workroomAcceptancePolicyDecisionToken)
-          ? resources.use(workroomAcceptancePolicyDecisionToken)
-          : undefined),
-      acceptanceAuthority: createGenerationWorkroomAcceptanceAuthority(() =>
-        resources.has(workroomAcceptanceAuthorityToken)
-          ? resources.use(workroomAcceptanceAuthorityToken)
-          : undefined),
-      remoteAssignmentAuthority: createGenerationWorkroomRemoteAssignmentAuthority(() =>
-        resources.has(workroomRemoteAssignmentAuthorityToken)
-          ? resources.use(workroomRemoteAssignmentAuthorityToken)
-          : undefined),
-      localAssignmentAuthority: createGenerationWorkroomLocalAssignmentAuthority(() =>
-        resources.has(workroomLocalAssignmentAuthorityToken)
-          ? resources.use(workroomLocalAssignmentAuthorityToken)
-          : undefined),
-      planGateAuthority: createGenerationWorkroomPlanGateAuthority(() =>
-        resources.has(workroomPlanGateAuthorityToken)
-          ? resources.use(workroomPlanGateAuthorityToken)
-          : undefined),
-      priorityAuthority: new GenerationWorkroomPriorityAuthority(() =>
-        resources.has(workroomPriorityAuthorityToken)
-          ? resources.use(workroomPriorityAuthorityToken)
-          : undefined),
-      runControlAuthority: createCatalogWorkroomRunControlAuthority(workroomCatalog),
-    });
-    let workroomRuntime: WorkroomRuntimeHandle;
-    let consoleProjectionAuthority: ReturnType<typeof createCatalogGovernedWorkroomProjectionAuthority>;
-    const dataGovernanceRuntimeRef: {
-      current?: ReturnType<typeof installWorkroomDataGovernanceResources>;
-    } = {};
+      catalog: workroomCatalog,
+      kernel: workroomKernel,
+      runtime: workroomRuntime,
+      consoleProjectionAuthority,
+    } = workroomFoundation;
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     const traceRuntime = createAgentTraceRuntime();
     const rememberedSandboxApprovals = new Map<string, Set<string>>();
@@ -523,16 +465,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resources.provide(agentEventBusToken, created.events);
       seedPresets = created.seedPresets;
 
-      // Console reads the same replayed facts as tools; it never receives the
-      // command authority or a mutable repository.
-      consoleProjectionAuthority = createCatalogGovernedWorkroomProjectionAuthority({
-        catalog: workroomCatalog,
-        governance: Object.freeze({
-          readProject: async (projectId: string) =>
-            await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
-        }),
-      });
-      workroomRuntime = createWorkroomRuntime(workroomJournal, consoleProjectionAuthority);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(composedRuntime.host);
       schedule = createAssistantScheduleRuntime(
         zhinAgent,
@@ -583,7 +515,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       agent: zhinAgent,
       semanticMemory,
       journal: workroomJournal,
-      journalPayloads: workroomJournalPayloads.payloads,
+      journalPayloads: workroomFoundation.journalPayloads.payloads,
       catalog: workroomCatalog,
       listAgentNames: () => listGenerationBindings().map(binding => binding.name),
       resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
@@ -743,10 +675,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 consoleAuthority: lifecycleAuthorities.console,
                 consoleDisclosure: createCatalogGovernedConsoleDisclosureAuthority({
                   catalog: workroomCatalog,
-                  governance: Object.freeze({
-                    readProject: async (projectId: string) =>
-                      await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
-                  }),
+                  governance: workroomFoundation.governance,
                 }),
               }
             : {}),
@@ -814,8 +743,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         },
       }),
     });
-    dataGovernanceRuntimeRef.current = dataGovernanceRuntime;
-    workroomJournalPayloads.activate(dataGovernanceRuntime.journalPayloads);
+    workroomFoundation.bindDataGovernance(dataGovernanceRuntime);
     handoff.add({
       activateNext: async operationSignal => {
         const catalog = await workroomCatalog.read();
@@ -1867,10 +1795,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       source: portfolioSponsor,
       authority: createCatalogGovernedWorkroomProjectionAuthority({
         catalog: workroomCatalog,
-        governance: Object.freeze({
-          readProject: async (projectId: string) =>
-            await dataGovernanceRuntimeRef.current?.options.repository.readProject(projectId),
-        }),
+        governance: workroomFoundation.governance,
       }),
     });
     portfolioSponsorConsoleControl.current = Object.freeze({
