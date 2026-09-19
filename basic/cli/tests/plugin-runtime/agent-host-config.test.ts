@@ -1,9 +1,13 @@
+import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertFixedWorkroomStorageMode,
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
   resolveAgentHostMcpServers,
+  resolveAgentHostKnowledgeDirectory,
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
   resolveWorkroomPlanningPolicyPublication,
@@ -12,6 +16,28 @@ import {
 } from '../../src/plugin-runtime/agent-host-config.js';
 
 describe('Agent Host Workroom configuration', () => {
+  it('resolves only explicitly configured project-local knowledge directories', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'zhin-knowledge-config-'));
+    const project = join(parent, 'project');
+    const outside = join(parent, 'outside');
+    mkdirSync(project);
+    mkdirSync(outside);
+    try {
+      expect(resolveAgentHostKnowledgeDirectory({}, project)).toBeUndefined();
+      expect(resolveAgentHostKnowledgeDirectory({ knowledge: { baseDir: 'knowledge' } }, project))
+        .toBe(join(realpathSync(project), 'knowledge'));
+      expect(() => resolveAgentHostKnowledgeDirectory({ knowledge: { baseDir: '../shared' } }, project))
+        .toThrow('canonical project-relative path');
+      expect(() => resolveAgentHostKnowledgeDirectory({ knowledge: {} } as never, project))
+        .toThrow('non-empty canonical path');
+      symlinkSync(outside, join(project, 'linked'), process.platform === 'win32' ? 'junction' : 'dir');
+      expect(() => resolveAgentHostKnowledgeDirectory({ knowledge: { baseDir: 'linked' } }, project))
+        .toThrow('inside the project root');
+    } finally {
+      rmSync(parent, { recursive: true, force: true });
+    }
+  });
+
   it('normalizes and validates MCP server declarations at the config boundary', () => {
     const args = ['server.js'];
     const entries = resolveAgentHostMcpServers({

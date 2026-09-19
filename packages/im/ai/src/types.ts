@@ -406,8 +406,8 @@ export interface AIConfig {
    * 放置 .md / .txt 文件到 baseDir，Agent 可通过 knowledge_search 工具检索。
    */
   knowledge?: {
-    /** 知识库目录路径（相对于项目根目录，默认 "knowledge"） */
-    baseDir?: string;
+    /** 项目根目录内的知识库目录路径。配置该段时必须显式声明。 */
+    baseDir: string;
   };
   /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
   githubMcp?: {

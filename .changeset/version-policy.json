@@ -3,6 +3,17 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "own-project-knowledge-search.md",
+      "packages": [
+        "@zhin.js/agent",
+        "@zhin.js/ai",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the detached project knowledge Tool with an explicit polymorphic index and generation-owned feature, and require canonical project-local configuration under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-false-media-analysis-tool.md",
       "packages": [
         "@zhin.js/agent",

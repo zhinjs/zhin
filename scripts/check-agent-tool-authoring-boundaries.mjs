@@ -102,6 +102,8 @@ for (const removedToolRegistryApi of [
   'createRunDeferredTaskTool',
   'AnalyzeMediaBuiltinTool',
   'createAnalyzeMediaTool',
+  'KnowledgeSearchTool',
+  'createKnowledgeSearchTool',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -128,6 +130,7 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/generate-image-tool.ts',
   'packages/im/agent/src/builtin/run-deferred-task-tool.ts',
   'packages/im/agent/src/builtin/analyze-media-tool.ts',
+  'packages/im/agent/src/builtin/knowledge-search-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');

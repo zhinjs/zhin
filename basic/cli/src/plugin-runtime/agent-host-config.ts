@@ -4,6 +4,8 @@ import type {
   WorkroomDefinition,
   McpServerEntry,
 } from '@zhin.js/agent';
+import { existsSync, realpathSync } from 'node:fs';
+import { isAbsolute, relative, resolve } from 'node:path';
 import {
   expandEnvironmentValue,
   type ConfigDocumentPort,
@@ -75,6 +77,32 @@ export function resolveAgentHostMcpServers(
     if (!entry) throw new TypeError(`Invalid ai.mcpServers[${index}] declaration`);
     return entry;
   }));
+}
+
+/** Resolve an explicitly configured project-local knowledge directory. */
+export function resolveAgentHostKnowledgeDirectory(
+  ai: AgentHostAIConfig,
+  projectRoot: string,
+): string | undefined {
+  if (ai.knowledge === undefined) return undefined;
+  const baseDir = ai.knowledge?.baseDir;
+  if (typeof baseDir !== 'string' || !baseDir.trim() || baseDir !== baseDir.trim()) {
+    throw new TypeError('ai.knowledge.baseDir must be a non-empty canonical path');
+  }
+  if (baseDir === '~' || baseDir.startsWith('~/') || baseDir.startsWith('~\\')) {
+    throw new TypeError('ai.knowledge.baseDir must stay inside the project root');
+  }
+  if (isAbsolute(baseDir) || baseDir.split(/[\\/]/u).some((segment) => segment === '.' || segment === '..')) {
+    throw new TypeError('ai.knowledge.baseDir must be a canonical project-relative path');
+  }
+  const root = realpathSync(resolve(projectRoot));
+  const configured = resolve(root, baseDir);
+  const directory = existsSync(configured) ? realpathSync(configured) : configured;
+  const relation = relative(root, directory);
+  if (relation === '..' || relation.startsWith('../') || relation.startsWith('..\\')) {
+    throw new TypeError('ai.knowledge.baseDir must stay inside the project root');
+  }
+  return directory;
 }
 
 export function resolveWorkroomDisclosureBootstrap(

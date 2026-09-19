@@ -75,6 +75,7 @@ export const DEFAULT_SUBAGENT_TOOL_NAMES = [
   'web_search',
   'web_fetch',
   'generate_image',
+  'knowledge_search',
 ] as const;
 
 export interface RestrictedToolViewOptions {

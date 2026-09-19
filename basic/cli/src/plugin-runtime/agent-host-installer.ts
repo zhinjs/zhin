@@ -80,10 +80,8 @@ import {
   turnJournalStoreToken,
   agentTurnEngineToken,
   createFullAgentTurnEngine,
-  createNativeFileToolFeatures,
-  NativeBashToolFeature,
-  createNativeWebToolFeatures,
-  createNativeImageToolFeature,
+  createNativeAgentToolSuite,
+  MarkdownKnowledgeIndex,
   createNativeTodoToolFeatures,
   createNativeInteractionToolFeatures,
   createNativeSemanticMemoryToolFeatures,
@@ -333,6 +331,7 @@ import {
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
   resolveAgentHostMcpServers,
+  resolveAgentHostKnowledgeDirectory,
   resolveAssistantConfigDocument,
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
@@ -447,6 +446,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
+    const knowledgeDirectory = resolveAgentHostKnowledgeDirectory(aiConfig, options.projectRoot);
+    const knowledgeIndex = knowledgeDirectory
+      ? new MarkdownKnowledgeIndex(knowledgeDirectory)
+      : undefined;
 
     let service: AIService;
     try {
@@ -565,6 +568,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         options.projectRoot,
         options.approvalPort,
         options.audioTranscriber,
+        knowledgeIndex,
       );
       zhinAgent = created.agent;
       composedRuntime = created.runtime;
@@ -819,19 +823,13 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     for (const tool of [...scheduleTools, ...homeTools]) {
       addFeature(toolFeatureId, tool.name, tool.definition);
     }
-    const nativeBash = new NativeBashToolFeature();
-    addFeature(nativeBash.feature, nativeBash.name, nativeBash.definition);
-    for (const tool of createNativeFileToolFeatures()) {
-      addFeature(tool.feature, tool.name, tool.definition);
+    for (const tool of createNativeAgentToolSuite({
+      resolveProvider: (alias) => service.getProvider(alias),
+      resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+      knowledgeIndex,
+    })) {
+      addFeature(toolFeatureId, tool.name, tool.definition);
     }
-    for (const tool of createNativeWebToolFeatures()) {
-      addFeature(tool.feature, tool.name, tool.definition);
-    }
-    const imageTool = createNativeImageToolFeature(
-      (alias) => service.getProvider(alias),
-      (alias) => service.getImageGenerationDefaults(alias),
-    );
-    addFeature(imageTool.feature, imageTool.name, imageTool.definition);
     for (const tool of createNativeTodoToolFeatures(
       new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
     )) {

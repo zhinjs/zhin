@@ -107,6 +107,8 @@ export * from './host-mcp-projection.js';
 export * from './native-file-tools.js';
 export * from './native-web-tools.js';
 export * from './native-image-tool.js';
+export * from './native-knowledge-tool.js';
+export * from './native-tool-suite.js';
 export * from './native-todo-tools.js';
 export * from './native-interaction-tools.js';
 export * from './native-semantic-memory-tools.js';

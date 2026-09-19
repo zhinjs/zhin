@@ -19,6 +19,7 @@ describe('resolveSubagentAgentTools', () => {
     makeTool('write_file'),
     makeTool('bash'),
     makeTool('generate_image', ['画', 'draw', 'image', 'picture']),
+    makeTool('knowledge_search', ['knowledge', '文档', 'FAQ']),
     makeTool('spawn_task'),
     makeTool('unlisted_sensitive_tool'),
   ];
@@ -84,6 +85,16 @@ describe('resolveSubagentAgentTools', () => {
       config: { ...DEFAULT_CONFIG, deferredToolMaxResults: 1 },
     });
     expect(tools.map(t => t.name)).toContain('generate_image');
+  });
+
+  it('configured project knowledge is available to matching subagent tasks', () => {
+    const tools = resolveSubagentAgentTools({
+      allTools: catalog,
+      task: '从项目 FAQ 文档查询退款政策',
+      role: 'researcher',
+      config: { ...DEFAULT_CONFIG, deferredToolMaxResults: 1 },
+    });
+    expect(tools.map((tool) => tool.name)).toContain('knowledge_search');
   });
 
   it('spawn_task 声明工具时仅暴露父会话已 load 的项 + load_tool/load_skill', () => {

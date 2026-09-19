@@ -2,9 +2,23 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createKnowledgeSearchTool } from '../src/builtin/knowledge-search-tool.js'
+import type { ToolExecutionContext } from '@zhin.js/tool'
+import type { AIProvider } from '@zhin.js/ai'
+import {
+  createNativeKnowledgeToolFeature,
+  MarkdownKnowledgeIndex,
+} from '../../src/plugin-runtime/native-knowledge-tool.js'
+import { createNativeAgentToolSuite } from '../../src/plugin-runtime/native-tool-suite.js'
 
 let tempDir: string
+
+const context = Object.freeze({ signal: new AbortController().signal }) as ToolExecutionContext
+
+function createTool(directory = 'knowledge') {
+  return createNativeKnowledgeToolFeature(
+    new MarkdownKnowledgeIndex(join(tempDir, directory), { cacheTtlMs: 0 }),
+  ).definition
+}
 
 beforeEach(async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'knowledge-test-'))
@@ -74,10 +88,20 @@ afterEach(async () => {
   await rm(tempDir, { recursive: true, force: true })
 })
 
-describe('knowledge_search tool', () => {
+describe('native knowledge_search Tool Feature', () => {
+  it('is published by the canonical native suite only when an index is configured', () => {
+    const resolver = () => ({}) as AIProvider
+    const withoutKnowledge = createNativeAgentToolSuite({ resolveProvider: resolver })
+    const index = new MarkdownKnowledgeIndex(join(tempDir, 'knowledge'))
+    const withKnowledge = createNativeAgentToolSuite({ resolveProvider: resolver, knowledgeIndex: index })
+
+    expect(withoutKnowledge.map((tool) => tool.name)).not.toContain('knowledge_search')
+    expect(withKnowledge.map((tool) => tool.name).filter((name) => name === 'knowledge_search'))
+      .toEqual(['knowledge_search'])
+  })
+
   it('should find content matching query', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '红烧肉' }) as string
+    const result = await createTool().execute({ query: '红烧肉' }, context)
 
     expect(result).toContain('红烧肉')
     expect(result).toContain('cooking.md')
@@ -85,60 +109,51 @@ describe('knowledge_search tool', () => {
   })
 
   it('should return multiple results sorted by relevance', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '番茄 鸡蛋' }) as string
+    const result = await createTool().execute({ query: '番茄 鸡蛋' }, context)
 
     expect(result).toContain('番茄炒蛋')
     expect(result).toContain('cooking.md')
   })
 
   it('should search across subdirectories', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: 'Node.js pnpm' }) as string
+    const result = await createTool().execute({ query: 'Node.js pnpm' }, context)
 
     expect(result).toContain('setup.md')
     expect(result).toContain('guides')
   })
 
   it('should respect limit parameter', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '菜', limit: 1 }) as string
+    const result = await createTool().execute({ query: '菜', limit: 1 }, context)
 
     expect(result).toContain('找到 1 条')
   })
 
   it('should handle no matches gracefully', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '量子力学 薛定谔方程' }) as string
+    const result = await createTool().execute({ query: '量子力学 薛定谔方程' }, context)
 
     expect(result).toContain('未找到')
   })
 
   it('should handle missing knowledge directory', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'nonexistent') })
-    const result = await tool.execute({ query: 'test' }) as string
+    const result = await createTool('nonexistent').execute({ query: 'test' }, context)
 
-    expect(result).toContain('不存在')
+    expect(result).toContain('does not exist')
   })
 
   it('should handle empty query', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '' }) as string
-
-    expect(result).toContain('请提供')
+    await expect(createTool().execute({ query: '' }, context))
+      .rejects.toThrow('query must be a non-empty string')
   })
 
   it('should find FAQ content', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '退款' }) as string
+    const result = await createTool().execute({ query: '退款' }, context)
 
     expect(result).toContain('退款')
     expect(result).toContain('faq.md')
   })
 
   it('should handle multi-word queries', async () => {
-    const tool = createKnowledgeSearchTool({ knowledgeDir: join(tempDir, 'knowledge') })
-    const result = await tool.execute({ query: '密码 重置' }) as string
+    const result = await createTool().execute({ query: '密码 重置' }, context)
 
     expect(result).toContain('密码')
     expect(result).toContain('faq.md')

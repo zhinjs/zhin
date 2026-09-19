@@ -13,12 +13,10 @@ import {
   type TurnRequest,
 } from '@zhin.js/agent';
 import {
-  NativeBashToolFeature,
   ZhinAgent,
   composeZhinAgentRuntime,
-  createNativeFileToolFeatures,
-  createNativeWebToolFeatures,
-  createNativeImageToolFeature,
+  createNativeAgentToolSuite,
+  type KnowledgeIndex,
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
@@ -47,6 +45,7 @@ export function createRuntimeZhinAgent(
   projectRoot: string,
   approvalPort?: ApprovalPort,
   audioTranscriber?: AudioTranscriptionPort,
+  knowledgeIndex?: KnowledgeIndex,
 ): {
   agent: ZhinAgent;
   events: AgentEventBus;
@@ -79,7 +78,7 @@ export function createRuntimeZhinAgent(
     subagentSender: composed.deliverOutbound,
   });
 
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, projectRoot));
+  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, knowledgeIndex));
   agent.getSubagentSystem()?.configureRouting({
     getProvider: (alias) => service.getProvider(alias),
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
@@ -106,16 +105,15 @@ export function createRuntimeZhinAgent(
  * main turn so the ToolIndex is the single source of truth. Native builtin
  * tools are projected from the same native ToolFeature definitions used by the main turn.
  */
-function buildRuntimeSubagentAgentTools(service: AIService, _projectRoot: string): AgentTool[] {
-  const nativeTools = [
-    new NativeBashToolFeature(),
-    ...createNativeFileToolFeatures(),
-    ...createNativeWebToolFeatures(),
-    createNativeImageToolFeature(
-      (alias) => service.getProvider(alias),
-      (alias) => service.getImageGenerationDefaults(alias),
-    ),
-  ];
+function buildRuntimeSubagentAgentTools(
+  service: AIService,
+  knowledgeIndex?: KnowledgeIndex,
+): AgentTool[] {
+  const nativeTools = createNativeAgentToolSuite({
+    resolveProvider: (alias) => service.getProvider(alias),
+    resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
+    knowledgeIndex,
+  });
   return nativeTools.map((native): AgentTool => ({
     name: native.name,
     description: native.definition.description,
