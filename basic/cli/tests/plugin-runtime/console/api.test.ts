@@ -196,20 +196,16 @@ async function startHost(options: {
       : {}),
   });
   hosts.push(host);
-  registerConsoleApiRoutes(
-    host,
-    stubConsoleRuntime(),
-    options.projectRoot,
-    '/api',
-    stubIm(),
-    undefined,
-    undefined,
-    options.snapshot,
-    undefined,
-    undefined,
-    options.primaryConfigDocument,
-    options.snapshots,
-  );
+  registerConsoleApiRoutes({
+    http: host,
+    consoleRuntime: stubConsoleRuntime(),
+    projectRoot: options.projectRoot,
+    apiBase: '/api',
+    im: stubIm(),
+    snapshot: options.snapshot,
+    primaryConfigDocument: options.primaryConfigDocument,
+    snapshots: options.snapshots,
+  });
   return host.listen();
 }
 
@@ -1296,10 +1292,13 @@ describe('console SSE events', () => {
     const hub = createConsoleEventHub();
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    registerConsoleApiRoutes(
-      host, stubConsoleRuntime(), projectRoot, '/api',
-      im, undefined, undefined, undefined, undefined, hub,
-    );
+    registerConsoleApiRoutes({
+      http: host,
+      consoleRuntime: stubConsoleRuntime(),
+      projectRoot,
+      im,
+      eventHub: hub,
+    });
     const { port } = await host.listen();
 
     const res = await fetch(`http://127.0.0.1:${port}/api/events`);
@@ -1392,10 +1391,12 @@ describe('console SSE events', () => {
     const hub = createConsoleEventHub();
     const host = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(host);
-    registerConsoleApiRoutes(
-      host, stubConsoleRuntime(), projectRoot, '/api',
-      undefined, undefined, undefined, undefined, undefined, hub,
-    );
+    registerConsoleApiRoutes({
+      http: host,
+      consoleRuntime: stubConsoleRuntime(),
+      projectRoot,
+      eventHub: hub,
+    });
     const { port } = await host.listen();
 
     const res = await fetch(`http://127.0.0.1:${port}/api/events`);

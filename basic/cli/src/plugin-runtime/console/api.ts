@@ -141,43 +141,63 @@ export function installConsoleApi(options: {
       lifecycle.add(acquireLoginAssistBinding(loginAssist, hub));
     }
 
-    registerConsoleApiRoutes(
+    registerConsoleApiRoutes({
       http,
-      options.console,
-      options.projectRoot,
+      consoleRuntime: options.console,
+      projectRoot: options.projectRoot,
       apiBase,
-      options.im,
-      options.onRestart,
-      options.databaseHost,
-      options.snapshot,
-      options.scheduleHost,
-      hub,
-      config.document,
-      options.snapshots,
-      options.pluginLifecycleFile ?? resolvePluginLifecycleFile(options.projectRoot),
-      options.pluginLifecycleStore,
+      im: options.im,
+      onRestart: options.onRestart,
+      databaseHost: options.databaseHost,
+      snapshot: options.snapshot,
+      scheduleHost: options.scheduleHost,
+      eventHub: hub,
+      primaryConfigDocument: config.document,
+      snapshots: options.snapshots,
+      pluginLifecycleFile: options.pluginLifecycleFile
+        ?? resolvePluginLifecycleFile(options.projectRoot),
+      pluginLifecycleStore: options.pluginLifecycleStore,
       configuration,
-    );
+    });
   };
 }
 
-export function registerConsoleApiRoutes(
-  http: HttpHost,
-  consoleRuntime: ConsoleRuntime,
-  projectRoot: string,
-  apiBase = '/api',
-  im?: ImRuntime,
-  onRestart?: () => void,
-  databaseHost?: DatabaseHost,
-  snapshot?: () => RuntimeSnapshot | undefined,
-  scheduleHost?: unknown,
-  eventHub?: ConsoleEventHub,
-  primaryConfigDocument?: RuntimeConfigDocument,
-  snapshots?: SnapshotReader,
-  pluginLifecycleFile = resolvePluginLifecycleFile(projectRoot),
-  pluginLifecycleStore = createPluginLifecycleStore(),
-  configuration = new ConsoleConfigurationStore(projectRoot),
-): void {
+export interface RegisterConsoleApiRoutesOptions {
+  readonly http: HttpHost;
+  readonly consoleRuntime: ConsoleRuntime;
+  readonly projectRoot: string;
+  readonly apiBase?: string;
+  readonly im?: ImRuntime;
+  readonly onRestart?: () => void;
+  readonly databaseHost?: DatabaseHost;
+  readonly snapshot?: () => RuntimeSnapshot | undefined;
+  readonly scheduleHost?: unknown;
+  readonly eventHub?: ConsoleEventHub;
+  readonly primaryConfigDocument?: RuntimeConfigDocument;
+  readonly snapshots?: SnapshotReader;
+  readonly pluginLifecycleFile?: string;
+  readonly pluginLifecycleStore?: PluginLifecycleStore;
+  readonly configuration?: ConsoleConfigurationStore;
+}
+
+export function registerConsoleApiRoutes(options: RegisterConsoleApiRoutesOptions): void {
+  const {
+    http,
+    consoleRuntime,
+    projectRoot,
+    apiBase = '/api',
+    im,
+    onRestart,
+    databaseHost,
+    snapshot,
+    scheduleHost,
+    eventHub,
+    primaryConfigDocument,
+    snapshots,
+    pluginLifecycleFile = resolvePluginLifecycleFile(projectRoot),
+    pluginLifecycleStore = createPluginLifecycleStore(),
+    configuration = new ConsoleConfigurationStore(projectRoot),
+  } = options;
   const base = normalizeBase(apiBase);
   const hub = eventHub ?? createConsoleEventHub();
 
