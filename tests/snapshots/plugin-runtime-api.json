@@ -46,6 +46,7 @@
     "export * from './host-tool-projection.js';",
     "export * from './native-bash-tool.js';",
     "export * from './native-file-tools.js';",
+    "export * from './native-image-tool.js';",
     "export * from './native-interaction-tools.js';",
     "export * from './native-semantic-memory-tools.js';",
     "export * from './native-todo-tools.js';",

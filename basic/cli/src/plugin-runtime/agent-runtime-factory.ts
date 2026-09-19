@@ -18,6 +18,7 @@ import {
   composeZhinAgentRuntime,
   createNativeFileToolFeatures,
   createNativeWebToolFeatures,
+  createNativeImageToolFeature,
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';
@@ -78,7 +79,7 @@ export function createRuntimeZhinAgent(
     subagentSender: composed.deliverOutbound,
   });
 
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(projectRoot));
+  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(service, projectRoot));
   agent.getSubagentSystem()?.configureRouting({
     getProvider: (alias) => service.getProvider(alias),
     resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
@@ -105,11 +106,15 @@ export function createRuntimeZhinAgent(
  * main turn so the ToolIndex is the single source of truth. Native builtin
  * tools are projected from the same native ToolFeature definitions used by the main turn.
  */
-function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
+function buildRuntimeSubagentAgentTools(service: AIService, _projectRoot: string): AgentTool[] {
   const nativeTools = [
     new NativeBashToolFeature(),
     ...createNativeFileToolFeatures(),
     ...createNativeWebToolFeatures(),
+    createNativeImageToolFeature(
+      (alias) => service.getProvider(alias),
+      (alias) => service.getImageGenerationDefaults(alias),
+    ),
   ];
   return nativeTools.map((native): AgentTool => ({
     name: native.name,

@@ -121,6 +121,7 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/web-fetch-tool.ts',
   'packages/im/agent/src/builtin/todo-read-tool.ts',
   'packages/im/agent/src/builtin/todo-write-tool.ts',
+  'packages/im/agent/src/builtin/generate-image-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');

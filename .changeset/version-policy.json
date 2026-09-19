@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "own-image-generation-tool.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace the detached class-based image tool with one generation-owned Tool Feature used by main and subagent turns under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-classic-builtin-tool-duplicates.md",
       "packages": [
         "@zhin.js/agent",

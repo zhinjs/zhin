@@ -83,6 +83,7 @@ import {
   createNativeFileToolFeatures,
   NativeBashToolFeature,
   createNativeWebToolFeatures,
+  createNativeImageToolFeature,
   createNativeTodoToolFeatures,
   createNativeInteractionToolFeatures,
   createNativeSemanticMemoryToolFeatures,
@@ -826,6 +827,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     for (const tool of createNativeWebToolFeatures()) {
       addFeature(tool.feature, tool.name, tool.definition);
     }
+    const imageTool = createNativeImageToolFeature(
+      (alias) => service.getProvider(alias),
+      (alias) => service.getImageGenerationDefaults(alias),
+    );
+    addFeature(imageTool.feature, imageTool.name, imageTool.definition);
     for (const tool of createNativeTodoToolFeatures(
       new FileTodoStore(join(options.projectRoot, '.zhin', 'todos')),
     )) {
