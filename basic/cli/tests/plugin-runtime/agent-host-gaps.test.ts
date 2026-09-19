@@ -15,11 +15,8 @@ import {
   resolveProductTurnIntent,
   resolveSnapshotTurnIntentResolver,
   resolveRuntimeSenderRoles,
-  resolveTriggerTimeoutMs,
-  renderTriggerError,
   createDeterministicApprovalPort,
   runtimeApprovalPolicy,
-  withTriggerTimeout,
   deliveryOutcomeFromReceipt,
   assertFixedWorkroomStorageMode,
   assertWorkroomCatalogMatchesGeneration,
@@ -28,11 +25,7 @@ import {
   resolveCatalogWorkroomProjectionConversation,
   resolveCatalogSponsorProjectionConversation,
   resolveWorkroomStorageMode,
-  routeSpecialistAgent,
   resolveIndexedProjectionReply,
-  restrictWorkroomAgentCapabilities,
-  resolveWorkroomOrchestratorConversation,
-  workroomOrchestratorSessionKey,
   createWorkroomPlanningBootstrapArtifacts,
   resolveWorkroomTrustedPackPublishers,
   resolveWorkroomDisclosureBootstrap,
@@ -41,6 +34,15 @@ import {
   resolveWorkroomPlanningPolicyPublication,
   isWorkroomPlanningPolicyReady,
 } from '../../src/plugin-runtime/agent-host-installer.js';
+import {
+  renderTriggerError,
+  resolveTriggerTimeoutMs,
+  resolveWorkroomOrchestratorConversation,
+  restrictWorkroomAgentCapabilities,
+  routeSpecialistAgent,
+  withTriggerTimeout,
+  workroomOrchestratorSessionKey,
+} from '../../src/plugin-runtime/agent-turn-trigger.js';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
@@ -1202,17 +1204,8 @@ describe('缺口 3：ai.trigger timeout / errorTemplate', () => {
   });
 
   it('withTriggerTimeout：限时内完成则正常返回', async () => {
-    const result = await withTriggerTimeout(Promise.resolve('ok'), 50);
+    const result = await withTriggerTimeout(async () => 'ok', 50);
     expect(result).toBe('ok');
-  });
-
-  it('withTriggerTimeout：超时 reject，迟到的 settle 不影响结果', async () => {
-    const slow = new Promise<string>((resolve) => {
-      setTimeout(() => resolve('late'), 100);
-    });
-    await expect(withTriggerTimeout(slow, 20)).rejects.toThrow('AI 处理超时（20ms）');
-    // 等待迟到 settle，确保不产生 unhandledRejection / 二次 settle 异常
-    await expect(slow).resolves.toBe('late');
   });
 
   it('withTriggerTimeout：signal-aware turn 会在超时后收到取消信号', async () => {
@@ -1284,18 +1277,17 @@ describe('缺口 3：masters / trusted 角色解析', () => {
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
   });
 
-  it.each([
-    ['user_id', 'legacy-user'],
-    ['senderId', 'runtime-user'],
-  ])('sender.id 缺失时 fallback metadata.%s 作为授权身份', (key, id) => {
+  it.each(['userId', 'user_id', 'senderId'])('sender.id 缺失时拒绝 metadata.%s 授权身份', (key) => {
     const message = makeMessage({
       content: 'hi',
       target: 'group:100',
       sender: null,
-      metadata: { endpoint: '10001', [key]: id },
+      metadata: { endpoint: '10001', [key]: 'forged-owner' },
     });
-    const roles = resolveRuntimeSenderRoles(message, id, [], undefined);
-    expect(roles).toEqual({ isMaster: true, isTrusted: false });
+    const roles = resolveRuntimeSenderRoles(message, 'forged-owner', ['forged-owner'], {
+      masters: ['forged-owner'], trusted: ['forged-owner'],
+    });
+    expect(roles).toEqual({ isMaster: false, isTrusted: false });
   });
 
 });

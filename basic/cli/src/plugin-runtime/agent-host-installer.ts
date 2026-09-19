@@ -83,7 +83,6 @@ import {
   FileHumanIngressApplicationRepository,
   HumanIngressApplicationService,
   type HumanIngressOrchestratorProposalPort,
-  type HumanIngressPlanningPort,
   type HumanIngressTargetResolverPort,
   type HumanIngressTargetResolutionRequest,
   WorkroomPlanningClarificationError,
@@ -343,6 +342,16 @@ import {
   resolveWorkroomHumanIntent,
   type WorkroomAgentTurnContinuation,
 } from './workroom-human-ingress-route.js';
+import {
+  renderTriggerError,
+  resolveRuntimeAgentTrigger,
+  resolveTriggerTimeoutMs,
+  resolveWorkroomOrchestratorConversation,
+  restrictWorkroomAgentCapabilities,
+  routeSpecialistAgent,
+  withTriggerTimeout,
+  workroomOrchestratorSessionKey,
+} from './agent-turn-trigger.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -815,10 +824,6 @@ export interface InstallAgentHostOptions {
   readonly snapshots?: SnapshotReader;
   /** Process-fixed Workroom storage identity. Changing it requires restart. */
   readonly workroomStorageMode: WorkroomStorageMode;
-  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
-  readonly ai?: AIConfig;
-  /** @deprecated Prefer the generation-owned Primary Config. Test overrides only. */
-  readonly assistant?: AssistantConfig;
   readonly im: ImRuntime;
   readonly projectRoot: string;
   /**
@@ -828,7 +833,7 @@ export interface InstallAgentHostOptions {
   readonly resolveEndpointOwner?: (adapterLocalName: string, endpointKey: string) => string | undefined;
   /**
    * Resolve Endpoint trusted id 列表（plugins.<key>.trusted / endpoints[].trusted）。
-   * 对齐 legacy resolveSenderRoles：trusted 角色弱于 master（不参与 Owner 审批放行）。
+   * trusted 角色弱于 master，不参与 Owner 审批放行。
    */
   readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   /** Candidate config Endpoint identities; never read from the old live ImRuntime projection. */
@@ -843,8 +848,6 @@ export interface InstallAgentHostOptions {
   readonly resolveTurnIntent?: TurnIntentResolver;
   /** Trusted idempotent Orchestrator/Kernel proposal seam for Workroom human ingress. */
   readonly workroomHumanIngressPort?: HumanIngressOrchestratorProposalPort;
-  /** @deprecated Test override. Standard startup installs the generation-owned planner. */
-  readonly workroomHumanIngressPlanningPort?: HumanIngressPlanningPort;
   /** P12 governed model-provider disclosure; absence fails closed before model invocation. */
   readonly workroomPlanningDisclosurePort?: WorkroomPlanningDisclosurePort;
   /** Persistent exact Project/Profile planning policy; absence fails closed. */
@@ -855,17 +858,6 @@ export interface InstallAgentHostOptions {
   readonly workroomTrustedPackPublishers?: readonly string[];
   /** Self-hosted Root-private KMS and signed governance decision issuer. */
   readonly workroomLocalDataGovernance?: LocalWorkroomDataGovernanceAuthority;
-  /**
-   * Trusted Root-only wrap/unwrap capability. It is never published through a
-   * Feature, Resource snapshot or Console API and never exposes KEK bytes.
-   */
-  readonly workroomPayloadVaultCryptography?: NonNullable<
-    Parameters<typeof installWorkroomDataGovernanceResources>[0]['cryptography']
-  >;
-  /** @internal Trusted Root test/embedding fallback; production uses the Root-private provider token. */
-  readonly workroomDataGovernanceVerification?: NonNullable<
-    Parameters<typeof installWorkroomDataGovernanceResources>[0]['governance']
-  >;
 }
 
 /**
@@ -881,10 +873,8 @@ export interface InstallAgentHostOptions {
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
   return async ({ generation, signal, resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
-    const configuredAi = options.ai ?? primaryConfig.get<AIConfig>('ai');
-    const aiConfig = configuredAi;
-    const assistantConfig = options.assistant
-      ?? primaryConfig.get<AssistantConfig>('assistant');
+    const aiConfig = primaryConfig.get<AIConfig>('ai');
+    const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
     const mcpEntries = parseMcpServers(aiConfig.mcpServers);
 
@@ -936,10 +926,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         workroomPriorityAuthorityToken,
         new CatalogWorkroomPriorityAuthority(workroomCatalog),
       );
-    }
-    if (options.workroomHumanIngressPlanningPort
-      && !resources.has(workroomHumanIngressPlanningToken)) {
-      resources.provide(workroomHumanIngressPlanningToken, options.workroomHumanIngressPlanningPort);
     }
     if (options.workroomPlanningDisclosurePort
       && !resources.has(workroomPlanningDisclosureToken)) {
@@ -1380,15 +1366,11 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       signal,
     });
     const localDataGovernance = rootDataGovernance
-      || options.workroomPayloadVaultCryptography
-      || options.workroomDataGovernanceVerification
       ? undefined
       : options.workroomLocalDataGovernance;
     const dataGovernanceCryptography = rootDataGovernance?.cryptography
-      ?? options.workroomPayloadVaultCryptography
       ?? localDataGovernance?.cryptography;
     const dataGovernanceVerification = rootDataGovernance?.governance
-      ?? options.workroomDataGovernanceVerification
       ?? localDataGovernance?.verification;
     if (dataGovernanceCryptography) {
       dataGovernanceStorage = createGenerationOwnedWorkroomDataGovernanceStorage({
@@ -4211,9 +4193,8 @@ export interface RuntimeSenderRoles {
 }
 
 /**
- * 对齐 legacy resolveSenderRoles（ai-trigger.ts:260）：
- * trigger.masters ∪ endpoint master → master 角色（审批放行）；
- * trigger.trusted ∪ endpoint trusted → trusted 角色（弱于 master，不参与 Owner 审批）。
+ * Sender roles derive only from the authenticated Message sender reference.
+ * trigger.masters and endpoint master grant master; trusted remains weaker.
  */
 export function resolveRuntimeSenderRoles(
   message: Message,
@@ -4221,7 +4202,7 @@ export function resolveRuntimeSenderRoles(
   endpointTrusted: readonly string[],
   trigger?: AITriggerConfig,
 ): RuntimeSenderRoles {
-  const senderId = message.sender?.id ?? resolveAuthenticatedSenderId(message);
+  const senderId = message.sender?.id;
   const triggerMasters = (trigger?.masters ?? []).map(String);
   const triggerTrusted = (trigger?.trusted ?? []).map(String);
   const isMaster = senderId != null
@@ -4738,69 +4719,6 @@ function resolveTrustedForRuntimeMessage(
   return [...new Set(merged.map((id) => String(id).trim()).filter(Boolean))];
 }
 
-/** ai.trigger.timeout（默认 60000，对齐 legacy DEFAULT_AI_TRIGGER_CONFIG）。 */
-const DEFAULT_TRIGGER_TIMEOUT_MS = 60_000;
-/** ai.trigger.errorTemplate 默认值，对齐 legacy DEFAULT_AI_TRIGGER_CONFIG。 */
-const DEFAULT_TRIGGER_ERROR_TEMPLATE = '❌ AI 处理失败: {error}';
-
-export function resolveTriggerTimeoutMs(trigger?: AITriggerConfig): number {
-  const raw = trigger?.timeout;
-  return typeof raw === 'number' && Number.isFinite(raw) && raw > 0
-    ? raw
-    : DEFAULT_TRIGGER_TIMEOUT_MS;
-}
-
-export function renderTriggerError(trigger: AITriggerConfig | undefined, detail: string): string {
-  const template = trigger?.errorTemplate?.trim()
-    ? trigger.errorTemplate
-    : DEFAULT_TRIGGER_ERROR_TEMPLATE;
-  return template.replace('{error}', detail);
-}
-
-export class TriggerTimeoutError extends Error {
-  constructor(timeoutMs: number) {
-    super(`AI 处理超时（${timeoutMs}ms）`);
-    this.name = 'TriggerTimeoutError';
-  }
-}
-
-/**
- * Runs one ingress-owned turn with a cancellation signal. On timeout the
- * signal reaches the inbound queue, PromptController, provider stream, and
- * tool execution instead of merely hiding a late result.
- */
-export function withTriggerTimeout<T>(
-  run: (signal: AbortSignal) => Promise<T>,
-  timeoutMs: number,
-): Promise<T>;
-/** @deprecated Promise inputs cannot be cancelled; pass a signal-aware callback. */
-export function withTriggerTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T>;
-export function withTriggerTimeout<T>(
-  work: Promise<T> | ((signal: AbortSignal) => Promise<T>),
-  timeoutMs: number,
-): Promise<T> {
-  if (typeof work === 'function') {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(new TriggerTimeoutError(timeoutMs)), timeoutMs);
-    return work(controller.signal).finally(() => clearTimeout(timer));
-  }
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new TriggerTimeoutError(timeoutMs));
-    }, timeoutMs);
-    work.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
 function resolveChannelId(message: Message): string {
   const id = message.conversation.id.trim();
   if (!id) throw new TypeError('Runtime IM ingress requires scene identity');
@@ -4814,11 +4732,9 @@ function capabilityLocalName(id: string): string {
   return local.split('~')[0]!;
 }
 
-/** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) — first-class field, metadata fallback. */
+/** Endpoint liveName (e.g. ICQQ uin, sandbox bot name) from the typed endpoint identity. */
 function adapterLiveEndpointId(message: Message): string {
   if (message.endpointId) return message.endpointId;
-  const live = String(message.metadata?.endpoint ?? message.metadata?.endpointKey ?? '');
-  if (live) return live;
   return capabilityLocalName(String(message.conversation.endpoint.id));
 }
 
@@ -5117,22 +5033,10 @@ function resolveChannelType(
 
 /**
  * 稳定发送者 ID：sender.id 是适配器从平台 API 传入的一等字段（稳定平台 ID），
- * metadata userId/user_id 降为 fallback（兼容尚未迁移的适配器）。
+ * Missing sender identity remains unauthenticated; metadata is never authority.
  */
 function resolveStableSenderId(message: Message): string {
-  return message.sender?.id ?? resolveAuthenticatedSenderId(message) ?? 'anon';
-}
-
-/**
- * Fallback sender identity from metadata. Only used when sender.id is absent
- * (legacy adapters that haven't migrated to MessageSenderRef).
- */
-function resolveAuthenticatedSenderId(message: Message): string | undefined {
-  for (const key of ['userId', 'user_id', 'senderId'] as const) {
-    const value = message.metadata?.[key];
-    if (value != null && String(value).trim()) return String(value);
-  }
-  return undefined;
+  return message.sender?.id ?? 'anon';
 }
 
 function isClearCommand(content: string): boolean {
@@ -5275,157 +5179,6 @@ function resolveInboundAudioUrl(
 
 function stripAudioPlaceholders(content: string): string {
   return content.replace(/\[audio:[^\]]*\]/gu, '').trim();
-}
-
-export function routeSpecialistAgent(
-  userText: string,
-  capabilities: Pick<AgentCapabilities, 'agents'>,
-  preferredAgentDefinitionId?: string,
-  defaultAgentDefinitionId?: string,
-): { readonly userText: string; readonly agent?: AgentCapabilities['agents'][number] } {
-  if (preferredAgentDefinitionId) {
-    if (preferredAgentDefinitionId === defaultAgentDefinitionId) return { userText };
-    const preferred = capabilities.agents.find((item) =>
-      item.name === preferredAgentDefinitionId
-      || item.qualifiedName === preferredAgentDefinitionId);
-    if (!preferred) {
-      throw new Error(`Workroom Orchestrator Agent is unavailable: ${preferredAgentDefinitionId}`);
-    }
-    return { userText, agent: preferred };
-  }
-  const match = userText.match(/^@([^\s:：]+)[:：]?\s*/u);
-  if (!match) return { userText };
-  const name = match[1]!.toLowerCase();
-  const agent = capabilities.agents.find((item) => item.name.toLowerCase() === name);
-  if (!agent) return { userText };
-  return { userText: userText.slice(match[0].length).trim() || userText, agent };
-}
-
-/**
- * 默认值与 legacy `DEFAULT_AI_TRIGGER_CONFIG`
- * （packages/im/core/src/built/ai-trigger.ts）对齐。
- */
-const DEFAULT_AI_TRIGGER_PREFIXES = ['#', 'AI:', 'ai:'];
-const DEFAULT_AI_TRIGGER_IGNORE_PREFIXES = ['/', '!', '！'];
-
-/**
- * 新 Plugin Runtime 的 AI 触发判定，对齐 legacy `shouldTriggerAI` 的顺序：
- * ignorePrefixes → 前缀 → @(群/频道，metadata.mentioned) → 私聊 → 关键词(仅单人会话)。
- *
- * 与 legacy 的差异：Runtime Message.content 为纯文本，at 信息由适配器经
- * `metadata.mentioned: true` 标注（icqq 扫 CQ 码、QQ 官方看 AT 事件、slack 看
- * app_mention）；且前缀触发对群聊同样生效（test-bot 群聊依赖 `ai:` 前缀，
- * legacy 群/频道仅 @ 触发）。
- */
-export function matchAiTrigger(
-  message: Message,
-  trigger: AITriggerConfig | undefined,
-): { content: string } | null {
-  if (trigger && trigger.enabled === false) return null;
-  const text = message.content.trim();
-  if (!text) return null;
-
-  // 0. 忽略前缀（命令前缀，避免与命令冲突）
-  const ignorePrefixes = trigger?.ignorePrefixes?.length
-    ? trigger.ignorePrefixes
-    : DEFAULT_AI_TRIGGER_IGNORE_PREFIXES;
-  for (const prefix of ignorePrefixes) {
-    if (prefix && text.startsWith(prefix)) return null;
-  }
-
-  const isPrivate = isPrivateRuntimeMessage(message);
-
-  // 1. 前缀触发（与 legacy 差异：群聊同样生效，见 docs/advanced/ai.md）
-  const prefixes = trigger?.prefixes?.length ? trigger.prefixes : DEFAULT_AI_TRIGGER_PREFIXES;
-  for (const prefix of prefixes) {
-    if (!prefix) continue;
-    if (text.startsWith(prefix)) {
-      const content = text.slice(prefix.length).trim();
-      return content ? { content } : null;
-    }
-  }
-
-  // 2. @ 触发（群/频道主路径；剥离提及后为空也触发，与 legacy 一致）
-  const respondToAt = trigger?.respondToAt !== false;
-  if (respondToAt && !isPrivate && (message.mentioned === true || message.metadata?.mentioned === true)) {
-    return { content: stripMentionMarkup(text) };
-  }
-
-  // 3. 私聊直接对话
-  const respondToPrivate = trigger?.respondToPrivate !== false;
-  if (respondToPrivate && isPrivate) {
-    return { content: text };
-  }
-
-  // 4. 关键词触发（仅私聊等单人会话，避免群聊旁听误触发，与 legacy 一致）
-  const keywords = trigger?.keywords ?? [];
-  if (isPrivate && keywords.length > 0) {
-    const lowerText = text.toLowerCase();
-    for (const keyword of keywords) {
-      if (keyword && lowerText.includes(keyword.toLowerCase())) {
-        return { content: text };
-      }
-    }
-  }
-
-  return null;
-}
-
-/** Project-scoped session isolates Workroom authority from ordinary room chat. */
-export function workroomOrchestratorSessionKey(
-  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'agentDefinitionId'>,
-): string {
-  return `workroom:${encodeURIComponent(continuation.projectId)}:orchestrator:${encodeURIComponent(continuation.agentDefinitionId)}`;
-}
-
-/** Pins a Workroom reply to the Catalog projection's canonical Endpoint. */
-export function resolveWorkroomOrchestratorConversation(
-  bindings: Readonly<Record<string, Readonly<{ conversation: ConversationRef }>>>,
-  continuation: Pick<WorkroomAgentTurnContinuation, 'projectId' | 'space'>,
-): ConversationRef | undefined {
-  return bindings[workroomProjectionBindingKey(
-    continuation.projectId,
-    continuation.space,
-  )]?.conversation;
-}
-
-/** Workroom Orchestrators delegate only through governed Run/Task commands. */
-export function restrictWorkroomAgentCapabilities(
-  capabilities: AgentCapabilities,
-  workroomTurn: boolean,
-): AgentCapabilities {
-  if (!workroomTurn) return capabilities;
-  const forbidden = new Set(['spawn_task', 'run_deferred_task']);
-  return Object.freeze({
-    ...capabilities,
-    tools: Object.freeze(capabilities.tools.filter(tool => !forbidden.has(tool.name))),
-  });
-}
-
-/** Durable Workroom discussion handoff bypasses ordinary chat trigger filtering. */
-export function resolveRuntimeAgentTrigger(
-  message: Message,
-  trigger: AITriggerConfig | undefined,
-  workroomAgentTurn: boolean,
-): { content: string } | null {
-  if (!workroomAgentTurn) return matchAiTrigger(message, trigger);
-  if (trigger?.enabled === false) return null;
-  const text = message.content.trim();
-  if (!text) return null;
-  return { content: stripMentionMarkup(text) || text };
-}
-
-/** 剥离 @ 触发后残留的提及标记：icqq CQ 码、QQ 官方/频道与 Slack 的 `<@!id>`。 */
-function stripMentionMarkup(text: string): string {
-  return text
-    .replace(/\[CQ:(?:at|mention),[^\]]*\]/giu, '')
-    .replace(/<@!?[^>\s]+>/gu, '')
-    .replace(/\[(?:at|mention):[^\]]*\]/giu, '')
-    .trim();
-}
-
-function isPrivateRuntimeMessage(message: Message): boolean {
-  return message.conversation.kind === 'private';
 }
 
 function flattenOutputElements(elements: readonly OutputElementLike[]): string {

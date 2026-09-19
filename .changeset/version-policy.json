@@ -36,6 +36,13 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace stateful anonymous runtime authority factories with explicit classes under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "strict-agent-host-contracts.md",
+      "packages": ["@zhin.js/cli"],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove Agent Host compatibility inputs and metadata authority fallbacks under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }
