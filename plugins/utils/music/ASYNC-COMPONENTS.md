@@ -35,7 +35,7 @@ export default defineComponent<UserCardProps>({
 命令放在 `commands/` 约定目录，default-export `defineCommand()`；用 `component(name, props)` 引用组件，返回值交给统一出站管道渲染：
 
 ```ts
-// commands/user-info/[userId].ts
+// commands/user-info/$[userId].ts
 import { defineCommand, component } from 'zhin.js/core/runtime';
 
 export default defineCommand({

@@ -1,6 +1,6 @@
 # @zhin.js/page
 
-标准 Page Feature provider。它把插件或项目根的平面 `pages/*.ts|tsx` 发现为 owner-bound Page manifest，并从 Plugin path 确定性生成 route。
+标准 Page Feature provider。它把插件或项目根的平面 `pages/$*.ts|tsx` 发现为 owner-bound Page manifest，并从 Plugin path 确定性生成 route；未加 `$` 的文件不会被加载为页面。
 
 ## Convention
 

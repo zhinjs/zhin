@@ -250,7 +250,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/endpoint/${list.ts, add/[[name]].ts, remove/[name].ts}
+// 4. commands/endpoint/$list.ts、add/$[[name]].ts、remove/$[name].ts
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 

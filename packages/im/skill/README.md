@@ -10,7 +10,7 @@ skills/
     └── SKILL.md
 ```
 
-只扫描一级 Skill 目录和其中精确命名的 `SKILL.md`。旧 `agent/skills/*.md`、任意散落 Markdown 和嵌套 Skill 不会被隐式发现。
+只扫描一级 Skill 目录和其中精确命名的 `SKILL.md`。另一套 `agent/skills/$*.md` 创作面、任意散落 Markdown 和嵌套 Skill 不会被本 Feature 隐式发现。
 
 ## Markdown 契约
 

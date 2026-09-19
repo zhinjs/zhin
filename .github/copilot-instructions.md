@@ -54,10 +54,10 @@ export default defineCommand({
 | 目录 | API |
 |------|-----|
 | `commands/**/$*.ts` | `defineCommand()` |
-| `middlewares/*.ts` | `defineMiddleware()` |
-| `components/*.tsx` | `defineComponent()` |
-| `tools/*.ts` | `defineAgentTool()` |
-| `pages/*.tsx` | `definePage()` |
+| `middlewares/$*.ts` | `defineMiddleware()` |
+| `components/$*.tsx` | `defineComponent()` |
+| `tools/$*.ts` | `defineAgentTool()` |
+| `pages/$*.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Skill |
 | `agents/$<name>.agent.md` | Agent |
 

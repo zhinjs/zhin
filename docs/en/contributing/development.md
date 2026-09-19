@@ -70,7 +70,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | Plugin Agent Publish (`pnpm check:plugin-agent-publish`) | Plugins with `agent/` have proper publish checklist (files, prepublishOnly, peer deps) |
 | Publish Repository (`pnpm check:publish-repository`) | Publishable packages have `repository.url` matching github.com/zhinjs/zhin (npm provenance) |
 | Agent Tool Schema (`pnpm check:agent-tool-schema`) | `agent/tools` inputSchema matches defineAgentTool/execute types |
-| No Package-Root skills/ (`pnpm check:no-package-skills`) | Plugin packages must not have top-level `skills/`; use `agent/skills/*.md` instead |
+| No Package-Root skills/ (`pnpm check:no-package-skills`) | Plugin packages must not have top-level `skills/`; use `agent/skills/$*.md` instead |
 
 **IM Chain & Runtime Conventions**
 

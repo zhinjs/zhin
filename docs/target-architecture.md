@@ -125,7 +125,7 @@ disposal. Standard providers use the following conventions:
 | Tool | `tools/$*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
 | Agent | `agents/$<name>.agent.md` | Agent capability catalog |
-| Prompt Section | `agent/prompt-sections/**/*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
+| Prompt Section | `agent/prompt-sections/**/$*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
 | Page | `pages/$*.ts(x)` / `definePage()` | Console PageIndex |
 | Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |
 

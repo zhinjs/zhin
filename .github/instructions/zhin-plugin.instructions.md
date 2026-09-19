@@ -43,7 +43,7 @@ Each TypeScript capability default-exports exactly one definition. Do not call `
   Import IM execution contracts from `zhin.js/core/runtime` (or `@zhin.js/core/runtime`).
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
   constructor parameter properties or TSX in server capability directories.
-- Browser `pages/*.tsx` are compiled by the Client Build adapter and are not imported by Node.
+- Browser `pages/$*.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
 
 ## Command routes
 

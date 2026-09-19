@@ -26,10 +26,10 @@ Three tiers:
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; `/` → `.` event inference) |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/`); `zhin.js/agent` (`agent/tools/*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/`); `zhin.js/agent` (`agent/tools/$*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | Generation-owned Prompt section with layer, retention budget, and profile scope |
 
-> Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`agent/skills/*.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
+> Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`agent/skills/$*.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
 
 ### Convention Directories and Files
 

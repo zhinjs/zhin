@@ -35,7 +35,7 @@ export default defineGamePlugin({
 });
 ```
 
-- `commands/<name>/[[action]].ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
+- `commands/<name>/$[[action]].ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
 - `middlewares/` 处理按钮 payload、裸文本答案和旧命令别名。
 - `defineGamePlugin()` 通过 `addGame` 发布 Game capability；`GameIndex` 是整代 snapshot
   的大厅 SSOT，命令通过 `context.project(gameFeatureId)` 读取。

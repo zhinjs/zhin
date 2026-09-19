@@ -35,12 +35,12 @@ tags:
 
 | 能力 | 做法 | 目录 / 位置 |
 |------|------|-------------|
-| 聊天命令 | `defineCommand()` default export | `commands/**/*.ts`（路径即路由） |
-| AI 工具 | `defineAgentTool()` | `tools/*.ts` 或 `agent/tools/*.ts` |
-| 中间件 | `defineMiddleware()` | `middlewares/*.ts` |
-| 组件 | `defineComponent()` | `components/*.tsx` |
+| 聊天命令 | `defineCommand()` default export | `commands/**/$*.ts`（`$` 入口路径即路由） |
+| AI 工具 | `defineAgentTool()` | `tools/$*.ts` 或 `agent/tools/$*.ts` |
+| 中间件 | `defineMiddleware()` | `middlewares/$*.ts` |
+| 组件 | `defineComponent()` | `components/$*.tsx` |
 | 定时任务 | `scheduleHostToken.register(...)` + `lifecycle` | `plugin.ts` setup |
-| 控制台页 | `definePage()` | `pages/*.tsx` |
+| 控制台页 | `definePage()` | `pages/$*.tsx` |
 | 单文件 demo | `setup({ addCommand })` | 仅 `examples/single-file-bot` 风格 |
 
 3. 确认 `package.json#zhin.features` 已挂对应 Feature（如 `@zhin.js/command`）
@@ -53,7 +53,7 @@ tags:
 - **出站**：走统一发送链（`$reply` / Adapter.sendMessage），禁止直调平台 Bot
 - 本地导入带 `.js` 扩展名
 
-**命令示例** `commands/greet/[name].ts`：
+**命令示例** `commands/greet/$[name].ts`：
 
 ```typescript
 import { defineCommand } from 'zhin.js/command';

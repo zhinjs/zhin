@@ -80,7 +80,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 | Category | Path |
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/*.ts` |
+| Platform tools | `agent/tools/$*.ts` |
 | Skill documentation | `agent/skills/$napcat.md` |
 
 ## Migration Notes (Plugin Runtime)
