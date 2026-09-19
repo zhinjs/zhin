@@ -75,7 +75,9 @@ export async function buildSubagentInboundTask(
       const filePath = spoolPayloadToFile(p, inboundRoot, 'image');
       spooledPaths.push(filePath);
       lines.push(
-        `${describePayload(p)}\n(已落盘: ${filePath}；请用 analyze_media，file_path 填该绝对路径)`,
+        useNativeVision
+          ? `${describePayload(p)}\n(已作为当前视觉模型输入；落盘路径: ${filePath})`
+          : `${describePayload(p)}\n(当前模型不支持图片输入；已落盘: ${filePath})`,
       );
       if (useNativeVision) {
         const vp = payloadToVisionPart(p);

@@ -100,6 +100,8 @@ for (const removedToolRegistryApi of [
   'TodoWriteBuiltinTool',
   'RunDeferredTaskBuiltinTool',
   'createRunDeferredTaskTool',
+  'AnalyzeMediaBuiltinTool',
+  'createAnalyzeMediaTool',
 ]) {
   const match = new RegExp(`\\b${removedToolRegistryApi}\\b`, 'u').exec(agentIndex);
   if (match) {
@@ -125,20 +127,21 @@ for (const removedRegistryPath of [
   'packages/im/agent/src/builtin/todo-write-tool.ts',
   'packages/im/agent/src/builtin/generate-image-tool.ts',
   'packages/im/agent/src/builtin/run-deferred-task-tool.ts',
+  'packages/im/agent/src/builtin/analyze-media-tool.ts',
 ]) {
   const target = path.join(repoRoot, removedRegistryPath);
   if (fs.existsSync(target)) report(target, 'removed ResourceHub Tool registry restored');
 }
 
-const retiredOrchestrationNames = ['tool_search', 'run_deferred_task'];
+const retiredToolNames = ['tool_search', 'run_deferred_task', 'analyze_media'];
 for (const file of files) {
   const fileName = relative(file);
   if (!fileName.endsWith('.ts')) continue;
   if (!fileName.startsWith('packages/im/agent/src/') && !fileName.startsWith('basic/cli/src/')) continue;
   const content = fs.readFileSync(file, 'utf8');
-  for (const name of retiredOrchestrationNames) {
+  for (const name of retiredToolNames) {
     const match = new RegExp(`\\b${name}\\b`, 'u').exec(content);
-    if (match) report(file, `retired orchestration protocol restored: ${name}`, lineOf(content, match.index));
+    if (match) report(file, `retired Tool protocol restored: ${name}`, lineOf(content, match.index));
   }
 }
 

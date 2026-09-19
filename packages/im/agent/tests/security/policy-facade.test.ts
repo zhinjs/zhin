@@ -80,22 +80,6 @@ describe('policy-facade', () => {
       expect(result.decisions.map((d) => d.policy)).toEqual(['role-gate', 'sensitive-path']);
     });
 
-    it('analyze_media 等价链（read_file 身份 + read 操作）：无 dangerous/memory/device/workspace 层', () => {
-      const fp = path.join(tmpDir, 'a.png');
-      const result = runToolPolicies({
-        toolName: 'read_file',
-        filePath: fp,
-        rawFilePath: fp,
-        fileOperation: 'read',
-      });
-      expect(result.allowed).toBe(true);
-      expect(result.decisions.map((d) => d.policy)).toEqual([
-        'role-gate',
-        'file-permission-matrix',
-        'sensitive-path',
-      ]);
-    });
-
     it('exec-policy 仅在 command 与 config 同时给定时生效', () => {
       const withConfig = runToolPolicies({
         toolName: 'bash',
@@ -300,21 +284,6 @@ describe('policy-facade', () => {
       expect(toolPolicyResultToMessage(result, 'read_file')).toBe(
         'Error: 禁止读取设备文件 /dev/zero（会导致进程挂起或注入攻击）',
       );
-    });
-
-    it('analyze_media 等价输入（无 devicePathGuard）不触发设备路径层', () => {
-      const result = runToolPolicies({
-        toolName: 'read_file',
-        filePath: '/dev/zero',
-        rawFilePath: '/dev/zero',
-        fileOperation: 'read',
-      });
-      expect(result.allowed).toBe(true);
-      expect(result.decisions.map((d) => d.policy)).toEqual([
-        'role-gate',
-        'file-permission-matrix',
-        'sensitive-path',
-      ]);
     });
 
     it('普通用户写会话 MEMORY.md 全链放行（对齐 checkMemoryWritePath session）', () => {

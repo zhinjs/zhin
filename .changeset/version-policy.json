@@ -3,6 +3,16 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "remove-false-media-analysis-tool.md",
+      "packages": [
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove a detached media Tool that could claim model analysis without placing media in a model turn, and require the canonical inbound media pipeline under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "remove-retired-orchestration-protocol.md",
       "packages": [
         "@zhin.js/agent",

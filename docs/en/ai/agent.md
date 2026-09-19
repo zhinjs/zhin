@@ -224,7 +224,7 @@ ai:
 | Interaction | `ask_user` |
 | Task | `spawn_task`, `todo_read`, `todo_write` |
 | Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
-| Media | `generate_image`, `analyze_media` |
+| Media | `generate_image`; inbound images go directly to vision-capable models |
 | Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |
 | Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
 

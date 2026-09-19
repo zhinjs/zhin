@@ -93,7 +93,9 @@ async function readFile(input: Record<string, unknown>, context: ToolExecutionCo
   if (stat.size > MAX_READ_FILE_SIZE) {
     throw new Error(`File exceeds the ${MAX_READ_FILE_SIZE} byte read limit`);
   }
-  if (isImageFile(target)) throw new Error('Use analyze_media for image files');
+  if (isImageFile(target)) {
+    throw new Error('Binary images cannot be read as UTF-8; attach the image to a turn using a vision-capable model');
+  }
   const content = await fs.readFile(target, { encoding: 'utf8', signal: context.signal });
   const lines = content.split('\n');
   const offset = nonNegativeInteger(input.offset, 0);

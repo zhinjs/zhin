@@ -19,7 +19,6 @@ describe('resolveSubagentAgentTools', () => {
     makeTool('write_file'),
     makeTool('bash'),
     makeTool('generate_image', ['画', 'draw', 'image', 'picture']),
-    makeTool('analyze_media', ['vision', 'image', '识图']),
     makeTool('spawn_task'),
     makeTool('unlisted_sensitive_tool'),
   ];

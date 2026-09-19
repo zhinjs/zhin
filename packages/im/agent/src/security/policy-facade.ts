@@ -73,10 +73,7 @@ export interface ToolPolicyInput {
   fileOperation?: FileOperation;
   /** bash 命令（exec-policy 与 bash 三层用） */
   command?: string;
-  /**
-   * 读类工具显式启用 blocked-device-path 层（仅 read_file；
-   * analyze_media 不启用以保持旧行为；拒绝文案也用读类措辞）。
-   */
+  /** 读类工具显式启用 blocked-device-path 层。 */
   devicePathGuard?: boolean;
   commMessage?: Message;
   /** exec policy 用配置 */
@@ -305,7 +302,7 @@ function resolveTurnFileOperation(toolName: string): FileOperation | undefined {
   if (toolName === 'write_file') return 'create';
   if (toolName === 'edit_file') return 'update';
   if (toolName === 'read_file' || toolName === 'list_dir' || toolName === 'glob'
-    || toolName === 'grep' || toolName === 'analyze_media') return 'read';
+    || toolName === 'grep') return 'read';
   return undefined;
 }
 

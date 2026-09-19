@@ -266,7 +266,7 @@ ai:
 | 交互 | `ask_user` |
 | 任务 | `spawn_task`、`todo_read`、`todo_write` |
 | 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
-| 媒体 | `generate_image`、`analyze_media` |
+| 媒体 | `generate_image`；入站图片直接进入支持视觉的模型 |
 | 元 | `discover`、`load_tool`、`load_skill`、`install_skill` |
 | 调度 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 
