@@ -20,9 +20,8 @@ export {
 } from './strategies.js';
 
 export {
-  buildUserMessageExtra,
+  buildUserMessageActor,
   prepareUserContentForSession,
-  layerInboundUserTurnBody,
   resolveTurnUserMessage,
   buildAgentSessionCreateInput,
   buildHistoryMessagesFromContext,
@@ -48,7 +47,6 @@ export type { BranchSummarizationOptions } from './branch-summarization-runtime.
 export {
   beginIngressTurnSession,
   buildTurnSessionCreateInput,
-  layerIngressUserBody,
   resolveIngressUserMessage,
 } from './turn-ingress-session.js';
 export type { ResolvedIngressUserMessage } from './turn-ingress-session.js';

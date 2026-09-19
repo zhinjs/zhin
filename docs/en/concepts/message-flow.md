@@ -61,6 +61,8 @@ The actual code locations for each step:
 
 6. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `OutboundMessageService`.
 
+   Core passes canonical user content to this route without encoding sender identity into text. Agent ingress projects the trusted sender, roles, and scene scope once into `UserMessage.actor`; AI persistence stores that actor and renders participant labels only at the LLM boundary. `agent_messages.extra` carries quote presentation context only and cannot become a second identity source.
+
 7. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
 
 ## Outbound: $reply -> Render -> Middleware -> Endpoint

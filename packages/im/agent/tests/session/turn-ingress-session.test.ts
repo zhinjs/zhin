@@ -56,11 +56,8 @@ describe('TurnIngress session projection', () => {
 
     expect(result.content).toBe('hello');
     expect(result.extra).toEqual({
-      sender: {
-        id: 'user-7',
-        name: 'Ada_Lovelace',
-        roles: ['trusted', 'admin'],
-        scope: 'group',
+      quote: {
+        block: expect.stringContaining('previous answer'),
       },
     });
     const text = result.llmMessage.content.find((block) => block.type === 'text');

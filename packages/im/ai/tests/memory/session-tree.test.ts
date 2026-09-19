@@ -42,15 +42,13 @@ describe('session-tree', () => {
     expect(points[0].messageId).toBe(1);
   });
 
-  it('listUserBranchPoints preview uses clean payload + extra (not roles in text)', () => {
-    const u1 = serializeAgentMessage(createUserMessage('你是谁'), {
-      sender: {
-        id: '1659488338',
-        name: '归雨',
-        roles: ['master', 'scene_admin'],
-        scope: 'group',
-      },
-    });
+  it('listUserBranchPoints preview uses clean payload and actor display name', () => {
+    const u1 = serializeAgentMessage(createUserMessage('你是谁', undefined, 1, {
+      subjectId: '1659488338',
+      displayName: '归雨',
+      roles: ['master', 'scene_admin'],
+      scope: 'group',
+    }));
     u1.id = 1;
     u1.session_id = 's';
     u1.parent_id = null;

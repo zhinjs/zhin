@@ -135,8 +135,7 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toContain('问题');
-      expect(result.content).toContain('[sender:');
+      expect(result.content).toBe('问题');
     });
   });
 
@@ -163,8 +162,7 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toContain('问题');
-      expect(result.content).toContain('[sender:');
+      expect(result.content).toBe('问题');
     });
   });
 
@@ -551,8 +549,8 @@ describe('AI Trigger 工具函数', () => {
     });
   });
 
-  describe('shouldTriggerAI - 群/频道发送者前缀', () => {
-    it('群聊 @ 触发时 content 包含 sender 前缀', () => {
+  describe('shouldTriggerAI - 正文与参与者身份分离', () => {
+    it('群聊 @ 触发只返回干净正文', () => {
       const message = createMockMessage({
         content: [
           { type: 'at', data: { user_id: 'bot123' } },
@@ -565,11 +563,10 @@ describe('AI Trigger 工具函数', () => {
       (message.$sender as any).name = '小红';
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toMatch(/^\[sender:id=alice name=小红 roles=user\]/);
-      expect(result.content).toContain('你好');
+      expect(result.content).toBe('你好');
     });
 
-    it('频道 @ 触发时 content 包含 sender 前缀', () => {
+    it('频道 @ 触发只返回干净正文', () => {
       const message = createMockMessage({
         content: [
           { type: 'at', data: { user_id: 'bot123' } },
@@ -582,10 +579,10 @@ describe('AI Trigger 工具函数', () => {
       (message.$sender as any).name = '阿博';
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toMatch(/^\[sender:id=bob name=阿博 roles=user\]/);
+      expect(result.content).toBe('问好');
     });
 
-    it('群聊 sender 无名称时 name 为 unknown', () => {
+    it('仅 @ 无正文时返回空正文', () => {
       const message = createMockMessage({
         content: [
           { type: 'at', data: { user_id: 'bot123' } },
@@ -596,20 +593,7 @@ describe('AI Trigger 工具函数', () => {
       });
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       expect(result.triggered).toBe(true);
-      expect(result.content).toMatch(/^\[sender:id=user99 name=unknown roles=user\]/);
-    });
-
-    it('仅 @ 无正文时 content 仅含 sender 前缀', () => {
-      const message = createMockMessage({
-        content: [{ type: 'at', data: { user_id: 'bot123' } }],
-        endpoint: 'bot123',
-        channelType: 'group',
-        senderId: 'u1',
-      });
-      (message.$sender as any).name = '用户';
-      const result = shouldTriggerAI(message as any, { respondToAt: true });
-      expect(result.triggered).toBe(true);
-      expect(result.content).toMatch(/^\[sender:id=u1 name=用户 roles=user\]$/);
+      expect(result.content).toBe('');
     });
 
     it('私聊触发时不添加 sender 前缀', () => {
@@ -625,7 +609,7 @@ describe('AI Trigger 工具函数', () => {
       expect(result.content).not.toContain('[sender:');
     });
 
-    it('master 角色应体现在 sender 前缀中', () => {
+    it('角色配置不进入触发正文', () => {
       const message = createMockMessage({
         content: [
           { type: 'at', data: { user_id: 'bot123' } },
@@ -638,7 +622,7 @@ describe('AI Trigger 工具函数', () => {
       (message.$sender as any).name = '管理员';
       const result = shouldTriggerAI(message as any, { respondToAt: true, masters: ['admin1'] });
       expect(result.triggered).toBe(true);
-      expect(result.content).toMatch(/\[sender:id=admin1 name=管理员 roles=master\]/);
+      expect(result.content).toBe('命令');
     });
   });
 });

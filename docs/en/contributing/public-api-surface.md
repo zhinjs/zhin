@@ -67,6 +67,9 @@ Three tiers:
 | `usePlugin()` / `getPlugin()` | `removed` | none (no longer exported) | The only entry is `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / `CommandFeature` | `removed` | none (no longer exported) | Commands use `defineCommand` and Runtime `CommandIndex` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | none (subpath deleted) | The only startup entry is `zhin runtime start` |
+| `AgentMessageSenderExtra` / `SenderScope` | `removed` | none (no longer exported) | Participant identity lives only in `UserMessage.actor` |
+| `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | none (no longer exported) | The AI boundary renders participant labels from actor and never infers identity from text or extra |
+| `buildSenderPrefixForMessage` | `removed` | none (no longer exported) | Core triggers return user content without encoding Agent identity |
 
 ### `zhin.config.yml` Top-Level Keys
 

@@ -6,7 +6,6 @@ import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import {
   createUserMessage,
   type AgentMessage,
-  type ConversationActor,
   type UserMessage,
 } from '../llm/types/agent-message.js';
 
@@ -24,7 +23,7 @@ import {
   findKeepRecentStartIndex,
 } from './agent-message-tokens.js';
 import { microCompactAgentMessages } from './agent-micro-compact.js';
-import { stripSenderPrefixFromText } from '../memory/sender-extra.js';
+import { userMessageBody } from '../memory/user-message-presentation.js';
 
 const logger = getLogger('AgentCompaction');
 
@@ -82,17 +81,13 @@ function textBlocks(message: AgentMessage): string {
 
 function agentMessageToTranscriptLine(message: AgentMessage): string {
   if (message.role === 'user') {
-    const text = textBlocks(message);
-    const legacy = stripSenderPrefixFromText(text);
-    const actor: ConversationActor | undefined = (message as UserMessage).actor ?? (legacy.sender ? {
-      subjectId: legacy.sender.id,
-      displayName: legacy.sender.name,
-      roles: legacy.sender.roles,
-    } : undefined);
-    if (!actor) return `[User] ${legacy.body}`;
+    const user = message as UserMessage;
+    const text = userMessageBody(user);
+    const actor = user.actor;
+    if (!actor) return `[User] ${text}`;
     const name = actor.displayName?.trim() || actor.subjectId;
     const roles = actor.roles?.length ? actor.roles.join(',') : 'user';
-    return `[User:${name} id=${actor.subjectId} roles=${roles}] ${legacy.body}`;
+    return `[User:${name} id=${actor.subjectId} roles=${roles}] ${text}`;
   }
   if (message.role === 'assistant') {
     return `[Assistant] ${textBlocks(message)}`;

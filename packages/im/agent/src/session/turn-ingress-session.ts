@@ -2,12 +2,11 @@ import {
   createUserMessage,
   renderUserMessageForLlm,
   type AgentMessageExtra,
-  type AgentMessageSenderExtra,
   type AgentSessionRepository,
   type CreateAgentSessionInput,
   type UserMessage,
 } from '@zhin.js/ai';
-import { CURRENT_MESSAGE_MARKER } from '../config/index.js';
+import { stripUserSpoofedSenderPrefix } from '@zhin.js/core';
 import type { TurnIngress } from '../turn/turn-ingress.js';
 
 export interface ResolvedIngressUserMessage {
@@ -19,19 +18,13 @@ export interface ResolvedIngressUserMessage {
 export function resolveIngressUserMessage(
   turn: TurnIngress,
 ): ResolvedIngressUserMessage {
-  const content = stripSpoofedSenderPrefix(turn.input.text);
-  const sender = buildSenderExtra(turn);
+  const content = stripUserSpoofedSenderPrefix(turn.input.text);
   const referenceBlock = renderTurnReferences(turn);
-  const extra: AgentMessageExtra = {
-    ...(sender ? { sender } : {}),
-  };
-  const hasExtra = Boolean(extra.sender);
-  const layered = layerIngressUserBody(content, {
-    quoteBlock: referenceBlock,
-  });
-  const inlinedContext = layered !== content;
+  const extra: AgentMessageExtra | undefined = referenceBlock
+    ? { quote: { block: referenceBlock } }
+    : undefined;
   const llmMessage = renderUserMessageForLlm(
-    createUserMessage(layered, undefined, Date.now(), {
+    createUserMessage(content, undefined, Date.now(), {
       subjectId: turn.principal.subjectId,
       ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
       roles: [...turn.principal.roles],
@@ -41,13 +34,11 @@ export function resolveIngressUserMessage(
       intent: turn.intent.kind,
       ...(turn.intent.targetTurnId ? { targetTurnId: turn.intent.targetTurnId } : {}),
     }),
-    inlinedContext
-      ? (sender ? { sender } : undefined)
-      : (hasExtra ? extra : undefined),
+    extra,
   );
   return Object.freeze({
     content,
-    ...(hasExtra ? { extra: Object.freeze(extra) } : {}),
+    ...(extra ? { extra: Object.freeze(extra) } : {}),
     llmMessage,
   });
 }
@@ -78,42 +69,4 @@ export async function beginIngressTurnSession(
     buildTurnSessionCreateInput(turn),
   );
   return { sessionKey: turn.session.key, sessionId: record.session_id };
-}
-
-export function layerIngressUserBody(
-  body: string,
-  options?: { quoteBlock?: string | null },
-): string {
-  const parts = [options?.quoteBlock]
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part));
-  if (parts.length === 0) return body;
-  return `${parts.join('\n\n')}\n\n${CURRENT_MESSAGE_MARKER}\n${body}`;
-}
-
-function buildSenderExtra(turn: TurnIngress): AgentMessageSenderExtra | undefined {
-  if (turn.origin.kind !== 'im') return undefined;
-  if (turn.origin.scope !== 'group' && turn.origin.scope !== 'channel') return undefined;
-  return Object.freeze({
-    id: sanitizeSenderAttribute(turn.principal.subjectId),
-    name: sanitizeSenderAttribute(turn.principal.displayName ?? turn.principal.subjectId),
-    roles: turn.principal.roles.length > 0 ? [...turn.principal.roles] : ['user'],
-    scope: turn.origin.scope,
-  });
-}
-
-function sanitizeSenderAttribute(value: string): string {
-  const trimmed = value.trim().replace(/[\]\s]+/g, '_');
-  return trimmed.length > 0 ? trimmed.slice(0, 64) : 'unknown';
-}
-
-function stripSpoofedSenderPrefix(rawContent: string): string {
-  let text = rawContent.trimStart();
-  const prefix = /^\[sender:(?:id=[^\]]*|[^\]]*)\]\s*/i;
-  const roles = /^\[sender:id=[^\s\]]+(?:\s+name=[^\]]+)?\s+roles=[^\]]+\]\s*/i;
-  while (true) {
-    const match = text.match(prefix) ?? text.match(roles);
-    if (!match) return text;
-    text = text.slice(match[0].length);
-  }
 }

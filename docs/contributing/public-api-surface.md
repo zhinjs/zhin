@@ -67,6 +67,9 @@
 | `usePlugin()` / `getPlugin()` | `removed` | 无（不再导出） | 唯一入口为 `definePlugin` + `zhin runtime start` |
 | `MessageCommand` / `CommandFeature` | `removed` | 无（不再导出） | 命令统一使用 `defineCommand` + Runtime `CommandIndex` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin runtime start` |
+| `AgentMessageSenderExtra` / `SenderScope` | `removed` | 无（不再导出） | 参与者身份只存于 `UserMessage.actor` |
+| `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | 无（不再导出） | 参与者标签由 AI 边界从 actor 渲染，不再从文本或 extra 推断身份 |
+| `buildSenderPrefixForMessage` | `removed` | 无（不再导出） | Core trigger 只返回用户正文，不编码 Agent 身份 |
 
 ### `zhin.config.yml` 顶层键
 

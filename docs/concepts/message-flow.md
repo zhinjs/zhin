@@ -70,6 +70,8 @@ flowchart LR
 
 6. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `OutboundMessageService` 上可变的插件 setter。
 
+   Core 只把干净正文交给该 route，不把发送者编码进文本。Agent ingress 将可信的 sender、角色和 scene scope 一次性投影为 `UserMessage.actor`；AI 持久层保存 actor，并仅在 LLM 边界渲染参与者标签。`agent_messages.extra` 只承载引用展示上下文，不能成为第二套身份来源。
+
 7. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
 
 ## 出站：$reply → 渲染 → 中间件 → Endpoint

@@ -683,6 +683,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the duplicate Agent Tool authoring model and package-root tools convention under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "canonical-conversation-actors.md",
+      "packages": [
+        "@zhin.js/ai",
+        "@zhin.js/agent",
+        "@zhin.js/core"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Make UserMessage.actor the sole participant identity authority and remove sender identity compatibility projections from Core, Agent, and AI under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

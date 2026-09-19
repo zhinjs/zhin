@@ -290,8 +290,6 @@ export type {
   AgentMessageRow,
   AgentSummaryRecord,
   AgentMessageExtra,
-  AgentMessageSenderExtra,
-  SenderScope,
 } from './memory/agent-db-models.js';
 export {
   MEMORY_ENTRY_MODEL,
@@ -310,16 +308,14 @@ export {
 } from './memory/memory-entry-repository.js';
 export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
 export {
-  buildSenderPrefix,
+  buildActorPrefix,
   parseAgentMessageExtra,
-  applySenderExtraToUserMessage,
   renderUserMessageForLlm,
   normalizeUserMessageForStorage,
-  stripSenderPrefixFromText,
-  splitQuoteFromUserText,
+  userMessageBody,
   userMessagePlainText,
   type AgentMessageQuoteExtra,
-} from './memory/sender-extra.js';
+} from './memory/user-message-presentation.js';
 export type { AppendMessagesOptions } from './memory/context-repository.js';
 
 export {

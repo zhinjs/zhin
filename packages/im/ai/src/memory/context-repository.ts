@@ -7,7 +7,7 @@ import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/t
 import { createContext, type Context } from '../llm/types/context.js';
 
 import { agentMessageRowToLlm, serializeAgentMessage, type AgentMessageRow, type AgentSummaryRecord } from './agent-db-models.js';
-import type { AgentMessageExtra } from './sender-extra.js';
+import type { AgentMessageExtra } from './user-message-presentation.js';
 
 import { findKeepRecentStartIndex } from '../compaction/agent-message-tokens.js';
 import {
@@ -36,7 +36,7 @@ export interface SaveSummaryOptions {
 }
 
 export interface AppendMessagesOptions {
-  /** 与 `messages` 同下标；显式 extra 优先于从正文解析（本轮 user 消息） */
+  /** 与 `messages` 同下标；仅承载引用等展示上下文。 */
   messageExtras?: (AgentMessageExtra | undefined)[];
 }
 
