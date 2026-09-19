@@ -4,7 +4,7 @@ import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import { getLogger } from '@zhin.js/logger';
 import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS, type RuntimeConfigDocument } from '@zhin.js/runtime';
-import { readPluginPackageMap } from './plugin-schema.js';
+import { readPluginPackageMap } from './plugin-package-map.js';
 
 export async function readProjectConfigYaml(projectRoot: string): Promise<string> {
   const file = await findConfigFile(projectRoot);

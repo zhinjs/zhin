@@ -8,15 +8,17 @@ import {
   writeProjectConfigYaml,
 } from './configuration-document.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
-import { readPluginSchema, readPluginSchemas } from './plugin-schema.js';
+import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 
 /** Owns one project's Console configuration I/O and serializes mutations. */
 export class ConsoleConfigurationStore {
   readonly #projectRoot: string;
+  readonly #schemas: PluginSchemaCatalog;
   #writeTail: Promise<unknown> = Promise.resolve();
 
   constructor(projectRoot: string) {
     this.#projectRoot = projectRoot;
+    this.#schemas = new PluginSchemaCatalog(projectRoot);
   }
 
   readYaml(): Promise<string> {
@@ -49,12 +51,12 @@ export class ConsoleConfigurationStore {
   }
 
   readSchema(pluginName?: string): Promise<unknown> {
-    return readPluginSchema(this.#projectRoot, pluginName);
+    return this.#schemas.read(pluginName);
   }
 
   async readAllSchemas(): Promise<Record<string, unknown>> {
     const keys = await listConsoleConfigKeys(this.#projectRoot);
-    return readPluginSchemas(this.#projectRoot, keys);
+    return this.#schemas.readAll(keys);
   }
 
   listKeys(primaryConfigDocument?: RuntimeConfigDocument): Promise<string[]> {
