@@ -31,7 +31,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## 旧 manifest / `plugin.yml` → package.json `zhin` 字段
 
-- **旧写法**：插件根的 `plugin.yml` 清单（`PluginManifest`，已标记 deprecated；legacy `Plugin` 与 `zhin build` 仍识别它，见 `basic/cli/src/libs/plugin-package-build.ts`）。
+- **旧写法**：插件根的 `plugin.yml` 清单。该格式及 `PluginManifest` 类型已从源码、构建识别和 public surface 删除。
 - **新写法**：`package.json` 的 `zhin` 字段，由 `@zhin.js/runtime`（`packages/im/runtime/src/manifest.ts`）解析并强校验。逐字段说明见 [definePlugin · package.json zhin 字段](../authoring/define-plugin.md)。
 
 ```jsonc
@@ -42,7 +42,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## `extends Adapter` 类适配器 → defineAdapter
 
-- **旧写法**：继承 `@zhin.js/core` 的 `Adapter` 基类实现平台适配器（该类仍在 `packages/im/core/src/adapter.ts`，供 legacy app 层使用）。
+- **旧写法**：继承 `@zhin.js/core` 的 `Adapter` 基类实现平台适配器。该类和对应 Core `Endpoint` 运行时已删除。
 - **新写法**：约定 `adapters/` 目录下默认导出 `defineAdapter({ capabilities, create })`（`@zhin.js/adapter`），按 `capabilities`（`inbound` / `outbound`）声明 IO 能力；Endpoint 实例配置来自 app 配置 `plugins.<instanceKey>`，结构由插件包 `schema.json` 描述。
 
 ```ts

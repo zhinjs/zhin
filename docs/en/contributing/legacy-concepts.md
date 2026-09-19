@@ -31,7 +31,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## Old Manifest / `plugin.yml` -> package.json `zhin` Field
 
-- **Old approach**: A `plugin.yml` manifest at the plugin root (`PluginManifest`, marked deprecated; legacy `Plugin` and `zhin build` still recognize it, see `basic/cli/src/libs/plugin-package-build.ts`).
+- **Old approach**: A `plugin.yml` manifest at the plugin root. That format and the `PluginManifest` type are absent from source, build detection, and the public surface.
 - **New approach**: The `zhin` field in `package.json`, parsed and strictly validated by `@zhin.js/runtime` (`packages/im/runtime/src/manifest.ts`). For field-by-field documentation, see [definePlugin - package.json zhin field](../authoring/define-plugin.md).
 
 ```jsonc
@@ -42,7 +42,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## `extends Adapter` Class Adapter -> defineAdapter
 
-- **Old approach**: Extending the `Adapter` base class from `@zhin.js/core` to implement platform adapters (the class still exists in `packages/im/core/src/adapter.ts` for the legacy app layer).
+- **Old approach**: Extending the `Adapter` base class from `@zhin.js/core` to implement platform adapters. That class and the matching Core `Endpoint` runtime have been deleted.
 - **New approach**: Default-export `defineAdapter({ capabilities, create })` (`@zhin.js/adapter`) from a file in the convention `adapters/` directory, declaring IO capabilities via `capabilities` (`inbound` / `outbound`). Endpoint instance configuration comes from the app config `plugins.<instanceKey>`, with the structure described by the plugin package's `schema.json`.
 
 ```ts

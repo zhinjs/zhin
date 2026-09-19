@@ -414,6 +414,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove the unused Kernel PluginBase, mutable Feature registry, string DI, and prototype extensions so Plugin Runtime and Feature Kit are the only lifecycle and capability authorities under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "remove-plugin-yml-compatibility.md",
+      "packages": [
+        "@zhin.js/cli",
+        "@zhin.js/core",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove plugin.yml build detection, package-name guessing, and the dead Core PluginManifest type so package.json#zhin is the only plugin manifest authority under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

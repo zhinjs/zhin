@@ -125,7 +125,7 @@ Three tiers:
 | `AgentOrchestrator` / `ResourceHub` | `removed` | Compatibility names are no longer exported | Use `AgentResourceHub` for capability registration; Workroom orchestration uses the Kernel and dedicated typed ports |
 | "Host plugin" narrative | `deprecated` | Documentation has been consolidated | Host capabilities are now token-based (see Host Token table above), no longer a plugin concept |
 | `examples/test-bot` as a user path | `deprecated` | Maintainer kitchen sink | User paths are minimal-bot (Stable) -> full-bot (L4); do not use test-bot config as a template |
-| `plugin.yml` plugin manifest | `deprecated` | Only legacy `zhin build` still reads it (`basic/cli/src/libs/plugin-package-build.ts`) | Convention-based plugins use `package.json`; the remaining build path will be retired separately |
+| `plugin.yml` / Core `PluginManifest` | `removed` | Build detection, source types, and the duplicate repository manifest were deleted | Plugin identity and metadata come only from strictly validated `package.json#zhin` |
 
 ## Decision Rules (Which Tier for New APIs)
 

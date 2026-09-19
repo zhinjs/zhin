@@ -329,20 +329,3 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   kind?: string;
 
 }
-
-
-// ============================================================================
-// 插件清单（plugin.yml）
-// ============================================================================
-
-/**
- * 插件清单元数据（从 plugin.yml 解析）
- */
-export interface PluginManifest {
-  /** 插件名称 */
-  name: string;
-  /** 插件描述 */
-  description?: string;
-  /** 插件版本 */
-  version?: string;
-}

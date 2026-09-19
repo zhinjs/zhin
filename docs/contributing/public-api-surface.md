@@ -138,7 +138,7 @@
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
-| `plugin.yml` 插件清单 | `deprecated` | 仅 legacy `zhin build` 仍在读取（`basic/cli/src/libs/plugin-package-build.ts`） | 约定式插件以 `package.json` 为准；剩余构建入口另行退役 |
+| `plugin.yml` / Core `PluginManifest` | `removed` | 构建识别、源码类型与仓库重复清单均已删除 | 插件身份与清单只认严格校验的 `package.json#zhin` |
 
 ## 判定规则（新增 API 放哪档）
 
