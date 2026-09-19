@@ -15,25 +15,7 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AIService,
-  AgentEventBus,
   AgentResourceHub,
-  discoverWorkspaceAgents,
-  createScheduleJobStoreFromConfig,
-  createScheduleTools,
-  ScheduleJobEngine,
-  JobWorker,
-  createTaskExecutor,
-  createNotificationRouter,
-  resolveAssistantConfig,
-  resolveAssistantDefaultsConfig,
-  parseJobNotify,
-  AssistantEventIngress,
-  loadAssistantProfileFile,
-  validateAssistantProfile,
-  syncProfileHeartbeatToStore,
-  syncProfileRoutinesToStore,
-  pruneStaleProfileCronJobs,
-  bootstrapAssistantHome,
   ActivatableWorkroomJournal,
   FileWorkroomJournal,
   ActivatableWorkroomCatalog,
@@ -43,19 +25,13 @@ import {
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
-  type ProactiveOutboundService,
   type AssistantConfig,
-  type BootstrapAssistantHomeResult,
   type ApprovalPort,
   type TurnRequest,
   type TurnOutcome,
-  type TurnEvent,
   type WorkroomDefinition,
   type WorkroomMemberRole,
   FileJournalStore,
-  demoteScheduleCreator,
-  type ScheduleActivityEvent,
-  type ScheduleTurnExecutionRequest,
   resolveWorkroomBotIdentity,
   workroomProjectionMessageKey,
   workroomProjectionBindingKey,
@@ -128,11 +104,9 @@ import {
   createWorkroomRuntime,
   createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
-  type AssistantRuntimeHandle,
   type WorkroomRuntimeHandle,
   type WorkroomRunControlCommand,
   type SessionTreeRuntimeHandle,
-  type AgentTraceRecorder,
   type TurnIntentResolver,
   createGenerationWorkroomAcceptancePolicyPort,
   workroomAcceptancePolicyDecisionToken,
@@ -303,7 +277,6 @@ import {
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
-import type { AgentTool, JsonSchema } from '@zhin.js/ai';
 import { conversationRefKey } from '@zhin.js/im-contract';
 import { resolveSandboxTurnPolicy } from './sandbox-turn-policy.js';
 import {
@@ -347,6 +320,14 @@ import {
   runtimeImSessionKey,
   type RuntimeSenderRoles,
 } from './agent-turn-request.js';
+import {
+  createRuntimeZhinAgent,
+  observeAgentTurnTrace,
+} from './agent-runtime-factory.js';
+import {
+  createAssistantHomeRuntime,
+  createAssistantScheduleRuntime,
+} from './assistant-runtime.js';
 import {
   assertFixedWorkroomStorageMode,
   assessWorkroomDisclosureSetup,
@@ -503,8 +484,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let zhinAgent: ZhinAgent | undefined;
     let composedRuntime: ReturnType<typeof composeZhinAgentRuntime> | undefined;
     let seedPresets: () => Promise<number>;
-    let scheduleTools: ReturnType<typeof createScheduleTools> = [];
-    let homeTools: BootstrapAssistantHomeResult['tools'] = [];
+    let scheduleTools: ReturnType<typeof createAssistantScheduleRuntime>['tools'] = [];
+    let homeTools: Awaited<ReturnType<typeof createAssistantHomeRuntime>>['tools'] = [];
     let assistantEnabled = false;
     const semanticMemory = aiConfig.memory?.semantic?.enabled === true
       ? new SemanticMemoryRuntime()
@@ -588,7 +569,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     let sessionTreeRuntime: SessionTreeRuntimeHandle;
     const traceRuntime = createAgentTraceRuntime();
     const rememberedSandboxApprovals = new Map<string, Set<string>>();
-    let schedule: ReturnType<typeof wireRuntimeSchedule>;
+    let schedule: ReturnType<typeof createAssistantScheduleRuntime>;
     try {
       const created = createRuntimeZhinAgent(
         service,
@@ -614,21 +595,20 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       });
       workroomRuntime = createWorkroomRuntime(workroomJournal, consoleProjectionAuthority);
       sessionTreeRuntime = createSessionTreeRuntimeFromAgent(composedRuntime.host);
-      schedule = wireRuntimeSchedule(
+      schedule = createAssistantScheduleRuntime(
         zhinAgent,
         service,
         options.runtime,
         options.im,
         options.projectRoot,
         assistantConfig,
-        lifecycle,
         traceRuntime,
       );
       scheduleTools = schedule.tools;
       assistantEnabled = schedule.assistantEnabled;
       lifecycle.add(schedule.dispose);
 
-      const home = await wireRuntimeHome(
+      const home = await createAssistantHomeRuntime(
         options.projectRoot,
         assistantConfig,
         schedule.notificationRouter,
@@ -901,7 +881,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
             binding: selected,
             mcpServers: selected.mcpServers,
             ...(selected.name === 'zhin' ? {} : { agent: selected.name }),
-          }, observeTrace(traceRuntime, request));
+          }, observeAgentTurnTrace(traceRuntime, request));
         },
       }),
       introspection: Object.freeze({
@@ -3257,7 +3237,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 mcpServers: binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
-              observeTrace(traceRuntime, request),
+              observeAgentTurnTrace(traceRuntime, request),
             );
           },
           resolveTriggerTimeoutMs(trigger),
@@ -3322,455 +3302,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | tools: ${(options.extraTools ?? []).map((tool) => tool.name).join(',') || '-'}`,
     );
-  };
-}
-
-/**
- * Persist schedule-jobs.json + schedule_* tools for Plugin Runtime Agent Host.
- * When `assistant.enabled`, also sync profile routines and register Event Ingress.
- */
-function wireRuntimeSchedule(
-  agent: ZhinAgent,
-  service: AIService,
-  runtime: AgentRuntime,
-  im: ImRuntime,
-  projectRoot: string,
-  assistantRaw: AssistantConfig | undefined,
-  lifecycle: DisposeStack,
-  trace: AgentTraceRecorder,
-): {
-  tools: ReturnType<typeof createScheduleTools>;
-  dispose: () => Promise<void>;
-  assistantEnabled: boolean;
-  notificationRouter: ReturnType<typeof createNotificationRouter>;
-  defaultNotify: ReturnType<typeof parseJobNotify> | undefined;
-  bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void;
-  assistantRuntime: AssistantRuntimeHandle | null;
-} {
-  const dataDir = join(projectRoot, 'data');
-  mkdirSync(dataDir, { recursive: true });
-
-  const assistantCfg = resolveAssistantConfig(assistantRaw);
-  const defaults = resolveAssistantDefaultsConfig(assistantCfg.defaults);
-  let defaultNotify = defaults.notify;
-  if (defaultNotify) {
-    try {
-      defaultNotify = parseJobNotify(defaultNotify);
-    } catch {
-      defaultNotify = undefined;
-    }
-  }
-
-  let callHaServiceImpl: ((service: string, target?: string, data?: unknown) => Promise<void>) | undefined;
-  const bindCallHaService = (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => {
-    callHaServiceImpl = fn;
-  };
-
-  const proactiveOutbound = createRuntimeProactiveOutbound(im);
-  const notificationRouter = createNotificationRouter({
-    resolveAdapter: () => undefined,
-    sendIm: async (notify, content, source) => {
-      await proactiveOutbound.send({
-        scene: notify.target.scene,
-        source: (source ?? 'scheduled') as import('@zhin.js/agent').ProactiveSendSource,
-      }, content);
-    },
-    callHaService: async (service, target, data) => {
-      if (callHaServiceImpl) {
-        await callHaServiceImpl(service, target, data);
-        return;
-      }
-      logger.info(formatCompact({
-        op: 'job_notify_ha_stub',
-        service,
-        target,
-      }));
-    },
-  });
-  const executor = createTaskExecutor({
-    turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
-    config: agent.config,
-    activity: createScheduleActivityPort(agent),
-    dataDir,
-    resolveAdapter: () => undefined,
-    router: notificationRouter,
-    defaultNotify,
-  });
-
-  const store = createScheduleJobStoreFromConfig(dataDir, {
-    defaultNotify,
-  });
-  const jobWorker = new JobWorker({
-    executor,
-    queue: assistantCfg.queue,
-  });
-  const jobEngine = new ScheduleJobEngine({
-    store,
-    worker: jobWorker,
-    notifyOnFailure: defaults.notifyOnFailure,
-    router: notificationRouter,
-    defaultNotify,
-  });
-
-  const scheduleManager = {
-    scheduleFeature: {
-      getStatus: () => [],
-    },
-    engine: jobEngine,
-    previewTask: (prompt: string, context: import('@zhin.js/agent').ScheduleInvocationContext, options?: { activityFeedback?: boolean }) =>
-      executor.preview(prompt, context, options),
-  };
-
-  let assistantRuntime: AssistantRuntimeHandle | null = null;
-  if (assistantCfg.enabled) {
-    const ingress = new AssistantEventIngress({
-      store,
-      engine: jobEngine,
-      eventsConfig: assistantCfg.events,
-    });
-    assistantRuntime = {
-      events: {
-        isEnabled: () => ingress.isEnabled(),
-        handle: (body) => ingress.handle(body),
-      },
-      jobs: {
-        list: () => jobEngine.listJobs(),
-        add: (job) => jobEngine.addJob(job),
-        remove: (id) => jobEngine.removeJob(id),
-        pause: (id) => jobEngine.pauseJob(id),
-        resume: (id) => jobEngine.resumeJob(id),
-      },
-    };
-    void (async () => {
-      const profile = await loadAssistantProfileFile(projectRoot, assistantCfg.profile);
-      if (profile) {
-        for (const err of validateAssistantProfile(profile)) {
-          logger.warn(formatCompact({ assistant_profile: err }));
-        }
-      }
-      await syncProfileHeartbeatToStore(store, profile);
-      await syncProfileRoutinesToStore(store, profile);
-      await pruneStaleProfileCronJobs(store, profile);
-      jobEngine.load();
-    })().catch((error) => {
-      logger.warn(formatCompact({
-        op: 'assistant_profile_load_fail',
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      jobEngine.load();
-    });
-    logger.info(formatCompact({
-      op: 'agent_host_assistant',
-      enabled: true,
-      events: ingress.isEnabled(),
-      profile: assistantCfg.profile?.enabled === true,
-    }));
-  } else {
-    jobEngine.load();
-  }
-
-  const tools = createScheduleTools(scheduleManager);
-
-  return {
-    tools,
-    assistantEnabled: assistantCfg.enabled,
-    notificationRouter,
-    defaultNotify,
-    bindCallHaService,
-    assistantRuntime,
-    // assistant / schedule-manager 注册随 generation lifecycle 反注册（provide 时挂接）
-    dispose: async () => {
-      jobEngine.unload();
-      await jobWorker.stop();
-      await executor.dispose();
-    },
-  };
-}
-
-function createRuntimeScheduleTurnPort(
-  runtime: AgentRuntime,
-  service: AIService,
-  projectRoot: string,
-  trace: AgentTraceRecorder,
-) {
-  return Object.freeze({
-    execute: async (input: ScheduleTurnExecutionRequest): Promise<TurnOutcome> => {
-      const binding = input.agent
-        ? service.getBindingRegistry().getBinding(input.agent)
-        : service.getBindingRegistry().requireZhinBinding();
-      if (!binding) throw new Error(`Schedule Agent binding not found: ${input.agent}`);
-      const creator = input.createdBy ? demoteScheduleCreator(input.createdBy) : undefined;
-      const request: TurnRequest = {
-        identity: { traceId: input.executionId, turnId: input.executionId },
-        origin: { kind: 'schedule', jobId: input.jobId },
-        intent: { kind: 'new' },
-        principal: {
-          subjectId: creator?.userId ?? 'schedule',
-          ...(creator?.name ? { displayName: creator.name } : {}),
-          roles: [...(creator?.roles ?? [])],
-        },
-        input: { text: input.prompt },
-        session: { key: `schedule:${input.jobId}` },
-        policy: {
-          permissions: [],
-          unattended: true,
-          network: {
-            enabled: true,
-            httpsOnly: true,
-            allowedDomains: [...input.security.allowedDomains],
-          },
-          shell: { preset: input.security.execPreset },
-          filesystem: { workspaceRoot: projectRoot },
-        },
-        execution: {
-          kind: 'schedule',
-          executionPlan: input.executionPlan,
-          createdBy: input.createdBy,
-          security: {
-            execPreset: input.security.execPreset,
-            allowedDomains: [...input.security.allowedDomains],
-          },
-        },
-        signal: input.signal,
-        ports: {},
-      };
-      return runtime.execute(rootPluginId(), request, {
-        binding,
-        mcpServers: binding.mcpServers,
-        ...(binding.name === 'zhin' ? {} : { agent: binding.name }),
-      }, observeTrace(trace, request, input.onTurnEvent));
-    },
-  });
-}
-
-function observeTrace(
-  trace: AgentTraceRecorder,
-  request: TurnRequest,
-  downstream?: (event: TurnEvent) => void,
-): (event: TurnEvent) => void {
-  return (event) => {
-    const tracedEvent: TurnEvent = event.type === 'turn_start'
-      && request.origin.kind === 'im'
-      && request.origin.messageId
-      ? { ...event, sourceMessageId: request.origin.messageId }
-      : event;
-    trace.record(request.session.key, request.identity.turnId, tracedEvent);
-    downstream?.(event);
-  };
-}
-
-function createScheduleActivityPort(agent: ZhinAgent) {
-  return Object.freeze({
-    publish: async (event: ScheduleActivityEvent) => {
-      const payload = scheduleActivityPayload(event);
-      if (!payload) return;
-      await agent.getEventEmitter().dispatch(`schedule.${event.phase}`, payload);
-    },
-  });
-}
-
-function scheduleActivityPayload(event: ScheduleActivityEvent) {
-  const previewIm = event.previewSource?.origin.kind === 'im' ? event.previewSource.origin : undefined;
-  const notifyIm = event.notify.channel === 'im' ? event.notify.target.scene : undefined;
-  const address = previewIm
-    ? {
-        platform: previewIm.platform,
-        endpointKey: previewIm.endpoint,
-        sceneId: previewIm.sceneId,
-        scope: previewIm.scope,
-        messageId: previewIm.messageId,
-      }
-    : notifyIm
-      ? {
-          platform: notifyIm.platform,
-          endpointKey: notifyIm.endpointKey,
-          sceneId: notifyIm.sceneId,
-          scope: notifyIm.kind,
-        }
-      : undefined;
-  if (!address) return undefined;
-  return {
-    sessionId: event.previewSource?.sessionKey ?? `schedule:${event.job.id}`,
-    source: 'zhin-agent' as const,
-    mode: 'text' as const,
-    userId: event.job.createdBy?.userId ?? 'schedule',
-    ...address,
-    hookContext: {
-      scheduleJobId: event.job.id,
-      ...(event.job.createdBy ? { scheduleCreatedBy: event.job.createdBy } : {}),
-      ...(event.previewSource ? { schedulePreview: true } : {}),
-      scheduleActivityFeedback: true,
-      ...(event.job.executionPlan ? { scheduleExecutionPlan: event.job.executionPlan } : {}),
-    },
-  };
-}
-
-async function wireRuntimeHome(
-  projectRoot: string,
-  assistantRaw: AssistantConfig | undefined,
-  notificationRouter: ReturnType<typeof createNotificationRouter>,
-  bindCallHaService: (fn: (service: string, target?: string, data?: unknown) => Promise<void>) => void,
-  defaultNotify: ReturnType<typeof parseJobNotify> | undefined,
-): Promise<{
-  tools: BootstrapAssistantHomeResult['tools'];
-  dispose: () => void;
-  homeActive: boolean;
-  watchActive: boolean;
-}> {
-  const assistantCfg = resolveAssistantConfig(assistantRaw);
-  const result = await bootstrapAssistantHome({
-    homeRaw: assistantCfg.home,
-    profile: assistantCfg.profile,
-    projectRoot,
-    notificationRouter,
-    defaultNotify,
-    bindCallHaService,
-    log: (payload) => logger.info(formatCompact(payload)),
-  });
-  return {
-    tools: result.tools,
-    dispose: result.dispose,
-    homeActive: result.homeActive,
-    watchActive: result.watchActive,
-  };
-}
-
-function createRuntimeZhinAgent(
-  service: AIService,
-  im: ImRuntime,
-  projectRoot: string,
-  approvalPort?: ApprovalPort,
-): {
-  agent: ZhinAgent;
-  events: AgentEventBus;
-  runtime: ReturnType<typeof composeZhinAgentRuntime>;
-  seedPresets: () => Promise<number>;
-} {
-  const binding = service.getBindingRegistry().requireZhinBinding();
-  const provider = service.getProvider(binding.providerAlias);
-  const events = new AgentEventBus();
-  const agent = new ZhinAgent(provider, {
-    ...(service.getAgentConfig() ?? {}),
-    chatModel: binding.model,
-  }, events);
-  const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
-  composed.host.approvalPort = approvalPort;
-  const resourceHub = new AgentResourceHub();
-  agent.configure({
-    agentCore: composed.agentCore,
-    toolSystem: composed.toolSystem,
-    contextSystem: composed.contextSystem,
-    memorySystem: composed.memorySystem,
-    sessionSystem: composed.sessionSystem,
-    eventSystem: composed.eventSystem,
-    resourceHub,
-    providerResolver: (alias) => service.getProvider(alias),
-    activeBinding: binding,
-    deferredResultSender: composed.deliverOutbound,
-    subagentSender: composed.deliverOutbound,
-  });
-
-  agent.initSubagentSystem(() => buildRuntimeSubagentAgentTools(projectRoot));
-  agent.getSubagentSystem()?.configureRouting({
-    getProvider: (alias) => service.getProvider(alias),
-    resolveBinding: (name) => service.getBindingRegistry().getBinding(name),
-    getMcpRegistry: () => null,
-    resolveAgentMeta: async (name) => {
-      const metas = await discoverWorkspaceAgents(null, projectRoot);
-      return metas.find((meta) => meta.name === name) ?? null;
-    },
-    getParentContextSnapshot: (origin) => agent.buildParentContextSnapshotForSubagent(origin),
-  });
-
-  // Persistence readiness is latched after DatabaseHost activateNext (or
-  // immediately when sessions.useDatabase === false / no DatabaseHost).
-  return {
-    agent,
-    events,
-    runtime: composed,
-    seedPresets: () => seedResourceHubAgentPresets(resourceHub, projectRoot),
-  };
-}
-
-/**
- * Subagent tool pool — derived from the same generation projection as the
- * main turn so the ToolIndex is the single source of truth. Native builtin
- * tools are projected from the same native ToolFeature definitions used by the main turn.
- */
-function buildRuntimeSubagentAgentTools(_projectRoot: string): AgentTool[] {
-  const nativeTools = [
-    new NativeBashToolFeature(),
-    ...createNativeFileToolFeatures(),
-    ...createNativeWebToolFeatures(),
-  ];
-  return nativeTools.map((native): AgentTool => ({
-    name: native.name,
-    description: native.definition.description,
-    parameters: native.definition.inputSchema as JsonSchema,
-    source: 'builtin',
-    execute: (args: Record<string, unknown>, _ctx?: unknown, execCtx?: unknown) =>
-      (native.definition.execute as (input: unknown, context: unknown) => Promise<unknown>)(
-        args,
-        execCtx,
-      ),
-  }));
-}
-
-async function seedResourceHubAgentPresets(
-  resourceHub: AgentResourceHub,
-  projectRoot: string,
-): Promise<number> {
-  try {
-    const metas = await discoverWorkspaceAgents(null, projectRoot);
-    for (const meta of metas) {
-      if (resourceHub.subagents.getPreset(meta.name)) continue;
-      resourceHub.addAgentPreset({
-        name: meta.name,
-        description: meta.description,
-        systemPrompt: '',
-        tools: meta.toolNames,
-        model: meta.model,
-        filePath: meta.filePath,
-        pluginName: meta.ownerPlugin,
-      });
-    }
-    if (metas.length > 0) {
-      logger.info(formatCompact({
-        op: 'agent_host_presets',
-        count: metas.length,
-        names: metas.map((meta) => meta.name).join(','),
-      }));
-    }
-    return metas.length;
-  } catch (error) {
-    logger.warn(formatCompact({
-      op: 'agent_host_presets_fail',
-      error: error instanceof Error ? error.message : String(error),
-    }));
-    return 0;
-  }
-}
-
-function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService {
-  return {
-    async send(ctx, content) {
-      const result = await im.sendEndpointMessage({
-        adapter: ctx.scene.platform,
-        endpointKey: ctx.scene.endpointKey,
-        conversation: {
-          kind: ctx.scene.kind as 'private' | 'group' | 'channel',
-          id: ctx.scene.sceneId,
-        },
-        content,
-      });
-      return result.messageId || 'ok';
-    },
-    async sendElements(ctx, elements) {
-      const content = await publishOutboundElements(elements, ctx.scene.platform);
-      if (content.length === 0) return [];
-      const id = await this.send(ctx, content);
-      return [id];
-    },
   };
 }
 
