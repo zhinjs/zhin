@@ -42,7 +42,7 @@ pnpm add @zhin.js/adapter-email
 plugins:
   email:
     endpoints:
-      - name: my-email-bot
+      - id: my-email-bot
         smtp:
           host: smtp.example.com
           port: 465

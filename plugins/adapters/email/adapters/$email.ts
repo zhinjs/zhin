@@ -5,7 +5,7 @@ import { defineAdapter } from 'zhin.js/adapter';
 import { EmailEndpoint } from '../src/endpoint.js';
 import {
   resolveEmailConfig,
-  type EmailAdapterConfig,
+  type EmailEndpointConfig,
 } from '../src/protocol.js';
 
 export { EmailEndpoint } from '../src/endpoint.js';
@@ -16,7 +16,7 @@ export type {
   EmailSmtpTransport,
 } from '../src/transport.js';
 
-export default defineAdapter<EmailAdapterConfig>({
+export default defineAdapter<EmailEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // image/audio/video/file 段映射为邮件附件：canonical MediaRef kind=url/path
   // 作 nodemailer attachment.path（URL 由 nodemailer 拉流、path 读盘），

@@ -8,7 +8,6 @@ const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
 const legacyAdapterConsumers = new Set();
 const directEnvironmentConsumers = new Set([
-  'plugins/adapters/email/src/protocol.ts',
   'plugins/adapters/github/src/gh-client.ts',
   'plugins/adapters/github/src/protocol.ts',
   'plugins/adapters/github/src/workspace-manager.ts',

@@ -181,6 +181,7 @@ outline: [2, 3]
 | `plugins.email.endpoints[].imap.user` | string | 是 | — | — |
 | `plugins.email.endpoints[].imap.password` | string | 是 | — | — |
 | `plugins.email.endpoints[].imap.checkInterval` | number | 否 | `60000` | — |
+| `plugins.email.endpoints[].imap.reconnectInterval` | number | 否 | `5000` | — |
 | `plugins.email.endpoints[].imap.mailbox` | string | 否 | `"INBOX"` | — |
 | `plugins.email.endpoints[].imap.markSeen` | boolean | 否 | `true` | — |
 | `plugins.email.endpoints[].attachments` | object | 否 | — | — |
@@ -188,6 +189,7 @@ outline: [2, 3]
 | `plugins.email.endpoints[].attachments.downloadPath` | string | 否 | — | — |
 | `plugins.email.endpoints[].attachments.maxFileSize` | number | 否 | — | — |
 | `plugins.email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | 否 | — | — |
+| `plugins.email.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.email.endpoints[].id` | string | 是 | — | Email bot name |
 | `plugins.email.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

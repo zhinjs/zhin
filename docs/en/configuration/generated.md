@@ -181,6 +181,7 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.email.endpoints[].imap.user` | string | yes | — | — |
 | `plugins.email.endpoints[].imap.password` | string | yes | — | — |
 | `plugins.email.endpoints[].imap.checkInterval` | number | no | `60000` | — |
+| `plugins.email.endpoints[].imap.reconnectInterval` | number | no | `5000` | — |
 | `plugins.email.endpoints[].imap.mailbox` | string | no | `"INBOX"` | — |
 | `plugins.email.endpoints[].imap.markSeen` | boolean | no | `true` | — |
 | `plugins.email.endpoints[].attachments` | object | no | — | — |
@@ -188,6 +189,7 @@ These fields are read directly from each plugin `schema.json`. The `<name>` in `
 | `plugins.email.endpoints[].attachments.downloadPath` | string | no | — | — |
 | `plugins.email.endpoints[].attachments.maxFileSize` | number | no | — | — |
 | `plugins.email.endpoints[].attachments.allowedTypes` | array&lt;string&gt; | no | — | — |
+| `plugins.email.endpoints[].commandPrefix` | string | no | — | — |
 | `plugins.email.endpoints[].id` | string | yes | — | Email bot name |
 | `plugins.email.commandPrefix` | string | no | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
