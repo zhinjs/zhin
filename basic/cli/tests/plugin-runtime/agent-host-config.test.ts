@@ -3,6 +3,7 @@ import {
   assertFixedWorkroomStorageMode,
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
+  resolveAgentHostMcpServers,
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
   resolveWorkroomPlanningPolicyPublication,
@@ -11,6 +12,42 @@ import {
 } from '../../src/plugin-runtime/agent-host-config.js';
 
 describe('Agent Host Workroom configuration', () => {
+  it('normalizes and validates MCP server declarations at the config boundary', () => {
+    const args = ['server.js'];
+    const entries = resolveAgentHostMcpServers({
+      mcpServers: [{
+        name: ' filesystem ',
+        transport: 'stdio',
+        command: 'node',
+        args,
+        env: { MODE: 'readonly' },
+      }, {
+        name: 'remote',
+        transport: 'streamable-http',
+        url: 'https://mcp.example/rpc',
+      }],
+    });
+    expect(entries).toEqual([{
+      name: 'filesystem',
+      transport: 'stdio',
+      command: 'node',
+      args: ['server.js'],
+      env: { MODE: 'readonly' },
+    }, {
+      name: 'remote',
+      transport: 'streamable-http',
+      url: 'https://mcp.example/rpc',
+    }]);
+    expect(Object.isFrozen(entries)).toBe(true);
+    expect(entries[0]?.args).not.toBe(args);
+    expect(() => resolveAgentHostMcpServers({
+      mcpServers: [{ name: 'missing-command', transport: 'stdio' }],
+    } as never)).toThrow('Invalid ai.mcpServers[0] declaration');
+    expect(() => resolveAgentHostMcpServers({
+      mcpServers: [{ name: 'missing-url', transport: 'sse' }],
+    } as never)).toThrow('Invalid ai.mcpServers[0] declaration');
+  });
+
   it('validates the process-owned trusted Pack publisher list', () => {
     expect(resolveWorkroomTrustedPackPublishers({
       workroom: { trustedPackPublishers: ['workroom-admin'] },

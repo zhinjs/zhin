@@ -332,6 +332,7 @@ import {
   assertFixedWorkroomStorageMode,
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
+  resolveAgentHostMcpServers,
   resolveAssistantConfigDocument,
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
@@ -364,8 +365,6 @@ type OutputElementLike = {
   readonly fallbackText?: string;
 };
 
-type McpServerConfig = NonNullable<AIConfig['mcpServers']>[number];
-
 interface AgentToolLike {
   readonly name: string;
   readonly description: string;
@@ -381,16 +380,6 @@ interface AgentToolLike {
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
   readonly approval?: 'always' | 'once' | 'never' | 'on-risk';
-}
-
-interface McpServerEntry {
-  readonly name: string;
-  readonly transport: 'stdio' | 'streamable-http' | 'sse';
-  readonly url?: string;
-  readonly command?: string;
-  readonly args?: string[];
-  readonly env?: Record<string, string>;
-  readonly headers?: Record<string, string>;
 }
 
 const logger = getLogger('agent');
@@ -458,7 +447,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
-    const mcpEntries = parseMcpServers(aiConfig.mcpServers);
+    const mcpEntries = resolveAgentHostMcpServers(aiConfig);
 
     let service: AIService;
     try {
@@ -3358,36 +3347,6 @@ async function readCapabilities(
   isActive: () => boolean,
 ): Promise<AgentCapabilities> {
   return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
-}
-
-function parseMcpServers(raw: AIConfig['mcpServers']): McpServerEntry[] {
-  if (raw == null) return [];
-  if (!Array.isArray(raw)) throw new TypeError('ai.mcpServers must be an array');
-  return raw.map((item, index) => {
-    const entry = toMcpServerEntry(item);
-    if (!entry) throw new TypeError(`Invalid ai.mcpServers[${index}] declaration`);
-    return entry;
-  });
-}
-
-function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | null {
-  if (!raw || typeof raw.name !== 'string' || !raw.name.trim()) return null;
-  const transport = raw.transport;
-  if (transport !== 'stdio' && transport !== 'streamable-http' && transport !== 'sse') return null;
-  if (transport === 'stdio') {
-    if (!raw.command?.trim()) return null;
-  } else if (!raw.url?.trim()) {
-    return null;
-  }
-  return {
-    name: raw.name.trim(),
-    transport,
-    url: raw.url,
-    command: raw.command,
-    args: raw.args,
-    env: raw.env,
-    headers: raw.headers,
-  };
 }
 
 function completedOutput(

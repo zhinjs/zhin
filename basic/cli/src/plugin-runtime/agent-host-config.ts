@@ -2,6 +2,7 @@ import type {
   AIService,
   AssistantConfig,
   WorkroomDefinition,
+  McpServerEntry,
 } from '@zhin.js/agent';
 import {
   expandEnvironmentValue,
@@ -11,6 +12,8 @@ import {
 
 export type AgentHostAIConfig = NonNullable<ConstructorParameters<typeof AIService>[0]>;
 export type WorkroomStorageMode = 'database' | 'file';
+
+type McpServerConfig = NonNullable<AgentHostAIConfig['mcpServers']>[number];
 
 type WorkroomModelProcessingContract = NonNullable<
   NonNullable<NonNullable<AgentHostAIConfig['workroom']>['disclosure']>['modelProviders']
@@ -59,6 +62,19 @@ export function resolveWorkroomTrustedPackPublishers(
     throw new Error('ai.workroom.trustedPackPublishers contains duplicates');
   }
   return Object.freeze(normalized);
+}
+
+export function resolveAgentHostMcpServers(
+  ai: AgentHostAIConfig,
+): readonly McpServerEntry[] {
+  const raw = ai.mcpServers;
+  if (raw == null) return Object.freeze([]);
+  if (!Array.isArray(raw)) throw new TypeError('ai.mcpServers must be an array');
+  return Object.freeze(raw.map((item, index) => {
+    const entry = toMcpServerEntry(item);
+    if (!entry) throw new TypeError(`Invalid ai.mcpServers[${index}] declaration`);
+    return entry;
+  }));
 }
 
 export function resolveWorkroomDisclosureBootstrap(
@@ -167,4 +183,24 @@ function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
   if (!value || typeof value !== 'object') return false;
   const candidate = value as Partial<ConfigDocumentPort>;
   return typeof candidate.read === 'function';
+}
+
+function toMcpServerEntry(raw: McpServerConfig): McpServerEntry | undefined {
+  if (!raw || typeof raw.name !== 'string' || !raw.name.trim()) return undefined;
+  const transport = raw.transport;
+  if (transport !== 'stdio' && transport !== 'streamable-http' && transport !== 'sse') return undefined;
+  if (transport === 'stdio') {
+    if (!raw.command?.trim()) return undefined;
+  } else if (!raw.url?.trim()) {
+    return undefined;
+  }
+  return {
+    name: raw.name.trim(),
+    transport,
+    ...(raw.url ? { url: raw.url } : {}),
+    ...(raw.command ? { command: raw.command } : {}),
+    ...(raw.args ? { args: [...raw.args] } : {}),
+    ...(raw.env ? { env: { ...raw.env } } : {}),
+    ...(raw.headers ? { headers: { ...raw.headers } } : {}),
+  };
 }
