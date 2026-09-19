@@ -5,10 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
 import {
   ConsoleConfigurationStore,
-  flattenConfigDocument,
-  jsonSchemaToConsoleSchema,
-  writeConfigKey,
 } from '../../../src/plugin-runtime/console/configuration.js';
+import {
+  flattenConfigDocument,
+  writeConfigKey,
+} from '../../../src/plugin-runtime/console/configuration-document.js';
+import { jsonSchemaToConsoleSchema } from '../../../src/plugin-runtime/console/plugin-schema.js';
 
 const tempRoots: string[] = [];
 
@@ -147,22 +149,12 @@ describe('jsonSchemaToConsoleSchema', () => {
             object: {
               name: { type: 'string', key: 'name', required: true },
             },
-            // dual-emit for PluginConfigForm nested list items
-            dict: {
-              name: { type: 'string', key: 'name', required: true },
-            },
-            properties: {
-              name: { type: 'string', key: 'name', required: true },
-            },
           },
         },
       },
-      // top-level dual-emit
-      dict: expect.any(Object),
-      properties: expect.any(Object),
     });
-    expect(consoleSchema?.dict).toEqual(consoleSchema?.object);
-    expect(consoleSchema?.properties).toEqual(consoleSchema?.object);
+    expect(consoleSchema).not.toHaveProperty('dict');
+    expect(consoleSchema).not.toHaveProperty('properties');
   });
 
   it('maps enum to options and integer to number', () => {
