@@ -295,6 +295,31 @@ const marketplaceOptions = {
 };
 
 describe('console-rest-pages marketplace', () => {
+  it('isolates registry caches between Host registrations', async () => {
+    const registryFetch = (name: string) => (async () => new Response(JSON.stringify({
+      plugins: [{ name, displayName: name }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+
+    const leftBase = await startHost(baseCtx(), {
+      ...marketplaceOptions,
+      fetchFn: registryFetch('left-plugin'),
+      pluginRegistryUrl: 'https://left.test/plugins.json',
+    });
+    const rightBase = await startHost(baseCtx(), {
+      ...marketplaceOptions,
+      fetchFn: registryFetch('right-plugin'),
+      pluginRegistryUrl: 'https://right.test/plugins.json',
+    });
+
+    const left = await json(await fetch(`${leftBase}/pub/marketplace/search`));
+    const right = await json(await fetch(`${rightBase}/pub/marketplace/search`));
+    expect(left.data).toEqual([expect.objectContaining({ name: 'left-plugin' })]);
+    expect(right.data).toEqual([expect.objectContaining({ name: 'right-plugin' })]);
+  });
+
   it('GET /pub/marketplace/search 返回分页列表并支持 keyword/category/official 过滤', async () => {
     const base = await startHost(baseCtx(), marketplaceOptions);
     const all = await json(await fetch(`${base}/pub/marketplace/search`));

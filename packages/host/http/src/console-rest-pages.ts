@@ -11,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
+import { MarketplaceRegistry } from './marketplace-registry.js';
 import type { AuthScope } from './token-registry.js';
 
 /** 与 basic/cli 接线方对齐的上下文约定。 */
@@ -131,7 +132,6 @@ const INTROSPECTION_PAGE_SIZES = {
 
 type IntrospectionKind = keyof typeof INTROSPECTION_PAGE_SIZES;
 
-let pluginsCache: { data: unknown[]; ts: number } | null = null;
 const PLUGINS_CACHE_TTL = 5 * 60 * 1000;
 
 /**
@@ -338,19 +338,11 @@ function registerMarketplaceRoutes(
   pluginRegistryUrl: string,
   npmRegistryUrl: string,
 ): void {
-  const fetchPluginRegistry = async (): Promise<unknown[]> => {
-    if (pluginsCache && Date.now() - pluginsCache.ts < PLUGINS_CACHE_TTL) {
-      return pluginsCache.data;
-    }
-    const resp = await fetchFn(pluginRegistryUrl, {
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!resp.ok) throw new Error(`plugins.json fetch failed: ${resp.status}`);
-    const json = (await resp.json()) as { plugins?: unknown[] };
-    const list = json.plugins || [];
-    pluginsCache = { data: list, ts: Date.now() };
-    return list;
-  };
+  const registry = new MarketplaceRegistry({
+    fetchFn,
+    url: pluginRegistryUrl,
+    ttlMs: PLUGINS_CACHE_TTL,
+  });
 
   route('GET', '/pub/marketplace/search', async (_request, response, url) => {
     const q = url.searchParams.get('q') ?? url.searchParams.get('keyword') ?? '';
@@ -364,7 +356,7 @@ function registerMarketplaceRoutes(
     const searchKeyword = q.trim().toLowerCase();
 
     try {
-      const allPlugins = (await fetchPluginRegistry()) as Array<Record<string, unknown>>;
+      const allPlugins = (await registry.list()) as readonly Record<string, unknown>[];
       let plugins = allPlugins.map((p) => ({
         name: p.name,
         displayName: p.displayName || '',
@@ -425,11 +417,11 @@ function registerMarketplaceRoutes(
     try {
       let cachedDownloads = { weekly: 0, monthly: 0 };
       try {
-        const registry = (await fetchPluginRegistry()) as Array<{
+        const registryPlugins = (await registry.list()) as readonly {
           name?: string;
           downloads?: unknown;
-        }>;
-        const cached = registry.find((p) => p.name === pkgName);
+        }[];
+        const cached = registryPlugins.find((p) => p.name === pkgName);
         if (cached?.downloads && typeof cached.downloads === 'object') {
           cachedDownloads = cached.downloads as { weekly: number; monthly: number };
         }

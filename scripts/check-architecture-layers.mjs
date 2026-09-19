@@ -321,6 +321,15 @@ for (const layerPath of layerPathsBySpecificity) {
     const content = fs.readFileSync(file, 'utf8');
     const imports = parseImports(content);
 
+    if (sourceLayer.startsWith('packages/host/')
+      && /^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(content)) {
+      violations.push({
+        file: relativeFilePath,
+        import: 'module-level mutable binding',
+        reason: 'Protocol Host runtime state must be owned by a Host instance or registration',
+      });
+    }
+
     for (const importPath of imports) {
       const result = checkImport(sourceLayer, relativeFilePath, importPath);
       if (!result.valid) {
