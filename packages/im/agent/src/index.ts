@@ -531,27 +531,28 @@ export {
   createAIHookBusPayload,
   isAISessionNewPayload,
   isAISessionCompactPayload,
-  onAIHook,
-  onAISessionNew,
-  onAISessionCompact,
 } from './ai-event-bus.js';
 export type {
-  AIEventPayload,
   AISessionNewPayload,
   AISessionCompactPayload,
 } from './ai-event-bus.js';
 export {
   AI_EVENT_NAMES,
-  subscribeAIEvents,
   subscribeAIEventsOnTarget,
 } from './ai-event-subscriber.js';
 export { originFromMessage } from './builtin/spawn-task-tool.js';
 export type {
-  AIEventName,
   AIEventFilter,
   AIEventHandlers,
   AIEventTarget,
 } from './ai-event-subscriber.js';
+export type {
+  AIEventName,
+  AIEventSource,
+  AIEventMode,
+  AIEventPath,
+  AIEventPayload,
+} from './ai-event-contract.js';
 
 export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
 

@@ -4,6 +4,7 @@ import { EventSystem } from './event-system.js';
 import type { EventHandler } from './contracts.js';
 import { getActivityFeedbackEligible } from '../internal/turn-context.js';
 import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
+import type { AIEventName, AIEventPayload } from '../ai-event-contract.js';
 
 const logger = getLogger('ZhinAgent');
 
@@ -34,9 +35,9 @@ export class ZhinAgentEventEmitter {
   createPayload(
     sessionId: string,
     commMessage: Message,
-    mode: Plugin.AIEventPayload['mode'],
-    extra: Partial<Plugin.AIEventPayload> = {},
-  ): Plugin.AIEventPayload {
+    mode: AIEventPayload['mode'],
+    extra: Partial<AIEventPayload> = {},
+  ): AIEventPayload {
     const { source = 'zhin-agent', hookContext: extraHookContext, ...rest } = extra;
     const hookContext: Record<string, unknown> = {
       ...(extraHookContext && typeof extraHookContext === 'object' ? extraHookContext : {}),
@@ -58,8 +59,8 @@ export class ZhinAgentEventEmitter {
   }
 
   async dispatch(
-    name: keyof Plugin.Lifecycle,
-    payload: Plugin.AIEventPayload,
+    name: AIEventName,
+    payload: AIEventPayload,
   ): Promise<void> {
     // Always fan-out for Plugin Runtime subscribers (activity-feedback, etc.).
     // Legacy Feature path still receives the same event via root.dispatch below.
@@ -69,7 +70,7 @@ export class ZhinAgentEventEmitter {
     await root.dispatch(name as any, payload);
   }
 
-  emit(name: keyof Plugin.Lifecycle, payload: Plugin.AIEventPayload): void {
+  emit(name: AIEventName, payload: AIEventPayload): void {
     this.eventSystem.emitFireAndForget(String(name), payload);
     // Fan-out happens inside dispatch (avoid double-emit on the module bus).
     this.dispatch(name, payload).catch((error) => {

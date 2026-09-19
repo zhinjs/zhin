@@ -7,7 +7,7 @@ type AIBusListener = (payload: AIEventPayload) => void | Promise<void>;
 
 /**
  * Module-level AI event bus for Plugin Runtime consumers that cannot use
- * Plugin ALS / `subscribeAIEvents(plugin, ...)`.
+ * a classic Plugin event target.
  *
  * `ZhinAgentEventEmitter.emit` fans out here so activity-feedback (and similar
  * Runtime plugins) can subscribe without a host Plugin.

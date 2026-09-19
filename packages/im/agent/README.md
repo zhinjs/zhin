@@ -145,6 +145,10 @@ packages/im/agent/src/
 
 `AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
 
+Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
+`subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
+也不再依赖 Plugin AsyncLocalStorage 恢复隐式上下文。
+
 Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提供
 `capabilitySeamToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable
 `AgentCapabilities`；Tool 仍只能由 `TurnToolRuntime` 执行，因此不会跳过 owner 可见性、

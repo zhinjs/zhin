@@ -1,5 +1,6 @@
 import type { AIHookEvent } from './resource-hub/types.js';
-import { createAIHookBusPayload, type AIEventPayload } from './ai-event-bus.js';
+import { createAIHookBusPayload } from './ai-event-bus.js';
+import type { AIEventPayload } from './ai-event-contract.js';
 import { aiHookRuntimeBus } from './ai-hook-runtime-bus.js';
 
 /** Emit AI hook and session lifecycle events onto the Runtime bus. */

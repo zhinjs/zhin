@@ -4,6 +4,7 @@ import type { McpRegistry } from './resource-hub/mcp-registry.js';
 import { ensureMcpConnectionsForBinding } from './resource-hub/mcp-lifecycle.js';
 import type { SubagentOrigin } from './subagent/index.js';
 import type { ZhinAgentEventEmitter } from './event/event-emitter.js';
+import type { AIEventPayload } from './ai-event-contract.js';
 export interface SubagentAiEventContext {
   taskId: string;
   label: string;
@@ -28,7 +29,7 @@ export class SubagentAiEventReporter {
     this.sessionId = resolveIMSessionIdFromMessage(this.commMessage);
   }
 
-  private payload(extra: Partial<import('@zhin.js/core').Plugin.AIEventPayload> = {}) {
+  private payload(extra: Partial<AIEventPayload> = {}) {
     const agentId = this.ctx.presetName?.trim()
       || this.ctx.role?.trim()
       || 'subagent';
@@ -49,7 +50,7 @@ export class SubagentAiEventReporter {
     }));
   }
 
-  async processingFinish(reply: string, extra?: Partial<import('@zhin.js/core').Plugin.AIEventPayload>): Promise<void> {
+  async processingFinish(reply: string, extra?: Partial<AIEventPayload>): Promise<void> {
     await this.emitter.dispatch('ai.processing.finish', this.payload({
       reply,
       keepTyping: this.ctx.keepTypingUntilUpstreamFinish,

@@ -1,41 +1,12 @@
-import { storage, type Plugin } from '@zhin.js/core';
-export type AIEventName =
-  | 'ai.processing.start'
-  | 'ai.processing.finish'
-  | 'ai.processing.error'
-  | 'ai.agent.start'
-  | 'ai.agent.finish'
-  | 'ai.thinking'
-  | 'ai.tool.call'
-  | 'ai.tool.result'
-  | 'ai.response'
-  | 'ai.typing.start'
-  | 'ai.typing.stop'
-  | 'ai.activity.queued.start'
-  | 'ai.activity.queued.clear'
-  | 'ai.subagent.spawn'
-  | 'ai.subagent.start'
-  | 'ai.subagent.finish'
-  | 'ai.deferred.start'
-  | 'ai.deferred.finish'
-  | 'ai.mcp.connect.start'
-  | 'ai.mcp.connect.finish'
-  | 'ai.mcp.connect.error'
-  | 'ai.session.new'
-  | 'ai.session.compact'
-  | 'ai.hook'
-  | 'schedule.start'
-  | 'schedule.finish'
-  | 'schedule.error';
-
-export type AIEventPayload = Plugin.AIEventPayload;
+import type { AIEventName, AIEventPayload, AIEventSource } from './ai-event-contract.js';
+export type { AIEventName, AIEventPayload } from './ai-event-contract.js';
 
 export interface AIEventFilter {
   sessionId?: string;
   platform?: string;
   endpointKey?: string;
   sceneId?: string;
-  source?: Plugin.AIEventPayload['source'];
+  source?: AIEventSource;
 }
 
 export interface AIEventHandlers {
@@ -150,27 +121,6 @@ export function subscribeAIEventsOnTarget(
     return () => {
       target.off(eventName, listener);
     };
-  });
-  return () => {
-    for (const dispose of disposers) dispose();
-  };
-}
-
-export function subscribeAIEvents(
-  plugin: Plugin,
-  handlers: AIEventHandlers,
-  filter?: AIEventFilter,
-): () => void {
-  const disposers = AI_EVENT_NAMES.map((eventName) => {
-    const listener = (payload: AIEventPayload) => {
-      if (!matchesFilter(payload, filter)) return;
-      // Classic subscribers still require their owning Plugin execution context.
-      void storage.run(plugin, async () => {
-        await invokeHandlers(eventName, payload, handlers);
-      });
-    };
-    plugin.on(eventName, listener);
-    return () => plugin.off(eventName, listener);
   });
   return () => {
     for (const dispose of disposers) dispose();
