@@ -276,6 +276,7 @@
     "export * from './inbox.js';",
     "export * from './outbound-host.js';",
     "export * from './outbound-sender.js';",
+    "export * from './plugin-configuration.js';",
     "export * from './plugin.js';",
     "export * from './root-controller.js';",
     "export * from './schedule-host.js';",

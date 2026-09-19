@@ -33,10 +33,6 @@ export interface ConfigCheckResult {
   fixesApplied: string[];
 }
 
-const RENAMED_PLUGINS: Record<string, string> = {
-  '@zhin.js/adapter-process': '@zhin.js/adapter-sandbox',
-};
-
 function adapterPluginForContext(context: string): string {
   return `@zhin.js/adapter-${context}`;
 }
@@ -95,7 +91,7 @@ function checkEndpoints(
     severity: 'error',
     code: 'endpoints.legacy_form',
     path: 'endpoints',
-    message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 plugins.<适配器实例>.endpoints；请运行 `zhin migrate` 或 `zhin setup --adapters` 迁移',
+    message: '顶层 endpoints 数组已废弃（legacy 形态）。Endpoint 配置收敛到 plugins.<适配器实例>.endpoints；请运行 `zhin migrate` 迁移',
   });
 }
 
@@ -108,7 +104,7 @@ function checkPlugins(config: Record<string, unknown>, issues: ConfigIssue[]): v
       severity: 'error',
       code: 'plugins.legacy_form',
       path: 'plugins',
-      message: 'plugins 数组形态已废弃（legacy）。Plugin Runtime 使用 plugins.<instanceKey> 对象形态；请运行 `zhin migrate` 或 `zhin setup` 迁移',
+      message: 'plugins 数组形态已废弃（legacy）。Plugin Runtime 使用 plugins.<instanceKey> 对象形态；请运行 `zhin migrate` 迁移',
     });
     return;
   }
@@ -426,21 +422,6 @@ export function applyConfigFixes(
   const fixes: string[] = [];
   const next: Record<string, unknown> = { ...config };
   const aiUtils = loadAiConfigUtils(cwd);
-
-  if (Array.isArray(next.plugins)) {
-    const plugins = [...next.plugins.map((p) => String(p))];
-    let changed = false;
-    for (let i = 0; i < plugins.length; i++) {
-      const old = plugins[i];
-      const renamed = RENAMED_PLUGINS[old];
-      if (renamed) {
-        plugins[i] = renamed;
-        fixes.push(`renamed plugin ${old} → ${renamed}`);
-        changed = true;
-      }
-    }
-    if (changed) next.plugins = [...new Set(plugins)];
-  }
 
   if (next.database && typeof next.database === 'object' && !Array.isArray(next.database)) {
     const database = { ...(next.database as Record<string, unknown>) };

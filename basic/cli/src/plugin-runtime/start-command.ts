@@ -15,7 +15,7 @@ import {
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
 import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
-import { defineInboxTables } from '@zhin.js/plugin-runtime';
+import { defineInboxTables, readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
@@ -757,10 +757,7 @@ export async function createEndpointRoleResolver(
   if (!document || typeof document !== 'object') {
     return { resolveOwner: () => undefined, resolveTrusted: () => [] };
   }
-  const plugins = (document as Record<string, unknown>).plugins;
-  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
-    return { resolveOwner: () => undefined, resolveTrusted: () => [] };
-  }
+  const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
   const addMaster = (key: string, raw: unknown) => {
     if (raw == null || String(raw).trim() === '') return;
     map.set(key, String(raw));
@@ -810,10 +807,8 @@ export async function readConfiguredEndpointKeys(
 ): Promise<ReadonlySet<string>> {
   const document = await readConfigDocumentValue(config);
   const keys = new Set<string>();
-  const plugins = document && typeof document === 'object'
-    ? (document as Record<string, unknown>).plugins
-    : undefined;
-  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) return keys;
+  if (!document || typeof document !== 'object') return keys;
+  const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
   const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
   for (const [adapter, raw] of Object.entries(expanded)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;

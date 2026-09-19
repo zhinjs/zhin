@@ -48,6 +48,7 @@ import {
 } from './plugin-lifecycle-store.js';
 import {
   INBOX_TABLE_MESSAGE,
+  readPluginConfigurationMap,
   runtimeEventPublisherToken,
   type DatabaseHost,
   type PluginNodeSnapshot,
@@ -2041,20 +2042,17 @@ export function flattenConfigDocument(
     if (key === 'plugins' || isForbiddenConfigKey(key)) continue;
     setOwnKey(flat, key, value);
   }
-  const plugins = document.plugins;
-  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
-    for (const [key, value] of Object.entries(plugins as Record<string, unknown>)) {
-      if (isForbiddenConfigKey(key)) continue;
-      // Host 键优先：plugins.<key> 与顶层键同名（如 instanceKey 叫 ai/http）时跳过，
-      // 否则读写路径互相覆写（读 flat 拿到插件值、写 writeConfigKey 落到顶层 host 键）。
-      if (Object.prototype.hasOwnProperty.call(flat, key)) {
-        consoleApiLogger.warn(
-          `plugins.${key} 与顶层 host 配置键同名，Console 扁平视图以 host 键为准，plugins.${key} 被跳过`,
-        );
-        continue;
-      }
-      setOwnKey(flat, key, value);
+  for (const [key, value] of Object.entries(readPluginConfigurationMap(document))) {
+    if (isForbiddenConfigKey(key)) continue;
+    // Host 键优先：plugins.<key> 与顶层键同名（如 instanceKey 叫 ai/http）时跳过，
+    // 否则读写路径互相覆写（读 flat 拿到插件值、写 writeConfigKey 落到顶层 host 键）。
+    if (Object.prototype.hasOwnProperty.call(flat, key)) {
+      consoleApiLogger.warn(
+        `plugins.${key} 与顶层 host 配置键同名，Console 扁平视图以 host 键为准，plugins.${key} 被跳过`,
+      );
+      continue;
     }
+    setOwnKey(flat, key, value);
   }
   return flat;
 }
@@ -2069,12 +2067,7 @@ export async function listConsoleConfigKeys(
   for (const key of HOST_CONFIG_KEYS) {
     if (Object.prototype.hasOwnProperty.call(document, key)) keys.add(key);
   }
-  const plugins = document.plugins;
-  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
-    for (const key of Object.keys(plugins as Record<string, unknown>)) keys.add(key);
-  } else if (Array.isArray(plugins)) {
-    for (const item of plugins) keys.add(String(item));
-  }
+  for (const key of Object.keys(readPluginConfigurationMap(document))) keys.add(key);
   for (const key of (await readPluginPackageMap(projectRoot)).keys()) keys.add(key);
   return [...keys].sort((a, b) => a.localeCompare(b));
 }
@@ -2170,12 +2163,8 @@ export function writeConfigKey(
   if (isForbiddenConfigKey(key)) {
     throw new Error(`Invalid config key: ${key}`);
   }
-  const plugins = document.plugins;
-  const pluginsIsObject = plugins
-    && typeof plugins === 'object'
-    && !Array.isArray(plugins);
-  const inPlugins = pluginsIsObject
-    && Object.prototype.hasOwnProperty.call(plugins, key);
+  const plugins = readPluginConfigurationMap(document);
+  const inPlugins = Object.prototype.hasOwnProperty.call(plugins, key);
 
   // Host 键或非 plugins 命名空间的顶层键写顶层；其余写 plugins.<key>
   if (HOST_CONFIG_KEY_SET.has(key)
@@ -2183,22 +2172,9 @@ export function writeConfigKey(
     setOwnKey(document, key, data);
     return;
   }
-  // plugins: [] (array form) must not be clobbered into an object — promote
-  // to a map while preserving previously listed bare names as empty objects.
-  let bucket: Record<string, unknown>;
-  if (pluginsIsObject) {
-    bucket = plugins as Record<string, unknown>;
-  } else if (Array.isArray(plugins)) {
-    bucket = {};
-    for (const item of plugins) {
-      const name = String(item);
-      if (name && !Object.prototype.hasOwnProperty.call(bucket, name)) {
-        bucket[name] = {};
-      }
-    }
-  } else {
-    bucket = {};
-  }
+  const bucket = document.plugins === undefined
+    ? {}
+    : plugins as Record<string, unknown>;
   setOwnKey(bucket, key, data);
   document.plugins = bucket;
 }

@@ -18,6 +18,8 @@ export {
 export * from './handoff.js';
 /** @public 用户侧创作面：`definePlugin`（`plugin.ts` 约定入口，承诺 semver）。 */
 export * from './plugin.js';
+/** @public Root configuration contract shared by Runtime and composition tooling. */
+export * from './plugin-configuration.js';
 /** @internal Runtime 内部：RootRuntime / RootController。 */
 export * from './root-controller.js';
 export * from './shared-lifetime.js';

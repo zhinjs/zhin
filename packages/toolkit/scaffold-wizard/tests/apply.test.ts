@@ -18,7 +18,7 @@ import type { AdapterSetupResult, InitOptions } from '../src/types.js';
 
 describe('apply wizard to config', () => {
   it('merges database, adapters, and ai into new runtime config format', () => {
-    const config: Record<string, unknown> = { plugins: ['example'], endpoints: [] };
+    const config: Record<string, unknown> = { plugins: { example: {} } };
     const options: InitOptions = {
       database: { dialect: 'sqlite', filename: './data/bot.db', mode: 'wal' },
       adapters: {
@@ -37,8 +37,6 @@ describe('apply wizard to config', () => {
     finalizeWizardOptions(options);
     applyWizardOptionsToConfig(config, options);
 
-    // legacy 数组 plugins 迁移为 instanceKey 映射；legacy endpoints 键被移除
-    expect(config.endpoints).toBeUndefined();
     const plugins = config.plugins as Record<string, unknown>;
     expect(plugins.example).toEqual({});
     expect(plugins.telegram).toEqual({ polling: true, endpoints: [{ id: 'tg', token: '${TELEGRAM_TOKEN}' }] });
@@ -49,6 +47,17 @@ describe('apply wizard to config', () => {
       agents: { zhin: { provider: 'ollama' } },
     });
     expect(config.ai).not.toHaveProperty('defaultProvider');
+  });
+
+  it('rejects legacy list-form plugins instead of migrating them during setup', () => {
+    const config: Record<string, unknown> = { plugins: ['@zhin.js/adapter-sandbox'] };
+    expect(() => applyAdaptersToConfig(config, {
+      packages: [],
+      plugins: [],
+      instances: [],
+      envVars: {},
+    })).toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+    expect(config.plugins).toEqual(['@zhin.js/adapter-sandbox']);
   });
 });
 

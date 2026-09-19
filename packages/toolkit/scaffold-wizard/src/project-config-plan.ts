@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
 import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { providerSdkFor } from './ai.js';
 
 const CONSOLE_URL = 'https://console.zhin.dev';
@@ -158,37 +159,34 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
   }
 
   const content = fs.readFileSync(resolvedPath, 'utf8');
+  const config = parseConfig(content, format);
+  try {
+    readPluginConfigurationMap(config, relativePath);
+  } catch (error) {
+    return {
+      status: 'unsupported',
+      cwd,
+      configPath: resolvedPath,
+      relativePath,
+      format,
+      config,
+      writable: false,
+      message: `${error instanceof Error ? error.message : String(error)}；请先运行 zhin migrate`,
+    };
+  }
   return {
     status: 'loaded',
     cwd,
     configPath: resolvedPath,
     relativePath,
     format,
-    config: parseConfig(content, format),
+    config,
     writable: true,
   };
 }
 
 function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly string[], mutations: string[]): void {
-  if (Array.isArray(config.plugins)) {
-    // legacy 数组形式：保持原形态追加，避免改写旧项目结构
-    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
-    let changed = false;
-    for (const plugin of pluginsToAdd) {
-      if (plugins.includes(plugin)) continue;
-      plugins.push(plugin);
-      mutations.push(`added ${plugin} to plugins`);
-      changed = true;
-    }
-    if (changed) {
-      config.plugins = plugins;
-    }
-    return;
-  }
-  // 新 Plugin Runtime：plugins 为 <instanceKey>: <配置> 映射
-  const plugins = config.plugins && typeof config.plugins === 'object'
-    ? { ...(config.plugins as Record<string, unknown>) }
-    : {};
+  const plugins = { ...readPluginConfigurationMap(config) };
   let changed = false;
   for (const pkg of pluginsToAdd) {
     const instanceKey = packageToInstanceKey(pkg);
@@ -197,7 +195,7 @@ function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly s
     mutations.push(`added ${instanceKey} (${pkg}) to plugins`);
     changed = true;
   }
-  if (changed || !config.plugins || typeof config.plugins !== 'object') {
+  if (changed || config.plugins === undefined) {
     config.plugins = plugins;
   }
 }
@@ -395,20 +393,7 @@ export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleC
     : {};
   const corsOrigins = Array.isArray(http.corsOrigins) ? http.corsOrigins : [];
 
-  if (Array.isArray(config.plugins)) {
-    // legacy 数组形式配置
-    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
-    return {
-      missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
-      missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
-      missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
-    };
-  }
-
-  // 新 Plugin Runtime：Console Host 由 CLI 装配，无需 host 插件；Sandbox 为 plugins.sandbox 实例
-  const plugins = config.plugins && typeof config.plugins === 'object'
-    ? config.plugins as Record<string, unknown>
-    : {};
+  const plugins = readPluginConfigurationMap(config);
   return {
     missingSandboxPlugin: !('sandbox' in plugins),
     missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),

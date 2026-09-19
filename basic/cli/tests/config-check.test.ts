@@ -73,7 +73,7 @@ ai:
 
   it('--fix 应迁移旧版 ai 段', async () => {
     const config = {
-      plugins: ['@zhin.js/adapter-process', '@zhin.js/adapter-sandbox'],
+      plugins: { sandbox: {} },
       endpoints: [{ context: 'sandbox', name: 'bot' }],
       database: { dialect: 'postgres' },
       ai: {
@@ -86,7 +86,7 @@ ai:
     };
 
     const { config: fixed, fixes } = applyConfigFixes(config);
-    expect(fixes.some((f) => f.includes('adapter-sandbox'))).toBe(true);
+    expect(fixes.some((f) => f.includes('adapter-sandbox'))).toBe(false);
     expect((fixed.database as { dialect: string }).dialect).toBe('pg');
     expect((fixed.ai as { agents: { zhin: { provider: string; model: string } } }).agents.zhin).toEqual({
       provider: 'openai',
@@ -160,7 +160,7 @@ log_level: 1
   });
 
   it('--fix 应将数字 log_level 规范为字符串', () => {
-    const { config: fixed, fixes } = applyConfigFixes({ log_level: 1, plugins: [] });
+    const { config: fixed, fixes } = applyConfigFixes({ log_level: 1, plugins: {} });
     expect(fixed.log_level).toBe('info');
     expect(fixes.some((f) => f.includes('log_level'))).toBe(true);
   });

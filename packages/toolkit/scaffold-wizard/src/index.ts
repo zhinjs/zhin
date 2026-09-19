@@ -119,7 +119,7 @@ export {
   mergePluginManifestIntoPackageJson,
   finalizeWizardOptions,
   applyWizardOptionsToConfig,
-  normalizePluginsMap,
+  clonePluginConfigurationMap,
   materializeDatabaseConfig,
   buildRuntimeConfigDocument,
   serializeRuntimeConfig,

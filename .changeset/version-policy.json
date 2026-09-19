@@ -3,6 +3,17 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "require-canonical-plugin-config.md",
+      "packages": [
+        "@zhin.js/plugin-runtime",
+        "@zhin.js/scaffold-wizard",
+        "@zhin.js/cli"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove normal-path plugins-array compatibility and expose the canonical instance configuration contract under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "move-endpoint-config-to-root.md",
       "packages": [
         "@zhin.js/adapter",

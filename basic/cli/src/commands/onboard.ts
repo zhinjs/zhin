@@ -13,6 +13,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import { execSync, spawnSync } from 'child_process';
 import { loadProjectConfig } from '@zhin.js/scaffold-wizard';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
 import { saveConfig } from '../utils/config-file.js';
 import {
@@ -96,6 +97,9 @@ async function loadExistingState(dir: string): Promise<{
   hasDataDir: boolean;
 } | null> {
   const loaded = loadProjectConfig(dir);
+  if (loaded.status === 'unsupported') {
+    throw new Error(loaded.message ?? '现有配置不符合当前 Runtime 契约');
+  }
   if (loaded.status !== 'loaded' || !loaded.configPath || !loaded.format) return null;
   const configPath = loaded.configPath;
   const config = loaded.config;
@@ -150,18 +154,9 @@ function printSummary(state: NonNullable<Awaited<ReturnType<typeof loadExistingS
   if (state.config.database?.dialect) {
     console.log(chalk.gray('  数据库: ') + chalk.cyan(state.config.database.dialect + (state.config.database.filename ? ` (${state.config.database.filename})` : '')));
   }
-  const plugins = state.config.plugins;
-  if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
-    // 新 Plugin Runtime：plugins 为 instanceKey → 配置 映射
-    const instanceKeys = Object.keys(plugins as Record<string, unknown>);
-    if (instanceKeys.length > 0) {
-      console.log(chalk.gray('  插件: ') + chalk.cyan(instanceKeys.join(', ')));
-    }
-  } else if (Array.isArray(plugins) && plugins.length > 0) {
-    const adapters = plugins.filter((p: string) => typeof p === 'string' && p.includes('adapter-'));
-    if (adapters.length > 0) {
-      console.log(chalk.gray('  适配器: ') + chalk.cyan(adapters.map((p: string) => p.replace('@zhin.js/adapter-', '')).join(', ')));
-    }
+  const instanceKeys = Object.keys(readPluginConfigurationMap(state.config));
+  if (instanceKeys.length > 0) {
+    console.log(chalk.gray('  插件: ') + chalk.cyan(instanceKeys.join(', ')));
   }
   if (state.config.ai?.enabled !== false) {
     const provider = state.config.ai?.agents?.zhin?.provider
@@ -201,7 +196,14 @@ function printQuickStart(): void {
 // ---------------------------------------------------------------------------
 
 async function runInProject(_checks: ReturnType<typeof checkEnvironment>): Promise<void> {
-  const state = await loadExistingState(cwd);
+  let state: Awaited<ReturnType<typeof loadExistingState>>;
+  try {
+    state = await loadExistingState(cwd);
+  } catch (error) {
+    logger.error(error instanceof Error ? error.message : String(error));
+    process.exitCode = 1;
+    return;
+  }
   const hasExistingConfig = state !== null;
 
   if (hasExistingConfig && state) {

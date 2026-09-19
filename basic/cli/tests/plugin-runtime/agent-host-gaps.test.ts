@@ -772,4 +772,11 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     expect(resolver.resolveOwner('icqq', 'x')).toBeUndefined();
     expect(resolver.resolveTrusted('icqq', 'x')).toEqual([]);
   });
+
+  it('拒绝旧 plugins 数组而不是按空配置继续启动', async () => {
+    await expect(readConfiguredEndpointKeys({ plugins: ['@zhin.js/adapter-icqq'] } as never))
+      .rejects.toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+    await expect(createEndpointRoleResolver({ plugins: ['@zhin.js/adapter-icqq'] } as never))
+      .rejects.toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+  });
 });

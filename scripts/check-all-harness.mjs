@@ -111,6 +111,11 @@ const checks = [
     description: '检查 Adapter definition 与 Endpoint instance 职责不混淆',
   },
   {
+    name: 'Runtime Config Boundaries',
+    command: 'pnpm check:runtime-config-boundaries',
+    description: '正常运行与配置路径只接受 instanceKey map；旧 plugins 数组仅供迁移和诊断读取',
+  },
+  {
     name: 'Console Client Boundaries',
     command: 'pnpm check:console-client-boundaries',
     description: 'Console 路由、运行时环境与网络连接必须归属显式 ConsoleClient 实例',

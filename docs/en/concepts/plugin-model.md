@@ -38,6 +38,12 @@ The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`pack
 | `features` | Array | Feature capability packages this package depends on: `{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `plugins` | Array | Child plugins mounted by this package: `{ "package": "...", "instanceKey": "...", "optional": false }` |
 
+This array belongs only to `package.json#zhin.plugins` and describes the static
+mount graph. Runtime `zhin.config.*#plugins` is an object map keyed by
+`instanceKey`; the two documents deliberately use different shapes. Runtime,
+Console, scaffolding, and install/uninstall commands accept only the map. Only
+the explicit `zhin migrate` pipeline reads the former configuration array.
+
 Packages with `type: "feature"` have fewer fields: `protocol` / `type` / `entry` / `engine` / `featureApi`. For example, `@zhin.js/adapter`:
 
 ```json

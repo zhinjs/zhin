@@ -5,6 +5,7 @@ import path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { formatCompact } from '@zhin.js/logger';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import {
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,
@@ -503,11 +504,11 @@ export const doctorCommand = new Command('doctor')
     if (existingConfig && !configParseFailed) {
       try {
         const config = (loadedConfig ?? await readConfig(path.join(cwd, existingConfig))) as Record<string, unknown>;
-        const plugins = config.plugins;
+        const plugins = readPluginConfigurationMap(config, existingConfig);
         const issues: string[] = [];
         let checkedEndpoints = 0;
-        if (plugins && typeof plugins === 'object' && !Array.isArray(plugins)) {
-          for (const [key, confRaw] of Object.entries(plugins as Record<string, unknown>)) {
+        {
+          for (const [key, confRaw] of Object.entries(plugins)) {
             if (!confRaw || typeof confRaw !== 'object' || Array.isArray(confRaw)) continue;
             const conf = confRaw as Record<string, unknown>;
             if (!Array.isArray(conf.endpoints) || conf.endpoints.length === 0) continue;

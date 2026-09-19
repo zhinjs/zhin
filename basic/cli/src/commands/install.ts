@@ -70,17 +70,23 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     const pluginName = resolvePluginNameForEnable(pluginToInstall, pluginType, process.cwd());
     const shouldEnable = options.enable !== false && !options.global;
+    const enablePreview = shouldEnable && pluginName
+      ? previewEnablePlugin(process.cwd(), pluginName)
+      : undefined;
+
+    if (enablePreview?.status === 'unsupported-config') {
+      throw new Error(enablePreview.message);
+    }
 
     if (options.dryRun) {
       logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
       logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
-      if (shouldEnable && pluginName) {
-        const preview = previewEnablePlugin(process.cwd(), pluginName);
-        logger.log(`将启用: ${preview.message}`);
+      if (shouldEnable && pluginName && enablePreview) {
+        logger.log(`将启用: ${enablePreview.message}`);
         logger.log(`将挂载: package.json 的 zhin.plugins 清单添加 ${pluginName}（instanceKey: ${packageToInstanceKey(pluginName)}）`);
-        if (preview.patch) {
+        if (enablePreview.patch) {
           logger.log('');
-          logger.log(preview.patch);
+          logger.log(enablePreview.patch);
         }
       }
       return;
@@ -116,7 +122,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
         if (enableResult.status === 'missing-config' || enableResult.status === 'unsupported-config') {
           logger.log('可手动添加到 zhin.config.yml:');
           logger.log('plugins:');
-          logger.log(`  - "${pluginName}"`);
+          logger.log(`  ${packageToInstanceKey(pluginName)}: {}`);
         }
         if (pluginName.startsWith('@zhin.js/adapter-') && pluginName !== '@zhin.js/adapter-sandbox') {
           logger.log('');
@@ -125,7 +131,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       } else if (pluginName) {
         logger.log('🔌 未自动启用插件。可手动添加到 zhin.config.yml:');
         logger.log('plugins:');
-        logger.log(`  - "${pluginName}"`);
+        logger.log(`  ${packageToInstanceKey(pluginName)}: {}`);
       }
 
       logger.log('');
@@ -367,7 +373,9 @@ export function previewEnablePlugin(cwd: string, pluginName: string): EnablePlug
       status: 'unsupported-config',
       configFile: loaded.configPath,
       pluginName,
-      message: `${loaded.relativePath ?? 'zhin.config'} 暂不支持自动写入；将提示手动添加 ${pluginName}`,
+      message: loaded.message
+        ? `${loaded.message}；无法自动启用 ${pluginName}`
+        : `${loaded.relativePath ?? 'zhin.config'} 暂不支持自动写入；无法自动启用 ${pluginName}`,
     };
   }
 

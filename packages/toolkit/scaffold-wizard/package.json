@@ -22,6 +22,7 @@
     "test": "vitest run --root ../../.. packages/toolkit/scaffold-wizard/tests"
   },
   "dependencies": {
+    "@zhin.js/plugin-runtime": "workspace:*",
     "chalk": "^5.6.2",
     "fs-extra": "^11.4.0",
     "inquirer": "^14.0.2",

@@ -38,6 +38,10 @@
 | `features` | 数组 | 本包依赖的 Feature 能力包：`{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `plugins` | 数组 | 本包挂载的子插件：`{ "package": "...", "instanceKey": "...", "optional": false }` |
 
+这里的数组只属于 `package.json#zhin.plugins`，描述静态挂载关系。运行配置
+`zhin.config.*#plugins` 是以 `instanceKey` 为键的对象映射，二者不共享形态。Runtime、Console、
+脚手架和安装/卸载命令都只接受对象映射；旧配置数组仅由 `zhin migrate` 的显式迁移流程读取。
+
 `type: "feature"` 的包字段更少：`protocol` / `type` / `entry` / `engine` / `featureApi`。例如 `@zhin.js/adapter`：
 
 ```json

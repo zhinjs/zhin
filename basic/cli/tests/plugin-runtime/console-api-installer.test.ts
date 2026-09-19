@@ -1505,13 +1505,11 @@ describe('config document flatten / write namespace', () => {
     expect((document.plugins as Record<string, unknown>).toString).toEqual({ enabled: true });
   });
 
-  it('promotes plugins:[] array form to a map without dropping listed names', () => {
+  it('rejects plugins arrays instead of promoting legacy configuration', () => {
     const document: Record<string, unknown> = { plugins: ['sandbox', 'icqq'] };
-    writeConfigKey(document, 'sandbox', { endpoints: [{ name: 'bot' }] });
-    expect(document.plugins).toEqual({
-      sandbox: { endpoints: [{ name: 'bot' }] },
-      icqq: {},
-    });
+    expect(() => writeConfigKey(document, 'sandbox', { endpoints: [{ name: 'bot' }] }))
+      .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
+    expect(document.plugins).toEqual(['sandbox', 'icqq']);
   });
 
   it('serializes concurrent setProjectConfigKey writes without losing keys', async () => {

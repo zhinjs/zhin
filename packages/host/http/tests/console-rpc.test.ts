@@ -46,13 +46,13 @@ describe('runtime console RPC', () => {
       {
         authScope: 'demo',
         listPages: async () => pages,
-        readConfigYaml: async () => 'plugins: []\n',
+        readConfigYaml: async () => 'plugins: {}\n',
         listPluginKeys: async () => ['@zhin.js/adapter-sandbox'],
       },
     );
     expect(pickRpcReply({ type: 'config:get-yaml', requestId: 4 }, yaml)).toEqual({
       requestId: 4,
-      data: { yaml: 'plugins: []\n', pluginKeys: ['@zhin.js/adapter-sandbox'] },
+      data: { yaml: 'plugins: {}\n', pluginKeys: ['@zhin.js/adapter-sandbox'] },
     });
   });
 
@@ -174,11 +174,11 @@ describe('runtime console RPC', () => {
   });
 
   it('writes config via config:save-yaml and config:set on full scope', async () => {
-    let stored = 'plugins: []\n';
-    const document: Record<string, unknown> = { plugins: [] };
+    let stored = 'plugins: {}\n';
+    const document: Record<string, unknown> = { plugins: {} };
 
     const saved = await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 10, yaml: 'plugins:\n  - sandbox\n' },
+      { type: 'config:save-yaml', requestId: 10, yaml: 'plugins:\n  sandbox: {}\n' },
       {
         authScope: 'full',
         listPages: async () => [],
@@ -275,7 +275,7 @@ describe('runtime console RPC', () => {
 
     published.length = 0;
     await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 61, yaml: 'plugins: []\n' },
+      { type: 'config:save-yaml', requestId: 61, yaml: 'plugins: {}\n' },
       {
         authScope: 'full',
         listPages: async () => [],

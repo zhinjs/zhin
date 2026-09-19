@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import yaml from 'yaml';
 import { stringify as stringifyToml } from 'smol-toml';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import type { AdapterSetupResult, AISetupConfig, DatabaseConfig, InitOptions } from './types.js';
 import {
   collectAdapterPluginConfigs,
@@ -13,31 +14,21 @@ import { generateAIEnvVars, materializeAIConfig } from './ai.js';
 import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT, ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
-import { packageToInstanceKey } from './project-config-plan.js';
 
 export function applyDatabaseToConfig(config: Record<string, unknown>, database: DatabaseConfig): void {
   // 物化为可落盘对象：非 SQLite 连接参数引用 .env（${VAR}），明文密码不进配置文件
   config.database = materializeDatabaseConfig(database);
 }
 
-/** 将 legacy 数组形式 plugins 归一化为新 runtime 的 instanceKey 映射 */
-export function normalizePluginsMap(value: unknown): Record<string, unknown> {
-  if (Array.isArray(value)) {
-    const map: Record<string, unknown> = {};
-    for (const entry of value) {
-      if (typeof entry !== 'string') continue;
-      map[packageToInstanceKey(entry)] ??= {};
-    }
-    return map;
-  }
-  if (value && typeof value === 'object') {
-    return { ...(value as Record<string, unknown>) };
-  }
-  return {};
+/** Returns a mutable copy of the canonical Plugin instance configuration map. */
+export function clonePluginConfigurationMap(
+  config: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return { ...readPluginConfigurationMap(config) };
 }
 
 export function applyAdaptersToConfig(config: Record<string, unknown>, result: AdapterSetupResult): void {
-  const plugins = normalizePluginsMap(config.plugins);
+  const plugins = clonePluginConfigurationMap(config);
   for (const instance of result.instances) {
     plugins[instance.instanceKey] = mergeAdapterInstanceConfig(
       instance.instanceKey,
@@ -46,8 +37,6 @@ export function applyAdaptersToConfig(config: Record<string, unknown>, result: A
     );
   }
   config.plugins = plugins;
-  // legacy endpoints 列表不被 runtime 配置 schema 接受（additionalProperties: false）
-  delete config.endpoints;
 }
 
 function endpointId(endpoint: unknown): string | undefined {

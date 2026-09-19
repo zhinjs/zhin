@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { formatDisplayPath } from '@zhin.js/logger';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
@@ -207,6 +208,7 @@ export const setupCommand = new Command('setup')
     }
 
     try {
+      readPluginConfigurationMap(config, configFile ?? 'zhin.config.yml');
       const wizardOptions: InitOptions = {};
       const configBefore = JSON.stringify(config);
 

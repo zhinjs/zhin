@@ -110,20 +110,6 @@ function resolveStackVersion(packageName: string): string {
   return ZHIN_STACK_VERSIONS[packageName as ZhinStackPackage] ?? 'latest';
 }
 
-function collectZhinPluginsFromConfig(config: Record<string, unknown>): string[] {
-  // legacy 数组形式：条目即包名
-  if (Array.isArray(config.plugins)) {
-    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
-    return [...new Set(plugins.filter((p) => p.startsWith('@zhin.js/')))];
-  }
-  // 新 runtime：plugins 为 instanceKey 映射，包名在 package.json zhin.plugins 清单中，
-  // 无法从配置推导；仅收集直接以包名出现的键（防御性）
-  if (config.plugins && typeof config.plugins === 'object') {
-    return Object.keys(config.plugins as Record<string, unknown>).filter((key) => key.startsWith('@zhin.js/'));
-  }
-  return [];
-}
-
 /** create-zhin / minimal-bot 默认 Host 端口（避免与常见 8086 占用冲突） */
 export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 
@@ -152,10 +138,6 @@ export function getRequiredZhinDependenciesForConfig(config: Record<string, unkn
   const deps: Record<string, string> = {
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
   };
-
-  for (const plugin of collectZhinPluginsFromConfig(config)) {
-    deps[plugin] = resolveStackVersion(plugin);
-  }
 
   const database = config.database;
   if (database && typeof database === 'object' && !Array.isArray(database)) {

@@ -32,7 +32,7 @@ describe('install command plugin enable helpers', () => {
 
   it('previews YAML config changes without writing', async () => {
     const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  example: {}\n');
 
     const preview = previewEnablePlugin(root, '@zhin.js/adapter-telegram');
     const content = await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8');
@@ -44,7 +44,7 @@ describe('install command plugin enable helpers', () => {
 
   it('writes plugin into YAML config once', async () => {
     const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  example: {}\n');
 
     const first = await enablePluginInProjectConfig(root, '@zhin.js/adapter-telegram');
     const second = await enablePluginInProjectConfig(root, '@zhin.js/adapter-telegram');
@@ -52,29 +52,41 @@ describe('install command plugin enable helpers', () => {
 
     expect(first.status).toBe('enabled');
     expect(second.status).toBe('already-enabled');
-    expect(content.match(/@zhin\.js\/adapter-telegram/g)).toHaveLength(1);
+    expect(content.match(/^\s*telegram:/gmu)).toHaveLength(1);
   });
 
   it('writes plugin into JSON config', async () => {
     const root = await makeTempProject();
-    await fs.writeJson(path.join(root, 'zhin.config.json'), { plugins: ['example'] });
+    await fs.writeJson(path.join(root, 'zhin.config.json'), { plugins: { example: {} } });
 
     const result = await enablePluginInProjectConfig(root, '@scope/plugin');
     const config = await fs.readJson(path.join(root, 'zhin.config.json'));
 
     expect(result.status).toBe('enabled');
-    expect(config.plugins).toEqual(['example', '@scope/plugin']);
+    expect(config.plugins).toEqual({ example: {}, plugin: {} });
   });
 
   it('writes plugin into TOML config', async () => {
     const root = await makeTempProject();
-    await fs.writeFile(path.join(root, 'zhin.config.toml'), 'plugins = ["example"]\n');
+    await fs.writeFile(path.join(root, 'zhin.config.toml'), '[plugins.example]\n');
 
     const result = await enablePluginInProjectConfig(root, '@scope/plugin');
     const content = await fs.readFile(path.join(root, 'zhin.config.toml'), 'utf8');
 
     expect(result.status).toBe('enabled');
-    expect(content).toContain('"@scope/plugin"');
+    expect(content).toContain('[plugins.plugin]');
+  });
+
+  it('refuses to enable plugins in a legacy list-form config', async () => {
+    const root = await makeTempProject();
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');
+
+    const result = previewEnablePlugin(root, '@scope/plugin');
+
+    expect(result.status).toBe('unsupported-config');
+    expect(result.message).toContain('zhin migrate');
+    expect(await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8'))
+      .toBe('plugins:\n  - "example"\n');
   });
 
   it('resolves local plugin installs from package.json before enabling config', async () => {

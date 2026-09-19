@@ -6,6 +6,7 @@ import path from 'path';
 import yaml from 'yaml';
 import { execSync } from 'child_process';
 import { formatCompact } from '@zhin.js/logger';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { logger } from '../utils/logger.js';
 
 async function findConfigFile(cwd: string): Promise<string | null> {
@@ -222,7 +223,7 @@ const adapterCommand = new Command('adapter')
     const pkgName = `@zhin.js/${adapterName}`;
     const shortName = name.replace(/^adapter-/, '');
 
-    // 配置：plugins.<instanceKey> 映射（key 通常是短名）；legacy 数组形态按包名过滤
+    // 配置：plugins.<instanceKey> 映射（key 通常是短名）
     await removePluginFromConfig(cwd, shortName, [name, adapterName, pkgName]);
 
     const pkg = await fs.readJson(pkgPath);
@@ -248,7 +249,7 @@ const adapterCommand = new Command('adapter')
     }
   });
 
-/** 从 zhin.config.* 移除插件配置：新形态删 plugins.<instanceKey> 键；legacy 数组按名过滤。 */
+/** 从 zhin.config.* 的 canonical plugins map 移除实例配置。 */
 async function removePluginFromConfig(cwd: string, key: string, aliases: string[] = [key]): Promise<void> {
   const configFile = await findConfigFile(cwd);
   if (!configFile) return;
@@ -256,17 +257,11 @@ async function removePluginFromConfig(cwd: string, key: string, aliases: string[
   const config = await readConfig(configPath);
   let changed = false;
 
-  if (Array.isArray(config.plugins)) {
-    const before = config.plugins.length;
-    config.plugins = config.plugins.filter((p: string) => !aliases.includes(p));
-    changed = config.plugins.length !== before;
-  } else if (config.plugins && typeof config.plugins === 'object') {
-    const map = config.plugins as Record<string, unknown>;
-    for (const candidate of [key, ...aliases]) {
-      if (candidate in map) {
-        delete map[candidate];
-        changed = true;
-      }
+  const map = readPluginConfigurationMap(config, configFile) as Record<string, unknown>;
+  for (const candidate of [key, ...aliases]) {
+    if (Object.prototype.hasOwnProperty.call(map, candidate)) {
+      delete map[candidate];
+      changed = true;
     }
   }
 

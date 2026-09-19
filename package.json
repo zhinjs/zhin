@@ -52,6 +52,7 @@
     "check:sixty-s-runtime-boundaries": "node scripts/check-sixty-s-runtime-boundaries.mjs",
     "check:agent-tool-authoring-boundaries": "node scripts/check-agent-tool-authoring-boundaries.mjs",
     "check:adapter-endpoint-boundaries": "node scripts/check-adapter-endpoint-boundaries.mjs",
+    "check:runtime-config-boundaries": "node scripts/check-runtime-config-boundaries.mjs",
     "check:im-session-ssot": "node scripts/check-im-session-ssot.mjs",
     "check:llm-runtime-boundaries": "node scripts/check-llm-runtime-boundaries.mjs",
     "check:speech-runtime-boundaries": "node scripts/check-speech-runtime-boundaries.mjs",
