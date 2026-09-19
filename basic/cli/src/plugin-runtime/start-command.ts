@@ -391,7 +391,7 @@ async function loadConfiguredAgentHost(
     import('./agent-host-installer.js'),
     import('./agent-host-config.js'),
   ]);
-  const { createLocalWorkroomDataGovernanceAuthority } = await import('./local-workroom-data-governance.js');
+  const { createLocalWorkroomDataGovernanceAuthority } = await import('./workroom/module.js');
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
   const initialAi = await configModule.resolveAiConfig(document);
   const workroomStorageMode = configModule.resolveWorkroomStorageMode(initialAi);

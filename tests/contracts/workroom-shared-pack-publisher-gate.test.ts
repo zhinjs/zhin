@@ -9,11 +9,11 @@ describe('Workroom shared Pack publisher authority gate', () => {
         import.meta.url,
       ), 'utf8'),
       readFile(new URL(
-        '../../basic/cli/src/plugin-runtime/workroom-profile-coordinator.ts',
+        '../../basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts',
         import.meta.url,
       ), 'utf8'),
       readFile(new URL(
-        '../../basic/cli/src/plugin-runtime/workroom-planning-coordinator.ts',
+        '../../basic/cli/src/plugin-runtime/workroom/planning-coordinator.ts',
         import.meta.url,
       ), 'utf8'),
     ]);

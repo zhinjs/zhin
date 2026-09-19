@@ -21,10 +21,13 @@ import {
   type WorkroomPlanningDisclosurePort,
   type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
-import type { LocalWorkroomDataGovernanceAuthority } from './local-workroom-data-governance.js';
 import { AgentTurnIngressRoute } from './agent-turn-ingress-route.js';
 import { AgentHostPublicationCoordinator } from './agent-host-publication-coordinator.js';
-import { WorkroomHostCoordinator } from './workroom-host-coordinator.js';
+import {
+  WorkroomHostCoordinator,
+  WorkroomRuntimeFoundation,
+  type LocalWorkroomDataGovernanceAuthority,
+} from './workroom/module.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -40,7 +43,6 @@ import {
   publishAgentToolFeatures,
   type HostAgentTool,
 } from './agent-tool-feature-publisher.js';
-import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
 import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
 
 const logger = getLogger('agent');
