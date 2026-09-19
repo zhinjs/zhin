@@ -12,14 +12,12 @@ import {
   type SendContent,
 } from '@zhin.js/core/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import { rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AIService,
   AgentResourceHub,
   ActivatableWorkroomJournal,
-  FileWorkroomJournal,
   ActivatableWorkroomCatalog,
-  FileWorkroomCatalog,
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
   handleRuntimeManagementCommand,
@@ -45,20 +43,8 @@ import {
   FileInteractionSpaceBindingRepository,
   InteractionSpaceRouter,
   FileWorkroomProjectionRepository,
-  FileAssignmentAuthorityGrantRepository,
   FilePortfolioJournalRepository,
-  FilePortfolioControlOutboxRepository,
-  DatabasePortfolioControlOutboxRepository,
-  ActivatablePortfolioControlOutboxRepository,
-  DatabaseAssignmentAuthorityGrantRepository,
-  ActivatableAssignmentAuthorityGrantRepository,
-  ActivatableProjectKnowledgeJournal,
-  FileProjectKnowledgeJournal,
-  DatabaseProjectKnowledgeJournal,
   ProjectKnowledgeRegistry,
-  ActivatableOverlayPackPromotionRepository,
-  FileOverlayPackPromotionRepository,
-  DatabaseOverlayPackPromotionRepository,
   JournalWorkroomAssignmentGrantClaimPreview,
   createDurableWorkroomAssignmentAuthorityGrantProvider,
   FileWorkroomTaskReportStore,
@@ -82,8 +68,6 @@ import {
   AgentRuntime,
   ZhinAgent,
   composeZhinAgentRuntime,
-  activateAiDatabaseStorage,
-  defineAiDatabaseModels,
   createAgentTraceRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogGovernedConsoleDisclosureAuthority,
@@ -319,7 +303,6 @@ import {
   createAssistantScheduleRuntime,
 } from './assistant-runtime.js';
 import {
-  assertFixedWorkroomStorageMode,
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
   resolveAgentHostMcpServers,
@@ -328,7 +311,6 @@ import {
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
   resolveWorkroomPlanningPolicyPublication,
-  resolveWorkroomStorageMode,
   type AgentHostAIConfig as AIConfig,
   type WorkroomStorageMode,
 } from './agent-host-config.js';
@@ -348,6 +330,7 @@ import {
   publishAgentToolFeatures,
   type HostAgentTool,
 } from './agent-tool-feature-publisher.js';
+import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -515,22 +498,6 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
           : undefined),
       runControlAuthority: createCatalogWorkroomRunControlAuthority(workroomCatalog),
     });
-    const activateFileWorkroomJournal = () => {
-      if (!workroomJournal.active) {
-        workroomJournal.activate(new FileWorkroomJournal(
-          join(options.projectRoot, '.zhin', 'workroom-journal'),
-          workroomJournalPayloads.payloads,
-        ));
-      }
-    };
-    const activateFileWorkroomCatalog = async () => {
-      workroomCatalog.activate(new FileWorkroomCatalog(join(options.projectRoot, '.zhin', 'workroom-catalog.json')));
-      await assertWorkroomCatalogMatchesGeneration(
-        workroomCatalog,
-        listGenerationBindings().map((binding) => binding.name),
-        await options.resolveConfiguredEndpointKeys?.(),
-      );
-    };
     let workroomRuntime: WorkroomRuntimeHandle;
     let consoleProjectionAuthority: ReturnType<typeof createCatalogGovernedWorkroomProjectionAuthority>;
     const dataGovernanceRuntimeRef: {
@@ -602,169 +569,36 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     }
     if (!zhinAgent || !composedRuntime) throw new Error('Agent Host candidate did not create a complete Agent runtime');
 
-    const useDatabase = aiConfig.sessions?.useDatabase !== false;
-    const requestedWorkroomStorageMode = resolveWorkroomStorageMode(aiConfig);
-    assertFixedWorkroomStorageMode(options.workroomStorageMode, requestedWorkroomStorageMode);
-    const workroomStateRoot = join(options.projectRoot, '.zhin');
-    const assignmentAuthorityGrants = new ActivatableAssignmentAuthorityGrantRepository();
-    const projectKnowledgeJournal = new ActivatableProjectKnowledgeJournal();
-    const fileProjectKnowledgeJournal = new FileProjectKnowledgeJournal(
-      join(workroomStateRoot, 'workroom-project-knowledge'),
-    );
-    const overlayPackPromotions = new ActivatableOverlayPackPromotionRepository();
-    const fileOverlayPackPromotions = new FileOverlayPackPromotionRepository(
-      join(workroomStateRoot, 'workroom-overlay-pack-promotions'),
-    );
-    const portfolioControlOutbox = new ActivatablePortfolioControlOutboxRepository();
-    const filePortfolioControlOutbox = new FilePortfolioControlOutboxRepository(
-      join(workroomStateRoot, 'portfolio-control-outbox'),
-    );
-    let persistencePendingActivate = false;
     let dataGovernanceStorage: ReturnType<
       typeof createGenerationOwnedWorkroomDataGovernanceStorage
     > | undefined;
     let recoverHumanIngress = async (): Promise<void> => {};
-    if (useDatabase) {
-      if (!resources.has(databaseRootHostToken)) {
-        throw new Error('Process-fixed Workroom database storage requires the Database Root Host');
-      }
-      const database = resources.use(databaseRootHostToken);
-      try {
-        const tableCount = defineAiDatabaseModels((name, definition) => {
-          database.define(name, definition);
-        });
-        persistencePendingActivate = true;
-        handoff.add({
-          activateNext: async (signal) => {
-            signal.throwIfAborted();
-            try {
-              const raw = database.getRawDatabase();
-              if (!raw) {
-                throw new Error('Agent persistence requires an active database connection');
-              }
-              await activateAiDatabaseStorage(
-                raw,
-                { aiService: service, zhinAgent },
-                aiConfig,
-                workroomJournal,
-                workroomJournalPayloads.payloads,
-                workroomCatalog,
-                semanticMemory,
-              );
-              const grantModel = raw.models?.get('workroom_assignment_authority_grants');
-              if (!grantModel) {
-                throw new Error('Workroom requires the Assignment Authority Grant database model');
-              }
-              assignmentAuthorityGrants.activate(new DatabaseAssignmentAuthorityGrantRepository(
-                raw as ConstructorParameters<typeof DatabaseAssignmentAuthorityGrantRepository>[0],
-                grantModel as ConstructorParameters<typeof DatabaseAssignmentAuthorityGrantRepository>[1],
-              ));
-              const catalogSnapshot = await workroomCatalog.read();
-              const projectIds = Object.keys(catalogSnapshot.definitions).sort();
-              if (dataGovernanceStorage) {
-                await dataGovernanceStorage.activateDatabase({
-                  database: raw,
-                  projectIds,
-                  repositoryIdentity: 'database-root:primary',
-                  signal,
-                });
-              }
-              const knowledgeModel = raw.models?.get('workroom_project_knowledge');
-              const promotionModel = raw.models?.get('workroom_overlay_pack_promotions');
-              if (!knowledgeModel || !promotionModel) {
-                throw new Error('Workroom requires the Project Knowledge and Overlay Promotion database models');
-              }
-              const databaseKnowledge = new DatabaseProjectKnowledgeJournal(
-                raw as ConstructorParameters<typeof DatabaseProjectKnowledgeJournal>[0],
-                knowledgeModel as ConstructorParameters<typeof DatabaseProjectKnowledgeJournal>[1],
-              );
-              await projectKnowledgeJournal.activate(
-                databaseKnowledge,
-                projectIds,
-                fileProjectKnowledgeJournal,
-              );
-              const databasePromotions = new DatabaseOverlayPackPromotionRepository(
-                raw as ConstructorParameters<typeof DatabaseOverlayPackPromotionRepository>[0],
-                promotionModel as ConstructorParameters<typeof DatabaseOverlayPackPromotionRepository>[1],
-              );
-              const promotionIds = new Set<string>();
-              for (const projectId of projectIds) {
-                for (const record of await fileOverlayPackPromotions.list(projectId)) {
-                  promotionIds.add(record.promotionId);
-                }
-                for (const record of await databasePromotions.list(projectId)) {
-                  promotionIds.add(record.promotionId);
-                }
-              }
-              await overlayPackPromotions.activate(
-                databasePromotions,
-                [...promotionIds].sort(),
-                fileOverlayPackPromotions,
-              );
-              const portfolioControlModel = raw.models?.get('portfolio_control_outbox');
-              if (!portfolioControlModel) {
-                throw new Error('Workroom requires the Portfolio Control Outbox database model');
-              }
-              const portfolioRepository = resources.has(portfolioJournalRepositoryToken)
-                ? resources.use(portfolioJournalRepositoryToken)
-                : undefined;
-              const portfolioIds = new Set([
-                ...await filePortfolioControlOutbox.listPortfolioIds(),
-                ...(portfolioRepository ? await portfolioRepository.listPortfolioIds() : []),
-              ]);
-              await portfolioControlOutbox.activate(
-                new DatabasePortfolioControlOutboxRepository(
-                  raw as ConstructorParameters<typeof DatabasePortfolioControlOutboxRepository>[0],
-                  portfolioControlModel as ConstructorParameters<typeof DatabasePortfolioControlOutboxRepository>[1],
-                ),
-                [...portfolioIds].sort(),
-                filePortfolioControlOutbox,
-              );
-              await assertWorkroomCatalogMatchesGeneration(
-                workroomCatalog,
-                listGenerationBindings().map((binding) => binding.name),
-                await options.resolveConfiguredEndpointKeys?.(),
-              );
-              await recoverHumanIngress();
-              signal.throwIfAborted();
-              logger.info(formatCompact({
-                op: 'agent_host_persistence',
-                mode: 'database',
-                tables: tableCount,
-              }));
-            } catch (error) {
-              throw new Error('Agent database persistence activation failed', { cause: error });
-            } finally {
-              zhinAgent.markMemoryPersistenceReady();
-            }
-          },
-        });
-      } catch (error) {
-        throw new Error('Agent database model registration failed', { cause: error });
-      }
-    } else if (semanticMemory) {
-      throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
-    } else {
-      activateFileWorkroomJournal();
-      await activateFileWorkroomCatalog();
-      assignmentAuthorityGrants.activate(new FileAssignmentAuthorityGrantRepository(
-        join(workroomStateRoot, 'workroom-assignment-authority-grants'),
-      ));
-      const projectIds = Object.keys((await workroomCatalog.read()).definitions).sort();
-      await projectKnowledgeJournal.activate(fileProjectKnowledgeJournal, projectIds);
-      const promotionIds = new Set<string>();
-      for (const projectId of projectIds) {
-        for (const record of await fileOverlayPackPromotions.list(projectId)) {
-          promotionIds.add(record.promotionId);
-        }
-      }
-      await overlayPackPromotions.activate(fileOverlayPackPromotions, [...promotionIds].sort());
-      await portfolioControlOutbox.activate(
-        filePortfolioControlOutbox,
-        await filePortfolioControlOutbox.listPortfolioIds(),
-      );
-      zhinAgent.markMemoryPersistenceReady();
-    }
+    const persistence = new WorkroomPersistenceCoordinator({
+      projectRoot: options.projectRoot,
+      config: aiConfig,
+      fixedStorageMode: options.workroomStorageMode,
+      resources,
+      handoff,
+      service,
+      agent: zhinAgent,
+      semanticMemory,
+      journal: workroomJournal,
+      journalPayloads: workroomJournalPayloads.payloads,
+      catalog: workroomCatalog,
+      listAgentNames: () => listGenerationBindings().map(binding => binding.name),
+      resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
+      resolveDataGovernanceStorage: () => dataGovernanceStorage,
+      recoverHumanIngress: () => recoverHumanIngress(),
+    });
+    await persistence.prepare();
+    const {
+      assignmentAuthorityGrants,
+      projectKnowledgeJournal,
+      overlayPackPromotions,
+      portfolioControlOutbox,
+      stateRoot: workroomStateRoot,
+      usesDatabase: useDatabase,
+    } = persistence;
 
     const ingress = new CapabilityIngress();
     const bootstrapText = await loadBootstrap(options.projectRoot);
@@ -2747,7 +2581,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         await drainHumanIngressProject(projectId);
       }
     };
-    if (!persistencePendingActivate) await recoverHumanIngress();
+    if (!persistence.pendingActivation) await recoverHumanIngress();
     const projectionReplyTargets = new WeakMap<Message, Message['message']>();
     const projectionMentionTargets = new WeakMap<Message, Readonly<{
       agentDefinitionId: string;
@@ -3220,7 +3054,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       + ` | presets: ${presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
-      + ` | persistence: ${persistencePendingActivate ? 'pending_activate' : 'file'}`,
+      + ` | persistence: ${persistence.pendingActivation ? 'pending_activate' : 'file'}`,
     );
     logger.debug(
       `ready detail | providers: ${providers.join(',')}`
