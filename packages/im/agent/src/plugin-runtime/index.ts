@@ -2,6 +2,33 @@ export * from './agent-runtime.js';
 export * from './agent-host-port.js';
 export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';
+export { ZhinAgent } from '../zhin-agent/index.js';
+export type { AgentTurnConfiguration, AgentTurnRequest } from '../zhin-agent/index.js';
+export { composeZhinAgentRuntime } from '../init/compose-zhin-agent-runtime.js';
+export type { ComposedZhinAgentRuntime } from '../init/compose-zhin-agent-runtime.js';
+export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.js';
+export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
+export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
+export {
+  introspectionRestBindings,
+  introspectionRestEndpoints,
+  introspectionRestCommands,
+  introspectionRestMcp,
+  introspectionRestTools,
+} from '../init/introspection-rest.js';
+export type { IntrospectionJsonResponse } from '../init/introspection-rest.js';
+export {
+  collectIntrospectionBindings,
+  collectIntrospectionAgentTools,
+  collectIntrospectionSkills,
+  collectIntrospectionMcpLabels,
+  collectIntrospectionMcpWithConfigFallback,
+} from '../init/introspection-collectors.js';
+export {
+  ensureMcpConnections,
+  ensureMcpConnectionsForBinding,
+  getMcpToolsForBinding,
+} from '../resource-hub/mcp-lifecycle.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export type {
   WorkroomRunControlCommand,

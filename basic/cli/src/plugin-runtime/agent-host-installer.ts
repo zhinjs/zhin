@@ -27,14 +27,10 @@ import {
 import { databaseRootHostToken, rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   AIService,
-  ZhinAgent,
   AgentEventBus,
-  composeZhinAgentRuntime,
   AgentResourceHub,
   discoverWorkspaceAgents,
   createBashTool,
-  activateAiDatabaseStorage,
-  defineAiDatabaseModels,
   createScheduleJobStoreFromConfig,
   createScheduleTools,
   ScheduleJobEngine,
@@ -57,7 +53,6 @@ import {
   FileWorkroomCatalog,
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
-  asPrivate,
   handleRuntimeOwnerApproveCommand,
   handleRuntimeManagementCommand,
   publishOutboundElements,
@@ -147,6 +142,10 @@ import {
   SemanticMemoryRuntime,
   FileTodoStore,
   AgentRuntime,
+  ZhinAgent,
+  composeZhinAgentRuntime,
+  activateAiDatabaseStorage,
+  defineAiDatabaseModels,
   createAgentTraceRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogGovernedConsoleDisclosureAuthority,
@@ -1027,7 +1026,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
         }),
       });
       workroomRuntime = createWorkroomRuntime(workroomJournal, consoleProjectionAuthority);
-      sessionTreeRuntime = createSessionTreeRuntimeFromAgent(asPrivate(zhinAgent));
+      sessionTreeRuntime = createSessionTreeRuntimeFromAgent(composedRuntime.host);
       schedule = wireRuntimeSchedule(
         zhinAgent,
         service,
@@ -1362,7 +1361,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
     );
     resources.provide(agentTurnEngineToken, createFullAgentTurnEngine({
-      host: asPrivate(zhinAgent),
+      host: composedRuntime.host,
       core: composedRuntime.agentCore,
       sessionSystem: composedRuntime.sessionSystem,
       contextSystem: composedRuntime.contextSystem,
@@ -2786,7 +2785,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     });
     if (options.snapshots && resources.has(workroomLocalAssignmentAuthorityToken)) {
       const localTurn = createAgentCoreWorkroomLocalTurnPort({
-        host: asPrivate(zhinAgent),
+        host: composedRuntime.host,
         core: composedRuntime.agentCore,
         generation,
         loopHooks: service.loopHooks,
@@ -2900,7 +2899,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
                 capabilitySnapshot,
               ),
               sessionSnapshot: Object.freeze({ loadedTools: {}, loadedSkills: [] }),
-              config: asPrivate(zhinAgent).config,
+              config: composedRuntime.host.config,
               persistSnapshot: async () => undefined,
               release: () => {
                 if (!releaseOwned) return;
@@ -3812,7 +3811,7 @@ function wireRuntimeSchedule(
   });
   const executor = createTaskExecutor({
     turn: createRuntimeScheduleTurnPort(runtime, service, projectRoot, trace),
-    config: asPrivate(agent).config,
+    config: agent.config,
     activity: createScheduleActivityPort(agent),
     dataDir,
     resolveAdapter: () => undefined,
@@ -4076,8 +4075,8 @@ function createRuntimeZhinAgent(
     ...(service.getAgentConfig() ?? {}),
     chatModel: binding.model,
   }, events);
-  asPrivate(agent).approvalPort = approvalPort;
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
+  composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
     agentCore: composed.agentCore,

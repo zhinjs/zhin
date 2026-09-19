@@ -19,6 +19,8 @@ import { asPrivate } from '../internal/as-private.js';
 
 export interface ComposedZhinAgentRuntime {
   agent: ZhinAgent;
+  /** Internal Host contract consumed by the composition root. */
+  host: import('../internal/agent-host.js').ZhinAgentPrivate;
   agentCore: AgentCore;
   toolSystem: ToolSystem;
   sessionSystem: SessionSystem;
@@ -56,6 +58,7 @@ export function composeZhinAgentRuntime(
 
   return {
     agent,
+    host: priv,
     agentCore,
     toolSystem,
     sessionSystem,

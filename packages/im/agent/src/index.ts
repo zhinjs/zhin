@@ -290,17 +290,8 @@ export {
 } from './builtin/install-skill-tool.js';
 export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
 export {
-  createToolRuntime,
-  type ToolRuntime,
-  type ToolRuntimeTurnContext,
-  type ToolRuntimeJournalPort,
-  type ToolCallContext,
-  type ToolExecutionOutcome,
-  type ToolPolicyInputExtractor,
-  type ToolPolicyInputResolver,
-} from './tool/tool-runtime.js';
-export { resolveBuiltinToolPolicyInput } from './tool/builtin-policy-extractors.js';
-export { stampToolGeneration } from './tool/tool-system.js';
+  stampToolGeneration,
+} from './tool/tool-system.js';
 export { FileJournalStore } from './journal/index.js';
 export { PersistentTurnJournal } from './journal/index.js';
 export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
@@ -372,9 +363,6 @@ export {
   PROFILE_MORNING_BRIEF_JOB_ID,
   PROFILE_BEDTIME_CHECK_JOB_ID,
 } from './assistant/index.js';
-
-/** Runtime Host（basic/cli）装配 session tree runtime 时的窄门面。 */
-export { asPrivate } from './internal/as-private.js';
 
 export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
@@ -467,21 +455,6 @@ export * from './data-governance/encrypted-database-payload-vault.js';
 export * from './data-governance/payload-vault-storage-handoff.js';
 export * from './data-governance/payload-hold-overdue-projection.js';
 
-export {
-  introspectionRestBindings,
-  introspectionRestEndpoints,
-  introspectionRestCommands,
-  introspectionRestMcp,
-  introspectionRestTools,
-} from './init/introspection-rest.js';
-export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
-export { collectIntrospectionBindings, collectIntrospectionAgentTools, collectIntrospectionSkills, collectIntrospectionMcpLabels, collectIntrospectionMcpWithConfigFallback } from './init/introspection-collectors.js';
-export { ensureMcpConnections, ensureMcpConnectionsForBinding, getMcpToolsForBinding } from './resource-hub/mcp-lifecycle.js';
-export { composeZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
-export type { ComposedZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
-export { activateAiDatabaseStorage } from './init/activate-ai-database-storage.js';
-export { defineAiDatabaseModels } from './init/define-ai-database-models.js';
-export type { AiDatabaseModelDefiner } from './init/define-ai-database-models.js';
 export * from './workroom/assignment-authority-grant-application.js';
 export * from './workroom/assignment-authority-grant-repository.js';
 
