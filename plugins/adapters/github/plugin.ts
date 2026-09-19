@@ -5,7 +5,7 @@ import { defineGithubOauthUsersTable } from './src/oauth-users.js';
 
 /**
  * github_subscriptions — repo event subscriptions per chat channel
- * (used by github_subscriptions agent tool; schema matches legacy defineModel).
+ * (used by github_subscriptions agent tool; schema is registered through DatabaseHost).
  */
 const GITHUB_SUBSCRIPTIONS_SCHEMA = {
   id: { type: 'integer', primary: true },

@@ -3,7 +3,6 @@ import {Adapter, Adapters} from './adapter.js';
 import { Endpoint } from './endpoint.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
-import { Databases,Registry } from '@zhin.js/database';
 import { ProcessAdapter } from './built/adapter-process.js';
 import type { SenderRole } from './built/roles.js';
 export type { SenderRole } from "./built/roles.js";
@@ -17,12 +16,6 @@ export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T
 export interface RegisteredAdapters extends Adapters {
   process: ProcessAdapter;
 }
-/**
- * 数据库配置类型，支持多种数据库驱动
- */
-export type DatabaseConfig<T extends keyof Databases=keyof Databases>={
-  dialect:T
-} & Registry.Config[T]
 /**
  * 获取对象所有value类型
  */

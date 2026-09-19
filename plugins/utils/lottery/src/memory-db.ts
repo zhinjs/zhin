@@ -44,7 +44,7 @@ const TABLE_NAMES = [
 ] as const;
 
 /**
- * Slice-2 fallback while Plugin Runtime has no DatabaseFeature Resource path.
+ * In-memory fallback for runtimes without a DatabaseHost.
  * Enough for smoke: today/history/stats/train/backtest/pipeline no longer return「数据库未就绪」.
  */
 export function createInMemoryLotteryDb(): LotteryDb {

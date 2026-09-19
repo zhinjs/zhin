@@ -191,7 +191,7 @@ export { Plugin } from './plugin.js'  // classic runtime；后续切片继续删
 
 // 基础机制（Cron / Scheduler 来自 @zhin.js/kernel）
 export { Feature, Cron, Scheduler } from '@zhin.js/kernel'
-export { ToolFeature, SkillFeature, DatabaseFeature, ... } from './built/*.js'
+export { ToolFeature, SkillFeature, ... } from './built/*.js'
 
 // 消息路由
 export { createMessageDispatcher } from './built/dispatcher.js'

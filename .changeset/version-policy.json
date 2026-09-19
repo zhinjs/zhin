@@ -263,6 +263,17 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove unmounted classic configuration and schema registries plus service-locator based Endpoint provisioning after Runtime and Adapter packages became the canonical authorities."
+    },
+    {
+      "changeset": "remove-classic-database-feature.md",
+      "packages": [
+        "@zhin.js/core",
+        "@zhin.js/agent",
+        "zhin.js"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Remove the unmounted classic database registry, module-global lifecycle hook, and inactive online bot_id compatibility migration in favor of the generation-owned Database Host."
     }
   ]
 }

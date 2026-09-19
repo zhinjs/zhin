@@ -10,7 +10,7 @@ import {
 let _db: GroupSuiteMemoryDb | null = null;
 const registrations: Array<{ readonly value: GroupSuiteMemoryDb }> = [];
 
-/** Ensure an in-memory store when Runtime DatabaseFeature Resource is not wired yet. */
+/** Ensure an in-memory store when no DatabaseHost is available. */
 export function ensureGroupSuiteMemoryDb(): GroupSuiteMemoryDb {
   if (!_db) _db = createInMemoryGroupSuiteDb();
   return _db;

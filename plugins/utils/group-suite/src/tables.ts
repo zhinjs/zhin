@@ -1,5 +1,5 @@
 /**
- * Group-suite table schemas for DatabaseHost / legacy DatabaseFeature.
+ * Group-suite table schemas for DatabaseHost.
  */
 import {
   CHECKIN_TABLE,

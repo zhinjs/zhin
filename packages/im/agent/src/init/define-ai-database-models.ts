@@ -1,6 +1,6 @@
 /**
  * Register ADR 0009 AI persistence tables on a Host/plugin `define` surface.
- * Used by legacy `registerDbModels` and Plugin Runtime Agent Host.
+ * Used by the Plugin Runtime Agent Host.
  */
 import {
   AGENT_SESSION_MODEL,

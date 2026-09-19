@@ -15,17 +15,12 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
-    defineModel: vi.fn(),
     Logger: class {
       debug = vi.fn();
       info = vi.fn();
       warn = vi.fn();
       error = vi.fn();
     },
-    resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
-      scope: 'private',
-      roles: message?._roles ?? ['user'],
-    })),
     segment: {
       toString: (elements: any[]) => {
         if (!Array.isArray(elements)) return String(elements);

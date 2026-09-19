@@ -516,8 +516,6 @@ export type {
 } from './ai-event-contract.js';
 export { AgentEventBus } from './event/ai-event-bus.js';
 
-export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
-
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
   ActivityFeedbackManager,
