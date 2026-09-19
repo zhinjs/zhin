@@ -14,7 +14,6 @@ import {
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { rootPluginId, type DisposeStack, type PluginId, type RuntimeSnapshot, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
-  AIService,
   AgentResourceHub,
   handleRuntimeManagementCommand,
   publishOutboundElements,
@@ -54,24 +53,16 @@ import {
 } from '@zhin.js/agent';
 import {
   agentHostToken,
-  agentEventBusToken,
   CapabilityIngress,
   turnJournalStoreToken,
   agentTurnEngineToken,
   createFullAgentTurnEngine,
-  MarkdownKnowledgeIndex,
-  SemanticMemoryRuntime,
   AgentRuntime,
-  ZhinAgent,
-  composeZhinAgentRuntime,
-  createAgentTraceRuntime,
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogGovernedConsoleDisclosureAuthority,
   createGovernedPortfolioSponsorProjectionReader,
-  createSessionTreeRuntimeFromAgent,
   type AgentCapabilities,
   type WorkroomRunControlCommand,
-  type SessionTreeRuntimeHandle,
   type TurnIntentResolver,
   workroomAcceptancePolicyDecisionToken,
   workroomAcceptanceAuthorityToken,
@@ -279,19 +270,11 @@ import {
   runtimeImSessionKey,
   type RuntimeSenderRoles,
 } from './agent-turn-request.js';
-import {
-  createRuntimeZhinAgent,
-  observeAgentTurnTrace,
-} from './agent-runtime-factory.js';
-import {
-  createAssistantHomeRuntime,
-  createAssistantScheduleRuntime,
-} from './assistant-runtime.js';
+import { observeAgentTurnTrace } from './agent-runtime-factory.js';
 import {
   assessWorkroomDisclosureSetup,
   isWorkroomPlanningPolicyReady,
   resolveAgentHostMcpServers,
-  resolveAgentHostKnowledgeDirectory,
   resolveAssistantConfigDocument,
   resolveWorkroomDisclosureAuthorityPublication,
   resolveWorkroomDisclosureBootstrap,
@@ -317,6 +300,7 @@ import {
 } from './agent-tool-feature-publisher.js';
 import { WorkroomPersistenceCoordinator } from './workroom-persistence-coordinator.js';
 import { WorkroomRuntimeFoundation } from './workroom-runtime-foundation.js';
+import { AgentRuntimeFoundation } from './agent-runtime-foundation.js';
 
 const WORKROOM_DYNAMIC_PLANNING_SYSTEM_PROMPT = `You produce one untrusted Workroom DAG candidate as strict JSON.
 Return exactly: {"version":1,"strategy":{"id":"...","version":"...","digest":"sha256:..."},"tasks":[...]}
@@ -394,42 +378,31 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
-    const knowledgeDirectory = resolveAgentHostKnowledgeDirectory(aiConfig, options.projectRoot);
-    const knowledgeIndex = knowledgeDirectory
-      ? new MarkdownKnowledgeIndex(knowledgeDirectory)
-      : undefined;
-
-    let service: AIService;
-    try {
-      service = new AIService(aiConfig);
-    } catch (error) {
-      throw new Error('Agent Host rejected invalid AI configuration', { cause: error });
-    }
-    if (!service.isReady()) {
-      await service.dispose();
-      throw new Error('Agent Host requires at least one ready AI provider');
-    }
-    if (!service.getBindingRegistry().getBinding('zhin')) {
-      await service.dispose();
-      throw new Error('Agent Host requires a ready ai.agents.zhin binding');
-    }
-    lifecycle.add(() => service.dispose());
-    const listGenerationBindings = () => Object.freeze(
-      service.getBindingRegistry().listAgentNames()
-        .map((name) => service.getBindingRegistry().getBinding(name))
-        .filter((entry): entry is NonNullable<typeof entry> => entry != null)
-        .map((entry) => Object.freeze({ ...entry, mcpServers: [...entry.mcpServers] })),
-    );
-    let zhinAgent: ZhinAgent | undefined;
-    let composedRuntime: ReturnType<typeof composeZhinAgentRuntime> | undefined;
-    let seedPresets: () => Promise<number>;
-    let scheduleTools: ReturnType<typeof createAssistantScheduleRuntime>['tools'] = [];
-    let homeTools: Awaited<ReturnType<typeof createAssistantHomeRuntime>>['tools'] = [];
-    let assistantEnabled = false;
-    const semanticMemory = aiConfig.memory?.semantic?.enabled === true
-      ? new SemanticMemoryRuntime()
-      : null;
-    if (semanticMemory) lifecycle.add(() => semanticMemory.dispose());
+    const agentFoundation = await AgentRuntimeFoundation.create({
+      config: aiConfig,
+      assistantConfig,
+      im: options.im,
+      projectRoot: options.projectRoot,
+      processRuntime: options.runtime,
+      approvalPort: options.approvalPort,
+      audioTranscriber: options.audioTranscriber,
+      resources,
+      lifecycle,
+    });
+    const {
+      service,
+      agent: zhinAgent,
+      composition: composedRuntime,
+      knowledgeIndex,
+      semanticMemory,
+      traceRuntime,
+      schedule,
+      scheduleTools,
+      homeTools,
+      assistantEnabled,
+      sessionTreeRuntime,
+    } = agentFoundation;
+    const listGenerationBindings = () => agentFoundation.listBindings();
     const workroomFoundation = new WorkroomRuntimeFoundation({
       generation,
       signal,
@@ -445,62 +418,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       runtime: workroomRuntime,
       consoleProjectionAuthority,
     } = workroomFoundation;
-    let sessionTreeRuntime: SessionTreeRuntimeHandle;
-    const traceRuntime = createAgentTraceRuntime();
     const rememberedSandboxApprovals = new Map<string, Set<string>>();
-    let schedule: ReturnType<typeof createAssistantScheduleRuntime>;
-    try {
-      const created = createRuntimeZhinAgent(
-        service,
-        options.im,
-        options.projectRoot,
-        options.approvalPort,
-        options.audioTranscriber,
-        knowledgeIndex,
-      );
-      zhinAgent = created.agent;
-      composedRuntime = created.runtime;
-      lifecycle.add(() => created.agent.dispose());
-      lifecycle.add(() => created.events.clear());
-      resources.provide(agentEventBusToken, created.events);
-      seedPresets = created.seedPresets;
-
-      sessionTreeRuntime = createSessionTreeRuntimeFromAgent(composedRuntime.host);
-      schedule = createAssistantScheduleRuntime(
-        zhinAgent,
-        service,
-        options.runtime,
-        options.im,
-        options.projectRoot,
-        assistantConfig,
-        traceRuntime,
-      );
-      scheduleTools = schedule.tools;
-      assistantEnabled = schedule.assistantEnabled;
-      lifecycle.add(schedule.dispose);
-
-      const home = await createAssistantHomeRuntime(
-        options.projectRoot,
-        assistantConfig,
-        schedule.notificationRouter,
-        schedule.bindCallHaService,
-        schedule.defaultNotify,
-      );
-      homeTools = home.tools;
-      lifecycle.add(home.dispose);
-      if (home.homeActive) {
-        logger.info(formatCompact({
-          op: 'agent_host_home',
-          enabled: true,
-          watch: home.watchActive,
-          tools: home.tools.length,
-        }));
-      }
-    } catch (error) {
-      throw new Error('Agent Host candidate initialization failed', { cause: error });
-    }
-    if (!zhinAgent || !composedRuntime) throw new Error('Agent Host candidate did not create a complete Agent runtime');
-
     let dataGovernanceStorage: ReturnType<
       typeof createGenerationOwnedWorkroomDataGovernanceStorage
     > | undefined;
@@ -623,7 +541,7 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       bootstrapContext: bootstrapText,
     }));
 
-    const presetCount = await seedPresets();
+    const presetCount = await agentFoundation.seedPresets();
 
     const binding = service.getBindingRegistry().requireZhinBinding();
     mkdirSync(workroomStateRoot, { recursive: true });
