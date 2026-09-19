@@ -6,7 +6,7 @@ import { httpHostToken } from '@zhin.js/host-http';
 import { SatoriWebhookEndpoint, SatoriWsEndpoint } from '../src/endpoint.js';
 import {
   resolveSatoriConfig,
-  type SatoriAdapterConfig,
+  type SatoriEndpointConfig,
 } from '../src/protocol.js';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 
@@ -19,7 +19,7 @@ export type {
   SatoriWsSocket,
 } from '../src/endpoint.js';
 
-export default defineAdapter<SatoriAdapterConfig>({
+export default defineAdapter<SatoriEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
   // Satori 协议 img/file 元素消费 url 与 base64 内联数据；无卡片交互面，交互段降级纯文本。

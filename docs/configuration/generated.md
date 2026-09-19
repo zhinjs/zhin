@@ -455,12 +455,15 @@ outline: [2, 3]
 | `plugins.satori.heartbeat_interval` | number | 否 | `10000` | WS PING interval in milliseconds |
 | `plugins.satori.master` | string \| number | 否 | — | 框架 master（platform user id；AI/工具权限、endpoint 管理）。endpoints[i].master 可逐项覆盖 |
 | `plugins.satori.trusted` | array&lt;string \| number&gt; | 否 | — | 框架 trusted 用户列表（弱于 master）。endpoints[i].trusted 可逐项追加 |
-| `plugins.satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层） |
+| `plugins.satori.endpoints` | array&lt;object&gt; | 是 | — | 多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值 |
 | `plugins.satori.endpoints[].master` | string \| number | 否 | — | 本 endpoint 的框架 master（platform user id）；覆盖顶层 master |
 | `plugins.satori.endpoints[].trusted` | array&lt;string \| number&gt; | 否 | — | 本 endpoint 的 trusted 列表 |
 | `plugins.satori.endpoints[].baseUrl` | string | 是 | — | Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140) |
+| `plugins.satori.endpoints[].connection` | string: `"ws"`, `"webhook"` | 否 | — | — |
 | `plugins.satori.endpoints[].token` | string | 否 | — | Bearer token for API and WS IDENTIFY |
 | `plugins.satori.endpoints[].path` | string | 否 | — | Webhook POST path (connection: webhook) |
+| `plugins.satori.endpoints[].heartbeat_interval` | number | 否 | — | — |
+| `plugins.satori.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.satori.endpoints[].id` | string | 是 | — | Satori bot name |
 | `plugins.satori.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 

@@ -1,10 +1,5 @@
-/**
- * Satori protocol helpers (no legacy Adapter/Endpoint / segment-mapper).
- * Canonicalization is owned by gateway/core before endpoint.send.
- * Spec: https://satori.chat/zh-CN/protocol/overview.html
- */
+/** Satori protocol helpers. Spec: https://satori.chat/zh-CN/protocol/overview.html */
 
-import { pickCredential } from 'zhin.js/adapter';
 import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
@@ -81,21 +76,15 @@ export interface SatoriWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface SatoriAdapterConfig {
-  readonly id?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface SatoriEndpointConfig {
+  readonly id: string;
   readonly connection?: 'ws' | 'webhook';
-  readonly baseUrl?: string;
+  readonly baseUrl: string;
   readonly token?: string;
   readonly heartbeat_interval?: number;
   /** Webhook POST path (connection: webhook). */
   readonly path?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: satori`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedSatoriWsConfig> & {
-    readonly context?: string;
-    readonly connection?: 'ws' | 'webhook';
-    readonly path?: string;
-  }>;
 }
 
 export interface ResolvedSatoriWsConfig {
@@ -118,29 +107,16 @@ export interface ResolvedSatoriWebhookConfig {
 
 export type ResolvedSatoriConfig = ResolvedSatoriWsConfig | ResolvedSatoriWebhookConfig;
 
-export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedSatoriConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'satori');
-  const connection = config.connection ?? entry?.connection ?? 'ws';
-  const baseUrl = pickCredential(config.baseUrl, entry?.baseUrl, process.env.SATORI_BASE_URL);
-  if (!baseUrl) {
-    throw new TypeError(
-      'Satori adapter requires baseUrl (plugins.<key>.baseUrl or endpoints with context: satori)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.SATORI_BOT_NAME
-    || 'satori-bot';
-  const token = (typeof config.token === 'string' && config.token)
-    || (typeof entry?.token === 'string' && entry.token)
-    || process.env.SATORI_TOKEN
-    || undefined;
+export function resolveSatoriConfig(config: SatoriEndpointConfig): ResolvedSatoriConfig {
+  const connection = config.connection ?? 'ws';
+  const id = requiredEndpointField(config.id, 'id');
+  const baseUrl = requiredEndpointField(config.baseUrl, 'baseUrl');
+  const token = typeof config.token === 'string' && config.token.trim()
+    ? config.token.trim()
+    : undefined;
 
   if (connection === 'webhook') {
-    const path = config.path ?? entry?.path;
-    if (!path) {
-      throw new TypeError('Satori connection:webhook requires path');
-    }
+    const path = requiredEndpointField(config.path, 'path');
     return {
       context: 'satori',
       connection: 'webhook',
@@ -151,9 +127,7 @@ export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedS
     };
   }
 
-  const heartbeat = config.heartbeat_interval
-    ?? entry?.heartbeat_interval
-    ?? 10_000;
+  const heartbeat = config.heartbeat_interval ?? 10_000;
   return {
     context: 'satori',
     connection: 'ws',
@@ -162,6 +136,16 @@ export function resolveSatoriConfig(config: SatoriAdapterConfig = {}): ResolvedS
     token,
     heartbeat_interval: heartbeat,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'baseUrl' | 'path',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Satori endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 /** Channel.type 1 = DIRECT (private). */

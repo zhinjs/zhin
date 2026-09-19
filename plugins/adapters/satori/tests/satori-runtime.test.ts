@@ -92,6 +92,7 @@ describe('satori protocol helpers', () => {
 
   it('resolves webhook config from plugin config', () => {
     const resolved = resolveSatoriConfig({
+      id: 'hook',
       connection: 'webhook',
       baseUrl: 'http://sdk.local',
       path: '/satori/webhook',
@@ -427,6 +428,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       name: 'satori',
       config: {
+        id: 'satori',
         connection: 'webhook',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',

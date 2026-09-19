@@ -22,7 +22,6 @@ const directEnvironmentConsumers = new Set([
   'plugins/adapters/onebot11/src/protocol.ts',
   'plugins/adapters/onebot12/src/protocol.ts',
   'plugins/adapters/sandbox/src/protocol.ts',
-  'plugins/adapters/satori/src/protocol.ts',
   'plugins/adapters/slack/src/protocol.ts',
   'plugins/adapters/telegram/src/protocol.ts',
   'plugins/adapters/wechat-mp/src/protocol.ts',

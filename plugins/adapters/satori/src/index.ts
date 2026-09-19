@@ -12,7 +12,7 @@ export {
   satoriInboundConversation,
   type ResolvedSatoriWebhookConfig,
   type ResolvedSatoriWsConfig,
-  type SatoriAdapterConfig,
+  type SatoriEndpointConfig,
   type SatoriApiOptions,
   type SatoriChannel,
   type SatoriEventBody,

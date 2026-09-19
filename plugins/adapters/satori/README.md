@@ -51,7 +51,7 @@ plugins:
     connection: ws
     heartbeat_interval: 10000
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         token: "${SATORI_TOKEN}"
 ```
@@ -63,7 +63,7 @@ plugins:
 | 字段 | 说明 |
 |------|------|
 | `heartbeat_interval` | WS PING 间隔（毫秒），默认 `10000` |
-| `token` | Bearer；也可设环境变量 `SATORI_TOKEN` |
+| `token` | Bearer；可在 YAML 中引用 `${SATORI_TOKEN}` |
 
 ### Webhook
 
@@ -72,7 +72,7 @@ plugins:
   satori:
     connection: webhook
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         path: "/satori/webhook"
         token: "${SATORI_TOKEN}"

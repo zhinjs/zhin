@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1b9ae88957ec98c4 -->
+<!-- sync-adapter-docs:sha256=42808b7568ca6b94 -->
 
 # @zhin.js/adapter-satori
 
@@ -63,7 +63,7 @@ plugins:
     connection: ws
     heartbeat_interval: 10000
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         token: "${SATORI_TOKEN}"
 ```
@@ -75,7 +75,7 @@ plugins:
 | 字段 | 说明 |
 |------|------|
 | `heartbeat_interval` | WS PING 间隔（毫秒），默认 `10000` |
-| `token` | Bearer；也可设环境变量 `SATORI_TOKEN` |
+| `token` | Bearer；可在 YAML 中引用 `${SATORI_TOKEN}` |
 
 ### Webhook
 
@@ -84,7 +84,7 @@ plugins:
   satori:
     connection: webhook
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         path: "/satori/webhook"
         token: "${SATORI_TOKEN}"
