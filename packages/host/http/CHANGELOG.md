@@ -1,5 +1,38 @@
 # @zhin.js/host-http
 
+## 1.1.1
+
+### Patch Changes
+
+- 244e475: Add a shared CLI and Console plugin-management transaction for install, update,
+  uninstall, configuration validation, lifecycle control, diagnostics, Marketplace
+  discovery, and Endpoint connectivity checks. Console mutations use revision checks,
+  exact-version plans, post-operation verification, and recoverable manifest and
+  lockfile snapshots.
+- 103f2c3: Document the canonical Workroom Journal, Projection Outbox, and Extended Console RPC module entries, and add a repository gate that prevents external deep imports or restoration of their removed flat source entries.
+- cd2a888: Scope the Console marketplace registry cache to each Host route registration so Hosts with different registries cannot reuse one another's plugin data. Concurrent registry reads within one Host now share the same in-flight request.
+- 2dbbc15: Classify watched Root configuration changes by their actual Host and Plugin projections, reload only affected Plugin subtrees, and request a process restart for Host configuration changes. Reload project dotenv layers as Runtime inputs so environment references are re-expanded without mutating global process state.
+- 6b70e46: Remove deprecated runtime authoring aliases instead of carrying two names for one concept. AI setup now accepts only `agentProvider` and exposes `resolveAgentProviderFromConfig`, HTTP Host consumers use the canonical Console endpoint contract directly, and activity feedback resolution goes through `ActivityFeedbackPolicy`.
+- baef56b: Require canonical dot-named Console RPCs with top-level camelCase request and response payloads, and remove legacy aliases and normalization paths.
+- da0a8e3: Split extended Console RPC into a thin protocol dispatcher plus cohesive schedule, inbox, login, Endpoint-management, and Workroom control modules. Keep request parsing and generation-leased Endpoint execution behind explicit internal helpers while preserving the package-root API and wire protocol.
+- 507d602: Make the Root `ConfigFileDocument` the sole configuration authority for Runtime, Endpoint commands, and Console. Console source editing now preserves the active YAML or JSON format, uses optimistic revision checks, returns one consistent source-and-key snapshot, and exposes canonical `config:get-source` / `config:replace-source` RPCs without the former YAML-only compatibility names.
+- Updated dependencies [13f7301]
+- Updated dependencies [244e475]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [baef56b]
+- Updated dependencies [65d0391]
+- Updated dependencies [cf83528]
+- Updated dependencies [507d602]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/console-protocol@1.1.6
+  - @zhin.js/logger@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes

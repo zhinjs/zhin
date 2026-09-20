@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/kernel",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Framework-agnostic scheduling, error, identity, and utility primitives",
   "type": "module",
   "main": "./lib/index.js",

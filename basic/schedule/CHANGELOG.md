@@ -1,5 +1,12 @@
 # @zhin.js/schedule
 
+## 1.1.1
+
+### Patch Changes
+
+- 9a32872: Replace the process-global holiday registry with an owner-scoped `HolidayCalendar`. Each `CalendarScheduler` now owns independent holiday data, derived caches, update listeners, and override persistence through `scheduler.holidays`; standalone planning can receive the same calendar explicitly. Remove the root `updateData`, `loadHolidayOverrides`, `getMinHolidayYear`, `getMaxHolidayYear`, and `onHolidayDataUpdate` functions together with the old `UpdateDataOptions` type.
+- 0b95351: Generate collision-resistant schedule job IDs without process-global sequence state, preventing automatic registration from replacing persisted or explicitly named jobs.
+
 ## 1.1.0
 
 ### Minor Changes

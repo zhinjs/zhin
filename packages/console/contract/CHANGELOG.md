@@ -1,5 +1,24 @@
 # @zhin.js/contract
 
+## 1.1.1
+
+### Patch Changes
+
+- f474b1d: Replace the process-wide Console application, runtime environment, and WebSocket singleton with an explicitly created `ConsoleClient` that owns its application registry and REST/SSE transport. React transport hooks now resolve that owner through `ConsoleClientProvider`, and the obsolete `addPage` compatibility alias is removed from the plugin registration contract.
+- Updated dependencies [1414ccb]
+- Updated dependencies [62dee52]
+- Updated dependencies [244e475]
+- Updated dependencies [1fa1c09]
+- Updated dependencies [75920c4]
+- Updated dependencies [cd4f240]
+- Updated dependencies [4bc3d3c]
+- Updated dependencies [77d5a46]
+- Updated dependencies [baef56b]
+- Updated dependencies [698f16f]
+- Updated dependencies [507d602]
+  - @zhin.js/ai@1.1.34
+  - @zhin.js/console-protocol@1.1.6
+
 ## 1.1.0
 
 ### Minor Changes

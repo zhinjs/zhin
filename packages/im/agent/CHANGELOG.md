@@ -1,5 +1,164 @@
 # @zhin.js/agent
 
+## 1.1.26
+
+### Patch Changes
+
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- 1414ccb: Make `UserMessage.actor` the sole participant identity authority across IM trigger, Agent ingress, persistence, LLM rendering, session-tree previews, and compaction. Remove sender identity from `agent_messages.extra`, delete text-based sender recovery and duplicate sender types/helpers, and keep Core AI trigger results limited to canonical user content.
+- e1d77d2: Centralize each turn's executable tool snapshot in `ExecutableToolRegistry`, removing duplicate mutable maps from full and standalone Agent loops and keeping model projection and runtime lookup on one authority.
+- 743d470: Make `@zhin.js/tool` the sole owner of Agent Tool input Schema admission, JSON Schema projection, and pre-execution parsing. Require an object-root JSON Schema or the public Zod 4 `safeParse` plus `toJSONSchema` contract, remove Zod 3 structural compatibility, and delete the duplicate `@zhin.js/core/tool-zod` entry point.
+- 62dee52: Rename the Agent Tool policy field from `approval` to `requiresApproval`, so values such as `never` and `always` state when human approval is required. Remove the old field without a compatibility alias and migrate built-in, adapter, feature, and utility Tools to the canonical contract.
+- eb0100a: Model per-turn tool execution, Workroom priority authorization, and generation-owned governed dispatch as concrete classes with private dependencies. Construct these implementations directly and remove their anonymous-object factories.
+- 6b0415a: Move Agent Host composition, database activation, runtime introspection, and MCP lifecycle helpers to `@zhin.js/agent/runtime`, and remove the classic `ToolRuntime` machinery from the package root. `composeZhinAgentRuntime` now returns the composed runtime carrying its internal Host contract, so the CLI no longer imports or calls `asPrivate` itself.
+- cd54131: Remove the deleted `usePlugin`, `getPlugin`, and host-root registry signatures
+  from the public runtime instead of retaining throwing or no-op compatibility
+  exports. Remove the module-global `registerAIHook` compatibility registry;
+  Agent hooks now belong to generation-owned resources and canonical stream events.
+- 8ededb6: Remove the classic Plugin-tree Agent discovery path. Workspace Agent discovery now accepts only a project root, package Agent surface discovery accepts a filesystem descriptor, and plugin-packaged Agents remain owned by the generation Feature provider.
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- 25a845a: Unify Skills on `skills/<name>/SKILL.md`, support Agent-private Skills and nested Skill-private Tools, publish and mount existing plugin Skills, add governed Skill metadata and Turn access filtering, unlock only already-admitted same-owner Tools, and make `on-risk` and `once` approval behavior precise.
+- 103f2c3: Document the canonical Workroom Journal, Projection Outbox, and Extended Console RPC module entries, and add a repository gate that prevents external deep imports or restoration of their removed flat source entries.
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+- d844144: Move Bash execution to a native generation ToolFeature backed by an explicit execution port and the typed Turn policy. Remove the classic Bash tool API, hidden input authority channel, and `createBuiltinTools` Bash entry.
+- 2a2b5d7: Move conversation compaction state into a host-owned `AgentCompactionRuntime`. Automatic compaction, manual compaction, lifecycle cleanup, and stability metrics now operate on the same explicit runtime instance, so multiple Agent hosts cannot share or evict each other's session state.
+
+  Remove the process-global compaction state helpers. `@zhin.js/agent/memory` now exposes the class-based runtime, including instance-local metrics, LRU pressure eviction, and cleanup.
+
+- 1fa1c09: Replace the process-wide proxy URL and fetch cache with provider-owned `AiHttpTransport` instances. Model discovery, text generation, image generation, and generated-image downloads now use the owning provider's transport, and disposing `AIService` waits for proxy agents to close.
+- b853dba: Remove process-global ScheduleEngine and Scheduler getters and setters. Each assistant ScheduleJobEngine now owns and disposes an isolated scheduler, preventing cross-runtime job collisions and stale timers.
+- e561309: Give each IM runtime one dedicated conversation owner for event-store replacement, inbound and outbound fact recording, notice normalization, reference lookup, context aggregation, and consumer cursors. Split the conversation contract into reader and writer ports so Agent and CLI receive only the read capability while Core retains mutation authority.
+- f4387ef: Publish `generate_image` as a generation-owned native Tool Feature for both main and subagent turns. Provider lookup and image defaults now stay with the Host-owned `AIService`, execution follows the canonical `ToolIndex` and `TurnToolRuntime` path, and the detached class-based implementation is removed.
+- 75920c4: Replace the process-global LLM provider, transport, live-model resolver, and language-model caches with owner-scoped `LlmApiRuntime` instances. Agent loops and compaction now require an explicit completion port; AIService, ZhinAgent, subagents, deferred workers, and the CLI composition root retain and inject their own runtime. Remove the global registration, lookup, resolver, cache-reset, and test-reset APIs.
+- 5c1ea6c: Replace the process-global Owner approval helpers with `OwnerApprovalRuntime`, owned by each `ZhinAgent` and injected into command handling and exec policy evaluation. Remove classic `Plugin` lookup wrappers, the unreachable pending-approval map and shorthand, and its misleading stability metric.
+
+  Split strict V2 persistence into a private store that validates complete documents and writes atomically. V1 files are rejected without online migration or rewriting; retained approvals must be recreated explicitly.
+
+- cd4f240: Replace the detached class-based `knowledge_search` implementation with a generation-owned Tool Feature backed by the explicit `KnowledgeIndex` contract and encapsulated `MarkdownKnowledgeIndex`. The CLI publishes it to main and subagent turns only when `ai.knowledge.baseDir` is explicitly configured inside the project root. Knowledge indexing is bounded, abort-aware, deterministic, and shared by both execution paths.
+- 535fed1: Make `tools/<name>/index.ts` available to the owner-aware Tool Feature, preserve tool tags and keywords through Agent projection, and replace the 60s plugin's process-global API base registration stack with an owner-scoped `SixtySClient` used by every command and Agent Tool.
+- 5d990be: Remove dead classic Plugin and Adapter runtime bridges. Agent activity feedback now depends on the explicit Adapter `EndpointControl` port, dangerous-tool allowlists come only from the current turn context, and the unused global Adapter registry cleanup and typing example integration are gone.
+- cd55ee6: Remove the ambiguous `defineTool` and `DefineToolInput` aliases from the Agent authoring surface. Explicit `tools/<name>/index.ts` entries now use the single canonical `defineAgentTool` authoring API.
+- 98dbc85: Remove classic `*.tool.md` and standalone Skill directory discovery from the Agent runtime. Tools now enter through Plugin Runtime `tools/<name>/index.ts` features, Skills use `skills/<name>/SKILL.md`, and Group Suite keeps its database and transient state inside its owning plugin runtime.
+- 3abdc90: Remove the unused classic Plugin-based Agent introspection REST and collector APIs. Console introspection is owned by the Host composition and reads commands, components, middleware, endpoints, and Agent resources from the current Runtime snapshot.
+- 2b7b271: Remove the unused classic `AgentFeature` and `MCPFeature` registries from the Agent root API. Agent presets and MCP connections now have one authority each: the generation-owned `AgentIndex` and `McpIndex` projections provided by their dedicated Feature packages.
+- f19d598: Remove the remaining classic Agent Tool rail and the unmounted `install_skill` and retired `activate_skill` protocols. Skill loading now uses the polymorphic `SkillInstructionSource` contract and typed read results, `spawn_task` owns its explicit turn-bound definition, and Web, file, orchestration, spawn, and Skill modules replace the former catch-all `builtin` directory. Remove the unused ToolSelection collector and its compatibility exports so the generation Tool catalog remains the only production selection path.
+- ba0ba3c: Remove the unused classic `createBuiltinTools()` aggregate and the duplicate class-based file, web-fetch, and TODO Tool implementations. These capabilities are now exposed only as generation-owned `@zhin.js/tool` definitions and executed through `ToolIndex` and `TurnToolRuntime`.
+- 5140ce1: Remove the unmounted classic Database Feature, its `defineModel` extension, and the process-global post-start migration hook. Database tables and lifecycle now have one authority through the generation-owned Database Host. Also remove the inactive online `bot_id` compatibility migration; supported schemas must use `endpoint_id` directly.
+- 379439b: Remove the unmounted classic Core `ToolFeature` and `SkillFeature` registries and the unused Agent bridge that copied them into a mutable resource hub. Tool and Skill authority now comes only from generation-owned Feature projections consumed by Plugin Runtime `CapabilityIngress`; Core retains only the stateless IM access predicate used by the current path.
+- 11c9352: Remove dead deprecated aliases from Core and Agent, including legacy Tool and outbound segment types, the old interactive segment helper, duplicate Session and Schedule names, obsolete log formatters, and the process-global Task Executor drain shim. Current APIs now expose one name and one ownership model for each behavior.
+- 4bc3d3c: Remove the unused IM-specific session store and its Agent injection slot. The persistent and in-memory implementations now share `AgentSessionRepository` as the single origin-neutral session lifecycle contract, and generated epoch IDs no longer depend on process-global counters.
+- 6012e3c: Remove the detached `analyze_media` Tool that reported images as model-ready without injecting them into a model turn. Inbound images now use the canonical media pipeline directly: vision-capable providers receive native image input, while unsupported providers report that limitation explicitly. File tools no longer direct callers to a nonexistent analysis path.
+- 31b42a8: Remove the latest-generation store API and implicit module-global runtime access. Generation-owned state is now provided as snapshot resources and resolved from each command, middleware, component, tool, or scheduled operation's capability context.
+
+  RSS, content moderation, and music now expose owner-scoped runtime tokens. The Agent security, prompt, continuation, typing, anomaly, audit, and sandbox modules require explicit instances instead of selecting a process-global current generation.
+
+- cb61227: Remove the implicit classic `web_search` Tool from standalone `AIService` agents. Standalone capabilities are now explicit through per-agent `tools` or the service-owned registration boundary, while the generation runtime remains the sole owner of native Web Tool Features. Move shared Web search infrastructure into the cohesive `web` module and reject ambiguous duplicate registrations.
+- 140cf0f: Remove the legacy composed side-event mapping aliases in favor of structured `mapNoticeParts` and `mapRequestParts`. Delete unmounted Agent default hook, tool, and subagent modules that exposed no runtime behavior.
+- 774ed26: Require the canonical `data/memory/global`, `platforms/<platform>`, and `sessions/<session>` layout. File-memory loading no longer copies or reads root-level legacy files, and the public migration helper has been removed.
+
+  Anchor memory path classification to the selected workspace and reject root-level or unknown memory paths. Path resolution, policy checks, and memory reads are now pure and cannot create memory directories as a side effect.
+
+- adecba9: Remove process-global prompt, instruction, bootstrap, and Git status caches. Context readers now observe the current workspace on every request without cross-owner state or cache-reset APIs.
+- 019f5ff: Make the generation `ToolIndex` the sole Agent Tool catalog. Remove the empty ResourceHub Tool registry, its builder and Capability Seam adapter, and stop merging its empty projection into Console introspection. Agent support resources now own only Skill, SubAgent, MCP, and Hook state; plugins register Tools through `tools/<name>/index.ts` or `context.addTool()`.
+- 77d5a46: Remove the retired `tool_search` and `run_deferred_task` orchestration protocol from the Agent and CLI. `discover`, `load_tool`, and `spawn_task` are now the only documented and executable orchestration vocabulary; obsolete config migration, result formatting, prompt redaction, reserved names, subagent filtering, and the detached class-based tool are removed. Config repair now preserves canonical `ai.agent` fields while removing retired model fields.
+- da17137: Remove the unused legacy Capability Seam DI symbol and direct Tool and Skill invocation compatibility APIs. Capability Seam now enters the runtime only through the generation-owned `capabilitySeamToken`, provider projection, and the canonical Turn Tool Runtime.
+- 659b61d: Require the current Agent session database models during generation activation and remove automatic SQLite schema probing, legacy-column deletion, and historical session-tree backfills. Database mode now rejects incomplete schema registration instead of silently retaining in-memory session state.
+- 91adaa5: Require every Workroom Projection binding and outbox item to carry an explicit audience and binding-generation cursor. Remove online normalization of legacy bindings and cursor migration, and split Projection contracts, repositories, state transitions, tracing, projection rules, and delivery into one canonical domain module.
+- 1fed817: Require the composition root to inject one `NotificationRouter` into Schedule execution and delivery. Remove the duplicate `resolveAdapter` construction path and the Task Executor adapter resolver exposure so scheduled output has one outbound routing authority.
+- 698f16f: Replace ambiguous command approval modes with `ask`, `auto`, and `bypass`, add a fail-closed review Agent, and scope remembered human decisions to the current invocation, sender, or conversation.
+- e5d9795: Separate Workroom, Portfolio, and Data Governance domain contracts from Agent runtime composition. Assignment grants, disclosure authority, remote execution, governed dispatch reasons, catalog validation, and effect blocker ports now belong to their domain modules; the local model assignment adapter moves to `@zhin.js/agent/runtime`. Remove the deprecated Workroom catalog config aliases and enforce the domain dependency direction in the architecture harness.
+- 444ea45: Split the Workroom Journal into a canonical domain module with explicit contracts, Memory/File/Database adapters, event validation and codec, stored control projection, and governed payload publication/replay boundaries. Preserve the package-root API while removing the monolithic source entry and migrating all internal consumers to the new module.
+- 2fd8017: Make root `AGENTS.md` the main Agent contract and `agents/<name>/agent.json` plus `system.md`, `boundaries.md`, and `conventions.md` the only named sub-agent authoring shape. Standardize Agent and Skill private Tools, Skills, and Hooks as nested named directories, enforce access predicates and governed Tool activation, and keep supporting-file changes on Agent Slot hot reloads.
+- 5c3858e: Make `@zhin.js/im-contract` the explicit zero-dependency owner of transport identities, canonical segments, media guards, conversation facts, stores, and delivery contracts. Platform adapters now read media contracts from that foundation instead of reaching through Core.
+- 33ea736: Use `tools/<name>/index.ts` and `defineAgentTool` from `@zhin.js/tool` as the sole Agent Tool authoring model. Remove the duplicate `@zhin.js/tools` definition, context, bridge, export, and discovery path; migrate plugin manifests, examples, scaffolding, HMR, and prepack compilation to the generation-owned Tool Feature.
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [13f7301]
+- Updated dependencies [cd54131]
+- Updated dependencies [a9e4a40]
+- Updated dependencies [5855db7]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [ec921d2]
+- Updated dependencies [8740059]
+- Updated dependencies [63d1f7a]
+- Updated dependencies [25a845a]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [eb3227a]
+- Updated dependencies [1fa1c09]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [d4c6175]
+- Updated dependencies [7a0e1ca]
+- Updated dependencies [103b5d3]
+- Updated dependencies [5a7a7f7]
+- Updated dependencies [75920c4]
+- Updated dependencies [b076eae]
+- Updated dependencies [cd4f240]
+- Updated dependencies [535fed1]
+- Updated dependencies [73a24b7]
+- Updated dependencies [4380cf9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [1cb1163]
+- Updated dependencies [be3061e]
+- Updated dependencies [75f8332]
+- Updated dependencies [81935e2]
+- Updated dependencies [f9ed01b]
+- Updated dependencies [ac0ab50]
+- Updated dependencies [5140ce1]
+- Updated dependencies [522d75f]
+- Updated dependencies [a7611b3]
+- Updated dependencies [8823044]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [4bc3d3c]
+- Updated dependencies [31b42a8]
+- Updated dependencies [135ac91]
+- Updated dependencies [140cf0f]
+- Updated dependencies [251e4d2]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [e0f6478]
+- Updated dependencies [77d5a46]
+- Updated dependencies [65d0391]
+- Updated dependencies [698f16f]
+- Updated dependencies [2fd8017]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [33ea736]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/core@1.1.37
+  - @zhin.js/ai@1.1.34
+  - @zhin.js/tool@1.1.1
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/adapter@1.1.14
+  - @zhin.js/mcp-feature@1.1.1
+  - @zhin.js/prompt-section@1.1.1
+  - @zhin.js/agent-feature@1.1.1
+  - @zhin.js/skill@1.1.1
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/kernel@1.1.1
+  - @zhin.js/im-contract@1.1.1
+  - @zhin.js/permission@1.1.1
+
 ## 1.1.25
 
 ### Patch Changes

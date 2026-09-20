@@ -1,5 +1,25 @@
 # @zhin.js/client
 
+## 1.1.6
+
+### Patch Changes
+
+- 244e475: Add a shared CLI and Console plugin-management transaction for install, update,
+  uninstall, configuration validation, lifecycle control, diagnostics, Marketplace
+  discovery, and Endpoint connectivity checks. Console mutations use revision checks,
+  exact-version plans, post-operation verification, and recoverable manifest and
+  lockfile snapshots.
+- f474b1d: Replace the process-wide Console application, runtime environment, and WebSocket singleton with an explicitly created `ConsoleClient` that owns its application registry and REST/SSE transport. React transport hooks now resolve that owner through `ConsoleClientProvider`, and the obsolete `addPage` compatibility alias is removed from the plugin registration contract.
+- 2dbbc15: Classify watched Root configuration changes by their actual Host and Plugin projections, reload only affected Plugin subtrees, and request a process restart for Host configuration changes. Reload project dotenv layers as Runtime inputs so environment references are re-expanded without mutating global process state.
+- baef56b: Require canonical dot-named Console RPCs with top-level camelCase request and response payloads, and remove legacy aliases and normalization paths.
+- 507d602: Make the Root `ConfigFileDocument` the sole configuration authority for Runtime, Endpoint commands, and Console. Console source editing now preserves the active YAML or JSON format, uses optimistic revision checks, returns one consistent source-and-key snapshot, and exposes canonical `config:get-source` / `config:replace-source` RPCs without the former YAML-only compatibility names.
+- Updated dependencies [244e475]
+- Updated dependencies [f474b1d]
+- Updated dependencies [baef56b]
+- Updated dependencies [507d602]
+  - @zhin.js/console-protocol@1.1.6
+  - @zhin.js/contract@1.1.1
+
 ## 1.1.5
 
 ### Patch Changes

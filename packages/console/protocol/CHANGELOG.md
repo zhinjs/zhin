@@ -1,5 +1,17 @@
 # @zhin.js/console-protocol
 
+## 1.1.6
+
+### Patch Changes
+
+- 244e475: Add a shared CLI and Console plugin-management transaction for install, update,
+  uninstall, configuration validation, lifecycle control, diagnostics, Marketplace
+  discovery, and Endpoint connectivity checks. Console mutations use revision checks,
+  exact-version plans, post-operation verification, and recoverable manifest and
+  lockfile snapshots.
+- baef56b: Require canonical dot-named Console RPCs with top-level camelCase request and response payloads, and remove legacy aliases and normalization paths.
+- 507d602: Make the Root `ConfigFileDocument` the sole configuration authority for Runtime, Endpoint commands, and Console. Console source editing now preserves the active YAML or JSON format, uses optimistic revision checks, returns one consistent source-and-key snapshot, and exposes canonical `config:get-source` / `config:replace-source` RPCs without the former YAML-only compatibility names.
+
 ## 1.1.5
 
 ### Patch Changes
