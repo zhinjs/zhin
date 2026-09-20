@@ -2,8 +2,7 @@
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
  */
-import type { AIProvider, Usage, OutputElement, AgentSessionStore, ContextRepository, IMSessionStore, MemoryAgentSessionStore, MemoryIMSessionStore, RateLimiter, ModelRegistry } from '@zhin.js/ai';
-import type { Plugin } from '@zhin.js/core';
+import type { AIProvider, Usage, OutputElement, AgentSessionRepository, ContextRepository, RateLimiter, ModelRegistry, LlmApiRuntime } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SkillSystem } from '../skill/skill-system.js';
@@ -18,7 +17,10 @@ import type { ApprovalPort } from '../session/approval-port.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredTurnState } from '../turn/deferred-turn-state.js';
+import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
+import type { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -32,10 +34,11 @@ import type {
 
 /** session 域：会话/上下文存储与会话事件。 */
 export interface AgentSessionHost {
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   sessionSystem: SessionSystem | null;
+  readonly compactionRuntime: AgentCompactionRuntime;
+  readonly ownerApprovals: OwnerApprovalRuntime;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(
     sessionId: string,
@@ -87,6 +90,8 @@ export interface ZhinAgentPrivate
   extends AgentSessionHost, AgentContextHost, AgentTurnLifecycleHost, AgentEmitterHost {
   config: RequiredHostConfig;
   activeBinding: ResolvedAgentBinding | null;
+  llmRuntime: LlmApiRuntime;
+  audioTranscriber?: AudioTranscriptionPort;
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
@@ -103,4 +108,4 @@ export interface ZhinAgentPrivate
   readonly deferred: DeferredTurnState;
 }
 
-export type { OnChunkCallback, OutputElement, Tool, Message, Plugin };
+export type { OnChunkCallback, OutputElement, Tool, Message };

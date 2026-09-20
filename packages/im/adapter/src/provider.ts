@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { AdapterIndex } from './adapter-index.js';
 import { parseAdapterDefinition } from './definition.js';
 
@@ -10,9 +10,9 @@ const adapterFeature = defineFeatureProvider({
   id: adapterFeatureId,
   authoring: {
     setupMethod: 'addAdapter',
-    conventions: [typeScriptModules({
-      id: 'adapters-ts',
-      directory: 'adapters',
+    conventions: [directoryModules({
+      id: 'adapters-index',
+      layouts: [{ segments: ['adapters', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseAdapterDefinition,
   },

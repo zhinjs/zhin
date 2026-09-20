@@ -56,7 +56,7 @@ export type LoginAssistEventName =
   | 'endpoint.login.resolved'
   | 'endpoint.login.expired';
 
-/** Minimal bus — Plugin Runtime / classic Plugin / test EventEmitter all qualify. */
+/** Minimal bus shared by the runtime host and lightweight test emitters. */
 export interface LoginAssistBus {
   emit(name: LoginAssistEventName, task: PendingLoginTask): void;
 }
@@ -241,16 +241,4 @@ function resolveTimeoutMs(
   const raw = explicit === undefined ? fallback : explicit;
   if (!Number.isFinite(raw) || raw <= 0) return undefined;
   return raw;
-}
-
-// ============================================================================
-// 扩展 Plugin 接口
-// ============================================================================
-
-declare module '../plugin.js' {
-  namespace Plugin {
-    interface Contexts {
-      loginAssist: LoginAssist;
-    }
-  }
 }

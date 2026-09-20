@@ -1,5 +1,5 @@
 /**
- * Eve-style disableTool() sentinel for defineAgent disallowedTools (ADR 0039 P2).
+ * Tool deny-list sentinel used by programmatic resource definitions.
  */
 export const DISABLE_TOOL_MARKER = Symbol.for('zhin.authoring.disableTool');
 
@@ -25,7 +25,7 @@ export function isDisabledToolRef(value: unknown): value is DisabledToolRef {
   );
 }
 
-/** Normalize defineAgent disallowedTools entries (string or disableTool sentinel). */
+/** Normalize disallowed Tool entries (string or disableTool sentinel). */
 export function normalizeToolDenylist(
   entries?: readonly (string | DisabledToolRef)[],
 ): string[] | undefined {

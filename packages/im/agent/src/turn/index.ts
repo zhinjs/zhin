@@ -60,10 +60,8 @@ export { SessionMessageQueue } from './session-message-queue.js';
 export {
   addUsage,
   EMPTY_USAGE,
-  formatAiHandlerCompleteLog,
   formatAiHandlerTurnTable,
   formatOutputElementsPreview,
-  formatZhinAgentTurnUsage,
 } from './turn-metrics.js';
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from './turn-metrics.js';
 
@@ -134,8 +132,6 @@ export type { TurnContextBridgeState } from './turn-context-bridge.js';
 export {
   TaskContinuationManager,
   decomposeTask,
-  getContinuationManager,
-  initContinuationManager,
 } from './task-continuation.js';
 export type {
   TaskStatus,

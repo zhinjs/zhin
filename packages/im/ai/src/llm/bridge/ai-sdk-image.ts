@@ -29,13 +29,14 @@ export async function generateImageViaAiSdk(
   config: ProviderInstanceConfig,
   request: ImageGenerateRequest,
   defaults: ProviderInstanceConfig['imageGeneration'] = {},
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<ImageGenerateResult> {
   if (config.accountId && !config.baseUrl?.trim()) {
-    return generateCloudflareImage(config, request, defaults);
+    return generateCloudflareImage(config, request, defaults, fetchFn);
   }
 
   if (sdk === 'minimax') {
-    return generateMiniMaxImage(config, request, defaults);
+    return generateMiniMaxImage(config, request, defaults, fetchFn);
   }
 
   if (!sdkSupportsImageGeneration(sdk)) {
@@ -47,7 +48,7 @@ export async function generateImageViaAiSdk(
     throw new Error('image model is required');
   }
 
-  const imageModel = createImageModel(sdk, config, modelId);
+  const imageModel = createImageModel(sdk, config, modelId, fetchFn);
   if (!imageModel) {
     throw new Error(`sdk "${sdk}" has no image model for "${modelId}"`);
   }

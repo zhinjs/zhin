@@ -1,6 +1,5 @@
 import {
   defineGamePlugin,
-  gameEvents,
   plainTextFromSendContent,
   type GameEventSession,
   type InMemoryGameDb,
@@ -77,12 +76,12 @@ export default defineGamePlugin<SessionServices>({
         content,
       })));
     };
-    const disposeTurn = gameEvents.on('turn:change', async (event) => {
+    const disposeTurn = services.session.events.on('turn:change', async (event) => {
       if (event.gameId === 'ttt' && event.session.status === 'active') {
         await notify(event.session, false);
       }
     });
-    const disposeEnd = gameEvents.on('game:end', async (event) => {
+    const disposeEnd = services.session.events.on('game:end', async (event) => {
       if (event.gameId === 'ttt') await notify(event.session, true);
     });
     return () => {

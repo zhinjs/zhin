@@ -36,7 +36,7 @@ import {
   createWorkroomStructuredTaskReport,
   WorkroomGovernedPayloadHeaderCasLostError,
 } from '../../src/workroom/workroom-task-report-store.js';
-import { FileWorkroomJournal } from '../../src/workroom/journal.js';
+import { FileWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 describe('WorkroomDataGovernanceRuntime', () => {

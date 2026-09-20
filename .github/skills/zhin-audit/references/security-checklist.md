@@ -1,93 +1,24 @@
 # 安全检查清单
 
-逐项检查，标记状态：✅ 通过 / ⚠️ 需关注 / ❌ 发现问题
+## Tool 执行边界
 
-## 1. 代码执行 [严重]
+- [ ] 所有 builtin Tool 风险检查统一通过 `packages/im/agent/src/security/policy-facade.ts` 的 `runToolPolicies`；没有在单个 Tool 内复制或跳过策略链。
+- [ ] Shell 规则检查 `security/exec-policy.ts` 与 `plugin-runtime/native-bash-tool.ts`，覆盖复合命令、引号、重定向、工作目录和环境变量。
+- [ ] 文件规则检查 `security/file-policy.ts`、`file-role-policy.ts`、`turn-file-authority.ts` 与 native file tools，验证 canonical path、workspace 边界和角色权限。
+- [ ] 网络规则检查 `network-policy.ts`、`turn-network-client.ts` 与 native web tools，验证 scheme/host/redirect/DNS 结果均不能扩大允许范围。
+- [ ] `requiresApproval` 只接受 `never | on-risk | once | always`；即使为 `never` 也不能绕过权限、sandbox、网络、文件和 generation 策略。
+- [ ] `approvalMode=auto` 的审核器 fail closed；`bypass` 只跳过确认，不提升 Tool 权限。
 
-- [ ] **eval / Function 构造器**
-  - 搜索：`eval(`, `new Function(`, `Function(`
-  - 重点文件：`packages/im/agent/src/builtin-tools.ts`, `packages/im/kernel/src/`
-  - 验证：所有动态代码执行是否有沙箱隔离
+## Host、输入与凭据
 
-- [ ] **Shell 命令执行**
-  - 搜索：`exec(`, `execSync(`, `spawn(`, `child_process`
-  - 重点文件：`basic/cli/src/commands/doctor.ts`
-  - 验证：所有命令参数是否经过转义，是否使用 `execFile` 替代 `exec`
+- [ ] HTTP/Console/MCP/A2A 入口在进入业务逻辑前完成认证、授权、body size 与 schema 校验。
+- [ ] Token 比较、来源与日志行为以当前 `packages/host/http/src/` 实现和测试为准，不把历史状态当作当前漏洞。
+- [ ] SQL 使用参数化或受控查询构造器；Shell 不拼接未验证用户输入；HTML/SVG/Markdown 输出在对应协议边界转义或清洗。
+- [ ] 路径解析后仍位于允许根目录；symlink、`..`、大小写和编码变体不能越界。
+- [ ] 源码、日志、错误、fixture 和快照不包含 token、密码、cookie、私聊内容或完整外部响应。
 
-- [ ] **动态导入**
-  - 搜索：`import(` 拼接用户输入的路径
-  - 重点文件：`packages/im/core/src/plugin.ts`（热重载机制）
-  - 验证：导入路径是否限制在安全目录内
+## 依赖与验证
 
-## 2. 注入攻击 [严重]
-
-- [ ] **SQL 注入**
-  - 重点文件：`basic/database/src/`
-  - 验证：所有 SQL 查询是否使用参数化绑定
-  - 检查 `where` 条件构建是否拼接字符串
-
-- [ ] **命令注入**
-  - 重点文件：`packages/im/agent/src/builtin-tools.ts`
-  - 验证：bash 命令参数是否经过 `checkBashCommandSafety()`
-  - 检查正则 `[\s;|&]` 分割是否可被绕过
-
-- [ ] **XSS / HTML 注入**
-  - 重点文件：`packages/toolkit/satori/src/html-to-svg.ts`
-  - 验证：用户输入是否在 HTML 渲染前转义
-  - 检查 SVG 输出是否包含 `<script>` 等危险标签
-
-## 3. 认证与授权 [高]
-
-- [ ] **Token 比较**
-  - 文件：`packages/host/http/src/index.ts`
-  - 验证：是否使用 `crypto.timingSafeEqual()` 防止时序攻击
-  - 当前状态：使用 `===` 直接比较（⚠️ 时序攻击风险）
-
-- [ ] **Token 传输**
-  - 验证：是否仅接受 `Authorization: Bearer` 头
-  - 当前状态：同时接受 `query.token`（⚠️ 日志泄漏风险）
-
-- [ ] **错误信息**
-  - 验证：401 响应是否区分 "missing" 和 "invalid"
-  - 当前状态：区分两种错误（⚠️ 可枚举 token 存在性）
-
-- [ ] **公共路径**
-  - 验证：`/pub/` 前缀路径不暴露敏感数据
-  - 检查是否有 API 意外放行
-
-## 4. 敏感信息 [高]
-
-- [ ] **硬编码凭据**
-  - 搜索关键词：`token`, `password`, `secret`, `apiKey`, `api_key`
-  - 排除：类型定义、接口声明
-  - 验证：所有凭据从配置文件或环境变量读取
-
-- [ ] **日志泄漏**
-  - 搜索 `logger.info`, `logger.debug`, `console.log`
-  - 验证：不输出 token、密码等敏感字段
-  - 检查错误堆栈是否包含请求体中的敏感信息
-
-- [ ] **错误响应**
-  - 验证：HTTP 错误响应不包含堆栈跟踪
-  - 验证：不暴露内部文件路径、数据库结构
-
-## 5. 文件访问 [中]
-
-- [ ] **路径遍历**
-  - 搜索文件读写操作中的用户输入
-  - 验证：路径经过 `path.resolve` + 边界检查
-  - 重点：`packages/im/agent/src/security/file-policy.ts` 黑名单完整性
-
-- [ ] **文件上传**
-  - 检查是否有文件上传功能
-  - 验证：文件类型白名单、大小限制
-
-## 6. 依赖安全 [低]
-
-- [ ] **已知漏洞**
-  - 运行 `pnpm audit`
-  - 检查 `pnpm-lock.yaml` 中高危依赖版本
-
-- [ ] **原型污染**
-  - 搜索 `Object.assign(`, `_.merge(`, `_.extend(`
-  - 验证：对象合并操作是否使用安全方法
+- [ ] 新依赖符合 `pnpm check:dependency-policy`，没有绕开 workspace overrides。
+- [ ] `pnpm audit` 的结果按可达性和运行环境分析；锁文件命中本身不等于可利用漏洞。
+- [ ] 对每个问题提供可复现输入或完整调用链，避免只凭 `rg` 命中定级。

@@ -44,17 +44,18 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
   "peerDependencies": {
     "@icqqjs/icqq": "^1.12.2",
     "@zhin.js/adapter": "workspace:^",
-    "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/core": "workspace:^",
     "@zhin.js/prompt-section": "workspace:^",
@@ -63,9 +64,6 @@
   },
   "peerDependenciesMeta": {
     "@icqqjs/icqq": {
-      "optional": true
-    },
-    "@zhin.js/agent": {
       "optional": true
     },
     "@zhin.js/command": {
@@ -84,7 +82,6 @@
   "devDependencies": {
     "@icqqjs/icqq": "^1.12.2",
     "@types/node": "^26.1.2",
-    "@zhin.js/agent": "workspace:*",
     "@zhin.js/prompt-section": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
@@ -98,10 +95,11 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
-    "tools",
+    "agents",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "PERMITS.md",
+    "prompt-sections"
   ],
   "publishConfig": {
     "access": "public",
@@ -127,6 +125,14 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/agent-feature",
         "api": "^1.0.0"
       }
     ],

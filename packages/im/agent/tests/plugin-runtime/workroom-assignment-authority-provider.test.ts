@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
-  createWorkroomAssignmentAuthorityGrant,
   createWorkroomGenerationAuthoritySnapshot,
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   digestWorkroomCatalogProjectBinding,
   digestWorkroomRemoteEndpointAuthority,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
 } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { createWorkroomAssignmentAuthorityGrant } from '../../src/workroom/assignment-authority.js';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { SkillIndex, skillFeatureId } from '@zhin.js/skill';
 import { ToolIndex, toolFeatureId } from '@zhin.js/tool';
@@ -264,7 +264,7 @@ function ceiling(id: string, revision: number) {
 }
 
 function toolDescriptor(name: string) {
-  return { name, description: name, approval: 'never' as const, hidden: false };
+  return { name, description: name, requiresApproval: 'never' as const, hidden: false };
 }
 
 function skillDescriptor(name: string) {

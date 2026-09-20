@@ -4,6 +4,7 @@
  */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Message } from '@zhin.js/core';
+import type { OwnerApprovalRuntime } from './owner-approval-runtime.js';
 
 export interface CommMessageExecutionScope {
   commMessage?: Message;
@@ -12,6 +13,7 @@ export interface CommMessageExecutionScope {
    * 该标记本身不再决定审批行为；审批由各路径的 execApprovalMode 控制。
    */
   directExecution?: boolean;
+  ownerApprovals?: OwnerApprovalRuntime;
 }
 
 const als = new AsyncLocalStorage<CommMessageExecutionScope | undefined>();
@@ -24,8 +26,13 @@ export function isDirectAgentExecution(): boolean {
   return als.getStore()?.directExecution === true;
 }
 
+export function getCurrentOwnerApprovalRuntime(): OwnerApprovalRuntime | undefined {
+  return als.getStore()?.ownerApprovals;
+}
+
 export interface RunWithCommMessageOptions {
   directExecution?: boolean;
+  ownerApprovals?: OwnerApprovalRuntime;
 }
 
 export function runWithCommMessage<T>(
@@ -43,7 +50,12 @@ export function runWithCommMessage<T>(
   fn: () => T | Promise<T>,
   options?: RunWithCommMessageOptions,
 ): T | Promise<T> {
-  return als.run({ commMessage, directExecution: options?.directExecution }, fn);
+  const parent = als.getStore();
+  return als.run({
+    commMessage,
+    directExecution: options?.directExecution,
+    ownerApprovals: options?.ownerApprovals ?? parent?.ownerApprovals,
+  }, fn);
 }
 
 /** 子 Agent / Deferred Worker：在独立执行上下文中运行 bash（审批策略由 execApprovalMode 决定） */

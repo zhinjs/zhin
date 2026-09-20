@@ -5,13 +5,6 @@ import {
 } from '../../src/core/tool-calls-user-format.js';
 import { sanitizeAssistantReply } from '../../src/core/text-sanitize.js';
 
-const DEFERRED_JSON = JSON.stringify({
-  status: 'ok',
-  loaded_tools: ['web_search'],
-  iterations: 5,
-  summary: '【web_search】(1/20 searches)\n1. 狐蒂云相关新闻\nURL: https://example.com',
-});
-
 describe('formatToolCallsForUser', () => {
   it('empty toolCalls returns actionable hint', () => {
     const out = formatToolCallsForUser([]);
@@ -19,38 +12,21 @@ describe('formatToolCallsForUser', () => {
     expect(out).not.toContain('任务已结束，但没有可展示的结果');
   });
 
-  it('extracts summary from run_deferred_task JSON without wrapper', () => {
+  it('hides catalog meta-tools and reports executable tool results', () => {
     const out = formatToolCallsForUser([
-      { tool: 'tool_search', result: '未找到与「狐」匹配的工具' },
-      { tool: 'run_deferred_task', result: DEFERRED_JSON },
+      { tool: 'discover', result: 'web_search' },
+      { tool: 'web_search', result: '1. 狐蒂云相关新闻\nURL: https://example.com' },
     ]);
     expect(out).toContain('狐蒂云');
-    expect(out).not.toContain('"status"');
-    expect(out).not.toContain('【run_deferred_task】');
-    expect(out).not.toContain('未找到');
-  });
-
-  it('drops minified JS in bash summary', () => {
-    const noisy = JSON.stringify({
-      status: 'ok',
-      summary: [
-        '【bash】[执行] STDOUT:',
-        "'(function(){/*',",
-        'google.c.e("load",a,',
-        '【web_search】\n1. 结果标题',
-      ].join('\n'),
-    });
-    const out = formatToolCallsForUser([{ tool: 'run_deferred_task', result: noisy }]);
-    expect(out).toContain('结果标题');
-    expect(out).not.toContain('google.c.e');
+    expect(out).not.toContain('discover');
   });
 });
 
 describe('looksLikeInternalToolDump + sanitizeAssistantReply', () => {
   it('prefers formatted tool summary over agent dump text', () => {
-    const dump = `Done. Information retrieved:\n【run_deferred_task】\n${DEFERRED_JSON}`;
+    const dump = 'Done. Information retrieved:\n【web_search】\nraw result';
     const formatted = formatToolCallsForUser([
-      { tool: 'run_deferred_task', result: DEFERRED_JSON },
+      { tool: 'web_search', result: '1. Result\nURL: https://example.com' },
     ]);
     expect(looksLikeInternalToolDump(dump)).toBe(true);
     const out = sanitizeAssistantReply(dump, { toolSummary: formatted });

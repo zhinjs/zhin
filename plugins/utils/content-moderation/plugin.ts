@@ -1,5 +1,6 @@
 import { definePlugin } from 'zhin.js';
-import { ModerationEngine, provideModerationEngine } from './src/engine.js';
+import { ModerationEngine } from './src/engine.js';
+import { moderationEngineToken } from './src/runtime.js';
 
 export default definePlugin({
   name: 'content-moderation',
@@ -12,6 +13,6 @@ export default definePlugin({
     // provide 自动挂 lifecycle 反注册，代际结束即摘除。
     const engine = new ModerationEngine();
     engine.configure(context.config.get());
-    provideModerationEngine(context, engine);
+    context.resources.provide(moderationEngineToken, engine);
   },
 });

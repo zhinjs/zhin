@@ -16,7 +16,6 @@ import * as path from 'node:path';
 import * as os from 'node:os';
 import * as fs from 'node:fs';
 import { matchHardBlockedCommand } from './exec-policy.js';
-import { createGenerationStore, type GenerationStoreContext } from '@zhin.js/plugin-runtime';
 import { executeInDocker, isDockerAvailable } from './sandbox-docker.js';
 
 // ── 资源限制包装 ────────────────────────────────────────────────────
@@ -662,34 +661,4 @@ export class Sandbox {
   getConfig(): SandboxConfig {
     return { ...this.config };
   }
-}
-
-// ── 全局沙箱实例 ──────────────────────────────────────────────────────
-
-const sandboxStore = createGenerationStore<Sandbox>('zhin.agent.sandbox');
-
-export function getSandbox(): Sandbox {
-  return sandboxStore.tryUse() ?? new Sandbox();
-}
-
-export function provideSandbox(context: GenerationStoreContext, config: Partial<SandboxConfig>): Sandbox {
-  const sandbox = new Sandbox(config);
-  sandboxStore.provide(context, sandbox);
-  return sandbox;
-}
-
-/** 重置全局沙箱（用于测试隔离） */
-export function resetSandbox(): void {
-  sandboxStore.clear();
-}
-
-/**
- * 在沙箱中执行命令
- */
-export async function executeInSandbox(command: string, options?: {
-  cwd?: string;
-  env?: Record<string, string>;
-  timeout?: number;
-}): Promise<SandboxResult> {
-  return getSandbox().execute(command, options);
 }

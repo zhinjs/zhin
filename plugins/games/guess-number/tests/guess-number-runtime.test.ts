@@ -1,15 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { DisposeStack, scheduleHostToken } from 'zhin.js';
 import {
   createMemoryGameServices,
-  getRuntimeGame,
   plainTextFromSendContent,
-  resetRuntimeGamesForTests,
   type GameReply,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
-import gameCommand from '../commands/guess/[[action]].ts';
+import gameCommand from '../commands/guess/[[action]]/index.ts';
 import { GUESS_HELP } from '../src/index.js';
 import { createServices } from '../src/session-service.js';
 let services: ReturnType<typeof createServices>;
@@ -37,17 +35,13 @@ function mockSetupContext(options?: { schedule?: boolean }) {
       throw new Error('missing resource');
     },
   };
-  return { lifecycle, register, resources };
+  const addGame = vi.fn();
+  return { lifecycle, register, resources, addGame };
 }
 
 describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   beforeEach(() => {
-    resetRuntimeGamesForTests();
     services = createMemoryGameServices(['guess_sessions'], createServices);
-  });
-
-  afterEach(() => {
-    resetRuntimeGamesForTests();
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -78,7 +72,7 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
   });
 
   it('setup registers hub metadata and stale-session cron when schedule host exists', async () => {
-    const { lifecycle, register, resources } = mockSetupContext({ schedule: true });
+    const { lifecycle, register, resources, addGame } = mockSetupContext({ schedule: true });
     void plugin.setup?.({
       plugin: {
         id: 'guess-number',
@@ -90,9 +84,13 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
       resources: resources as never,
       lifecycle,
       handoff: {} as never,
+      addGame,
     });
 
-    expect(getRuntimeGame('guess')?.title).toBe('猜数字');
+    expect(addGame).toHaveBeenCalledWith(
+      'guess',
+      expect.objectContaining({ id: 'guess', title: '猜数字' }),
+    );
     expect(register).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'guess/abort-stale',
@@ -101,6 +99,5 @@ describe('@zhin.js/plugin-guess-number runtime (slice-2)', () => {
     );
 
     await lifecycle.dispose();
-    expect(getRuntimeGame('guess')).toBeUndefined();
   });
 });

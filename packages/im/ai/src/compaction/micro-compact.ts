@@ -27,7 +27,7 @@ export const COMPACTABLE_TOOLS = new Set([
   'web_fetch', 'web_search', 'fetch',
   'list_dir', 'list_directory',
   'read_notebook', 'run_notebook',
-  'activate_skill', 'tool_search', 'run_deferred_task',
+  'load_skill', 'load_tool', 'discover',
 ]);
 
 /** 被清理后的占位文本 */

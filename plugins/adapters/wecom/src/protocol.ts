@@ -7,19 +7,15 @@ import { createHash, createDecipheriv, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface WecomAdapterConfig {
-  readonly id?: string;
-  readonly corpId?: string;
-  readonly agentSecret?: string;
-  readonly token?: string;
-  readonly encodingAESKey?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface WecomEndpointConfig {
+  readonly id: string;
+  readonly corpId: string;
+  readonly agentSecret: string;
+  readonly token: string;
+  readonly encodingAESKey: string;
   readonly webhookPath?: string;
   readonly apiBaseUrl?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: wecom`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedWecomConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedWecomConfig {
@@ -84,23 +80,12 @@ export interface WecomSendBody {
   readonly data: Record<string, unknown>;
 }
 
-export function resolveWecomConfig(config: WecomAdapterConfig = {}): ResolvedWecomConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'wecom');
-  const corpId = config.corpId ?? entry?.corpId ?? process.env.WECOM_CORP_ID;
-  const agentSecret = config.agentSecret ?? entry?.agentSecret ?? process.env.WECOM_AGENT_SECRET;
-  const token = config.token ?? entry?.token ?? process.env.WECOM_TOKEN;
-  const encodingAESKey = config.encodingAESKey
-    ?? entry?.encodingAESKey
-    ?? process.env.WECOM_AES_KEY;
-  if (!corpId || !agentSecret || !token || !encodingAESKey) {
-    throw new TypeError(
-      'WeCom adapter requires corpId + agentSecret + token + encodingAESKey (plugins.<key> or endpoints with context: wecom)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.WECOM_BOT_NAME
-    || 'wecom-bot';
+export function resolveWecomConfig(config: WecomEndpointConfig): ResolvedWecomConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const corpId = requiredEndpointField(config.corpId, 'corpId');
+  const agentSecret = requiredEndpointField(config.agentSecret, 'agentSecret');
+  const token = requiredEndpointField(config.token, 'token');
+  const encodingAESKey = requiredEndpointField(config.encodingAESKey, 'encodingAESKey');
   return {
     context: 'wecom',
     id,
@@ -109,12 +94,25 @@ export function resolveWecomConfig(config: WecomAdapterConfig = {}): ResolvedWec
     token,
     encodingAESKey,
     webhookPath: normalizeWebhookPath(
-      config.webhookPath ?? entry?.webhookPath ?? '/wecom/callback',
+      optionalEndpointField(config.webhookPath) ?? '/wecom/callback',
     ),
-    apiBaseUrl: config.apiBaseUrl
-      ?? entry?.apiBaseUrl
-      ?? 'https://qyapi.weixin.qq.com',
+    apiBaseUrl: optionalEndpointField(config.apiBaseUrl) ?? 'https://qyapi.weixin.qq.com',
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'corpId' | 'agentSecret' | 'token' | 'encodingAESKey',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`WeCom endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function normalizeWebhookPath(path: string): string {

@@ -16,7 +16,6 @@ export {
   senderUserId,
   type OneBot11ActionRequest,
   type OneBot11ActionResponse,
-  type OneBot11AdapterConfig,
   type OneBot11ConfigBase,
   type OneBot11EndpointConfig,
   type OneBot11Event,
@@ -45,7 +44,6 @@ export {
   decodeWsPayload,
   handleOneBot11WsMessage,
   rejectAllPending,
-  startOneBot11Heartbeat,
 } from './ws-transport.js';
 
 export { verifyOneBotAccessToken } from './wss-auth.js';

@@ -11,7 +11,7 @@ export {
   resolveSender,
   verifySignature,
   type AccessToken,
-  type DingTalkAdapterConfig,
+  type DingTalkEndpointConfig,
   type DingTalkApiResponse,
   type DingTalkEvent,
   type DingTalkMessage,

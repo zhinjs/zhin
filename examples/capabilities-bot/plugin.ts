@@ -56,7 +56,7 @@ export default definePlugin<ShowcaseConfig>({
     // ⑤ Agent 工具：作为本 generation 的 Tool capability 原子发布
     context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
         description: 'Return the configured greeting for a name',
-        approval: 'never',
+        requiresApproval: 'never',
         inputSchema: {
           type: 'object',
           properties: { name: { type: 'string' } },

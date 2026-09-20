@@ -2,7 +2,6 @@
  * OneBot12 WS client endpoint — outbound connect to OneBot implementation.
  */
 import WebSocket from 'ws';
-import { clearTimeout } from 'node:timers';
 import {
   ClientEndpoint,
   createRecallEndpointControl,
@@ -27,8 +26,6 @@ import {
   senderNickname,
   senderUserId,
   uploadOneBot12MediaSegments,
-  type OneBot12ActionRequest,
-  type OneBot12ActionResponse,
   type OneBot12Event,
   type OneBot12WsConfig,
 } from './protocol.js';
@@ -36,10 +33,15 @@ import { receiveOneBot12SideEvent } from './side-event-dispatch.js';
 import { createOneBot12ContentPort } from './content-port.js';
 import { callOnebot12Client, createOnebot12EndpointClient, forwardOnebot12ClientEvents, type Onebot12Client } from './client.js';
 import {
+  type OneBot12PendingAction,
   type OneBot12WsCreateOptions,
   type OneBot12WsSocket,
-  WS_OPEN,
 } from './ws-types.js';
+import {
+  callOneBot12WsAction,
+  handleOneBot12WsMessage,
+  rejectAllPending,
+} from './ws-transport.js';
 
 export interface OneBot12WsEndpointOptions {
   readonly id: CapabilityId;
@@ -60,12 +62,8 @@ export class OneBot12WsEndpoint extends ClientEndpoint<Onebot12Client> {
   readonly content;
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot12WsSocket;
-  #requestId = 0;
-  #pending = new Map<string, {
-    resolve: (value: OneBot12ActionResponse) => void;
-    reject: (err: Error) => void;
-    timeout: NodeJS.Timeout;
-  }>();
+  #requestId = { value: 0 };
+  #pending = new Map<string, OneBot12PendingAction>();
 
   constructor(options: OneBot12WsEndpointOptions) {
     super();
@@ -118,11 +116,7 @@ export class OneBot12WsEndpoint extends ClientEndpoint<Onebot12Client> {
     this.close();
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
-    for (const [, pending] of this.#pending) {
-      clearTimeout(pending.timeout);
-      pending.reject(new Error('连接已关闭'));
-    }
-    this.#pending.clear();
+    rejectAllPending(this.#pending);
     this.#ws = undefined;
   }
 
@@ -238,7 +232,15 @@ export class OneBot12WsEndpoint extends ClientEndpoint<Onebot12Client> {
       });
 
       ws.on('message', (data) => {
-        this.#onMessage(data);
+        if (this.#ws !== ws) return;
+        this.#lifecycle.notifyHeartbeatAck();
+        handleOneBot12WsMessage(data, {
+          endpointId: this.#options.config.id,
+          pending: this.#pending,
+          ingest: (event) => this.client.ingest(
+            event as Parameters<Onebot12Client['ingest']>[0],
+          ),
+        });
       });
 
       ws.on('close', (code, reason) => {
@@ -251,6 +253,10 @@ export class OneBot12WsEndpoint extends ClientEndpoint<Onebot12Client> {
         if (!settled) {
           settled = true;
           reject(new Error(`OneBot12 WS 关闭: ${codeNum} ${reasonStr}`));
+        }
+        if (this.#ws === ws) {
+          this.#ws = undefined;
+          rejectAllPending(this.#pending);
         }
         // 断开日志与重连武装均由基座负责；仅曾 open 的连接才会武装重连，
         // 初始连接失败由 start() 的拒绝路径复位，不产生僵尸重连。
@@ -273,49 +279,7 @@ export class OneBot12WsEndpoint extends ClientEndpoint<Onebot12Client> {
     });
   }
 
-  #onMessage(data: unknown): void {
-    try {
-      const raw = typeof data === 'string'
-        ? data
-        : Buffer.isBuffer(data)
-          ? data.toString()
-          : data instanceof ArrayBuffer
-            ? new TextDecoder().decode(data)
-            : String(data ?? '');
-      const msg = JSON.parse(raw) as OneBot12Event | OneBot12ActionResponse;
-      if ('echo' in msg && typeof (msg as OneBot12ActionResponse).echo === 'string') {
-        const resp = msg as OneBot12ActionResponse;
-        const pending = this.#pending.get(resp.echo!);
-        if (pending) {
-          this.#pending.delete(resp.echo!);
-          clearTimeout(pending.timeout);
-          pending.resolve(resp);
-        }
-        return;
-      }
-      this.client.ingest(msg as Parameters<Onebot12Client['ingest']>[0]);
-    } catch (error) {
-      this.#logger.warn(formatCompact({
-        op: 'onebot12_parse_failed',
-        endpoint: this.#options.config.id,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    }
-  }
-
-  #callAction(action: string, params: Record<string, unknown>): Promise<OneBot12ActionResponse> {
-    if (!this.#ws || this.#ws.readyState !== WS_OPEN) {
-      return Promise.reject(new Error('WebSocket 未连接'));
-    }
-    const echo = `ob12_${++this.#requestId}`;
-    const req: OneBot12ActionRequest = { action, params, echo };
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.#pending.delete(echo);
-        reject(new Error(`OneBot12 动作超时: ${action}`));
-      }, 30_000);
-      this.#pending.set(echo, { resolve, reject, timeout });
-      this.#ws!.send(JSON.stringify(req));
-    });
+  #callAction(action: string, params: Record<string, unknown>) {
+    return callOneBot12WsAction(this.#ws, this.#pending, this.#requestId, action, params);
   }
 }

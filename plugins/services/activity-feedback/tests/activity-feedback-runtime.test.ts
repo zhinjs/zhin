@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { DisposeStack, type GenerationAdmissionGate } from 'zhin.js';
-import { activityFeedbackAiBus } from '@zhin.js/agent';
+import { DisposeStack, outboundHostToken, type GenerationAdmissionGate } from 'zhin.js';
+import { AgentEventBus } from '@zhin.js/agent';
+import { agentEventBusToken } from '@zhin.js/agent/runtime';
 import plugin from '../plugin.ts';
 import { loadActivityFeedbackServiceConfig } from '../src/config.js';
 import {
@@ -40,12 +41,13 @@ function mutableAdmission(initial: boolean): {
 const runWithView = <T>(operation: () => Promise<T>): Promise<T> => operation();
 
 describe('@zhin.js/service-activity-feedback runtime', () => {
+  const events = new AgentEventBus();
   beforeEach(() => {
-    activityFeedbackAiBus.clear();
+    events.clear();
   });
 
   afterEach(() => {
-    activityFeedbackAiBus.clear();
+    events.clear();
   });
 
   it('defines a valid Plugin Runtime entry', () => {
@@ -59,12 +61,16 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
   it('setup binds AI event bus without throw; dispose cleans up', async () => {
     const lifecycle = new DisposeStack();
+    const use = vi.fn((token) => token === agentEventBusToken
+      ? events
+      : {
+          runWithView,
+          sendEndpointMessage: vi.fn(),
+        });
     const resources = {
-      has: () => false,
+      has: (token: unknown) => token === outboundHostToken || token === agentEventBusToken,
       provide: vi.fn(),
-      use: () => {
-        throw new Error('missing resource');
-      },
+      use,
     };
 
     expect(() => {
@@ -81,14 +87,15 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
         handoff: {} as never,
       });
     }).not.toThrow();
+    expect(use).toHaveBeenCalledWith(agentEventBusToken);
 
     const received: string[] = [];
     const probe = (payload: { sessionId: string }) => {
       received.push(payload.sessionId);
     };
-    activityFeedbackAiBus.on('ai.processing.start', probe as never);
+    events.on('ai.processing.start', probe as never);
 
-    await activityFeedbackAiBus.dispatch('ai.processing.start', {
+    await events.dispatch('ai.processing.start', {
       sessionId: 's1',
       source: 'zhin-agent',
     } as never);
@@ -97,12 +104,12 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     await lifecycle.dispose();
 
     received.length = 0;
-    await activityFeedbackAiBus.dispatch('ai.processing.start', {
+    await events.dispatch('ai.processing.start', {
       sessionId: 's2',
       source: 'zhin-agent',
     } as never);
     expect(received).toEqual(['s2']);
-    activityFeedbackAiBus.off('ai.processing.start', probe as never);
+    events.off('ai.processing.start', probe as never);
   });
 
   it('skips binding when enabled=false', async () => {
@@ -131,7 +138,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
   it('bindActivityFeedbackToAIEventBus dispose unsubscribes handlers', async () => {
     const startPhase = vi.fn().mockResolvedValue(undefined);
-    const dispose = bindActivityFeedbackToAIEventBus({
+    const dispose = bindActivityFeedbackToAIEventBus(events, {
       startPhase,
       stopPhase: vi.fn(),
       updateThinkingText: vi.fn(),
@@ -140,7 +147,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
     dispose();
 
-    activityFeedbackAiBus.emit('ai.activity.queued.start', {
+    events.emit('ai.activity.queued.start', {
       sessionId: 's1',
       source: 'zhin-agent',
       platform: 'sandbox',
@@ -162,6 +169,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       throw new Error('Root is not accepting generation operations (idle)');
     });
     const dispose = bindActivityFeedbackToAIEventBus(
+      events,
       orchestrator as never,
       mutableAdmission(false).gate,
       runWithUnavailableView,
@@ -319,6 +327,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       dispose: vi.fn().mockResolvedValue(undefined),
     };
     const dispose = bindActivityFeedbackToAIEventBus(
+      events,
       orchestrator as never,
       mutableAdmission(true).gate,
       runWithView,
@@ -331,8 +340,8 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       hookContext: { activityFeedbackEligible: true },
     } as never;
 
-    activityFeedbackAiBus.emit('ai.processing.start', payload);
-    activityFeedbackAiBus.emit('ai.processing.finish', payload);
+    events.emit('ai.processing.start', payload);
+    events.emit('ai.processing.finish', payload);
     await done;
 
     expect(order).toEqual(['start', 'finish']);
@@ -346,12 +355,12 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
     const pendingPrevious = new Promise<void>((resolve) => { releasePrevious = resolve; });
     const previousStart = vi.fn(() => pendingPrevious);
     const candidateStart = vi.fn().mockResolvedValue(undefined);
-    const previousDispose = bindActivityFeedbackToAIEventBus({
+    const previousDispose = bindActivityFeedbackToAIEventBus(events, {
       startPhase: previousStart,
       stopPhase: vi.fn(),
       dispose: vi.fn().mockResolvedValue(undefined),
     } as never, previous.gate, runWithView);
-    const candidateDispose = bindActivityFeedbackToAIEventBus({
+    const candidateDispose = bindActivityFeedbackToAIEventBus(events, {
       startPhase: candidateStart,
       stopPhase: vi.fn(),
       dispose: vi.fn().mockResolvedValue(undefined),
@@ -364,7 +373,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       hookContext: { activityFeedbackEligible: true },
     } as never;
 
-    const dispatch = activityFeedbackAiBus.dispatch('ai.processing.start', payload);
+    const dispatch = events.dispatch('ai.processing.start', payload);
     await Promise.resolve();
     previous.setActive(false);
     candidate.setActive(true);
@@ -373,7 +382,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
 
     expect(previousStart).toHaveBeenCalledOnce();
     expect(candidateStart).not.toHaveBeenCalled();
-    await activityFeedbackAiBus.dispatch('ai.processing.start', payload);
+    await events.dispatch('ai.processing.start', payload);
     expect(previousStart).toHaveBeenCalledOnce();
     expect(candidateStart).toHaveBeenCalledOnce();
     await previousDispose();
@@ -392,6 +401,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
       dispose: vi.fn().mockResolvedValue(undefined),
     };
     const dispose = bindActivityFeedbackToAIEventBus(
+      events,
       orchestrator as never,
       admission.gate,
       async (operation) => {
@@ -399,7 +409,7 @@ describe('@zhin.js/service-activity-feedback runtime', () => {
         return operation();
       },
     );
-    const dispatch = activityFeedbackAiBus.dispatch('ai.processing.start', {
+    const dispatch = events.dispatch('ai.processing.start', {
       sessionId: 'retiring-state',
       source: 'zhin-agent',
       platform: 'sandbox',

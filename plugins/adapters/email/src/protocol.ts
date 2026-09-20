@@ -4,9 +4,9 @@
  */
 
 import type { Attachment } from 'mailparser';
-import { htmlToPlainTextWithBlockBreaks, isMediaRef, type MediaRef } from '@zhin.js/core';
+import { htmlToPlainTextWithBlockBreaks } from '@zhin.js/core';
+import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('email');
@@ -41,16 +41,12 @@ export interface EmailAttachmentsConfig {
   readonly allowedTypes?: readonly string[];
 }
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface EmailAdapterConfig {
-  readonly id?: string;
-  readonly smtp?: SmtpConfig;
-  readonly imap?: ImapConfig;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface EmailEndpointConfig {
+  readonly id: string;
+  readonly smtp: SmtpConfig;
+  readonly imap: ImapConfig;
   readonly attachments?: EmailAttachmentsConfig;
-  /** Transitional: legacy root `endpoints[]` with `context: email`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedEmailConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedEmailConfig {
@@ -85,20 +81,16 @@ export interface EmailWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEmailConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'email');
-  const smtp = config.smtp ?? entry?.smtp;
-  const imap = config.imap ?? entry?.imap;
+export function resolveEmailConfig(config: EmailEndpointConfig): ResolvedEmailConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const smtp = config.smtp;
+  const imap = config.imap;
   if (!smtp?.host || !smtp.auth?.user || !imap?.host || !imap.user) {
     throw new TypeError(
-      'Email adapter requires smtp + imap config (plugins.<key>.smtp/imap or endpoints with context: email)',
+      'Email endpoint requires complete smtp and imap configuration',
     );
   }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.EMAIL_BOT_NAME
-    || 'email-bot';
-  const attachmentsSource = config.attachments ?? entry?.attachments;
+  const attachmentsSource = config.attachments;
   const attachments = attachmentsSource?.enabled
     ? {
       enabled: true as const,
@@ -121,6 +113,13 @@ export function resolveEmailConfig(config: EmailAdapterConfig = {}): ResolvedEma
     },
     attachments,
   };
+}
+
+function requiredEndpointField(value: unknown, field: 'id'): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Email endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function htmlToText(html: string): string {

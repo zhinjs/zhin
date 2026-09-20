@@ -15,7 +15,6 @@ export {
   type MessageSegment,
   type NapCatActionRequest,
   type NapCatActionResponse,
-  type NapCatAdapterConfig,
   type NapCatConfigBase,
   type NapCatEndpointConfig,
   type NapCatEvent,

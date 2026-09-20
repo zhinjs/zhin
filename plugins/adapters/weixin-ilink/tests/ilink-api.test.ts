@@ -23,7 +23,14 @@ vi.mock("node:crypto", () => ({
   },
 }));
 
-import { getUpdates, sendMessage, sanitizeBotAgent } from "../src/ilink-api.js";
+import {
+  getUpdates,
+  IlinkClientMetadata,
+  sendMessage,
+  sanitizeBotAgent,
+} from "../src/ilink-api.js";
+
+const metadata = new IlinkClientMetadata({ version: "1.2.3" });
 
 function mockResponse(body: object | string, status = 200, ok = true): Response {
   const text = typeof body === "string" ? body : JSON.stringify(body);
@@ -45,6 +52,7 @@ describe("getUpdates", () => {
     mockFetch.mockResolvedValueOnce(mockResponse(resp));
     const result = await getUpdates({
       baseUrl: "https://api.example.com",
+      metadata,
       get_updates_buf: "old-buf",
       token: "tok",
     });
@@ -61,6 +69,7 @@ describe("getUpdates", () => {
     mockFetch.mockRejectedValueOnce(abortErr);
     const result = await getUpdates({
       baseUrl: "https://api.example.com",
+      metadata,
       get_updates_buf: "buf",
     });
     expect(result.ret).toBe(0);
@@ -73,6 +82,7 @@ describe("sendMessage", () => {
     mockFetch.mockResolvedValueOnce(mockResponse("{}"));
     await sendMessage({
       baseUrl: "https://api.example.com",
+      metadata,
       token: "tok",
       body: { msg: { to_user_id: "u1" } },
     });
@@ -91,5 +101,47 @@ describe("sanitizeBotAgent", () => {
 
   it("accepts UA-style token", () => {
     expect(sanitizeBotAgent("Zhin.js/1.0.0")).toBe("Zhin.js/1.0.0");
+  });
+
+  it("keeps endpoint metadata isolated", () => {
+    const left = new IlinkClientMetadata({ version: "1.2.3", botAgent: "Left/1.0" });
+    const right = new IlinkClientMetadata({ version: "4.5.6", botAgent: "Right/2.0" });
+
+    expect(left.buildBaseInfo()).toEqual({
+      channel_version: "1.2.3",
+      bot_agent: "Left/1.0",
+    });
+    expect(right.buildBaseInfo()).toEqual({
+      channel_version: "4.5.6",
+      bot_agent: "Right/2.0",
+    });
+    expect(left.appClientVersion).toBe(0x010203);
+    expect(right.appClientVersion).toBe(0x040506);
+  });
+
+  it("uses the metadata supplied by each request", async () => {
+    const left = new IlinkClientMetadata({ version: "1.2.3", botAgent: "Left/1.0" });
+    const right = new IlinkClientMetadata({ version: "4.5.6", botAgent: "Right/2.0" });
+    mockFetch.mockResolvedValue(mockResponse("{}"));
+
+    await sendMessage({
+      baseUrl: "https://api.example.com",
+      metadata: left,
+      body: { msg: { to_user_id: "left" } },
+    });
+    await sendMessage({
+      baseUrl: "https://api.example.com",
+      metadata: right,
+      body: { msg: { to_user_id: "right" } },
+    });
+
+    const leftRequest = mockFetch.mock.calls[0]?.[1] as RequestInit;
+    const rightRequest = mockFetch.mock.calls[1]?.[1] as RequestInit;
+    expect(JSON.parse(String(leftRequest.body)).base_info).toEqual(left.buildBaseInfo());
+    expect(JSON.parse(String(rightRequest.body)).base_info).toEqual(right.buildBaseInfo());
+    expect((leftRequest.headers as Record<string, string>)["iLink-App-ClientVersion"])
+      .toBe(String(left.appClientVersion));
+    expect((rightRequest.headers as Record<string, string>)["iLink-App-ClientVersion"])
+      .toBe(String(right.appClientVersion));
   });
 });

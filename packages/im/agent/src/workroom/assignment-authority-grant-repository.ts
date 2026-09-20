@@ -4,7 +4,7 @@ import type {
   WorkroomAssignmentAuthorityGrant,
   WorkroomAssignmentAuthorityGrantPort,
   WorkroomAssignmentAuthorityGrantRequest,
-} from '../plugin-runtime/workroom-assignment-authority-provider.js';
+} from './assignment-authority.js';
 import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,

@@ -2,8 +2,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   TaskContinuationManager,
   decomposeTask,
-  initContinuationManager,
-  getContinuationManager,
 } from '../../src/turn/task-continuation.js';
 
 describe('TaskContinuationManager', () => {
@@ -239,17 +237,5 @@ describe('decomposeTask', () => {
     const implementation = decomposition.subtasks.find(s => s.id === 'implementation');
     expect(implementation).toBeDefined();
     expect(implementation?.dependencies.length).toBeGreaterThan(0);
-  });
-});
-
-describe('全局实例', () => {
-  it('应该获取全局实例', () => {
-    const instance = getContinuationManager();
-    expect(instance).toBeDefined();
-  });
-
-  it('应该初始化全局实例', () => {
-    const instance = initContinuationManager(50);
-    expect(instance).toBeDefined();
   });
 });

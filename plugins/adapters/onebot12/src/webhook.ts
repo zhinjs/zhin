@@ -131,12 +131,8 @@ export class OneBot12WebhookEndpoint extends ClientEndpoint<Onebot12Client> {
     action: string,
     params: Record<string, unknown> = {},
   ): Promise<import('@imhelper/onebot-v12').OneBotV12Response> {
-    const apiUrl = this.#options.config.api_url;
-    if (!apiUrl) {
-      throw new Error('OneBot12 connection:webhook requires api_url for outbound api');
-    }
     return this.#callAction(
-      { url: apiUrl, access_token: this.#options.config.access_token },
+      { url: this.#options.config.api_url, access_token: this.#options.config.access_token },
       action,
       params,
     );

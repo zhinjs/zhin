@@ -9,7 +9,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 
 const GATES = {
   segments: 'scripts/check-segment-adapters.mjs',
-  rich: 'scripts/check-rich-segment-adapters.mjs',
+  outboundMedia: 'scripts/check-outbound-media-policies.mjs',
   interactive: 'scripts/check-interactive-segment-adapters.mjs',
   aiOutbound: 'scripts/check-ai-outbound-adapters.mjs',
 } as const;
@@ -29,7 +29,7 @@ function makeFixture(adapters: Record<string, {
     if (spec.entry !== undefined) {
       const dir = path.join(root, name, 'adapters');
       fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(path.join(dir, `${name}.ts`), spec.entry);
+      fs.writeFileSync(path.join(dir, `$${name}.ts`), spec.entry);
     } else {
       fs.mkdirSync(path.join(root, name), { recursive: true });
     }
@@ -63,7 +63,7 @@ export default defineAdapter({
 });
 `;
 
-describe('segment gate scripts（adapters/*.ts 探测点）', () => {
+describe('segment gate scripts（adapters/*/index.ts 探测点）', () => {
   it('已声明 segments 的 adapter 通过三道段门禁', () => {
     const fixture = makeFixture({
       declared: { entry: DECLARED_ENTRY },
@@ -71,7 +71,7 @@ describe('segment gate scripts（adapters/*.ts 探测点）', () => {
       'not-an-adapter': {},
     });
     try {
-      for (const gate of ['segments', 'rich', 'interactive'] as const) {
+      for (const gate of ['segments', 'outboundMedia', 'interactive'] as const) {
         const result = runGate(gate, fixture.root);
         expect(result.status, `${gate}: ${result.stderr}`).toBe(0);
       }
@@ -88,10 +88,10 @@ describe('segment gate scripts（adapters/*.ts 探测点）', () => {
       expect(segments.stderr).toContain('fakebot');
       expect(segments.stderr).toContain('segments');
 
-      const rich = runGate('rich', fixture.root);
-      expect(rich.status).toBe(1);
-      expect(rich.stderr).toContain('fakebot');
-      expect(rich.stderr).toContain('outboundMedia');
+      const outboundMedia = runGate('outboundMedia', fixture.root);
+      expect(outboundMedia.status).toBe(1);
+      expect(outboundMedia.stderr).toContain('fakebot');
+      expect(outboundMedia.stderr).toContain('outboundMedia');
 
       const interactive = runGate('interactive', fixture.root);
       expect(interactive.status).toBe(1);
@@ -113,7 +113,7 @@ describe('segment gate scripts（adapters/*.ts 探测点）', () => {
     });
     try {
       expect(runGate('segments', fixture.root).status).toBe(0);
-      expect(runGate('rich', fixture.root).status).toBe(0);
+      expect(runGate('outboundMedia', fixture.root).status).toBe(0);
       const interactive = runGate('interactive', fixture.root);
       expect(interactive.status).toBe(1);
       expect(interactive.stderr).toContain('partial');
@@ -124,7 +124,7 @@ describe('segment gate scripts（adapters/*.ts 探测点）', () => {
 
   it('三道门禁的 PENDING 豁免名单已收敛为空（Wave 2 完成）', () => {
     // Wave 2 全量声明后豁免清零；新增 adapter 未迁移时才允许重新加入名单。
-    for (const gate of ['segments', 'rich', 'interactive'] as const) {
+    for (const gate of ['segments', 'outboundMedia', 'interactive'] as const) {
       const source = fs.readFileSync(path.join(repoRoot, GATES[gate]), 'utf8');
       const setBody = source.match(/PENDING = new Set\(\[([\s\S]*?)\]\)/u)?.[1] ?? '';
       const names = [...setBody.matchAll(/'([^']+)'/gu)].map((m) => m[1]);

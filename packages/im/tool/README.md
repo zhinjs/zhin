@@ -1,22 +1,25 @@
 # @zhin.js/tool
 
-下一代 Agent Tool Feature。它从 Plugin 或项目根的 `tools/<name>.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。
+Agent Tool Feature。它从命名目录的 `index.ts` 发现 `defineAgentTool()` definition，并投影为 owner-aware `ToolIndex`。
 
 ## 目录与身份
 
 ```text
 tools/
-├── get-weather.ts
-└── search.ts
+└── get-weather/
+    ├── index.ts
+    └── weather-client.ts
 ```
 
-Tool 目录只允许一级 `.ts` 文件。文件 basename 是 owner 内部使用的 local name；Agent turn 对模型发布 owner-qualified name。Root 的 `get-weather` 仍是 `get-weather`，child `root/maps` 的同名 Tool 是 `maps__get-weather`。嵌套目录、TSX 和旧 `agent/tools` 不属于绿地接口。
+公共 Tool 使用 `tools/<name>/index.ts`。Agent 私有 Tool 使用 `agents/<agent>/tools/<name>/index.ts`；Skill 私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 内 Skill 的私有 Tool 使用 `agents/<agent>/skills/<skill>/tools/<name>/index.ts`。目录段提供稳定 identity，辅助模块与入口共置。
+
+四种位置同时是披露边界：插件启用后，模型基线只接收根 Tool 以及 Agent/Skill 的摘要；Agent Tool 仅在选择该 Agent 后进入其能力集，Skill Tool 仅在 `load_skill` 激活所属 Skill 后解锁，Agent Skill Tool 同时受这两层约束。所有 definition 仍在候选 generation 中完成校验，避免激活时才暴露语法、权限或依赖错误；渐进的是模型上下文和可调用能力，不是安全校验。
 
 ## 定义 Tool
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
-import { weatherClientToken } from '../plugin.js';
+import { weatherClientToken } from '../../plugin.js';
 
 export default defineAgentTool<{ city: string }>({
   description: 'Query current weather',
@@ -25,19 +28,23 @@ export default defineAgentTool<{ city: string }>({
     properties: { city: { type: 'string' } },
     required: ['city'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   execute(input, context) {
     return context.use(weatherClientToken).get(input.city, context.config);
   },
 });
 ```
 
-`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`approval` 支持 `never`、`on-risk`、`once`、`always`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。
+`defineAgentTool()` 只校验并冻结声明，不定位当前 Plugin、不注册能力。`requiresApproval` 表示 Tool 何时需要审批，支持 `never`、`on-risk`、`once`、`always`，默认 `on-risk`；批准状态和判定由 Turn Tool Runtime 持有，本包只保留声明。标准 Host 中 `once` 可在当前会话记住 Tool，`always` 每次请求确认；`on-risk` 仅在专用风险策略尚未覆盖该操作时请求确认。
 
-`inputSchema` 保持 provider-neutral，可以是 JSON Schema 或模型 adapter 能理解的其它只读描述。本包不引入 Zod，也不在 ToolIndex 重复实现 schema validator。
+`inputSchema` 只有两种契约：根节点为 `object` 的 JSON Schema，或同时实现
+`safeParse()` 与 `toJSONSchema()` 的可执行 Schema。Zod 4 object 原生满足后一契约；Zod 3
+内部结构和仅靠字段形状模拟的对象不会被接受。`@zhin.js/tool` 是 Schema 准入、模型投影和
+执行前解析的唯一所有者；投影明确使用输入语义，因此默认值和 transform 不会被误写成模型
+必须提供的输出字段。本包不依赖 Core，也不把转换责任交给模型 adapter。
 
 单文件插件可用 `setup({ addTool })` 注册 `defineAgentTool(...)`。Tool Feature 必须已在
-插件 manifest 中挂载；注册结果与 `tools/` 目录进入同一 ToolIndex。
+插件 manifest 中挂载；注册结果与约定目录进入同一 ToolIndex。
 
 ## Owner 解析
 

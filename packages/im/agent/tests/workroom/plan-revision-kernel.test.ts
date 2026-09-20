@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   createWorkflowPlanRevisionCandidate,
 } from '../../src/workroom/plan-revision.js';

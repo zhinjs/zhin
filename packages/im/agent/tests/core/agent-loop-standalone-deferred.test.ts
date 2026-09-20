@@ -55,12 +55,13 @@ describe('standalone loop 延迟加载', () => {
       maxLoadedPerSession: 12,
       discoverTopK: 5,
       persistSnapshot: async () => {},
-      skillLoadOpts: { skillDirList: () => [], skillMaxChars: 4_000 },
+      skillInstructions: { read: async (name) => ({ status: 'missing', name }) },
     });
     const commMessage = {} as never;
 
     const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
       provider,
+      llmRuntime: llm.runtime,
       model: 'mock',
       systemPrompt: '',
       tools: [],
@@ -86,6 +87,7 @@ describe('standalone loop 延迟加载', () => {
     const controller = new AbortController();
     const pending = runAgentLoopStandaloneTurn({
       provider,
+      llmRuntime: llm.runtime,
       model: 'mock',
       systemPrompt: '',
       tools: [],

@@ -1,13 +1,9 @@
 /**
  * Message enrich — 入站鉴权快照与合成通讯上下文
  */
-import type { Plugin } from '../plugin.js';
 import { Message, type MessageChannel } from '../message.js';
-import type { Adapters } from '../adapter.js';
 import type { MessageElement, SendContent } from '../types.js';
-import { hasSenderRole, type SenderRole } from './roles.js';
-
-import { resolveSubjectRoles } from './authorization.js';
+import type { SenderRole } from './roles.js';
 
 /** Agent turn 可挂载在 Message 扩展字段上的元数据 */
 export type AgentTurnMessage = Message<{ extra?: Record<string, unknown> }>;
@@ -29,18 +25,8 @@ export function senderRolesFromMessage(message: Message<any>): readonly SenderRo
   return ['user'];
 }
 
-/**
- * 入站 enrich：写入 $sender.isMaster / isTrusted 快照（本 turn 只读）
- */
-export function enrichMessageForAgent(plugin: Plugin, message: Message<any>): Message<any> {
-  const { roles } = resolveSubjectRoles(plugin.root ?? plugin, message);
-  message.$sender.isMaster = hasSenderRole(roles, 'master');
-  message.$sender.isTrusted = !message.$sender.isMaster && hasSenderRole(roles, 'trusted');
-  return message;
-}
-
 export interface SyntheticMessageInput {
-  adapter: keyof Adapters | string;
+  adapter: string;
   endpoint: string;
   sender: {
     id: string;
@@ -63,7 +49,7 @@ export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnM
     { extra: input.extra },
     {
       $id: id,
-      $adapter: input.adapter as keyof Adapters,
+      $adapter: input.adapter,
       $endpoint: input.endpoint,
       $content: [] as MessageElement[],
       $sender: { ...input.sender },

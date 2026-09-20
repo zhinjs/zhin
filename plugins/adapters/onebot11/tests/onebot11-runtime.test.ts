@@ -7,6 +7,7 @@ import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { OneBot11WsEndpoint } from '../src/ws-endpoint.js';
+import { OneBot11WssEndpoint } from '../src/wss-endpoint.js';
 import type { OneBot11WsSocket } from '../src/ws-types.js';
 import {
   buildSendAction,
@@ -18,6 +19,7 @@ import {
   resolveOneBot11Config,
   senderNickname,
   senderUserId,
+  type OneBot11EndpointConfig,
   type OneBot11Event,
   type OneBot11WsConfig,
 } from '../src/protocol.js';
@@ -82,6 +84,7 @@ function createMockWs(): OneBot11WsSocket & {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('onebot11 protocol helpers', () => {
@@ -100,20 +103,33 @@ describe('onebot11 protocol helpers', () => {
     });
   });
 
-  it('maps legacy type ws_reverse to wss', () => {
+  it('resolves wss config from the expanded endpoint config', () => {
     const resolved = resolveOneBot11Config({
-      endpoints: [{
-        context: 'onebot11',
-        type: 'ws_reverse',
-        id: 'rev',
-        path: '/onebot/ws',
-      }],
+      connection: 'wss',
+      id: 'rev',
+      path: '/onebot/ws',
     });
     expect(resolved).toMatchObject({
       connection: 'wss',
       id: 'rev',
       path: '/onebot/ws',
     });
+  });
+
+  it('does not infer endpoint config from process state or legacy endpoint rows', () => {
+    vi.stubEnv('ONEBOT11_BOT_NAME', 'environment-bot');
+    const legacy = {
+      endpoints: [{
+        context: 'onebot11',
+        type: 'ws_reverse',
+        id: 'legacy-bot',
+        path: '/onebot/ws',
+      }],
+    } as unknown as OneBot11EndpointConfig;
+
+    expect(() => resolveOneBot11Config(legacy)).toThrow('non-empty id');
+    expect(() => resolveOneBot11Config({ id: ' ', url: 'ws://localhost:1' }))
+      .toThrow('non-empty id');
   });
 
   it('normalizes inbound events to ConversationRef and extracts content', () => {
@@ -611,7 +627,7 @@ describe('onebot11 plugin runtime adapter', () => {
   });
 
   it('creates reverse-wss endpoint when httpHostToken provided', async () => {
-    const { default: adapter } = await import('../adapters/onebot11.js');
+    const { default: adapter } = await import('../adapters/onebot11/index.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
@@ -696,7 +712,6 @@ describe('onebot11 ws lifecycle', () => {
 
   it('warns loudly when wss starts without access_token', async () => {
     const { getAdapterLogger } = await import('@zhin.js/logger');
-    const { OneBot11WssEndpoint } = await import('../src/wss-endpoint.js');
     const warnSpy = vi.spyOn(getAdapterLogger('onebot11', 'wss-noauth'), 'warn');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     try {
@@ -717,5 +732,90 @@ describe('onebot11 ws lifecycle', () => {
       warnSpy.mockRestore();
       await http.close().catch(() => undefined);
     }
+  });
+});
+
+describe('onebot11 reverse ws lifecycle', () => {
+  function createReverseEndpoint(heartbeatInterval = 20) {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const releaseRoute = vi.fn();
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return releaseRoute;
+        },
+        close: vi.fn(),
+      })),
+    };
+    const endpoint = bindTestEndpoint(new OneBot11WssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot11'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveOneBot11Config({
+        connection: 'wss',
+        id: 'reverse-bot',
+        path: '/onebot/ws',
+        access_token: 'secret',
+        heartbeat_interval: heartbeatInterval,
+      }) as never,
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    return { endpoint, releaseRoute, get acceptConnection() { return acceptConnection; } };
+  }
+
+  function reverseConnection(socket: OneBot11WsSocket) {
+    return {
+      socket,
+      request: {
+        headers: { authorization: 'Bearer secret' },
+        url: '/',
+        socket: { remoteAddress: '127.0.0.1' },
+      },
+      authScope: 'full',
+    };
+  }
+
+  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+    const harness = createReverseEndpoint();
+    const ws = createMockWs();
+
+    await harness.endpoint.start();
+    harness.endpoint.open();
+    harness.acceptConnection?.(reverseConnection(ws));
+    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+
+    await harness.endpoint.stop();
+    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
+    expect(ws.close).toHaveBeenCalled();
+    expect(harness.releaseRoute).toHaveBeenCalledOnce();
+  });
+
+  it('rejects messages from a replaced reverse socket', async () => {
+    const harness = createReverseEndpoint();
+    const ingest = vi.spyOn(harness.endpoint.client, 'ingest');
+    const first = createMockWs();
+    const second = createMockWs();
+    const event = JSON.stringify({
+      post_type: 'message',
+      message_type: 'private',
+      message_id: 1,
+      user_id: 42,
+      raw_message: 'hello',
+    });
+
+    await harness.endpoint.start();
+    harness.acceptConnection?.(reverseConnection(first));
+    await vi.waitFor(() => expect((first.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+    harness.acceptConnection?.(reverseConnection(second));
+    await vi.waitFor(() => expect(first.close).toHaveBeenCalled());
+
+    first.emitMessage(event);
+    expect(ingest).not.toHaveBeenCalled();
+    second.emitMessage(event);
+    expect(ingest).toHaveBeenCalledOnce();
+
+    await harness.endpoint.stop();
   });
 });

@@ -25,8 +25,7 @@
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/plugin-runtime": "workspace:*",
-    "yaml": "^2.9.0"
+    "@zhin.js/plugin-runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

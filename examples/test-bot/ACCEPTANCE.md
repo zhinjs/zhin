@@ -34,7 +34,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
 
 ### Agent（minimal 配置：无 toolSearch、无 MCP）
 
-- [x] **spawn_task**：`packages/agent/tests/builtin/spawn-task-tool.test.ts`（含于 `pnpm check:stable`）
+- [x] **spawn_task**：`packages/im/agent/tests/spawn/spawn-task-tool.test.ts`（含于 `pnpm check:stable`）
 - [x] **Bootstrap**：工作区 `SOUL.md` / `TOOLS.md` / `AGENTS.md`（本目录；手测 / 启动日志）
 - [x] **exec allowlist**：`packages/agent/tests/exec-policy.test.ts`（含于 `pnpm check:stable`）
 - [x] **minimal-bot 配置契约**：`examples/minimal-bot/tests/stable-path.test.ts`（含于 `pnpm check:stable`）
@@ -60,7 +60,7 @@ pnpm vitest run packages/agent/tests/advanced-acceptance.test.ts \
   - [x] Typing indicator（`sendTyping`）长任务期间可见
   - [x] 文档边界：**仅私聊、无群**（见 [weixin-ilink README](../../plugins/adapters/weixin-ilink/README.md)）
   - 实机回归：`L4_SKIP_PLATFORM=0` + 配置 `weixin-ilink` 段后跑 `pnpm check:l4`（可选）
-- [x] **toolSearch + Worker**（`ai.agent.toolSearch: true`）：主编排 3 工具（`tool_search` / `run_deferred_task` / `ask_user`）；查 star 走 Worker — `advanced-acceptance.test.ts`、`tool-search-orchestrator.test.ts`；prompt token &lt; 20k — `advanced-acceptance.test.ts`
+- [x] **按需能力 + Worker**：主编排通过 `discover` / `load_tool` 按需加载能力，通过 `spawn_task` 委派 Worker；prompt token &lt; 20k — `advanced-acceptance.test.ts`
 - [x] **平台 Prompt**：ICQQ/GitHub 指令是按 `platforms` 过滤的 generation-owned Prompt Section；通用 `buildRichSystemPrompt` 无平台硬编码 — `prompt-section.test.ts`、`agent-runtime.test.ts`、`prompt-discipline.test.ts`
 
 ### Assistant / Home（实机）

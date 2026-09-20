@@ -33,10 +33,7 @@ describe('DeferredTurnController', () => {
       persistSnapshot: async (snapshot) => {
         persisted.push(Object.keys(snapshot.loadedTools));
       },
-      skillLoadOpts: {
-        skillDirList: () => [],
-        skillMaxChars: 4_000,
-      },
+      skillInstructions: { read: async (name) => ({ status: 'missing', name }) },
     });
     const turnA = create(persistedA);
     const turnB = create(persistedB);

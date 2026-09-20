@@ -1,11 +1,31 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createOutboundHost } from '../../src/plugin-runtime/outbound-host-installer.js';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import {
+  createOutboundHost,
+  type OutboundRuntimePort,
+} from '../../src/plugin-runtime/outbound-host-installer.js';
+
+function createRuntime(
+  endpoints: Partial<OutboundRuntimePort['endpoints']>,
+): OutboundRuntimePort {
+  return {
+    endpoints: {
+      capabilities: () => undefined,
+      send: async () => ({ messageId: '' }),
+      addReaction: async () => null,
+      removeReaction: async () => undefined,
+      recall: async () => undefined,
+      edit: async () => null,
+      typing: async () => undefined,
+      ...endpoints,
+    },
+    runWithSnapshotView: (operation) => operation(),
+  };
+}
 
 describe('OutboundHost', () => {
-  it('delegates to ImRuntime.sendEndpointMessage', async () => {
+  it('delegates to the Endpoint runtime', async () => {
     const sendEndpointMessage = vi.fn().mockResolvedValue({ messageId: 'm1' });
-    const host = createOutboundHost({ sendEndpointMessage } as unknown as ImRuntime);
+    const host = createOutboundHost(createRuntime({ send: sendEndpointMessage }));
     await host.send({
       adapter: 'sandbox',
       endpointKey: 'bot',
@@ -21,10 +41,10 @@ describe('OutboundHost', () => {
   });
 
   it('swallows reaction failures so activity-feedback cannot block outbound send', async () => {
-    const host = createOutboundHost({
-      addEndpointReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
-      removeEndpointReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
-    } as unknown as ImRuntime);
+    const host = createOutboundHost(createRuntime({
+      addReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
+      removeReaction: vi.fn().mockRejectedValue(new Error('packet timeout')),
+    }));
     const message = {
       conversation: {
         endpoint: { id: 'icqq', adapter: 'icqq' },
@@ -63,11 +83,11 @@ describe('OutboundHost', () => {
     });
     const editEndpointMessage = vi.fn().mockResolvedValue('message-1');
     const setEndpointTyping = vi.fn().mockResolvedValue(undefined);
-    const host = createOutboundHost({
-      endpointCapabilities,
-      editEndpointMessage,
-      setEndpointTyping,
-    } as unknown as ImRuntime);
+    const host = createOutboundHost(createRuntime({
+      capabilities: endpointCapabilities,
+      edit: editEndpointMessage,
+      typing: setEndpointTyping,
+    }));
 
     expect(host.capabilities?.({ adapter: 'discord', endpointKey: 'bot' })).toEqual({
       operations: ['edit', 'typing'],

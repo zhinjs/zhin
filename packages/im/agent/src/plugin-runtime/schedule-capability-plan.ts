@@ -84,7 +84,12 @@ export function createScheduleCapabilityPlan(input: {
 function selectSkillsByAffinity(skills: readonly SkillDescriptor[], prompt: string): SkillDescriptor[] {
   const pseudo = skills.map((skill): AgentTool => ({
     name: skill.qualifiedName,
-    description: `${skill.description}\n${skill.instructions.slice(0, 500)}`,
+    description: [
+      skill.description,
+      ...(skill.keywords ?? []),
+      ...(skill.tags ?? []),
+      skill.instructions.slice(0, 500),
+    ].join('\n'),
     parameters: { type: 'object', properties: {} },
     execute: async () => undefined,
   }));

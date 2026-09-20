@@ -8,7 +8,7 @@ export const agentCommand = new Command('agent')
 
 agentCommand
   .command('info')
-  .description('List discovered agent/ surfaces (Eve info parity)')
+  .description('List discovered Agent capabilities and named Agents')
   .option('--json', 'Output JSON report')
   .action(async (opts: { json?: boolean }) => {
     let mod: typeof import('@zhin.js/agent');

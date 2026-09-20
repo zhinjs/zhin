@@ -5,11 +5,11 @@ Toolkit 提供 **optional peer** 能力与脚手架，不进入 IM 核心默认�
 ## 语言
 
 **Speech Pipeline**:
-`@zhin.js/speech` 提供的 STT/TTS 引擎；入站 STT 走 Agent 多模态链，出站 TTS 走 Rich Segment `tts` kind。
+`@zhin.js/speech` 提供的 STT/TTS 引擎；composition root 创建 Speech Host，并将工具与转写端口注入 Agent。
 _避免使用_：plugin-voice、voice 配置键
 
 **Html Renderer**:
-`@zhin.js/html-renderer` 将 HTML 字符串渲染为 PNG/SVG；Rich Segment `html`/`markdown` 的 image mode 依赖它。
+`@zhin.js/html-renderer` 将 HTML 字符串渲染为 PNG/SVG；composition root 将它作为 generation resource 提供给 Core 的统一出站规范化链路。
 _避免使用_：plugin-html-renderer、出站前手写转图
 
 **Scaffold Wizard**:
@@ -26,8 +26,8 @@ _避免使用_：与 zhin.js JSX 插件组件混用
 
 ## 关系
 
-- **Speech Pipeline** 经 `registerRichSegmentCapabilityLoader('speech')` 注入 Rich Segment 渲染上下文；未安装时 `TtsSegment` 降级 `text`。
-- **Html Renderer** 同理注册 `html-renderer` loader；`registerAiTextAsImageOutput` 另挂 `before.sendMessage` 做 AI 纯文本转图。
+- **Speech Pipeline** 由 CLI composition root 创建，向 Agent Host 提供语音工具与转写端口。
+- **Html Renderer** 由 CLI composition root 创建并以 `htmlRendererToken` 安装到 generation；`registerAiTextAsImageOutput` 另挂 `before.sendMessage` 做 AI 纯文本转图。
 - **Scaffold Wizard** 的 `diagnoseOptionalPeers` 读取 `speech:`、`htmlRenderer:`、`ai.multimodal.audio.strategy` 与 adapter context 列表。
 - **Satori HTML** 输出交给 **Html Renderer** 或业务自行 `render()`；不绕过 `Adapter.sendMessage`。
 
@@ -49,4 +49,4 @@ _避免使用_：与 zhin.js JSX 插件组件混用
 ## 已标记歧义
 
 - `voice:` 配置键已废弃，SSOT 为 `speech:`（ADR 0020）。
-- `aiTextAsImage` 在 `before.sendMessage` 执行，晚于 `resolveRichSegments`；与 Rich Segment html 转图是不同路径。
+- `aiTextAsImage` 在 `before.sendMessage` 执行；HTML 消息段则由 Plugin Runtime 的统一出站规范化链路通过 generation-owned HtmlRenderer Host 渲染或降级。

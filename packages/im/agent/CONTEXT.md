@@ -48,7 +48,7 @@ _避免使用_：tool collection、tool filtering
 在 Tool Selection 之后决定最终运行时工具列表、上下文工具注入和 Pre-executable Tool 路径的 Agent Runtime 模块。每次执行只接收 canonical Tool Execution Context（origin / principal / session / trace / signal / policy），不得读取 IM Message 第二参数。执行前必须统一经过 `runTurnToolPolicies`；文件 CRUD、敏感路径和 Bash 命令不得在 Tool 实现内另建策略链。网络 transport 的每个真实 hop 必须消费同一 context policy，禁止依赖 ALS 或执行域特判。
 _避免使用_：tool glue、runtime helper
 
-文件 Tool 的 workspace authority 属于 Turn policy。策略门面必须 canonicalize 现存目标、symlink 与不存在写目标的最近父目录，并把批准后的绝对路径交给 ToolFeature；实现不得重新读取 `process.cwd()`、展开 `~` 或用 shell 模拟 glob/grep。
+文件 Tool 的 workspace authority 属于 Turn policy。策略门面必须 canonicalize 现存目标、symlink 与不存在写目标的最近父目录，并把批准后的绝对路径交给当前 generation 的 Tool capability；实现不得重新读取 `process.cwd()`、展开 `~` 或用 shell 模拟 glob/grep。
 
 网络 Tool 只使用 Turn-scoped `TurnNetworkClient`。它必须逐 redirect hop 授权 URL、解析并拒绝所有非公网地址，再把 HTTPS SNI/Host 保持为原域名而将 socket 固定连接到已审核 IP；禁止先检查后交给另一套 DNS resolver、`redirect: follow`、ALS network policy 或工具内手写 SSRF 分支。
 
@@ -60,20 +60,20 @@ TODO capability 以 canonical session key 为唯一地址，由 `TodoStore` 哈�
 Plugin 侧可写能力表（Tool / Skill / Agent / MCP），承载装配与生命周期；**不是**回合执行时的运行时权威。
 _避免使用_：tool service 真相源、双注册、registry bag
 
-**ToolFeature** / **SkillFeature**:
-Core IM 中的能力 Feature；插件与文件发现在装配期写入此处。
+**Tool / Skill Feature projection**:
+`@zhin.js/tool` / `@zhin.js/skill` 把插件 setup 与显式约定入口投影成 generation-owned `ToolIndex` / `SkillIndex`。
 _避免使用_：Orchestrator 直写、回合 SSOT
 
-**AgentFeature**:
-Agent Runtime 中的专长 / 子代理预设 Feature（对齐 `*.agent.md`）；**不**替代配置里的主 Agent 选用。
-_避免使用_：AgentPresetFeature（作为唯一对外名）、主绑定 SSOT
+**Agent Feature projection**:
+`@zhin.js/agent-feature` 把插件 setup 与显式 `agents/<name>/agent.json` 入口投影成 generation-owned `AgentIndex`；**不**替代配置里的主 Agent 选用。
+_避免使用_：主绑定 SSOT
 
-**MCPFeature**:
-Agent Runtime 中的 MCP server **声明** Feature；不含已连接后的工具列表。
+**MCP Feature projection**:
+`@zhin.js/mcp-feature` 把插件 setup 与显式 `mcps/*/index.ts` 入口投影成 generation-owned `McpIndex`，由该 Index 持有连接生命周期与工具调用权威。
 _避免使用_：已连接工具池、MCP host server
 
 **Capability Ingress**:
-把 Capability Feature（及常驻核心）按需装入 **Agent Resource Hub** 的 seam；Boot 装 reserved/builtin，入站按 `canAccessTool`（platforms / scopes / permissions）装载并按可达投影缓存；换出上一轮 on-demand 条目（有活动回合持有时延迟到 lease 释放再清除）。实现类为 `FeatureCapabilityIngress`（`src/ingress/`），与 `@zhin.js/agent/runtime` 的 Plugin Runtime `CapabilityIngress`（`src/plugin-runtime/`）区分。
+`src/plugin-runtime/capability-ingress.ts` 直接读取当前 generation 的 Tool / Skill / Agent / MCP projection，执行 platform / scope / permission 准入，并生成不可变的回合能力快照。回合执行不经过经典 Core registry 或可变 bridge。
 _避免使用_：双写 bridge、mount 全量同步、作者侧第二套 adapter/scene/role 声明语言
 
 **Tool Ingress**:
@@ -89,11 +89,11 @@ _避免使用_：role、ACL、rank、独立的 adapter/scene_type/sender_role �
 _避免使用_：plugin、prompt、recipe
 
 **Subagent**:
-用于更窄任务或角色的委派 Agent 预设（常来自 **AgentFeature**）。
+用于更窄任务或角色的委派 Agent 预设（来自 **Agent Feature projection**）。
 _避免使用_：worker、child bot、helper
 
 **Agent Binding**:
-配置 `agents[].match` 解析出的主路径选用结果；入站选用权威在配置，不在 AgentFeature。
+配置 `agents[].match` 解析出的主路径选用结果；入站选用权威在配置，不在 Agent Feature projection。
 _避免使用_：Feature match、preset 当主绑定
 
 **Context Budget**:
@@ -456,8 +456,8 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 ## 关系
 
 - 插件与文件发现向 **Capability Feature** 写入；**Capability Ingress** 在 Boot（常驻核心）与入站（命中 **Agent Binding** 作用域）把能力装入 **Agent Resource Hub**；回合只读 Resource Hub。
-- **ZhinAgent** 通过 **Agent Resource Hub** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP **声明** 在 **MCPFeature**，generation 激活时连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
-- 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；**AgentFeature** 仅提供专长 / **Subagent** 预设。
+- **ZhinAgent** 通过 **Agent Resource Hub** 发现已装载的 **Tool**、**Skill**、**Subagent** 与 Hook；MCP 声明由 generation-owned `McpIndex` 连接，入站再按 **Agent Binding** 的 `mcpServers` 过滤；工具以 `${qualifiedServer}__${tool}` 的 owner-qualified 名称并入工具池。
+- 主路径 Agent 选用由配置 **Agent Binding**（`agents[].match`）决定；generation-owned `AgentIndex` 仅提供专长 / **Subagent** 预设。
 - **Tool Selection** 在 **Permission Level** 检查后把 **Tool** 转换为 **AgentTool**；装载过滤与 Selection 共用 `platforms` / `scopes` / `permissions`。
 - **Tool Runtime** 基于 **Tool Selection** 的结果补充上下文工具，并决定 **Pre-executable Tool** 是走快速路径还是完整 Agent 路径。
 - **Skill** 可以在通用相关性过滤前贡献 Tool。
@@ -482,7 +482,7 @@ Session lifecycle 写权威只有 `ContextRepository`；archive 不得再代理�
 ## 示例对话
 
 > **开发者：** “我可以直接注册一个模型函数作为 **AgentTool** 吗？”
-> **领域专家：** “装配期写入 **ToolFeature**（或 `defineAgentTool` 发现）。**Capability Ingress** 再装入 **Agent Resource Hub**；**Tool Selection** 负责权限检查、上下文注入，以及转换为 **AgentTool**。”
+> **领域专家：** “用 `defineAgentTool` 或 `setup({ addTool })` 写入 Tool Feature；Plugin Runtime 投影生成 `ToolIndex`，**Capability Ingress** 从当前 generation 读取并完成准入，再交给回合执行权威。”
 
 ## 已标记歧义
 
@@ -508,15 +508,17 @@ zhin.js + hosts      IM / HTTP / A2A / Schedule ingress adapters 与 delivery pr
 | 理想模块 | 包内路径 | 主要落层 | 与下层关系 |
 |----------|----------|----------|------------|
 | Agent Core | `src/core/` | agent | **委托** `@zhin.js/ai` `agentLoop`；禁止自有 LLM 迭代（ADR 0009） |
-| Tool System | `src/tool/` | agent | 组合 `AgentResourceHub` 能力注册表、builtin 与 MCP 生命周期；不拥有 Workroom 状态 |
+| Tool System | `src/tool/` | agent | 消费 generation `ToolIndex`、builtin 与 MCP capability；不拥有第二套 Tool 注册表或 Workroom 状态 |
 | Session System | `src/session/` | agent | origin-neutral session store + explicit transport-provided `ApprovalPort` |
 | Event System | `src/event/` | agent | Agent turn 域事件 + **AgentStreamBus**（per-resource-hub egress）；不替代 Kernel RunEvent 或 plugin `before.*` |
 | Skill System | `src/skill/` | agent | 包装 `SkillRegistry` + discovery |
-| Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；压缩委托 ai compaction |
+| Memory System | `src/memory/` | agent → port → ai | `MemoryStore` 适配 `ContextRepository`；`ZhinAgent` 独占一个 `AgentCompactionRuntime`，压缩状态不跨 Host 共享 |
 | Subagent System | `src/subagent/` | agent | `SubagentSystem` spawn/cancel；`ResultSink` 对接 outbound |
 | Context System | `src/context/` | agent | 只读 canonical Turn 的 prompt-assembly / turn-user-message builder 链；IM `Message` 投影仅存在于外层 ingress adapter |
 | Workroom Kernel | `src/workroom/` | agent | versioned Journal + pure replay/decision；不并入 Subagent |
 | IM 装配 | `basic/cli` Plugin Runtime | composition root | canonical Turn ingress / reply Delivery；不承担 Agent 间通信 |
+
+`ZhinAgent` 同时拥有实例级 `AgentCompactionRuntime` 与 `OwnerApprovalRuntime`。后者是 `/approve always bash`、ICQQ 正则放行和 exec 策略读取的唯一权威；安全策略不从模块全局状态或经典 `Plugin` 树解析审批。
 
 ### 现状 → 理想模块映射
 

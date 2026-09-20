@@ -1,31 +1,3 @@
-// ── Endpoint 配置 ─────────────────────────────────────────────────────────
-//  基于 gh CLI 认证：需要系统已安装并认证 gh CLI
-//  认证方式：gh auth login
-
-export interface GitHubEndpointConfig {
-  context: 'github';
-  /** Endpoint 标识名称 */
-  name: string;
-  /** GitHub Enterprise 主机名（默认 github.com） */
-  host?: string;
-  /** GitHub App ID */
-  app_id?: string | number;
-  /** GitHub App 私钥（PEM 内容或文件路径） */
-  private_key?: string;
-  /** Webhook Secret（配置后启用 Webhook 接收事件，不配置则使用轮询） */
-  webhook_secret?: string;
-  /** Webhook 路由路径（默认 /github/webhook） */
-  webhook_path?: string;
-  /** 事件轮询间隔（秒，默认 60，Webhook 模式下作为降级备选） */
-  poll_interval?: number;
-  /** 这些仓库的人类 Issue/PR 评论自动触发 AI（无需 @bot） */
-  auto_reply_repos?: string[];
-  /** 覆盖 App bot 登录名（默认 {slug}[bot]） */
-  bot_login?: string;
-  /** 托管 git 工作区根目录（默认 {cwd}/data/github-workspaces） */
-  workspace_root?: string;
-}
-
 // ── Channel ID ───────────────────────────────────────────────────────
 //  格式: {owner}/{repo}/issues/{number} 或 {owner}/{repo}/pull/{number}
 

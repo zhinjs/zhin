@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/discord.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/discord/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -85,9 +85,9 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools (7) | `agent/tools/` (`discord_*`: roles, Embed, reactions, etc.) |
-| Skill documentation | `agent/skills/discord.md` |
+| Permit vocabulary | `PERMITS.md` |
+| Platform tools (7) | `tools/` (`discord_*`: roles, Embed, reactions, etc.) |
+| Skill documentation | `agents/discord/skills/discord/SKILL.md` |
 
 Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 

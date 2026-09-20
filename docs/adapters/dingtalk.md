@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=acb652bd61620344 -->
+<!-- sync-adapter-docs:sha256=1b47f6295e26a3f3 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式薄入口 `adapters/dingtalk.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式薄入口 `adapters/dingtalk/index.ts`（`defineAdapter`）
 - 实现：`src/endpoint.ts`（生命周期/出站/OpenAPI）、`src/webhook.ts`（验签入站）、`src/protocol.ts`
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
@@ -47,7 +47,7 @@ pnpm add @zhin.js/adapter-dingtalk
 3. 设置消息接收 URL 为 `https://your-domain/dingtalk/webhook`
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`name`、`appKey`、`appSecret`、`webhookPath`、`robotCode`。
+必填字段（`endpoints[i]`）：`id`、`appKey`、`appSecret`。
 
 ## 最小配置
 
@@ -57,7 +57,7 @@ plugins:
   dingtalk:
     apiBaseUrl: https://oapi.dingtalk.com # 可选，顶层共享
     endpoints:
-      - name: my-dingtalk-bot
+      - id: my-dingtalk-bot
         appKey: ${DINGTALK_APP_KEY}
         appSecret: ${DINGTALK_APP_SECRET}
         robotCode: ${DINGTALK_ROBOT_CODE}
@@ -70,9 +70,9 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `DINGTALK_APP_KEY` | 应用 AppKey |
-| `DINGTALK_APP_SECRET` | 应用 AppSecret |
-| `DINGTALK_ROBOT_CODE` | RobotCode（主动发送 `/robot/send`） |
+| `DINGTALK_APP_KEY` | 示例中由 YAML `${DINGTALK_APP_KEY}` 引用的 AppKey；变量名可自行定义 |
+| `DINGTALK_APP_SECRET` | 示例中由 YAML `${DINGTALK_APP_SECRET}` 引用的 AppSecret；变量名可自行定义 |
+| `DINGTALK_ROBOT_CODE` | 示例中由 YAML `${DINGTALK_ROBOT_CODE}` 引用的 RobotCode；变量名可自行定义 |
 
 ## 消息类型映射
 
@@ -87,7 +87,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、部门、群聊、工作通知等）。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
+`agents/dingtalk/skills/dingtalk/tools/` 在 DingTalk Skill 激活后提供 get_user、部门、群聊、工作通知等 Tool。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

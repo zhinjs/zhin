@@ -127,4 +127,22 @@ describe('generation admission', () => {
     expect(gate.active).toBe(true);
     await owner.close();
   });
+
+  it('leaves both roots untouched when a switch claims another root admission', async () => {
+    const current = createGenerationAdmissionGate();
+    const foreign = createGenerationAdmissionGate();
+    const owner = new SnapshotStore(state(current));
+    const foreignOwner = new SnapshotStore(state(foreign));
+
+    expect(() => owner.commit(0, {
+      snapshot: state(foreign),
+      dispose: () => undefined,
+    })).toThrow('another SnapshotStore');
+    expect(owner.current.generation).toBe(0);
+    expect(current.active).toBe(true);
+    expect(foreign.active).toBe(true);
+
+    await owner.close();
+    await foreignOwner.close();
+  });
 });

@@ -44,4 +44,4 @@ export function parseQqBotKindAnswer(raw: unknown): QqBotKind | undefined {
 
 export const QQ_BOT_KIND_PROMPT =
   '请回复 public（公域）或 private（私域），确认后一次性写入 .env 与配置。\n'
-  + '也可发 qq.endpoint cancel 取消。';
+  + '也可发 qq endpoint cancel 取消。';

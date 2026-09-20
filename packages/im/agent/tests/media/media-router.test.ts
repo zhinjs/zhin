@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   preprocessInboundMedia,
-  resetPreprocessInboundMediaForTests,
 } from '../../src/media/media-router.js';
 import { DEFAULT_MULTIMODAL_CONFIG, type MediaBinaryPayload } from '../../src/media/media-types.js';
 
@@ -21,20 +20,18 @@ describe('preprocessInboundMedia', () => {
   });
 
   it('transcribe 成功时追加语音转写文本', async () => {
-    resetPreprocessInboundMediaForTests();
     const pre = await preprocessInboundMedia(
       [audioPayload()],
       { ...DEFAULT_MULTIMODAL_CONFIG, audio: { strategy: 'transcribe' } },
       undefined,
       {
-        transcribe: async () => '你好世界',
+        transcriber: { transcribe: async () => '你好世界' },
       },
     );
     expect(pre.textAppend).toContain('[语音转写] 你好世界');
   });
 
   it('transcribe 未安装 speech 时降级为占位', async () => {
-    resetPreprocessInboundMediaForTests();
     const warn = vi.fn();
     const pre = await preprocessInboundMedia(
       [audioPayload()],
@@ -47,14 +44,15 @@ describe('preprocessInboundMedia', () => {
   });
 
   it('transcribe 失败时降级为占位', async () => {
-    resetPreprocessInboundMediaForTests();
     const pre = await preprocessInboundMedia(
       [audioPayload()],
       { ...DEFAULT_MULTIMODAL_CONFIG, audio: { strategy: 'transcribe' } },
       undefined,
       {
-        transcribe: async () => {
-          throw new Error('stt failed');
+        transcriber: {
+          transcribe: async () => {
+            throw new Error('stt failed');
+          },
         },
       },
     );

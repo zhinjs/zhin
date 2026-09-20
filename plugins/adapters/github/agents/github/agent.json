@@ -1,0 +1,20 @@
+{
+  "name": "GITHUB Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles github platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "github",
+      "adapter:github"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "github"
+  ]
+}

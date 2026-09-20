@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7891b3e24a775ebc -->
+<!-- sync-adapter-docs:sha256=cd2f5eb5aad7fd5e -->
 
 # @zhin.js/adapter-onebot11
 
@@ -30,10 +30,12 @@ pnpm add @zhin.js/adapter-onebot11
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/onebot11.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/onebot11/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
+
+`AdapterIndex` 会把实例默认值与 `endpoints[]` 的逐项覆盖合并；协议层只接收一个已经展开的 endpoint 配置，不再读取嵌套 endpoint、旧 `type: ws_reverse` 别名或进程环境。
 
 每个 Endpoint 的 `$client` 是 `@imhelper/onebot-v11` 的 `OneBotV11Client`。业务代码直接调用
 `$client.call(action, params)` 和 Client 的公开平台能力；双工 WS 的 `echo` 响应由 Endpoint
@@ -58,7 +60,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: ob11-bot
+      - id: ob11-bot
         url: "ws://127.0.0.1:6700"
         access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```
@@ -86,15 +88,15 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具 | `agent/tools/set_title.ts` → `onebot11_set_title` |
-| 技能说明 | `agent/skills/onebot11.md` |
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具 | `tools/set_title/index.ts` → `onebot11_set_title` |
+| 技能说明 | `agents/onebot11/skills/onebot11/SKILL.md` |
 
 ## 迁移说明（Plugin Runtime）
 
 - **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`；消息仍走 `outboundMessageToken`。
 - **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后仅保留 `onebot11_set_title`，其余群管能力可通过 `$client.call()`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
-- **平台权限门禁**：`plugin.ts` setup 已注册 `registerDefaultScenePlatformPermitChecker('onebot11')`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
+- **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('onebot11', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
 ## 文档链接
 

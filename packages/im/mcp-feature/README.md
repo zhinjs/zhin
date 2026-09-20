@@ -1,16 +1,16 @@
 # @zhin.js/mcp-feature
 
-下一代 MCP Client Feature。它从 `mcp/<name>.ts` 发现 provider-neutral client definition，并将连接实例的创建、启动、调用和销毁绑定到 Plugin owner 与 generation lease。
+下一代 MCP Client Feature。它从 `mcps/<name>/index.ts` 发现 provider-neutral client definition，并将连接实例的创建、启动、调用和销毁绑定到 Plugin owner 与 generation lease。
 
 ## 目录约定
 
 ```text
-mcp/
-├── filesystem.ts
-└── memory.ts
+mcps/
+├── filesystem/index.ts
+└── memory/index.ts
 ```
 
-只发现一级 `.ts` 文件。连接参数、URL、command 和 secret 应从 owner config/resource 读取，不写入另一份全局 MCP 配置 registry。
+只发现一级命名目录中的 `index.ts`；同目录其他文件都是该连接的 helper。连接参数、URL、command 和 secret 应从 owner config/resource 读取，不写入另一份全局 MCP 配置 registry。
 
 ## 定义 MCP Client
 

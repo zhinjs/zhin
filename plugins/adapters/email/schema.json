@@ -23,10 +23,11 @@
     },
     "endpoints": {
       "type": "array",
+      "minItems": 1,
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -106,6 +107,10 @@
                 "type": "number",
                 "default": 60000
               },
+              "reconnectInterval": {
+                "type": "number",
+                "default": 5000
+              },
               "mailbox": {
                 "type": "string",
                 "default": "INBOX"
@@ -144,6 +149,9 @@
                 }
               }
             }
+          },
+          "commandPrefix": {
+            "type": "string"
           },
           "id": {
             "type": "string",

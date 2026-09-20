@@ -15,19 +15,24 @@ import type {
   ToolInvocationContext,
   ToolScope,
 } from './definition.js';
+import { parseToolInputSchema } from './input-schema.js';
+import type { ToolInputSchema } from './input-schema.js';
 
 export interface ToolDescriptor {
   readonly owner: PluginId;
   readonly name: string;
   readonly qualifiedName: string;
   readonly description: string;
-  readonly inputSchema?: unknown;
-  readonly approval: ToolApproval;
+  readonly inputSchema?: ToolInputSchema;
+  readonly requiresApproval: ToolApproval;
   readonly adapter?: string;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly hidden?: boolean;
+  readonly placement?: AgentToolDefinition['placement'];
   readonly source: string;
 }
 
@@ -61,7 +66,10 @@ export class ToolIndex {
   ): Promise<TResult> {
     const entry = this.#index.resolve(requester, name);
     if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
-    const parsedInput = parseExecutableInputSchema<TInput>(entry.qualifiedName, entry.slot.definition.inputSchema, input);
+    const parsed = parseToolInputSchema(entry.slot.definition.inputSchema, input);
+    if (!parsed.ok) {
+      throw new TypeError(`Invalid Agent Tool input for ${entry.qualifiedName}: ${parsed.error}`);
+    }
     const expectedAdapter = entry.slot.definition.adapter;
     if (expectedAdapter && invocation.client?.adapter !== expectedAdapter) {
       throw new Error(`Agent Tool ${entry.qualifiedName} requires adapter ${expectedAdapter}`);
@@ -101,27 +109,8 @@ export class ToolIndex {
       get: () => invocation.client?.get(),
     });
     Object.freeze(context);
-    return entry.slot.definition.execute(parsedInput, context) as TResult | Promise<TResult>;
+    return entry.slot.definition.execute(parsed.data as TInput, context) as TResult | Promise<TResult>;
   }
-}
-
-interface ExecutableInputSchema<T> {
-  safeParse(input: unknown):
-    | Readonly<{ success: true; data: T }>
-    | Readonly<{ success: false; error?: Readonly<{ issues?: readonly Readonly<{ path?: readonly PropertyKey[]; message?: string }>[] }> }>;
-}
-
-function parseExecutableInputSchema<T>(name: string, schema: unknown, input: unknown): T {
-  if (!schema || typeof schema !== 'object' || typeof (schema as ExecutableInputSchema<T>).safeParse !== 'function') {
-    return input as T;
-  }
-  const result = (schema as ExecutableInputSchema<T>).safeParse(input);
-  if (result.success) return result.data;
-  const detail = result.error?.issues?.map((issue) => {
-    const path = issue.path?.map(String).join('.') || 'root';
-    return `${path}: ${issue.message ?? 'invalid'}`;
-  }).join('; ') || 'invalid input';
-  throw new TypeError(`Invalid Agent Tool input for ${name}: ${detail}`);
 }
 
 function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDescriptor {
@@ -132,12 +121,15 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     qualifiedName: entry.qualifiedName,
     description: definition.description,
     inputSchema: definition.inputSchema,
-    approval: definition.approval,
+    requiresApproval: definition.requiresApproval,
     ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
     scopes: definition.scopes,
     permissions: definition.permissions,
+    tags: definition.tags,
+    keywords: definition.keywords,
     hidden: definition.hidden,
+    placement: definition.placement,
     source: entry.source,
   });
 }

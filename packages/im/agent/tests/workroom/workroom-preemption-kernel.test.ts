@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   readWorkroomPreemptionCheckpointAck,
   replayWorkroomPreemptions,

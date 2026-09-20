@@ -11,7 +11,7 @@ export {
   resolveSender,
   verifySignature,
   type AccessToken,
-  type LarkAdapterConfig,
+  type LarkEndpointConfig,
   type LarkApiResponse,
   type LarkEventBody,
   type LarkMessage,

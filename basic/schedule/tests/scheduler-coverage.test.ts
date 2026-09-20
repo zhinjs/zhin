@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as dispatch from '../src/dispatch.js';
-import { updateData, resetHolidayRegistryForTests } from '../src/update-data.js';
 import { CalendarScheduler } from '../src/scheduler.js';
 import type { JobStore, StoredJob } from '../src/store/types.js';
 
@@ -13,7 +12,6 @@ function at(iso: string): Date {
 describe('CalendarScheduler branch coverage', () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    resetHolidayRegistryForTests();
   });
 
   afterEach(() => {
@@ -164,7 +162,7 @@ describe('CalendarScheduler branch coverage', () => {
     });
     upsert.mockClear();
 
-    await updateData(2027, {
+    await scheduler.holidays.update(2027, {
       holidayRanges: [{ start: '2027-10-01', end: '2027-10-07', festival: '国庆节' }],
       workdays: [],
     });
@@ -183,7 +181,7 @@ describe('CalendarScheduler branch coverage', () => {
     });
     scheduler.pause('paused-recalc');
 
-    await updateData(2027, {
+    await scheduler.holidays.update(2027, {
       holidayRanges: [{ start: '2027-10-01', end: '2027-10-07', festival: '国庆节' }],
       workdays: [],
     });

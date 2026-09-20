@@ -3,12 +3,12 @@
 //
 // AI 工具按目录发现，一个文件一个工具，default export：
 //   my-plugin/
-//     tools/plugin-health.ts        ← 包顶层工具（@zhin.js/tool）
-//     agent/tools/run-code.ts       ← agent/ 授权面工具（@zhin.js/agent）
-//     agent/skills/<name>.md        ← Skill：标准 SKILL.md（frontmatter + 正文）
-//     agents/<name>.agent.md        ← Agent 预设：frontmatter + 正文作为 systemPrompt
+//     tools/plugin-health/index.ts  ← 包顶层 Tool（@zhin.js/tool）
+//     skills/<name>/SKILL.md        ← Skill：标准 SKILL.md
+//     agents/<name>/agent.json      ← Agent 元数据
+//     agents/<name>/{system,boundaries,conventions}.md
 //
-// 注意：插件包禁止**顶层 skills/**，必须用 `agent/skills/*.md`（check:no-package-skills）。
+// 注意：插件 Skill 统一使用 `skills/<name>/SKILL.md`（check:skill-authoring-boundaries）。
 import { defineAgentTool } from '@zhin.js/tool';
 
 interface HealthInput {
@@ -27,9 +27,9 @@ export default defineAgentTool<HealthInput>({
       },
     },
   },
-  // 'never' | 'on-risk' | 'always'，缺省为 'on-risk'。
+  // 'never' | 'on-risk' | 'once' | 'always'，缺省为 'on-risk'。
   // 有副作用/高风险的工具不要降级成 'never'。
-  approval: 'never',
+  requiresApproval: 'never',
   // 入参是第一个位置参数；第二个参数是 CapabilityContext（含 config）。
   execute(input, context) {
     return {

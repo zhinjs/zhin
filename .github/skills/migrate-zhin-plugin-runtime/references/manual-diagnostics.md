@@ -20,7 +20,7 @@ if (config.enableProfile) {
 ```
 
 ```ts
-// 新：commands/profile.ts —— 命令始终存在，开关在执行时判断
+// 新：commands/profile/index.ts —— 命令始终存在，开关在执行时判断
 export default defineCommand({
   description: 'Show current user profile',
   async execute(context) {
@@ -32,7 +32,7 @@ export default defineCommand({
 
 动态生成的一批命令（`for (const name of list) addCommand(...)`）无法用文件路由表达：
 要么为每个固定名字建一个文件，要么改成一个带参数的命令
-（`commands/item/[name].ts`，并在 `defineCommand({ params })` 中声明 `name` 的类型）在执行期分发。
+（`commands/item/[name]/index.ts`，并在 `defineCommand({ params })` 中声明 `name` 的类型）在执行期分发。
 
 ## `Command action captures source bindings: a, b`
 
@@ -68,9 +68,9 @@ export default definePlugin({
 ```
 
 ```ts
-// 新 commands/profile.ts：从上下文取，不 import 单例
+// 新 commands/profile/index.ts：从上下文取，不 import 单例
 import { defineCommand } from 'zhin.js/command';
-import { cacheToken } from '../plugin.js';
+import { cacheToken } from '../../plugin.js';
 
 export default defineCommand({
   description: 'Show current user profile',
@@ -92,8 +92,8 @@ export default defineCommand({
 文件路由的对应关系：
 
 ```text
-gh issue list                        -> commands/gh/issue/list.ts
-gh pr <title:string=defaultTitle>    -> commands/gh/pr/[[title]].ts
+gh issue list                        -> commands/gh/issue/list/index.ts
+gh pr <title:string=defaultTitle>    -> commands/gh/pr/[[title]]/index.ts
 ```
 
 文件名只声明参数形态（双方括号 `[[title]]` 表示可选），类型与默认值在

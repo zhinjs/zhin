@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import * as ai from '@zhin.js/ai';
 import { createUserMessage } from '@zhin.js/ai';
 import {
   ContextSystem,
@@ -13,7 +12,6 @@ import { turnContextViewFromMessage } from '../../src/context/im-turn-context-ad
 
 describe('ContextSystem', () => {
   it('buildTextTurnContext merges registered builder messages and injectors', async () => {
-    vi.spyOn(ai, 'getLlmTransportModel').mockReturnValue({ id: 'gpt-4o-mini', sdk: 'openai' } as any);
     const host = {
       config: { persona: 'p', toneAwareness: false },
       userProfiles: { buildProfileSummary: async () => '' },
@@ -21,6 +19,7 @@ describe('ContextSystem', () => {
       modelRegistry: null,
       buildDisciplinedPrompt: (p: string) => p,
       getTurnActiveSkills: () => '',
+      llmRuntime: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
     } as any;
 
     const system = createContextSystemForHost(host);
@@ -66,7 +65,6 @@ describe('ContextSystem', () => {
   });
 
   it('schedule turns contain only the current task and no conversation history or profile builders', async () => {
-    vi.spyOn(ai, 'getLlmTransportModel').mockReturnValue({ id: 'gpt-4o-mini', sdk: 'openai' } as any);
     const host = {
       config: { persona: 'chat persona', toneAwareness: true },
       userProfiles: { buildProfileSummary: async () => 'interactive profile' },
@@ -74,6 +72,7 @@ describe('ContextSystem', () => {
       modelRegistry: null,
       buildDisciplinedPrompt: (prompt: string) => prompt,
       getTurnActiveSkills: () => '',
+      llmRuntime: { model: () => ({ id: 'gpt-4o-mini', sdk: 'openai', input: ['text'] }) },
     } as any;
     const system = createContextSystemForHost(host);
     system.addBuilder({ name: 'history-leak', build: async () => [createUserMessage('must not leak')] });

@@ -118,7 +118,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/[name].ts — 路径即路由，类型在 params 中声明
+// commands/hello/[name]/index.ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -133,7 +133,7 @@ export default defineCommand({
 ```
 
 ```typescript
-// tools/get_weather.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
+// tools/get_weather/index.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
 import { defineAgentTool } from 'zhin.js/tool';
 
 export default defineAgentTool({
@@ -153,7 +153,7 @@ export default defineAgentTool({
 
 ## 已移除：`zhin.js/node`
 
-`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。唯一入口为 `definePlugin()` + `zhin runtime start`。`MessageCommand` 仍 deprecated。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
+`zhin.js/node`、`bootstrapNode` 与 `MessageCommand` **已删除且不再导出**。唯一入口为 `definePlugin()` + `zhin runtime start`，命令使用 `defineCommand()`。迁移见 `.github/skills/migrate-zhin-plugin-runtime`。
 
 ## 核心概念
 

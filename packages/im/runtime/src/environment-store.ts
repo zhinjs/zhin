@@ -9,6 +9,12 @@ export interface EnvironmentLayers {
   readonly plugins?: Readonly<Record<string, EnvironmentSource>>;
 }
 
+/** Reloadable authority for environment layers and their watched files. */
+export interface EnvironmentLayersPort {
+  readonly sources: readonly string[];
+  read(): Promise<EnvironmentLayers>;
+}
+
 export interface EnvSchema<T> {
   readonly secretKeys?: readonly string[];
   parse(source: EnvironmentSource): T;

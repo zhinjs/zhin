@@ -1,13 +1,12 @@
-import type { AIEventPayload } from './ai-event-bus.js';
+import type { AIEventPayload } from './ai-event-contract.js';
 
 type AIHookBusListener = (payload: AIEventPayload) => void;
 
 /**
- * Module-level AI hook bus for Plugin Runtime consumers that cannot use
- * Plugin ALS / `onAIHook(plugin, …)`.
+ * Runtime AI hook event bus.
  *
  * `emitAIHookBusEvent` fans out here so Runtime plugins can observe hooks
- * without a host Plugin (same pattern as `activityFeedbackAiBus`).
+ * without a classic host Plugin.
  */
 export class AIHookRuntimeBus {
   private readonly listeners = new Map<string, Set<AIHookBusListener>>();

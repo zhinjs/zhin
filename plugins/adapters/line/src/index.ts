@@ -10,7 +10,7 @@ export {
   resolveChannel,
   resolveLineConfig,
   verifySignature,
-  type LineAdapterConfig,
+  type LineEndpointConfig,
   type LineApiResponse,
   type LineChannel,
   type LineEvent,

@@ -1,11 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   MemoryWorkroomProjectionRepository,
   WorkroomProjectionTracer,
   workroomProjectionMessageKey,
   type WorkroomProjectionBinding,
-} from '../../src/workroom/projection-outbox.js';
+} from '../../src/workroom/projection-outbox/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import {
   createProjectionHumanIngressTargetResolver,

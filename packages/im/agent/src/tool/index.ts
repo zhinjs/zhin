@@ -42,6 +42,6 @@ export {
 export { collectRuntimeTools } from './runtime.js';
 export { prepareTurnTools } from './prepare-turn-tools.js';
 export type { TurnToolsPrep } from './prepare-turn-tools.js';
-export { TurnToolRuntime, turnToolExecutionAuthority } from './turn-tool-runtime.js';
+export { TurnToolExecutionAuthority, TurnToolRuntime } from './turn-tool-runtime.js';
 export type { TurnToolOutcome } from './turn-tool-runtime.js';
 export { createConversationReferenceCapability } from './conversation-reference-tool.js';

@@ -46,6 +46,7 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
+import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import {
   ImRuntime,
   ingressRouteToken,
@@ -57,7 +58,6 @@ import {
   type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
-import { resetKeyboardFallbackStoreForTests } from '../../src/built/interactive-segments/index.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -91,10 +91,10 @@ const ignoredEndpointEvents = Object.freeze({
 
 function receive(
   im: ImRuntime,
-  payload: Parameters<ImRuntime['receiveEndpointEvent']>[0]['payload'],
+  payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
 ) {
   const input = payload as { conversation?: { endpoint?: { id?: string } } };
-  return im.receiveEndpointEvent(Object.freeze({
+  return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
     endpoint: Object.freeze({
@@ -106,7 +106,7 @@ function receive(
 }
 
 function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<unknown> {
-  return im.receiveEndpointEvent(Object.freeze({
+  return im.endpointEvents.receive(Object.freeze({
     name,
     payload,
     endpoint: Object.freeze({ id: 'test-endpoint' as never, adapter: 'test' }),
@@ -133,7 +133,7 @@ describe('IM Runtime', () => {
     await receiveEvent(fixture.im, 'notice.receive', notice as never);
     await receiveEvent(fixture.im, 'notice.receive', notice as never);
     await receiveEvent(fixture.im, 'notice.receive', { ...notice, $scene_id: 'room-2' } as never);
-    const events = await fixture.im.conversationEvents.listBetween({
+    const events = await fixture.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
@@ -145,7 +145,7 @@ describe('IM Runtime', () => {
       actor: { id: 'admin', displayName: 'Admin' },
       durationSeconds: 60,
     });
-    await expect(fixture.im.conversationEvents.listBetween({
+    await expect(fixture.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-2',
@@ -307,7 +307,7 @@ describe('IM Runtime', () => {
       id: 'room-window',
     };
     for (let index = 1; index <= 55; index += 1) {
-      await fixture.im.conversationEvents.append(Object.freeze({
+      await fixture.conversationEvents.append(Object.freeze({
         eventId: `background-${index}`,
         conversation,
         timestamp: index,
@@ -320,7 +320,7 @@ describe('IM Runtime', () => {
         }),
       }));
     }
-    const current = await fixture.im.conversationEvents.append(Object.freeze({
+    const current = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'current-56',
       conversation,
       timestamp: 56,
@@ -332,7 +332,7 @@ describe('IM Runtime', () => {
         timestamp: 56,
       }),
     }));
-    const future = await fixture.im.conversationEvents.append(Object.freeze({
+    const future = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'future-57',
       conversation,
       timestamp: 57,
@@ -670,7 +670,7 @@ describe('IM Runtime', () => {
       owner: child,
       feature: commandFeatureId,
       localName: 'status',
-      source: '/plugins/child/commands/status.ts',
+      source: '/plugins/child/commands/status/index.ts',
       definition: defineCommand({ execute: () => 'child result' }),
     });
     const state: SnapshotState = {
@@ -712,7 +712,7 @@ describe('IM Runtime', () => {
         kind: 'private',
         id: 'room',
       },
-      '/child.status',
+      '/status',
       1,
       async (_content, owner) => { requester = owner; return { status: 'sent' }; },
     );
@@ -730,7 +730,7 @@ describe('IM Runtime', () => {
       owner: root,
       feature: commandFeatureId,
       localName: 'zt',
-      source: '/commands/zt.ts',
+      source: '/commands/zt/index.ts',
       definition: defineCommand({ execute: () => 'card' }),
     });
     const makeSnapshot = (config: Record<string, unknown>) => {
@@ -1033,7 +1033,7 @@ describe('IM Runtime', () => {
       conversation,
     }));
 
-    await fixture.im.sendEndpointMessage({
+    await fixture.im.endpoints.send({
       adapter: 'memory',
       endpointKey: 'memory',
       conversation,
@@ -1077,21 +1077,21 @@ describe('IM Runtime', () => {
     };
     const message = { conversation, id: 'message-1' };
 
-    expect(fixture.im.endpointCapabilities({ adapter: 'memory', endpointKey: 'memory' }))
+    expect(fixture.im.endpoints.capabilities({ adapter: 'memory', endpointKey: 'memory' }))
       .toEqual({
         inbound: true,
         outbound: true,
         operations: { recall: true, edit: true, reaction: true, typing: true },
       });
 
-    await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointKey: 'memory', message });
-    await expect(fixture.im.editEndpointMessage({
+    await fixture.im.endpoints.recall({ adapter: 'memory', endpointKey: 'memory', message });
+    await expect(fixture.im.endpoints.edit({
       adapter: 'memory', endpointKey: 'memory', message, content: 'updated',
     })).resolves.toBe('edited');
-    await expect(fixture.im.addEndpointReaction({
+    await expect(fixture.im.endpoints.addReaction({
       adapter: 'memory', endpointKey: 'memory', message, emoji: '👍',
     })).resolves.toBe('👍');
-    await fixture.im.setEndpointTyping({
+    await fixture.im.endpoints.typing({
       adapter: 'memory', endpointKey: 'memory', conversation, active: true,
     });
 
@@ -1125,7 +1125,7 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const recalling = fixture.im.recallEndpointMessage({
+    const recalling = fixture.im.endpoints.recall({
       adapter: 'memory',
       endpointKey: 'memory',
       message: {
@@ -1174,7 +1174,7 @@ describe('IM Runtime', () => {
 
     const operation = fixture.im.runWithSnapshotView(async () => {
       await pending;
-      await fixture.im.recallEndpointMessage({
+      await fixture.im.endpoints.recall({
         adapter: 'memory', endpointKey: 'memory', message,
       });
     });
@@ -1205,7 +1205,7 @@ describe('IM Runtime', () => {
       id: 'room-1',
     };
 
-    await fixture.im.recallEndpointMessage({
+    await fixture.im.endpoints.recall({
       adapter: 'memory',
       endpointKey: 'memory',
       message: { conversation, id: 'message-1' },
@@ -1233,7 +1233,7 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const listing = fixture.im.withEndpointManagement(
+    const listing = fixture.im.endpoints.withManagement(
       'memory',
       'memory',
       (management) => management.listFriends?.(),
@@ -1259,7 +1259,7 @@ describe('IM Runtime', () => {
       owner: root,
       feature: adapterFeatureId,
       localName: 'icqq',
-      source: '/adapters/icqq.ts',
+      source: '/adapters/icqq/index.ts',
       definition: defineAdapter({
         capabilities: ['inbound', 'outbound'],
         operations: ['recall'],
@@ -1307,7 +1307,7 @@ describe('IM Runtime', () => {
     await adapters.start();
     adapters.open();
 
-    const listed = im.listEndpoints();
+    const listed = im.endpoints.list();
     expect(listed).toEqual([expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
@@ -1323,7 +1323,7 @@ describe('IM Runtime', () => {
     });
 
     // 用 slot localName 解析（inbox-installer 路径）
-    expect(im.getEndpoint('icqq', 'icqq')).toEqual(expect.objectContaining({
+    expect(im.endpoints.get('icqq', 'icqq')).toEqual(expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
       connected: true,
@@ -1332,11 +1332,11 @@ describe('IM Runtime', () => {
       managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     }));
     // 用 live name 解析（console endpoint.info 路径）
-    expect(im.getEndpoint('icqq', '111111')).toEqual(expect.objectContaining({
+    expect(im.endpoints.get('icqq', '111111')).toEqual(expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
     }));
-    await expect(im.withEndpointManagement('icqq', '111111', (management) => {
+    await expect(im.endpoints.withManagement('icqq', '111111', (management) => {
       expect(management).toEqual(expect.objectContaining({
         listFriends: expect.any(Function),
         listGroups: expect.any(Function),
@@ -1344,18 +1344,19 @@ describe('IM Runtime', () => {
       }));
       return true;
     })).resolves.toBe(true);
-    await expect(im.withEndpointManagement('missing', 'missing', () => true))
+    await expect(im.endpoints.withManagement('missing', 'missing', () => true))
       .resolves.toBeNull();
 
     await adapters.stop();
     await store.close();
   });
 
-  it('emits inbound and outbound message events via onMessage', async () => {
+  it('publishes inbound and outbound events through the message event source', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);
     const events: RuntimeMessageEvent[] = [];
-    const unsubscribe = fixture.im.onMessage((event) => events.push(event));
+    expect('publish' in fixture.im.messageEvents).toBe(false);
+    const unsubscribe = fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const groupConversation = {
       endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
@@ -1434,7 +1435,7 @@ describe('IM Runtime', () => {
       outboundMiddleware: async () => undefined,
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await expect(fixture.im.send({
       conversation: {
@@ -1461,7 +1462,7 @@ describe('IM Runtime', () => {
       },
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const receipt = await fixture.im.send({
       conversation: {
@@ -1501,7 +1502,7 @@ describe('IM Runtime', () => {
       },
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await expect(fixture.im.send({
       conversation: {
@@ -1524,7 +1525,7 @@ describe('IM Runtime', () => {
       endpointSend: () => { throw new Error('transport closed'); },
     });
     const failedEvents: RuntimeMessageEvent[] = [];
-    failed.im.onMessage((event) => failedEvents.push(event));
+    failed.im.messageEvents.subscribe((event) => failedEvents.push(event));
     await expect(failed.im.send({
       conversation: {
         endpoint: { id: String(failed.adapter.id), adapter: String(rootPluginId()) },
@@ -1542,7 +1543,7 @@ describe('IM Runtime', () => {
       adapterCapabilities: ['inbound'],
     });
     const unsupportedEvents: RuntimeMessageEvent[] = [];
-    unsupported.im.onMessage((event) => unsupportedEvents.push(event));
+    unsupported.im.messageEvents.subscribe((event) => unsupportedEvents.push(event));
     await expect(unsupported.im.send({
       conversation: {
         endpoint: { id: String(unsupported.adapter.id), adapter: String(rootPluginId()) },
@@ -1561,8 +1562,8 @@ describe('IM Runtime', () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage(() => { throw new Error('broken listener'); });
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe(() => { throw new Error('broken listener'); });
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const longContent = 'x'.repeat(500);
     await receive(fixture.im, {
@@ -1589,7 +1590,7 @@ describe('IM Runtime', () => {
       middleware: false,
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await fixture.im.send({
       conversation: {
@@ -1660,7 +1661,6 @@ describe('IM Runtime', () => {
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
       middleware: false,
     });
-    resetKeyboardFallbackStoreForTests();
     const handled: string[] = [];
     fixture.im.registerInteractiveHandler('hub:', async (message) => {
       handled.push(message.content);
@@ -1699,7 +1699,7 @@ describe('IM Runtime', () => {
     expect(outbound.payload[1]?.data.text).toContain('1. 井字棋');
     expect(outbound.payload[1]?.data.text).toContain('2. 猜数字');
 
-    // 数字回跳 → 中央 fallback map → handler
+    // 数字回跳 → 当前 runtime 的 fallback map → handler
     const digit = await receive(fixture.im, {
       conversation: {
         endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
@@ -1737,9 +1737,75 @@ describe('IM Runtime', () => {
     });
     expect(miss.matched).toBe(false);
 
-    resetKeyboardFallbackStoreForTests();
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it('scopes keyboard fallback state to its owning ImRuntime and generation', async () => {
+    const first = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const second = await createFixture([], [], undefined, undefined, undefined, {
+      middleware: false,
+    });
+    const secondCalls: string[] = [];
+    const firstCalls: string[] = [];
+    first.im.registerInteractiveHandler('hub:', (message) => {
+      firstCalls.push(message.content);
+      return true;
+    });
+    second.im.registerInteractiveHandler('hub:', (message) => {
+      secondCalls.push(message.content);
+      return true;
+    });
+    const conversation = {
+      endpoint: { id: String(first.adapter.id), adapter: String(rootPluginId()) },
+      kind: 'group' as const,
+      id: 'shared-room',
+    };
+
+    await first.im.send({
+      conversation,
+      requester: rootPluginId(),
+      content: raw([{
+        type: 'keyboard',
+        data: {
+          rows: [[{ id: 'g1', label: '井字棋', payload: 'hub:h1:g_ttt' }]],
+          fallback: { hint: '回复数字', map: { '1': 'hub:h1:g_ttt' } },
+        },
+      }]),
+    });
+
+    await expect(receive(second.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: false });
+    expect(secondCalls).toEqual([]);
+
+    await expect(receive(first.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: true, command: 'interactive' });
+    expect(firstCalls).toEqual(['1']);
+
+    const current = first.store.current;
+    first.store.commit(0, {
+      snapshot: snapshotState(current),
+      dispose: () => undefined,
+    });
+    await expect(receive(first.im, {
+      conversation,
+      content: '1',
+      sender: { id: 'alice' },
+    })).resolves.toMatchObject({ matched: false });
+    expect(firstCalls).toEqual(['1']);
+
+    await first.adapters.stop();
+    await first.store.close();
+    await second.adapters.stop();
+    await second.store.close();
   });
 
   it('does not let a candidate interactive handler shadow the committed generation', async () => {
@@ -1958,7 +2024,7 @@ async function createFixture(
     owner: root,
     feature: middlewareFeatureId,
     localName: 'inbound',
-    source: '/middlewares/inbound.ts',
+    source: '/middlewares/inbound/index.ts',
     definition: defineMiddleware<Message>({
       target: 'inbound',
       async handle({ input }, next) {
@@ -1973,7 +2039,7 @@ async function createFixture(
     owner: root,
     feature: middlewareFeatureId,
     localName: 'outbound',
-    source: '/middlewares/outbound.ts',
+    source: '/middlewares/outbound/index.ts',
     definition: defineMiddleware<OutboundEnvelope>({
       target: 'outbound',
       async handle({ input }, next) {
@@ -2004,11 +2070,15 @@ async function createFixture(
       : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });
-  const im = new ImRuntime({ inboundClaim: options?.inboundClaim });
+  const conversationEvents = new MemoryConversationEventStore();
+  const im = new ImRuntime({
+    inboundClaim: options?.inboundClaim,
+    conversationEvents,
+  });
   im.attach(store);
   await adapters.start();
   adapters.open();
-  return { im, store, adapters, adapter };
+  return { im, store, adapters, adapter, conversationEvents };
 }
 
 function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
@@ -2242,627 +2312,5 @@ describe('Message.$replyToChannel', () => {
       parent: { kind: 'channel', id: 'guild-1' },
       threadId: 'thread-42',
     });
-  });
-});
-
-describe('UserInteraction via ImRuntime', () => {
-  async function createInteractionFixture() {
-    const sent: unknown[] = [];
-    const events: string[] = [];
-    let interactionResult: unknown;
-    let interactionError: unknown;
-    const commandExecuted = vi.fn();
-    const root = rootPluginId();
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'ask',
-      source: '/commands/ask.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          commandExecuted();
-          try {
-            interactionResult = await context.interaction!.ask({
-              type: 'text',
-              title: '个人信息',
-              description: '请输入你的名字',
-              tip: '将用于后续问候',
-            });
-          } catch (e) {
-            interactionError = e;
-            throw e;
-          }
-          return `你好 ${interactionResult}`;
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-    return {
-      im,
-      sent,
-      events,
-      commandExecuted,
-      getResult: () => interactionResult,
-      getError: () => interactionError,
-    };
-  }
-
-  function incomingMessage(content: string, sender = 'user-1') {
-    const root = rootPluginId();
-    return {
-      conversation: {
-        endpoint: { id: String(capabilityId(root, adapterFeatureId, 'memory')), adapter: String(root) },
-        kind: 'group' as const,
-        id: 'room-1',
-      },
-      content,
-      sender: { id: sender },
-    };
-  }
-
-  it('text interaction 应发送提示并等待用户输入后返回', async () => {
-    const { im, sent, getResult } = await createInteractionFixture();
-
-    const commandPromise = receive(im, incomingMessage('/ask'));
-
-    await vi.waitFor(() => {
-      expect(sent.length).toBeGreaterThanOrEqual(1);
-    });
-    expect(sent[0]).toEqual(expect.objectContaining({
-      payload: [{
-        type: 'text',
-        data: { text: '个人信息\n\n请输入你的名字\n\n💡 将用于后续问候' },
-      }],
-    }));
-
-    const answerResult = await receive(im, incomingMessage('张三'));
-    expect(answerResult.matched).toBe(true);
-    expect(answerResult.command).toBe('interaction');
-
-    const result = await commandPromise;
-    expect(result.matched).toBe(true);
-    expect(result.command).toBe('ask');
-    expect(getResult()).toBe('张三');
-  });
-
-  it('interaction 应仅匹配同一用户同一频道的消息', async () => {
-    const { im, sent } = await createInteractionFixture();
-
-    receive(im, incomingMessage('/ask'));
-
-    await vi.waitFor(() => {
-      expect(sent.length).toBeGreaterThanOrEqual(1);
-    });
-
-    const otherUserResult = await receive(im, incomingMessage('李四', 'user-2'));
-    expect(otherUserResult.matched).toBe(false);
-  });
-
-  it('consumes pending interaction replies before message.receive handlers can re-enter', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    const handled = vi.fn();
-    let answer: unknown;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {}, open() {}, close() {}, stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const handler = createCapabilitySlot({
-      owner: root,
-      feature: handlerFeatureId,
-      localName: 'message/receive',
-      source: '/handlers/message/receive.ts',
-      definition: defineHandler({
-        event: 'message.receive',
-        async handle() {
-          handled();
-          answer = await this.interaction!.ask({ type: 'text', title: '请回复' });
-        },
-      }),
-    });
-    const slots = [adapter, handler];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const store = new SnapshotStore({
-      ...base,
-      projections: new Map([
-        [adapterFeatureId, adapters],
-        [handlerFeatureId, new HandlerIndex([handler], view)],
-      ]),
-    });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    const initial = receive(im, incomingMessage('start'));
-    await vi.waitFor(() => expect(sent).toHaveLength(1));
-    await expect(receive(im, incomingMessage('完成'))).resolves.toMatchObject({
-      matched: true,
-      command: 'interaction',
-    });
-    await initial;
-    expect(answer).toBe('完成');
-    expect(handled).toHaveBeenCalledTimes(1);
-  });
-
-  it('interaction 超时时 reject 并回复超时消息', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    let interactionError: unknown;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'ask',
-      source: '/commands/ask.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          try {
-            await context.interaction!.ask({
-              type: 'text', title: '请输入', timeout: 50, timeoutText: '等太久了',
-            });
-          } catch (e) {
-            interactionError = e;
-          }
-          return '完成';
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    await receive(im, incomingMessage('/ask'));
-
-    expect(interactionError).toBeInstanceOf(Error);
-    expect((interactionError as Error).message).toBe('等太久了');
-    expect(sent.some((s: any) => (
-      Array.isArray(s.payload)
-      && s.payload.some((segment: any) => segment.type === 'text' && segment.data?.text.includes('等太久了'))
-    ))).toBe(true);
-  });
-
-  it('number interaction 应解析数字', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    let interactionResult: unknown;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'age',
-      source: '/commands/age.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          interactionResult = await context.interaction!.ask({ type: 'number', title: '你几岁' });
-          return `${interactionResult}`;
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    const commandPromise = receive(im, incomingMessage('/age'));
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
-
-    await receive(im, incomingMessage('25'));
-    await commandPromise;
-    expect(interactionResult).toBe(25);
-  });
-
-  it('confirm interaction 应判定确认条件', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    let interactionResult: unknown;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'confirm',
-      source: '/commands/confirm.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          interactionResult = await context.interaction!.ask({ type: 'confirm', title: '确认删除？' });
-          return interactionResult ? '已删除' : '已取消';
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    const commandPromise = receive(im, incomingMessage('/confirm'));
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
-
-    expect(sent[0]).toEqual(expect.objectContaining({
-      payload: [
-        expect.objectContaining({ type: 'text' }),
-        expect.objectContaining({
-          type: 'text',
-          data: { text: '也可以直接回复对应内容。\n1. 确认\n2. 取消' },
-        }),
-      ],
-    }));
-
-    await receive(im, {
-      ...incomingMessage('[button:confirm]'),
-      segments: [{ type: 'action', data: { id: 'confirm', payload: 'yes' } }],
-    });
-    await commandPromise;
-    expect(interactionResult).toBe(true);
-
-    const sentBeforeSecondRun = sent.length;
-    const cancelledCommand = receive(im, incomingMessage('/confirm'));
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThan(sentBeforeSecondRun); });
-
-    await receive(im, incomingMessage('no'));
-    await cancelledCommand;
-    expect(interactionResult).toBe(false);
-  });
-
-  it('interaction.sequence 应连续收集类型化结论并恢复原命令节点', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    let sequenceResult: Readonly<{
-      name: string;
-      environment: 'development' | 'production';
-      confirmed: boolean;
-    }> | undefined;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'environment',
-      source: '/commands/environment.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          sequenceResult = await context.interaction!.sequence({
-            title: '部署向导',
-            description: '请完成三个步骤。',
-            tip: '结果会在最后一步后一次性返回。',
-            steps: [
-              { id: 'name', type: 'text', title: '请输入发布名称', minLength: 2 },
-              {
-                id: 'environment',
-                type: 'select',
-                title: '请选择部署环境',
-                options: [
-                  { label: '开发环境', value: 'development' as const },
-                  { label: '生产环境', value: 'production' as const },
-                ],
-              },
-              { id: 'confirmed', type: 'confirm', title: '确认发布？' },
-            ],
-          });
-          return sequenceResult.environment;
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    const commandPromise = receive(im, incomingMessage('/environment'));
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(1); });
-
-    const firstAnswer = await receive(im, incomingMessage('正式发布'));
-    expect(firstAnswer).toMatchObject({ matched: true, command: 'interaction' });
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(2); });
-
-    const secondAnswer = await receive(im, incomingMessage('2'));
-    expect(secondAnswer).toMatchObject({ matched: true, command: 'interaction' });
-    await vi.waitFor(() => { expect(sent.length).toBeGreaterThanOrEqual(3); });
-
-    const thirdAnswer = await receive(im, incomingMessage('yes'));
-    expect(thirdAnswer).toMatchObject({ matched: true, command: 'interaction' });
-    await commandPromise;
-    expect(sequenceResult).toEqual({
-      name: '正式发布',
-      environment: 'production',
-      confirmed: true,
-    });
-  });
-
-  it('confirm interaction 在 signal abort 后应 fail closed 且不使用 default', async () => {
-    const root = rootPluginId();
-    const sent: unknown[] = [];
-    let interactionError: unknown;
-    const adapter = createCapabilitySlot({
-      owner: root,
-      feature: adapterFeatureId,
-      localName: 'memory',
-      source: '/adapters/memory.ts',
-      definition: defineAdapter({
-        capabilities: ['inbound', 'outbound'],
-        create: () => ({
-          start() {},
-          open() {},
-          close() {},
-          stop() {},
-          send(request) {
-            sent.push(request);
-            return `sent-${sent.length}`;
-          },
-        }),
-      }),
-    });
-    const command = createCapabilitySlot({
-      owner: root,
-      feature: commandFeatureId,
-      localName: 'abort-confirm',
-      source: '/commands/abort-confirm.ts',
-      definition: defineCommand<{}, SendContent, Message>({
-        async execute(context) {
-          const ac = new AbortController();
-          const pending = context.interaction!.ask({
-            type: 'confirm', title: '确认删除？', signal: ac.signal, default: false,
-          });
-          ac.abort();
-          try {
-            await pending;
-          } catch (error) {
-            interactionError = error;
-          }
-          return '已终止';
-        },
-      }),
-    });
-    const slots = [adapter, command];
-    const base = baseState(slots);
-    const view = createSnapshotView(0, base);
-    const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
-      [adapterFeatureId, adapters],
-      [commandFeatureId, new CommandIndex([command], view)],
-    ]);
-    const store = new SnapshotStore({ ...base, projections });
-    const im = new ImRuntime();
-    im.attach(store);
-    await adapters.start();
-    adapters.open();
-
-    await expect(receive(im, incomingMessage('/abort-confirm'))).resolves.toMatchObject({
-      matched: true,
-    });
-    expect(interactionError).toBeInstanceOf(Error);
-    await expect(receive(im, incomingMessage('yes'))).resolves.toMatchObject({
-      matched: false,
-    });
-  });
-
-  it('initial interaction delivery failure rejects immediately without claiming later input', async () => {
-    const { im } = await createInteractionFixture();
-    const incoming = incomingMessage('start');
-    const message = new Message(
-      incoming.conversation,
-      incoming.content,
-      1,
-      async () => ({
-        status: 'rejected' as const,
-        failure: { code: 'policy_denied', message: 'not delivered' },
-      }),
-      { id: 'user-1' },
-    );
-    const interaction = im.createInteraction(message)!;
-
-    await expect(interaction.ask({ type: 'text', title: '请输入' }))
-      .rejects.toThrow(/delivery/i);
-    await expect(receive(im, incomingMessage('后续消息'))).resolves.toMatchObject({ matched: false });
-  });
-
-  it('keeps same-user interaction claims isolated by canonical thread identity', async () => {
-    const { im } = await createInteractionFixture();
-    const createThreadMessage = (threadId: string) => new Message(
-      { ...incomingMessage('start').conversation, threadId },
-      'start',
-      1,
-      async () => ({ status: 'sent' as const }),
-      { id: 'user-1' },
-    );
-    const threadOne = im.createInteraction(createThreadMessage('thread-1'))!;
-    const threadTwo = im.createInteraction(createThreadMessage('thread-2'))!;
-    const first = threadOne.ask({ type: 'text', title: '线程一' });
-    const second = threadTwo.ask({ type: 'text', title: '线程二' });
-    await new Promise<void>((resolve) => queueMicrotask(resolve));
-
-    await expect(receive(im, {
-      ...incomingMessage('答案二'),
-      conversation: { ...incomingMessage('答案二').conversation, threadId: 'thread-2' },
-    })).resolves.toMatchObject({ matched: true, command: 'interaction' });
-    await expect(second).resolves.toBe('答案二');
-
-    await expect(receive(im, {
-      ...incomingMessage('答案一'),
-      conversation: { ...incomingMessage('答案一').conversation, threadId: 'thread-1' },
-    })).resolves.toMatchObject({ matched: true, command: 'interaction' });
-    await expect(first).resolves.toBe('答案一');
-  });
-
-  it('createInteraction(bind.subjectId) 只接受该用户的回复', async () => {
-    const { im } = await createInteractionFixture();
-    const incoming = incomingMessage('start', 'user-1');
-    const delivered: string[] = [];
-    const message = new Message(
-      incoming.conversation,
-      incoming.content,
-      1,
-      async (content) => {
-        delivered.push(String(content));
-        return { status: 'sent' as const };
-      },
-      { id: 'user-1' },
-      Object.freeze({}),
-      undefined,
-      { conversation: incoming.conversation, id: 'm-ask' },
-      'memory',
-    );
-    const interaction = im.createInteraction(message, { subjectId: 'master-1' });
-    expect(interaction).toBeDefined();
-    const pending = interaction!.ask({ type: 'confirm', title: '请 master 确认' });
-    await vi.waitFor(() => { expect(delivered.length).toBeGreaterThanOrEqual(1); });
-    await expect(receive(im, incomingMessage('yes', 'user-1'))).resolves.toMatchObject({ matched: false });
-    await expect(receive(im, incomingMessage('yes', 'master-1'))).resolves.toMatchObject({
-      matched: true,
-      command: 'interaction',
-    });
-    await expect(pending).resolves.toBe(true);
   });
 });

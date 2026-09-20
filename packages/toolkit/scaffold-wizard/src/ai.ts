@@ -5,8 +5,6 @@ import { formatEnvValue } from './env.js';
 export interface AISetupConfig {
   enabled: boolean;
   agentProvider?: string;
-  /** @deprecated Use agentProvider. Kept for one compatibility cycle. */
-  defaultProvider?: string;
   providers?: Record<string, {
     sdk?: string;
     apiKey?: string;
@@ -134,9 +132,8 @@ function defaultModelForProvider(driver: string): string {
   return entry?.defaultModel ?? '';
 }
 
-export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'defaultProvider' | 'providers'>): string {
+export function resolveAISetupAgentProvider(config: Pick<AISetupConfig, 'agentProvider' | 'providers'>): string {
   return config.agentProvider
-    ?? config.defaultProvider
     ?? Object.keys(config.providers ?? {})[0]
     ?? 'openai';
 }
@@ -525,72 +522,6 @@ export function generateAIConfigYaml(config: AISetupConfig): string {
   }
 
   lines.push(`  memoryMcp: ${config.memoryMcp ?? false}`);
-
-  return lines.join('\n');
-}
-
-/**
- * 生成 TOML 格式的 AI 配置段
- */
-export function generateAIConfigToml(config: AISetupConfig): string {
-  if (!config.enabled) return '';
-
-  const lines: string[] = [
-    '',
-    '[ai]',
-    `memoryMcp = ${config.memoryMcp ?? false}`,
-  ];
-
-  if (config.providers) {
-    for (const [name, providerConfig] of Object.entries(config.providers)) {
-      lines.push('', `[ai.providers.${name}]`);
-      lines.push(`sdk = "${providerConfig.sdk ?? providerSdkFor(name)}"`);
-      if (providerConfig.apiKey) lines.push(`apiKey = "${providerConfig.apiKey}"`);
-      if (providerConfig.host) lines.push(`host = "${providerConfig.host}"`);
-      if (providerConfig.models?.length) {
-        lines.push(`models = ${JSON.stringify(providerConfig.models)}`);
-      }
-      if (providerConfig.baseUrl) lines.push(`baseUrl = "${providerConfig.baseUrl}"`);
-    }
-  }
-
-  const providerAlias = resolveAISetupAgentProvider(config);
-  lines.push('', '[ai.agents.zhin]');
-  lines.push(`provider = "${providerAlias}"`);
-  const zhinModel = resolveAISetupAgentModel(config, providerAlias);
-  if (zhinModel) lines.push(`model = "${zhinModel}"`);
-
-  if (config.trigger) {
-    lines.push('', '[ai.trigger]');
-    lines.push(`respondToAt = ${config.trigger.respondToAt}`);
-    lines.push(`respondToPrivate = ${config.trigger.respondToPrivate}`);
-    lines.push(`prefixes = ${JSON.stringify(config.trigger.prefixes)}`);
-    lines.push(`ignorePrefixes = ${JSON.stringify(config.trigger.ignorePrefixes)}`);
-    lines.push(`timeout = ${config.trigger.timeout}`);
-  }
-
-  if (config.sessions) {
-    lines.push('', '[ai.sessions]');
-    lines.push(`useDatabase = ${config.sessions.useDatabase}`);
-    lines.push(`maxHistory = ${config.sessions.maxHistory}`);
-    lines.push(`expireMs = ${config.sessions.expireMs}`);
-  }
-
-  if (config.context) {
-    lines.push('', '[ai.context]');
-    lines.push(`enabled = ${config.context.enabled}`);
-    lines.push(`maxRecentMessages = ${config.context.maxRecentMessages}`);
-    lines.push(`summaryThreshold = ${config.context.summaryThreshold}`);
-    lines.push(`keepAfterSummary = ${config.context.keepAfterSummary}`);
-  }
-
-  if (config.agent) {
-    lines.push('', '[ai.agent]');
-    lines.push(`execSecurity = "${config.agent.execSecurity}"`);
-    lines.push(`execPreset = "${config.agent.execPreset}"`);
-    lines.push(`execAllowlist = ${JSON.stringify(config.agent.execAllowlist)}`);
-    lines.push(`phaseTrace = ${config.agent.phaseTrace}`);
-  }
 
   return lines.join('\n');
 }

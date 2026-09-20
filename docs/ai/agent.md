@@ -110,12 +110,12 @@ ai:
 | 参数 | 说明 |
 |------|------|
 | `task` | 任务描述（目标、范围、期望产出） |
-| `agent` | 子代理名（须在 `ai.agents` 或 `agents/*.agent.md` 预设中存在） |
+| `agent` | 子代理名（须在 `ai.agents` 或 `agents/<name>/agent.json` 预设中存在） |
 | `wait` | `true` 时同步等待，结果经 tool result 回到当前回合 |
 | `context` | `fork`（注入父会话近期消息）/ `fresh`（空上下文） |
 | `tools` / `skills` | 声明子任务需要的工具与技能 |
 
-行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。另外，子代理预设可用 `agents/<name>.agent.md`（YAML frontmatter + 说明）文件化声明，启动时自动发现注册。
+行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。子代理预设使用 `agents/<name>/agent.json` 与三个核心 Markdown 文件声明，启动时自动发现注册。
 
 ## Workroom Kernel
 
@@ -260,17 +260,17 @@ ai:
 
 | 类别 | 工具 |
 |------|------|
-| 执行 | `bash`、`run_deferred_task` |
+| 执行 | `bash` |
 | 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
 | 网络 | `web_search`、`web_fetch` |
 | 交互 | `ask_user` |
 | 任务 | `spawn_task`、`todo_read`、`todo_write` |
 | 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
-| 媒体 | `generate_image`、`analyze_media` |
-| 元 | `discover`、`load_tool`、`load_skill`、`install_skill` |
+| 媒体 | `generate_image`；入站图片直接进入支持视觉的模型 |
+| 元 | `discover`、`load_tool`、`load_skill` |
 | 调度 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
 
-文件工具只在当前 Turn 显式授权的项目 workspace 内运行。相对路径以该 workspace 为根；绝对路径必须仍位于其中；`~`、目录逃逸以及经符号链接指向 workspace 外的路径都会在统一策略门面中 fail-closed。策略批准后的 canonical 路径才会传给 ToolFeature 执行器，`glob` / `grep` 不启动 shell 子进程。
+文件工具只在当前 Turn 显式授权的项目 workspace 内运行。相对路径以该 workspace 为根；绝对路径必须仍位于其中；`~`、目录逃逸以及经符号链接指向 workspace 外的路径都会在统一策略门面中 fail-closed。策略批准后的 canonical 路径才会传给当前 generation 的 Tool capability，`glob` / `grep` 不启动 shell 子进程。
 
 网络工具仅在 `ai.agent.execPreset: network` 时获得 HTTPS authority。`web_fetch` 的初始 URL 与每个重定向目标都会重新检查协议、域名和 SSRF；DNS 结果中的私网、link-local、CGNAT 与 multicast 地址会被拒绝，实际连接固定到已审核地址。`readonly` 等其他 preset 不会隐式开放网络。
 

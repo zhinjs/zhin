@@ -6,7 +6,6 @@ export {
   segmentLocalPath,
   sleep,
   type ResolvedWeixinIlinkConfig,
-  type WeixinIlinkAdapterConfig,
   type WeixinIlinkEndpointConfig,
   type WeixinInboundMediaPaths,
   type WeixinMessageWithMedia,
@@ -14,7 +13,21 @@ export {
 } from './protocol.js';
 
 export type { WeixinMessage, MessageItem } from './ilink-types.js';
-export type { WeixinIlinkCredentials } from './credentials.js';
+export {
+  WeixinIlinkStateStore,
+  type WeixinIlinkCredentials,
+} from './credentials.js';
+export {
+  IlinkClientMetadata,
+  sanitizeBotAgent,
+  type IlinkClientMetadataOptions,
+} from './ilink-meta.js';
+export { WeixinContextTokenStore } from './context-store.js';
+export {
+  IlinkSessionGuard,
+  SESSION_EXPIRED_ERRCODE,
+  SESSION_PAUSE_DURATION_MS,
+} from './ilink-session-guard.js';
 
 export {
   WeixinIlinkClient,

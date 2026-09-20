@@ -55,8 +55,13 @@ export {
   type RuntimeConsoleRpcMessage,
   type RuntimeConsoleRpcReply,
   type RuntimeEndpointSendInput,
-  type RuntimeEndpointSummary,
+  type PluginInstallPlan,
+  type PluginUninstallPlan,
+  type PluginUpdatePlan,
+  type PluginManagementPort,
+  type PluginConfigValidation,
 } from './console-rpc.js';
+export { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 export {
   buildProjectFileTree,
   FILE_MANAGER_ALLOWED,
@@ -82,4 +87,4 @@ export {
   type ConsoleWorkroomProfileControlPort,
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,
-} from './console-rpc-extended.js';
+} from './console-rpc-extended/index.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { AIEventPayload } from '@zhin.js/agent';
-import { resolveActivityFeedbackForTarget, loadActivityFeedbackServiceConfig } from '../src/config.js';
+import { mergeActivityFeedbackLayers, loadActivityFeedbackServiceConfig } from '../src/config.js';
 import { ActivityFeedbackOrchestrator } from '../src/orchestrator.js';
 import type { ActivityFeedbackExecutor } from '../src/executor.js';
 import { ActivityFeedbackPolicy } from '../src/policy.js';
@@ -29,14 +29,19 @@ describe('activityFeedback config', () => {
       },
     });
 
-    const resolved = resolveActivityFeedbackForTarget(service, 'icqq', '75318');
+    const resolved = mergeActivityFeedbackLayers(
+      service.defaults,
+      service.platforms?.icqq,
+      service.endpoints?.['icqq:75318'],
+    );
     expect(resolved?.phases?.active?.group?.emoji).toBe('99');
     expect(resolved?.phases?.active?.private?.message).toBe('hi');
   });
 
   it('enabled=false 时应全局禁用', () => {
     const service = loadActivityFeedbackServiceConfig({ enabled: false });
-    expect(resolveActivityFeedbackForTarget(service, 'icqq', 'x')?.enabled).toBe(false);
+    const policy = new ActivityFeedbackPolicy(service);
+    expect(policy.resolvePhase('icqq', 'x', 'active', 'private')).toEqual({ kind: 'disabled' });
   });
 
   it('schedule finish/error 配置覆盖常规平台默认值', () => {

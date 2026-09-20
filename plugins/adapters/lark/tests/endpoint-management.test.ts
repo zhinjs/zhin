@@ -55,7 +55,7 @@ function createEndpoint(fetch: LarkFetch): LarkEndpoint {
     }, undefined);
 }
 
-describe('lark.endpoint management', () => {
+describe('lark endpoint management', () => {
   it('advertises only listGroups/listGroupMembers and keeps the port frozen', () => {
     const endpoint = createEndpoint(mockLarkApi(() => ({ code: 0, data: { items: [] } })));
     expect(Object.isFrozen(endpoint.management)).toBe(true);

@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { ComponentIndex } from './component-index.js';
 import { parseComponentDefinition } from './definition.js';
 
@@ -10,10 +10,10 @@ const componentFeature = defineFeatureProvider({
   id: componentFeatureId,
   authoring: {
     setupMethod: 'addComponent',
-    conventions: [typeScriptModules({
-      id: 'components-tsx',
-      directory: 'components',
-      tsx: true,
+    conventions: [directoryModules({
+      id: 'components-index',
+      extensions: ['ts', 'tsx', 'js', 'mjs', 'cjs'],
+      layouts: [{ segments: ['components', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseComponentDefinition,
   },

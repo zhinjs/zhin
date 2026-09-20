@@ -1,7 +1,7 @@
 import { definePlugin } from 'zhin.js';
 
 /**
- * Plugin Runtime game hub — lists games registered via `registerRuntimeGame`.
+ * Plugin Runtime game hub — commands read the generation-owned GameIndex projection.
  * Interactive hub menus are deferred; `/games` command shows help text.
  */
 export default definePlugin({

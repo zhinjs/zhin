@@ -10,11 +10,7 @@ import {
   handlerFeature,
   type HandlerDefinition,
 } from '../src/index.js';
-import {
-  typeScriptModules,
-  type DirectoryEntry,
-  type DiscoveryHost,
-} from '@zhin.js/feature-kit';
+import type { DirectoryEntry, DiscoveryHost } from '@zhin.js/feature-kit';
 import type { CapabilitySlot, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 
 // ---------------------------------------------------------------------------
@@ -116,7 +112,7 @@ function createSlot(
     id: `slot-${localName}` as never,
     owner,
     localName,
-    source: `/handlers/${localName}.ts`,
+    source: `/handlers/${localName}/index.ts`,
     definition,
   });
 }
@@ -213,7 +209,7 @@ describe('HandlerIndex', () => {
     expect(descriptors[0]).toEqual({
       owner: 'test-plugin',
       name: 'foo/bar',
-      source: '/handlers/foo/bar.ts',
+      source: '/handlers/foo/bar/index.ts',
       event: 'foo.bar',
     });
     expect((descriptors[0] as Record<string, unknown>).slot).toBeUndefined();
@@ -227,7 +223,7 @@ describe('HandlerIndex', () => {
     expect(index.list()).toEqual([{
       owner: 'test-plugin',
       name: 'notice/receive',
-      source: '/handlers/notice/receive.ts',
+      source: '/handlers/notice/receive/index.ts',
       event: 'notice.receive',
     }]);
   });
@@ -253,66 +249,40 @@ describe('isHandlerIndex', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Handler convention (localName uses `/`; event mapping is HandlerIndex)
+// Handler convention
 // ---------------------------------------------------------------------------
 
-describe('typeScriptModules for handlers', () => {
-  it('joins nested handler paths with / for capability localName', async () => {
+describe('directoryModules for handlers', () => {
+  it('discovers one named directory per handler', async () => {
     const sources = await discoverHandlers('/workspace/plugin', {
       'handlers': [
-        { name: 'message', kind: 'directory' },
+        { name: 'message-receive', kind: 'directory' },
       ],
-      'handlers/message': [
-        { name: 'receive.ts', kind: 'file' },
+      'handlers/message-receive': [
+        { name: 'index.ts', kind: 'file' },
       ],
     });
 
     expect(sources).toEqual([
-      { localName: 'message/receive', source: '/workspace/plugin/handlers/message/receive.ts' },
+      { localName: 'message-receive', source: '/workspace/plugin/handlers/message-receive/index.ts' },
     ]);
   });
 
-  it('handles deeply nested handler paths', async () => {
+  it('ignores helpers and nested directories inside a handler module', async () => {
     const sources = await discoverHandlers('/workspace/plugin', {
       'handlers': [
-        { name: 'ai', kind: 'directory' },
+        { name: 'ai-tool-call', kind: 'directory' },
       ],
-      'handlers/ai': [
-        { name: 'tool', kind: 'directory' },
-      ],
-      'handlers/ai/tool': [
-        { name: 'call.ts', kind: 'file' },
-        { name: 'result.ts', kind: 'file' },
+      'handlers/ai-tool-call': [
+        { name: 'index.ts', kind: 'file' },
+        { name: 'helper.ts', kind: 'file' },
+        { name: 'private', kind: 'directory' },
       ],
     });
 
     expect(sources).toEqual([
-      { localName: 'ai/tool/call', source: '/workspace/plugin/handlers/ai/tool/call.ts' },
-      { localName: 'ai/tool/result', source: '/workspace/plugin/handlers/ai/tool/result.ts' },
+      { localName: 'ai-tool-call', source: '/workspace/plugin/handlers/ai-tool-call/index.ts' },
     ]);
-  });
-
-  it('default separator is / (backwards compatible)', async () => {
-    const convention = typeScriptModules({ id: 'test', directory: 'commands' });
-    const host: DiscoveryHost = {
-      async list(directory) {
-        if (directory === '/pkg/commands') {
-          return [{ name: 'sub', kind: 'directory' as const }];
-        }
-        if (directory === '/pkg/commands/sub') {
-          return [{ name: 'cmd.ts', kind: 'file' as const }];
-        }
-        return [];
-      },
-      async loadModule<T>() { return {} as T; },
-      async readText() { return ''; },
-    };
-
-    const sources: Array<{ localName: string }> = [];
-    for await (const s of convention.discover({ owner: 'r' as never, packageRoot: '/pkg', host })) {
-      sources.push({ localName: s.localName });
-    }
-    expect(sources).toEqual([{ localName: 'sub/cmd' }]);
   });
 });
 
@@ -327,7 +297,7 @@ describe('handlerFeature', () => {
     expect(handlerFeature.id).toBe(handlerFeatureId);
     expect(handlerFeature.authoring.setupMethod).toBe('addHandler');
     expect(handlerFeature.authoring.conventions).toHaveLength(1);
-    expect(handlerFeature.authoring.conventions[0].id).toBe('handlers-ts');
+    expect(handlerFeature.authoring.conventions[0].id).toBe('handlers-index');
   });
 
   it('validate accepts valid handler definitions', () => {
@@ -376,10 +346,7 @@ async function discoverHandlers(
     async loadModule<T>() { return {} as T; },
     async readText() { return ''; },
   };
-  const convention = typeScriptModules({
-    id: 'handlers-ts',
-    directory: 'handlers',
-  });
+  const convention = handlerFeature.authoring.conventions[0];
   const sources: Array<{ localName: string; source: string }> = [];
   for await (const source of convention.discover({
     owner: 'root' as never,

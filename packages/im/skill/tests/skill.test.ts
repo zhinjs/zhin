@@ -17,14 +17,19 @@ import skillFeature, {
 } from '../src/index.js';
 
 describe('Skill Feature', () => {
-  it('discovers only skills/<name>/SKILL.md and keeps Markdown as SSOT', async () => {
+  it('discovers only skills/<name>/SKILL.md and keeps colocated files as ordinary material', async () => {
     const source = '/project/skills/research/SKILL.md';
     const host = new MemoryHost({
       '/project/skills': [
         { name: 'research', kind: 'directory' },
-        { name: 'ignored.md', kind: 'file' },
+        { name: 'helper.md', kind: 'file' },
+        { name: 'references', kind: 'directory' },
       ],
-      '/project/skills/research': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/skills/research': [
+        { name: 'SKILL.md', kind: 'file' },
+        { name: 'notes.md', kind: 'file' },
+      ],
+      '/project/skills/references': [{ name: 'README.md', kind: 'file' }],
     }, new Map([[source, '# Research\n\nUse primary sources.']]));
     const slots = await new FeatureDiscovery(host).discover(skillFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
@@ -59,6 +64,86 @@ describe('Skill Feature', () => {
 
     expect(index.get(child, 'review')?.description).toBe('Child review');
     expect(index.get(root, 'review')?.description).toBe('Root review');
+  });
+
+  it('binds colocated private tools and keeps Agent-private Skills scoped', async () => {
+    const publicSource = '/project/skills/research/SKILL.md';
+    const privateSource = '/project/agents/reviewer/skills/audit/SKILL.md';
+    const host = new MemoryHost({
+      '/project/skills': [{ name: 'research', kind: 'directory' }],
+      '/project/skills/research': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/skills/research/tools': [{ name: 'search', kind: 'directory' }],
+      '/project/skills/research/tools/search': [{ name: 'index.ts', kind: 'file' }],
+      '/project/agents': [{ name: 'reviewer', kind: 'directory' }],
+      '/project/agents/reviewer/skills': [{ name: 'audit', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/agents/reviewer/skills/audit/tools': [{ name: 'report', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools/report': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([
+      [publicSource, '# Research'],
+      [privateSource, '# Audit'],
+    ]));
+    const slots = await new FeatureDiscovery(host).discover(skillFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+
+    expect(slots.map((slot) => slot.localName)).toEqual(['research', 'agent/reviewer/audit']);
+    expect(slots[0]?.definition.toolNames).toEqual(['skill__research__search']);
+    expect(slots[1]?.definition).toMatchObject({
+      name: 'audit',
+      agentName: 'reviewer',
+      toolNames: ['agent__reviewer__skill__audit__report'],
+    });
+  });
+
+  it('parses governed frontmatter and keeps only instructions in the prompt payload', () => {
+    const definition = parseSkillMarkdown(`---
+name: research
+description: Evidence-first research
+tools: [web_search, read_file]
+platforms: [qq]
+scopes: [private, group]
+permissions: [role(trusted)]
+keywords: [sources, citations]
+tags: [research]
+always: true
+---
+
+# Research
+
+Use primary sources.`, {
+      owner: rootPluginId(),
+      feature: skillFeatureId,
+      localName: 'research',
+      source: '/project/skills/research/SKILL.md',
+    });
+
+    expect(definition).toMatchObject({
+      name: 'research',
+      description: 'Evidence-first research',
+      instructions: '# Research\n\nUse primary sources.',
+      toolNames: ['web_search', 'read_file'],
+      platforms: ['qq'],
+      scopes: ['private', 'group'],
+      permissions: ['role(trusted)'],
+      keywords: ['sources', 'citations'],
+      tags: ['research'],
+      always: true,
+    });
+    expect(Object.isFrozen(definition.toolNames)).toBe(true);
+  });
+
+  it('rejects frontmatter that can redirect identity or weaken scope validation', () => {
+    const context = {
+      owner: rootPluginId(),
+      feature: skillFeatureId,
+      localName: 'research',
+      source: '/project/skills/research/SKILL.md',
+    };
+    expect(() => parseSkillMarkdown('---\nname: deploy\n---\n# Research', context))
+      .toThrow('must match directory research');
+    expect(() => parseSkillMarkdown('---\nscopes: [dm]\n---\n# Research', context))
+      .toThrow('scopes must be private, group, or channel');
   });
 });
 

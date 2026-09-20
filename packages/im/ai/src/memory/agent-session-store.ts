@@ -2,6 +2,7 @@
  * agent_sessions CRUD — epoch-aware session metadata (ADR 0009 D4).
  */
 
+import { randomUUID } from 'node:crypto';
 import type {
   AgentSessionRecord,
   CreateAgentSessionInput,
@@ -10,6 +11,17 @@ import { persistenceFailure } from './persistence-error.js';
 
 export interface AgentSessionStoreConfig {
   sessionIdleArchiveMs?: number;
+}
+
+/** Session lifecycle authority shared by persistent and in-memory adapters. */
+export interface AgentSessionRepository {
+  findActive(sessionKey: string): Promise<AgentSessionRecord | null>;
+  getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord>;
+  touch(sessionId: string): Promise<void>;
+  getBySessionId(sessionId: string): Promise<AgentSessionRecord | null>;
+  setActiveLeafMessageId(sessionId: string, messageId: number | null): Promise<void>;
+  archiveByKey(sessionKey: string): Promise<boolean>;
+  archiveIdleForKey(sessionKey: string): Promise<number>;
 }
 
 interface DbModel {
@@ -22,14 +34,11 @@ interface DbModel {
   };
 }
 
-let sessionEpochSeq = 0;
-
-export function createAgentSessionEpochId(sessionKey: string): string {
-  sessionEpochSeq += 1;
-  return `${sessionKey}#${Date.now()}-${sessionEpochSeq}`;
+function createSessionEpochId(sessionKey: string): string {
+  return `${sessionKey}#${randomUUID()}`;
 }
 
-export class AgentSessionStore {
+export class AgentSessionStore implements AgentSessionRepository {
   private readonly model: DbModel;
   private readonly config: Required<Pick<AgentSessionStoreConfig, 'sessionIdleArchiveMs'>>;
 
@@ -61,7 +70,7 @@ export class AgentSessionStore {
     await this.archiveIdleForKey(input.session_key);
     const now = Date.now();
     const record: AgentSessionRecord = {
-      session_id: createAgentSessionEpochId(input.session_key),
+      session_id: createSessionEpochId(input.session_key),
       session_key: input.session_key,
       model: input.model ?? '',
       status: 'active',
@@ -141,7 +150,7 @@ export class AgentSessionStore {
   }
 }
 
-export class MemoryAgentSessionStore {
+export class MemoryAgentSessionStore implements AgentSessionRepository {
   private sessions = new Map<string, AgentSessionRecord>();
   private static readonly MAX_SESSIONS = 2000;
   private static readonly IDLE_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -172,7 +181,7 @@ export class MemoryAgentSessionStore {
     }
     const now = Date.now();
     const record: AgentSessionRecord = {
-      session_id: createAgentSessionEpochId(input.session_key),
+      session_id: createSessionEpochId(input.session_key),
       session_key: input.session_key,
       model: input.model ?? '',
       status: 'active',

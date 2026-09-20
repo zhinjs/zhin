@@ -2,7 +2,7 @@ import {
   conversationRefKey,
   messageRefKey,
   type ConversationEvent,
-  type ConversationEventStore,
+  type ConversationEventReader,
 } from '@zhin.js/im-contract';
 import {
   deepFreezeWorkroomValue as deepFreeze,
@@ -48,7 +48,7 @@ export function humanIngressConversationEventRef(event: ConversationEvent): stri
  */
 export class ConversationEventHumanIngressSourceReader
 implements HumanIngressSourceReaderPort {
-  constructor(readonly store: ConversationEventStore | (() => ConversationEventStore)) {}
+  constructor(readonly store: ConversationEventReader | (() => ConversationEventReader)) {}
 
   async read(source: HumanIngressSourceAnchor): Promise<CanonicalHumanIngressSource> {
     const anchor = normalizeAnchor(source);

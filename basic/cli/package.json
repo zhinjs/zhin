@@ -27,7 +27,8 @@
     "@zhin.js/ai": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
-    "@zhin.js/config-yaml": "workspace:*",
+    "@zhin.js/config-file": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/database": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
@@ -51,7 +52,6 @@
     "inquirer": "^14.0.2",
     "open": "^11.0.0",
     "ora": "^9.4.1",
-    "smol-toml": "^1.7.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

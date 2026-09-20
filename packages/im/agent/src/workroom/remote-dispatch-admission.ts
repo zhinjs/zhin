@@ -21,10 +21,10 @@ import {
   type WorkroomRemoteDispatchInput,
   type WorkroomRemoteDispatchOutboxItem,
 } from './remote-dispatch.js';
-import type { WorkroomRemoteExecutorPort } from '../plugin-runtime/workroom-remote-executor.js';
-import type { WorkroomDisclosureManifestAuthorityPort } from '../plugin-runtime/workroom-data-governance-runtime.js';
+import type { WorkroomRemoteExecutorPort } from './remote-executor.js';
+import type { WorkroomDisclosureManifestAuthorityPort } from '../data-governance/disclosure-authority.js';
 import type { WorkroomRunState } from './kernel-contracts.js';
-import { createWorkroomGovernedDispatchReason } from '../plugin-runtime/workroom-governed-dispatch-reasons.js';
+import { createWorkroomGovernedDispatchReason } from './governed-dispatch-reasons.js';
 
 export interface RemoteAssignmentDispatchRunStatePort {
   read(projectId: string, runId: string): Promise<WorkroomRunState>;

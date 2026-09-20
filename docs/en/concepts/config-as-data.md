@@ -14,8 +14,7 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - name: full-bot-sandbox
-        context: sandbox
+      - id: full-bot-sandbox
         owner: local-user
   napcat:
     connection: ws
@@ -56,7 +55,7 @@ The `schema.json` in each package's root directory is its configuration contract
 }
 ```
 
-There are a few constraints to be aware of when writing schemas. The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional schemas at the root level (`anyOf`/`oneOf`/`allOf`/`$ref` without `properties`) are not allowed -- they can pass validation, but cause the config projection to silently become empty, so they are explicitly rejected. Validation uses Ajv 2020 with `strict: true`, `allErrors: true`, `useDefaults: true`: `default` values in the schema are backfilled into the document during validation. Validation failure throws `ConfigValidationError`, with error messages indicating the specific path and offending keys (`additionalProperty: xxx`) or valid enum values. Additionally, if a child plugin's `instanceKey` collides with a property name in the parent plugin's own schema, a `ConfigSchemaCollisionError` is thrown.
+The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional root schemas are rejected. The framework injects an optional `commandNamespace` field into every plugin config; plugin schemas must not redeclare it, and omitted values mean no plugin namespace. Validation uses Ajv 2020 with strict validation and defaults. A reserved-field collision or a child `instanceKey` collision throws `ConfigSchemaCollisionError`.
 
 ## ConfigView: Projection by Owner
 
@@ -100,7 +99,7 @@ The command prefix is resolved by default based on the adapter instance that own
 
 ## Configuration Document Transactions and Rollback
 
-Runtime configuration changes (Console UI, `patchConfig` API) do not modify the file directly. Instead, they go through a two-phase transaction with the `ConfigDocumentPort` interface:
+Runtime configuration changes (Console UI, `patchConfig` API) do not modify the file directly. They use a two-phase transaction; the `ConfigDocumentPort` and structural patch semantics live in zero-dependency `@zhin.js/plugin-runtime`:
 
 ```ts
 interface ConfigDocumentPort {
@@ -113,13 +112,15 @@ interface PreparedConfigDocument {
 }
 ```
 
-Key implementation details of `YamlConfigDocument` (`@zhin.js/config-yaml`):
+`ConfigFileDocument` (`@zhin.js/config-file`) owns the transaction lifecycle shared by both formats:
 
 - **Optimistic concurrency**: Both `prepare` and `commit` re-read the file and verify the revision; if the file was modified externally after reading, a `ConfigDocumentConflictError` is thrown.
-- **Format preservation**: Patches are applied to the YAML AST before stringifying, preserving comments and indentation style (including CRLF); numeric segments in paths address array elements (`endpoints.0.url`), and dangerous segments like `__proto__` are rejected.
 - **Atomic write to disk**: `commit` first writes to a temporary file then uses `rename` to replace, preserving original file permissions.
 - **Consistency**: If the candidate document diverges from the runtime-validated candidate, a `ConfigDocumentDivergenceError` is thrown -- preferring failure over writing divergent configuration.
+- **Format polymorphism**: `YamlConfigDocument` patches the AST and preserves comments and indentation; `JsonConfigDocument` reuses Runtime structural patch semantics and preserves indentation and line endings.
 
-Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the `zhin.config.yml` on disk nor the in-memory runtime will be left in a half-updated state.
+The composition root creates one concrete `ConfigFileDocument`. Root Runtime, Endpoint configuration commands, and Console all receive that instance instead of discovering, parsing, or overwriting the configuration file independently. Console source editing reads the original text, format, and revision through `readSource()`, then commits through `prepareReplacement()`; configuration keys in the response are projected from the same revision. Competing callers receive an explicit revision conflict instead of silently overwriting the earlier update.
+
+Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the Root config on disk nor the in-memory runtime will be left in a half-updated state.
 
 Direct external editing of the configuration file is also supported: the config file itself is watched, and external modifications trigger a full reload using the disk content as the source of truth.

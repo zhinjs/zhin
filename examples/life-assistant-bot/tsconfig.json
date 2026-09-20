@@ -5,6 +5,6 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["plugin.ts", "commands/**/*.ts", "tools/**/*.ts"],
+  "include": ["plugin.ts", "commands/**/*.ts", "tools/**/index.ts"],
   "exclude": ["lib", "node_modules"]
 }

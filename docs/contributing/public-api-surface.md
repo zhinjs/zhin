@@ -21,29 +21,33 @@
 | API | 稳定性 | 作者 import | 实现包 | 一句话 |
 |-----|--------|-------------|--------|--------|
 | `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
-| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/` 下默认导出） |
-| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/` 下默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
-| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/` 下默认导出） |
-| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/` 下默认导出） |
-| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/` 下默认导出；`/` → `.` 推断事件名） |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/`）；`zhin.js/agent`（`agent/tools/*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/*/index.ts` 默认导出） |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/*/index.ts` 默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/*/index.ts(x)` 默认导出） |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/*/index.ts` 默认导出） |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/<name>/index.ts` 默认导出；带点事件显式声明 `event`） |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/<name>/index.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
+| `defineMcp` | `experimental` | `@zhin.js/mcp-feature` | `@zhin.js/mcp-feature` | generation-owned MCP 连接（`mcps/<name>/index.ts`） |
+| `defineSchedule` | `experimental` | `@zhin.js/schedule-feature` | `@zhin.js/schedule-feature` | generation-owned 定时任务（`schedules/<name>/index.ts` 或 `plugin.ts` 注入） |
 
-> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
+> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`skills/<name>/SKILL.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 
 ### 约定目录与文件
 
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
 | `plugin.ts` | `stable` | `zhin.js` | 插件根入口，默认导出 `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 命令模块目录，支持 `[name]` / `[[name]]` / `[...name]` 动态参数段 |
-| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 适配器模块目录 |
-| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 中间件模块目录 |
-| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | Lifecycle 事件处理器目录（`/` 分段 localName，省略 `event` 时映为 `.`；当前运行时接线 `message.receive`） |
-| `tools/` | `experimental` | `@zhin.js/tool` | Agent 工具目录（`defineAgentTool`） |
-| `agent/tools` | `experimental` | `zhin.js/agent` authoring | 文件化 Agent 工具创作面 |
-| `agent/skills` | `experimental` | `@zhin.js/skill` / Agent 发现 | Agent 技能 Markdown（随 npm 包发布） |
-| `pages/` | `experimental` | `@zhin.js/console-page` | Console 页面模块目录 |
+| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | `commands/**/index.ts`；支持 `[name]` / `[[name]]` / `[...name]` 动态参数目录 |
+| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | `adapters/<name>/index.ts` |
+| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | `middlewares/<name>/index.ts` |
+| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | `handlers/<name>/index.ts`；同目录其他文件是 helper |
+| `tools/` | `experimental` | `@zhin.js/tool` | `tools/<name>/index.ts` 是公共 Tool；Agent/Skill 私有 Tool 放在所属目录的同构 `tools/` 下 |
+| `hooks/` | `experimental` | `zhin.js/agent/hooks` | `hooks/<name>/index.ts`；Agent/Skill 私有 Hook 放在所属目录的同构 `hooks/` 下 |
+| `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent 发现 | Skill Markdown，可在同目录附带参考资料与脚本（随 npm 包发布） |
+| `mcps/` | `experimental` | `@zhin.js/mcp-feature` | `mcps/<name>/index.ts`，替代旧 connection 入口 |
+| `schedules/` | `experimental` | `@zhin.js/schedule-feature` | `schedules/<name>/index.ts`；也允许 `plugin.ts` 注入 |
+| `pages/` | `experimental` | `@zhin.js/console-page` | `pages/<name>/index.ts(x)`；`nav` / `footer` 是布局槽 |
 
 ### Host Token（`context.resources.use(token)` 消费）
 
@@ -59,15 +63,18 @@
 
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
-| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Tool/Skill/SubAgent/MCP/Hook 能力注册；不拥有 Workroom Run/Task/Assignment 状态 |
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Skill/SubAgent/Hook 支持资源；Tool 与 MCP 分别由对应 Feature 投影 |
 
 ### Removed Legacy Hooks
 
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
-| `usePlugin()` 及配套 Hooks（`provide` / `addCommand` / `useContext` 等） | `removed`（见下表） | `zhin.js`（`@zhin.js/core`） | 已移除，调用 throw；唯一入口为 `definePlugin` + `zhin runtime start` |
-| `MessageCommand` / `CommandFeature` | `deprecated` | `zhin.js`（`@zhin.js/core`） | 经典命令；新代码用 `defineCommand` + `commands/` |
+| `usePlugin()` / `getPlugin()` | `removed` | 无（不再导出） | 唯一入口为 `definePlugin` + `zhin runtime start` |
+| `MessageCommand` / `CommandFeature` | `removed` | 无（不再导出） | 命令统一使用 `defineCommand` + Runtime `CommandIndex` |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 无（子路径已删除） | 唯一启动入口为 `zhin runtime start` |
+| `AgentMessageSenderExtra` / `SenderScope` | `removed` | 无（不再导出） | 参与者身份只存于 `UserMessage.actor` |
+| `buildSenderPrefix` / `applySenderExtraToUserMessage` / `stripSenderPrefixFromText` | `removed` | 无（不再导出） | 参与者标签由 AI 边界从 actor 渲染，不再从文本或 extra 推断身份 |
+| `buildSenderPrefixForMessage` | `removed` | 无（不再导出） | Core trigger 只返回用户正文，不编码 Agent 身份 |
 
 ### `zhin.config.yml` 顶层键
 
@@ -106,21 +113,43 @@
 | `CommandIndex` | `internal` | `@zhin.js/command` | 命令 projection，快照 → 命令路由表 |
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex` 等 | `internal` | 各 feature 包 | 其余 projection，同属内部机制 |
 | `defineFeatureProvider`（Feature Provider 协议） | `internal` | `@zhin.js/feature-kit` | 新增 feature 类型的协议，面向框架扩展者而非插件作者 |
-| `MessageDispatcher` | `internal` | `@zhin.js/core` | 消息分发器（`createMessageDispatcher` 装配，路由策略可配置） |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `InboundRuntime` 持有的 generation-owned 消息分发器 |
+| `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
+| `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
+| Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
+| Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
+| classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host 安装器（database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol），装配细节随时可变 |
 
 ## Deprecated / 已迁移
 
 | 项 | 稳定性 | 现状 | 一句话 |
 |----|--------|------|--------|
-| legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 调用 throw（throwing stub） | 唯一入口：`definePlugin` + `zhin runtime start` |
-| `MessageCommand` / classic `CommandFeature` | `deprecated` | Agent init / game-kit hub 仍用 | 迁到 `defineCommand` + Runtime `CommandIndex` 后删除 |
+| legacy `usePlugin()` / `getPlugin()` 插件体系 | `removed` | 源码与 public surface 均已删除 | 唯一入口：`definePlugin` + `zhin runtime start` |
+| `MessageCommand` / classic `CommandFeature` | `removed` | 源码与 public surface 均已删除 | 命令统一走 `defineCommand` + Runtime `CommandIndex` |
+| Core `ToolFeature` / `SkillFeature` | `removed` | 源码与 public surface 均已删除 | Tool / Skill 统一走 Feature provider、generation projection 与 Agent `CapabilityIngress` |
+| Agent `FeatureCapabilityIngress` | `removed` | 源码与 public surface 均已删除 | Agent 只保留读取 Runtime snapshot 的 `CapabilityIngress` |
+| Agent `AgentFeature` / `MCPFeature` | `removed` | 源码与 public surface 均已删除 | Agent / MCP 声明统一由各自 Feature provider 投影为 generation-owned `AgentIndex` / `McpIndex` |
+| `@zhin.js/tools` 与 Agent 作者侧 Tool bridge | `removed` | 子路径、重复 definition/context/discovery 均已删除 | Tool 创作统一使用 `@zhin.js/tool` 与 `tools/<name>/index.ts` |
+| `@zhin.js/core/tool-zod` | `removed` | Core 子路径与 Zod 3 结构兼容已删除 | Tool 输入 Schema 统一由 `@zhin.js/tool` 的 Zod 4 / JSON Schema 契约拥有 |
+| Core / Agent deprecated 同义 API | `removed` | 死别名、旧类型与始终失败的迁移函数已删除 | 使用 canonical Segment、Turn、Schedule、Prompt 与 executor-owned lifecycle API |
+| Schedule `resolveAdapter` delivery fallback | `removed` | `TaskExecutor` 与 `deliverScheduleToAdapter` 必须注入 `NotificationRouter` | Schedule 出站由 composition root 创建的 Router 独占路由与发送权威 |
+| classic adapter-derived Message generics | `removed` | `Message` / Side Event 的 adapter identity 为 Runtime 字符串 | canonical IM 契约不再反向依赖经典 `Adapter`、`Endpoint` 或 `ProcessAdapter` 类型注册表 |
+| classic Plugin tree Agent discovery | `removed` | workspace 扫描接收项目根；单包扫描接收目录描述符 | 插件 Agent 由 generation Feature provider 发现，不再递归经典 `Plugin` 对象树 |
+| Agent classic Plugin / Adapter runtime bridges | `removed` | 全局 Adapter registry 清理、未挂载 typing 示例与 `BotWithEditing` 已删除 | Agent 平台反馈依赖 `@zhin.js/adapter` 的 `EndpointControl` 端口；工具权限只读当前 turn 的显式消息上下文 |
+| Core `ProcessAdapter` / process runtime IO | `removed` | 未被生产装配的经典内置适配器与 stdin 辅助已删除 | 本地交互由 Sandbox Adapter 与 CLI Host 提供，不再占用经典 Adapter 注册表 |
+| `Adapter.Registry` / `Adapter.register` / `Adapter.Factory` | `removed` | 进程级工厂注册表及其唯一自证测试已删除 | Adapter 定义与实例只由 generation-owned `AdapterIndex` 发现和持有 |
+| `Plugin.adapters` / `Plugin.injectAdapter` | `removed` | 经典 Plugin 的重复 Adapter 目录与 service-locator helper 已删除 | 当前 Endpoint 目录只能从 generation-owned `AdapterIndex` 查询 |
+| classic Core `Adapter` / `Endpoint` runtime | `removed` | 类、类型、capability WeakMap、连接与生命周期 helper 及专属测试已删除 | 唯一实现是 `zhin.js/adapter` 的 `defineAdapter`、`Endpoint<TClient>` 与 generation-owned `AdapterIndex` |
+| classic Core `Plugin` runtime | `removed` | Plugin 类、Context ALS、重复 Dispatcher 与入站管线均已删除 | 插件生命周期由 `@zhin.js/plugin-runtime` 的 generation snapshot 管理；IM 分发只走 `ImRuntime` |
+| Kernel `PluginBase` / mutable `Feature` registry | `removed` | Plugin tree、字符串 DI、prototype extension registry 与自证测试已删除 | 生命周期统一属于 `@zhin.js/plugin-runtime`；能力发现和投影统一属于 `@zhin.js/feature-kit` |
+| Kernel global Schedule getters/setters | `removed` | `get/setScheduleEngine` 与 `get/setScheduler` 已删除 | 每个 `ScheduleJobEngine` 私有持有并销毁自己的调度引擎，Host 调度走 generation-owned token |
 | `bootstrapNode` / `zhin.js/node` | `removed` | 不再导出 | 唯一启动入口：`zhin runtime start` |
 | `AgentOrchestrator` / `ResourceHub` | `removed` | 兼容名称不再导出 | 能力注册改用 `AgentResourceHub`；Workroom 编排改走 Kernel 与专用 typed ports |
 | 「`host` 插件」叙事 | `deprecated` | 文档已收口 | Host 能力改为 token 化（见上表 Host Token），不再是插件概念 |
 | `examples/test-bot` 作为用户路径 | `deprecated` | 维护者厨房水槽 | 用户路径为 minimal-bot（Stable）→ full-bot（L4），勿把 test-bot 配置当模板 |
-| `plugin.yml` 插件清单 | `deprecated` | legacy `Plugin` 与 `zhin build` 仍在读取（`packages/im/core/src/plugin.ts`、`basic/cli/src/libs/plugin-package-build.ts`） | 属 legacy 体系的一部分，随 legacy 一起退役；约定式插件以 `package.json` 为准 |
+| `plugin.yml` / Core `PluginManifest` | `removed` | 构建识别、源码类型与仓库重复清单均已删除 | 插件身份与清单只认严格校验的 `package.json#zhin` |
 
 ## 判定规则（新增 API 放哪档）
 

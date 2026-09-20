@@ -3,8 +3,7 @@ import type { DatabaseHost } from './database-host.js';
 /**
  * 系统日志表（console logs 页数据源）定义与写入辅助。
  *
- * 列结构对齐 packages/im/core/src/models/system-log.ts（legacy SystemLogDefinition，
- * 读取端为 packages/host/http console-rest-pages registerLogsRoutes）。
+ * 读取端为 packages/host/http console-rest-pages registerLogsRoutes。
  */
 export const SYSTEM_LOG_TABLE = 'SystemLog';
 

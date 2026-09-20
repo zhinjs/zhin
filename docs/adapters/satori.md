@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8a8d90da170991bb -->
+<!-- sync-adapter-docs:sha256=625f3e4f602bba7c -->
 
 # @zhin.js/adapter-satori
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-satori
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/satori.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/satori/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由
@@ -63,7 +63,7 @@ plugins:
     connection: ws
     heartbeat_interval: 10000
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         token: "${SATORI_TOKEN}"
 ```
@@ -75,7 +75,7 @@ plugins:
 | 字段 | 说明 |
 |------|------|
 | `heartbeat_interval` | WS PING 间隔（毫秒），默认 `10000` |
-| `token` | Bearer；也可设环境变量 `SATORI_TOKEN` |
+| `token` | Bearer；可在 YAML 中引用 `${SATORI_TOKEN}` |
 
 ### Webhook
 
@@ -84,7 +84,7 @@ plugins:
   satori:
     connection: webhook
     endpoints:
-      - name: satori-bot
+      - id: satori-bot
         baseUrl: "http://127.0.0.1:5140"
         path: "/satori/webhook"
         token: "${SATORI_TOKEN}"
@@ -104,7 +104,7 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 
 ## AI 工具
 
-技能说明见 `agent/skills/satori.md`。
+技能说明见 `skills/satori/SKILL.md`。
 
 ## 协议文档
 

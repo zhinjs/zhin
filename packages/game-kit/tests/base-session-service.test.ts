@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DisposeStack,
   createToken,
@@ -10,8 +10,7 @@ import {
   GameSessionConflictError,
   createInMemoryGameDb,
   defineGamePlugin,
-  gameEvents,
-  gameSessionCoordinator,
+  GameSessionCoordinator,
   type BaseGameSessionRow,
   type GameSessionDatabase,
 } from '../src/index.js';
@@ -62,15 +61,6 @@ class TestSessionService extends BaseSessionService<TestSessionRow> {
 }
 
 describe('BaseSessionService', () => {
-  beforeEach(() => {
-    gameEvents.clear();
-    gameSessionCoordinator.clear();
-  });
-
-  afterEach(() => {
-    gameEvents.clear();
-    gameSessionCoordinator.clear();
-  });
 
   it('emits start, turn and end events around persisted transitions', async () => {
     const service = new TestSessionService(
@@ -84,9 +74,9 @@ describe('BaseSessionService', () => {
     );
     const events: string[] = [];
     const outcomes: unknown[] = [];
-    gameEvents.on('game:start', () => { events.push('start'); });
-    gameEvents.on('turn:change', () => { events.push('turn'); });
-    gameEvents.on('game:end', (event) => {
+    service.events.on('game:start', () => { events.push('start'); });
+    service.events.on('turn:change', () => { events.push('turn'); });
+    service.events.on('game:end', (event) => {
       events.push('end');
       outcomes.push(...event.outcomes);
     });
@@ -110,8 +100,9 @@ describe('BaseSessionService', () => {
   it('rejects a different game for the same user and channel', async () => {
     const alpha = new TestSessionService('alpha', 'alpha_sessions');
     const beta = new TestSessionService('beta', 'beta_sessions');
-    const disposeAlpha = alpha.registerCoordinator();
-    const disposeBeta = beta.registerCoordinator();
+    const coordinator = new GameSessionCoordinator([alpha, beta]);
+    alpha.bindAvailability(coordinator);
+    beta.bindAvailability(coordinator);
 
     await alpha.start({ id: 'alpha-1' });
 
@@ -123,8 +114,6 @@ describe('BaseSessionService', () => {
       }),
     );
 
-    disposeBeta();
-    disposeAlpha();
   });
 
   it('keeps cleaning stale rows when a timeout notifier fails', async () => {
@@ -133,7 +122,7 @@ describe('BaseSessionService', () => {
     const notify = vi.fn()
       .mockRejectedValueOnce(new Error('adapter offline'))
       .mockResolvedValueOnce(undefined);
-    gameEvents.on('session:timeout', timeoutEvents);
+    service.events.on('session:timeout', timeoutEvents);
     const staleAt = Date.now() - 60_000;
 
     await service.start({ id: 's1', player_id: 'alice', updated_at: staleAt });
@@ -146,18 +135,18 @@ describe('BaseSessionService', () => {
     expect(await service.getById('s2')).toMatchObject({ status: 'aborted' });
   });
 
-  it('uses the latest HMR registration and restores the previous generation', async () => {
-    const coordinator = gameSessionCoordinator;
+  it('uses the immutable providers supplied for one generation', async () => {
     const oldProvider = {
       gameId: 'alpha',
       getActiveForUser: vi.fn().mockResolvedValue({ id: 'old', channel_key: 'room' }),
+      bindAvailability: vi.fn(),
     };
     const nextProvider = {
       gameId: 'alpha',
       getActiveForUser: vi.fn().mockResolvedValue(null),
+      bindAvailability: vi.fn(),
     };
-    const disposeOld = coordinator.register(oldProvider);
-    const disposeNext = coordinator.register(nextProvider);
+    const coordinator = new GameSessionCoordinator([nextProvider]);
 
     await expect(
       coordinator.assertAvailable('beta', 'room', ['alice']),
@@ -165,11 +154,9 @@ describe('BaseSessionService', () => {
     expect(nextProvider.getActiveForUser).toHaveBeenCalledOnce();
     expect(oldProvider.getActiveForUser).not.toHaveBeenCalled();
 
-    disposeNext();
-    await expect(
-      coordinator.assertAvailable('beta', 'room', ['alice']),
-    ).rejects.toBeInstanceOf(GameSessionConflictError);
-    disposeOld();
+    const previous = new GameSessionCoordinator([oldProvider]);
+    await expect(previous.assertAvailable('beta', 'room', ['alice']))
+      .rejects.toBeInstanceOf(GameSessionConflictError);
   });
 
   it('routes stale-session notifications through the optional outbound host', async () => {
@@ -225,6 +212,7 @@ describe('BaseSessionService', () => {
       resources: resources as never,
       lifecycle,
       handoff: {} as never,
+      addGame: vi.fn(),
     });
     await scheduled?.execute();
 

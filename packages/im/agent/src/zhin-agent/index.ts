@@ -13,13 +13,11 @@ import {
   type AgentEvent,
   type OutputElement,
   type ModelRegistry,
-  type AgentSessionStore,
+  type AgentSessionRepository,
   type ContextRepository,
-  type IMSessionStore,
-  type MemoryAgentSessionStore,
-  MemoryIMSessionStore,
   createMemoryContextRepository,
   RateLimiter,
+  type LlmApiRuntime,
 } from '@zhin.js/ai';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
@@ -30,8 +28,11 @@ import type { ToolSystem } from '../tool/tool-system.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { ContextSystem } from '../context/context-system.js';
 import { type MemorySystem, createMemorySystemForHost } from '../memory/memory-system.js';
+import { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
+import { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionSystem } from '../session/session-system.js';
 import type { EventSystem } from '../event/event-system.js';
+import { AgentEventBus } from '../event/ai-event-bus.js';
 import { type ZhinAgentTurnMetrics } from '../turn/turn-metrics.js';
 import { TurnTracker } from '../turn/turn-tracker.js';
 import { ZhinAgentEventEmitter } from '../event/event-emitter.js';
@@ -57,6 +58,7 @@ import { getActiveTurnTracker } from '../internal/turn-context.js';
 import { computeDeferredDelta } from '../turn/turn-deferred-delta.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 import { buildDisciplinedPrompt as assembleDisciplinedPrompt } from '../prompt/assembly.js';
 import { createInboundTurnQueue, runWithInboundQueue } from '../turn/inbound-queue-runtime.js';
 import type { ResolvedInboundQueueConfig } from '../turn/inbound-queue-config.js';
@@ -107,7 +109,7 @@ export type {
 export type { ZhinAgentTurnMetrics, ZhinAgentTurnPath } from '../turn/turn-metrics.js';
 export { PromptAccessDeniedError } from '../turn/prompt-access.js';
 export type { AgentTurnConfiguration } from '../turn/agent-turn-context.js';
-export { formatAiHandlerCompleteLog, formatAiHandlerTurnTable, formatZhinAgentTurnUsage } from '../turn/turn-metrics.js';
+export { formatAiHandlerTurnTable } from '../turn/turn-metrics.js';
 export * from '../prompt/prompt-builder.js';
 export * from '../prompt/templates.js';
 export * from '../turn/task-continuation.js';
@@ -141,8 +143,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   config: Required<ZhinAgentConfig>;
   /** ideal 模块槽位；经 getter/setter 供 configure 与 asPrivate(host) 读写 */
   private readonly runtimeModules: ZhinAgentRuntimeModules;
-  readonly imSessionStore: IMSessionStore | MemoryIMSessionStore = new MemoryIMSessionStore();
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
@@ -153,8 +154,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   alwaysSkillsBaseline: string = '';
   skillsSummaryXML: string = '';
   modelRegistry: ModelRegistry | null = null;
-  readonly emitter = new ZhinAgentEventEmitter();
+  llmRuntime: LlmApiRuntime;
+  audioTranscriber?: AudioTranscriptionPort;
+  readonly emitter: ZhinAgentEventEmitter;
   readonly deferred = new DeferredTurnState();
+  readonly compactionRuntime = new AgentCompactionRuntime();
+  readonly ownerApprovals = new OwnerApprovalRuntime();
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */
   approvalPort?: ApprovalPort;
@@ -208,8 +213,14 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     return { promptTraceEnabled: isPromptTraceEnabled(this.config), promptTraceVerbose: isPromptTraceVerbose(this.config) };
   }
 
-  constructor(provider: AIProvider, config?: ZhinAgentConfig) {
+  constructor(
+    provider: AIProvider,
+    config?: ZhinAgentConfig,
+    events = new AgentEventBus(),
+    llmRuntime?: LlmApiRuntime,
+  ) {
     this.provider = provider;
+    this.emitter = new ZhinAgentEventEmitter(events);
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
     this.userProfiles = new UserProfileStore();
@@ -226,10 +237,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     });
     this.agentSessionStore = memoryStack.sessionStore;
     this.contextRepository = memoryStack.repository;
+    this.llmRuntime = llmRuntime
+      ?? wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
     this.turnContextState.alwaysSkillsBaseline = this.alwaysSkillsBaseline;
     this.runtimeModules = createZhinAgentRuntimeModules(asPrivate(this));
     bindModuleProperties(this, this.runtimeModules);
-    this.wireLlmApiLayer();
   }
 
   configure(deps: Partial<ZhinAgentDependencies>): void {
@@ -250,10 +262,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   buildDisciplinedPrompt(basePrompt: string): string {
     return assembleDisciplinedPrompt(asPrivate(this), basePrompt);
-  }
-
-  wireLlmApiLayer(): void {
-    wireZhinAgentLlmApiLayer(this.provider, this.providerResolver);
   }
 
   getActiveBinding(): ResolvedAgentBinding | null {
@@ -282,7 +290,6 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
 
   sharePersistenceWith(target: ZhinAgent): void {
     target.configure({
-      imSessionStore: this.imSessionStore,
       agentSessionStore: this.agentSessionStore,
       contextRepository: this.contextRepository,
     });
@@ -298,6 +305,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   initSubagentSystem(createTools: () => AgentTool[]): void {
     this.subagentSystem = createSubagentSystem({
       provider: this.provider,
+      llmRuntime: this.llmRuntime,
       config: this.config,
       modelRegistry: this.modelRegistry,
       emitter: this.emitter,
@@ -409,11 +417,11 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   }
 
   steer(message: AgentMessage, commMessage: Message): void {
-    steerMessage(this.promptController, this.emitter, message, commMessage);
+    steerMessage(this.promptController, message, commMessage);
   }
 
   followUp(message: AgentMessage, commMessage: Message): void {
-    followUpMessage(this.promptController, this.emitter, message, commMessage);
+    followUpMessage(this.promptController, message, commMessage);
   }
 
   async prompt(
@@ -528,6 +536,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
       await disposeZhinAgentResources(this);
       this.subagentSystem = null;
       this.lastTurnMetrics = null;
+      this.compactionRuntime.clear();
 
       this.provider = null!;
       this.providerResolver = null;

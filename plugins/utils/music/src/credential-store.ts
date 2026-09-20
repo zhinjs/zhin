@@ -1,8 +1,3 @@
-import {
-  createGenerationStore,
-  type Dispose,
-  type GenerationStoreContext,
-} from 'zhin.js';
 import type { MusicSource } from './types.js';
 
 export const MUSIC_CREDENTIALS_TABLE = 'music_credentials';
@@ -75,95 +70,56 @@ function createMemoryModel(): CredentialModel {
   };
 }
 
-const credentialDbStore = createGenerationStore<CredentialDb>('music/credential-db');
-let _memoryDb: CredentialDb | null = null;
-
-export function provideCredentialDb(
-  context: GenerationStoreContext,
-  db: CredentialDb,
-): Dispose {
-  return credentialDbStore.provide(context, db);
+export function createInMemoryCredentialDb(): CredentialDb {
+  const model = createMemoryModel();
+  return {
+    models: {
+      get: (name) => name === MUSIC_CREDENTIALS_TABLE ? model : undefined,
+    },
+  };
 }
 
-function getDb(): CredentialDb {
-  const provided = credentialDbStore.tryUse();
-  if (provided) return provided;
-  if (!_memoryDb) {
-    _memoryDb = {
-      models: {
-        get: (name) =>
-          name === MUSIC_CREDENTIALS_TABLE ? memoryModel : undefined,
-      },
-    };
+export class CredentialStore {
+  readonly #db: CredentialDb;
+
+  constructor(db: CredentialDb) {
+    this.#db = db;
   }
-  return _memoryDb;
-}
 
-const memoryModel = createMemoryModel();
-
-function getModel(): CredentialModel | null {
-  return getDb().models.get(MUSIC_CREDENTIALS_TABLE) ?? null;
-}
-
-export async function getCredential(
-  source: MusicSource,
-  key: string,
-): Promise<string | null> {
-  const model = getModel();
-  if (!model) return null;
-  const rows = await model.select().where({ source, key });
-  if (rows.length === 0) return null;
-  return String(rows[0]!.value ?? '');
-}
-
-export async function setCredential(
-  source: MusicSource,
-  key: string,
-  value: string,
-): Promise<void> {
-  const model = getModel();
-  if (!model) return;
-  const existing = await model.select().where({ source, key });
-  if (existing.length > 0) {
-    await model
-      .update({ value, updated_at: new Date().toISOString() })
-      .where({ source, key });
-  } else {
-    await model.insert({
-      source,
-      key,
-      value,
-      updated_at: new Date().toISOString(),
-    });
+  private get model(): CredentialModel | null {
+    return this.#db.models.get(MUSIC_CREDENTIALS_TABLE) ?? null;
   }
-}
 
-export async function deleteCredential(
-  source: MusicSource,
-  key: string,
-): Promise<void> {
-  const model = getModel();
-  if (!model) return;
-  await model.delete().where({ source, key });
-}
+  async get(source: MusicSource, key: string): Promise<string | null> {
+    const rows = await this.model?.select().where({ source, key });
+    if (!rows?.length) return null;
+    return String(rows[0]!.value ?? '');
+  }
 
-export async function listCredentials(
-  source?: MusicSource,
-): Promise<CredentialRow[]> {
-  const model = getModel();
-  if (!model) return [];
-  const rows = source
-    ? await model.select().where({ source })
-    : await model.select();
-  return rows.map((r) => ({
-    source: String(r.source) as MusicSource,
-    key: String(r.key),
-    value: String(r.value),
-    updated_at: String(r.updated_at ?? ''),
-  }));
-}
+  async set(source: MusicSource, key: string, value: string): Promise<void> {
+    const model = this.model;
+    if (!model) return;
+    const existing = await model.select().where({ source, key });
+    if (existing.length > 0) {
+      await model.update({ value, updated_at: new Date().toISOString() }).where({ source, key });
+      return;
+    }
+    await model.insert({ source, key, value, updated_at: new Date().toISOString() });
+  }
 
-export function resetCredentialDb(): void {
-  credentialDbStore.clear();
-  _memoryDb = null;
+  async delete(source: MusicSource, key: string): Promise<void> {
+    await this.model?.delete().where({ source, key });
+  }
+
+  async list(source?: MusicSource): Promise<CredentialRow[]> {
+    const model = this.model;
+    if (!model) return [];
+    const rows = source ? await model.select().where({ source }) : await model.select();
+    return rows.map((row) => ({
+      source: String(row.source) as MusicSource,
+      key: String(row.key),
+      value: String(row.value),
+      updated_at: String(row.updated_at ?? ''),
+    }));
+  }
 }

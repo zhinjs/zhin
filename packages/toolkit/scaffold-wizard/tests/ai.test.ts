@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { generateAIConfigJSON, generateAIConfigToml, generateAIConfigYaml, generateAIEnvVars, PROVIDER_DEFAULT_BASE_URLS, providerSdkFor, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
+import { generateAIConfigJSON, generateAIConfigYaml, generateAIEnvVars, PROVIDER_DEFAULT_BASE_URLS, providerSdkFor, RECOMMENDED_AI_DEFAULTS, type AISetupConfig } from '../src/ai';
 
 const aiConfig: AISetupConfig = {
   enabled: true,
@@ -56,29 +56,6 @@ describe('create-zhin ai config', () => {
     expect(parsed.ai.trigger.timeout).toBe(60000)
   })
 
-  it('keeps top-level AI TOML values in the ai table', () => {
-    const toml = generateAIConfigToml(aiConfig)
-
-    expect(toml).toContain('[ai]\nmemoryMcp = false')
-    expect(toml).toContain('[ai.providers.openai]\nsdk = "openai"')
-    expect(toml).toContain('[ai.agents.zhin]\nprovider = "openai"')
-    expect(toml).toContain('[ai.agent]')
-    expect(toml).not.toContain('toolSearch')
-    expect(toml).not.toContain('defaultProvider')
-  })
-
-  it('accepts legacy defaultProvider input without emitting it', () => {
-    const json = `{${generateAIConfigJSON({
-      enabled: true,
-      defaultProvider: 'ollama',
-      providers: { ollama: { host: 'http://127.0.0.1:11434' } },
-    })}}`
-    const parsed = JSON.parse(json)
-
-    expect(parsed.ai.defaultProvider).toBeUndefined()
-    expect(parsed.ai.providers.ollama.sdk).toBe('ollama')
-    expect(parsed.ai.agents.zhin.provider).toBe('ollama')
-  })
 })
 
 describe('openai-compatible providers baseUrl', () => {

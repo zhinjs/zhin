@@ -1,6 +1,5 @@
+import { randomUUID } from 'node:crypto';
 import type { JobHandler, JobInfo, ResolvedJob } from './types.js';
-
-let nextJobId = 1;
 
 export interface InternalJob {
   id: string;
@@ -18,7 +17,7 @@ export interface InternalJob {
 }
 
 export function createJobId(): string {
-  return `job-${nextJobId++}`;
+  return `job-${randomUUID()}`;
 }
 
 export function toJobInfo(job: InternalJob, cancel: () => void): JobInfo {

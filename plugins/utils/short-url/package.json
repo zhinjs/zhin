@@ -19,7 +19,8 @@
     "commands",
     "src",
     "lib",
-    "agent",
+    "tools",
+    "skills",
     "README.md"
   ],
   "scripts": {
@@ -45,22 +46,17 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@zhin.js/agent": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
-    "@zhin.js/agent": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
-    "@zhin.js/agent": {
-      "optional": true
-    },
     "@zhin.js/command": {
       "optional": true
     },
@@ -90,8 +86,20 @@
       {
         "package": "@zhin.js/command",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []
+  },
+  "dependencies": {
+    "@zhin.js/tool": "workspace:*",
+    "@zhin.js/skill": "workspace:*"
   }
 }

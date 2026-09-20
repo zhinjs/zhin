@@ -19,8 +19,10 @@ describe('build-plugin-runtime-entries', () => {
   it('emits standalone JS for plugin and nested convention modules', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-build-'));
     temporary.push(root);
-    await mkdir(join(root, 'commands/gh'), { recursive: true });
-    await mkdir(join(root, 'tools'), { recursive: true });
+    await mkdir(join(root, 'commands/gh/status'), { recursive: true });
+    await mkdir(join(root, 'tools/lookup'), { recursive: true });
+    await mkdir(join(root, 'hooks/audit'), { recursive: true });
+    await mkdir(join(root, 'agents/reviewer/tools/inspect'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: '@test/plugin',
       type: 'module',
@@ -31,27 +33,34 @@ describe('build-plugin-runtime-entries', () => {
       "import value from './src/value.js';\nexport default value satisfies number;\n",
     );
     await writeFile(
-      join(root, 'commands/gh/status.ts'),
+      join(root, 'commands/gh/status/index.ts'),
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(
-      join(root, 'tools/status.ts'),
-      "import value from '../src/value.js';\nexport default value as number;\n",
+      join(root, 'tools/lookup/index.ts'),
+      "import value from '../../src/value.js';\nexport default value as number;\n",
+    );
+    await writeFile(join(root, 'hooks/audit/index.ts'), 'export default {} as object;\n');
+    await writeFile(
+      join(root, 'agents/reviewer/tools/inspect/index.ts'),
+      'export default {} as object;\n',
     );
 
     const outputs = await buildPluginRuntimeEntries(root);
 
     expect(outputs.map((path) => path.slice(root.length + 1))).toEqual([
       'plugin.js',
-      'commands/gh/status.js',
-      'tools/status.js',
+      'agents/reviewer/tools/inspect/index.js',
+      'tools/lookup/index.js',
+      'hooks/audit/index.js',
+      'commands/gh/status/index.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
       .toContain('./lib/value.js');
-    expect(await readFile(join(root, 'commands/gh/status.js'), 'utf8'))
+    expect(await readFile(join(root, 'commands/gh/status/index.js'), 'utf8'))
       .toContain('../../lib/value.js');
-    expect(await readFile(join(root, 'tools/status.js'), 'utf8'))
-      .toContain('../lib/value.js');
+    expect(await readFile(join(root, 'tools/lookup/index.js'), 'utf8'))
+      .toContain('../../lib/value.js');
   });
 
   it('cleans only files carrying the generated marker', async () => {

@@ -4,18 +4,18 @@
 
 | 旧写法 | 新 SSOT |
 |---|---|
-| `addCommand(new MessageCommand(...))` | `commands/**/*.ts` + `defineCommand()` |
-| `addMiddleware(fn)` | `middlewares/*.ts` + `defineMiddleware()` |
-| `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/*.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message/receive.ts` + `defineHandler()`（localName 用 `/`，省略 `event` 时映为 `message.receive`） |
-| `plugin.on('before.sendMessage')` | `middlewares/*.ts` + `target: 'outbound'` |
-| `addComponent(fn)` | `components/*.ts(x)` + `defineComponent()` |
-| `addTool()` / Tool registry | `tools/*.ts` + `defineAgentTool()` |
-| `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()`，或 `agent/schedules/*.ts` + `defineSchedule()` |
-| Skill registry | `agent/skills/<name>.md`（插件包**禁止**顶层 `skills/`，见 `check:no-package-skills`） |
-| Agent registry | `agents/<name>.agent.md` |
-| MCP registry | `mcp/*.ts` + MCP Feature definition |
-| Console entry route metadata | `pages/*.tsx` + `definePage()` |
-| 自定义 nav/footer 注册 | `pages/$nav.tsx` / `pages/$footer.tsx` |
+| `addCommand(new MessageCommand(...))` | `commands/**/*/index.ts` + `defineCommand()` |
+| `addMiddleware(fn)` | `middlewares/*/index.ts` + `defineMiddleware()` |
+| `plugin.on('message.*.receive')` / `plugin.on('message.receive')` | 有序链：`middlewares/*/index.ts` + `target: 'inbound'`；fire-and-forget：`handlers/message-receive/index.ts` + `defineHandler({ event: 'message.receive' })` |
+| `plugin.on('before.sendMessage')` | `middlewares/*/index.ts` + `target: 'outbound'` |
+| `addComponent(fn)` | `components/*/index.ts(x)` + `defineComponent()` |
+| `addTool()` / Tool registry | `tools/<name>/index.ts` + `defineAgentTool()` |
+| `addCron(new Cron(...))` | `schedules/<name>/index.ts` + `defineSchedule()`；需要动态注入时用 `plugin.ts` setup + `scheduleHostToken.register()` |
+| Skill registry | `skills/<name>/SKILL.md`（由 `check:skill-authoring-boundaries` 校验） |
+| Agent registry | `agents/<name>/agent.json` + `system.md` / `boundaries.md` / `conventions.md` |
+| MCP registry | `mcps/*/index.ts` + MCP Feature definition |
+| Console entry route metadata | `pages/*/index.tsx` + `definePage()` |
+| 自定义 nav/footer 注册 | `pages/nav/index.tsx` / `pages/footer/index.tsx` |
 | 模块级 Plugin 注册 | `package.json#zhin` + `definePlugin()` entry |
 | 全局可变能力 registry | generation-scoped Feature projection |
 
@@ -28,7 +28,7 @@
 | `inject(name)`（在能力里） | `execute` 内 `context.use(token)`（CapabilityContext，无 `.resources`） |
 | `useContext('database', cb)` | `databaseHostToken`（先 `has` 再 `use`） |
 | `useContext('router', cb)` | `httpHostToken` / Host 提供的 router 资源 |
-| `useContext('web', cb)` | `pages/*.tsx` + `definePage()` |
+| `useContext('web', cb)` | `pages/*/index.tsx` + `definePage()` |
 | `declareConfig(name, Schema)` | `schema.json` 声明字段 + `context.config.get()` |
 | `plugin.onDispose(fn)` | `context.lifecycle.add(fn)` 或从 `setup()` 返回 disposer |
 | 模块级共享状态 | owner Resource（`createToken` + `provide`） |
@@ -69,9 +69,9 @@ export default definePlugin({
 ```
 
 ```ts
-// 新 commands/hit.ts：文件路径即路由（依赖 zhin.js 时从门面导入，勿再装 @zhin.js/command）
+// 新 commands/hit/index.ts：文件路径即路由（依赖 zhin.js 时从门面导入，勿再装 @zhin.js/command）
 import { defineCommand } from 'zhin.js/command';
-import { hitsToken } from '../plugin.js';
+import { hitsToken } from '../../plugin.js';
 
 export default defineCommand({
   description: 'Count hits per user',
@@ -91,10 +91,10 @@ export default defineCommand({
 
 ```text
 gh issue list
-  -> commands/gh/issue/list.ts
+  -> commands/gh/issue/list/index.ts
 
 gh pr <title:string=defaultTitle>
-  -> commands/gh/pr/[[title]].ts
+  -> commands/gh/pr/[[title]]/index.ts
      （defineCommand({ params: { title: { type: 'string', default: 'defaultTitle' } } })）
 ```
 

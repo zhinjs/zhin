@@ -1,9 +1,10 @@
-import { getLogger, hasSenderRole, senderRolesFromMessage, type Message, type Plugin } from '@zhin.js/core';
+import { hasSenderRole, senderRolesFromMessage, type Message } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('DangerousToolPolicy');
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkFileAccess, extractBashReadPaths } from './file-policy.js';
-import type { ToolRequesterRole } from './owner-approve-always-store.js';
+import type { ToolRequesterRole } from './owner-approval-runtime.js';
 export interface DangerousToolDecision {
   allowed: boolean;
   needsOwnerApproval?: boolean;
@@ -35,35 +36,11 @@ function isAllowlisted(allowlist: string[], item: string): boolean {
   });
 }
 
-function resolveExecAllowlistFromAiService(plugin: Plugin): string[] {
-  const root = plugin.root ?? plugin;
-  const aiService = root.inject('ai') as { getAgentConfig?: () => { execAllowlist?: string[] } } | undefined;
-  const allowlist = aiService?.getAgentConfig?.()?.execAllowlist;
-  if (!Array.isArray(allowlist)) return [];
-  return allowlist.map((v) => String(v)).filter(Boolean);
-}
-
 function resolveExecAllowlistFromMessage(commMessage?: Message): string[] {
   const extra = (commMessage as { extra?: { execAllowlist?: string[] } } | undefined)?.extra;
   if (Array.isArray(extra?.execAllowlist) && extra.execAllowlist.length > 0) {
     return extra.execAllowlist.map((v) => String(v)).filter(Boolean);
   }
-  return [];
-}
-
-/** 优先 message.extra，再尝试 host root 读取 ai.agent.execAllowlist */
-function resolveExecAllowlistSafe(
-  plugin: Plugin | undefined,
-  commMessage?: Message,
-): string[] {
-  const fromExtra = resolveExecAllowlistFromMessage(commMessage);
-  if (fromExtra.length > 0) return fromExtra;
-
-  if (plugin) {
-    const fromPlugin = resolveExecAllowlistFromAiService(plugin);
-    if (fromPlugin.length > 0) return fromPlugin;
-  }
-
   return [];
 }
 
@@ -73,7 +50,6 @@ function hasMessageIdentity(commMessage?: Message): boolean {
 
 function resolveRoleFromMessage(commMessage?: Message): {
   role: ToolRequesterRole;
-  plugin?: Plugin;
   hasIdentity: boolean;
 } {
   const hasIdentity = hasMessageIdentity(commMessage);
@@ -83,7 +59,6 @@ function resolveRoleFromMessage(commMessage?: Message): {
 
   return {
     role: resolveRoleFromMessageFallback(commMessage!),
-    plugin: undefined,
     hasIdentity: true,
   };
 }
@@ -153,8 +128,13 @@ export function checkFileToolAccess(toolName: FileToolName, commMessage?: Messag
   };
 }
 
-export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: string, commMessage?: Message): DangerousToolDecision {
-  const base = checkFileAccess(filePath);
+export function checkSensitiveFilePathAccess(
+  toolName: FileToolName,
+  filePath: string,
+  commMessage?: Message,
+  workspaceDir?: string,
+): DangerousToolDecision {
+  const base = checkFileAccess(filePath, workspaceDir);
   const { role } = resolveRoleFromMessage(commMessage);
   if (base.allowed) {
     return { allowed: true, role };
@@ -191,6 +171,7 @@ export function checkSensitiveFilePathAccess(toolName: FileToolName, filePath: s
 export function checkBashSensitiveReadAccess(
   command: string,
   commMessage?: Message,
+  workspaceDir?: string,
 ): DangerousToolDecision {
   const paths = extractBashReadPaths(command);
   if (paths.length === 0) {
@@ -198,7 +179,7 @@ export function checkBashSensitiveReadAccess(
     return { allowed: true, role };
   }
   for (const filePath of paths) {
-    const decision = checkSensitiveFilePathAccess('read_file', filePath, commMessage);
+    const decision = checkSensitiveFilePathAccess('read_file', filePath, commMessage, workspaceDir);
     if (!decision.allowed) {
       return {
         ...decision,
@@ -211,7 +192,7 @@ export function checkBashSensitiveReadAccess(
 }
 
 export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 'web_fetch', commMessage?: Message): DangerousToolDecision {
-  const { role, plugin, hasIdentity } = resolveRoleFromMessage(commMessage);
+  const { role, hasIdentity } = resolveRoleFromMessage(commMessage);
 
   if (!hasIdentity) {
     // 无 IM 上下文 → 全权
@@ -228,7 +209,7 @@ export function checkDangerousToolAccess(toolName: 'write_file' | 'edit_file' | 
     }
 
     if (role === 'trusted') {
-      const allowlist = resolveExecAllowlistSafe(plugin, commMessage);
+      const allowlist = resolveExecAllowlistFromMessage(commMessage);
       if (isAllowlisted(allowlist, toolName)) {
         return { allowed: true, role };
       }

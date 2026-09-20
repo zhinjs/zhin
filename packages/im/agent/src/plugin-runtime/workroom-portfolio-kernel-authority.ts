@@ -10,7 +10,7 @@ import {
   canonicalWorkroomJson,
   digestCanonicalWorkroomValue as digest,
 } from '../workroom/canonical-value.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import { replayWorkroom } from '../workroom/kernel-state.js';
 import { parseWorkroomDispatchTaskDecision } from '../workroom/workroom-scheduler.js';
 import type { PortfolioKernelCommandAuthorityPort } from './workroom-portfolio-capacity.js';

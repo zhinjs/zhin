@@ -9,8 +9,6 @@ export interface PendingSearch {
 
 const SEARCH_TIMEOUT_MS = 3 * 60 * 1000;
 
-const pendingSessions = new Map<string, PendingSearch>();
-
 export function sessionKey(
   endpointId: string,
   conversationId: string,
@@ -32,29 +30,48 @@ export function resolveMessageIds(input: {
   return { endpointId, conversationId, senderId };
 }
 
-export function setPending(key: string, search: PendingSearch): void {
-  pendingSessions.set(key, search);
-}
+/** Generation-owned pending music selections. */
+export class MusicSearchSessions {
+  readonly #pending = new Map<string, PendingSearch>();
+  readonly #timeoutMs: number;
+  readonly #now: () => number;
 
-export function getPending(key: string): PendingSearch | undefined {
-  const session = pendingSessions.get(key);
-  if (!session) return undefined;
-  if (Date.now() - session.timestamp > SEARCH_TIMEOUT_MS) {
-    pendingSessions.delete(key);
-    return undefined;
+  constructor(
+    timeoutMs = SEARCH_TIMEOUT_MS,
+    now: () => number = Date.now,
+  ) {
+    this.#timeoutMs = timeoutMs;
+    this.#now = now;
   }
-  return session;
-}
 
-export function clearPending(key: string): void {
-  pendingSessions.delete(key);
-}
+  set(key: string, search: PendingSearch): void {
+    this.#pending.set(key, search);
+  }
 
-export function cleanExpired(): void {
-  const now = Date.now();
-  for (const [key, session] of pendingSessions) {
-    if (now - session.timestamp > SEARCH_TIMEOUT_MS) {
-      pendingSessions.delete(key);
+  get(key: string): PendingSearch | undefined {
+    const session = this.#pending.get(key);
+    if (!session) return undefined;
+    if (this.#now() - session.timestamp > this.#timeoutMs) {
+      this.#pending.delete(key);
+      return undefined;
     }
+    return session;
+  }
+
+  delete(key: string): void {
+    this.#pending.delete(key);
+  }
+
+  pruneExpired(): void {
+    const now = this.#now();
+    for (const [key, session] of this.#pending) {
+      if (now - session.timestamp > this.#timeoutMs) {
+        this.#pending.delete(key);
+      }
+    }
+  }
+
+  dispose(): void {
+    this.#pending.clear();
   }
 }

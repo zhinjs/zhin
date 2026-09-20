@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2d76da43136b4f89 -->
+<!-- sync-adapter-docs:sha256=f655b691db9f74ce -->
 
 # @zhin.js/adapter-line
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-line
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/line.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/line/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -47,7 +47,7 @@ pnpm add @zhin.js/adapter-line
 4. 在 Console 中启用 **Use webhooks** 并关闭 **Auto-reply messages**
 5. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`name`、`channelSecret`、`channelAccessToken`。
+必填字段（`endpoints[i]`）：`id`、`channelSecret`、`channelAccessToken`。
 
 ## 最小配置
 
@@ -58,7 +58,7 @@ plugins:
     webhookPath: /line/webhook       # 可选，默认 /line/webhook
     apiBaseUrl: https://api.line.me   # 可选，调试时可改为 LINE API 沙盒地址
     endpoints:
-      - name: my-line-bot
+      - id: my-line-bot
         channelSecret: ${LINE_CHANNEL_SECRET}
         channelAccessToken: ${LINE_CHANNEL_ACCESS_TOKEN}
 ```
@@ -69,8 +69,8 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `LINE_CHANNEL_SECRET` | Channel Secret（签名验证用） |
-| `LINE_CHANNEL_ACCESS_TOKEN` | Long-lived Channel Access Token（API 调用用） |
+| `LINE_CHANNEL_SECRET` | 示例中由 YAML `${LINE_CHANNEL_SECRET}` 引用的 Channel Secret；变量名可自行定义 |
+| `LINE_CHANNEL_ACCESS_TOKEN` | 示例中由 YAML `${LINE_CHANNEL_ACCESS_TOKEN}` 引用的 Channel Access Token；变量名可自行定义 |
 
 ## Webhook URL 配置
 
@@ -98,9 +98,9 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
-| 技能说明 | `agent/skills/line.md` |
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具（2 个） | `tools/`（`line_get_profile`、`line_get_group_members`） |
+| 技能说明 | `agents/line/skills/line/SKILL.md` |
 
 ## 已知限制
 

@@ -6,31 +6,16 @@ export type IlinkLogger = {
   withAccount: (accountId: string) => IlinkLogger;
 };
 
-let sink: IlinkLogger = {
-  debug: () => {},
-  info: () => {},
-  warn: (msg) => console.warn(`[weixin-ilink] ${msg}`),
-  error: (msg) => console.error(`[weixin-ilink] ${msg}`),
-  withAccount(accountId) {
-    const prefix = `[weixin-ilink:${accountId}]`;
-    return {
-      debug: (msg) => sink.debug(`${prefix} ${msg}`),
-      info: (msg) => sink.info(`${prefix} ${msg}`),
-      warn: (msg) => sink.warn(`${prefix} ${msg}`),
-      error: (msg) => sink.error(`${prefix} ${msg}`),
-      withAccount: () => this,
-    };
-  },
-};
-
-export function setIlinkLogger(next: IlinkLogger): void {
-  sink = next;
+function createIlinkLogger(prefix = '[weixin-ilink]'): IlinkLogger {
+  return Object.freeze({
+    debug: () => {},
+    info: () => {},
+    warn: (msg) => console.warn(`${prefix} ${msg}`),
+    error: (msg) => console.error(`${prefix} ${msg}`),
+    withAccount(accountId) {
+      return createIlinkLogger(`[weixin-ilink:${accountId}]`);
+    },
+  });
 }
 
-export const logger: IlinkLogger = {
-  debug: (msg) => sink.debug(msg),
-  info: (msg) => sink.info(msg),
-  warn: (msg) => sink.warn(msg),
-  error: (msg) => sink.error(msg),
-  withAccount: (accountId) => sink.withAccount(accountId),
-};
+export const logger: IlinkLogger = createIlinkLogger();

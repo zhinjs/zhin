@@ -29,6 +29,7 @@ describe('HF canary local bundle', () => {
     const pkg = JSON.parse(readFileSync(join(options.outputDirectory, 'package.json'), 'utf8'));
     expect(Object.keys(pkg.pnpm.overrides)).toHaveLength(4);
     expect(pkg.dependencies['zhin.js']).toBe('file:artifacts/0.tgz');
+    expect(existsSync(join(options.outputDirectory, 'agents'))).toBe(false);
     expect(readFileSync(join(options.outputDirectory, 'server.mjs'), 'utf8')).toContain("sandboxRoundTrip: 'not-tested'");
   });
   it('prepares the same relative package paths without a seed lock or network, then explicitly creates the matching lock', () => {

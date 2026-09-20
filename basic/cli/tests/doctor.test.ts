@@ -7,7 +7,7 @@ import { findMissingEndpointFields, loadPluginSchemaJson } from '../src/utils/ad
 
 describe('doctor console diagnostics', () => {
   it('detects missing Sandbox, CORS, and token config', () => {
-    const diagnosis = diagnoseConsoleConfig({ plugins: ['example'], http: {} });
+    const diagnosis = diagnoseConsoleConfig({ plugins: { example: {} }, http: {} });
 
     expect(diagnosis.missingSandboxPlugin).toBe(true);
     expect(diagnosis.missingConsoleOrigin).toBe(true);
@@ -16,7 +16,7 @@ describe('doctor console diagnostics', () => {
 
   it('fills first-run Console and Sandbox config without dropping existing plugins', () => {
     const config: Record<string, unknown> = {
-      plugins: ['example'],
+      plugins: { example: {} },
       http: { port: 8086 },
     };
 
@@ -24,11 +24,7 @@ describe('doctor console diagnostics', () => {
     const diagnosis = diagnoseConsoleConfig(config);
 
     expect(changed).toBe(true);
-    // legacy host-api / host-router 插件栈已删除，不再写入配置
-    expect(config.plugins).toEqual([
-      'example',
-      '@zhin.js/adapter-sandbox',
-    ]);
+    expect(config.plugins).toEqual({ example: {}, sandbox: {} });
     expect(config.http).toMatchObject({
       port: 8086,
       token: '${HTTP_TOKEN}',
@@ -43,11 +39,17 @@ describe('doctor console diagnostics', () => {
 
   it('does not rewrite already healthy config', () => {
     const config: Record<string, unknown> = {
-      plugins: ['@zhin.js/adapter-sandbox'],
+      plugins: { sandbox: {} },
       http: { token: '${HTTP_TOKEN}', corsOrigins: ['https://console.zhin.dev'] },
     };
 
     expect(applyConsoleConfigFixes(config)).toBe(false);
+  });
+
+  it('does not repair legacy list-form plugins in the normal doctor path', () => {
+    const config: Record<string, unknown> = { plugins: ['@zhin.js/adapter-sandbox'] };
+    expect(() => applyConsoleConfigFixes(config))
+      .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
   });
 });
 

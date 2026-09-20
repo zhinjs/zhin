@@ -12,32 +12,24 @@ export {
   formatSearchResults,
   buildMusicShareSegment,
 } from './music-lib.js';
-export { musicServices } from './sources/index.js';
+export { createMusicServices } from './sources/index.js';
 export {
   sessionKey,
   resolveMessageIds,
-  setPending,
-  getPending,
-  clearPending,
-  cleanExpired,
+  MusicSearchSessions,
   type PendingSearch,
 } from './session.js';
 export {
-  getCredential,
-  setCredential,
-  deleteCredential,
-  listCredentials,
+  CredentialStore,
+  createInMemoryCredentialDb,
   MUSIC_CREDENTIALS_TABLE,
-  provideCredentialDb,
-  resetCredentialDb,
+  type CredentialDb,
+  type CredentialRow,
 } from './credential-store.js';
+export { musicRuntimeToken, type MusicRuntime } from './runtime.js';
 export {
-  startLogin,
-  pollLogin,
-  cancelLogin,
-  getActiveLogin,
+  QrLoginRuntime,
   loginSessionKey,
-  cleanExpiredLogins,
   type QrLoginSource,
   type QrLoginSession,
   type QrPollResult,

@@ -11,7 +11,7 @@ import {
   createDurableWorkroomAssignmentAuthorityGrantProvider,
   type AssignmentAuthorityGrantRecordInput,
 } from '../../src/workroom/assignment-authority-grant-repository.js';
-import { createWorkroomAssignmentAuthorityGrant } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+import { createWorkroomAssignmentAuthorityGrant } from '../../src/workroom/assignment-authority.js';
 import { remoteDisclosureFixture } from './remote-disclosure-fixture.js';
 
 const SHA = `sha256:${'a'.repeat(64)}`;

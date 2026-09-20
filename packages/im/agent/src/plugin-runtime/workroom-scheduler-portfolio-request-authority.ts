@@ -1,6 +1,6 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalogSnapshot } from '../workroom/catalog.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
 import {
   canonicalWorkroomJson,

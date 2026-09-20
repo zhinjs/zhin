@@ -1,7 +1,7 @@
 # 能力接缝（Capability Seam）
 
 Capability Seam 是 Agent Runtime 的 **Advanced / experimental** Provider 扩展口。普通插件仍应优先使用
-`tools/*.ts`、`agent/skills/*.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
+`tools/<name>/index.ts`、`skills/<name>/SKILL.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
 owner 可见性、Generation HMR 和冲突校验。Seam 用于 Root Host 需要接入远程能力服务、已有能力注册表，
 或不适合落成普通 Feature slot 的 Provider。
 
@@ -24,19 +24,19 @@ Root Capability Seam ─┘                         │
 
 `CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `capabilitySeamToken`，把服务投影为与
 Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立的
-`executeTool(name, args)` 执行通道（遗留同名方法只返回 fail-closed 迁移错误）；只有
+`executeTool(name, args)` 执行通道；只有
 `TurnToolRuntime` 可以执行投影后的 Tool。因此：
 
 - 当前 generation 退役或 operation 结束后，Provider 不再可执行；
 - `platforms`、`scopes`、`permissions` 和 `hidden` 先经过统一可见性过滤；
-- `approval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
+- `requiresApproval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
 - Tool call、denied、failed 和 result 进入同一 Turn Journal；
 - Feature 与 Seam 出现同名 Tool / Skill 时，候选能力快照直接拒绝，而不是静默覆盖。
 
 ## 服务契约
 
 `ToolService` 提供 schema 和最终 Provider 调用。schema 上的策略字段会进入 canonical
-Tool capability；未声明 `approval` 时默认 `on-risk`。
+Tool capability；未声明 `requiresApproval` 时默认 `on-risk`。
 
 ```ts
 import type {
@@ -61,7 +61,7 @@ export class SearchService implements ToolService {
           required: ['query'],
         },
       },
-      approval: 'never',
+      requiresApproval: 'never',
       permissions: ['authenticated'],
       source: 'remote:acme',
     }]
@@ -129,8 +129,8 @@ export default definePlugin({
 不要在模块顶层保存 `SeamIntegration`，也不要在 candidate 发布后向旧 Generation 的实例追加
 Provider。动态变化应生成新的 Runtime Generation。
 
-旧 `seamIntegrationToken` Symbol 仅为源码兼容保留，Plugin Runtime Scope 不会消费它。迁移时改用
-`capabilitySeamToken`；旧 `executeTool()` / `invokeSkill()` 方法也只返回 fail-closed 错误。
+Capability Seam 只通过 `capabilitySeamToken` 进入 Plugin Runtime Scope。`SeamIntegration` 只负责
+Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直接执行方法。
 
 ## 作用域和冲突
 
@@ -146,7 +146,6 @@ Provider。动态变化应生成新的 Runtime Generation。
 | 类 | 用途 |
 |---|---|
 | `BuiltinToolService` | 把 QuestionPort 的交互能力适配为 ToolService；仅用于自定义 Host 组合 |
-| `ToolRegistryAsService` | 显式桥接 generation-owned `ToolRegistry`；不会由 Agent Host 自动全局发布 |
 | `SkillRegistryAsService` | 显式桥接 generation-owned `SkillRegistry`，并读取 Skill 文档 |
 
 这些适配器不会自动注册。框架内置 Tool / Skill 仍走 Feature projection，避免形成第二套可见性和
@@ -158,7 +157,7 @@ Provider。动态变化应生成新的 Runtime Generation。
 |---|---|
 | npm 插件中的普通 Tool / Skill | Feature 约定目录或 `addTool` / `addSkill` |
 | 需要 manifest、owner 关系和文件级 HMR | Feature |
-| Root Host 接入远程 Provider 或已有 registry | Capability Seam |
+| Root Host 接入远程 Provider | Capability Seam |
 | 需要绕过审批或直接按名称执行 | 不支持；使用 Turn capability |
 
 相关文档：[插件模型](./plugin-model.md) · [Generation 生命周期](./generation-lifecycle.md) ·

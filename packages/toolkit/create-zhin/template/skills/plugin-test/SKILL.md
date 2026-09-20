@@ -48,7 +48,7 @@ pnpm test:coverage
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import hello from '../commands/hello.js';
+import hello from '../commands/hello/index.js';
 
 describe('commands/hello', () => {
   it('returns greeting', async () => {
@@ -69,7 +69,7 @@ describe('commands/hello', () => {
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import weather from '../tools/get_weather.js';
+import weather from '../tools/get_weather/index.js';
 
 describe('tools/get_weather', () => {
   it('formats city weather', async () => {

@@ -155,19 +155,6 @@ export function applyAiConfigFixes(
     agents: nextAgents,
   };
 
-  const migratedAgent = migrateAgentDeferredSection(src.agent);
-  if (migratedAgent.section) {
-    next.agent = migratedAgent.section;
-    fixes.push(...migratedAgent.fixes);
-  }
-
-  if (legacy.agent) {
-    delete next.agent;
-    if (migratedAgent.section) {
-      next.agent = migratedAgent.section;
-    }
-  }
-
   for (const key of ['allowedTools', 'disabledTools', 'toolSearch'] as const) {
     if (key in next) {
       delete next[key];
@@ -194,54 +181,4 @@ export function applyAiConfigFixes(
   }
 
   return { ai: next, fixes };
-}
-
-const DEPRECATED_ORCHESTRATOR_TOOLS = new Set([
-  'tool_search',
-  'run_deferred_task',
-  'activate_skill',
-  'orchestration_start',
-  'orchestration_add_task',
-  'orchestration_status',
-  'orchestration_complete',
-  'orchestration_retry_task',
-  'orchestration_skip_task',
-]);
-
-function migrateAgentDeferredSection(
-  agentSection: unknown,
-): { section?: Record<string, unknown>; fixes: string[] } {
-  const fixes: string[] = [];
-  if (!agentSection || typeof agentSection !== 'object' || Array.isArray(agentSection)) {
-    return { fixes };
-  }
-  const agentObj = { ...(agentSection as Record<string, unknown>) };
-  let changed = false;
-  const tools = agentObj.orchestratorTools;
-  if (Array.isArray(tools)) {
-    const migrated = tools
-      .filter((t): t is string => typeof t === 'string')
-      .map(t => (t === 'activate_skill' ? 'load_skill' : t))
-      .filter(t => !DEPRECATED_ORCHESTRATOR_TOOLS.has(t));
-    const unique = [...new Set(migrated)];
-    if (unique.length !== tools.length || tools.some(t => t === 'activate_skill')) {
-      delete agentObj.orchestratorTools;
-      const dt = (agentObj.deferredTools && typeof agentObj.deferredTools === 'object'
-        ? { ...(agentObj.deferredTools as Record<string, unknown>) }
-        : {}) as Record<string, unknown>;
-      if (!dt.alwaysLoadedTools) {
-        dt.alwaysLoadedTools = unique;
-      }
-      agentObj.deferredTools = dt;
-      fixes.push('migrated agent.orchestratorTools → agent.deferredTools.alwaysLoadedTools (ADR 0029)');
-      changed = true;
-    }
-  }
-  const allowed = agentObj.allowedTools;
-  if (Array.isArray(allowed) && allowed.includes('activate_skill')) {
-    agentObj.allowedTools = allowed.map(t => (t === 'activate_skill' ? 'load_skill' : t));
-    fixes.push('replaced activate_skill with load_skill in agent.allowedTools');
-    changed = true;
-  }
-  return changed ? { section: agentObj, fixes } : { fixes };
 }

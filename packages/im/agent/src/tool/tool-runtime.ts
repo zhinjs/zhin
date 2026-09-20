@@ -8,10 +8,10 @@
  * 4. Journal 事件 — 发射 tool_call / tool_result
  * 5. 审计 — policyAudit 链路记录
  *
- * ToolRuntime 按 turn 创建（createToolRuntime），绑定 turn 级上下文。
+ * ToolRuntime 按 turn 实例化，绑定 turn 级上下文。
  */
 import type { AgentTool } from '@zhin.js/ai';
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import {
   runToolPolicies,
@@ -35,7 +35,7 @@ export interface ToolRuntimeTurnContext {
   readonly commMessage?: Message;
   readonly journal?: ToolRuntimeJournalPort;
   readonly config?: Required<ZhinAgentConfig>;
-  readonly hostPlugin?: Plugin;
+  readonly policyInputResolver?: ToolPolicyInputResolver;
   readonly isGenerationValid?: (gen: number) => boolean;
 }
 
@@ -58,124 +58,113 @@ export type ToolPolicyInputExtractor = (
   toolName: string,
   args: Record<string, unknown>,
   commMessage?: Message,
-  hostPlugin?: Plugin,
 ) => ToolPolicyInput;
-
-// ── 默认策略提取器注册表 ─────────────────────────────────────────
-
-const extractorRegistry = new Map<string, ToolPolicyInputExtractor>();
-
-export function registerPolicyExtractor(toolName: string, extractor: ToolPolicyInputExtractor): void {
-  extractorRegistry.set(toolName, extractor);
-}
+export type ToolPolicyInputResolver = ToolPolicyInputExtractor;
 
 function defaultExtractor(toolName: string, _args: Record<string, unknown>, commMessage?: Message): ToolPolicyInput {
   return { toolName, commMessage };
 }
 
-function resolveExtractor(toolName: string): ToolPolicyInputExtractor {
-  return extractorRegistry.get(toolName) ?? defaultExtractor;
-}
-
 // ── ToolRuntime ─────────────────────────────────────────────────────
 
-export interface ToolRuntime {
-  execute(tool: AgentTool, args: Record<string, unknown>, call: ToolCallContext): Promise<ToolExecutionOutcome>;
-  checkPolicy(input: ToolPolicyInput): ToolPolicyResult;
-  readonly generation: number;
-}
+export class ToolRuntime {
+  readonly #context: ToolRuntimeTurnContext;
 
-export function createToolRuntime(ctx: ToolRuntimeTurnContext): ToolRuntime {
-  return {
-    generation: ctx.generation,
+  constructor(context: ToolRuntimeTurnContext) {
+    this.#context = context;
+  }
 
-    checkPolicy(input: ToolPolicyInput): ToolPolicyResult {
-      return runToolPolicies(input);
-    },
+  get generation(): number {
+    return this.#context.generation;
+  }
 
-    async execute(
-      tool: AgentTool,
-      args: Record<string, unknown>,
-      call: ToolCallContext,
-    ): Promise<ToolExecutionOutcome> {
-      const t0 = performance.now();
-      const toolName = tool.name;
+  checkPolicy(input: ToolPolicyInput): ToolPolicyResult {
+    return runToolPolicies(input);
+  }
 
-      // 1. Generation 验证 — context-level and tool-level
-      if (ctx.isGenerationValid && !ctx.isGenerationValid(ctx.generation)) {
-        return {
-          output: `Error: tool「${toolName}」rejected — generation ${ctx.generation} is no longer valid`,
-          durationMs: performance.now() - t0,
-          denied: 'generation_invalid',
-          policyAudit: [],
-        };
-      }
-      if (tool.generation !== undefined && tool.generation !== ctx.generation) {
-        return {
-          output: `Error: tool「${toolName}」rejected — tool generation ${tool.generation} does not match turn generation ${ctx.generation}`,
-          durationMs: performance.now() - t0,
-          denied: 'generation_mismatch',
-          policyAudit: [],
-        };
-      }
+  async execute(
+    tool: AgentTool,
+    args: Record<string, unknown>,
+    call: ToolCallContext,
+  ): Promise<ToolExecutionOutcome> {
+    const ctx = this.#context;
+    const t0 = performance.now();
+    const toolName = tool.name;
 
-      // 2. 取消检查
+    // 1. Generation 验证 — context-level and tool-level
+    if (ctx.isGenerationValid && !ctx.isGenerationValid(ctx.generation)) {
+      return {
+        output: `Error: tool「${toolName}」rejected — generation ${ctx.generation} is no longer valid`,
+        durationMs: performance.now() - t0,
+        denied: 'generation_invalid',
+        policyAudit: [],
+      };
+    }
+    if (tool.generation !== undefined && tool.generation !== ctx.generation) {
+      return {
+        output: `Error: tool「${toolName}」rejected — tool generation ${tool.generation} does not match turn generation ${ctx.generation}`,
+        durationMs: performance.now() - t0,
+        denied: 'generation_mismatch',
+        policyAudit: [],
+      };
+    }
+
+    // 2. 取消检查
+    if (ctx.signal.aborted) {
+      throw ctx.signal.reason instanceof Error
+        ? ctx.signal.reason
+        : new Error('Tool execution cancelled');
+    }
+
+    // 3. 安全策略
+    const extractor = ctx.policyInputResolver ?? defaultExtractor;
+    const policyInput = extractor(toolName, args, ctx.commMessage);
+    if (ctx.config) policyInput.config = ctx.config;
+    const policyResult = runToolPolicies(policyInput);
+    const policyAudit = policyResult.decisions;
+    const denied = toolPolicyResultToMessage(policyResult, toolName);
+    if (denied) {
+      await emitToolEvents(ctx, toolName, args, call.toolCallId, denied, performance.now() - t0);
+      return { output: denied, durationMs: performance.now() - t0, denied, policyAudit };
+    }
+
+    // 4. Journal: tool_call
+    await emitToolCall(ctx, toolName, args, call.toolCallId);
+
+    // 5. 执行（取消感知）
+    let output: unknown;
+    try {
+      output = await Promise.resolve().then(() =>
+        tool.execute(args, ctx.commMessage, {
+          signal: ctx.signal,
+          sessionId: ctx.sessionId,
+          toolCallId: call.toolCallId,
+          toolName,
+        }),
+      );
+    } catch (err) {
       if (ctx.signal.aborted) {
         throw ctx.signal.reason instanceof Error
           ? ctx.signal.reason
           : new Error('Tool execution cancelled');
       }
+      throw err;
+    }
 
-      // 3. 安全策略
-      const extractor = resolveExtractor(toolName);
-      const policyInput = extractor(toolName, args, ctx.commMessage, ctx.hostPlugin);
-      if (ctx.config) policyInput.config = ctx.config;
-      const policyResult = runToolPolicies(policyInput);
-      const policyAudit = policyResult.decisions;
-      const denied = toolPolicyResultToMessage(policyResult, toolName);
-      if (denied) {
-        await emitToolEvents(ctx, toolName, args, call.toolCallId, denied, performance.now() - t0);
-        return { output: denied, durationMs: performance.now() - t0, denied, policyAudit };
-      }
+    // 6. 取消后检查
+    if (ctx.signal.aborted) {
+      throw ctx.signal.reason instanceof Error
+        ? ctx.signal.reason
+        : new Error('Tool execution cancelled');
+    }
 
-      // 4. Journal: tool_call
-      await emitToolCall(ctx, toolName, args, call.toolCallId);
+    const durationMs = performance.now() - t0;
 
-      // 5. 执行（取消感知）
-      let output: unknown;
-      try {
-        output = await Promise.resolve().then(() =>
-          tool.execute(args, ctx.commMessage, {
-            signal: ctx.signal,
-            sessionId: ctx.sessionId,
-            toolCallId: call.toolCallId,
-            toolName,
-          }),
-        );
-      } catch (err) {
-        if (ctx.signal.aborted) {
-          throw ctx.signal.reason instanceof Error
-            ? ctx.signal.reason
-            : new Error('Tool execution cancelled');
-        }
-        throw err;
-      }
+    // 7. Journal: tool_result
+    await emitToolResult(ctx, toolName, output, call.toolCallId, durationMs);
 
-      // 6. 取消后检查
-      if (ctx.signal.aborted) {
-        throw ctx.signal.reason instanceof Error
-          ? ctx.signal.reason
-          : new Error('Tool execution cancelled');
-      }
-
-      const durationMs = performance.now() - t0;
-
-      // 7. Journal: tool_result
-      await emitToolResult(ctx, toolName, output, call.toolCallId, durationMs);
-
-      return { output, durationMs, policyAudit };
-    },
-  };
+    return { output, durationMs, policyAudit };
+  }
 }
 
 // ── Journal 事件辅助 ─────────────────────────────────────────────────

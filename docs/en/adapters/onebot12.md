@@ -30,10 +30,12 @@ pnpm add @zhin.js/adapter-onebot12
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/onebot12.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/onebot12/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+
+`AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol receives one expanded endpoint configuration and does not inspect nested endpoint rows or infer identity from process environment variables. Webhook endpoints require both `path` and `api_url`, so their bidirectional capability is complete before startup.
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'|'channel'`; guild containers land in `parent`)
 Outbound: `send({ conversation, payload })` -> WS `send_message` (payload is rendered by gateway/core; no segment-mapper)
@@ -54,7 +56,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: ob12-bot
+      - id: ob12-bot
         url: "ws://127.0.0.1:6700"
         access_token: "${ONEBOT12_ACCESS_TOKEN}"
 ```
@@ -81,7 +83,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## AI Tools
 
-See `agent/skills/onebot12.md` for skill documentation.
+See `skills/onebot12/SKILL.md` for skill documentation.
 
 ## Documentation Links
 

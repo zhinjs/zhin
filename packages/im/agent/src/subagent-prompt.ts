@@ -1,5 +1,5 @@
 /**
- * 子 agent system prompt 净化：剥离父级编排指令（spawn_task / tool_search 等）
+ * 子 agent system prompt 净化：剥离父级编排指令。
  */
 
 export function sanitizeSubagentSystemPrompt(prompt: string): string {
@@ -31,8 +31,5 @@ function readMarkdownHeading(line: string): string | null {
 }
 
 function redactOrchestrationTerms(text: string): string {
-  return text
-    .replaceAll('spawn_task', '[orchestration-redacted]')
-    .replaceAll('tool_search', '[orchestration-redacted]')
-    .replaceAll('run_deferred_task', '[orchestration-redacted]');
+  return text.replaceAll('spawn_task', '[orchestration-redacted]');
 }

@@ -1,11 +1,6 @@
 import type { AgentMessage, UserMessage } from '../llm/types/agent-message.js';
 import { type AgentMessageRow, parseAgentMessageRow } from './agent-db-models.js';
-import {
-  parseAgentMessageExtra,
-  stripSenderPrefixFromText,
-  userMessagePlainText,
-  type AgentMessageExtra,
-} from './sender-extra.js';
+import { userMessagePlainText } from './user-message-presentation.js';
 export interface SessionBranchPoint {
   index: number;
   messageId: number;
@@ -61,11 +56,11 @@ export function sortRowsChronologically(rows: AgentMessageRow[]): AgentMessageRo
   );
 }
 
-function userPreview(message: AgentMessage, extra?: AgentMessageExtra): string {
+function userPreview(message: AgentMessage): string {
   if (message.role !== 'user') return '';
   const text = userMessagePlainText(message as UserMessage);
-  const body = extra?.sender ? text : stripSenderPrefixFromText(text).body;
-  const name = extra?.sender?.name?.trim();
+  const body = text;
+  const name = (message as UserMessage).actor?.displayName?.trim();
   const display = name && name !== 'unknown' ? `${name}: ${body}` : body;
   return display.slice(0, 80);
 }
@@ -78,11 +73,10 @@ export function listUserBranchPoints(pathRows: AgentMessageRow[]): SessionBranch
     const parsed = parseAgentMessageRow(row);
     if (!parsed || parsed.role !== 'user' || row.id == null) continue;
     index += 1;
-    const extra = parseAgentMessageExtra(row.extra);
     points.push({
       index,
       messageId: row.id,
-      preview: userPreview(parsed, extra) || `(user #${index})`,
+      preview: userPreview(parsed) || `(user #${index})`,
     });
   }
   return points;

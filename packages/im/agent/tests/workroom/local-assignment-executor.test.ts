@@ -12,7 +12,7 @@ import {
   type LocalAssignmentCapabilityProjectionPort,
   type LocalModelExecutionEvent,
   type LocalModelExecutionPort,
-} from '../../src/workroom/local-assignment-executor.js';
+} from '../../src/plugin-runtime/workroom-local-assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySnapshot,
@@ -501,7 +501,7 @@ function testTool(
     name,
     qualifiedName: name,
     description: name,
-    approval: 'never',
+    requiresApproval: 'never',
     source: `/tools/${name}.ts`,
     execute: async <TInput = unknown, TResult = unknown>(input: TInput) => input as TResult,
   });

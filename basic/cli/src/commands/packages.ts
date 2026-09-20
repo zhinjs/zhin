@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { execFileSync } from 'node:child_process';
 import { formatCompact } from '@zhin.js/logger';
+import { packageToInstanceKey } from '@zhin.js/scaffold-wizard';
 import {
   installZhinPackage,
   listZhinPackageSkillRoots,
@@ -18,6 +19,7 @@ import {
 import {
   buildInstallArgs,
   enablePluginInProjectConfig,
+  previewEnablePlugin,
 } from './install.js';
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
@@ -78,11 +80,17 @@ async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallOptions)
   const pkg = resolved.package;
   const installArgs = buildInstallArgs(pkg, 'npm', {});
   const shouldEnable = opts.enable !== false;
+  const enablePreview = shouldEnable ? previewEnablePlugin(cwd, pkg) : undefined;
+
+  if (enablePreview?.status === 'unsupported-config') {
+    throw new Error(enablePreview.message);
+  }
 
   if (opts.dryRun) {
     logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
     logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
     if (shouldEnable) {
+      if (enablePreview) logger.log(`将启用: ${enablePreview.message}`);
       logger.log(`将挂载: package.json 的 zhin.plugins 清单添加 ${pkg}`);
     }
     return;
@@ -116,7 +124,7 @@ async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallOptions)
   } else {
     logger.log('🔌 未自动启用插件。可手动添加到 zhin.config.yml:');
     logger.log('plugins:');
-    logger.log(`  - "${pkg}"`);
+    logger.log(`  ${packageToInstanceKey(pkg)}: {}`);
   }
 
   // a) 已知适配器：提示完成凭据配置

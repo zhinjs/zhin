@@ -1,5 +1,6 @@
 import type { ResolvedScatterJob } from '../resolvers/scatter.js';
 import type { ScatterRunState } from '../types.js';
+import { HolidayCalendar } from '../holiday-calendar.js';
 import {
   getDailySlotSeconds,
   getScatterMeta,
@@ -26,11 +27,12 @@ export function planScatterExecution(
   scheduledAt: Date,
   now: Date,
   graceMs: number,
+  holidays = new HolidayCalendar(),
 ): ScatterExecutionPlan {
   const dateKey = formatDateKey(scheduledAt, job.timezone);
   const slots = getDailySlotSeconds(job, jobId, dateKey);
   const firedCount = state.dateKey === dateKey ? state.firedCount : 0;
-  const allSlotsToday = listScatterSlotsForDay(job, jobId, dateKey);
+  const allSlotsToday = listScatterSlotsForDay(job, jobId, dateKey, holidays);
   const misfire = job.misfire ?? 'fire';
   const lateness = now.getTime() - scheduledAt.getTime();
 

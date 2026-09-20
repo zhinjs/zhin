@@ -65,19 +65,10 @@ export type { QueueMode } from './types/queue-mode.js';
 export { DEFAULT_STEERING_MODE, DEFAULT_FOLLOW_UP_MODE } from './types/queue-mode.js';
 
 export {
-  registerApiProvider,
-  registerProviderInstance,
-  getApiProvider,
-  getProviderConfig,
-  getLlmTransportModel,
-  stream,
-  complete,
-  streamSimple,
-  completeSimple,
+  LlmApiRuntime,
+  createLlmTransportModel,
   createAssistantMessageEventStream,
-  clearApiRegistryForTests,
-  setLiveModelsResolver,
-} from './api-registry.js';
+} from './llm-api-runtime.js';
 export {
   applyProviderGatewayPreset,
   validateProviderGatewayConfig,
@@ -94,7 +85,8 @@ export type {
   AssistantStreamEvent,
   AssistantMessageEventStream,
   RegisteredProvider,
-} from './api-registry.js';
+  LlmCompletionPort,
+} from './llm-api-runtime.js';
 
 export {
   validateToolCall,
@@ -118,11 +110,9 @@ export type {
 export { assistantText } from './convert/openai-bridge.js';
 
 export {
-  registerLlmApiFromProviders,
-  resetLlmApiRegistryForTests,
-  ensureLanguageModelRegistered,
-} from './register-api-layer.js';
-export type { SdkProviderEntry } from './register-api-layer.js';
+  createLlmApiRuntime,
+} from './llm-runtime-factory.js';
+export type { SdkProviderEntry } from './llm-runtime-factory.js';
 
 export {
   agentToolToLlmTool,
@@ -138,6 +128,12 @@ export {
   sdkSupportsImageGeneration,
 } from './sdk-registry.js';
 export type { SdkId } from './sdk-registry.js';
+export {
+  AiHttpTransport,
+  createAiHttpTransport,
+  resolveAiProxyUrl,
+  type AiHttpTransportOptions,
+} from './http-transport.js';
 
 export {
   SDK_DEFAULT_MODELS,

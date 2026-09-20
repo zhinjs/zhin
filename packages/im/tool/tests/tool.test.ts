@@ -33,19 +33,22 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
-  it('brands definitions and discovers only flat tools/*.ts', async () => {
+  it('brands definitions and discovers flat tools/<name>/index.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
     });
-    expect(definition.approval).toBe('on-risk');
+    expect(definition.requiresApproval).toBe('on-risk');
     expect(parseAgentToolDefinition(definition)).toBe(definition);
     const host = new MemoryHost({
       '/project/tools': [
-        { name: 'weather.ts', kind: 'file' },
-        { name: 'nested', kind: 'directory' },
+        { name: 'weather', kind: 'directory' },
       ],
-    }, new Map([['/project/tools/weather.ts', { default: definition }]]));
+      '/project/tools/weather': [
+        { name: 'index.ts', kind: 'file' },
+        { name: 'client.ts', kind: 'file' },
+      ],
+    }, new Map([['/project/tools/weather/index.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -53,21 +56,80 @@ describe('Tool Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['weather']);
   });
 
-  it('discovers snake_case tool files such as send_user_like.ts', async () => {
+  it('ignores removed package-root tools directories', async () => {
     const definition = defineAgentTool({
       description: '给用户点赞',
       execute: () => 'ok',
     });
     const host = new MemoryHost({
-      '/project/tools': [
-        { name: 'send_user_like.ts', kind: 'file' },
+      '/project/agent/tools': [
+        { name: '$send_user_like.ts', kind: 'file' },
       ],
-    }, new Map([['/project/tools/send_user_like.ts', { default: definition }]]));
+    }, new Map([['/project/tools/$send_user_like.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
 
-    expect(slots.map((slot) => slot.localName)).toEqual(['send_user_like']);
+    expect(slots).toEqual([]);
+  });
+
+  it('discovers plugin AI tools from tools with the same owner context', async () => {
+    const definition = defineAgentTool({
+      description: 'Get current news',
+      tags: ['news'],
+      keywords: ['today'],
+      execute: () => 'ok',
+    });
+    const host = new MemoryHost({
+      '/project/tools': [
+        { name: 'news', kind: 'directory' },
+      ],
+      '/project/tools/news': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([['/project/tools/news/index.ts', { default: definition }]]));
+    const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+    const [descriptor] = new ToolIndex(slots, createSnapshot(slots, createToken('unused').id)).list();
+
+    expect(descriptor).toMatchObject({
+      name: 'news',
+      tags: ['news'],
+      keywords: ['today'],
+    });
+  });
+
+  it('derives stable identities for Agent and Skill private tools', async () => {
+    const definition = defineAgentTool({ description: 'Private', execute: () => 'ok' });
+    const host = new MemoryHost({
+      '/project/agents': [{ name: 'reviewer', kind: 'directory' }],
+      '/project/agents/reviewer/tools': [{ name: 'inspect', kind: 'directory' }],
+      '/project/agents/reviewer/tools/inspect': [{ name: 'index.ts', kind: 'file' }],
+      '/project/agents/reviewer/skills': [{ name: 'audit', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools': [{ name: 'report', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools/report': [{ name: 'index.ts', kind: 'file' }],
+      '/project/skills': [{ name: 'research', kind: 'directory' }],
+      '/project/skills/research/tools': [{ name: 'search', kind: 'directory' }],
+      '/project/skills/research/tools/search': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([
+      ['/project/agents/reviewer/tools/inspect/index.ts', { default: definition }],
+      ['/project/agents/reviewer/skills/audit/tools/report/index.ts', { default: definition }],
+      ['/project/skills/research/tools/search/index.ts', { default: definition }],
+    ]));
+    const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+
+    expect(slots.map((slot) => slot.localName)).toEqual([
+      'agent/reviewer/inspect',
+      'skill/research/search',
+      'agent/reviewer/skill/audit/report',
+    ]);
+    expect(slots.map((slot) => slot.definition.placement)).toEqual([
+      { kind: 'agent', agent: 'reviewer' },
+      { kind: 'skill', skill: 'research' },
+      { kind: 'agent-skill', agent: 'reviewer', skill: 'audit' },
+    ]);
+    expect(slots.every((slot) => slot.definition.hidden === true)).toBe(true);
   });
 
   it('keeps immutable visibility, permit, and approval metadata in the Tool index', () => {
@@ -77,15 +139,17 @@ describe('Tool Feature', () => {
       platforms: ['qq'],
       scopes: ['group'],
       permissions: ['platform(qq,scene_admin)'],
+      tags: ['moderation'],
+      keywords: ['admin'],
       hidden: true,
-      approval: 'always',
+      requiresApproval: 'always',
       execute: () => 'ok',
     });
     const slot = createCapabilitySlot({
       owner: root,
       feature: toolFeatureId,
       localName: 'moderate',
-      source: '/tools/moderate.ts',
+      source: '/tools/moderate/index.ts',
       definition,
     });
     const snapshot = createSnapshot([slot], createToken('unused').id);
@@ -95,8 +159,10 @@ describe('Tool Feature', () => {
       platforms: ['qq'],
       scopes: ['group'],
       permissions: ['platform(qq,scene_admin)'],
+      tags: ['moderation'],
+      keywords: ['admin'],
       hidden: true,
-      approval: 'always',
+      requiresApproval: 'always',
     });
     expect(Object.isFrozen(definition.permissions)).toBe(true);
   });
@@ -137,10 +203,10 @@ describe('Tool Feature', () => {
       owner,
       feature: toolFeatureId,
       localName: 'lookup',
-      source: `/${owner}/tools/lookup.ts`,
+      source: `/${owner}/tools/lookup/index.ts`,
       definition: defineAgentTool<{ query: string }>({
         description: `Lookup ${value}`,
-        approval: 'never',
+        requiresApproval: 'never',
         execute(input, context) {
           return `${value}:${input.query}:${context.origin.kind}:${(context.config as { scope: string }).scope}:${context.use(secret)}`;
         },
@@ -164,10 +230,10 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'network-policy',
-      source: '/tools/network-policy.ts',
+      source: '/tools/network-policy/index.ts',
       definition: defineAgentTool({
         description: 'Inspect execution policy',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: (_input, context) => context.policy,
       }),
     });
@@ -189,7 +255,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'client-id',
-      source: '/tools/client-id.ts',
+      source: '/tools/client-id/index.ts',
       definition: defineAgentTool<Record<string, never>>({
         adapter: 'tool-test',
         description: 'Read the native client',
@@ -218,10 +284,10 @@ describe('Tool Feature', () => {
       owner: child,
       feature: toolFeatureId,
       localName: 'history',
-      source: '/plugins/lottery/tools/history.ts',
+      source: '/plugins/lottery/tools/history/index.ts',
       definition: defineAgentTool<{ game: string }>({
         description: 'Lottery history',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: ({ game }) => `history:${game}`,
       }),
     });
@@ -240,11 +306,16 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'save',
-      source: '/tools/save.ts',
+      source: '/tools/save/index.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Save value',
-        approval: 'never',
+        requiresApproval: 'never',
         inputSchema: {
+          toJSONSchema: () => ({
+            type: 'object',
+            properties: { value: { type: 'string', minLength: 1 } },
+            required: ['value'],
+          }),
           safeParse: (input: unknown) => {
             const value = (input as { value?: unknown })?.value;
             return typeof value === 'string' && value.length > 0

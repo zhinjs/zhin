@@ -4,9 +4,8 @@
  * 测试 collectTools 逻辑、handleMessage 端到端流程、会话管理等
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ZhinAgent } from '@zhin.js/agent';
-import { Plugin, SkillFeature, type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
-import { resetLlmApiRegistryForTests } from '@zhin.js/ai';
+import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
+import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 
 
@@ -88,17 +87,17 @@ function createToolCallProvider(): AIProvider {
 }
 
 describe('ZhinAgent', () => {
+  const events = new AgentEventBus();
   let agent: ZhinAgent;
   let provider: AIProvider;
   let llm: MockLlmApi;
 
   beforeEach(() => {
-    resetLlmApiRegistryForTests();
     ({ provider, llm } = createMockProvider());
     agent = new ZhinAgent(provider, {
       persona: '测试助手',
       maxIterations: 3,
-    });
+    }, undefined, llm.runtime);
   });
 
   afterEach(() => {
@@ -113,8 +112,18 @@ describe('ZhinAgent', () => {
 
   describe('依赖注入', () => {
     it('configure({ skillRegistry }) 应正常工作', () => {
-      const registry = new SkillFeature();
+      const registry = new SkillRegistry();
       expect(() => agent.configure({ skillRegistry: registry })).not.toThrow();
+    });
+
+    it('providerResolver 必须与同一 owner 的 llmRuntime 一起注入', () => {
+      expect(() => agent.configure({ providerResolver: () => provider })).toThrow(
+        /providerResolver requires an owner-scoped llmRuntime/,
+      );
+      expect(() => agent.configure({
+        providerResolver: () => provider,
+        llmRuntime: llm.runtime,
+      })).not.toThrow();
     });
 
     it('registerTool 应添加和移除工具', () => {
@@ -163,7 +172,7 @@ describe('ZhinAgent', () => {
       // 创建一个严格限制的 agent
       const strictAgent = new ZhinAgent(provider, {
         rateLimit: { maxRequestsPerMinute: 1, cooldownSeconds: 5 },
-      });
+      }, undefined, llm.runtime);
 
       const commMessage = makeCommMessage();
 
@@ -185,7 +194,7 @@ describe('ZhinAgent', () => {
       const phaseAgent = new ZhinAgent(provider, {
         phaseTrace: true,
         onPhaseTrace: ({ phase }) => phases.push(phase),
-      });
+      }, undefined, llm.runtime);
       const commMessage = makeCommMessage();
       try {
         await phaseAgent.process('phase trace', commMessage, []);
@@ -201,24 +210,21 @@ describe('ZhinAgent', () => {
       }
     });
 
-    it('应将 AI 生命周期桥接到 plugin 事件总线', async () => {
+    it('应将 AI 生命周期发布到 Runtime 事件总线', async () => {
       const busAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      });
-      const hostPlugin = new Plugin('/virtual/host-plugin.ts');
+      }, events, llm.runtime);
       const received: string[] = [];
 
       const record = (event: string) => () => {
         received.push(event);
       };
 
-      hostPlugin.on('ai.processing.start', record('ai.processing.start'));
-      hostPlugin.on('ai.agent.start', record('ai.agent.start'));
-      hostPlugin.on('ai.response', record('ai.response'));
-      hostPlugin.on('ai.processing.finish', record('ai.processing.finish'));
-
-      busAgent.configure({ hostPlugin });
+      events.on('ai.processing.start', record('ai.processing.start'));
+      events.on('ai.agent.start', record('ai.agent.start'));
+      events.on('ai.response', record('ai.response'));
+      events.on('ai.processing.finish', record('ai.processing.finish'));
 
       try {
         await busAgent.process(
@@ -228,6 +234,7 @@ describe('ZhinAgent', () => {
         );
       } finally {
         busAgent.dispose();
+        events.clear();
       }
 
       expect(received).toContain('ai.processing.start');
@@ -240,17 +247,15 @@ describe('ZhinAgent', () => {
       const sessionAgent = new ZhinAgent(provider, {
         persona: '测试助手',
         maxIterations: 3,
-      });
-      const hostPlugin = new Plugin('/virtual/host-plugin.ts');
+      }, events, llm.runtime);
       const payloads: any[] = [];
-      hostPlugin.on('ai.session.new', payload => payloads.push(payload));
-      sessionAgent.configure({ hostPlugin });
-
+      events.on('ai.session.new', payload => payloads.push(payload));
       try {
         await sessionAgent.process('你好', makeCommMessage(), []);
         await sessionAgent.process('再来一次', makeCommMessage(), []);
       } finally {
         sessionAgent.dispose();
+        events.clear();
       }
 
       expect(payloads).toHaveLength(1);
@@ -262,7 +267,7 @@ describe('ZhinAgent', () => {
 
   describe('collectTools 去重', () => {
     it('应优先使用 Skill 中的工具', async () => {
-      const registry = new SkillFeature();
+      const registry = new SkillRegistry();
       
       // 注册一个 Skill 包含 tool_a
       registry.add({
@@ -271,7 +276,7 @@ describe('ZhinAgent', () => {
         tools: [makeTool('tool_a', '来自 skill 的工具', { keywords: ['天气'] })],
         keywords: ['天气'],
         pluginName: 'p1',
-      }, 'p1');
+      }, undefined, 'p1');
 
       agent.configure({ skillRegistry: registry });
 

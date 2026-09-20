@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=3237b6c6b32cee78 -->
+<!-- sync-adapter-docs:sha256=94da52edaa94f093 -->
 
 # @zhin.js/adapter-qq
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/qq.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/qq/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -50,7 +50,7 @@ pnpm add @zhin.js/adapter-qq
 | **WebSocket（默认）** | `qq-official-bot` 正向连接；无需公网回调 |
 | **host-http** | WebSocket **不需要**；Webhook / middleware 模式需要（经 `httpHostToken`） |
 
-必填字段（`endpoints[i]`）：`name`、`appid`、`secret`。
+必填字段（`endpoints[i]`）：`id`、`appid`、`secret`。
 
 ## 最小配置
 
@@ -60,10 +60,10 @@ plugins:
   qq:
     # mode: websocket   # 默认
     endpoints:
-      - name: my-qq-bot
+      - id: my-qq-bot
         appid: ${QQ_APPID}
         secret: ${QQ_SECRET}
-        # botKind / intents 可由向导写入；`qq.endpoint add` 扫码后会追问公域/私域再写入
+        # botKind / intents 可由向导写入；`qq endpoint add` 扫码后会追问公域/私域再写入
 ```
 
 ### botKind 与 intents
@@ -77,16 +77,16 @@ WebSocket Identify 的 `intents` **必须与开放平台已开通的权限一致
 | `private`（私域） | `GUILD_MESSAGES`（频道全量） | 同上 |
 
 公域机器人订阅 `GUILD_MESSAGES` 会 Identify 失败断连。显式配置 `intents` 时优先于 `botKind`。
-`create-zhin` / `zhin setup` 会询问公/私域并写入；`qq.endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后一次性写 `.env` 与 yaml。
+`create-zhin` / `zhin setup` 会询问公/私域并写入；`qq endpoint add` 扫码成功后在同一会话追问 `public`/`private`（或 `公域`/`私域`），确认后一次性写 `.env` 与 yaml。
 
-多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+多账号：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
 plugins:
   qq:
     mode: websocket
     endpoints:
-      - name: main-bot
+      - id: main-bot
         appid: ${QQ_APPID}
         secret: ${QQ_SECRET}
         botKind: public
@@ -97,7 +97,7 @@ plugins:
           - GUILD_MEMBERS
           - DIRECT_MESSAGE
           - PUBLIC_GUILD_MESSAGES
-      - name: private-bot
+      - id: private-bot
         appid: ${QQ_APPID_2}
         secret: ${QQ_SECRET_2}
         botKind: private
@@ -114,14 +114,14 @@ plugins:
 
 ## Endpoint 管理命令
 
-适配器自带 `qq.endpoint` 命令组（聊天内直接使用，默认无前缀；受 `commandPrefix` 影响）：
+适配器自带 `qq endpoint` 命令组（聊天内直接使用，默认无前缀；受 `commandPrefix` 影响）：
 
 | 命令 | 说明 |
 |------|------|
-| `qq.endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `plugins.qq.endpoints`（重启生效） |
-| `qq.endpoint cancel` | 取消进行中的扫码绑定或待确认的公域/私域选择 |
-| `qq.endpoint list` | 列出运行中与配置中的 endpoints |
-| `qq.endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
+| `qq endpoint add [name]` | 手机 QQ 扫码绑定 → **追问公域/私域** → 一次性写入 `.env` + `plugins.qq.endpoints`（重启生效） |
+| `qq endpoint cancel` | 取消进行中的扫码绑定或待确认的公域/私域选择 |
+| `qq endpoint list` | 列出运行中与配置中的 endpoints |
+| `qq endpoint remove <name>` | 从配置移除 endpoint（`.env` 键保留，可手动清理） |
 
 add/cancel/remove 受 `master` 限制：实例配置声明了 `master`（顶层或 `endpoints[i].master`）时仅
 master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoint 的 `master`）。二维码当前以链接文本下发
@@ -131,9 +131,8 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 | 变量 | 说明 |
 |------|------|
-| `QQ_APPID` / `QQ_BOT_APPID` | 应用 AppID |
-| `QQ_SECRET` / `QQ_BOT_SECRET` | 应用 Secret |
-| `QQ_BOT_NAME` | 可选，默认 endpoint 名 |
+| `QQ_APPID` | YAML 示例中 `appid` 引用的应用 AppID |
+| `QQ_SECRET` | YAML 示例中 `secret` 引用的应用 Secret |
 
 ## Webhook / middleware
 
@@ -143,9 +142,9 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具 | `agent/tools/`（频道、角色等） |
-| 技能说明 | `agent/skills/qq.md` |
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具 | `tools/`（频道、角色等） |
+| 技能说明 | `agents/qq/skills/qq/SKILL.md` |
 
 ## 平台 Client 与 QQ API
 

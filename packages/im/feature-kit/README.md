@@ -28,7 +28,7 @@ Command、Middleware、Component、Tool、Skill、Agent、Page 等都应是独�
 | `FeatureCatalog` | 在一个 generation 内检测 Feature provider identity 冲突 |
 | `FeatureRuntime.project()` | 从 Slot 构造只读索引、matcher 或 manifest 等派生物 |
 | `FeatureBuildAdapter` | 将 source 映射为可选构建产物计划 |
-| `typeScriptModules()` | 发现普通递归 `*.ts`/可选 `*.tsx` 目录并加载 default export |
+| `directoryModules()` | 按声明式目录布局发现固定 `index.ts(x)` 并加载 default export |
 | `createCapabilityContext()` | 从 immutable snapshot 建立 owner/config/resource 执行上下文 |
 | `OwnerCapabilityIndex` | nearest-owner resolve、visible view 与稳定 qualified name |
 
@@ -64,7 +64,7 @@ Projection 也可以返回 generation `handoff` participant。Runtime 在 publis
 
 普通 TypeScript 目录约定与 execution context 由 Feature Kit 复用，但文件语义、definition brand、排序和执行仍归具体 Feature 所有。Command、Middleware、Component 因此不需要复制扫描器和 Resource lookup，也不会把领域枚举塞回 Kernel。
 
-`typeScriptModules({ recursive: false })` 用于 Tool/MCP 这类一级目录；默认仍递归。`OwnerCapabilityIndex` 只表达 Plugin tree 继承，不知道 Tool、Skill、Agent 等领域枚举。
+`directoryModules()` 只发现命名目录的固定 `index` 入口，并把同目录其他文件作为相关 helper 跟踪。`OwnerCapabilityIndex` 只表达 Plugin tree 继承，不知道 Tool、Skill、Agent 等领域枚举。
 
 ## Identity 与冲突
 

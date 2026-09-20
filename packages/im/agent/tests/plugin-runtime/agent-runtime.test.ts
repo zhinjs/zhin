@@ -12,7 +12,7 @@ import {
 import {
   AgentIndex,
   agentFeatureId,
-  parseAgentMarkdown,
+  parseAgentPackage,
 } from '@zhin.js/agent-feature';
 import {
   McpIndex,
@@ -34,8 +34,8 @@ import {
   defineAgentPromptSection,
   promptSectionFeatureId,
 } from '@zhin.js/prompt-section';
-import { createPermissionHost, permissionHostToken } from '@zhin.js/permission';
-import { compactAgentMessages, getLlmTransportModel } from '@zhin.js/ai';
+import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
+import { compactAgentMessages } from '@zhin.js/ai';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import {
   AgentRuntime,
@@ -47,7 +47,7 @@ import {
   turnJournalStoreToken,
   type ExternalToolCapability,
 } from '../../src/plugin-runtime/index.js';
-import { turnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority } from '../../src/tool/turn-tool-runtime.js';
 import { getAgentTurnConfiguration } from '../../src/turn/agent-turn-context.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { assistantTextReply, assistantToolCallReply, wireMockLlmApi } from '../helpers/mock-llm-api.js';
@@ -248,7 +248,7 @@ describe('Agent CapabilityIngress', () => {
       source: '/plugins/child/tools/lookup.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Replacement lookup',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: (input) => `new:${input.value}`,
       }),
     });
@@ -277,14 +277,22 @@ describe('Agent CapabilityIngress', () => {
   });
 
   it('preserves fail-closed approval semantics in the production Tool projection', async () => {
-    const fixture = await createFixture({ approval: 'on-risk' });
+    const fixture = await createFixture({
+      requiresApproval: 'on-risk',
+      tags: ['lookup'],
+      keywords: ['find'],
+    });
     const [capability] = (await new CapabilityIngress().read(fixture.snapshot, rootPluginId())).tools;
-    expect(capabilityToTool(capability!, invocation()).approval).toBe('on-risk');
+    expect(capabilityToTool(capability!, invocation())).toMatchObject({
+      requiresApproval: 'on-risk',
+      tags: ['lookup'],
+      keywords: ['find'],
+    });
     await fixture.mcp.stop();
   });
 
   it('fails closed for approval-gated external protocol tools', async () => {
-    const fixture = await createFixture({ approval: 'always' });
+    const fixture = await createFixture({ requiresApproval: 'always' });
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
     const runtime = new ToolIngressRuntime();
     runtime.attach(store);
@@ -306,13 +314,13 @@ describe('Agent CapabilityIngress', () => {
       seen.push(turn);
       expect(capabilities.tools[0]?.name).toBe('child__lookup');
       expect(capabilities.tools.map((tool) => tool.name)).toContain('child__memory__search');
-      expect(capabilities.tools.find((tool) => tool.name === 'child__memory__search')?.approval)
+      expect(capabilities.tools.find((tool) => tool.name === 'child__memory__search')?.requiresApproval)
         .toBe('on-risk');
       expect('execute' in capabilities.tools[0]!).toBe(false);
       await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
         status: 'completed', output: 'old:runner',
       });
-      await expect(turnToolExecutionAuthority(tools).execute({
+      await expect(new TurnToolExecutionAuthority(tools).execute({
         name: 'child__lookup',
         description: 'Lookup',
         parameters: { type: 'object', properties: {} },
@@ -362,7 +370,7 @@ describe('Agent CapabilityIngress', () => {
       maxIterations: 5,
       toolExecution: 'sequential',
       deferredTools: { maxLoadedPerSession: 8, alwaysLoadedTools: ['child__lookup'] },
-    });
+    }, undefined, llm.runtime);
     agent.activeBinding = {
       name: 'zhin', providerAlias: 'shared-session', model: 'model', mcpServers: [],
     };
@@ -455,7 +463,8 @@ describe('Agent CapabilityIngress', () => {
     ]));
     llm.respondText('Alice 要求先不要改数据库；Bob 补充不能使用 Kubernetes。');
     const compacted = await compactAgentMessages({
-      model: getLlmTransportModel('shared-session', 'model'),
+      transport: llm.runtime,
+      model: llm.runtime.model('shared-session', 'model'),
       messages: restored.messages,
       keepRecentTokens: 1,
       minKeepCount: 1,
@@ -653,8 +662,51 @@ describe('Agent CapabilityIngress', () => {
     await restricted.mcp.stop();
 
     const hidden = await createFixture({ hidden: true });
-    expect((await ingress.read(hidden.snapshot, hidden.child)).tools).toEqual([]);
+    const hiddenCapabilities = await ingress.read(hidden.snapshot, hidden.child);
+    expect(hiddenCapabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
+    expect(hiddenCapabilities.tools[0]?.hidden).toBe(true);
     await hidden.mcp.stop();
+  });
+
+  it('projects child Skills to the root Agent and applies the canonical access predicate', async () => {
+    const fixture = await createFixture({
+      skillMarkdown: `---
+platforms: [qq]
+scopes: [group]
+permissions: [role(trusted)]
+---
+# Research`,
+    });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      accessTurn('qq'),
+    )).skills.map((skill) => skill.qualifiedName)).toEqual(['child__research']);
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      accessTurn('telegram'),
+    )).skills).toEqual([]);
+    await fixture.mcp.stop();
+  });
+
+  it('projects an Agent-private Skill only when that Agent is selected', async () => {
+    const fixture = await createFixture({ privateSkillAgent: 'planner' });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(fixture.snapshot, rootPluginId())).skills).toEqual([]);
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      undefined,
+      'planner',
+    )).skills).toMatchObject([{ name: 'research', agentName: 'planner' }]);
+    await fixture.mcp.stop();
   });
 
   it('publishes platform prompt sections only to matching IM turns', async () => {
@@ -676,6 +728,20 @@ describe('Agent CapabilityIngress', () => {
 
     await fixture.mcp.stop();
   });
+
+  it('filters Agent packages with the canonical platform and permission predicate', async () => {
+    const fixture = await createFixture({ platforms: ['github'], permissions: ['role(admin)'] });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github')))
+      .agents).toHaveLength(0);
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github', ['admin'])))
+      .agents.map((agent) => agent.name)).toEqual(['planner']);
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('icqq', ['admin'])))
+      .agents).toHaveLength(0);
+
+    await fixture.mcp.stop();
+  });
 });
 
 async function createFixture(access: {
@@ -683,8 +749,12 @@ async function createFixture(access: {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly approval?: 'never' | 'on-risk' | 'always';
+  readonly requiresApproval?: 'never' | 'on-risk' | 'once' | 'always';
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
+  readonly skillMarkdown?: string;
+  readonly privateSkillAgent?: string;
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
@@ -699,19 +769,19 @@ async function createFixture(access: {
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
       ...access,
-      approval: access.approval ?? 'never',
+      requiresApproval: access.requiresApproval ?? 'never',
       execute(input) { return `old:${input.value}`; },
     }),
   });
   const skill = createCapabilitySlot({
-    owner: root,
+    owner: child,
     feature: skillFeatureId,
-    localName: 'research',
+    localName: access.privateSkillAgent ? `agent/${access.privateSkillAgent}/research` : 'research',
     source: '/skills/research/SKILL.md',
-    definition: parseSkillMarkdown('# Research', validation(
-      root,
+    definition: parseSkillMarkdown(access.skillMarkdown ?? '# Research', validation(
+      child,
       skillFeatureId,
-      'research',
+      access.privateSkillAgent ? `agent/${access.privateSkillAgent}/research` : 'research',
       '/skills/research/SKILL.md',
     )),
   });
@@ -719,19 +789,34 @@ async function createFixture(access: {
     owner: root,
     feature: agentFeatureId,
     localName: 'planner',
-    source: '/agents/planner.agent.md',
-    definition: parseAgentMarkdown('# Planner', validation(
+    source: '/agents/planner/agent.json',
+    definition: parseAgentPackage({
+      manifest: {
+        name: 'Planner', version: '1.0.0', description: 'Planner',
+        trigger_rules: { file_patterns: [], keywords: ['plan'] },
+        entry_points: ['system.md', 'boundaries.md', 'conventions.md'],
+        platforms: access.platforms,
+        scopes: access.scopes,
+        permissions: access.permissions,
+      },
+      files: {
+        'system.md': '# Planner',
+        'boundaries.md': '# Boundaries\n\nStay in scope.',
+        'conventions.md': '# Conventions\n\nFollow AGENTS.md.',
+      },
+      workflows: [], knowledge: [],
+    }, validation(
       root,
       agentFeatureId,
       'planner',
-      '/agents/planner.agent.md',
+      '/agents/planner/agent.json',
     )),
   });
   const mcpSlot = createCapabilitySlot({
     owner: child,
     feature: mcpFeatureId,
     localName: 'memory',
-    source: '/mcp/memory.ts',
+    source: '/mcps/memory/index.ts',
     definition: defineMcp({
       create: () => ({
         listTools: () => [{ name: 'search' }],
@@ -743,7 +828,7 @@ async function createFixture(access: {
     owner: root,
     feature: promptSectionFeatureId,
     localName: 'project-rules',
-    source: '/agent/prompt-sections/project-rules.ts',
+    source: '/prompt-sections/project-rules.ts',
     definition: defineAgentPromptSection({
       title: 'Project rules',
       content: 'Prefer repository-local conventions.',
@@ -769,15 +854,15 @@ async function createFixture(access: {
   return { snapshot, child, mcp, journal };
 }
 
-function accessTurn(platform: string) {
+function accessTurn(platform: string, roles: readonly string[] = ['trusted']) {
   return createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'im', platform, endpoint: 'bot', scope: 'group', sceneId: '100' },
-    principal: { subjectId: 'trusted-user', roles: ['trusted'] },
+    principal: { subjectId: 'trusted-user', roles },
     input: { text: 'lookup' },
     session: { key: `im:${platform}:bot:group:100` },
-    policy: { permissions: ['trusted'], unattended: false },
+    policy: { permissions: roles, unattended: false },
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal,
     ports: { journal: { append: () => undefined } },
@@ -846,7 +931,7 @@ function baseState(slots: readonly CapabilitySlot[], journal = memoryJournalStor
     ]),
     config: new Map([[root, {}], [child, {}]]),
     resources: new Map([[root, new Map([
-      [permissionHostToken.id, createPermissionHost()],
+      [permissionHostToken.id, new PermissionHost()],
       [turnJournalStoreToken.id, journal],
     ])], [child, new Map()]]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),

@@ -43,12 +43,14 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(pluginDir)).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'plugin.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'schema.json'))).toBe(true)
-    expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'commands', pluginName, 'index.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}.ts`))).toBe(false)
     expect(
-      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'))
+      await fs.pathExists(path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'))
     ).toBe(true)
     expect(await fs.pathExists(path.join(pluginDir, 'tests'))).toBe(true)
-    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'))).toBe(true)
+    expect(await fs.pathExists(path.join(pluginDir, 'agent', 'skills'))).toBe(false)
     expect(await fs.pathExists(path.join(pluginDir, 'client'))).toBe(false)
     expect(await fs.pathExists(path.join(pluginDir, 'src', 'index.ts'))).toBe(false)
 
@@ -63,7 +65,7 @@ describe('CLI new command integration', () => {
     expect(packageJson.files).toContain('plugin.ts')
     expect(packageJson.files).toContain('schema.json')
     expect(packageJson.files).toContain('commands')
-    expect(packageJson.files).toContain('agent')
+    expect(packageJson.files).toContain('skills')
     expect(packageJson.zhin).toMatchObject({
       protocol: 1,
       type: 'plugin',
@@ -72,8 +74,10 @@ describe('CLI new command integration', () => {
       runtime: 'trusted',
     })
     expect(packageJson.zhin.features).toEqual([
+      { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/command', api: '^1.0.0' },
     ])
+    expect(packageJson.dependencies?.['@zhin.js/skill']).toBeDefined()
     expect(packageJson.peerDependencies?.['zhin.js'] ?? packageJson.devDependencies?.['zhin.js']).toBeDefined()
     expect(packageJson.peerDependencies?.['@zhin.js/command']).toBeDefined()
     expect(packageJson.peerDependenciesMeta?.['@zhin.js/command']?.optional).toBe(true)
@@ -98,13 +102,13 @@ describe('CLI new command integration', () => {
 
     // Check commands（defineCommand + 动态段示例）
     const commandTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}.ts`),
+      path.join(pluginDir, 'commands', pluginName, 'index.ts'),
       'utf-8'
     )
     expect(commandTs).toContain('defineCommand')
     expect(commandTs).toContain('zhin.js/command')
     const echoTs = await fs.readFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text].ts'),
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'),
       'utf-8'
     )
     expect(echoTs).toContain('params.text')
@@ -136,7 +140,7 @@ describe('CLI new command integration', () => {
     expect(gitignore).toContain('lib/')
     expect(await fs.pathExists(path.join(pluginDir, 'CHANGELOG.md'))).toBe(true)
 
-    const skillPath = path.join(pluginDir, 'agent', 'skills', `${pluginName}.md`)
+    const skillPath = path.join(pluginDir, 'skills', pluginName, 'SKILL.md')
     const skillMd = await fs.readFile(skillPath, 'utf-8')
     expect(skillMd).toContain(`name: ${pluginName}`)
     expect(skillMd).toContain('description:')
@@ -178,7 +182,9 @@ describe('CLI new command integration', () => {
     expect(testFile).toContain('plugin.setup')
 
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
-    expect(packageJson.zhin.features).toEqual([])
+    expect(packageJson.zhin.features).toEqual([
+      { package: '@zhin.js/skill', api: '^1.0.0' },
+    ])
   }, 30000)
 
   it('should create adapter plugin with defineAdapter skeleton', async () => {
@@ -201,9 +207,10 @@ describe('CLI new command integration', () => {
 
     // adapters/<name>.ts：defineAdapter + Endpoint 骨架，入站经 Endpoint.emit
     const adapterTs = await fs.readFile(
-      path.join(pluginDir, 'adapters', `${adapterName}.ts`),
+      path.join(pluginDir, 'adapters', adapterName, 'index.ts'),
       'utf-8'
     )
+    expect(await fs.pathExists(path.join(pluginDir, 'adapters', `${adapterName}.ts`))).toBe(false)
     expect(adapterTs).toContain('defineAdapter')
     expect(adapterTs).toContain('zhin.js/adapter')
     expect(adapterTs).toContain('extends Endpoint')
@@ -220,8 +227,10 @@ describe('CLI new command integration', () => {
     // package.json：adapter feature + adapter/core 依赖
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))
     expect(packageJson.zhin.features).toEqual([
+      { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/adapter', api: '^1.0.0' },
     ])
+    expect(packageJson.dependencies['@zhin.js/skill']).toBeDefined()
     expect(packageJson.dependencies['@zhin.js/adapter']).toBeDefined()
     expect(packageJson.dependencies['@zhin.js/core']).toBeDefined()
     expect(packageJson.files).toContain('adapters')

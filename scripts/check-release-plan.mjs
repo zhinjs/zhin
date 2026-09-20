@@ -44,47 +44,25 @@ if (versionPolicy.defaultReleaseType !== 'patch') {
 
 const declarations = readChangesetDeclarations();
 const approvals = versionPolicy.approvedNonPatchReleases ?? [];
-const malformedApprovals = approvals.filter(
-  (approval) =>
-    approval.approvedBy !== versionPolicy.owner ||
-    typeof approval.reason !== 'string' ||
-    approval.reason.trim() === '' ||
-    !(
-      approval.packages === '*' ||
-      (Array.isArray(approval.packages) &&
-        approval.packages.length > 0 &&
-        approval.packages.every((name) => typeof name === 'string'))
-    ) ||
-    (approval.type !== 'minor' && approval.type !== 'major'),
-);
-
-if (malformedApprovals.length > 0) {
-  console.error('Version policy contains malformed non-patch approvals:');
-  for (const approval of malformedApprovals) {
-    console.error(`- ${approval.changeset}: ${JSON.stringify(approval.packages)} (${approval.type})`);
-  }
+if (approvals.length > 0) {
+  console.error('Version policy must not contain non-patch approvals.');
   process.exit(1);
 }
 
-const activeApprovals = approvals.filter((approval) =>
-  declarations.some(
-    (declaration) =>
-      declaration.changeset === approval.changeset &&
-      declaration.type === approval.type &&
-      (approval.packages === '*' || approval.packages.includes(declaration.package)),
-  ),
-);
+const nonPatchDeclarations = declarations.filter((declaration) => declaration.type !== 'patch');
+if (nonPatchDeclarations.length > 0) {
+  console.error('Every changeset declaration must use patch:');
+  for (const declaration of nonPatchDeclarations) {
+    console.error(`- ${declaration.changeset}: ${declaration.package} (${declaration.type})`);
+  }
+  process.exit(1);
+}
 
 const isChangesetsVersionPr =
   process.env.GITHUB_HEAD_REF === 'changeset-release/main' &&
   process.env.GITHUB_BASE_REF === 'main';
 
 if (declarations.length === 0 && isChangesetsVersionPr) {
-  if (approvals.length > 0) {
-    console.error('Changesets version PR must clear consumed non-patch approvals.');
-    process.exit(1);
-  }
-
   const diff = spawnSync(
     'git',
     ['diff', '--name-only', 'origin/main...HEAD'],
@@ -146,33 +124,19 @@ try {
   }
 
   const plan = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
-  const unauthorizedNonPatchReleases = plan.releases
+  const nonPatchReleases = plan.releases
     .filter((release) => release.type === 'minor' || release.type === 'major')
-    .filter(
-      (release) =>
-        !activeApprovals.some(
-          (approval) =>
-            approval.type === release.type &&
-            (approval.packages === '*' || approval.packages.includes(release.name)),
-        ),
-    )
     .map((release) => `${release.name} (${release.oldVersion} -> ${release.newVersion})`);
 
-  if (unauthorizedNonPatchReleases.length > 0) {
-    console.error('Release plan contains unauthorized minor or major bumps:');
-    for (const release of unauthorizedNonPatchReleases) console.error(`- ${release}`);
-    console.error(
-      'Record explicit owner approval in .changeset/version-policy.json before merging.',
-    );
+  if (nonPatchReleases.length > 0) {
+    console.error('Release plan contains forbidden minor or major bumps:');
+    for (const release of nonPatchReleases) console.error(`- ${release}`);
     process.exit(1);
   }
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
-  const nonPatchCount = plannedReleases.filter(
-    (release) => release.type === 'minor' || release.type === 'major',
-  ).length;
   console.log(
-    `Release plan check passed (${plannedReleases.length} releases, ${nonPatchCount} approved non-patch releases).`,
+    `Release plan check passed (${plannedReleases.length} patch releases).`,
   );
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });

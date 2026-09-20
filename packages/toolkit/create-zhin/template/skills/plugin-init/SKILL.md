@@ -78,13 +78,13 @@ plugins/{name}/
 
 | 目录 | API |
 |------|-----|
-| `commands/**/*.ts` | `defineCommand()` |
-| `middlewares/*.ts` | `defineMiddleware()` |
-| `components/*.tsx` | `defineComponent()` |
-| `tools/*.ts` | `defineAgentTool()` |
-| `pages/*.tsx` | `definePage()` |
-| `skills/<name>/SKILL.md` | Markdown Skill |
-| `agents/<name>.agent.md` | Markdown Agent |
+| `commands/**/*/index.ts` | `defineCommand()`；未加 `$` 的文件是普通依赖模块 |
+| `middlewares/*/index.ts` | `defineMiddleware()` |
+| `components/*/index.tsx` | `defineComponent()` |
+| `tools/<name>/index.ts` | `defineAgentTool()` |
+| `pages/*/index.tsx` | `definePage()` |
+| `skills/<name>/SKILL.md` | Markdown Skill 入口 |
+| `agents/<name>/` | `agent.json` + `system.md` + `boundaries.md` + `conventions.md` 子 Agent |
 
 ### 第 3 步：生成 package.json
 
@@ -142,7 +142,7 @@ export default definePlugin({
 
 ### 第 5 步：生成首个命令
 
-`commands/hello.ts`（文件路径即路由 `hello`）：
+`commands/hello/index.ts`（文件路径即路由 `hello`）：
 
 ```typescript
 import { defineCommand } from 'zhin.js/command';
@@ -155,7 +155,7 @@ export default defineCommand({
 });
 ```
 
-带参数用 Next.js 风格方括号文件名，例如 `commands/hello/[[name]].ts` → `hello [name]`（可选）；类型与默认值在 `defineCommand({ params })` 中声明（如 `params: { name: { type: 'string', default: 'world' } }`），在 `execute` 里读 `params.name`。必需参数用单方括号 `[name].ts`，捕获所有用 `[...name].ts`（运行时 `params.name` 为 `string[]`）。
+带参数用 Next.js 风格方括号目录，例如 `commands/hello/[[name]]/index.ts` → `hello [name]`（可选）；类型与默认值在 `defineCommand({ params })` 中声明（如 `params: { name: { type: 'string', default: 'world' } }`），在 `execute` 里读 `params.name`。必需参数用 `[name]/index.ts`，捕获所有用 `[...name]/index.ts`（运行时 `params.name` 为 `string[]`）。
 
 ### 第 6 步：生成 tsconfig.json
 

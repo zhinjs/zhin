@@ -1,15 +1,11 @@
-/**
- * Process monitor — module-level state + file-backed restart detection.
- * No usePlugin; Plugin Runtime setup() calls startProcessMonitor().
- */
-import os from 'node:os';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { createToken } from 'zhin.js';
 
 export interface NotifyChannel {
-  type: 'user' | 'group' | 'webhook';
+  type: 'webhook';
   target: string;
-  platform?: string;
 }
 
 export interface ProcessMonitorConfig {
@@ -23,34 +19,21 @@ export interface ProcessMonitorConfig {
 export interface ProcessState {
   lastPid?: number;
   lastStartTime?: number;
-  /** SIGTERM/SIGINT 正常退出时置 true，下次启动据此归为 restart 而非 crash。 */
   cleanExit?: boolean;
   restartCount: number;
   crashCount: number;
   totalUptime: number;
 }
 
-const STATE_FILE = path.join(process.cwd(), 'data', 'process-state.json');
+export type StartupReason = 'start' | 'restart' | 'crash';
+export type ResolvedProcessMonitorConfig = ReturnType<typeof resolveProcessMonitorConfig>;
 
-export let processState: ProcessState = {
-  restartCount: 0,
-  crashCount: 0,
-  totalUptime: 0,
-};
+export const processMonitorToken = createToken<ProcessMonitor>(
+  'zhin.process-monitor.runtime',
+  'Owner-scoped process monitor state and lifecycle',
+);
 
-export const startTime = Date.now();
-
-let started = false;
-let signalHandlers: { sigterm: () => void; sigint: () => void } | null = null;
-
-export function resolveProcessMonitorConfig(
-  raw: ProcessMonitorConfig | undefined,
-): Required<
-  Pick<
-    ProcessMonitorConfig,
-    'enabled' | 'notifyOnStart' | 'notifyOnRestart' | 'notifyOnCrash'
-  >
-> & { notifyChannels: NotifyChannel[] } {
+export function resolveProcessMonitorConfig(raw: ProcessMonitorConfig | undefined) {
   return {
     enabled: raw?.enabled ?? true,
     notifyChannels: raw?.notifyChannels ?? [],
@@ -65,134 +48,12 @@ export function formatUptime(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
-
   if (days > 0) return `${days}天${hours % 24}小时`;
   if (hours > 0) return `${hours}小时${minutes % 60}分钟`;
   if (minutes > 0) return `${minutes}分钟`;
   return `${seconds}秒`;
 }
 
-export function formatProcessStatus(): string {
-  const uptime = Date.now() - startTime;
-  const memUsage = process.memoryUsage();
-  return [
-    '📊 进程监控状态',
-    '',
-    `🚀 当前 PID: ${process.pid}`,
-    `⏱️  运行时长: ${formatUptime(uptime)}`,
-    `💾 内存使用: ${Math.round(memUsage.heapUsed / 1024 / 1024)} MB`,
-    `🔄 总重启: ${processState.restartCount} 次`,
-    `💥 崩溃: ${processState.crashCount} 次`,
-    `📈 累计运行: ${formatUptime(processState.totalUptime)}`,
-    `🖥️  主机: ${os.hostname()}`,
-    `💻 平台: ${os.platform()}-${os.arch()}`,
-    `📦 Node: ${process.version}`,
-  ].join('\n');
-}
-
-function loadProcessState(): void {
-  try {
-    if (fs.existsSync(STATE_FILE)) {
-      const data = fs.readFileSync(STATE_FILE, 'utf-8');
-      processState = JSON.parse(data);
-    }
-  } catch {
-    // keep defaults
-  }
-}
-
-function saveProcessState(): void {
-  try {
-    fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
-    fs.writeFileSync(STATE_FILE, JSON.stringify(processState, null, 2));
-  } catch {
-    // ignore
-  }
-}
-
-function formatNotificationMessage(record: {
-  reason: string;
-  timestamp: Date;
-  hostname: string;
-  pid: number;
-  platform: string;
-  nodeVersion: string;
-  uptime?: number;
-  memory?: number;
-}): string {
-  const emoji = ({ start: '🚀', restart: '🔄', crash: '💥' } as Record<string, string>)[
-    record.reason
-  ] || '📊';
-  const reasonText = (
-    { start: '首次启动', restart: '正常重启', crash: '异常崩溃' } as Record<string, string>
-  )[record.reason] || '未知';
-
-  const lines = [
-    `${emoji} 【进程监控通知】`,
-    '',
-    `📊 事件: ${reasonText}`,
-    `⏰ 时间: ${record.timestamp.toLocaleString('zh-CN')}`,
-    `🖥️  主机: ${record.hostname}`,
-    `🔢 PID: ${record.pid}`,
-    `💻 平台: ${record.platform}`,
-    `📦 Node: ${record.nodeVersion}`,
-  ];
-
-  if (record.uptime) {
-    lines.push(`⏱️  运行时长: ${formatUptime(record.uptime)}`);
-  }
-  if (record.memory) {
-    lines.push(`💾 内存: ${record.memory} MB`);
-  }
-
-  lines.push('', `📈 统计:`);
-  lines.push(`  • 总重启: ${processState.restartCount} 次`);
-  lines.push(`  • 崩溃: ${processState.crashCount} 次`);
-  lines.push(`  • 累计运行: ${formatUptime(processState.totalUptime)}`);
-
-  return lines.join('\n');
-}
-
-async function sendNotification(
-  config: ReturnType<typeof resolveProcessMonitorConfig>,
-  record: {
-    reason: string;
-    timestamp: Date;
-    hostname: string;
-    pid: number;
-    platform: string;
-    nodeVersion: string;
-    uptime?: number;
-    memory?: number;
-  },
-): Promise<void> {
-  // user/group 渠道尚未实现（需要接入 OutboundHost 出站链路），
-  // 目前仅支持 webhook；实现时用 formatNotificationMessage(record) 生成文本。
-  for (const channel of config.notifyChannels) {
-    if (channel.type !== 'webhook') continue;
-    try {
-      await fetch(channel.target, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          event: 'process_restart',
-          data: record,
-          stats: processState,
-        }),
-      });
-    } catch {
-      // ignore webhook errors
-    }
-  }
-}
-
-export type StartupReason = 'start' | 'restart' | 'crash';
-
-/**
- * Classify this startup from persisted state.
- * - 同 PID（热重载，进程未退出）跳过判定，不算 restart/crash。
- * - 上次为 SIGTERM/SIGINT 正常退出（cleanExit）时归为 restart，即使间隔 <5min。
- */
 export function classifyStartup(
   state: ProcessState,
   currentPid: number,
@@ -201,88 +62,143 @@ export function classifyStartup(
   if (!state.lastPid || !state.lastStartTime) return { reason: 'start' };
   if (state.lastPid === currentPid) return { reason: 'start' };
   const uptime = now - state.lastStartTime;
-  if (state.cleanExit === true || uptime >= 5 * 60 * 1000) {
-    return { reason: 'restart', uptime };
-  }
-  return { reason: 'crash', uptime };
+  return state.cleanExit === true || uptime >= 5 * 60 * 1000
+    ? { reason: 'restart', uptime }
+    : { reason: 'crash', uptime };
 }
 
-async function detectStartupReason(
-  config: ReturnType<typeof resolveProcessMonitorConfig>,
-): Promise<void> {
-  const currentPid = process.pid;
-  const currentTime = Date.now();
-
-  const { reason, uptime } = classifyStartup(processState, currentPid, currentTime);
-  if (reason === 'crash') processState.crashCount++;
-  else if (reason === 'restart') processState.restartCount++;
-  if (uptime) processState.totalUptime += uptime;
-
-  processState.cleanExit = false;
-  processState.lastPid = currentPid;
-  processState.lastStartTime = currentTime;
-  saveProcessState();
-
-  const record = {
-    timestamp: new Date(),
-    reason,
-    uptime,
-    pid: currentPid,
-    hostname: os.hostname(),
-    platform: `${os.platform()}-${os.arch()}`,
-    nodeVersion: process.version,
-    memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-  };
-
-  const shouldNotify =
-    (reason === 'start' && config.notifyOnStart) ||
-    (reason === 'restart' && config.notifyOnRestart) ||
-    (reason === 'crash' && config.notifyOnCrash);
-
-  if (shouldNotify && config.notifyChannels.length > 0) {
-    await sendNotification(config, record);
-  }
+export interface ProcessMonitorOptions {
+  readonly stateFile?: string;
+  readonly now?: () => number;
+  readonly fetch?: typeof fetch;
 }
 
-/** Start monitoring once; returns disposer for lifecycle cleanup. */
-export function startProcessMonitor(rawConfig?: ProcessMonitorConfig): () => void {
-  const config = resolveProcessMonitorConfig(rawConfig);
-  if (!config.enabled || started) {
-    return () => undefined;
+/** One plugin owner's process statistics, persistence, notifications, and signal lifecycle. */
+export class ProcessMonitor {
+  readonly #config: ResolvedProcessMonitorConfig;
+  readonly #stateFile: string;
+  readonly #now: () => number;
+  readonly #fetch: typeof fetch;
+  readonly #startTime: number;
+  #state: ProcessState = { restartCount: 0, crashCount: 0, totalUptime: 0 };
+  #started = false;
+  #signalHandlers?: { readonly sigterm: () => void; readonly sigint: () => void };
+
+  constructor(config: ProcessMonitorConfig = {}, options: ProcessMonitorOptions = {}) {
+    this.#config = resolveProcessMonitorConfig(config);
+    this.#stateFile = options.stateFile ?? path.join(process.cwd(), 'data', 'process-state.json');
+    this.#now = options.now ?? Date.now;
+    this.#fetch = options.fetch ?? fetch;
+    this.#startTime = this.#now();
   }
-  started = true;
-  loadProcessState();
-  void detectStartupReason(config);
 
-  const onSigterm = () => {
-    processState.cleanExit = true;
-    saveProcessState();
-  };
-  const onSigint = () => {
-    processState.cleanExit = true;
-    saveProcessState();
-  };
-  process.on('SIGTERM', onSigterm);
-  process.on('SIGINT', onSigint);
-  signalHandlers = { sigterm: onSigterm, sigint: onSigint };
+  get state(): Readonly<ProcessState> {
+    return this.#state;
+  }
 
-  return () => {
-    if (signalHandlers) {
-      process.removeListener('SIGTERM', signalHandlers.sigterm);
-      process.removeListener('SIGINT', signalHandlers.sigint);
-      signalHandlers = null;
+  get started(): boolean {
+    return this.#started;
+  }
+
+  start(): void {
+    if (!this.#config.enabled || this.#started) return;
+    this.#started = true;
+    this.#loadState();
+    void this.#detectStartupReason();
+
+    const markCleanExit = () => {
+      this.#state.cleanExit = true;
+      this.#saveState();
+    };
+    const sigterm = () => markCleanExit();
+    const sigint = () => markCleanExit();
+    process.on('SIGTERM', sigterm);
+    process.on('SIGINT', sigint);
+    this.#signalHandlers = { sigterm, sigint };
+  }
+
+  dispose(): void {
+    if (this.#signalHandlers) {
+      process.removeListener('SIGTERM', this.#signalHandlers.sigterm);
+      process.removeListener('SIGINT', this.#signalHandlers.sigint);
+      this.#signalHandlers = undefined;
     }
-    started = false;
-  };
-}
-
-/** Test helper: reset module state without touching disk. */
-export function resetProcessMonitorForTests(): void {
-  if (signalHandlers) {
-    process.removeListener('SIGTERM', signalHandlers.sigterm);
-    process.removeListener('SIGINT', signalHandlers.sigint);
-    signalHandlers = null;
+    this.#started = false;
   }
-  processState = { restartCount: 0, crashCount: 0, totalUptime: 0 };
-  started = false;
+
+  formatStatus(): string {
+    const memory = process.memoryUsage();
+    return [
+      '📊 进程监控状态',
+      '',
+      `🚀 当前 PID: ${process.pid}`,
+      `⏱️  运行时长: ${formatUptime(this.#now() - this.#startTime)}`,
+      `💾 内存使用: ${Math.round(memory.heapUsed / 1024 / 1024)} MB`,
+      `🔄 总重启: ${this.#state.restartCount} 次`,
+      `💥 崩溃: ${this.#state.crashCount} 次`,
+      `📈 累计运行: ${formatUptime(this.#state.totalUptime)}`,
+      `🖥️  主机: ${os.hostname()}`,
+      `💻 平台: ${os.platform()}-${os.arch()}`,
+      `📦 Node: ${process.version}`,
+    ].join('\n');
+  }
+
+  #loadState(): void {
+    try {
+      if (!fs.existsSync(this.#stateFile)) return;
+      this.#state = JSON.parse(fs.readFileSync(this.#stateFile, 'utf-8')) as ProcessState;
+    } catch {
+      this.#state = { restartCount: 0, crashCount: 0, totalUptime: 0 };
+    }
+  }
+
+  #saveState(): void {
+    try {
+      fs.mkdirSync(path.dirname(this.#stateFile), { recursive: true });
+      fs.writeFileSync(this.#stateFile, JSON.stringify(this.#state, null, 2));
+    } catch {
+      // Monitoring must not interrupt the host process.
+    }
+  }
+
+  async #detectStartupReason(): Promise<void> {
+    const now = this.#now();
+    const { reason, uptime } = classifyStartup(this.#state, process.pid, now);
+    if (reason === 'crash') this.#state.crashCount += 1;
+    if (reason === 'restart') this.#state.restartCount += 1;
+    if (uptime) this.#state.totalUptime += uptime;
+    this.#state.cleanExit = false;
+    this.#state.lastPid = process.pid;
+    this.#state.lastStartTime = now;
+    this.#saveState();
+
+    const shouldNotify = reason === 'start'
+      ? this.#config.notifyOnStart
+      : reason === 'restart'
+        ? this.#config.notifyOnRestart
+        : this.#config.notifyOnCrash;
+    if (!shouldNotify) return;
+
+    const record = {
+      reason,
+      timestamp: new Date(now),
+      hostname: os.hostname(),
+      pid: process.pid,
+      platform: `${os.platform()}-${os.arch()}`,
+      nodeVersion: process.version,
+      uptime,
+      memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+    };
+    for (const channel of this.#config.notifyChannels) {
+      try {
+        await this.#fetch(channel.target, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'process_restart', data: record, stats: this.#state }),
+        });
+      } catch {
+        // Notification failure must not interrupt monitoring.
+      }
+    }
+  }
 }

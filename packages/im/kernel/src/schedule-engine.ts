@@ -234,16 +234,6 @@ export class ScheduleEngine {
   }
 }
 
-let globalEngine: ScheduleEngine | null = null;
-
-export function getScheduleEngine(): ScheduleEngine | null {
-  return globalEngine;
-}
-
-export function setScheduleEngine(engine: ScheduleEngine | null): void {
-  globalEngine = engine;
-}
-
 export {
   resolveSolarJob,
   resolveLunarJob,

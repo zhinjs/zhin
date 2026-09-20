@@ -7,12 +7,7 @@ import {
   NoneTypingIndicator,
   ReactionTypingIndicatorAdapter,
   GenericTypingIndicatorAdapter,
-  provideTypingIndicatorManager,
-  getTypingIndicatorManager,
-  startTypingIndicator,
-  stopTypingIndicator,
 } from '../../src/typing-indicator/index.js';
-import { DisposeStack } from '@zhin.js/plugin-runtime';
 import { AdapterActivityFeedbackManager } from '../../src/activity-feedback/adapter-integration.js';
 
 describe('TypingIndicatorManager', () => {
@@ -839,26 +834,9 @@ describe('GenericTypingIndicatorAdapter', () => {
   });
 });
 
-describe('全局实例', () => {
-  it('应该获取全局实例', () => {
-    const instance = getTypingIndicatorManager();
-    expect(instance).toBeDefined();
-  });
-
-  it('应该初始化全局实例', () => {
-    const lifecycle = new DisposeStack();
-    const instance = provideTypingIndicatorManager({ lifecycle }, {
-      type: 'reaction',
-      emoji: '👍',
-    });
-
-    expect(instance).toBeDefined();
-    void lifecycle.dispose();
-  });
-
-  it('generation dispose 应等待活跃提示完成清理', async () => {
-    const lifecycle = new DisposeStack();
-    const manager = provideTypingIndicatorManager({ lifecycle });
+describe('显式实例生命周期', () => {
+  it('dispose 应等待活跃提示完成清理', async () => {
+    const manager = new TypingIndicatorManager();
     let releaseStop!: () => void;
     const indicator = {
       start: vi.fn().mockResolvedValue(undefined),
@@ -876,76 +854,11 @@ describe('全局实例', () => {
     });
 
     let disposed = false;
-    const disposing = lifecycle.dispose().then(() => { disposed = true; });
+    const disposing = manager.dispose().then(() => { disposed = true; });
     await vi.waitFor(() => expect(indicator.stop).toHaveBeenCalledTimes(1));
     expect(disposed).toBe(false);
     releaseStop();
     await disposing;
     expect(indicator.stop).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('便捷函数', () => {
-  it('应该快速开始提示', async () => {
-    const lifecycle = new DisposeStack();
-    const manager = provideTypingIndicatorManager({ lifecycle });
-
-    const mockIndicator = {
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-      isActive: vi.fn().mockReturnValue(true),
-    };
-
-    const adapter: ICQQTypingIndicatorAdapter = {
-      platform: 'icqq',
-      supportedTypes: ['reaction', 'message'],
-      createIndicator: vi.fn().mockReturnValue(mockIndicator),
-    };
-
-    manager.registerAdapter(adapter);
-
-    const indicator = await startTypingIndicator({
-      platform: 'icqq',
-      endpointKey: '75318',
-      sessionId: 'private:liuchunlang',
-      sceneType: 'private',
-    });
-
-    expect(mockIndicator.start).toHaveBeenCalled();
-  });
-
-  it('应该快速停止提示', async () => {
-    const lifecycle = new DisposeStack();
-    const manager = provideTypingIndicatorManager({ lifecycle });
-
-    const mockIndicator = {
-      start: vi.fn().mockResolvedValue(undefined),
-      stop: vi.fn().mockResolvedValue(undefined),
-      isActive: vi.fn().mockReturnValue(true),
-    };
-
-    const adapter: ICQQTypingIndicatorAdapter = {
-      platform: 'icqq',
-      supportedTypes: ['reaction', 'message'],
-      createIndicator: vi.fn().mockReturnValue(mockIndicator),
-    };
-
-    manager.registerAdapter(adapter);
-
-    await startTypingIndicator({
-      platform: 'icqq',
-      endpointKey: '75318',
-      sessionId: 'private:liuchunlang',
-      sceneType: 'private',
-    });
-
-    await stopTypingIndicator({
-      platform: 'icqq',
-      endpointKey: '75318',
-      sessionId: 'private:liuchunlang',
-      sceneType: 'private',
-    });
-
-    expect(mockIndicator.stop).toHaveBeenCalled();
   });
 });

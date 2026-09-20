@@ -53,8 +53,8 @@ describe('Console contract', () => {
           order: 10, hideInNav: false, requiredPermissions: [], requiredRoles: [],
         },
         layouts: {
-          nav: { id: 'nav', owner: 'root/a', slot: 'nav', source: '/a/pages/$nav.tsx', module: '/assets/a-nav.js', hash: 'nav' },
-          footer: { id: 'footer', owner: 'root', slot: 'footer', source: '/pages/$footer.tsx', module: '/assets/footer.js', hash: 'footer' },
+          nav: { id: 'nav', owner: 'root/a', slot: 'nav', source: '/a/pages/nav/index.tsx', module: '/assets/a-nav.js', hash: 'nav' },
+          footer: { id: 'footer', owner: 'root', slot: 'footer', source: '/pages/footer/index.tsx', module: '/assets/footer.js', hash: 'footer' },
         },
       },
     } satisfies ConsoleTopologyResponse;

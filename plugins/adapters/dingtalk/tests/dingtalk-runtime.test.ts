@@ -13,7 +13,7 @@ import {
   type DingTalkMessage,
 } from '../src/protocol.js';
 import { dingtalkClient } from '../src/client.js';
-import defineDingTalkAdapter from '../adapters/dingtalk.js';
+import defineDingTalkAdapter from '../adapters/dingtalk/index.js';
 
 const adapterFeature = featureId('zhin.adapter');
 const hosts: ReturnType<typeof createHttpHost>[] = [];
@@ -72,12 +72,31 @@ afterEach(async () => {
 describe('dingtalk protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
     const resolved = resolveDingTalkConfig({
+      id: 'dingtalk-bot',
       appKey: 'k',
       appSecret: 's',
     });
     expect(resolved.webhookPath).toBe('/dingtalk/webhook');
     expect(resolved.apiBaseUrl).toBe('https://oapi.dingtalk.com');
     expect(resolved.id).toBe('dingtalk-bot');
+  });
+
+  it('requires expanded endpoint identity and app credentials', () => {
+    expect(() => resolveDingTalkConfig({
+      id: ' ',
+      appKey: 'k',
+      appSecret: 's',
+    })).toThrow('DingTalk endpoint requires a non-empty id');
+    expect(() => resolveDingTalkConfig({
+      id: 'dingtalk-bot',
+      appKey: ' ',
+      appSecret: 's',
+    })).toThrow('DingTalk endpoint requires a non-empty appKey');
+    expect(() => resolveDingTalkConfig({
+      id: 'dingtalk-bot',
+      appKey: 'k',
+      appSecret: ' ',
+    })).toThrow('DingTalk endpoint requires a non-empty appSecret');
   });
 
   it('verifies HMAC-SHA256 signatures', () => {

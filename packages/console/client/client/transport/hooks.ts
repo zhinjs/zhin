@@ -1,0 +1,535 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useConsoleClient } from "../console-client-context.js";
+import type { UseConsoleTransportOptions } from "./types.js";
+
+/**
+ * 每次连接会话只对同一 key 自动加载一次：失败后不再零退避死循环
+ * （旧行为：加载失败 → 状态保持空 → effect 反复立即重试，打爆 /api/console/request）。
+ * 断连后重置；key 变化（如 pluginName 切换）视为新目标重新尝试；手动重试走各 hook 返回的 load 函数。
+ */
+function useAutoLoadOnce(connected: boolean, key: unknown, ready: boolean, fire: () => void) {
+  const attemptedRef = useRef<unknown>(undefined);
+  useEffect(() => {
+    if (!connected) {
+      attemptedRef.current = undefined;
+      return;
+    }
+    if (ready || attemptedRef.current === key) return;
+    attemptedRef.current = key;
+    fire();
+  });
+}
+
+export function useConsoleTransport(options: UseConsoleTransportOptions = {}) {
+  const { autoConnect = true } = options;
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+
+  useEffect(() => {
+    return wsManager.onConnectionChange(setConnected);
+  }, [wsManager]);
+
+  const connect = useCallback(() => wsManager.connect(), [wsManager]);
+  const disconnect = useCallback(() => wsManager.disconnect(), [wsManager]);
+  const send = useCallback((message: unknown) => wsManager.send(message), [wsManager]);
+  const sendRequest = useCallback(
+    <T = unknown>(message: unknown) => wsManager.sendRequest<T>(message),
+    [wsManager],
+  );
+
+  useEffect(() => {
+    if (autoConnect && !connected) connect();
+  }, [autoConnect, connected, connect]);
+
+  return { connected, connect, disconnect, send, sendRequest, manager: wsManager };
+}
+
+/**
+ * 按 key 绑定异步加载结果：key（如 pluginName）切换后，旧 key 的残留值视为 null，
+ * 避免 useConfig 的 ready 判断（config != null）被上一插件的 state 挡住而不再加载新配置。
+ * @internal
+ */
+export function resolveKeyedValue<T>(
+  entry: { readonly key: string; readonly value: T } | null,
+  key: string,
+): T | null {
+  return entry && entry.key === key ? entry.value : null;
+}
+
+export function useConfig(pluginName: string, options?: { autoLoad?: boolean; autoLoadSchema?: boolean }) {
+  const { autoLoad = true, autoLoadSchema = true } = options ?? {};
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+  const [configEntry, setConfigEntry] = useState<{ key: string; value: unknown } | null>(null);
+  const [schemaEntry, setSchemaEntry] = useState<{ key: string; value: unknown } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const config = resolveKeyedValue(configEntry, pluginName);
+  const schema = resolveKeyedValue(schemaEntry, pluginName);
+
+  useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
+
+  const getConfig = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await wsManager.getConfig(pluginName);
+      setConfigEntry({ key: pluginName, value: result });
+      return result;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [pluginName, wsManager]);
+
+  const setConfig = useCallback(
+    async (newConfig: unknown) => {
+      setLoading(true);
+      setError(null);
+      try {
+        return await wsManager.setConfig(pluginName, newConfig);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Unknown error");
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [pluginName, wsManager],
+  );
+
+  const getSchema = useCallback(async () => {
+    try {
+      const result = await wsManager.getSchema(pluginName);
+      if (result) setSchemaEntry({ key: pluginName, value: result });
+      return result;
+    } catch (e) {
+      throw e;
+    }
+  }, [pluginName, wsManager]);
+
+  useAutoLoadOnce(connected, `config:${pluginName}`, !autoLoad || config != null || loading, () => {
+    getConfig().catch(() => {});
+  });
+  useAutoLoadOnce(connected, `schema:${pluginName}`, !autoLoadSchema || schema != null, () => {
+    getSchema().catch(() => {});
+  });
+
+  return useMemo(
+    () => ({ config, schema, loading, error, connected, getConfig, setConfig, getSchema }),
+    [config, schema, loading, error, connected, getConfig, setConfig, getSchema],
+  );
+}
+
+export function useConfigSource() {
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+  const [source, setSource] = useState("");
+  const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
+  const [revision, setRevision] = useState("");
+  const [configKeys, setConfigKeys] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await wsManager.getConfigSource();
+      setSource(result.source);
+      setFormat(result.format);
+      setRevision(result.revision);
+      setConfigKeys([...result.configKeys]);
+      return result;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const save = useCallback(
+    async (content: string) => {
+      setLoading(true);
+      setError(null);
+      try {
+        if (!revision) throw new Error('Config source must be loaded before it can be replaced');
+        const result = await wsManager.replaceConfigSource(content, revision);
+        setSource(content);
+        setRevision(result.revision);
+        return result;
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Unknown error");
+        throw e;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [revision, wsManager],
+  );
+
+  useAutoLoadOnce(connected, "config-source", !!revision || loading, () => {
+    load().catch(() => {});
+  });
+
+  return useMemo(
+    () => ({ source, format, revision, configKeys, loading, error, load, save }),
+    [source, format, revision, configKeys, loading, error, load, save],
+  );
+}
+
+/** Shared Console flow for previewing and committing a plugin installation. */
+export function usePluginInstall() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof wsManager.planPluginInstall>> | null>(null);
+
+  const preview = useCallback(async (packageName: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await wsManager.planPluginInstall(packageName);
+      setPlan(next);
+      return next;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const install = useCallback(async (packageName: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.installPlugin(packageName, expectedRevision);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  return useMemo(() => ({ plan, loading, error, preview, install }), [
+    plan, loading, error, preview, install,
+  ]);
+}
+
+export function usePluginConfigValidation(pluginName: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const validate = useCallback(async (data: unknown) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.validatePluginConfig(pluginName, data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [pluginName, wsManager]);
+  return useMemo(() => ({ loading, error, validate }), [loading, error, validate]);
+}
+
+export function usePluginDiagnostics(pluginName: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const diagnose = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.diagnosePlugin(pluginName);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [pluginName, wsManager]);
+  return useMemo(() => ({ loading, error, diagnose }), [loading, error, diagnose]);
+}
+
+export function usePluginLifecycle(instanceKey: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setEnabled = useCallback(async (enabled: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.setPluginEnabled(instanceKey, enabled);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [instanceKey, wsManager]);
+  return useMemo(() => ({ loading, error, setEnabled }), [loading, error, setEnabled]);
+}
+
+export function usePluginUninstall() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = useCallback(async (packageName: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.planPluginUninstall(packageName);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+  const uninstall = useCallback(async (packageName: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.uninstallPlugin(packageName, expectedRevision);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+  return useMemo(() => ({ loading, error, preview, uninstall }), [
+    loading, error, preview, uninstall,
+  ]);
+}
+
+export function usePluginUpdate() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = useCallback((packageName: string, targetVersion: string) => {
+    setLoading(true);
+    setError(null);
+    return wsManager.planPluginUpdate(packageName, targetVersion)
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Unknown error');
+        throw e;
+      })
+      .finally(() => setLoading(false));
+  }, [wsManager]);
+  const update = useCallback((packageName: string, targetVersion: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    return wsManager.updatePlugin(packageName, targetVersion, expectedRevision)
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Unknown error');
+        throw e;
+      })
+      .finally(() => setLoading(false));
+  }, [wsManager]);
+  return useMemo(() => ({ loading, error, preview, update }), [loading, error, preview, update]);
+}
+
+export function useEndpointTest(adapter: string, endpointKey: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const test = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.testEndpoint(adapter, endpointKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [adapter, endpointKey, wsManager]);
+  return useMemo(() => ({ loading, error, test }), [loading, error, test]);
+}
+
+export function usePluginMarketplace() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = useCallback(async <T>(operation: () => Promise<T>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await operation();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  const search = useCallback(
+    (query?: Parameters<typeof wsManager.searchMarketplace>[0]) =>
+      run(() => wsManager.searchMarketplace(query)),
+    [run, wsManager],
+  );
+  const detail = useCallback(
+    (packageName: string) => run(() => wsManager.getMarketplacePlugin(packageName)),
+    [run, wsManager],
+  );
+  const updates = useCallback(() => run(() => wsManager.getPluginUpdates()), [run, wsManager]);
+  const installed = useCallback(() => run(() => wsManager.listPlugins()), [run, wsManager]);
+  return useMemo(() => ({ loading, error, search, detail, updates, installed }), [
+    loading, error, search, detail, updates, installed,
+  ]);
+}
+
+export function useFiles() {
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+  const [tree, setTree] = useState<import("./types.js").FileTreeNode[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
+
+  const loadTree = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await wsManager.getFileTree();
+      setTree(result.tree);
+      return result.tree;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const readFile = useCallback(async (filePath: string) => (await wsManager.readFile(filePath)).content, [wsManager]);
+  const saveFile = useCallback(
+    async (filePath: string, content: string) => wsManager.saveFile(filePath, content),
+    [wsManager],
+  );
+
+  useAutoLoadOnce(connected, "file-tree", tree.length > 0 || loading, () => {
+    loadTree().catch(() => {});
+  });
+
+  return useMemo(() => ({ tree, loading, error, loadTree, readFile, saveFile }), [tree, loading, error, loadTree, readFile, saveFile]);
+}
+
+export function useEnvFiles() {
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+  const [files, setFiles] = useState<Array<{ name: string; exists: boolean }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
+
+  const listFiles = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await wsManager.getEnvList();
+      setFiles(result.files);
+      return result.files;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const getFile = useCallback(
+    async (filename: string) => {
+      const result = await wsManager.getEnvFile(filename);
+      return result.content;
+    },
+    [wsManager],
+  );
+
+  const saveFile = useCallback(
+    async (filename: string, content: string) => wsManager.saveEnvFile(filename, content),
+    [wsManager],
+  );
+
+  useAutoLoadOnce(connected, "env-files", files.length > 0 || loading, () => {
+    listFiles().catch(() => {});
+  });
+
+  return useMemo(
+    () => ({ files, loading, error, listFiles, getFile, saveFile }),
+    [files, loading, error, listFiles, getFile, saveFile],
+  );
+}
+
+export function useDatabase() {
+  const wsManager = useConsoleClient().transport;
+  const [connected, setConnected] = useState(wsManager.isConnected());
+  const [info, setInfo] = useState<import("./types.js").DatabaseInfo | null>(null);
+  const [tables, setTables] = useState<import("./types.js").TableInfo[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => wsManager.onConnectionChange(setConnected), [wsManager]);
+
+  const loadInfo = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await wsManager.getDbInfo();
+      setInfo(result);
+      return result;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const loadTables = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await wsManager.getDbTables();
+      setTables(result.tables);
+      return result.tables;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error");
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const select = useCallback(async (table: string, page?: number, pageSize?: number, where?: unknown) => wsManager.dbSelect(table, page, pageSize, where), [wsManager]);
+  const insert = useCallback(async (table: string, row: unknown) => wsManager.dbInsert(table, row), [wsManager]);
+  const update = useCallback(async (table: string, row: unknown, where: unknown) => wsManager.dbUpdate(table, row, where), [wsManager]);
+  const remove = useCallback(async (table: string, where: unknown) => wsManager.dbDelete(table, where), [wsManager]);
+  const dropTable = useCallback(async (table: string) => { const r = await wsManager.dbDropTable(table); await loadTables(); return r; }, [wsManager, loadTables]);
+  const kvGet = useCallback(async (table: string, key: string) => wsManager.kvGet(table, key), [wsManager]);
+  const kvSet = useCallback(async (table: string, key: string, value: unknown, ttl?: number) => wsManager.kvSet(table, key, value, ttl), [wsManager]);
+  const kvDelete = useCallback(async (table: string, key: string) => wsManager.kvDelete(table, key), [wsManager]);
+  const kvEntries = useCallback(async (table: string) => wsManager.kvGetEntries(table), [wsManager]);
+
+  useAutoLoadOnce(connected, "db-info", info != null || loading, () => {
+    loadInfo().catch(() => {});
+    loadTables().catch(() => {});
+  });
+
+  return useMemo(
+    () => ({ info, tables, loading, error, loadInfo, loadTables, dropTable, select, insert, update, remove, kvGet, kvSet, kvDelete, kvEntries }),
+    [info, tables, loading, error, loadInfo, loadTables, dropTable, select, insert, update, remove, kvGet, kvSet, kvDelete, kvEntries],
+  );
+}

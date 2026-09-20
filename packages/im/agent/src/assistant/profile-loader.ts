@@ -143,9 +143,6 @@ export function buildScheduleJobFromRoutine(
   };
 }
 
-/** @deprecated */
-export const buildCronJobFromRoutine = buildScheduleJobFromRoutine;
-
 export function buildHeartbeatJobFromRoutine(
   routine: AssistantProfileRoutineHeartbeat,
   profileDefaults?: JobNotify,
@@ -233,9 +230,6 @@ export async function pruneStaleProfileCronJobs(
   }
   return removed;
 }
-
-/** @deprecated */
-export const syncProfileCronRoutinesToStore = syncProfileRoutinesToStore;
 
 /** 合并 Profile + assistant.home 的设备别名 */
 export function mergeProfileDeviceAliases(

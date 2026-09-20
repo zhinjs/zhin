@@ -10,7 +10,7 @@ import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { createDeferredTurnController, type DeferredTurnController } from '../tool-catalog/deferred-turn-controller.js';
-import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
+import { buildSkillInstructionReaderForAgent } from '../skill/skill-instruction-reader-factory.js';
 export interface ResolvedToolsForTurn {
   tools: AgentTool[];
   catalog: ToolCatalogItem[];
@@ -78,7 +78,7 @@ export async function resolveAgentToolsForTurn(
       await persistDeferredToolSnapshot(agent, sessionId, snapshot);
     },
     onSkillLoaded: (_name, instructions) => agent.appendActiveSkillsContext(instructions),
-    skillLoadOpts: buildSkillLoadOptsForAgent(agent),
+    skillInstructions: buildSkillInstructionReaderForAgent(agent),
   });
   const turnTools = [...baseTools, ...controller.tools as unknown as AgentTool[]];
   const catalog = buildToolCatalog({

@@ -8,7 +8,7 @@ import {
   type ToolResultMessage,
 } from '@zhin.js/ai';
 
-const ORCHESTRATION_TOOLS = new Set(['spawn_task', 'tool_search', 'run_deferred_task']);
+const ORCHESTRATION_TOOLS = new Set(['spawn_task']);
 const DEFAULT_MAX_CHARS = 4096;
 const DEFAULT_MAX_MESSAGES = 20;
 

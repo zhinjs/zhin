@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import middleware from '../middlewares/chain-text.ts';
+import middleware from '../middlewares/chain-text/index.ts';
 import { startGame } from '../src/game-flow.js';
 import {
   createMemoryGameServices,

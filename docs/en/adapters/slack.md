@@ -20,7 +20,7 @@ Zhin.js Slack adapter (Plugin Runtime). Prefers Socket Mode; can also send and r
 - **HTTP Events API**: `httpHostToken` POST (signature verification), **not** legacy host-router/Koa
 - Inbound via `Endpoint.emit(...)`; outbound `send({ conversation, payload })` -> `chat.postMessage` / Block Kit
 - Convention-based `defineAdapter` / `definePlugin` (no `usePlugin` needed)
-- Block Kit buttons, slash commands, message editing, emoji reactions, etc. (see `agent/tools/`)
+- Block Kit buttons, slash commands, message editing, emoji reactions, etc. (see `tools/`)
 
 ## Installation
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/slack.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/slack/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
 - `zhin.js` — `plugin.ts` (`definePlugin`)
@@ -127,9 +127,9 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/` (invite, topic, reactions, pin, edit, etc.) |
-| Skill documentation | `agent/skills/slack.md` |
+| Permit vocabulary | `PERMITS.md` |
+| Platform tools | `tools/` (invite, topic, reactions, pin, edit, etc.) |
+| Skill documentation | `agents/slack/skills/slack-channels/SKILL.md` and `agents/slack/skills/slack-messages/SKILL.md` |
 
 ## Limitations
 

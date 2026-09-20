@@ -5,7 +5,8 @@ import { PromptController } from '../../src/turn/prompt-controller.js';
 import { createTurnIngress } from '../../src/turn/turn-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
-import { activityFeedbackAiBus } from '../../src/activity-feedback/ai-bus.js';
+import { AgentEventBus } from '../../src/event/ai-event-bus.js';
+import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 
 function selection() {
   return {
@@ -21,8 +22,10 @@ function selection() {
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
 
 describe('FullAgentTurnEngine', () => {
+  const agentEvents = new AgentEventBus();
+  const emitter = new ZhinAgentEventEmitter(agentEvents);
   afterEach(() => {
-    activityFeedbackAiBus.clear();
+    agentEvents.clear();
   });
 
   it('runs canonical ingress through session, deferred capability, PromptController, and full AgentCore seams', async () => {
@@ -113,6 +116,7 @@ describe('FullAgentTurnEngine', () => {
       },
     };
     const host = {
+      emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
       contextRepository: {
@@ -149,10 +153,10 @@ describe('FullAgentTurnEngine', () => {
     const finished: Array<Record<string, unknown>> = [];
     const toolCalls: Array<Record<string, unknown>> = [];
     const toolResults: Array<Record<string, unknown>> = [];
-    activityFeedbackAiBus.on('ai.processing.start', (payload) => started.push(payload as never));
-    activityFeedbackAiBus.on('ai.tool.call', (payload) => toolCalls.push(payload as never));
-    activityFeedbackAiBus.on('ai.tool.result', (payload) => toolResults.push(payload as never));
-    activityFeedbackAiBus.on('ai.processing.finish', (payload) => {
+    agentEvents.on('ai.processing.start', (payload) => started.push(payload as never));
+    agentEvents.on('ai.tool.call', (payload) => toolCalls.push(payload as never));
+    agentEvents.on('ai.tool.result', (payload) => toolResults.push(payload as never));
+    agentEvents.on('ai.processing.finish', (payload) => {
       order.push('finish');
       finished.push(payload as never);
     });
@@ -227,6 +231,7 @@ describe('FullAgentTurnEngine', () => {
       },
     };
     const host = {
+      emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
       contextRepository: {
@@ -258,7 +263,7 @@ describe('FullAgentTurnEngine', () => {
       touchAfterTurn: vi.fn(async () => undefined),
     };
     const thinking: Array<Record<string, unknown>> = [];
-    activityFeedbackAiBus.on('ai.thinking', (payload) => thinking.push(payload as never));
+    agentEvents.on('ai.thinking', (payload) => thinking.push(payload as never));
     const engine = createFullAgentTurnEngine({
       host: host as never,
       core: core as never,
@@ -330,6 +335,7 @@ describe('FullAgentTurnEngine', () => {
       },
     };
     const host = {
+      emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
       contextRepository: {
@@ -429,6 +435,7 @@ describe('FullAgentTurnEngine', () => {
       },
     };
     const host = {
+      emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
       contextRepository: {
@@ -518,7 +525,7 @@ describe('FullAgentTurnEngine', () => {
     });
     const weather = {
       owner: rootPluginId(), name: 'weather', qualifiedName: 'weather',
-      description: 'weather', approval: 'never' as const, source: 'test',
+      description: 'weather', requiresApproval: 'never' as const, source: 'test',
       execute: vi.fn(async () => 'sunny'),
     };
     const report = {
@@ -554,6 +561,7 @@ describe('FullAgentTurnEngine', () => {
       })),
     };
     const host = {
+      emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => { throw new Error('schedule must not use interactive rate limits'); } },
       contextRepository: { getDeferredToolSnapshot: async () => { throw new Error('schedule must not load deferred state'); } },
@@ -576,7 +584,7 @@ describe('FullAgentTurnEngine', () => {
     });
     const events: import('../../src/event/turn-event.js').TurnEvent[] = [];
     const started: unknown[] = [];
-    activityFeedbackAiBus.on('ai.processing.start', (payload) => started.push(payload));
+    agentEvents.on('ai.processing.start', (payload) => started.push(payload));
     const stream = engine.run(context);
     while (true) {
       const step = await stream.next();

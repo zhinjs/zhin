@@ -3,7 +3,7 @@ import type {
   WorkroomProjectionDeliveryPort,
   WorkroomProjectionDeliveryResult,
   WorkroomProjectionOutboxItem,
-} from '../workroom/projection-outbox.js';
+} from '../workroom/projection-outbox/index.js';
 
 type ProjectionRequester = Parameters<OutboundMessageService['send']>[0]['requester'];
 

@@ -47,15 +47,6 @@ export type InteractivePolicy = 'native' | 'text';
 
 export const DEFAULT_INTERACTIVE_POLICY: InteractivePolicy = 'text';
 
-export type InteractiveHandler = (
-  message: import('../../message.js').Message<any>,
-) => Promise<boolean> | boolean;
-
-export interface RegisteredInteractiveHandler {
-  prefix: string;
-  handler: InteractiveHandler;
-}
-
 export function isKeyboardSegment(item: MessageElement): item is MessageElement & {
   type: typeof KEYBOARD_SEGMENT_TYPE;
   data: KeyboardSegmentData;

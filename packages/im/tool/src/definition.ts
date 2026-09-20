@@ -8,6 +8,7 @@ import type {
   OperationClientPort,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+import { isToolInputSchema, type ToolInputSchema } from './input-schema.js';
 
 const toolBrand = 'zhin.agent-tool/1' as const;
 
@@ -26,7 +27,7 @@ export interface ToolInvocationPolicy {
     readonly preset?: 'readonly' | 'network';
     readonly security?: 'deny' | 'allowlist' | 'full';
     readonly execPreset?: 'readonly' | 'network' | 'development' | 'custom';
-    readonly approvalMode?: 'ask' | 'allow' | 'deny';
+    readonly approvalMode?: 'ask' | 'bypass' | 'auto';
     readonly isolation?: 'required' | 'none';
   }>;
   readonly filesystem?: Readonly<{
@@ -116,19 +117,35 @@ export interface AgentToolDefinition<
   /** @internal Runtime feature brand. */
   readonly $feature: typeof toolBrand;
   readonly description: string;
-  readonly inputSchema?: unknown;
-  readonly approval: ToolApproval;
+  readonly inputSchema?: ToolInputSchema<TInput>;
+  readonly requiresApproval: ToolApproval;
   /** Restrict this tool to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
+  readonly tags?: readonly string[];
+  readonly keywords?: readonly string[];
   readonly hidden?: boolean;
+  /** @internal Filesystem-derived private capability binding. */
+  readonly placement?: ToolPlacement;
   execute(
     input: TInput,
     context: ToolExecutionContext<TConfig, TAdapter>,
   ): TResult | Promise<TResult>;
 }
+
+type ToolPlacement = Readonly<{
+  kind: 'agent';
+  agent: string;
+} | {
+  kind: 'skill';
+  skill: string;
+} | {
+  kind: 'agent-skill';
+  agent: string;
+  skill: string;
+}>;
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext<TConfig = unknown> {
@@ -149,15 +166,15 @@ declare module '@zhin.js/plugin-runtime' {
 type AgentToolAuthoringDefinition<TInput, TResult, TConfig> =
   | (Omit<
       AgentToolDefinition<TInput, TResult, TConfig, undefined>,
-      '$feature' | 'approval'
-    > & { readonly approval?: ToolApproval })
+      '$feature' | 'requiresApproval'
+    > & { readonly requiresApproval?: ToolApproval })
   | {
       [TAdapter in RegisteredAdapterName]: Omit<
         AgentToolDefinition<TInput, TResult, TConfig, TAdapter>,
-        '$feature' | 'approval'
+        '$feature' | 'requiresApproval'
       > & {
         readonly adapter: TAdapter;
-        readonly approval?: ToolApproval;
+        readonly requiresApproval?: ToolApproval;
       }
     }[RegisteredAdapterName];
 
@@ -172,6 +189,9 @@ export function defineAgentTool<
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Agent Tool execute must be a function');
   }
+  if (definition.inputSchema !== undefined && !isToolInputSchema(definition.inputSchema)) {
+    throw new TypeError('Agent Tool inputSchema must be an object JSON Schema or executable schema');
+  }
   const adapter = (definition as { readonly adapter?: unknown }).adapter;
   if (adapter !== undefined
     && (typeof adapter !== 'string' || adapter.trim() === '')) {
@@ -181,12 +201,15 @@ export function defineAgentTool<
     && (definition.platforms.length !== 1 || definition.platforms[0] !== adapter)) {
     throw new TypeError('Agent Tool adapter and platforms must select the same single adapter');
   }
-  const approval = definition.approval ?? 'on-risk';
-  if (approval !== 'never' && approval !== 'on-risk' && approval !== 'once' && approval !== 'always') {
-    throw new TypeError(`Invalid Agent Tool approval: ${String(approval)}`);
+  const requiresApproval = definition.requiresApproval ?? 'on-risk';
+  if (requiresApproval !== 'never' && requiresApproval !== 'on-risk'
+    && requiresApproval !== 'once' && requiresApproval !== 'always') {
+    throw new TypeError(`Invalid Agent Tool requiresApproval: ${String(requiresApproval)}`);
   }
   validateStringList('platforms', definition.platforms);
   validateStringList('permissions', definition.permissions);
+  validateStringList('tags', definition.tags);
+  validateStringList('keywords', definition.keywords);
   if (definition.scopes !== undefined && !Array.isArray(definition.scopes)) {
     throw new TypeError('Agent Tool scopes must be an array');
   }
@@ -198,13 +221,18 @@ export function defineAgentTool<
     platforms: freezeList(typeof adapter === 'string' ? [adapter] : definition.platforms),
     scopes: freezeList(definition.scopes),
     permissions: freezeList(definition.permissions),
+    tags: freezeList(definition.tags),
+    keywords: freezeList(definition.keywords),
     $feature: toolBrand,
-    approval,
+    requiresApproval,
   }) as Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
 }
 
 /** @internal Runtime validation for convention-discovered modules. */
-export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
+export function parseAgentToolDefinition(
+  value: unknown,
+  context?: import('@zhin.js/feature-kit').ValidationContext,
+): AgentToolDefinition {
   if (!value || typeof value !== 'object') throw invalidTool();
   const definition = value as Partial<AgentToolDefinition>;
   if (
@@ -212,18 +240,40 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
     || typeof definition.description !== 'string'
     || !definition.description.trim()
     || typeof definition.execute !== 'function'
+    || (definition.inputSchema !== undefined && !isToolInputSchema(definition.inputSchema))
     || !validAdapterName((definition as { readonly adapter?: unknown }).adapter)
-    || (definition.approval !== 'never'
-      && definition.approval !== 'on-risk'
-      && definition.approval !== 'once'
-      && definition.approval !== 'always')
+    || (definition.requiresApproval !== 'never'
+      && definition.requiresApproval !== 'on-risk'
+      && definition.requiresApproval !== 'once'
+      && definition.requiresApproval !== 'always')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)
+    || !validStringList(definition.tags)
+    || !validStringList(definition.keywords)
     || (definition.scopes !== undefined && !Array.isArray(definition.scopes))
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
   ) throw invalidTool();
-  return definition as AgentToolDefinition;
+  const placement = context?.localName
+    ? placementFromLocalName(context.localName)
+    : undefined;
+  return placement
+    ? Object.freeze({ ...definition, hidden: true, placement }) as AgentToolDefinition
+    : definition as AgentToolDefinition;
+}
+
+function placementFromLocalName(localName: string): ToolPlacement | undefined {
+  const segments = localName.split('/');
+  if (segments[0] === 'agent' && segments[2] === 'skill' && segments.length === 5) {
+    return Object.freeze({ kind: 'agent-skill', agent: segments[1]!, skill: segments[3]! });
+  }
+  if (segments[0] === 'agent' && segments.length === 3) {
+    return Object.freeze({ kind: 'agent', agent: segments[1]! });
+  }
+  if (segments[0] === 'skill' && segments.length === 3) {
+    return Object.freeze({ kind: 'skill', skill: segments[1]! });
+  }
+  return undefined;
 }
 
 function validateStringList(name: string, values: readonly string[] | undefined): void {

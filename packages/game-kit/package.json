@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@zhin.js/core": "workspace:*",
+    "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/satori": "workspace:*"
@@ -46,5 +47,12 @@
     "type": "git",
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/game-kit"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "feature",
+    "entry": "./lib/provider.js",
+    "engine": "^1.0.0",
+    "featureApi": "1.0.0"
   }
 }

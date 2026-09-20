@@ -1,7 +1,5 @@
 /**
  * SubAgentRegistry — sub-agent definition management with common/specialized support.
- *
- * Absorbs: core/built/agent-preset.ts (AgentPresetFeature)
  */
 
 import { ResourceRegistry } from './resource-registry.js';

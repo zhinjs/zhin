@@ -1,44 +1,41 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseComponentDefinition } from 'zhin.js/component';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
-import shareMusic from '../components/share-music.ts';
-import searchTool from '../tools/music-search.ts';
-import shareTool from '../tools/music-share.ts';
-import loginCommand from '../commands/login/[platform].ts';
-import statusCommand from '../commands/cookie/status.ts';
-import setCommand from '../commands/cookie/set/[source].ts';
-import getCommand from '../commands/cookie/get/[source].ts';
-import deleteCommand from '../commands/cookie/delete/[source].ts';
+import shareMusic from '../components/share-music/index.ts';
+import searchTool from '../skills/music/tools/music-search/index.ts';
+import shareTool from '../skills/music/tools/music-share/index.ts';
+import loginCommand from '../commands/login/[platform]/index.ts';
+import statusCommand from '../commands/cookie/status/index.ts';
+import setCommand from '../commands/cookie/set/[source]/index.ts';
+import getCommand from '../commands/cookie/get/[source]/index.ts';
+import deleteCommand from '../commands/cookie/delete/[source]/index.ts';
 import { formatMusicInfo, resolveSourceAlias, SOURCE_DISPLAY_NAME } from '../src/config.js';
 import { formatSearchResults } from '../src/music-lib.js';
 import {
+  MusicSearchSessions,
   sessionKey,
   resolveMessageIds,
-  setPending,
-  getPending,
-  clearPending,
-  cleanExpired,
 } from '../src/session.js';
 import { QQMusicService } from '../src/sources/qq.js';
 import { KuwoMusicService } from '../src/sources/kuwo.js';
 import { KugouMusicService } from '../src/sources/kugou.js';
-import { musicServices } from '../src/sources/index.js';
+import { createMusicServices } from '../src/sources/index.js';
 import {
-  getCredential,
-  setCredential,
-  deleteCredential,
-  listCredentials,
-  resetCredentialDb,
+  CredentialStore,
+  createInMemoryCredentialDb,
 } from '../src/credential-store.js';
 import {
+  QrLoginRuntime,
   loginSessionKey,
-  getActiveLogin,
-  cancelLogin,
-  cleanExpiredLogins,
+  type QrLoginProvider,
 } from '../src/login/index.js';
 import type { MusicInfo, MusicSource } from '../src/types.js';
+
+function createCredentials(): CredentialStore {
+  return new CredentialStore(createInMemoryCredentialDb());
+}
 
 describe('@zhin.js/plugin-music', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -76,7 +73,7 @@ describe('@zhin.js/plugin-music', () => {
     });
     vi.stubGlobal('fetch', fetchMock);
     try {
-      const service = new QQMusicService();
+      const service = new QQMusicService(createCredentials());
       await expect(service.getLyric('some-mid')).resolves.toBe(lyric);
     } finally {
       vi.unstubAllGlobals();
@@ -132,6 +129,7 @@ describe('@zhin.js/plugin-music', () => {
 
   describe('music services registry', () => {
     it('has all four sources', () => {
+      const musicServices = createMusicServices(createCredentials());
       expect(musicServices.qq).toBeInstanceOf(QQMusicService);
       expect(musicServices.kuwo).toBeInstanceOf(KuwoMusicService);
       expect(musicServices.kugou).toBeInstanceOf(KugouMusicService);
@@ -165,40 +163,57 @@ describe('@zhin.js/plugin-music', () => {
     });
 
     it('stores and retrieves pending search', () => {
+      const sessions = new MusicSearchSessions();
       const search = {
         results: [{ id: '1', source: 'qq' as const, title: 'Test', url: '' }],
         source: 'qq' as const,
         keyword: 'test',
         timestamp: Date.now(),
       };
-      setPending(key, search);
-      const retrieved = getPending(key);
+      sessions.set(key, search);
+      const retrieved = sessions.get(key);
       expect(retrieved).toBeDefined();
       expect(retrieved!.keyword).toBe('test');
-      clearPending(key);
-      expect(getPending(key)).toBeUndefined();
+      sessions.delete(key);
+      expect(sessions.get(key)).toBeUndefined();
     });
 
     it('expires old sessions', () => {
-      setPending(key, {
+      const sessions = new MusicSearchSessions();
+      sessions.set(key, {
         results: [],
         source: 'qq',
         keyword: 'old',
         timestamp: Date.now() - 4 * 60 * 1000,
       });
-      expect(getPending(key)).toBeUndefined();
+      expect(sessions.get(key)).toBeUndefined();
     });
 
     it('cleanExpired removes stale entries', () => {
+      const sessions = new MusicSearchSessions();
       const staleKey = sessionKey('ep', 'g', 'stale');
-      setPending(staleKey, {
+      sessions.set(staleKey, {
         results: [],
         source: 'netease',
         keyword: 'stale',
         timestamp: Date.now() - 5 * 60 * 1000,
       });
-      cleanExpired();
-      expect(getPending(staleKey)).toBeUndefined();
+      sessions.pruneExpired();
+      expect(sessions.get(staleKey)).toBeUndefined();
+    });
+
+    it('isolates pending selections between runtime owners', () => {
+      const first = new MusicSearchSessions();
+      const second = new MusicSearchSessions();
+      first.set(key, {
+        results: [],
+        source: 'qq',
+        keyword: 'first',
+        timestamp: Date.now(),
+      });
+
+      expect(first.get(key)?.keyword).toBe('first');
+      expect(second.get(key)).toBeUndefined();
     });
   });
 
@@ -241,50 +256,97 @@ describe('@zhin.js/plugin-music', () => {
     });
 
     it('returns undefined for non-existent login', () => {
-      expect(getActiveLogin('nonexistent')).toBeUndefined();
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(logins.get('nonexistent')).toBeUndefined();
     });
 
     it('cancel returns false for non-existent session', () => {
-      expect(cancelLogin('nonexistent')).toBe(false);
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(logins.cancel('nonexistent')).toBe(false);
     });
 
     it('cleanExpiredLogins does not throw on empty map', () => {
-      expect(() => cleanExpiredLogins()).not.toThrow();
+      const logins = new QrLoginRuntime(createCredentials());
+      expect(() => logins.pruneExpired()).not.toThrow();
+    });
+
+    it('isolates active logins between runtime owners', async () => {
+      const provider: QrLoginProvider = {
+        createQr: vi.fn(async () => ({
+          imageSegment: { type: 'image', data: { url: 'https://example.test/qr' } },
+          pollData: { token: 'one' },
+        })),
+        pollQr: vi.fn(async () => ({ status: 'waiting', message: 'waiting' })),
+      };
+      const providers = { qq: provider, netease: provider };
+      const first = new QrLoginRuntime(createCredentials(), providers);
+      const second = new QrLoginRuntime(createCredentials(), providers);
+      const key = loginSessionKey('ep', 'group', 'owner');
+
+      await first.start('qq', key);
+
+      expect(first.get(key)?.pollData).toEqual({ token: 'one' });
+      expect(second.get(key)).toBeUndefined();
+    });
+
+    it('does not resurrect an in-flight login after runtime disposal', async () => {
+      let resolveQr!: (value: Awaited<ReturnType<QrLoginProvider['createQr']>>) => void;
+      const provider: QrLoginProvider = {
+        createQr: () => new Promise((resolve) => { resolveQr = resolve; }),
+        pollQr: vi.fn(async () => ({ status: 'waiting', message: 'waiting' })),
+      };
+      const logins = new QrLoginRuntime(createCredentials(), {
+        qq: provider,
+        netease: provider,
+      });
+      const key = loginSessionKey('ep', 'group', 'owner');
+      const starting = logins.start('qq', key);
+
+      logins.dispose();
+      resolveQr({
+        imageSegment: { type: 'image', data: { url: 'https://example.test/qr' } },
+        pollData: { token: 'late' },
+      });
+
+      await expect(starting).rejects.toThrow('登录已取消');
+      expect(logins.get(key)).toBeUndefined();
     });
   });
 
   describe('credential store', () => {
-    beforeEach(() => resetCredentialDb());
-
     it('stores and retrieves credentials', async () => {
-      await setCredential('qq', 'cookie', 'qqmusic_key=abc123');
-      const value = await getCredential('qq', 'cookie');
+      const store = createCredentials();
+      await store.set('qq', 'cookie', 'qqmusic_key=abc123');
+      const value = await store.get('qq', 'cookie');
       expect(value).toBe('qqmusic_key=abc123');
     });
 
     it('returns null for missing credentials', async () => {
-      expect(await getCredential('netease', 'cookie')).toBeNull();
+      expect(await createCredentials().get('netease', 'cookie')).toBeNull();
     });
 
     it('updates existing credentials', async () => {
-      await setCredential('netease', 'cookie', 'MUSIC_U=old');
-      await setCredential('netease', 'cookie', 'MUSIC_U=new');
-      expect(await getCredential('netease', 'cookie')).toBe('MUSIC_U=new');
+      const store = createCredentials();
+      await store.set('netease', 'cookie', 'MUSIC_U=old');
+      await store.set('netease', 'cookie', 'MUSIC_U=new');
+      expect(await store.get('netease', 'cookie')).toBe('MUSIC_U=new');
     });
 
     it('deletes credentials', async () => {
-      await setCredential('kuwo', 'token', 'abc');
-      await deleteCredential('kuwo', 'token');
-      expect(await getCredential('kuwo', 'token')).toBeNull();
+      const store = createCredentials();
+      await store.set('kuwo', 'token', 'abc');
+      await store.delete('kuwo', 'token');
+      expect(await store.get('kuwo', 'token')).toBeNull();
     });
 
     it('lists credentials by source', async () => {
-      await setCredential('qq', 'cookie', 'val1');
-      await setCredential('qq', 'token', 'val2');
-      await setCredential('netease', 'cookie', 'val3');
-      const qqCreds = await listCredentials('qq');
+      const store = createCredentials();
+      await store.set('qq', 'cookie', 'val1');
+      await store.set('qq', 'token', 'val2');
+      await store.set('netease', 'cookie', 'val3');
+      const qqCreds = await store.list('qq');
       expect(qqCreds).toHaveLength(2);
-      const allCreds = await listCredentials();
+      const allCreds = await store.list();
       expect(allCreds).toHaveLength(3);
     });
   });

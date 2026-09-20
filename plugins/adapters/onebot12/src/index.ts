@@ -16,7 +16,6 @@ export {
   uploadOneBot12MediaSegments,
   type OneBot12ActionRequest,
   type OneBot12ActionResponse,
-  type OneBot12AdapterConfig,
   type OneBot12CallAction,
   type OneBot12ConfigBase,
   type OneBot12EndpointConfig,

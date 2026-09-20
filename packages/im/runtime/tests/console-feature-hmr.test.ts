@@ -34,8 +34,8 @@ describe('Console Feature slot HMR', () => {
     const pluginSource = join(project, 'plugin.ts');
     const pageProvider = join(project, 'packages/page/index.ts');
     const layoutProvider = join(project, 'packages/layout/index.ts');
-    const pageSource = join(project, 'pages/status.tsx');
-    const navSource = join(project, 'pages/$nav.tsx');
+    const pageSource = join(project, 'pages/status/index.tsx');
+    const navSource = join(project, 'pages/nav/index.tsx');
     let setups = 0;
     modules.set(pluginSource, {
       default: definePlugin({ name: 'root', setup() { setups += 1; } }),
@@ -100,12 +100,12 @@ describe('Console Feature slot HMR', () => {
     const pluginSource = join(project, 'plugin.ts');
     const pageProvider = join(project, 'packages/page/index.ts');
     const layoutProvider = join(project, 'packages/layout/index.ts');
-    const pageSource = join(project, 'pages/status.tsx');
+    const pageSource = join(project, 'pages/status/index.tsx');
     server.set(pluginSource, { default: definePlugin({ name: 'root' }) });
     server.set(pageProvider, { default: pageFeature });
     server.set(layoutProvider, { default: layoutFeature });
     await writeFile(pageSource, pageModule('Status v1'));
-    await writeFile(join(project, 'pages/$nav.tsx'), 'export default function Nav() { return null; }\n');
+    await writeFile(join(project, 'pages/nav/index.tsx'), 'export default function Nav() { return null; }\n');
     const modules = new ClientBuildModuleRuntime(server, new TypeScriptClientBuilder({
       projectRoot: project,
       outDir: join(project, 'dist/client'),
@@ -230,8 +230,8 @@ async function createProject(): Promise<string> {
     'plugin.ts',
     'packages/page/index.ts',
     'packages/layout/index.ts',
-    'pages/status.tsx',
-    'pages/$nav.tsx',
+    'pages/status/index.tsx',
+    'pages/nav/index.tsx',
   ]) await touch(join(root, file));
   return realpath(root);
 }

@@ -104,7 +104,7 @@ export function isOutboundSegment(value: unknown): value is OutboundSegment {
 /**
  * 平台名 → 出站 interactive 策略（adapter 未声明 `segments.interactive` 时
  * 的内置来源）：telegram / discord 端点自行把 keyboard 编码为原生按钮；
- * 其余平台默认 'text'（编号文本降级，对齐旧轨 DEFAULT_INTERACTIVE_POLICY）。
+ * 其余平台默认 'text'（编号文本降级）。
  */
 const OUTBOUND_INTERACTIVE_POLICY_BY_ADAPTER: Record<string, InteractivePolicy> = {
   telegram: 'native',
@@ -166,9 +166,8 @@ function readDeclaredInteractivePolicy(definition: unknown): InteractivePolicy |
 }
 
 /**
- * keyboard 段中央降级：'text' 端点把 keyboard 渲染为编号文本（复用旧轨
- * `renderKeyboardAsText`），并把有效 fallback 映射经 `remember` 回调写入
- * 中央存储（供入站数字回跳解析）；'native' 端点透传 keyboard。
+ * keyboard 段降级：'text' 端点把 keyboard 渲染为编号文本，并把有效
+ * fallback 映射交给调用方所属的 runtime；'native' 端点透传 keyboard。
  */
 export function applyOutboundInteractivePolicy(
   payload: unknown,

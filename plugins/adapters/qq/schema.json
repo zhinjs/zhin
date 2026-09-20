@@ -62,20 +62,13 @@
       "default": "/qq/webhook",
       "description": "POST path on httpHostToken for webhook/middleware modes."
     },
-    "port": {
-      "type": "number",
-      "description": "Legacy standalone webhook port (unused with httpHostToken)."
-    },
-    "path": {
-      "type": "string",
-      "description": "Legacy standalone webhook path (unused with httpHostToken)."
-    },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
+      "minItems": 1,
+      "description": "多账号：每项定义一个 endpoint，id/appid/secret 必填，其余字段覆盖实例默认值",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "appid": {
             "type": "string",
@@ -84,6 +77,17 @@
           "secret": {
             "type": "string",
             "description": "QQ official bot secret"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "websocket",
+              "webhook",
+              "middleware"
+            ]
+          },
+          "sandbox": {
+            "type": "boolean"
           },
           "master": {
             "type": [
@@ -117,6 +121,18 @@
               "type": "string"
             },
             "description": "覆盖顶层 intents"
+          },
+          "accessTokenUrl": {
+            "type": "string"
+          },
+          "gatewayUrl": {
+            "type": "string"
+          },
+          "webhookPath": {
+            "type": "string"
+          },
+          "commandPrefix": {
+            "type": "string"
           },
           "id": {
             "type": "string",

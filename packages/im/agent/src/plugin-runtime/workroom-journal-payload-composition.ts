@@ -1,7 +1,7 @@
 import {
   WorkroomJournalPayloadAuthorityUnavailableError,
   type WorkroomJournalPayloadPort,
-} from '../workroom/journal.js';
+} from '../workroom/journal/index.js';
 
 export interface GenerationOwnedWorkroomJournalPayloadPort {
   readonly generation: number;

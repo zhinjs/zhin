@@ -11,7 +11,7 @@ title: 仓库结构
 | 目录 | 内容 |
 | --- | --- |
 | `basic/` | 基础层：`cli`、`database`、`logger`、`schedule`、`schema`（日志、数据库、配置校验、命令行） |
-| `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-yaml`、`core`、`feature-kit`、`handler`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`、`runtime`、`skill`、`tool`、`zhin` 等 |
+| `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-file`、`core`、`feature-kit`、`handler`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`、`runtime`、`skill`、`tool`、`zhin` 等 |
 | `packages/console/` | Remote Console 支撑包（`client`、`contract`、`layout`、`page`、`pagemanager`、`plugin-contract`、`protocol`）。Host 只提供 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
 | `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server） |
 | `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`satori`、`html-renderer`、`speech` |
@@ -33,20 +33,46 @@ title: 仓库结构
 
 ## 分层与依赖方向
 
-核心包之间的依赖方向是单向的，由 `pnpm check:architecture`（`scripts/check-architecture-layers.mjs`）强制检查：
+核心包之间的依赖方向是单向的，由 `pnpm check:architecture`（`scripts/check-architecture-layers.mjs`）强制检查。完整关系以[架构概览](../concepts/architecture.md)为 SSOT，常用主干如下：
 
 ```mermaid
-flowchart LR
-  basic["basic/*<br/>logger · database · schema · cli"] --> kernel["@zhin.js/kernel<br/>插件系统 · 定时 · 错误体系"]
-  kernel --> ai["@zhin.js/ai<br/>Provider · agentLoop · 会话 · 记忆"]
-  ai --> core["@zhin.js/core<br/>Plugin · Adapter · Endpoint · 命令 · 中间件"]
-  core --> agent["@zhin.js/agent<br/>ZhinAgent · 编排 · 安全沙箱 · MCP client"]
-  agent --> zhin["zhin.js<br/>启动入口 · 配置解析 · 插件加载"]
-  zhin --> hostHttp["@zhin.js/host-http"]
-  hostHttp --> hostMcp["@zhin.js/mcp / @zhin.js/a2a"]
+flowchart BT
+  contract["plugin-runtime · im-contract · interaction"] --> featureKit["feature-kit"]
+  featureKit --> features["adapter · command · component · middleware · handler"]
+  features --> core["core"]
+  basic["logger · schema · schedule · database"] --> kernel["kernel"]
+  kernel --> core
+  basic --> ai["ai"]
+  ai --> agent["agent"]
+  core --> agent
+  core --> zhin["zhin.js"]
+  contract --> runtime["runtime"]
+  featureKit --> runtime
+  runtime --> cli["cli composition root"]
+  agent --> cli
 ```
 
-记住三件事：`kernel` 与 `ai` 不含任何 IM 概念，可以独立拿出来用；低层不得反向依赖高层，也不得让低层代码引入 IM 概念；唯一例外是 `basic/cli`——它是 Plugin Runtime 的 composition root（`zhin runtime start` 在这里装配 IM / Agent / Console Host），允许导入 `packages/im` 各层。
+`plugin-runtime`、`im-contract` 与 `interaction` 是底层契约；Feature 包在其上描述单一能力，
+`core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
+`basic/cli`，`zhin runtime start` 在这里组合 IM、Agent 与 Console Host。
+
+大型领域采用“一个 canonical 入口 + 单向内部协作”的深模块结构。当前收敛后的阅读入口是：
+
+| 领域 | 阅读入口 | 内部职责 |
+| --- | --- | --- |
+| Workroom Journal | `packages/im/agent/src/workroom/journal/index.ts` | 契约、事件校验/编解码、受治理载荷、Memory/File/Database 适配器 |
+| Workroom Projection | `packages/im/agent/src/workroom/projection-outbox/index.ts` | 契约、Repository CAS、投影规则、Tracer、Delivery Worker |
+| Extended Console RPC | `packages/host/http/src/console-rpc-extended/index.ts` | 薄 Dispatcher、schedule/inbox/login/Endpoint/Workroom RPC 域 |
+
+目录存在的目的不是缩短单个文件，而是让调用方只依赖稳定入口，让状态、策略和 IO
+实现保持单向关系。`pnpm check:domain-module-boundaries` 禁止模块外深层导入和旧平面入口回归。
+
+插件的约定能力也遵循同一原则：`commands/<path>/index.ts`、`adapters/<name>/index.ts`、
+`agents/<name>/`、`skills/<name>/`、`tools/<name>/index.ts` 是能力所有权边界。仅供某个能力
+使用的 definition、handler 或 helper 放在该能力目录内；多个能力共享且属于插件运行态的实现
+才放在 `src/`，并通过稳定包入口或一个局部桥接模块使用。叶子 `index.ts` 不得用多层相对路径
+回穿包根 `src/`。适配器 Command 与 Agent Skill Tool 的这项约束由
+`pnpm check:agent-tool-authoring-boundaries` 强制检查。
 
 ## AGENTS.md 导读
 

@@ -50,8 +50,18 @@ export class TurnToolRuntime {
       }
       const approved = await this.turn.ports.approval.requestApproval({
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
+        sessionKey: this.turn.session.key,
+        ...(this.turn.origin.kind === 'im'
+          ? { conversationScope: this.turn.origin.scope }
+          : {}),
+        requesterId: this.turn.principal.subjectId,
         toolName: name,
-        scopeKey: approvalScopeKey(name, decision.input),
+        scopeKey: tool.requiresApproval === 'once'
+          ? name
+          : approvalScopeKey(name, decision.input),
+        ...(tool.requiresApproval === 'once' || decision.policy === 'exec-policy'
+          ? { remember: 'session' as const }
+          : {}),
         question: formatApprovalQuestion(name, decision.reason, decision.input),
         signal: this.turn.signal,
       });
@@ -143,11 +153,21 @@ function stableApprovalValue(value: unknown): string {
 }
 
 /** Adapts canonical capability execution to the full AgentCore seam. */
-export function turnToolExecutionAuthority(runtime: TurnToolRuntime): ToolExecutionAuthority {
-  return Object.freeze({
-    execute: (tool: AgentTool, input: Readonly<Record<string, unknown>>, toolUseId: string, cause?: ToolExecutionCause) =>
-      runtime.execute(tool.name, input, toolUseId, cause),
-  });
+export class TurnToolExecutionAuthority implements ToolExecutionAuthority {
+  readonly #runtime: TurnToolRuntime;
+
+  constructor(runtime: TurnToolRuntime) {
+    this.#runtime = runtime;
+  }
+
+  execute(
+    tool: AgentTool,
+    input: Readonly<Record<string, unknown>>,
+    toolUseId: string,
+    cause?: ToolExecutionCause,
+  ) {
+    return this.#runtime.execute(tool.name, input, toolUseId, cause);
+  }
 }
 
 function freezeToolExecutionCause(cause?: ToolExecutionCause): ToolExecutionCause | undefined {

@@ -1,6 +1,6 @@
 /**
  * Deferred worker 完成后将结果写入主会话 ContextRepository，
- * 避免下一轮主 Agent 仍只看到 run_deferred_task 的 delegated 占位。
+ * 让下一轮主 Agent 能直接读取已完成 Worker 的结果。
  */
 import {
   EMPTY_TOKEN_USAGE,

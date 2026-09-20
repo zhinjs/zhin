@@ -67,10 +67,10 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | API Surface (`pnpm check:api-surface`) | Public API surface snapshot |
 | Plugin Runtime API (`pnpm check:plugin-runtime-api`) | Convention-based plugin runtime API surface snapshot |
 | Plugin Spec (`pnpm check:plugin`) | Plugins conform to standard spec |
-| Plugin Agent Publish (`pnpm check:plugin-agent-publish`) | Plugins with `agent/` have proper publish checklist (files, prepublishOnly, peer deps) |
+| Plugin Capability Publish (`pnpm check:plugin-capability-publish`) | Plugins publish their capability directories with the required files, prepublish build, and peer dependencies |
 | Publish Repository (`pnpm check:publish-repository`) | Publishable packages have `repository.url` matching github.com/zhinjs/zhin (npm provenance) |
-| Agent Tool Schema (`pnpm check:agent-tool-schema`) | `agent/tools` inputSchema matches defineAgentTool/execute types |
-| No Package-Root skills/ (`pnpm check:no-package-skills`) | Plugin packages must not have top-level `skills/`; use `agent/skills/*.md` instead |
+| Agent Tool Schema (`pnpm check:agent-tool-schema`) | `tools` inputSchema matches defineAgentTool/execute types |
+| Skill Authoring Boundaries (`pnpm check:skill-authoring-boundaries`) | Skills use `skills/<name>/SKILL.md` and explicitly mount the Feature |
 
 **IM Chain & Runtime Conventions**
 
@@ -78,15 +78,14 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | --- | --- |
 | IM Send Path (`pnpm check:harness-paths`) | Must not bypass the Adapter.sendMessage unified chain |
 | IM Session SSOT (`pnpm check:im-session-ssot`) | IM scene/session identity resolution uses core SSOT |
-| usePlugin Top-Level (`pnpm check:use-plugin-top-level`) | `usePlugin()` must be at module top level |
-| getPlugin Runtime (`pnpm check:get-plugin-runtime`) | `getPlugin()` is forbidden inside runtime callbacks |
+| Removed Plugin API (`pnpm check:no-removed-plugin-api`) | Removed Plugin lookup APIs must not reappear in production source |
 | Workroom SSOT (`pnpm check:workroom-ssot`) | Workroom state must go through the Journal + CAS Kernel; parallel mutable authorities are forbidden |
 
 **AI Layer**
 
 | Check | Description |
 | --- | --- |
-| getModel Import Disambiguation (`pnpm check:get-model-imports`) | Runtime code uses getLlmTransportModel, not the ambiguous getModel |
+| LLM Runtime Boundaries (`pnpm check:llm-runtime-boundaries`) | Runtime code resolves models through an owner-scoped `LlmApiRuntime` and does not import ambiguous `getModel` |
 | Legacy AI Exports (`pnpm check:legacy-ai-exports`) | `@zhin.js/ai` no longer exports SessionManager and similar symbols |
 | Provider Gateway (`pnpm check:provider-gateway`) | LLM gateway sdk/contextWindow preset contract |
 | A2A Mesh (`pnpm check:a2a-mesh`) | No residual MCP Agent Mesh v1 symbols |
@@ -95,7 +94,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 
 | Check | Description |
 | --- | --- |
-| Rich Segment Adapters (`pnpm check:rich-segments`) | outboundRichSegmentPolicy declaration and contract tests |
+| Outbound Media Policies (`pnpm check:outbound-media-policies`) | segments.outboundMedia declarations and contract tests |
 | AI Outbound Adapters (`pnpm check:ai-outbound`) | aiOutboundExtensions declaration and contract tests |
 | Interactive Segments (`pnpm check:interactive-segments`) | interactivePolicy declaration and contract tests |
 | Segment Adapters (`pnpm check:segments`) | defineAdapter segments declaration contract (sandbox must pass) |

@@ -31,7 +31,7 @@ export function createOnebot12EndpointClient(
 ): OneBotV12Client {
   const baseUrl = config.connection === 'ws'
     ? config.url.replace(/^ws(s?):/, 'http$1:')
-    : config.connection === 'webhook' && config.api_url
+    : config.connection === 'webhook'
       ? config.api_url
       : 'http://localhost';
   return new OneBotV12Client({

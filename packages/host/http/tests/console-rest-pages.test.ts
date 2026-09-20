@@ -295,6 +295,31 @@ const marketplaceOptions = {
 };
 
 describe('console-rest-pages marketplace', () => {
+  it('isolates registry caches between Host registrations', async () => {
+    const registryFetch = (name: string) => (async () => new Response(JSON.stringify({
+      plugins: [{ name, displayName: name }],
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    })) as typeof fetch;
+
+    const leftBase = await startHost(baseCtx(), {
+      ...marketplaceOptions,
+      fetchFn: registryFetch('left-plugin'),
+      pluginRegistryUrl: 'https://left.test/plugins.json',
+    });
+    const rightBase = await startHost(baseCtx(), {
+      ...marketplaceOptions,
+      fetchFn: registryFetch('right-plugin'),
+      pluginRegistryUrl: 'https://right.test/plugins.json',
+    });
+
+    const left = await json(await fetch(`${leftBase}/pub/marketplace/search`));
+    const right = await json(await fetch(`${rightBase}/pub/marketplace/search`));
+    expect(left.data).toEqual([expect.objectContaining({ name: 'left-plugin' })]);
+    expect(right.data).toEqual([expect.objectContaining({ name: 'right-plugin' })]);
+  });
+
   it('GET /pub/marketplace/search 返回分页列表并支持 keyword/category/official 过滤', async () => {
     const base = await startHost(baseCtx(), marketplaceOptions);
     const all = await json(await fetch(`${base}/pub/marketplace/search`));
@@ -389,7 +414,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
         { pattern: 'bar', desc: 'bar cmd', plugin: 'game' },
       ],
       middlewares: () => [{ name: 'audit', owner: 'root', phase: 'before-dispatch', target: 'inbound', order: 10 }],
-      components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card.ts' }],
+      components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card/index.ts' }],
       renderComponent: async ({ requester, name, props }) => ({
         type: 'text', data: { text: `${requester}:${name}:${JSON.stringify(props)}` },
       }),
@@ -404,7 +429,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
         order: 70,
         retention: 'preferred',
         profiles: ['interactive'],
-        source: './agent/prompt-sections/project-rules.ts',
+        source: './prompt-sections/project-rules.ts',
         generation: 7,
         contentChars: 36,
       }],
@@ -564,12 +589,12 @@ describe('console-rest-pages introspection', () => {
     expect(typeof (body.data as { note?: string }).note).toBe('string');
   });
 
-  it('collector 抛错时按 legacy err 路径返回 503', async () => {
+  it('collector 抛错时返回 503', async () => {
     const base = await startHost(baseCtx({
       acquireAgentRuntime: () => lease({
         introspection: {
           commands: () => {
-            throw new Error('CommandFeature 不可用');
+            throw new Error('CommandIndex 不可用');
           },
         },
       } satisfies ConsoleAgentRuntime),
@@ -578,7 +603,7 @@ describe('console-rest-pages introspection', () => {
     expect(response.status).toBe(503);
     expect(await json(response)).toMatchObject({
       success: false,
-      error: 'CommandFeature 不可用',
+      error: 'CommandIndex 不可用',
     });
   });
 

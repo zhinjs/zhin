@@ -2,19 +2,9 @@
 /**
  * Harness: 检查架构层级依赖是否正确
  *
- * 依赖层级（从低到高）：
- * 1. basic/ (logger, schema, database, cli)
- * 2. packages/im/kernel (无 IM 概念)
- * 3. packages/im/ai (providers, agents, memory)
- * 4. packages/im/core (Plugin, Adapter, Endpoint, Command)
- * 5. packages/im/agent (ZhinAgent, security policies)
- * 6. packages/im/zhin (主入口)
- *
- * 禁止的导入：
- * - kernel 不能导入 core/agent/zhin
- * - ai 不能导入 core/agent/zhin
- * - core 不能导入 agent/zhin
- * - agent 不能导入 zhin
+ * 依赖层级的 SSOT：docs/concepts/architecture.md。
+ * 本门禁把零依赖契约、Feature 机制、IM/AI 组装与 composition root
+ * 映射为实际可检查的包依赖。
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -33,10 +23,16 @@ const repoRoot = path.resolve(__dirname, '..');
 // Plugin Runtime 新层（约定式插件运行时迁移引入）：
 // plugin-runtime（契约/宿主 token，零 zhin 依赖）→ feature-kit（feature provider 基座）
 // → 9 个 provider 包（adapter/command/component/middleware/handler/tool/skill/agent-feature/mcp-feature）
-// → runtime（RootHost 装配）→ isolate / config-yaml（依赖 runtime，仅契约）。
+// → runtime（RootHost 装配）→ isolate / config-file（依赖 runtime，仅契约）。
 // packages/host/http-contract 是协议 Host 的最小端口（路由 + body），零业务依赖。
 // packages/host/http 是具体 HTTP / WebSocket Host，仅依赖 basic + plugin-runtime。
-const providerLayerAllowed = ['basic', 'packages/im/interaction', 'packages/im/plugin-runtime', 'packages/im/feature-kit'];
+const providerLayerAllowed = [
+  'basic',
+  'packages/im/im-contract',
+  'packages/im/interaction',
+  'packages/im/plugin-runtime',
+  'packages/im/feature-kit',
+];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
   // external Console builds can share it without pulling runtime packages.
@@ -44,6 +40,7 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
+  'packages/im/im-contract': { level: 0, allowedImports: [] },
   'packages/im/interaction': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
   'packages/im/feature-kit': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime'] },
@@ -59,12 +56,12 @@ const layers = {
   'packages/im/prompt-section': { level: 1, allowedImports: providerLayerAllowed },
   'packages/im/runtime': { level: 1, allowedImports: [...providerLayerAllowed, 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler', 'packages/im/tool', 'packages/im/skill', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section'] },
   'packages/im/isolate': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
-  'packages/im/config-yaml': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
+  'packages/im/config-file': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/im/runtime'] },
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
@@ -108,8 +105,9 @@ const packageNameToPath = {
   '@zhin.js/prompt-section': 'packages/im/prompt-section',
   '@zhin.js/runtime': 'packages/im/runtime',
   '@zhin.js/isolate': 'packages/im/isolate',
-  '@zhin.js/config-yaml': 'packages/im/config-yaml',
+  '@zhin.js/config-file': 'packages/im/config-file',
   '@zhin.js/interaction': 'packages/im/interaction',
+  '@zhin.js/im-contract': 'packages/im/im-contract',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',
@@ -323,6 +321,15 @@ for (const layerPath of layerPathsBySpecificity) {
     const content = fs.readFileSync(file, 'utf8');
     const imports = parseImports(content);
 
+    if (sourceLayer.startsWith('packages/host/')
+      && /^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(content)) {
+      violations.push({
+        file: relativeFilePath,
+        import: 'module-level mutable binding',
+        reason: 'Protocol Host runtime state must be owned by a Host instance or registration',
+      });
+    }
+
     for (const importPath of imports) {
       const result = checkImport(sourceLayer, relativeFilePath, importPath);
       if (!result.valid) {
@@ -446,3 +453,49 @@ if (reverseViolations.length) {
 }
 
 console.log('Harness assistant reverse-dependency check: OK.');
+
+// Workroom, Portfolio and Data Governance are domain modules. Their contracts
+// and policies must remain independent from Agent configuration and Plugin
+// Runtime composition. Runtime adapters may depend on these domains only in
+// the opposite direction.
+const agentDomainRoots = [
+  'packages/im/agent/src/workroom',
+  'packages/im/agent/src/portfolio',
+  'packages/im/agent/src/data-governance',
+];
+const agentRuntimeRoots = [
+  path.join(repoRoot, 'packages/im/agent/src/config'),
+  path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
+];
+const agentDomainViolations = [];
+
+for (const domainRoot of agentDomainRoots) {
+  const files = [];
+  walkTs(path.join(repoRoot, domainRoot), files);
+  for (const file of files) {
+    const content = fs.readFileSync(file, 'utf8');
+    for (const importPath of parseImports(content)) {
+      if (!importPath.startsWith('.')) continue;
+      const target = path.resolve(path.dirname(file), importPath);
+      const forbidden = agentRuntimeRoots.find(root => target === root || target.startsWith(`${root}${path.sep}`));
+      if (!forbidden) continue;
+      agentDomainViolations.push({
+        file: path.relative(repoRoot, file),
+        import: importPath,
+        reason: `${domainRoot} must not depend on ${path.relative(repoRoot, forbidden)}`,
+      });
+    }
+  }
+}
+
+if (agentDomainViolations.length) {
+  console.error('\nHarness Agent domain boundary check: FAILED\n');
+  for (const violation of agentDomainViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Agent domain boundary check: OK.');

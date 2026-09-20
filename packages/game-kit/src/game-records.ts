@@ -1,13 +1,11 @@
 import {
   type Database,
-  type DatabaseFeature,
   type Models,
-  type Plugin,
   type RelatedModel,
 } from '@zhin.js/core';
 import { channelKey } from './board-sender.js';
 import type { GameMessageLike } from './command-message.js';
-import { createHostGameDb, type HostGameDbSource } from './memory-db.js';
+import type { HostGameDbSource } from './memory-db.js';
 import { generateCompactId } from './random.js';
 
 export type GameRecordResult = 'won' | 'lost' | 'draw' | 'aborted';
@@ -28,41 +26,8 @@ declare module '@zhin.js/core' {
 }
 
 export type GameRecordRow = Models['game_records'];
-type GameRecordDb = Database<unknown, Models, string>;
-
-let legacyDb: GameRecordDb | null = null;
-let hostDatabases = new WeakMap<GameRecordDatabaseHost, GameRecordDb>();
-const hostRegistrations: Array<{
-  readonly host: GameRecordDatabaseHost;
-  readonly database: GameRecordDb;
-}> = [];
-
-/** gameId → 该游戏插件 setup 时注册的战绩库（按插件作用域取库，避免多 Host 时全局最后注册者胜） */
-const gameDatabases = new Map<string, GameRecordDb>();
-/** 最近一次 initGameRecordHost 注册的库；registerRuntimeGame 借此把游戏绑定到所属 Host 的库 */
-let latestHostDatabase: GameRecordDb | null = null;
-
-function activeDatabase(): GameRecordDb | null {
-  return hostRegistrations[hostRegistrations.length - 1]?.database ?? legacyDb;
-}
-
-/** 按游戏作用域取库：优先该游戏插件注册时绑定的 Host 库，回退到全局活跃库 */
-function databaseForGame(gameId: string): GameRecordDb | null {
-  return gameDatabases.get(gameId) ?? activeDatabase();
-}
-
-/**
- * 由 registerRuntimeGame 在游戏注册时调用：把游戏绑定到当前插件刚通过 initGameRecordHost 注册的战绩库。
- * 返回解绑函数（随游戏注销一并解绑）。
- */
-export function bindGameRecordDatabase(gameId: string): () => void {
-  const db = latestHostDatabase;
-  if (!db) return () => {};
-  gameDatabases.set(gameId, db);
-  return () => {
-    if (gameDatabases.get(gameId) === db) gameDatabases.delete(gameId);
-  };
-}
+export type GameRecordDatabase = Database<unknown, Models, string>;
+type GameRecordDb = GameRecordDatabase;
 
 function getRecordModel(database: GameRecordDb): RelatedModel<unknown, Models, 'game_records'> {
   const model = database.models.get('game_records');
@@ -70,24 +35,7 @@ function getRecordModel(database: GameRecordDb): RelatedModel<unknown, Models, '
   return model as RelatedModel<unknown, Models, 'game_records'>;
 }
 
-export function registerGameRecordModels(plugin: Plugin): void {
-  plugin.defineModel('game_records', {
-    id: { type: 'text', primary: true },
-    user_id: { type: 'text', nullable: false },
-    user_name: { type: 'text', default: '' },
-    channel_key: { type: 'text', nullable: false },
-    game_id: { type: 'text', nullable: false },
-    result: { type: 'text', nullable: false },
-    score: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
-  });
-}
-
-export function initGameRecordDatabase(dbFeature: DatabaseFeature): void {
-  legacyDb = dbFeature.db as GameRecordDb;
-}
-
-const GAME_RECORDS_DEFINITION: Record<string, unknown> = {
+export const GAME_RECORDS_DEFINITION: Record<string, unknown> = Object.freeze({
   id: { type: 'text', primary: true },
   user_id: { type: 'text', nullable: false },
   user_name: { type: 'text', default: '' },
@@ -96,31 +44,15 @@ const GAME_RECORDS_DEFINITION: Record<string, unknown> = {
   result: { type: 'text', nullable: false },
   score: { type: 'integer', default: 0 },
   created_at: { type: 'integer', default: 0 },
-};
+});
 
 /** Plugin Runtime DatabaseHost 的最小结构（与 @zhin.js/plugin-runtime 的 DatabaseHost 结构对齐） */
 export interface GameRecordDatabaseHost extends HostGameDbSource {
   define(name: string, definition: Record<string, unknown>): void;
 }
 
-/**
- * Plugin Runtime 下用 databaseHostToken 初始化战绩库。
- * 幂等：多个游戏插件 setup 都会调用，只建一次；无 token 时保持跳过（内存/静默）。
- */
-export function initGameRecordHost(host: GameRecordDatabaseHost): () => void {
-  let database = hostDatabases.get(host);
-  if (!database) {
-    host.define('game_records', GAME_RECORDS_DEFINITION);
-    database = createHostGameDb(host, ['game_records']) as unknown as GameRecordDb;
-    hostDatabases.set(host, database);
-  }
-  latestHostDatabase = database;
-  const registration = Object.freeze({ host, database });
-  hostRegistrations.push(registration);
-  return () => {
-    const index = hostRegistrations.lastIndexOf(registration);
-    if (index >= 0) hostRegistrations.splice(index, 1);
-  };
+export function defineGameRecordTable(host: GameRecordDatabaseHost): void {
+  host.define('game_records', GAME_RECORDS_DEFINITION);
 }
 
 function recordId(): string {
@@ -128,27 +60,6 @@ function recordId(): string {
 }
 
 /** 对局结束时写入战绩（database 未就绪时静默跳过） */
-export async function recordGameOutcome(
-  message: GameMessageLike,
-  gameId: string,
-  result: GameRecordResult,
-  score = 0,
-): Promise<void> {
-  const db = databaseForGame(gameId);
-  if (!db) return;
-  const row: GameRecordRow = {
-    id: recordId(),
-    user_id: message.$sender.id,
-    user_name: String(message.$sender.name ?? message.$sender.id),
-    channel_key: channelKey(message),
-    game_id: gameId,
-    result,
-    score,
-    created_at: Date.now(),
-  };
-  await getRecordModel(db).create(row);
-}
-
 export interface UserGameStats {
   gameId: string;
   wins: number;
@@ -156,39 +67,6 @@ export interface UserGameStats {
   draws: number;
   totalScore: number;
   games: number;
-}
-
-export async function getUserGameStats(
-  userId: string,
-  channelKeyFilter?: string,
-): Promise<UserGameStats[]> {
-  const db = activeDatabase();
-  if (!db) return [];
-  const where = channelKeyFilter
-    ? { user_id: userId, channel_key: channelKeyFilter }
-    : { user_id: userId };
-  const rows = await getRecordModel(db).findAll(where);
-  const byGame = new Map<string, UserGameStats>();
-  for (const row of rows) {
-    let stat = byGame.get(row.game_id);
-    if (!stat) {
-      stat = {
-        gameId: row.game_id,
-        wins: 0,
-        losses: 0,
-        draws: 0,
-        totalScore: 0,
-        games: 0,
-      };
-      byGame.set(row.game_id, stat);
-    }
-    stat.games++;
-    stat.totalScore += row.score;
-    if (row.result === 'won') stat.wins++;
-    else if (row.result === 'lost') stat.losses++;
-    else if (row.result === 'draw') stat.draws++;
-  }
-  return [...byGame.values()].sort((a, b) => b.wins - a.wins);
 }
 
 export interface LeaderboardEntry {
@@ -199,44 +77,67 @@ export interface LeaderboardEntry {
   games: number;
 }
 
-export async function getGameLeaderboard(
-  gameId: string,
-  channelKeyFilter: string,
-  limit = 10,
-): Promise<LeaderboardEntry[]> {
-  const db = databaseForGame(gameId);
-  if (!db) return [];
-  const rows = await getRecordModel(db).findAll({
-    game_id: gameId,
-    channel_key: channelKeyFilter,
-  });
-  const byUser = new Map<string, LeaderboardEntry>();
-  for (const row of rows) {
-    let entry = byUser.get(row.user_id);
-    if (!entry) {
-      entry = {
-        userId: row.user_id,
-        userName: row.user_name,
-        wins: 0,
-        totalScore: 0,
-        games: 0,
-      };
-      byUser.set(row.user_id, entry);
-    }
-    entry.games++;
-    entry.totalScore += row.score;
-    if (row.result === 'won') entry.wins++;
-  }
-  return [...byUser.values()]
-    .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
-    .slice(0, limit);
+export interface GameRecordPort {
+  record(
+    message: GameMessageLike,
+    gameId: string,
+    result: GameRecordResult,
+    score?: number,
+  ): Promise<void>;
+  getUserStats(userId: string, channelKeyFilter?: string): Promise<UserGameStats[]>;
+  getLeaderboard(gameId: string, channelKeyFilter: string, limit?: number): Promise<LeaderboardEntry[]>;
 }
 
-/** 测试专用 */
-export function resetGameRecordsForTests(): void {
-  legacyDb = null;
-  hostDatabases = new WeakMap();
-  hostRegistrations.splice(0);
-  gameDatabases.clear();
-  latestHostDatabase = null;
+export class GameRecordStore implements GameRecordPort {
+  constructor(private readonly database: GameRecordDb) {}
+
+  async record(message: GameMessageLike, gameId: string, result: GameRecordResult, score = 0): Promise<void> {
+    await getRecordModel(this.database).create({
+      id: recordId(),
+      user_id: message.$sender.id,
+      user_name: String(message.$sender.name ?? message.$sender.id),
+      channel_key: channelKey(message),
+      game_id: gameId,
+      result,
+      score,
+      created_at: Date.now(),
+    });
+  }
+
+  async getUserStats(userId: string, channelKeyFilter?: string): Promise<UserGameStats[]> {
+    const where = channelKeyFilter
+      ? { user_id: userId, channel_key: channelKeyFilter }
+      : { user_id: userId };
+    const rows = await getRecordModel(this.database).findAll(where);
+    const byGame = new Map<string, UserGameStats>();
+    for (const row of rows) {
+      const stat = byGame.get(row.game_id) ?? {
+        gameId: row.game_id, wins: 0, losses: 0, draws: 0, totalScore: 0, games: 0,
+      };
+      stat.games++;
+      stat.totalScore += row.score;
+      if (row.result === 'won') stat.wins++;
+      else if (row.result === 'lost') stat.losses++;
+      else if (row.result === 'draw') stat.draws++;
+      byGame.set(row.game_id, stat);
+    }
+    return [...byGame.values()].sort((a, b) => b.wins - a.wins);
+  }
+
+  async getLeaderboard(gameId: string, channelKeyFilter: string, limit = 10): Promise<LeaderboardEntry[]> {
+    const rows = await getRecordModel(this.database).findAll({ game_id: gameId, channel_key: channelKeyFilter });
+    const byUser = new Map<string, LeaderboardEntry>();
+    for (const row of rows) {
+      const entry = byUser.get(row.user_id) ?? {
+        userId: row.user_id, userName: row.user_name, wins: 0, totalScore: 0, games: 0,
+      };
+      entry.games++;
+      entry.totalScore += row.score;
+      if (row.result === 'won') entry.wins++;
+      byUser.set(row.user_id, entry);
+    }
+    return [...byUser.values()]
+      .sort((a, b) => b.wins - a.wins || b.totalScore - a.totalScore)
+      .slice(0, limit);
+  }
 }

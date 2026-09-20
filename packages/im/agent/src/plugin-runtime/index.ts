@@ -1,6 +1,20 @@
 export * from './agent-runtime.js';
 export * from './agent-host-port.js';
+export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';
+export * from './native-bash-tool.js';
+export { ZhinAgent } from '../zhin-agent/index.js';
+export type { AgentTurnConfiguration, AgentTurnRequest } from '../zhin-agent/index.js';
+export { composeZhinAgentRuntime } from '../init/compose-zhin-agent-runtime.js';
+export type { ComposedZhinAgentRuntime } from '../init/compose-zhin-agent-runtime.js';
+export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.js';
+export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
+export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
+export {
+  ensureMcpConnections,
+  ensureMcpConnectionsForBinding,
+  getMcpToolsForBinding,
+} from '../resource-hub/mcp-lifecycle.js';
 export type { AssistantRuntimeHandle } from '../assistant/runtime-contract.js';
 export type {
   WorkroomRunControlCommand,
@@ -54,6 +68,7 @@ export * from './workroom-scheduler-portfolio-request-authority.js';
 export * from './workroom-scheduler-portfolio-composition.js';
 export * from './workroom-preemption-runtime.js';
 export * from './workroom-local-assignment-runtime.js';
+export * from './workroom-local-assignment-executor.js';
 export * from './workroom-local-assignment-authority.js';
 export * from './workroom-local-assignment-supply.js';
 export * from './workroom-local-agent-loop.js';
@@ -67,7 +82,9 @@ export * from './workroom-data-governance-root-provider.js';
 export { digestCanonicalWorkroomValue } from '../workroom/canonical-value.js';
 export * from './workroom-data-governance-storage.js';
 export * from './workroom-governed-dispatch-composition.js';
-export * from './workroom-governed-dispatch-reasons.js';
+export * from '../workroom/governed-dispatch-reasons.js';
+export * from '../workroom/remote-executor.js';
+export * from '../data-governance/disclosure-authority.js';
 export * from './workroom-data-lifecycle-composition.js';
 export * from './workroom-data-lifecycle-console.js';
 export * from './workroom-data-lifecycle-human-ingress.js';
@@ -89,6 +106,9 @@ export * from './host-tool-projection.js';
 export * from './host-mcp-projection.js';
 export * from './native-file-tools.js';
 export * from './native-web-tools.js';
+export * from './native-image-tool.js';
+export * from './native-knowledge-tool.js';
+export * from './native-tool-suite.js';
 export * from './native-todo-tools.js';
 export * from './native-interaction-tools.js';
 export * from './native-semantic-memory-tools.js';

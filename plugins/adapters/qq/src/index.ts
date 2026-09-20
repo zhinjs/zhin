@@ -4,7 +4,7 @@ export {
   resolveOutboundMessageId,
   resolveQqConfig,
   senderDisplayName,
-  type QqAdapterConfig,
+  type QqEndpointConfig,
   type QqChannelKind,
   type QqInboundMessage,
   type QqWireSegment,

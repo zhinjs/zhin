@@ -67,7 +67,7 @@ export function createNativeSemanticMemoryToolFeatures(
         }),
         required: Object.freeze(['query']),
       }),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: (input, context) => searchMemory(runtime, input, context),
     })),
     feature('memory_upsert', defineAgentTool({
@@ -84,7 +84,7 @@ export function createNativeSemanticMemoryToolFeatures(
         }),
         required: Object.freeze(['key', 'content']),
       }),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: (input, context) => upsertMemory(runtime, input, context),
     })),
   ]);

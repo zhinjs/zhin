@@ -35,9 +35,10 @@ export default defineGamePlugin({
 });
 ```
 
-- `commands/<name>/[[action]].ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
+- `commands/<name>/[[action]]/index.ts` 定义命令（可选参数；在 `defineCommand({ params })` 中声明 `action` 的类型与默认值）。
 - `middlewares/` 处理按钮 payload、裸文本答案和旧命令别名。
-- `registerRuntimeGame()` / `getRuntimeGames()` 是大厅 SSOT，dispose 时对称移除。
+- `defineGamePlugin()` 通过 `addGame` 发布 Game capability；`GameIndex` 是整代 snapshot
+  的大厅 SSOT，命令通过 `context.project(gameFeatureId)` 读取。
 - `DEFAULT_GAME_STALE_CRON` 与 `scheduleHostToken` 用于清理超时会话。
 - `defineGamePlugin()` 在存在 `outboundHostToken` 时自动通知超时会话所在频道。
 - 每个游戏包定义自己的 typed service token；`plugin.ts` 提供资源，command/middleware
@@ -64,14 +65,16 @@ class SessionService extends BaseSessionService<MySessionRow> {
 ```
 
 基类统一提供 `getById()`、用户/频道活动会话查询、`updateSession()`、`abortStale()`
-和跨游戏冲突检查。`gameEvents` 发布 `game:start`、`game:end`、
-`turn:change`、`session:timeout`；监听器失败不会回滚已经持久化的会话变化。
+和跨游戏冲突检查。每个 SessionService 的 `events` 发布 `game:start`、`game:end`、
+`turn:change`、`session:timeout`；事件总线属于服务实例，监听器失败不会回滚已经持久化的
+会话变化。
 
 SessionService 可用 `projectOutcomes` 把终局行投影为玩家结果。`defineGamePlugin()` 订阅
 `game:end` 并统一写入战绩，game-flow 不再直接触碰战绩数据库。
 
-`GameSessionCoordinator` 使用按 gameId 分组的 generation 栈。热更新先安装新代、再释放
-旧代时，查询始终落到最新服务；dispose 新代后仍可恢复旧代，避免短暂注册空窗。
+`GameIndex` 从当前 snapshot 的 Game capability 一次性构造 `GameSessionCoordinator`，再把
+该代的可用性视图绑定到各 SessionService。不同 Root 与不同 generation 没有共享注册表，
+旧代释放不会改变新代的协调关系。
 
 ### 长生命周期与并发
 
@@ -133,7 +136,8 @@ const board = buildGridKeyboard({
 - `createInMemoryGameDb()`：测试与无数据库配置时的完整内存实现。
 - `createMemoryGameServices()`：把 typed service factory 接到唯一内存实现。
 - `createHostGameDb()`：把 generation-owned `DatabaseHost` 转成 SessionService 所需接口。
-- `initGameRecordHost()` / `recordGameOutcome()`：统一战绩表与结果写入。
+- `GameRecordStore`：每个游戏实例显式持有自己的战绩库，并作为 `GameRecordPort`
+  随 Game capability 投影给大厅；不存在全局当前数据库。
 - `channelKey()` / `generateSessionId()`：稳定会话身份。
 
 游戏包应优先使用 `databaseHostToken`，缺失时为每个插件实例创建独立内存库。数据库、

@@ -22,6 +22,10 @@ await runtime.start();
 - child/schema 变化替换最浅受影响 subtree。
 - manifest topology transaction 支持 child/Feature 新增、删除和移动。
 - Root/package ABI、lockfile 和未知 importer 变化升级为 process restart。
+- 外部 Root 配置按实际投影分类：子 Plugin 配置只替换对应 subtree，Host 配置请求
+  process restart。
+- `.env` / `.env.<environment>` 由 `EnvironmentLayersPort` 重读；Runtime 重新展开配置引用，
+  Host 投影变化时重启进程，否则提交新的 Plugin generation。
 - 候选校验或 handoff 失败不提交 generation；旧 snapshot 保持可用。
 - 最后一个旧 lease 释放后，旧资源才按 children-first 顺序回收。
 

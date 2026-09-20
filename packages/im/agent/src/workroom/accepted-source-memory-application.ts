@@ -16,7 +16,7 @@ import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
 } from './canonical-value.js';
-import type { WorkroomJournal } from './journal.js';
+import type { WorkroomJournal } from './journal/index.js';
 
 export interface WorkroomAcceptedReportReadInput {
   readonly projectId: string;

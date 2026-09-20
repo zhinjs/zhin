@@ -6,7 +6,7 @@ import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineOneBot12Adapter from '../adapters/onebot12.js';
+import defineOneBot12Adapter from '../adapters/onebot12/index.js';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
 import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot12WssEndpoint } from '../src/wss-endpoint.js';
@@ -19,6 +19,7 @@ import {
   onebot12InboundConversation,
   resolveOneBot12Config,
   uploadOneBot12MediaSegments,
+  type OneBot12EndpointConfig,
   type OneBot12Event,
   type OneBot12WsConfig,
 } from '../src/protocol.js';
@@ -93,6 +94,7 @@ function createMockWs(): OneBot12WsSocket & {
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close().catch(() => undefined)));
 });
 
@@ -110,6 +112,41 @@ describe('onebot12 protocol helpers', () => {
       reconnect_interval: 5000,
       heartbeat_interval: 30_000,
     });
+  });
+
+  it('requires a complete expanded webhook config', () => {
+    expect(resolveOneBot12Config({
+      connection: 'webhook',
+      id: 'hook',
+      path: '/onebot12/webhook',
+      api_url: 'http://127.0.0.1:6700',
+    })).toMatchObject({
+      connection: 'webhook',
+      id: 'hook',
+      path: '/onebot12/webhook',
+      api_url: 'http://127.0.0.1:6700',
+    });
+    expect(() => resolveOneBot12Config({
+      connection: 'webhook',
+      id: 'hook',
+      path: '/onebot12/webhook',
+    })).toThrow('non-empty api_url');
+  });
+
+  it('does not infer endpoint config from process state or nested endpoint rows', () => {
+    vi.stubEnv('ONEBOT12_BOT_NAME', 'environment-bot');
+    const nested = {
+      endpoints: [{
+        context: 'onebot12',
+        connection: 'ws',
+        id: 'nested-bot',
+        url: 'ws://localhost:1',
+      }],
+    } as unknown as OneBot12EndpointConfig;
+
+    expect(() => resolveOneBot12Config(nested)).toThrow('non-empty id');
+    expect(() => resolveOneBot12Config({ id: ' ', url: 'ws://localhost:1' }))
+      .toThrow('non-empty id');
   });
 
   it('normalizes inbound events into ConversationRef and content', () => {
@@ -950,6 +987,7 @@ describe('onebot12 ws lifecycle', () => {
           connection: 'webhook',
           id: 'hook-noauth',
           path: '/ob12/hook',
+          api_url: 'http://127.0.0.1:6700',
         }) as ReturnType<typeof resolveOneBot12Config> & { connection: 'webhook' },
       }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
       await endpoint.start();
@@ -958,5 +996,94 @@ describe('onebot12 ws lifecycle', () => {
     } finally {
       warnSpy.mockRestore();
     }
+  });
+});
+
+describe('onebot12 reverse ws lifecycle', () => {
+  function createReverseEndpoint(heartbeatInterval = 20) {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const releaseRoute = vi.fn();
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return releaseRoute;
+        },
+        close: vi.fn(),
+      })),
+    };
+    const endpoint = bindTestEndpoint(new OneBot12WssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'onebot12'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveOneBot12Config({
+        connection: 'wss',
+        id: 'reverse-bot',
+        path: '/onebot12/ws',
+        access_token: 'secret',
+        heartbeat_interval: heartbeatInterval,
+      }) as never,
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+    return { endpoint, releaseRoute, get acceptConnection() { return acceptConnection; } };
+  }
+
+  function reverseConnection(socket: OneBot12WsSocket) {
+    return {
+      socket,
+      request: {
+        headers: { authorization: 'Bearer secret' },
+        url: '/',
+        socket: { remoteAddress: '127.0.0.1' },
+      },
+      authScope: 'full',
+    };
+  }
+
+  it('owns heartbeat requests and closes the accepted connection on stop', async () => {
+    const harness = createReverseEndpoint();
+    const ws = createMockWs();
+
+    await harness.endpoint.start();
+    harness.endpoint.open();
+    harness.acceptConnection?.(reverseConnection(ws));
+    await vi.waitFor(() => expect(ws.sent.length).toBeGreaterThan(0));
+
+    await harness.endpoint.stop();
+    const sendsAfterStop = ws.sent.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(ws.sent).toHaveLength(sendsAfterStop);
+    expect(ws.close).toHaveBeenCalled();
+    expect(harness.releaseRoute).toHaveBeenCalledOnce();
+  });
+
+  it('rejects messages from a replaced reverse socket', async () => {
+    const harness = createReverseEndpoint();
+    const ingest = vi.spyOn(harness.endpoint.client, 'ingest');
+    const first = createMockWs();
+    const second = createMockWs();
+    const event = JSON.stringify({
+      id: 'event-1',
+      time: 1,
+      type: 'message',
+      detail_type: 'private',
+      sub_type: '',
+      self: { platform: 'qq', user_id: 'bot' },
+      message_id: 'message-1',
+      user_id: '42',
+      alt_message: 'hello',
+    });
+
+    await harness.endpoint.start();
+    harness.acceptConnection?.(reverseConnection(first));
+    await vi.waitFor(() => expect(first.sent.length).toBeGreaterThan(0));
+    harness.acceptConnection?.(reverseConnection(second));
+    await vi.waitFor(() => expect(first.close).toHaveBeenCalled());
+
+    first.emitMessage(event);
+    expect(ingest).not.toHaveBeenCalled();
+    second.emitMessage(event);
+    expect(ingest).toHaveBeenCalledOnce();
+
+    await harness.endpoint.stop();
   });
 });

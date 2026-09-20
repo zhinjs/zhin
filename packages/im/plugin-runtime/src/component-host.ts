@@ -39,7 +39,7 @@ export interface TemplateContext {
 /**
  * Thin Host Resource for Plugin Runtime outbound template compilation.
  * Evaluates `${expr}` template expressions in a sandboxed VM context
- * (same security boundary as the legacy ComponentFeature pipeline).
+ * The Host keeps render authority inside the active Runtime operation.
  *
  * Implemented by the CLI Host; absent when not wired — consumers must
  * pass text through unchanged.

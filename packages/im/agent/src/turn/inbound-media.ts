@@ -11,12 +11,9 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   normalizeMediaRefsToPayloads,
 } from '../media/media-normalize.js';
-import type { MediaBinaryPayload } from '../media/media-types.js';
+import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
-import {
-  getPrimaryAppConfig,
-  resolveMultimodalConfig,
-} from '../media/resolve-config.js';
+import { resolveMultimodalConfig } from '../media/resolve-config.js';
 import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
@@ -34,6 +31,13 @@ export interface InboundMediaOutcome {
   readonly kind: TurnMedia['kind'];
   readonly status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
   readonly code: string;
+}
+
+export interface ResolveTurnMediaOptions {
+  readonly references?: ReferencePort;
+  readonly signal?: AbortSignal;
+  readonly providerInput?: readonly ModelInputModality[];
+  readonly transcriber?: AudioTranscriptionPort;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
@@ -68,10 +72,14 @@ function toBase64Block(
 
 export async function resolveTurnMediaInjection(
   turnMedia: readonly TurnMedia[] | undefined,
-  references?: ReferencePort,
-  signal: AbortSignal = new AbortController().signal,
-  providerInput?: readonly ModelInputModality[],
+  options: ResolveTurnMediaOptions = {},
 ): Promise<InboundMediaInjection> {
+  const {
+    references,
+    signal = new AbortController().signal,
+    providerInput,
+    transcriber,
+  } = options;
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
     type: entry.kind,
@@ -129,10 +137,7 @@ export async function resolveTurnMediaInjection(
     if (type === 'audio') {
       if (config.audio.strategy === 'transcribe') {
         try {
-          const text = await transcribeAudioPayload(payload, {
-            getConfig: getPrimaryAppConfig,
-            warn: (msg) => logger.warn(formatCompact({ op: 'inbound_stt', fallback: msg })),
-          });
+          const text = await transcribeAudioPayload(payload, transcriber, signal);
           if (text?.trim()) {
             textAppends.push(`[语音转写] ${text.trim()}`);
             outcomes.push({ kind: type, status: 'derived', code: 'speech_transcription' });

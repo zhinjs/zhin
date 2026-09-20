@@ -1,6 +1,6 @@
 import { hostname } from 'node:os';
 import { buildJobContext } from './context.js';
-import { onHolidayDataUpdate } from './data/holiday-registry.js';
+import { HolidayCalendar } from './holiday-calendar.js';
 import { getNextRun } from './dispatch.js';
 import {
   createJobId,
@@ -76,6 +76,7 @@ function toJobSnapshot(job: InternalJob): JobSnapshot {
 }
 
 export class CalendarScheduler {
+  readonly holidays: HolidayCalendar;
   private readonly timezone: string;
   private readonly onError?: SchedulerOptions['onError'];
   private readonly onJob?: SchedulerOptions['onJob'];
@@ -104,6 +105,7 @@ export class CalendarScheduler {
     this.handlerTimeoutMs = options.handlerTimeoutMs;
     this.misfireGraceMs = options.misfireGraceMs ?? DEFAULT_MISFIRE_GRACE_MS;
     this.workerId = options.workerId ?? defaultWorkerId();
+    this.holidays = options.holidays ?? new HolidayCalendar();
 
     if (options.store) {
       this.store = options.store;
@@ -112,7 +114,7 @@ export class CalendarScheduler {
     }
 
     this.timer = new TimerWheel((job) => this.executeJob(job));
-    this.unsubscribeHolidayUpdate = onHolidayDataUpdate(() => {
+    this.unsubscribeHolidayUpdate = this.holidays.onUpdate(() => {
       void this.recalculateAllJobs();
     });
 
@@ -167,6 +169,7 @@ export class CalendarScheduler {
       jobId: job.id,
       scatterState:
         job.resolved.kind === 'scatter' ? getScatterState(job.payload) : undefined,
+      holidays: this.holidays,
     });
     if (job.nextRunAt == null) {
       return this.cancel(id);
@@ -314,6 +317,7 @@ export class CalendarScheduler {
     const nextRunAt = getNextRun(resolved, new Date(), {
       jobId: id,
       scatterState: resolved.kind === 'scatter' ? scatterState : undefined,
+      holidays: this.holidays,
     });
     const canPersist = Boolean(this.store && (handlerKey || this.onJob));
     const ephemeral = !canPersist;
@@ -484,6 +488,7 @@ export class CalendarScheduler {
           scheduledAt,
           now,
           this.misfireGraceMs,
+          this.holidays,
         );
         scheduledAt = plan.scheduledAt;
         nextScatterState = plan.nextState;
@@ -499,6 +504,7 @@ export class CalendarScheduler {
           job.nextRunAt = getNextRun(job.resolved, new Date(), {
             jobId: job.id,
             scatterState: nextScatterState,
+            holidays: this.holidays,
           });
           if (job.nextRunAt == null) {
             job.cancelled = true;
@@ -522,6 +528,7 @@ export class CalendarScheduler {
         scheduledAt,
         job.resolved.timezone,
         scatterCtx,
+        this.holidays,
       );
       const handler = this.resolveHandler(job);
 
@@ -560,9 +567,10 @@ export class CalendarScheduler {
         job.nextRunAt = getNextRun(job.resolved, new Date(), {
           jobId: job.id,
           scatterState: nextScatterState,
+          holidays: this.holidays,
         });
       } else {
-        job.nextRunAt = getNextRun(job.resolved, new Date());
+        job.nextRunAt = getNextRun(job.resolved, new Date(), { holidays: this.holidays });
       }
 
       if (job.nextRunAt == null) {
@@ -610,6 +618,7 @@ export class CalendarScheduler {
         jobId: job.id,
         scatterState:
           job.resolved.kind === 'scatter' ? getScatterState(job.payload) : undefined,
+        holidays: this.holidays,
       });
       if (job.nextRunAt == null) {
         job.cancelled = true;

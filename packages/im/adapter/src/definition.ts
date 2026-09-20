@@ -5,11 +5,11 @@
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
 import type { CapabilityContext } from '@zhin.js/feature-kit';
 import type {
-  ConversationRef,
   EndpointCapabilities,
   EndpointOperation,
 } from '@zhin.js/im-contract';
-import type { Endpoint, EndpointImplementation } from './endpoint.js';
+import type { Endpoint } from './endpoint.js';
+import type { EndpointImplementation } from './endpoint-contract.js';
 
 export { Endpoint } from './endpoint.js';
 export type {
@@ -22,8 +22,9 @@ export type {
   EndpointIdentity,
   EndpointImplementation,
   EndpointIncomingMessage,
+  EndpointSendRequest,
   PlatformEvent,
-} from './endpoint.js';
+} from './endpoint-contract.js';
 export { defineEndpointClient } from './endpoint-client.js';
 export type {
   EndpointClientContext,
@@ -49,12 +50,6 @@ export type AdapterOutboundMedia = 'url' | 'path' | 'base64' | 'upload';
 export type AdapterInteractiveMode = 'native' | 'text';
 /** Markdown semantic segment consumption mode. */
 export type AdapterMarkdownMode = 'native' | 'text';
-
-export interface EndpointSendRequest {
-  /** 结构化会话寻址；端点在平台边界自行派生原生 target。 */
-  readonly conversation: ConversationRef;
-  readonly payload: unknown;
-}
 
 /**
  * Generation-owned construction context for one runtime Endpoint.

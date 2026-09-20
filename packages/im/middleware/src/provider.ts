@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { parseMiddlewareDefinition } from './definition.js';
 import { MiddlewareIndex } from './middleware-index.js';
 
@@ -10,9 +10,9 @@ const middlewareFeature = defineFeatureProvider({
   id: middlewareFeatureId,
   authoring: {
     setupMethod: 'addMiddleware',
-    conventions: [typeScriptModules({
-      id: 'middlewares-ts',
-      directory: 'middlewares',
+    conventions: [directoryModules({
+      id: 'middlewares-index',
+      layouts: [{ segments: ['middlewares', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseMiddlewareDefinition,
   },

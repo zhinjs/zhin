@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type { PluginDatabaseHost } from 'zhin.js';
 import { defineEndpointClient } from 'zhin.js/adapter';
 import { GhClient } from './gh-client.js';
@@ -43,9 +42,7 @@ export class GithubClient {
 
   get workspaceManager(): WorkspaceManager {
     if (!this.#workspaceManager) {
-      const root = this.config.workspaceRoot
-        ?? path.join(process.cwd(), 'data', 'github-workspaces');
-      this.#workspaceManager = new WorkspaceManager(this.api, root);
+      this.#workspaceManager = new WorkspaceManager(this.api, this.config.workspaceRoot);
     }
     return this.#workspaceManager;
   }

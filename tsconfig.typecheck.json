@@ -26,9 +26,6 @@
       "@zhin.js/agent/config": [
         "./packages/im/agent/src/config/index.ts"
       ],
-      "@zhin.js/agent/connections": [
-        "./packages/im/agent/src/authoring/entries/connections.ts"
-      ],
       "@zhin.js/agent/context": [
         "./packages/im/agent/src/context/index.ts"
       ],
@@ -53,9 +50,6 @@
       "@zhin.js/agent/runtime": [
         "./packages/im/agent/src/plugin-runtime/index.ts"
       ],
-      "@zhin.js/agent/schedules": [
-        "./packages/im/agent/src/authoring/entries/schedules.ts"
-      ],
       "@zhin.js/agent/security": [
         "./packages/im/agent/src/security/index.ts"
       ],
@@ -76,9 +70,6 @@
       ],
       "@zhin.js/agent/tool": [
         "./packages/im/agent/src/tool/index.ts"
-      ],
-      "@zhin.js/agent/tools": [
-        "./packages/im/agent/src/authoring/entries/tools.ts"
       ],
       "@zhin.js/agent/turn": [
         "./packages/im/agent/src/turn/index.ts"
@@ -113,8 +104,8 @@
       "@zhin.js/component": [
         "./packages/im/component/src/index.ts"
       ],
-      "@zhin.js/config-yaml": [
-        "./packages/im/config-yaml/src/index.ts"
+      "@zhin.js/config-file": [
+        "./packages/im/config-file/src/index.ts"
       ],
       "@zhin.js/core": [
         "./packages/im/core/src/index.ts"
@@ -145,9 +136,6 @@
       ],
       "@zhin.js/core/runtime": [
         "./packages/im/core/src/plugin-runtime/im/index.ts"
-      ],
-      "@zhin.js/core/tool-zod": [
-        "./packages/im/core/src/tool-zod.ts"
       ],
       "@zhin.js/database": [
         "./basic/database/src/index.ts"
@@ -259,6 +247,9 @@
       ],
       "zhin.js/runtime": [
         "./packages/im/zhin/src/plugin-runtime.ts"
+      ],
+      "@zhin.js/schedule-feature": [
+        "./packages/im/schedule-feature/src/index.ts"
       ]
     },
     "types": []
@@ -286,7 +277,11 @@
     "plugins/*/*/plugin.ts",
     "plugins/*/*/commands/**/*.ts",
     "plugins/*/*/middlewares/**/*.ts",
-    "plugins/*/*/agent/**/*.ts",
+    "plugins/*/*/agents/**/*.ts",
+    "plugins/*/*/hooks/**/*.ts",
+    "plugins/*/*/prompt-sections/**/*.ts",
+    "plugins/*/*/skills/**/*.ts",
+    "plugins/*/*/tools/**/*.ts",
     "plugins/adapters/*/src/client.ts",
     "plugins/*/*/adapters/**/*.ts",
     "plugins/*/*/src/**/*.d.ts"

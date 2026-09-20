@@ -9,7 +9,8 @@
 //     schema.json       ← 只声明本 package 自己的配置字段
 //     plugin.ts         ← 本文件
 //     commands/         middlewares/        components/
-//     tools/            agent/skills/       agent/schedules/
+//     tools/<name>/index.ts      skills/<name>/SKILL.md      hooks/<name>/index.ts
+//     schedules/<name>/index.ts  mcps/<name>/index.ts        pages/<name>/index.tsx
 import { createToken, definePlugin } from 'zhin.js';
 
 /** 供本包能力读取的 owner Resource（取代旧的模块级共享闭包/全局 registry）。 */

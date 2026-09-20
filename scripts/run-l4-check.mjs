@@ -30,7 +30,7 @@ const l4TestFiles = [
   'examples/full-bot/tests/full-bot-l4-contract.test.ts',
   'examples/full-bot/tests/provider-gateway-contract.test.ts',
   'examples/full-bot/tests/multimodal-peers-contract.test.ts',
-  'packages/im/core/tests/multimodal-chain-contract.test.ts',
+  'packages/im/core/tests/plugin-runtime/outbound-segments.test.ts',
   'plugins/adapters/napcat/tests/napcat-runtime.test.ts',
   'plugins/adapters/kook/tests/kook-runtime.test.ts',
   'examples/demo-bot/tests/demo-config.test.ts',

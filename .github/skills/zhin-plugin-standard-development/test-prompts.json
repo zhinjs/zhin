@@ -2,7 +2,7 @@
   {
     "id": 1,
     "prompt": "给现有插件加一个带数据库的签到命令",
-    "expected": "declareConfig、useContext(database)、commands 拆分、清理函数"
+    "expected": "schema.json、databaseHostToken、commands/<name>/index.ts、owner Resource、生命周期清理"
   },
   {
     "id": 2,

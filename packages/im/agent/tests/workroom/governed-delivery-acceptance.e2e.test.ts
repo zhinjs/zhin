@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { replayWorkroom } from '../../src/workroom/kernel-state.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { createSoftwareDeliveryPlan, type SoftwareDeliveryPlanInput } from '../../src/workroom/software-delivery-plan.js';

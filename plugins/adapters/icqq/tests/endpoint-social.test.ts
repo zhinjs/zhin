@@ -60,7 +60,7 @@ async function startEndpoint(options: EndpointSetup = {}): Promise<IcqqEndpoint>
 afterEach(() => {
 });
 
-describe('icqq.endpoint management 接口', () => {
+describe('icqq endpoint management 接口', () => {
   it('management.listFriends 归一为 {user_id, nickname, remark}[]', async () => {
     const endpoint = await startEndpoint();
     const friends = await endpoint.management.listFriends!();

@@ -39,8 +39,6 @@ function getConfigFilename(format: InitOptions['config']): string {
   switch (format) {
     case 'json':
       return 'zhin.config.json';
-    case 'toml':
-      return 'zhin.config.toml';
     case 'yaml':
     default:
       return 'zhin.config.yml';
@@ -59,7 +57,7 @@ function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
       // 对齐 examples/minimal-bot 的 Stable 黄金路径：命令保留 / 前缀（/hello）
       config: {
         commandPrefix: '/',
-        endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
+        endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }],
       },
     }],
     envVars: {},
@@ -164,6 +162,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       features: [
         { package: '@zhin.js/page', api: '^1.0.0' },
         { package: '@zhin.js/layout', api: '^1.0.0' },
+        { package: '@zhin.js/skill', api: '^1.0.0' },
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
         ...(aiEnabled ? [{ package: '@zhin.js/prompt-section', api: '^1.0.0' }] : []),
       ],
@@ -452,18 +451,18 @@ ${projectName}/
 ├── schema.json            # 根插件配置契约（JSON Schema）
 ├── ${configFilename}     # 顶层 http/database/ai + plugins.<instanceKey> 配置
 ├── commands/
-│   ├── hello.ts           # /hello 命令（defineCommand）
-│   └── card.ts            # /card -> component("status-card")
+│   ├── hello/index.ts     # /hello 命令（defineCommand）
+│   └── card/index.ts      # /card -> component("status-card")
 ├── components/
-│   └── status-card.ts     # defineComponent()，Satori 卡片
+│   └── status-card/index.ts # defineComponent()，Satori 卡片
 ├── middlewares/           # 消息中间件（约定目录）
 ├── pages/
-│   ├── index.tsx          # Console 页面（/）
-│   ├── $nav.tsx           # 最近插件导航布局
-│   └── $footer.tsx        # 最近插件页脚布局
-├── tools/                 # AI 工具（启用 AI 后自动发现）
-├── skills/                # SKILL.md 能力目录
-├── agents/                # *.agent.md Agent 目录
+│   ├── index/index.tsx    # Console 页面（/）
+│   ├── nav/index.tsx      # 最近插件导航布局
+│   └── footer/index.tsx   # 最近插件页脚布局
+├── tools/                 # <name>/index.ts AI 工具入口
+├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
+├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
 ├── packages/              # 贡献给 Zhin 的 Feature workspace
 ├── package.json           # zhin 清单（protocol 1 / features / plugins）
@@ -513,7 +512,7 @@ pnpm dev
 
 ### 新增命令
 
-在 \`commands/\` 下创建 \`.ts\` 文件（默认导出 \`defineCommand\`）：
+在 \`commands/<name>/index.ts\` 创建入口文件（默认导出 \`defineCommand\`）。同目录其他文件是普通模块，可以被入口自由导入：
 
 \`\`\`typescript
 import { defineCommand } from 'zhin.js/command';
@@ -526,8 +525,8 @@ export default defineCommand({
 
 ### Console 页面与布局
 
-在 \`pages/\` 下新增页面：\`index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
-\`$nav.tsx\` 与 \`$footer.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
+在 \`pages/<name>/index.tsx\` 新增页面：\`pages/index/index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
+\`pages/nav/index.tsx\` 与 \`pages/footer/index.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
 页面元数据必须用 \`@zhin.js/console-contract\` 的 \`definePage\` 声明；默认示例不依赖 React 或浏览器构建工具。
 
 ### 接入更多平台
@@ -539,7 +538,7 @@ npx zhin setup --adapters   # 选择平台并写入 plugins.<instanceKey> 配置
 ## 🤖 AI Agent
 
 如果初始化时启用了 AI，配置会写入 \`${configFilename}\` 的 \`ai:\` 段，API Key 会写入 \`.env\`。
-启用后 \`tools/\` 约定目录下的 \`defineAgentTool\` 工具会被 Agent 自动发现。
+启用后 \`tools/<name>/index.ts\` 默认导出的 \`defineAgentTool\` 会被 Agent 自动发现；辅助模块与入口共置在命名目录中。
 
 ## ✅ 验证项目
 
@@ -568,7 +567,7 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
     fs.ensureDir(path.join(projectPath, 'pages')),
     fs.ensureDir(path.join(projectPath, 'skills')),
     fs.ensureDir(path.join(projectPath, 'data')),
-    ...['agents', 'middlewares', 'tools', 'plugins', 'packages'].map(async (directory) => {
+    ...['agents', 'hooks', 'middlewares', 'plugins', 'packages', 'prompt-sections', 'tools'].map(async (directory) => {
       await fs.outputFile(path.join(projectPath, directory, '.gitkeep'), '');
     }),
   ]);
@@ -621,6 +620,9 @@ HTTP_TOKEN=change-me
       "middlewares/**/*.tsx",
       "tools/**/*.ts",
       "tools/**/*.tsx",
+      "hooks/**/*.ts",
+      "agents/**/*.ts",
+      "skills/**/*.ts",
       "pages/**/*.ts",
       "pages/**/*.tsx"
     ],
@@ -651,7 +653,7 @@ export default definePlugin({
 
   // pages/ follows the Feature conventions. These components deliberately
   // return text, keeping the initial IM project free of a browser UI runtime.
-  await fs.writeFile(path.join(projectPath, 'pages', 'index.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'index', 'index.tsx'),
 `import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
@@ -663,14 +665,14 @@ export default function HomePage() {
   return 'Zhin Console is ready. Add pages in pages/ to extend this plugin.';
 }
 `);
-  await fs.writeFile(path.join(projectPath, 'pages', '$nav.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'),
 `import type { NavSlotProps } from '@zhin.js/console-contract';
 
 export default function ProjectNavigation({ current }: NavSlotProps) {
   return current ? \`Current page: \${current}\` : '${projectName}';
 }
 `);
-  await fs.writeFile(path.join(projectPath, 'pages', '$footer.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'),
 `import type { FooterSlotProps } from '@zhin.js/console-contract';
 
 export default function ProjectFooter({ owner }: FooterSlotProps) {
@@ -678,8 +680,8 @@ export default function ProjectFooter({ owner }: FooterSlotProps) {
 }
 `);
 
-  // commands/hello.ts
-  await fs.writeFile(path.join(projectPath, 'commands', 'hello.ts'),
+  // commands/hello/index.ts
+  await fs.outputFile(path.join(projectPath, 'commands', 'hello', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -692,8 +694,8 @@ export default defineCommand({
 });
 `);
 
-  // commands/card.ts（组件渲染示例，对齐 examples/minimal-bot）
-  await fs.writeFile(path.join(projectPath, 'commands', 'card.ts'),
+  // commands/card/index.ts（组件渲染示例，对齐 examples/minimal-bot）
+  await fs.outputFile(path.join(projectPath, 'commands', 'card', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 import { component } from 'zhin.js/core/runtime';
 
@@ -712,8 +714,8 @@ export default defineCommand({
 });
 `);
 
-  // components/status-card.ts
-  await fs.writeFile(path.join(projectPath, 'components', 'status-card.ts'),
+  // components/status-card/index.ts
+  await fs.outputFile(path.join(projectPath, 'components', 'status-card', 'index.ts'),
 `import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import {
@@ -760,10 +762,10 @@ export default defineComponent<StatusCardProps>({
 });
 `);
 
-  // tools/echo.ts（AI 启用时生成，defineAgentTool 约定目录）
+  // tools/echo/index.ts（AI 启用时生成，defineAgentTool 约定目录）
   if (aiEnabled) {
-    await fs.ensureDir(path.join(projectPath, 'tools'));
-    await fs.writeFile(path.join(projectPath, 'tools', 'echo.ts'),
+    await fs.ensureDir(path.join(projectPath, 'tools', 'echo'));
+    await fs.writeFile(path.join(projectPath, 'tools', 'echo', 'index.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -824,7 +826,7 @@ export default defineAgentTool<{ message: string }>({
 `);
 
     // 生活助手命令与工具（工具需 AI 启用才挂载 @zhin.js/tool feature）
-    await fs.writeFile(path.join(projectPath, 'commands', 'remind.ts'),
+    await fs.outputFile(path.join(projectPath, 'commands', 'remind', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -834,8 +836,8 @@ export default defineCommand({
 `);
 
     if (aiEnabled) {
-      await fs.ensureDir(path.join(projectPath, 'tools'));
-      await fs.writeFile(path.join(projectPath, 'tools', 'get_current_time.ts'),
+      await fs.ensureDir(path.join(projectPath, 'tools', 'get_current_time'));
+      await fs.writeFile(path.join(projectPath, 'tools', 'get_current_time', 'index.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 

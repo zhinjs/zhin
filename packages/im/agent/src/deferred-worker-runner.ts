@@ -1,9 +1,9 @@
 /**
  * DeferredWorkerRunner — 同步 Worker 子 Agent，在隔离上下文中执行 deferred 工具任务。
  */
-import { resolveIMSessionIdFromMessage, type Message, getLogger } from '@zhin.js/core';
-import { formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
-import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, getLlmTransportModel, type ModelRegistry } from '@zhin.js/ai';
+import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
+import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
+import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, createLlmApiRuntime, sdkEntryFromProvider, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
 import { stripThinkBlocks } from './core/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
@@ -32,6 +32,7 @@ export interface DeferredWorkerRunOptions {
   execApprovalMode?: ExecApprovalMode;
   modelRegistry?: ModelRegistry | null;
   provider: AIProvider;
+  llmRuntime?: LlmApiRuntime;
   summaryMaxChars?: number;
   onEvent?: (event: DeferredWorkerLifecycleEvent) => void | Promise<void>;
 }
@@ -127,7 +128,11 @@ export class DeferredWorkerRunner {
     }
 
     const model = provider.models[0];
-    const llmModel = getLlmTransportModel(provider.name, model);
+    const llmRuntime = options.llmRuntime ?? createLlmApiRuntime(
+      [sdkEntryFromProvider(provider)],
+      (alias) => alias === provider.name ? provider.models : [],
+    );
+    const llmModel = llmRuntime.model(provider.name, model);
 
     const workerBody = resolveWorkspacePrompt('deferred-worker', llmModel.sdk);
 
@@ -167,6 +172,7 @@ ${goal}`;
       }
       const result = await runAgentLoopStandaloneTurn({
         provider,
+        llmRuntime,
         model,
         systemPrompt,
         tools,

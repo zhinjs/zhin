@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { type OutputElement, renderToPlainText } from '@zhin.js/ai';
-import type { Segment } from '@zhin.js/core';
+import type { Segment } from '@zhin.js/im-contract';
 import type { OutboundMediaCapabilities, MediaBinaryPayload, MediaKind } from './media-types.js';
 import { resolveOutboundCapabilities } from './media-capabilities.js';
 import { fetchUrlAsBase64 } from './media-normalize.js';

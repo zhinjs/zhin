@@ -7,7 +7,7 @@ export type { AdapterSetupResult } from './adapter.js';
 export interface InitOptions {
   name?: string;
   template?: 'default' | 'life-assistant';
-  config?: 'json' | 'yaml' | 'toml';
+  config?: 'json' | 'yaml';
   runtime?: 'node' | 'bun';
   yes?: boolean;
   httpToken?: string;

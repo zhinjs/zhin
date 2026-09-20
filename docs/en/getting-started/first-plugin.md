@@ -83,7 +83,7 @@ export default definePlugin<PingPongConfig>({
 });
 ```
 
-## 3. commands/ping.ts
+## 3. commands/ping/index.ts
 
 Files under `commands/` are auto-discovered by the Command Feature; the filename becomes the command name:
 
@@ -178,14 +178,14 @@ zhin runtime start
 
 - The startup log should show `[ping-pong] setup: reply=pong!`
 - Send `/ping` in a connected channel; the bot replies `pong!`
-- Editing `commands/ping.ts` or `zhin.config.yml` triggers hot reload -- no process restart needed
+- Editing `commands/ping/index.ts` or `zhin.config.yml` triggers hot reload -- no process restart needed
 - `zhin runtime start --once` can be used for assembly smoke testing (non-interactive)
 
 ```mermaid
 flowchart TD
   M[package.json#zhin manifest] --> R[Plugin Runtime]
   R --> F[Command Feature]
-  F -->|discovers| C[commands/ping.ts]
+  F -->|discovers| C[commands/ping/index.ts]
   R --> E[plugin.ts setup]
   S[schema.json defaults] --> CFG[Layered config]
   Y[zhin.config.yml overrides] --> CFG

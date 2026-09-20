@@ -1,7 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import {
   createInMemoryGameDb,
-  gameSessionCoordinator,
   plainTextFromSendContent,
   type GameMessageLike,
 } from '@zhin.js/game-kit';
@@ -23,9 +22,6 @@ const message: GameMessageLike = {
 };
 
 describe('dungeon game flow', () => {
-  beforeEach(() => {
-    gameSessionCoordinator.clear();
-  });
 
   it('returns a structured lobby with native controls', async () => {
     const service = createService();

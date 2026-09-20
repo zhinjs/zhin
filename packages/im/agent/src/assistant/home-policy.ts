@@ -2,7 +2,7 @@
  * Home Domain 工具权限（M4）
  */
 import type { ToolInvocationContext } from '@zhin.js/tool';
-import { type ToolRequesterRole } from '../security/owner-approve-always-store.js';
+import { type ToolRequesterRole } from '../security/owner-approval-runtime.js';
 import type { HomePolicyConfig } from './home-config.js';
 import { parseEntityDomain } from './domains/home-entity.js';
 export interface HomeToolDecision {

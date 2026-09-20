@@ -18,7 +18,7 @@ import type {
   WorkroomGovernedKnowledgeContentReader,
   WorkroomAssignmentKnowledgeContextProjector,
 } from '../workroom/workroom-assignment-knowledge-context.js';
-import type { WorkroomDisclosureManifestAuthorityPort } from './workroom-data-governance-runtime.js';
+import type { WorkroomDisclosureManifestAuthorityPort } from '../data-governance/disclosure-authority.js';
 
 export interface WorkroomEphemeralAssignmentContext {
   readonly ref: string;

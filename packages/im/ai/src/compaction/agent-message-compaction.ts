@@ -6,12 +6,12 @@ import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
 import {
   createUserMessage,
   type AgentMessage,
-  type ConversationActor,
   type UserMessage,
 } from '../llm/types/agent-message.js';
 
 import type { Model } from '../llm/types/model.js';
-import { completeSimple, createContext } from '../llm/index.js';
+import { createContext } from '../llm/index.js';
+import type { LlmCompletionPort } from '../llm/llm-api-runtime.js';
 import {
   AUTOCOMPACT_BUFFER_TOKENS,
   DEFAULT_CONTEXT_TOKENS,
@@ -23,7 +23,7 @@ import {
   findKeepRecentStartIndex,
 } from './agent-message-tokens.js';
 import { microCompactAgentMessages } from './agent-micro-compact.js';
-import { stripSenderPrefixFromText } from '../memory/sender-extra.js';
+import { userMessageBody } from '../memory/user-message-presentation.js';
 
 const logger = getLogger('AgentCompaction');
 
@@ -81,17 +81,13 @@ function textBlocks(message: AgentMessage): string {
 
 function agentMessageToTranscriptLine(message: AgentMessage): string {
   if (message.role === 'user') {
-    const text = textBlocks(message);
-    const legacy = stripSenderPrefixFromText(text);
-    const actor: ConversationActor | undefined = (message as UserMessage).actor ?? (legacy.sender ? {
-      subjectId: legacy.sender.id,
-      displayName: legacy.sender.name,
-      roles: legacy.sender.roles,
-    } : undefined);
-    if (!actor) return `[User] ${legacy.body}`;
+    const user = message as UserMessage;
+    const text = userMessageBody(user);
+    const actor = user.actor;
+    if (!actor) return `[User] ${text}`;
     const name = actor.displayName?.trim() || actor.subjectId;
     const roles = actor.roles?.length ? actor.roles.join(',') : 'user';
-    return `[User:${name} id=${actor.subjectId} roles=${roles}] ${legacy.body}`;
+    return `[User:${name} id=${actor.subjectId} roles=${roles}] ${text}`;
   }
   if (message.role === 'assistant') {
     return `[Assistant] ${textBlocks(message)}`;
@@ -103,6 +99,7 @@ function agentMessageToTranscriptLine(message: AgentMessage): string {
 }
 
 async function summarizeAgentMessages(
+  transport: LlmCompletionPort,
   model: Model,
   messages: AgentMessage[],
   previousSummary?: string,
@@ -125,7 +122,7 @@ async function summarizeAgentMessages(
   userContent += `New conversation:\n${conversation}\n\nGenerate the updated full summary.`;
 
   try {
-    const assistant = await completeSimple(
+    const assistant = await transport.completeSimple(
       model,
       createContext(systemPrompt, [createUserMessage(userContent)]),
     );
@@ -165,6 +162,7 @@ export function shouldAutoCompactAgentMessages(
 }
 
 export async function compactAgentMessages(params: {
+  transport: LlmCompletionPort;
   model: Model;
   messages: AgentMessage[];
   contextWindow?: number;
@@ -192,6 +190,7 @@ export async function compactAgentMessages(params: {
   const beforeTokens = estimateAgentMessagesTokens(toCompact);
 
   const summary = await summarizeAgentMessages(
+    params.transport,
     params.model,
     toCompact,
     undefined,
@@ -208,6 +207,7 @@ export async function compactAgentMessages(params: {
 }
 
 export async function autoCompactAgentMessagesIfNeeded(params: {
+  transport: LlmCompletionPort;
   model: Model;
   messages: AgentMessage[];
   config?: AgentCompactionConfig;
@@ -253,6 +253,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
 
   try {
     const result = await compactAgentMessages({
+      transport: params.transport,
       model: params.model,
       messages,
       contextWindow,

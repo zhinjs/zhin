@@ -1,20 +1,16 @@
-/**
- * QQ Official Bot protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
- * Canonicalization is owned by gateway/core before endpoint.send.
- */
+/** QQ Official Bot protocol helpers. Canonicalization is owned by Core. */
 
-import { pickCredential } from 'zhin.js/adapter';
 import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveQqIntents } from './qq-intents.js';
 
 const logger = getLogger('qq');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface QqAdapterConfig {
-  readonly id?: string;
-  readonly appid?: string;
-  readonly secret?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface QqEndpointConfig {
+  readonly id: string;
+  readonly appid: string;
+  readonly secret: string;
   /** Default `websocket`. `webhook` / `middleware` use httpHostToken POST. */
   readonly mode?: 'websocket' | 'webhook' | 'middleware';
   readonly sandbox?: boolean;
@@ -25,24 +21,6 @@ export interface QqAdapterConfig {
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
   readonly webhookPath?: string;
-  readonly port?: number;
-  readonly path?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: qq`. */
-  readonly endpoints?: ReadonlyArray<{
-    readonly context?: string;
-    readonly id?: string;
-    readonly appid?: string;
-    readonly secret?: string;
-    readonly mode?: 'websocket' | 'webhook' | 'middleware';
-    readonly sandbox?: boolean;
-    readonly intents?: readonly string[];
-    readonly botKind?: string;
-    readonly accessTokenUrl?: string;
-    readonly gatewayUrl?: string;
-    readonly webhookPath?: string;
-    readonly port?: number;
-    readonly path?: string;
-  }>;
 }
 
 export interface ResolvedQqWebsocketConfig {
@@ -98,23 +76,14 @@ export interface QqWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'qq' || !item.context);
-  const appid = pickCredential(config.appid, entry?.appid, process.env.QQ_APPID, process.env.QQ_BOT_APPID);
-  const secret = pickCredential(config.secret, entry?.secret, process.env.QQ_SECRET, process.env.QQ_BOT_SECRET);
-  if (!appid || !secret) {
-    throw new TypeError(
-      'QQ adapter requires appid + secret (plugins.<key>.appid/secret or endpoints with context: qq)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.QQ_BOT_NAME
-    || 'qq-bot';
-  const mode = config.mode ?? entry?.mode ?? 'websocket';
+export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const appid = requiredEndpointField(config.appid, 'appid');
+  const secret = requiredEndpointField(config.secret, 'secret');
+  const mode = config.mode ?? 'websocket';
 
   if (mode === 'webhook' || mode === 'middleware') {
-    const webhookPathRaw = config.webhookPath ?? entry?.webhookPath ?? '/qq/webhook';
+    const webhookPathRaw = config.webhookPath ?? '/qq/webhook';
     const webhookPath = webhookPathRaw.startsWith('/') ? webhookPathRaw : `/${webhookPathRaw}`;
     return {
       context: 'qq',
@@ -123,7 +92,7 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
       appid,
       secret,
       webhookPath,
-      sandbox: config.sandbox === true || entry?.sandbox === true,
+      sandbox: config.sandbox === true,
     };
   }
 
@@ -133,14 +102,21 @@ export function resolveQqConfig(config: QqAdapterConfig = {}): ResolvedQqConfig 
     id,
     appid,
     secret,
-    sandbox: config.sandbox === true || entry?.sandbox === true,
+    sandbox: config.sandbox === true,
     intents: resolveQqIntents({
-      intents: config.intents ?? entry?.intents,
-      botKind: config.botKind ?? entry?.botKind,
+      intents: config.intents,
+      botKind: config.botKind,
     }),
-    accessTokenUrl: config.accessTokenUrl ?? entry?.accessTokenUrl,
-    gatewayUrl: config.gatewayUrl ?? entry?.gatewayUrl,
+    accessTokenUrl: config.accessTokenUrl,
+    gatewayUrl: config.gatewayUrl,
   };
+}
+
+function requiredEndpointField(value: unknown, field: 'id' | 'appid' | 'secret'): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`QQ endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 /**

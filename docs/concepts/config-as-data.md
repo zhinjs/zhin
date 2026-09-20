@@ -14,8 +14,7 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - name: full-bot-sandbox
-        context: sandbox
+      - id: full-bot-sandbox
         owner: local-user
   napcat:
     connection: ws
@@ -56,7 +55,7 @@ plugins:
 }
 ```
 
-写 schema 时有几点约束要知道。根必须是 object schema；没有 schema.json 时按空 object 处理。根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验，但会让配置投影静默变空，因此被显式拒绝。校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`：schema 里的 `default` 会在校验时回填进文档。校验失败抛 `ConfigValidationError`，错误信息会指出具体路径和冒名的键（`additionalProperty: xxx`）或合法枚举值。另外，子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，抛 `ConfigSchemaCollisionError`。
+写 schema 时有几点约束要知道。根必须是 object schema；没有 schema.json 时按空 object 处理。根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验，但会让配置投影静默变空，因此被显式拒绝。框架会为每个插件注入可选 `commandNamespace` 字段，插件 schema 不得重复声明；未配置时命令没有插件命名空间。校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`。子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，也会抛 `ConfigSchemaCollisionError`。
 
 ## ConfigView：按 owner 投影
 
@@ -100,7 +99,7 @@ plugins:
 
 ## 配置文档事务与回滚
 
-运行时改配置（Console 界面、`patchConfig` API）不是直接改文件，而是一个两阶段事务，接口是 `ConfigDocumentPort`：
+运行时改配置（Console 界面、`patchConfig` API）不是直接改文件，而是一个两阶段事务。`ConfigDocumentPort` 与结构化 patch 语义定义在零依赖的 `@zhin.js/plugin-runtime`：
 
 ```ts
 interface ConfigDocumentPort {
@@ -113,13 +112,39 @@ interface PreparedConfigDocument {
 }
 ```
 
-`YamlConfigDocument`（`@zhin.js/config-yaml`）的实现要点：
+`ConfigFileDocument`（`@zhin.js/config-file`）封装两种格式共享的事务生命周期：
 
 - **乐观并发**：`prepare` 和 `commit` 都会重读文件并核对 revision；文件在读取后被外部改动则抛 `ConfigDocumentConflictError`。
-- **保格式**：patch 应用在 YAML AST 上再 stringify，注释与缩进风格（含 CRLF）保留；路径段里的数字寻址数组元素（`endpoints.0.url`），`__proto__` 等危险段被拒绝。
 - **原子落盘**：`commit` 先写临时文件再 `rename` 替换，保留原文件权限位。
 - **一致性**：候选文档与运行时校验过的候选不一致时抛 `ConfigDocumentDivergenceError`，宁可失败也不写分歧配置。
+- **格式多态**：`YamlConfigDocument` 在 AST 上应用 patch 并保留注释与缩进；`JsonConfigDocument` 复用 Runtime 的结构化 patch 语义并保留缩进与换行风格。
 
-事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 `zhin.config.yml` 和内存里的运行时都不会出现半更新状态。
+composition root 只创建一个具体的 `ConfigFileDocument`。Root Runtime、Endpoint 配置命令和 Console 都接收这个实例，不再各自查找、解析或覆盖配置文件。Console 全文编辑通过 `readSource()` 取得原始文本、格式和 revision，再用 `prepareReplacement()` 提交；同一响应中的配置键也从该 revision 的文档投影，避免跨版本拼接结果。调用方之间发生竞争时明确返回 revision 冲突，不以最后写入者静默覆盖前一次修改。
 
-外部直接编辑配置文件也可以：配置文件本身被 watch，外部修改会触发一次全量重载，以磁盘内容为准。
+事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 Root 配置和内存里的运行时都不会出现半更新状态。
+
+外部直接编辑配置文件也可以。配置文件适配器通过 `ConfigDocumentPort.sources` 声明受监视的
+权威文件，Runtime 重新读取、校验并比较实际投影后再决定影响范围：
+
+- `plugins.<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root
+  Resources 保持当前 generation；
+- Root Plugin 的 `plugin` 配置变化时，重建 Root generation；
+- `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` /
+  `assistant` / `log_level` 等 Host 配置变化时，请求进程重启，因为这些资源在 composition
+  root 启动阶段创建，不能用 Plugin generation 假装已经替换；
+- 只改注释、空白或等价值时，只采纳新的文档 revision，不创建无意义 generation。
+
+## 环境文件重载
+
+CLI 把 `.env` 与当前环境的 `.env.<environment>` 包装成 `EnvironmentLayersPort`。端口保留
+启动进程继承的基础环境，每次文件事件重新读取 dotenv overlay，不把项目密钥写回全局
+`process.env`。Runtime 随后用新的 owner-scoped `EnvStore` 重新展开配置中的 `${VAR}`、
+`${VAR:-default}` 和 `${VAR:=default}`：
+
+- 若 Host 配置的展开值变化，触发进程重启，新进程用新环境创建 HTTP、Database、Agent 等
+  Host 资源；
+- 否则重建 Root generation，使插件配置引用和直接使用 `EnvStore` 的插件同时切换到新快照；
+- dotenv 内容未产生有效环境变化时，不创建 generation。
+
+环境文件和配置文件都走同一个 HMR 串行队列。候选配置校验或 shadow setup 失败时，旧
+generation、旧环境快照和旧配置 revision 继续生效。

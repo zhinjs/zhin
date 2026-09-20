@@ -88,7 +88,7 @@ function packagesForSdkIds(sdkIds: Iterable<string>): Record<string, string> {
 
 function collectSdkPackagesFromSetup(ai: AISetupConfig): Record<string, string> {
   const sdkIds = new Set<string>();
-  const agentProvider = ai.agentProvider ?? ai.defaultProvider;
+  const agentProvider = ai.agentProvider;
   if (agentProvider) {
     const id = inferSdkId(agentProvider, ai.providers?.[agentProvider] as { sdk?: string });
     if (id) sdkIds.add(id);
@@ -124,7 +124,7 @@ function collectSdkPackagesFromConfig(config: { ai?: unknown }): Record<string, 
   }
 
   if (sdkIds.size === 0) {
-    const alias = resolveDefaultProviderFromConfig(config);
+    const alias = resolveAgentProviderFromConfig(config);
     if (alias) {
       const id = inferSdkId(alias, providers?.[alias]);
       if (id) sdkIds.add(id);
@@ -249,7 +249,7 @@ export function isAiEnabledInConfig(config: { ai?: unknown }): boolean {
   return false;
 }
 
-export function resolveDefaultProviderFromConfig(config: { ai?: unknown }): string | undefined {
+export function resolveAgentProviderFromConfig(config: { ai?: unknown }): string | undefined {
   const ai = config.ai;
   if (!ai || typeof ai !== 'object' || Array.isArray(ai)) return undefined;
   const rec = ai as Record<string, unknown>;
@@ -265,7 +265,6 @@ export function resolveDefaultProviderFromConfig(config: { ai?: unknown }): stri
     const first = Object.keys(providers as Record<string, unknown>)[0];
     if (first) return first;
   }
-  if (rec.defaultProvider != null) return String(rec.defaultProvider);
   return undefined;
 }
 
@@ -281,7 +280,7 @@ export function getRequiredAIDependenciesForConfig(config: { ai?: unknown }): Re
   const ai = config.ai as Record<string, unknown>;
   const setup: AISetupConfig = {
     enabled: true,
-    agentProvider: resolveDefaultProviderFromConfig(config),
+    agentProvider: resolveAgentProviderFromConfig(config),
     providers: ai.providers as AISetupConfig['providers'],
     memoryMcp: aiConfigNeedsMcp(ai),
   };
@@ -365,7 +364,7 @@ export function diagnoseAIDependencies(
   const notInstalled = findUnresolvedPackageInstalls(cwd, declared);
   return {
     enabled: true,
-    provider: resolveDefaultProviderFromConfig(config),
+    provider: resolveAgentProviderFromConfig(config),
     required,
     missingFromPackageJson,
     outdatedInPackageJson,

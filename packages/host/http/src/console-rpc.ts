@@ -1,12 +1,14 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  CONFIG_RPC,
+  ENDPOINT_RPC,
+  type ConsoleConfigSource,
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
-  endpointSendResult,
-  normalizeConsoleRpcMessage,
 } from '@zhin.js/console-protocol';
-import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended.js';
+import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
+import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 
 /**
  * Console RPC 请求结构：未锚定 endpoint 的会话地址（结构对齐
@@ -23,17 +25,14 @@ export interface ConversationAddress {
   readonly threadId?: string;
 }
 
-/** `$channel_type`/`$channel_id`/`$parent` wire 字段 → 会话地址（RPC 边界组帧）。 */
+/** Canonical Console wire fields → runtime conversation address. */
 function wireConversation(
   channelType: string,
   channelId: string,
   parent: unknown,
 ): ConversationAddress {
-  // console 旧 wire 允许 channel_id 自带场景前缀（`group:123`），解析结果优先
-  const prefixed = /^(private|group|channel|direct|c2c|temp):(.+)$/iu.exec(channelId);
-  const rawKind = channelType || prefixed?.[1] || 'private';
   const kind: ConversationAddress['kind'] =
-    rawKind === 'group' || rawKind === 'channel' ? rawKind : 'private';
+    channelType === 'group' || channelType === 'channel' ? channelType : 'private';
   const wire = parent && typeof parent === 'object'
     ? parent as { readonly type?: unknown; readonly id?: unknown }
     : undefined;
@@ -41,7 +40,7 @@ function wireConversation(
   const parentId = typeof wire?.id === 'string' && wire.id ? wire.id : undefined;
   return {
     kind,
-    id: prefixed ? prefixed[2]! : channelId,
+    id: channelId,
     ...(parentKind && parentId ? { parent: { kind: parentKind, id: parentId } } : {}),
   };
 }
@@ -53,6 +52,64 @@ export type RuntimeConsoleRpcMessage = {
 };
 
 export type RuntimeConsoleRpcReply = Record<string, unknown>;
+
+export interface PluginInstallPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly alreadyDeclared: boolean;
+  readonly alreadyInstalled: boolean;
+  readonly restartRequired: boolean;
+  readonly changes: Readonly<{
+    readonly packageManifest: 'unchanged' | 'add-plugin';
+    readonly config: 'unchanged' | 'create-entry' | 'schema-required';
+  }>;
+  readonly warnings: readonly string[];
+}
+
+export interface PluginUninstallPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly installed: boolean;
+  readonly declared: boolean;
+  readonly hasConfig: boolean;
+  readonly restartRequired: boolean;
+}
+
+export interface PluginUpdatePlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly currentVersion: string | null;
+  readonly targetVersion: string;
+  readonly installed: boolean;
+  readonly declared: boolean;
+  readonly alreadyCurrent: boolean;
+  readonly restartRequired: boolean;
+}
+
+export interface PluginManagementPort {
+  planInstall(packageName: string): Promise<PluginInstallPlan>;
+  install?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginInstallPlan;
+    readonly restartRequired: boolean;
+  }>>;
+  planUninstall?(packageName: string): Promise<PluginUninstallPlan>;
+  uninstall?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginUninstallPlan;
+    readonly restartRequired: boolean;
+  }>>;
+  planUpdate?(packageName: string, targetVersion: string): Promise<PluginUpdatePlan>;
+  update?(packageName: string, targetVersion: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginUpdatePlan;
+    readonly installedVersion: string;
+    readonly restartRequired: boolean;
+  }>>;
+}
+
+export interface PluginConfigValidation {
+  readonly valid: boolean;
+  readonly errors: readonly { readonly path: string; readonly message: string }[];
+  readonly missingEnv: readonly string[];
+}
 
 export type RuntimeConsolePage = {
   readonly id: string;
@@ -68,17 +125,16 @@ export type RuntimeConsoleRpcContext = {
   readonly authScope: AuthScope;
   listPages(): Promise<readonly RuntimeConsolePage[]>;
   /** Optional project config accessors for read-only config RPCs. */
-  readConfigYaml?(): Promise<string>;
-  listPluginKeys?(): Promise<readonly string[]>;
+  readConfigSource?(): Promise<ConsoleConfigSource>;
   readConfigDocument?(): Promise<Record<string, unknown>>;
-  /**
-   * Full-scope write: replace project config file contents (YAML or JSON text).
-   * Runtime Host does not hot-reload the process — callers should restart.
-   */
-  writeConfigYaml?(yaml: string): Promise<void>;
+  /** Full-scope, revision-checked replacement of the active Root config source. */
+  replaceConfigSource?(
+    source: string,
+    expectedRevision: string,
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
-   * Returns whether a process restart is required (always true without ConfigFeature).
+   * Returns whether a process restart is required.
    */
   setConfigKey?(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
   /** Persist a declared child Plugin lifecycle state. Takes effect after restart. */
@@ -86,6 +142,10 @@ export type RuntimeConsoleRpcContext = {
     instanceKey: string,
     enabled: boolean,
   ): Promise<Readonly<{ disabled: readonly string[] }>>;
+  /** Read-only install planning shared by Console Web and CLI surfaces. */
+  pluginManagement?: PluginManagementPort;
+  validatePluginConfig?(pluginName: string, data: unknown): Promise<PluginConfigValidation>;
+  diagnosePlugin?(pluginName: string): Promise<unknown>;
   /** Atomic, revision-checked runtime Workroom Catalog read/write. */
   readWorkroomCatalog?(): Promise<Readonly<{
     agents: Readonly<Record<string, unknown>>;
@@ -109,8 +169,8 @@ export type RuntimeConsoleRpcContext = {
   getSchema?(pluginName?: string): Promise<unknown>;
   getAllSchemas?(): Promise<Record<string, unknown>>;
   /** Optional Adapter endpoint Console surface (Sandbox / Remote Console). */
-  listEndpoints?(): Promise<readonly RuntimeEndpointSummary[]>;
-  getEndpoint?(adapter: string, endpointKey: string): Promise<RuntimeEndpointSummary | null>;
+  listEndpoints?(): Promise<readonly ConsoleEndpointSummary[]>;
+  getEndpoint?(adapter: string, endpointKey: string): Promise<ConsoleEndpointSummary | null>;
   sendEndpointMessage?(input: RuntimeEndpointSendInput): Promise<{ messageId: string }>;
   /** Optional Database host surface (CLI wires DatabaseHost from plugin-runtime). */
   dbInfo?(): Promise<RuntimeDatabaseInfo> | RuntimeDatabaseInfo;
@@ -126,11 +186,6 @@ export type RuntimeConsoleRpcContext = {
   /** Extended RPC surface（cron/schedule、endpoint 社交/inbox），fullScope 由 authScope 推导。 */
   extended?: Omit<ConsoleRpcExtendedCtx, 'fullScope'>;
 };
-
-export type RuntimeEndpointPhase = NonNullable<ConsoleEndpointSummary['phase']>;
-
-/** @deprecated Prefer `ConsoleEndpointSummary` from `@zhin.js/console-protocol`. */
-export type RuntimeEndpointSummary = ConsoleEndpointSummary;
 
 export type RuntimeDatabaseInfo = {
   readonly dialect: string | null;
@@ -165,7 +220,6 @@ export async function dispatchRuntimeConsoleRpc(
   const emit = (payload: RuntimeConsoleRpcReply) => {
     payloads.push(payload);
   };
-  message = normalizeConsoleRpcMessage(message);
   const type = String(message.type ?? '');
   const requestId = message.requestId as number | string | undefined;
 
@@ -190,6 +244,12 @@ export async function dispatchRuntimeConsoleRpc(
         : { requestId, data: extended.data });
       return payloads;
     }
+  }
+
+  const pluginReply = await dispatchPluginConsoleRpc(type, message, ctx);
+  if (pluginReply !== undefined) {
+    emit(pluginReply);
+    return payloads;
   }
 
   switch (type) {
@@ -217,11 +277,12 @@ export async function dispatchRuntimeConsoleRpc(
       emit({ requestId, data: pages });
       return payloads;
     }
-    case 'config:get-yaml': {
+    case CONFIG_RPC.GET_SOURCE: {
       try {
-        const yaml = ctx.readConfigYaml ? await ctx.readConfigYaml() : '';
-        const pluginKeys = ctx.listPluginKeys ? await ctx.listPluginKeys() : [];
-        emit({ requestId, data: { yaml, pluginKeys } });
+        const config: ConsoleConfigSource = ctx.readConfigSource
+          ? await ctx.readConfigSource()
+          : { source: '', format: 'yaml', revision: '', configKeys: [] };
+        emit({ requestId, data: config });
       } catch (error) {
         emit({
           requestId,
@@ -230,7 +291,7 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:get-all': {
+    case CONFIG_RPC.GET_ALL: {
       try {
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
         emit({ requestId, data: document });
@@ -242,11 +303,9 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:get': {
+    case CONFIG_RPC.GET: {
       try {
-        // 兼容 console UI 的 data:{plugin} / data:{key} 形状
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        const key = String(message.key ?? message.pluginName ?? data.pluginName ?? data.plugin ?? data.key ?? '');
+        const key = String(message.pluginName ?? '');
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
         emit({ requestId, data: key ? document[key] : document });
       } catch (error) {
@@ -290,22 +349,33 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:save-yaml': {
+    case CONFIG_RPC.REPLACE_SOURCE: {
       try {
-        const yaml = message.yaml;
-        if (typeof yaml !== 'string') {
-          emit({ requestId, error: 'yaml field is required' });
+        const source = message.source;
+        const expectedRevision = message.expectedRevision;
+        if (typeof source !== 'string') {
+          emit({ requestId, error: 'source field is required' });
           return payloads;
         }
-        if (!ctx.writeConfigYaml) {
+        if (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(expectedRevision)) {
+          emit({ requestId, error: 'expectedRevision is required' });
+          return payloads;
+        }
+        if (!ctx.replaceConfigSource) {
           emit({ requestId, error: 'Config write is not configured' });
           return payloads;
         }
-        await ctx.writeConfigYaml(yaml);
+        const result = await ctx.replaceConfigSource(source, expectedRevision);
         ctx.publishEvent?.('config:updated', { pluginName: null, keys: [] });
         emit({
           requestId,
-          data: { success: true, message: '配置已保存，需重启生效' },
+          data: {
+            success: true,
+            ...result,
+            message: result.restartRequired
+              ? '配置已保存，需重启进程才能生效'
+              : '配置已保存',
+          },
         });
       } catch (error) {
         emit({
@@ -315,7 +385,7 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:set': {
+    case CONFIG_RPC.SET: {
       try {
         const pluginName = message.pluginName;
         if (typeof pluginName !== 'string' || !pluginName) {
@@ -325,6 +395,17 @@ export async function dispatchRuntimeConsoleRpc(
         if (!ctx.setConfigKey) {
           emit({ requestId, error: 'Config write is not configured' });
           return payloads;
+        }
+        if (ctx.validatePluginConfig) {
+          const validation = await ctx.validatePluginConfig(pluginName, message.data);
+          if (!validation.valid) {
+            emit({
+              requestId,
+              error: '配置校验失败',
+              data: validation,
+            });
+            return payloads;
+          }
         }
         const result = await ctx.setConfigKey(pluginName, message.data);
         ctx.publishEvent?.('config:updated', {
@@ -471,10 +552,9 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'schema:get': {
       try {
-        // 兼容 console UI 的 data:{plugin} / data:{pluginName} 形状（SDK 发顶层 pluginName）
-        const data = (message.data ?? {}) as Record<string, unknown>;
-        const candidate = message.pluginName ?? data.pluginName ?? data.plugin;
-        const pluginName = typeof candidate === 'string' ? candidate : undefined;
+        const pluginName = typeof message.pluginName === 'string'
+          ? message.pluginName
+          : undefined;
         const schema = ctx.getSchema ? await ctx.getSchema(pluginName) : null;
         emit({ requestId, data: schema });
       } catch (error) {
@@ -678,11 +758,11 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'endpoint.info': {
       try {
-        const data = message as Record<string, unknown>;
-        const adapter = String(data.$adapter ?? '');
-        const endpointKey = String(data.$endpoint ?? '');
+        const data = recordField(message.data) ?? message;
+        const adapter = String(data.adapter ?? '');
+        const endpointKey = String(data.endpointKey ?? '');
         if (!adapter || !endpointKey) {
-          emit({ requestId, error: '$adapter and $endpoint required' });
+          emit({ requestId, error: 'adapter and endpointKey are required' });
           return payloads;
         }
         if (!ctx.getEndpoint) {
@@ -703,19 +783,67 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case ENDPOINT_RPC.TEST: {
+      const data = recordField(message.data) ?? message;
+      const adapter = stringField(data, 'adapter');
+      const endpointKey = stringField(data, 'endpointKey');
+      if (!adapter || !endpointKey) {
+        emit({ requestId, error: 'adapter and endpointKey are required' });
+        return payloads;
+      }
+      if (!ctx.getEndpoint) {
+        emit({ requestId, error: 'Endpoint registry is not configured' });
+        return payloads;
+      }
+      const startedAt = Date.now();
+      try {
+        const endpoint = await ctx.getEndpoint(adapter, endpointKey);
+        if (!endpoint) {
+          emit({ requestId, data: {
+            reachable: false,
+            connected: false,
+            phase: 'unconfigured',
+            latencyMs: Date.now() - startedAt,
+            message: 'Endpoint 未注册到当前 generation',
+          } });
+          return payloads;
+        }
+        emit({ requestId, data: {
+          reachable: endpoint.connected && endpoint.status === 'online',
+          connected: endpoint.connected,
+          status: endpoint.status,
+          phase: endpoint.phase ?? (endpoint.connected ? 'online' : 'pending'),
+          pendingLogin: endpoint.pendingLogin ?? false,
+          latencyMs: Date.now() - startedAt,
+          message: endpoint.connected
+            ? 'Endpoint 已连接'
+            : endpoint.pendingLogin
+              ? 'Endpoint 等待登录操作'
+              : 'Endpoint 当前离线',
+        } });
+      } catch (error) {
+        emit({ requestId, data: {
+          reachable: false,
+          connected: false,
+          phase: 'failed',
+          latencyMs: Date.now() - startedAt,
+          message: error instanceof Error ? error.message : String(error),
+        } });
+      }
+      return payloads;
+    }
     case 'endpoint.send_message': {
       try {
-        const data = message as Record<string, unknown>;
-        const adapter = String(data.$adapter ?? '');
-        const endpointKey = String(data.$endpoint ?? '');
-        const channelId = String(data.$channel_id ?? '');
-        const channelType = String(data.$channel_type ?? '');
-        const content = data.$content;
-        // channelType 可省：wireConversation 归一为 private（与旧 RPC 行为对齐）。
-        if (!adapter || !endpointKey || !channelId || content === undefined) {
+        const data = recordField(message.data) ?? message;
+        const adapter = String(data.adapter ?? '');
+        const endpointKey = String(data.endpointKey ?? '');
+        const channelId = String(data.channelId ?? data.id ?? '');
+        const channelType = String(data.channelType ?? data.type ?? '');
+        const content = data.content;
+        if (!adapter || !endpointKey || !channelId || !channelType || content === undefined) {
           emit({
             requestId,
-            error: '$adapter, $endpoint, $channel_id, $content required',
+            error: 'adapter, endpointKey, channelId, channelType, and content are required',
           });
           return payloads;
         }
@@ -726,11 +854,10 @@ export async function dispatchRuntimeConsoleRpc(
         const result = await ctx.sendEndpointMessage({
           adapter,
           endpointKey,
-          conversation: wireConversation(channelType, channelId, data.$parent),
+          conversation: wireConversation(channelType, channelId, data.parent),
           content,
         });
-        // Legacy contract: { message_id }. Keep messageId for new callers.
-        emit({ requestId, data: endpointSendResult(result.messageId) });
+        emit({ requestId, data: { messageId: result.messageId } });
       } catch (error) {
         emit({
           requestId,
@@ -758,41 +885,6 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
-      return payloads;
-    }
-    case 'plugin:set-enabled': {
-      try {
-        const instanceKey = typeof message.instanceKey === 'string' ? message.instanceKey : '';
-        const enabled = message.enabled;
-        if (!instanceKey || typeof enabled !== 'boolean') {
-          emit({ requestId, error: 'instanceKey and boolean enabled are required' });
-          return payloads;
-        }
-        if (!ctx.setPluginEnabled) {
-          emit({ requestId, error: 'Plugin lifecycle management is not configured' });
-          return payloads;
-        }
-        const lifecycle = await ctx.setPluginEnabled(instanceKey, enabled);
-        ctx.publishEvent?.('plugin:lifecycle-updated', { instanceKey, enabled });
-        emit({
-          requestId,
-          data: {
-            success: true,
-            instanceKey,
-            enabled,
-            disabled: lifecycle.disabled,
-            restartRequired: true,
-            message: `${instanceKey} 已${enabled ? '启用' : '停用'}，Host 正在重启`,
-          },
-        });
-        if (ctx.requestRestart) {
-          setTimeout(() => {
-            void Promise.resolve(ctx.requestRestart?.()).catch(() => undefined);
-          }, 500);
-        }
-      } catch (error) {
-        emit({ requestId, error: error instanceof Error ? error.message : String(error) });
       }
       return payloads;
     }

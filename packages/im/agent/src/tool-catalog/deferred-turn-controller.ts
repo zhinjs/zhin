@@ -9,7 +9,7 @@ import {
 import type { Tool, ToolResult } from '@zhin.js/core';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
-import { readSkillInstructions, type LoadSkillToolOptions } from '../builtin/load-skill-tool.js';
+import type { SkillInstructionSource } from '../skill/skill-instruction-reader.js';
 import { catalogToolByName, discoverInCatalog, type DiscoverKind } from './tool-catalog.js';
 import type { ToolCatalogItem } from './types.js';
 
@@ -25,7 +25,7 @@ export interface DeferredTurnControllerOptions {
   readonly discoverTopK: number;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
   readonly onSkillLoaded?: (name: string, instructions: string, toolNames: string[]) => void;
-  readonly skillLoadOpts: LoadSkillToolOptions;
+  readonly skillInstructions: SkillInstructionSource;
 }
 
 export interface DeferredTurnController {
@@ -139,8 +139,9 @@ export function createDeferredTurnController(
       source: 'builtin:agent',
       execute: async (args): Promise<ToolResult> => {
         const name = String((args as Record<string, unknown>).name);
-        const instructions = await readSkillInstructions(name, options.skillLoadOpts);
-        if (instructions.startsWith(`Skill '${name}' not found`)) return instructions;
+        const result = await options.skillInstructions.read(name);
+        if (result.status === 'missing') return `Skill '${result.name}' not found. Check skills/ directory.`;
+        const { instructions } = result;
         let next = addSkillToSnapshot(currentSnapshot, name);
         const toolNames = options.skillRegistry?.getByName(name)?.tools?.map(tool => tool.name) ?? [];
         next = touchToolsInSnapshot(next, toolNames, options.maxLoadedPerSession);

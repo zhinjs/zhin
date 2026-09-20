@@ -4,8 +4,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
-import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type MediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { mrkdwnToMarkdown } from './mrkdwn-to-markdown.js';
 
@@ -19,25 +18,16 @@ function dropOutboundMedia(type: string, reason: string): void {
 const SLACK_SIG_VERSION = 'v0';
 const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface SlackAdapterConfig {
-  readonly id?: string;
-  readonly token?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface SlackEndpointConfig {
+  readonly id: string;
+  readonly token: string;
   readonly signingSecret?: string;
   readonly appToken?: string;
   /** Default true (Socket Mode). Set false for HTTP Events API via httpHostToken. */
   readonly socketMode?: boolean;
   readonly webhookPath?: string;
   readonly clientPingTimeout?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: slack`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedSlackConfig> & {
-    readonly context?: string;
-    readonly socketMode?: boolean;
-    readonly signingSecret?: string;
-    readonly appToken?: string;
-    readonly webhookPath?: string;
-    readonly clientPingTimeout?: number;
-  }>;
 }
 
 export interface ResolvedSlackConfig {
@@ -127,46 +117,19 @@ export interface SlackWireSegment {
   readonly data?: Record<string, unknown>;
 }
 
-export function resolveSlackConfig(config: SlackAdapterConfig = {}): ResolvedSlackConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'slack');
-  const token = config.token
-    ?? entry?.token
-    ?? process.env.SLACK_BOT_TOKEN
-    ?? process.env.SLACK_TOKEN;
-  if (!token) {
-    throw new TypeError(
-      'Slack adapter requires token (plugins.<key>.token or endpoints with context: slack)',
-    );
-  }
-
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.SLACK_BOT_NAME
-    || 'slack-bot';
-
-  const socketMode = config.socketMode ?? entry?.socketMode;
+export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const token = requiredEndpointField(config.token, 'token');
+  const socketMode = config.socketMode;
   // Prefer Socket Mode (default true) — no public URL required.
   const mode: 'socket' | 'http' = socketMode === false ? 'http' : 'socket';
 
-  const signingSecret = config.signingSecret
-    ?? entry?.signingSecret
-    ?? process.env.SLACK_SIGNING_SECRET
-    ?? '';
-  const appToken = config.appToken
-    ?? entry?.appToken
-    ?? process.env.SLACK_APP_TOKEN
-    ?? undefined;
-
-  if (mode === 'socket' && !appToken) {
-    throw new TypeError(
-      'Slack Socket Mode requires appToken (xapp-...); set socketMode: false for HTTP Events API',
-    );
-  }
-  if (mode === 'http' && !signingSecret) {
-    throw new TypeError(
-      'Slack HTTP Events API requires signingSecret',
-    );
-  }
+  const signingSecret = mode === 'http'
+    ? requiredEndpointField(config.signingSecret, 'signingSecret')
+    : config.signingSecret?.trim() ?? '';
+  const appToken = mode === 'socket'
+    ? requiredEndpointField(config.appToken, 'appToken')
+    : config.appToken?.trim();
 
   return {
     context: 'slack',
@@ -176,12 +139,20 @@ export function resolveSlackConfig(config: SlackAdapterConfig = {}): ResolvedSla
     signingSecret,
     appToken,
     webhookPath: normalizeWebhookPath(
-      config.webhookPath ?? entry?.webhookPath ?? '/slack/events',
+      config.webhookPath ?? '/slack/events',
     ),
-    clientPingTimeout: config.clientPingTimeout
-      ?? entry?.clientPingTimeout
-      ?? 15_000,
+    clientPingTimeout: config.clientPingTimeout ?? 15_000,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'token' | 'signingSecret' | 'appToken',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`Slack endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function normalizeWebhookPath(path: string): string {

@@ -24,7 +24,7 @@ afterEach(async () => {
 });
 
 describe('ProjectConfigPlan', () => {
-  it('keeps legacy list-form configs list-form and ensures http for Console', async () => {
+  it('marks legacy list-form configs unsupported and leaves them untouched', async () => {
     const root = await makeProject();
     await fs.writeFile(path.join(root, 'zhin.config.yml'), 'plugins:\n  - "example"\n');
 
@@ -36,18 +36,13 @@ describe('ProjectConfigPlan', () => {
       ensureHttp: true,
       enablePlugins: ['@zhin.js/adapter-telegram'],
     });
-    const patch = renderProjectConfigPatch(plan);
-
-    expect(plan.changed).toBe(true);
-    // legacy 数组形态：sandbox 等插件追加到列表；host 插件栈已删除，不再写入
-    expect(patch).not.toContain('@zhin.js/host-api');
-    expect(patch).toContain('@zhin.js/adapter-sandbox');
-    expect(patch).toContain('@zhin.js/adapter-telegram');
-    expect(patch).toContain('https://console.zhin.dev');
-
-    await applyProjectConfigPlan(plan);
+    expect(loaded.status).toBe('unsupported');
+    expect(loaded.message).toContain('zhin migrate');
+    expect(plan.changed).toBe(false);
+    expect(plan.writable).toBe(false);
+    await expect(applyProjectConfigPlan(plan)).resolves.toBe(false);
     const content = await fs.readFile(path.join(root, 'zhin.config.yml'), 'utf8');
-    expect(content).toContain('@zhin.js/adapter-telegram');
+    expect(content).toBe('plugins:\n  - "example"\n');
   });
 
   it('does not write host plugins into new runtime plugins map configs', async () => {
@@ -88,33 +83,23 @@ describe('ProjectConfigPlan', () => {
     expect(content).toContain('telegram:');
   });
 
-  it('writes TOML configs through the same plan', async () => {
+  it('loads the canonical config.yml Root filename', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.toml'), 'plugins = ["example"]\n');
+    await fs.writeFile(path.join(root, 'config.yml'), 'plugins:\n  example: {}\n');
 
     const loaded = loadProjectConfig(root);
     const plan = createProjectConfigPlan({ loaded, enablePlugins: ['@scope/plugin'] });
-    await applyProjectConfigPlan(plan);
-    const content = await fs.readFile(path.join(root, 'zhin.config.toml'), 'utf8');
-
-    expect(content).toContain('"@scope/plugin"');
+    expect(loaded.status).toBe('loaded');
+    expect(plan.changed).toBe(true);
+    await expect(applyProjectConfigPlan(plan)).resolves.toBe(true);
+    expect(await fs.readFile(path.join(root, 'config.yml'), 'utf8')).toContain('plugin:');
   });
 
-  it('returns a copyable patch for readonly TypeScript configs', async () => {
+  it('rejects projects with multiple Root configuration files', async () => {
     const root = await makeProject();
-    await fs.writeFile(path.join(root, 'zhin.config.ts'), 'export default {}\n');
-
-    const loaded = loadProjectConfig(root);
-    const plan = createProjectConfigPlan({
-      loaded,
-      config: { plugins: ['example'] },
-      enablePlugins: ['@scope/plugin'],
-    });
-
-    expect(loaded.status).toBe('unsupported');
-    expect(plan.writable).toBe(false);
-    expect(renderProjectConfigPatch(plan)).toContain('@scope/plugin');
-    await expect(applyProjectConfigPlan(plan)).resolves.toBe(false);
+    await fs.writeFile(path.join(root, 'config.json'), '{}\n');
+    await fs.writeFile(path.join(root, 'zhin.config.yml'), '{}\n');
+    expect(() => loadProjectConfig(root)).toThrow(/Multiple Root config files found/);
   });
 
   it('migrates legacy AI provider fields to sdk and agents.zhin.provider', () => {

@@ -76,10 +76,10 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | API Surface（`pnpm check:api-surface`） | public API surface 快照 |
 | Plugin Runtime API（`pnpm check:plugin-runtime-api`） | 约定式插件运行时 API surface 快照 |
 | Plugin Spec（`pnpm check:plugin`） | 插件符合标准规范 |
-| Plugin Agent Publish（`pnpm check:plugin-agent-publish`） | 带 `agent/` 的插件发布清单（files、prepublishOnly、peer 依赖） |
+| Plugin Capability Publish（`pnpm check:plugin-capability-publish`） | 插件能力目录发布清单（files、prepublishOnly、peer 依赖） |
 | Publish Repository（`pnpm check:publish-repository`） | 可发布包 `repository.url` 匹配 github.com/zhinjs/zhin（npm provenance） |
-| Agent Tool Schema（`pnpm check:agent-tool-schema`） | `agent/tools` inputSchema 与 defineAgentTool/execute 类型一致 |
-| No Package-Root skills/（`pnpm check:no-package-skills`） | 插件包禁止顶层 `skills/`，须用 `agent/skills/*.md` |
+| Agent Tool Schema（`pnpm check:agent-tool-schema`） | `tools` inputSchema 与 defineAgentTool/execute 类型一致 |
+| Skill Authoring Boundaries（`pnpm check:skill-authoring-boundaries`） | Skill 统一使用 `skills/<name>/SKILL.md`，并显式挂载 Feature |
 
 **IM 链路与运行时约定**
 
@@ -87,15 +87,14 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | --- | --- |
 | IM Send Path（`pnpm check:harness-paths`） | 不得绕过 Adapter.sendMessage 统一链路 |
 | IM Session SSOT（`pnpm check:im-session-ssot`） | IM 场景/session 身份解析走 core SSOT |
-| usePlugin Top-Level（`pnpm check:use-plugin-top-level`） | 禁止调用已移除的 `usePlugin()`（throwing stub） |
-| getPlugin Runtime（`pnpm check:get-plugin-runtime`） | 禁止调用已移除的 `getPlugin()`（含运行时回调；throwing stub） |
+| Removed Plugin API（`pnpm check:no-removed-plugin-api`） | 禁止在生产源码中重新引入已删除的 Plugin lookup API |
 | Workroom SSOT（`pnpm check:workroom-ssot`） | Workroom 状态只经 Journal + CAS Kernel；禁止恢复并行可变权威 |
 
 **AI 层**
 
 | 检查 | 说明 |
 | --- | --- |
-| getModel Import Disambiguation（`pnpm check:get-model-imports`） | 运行时代码用 getLlmTransportModel，不用歧义 getModel |
+| LLM Runtime Boundaries（`pnpm check:llm-runtime-boundaries`） | 运行时代码经 owner-scoped `LlmApiRuntime` 解析模型，不导入歧义 `getModel` |
 | Legacy AI Exports（`pnpm check:legacy-ai-exports`） | `@zhin.js/ai` 不再导出 SessionManager 等符号 |
 | Provider Gateway（`pnpm check:provider-gateway`） | LLM 网关 sdk/contextWindow 预设契约 |
 | A2A Mesh（`pnpm check:a2a-mesh`） | 禁止残留 MCP Agent Mesh v1 符号 |
@@ -104,7 +103,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 
 | 检查 | 说明 |
 | --- | --- |
-| Rich Segment Adapters（`pnpm check:rich-segments`） | outboundRichSegmentPolicy 声明与契约测试 |
+| Outbound Media Policies（`pnpm check:outbound-media-policies`） | segments.outboundMedia 声明与契约测试 |
 | AI Outbound Adapters（`pnpm check:ai-outbound`） | aiOutboundExtensions 声明与契约测试 |
 | Interactive Segments（`pnpm check:interactive-segments`） | interactivePolicy 声明与契约测试 |
 | Segment Adapters（`pnpm check:segments`） | defineAdapter segments 声明契约（sandbox 必须达标） |
@@ -145,21 +144,10 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 
 日常开发只需 `pnpm release` 提交 changeset 文件；`bump` 和 `pub` 由 CI 执行。
 
-版本策略默认只允许 `patch`。`pnpm check:release-plan` 会读取 Changesets 的完整发布计划，
-只要出现未授权的 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败。
-确需非 patch 发版时，由版本 owner 在 `.changeset/version-policy.json` 的
-`approvedNonPatchReleases` 中记录 changeset 文件名、包范围、级别、`approvedBy` 和原因；
-该策略文件由 `.github/CODEOWNERS` 指定 owner 审核。示例：
-
-```json
-{
-  "changeset": "intentional-breaking-change.md",
-  "packages": ["zhin.js"],
-  "type": "major",
-  "approvedBy": "lc-cn",
-  "reason": "Remove the deprecated compatibility API"
-}
-```
+版本策略只允许 `patch`。所有 changeset 声明都必须使用 `patch`，
+`.changeset/version-policy.json` 的 `approvedNonPatchReleases` 必须保持为空。
+`pnpm check:release-plan` 会同时检查原始声明和 Changesets 推导出的完整发布计划；
+只要出现 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败，不提供豁免入口。
 
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。

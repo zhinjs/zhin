@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
 import { formatDisplayPath } from '@zhin.js/logger';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { CREATE_PROJECT_COMMAND } from '../utils/create-project.js';
 import { ensureGlobalHome, installGlobalHomeDeps } from '../utils/global-home-init.js';
 import { globalZhinHome } from '../utils/zhin-home.js';
@@ -72,23 +73,23 @@ const TOOLS_MD_TEMPLATE = `# Tools Guide
 ## 常用工具场景
 
 ### 文件操作
-- \`file_read\` - 读取文件内容
-- \`file_write\` - 创建或覆盖文件
-- \`file_list\` - 列出目录内容
-- \`semantic_search\` - 语义搜索代码
+- \`read_file\` - 读取文件内容
+- \`write_file\` - 创建或覆盖文件
+- \`list_dir\` - 列出目录内容
+- \`grep\` - 搜索文件内容
 
 ### 网络操作
-- \`web_search\` - DuckDuckGo 搜索
+- \`web_search\` - 搜索公开网页
 - \`web_fetch\` - 获取网页内容
 
 ### 系统操作
-- \`shell_exec\` - 执行 shell 命令（需谨慎）
-- \`plan_create\` - 创建和管理待办计划
+- \`bash\` - 执行 shell 命令（需谨慎）
+- \`todo_read\` / \`todo_write\` - 查看和维护计划
 
 ### 记忆与学习
-- \`memory_store\` - 存储长期记忆
-- \`memory_search\` - 检索相关记忆
-- \`activate_skill\` - 激活专业技能
+- \`memory_upsert\` - 存储语义记忆
+- \`memory_search\` - 检索语义记忆
+- \`discover\` / \`load_skill\` - 查找并载入专业技能
 
 ## 注意事项
 - 工具调用后务必基于结果生成完整回答
@@ -207,6 +208,7 @@ export const setupCommand = new Command('setup')
     }
 
     try {
+      readPluginConfigurationMap(config, configFile ?? 'zhin.config.yml');
       const wizardOptions: InitOptions = {};
       const configBefore = JSON.stringify(config);
 
@@ -236,8 +238,7 @@ export const setupCommand = new Command('setup')
       if (depsChanged || featuresChanged) {
         console.log(chalk.gray('  ✓ 已更新 package.json 依赖/features 清单，请运行 pnpm install'));
         if (wizardOptions.ai?.enabled) {
-          const agentProvider = wizardOptions.ai.agentProvider ?? wizardOptions.ai.defaultProvider;
-          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(agentProvider)}`));
+          console.log(chalk.gray(`    AI 栈: ${formatAIDependencyHint(wizardOptions.ai.agentProvider)}`));
         }
       }
 

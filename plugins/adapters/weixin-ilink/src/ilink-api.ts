@@ -2,8 +2,7 @@ import crypto from "node:crypto";
 
 import { logger } from "./ilink-logger.js";
 import {
-  buildBaseInfo,
-  ILINK_APP_CLIENT_VERSION,
+  type IlinkClientMetadata,
   ILINK_APP_ID,
 } from "./ilink-meta.js";
 import { redactBody, redactUrl } from "./ilink-redact.js";
@@ -20,10 +19,11 @@ import type {
   GetConfigResp,
 } from "./ilink-types.js";
 
-export { buildBaseInfo, sanitizeBotAgent } from "./ilink-meta.js";
+export { IlinkClientMetadata, sanitizeBotAgent } from "./ilink-meta.js";
 
 export type WeixinApiOptions = {
   baseUrl: string;
+  metadata: IlinkClientMetadata;
   token?: string;
   timeoutMs?: number;
   /** Long-poll timeout for getUpdates (server may hold the request up to this). */
@@ -48,20 +48,20 @@ function randomWechatUin(): string {
 }
 
 /** Build headers shared by both GET and POST requests. */
-function buildCommonHeaders(): Record<string, string> {
+function buildCommonHeaders(metadata: IlinkClientMetadata): Record<string, string> {
   const headers: Record<string, string> = {
     "iLink-App-Id": ILINK_APP_ID,
-    "iLink-App-ClientVersion": String(ILINK_APP_CLIENT_VERSION),
+    "iLink-App-ClientVersion": String(metadata.appClientVersion),
   };
   return headers;
 }
 
-function buildHeaders(opts: { token?: string }): Record<string, string> {
+function buildHeaders(opts: { metadata: IlinkClientMetadata; token?: string }): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     AuthorizationType: "ilink_bot_token",
     "X-WECHAT-UIN": randomWechatUin(),
-    ...buildCommonHeaders(),
+    ...buildCommonHeaders(opts.metadata),
   };
   if (opts.token?.trim()) {
     headers.Authorization = `Bearer ${opts.token.trim()}`;
@@ -80,6 +80,7 @@ function buildHeaders(opts: { token?: string }): Record<string, string> {
  */
 export async function apiGetFetch(params: {
   baseUrl: string;
+  metadata: IlinkClientMetadata;
   endpoint: string;
   timeoutMs?: number;
   label: string;
@@ -87,7 +88,7 @@ export async function apiGetFetch(params: {
 }): Promise<string> {
   const base = ensureTrailingSlash(params.baseUrl);
   const url = new URL(params.endpoint, base);
-  const hdrs = buildCommonHeaders();
+  const hdrs = buildCommonHeaders(params.metadata);
   logger.debug(`GET ${redactUrl(url.toString())}`);
 
   const timeoutMs = params.timeoutMs;
@@ -149,6 +150,7 @@ function combineAbortSignals(
  */
 export async function apiPostFetch(params: {
   baseUrl: string;
+  metadata: IlinkClientMetadata;
   endpoint: string;
   body: string;
   token?: string;
@@ -158,7 +160,7 @@ export async function apiPostFetch(params: {
 }): Promise<string> {
   const base = ensureTrailingSlash(params.baseUrl);
   const url = new URL(params.endpoint, base);
-  const hdrs = buildHeaders({ token: params.token });
+  const hdrs = buildHeaders({ metadata: params.metadata, token: params.token });
   logger.debug(`POST ${redactUrl(url.toString())} body=${redactBody(params.body)}`);
 
   const controller =
@@ -196,10 +198,7 @@ export async function apiPostFetch(params: {
  * with ret=0 so the caller can simply retry. This is normal for long-poll.
  */
 export async function getUpdates(
-  params: GetUpdatesReq & {
-    baseUrl: string;
-    token?: string;
-    timeoutMs?: number;
+  params: GetUpdatesReq & WeixinApiOptions & {
     /**
      * Optional external abort signal (e.g. from the gateway when stopping the
      * channel). When this aborts, the in-flight long-poll is terminated
@@ -213,10 +212,11 @@ export async function getUpdates(
   try {
     const rawText = await apiPostFetch({
       baseUrl: params.baseUrl,
+      metadata: params.metadata,
       endpoint: "ilink/bot/getupdates",
       body: JSON.stringify({
         get_updates_buf: params.get_updates_buf ?? "",
-        base_info: buildBaseInfo(),
+        base_info: params.metadata.buildBaseInfo(),
       }),
       token: params.token,
       timeoutMs: timeout,
@@ -249,6 +249,7 @@ export async function getUploadUrl(
 ): Promise<GetUploadUrlResp> {
   const rawText = await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/getuploadurl",
     body: JSON.stringify({
       filekey: params.filekey,
@@ -262,7 +263,7 @@ export async function getUploadUrl(
       thumb_filesize: params.thumb_filesize,
       no_need_thumb: params.no_need_thumb,
       aeskey: params.aeskey,
-      base_info: buildBaseInfo(),
+      base_info: params.metadata.buildBaseInfo(),
     }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
@@ -278,8 +279,9 @@ export async function sendMessage(
 ): Promise<void> {
   await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/sendmessage",
-    body: JSON.stringify({ ...params.body, base_info: buildBaseInfo() }),
+    body: JSON.stringify({ ...params.body, base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_API_TIMEOUT_MS,
     label: "sendMessage",
@@ -292,11 +294,12 @@ export async function getConfig(
 ): Promise<GetConfigResp> {
   const rawText = await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/getconfig",
     body: JSON.stringify({
       ilink_user_id: params.ilinkUserId,
       context_token: params.contextToken,
-      base_info: buildBaseInfo(),
+      base_info: params.metadata.buildBaseInfo(),
     }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
@@ -312,8 +315,9 @@ export async function sendTyping(
 ): Promise<void> {
   await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/sendtyping",
-    body: JSON.stringify({ ...params.body, base_info: buildBaseInfo() }),
+    body: JSON.stringify({ ...params.body, base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "sendTyping",
@@ -328,8 +332,9 @@ export async function sendTyping(
 export async function notifyStop(params: WeixinApiOptions): Promise<NotifyStopResp> {
   const rawText = await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/msg/notifystop",
-    body: JSON.stringify({ base_info: buildBaseInfo() }),
+    body: JSON.stringify({ base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "notifyStop",
@@ -343,8 +348,9 @@ export async function notifyStop(params: WeixinApiOptions): Promise<NotifyStopRe
 export async function notifyStart(params: WeixinApiOptions): Promise<NotifyStartResp> {
   const rawText = await apiPostFetch({
     baseUrl: params.baseUrl,
+    metadata: params.metadata,
     endpoint: "ilink/bot/msg/notifystart",
-    body: JSON.stringify({ base_info: buildBaseInfo() }),
+    body: JSON.stringify({ base_info: params.metadata.buildBaseInfo() }),
     token: params.token,
     timeoutMs: params.timeoutMs ?? DEFAULT_CONFIG_TIMEOUT_MS,
     label: "notifyStart",

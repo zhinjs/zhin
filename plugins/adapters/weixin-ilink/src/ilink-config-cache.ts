@@ -1,4 +1,4 @@
-import { getConfig } from "./ilink-api.js";
+import { getConfig, type WeixinApiOptions } from "./ilink-api.js";
 
 /** Subset of getConfig fields that we actually need; add new fields here as needed. */
 export interface CachedConfig {
@@ -21,41 +21,45 @@ interface ConfigCacheEntry {
  * exponential-backoff retry (up to 1h) on failure.
  */
 export class WeixinConfigManager {
-  private cache = new Map<string, ConfigCacheEntry>();
+  readonly #cache = new Map<string, ConfigCacheEntry>();
+  readonly #apiOptions: WeixinApiOptions;
+  readonly #log: (msg: string) => void;
 
   constructor(
-    private apiOpts: { baseUrl: string; token?: string },
-    private log: (msg: string) => void,
-  ) {}
+    apiOptions: WeixinApiOptions,
+    log: (msg: string) => void,
+  ) {
+    this.#apiOptions = apiOptions;
+    this.#log = log;
+  }
 
   async getForUser(userId: string, contextToken?: string): Promise<CachedConfig> {
     const now = Date.now();
-    const entry = this.cache.get(userId);
+    const entry = this.#cache.get(userId);
     const shouldFetch = !entry || now >= entry.nextFetchAt;
 
     if (shouldFetch) {
       let fetchOk = false;
       try {
         const resp = await getConfig({
-          baseUrl: this.apiOpts.baseUrl,
-          token: this.apiOpts.token,
+          ...this.#apiOptions,
           ilinkUserId: userId,
           contextToken,
         });
         if (resp.ret === 0) {
-          this.cache.set(userId, {
+          this.#cache.set(userId, {
             config: { typingTicket: resp.typing_ticket ?? "" },
             everSucceeded: true,
             nextFetchAt: now + Math.random() * CONFIG_CACHE_TTL_MS,
             retryDelayMs: CONFIG_CACHE_INITIAL_RETRY_MS,
           });
-          this.log(
+          this.#log(
             `[weixin] config ${entry?.everSucceeded ? "refreshed" : "cached"} for ${userId}`,
           );
           fetchOk = true;
         }
       } catch (err) {
-        this.log(`[weixin] getConfig failed for ${userId} (ignored): ${String(err)}`);
+        this.#log(`[weixin] getConfig failed for ${userId} (ignored): ${String(err)}`);
       }
       if (!fetchOk) {
         const prevDelay = entry?.retryDelayMs ?? CONFIG_CACHE_INITIAL_RETRY_MS;
@@ -64,7 +68,7 @@ export class WeixinConfigManager {
           entry.nextFetchAt = now + nextDelay;
           entry.retryDelayMs = nextDelay;
         } else {
-          this.cache.set(userId, {
+          this.#cache.set(userId, {
             config: { typingTicket: "" },
             everSucceeded: false,
             nextFetchAt: now + CONFIG_CACHE_INITIAL_RETRY_MS,
@@ -74,6 +78,6 @@ export class WeixinConfigManager {
       }
     }
 
-    return this.cache.get(userId)?.config ?? { typingTicket: "" };
+    return this.#cache.get(userId)?.config ?? { typingTicket: "" };
   }
 }

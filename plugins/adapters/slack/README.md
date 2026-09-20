@@ -8,7 +8,7 @@ Zhin.js Slack 适配器（Plugin Runtime），优先 Socket Mode，也可经 Run
 - **HTTP Events API**：`httpHostToken` POST（签名验证），**非** legacy host-router/Koa
 - 入站经 `Endpoint.emit(...)`；出站 `send({ conversation, payload })` → `chat.postMessage` / Block Kit
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
-- Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `agent/tools/`）
+- Block Kit 按钮、斜杠命令、消息编辑、表情反应等（见 `tools/`）
 
 ## 安装
 
@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/slack.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/slack/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -52,21 +52,21 @@ plugins:
   slack:
     socketMode: true          # 默认 true，可省略
     endpoints:
-      - name: my-slack-bot
+      - id: my-slack-bot
         token: ${SLACK_BOT_TOKEN}
         appToken: ${SLACK_APP_TOKEN}
 ```
 
-多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`name` 必填）：
+多 workspace：一个插件实例挂多个 endpoint（`endpoints` 数组逐项覆盖顶层字段，`id` 必填）：
 
 ```yaml
 plugins:
   slack:
     endpoints:
-      - name: team-a
+      - id: team-a
         token: ${SLACK_BOT_TOKEN_A}
         appToken: ${SLACK_APP_TOKEN_A}
-      - name: team-b
+      - id: team-b
         token: ${SLACK_BOT_TOKEN_B}
         appToken: ${SLACK_APP_TOKEN_B}
 ```
@@ -79,7 +79,7 @@ plugins:
     socketMode: false
     webhookPath: /slack/events   # 可选，默认 /slack/events
     endpoints:
-      - name: my-slack-bot
+      - id: my-slack-bot
         token: ${SLACK_BOT_TOKEN}
         signingSecret: ${SLACK_SIGNING_SECRET}
 ```
@@ -91,10 +91,9 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 
 | 变量 | 说明 |
 |------|------|
-| `SLACK_BOT_TOKEN` / `SLACK_TOKEN` | Bot User OAuth Token（`xoxb-...`） |
-| `SLACK_APP_TOKEN` | App-Level Token（Socket Mode，`xapp-...`） |
-| `SLACK_SIGNING_SECRET` | Signing Secret（HTTP 模式） |
-| `SLACK_BOT_NAME` | 可选 endpoint 名称 |
+| `SLACK_BOT_TOKEN` | 示例中由 YAML `${SLACK_BOT_TOKEN}` 引用的 Bot User OAuth Token；变量名可自行定义 |
+| `SLACK_APP_TOKEN` | 示例中由 YAML `${SLACK_APP_TOKEN}` 引用的 App-Level Token；变量名可自行定义 |
+| `SLACK_SIGNING_SECRET` | 示例中由 YAML `${SLACK_SIGNING_SECRET}` 引用的 Signing Secret；变量名可自行定义 |
 
 ## 消息格式
 
@@ -115,9 +114,9 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具 | `agent/tools/`（邀请、话题、反应、置顶、编辑等） |
-| 技能说明 | `agent/skills/slack.md` |
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具 | `tools/`（邀请、话题、反应、置顶、编辑等） |
+| 技能说明 | `agents/slack/skills/slack-channels/SKILL.md`、`agents/slack/skills/slack-messages/SKILL.md` |
 
 ## 限制
 

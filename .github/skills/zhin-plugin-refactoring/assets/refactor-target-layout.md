@@ -1,54 +1,49 @@
 # 目标结构草图
 
-这是一个常见的重构目标结构，不是强制模板。
+这是一个按需裁剪的重构目标，不是要求创建全部目录。
 
 ```text
-src/
-  index.ts
-  commands/
-    index.ts
-  middlewares/
-    index.ts
-  events/
-    index.ts
-  crons/
-    index.ts
-  tools/
-    index.ts
-  services/
-    database.ts
-    http.ts
-    domain.ts
-  models/
-    index.ts
-client/
-  index.tsx
-  pages/
-  components/
+my-plugin/
+├── package.json
+├── plugin.ts
+├── schema.json
+├── commands/
+│   └── status/index.ts
+├── middlewares/
+│   └── audit/index.ts
+├── handlers/
+│   └── message-receive/index.ts
+├── components/
+│   └── status-card/index.tsx
+├── schedules/
+│   └── daily-report/index.ts
+├── tools/
+│   └── health/index.ts
+├── hooks/
+│   └── audit/index.ts
+├── skills/
+│   └── diagnostics/SKILL.md
+├── agents/
+│   └── operator/
+│       ├── agent.json
+│       ├── system.md
+│       ├── boundaries.md
+│       └── conventions.md
+├── mcps/
+│   └── service/index.ts
+├── pages/
+│   └── dashboard/index.tsx
+└── src/
+    ├── service.ts
+    └── domain.ts
 ```
 
 ## 最小保留原则
 
-- 没有这类能力，就不要建这类目录
-- `index.ts` 只负责装配
-- 先把重复逻辑抽到 `services/`，再考虑更细分层
+- 没有某类能力，就不创建对应目录。
+- `plugin.ts` 只装配资源和生命周期。
+- 能力入口使用约定目录并 default-export 对应 `define*` 定义。
+- 普通 helper 与共享业务实现放 `src/`，不参与能力发现。
+- Agent/Skill 私有 Tool 留在所属目录，维持渐进披露。
 
-## 常见收缩版
-
-如果插件没有前端、AI 工具、定时任务，可以收缩为：
-
-```text
-src/
-  index.ts
-  commands/
-  services/
-  models/
-```
-
-如果插件只有少量命令和一个服务，也可以只保留：
-
-```text
-src/
-  index.ts
-  services/
-```
+只有装配逻辑时可收缩为 `package.json`、`plugin.ts` 和按需的 `schema.json`。只有一个命令时也应使用 `commands/<name>/index.ts`，不要回退到命令式注册。

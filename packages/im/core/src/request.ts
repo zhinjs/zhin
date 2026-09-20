@@ -1,5 +1,4 @@
 import type { MaybePromise } from './types.js';
-import type { Adapters } from './adapter.js';
 import type { RequestKind } from './side-event/types.js';
 import type { SideEventBase } from './side-event/base.js';
 
@@ -29,7 +28,7 @@ export type { RequestKind, ComposedRequestName } from './side-event/types.js';
  * ```
  */
 export interface RequestBase extends SideEventBase {
-  $adapter: keyof Adapters;
+  $adapter: string;
   $type: RequestKind;
   /** 主参与者（必填） */
   $actor: NonNullable<SideEventBase['$actor']>;

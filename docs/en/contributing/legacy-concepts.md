@@ -4,7 +4,7 @@ After the Plugin Runtime consolidation, the following legacy concepts are no lon
 
 ## `usePlugin()` Plugin System -> Convention-based plugin.ts + definePlugin
 
-- **Old approach**: `usePlugin()` from `@zhin.js/core` -- a React Hooks-like design that uses AsyncLocalStorage to locate the calling file and automatically build the plugin tree. The constraint is that it must be called at module top level (gate: `pnpm check:use-plugin-top-level`). This function still exists in `packages/im/core/src/plugin.ts` for backward compatibility with the legacy app layer (`packages/im/zhin`).
+- **Old approach**: `usePlugin()` from `@zhin.js/core` -- a React Hooks-like design that used AsyncLocalStorage to locate the calling file and automatically build the plugin tree. The API is absent from source and the public surface; `pnpm check:no-removed-plugin-api` prevents its reintroduction.
 - **New approach**: A convention-based `plugin.ts` at the plugin package root that default-exports `definePlugin(...)` (`zhin.js`). Commands, middleware, adapters, etc. go in convention directories (`commands/`, `middlewares/`, `adapters/`...) for auto-discovery. See [definePlugin](../authoring/define-plugin.md) and [Convention Directories](../authoring/conventions.md).
 
 ```ts
@@ -31,7 +31,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## Old Manifest / `plugin.yml` -> package.json `zhin` Field
 
-- **Old approach**: A `plugin.yml` manifest at the plugin root (`PluginManifest`, marked deprecated; legacy `Plugin` and `zhin build` still recognize it, see `basic/cli/src/libs/plugin-package-build.ts`).
+- **Old approach**: A `plugin.yml` manifest at the plugin root. That format and the `PluginManifest` type are absent from source, build detection, and the public surface.
 - **New approach**: The `zhin` field in `package.json`, parsed and strictly validated by `@zhin.js/runtime` (`packages/im/runtime/src/manifest.ts`). For field-by-field documentation, see [definePlugin - package.json zhin field](../authoring/define-plugin.md).
 
 ```jsonc
@@ -42,7 +42,7 @@ if (context.resources.has(httpHostToken)) {
 
 ## `extends Adapter` Class Adapter -> defineAdapter
 
-- **Old approach**: Extending the `Adapter` base class from `@zhin.js/core` to implement platform adapters (the class still exists in `packages/im/core/src/adapter.ts` for the legacy app layer).
+- **Old approach**: Extending the `Adapter` base class from `@zhin.js/core` to implement platform adapters. That class and the matching Core `Endpoint` runtime have been deleted.
 - **New approach**: Default-export `defineAdapter({ capabilities, create })` (`@zhin.js/adapter`) from a file in the convention `adapters/` directory, declaring IO capabilities via `capabilities` (`inbound` / `outbound`). Endpoint instance configuration comes from the app config `plugins.<instanceKey>`, with the structure described by the plugin package's `schema.json`.
 
 ```ts

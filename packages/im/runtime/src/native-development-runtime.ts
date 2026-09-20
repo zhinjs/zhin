@@ -4,7 +4,7 @@ import {
   watch as watchDirectory,
   type FSWatcher,
 } from 'node:fs';
-import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
+  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcps', 'middlewares', 'pages', 'prompt-sections', 'schedules', 'skills', 'tools',
 ]);
 
 /**
@@ -66,14 +66,31 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // Installed packages and external paths are intentionally not watched.
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
+    if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
     const parts = relative(packageRoot, normalized).split(sep);
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);
     const root = parts[capability];
-    if (root === 'pages') return false;
-    if (root === 'skills' || root === 'agents') return extname(normalized) !== '.md';
-    if (root === 'tools' || root === 'mcp') return parts.length !== capability + 2;
-    if (isCapabilityEntry(parts.slice(capability + 1))) return false;
+    if (root === 'agents' || root === 'skills') {
+      const local = parts.slice(capability + 1);
+      if (isNestedDirectoryEntry(local)) return false;
+      return extname(normalized) !== '.md';
+    }
+    if (root === 'commands') {
+      const local = parts.slice(capability + 1);
+      if (!isExecutableSource(normalized)) return extname(normalized) === '.json';
+      return local.length < 2
+        || !local.slice(0, -1).every(isCommandDirectorySegment);
+    }
+    if (root === 'adapters' || root === 'components' || root === 'handlers'
+      || root === 'hooks' || root === 'mcps' || root === 'middlewares'
+      || root === 'pages' || root === 'prompt-sections' || root === 'schedules'
+      || root === 'tools') {
+      const local = parts.slice(capability + 1);
+      if (!isExecutableSource(normalized)) return extname(normalized) === '.json';
+      return local.length < 2
+        || !isNamedCapabilityDirectory(local[0] ?? '', root === 'tools');
+    }
     // Support files inside capability directories (e.g. commands/_utils.ts)
     // are not discovery entries: reloading the entry URL only bumps that
     // entry's zhin-generation, so the importer closure keeps the old code.
@@ -112,6 +129,31 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   #assertOpen(): void {
     if (this.#closed) throw new Error('NativeDevelopmentModuleRuntime is closed');
   }
+}
+
+function isCommandDirectorySegment(value: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/u.test(value)
+    || (!/[A-Z]/u.test(value) && /[^\x00-\x7F]/u.test(value) && !/[\s/\\]/u.test(value))
+    || /^\[(?:\[)?(?:\.\.\.)?[a-zA-Z][a-zA-Z0-9]*\](?:\])?$/u.test(value);
+}
+
+function isNamedCapabilityDirectory(value: string, allowSnake: boolean): boolean {
+  return allowSnake
+    ? /^[a-z0-9][a-z0-9_-]*$/u.test(value)
+    : /^[a-z0-9][a-z0-9-]*$/u.test(value);
+}
+
+function isDirectoryCapabilityEntry(parts: readonly string[]): boolean {
+  return parts.length === 2
+    && parts[1] === `index${extname(parts[1] ?? '')}`
+    && ['.cjs', '.js', '.mjs', '.ts'].includes(extname(parts[1] ?? ''));
+}
+
+function isNestedDirectoryEntry(parts: readonly string[]): boolean {
+  const index = parts.indexOf('tools');
+  const hookIndex = parts.indexOf('hooks');
+  const capability = index >= 0 ? index : hookIndex;
+  return capability >= 1 && isDirectoryCapabilityEntry(parts.slice(capability + 1));
 }
 
 export function supportsNativeTypeScript(
@@ -240,24 +282,6 @@ function isWatchedSource(source: string): boolean {
 /** Mirrors sourceSnapshot: any path segment matching an ignored directory opts out. */
 function isIgnoredSource(root: string, source: string): boolean {
   return relative(root, source).split(sep).some((segment) => ignoredDirectories.has(segment));
-}
-
-/**
- * Discovery entries follow the typeScriptModules convention
- * (feature-kit typescript-convention.ts): lowercase segment directories and
- * lowercase .ts/.tsx module names only.
- */
-function isCapabilityEntry(segments: readonly string[]): boolean {
-  const file = segments[segments.length - 1] ?? '';
-  return segments.slice(0, -1).every(isCapabilitySegment) && isCapabilityModule(file);
-}
-
-function isCapabilitySegment(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*$/u.test(value);
-}
-
-function isCapabilityModule(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*\.tsx?$/u.test(value);
 }
 
 function isExecutableSource(source: string): boolean {

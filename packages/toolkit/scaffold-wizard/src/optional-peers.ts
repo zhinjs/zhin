@@ -1,5 +1,6 @@
 import fs from 'fs-extra';
 import path from 'node:path';
+import { readPluginConfigurationMap } from '@zhin.js/plugin-runtime';
 import { findMissingPackageDependencies, findUnresolvedPackageInstalls, type PackageJsonLike } from './project-deps.js';
 
 export const SPEECH_PACKAGE = '@zhin.js/speech';
@@ -38,21 +39,10 @@ function readSpeechStrategy(config: Record<string, unknown>): string | undefined
 }
 
 function configUsesHtmlImageAdapter(config: Record<string, unknown>): boolean {
-  const plugins = Array.isArray(config.plugins)
-    ? config.plugins.filter((p): p is string => typeof p === 'string')
-    : [];
-  for (const plugin of plugins) {
+  for (const instanceKey of Object.keys(readPluginConfigurationMap(config))) {
+    if (ADAPTERS_PREFER_HTML_IMAGE.has(instanceKey)) return true;
     for (const ctx of ADAPTERS_PREFER_HTML_IMAGE) {
-      if (plugin.includes(`adapter-${ctx}`)) return true;
-    }
-  }
-  // 新 runtime 配置形态：plugins 为 instanceKey → 配置 的映射，instanceKey 即适配器 context
-  if (config.plugins && typeof config.plugins === 'object' && !Array.isArray(config.plugins)) {
-    for (const instanceKey of Object.keys(config.plugins as Record<string, unknown>)) {
-      if (ADAPTERS_PREFER_HTML_IMAGE.has(instanceKey)) return true;
-      for (const ctx of ADAPTERS_PREFER_HTML_IMAGE) {
-        if (instanceKey.includes(`adapter-${ctx}`)) return true;
-      }
+      if (instanceKey.includes(`adapter-${ctx}`)) return true;
     }
   }
   const endpoints = Array.isArray(config.endpoints) ? config.endpoints : [];

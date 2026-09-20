@@ -4,10 +4,8 @@
  */
 import type { JobNotify } from './types.js';
 import {
-  createNotificationRouter,
   type DeliverResult,
   type NotificationRouter,
-  type NotificationRouterDeps,
 } from './notification-router.js';
 
 export interface DeliverScheduleToAdapterInput {
@@ -15,9 +13,7 @@ export interface DeliverScheduleToAdapterInput {
   content: string;
   jobId?: string;
   label?: string;
-  router?: NotificationRouter;
-  /** @deprecated 仅用于未注入 router 时的回退构造 */
-  resolveAdapter?: NotificationRouterDeps['resolveAdapter'];
+  router: NotificationRouter;
   source?: string;
 }
 
@@ -27,12 +23,6 @@ export interface DeliverScheduleToAdapterInput {
 export async function deliverScheduleToAdapter(
   input: DeliverScheduleToAdapterInput,
 ): Promise<DeliverResult> {
-  const { notify, content, jobId, label, source } = input;
-  const router = input.router ?? (input.resolveAdapter
-    ? createNotificationRouter({ resolveAdapter: input.resolveAdapter })
-    : undefined);
-  if (!router) {
-    return { delivered: false, channel: notify.channel };
-  }
+  const { notify, content, jobId, label, source, router } = input;
   return router.deliver({ notify, content, jobId, label, source });
 }

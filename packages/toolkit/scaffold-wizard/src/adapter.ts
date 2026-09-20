@@ -413,7 +413,7 @@ export async function configureAdapters(): Promise<AdapterSetupResult> {
         package: adapterDef.package,
         instanceKey: 'sandbox',
         config: {
-          endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }],
+          endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }],
         },
       });
       continue;

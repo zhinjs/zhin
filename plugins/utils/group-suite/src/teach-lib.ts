@@ -7,8 +7,6 @@ import {
 } from './shared-runtime.js';
 import type { GroupSuiteRuntime } from './runtime-state.js';
 
-const cooldownMap = new Map<string, number>();
-
 export const TEACH_USAGE_HINT =
   '格式：teach 关键词 回答（回答可含空格），或 teach 问题|答案';
 
@@ -84,9 +82,9 @@ async function findMatch(
   ctxType: string,
   ctxId: string,
   cfg: GroupSuiteConfig,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<Record<string, unknown> | null> {
-  const QA = getTeachModel(runtime?.db);
+  const QA = getTeachModel(runtime.db);
   if (!QA) return null;
   const allItems = (await QA.select()) as Record<string, unknown>[];
   const candidates = allItems.filter(
@@ -115,9 +113,9 @@ export async function teachAdd(
   cfg: GroupSuiteConfig,
   payload: string,
   regex = false,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const QA = getTeachModel(runtime?.db);
+  const QA = getTeachModel(runtime.db);
   if (!QA) return '问答数据库尚未就绪，请稍后重试';
   if (regex && !cfg.teachAllowRegex) return '管理员已禁用正则问答';
 
@@ -191,9 +189,9 @@ export async function teachList(
   input: MessageInput,
   cfg: GroupSuiteConfig,
   page = 1,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const QA = getTeachModel(runtime?.db);
+  const QA = getTeachModel(runtime.db);
   if (!QA) return '问答数据库尚未就绪';
   const safePage = Math.max(1, page);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -219,9 +217,9 @@ export async function teachList(
 export async function teachForget(
   input: MessageInput,
   questionRaw: string,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const QA = getTeachModel(runtime?.db);
+  const QA = getTeachModel(runtime.db);
   if (!QA) return '问答数据库尚未就绪';
   const question = questionRaw.trim();
   if (!question) return '请提供要删除的问题';
@@ -247,7 +245,7 @@ export async function teachForget(
 export async function tryTeachReply(
   input: MessageInput,
   cfg: GroupSuiteConfig,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string | null> {
   const content = typeof input.content === 'string' ? input.content.trim() : '';
   if (!content) return null;
@@ -256,12 +254,12 @@ export async function tryTeachReply(
   if (!matched) return null;
 
   const cooldownKey = `${matched.question}:${ctxType}:${ctxId}:${matched.is_regex ?? 0}`;
-  const cooldowns = runtime?.teachCooldowns ?? cooldownMap;
+  const cooldowns = runtime.teachCooldowns;
   const last = cooldowns.get(cooldownKey);
   if (last && Date.now() - last < cfg.teachCooldownMs) return null;
   cooldowns.set(cooldownKey, Date.now());
 
-  const QA = getTeachModel(runtime?.db);
+  const QA = getTeachModel(runtime.db);
   if (QA) {
     try {
       await QA.update({
@@ -293,9 +291,4 @@ export async function tryTeachReply(
     answer = processAnswer(answer, sender);
   }
   return answer;
-}
-
-/** Test helper */
-export function resetTeachCooldown(): void {
-  cooldownMap.clear();
 }

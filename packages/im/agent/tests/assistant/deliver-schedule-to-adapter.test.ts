@@ -65,11 +65,4 @@ describe('deliverScheduleToAdapter', () => {
     expect(sendIm).toHaveBeenCalledWith(notify, 'hello', 'scheduled');
   });
 
-  it('returns not delivered when no router provided', async () => {
-    const result = await deliverScheduleToAdapter({
-      notify: { channel: 'im', target: { channel: 'im', scene: { platform: 'x', endpointKey: 'e', sceneId: 's', kind: 'group' } } },
-      content: 'text',
-    });
-    expect(result.delivered).toBe(false);
-  });
 });

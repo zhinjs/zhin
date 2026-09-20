@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
 import type { ProjectProfileRegistry, ProjectProfileRegistrySnapshot } from '../workroom/profile-registry.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import {
   assertWorkflowPlanProposal,
   type WorkflowPlanProposal,

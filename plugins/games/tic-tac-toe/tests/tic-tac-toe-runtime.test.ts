@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { DisposeStack, outboundHostToken } from 'zhin.js';
 import plugin from '../plugin.ts';
-import gameCommand from '../commands/ttt/[[action]].ts';
+import gameCommand from '../commands/ttt/[[action]]/index.ts';
 import { TTT_HELP } from '../src/index.js';
 import {
   createMemoryGameServices,
@@ -81,6 +81,7 @@ describe('@zhin.js/plugin-tic-tac-toe runtime (slice-2)', () => {
       resources: resources as never,
       lifecycle,
       handoff: {} as never,
+      addGame: vi.fn(),
     });
     const message = {
       $adapter: 'sandbox',

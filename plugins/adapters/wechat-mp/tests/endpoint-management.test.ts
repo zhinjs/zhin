@@ -16,7 +16,7 @@ function gateway(): OutboundMessageService {
 
 function config() {
   return resolveWeChatMpConfig({
-    name: 'mgmt-bot',
+    id: 'mgmt-bot',
     appId: 'wx-app',
     appSecret: 'sec',
     token: 'tok',
@@ -24,7 +24,7 @@ function config() {
   });
 }
 
-describe('wechat-mp.endpoint management', () => {
+describe('wechat-mp endpoint management', () => {
   it('只暴露 listFriends（公众号无群/频道概念）', () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = bindTestEndpoint(new WeChatMpEndpoint({

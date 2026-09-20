@@ -1,0 +1,21 @@
+{
+  "name": "planner",
+  "version": "1.0.0",
+  "description": "五角色协调者，拆解目标并编排子任务",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "plan",
+      "规划",
+      "协调"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "role": "planner",
+  "context_mode": "fresh",
+  "max_iterations": 10
+}

@@ -1,17 +1,12 @@
-import type { Plugin } from '@zhin.js/core';
 import type { AIHookEvent } from './resource-hub/types.js';
 import { createAIHookBusPayload } from './ai-event-bus.js';
+import type { AIEventPayload } from './ai-event-contract.js';
 import { aiHookRuntimeBus } from './ai-hook-runtime-bus.js';
-import { runModuleAIHookHandlers } from './ai-hook-handlers.js';
 
-/**
- * Emit AI hook / session lifecycle events onto:
- * 1. Module Runtime bus (`aiHookRuntimeBus`) — Plugin Runtime path
- * 2. Legacy `registerAIHook` handlers (module-level)
- */
+/** Emit AI hook and session lifecycle events onto the Runtime bus. */
 export function emitAIHookBusEvent(
   event: AIHookEvent,
-  source: Plugin.AIEventPayload['source'],
+  source: AIEventPayload['source'],
   agentId?: string,
 ): void {
   const payload = createAIHookBusPayload(event, source, agentId);
@@ -22,6 +17,4 @@ export function emitAIHookBusEvent(
   if (event.type === 'session' && event.action === 'compact') {
     aiHookRuntimeBus.emit('ai.session.compact', payload);
   }
-
-  void runModuleAIHookHandlers(event);
 }

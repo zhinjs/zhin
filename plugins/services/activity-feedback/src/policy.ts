@@ -11,7 +11,7 @@ import {
 } from './config.js';
 
 export type { ActivityFeedbackServiceConfig } from './config.js';
-export { loadActivityFeedbackServiceConfig, resolveActivityFeedbackForTarget } from './config.js';
+export { loadActivityFeedbackServiceConfig } from './config.js';
 
 export type PhaseResolution =
   | { kind: 'disabled' }

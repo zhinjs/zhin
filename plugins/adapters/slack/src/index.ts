@@ -12,7 +12,7 @@ export {
   slackInboundConversation,
   verifySlackSignature,
   type ResolvedSlackConfig,
-  type SlackAdapterConfig,
+  type SlackEndpointConfig,
   type SlackBlockAction,
   type SlackEvent,
   type SlackEventEnvelope,

@@ -4,10 +4,12 @@ import {
   defineAgentTool,
   toolFeatureId,
   type AgentToolDefinition,
+  type ToolInputJsonObjectSchema,
+  type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
 import { MAX_EDIT_FILE_SIZE, MAX_READ_FILE_SIZE, isFileStale } from '../security/file-policy.js';
-import { findActualStringInFile, preserveQuoteStyleInEdit } from '../builtin/file-edit-quote-utils.js';
+import { findActualStringInFile, preserveQuoteStyleInEdit } from './file-edit-quote-utils.js';
 
 export interface NativeFileToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -25,7 +27,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         offset: { type: 'number', description: 'Zero-based first line' },
         limit: { type: 'number', description: 'Maximum lines to return' },
       }, ['file_path']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: readFile,
     })),
     feature('write_file', defineAgentTool({
@@ -34,7 +36,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         file_path: { type: 'string', description: 'Path relative to the authorized workspace' },
         content: { type: 'string', description: 'Complete file content' },
       }, ['file_path', 'content']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: writeFile,
     })),
     feature('edit_file', defineAgentTool({
@@ -44,13 +46,13 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         old_string: { type: 'string', description: 'Unique text to replace' },
         new_string: { type: 'string', description: 'Replacement text' },
       }, ['file_path', 'old_string', 'new_string']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: editFile,
     })),
     feature('list_dir', defineAgentTool({
       description: 'List entries in a directory inside the authorized workspace.',
       inputSchema: objectSchema({ path: { type: 'string', description: 'Directory path' } }, ['path']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: listDir,
     })),
     feature('glob', defineAgentTool({
@@ -59,7 +61,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         pattern: { type: 'string', description: 'Glob pattern such as **/*.ts' },
         cwd: { type: 'string', description: 'Search directory inside the workspace' },
       }, ['pattern']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: globFiles,
     })),
     feature('grep', defineAgentTool({
@@ -71,7 +73,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         ignore_case: { type: 'boolean' },
         limit: { type: 'number', description: 'Maximum matching lines' },
       }, ['pattern']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: grepFiles,
     })),
   ]);
@@ -91,7 +93,9 @@ async function readFile(input: Record<string, unknown>, context: ToolExecutionCo
   if (stat.size > MAX_READ_FILE_SIZE) {
     throw new Error(`File exceeds the ${MAX_READ_FILE_SIZE} byte read limit`);
   }
-  if (isImageFile(target)) throw new Error('Use analyze_media for image files');
+  if (isImageFile(target)) {
+    throw new Error('Binary images cannot be read as UTF-8; attach the image to a turn using a vision-capable model');
+  }
   const content = await fs.readFile(target, { encoding: 'utf8', signal: context.signal });
   const lines = content.split('\n');
   const offset = nonNegativeInteger(input.offset, 0);
@@ -245,6 +249,9 @@ function slash(value: string): string {
   return value.split(path.sep).join('/');
 }
 
-function objectSchema(properties: Record<string, unknown>, required: readonly string[]): Readonly<Record<string, unknown>> {
+function objectSchema(
+  properties: Record<string, ToolInputJsonSchema>,
+  required: readonly string[],
+): ToolInputJsonObjectSchema {
   return Object.freeze({ type: 'object', properties: Object.freeze(properties), required: Object.freeze([...required]) });
 }

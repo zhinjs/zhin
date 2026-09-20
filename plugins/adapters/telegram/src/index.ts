@@ -16,7 +16,7 @@ export {
   resolveTelegramConfig,
   senderDisplayName,
   type ResolvedTelegramConfig,
-  type TelegramAdapterConfig,
+  type TelegramEndpointConfig,
   type TelegramCallbackQuery,
   type TelegramChat,
   type TelegramChatMember,

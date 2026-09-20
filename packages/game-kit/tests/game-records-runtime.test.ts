@@ -1,60 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  initGameRecordHost,
-  recordGameOutcome,
-  resetGameRecordsForTests,
-  type GameRecordDatabaseHost,
-} from '../src/game-records.js';
+import { describe, expect, it, vi } from 'vitest';
+import { GameRecordStore, type GameRecordDatabase } from '../src/game-records.js';
 
-function createHost() {
-  const insert = vi.fn(async () => undefined);
-  const model = {
-    select: () => ({ where: async () => [] }),
-    insert,
-    delete: () => ({ where: async () => undefined }),
-    update: () => ({ where: async () => undefined }),
-  };
-  const define = vi.fn();
-  const host: GameRecordDatabaseHost = {
-    define,
-    models: { get: () => model },
-  };
-  return { host, define, insert };
+function createDatabase() {
+  const create = vi.fn(async () => undefined);
+  const findAll = vi.fn(async () => [] as Record<string, unknown>[]);
+  const database = {
+    models: { get: () => ({ create, findAll }) },
+  } as unknown as GameRecordDatabase;
+  return { database, create, findAll };
 }
 
 const message = {
-  $adapter: 'process',
-  $endpoint: 'terminal',
+  $adapter: 'process', $endpoint: 'terminal',
   $sender: { id: 'u1', name: 'User' },
   $channel: { type: 'private', id: 'u1' },
 } as never;
 
-describe('Plugin Runtime game record ownership', () => {
-  beforeEach(() => resetGameRecordsForTests());
-
-  it('defines each new Host and keeps the newest generation after old disposal', async () => {
-    const previous = createHost();
-    const next = createHost();
-    const disposePrevious = initGameRecordHost(previous.host);
-    const disposeNext = initGameRecordHost(next.host);
-
-    disposePrevious();
-    await recordGameOutcome(message, 'guess', 'won');
-
-    expect(previous.define).toHaveBeenCalledOnce();
-    expect(next.define).toHaveBeenCalledOnce();
-    expect(previous.insert).not.toHaveBeenCalled();
-    expect(next.insert).toHaveBeenCalledOnce();
-    disposeNext();
+describe('GameRecordStore ownership', () => {
+  it('writes only through its explicitly owned database', async () => {
+    const first = createDatabase();
+    const second = createDatabase();
+    await new GameRecordStore(first.database).record(message, 'guess', 'won');
+    expect(first.create).toHaveBeenCalledOnce();
+    expect(second.create).not.toHaveBeenCalled();
   });
 
-  it('defines a shared Host only once for multiple game plugins', () => {
-    const shared = createHost();
-    const disposeFirst = initGameRecordHost(shared.host);
-    const disposeSecond = initGameRecordHost(shared.host);
-
-    expect(shared.define).toHaveBeenCalledOnce();
-    disposeFirst();
-    disposeSecond();
+  it('does not share state between store instances', async () => {
+    const first = createDatabase();
+    const second = createDatabase();
+    first.findAll.mockResolvedValue([{ game_id: 'guess', result: 'won', score: 2 }]);
+    expect(await new GameRecordStore(first.database).getUserStats('u1')).toMatchObject([
+      { gameId: 'guess', wins: 1, totalScore: 2 },
+    ]);
+    expect(await new GameRecordStore(second.database).getUserStats('u1')).toEqual([]);
   });
 });

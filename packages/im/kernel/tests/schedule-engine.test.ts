@@ -1,14 +1,10 @@
 /**
  * ScheduleEngine tests
  */
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { ScheduleEngine, setScheduleEngine } from '../src/schedule-engine.js';
+import { describe, it, expect, vi } from 'vitest';
+import { ScheduleEngine } from '../src/schedule-engine.js';
 
 describe('ScheduleEngine', () => {
-  afterEach(() => {
-    setScheduleEngine(null);
-  });
-
   it('registers every schedule and fires callback', async () => {
     vi.useFakeTimers();
     const cb = vi.fn();

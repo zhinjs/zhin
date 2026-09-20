@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createGenerationOwnedWorkroomGovernedOutboundComposition,
-  createGenerationOwnedWorkroomGovernedDispatchPort,
+  GenerationOwnedWorkroomGovernedDispatchAuthority,
 } from '../../src/plugin-runtime/workroom-governed-dispatch-composition.js';
 import type {
   WorkroomDisclosureManifestAuthorityPort,
@@ -13,7 +13,7 @@ describe('generation-owned governed dispatch composition', () => {
     const controller = new AbortController();
     const first = vi.fn(async () => ({ status: 'blocked' as const, reason: 'disclosure_denied' as const }));
     let current = { generation: 7, port: { revalidate: first } };
-    const port = createGenerationOwnedWorkroomGovernedDispatchPort({
+    const port = new GenerationOwnedWorkroomGovernedDispatchAuthority({
       generation: 7,
       signal: controller.signal,
       resolve: () => current,
@@ -33,12 +33,12 @@ describe('generation-owned governed dispatch composition', () => {
   });
 
   it('never materializes Projection through a revalidate-only consumer adapter', () => {
-    const port = createGenerationOwnedWorkroomGovernedDispatchPort({
+    const port = new GenerationOwnedWorkroomGovernedDispatchAuthority({
       generation: 1,
       signal: new AbortController().signal,
       resolve: () => undefined,
     });
-    expect(Object.keys(port)).toEqual(['revalidate']);
+    expect(typeof port.revalidate).toBe('function');
   });
 
   it('binds Projection and Remote consumers to one exact generation authority', () => {
@@ -58,7 +58,7 @@ describe('generation-owned governed dispatch composition', () => {
     });
 
     expect(composition.projection).toBe(authority);
-    expect(Object.keys(composition.remote)).toEqual(['revalidate']);
+    expect(composition.remote).toBeInstanceOf(GenerationOwnedWorkroomGovernedDispatchAuthority);
     expect(() => createGenerationOwnedWorkroomGovernedOutboundComposition({
       generation: 8,
       signal: new AbortController().signal,

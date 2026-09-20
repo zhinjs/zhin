@@ -204,7 +204,7 @@ zhin schedule resume <id>
 zhin agent info [--json]
 ```
 
-Lists discovered `agent/` authoring assets (tools / skills, etc.). Requires the AI stack to be installed (`@zhin.js/agent` + `zod` + `ai`).
+Lists discovered Agent capabilities and named Agents (Tools, Skills, Hooks, and related assets). Requires the AI stack to be installed (`@zhin.js/agent` + `zod` + `ai`).
 
 ## service: System Service
 

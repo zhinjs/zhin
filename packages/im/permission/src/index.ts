@@ -1,8 +1,7 @@
 export {
-  type PermissionHost,
+  PermissionHost,
   type PermissionChecker,
   type PlatformPermitChecker,
-  createPermissionHost,
 } from './host.js';
 
 export { permissionHostToken } from './token.js';
@@ -34,4 +33,4 @@ export {
   definePlatformPermission,
 } from './define.js';
 
-export { createSceneRolePlatformChecker } from './helpers.js';
+export { createSceneRolePlatformChecker, platformPermission } from './helpers.js';

@@ -1,6 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  createPluginRegisterHostApi,
   getRegisterFn,
   resolveEntryRegister,
 } from "./loadConsoleEntries.js";
@@ -32,7 +31,6 @@ describe("console entries bootstrap", () => {
     register!({
       React: { createElement } as any,
       addRoute,
-      addPage: addRoute,
       addTool: vi.fn(),
     });
     expect(addRoute).toHaveBeenCalledWith(expect.objectContaining({
@@ -41,18 +39,5 @@ describe("console entries bootstrap", () => {
       icon: "Box",
     }));
     expect(createElement).toHaveBeenCalledWith(Page);
-  });
-
-  it("creates a host API with addPage aliased to addRoute", () => {
-    const React = {} as any;
-    const addRoute = vi.fn();
-    const addTool = vi.fn(() => "tool-id");
-    const api = createPluginRegisterHostApi({ React, addRoute, addTool });
-
-    api.addPage({ path: "/x", name: "x", element: "page" as any });
-    api.addRoute({ path: "/y", name: "y", element: "route" as any });
-    expect(api.React).toBe(React);
-    expect(addRoute).toHaveBeenCalledTimes(2);
-    expect(api.addTool({ id: "t", name: "T" })).toBe("tool-id");
   });
 });

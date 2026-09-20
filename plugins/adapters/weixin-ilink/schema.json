@@ -18,6 +18,12 @@
       "type": "number",
       "default": 35000
     },
+    "dataDir": {
+      "type": "string",
+      "minLength": 1,
+      "default": "data/weixin-ilink",
+      "description": "Endpoint state root for credentials, cursors, context tokens, and media"
+    },
     "master": {
       "type": [
         "string",
@@ -38,10 +44,11 @@
     },
     "endpoints": {
       "type": "array",
+      "minItems": 1,
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -63,16 +70,37 @@
           },
           "botToken": {
             "type": "string",
-            "description": "iLink bot token (prefer env WEIXIN_ILINK_TOKEN or sidecar credential file)"
+            "description": "iLink bot token; omit to load endpoint state or start QR login"
           },
           "id": {
             "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
             "description": "Weixin iLink bot name"
+          },
+          "botAgent": {
+            "type": "string"
+          },
+          "baseUrl": {
+            "type": "string"
+          },
+          "cdnBaseUrl": {
+            "type": "string"
+          },
+          "longPollTimeoutMs": {
+            "type": "number"
+          },
+          "dataDir": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Endpoint state root"
+          },
+          "commandPrefix": {
+            "type": "string",
+            "description": "本 endpoint 的命令前缀"
           }
         },
         "required": [
-          "id",
-          "botToken"
+          "id"
         ]
       }
     },

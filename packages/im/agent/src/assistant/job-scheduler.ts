@@ -4,8 +4,6 @@
 import { getLogger } from '@zhin.js/logger';
 import {
   ScheduleEngine,
-  getScheduleEngine,
-  setScheduleEngine,
   resolveSolarJob,
   resolveLunarJob,
   resolveWorkdayJob,
@@ -19,15 +17,6 @@ import type { ScheduleJob, JobSchedule } from './types.js';
 const jobLogger = getLogger('JobScheduler');
 
 export type ScheduleDispose = () => void;
-
-function ensureEngine(): ScheduleEngine {
-  let engine = getScheduleEngine();
-  if (!engine) {
-    engine = new ScheduleEngine();
-    setScheduleEngine(engine);
-  }
-  return engine;
-}
 
 export function jobScheduleToResolved(schedule: JobSchedule, timezone = 'Asia/Shanghai'): ResolvedJob | null {
   const tz = 'tz' in schedule ? schedule.tz ?? timezone : timezone;
@@ -76,11 +65,11 @@ export function isRuntimeSchedulable(job: ScheduleJob, now = Date.now()): boolea
 }
 
 export function registerJobSchedule(
+  engine: ScheduleEngine,
   job: ScheduleJob,
   onRun: (jobId: string) => void | Promise<void>,
 ): ScheduleDispose | null {
   const jobId = job.id;
-  const engine = ensureEngine();
   try {
     const schedule = job.schedule;
     if (schedule.kind === 'every') {

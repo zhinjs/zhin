@@ -1,7 +1,7 @@
 ---
 name: zhin-plugin-standard-development
-description: 'Implement Zhin.js plugins with Plugin Runtime. Use when asked to create a plugin, add commands, middleware, components, cron, AI tools/skills/agents, config, database, router, or console pages. 适用于 definePlugin / 约定目录能力落地。'
-argument-hint: 'Describe the plugin goal, target package, and required capabilities (commands, middleware, events, components, cron, AI tools, config, database, router, console).'
+description: 'Implement Zhin.js plugins with Plugin Runtime. Use when asked to create a plugin or add commands, middleware, handlers, components, schedules, Agent capabilities, config, database, HTTP Host integration, or Console pages. 适用于 definePlugin / 约定目录能力落地。'
+argument-hint: 'Describe the plugin goal, target package, and required capabilities (commands, middleware, handlers, components, schedules, Agent tools, config, database, HTTP, Console).'
 user-invocable: true
 ---
 
@@ -13,22 +13,26 @@ user-invocable: true
 `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛
 `does not default-export a Plugin definition`。
 
-能力**按目录发现**（一个文件一个能力，default export），不要命令式注册：
+能力**按命名目录发现**（每个能力固定 `index.ts` 入口并 default export），不要命令式注册：
 
 | 目录 | API |
 |------|-----|
-| `commands/**/*.ts` | `defineCommand()`（路径即路由；Next.js 风格 `[name].ts` / `[[name]].ts` / `[...name].ts` 传参，类型与默认值在 `params` 中声明） |
-| `middlewares/*.ts` | `defineMiddleware()` |
-| `components/*.tsx` | `defineComponent()` |
-| `tools/*.ts` | `defineAgentTool()` |
-| `pages/*.tsx` | `definePage()`（`$nav.tsx` / `$footer.tsx` 布局） |
+| `commands/**/index.ts` | `defineCommand()`（目录路径即路由；`[name]` / `[[name]]` / `[...name]` / `[[...name]]` 传参，类型与默认值在 `params` 中声明） |
+| `middlewares/<name>/index.ts` | `defineMiddleware()` |
+| `handlers/<name>/index.ts` | `defineHandler()` |
+| `components/<name>/index.tsx` | `defineComponent()` |
+| `tools/<name>/index.ts` | `defineAgentTool()` |
+| `mcps/<name>/index.ts` | `defineMcp()` |
+| `schedules/<name>/index.ts` | `defineSchedule()`；也可在 `plugin.ts` 注入 |
+| `hooks/<name>/index.ts` | `defineHook()` |
+| `pages/<name>/index.tsx` | `definePage()`（`nav/` / `footer/` 为布局槽） |
 | `skills/<name>/SKILL.md` | Markdown Skill |
-| `agents/<name>.agent.md` | Markdown Agent |
+| `agents/<name>/agent.json` | Agent 元数据；提示词和边界文件与其同目录 |
 
 DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 
-**禁止新代码使用** `usePlugin()` / `getPlugin()` / `MessageCommand` / `addCron(new Cron)` /
-`declareConfig` 经典路径——它们只在已弃用的 `zhin.js/node`（`bootstrapNode`）下有效，未接 CLI。
+**禁止使用** `usePlugin()` / `getPlugin()` / `MessageCommand` / `addCron(new Cron)` /
+`declareConfig` 经典路径；`zhin.js/node` 与 `bootstrapNode` 已删除且不再导出。
 迁移旧代码用 [migrate-zhin-plugin-runtime](../migrate-zhin-plugin-runtime/SKILL.md)。
 
 配套资产：
@@ -71,15 +75,19 @@ DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 
 | 类型 | 重点 | 位置 |
 |------|------|------|
-| 命令 | `defineCommand`，路径即路由 | `commands/**/*.ts` |
-| 中间件 / 入站过滤 | `defineMiddleware`，`target: 'inbound'` | `middlewares/*.ts` |
-| 出站改写 | `target: 'outbound'` | `middlewares/*.ts` |
-| 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` 或 `agent/schedules/*.ts` |
-| 组件 | `defineComponent` | `components/*.tsx` |
-| AI 工具 | `defineAgentTool` | `tools/*.ts` |
+| 命令 | `defineCommand`，路径即路由 | `commands/**/index.ts` |
+| 中间件 / 入站过滤 | `defineMiddleware`，`target: 'inbound'` | `middlewares/<name>/index.ts` |
+| 出站改写 | `target: 'outbound'` | `middlewares/<name>/index.ts` |
+| 定时 | `defineSchedule`，或 setup 注入 | `schedules/<name>/index.ts` / `plugin.ts` |
+| Handler | `defineHandler`，显式声明事件 | `handlers/<name>/index.ts` |
+| Hook | `defineHook` | `hooks/<name>/index.ts` |
+| 组件 | `defineComponent` | `components/<name>/index.tsx` |
+| AI 工具 | `defineAgentTool` | `tools/<name>/index.ts` |
+| Skill | `SKILL.md`，按需披露专用工具 | `skills/<name>/SKILL.md` |
+| Agent | `agent.json` + 提示词与边界文件 | `agents/<name>/` |
 | 服务 / DI | `resources.provide` | `plugin.ts` setup |
 | 数据库 | `databaseHostToken`，`start` 前 `define` 表 | `plugin.ts` setup |
-| Web | `definePage` | `pages/*.tsx` |
+| Web | `definePage` | `pages/<name>/index.tsx` |
 
 多类型并存时先定主职责，再考虑拆分子包。
 
@@ -102,7 +110,7 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 
 ### 第 1 步：最小功能面
 
-明确职责、用户入口（命令 / 中间件 / 页）、是否持久化。无复杂度时保持最小结构（可先单文件 `addCommand`，再拆 `commands/`）。
+明确职责、用户入口（命令 / 中间件 / 页）、是否持久化。无复杂度时也直接使用最小约定入口，例如 `commands/<name>/index.ts`，不要先写命令式注册再迁移。
 
 ### 第 2 步：入口与骨架
 
@@ -115,7 +123,7 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 ### 第 3 步：命令与中间件
 
 - 命令：路径是路由 SSOT；`execute` 读 `params` / `args` / `input`（含 session 字段若需要）
-- **子插件命令路径首段必须是静态段**：子插件命令名自动带插件路径前缀（如 `remind.add`），动态参数只能是路径最后一段且至多一个。`commands/[note].ts` 在 root 可用、在子插件启动期抛 `Invalid Command path`；子插件一律写 `commands/add/[note].ts`
+- 命令目录直接形成空格分隔的路由：`commands/[note]/index.ts` 形成 `<note>`，`commands/add/[note]/index.ts` 形成 `add <note>`。只有插件显式配置 `commandNamespace: 'remind'` 时，才分别形成 `remind <note>` 与 `remind add <note>`；默认没有命名空间。动态参数至多一个且必须位于末段。
 - 中间件：洋葱模型，明确是否 `await next()`
 - 组件：消息渲染，不替代服务层
 - AI 工具：`inputSchema` 与 execute 入参一致；副作用边界清晰
@@ -131,11 +139,12 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 
 ### 第 5 步：验证
 
-1. `package.json#zhin` + default export
+1. `package.json#zhin` + `plugin.ts` default export
 2. 相对导入 `.js`
 3. 无 `usePlugin` / `MessageCommand` 新增
 4. lifecycle / Host has-use
 5. `pnpm --filter <pkg> test` 或 Sandbox 手测命令原文
+6. 改 Tool / Skill / Agent / Hook 时运行对应 authoring boundary；发布插件再运行 `pnpm check:plugin-capability-publish`
 
 ## 常见分支
 

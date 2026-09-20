@@ -3,13 +3,16 @@ import { NeteaseMusicService } from './netease.js';
 import { KuwoMusicService } from './kuwo.js';
 import { KugouMusicService } from './kugou.js';
 import type { MusicSource, MusicSearchService } from '../types.js';
+import type { CredentialStore } from '../credential-store.js';
 
-export const musicServices: Record<MusicSource, MusicSearchService> = {
-  qq: new QQMusicService(),
-  netease: new NeteaseMusicService(),
-  kuwo: new KuwoMusicService(),
-  kugou: new KugouMusicService(),
-};
+export function createMusicServices(credentials: CredentialStore): Record<MusicSource, MusicSearchService> {
+  return {
+    qq: new QQMusicService(credentials),
+    netease: new NeteaseMusicService(credentials),
+    kuwo: new KuwoMusicService(),
+    kugou: new KugouMusicService(),
+  };
+}
 
 export * from './qq.js';
 export * from './netease.js';

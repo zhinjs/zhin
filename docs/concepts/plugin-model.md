@@ -25,7 +25,7 @@
 }
 ```
 
-字段由 `@zhin.js/runtime` 的 manifest 解析器（`packages/im/runtime/src/manifest.ts`）严格校验，任何字段不合法都会抛出 `ManifestValidationError` 并列出全部问题。
+字段由 `@zhin.js/runtime` 的 manifest 解析器（`packages/im/runtime/src/manifest.ts`）严格校验，任何字段不合法都会抛出 `ManifestValidationError` 并列出全部问题。解析完成后，`package-contract` 模块校验当前 engine 与 Feature API 的 semver 契约，违反契约时抛出 `PackageContractError`。
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
@@ -37,6 +37,10 @@
 | `platformFeatures` | 布尔，可选 | 默认 `true`；Root 是否继承平台 Stable Features（见下文「platformFeatures 继承」） |
 | `features` | 数组 | 本包依赖的 Feature 能力包：`{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `plugins` | 数组 | 本包挂载的子插件：`{ "package": "...", "instanceKey": "...", "optional": false }` |
+
+这里的数组只属于 `package.json#zhin.plugins`，描述静态挂载关系。运行配置
+`zhin.config.*#plugins` 是以 `instanceKey` 为键的对象映射，二者不共享形态。Runtime、Console、
+脚手架和安装/卸载命令都只接受对象映射；旧配置数组仅由 `zhin migrate` 的显式迁移流程读取。
 
 `type: "feature"` 的包字段更少：`protocol` / `type` / `entry` / `engine` / `featureApi`。例如 `@zhin.js/adapter`：
 
@@ -62,7 +66,7 @@
 插件通过 `features` 数组声明依赖某类能力后，就可以按该 Feature 的约定提供能力实现。例如沙箱适配器插件（`@zhin.js/adapter-sandbox`）声明了 `@zhin.js/adapter` 能力后，在包内 `adapters/` 目录放置约定式入口：
 
 ```ts
-// plugins/adapters/sandbox/adapters/sandbox.ts
+// plugins/adapters/sandbox/adapters/sandbox/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
 import { outboundMessageToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';

@@ -6,7 +6,7 @@ import {
   MemoryWorkroomJournalPayloadPort,
   digestStoredWorkroomEvent,
   digestWorkroomEventRowBinding,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import { WORKROOM_EVENT_MODEL } from '../../src/workroom/journal-model.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { activateAiDatabaseStorage } from '../../src/init/activate-ai-database-storage.js';
@@ -87,6 +87,9 @@ describe('Database Workroom Journal row integrity', () => {
     const catalog = new ActivatableWorkroomCatalog();
     const db = {
       models: new Map<string, unknown>([
+        ['agent_sessions', {}],
+        ['agent_messages', {}],
+        ['agent_summaries', {}],
         ['workroom_events', fixture.model],
         ['workroom_catalog', { select: () => ({ where: async () => [] }) }],
       ]),

@@ -19,7 +19,7 @@ import {
 } from '../workroom/canonical-value.js';
 import { DurableFileStore } from '../workroom/durable-file-store.js';
 import type { WorkroomEvent } from '../workroom/kernel-contracts.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 
 export interface WorkroomProjectMemorySchemaAuthorityPort {
   resolve(input: Readonly<{

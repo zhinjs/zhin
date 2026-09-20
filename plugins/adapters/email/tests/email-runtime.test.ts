@@ -100,6 +100,7 @@ describe('email protocol helpers', () => {
 
   it('clamps checkInterval/reconnectInterval to a minimum to avoid setInterval storms', () => {
     const resolved = resolveEmailConfig({
+      id: 'test-endpoint',
       smtp: baseConfig.smtp,
       imap: { ...baseConfig.imap, checkInterval: 0, reconnectInterval: -5 },
     });
@@ -109,10 +110,19 @@ describe('email protocol helpers', () => {
 
   it('defaults reconnectInterval when not configured', () => {
     const resolved = resolveEmailConfig({
+      id: 'test-endpoint',
       smtp: baseConfig.smtp,
       imap: baseConfig.imap,
     });
     expect(resolved.imap.reconnectInterval).toBe(5_000);
+  });
+
+  it('requires the expanded endpoint identity', () => {
+    expect(() => resolveEmailConfig({
+      id: ' ',
+      smtp: baseConfig.smtp,
+      imap: baseConfig.imap,
+    })).toThrow('Email endpoint requires a non-empty id');
   });
 
   it('formats inbound content from subject + text', () => {

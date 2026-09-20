@@ -5,10 +5,10 @@ description: commands/ file routing, execute context, return value rendering, ma
 
 # Commands (defineCommand)
 
-Create a `commands/` directory in your plugin package root and drop a `hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **The file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature (inherited via `platformFeatures` when depending on `zhin.js`); no manual registration needed. Authors import from `zhin.js/command` — **do not** `pnpm add @zhin.js/command`.
+Create `commands/hello/index.ts` in a plugin package and users can type `hello` to trigger it. Only `index.ts` or `index.tsx` is a command entry; sibling files are helpers. The `@zhin.js/command` Feature provides discovery and hot reload.
 
 ```ts
-// commands/hello.ts
+// commands/hello/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -34,40 +34,40 @@ export default definePlugin({
 ```
 
 `addCommand` and directory discovery share the same `CommandIndex`, manifest, conflict detection, and generation lifecycle.
-When commands grow in number, move the definition to a `commands/hello.ts` default export; the directory mode also narrows
+When commands grow in number, move the definition to a `commands/hello/index.ts` default export; the directory mode also narrows
 HMR granularity to individual command files.
 
 ## File Routing
 
-Command name = plugin tree path segments (instanceKey, without root, joined by `.`) + `.` + the file's relative path segments (joined by spaces). Root plugins (the application itself) have no prefix.
+The command name comes from the directory path under `commands/`, with segments joined by spaces. The Endpoint first consumes its own `commandPrefix`, which defaults to an empty string. The plugin owner remains part of Capability identity and configuration scope; it enters user input only when plugin config explicitly sets `commandNamespace`.
 
 | File | Plugin | Command name |
 | --- | --- | --- |
-| `commands/hello.ts` | root | `hello` |
-| `commands/endpoint/list.ts` | `qq` | `qq.endpoint list` |
-| `commands/endpoint/add/[[name]].ts` | `qq` | `qq.endpoint add [name]` |
-| `commands/foo.ts` | `a` under `b` (`root/b/a`) | `b.a.foo` |
+| `commands/hello/index.ts` | root | `hello` |
+| `commands/qq/endpoint/list/index.ts` | `qq` | `qq endpoint list` |
+| `commands/qq/endpoint/add/[[name]]/index.ts` | `qq` | `qq endpoint add [name]` |
+| `commands/foo/index.ts` + `commandNamespace: admin` | `a` under `b` (`root/b/a`) | `admin foo` |
 
 First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`zhin.js`):
 
-- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello.ts`, `lottery-today.ts`)
-- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我.ts` (trigger word `赞我`)
-- Dynamic parameter files remain ASCII-only: `[name].ts` / `[[name]].ts`, etc.
+- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello/`, `lottery-today/`)
+- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我/` (trigger word `赞我`)
+- Dynamic parameter directories remain ASCII-only: `[name]/` / `[[name]]/`, etc.
 
-`instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like.ts`).
+`instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like/`).
 
-Dynamic parameter segments use Next.js-style file names to declare their shape and must be the last segment of the path; **type and default value are not written into the file name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
+Dynamic parameter segments use Next.js-style directory names to declare their shape and must be the last segment of the path; **type and default value are not written into the directory name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
 
-| File name | Shape | Help display | params declaration |
+| Directory entry | Shape | Help display | params declaration |
 | --- | --- | --- | --- |
-| `[name].ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
-| `[[name]].ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `[...name].ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
-| `[[...name]].ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
+| `[name]/index.ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
+| `[[name]]/index.ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
+| `[...name]/index.ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
+| `[[...name]]/index.ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
 
-Consistency is validated at startup: when a `default` is present the file name must use double brackets (`[[name]]`), and a parameter shape in the file name without a matching `params` declaration both throw `CommandPathSyntaxError`.
+Consistency is validated at startup: when a `default` is present the directory must use double brackets (`[[name]]`), and a parameter directory without a matching `params` declaration both throw `CommandPathSyntaxError`.
 
-**Child plugin constraint: the first command path segment must be static.** Child plugin commands are auto-prefixed by the plugin path (e.g. `remind.add`), and a dynamic parameter may only be the last segment (at most one) — so `commands/[note].ts` works in the root plugin but throws `Invalid Command path` at startup in a child plugin (no static segment to anchor to). In child plugins, always put dynamic parameters under a static directory: `commands/add/[note].ts` (command name `remind.add <note>`).
+A dynamic parameter may be the top-level first segment. In both Root and child plugins, `commands/[note]/index.ts` matches one top-level segment; `commands/remind/[note]/index.ts` becomes `remind <note>`. A command still allows only one dynamic segment, and it must be last. If different owners publish the same user route, generation construction fails with a conflict.
 
 The element granularity of a catch-all array depends on `params.<name>.type`: `text` collects per message segment (plain-text input arrives as a single element); `word` / `string` split on whitespace into words; `number` / `integer` / `float` / `boolean` split into words and convert each one — any word that fails conversion makes the whole command not match; structured types such as `mention` / `image` collect per message segment.
 
@@ -81,12 +81,12 @@ The element granularity of a catch-all array depends on `params.<name>.type`: `t
 Structured IM parameters do not support default values. At runtime, `segment-matcher` matches directly on canonical segments,
 without first degrading image, mention, etc. to text; type mismatches are treated as "command not matched" during dispatch.
 
-Route conflict has two rules: **static priority** -- `list.ts` always wins over `[name].ts`, and among dynamic routes, those with more static segments (more specific) take priority; **same-shape rejection** -- duplicate registration of the same route shape reports an error at startup (`Duplicate runtime Command`).
+Route conflict has two rules: **static priority** -- `list/index.ts` always wins over `[name]/index.ts`, and among dynamic routes, those with more static segments take priority; **effective-route rejection** -- routes that still collide after applying explicit `commandNamespace` values fail generation startup. Users can assign different namespaces to incompatible plugins.
 
-Real-world example (`plugins/adapters/qq/commands/endpoint/remove/[name].ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
+Real-world example (`plugins/adapters/qq/commands/qq/endpoint/remove/[name]/index.ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
 
 ```ts
-import { qqEndpointCommands } from '../../../src/qq-endpoint-commands.js';
+import { qqEndpointCommands } from '../../../../src/qq-endpoint-commands.js';
 
 export default qqEndpointCommands.remove;
 ```
@@ -143,13 +143,13 @@ flowchart LR
 
 During dispatch, compiled command patterns are tried in deterministic priority order: static commands before dynamic commands, and among dynamic commands,
 more specific paths take priority. After a match, remaining text is split by whitespace into `args`, and the full rich-message tail is preserved in `segments`.
-Therefore `qq.endpoint remove mybot` matches `qq.endpoint remove <name>`, `args` is empty, and
+Therefore `qq endpoint remove mybot` matches `qq endpoint remove <name>`, `args` is empty, and
 `params.name === 'mybot'`.
 
 Structured parameter example:
 
 ```ts
-// commands/upload/[asset].ts
+// commands/upload/[asset]/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -193,16 +193,16 @@ export default defineCommand({
   description: 'ICQQ like',
   alias: ['zan'],                    // multi-word OK, e.g. 'gh issue'
   permit: ['adapter(icqq)'],         // array AND; commas inside one entry OR
-  // shortcut: { '赞满': { count: 10 } }, // global exact full-message match; may break owner prefix
+  // shortcut: { '赞满': { count: 10 } }, // global exact full-message match
   execute: async (ctx) => { /* ... */ },
 });
 ```
 
 | Field | Behavior |
 |---|---|
-| `alias` | Replaces **all local static segments**, then re-applies the owner prefix (child plugins need `qq.ep`; bare `ep` does not match). Dynamic `$param` still follows. |
+| `alias` | Replaces **all local static segments**. Dynamic `$param` still follows; owner does not participate in routing. |
 | `permit` | Builtin DSL only: `adapter\|group\|private\|channel\|user\|role(...)`. Failure is a **silent miss** (`matched: false`). `CommandIndex.execute` skips permit when there is no session. |
-| `shortcut` | `Record`: trigger → prefilled `params`. Exact match after trim. **May be global** (no owner prefix required). |
+| `shortcut` | `Record`: trigger → prefilled `params`. Exact match after trim. |
 
 Conflict keys are the **full word sequence** (`b` and `b list` may coexist). Primary routes, aliases, and shortcut keys are mutually exclusive.
 
@@ -225,10 +225,17 @@ The key points of this pattern: use `config` (plugin configuration) to get the d
 
 `@zhin.js/adapter`'s `createEndpointCommands(spec, defineCommand)` generates **list / add / remove** commands for `<adapter> endpoint`. Except for email (smtp/imap nested objects, not expressible in kv) and sandbox (built-in debug adapter, no credentials), all platform adapters are integrated: qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
 
-- `<adapter>.endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) + the configuration list from `plugins.<adapterKey>.endpoints` in `zhin.config.yml`.
-- `<adapter>.endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in yaml; other fields are written inline. YAML uses Document-node-level operations to preserve existing comments; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
-- `<adapter>.endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
-- Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq.endpoint cancel`.
+- `<adapter> endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) plus `plugins.<adapterKey>.endpoints` from the active Root configuration.
+- `<adapter> endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in the Root configuration; other fields are written inline. YAML and JSON use the same transaction port, and YAML comments are preserved; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
+- `<adapter> endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
+- Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq endpoint cancel`.
+
+The commands depend only on `EndpointConfigurationStore`; they do not access the
+filesystem. The official CLI provides `endpointConfigurationStoreToken` at the
+composition root and persists the active YAML or JSON Root configuration plus `.env`. Custom
+`RootRuntime` compositions that enable these commands must provide the same port.
+`plugins` must be an object map; legacy arrays are rejected and require an
+explicit migration.
 
 Integrating an adapter requires only four steps (using telegram as an example):
 
@@ -236,7 +243,7 @@ Integrating an adapter requires only four steps (using telegram as an example):
 // 1. src/telegram-runtime-state.ts -- runtime endpoint registry token
 export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
 
-// 2. plugin.ts setup() -- provide state; register in adapters/telegram.ts create()
+// 2. plugin.ts setup() -- provide state; register in adapters/telegram/index.ts create()
 context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
 // create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
 
@@ -250,7 +257,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/endpoint/{list.ts, add/[[name]].ts, remove/[name].ts}
+// 4. commands/telegram/endpoint/list/index.ts, add/[[name]]/index.ts, remove/[name]/index.ts
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 
@@ -263,7 +270,7 @@ By default there is no prefix: any text will be tried for command matching. Afte
 ```yaml
 plugins:
   qq:
-    commandPrefix: '/'     # Only "/qq.endpoint list" triggers
+    commandPrefix: '/'     # Only "/qq endpoint list" triggers
     endpoints:
       - name: main
         commandPrefix: ''  # endpoints[i] can override the top-level
@@ -273,4 +280,4 @@ Resolution rules (`packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`
 
 ## Troubleshooting Tips
 
-`description` appears in command listings, so it's recommended to always include one. Command name conflicts (same-name static commands or same-shape dynamic routes) throw errors at startup; running a startup after configuration changes catches them early. Commands returning `Promise` can implement multi-round interactions -- resolve the first reply, then append subsequent ones with `input.$reply`; see the QQ `qq.endpoint add` scan-code binding flow for reference.
+`description` appears in command listings, so it's recommended to always include one. Command name conflicts (same-name static commands or same-shape dynamic routes) throw errors at startup; running a startup after configuration changes catches them early. Commands returning `Promise` can implement multi-round interactions -- resolve the first reply, then append subsequent ones with `input.$reply`; see the QQ `qq endpoint add` scan-code binding flow for reference.

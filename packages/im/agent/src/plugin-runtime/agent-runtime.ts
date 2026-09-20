@@ -13,7 +13,7 @@ import {
   type ToolCapability,
 } from './capability-ingress.js';
 import { TurnToolRuntime, type TurnToolOutcome } from '../tool/turn-tool-runtime.js';
-import type { ToolDescriptor } from '@zhin.js/tool';
+import { requireToolInputSchema, type ToolDescriptor } from '@zhin.js/tool';
 import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
@@ -58,25 +58,27 @@ export class ToolIngressRuntime extends SnapshotAttachedRuntime {
     try {
       const capabilities = await this.#ingress.read(lease.value, owner, () => active, request);
       let invocationSequence = 0;
-      const tools = Object.freeze(capabilities.tools.map(({ execute: _execute, ...descriptor }) => Object.freeze({
-        ...descriptor,
-        execute: async (input: Readonly<Record<string, unknown>>, toolUseId: string) => {
-          if (!active) throw new Error('External Tool capability scope has ended');
-          invocationSequence += 1;
-          const invocationRequest: TurnRequest = {
-            ...request,
-            identity: {
-              traceId: request.identity.traceId,
-              turnId: `${request.identity.turnId}:${invocationSequence}`,
-            },
-          };
-          const turn = createIngressTurn(lease.value, invocationRequest, capabilities);
-          const runtime = new TurnToolRuntime(turn, capabilities.tools);
-          const outcome = await runtime.execute(descriptor.name, input, toolUseId);
-          await appendExternalToolTerminal(turn, outcome);
-          return outcome;
-        },
-      })));
+      const tools = Object.freeze(capabilities.tools
+        .filter((tool) => !tool.hidden)
+        .map(({ execute: _execute, ...descriptor }) => Object.freeze({
+          ...descriptor,
+          execute: async (input: Readonly<Record<string, unknown>>, toolUseId: string) => {
+            if (!active) throw new Error('External Tool capability scope has ended');
+            invocationSequence += 1;
+            const invocationRequest: TurnRequest = {
+              ...request,
+              identity: {
+                traceId: request.identity.traceId,
+                turnId: `${request.identity.turnId}:${invocationSequence}`,
+              },
+            };
+            const turn = createIngressTurn(lease.value, invocationRequest, capabilities);
+            const runtime = new TurnToolRuntime(turn, capabilities.tools);
+            const outcome = await runtime.execute(descriptor.name, input, toolUseId);
+            await appendExternalToolTerminal(turn, outcome);
+            return outcome;
+          },
+        })));
       return await operation(tools);
     } finally {
       active = false;
@@ -290,7 +292,13 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let active = true;
     try {
       if (!active) throw new Error('Agent generation operation is not active');
-      const discovered = await this.#ingress.read(lease.value, owner, () => active && lease.active, request);
+      const discovered = await this.#ingress.read(
+        lease.value,
+        owner,
+        () => active && lease.active,
+        request,
+        selection.agent,
+      );
       const referenceCapability = createConversationReferenceCapability(owner, request);
       const capabilities = Object.freeze({
         ...discovered,
@@ -378,8 +386,10 @@ export async function expandMcpTools(
         name,
         qualifiedName: name,
         description: tool.description?.trim() || `${connection.name} MCP tool ${tool.name}`,
-        inputSchema: tool.inputSchema,
-        approval: 'on-risk' as const,
+        inputSchema: tool.inputSchema === undefined
+          ? undefined
+          : requireToolInputSchema(tool.inputSchema, `MCP Tool ${name} inputSchema`),
+        requiresApproval: 'on-risk' as const,
         source: connection.source,
         execute: <TInput = unknown, TResult = unknown>(input: TInput) =>
           connection.callTool<TResult>(tool.name, input),

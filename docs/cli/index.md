@@ -211,7 +211,7 @@ zhin agent legacy-runs <input> [--output <file>]
 zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [--storage file|database]
 ```
 
-`info` 列出发现的 `agent/` 创作面（tools / skills 等）。`workroom runs/run/readiness` 连接当前项目正在运行的
+`info` 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等）。`workroom runs/run/readiness` 连接当前项目正在运行的
 Host API，使用配置中的 token-bound principal 读取 content-free Run、Task、Assignment 与 Blocker 状态；
 `cancel` 与 `request-replan` 还要求当前 Project Sponsor 权限，并通过 `expected-sequence` 做 CAS。后者只持久化
 重规划请求并暂停调度，不会伪装成已经生成了新 Plan Revision。以上在线命令需要先运行

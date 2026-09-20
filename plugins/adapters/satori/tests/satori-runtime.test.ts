@@ -6,7 +6,7 @@ import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineSatoriAdapter from '../adapters/satori.js';
+import defineSatoriAdapter from '../adapters/satori/index.js';
 import {
   SatoriWebhookEndpoint,
   SatoriWsEndpoint,
@@ -92,6 +92,7 @@ describe('satori protocol helpers', () => {
 
   it('resolves webhook config from plugin config', () => {
     const resolved = resolveSatoriConfig({
+      id: 'hook',
       connection: 'webhook',
       baseUrl: 'http://sdk.local',
       path: '/satori/webhook',
@@ -427,6 +428,7 @@ describe('satori plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'satori'),
       name: 'satori',
       config: {
+        id: 'satori',
         connection: 'webhook',
         baseUrl: 'http://127.0.0.1:5140',
         path: '/satori/webhook',
@@ -595,7 +597,7 @@ describe('satori ws heartbeat', () => {
 });
 
 
-describe('satori.endpoint management', () => {
+describe('satori endpoint management', () => {
   function createManagementCallApi() {
     return vi.fn(async (
       _options: unknown,

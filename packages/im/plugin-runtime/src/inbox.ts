@@ -7,7 +7,7 @@ import { createToken } from './token.js';
  * 列结构对齐 packages/im/zhin/src/setup/register-inbox.ts（legacy 读路径 SSOT），
  * request/notice 额外补 consumed/consumed_at 列（对齐 legacy host-api
  * endpoint-persistence 的 console_bot_requests/notices consumed 标记方式），
- * 供 console-rpc-extended 的 endpoint:requestConsumed/noticeConsumed 写路径使用。
+ * 供 console-rpc-extended 的 request.consumed / notice.consumed 写路径使用。
  */
 export const INBOX_TABLE_MESSAGE = 'unified_inbox_message';
 export const INBOX_TABLE_REQUEST = 'unified_inbox_request';

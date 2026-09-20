@@ -9,6 +9,7 @@ import type { ModuleRuntime } from './module-runtime.js';
 import type { SourceOwnershipIndex } from './source-ownership.js';
 
 export interface HmrReloadPort {
+  handlesSource?(source: string): boolean;
   reload(plan: GenerationInvalidationPlan): Promise<ProcessInvalidationPlan | void>;
 }
 
@@ -93,9 +94,10 @@ export class HmrCoordinator {
       while (this.#pending.size > 0) {
         const changed = [...this.#pending];
         this.#pending.clear();
-        const forcedRestart = changed.filter((source) =>
-          this.options.modules.requiresProcessRestart?.(source),
-        );
+        const forcedRestart = changed.filter((source) => (
+          !this.options.runtime.handlesSource?.(source)
+          && this.options.modules.requiresProcessRestart?.(source)
+        ));
         if (forcedRestart.length > 0) {
           this.#restartRequired = true;
           this.#pending.clear();

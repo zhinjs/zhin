@@ -18,7 +18,7 @@ import type {
   WorkroomJournal,
   WorkroomStoredEventControl,
   WorkroomStoredRunHeaders,
-} from './journal.js';
+} from './journal/index.js';
 
 export interface WorkroomProjectionReadAuthorityInput {
   readonly destination: 'console';

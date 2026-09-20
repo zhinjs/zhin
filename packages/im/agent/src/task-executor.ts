@@ -1,7 +1,7 @@
 /** Delivery boundary for the independent schedule execution domain. */
 import { getLogger } from '@zhin.js/logger';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { createNotificationRouter, type NotificationRouter } from './assistant/notification-router.js';
+import type { NotificationRouter } from './assistant/notification-router.js';
 import type { ScheduleJob, ScheduleJobExecutionPlan } from './assistant/types.js';
 import { scheduleJobCreatorFromPrincipal } from './assistant/job-creator.js';
 import type { ScheduleInvocationContext } from './assistant/schedule-job-service.js';
@@ -27,8 +27,7 @@ export interface TaskExecutionResult extends ScheduleExecutionResult {
 export interface TaskExecutorDeps {
   turn?: ScheduleTurnPort;
   config?: Required<ZhinAgentConfig>;
-  resolveAdapter: (platform: string) => { sendMessage: (opts: import('@zhin.js/core').SendOptions) => Promise<string> } | undefined;
-  router?: NotificationRouter;
+  router: NotificationRouter;
   activity?: ScheduleActivityPort;
   defaultNotify?: import('./assistant/types.js').JobNotify;
   domain?: ScheduleExecutionDomain;
@@ -56,7 +55,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
   const executionContext = new AsyncLocalStorage<boolean>();
   let disposed = false;
   let disposal: Promise<void> | undefined;
-  const router = deps.router ?? createNotificationRouter({ resolveAdapter: deps.resolveAdapter });
+  const { router } = deps;
   const domain = deps.domain ?? new ScheduleExecutionDomainImpl({
     turn: deps.turn ?? missingScheduleTurnPort(),
     config: deps.config ?? DEFAULT_CONFIG,
@@ -163,7 +162,7 @@ export function createTaskExecutor(deps: TaskExecutorDeps) {
     return disposal;
   }
 
-  return { execute, preview, resolveAdapter: deps.resolveAdapter, dispose };
+  return { execute, preview, dispose };
 }
 
 function missingScheduleTurnPort(): ScheduleTurnPort {
@@ -178,17 +177,6 @@ function scheduleLockKey(job: ScheduleJob, notify: import('./assistant/types.js'
   if (notify.channel !== 'im') return `schedule:${job.id}`;
   const scene = notify.target.scene;
   return `im:${scene.platform}:${scene.endpointKey}:${scene.kind}:${scene.sceneId}`;
-}
-
-/**
- * @deprecated Task executors now own and drain their own scene locks through
- * `executor.dispose()`. Retained only to provide explicit migration guidance;
- * calling it now rejects because no process-global lock owner exists.
- */
-export async function drainTaskExecutorLocks(_timeoutMs: number): Promise<void> {
-  throw new Error(
-    'Global TaskExecutor lock draining is no longer supported; retain the executor and await executor.dispose()',
-  );
 }
 
 export type TaskExecutor = ReturnType<typeof createTaskExecutor>;

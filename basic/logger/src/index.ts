@@ -65,7 +65,6 @@ export {
   wrapDisplayText,
 } from './terminal-width.js'
 
-export { createWarnOnce, resetWarnOnceForTests } from './warn-once.js'
 export {
   CONTENT_CHAIN_STAGE,
   formatContentChainLog,

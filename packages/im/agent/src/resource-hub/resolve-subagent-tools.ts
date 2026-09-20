@@ -10,10 +10,7 @@ import { DEFAULT_SUBAGENT_TOOL_NAMES } from './tool-selection.js';
 /** 仅主编排使用的工具，子 Agent 不可直接调用 */
 export const SUBAGENT_BLOCKED_TOOL_NAMES = new Set<string>([
   'discover',
-  'install_skill',
   'spawn_task',
-  'tool_search',
-  'run_deferred_task',
 ]);
 
 const BLOCKED = SUBAGENT_BLOCKED_TOOL_NAMES;
@@ -46,13 +43,22 @@ function applyExplicitCapabilityBoundary(
   config: Required<ZhinAgentConfig>,
   meta?: AgentMeta,
 ): AgentTool[] {
+  const privatePrefix = meta ? `agent__${meta.name}__` : undefined;
+  const privateSkillPrefix = privatePrefix ? `${privatePrefix}skill__` : undefined;
   const configured = new Set([
     ...DEFAULT_SUBAGENT_TOOL_NAMES,
     ...config.subagentTools,
     ...SUBAGENT_DEFER_META_TOOLS,
+    ...(meta?.toolNames ?? []),
   ]);
   const definition = meta?.toolNames?.length ? new Set(meta.toolNames) : null;
-  return pool.filter(tool => configured.has(tool.name) && (!definition || definition.has(tool.name)));
+  return pool.filter(tool => (privatePrefix
+    && tool.name.includes(privatePrefix)
+    && !tool.name.includes(privateSkillPrefix!)) || ([...configured].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  ) && (!definition || [...definition].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  ))));
 }
 
 function applySpawnDeclaredTools(

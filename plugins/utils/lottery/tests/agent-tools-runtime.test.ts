@@ -5,13 +5,13 @@ import { createInMemoryLotteryDb } from '../src/memory-db.js';
 import { upsertDraws } from '../src/db.js';
 import { lotteryRuntimeToken, type LotteryRuntime } from '../src/runtime-state.js';
 import { resolveLotteryConfig } from '../src/config.js';
-import computeRecommend from '../tools/compute-recommend.js';
-import getModelState from '../tools/get-model-state.js';
-import history from '../tools/history.js';
-import listPending from '../tools/list-pending.js';
-import savePrediction from '../tools/save-prediction.js';
-import statsSnapshot from '../tools/stats-snapshot.js';
-import sync from '../tools/sync.js';
+import computeRecommend from '../skills/lottery/tools/compute-recommend/index.js';
+import getModelState from '../skills/lottery/tools/get-model-state/index.js';
+import history from '../skills/lottery/tools/history/index.js';
+import listPending from '../skills/lottery/tools/list-pending/index.js';
+import savePrediction from '../skills/lottery/tools/save-prediction/index.js';
+import statsSnapshot from '../skills/lottery/tools/stats-snapshot/index.js';
+import sync from '../skills/lottery/tools/sync/index.js';
 
 const TOOLS = [
   computeRecommend,
@@ -57,7 +57,7 @@ describe('lottery ToolFeature definitions', () => {
     expect(manifest.zhin?.features?.map((feature) => feature.package)).toContain('@zhin.js/tool');
   });
 
-  it('uses only validated tools/*.ts convention definitions', () => {
+  it('uses only validated tools/<name>/index.ts convention definitions', () => {
     expect(TOOLS.map(parseAgentToolDefinition)).toEqual([...TOOLS]);
   });
 

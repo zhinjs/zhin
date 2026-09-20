@@ -14,7 +14,6 @@ const FILE_PATH_ARGUMENTS: Readonly<Record<string, string>> = Object.freeze({
   list_dir: 'path',
   glob: 'cwd',
   grep: 'path',
-  analyze_media: 'file_path',
 });
 
 /**

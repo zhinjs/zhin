@@ -1,5 +1,5 @@
 /**
- * 展开配置字符串中的 ${VAR} / ${VAR:-default}（支持字符串内多处替换，与 ConfigLoader 整串形式兼容）
+ * 展开配置字符串中的 ${VAR} / ${VAR:-default}，并支持字符串内多处引用。
  */
 export function resolveConfigEnvString(
   value: string | undefined,

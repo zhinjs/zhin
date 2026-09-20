@@ -28,13 +28,6 @@ export function resolveApiUrl(path: string): string {
   return `${base}${p}`;
 }
 
-export function resolveWebSocketUrl(path: string): string {
-  const httpUrl = resolveApiUrl(path);
-  const url = new URL(httpUrl);
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  return url.href;
-}
-
 /** fetch with Bearer token; relative paths resolve against {@link getApiBase}. */
 export async function apiFetch(
   input: RequestInfo | URL,

@@ -1,16 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { aiHookRuntimeBus } from '../src/ai-hook-runtime-bus.js';
-import {
-  clearAIHooks,
-  createAIHookEvent,
-  registerAIHook,
-  triggerAIHook,
-} from '../src/hooks.js';
 import { emitAIHookBusEvent } from '../src/plugin-ai-hook-bus.js';
+import { createAIHookEvent } from '../src/resource-hub/hook-registry.js';
 
-describe('aiHookRuntimeBus + registerAIHook (Plugin Runtime)', () => {
+describe('aiHookRuntimeBus', () => {
   afterEach(() => {
-    clearAIHooks();
     aiHookRuntimeBus.clear();
   });
 
@@ -28,28 +22,6 @@ describe('aiHookRuntimeBus + registerAIHook (Plugin Runtime)', () => {
     emitAIHookBusEvent(event as import('../src/resource-hub/types.js').AIHookEvent, 'ai-hook');
 
     expect(seen).toEqual(['ai-hook:sess-1']);
-  });
-
-  it('registerAIHook handlers run via triggerAIHook without host Plugin', async () => {
-    const handler = vi.fn();
-    registerAIHook('message:received', handler);
-
-    await triggerAIHook(createAIHookEvent('message', 'received', 's2', {
-      from: 'u2',
-      content: 'ping',
-      platform: 'sandbox',
-    }));
-
-    // Fire-and-forget: allow microtask queue to drain.
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler.mock.calls[0]![0]).toMatchObject({
-      type: 'message',
-      action: 'received',
-      sessionId: 's2',
-    });
   });
 
   it('session:new also emits ai.session.new on runtime bus', () => {

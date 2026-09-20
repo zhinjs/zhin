@@ -3,7 +3,7 @@ import type { ResolvedActivityFeedbackPhaseConfig } from './types.js';
 
 /**
  * Subagent activity feedback tag (e.g. researcher).
- * Prefer ai.agents / *.agent.md name; fall back to role; never use long task labels.
+ * Prefer ai.agents / agents/<name>/agent.json name; fall back to role; never use long task labels.
  */
 export function resolveSubagentActivityTag(
   payload: Pick<AIEventPayload, 'source' | 'agentId'>,

@@ -1,11 +1,8 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach } from "vitest";
 import {
+  LlmApiRuntime,
   agentLoop,
-  clearApiRegistryForTests,
   createAssistantMessageEventStream,
-  registerApiProvider,
-  registerProviderInstance,
-  getLlmTransportModel,
   createUserMessage,
   EMPTY_TOKEN_USAGE,
   z,
@@ -13,139 +10,156 @@ import {
   type AgentMessage,
   type AssistantMessage,
   type LlmTool,
-} from '../../src/llm/index.js';
+} from "../../src/llm/index.js";
 import {
   createIncrementalRepair,
   repairAgentMessagesForLlm,
-} from '../../src/llm/repair-agent-messages.js';
+} from "../../src/llm/repair-agent-messages.js";
 
-const MODEL = { api: 'ai-sdk' as const, provider: 'test', id: 'mock' };
+const MODEL = { api: "ai-sdk" as const, provider: "test", id: "mock" };
 
-function assistantWithCalls(calls: Array<{ id: string; name: string }>): AssistantMessage {
+function assistantWithCalls(
+  calls: Array<{ id: string; name: string }>
+): AssistantMessage {
   return {
-    role: 'assistant',
-    content: calls.map((c) => ({ type: 'toolCall', id: c.id, name: c.name, arguments: {} })),
+    role: "assistant",
+    content: calls.map((c) => ({
+      type: "toolCall",
+      id: c.id,
+      name: c.name,
+      arguments: {},
+    })),
     ...MODEL,
     model: MODEL.id,
     usage: EMPTY_TOKEN_USAGE,
-    stopReason: 'toolCalls',
+    stopReason: "toolCalls",
     timestamp: Date.now(),
   };
 }
 
 function assistantText(text: string): AssistantMessage {
   return {
-    role: 'assistant',
-    content: [{ type: 'text', text }],
+    role: "assistant",
+    content: [{ type: "text", text }],
     ...MODEL,
     model: MODEL.id,
     usage: EMPTY_TOKEN_USAGE,
-    stopReason: 'stop',
+    stopReason: "stop",
     timestamp: Date.now(),
   };
 }
 
-describe('agentLoop harness 不变量', () => {
+describe("agentLoop harness 不变量", () => {
+  let runtime: LlmApiRuntime;
   beforeEach(() => {
-    clearApiRegistryForTests();
-    registerProviderInstance('test', { sdk: 'openai' }, ['mock']);
+    runtime = new LlmApiRuntime();
+    runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
   });
 
-  it('agent_end 事件快照在生成器结束后仍完整（不再被 finally 清空）', async () => {
-    registerApiProvider({
-      api: 'ai-sdk',
+  it("agent_end 事件快照在生成器结束后仍完整（不再被 finally 清空）", async () => {
+    runtime.registerApiProvider({
+      api: "ai-sdk",
       stream() {
-        const message = assistantText('done');
+        const message = assistantText("done");
         return createAssistantMessageEventStream(async (push) => {
-          push({ type: 'done', message });
+          push({ type: "done", message });
           return message;
         });
       },
     } as never);
-    let agentEnd: Extract<AgentEvent, { type: 'agent_end' }> | undefined;
+    let agentEnd: Extract<AgentEvent, { type: "agent_end" }> | undefined;
     for await (const event of agentLoop(
-      createUserMessage('hi'),
-      { systemPrompt: '', messages: [], tools: [] },
-      { model: getLlmTransportModel('test', 'mock') } as never,
+      createUserMessage("hi"),
+      { systemPrompt: "", messages: [], tools: [] },
+      { model: runtime.model("test", "mock"), transport: runtime }
     )) {
-      if (event.type === 'agent_end') agentEnd = event;
+      if (event.type === "agent_end") agentEnd = event;
     }
     // 生成器已完整结束：事件里的 messages 必须是当时的快照
     expect(agentEnd).toBeDefined();
     expect(agentEnd!.messages.length).toBeGreaterThan(0);
-    expect(agentEnd!.messages.some((m) => m.role === 'assistant')).toBe(true);
+    expect(agentEnd!.messages.some((m) => m.role === "assistant")).toBe(true);
   });
 
-  it('并行工具结果按调用序落列（与完成先后无关）', async () => {
-    const slow = 'read_file';
-    const fast = 'web_search';
-    registerApiProvider({
-      api: 'ai-sdk',
+  it("并行工具结果按调用序落列（与完成先后无关）", async () => {
+    const slow = "read_file";
+    const fast = "web_search";
+    runtime.registerApiProvider({
+      api: "ai-sdk",
       stream(_model: unknown, context: { messages: AgentMessage[] }) {
-        const hasResults = context.messages.some((m) => m.role === 'toolResult');
+        const hasResults = context.messages.some(
+          (m) => m.role === "toolResult"
+        );
         const message = hasResults
-          ? assistantText('ok')
+          ? assistantText("ok")
           : assistantWithCalls([
-            { id: 'call_slow', name: slow },
-            { id: 'call_fast', name: fast },
-          ]);
+              { id: "call_slow", name: slow },
+              { id: "call_fast", name: fast },
+            ]);
         return createAssistantMessageEventStream(async (push) => {
-          push({ type: 'done', message });
+          push({ type: "done", message });
           return message;
         });
       },
     } as never);
 
     const tools: LlmTool[] = [
-      { name: slow, description: '', parameters: z.object({}) },
-      { name: fast, description: '', parameters: z.object({}) },
+      { name: slow, description: "", parameters: z.object({}) },
+      { name: fast, description: "", parameters: z.object({}) },
     ];
     const emitted: AgentMessage[] = [];
     for await (const event of agentLoop(
-      createUserMessage('go'),
-      { systemPrompt: '', messages: [], tools },
+      createUserMessage("go"),
+      { systemPrompt: "", messages: [], tools },
       {
-        model: getLlmTransportModel('test', 'mock'),
-        toolExecution: 'parallel',
+        model: runtime.model("test", "mock"),
+        transport: runtime,
+        toolExecution: "parallel",
         executeTool: async (call) => {
           if (call.name === slow) await new Promise((r) => setTimeout(r, 30));
           return {
-            role: 'toolResult' as const,
+            role: "toolResult" as const,
             toolCallId: call.id,
             toolName: call.name,
-            content: [{ type: 'text' as const, text: call.name }],
+            content: [{ type: "text" as const, text: call.name }],
             isError: false,
             timestamp: Date.now(),
           };
         },
-      } as never,
+      } as never
     )) {
-      if (event.type === 'agent_end') emitted.push(...event.messages);
+      if (event.type === "agent_end") emitted.push(...event.messages);
     }
-    const resultIds = emitted.filter((m) => m.role === 'toolResult').map((m) => m.toolCallId);
+    const resultIds = emitted
+      .filter((m) => m.role === "toolResult")
+      .map((m) => m.toolCallId);
     // slow 先声明但后完成：落列顺序仍是声明顺序
-    expect(resultIds).toEqual(['call_slow', 'call_fast']);
+    expect(resultIds).toEqual(["call_slow", "call_fast"]);
   });
 });
 
-describe('createIncrementalRepair', () => {
-  it('逐步追加与一次性全量修复结果一致', () => {
+describe("createIncrementalRepair", () => {
+  it("逐步追加与一次性全量修复结果一致", () => {
     const orphan: AgentMessage = {
-      role: 'toolResult',
-      toolCallId: 'ghost',
-      toolName: 'ghost',
-      content: [{ type: 'text', text: 'orphan' }],
+      role: "toolResult",
+      toolCallId: "ghost",
+      toolName: "ghost",
+      content: [{ type: "text", text: "orphan" }],
       isError: false,
       timestamp: 1,
     };
-    const u1 = createUserMessage('一', undefined, 2);
-    const a1 = assistantWithCalls([{ id: 'c1', name: 'echo' }]);
+    const u1 = createUserMessage("一", undefined, 2);
+    const a1 = assistantWithCalls([{ id: "c1", name: "echo" }]);
     const r1: AgentMessage = {
-      role: 'toolResult', toolCallId: 'c1', toolName: 'echo',
-      content: [{ type: 'text', text: 'r1' }], isError: false, timestamp: 4,
+      role: "toolResult",
+      toolCallId: "c1",
+      toolName: "echo",
+      content: [{ type: "text", text: "r1" }],
+      isError: false,
+      timestamp: 4,
     };
-    const u2 = createUserMessage('二', undefined, 5);
-    const a2 = assistantWithCalls([{ id: 'c2', name: 'echo' }]);
+    const u2 = createUserMessage("二", undefined, 5);
+    const a2 = assistantWithCalls([{ id: "c2", name: "echo" }]);
 
     const repairer = createIncrementalRepair();
     const history: AgentMessage[] = [orphan, u1];
@@ -158,18 +172,29 @@ describe('createIncrementalRepair', () => {
 
     expect(incremental.map((m) => m.role)).toEqual(full.map((m) => m.role));
     // 孤儿 toolResult 被丢弃；c1 有真实结果；c2 尾部注入占位结果
-    expect(incremental.some((m) => m.role === 'toolResult' && m.toolCallId === 'ghost')).toBe(false);
-    expect(incremental.filter((m) => m.role === 'toolResult')).toHaveLength(2);
-    expect(incremental.at(-1)).toMatchObject({ role: 'toolResult', toolCallId: 'c2', isError: true });
+    expect(
+      incremental.some(
+        (m) => m.role === "toolResult" && m.toolCallId === "ghost"
+      )
+    ).toBe(false);
+    expect(incremental.filter((m) => m.role === "toolResult")).toHaveLength(2);
+    expect(incremental.at(-1)).toMatchObject({
+      role: "toolResult",
+      toolCallId: "c2",
+      isError: true,
+    });
   });
 
-  it('历史被替换（边界回退）时自动重置', () => {
+  it("历史被替换（边界回退）时自动重置", () => {
     const repairer = createIncrementalRepair();
-    const long: AgentMessage[] = [createUserMessage('a', undefined, 1), assistantText('x')];
+    const long: AgentMessage[] = [
+      createUserMessage("a", undefined, 1),
+      assistantText("x"),
+    ];
     repairer.repair(long);
-    const short: AgentMessage[] = [assistantText('fresh')];
+    const short: AgentMessage[] = [assistantText("fresh")];
     const repaired = repairer.repair(short);
     expect(repaired).toHaveLength(1);
-    expect(repaired[0]).toMatchObject({ role: 'assistant' });
+    expect(repaired[0]).toMatchObject({ role: "assistant" });
   });
 });

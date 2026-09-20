@@ -182,7 +182,7 @@ interface MutablePackage {
   readonly [key: string]: unknown;
 }
 
-interface PluginManifest extends Record<string, unknown> {
+interface ZhinPackageManifest extends Record<string, unknown> {
   readonly protocol: 1;
   readonly type: 'plugin';
   readonly entry: string;
@@ -307,7 +307,7 @@ function createCandidatePackage(
     readonly capabilities: readonly CutoverCapability[];
     readonly dependencies: Record<string, string>;
     readonly devDependencies: Record<string, string>;
-    readonly existingManifest?: PluginManifest;
+    readonly existingManifest?: ZhinPackageManifest;
   },
 ): Record<string, unknown> {
   const manifest = {
@@ -400,15 +400,15 @@ async function directoryContainsSource(directory: string): Promise<boolean> {
   return false;
 }
 
-function parseManifest(value: unknown, packageFile: string): PluginManifest | undefined {
+function parseManifest(value: unknown, packageFile: string): ZhinPackageManifest | undefined {
   if (value === undefined) return undefined;
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`${packageFile} already contains a zhin manifest; migrate it manually`);
   }
-  return value as PluginManifest;
+  return value as ZhinPackageManifest;
 }
 
-function isPluginManifest(value: PluginManifest): boolean {
+function isPluginManifest(value: ZhinPackageManifest): boolean {
   return value.protocol === 1
     && value.type === 'plugin'
     && (value.entry === './plugin.ts' || value.entry === './plugin.js');

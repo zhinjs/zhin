@@ -124,20 +124,34 @@ const formatter = Schema.resolve('number')
 
 ## 与 Zhin.js 集成
 
-在插件中使用 `defineSchema` 定义配置（自动注册到 Web 控制台表单渲染）：
+Plugin Runtime 的配置契约由插件根目录 `schema.json` 声明，Runtime 在候选代装配前统一校验并填充默认值：
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "port": { "type": "number", "default": 8080 },
+    "enabled": { "type": "boolean", "default": true }
+  },
+  "additionalProperties": false
+}
+```
+
+插件从 generation-owned `ConfigView` 读取已验证配置：
 
 ```typescript
-import { usePlugin, Schema } from 'zhin.js'
+import { definePlugin } from 'zhin.js'
 
-const { defineSchema } = usePlugin()
-
-const getConfig = defineSchema(Schema.object({
-  port: Schema.number().default(8080).description('服务端口'),
-  enabled: Schema.boolean().default(true).description('是否启用'),
-}))
-
-const config = getConfig()
+export default definePlugin<{ port: number; enabled: boolean }>({
+  name: 'example',
+  setup({ config }) {
+    const current = config.get()
+    console.log(current.port, current.enabled)
+  },
+})
 ```
+
+`@zhin.js/schema` 继续用于业务输入的运行时解析；它不承担 Plugin Runtime 配置注册。
 
 ## 工具函数
 

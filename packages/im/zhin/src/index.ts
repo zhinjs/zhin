@@ -13,13 +13,6 @@ export * from '@zhin.js/plugin-runtime';
 export { default as logger, formatCompact, formatCompactLog, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 
 declare module 'zhin.js' {
-  /** Public plugin authoring extensions installed by the Zhin application facade. */
-  namespace Plugin {
-    interface Extensions {
-      defineModel<K extends keyof Models>(name: K, definition: import('@zhin.js/core').Definition<Models[K]>): void;
-    }
-  }
-  interface RegisteredAdapters {}
   interface Models {
     unified_inbox_message?: object;
     unified_inbox_request?: object;

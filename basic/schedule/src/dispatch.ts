@@ -1,4 +1,5 @@
 import type { ResolvedJob, ScatterRunState } from './types.js';
+import { HolidayCalendar } from './holiday-calendar.js';
 import { getSolarNextRun, isSolarDue } from './resolvers/solar.js';
 import { getLunarNextRun, isLunarDue } from './resolvers/lunar.js';
 import { getHolidayNextRun, isHolidayDue } from './resolvers/holiday.js';
@@ -9,6 +10,7 @@ import { getScatterNextRun, isScatterDue } from './resolvers/scatter.js';
 export interface GetNextRunOptions {
   jobId?: string;
   scatterState?: ScatterRunState;
+  holidays?: HolidayCalendar;
 }
 
 export function getNextRun(
@@ -22,11 +24,11 @@ export function getNextRun(
     case 'lunar':
       return getLunarNextRun(from, job.cron, job.timezone);
     case 'holiday':
-      return getHolidayNextRun(from, job);
+      return getHolidayNextRun(from, job, options?.holidays ?? new HolidayCalendar());
     case 'freeDay':
-      return getFreeDayNextRun(from, job);
+      return getFreeDayNextRun(from, job, options?.holidays ?? new HolidayCalendar());
     case 'workday':
-      return getWorkdayNextRun(from, job);
+      return getWorkdayNextRun(from, job, options?.holidays ?? new HolidayCalendar());
     case 'scatter':
       if (!options?.jobId) {
         return null;
@@ -36,6 +38,7 @@ export function getNextRun(
         job,
         options.jobId,
         options.scatterState ?? { dateKey: '', firedCount: 0 },
+        options.holidays ?? new HolidayCalendar(),
       );
     default:
       return null;
@@ -53,11 +56,11 @@ export function isJobDue(
     case 'lunar':
       return isLunarDue(at, job.cron, job.timezone);
     case 'holiday':
-      return isHolidayDue(at, job);
+      return isHolidayDue(at, job, options?.holidays ?? new HolidayCalendar());
     case 'freeDay':
-      return isFreeDayDue(at, job);
+      return isFreeDayDue(at, job, options?.holidays ?? new HolidayCalendar());
     case 'workday':
-      return isWorkdayDue(at, job);
+      return isWorkdayDue(at, job, options?.holidays ?? new HolidayCalendar());
     case 'scatter':
       if (!options?.jobId) {
         return false;
@@ -67,6 +70,7 @@ export function isJobDue(
         job,
         options.jobId,
         options.scatterState ?? { dateKey: '', firedCount: 0 },
+        options.holidays ?? new HolidayCalendar(),
       );
     default:
       return false;

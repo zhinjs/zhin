@@ -8,22 +8,19 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import type { Plugin } from '@zhin.js/core';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import {
   runToolPolicies,
   toolPolicyResultToMessage,
 } from '../../src/security/policy-facade.js';
 import type { ZhinAgentConfig } from '../../src/config/index.js';
-import { EditFileBuiltinTool } from '../../src/builtin/edit-file-tool.js';
-import { WriteFileBuiltinTool } from '../../src/builtin/write-file-tool.js';
 
 function makeExecConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<ZhinAgentConfig> {
   return {
     execSecurity: 'allowlist',
     execPreset: 'custom',
     execAllowlist: [],
-    execApprovalMode: 'deny',
+    execApprovalMode: 'auto',
     ...overrides,
   } as unknown as Required<ZhinAgentConfig>;
 }
@@ -37,22 +34,6 @@ describe('policy-facade', () => {
     vi.restoreAllMocks();
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-
-  function mockPlugin(master = 'owner1', trusted: string[] = ['admin1'], execAllowlist: string[] = []) {
-    const plugin = {
-      inject: (name: string) => {
-        if (name === 'icqq') {
-          return { endpoints: new Map([['bot1', { $config: { master, trusted } }]]) };
-        }
-        if (name === 'ai') {
-          return { getAgentConfig: () => ({ execAllowlist }) };
-        }
-        return undefined;
-      },
-    } as unknown as Plugin;
-    (plugin as unknown as { root: Plugin }).root = plugin;
-    return plugin;
-  }
 
   describe('层顺序与 applies 条件', () => {
     it('edit_file 全链 7 层按序执行且全部通过', () => {
@@ -97,22 +78,6 @@ describe('policy-facade', () => {
       const result = runToolPolicies({ toolName: 'list_dir', filePath: tmpDir });
       expect(result.allowed).toBe(true);
       expect(result.decisions.map((d) => d.policy)).toEqual(['role-gate', 'sensitive-path']);
-    });
-
-    it('analyze_media 等价链（read_file 身份 + read 操作）：无 dangerous/memory/device/workspace 层', () => {
-      const fp = path.join(tmpDir, 'a.png');
-      const result = runToolPolicies({
-        toolName: 'read_file',
-        filePath: fp,
-        rawFilePath: fp,
-        fileOperation: 'read',
-      });
-      expect(result.allowed).toBe(true);
-      expect(result.decisions.map((d) => d.policy)).toEqual([
-        'role-gate',
-        'file-permission-matrix',
-        'sensitive-path',
-      ]);
     });
 
     it('exec-policy 仅在 command 与 config 同时给定时生效', () => {
@@ -167,7 +132,6 @@ describe('policy-facade', () => {
 
   describe('deny 短路与 deniedBy', () => {
     it('普通用户 edit_file 在 role-gate 短路，后续层不执行', () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, 'a.txt');
       const result = runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx });
@@ -180,7 +144,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 未在 execAllowlist 时在 dangerous-tool-approval 短路（ZHIN_NEEDS_OWNER）', () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, 'a.txt');
       const result = runToolPolicies({ toolName: 'edit_file', filePath: fp, rawFilePath: fp, commMessage: ctx });
@@ -224,7 +187,6 @@ describe('policy-facade', () => {
     });
 
     it('master 访问敏感路径在 sensitive-path 产生 gate（list_dir，无权限矩阵层）', () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
       const fp = path.join(tmpDir, '.env');
       const result = runToolPolicies({ toolName: 'list_dir', filePath: fp, commMessage: ctx });
@@ -265,7 +227,6 @@ describe('policy-facade', () => {
 
   describe('edit_file 全链（门面侧验证；工具不再自行检查策略）', () => {
     it('trusted 未 allowlist：门面返回 ZHIN_NEEDS_OWNER', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, 'eq.txt');
       fs.writeFileSync(fp, 'before', 'utf-8');
@@ -278,7 +239,6 @@ describe('policy-facade', () => {
     });
 
     it('普通用户：门面返回 Error', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, 'eq2.txt');
       fs.writeFileSync(fp, 'before', 'utf-8');
@@ -290,19 +250,6 @@ describe('policy-facade', () => {
       expect(facadeMsg).toBe('Error: 权限不足：当前策略不允许执行「edit_file」。');
     });
 
-    it('master 全链通过后工具正常写入（edit_file / write_file）', async () => {
-      const fp = path.join(tmpDir, 'eq3.txt');
-      fs.writeFileSync(fp, 'one two', 'utf-8');
-      const editOut = String(
-        await new EditFileBuiltinTool().run({ file_path: fp, old_string: 'two', new_string: 'three' }),
-      );
-      expect(editOut).toContain('✅ Edited');
-      expect(fs.readFileSync(fp, 'utf-8')).toBe('one three');
-
-      const wp = path.join(tmpDir, 'eq4.txt');
-      const writeOut = String(await new WriteFileBuiltinTool().run({ file_path: wp, content: 'hello' }));
-      expect(writeOut).toBe(`✅ Wrote 5 bytes to ${wp}`);
-    });
   });
 
   describe('read_file 迁移等价', () => {
@@ -339,21 +286,6 @@ describe('policy-facade', () => {
       );
     });
 
-    it('analyze_media 等价输入（无 devicePathGuard）不触发设备路径层', () => {
-      const result = runToolPolicies({
-        toolName: 'read_file',
-        filePath: '/dev/zero',
-        rawFilePath: '/dev/zero',
-        fileOperation: 'read',
-      });
-      expect(result.allowed).toBe(true);
-      expect(result.decisions.map((d) => d.policy)).toEqual([
-        'role-gate',
-        'file-permission-matrix',
-        'sensitive-path',
-      ]);
-    });
-
     it('普通用户写会话 MEMORY.md 全链放行（对齐 checkMemoryWritePath session）', () => {
       const ctx = mockCommMessage({
         adapter: 'qq',
@@ -367,6 +299,7 @@ describe('policy-facade', () => {
         toolName: 'write_file',
         filePath: fp,
         rawFilePath: fp,
+        workspaceDir: tmpDir,
         commMessage: ctx,
       });
       expect(result.allowed).toBe(true);
@@ -375,7 +308,6 @@ describe('policy-facade', () => {
     });
 
     it('普通用户读敏感路径在 file-permission-matrix 拒绝（门面侧验证）', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const fp = path.join(tmpDir, '.env');
 
@@ -387,7 +319,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 读敏感路径为 needsOwnerConfirmation gate（门面侧验证）', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
       const fp = path.join(tmpDir, '.env');
 
@@ -409,7 +340,6 @@ describe('policy-facade', () => {
     });
 
     it('master 搜索敏感目录在 sensitive-path gate（门面侧验证）', async () => {
-      mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'owner1', sender_roles: ['master'] });
       const fp = path.join(tmpDir, '.ssh');
 
@@ -429,7 +359,6 @@ describe('policy-facade', () => {
     });
 
     it('trusted 未 allowlist 时 gate（门面侧验证）', async () => {
-      mockPlugin('owner1', ['admin1'], []);
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'admin1', sender_roles: ['trusted'] });
 
       const facadeMsg = toolPolicyResultToMessage(
@@ -460,12 +389,11 @@ describe('policy-facade', () => {
     });
 
     it('普通用户删除命令在 bash-file-permission 拒绝（门面侧验证）', async () => {
-      const plugin = mockPlugin();
       const ctx = mockCommMessage({ adapter: 'icqq', endpoint: 'bot1', senderId: 'user1', sender_roles: ['user'] });
       const cmd = `rm -rf ${path.join(tmpDir, 'x')}`;
 
       const facadeMsg = toolPolicyResultToMessage(
-        runToolPolicies({ toolName: 'bash', command: cmd, commMessage: ctx, hostPlugin: plugin }),
+        runToolPolicies({ toolName: 'bash', command: cmd, commMessage: ctx }),
         'bash',
       );
       expect(facadeMsg).toBe('Error: 当前角色为「普通用户」，仅允许读取文件；请求的操作「delete」被拒绝。');

@@ -4,7 +4,7 @@ import { DedupeToolFilter, ExternalToolSource, RegisteredToolSource } from '../.
 import type { RegisteredAgentTool } from '../../src/tool/contracts.js';
 import type { AgentTool } from '@zhin.js/ai';
 import { createSyntheticMessage } from '@zhin.js/core';
-import { createPermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import type { Tool } from '../../src/resource-hub/types.js';
 
 describe('ToolSystem', () => {
@@ -76,7 +76,7 @@ describe('ToolSystem', () => {
       skillRegistry: null,
       externalRegistered: new Map(),
       userProfiles: {} as never,
-      permissionHost: createPermissionHost(),
+      permissionHost: new PermissionHost(),
     };
     const trusted = createSyntheticMessage({
       adapter: 'qq',
@@ -104,7 +104,7 @@ describe('ToolSystem', () => {
       skillRegistry: null,
       externalTools: [],
       userProfiles: {} as never,
-      permissionHost: createPermissionHost(),
+      permissionHost: new PermissionHost(),
     };
     const trustedGroup = createSyntheticMessage({
       adapter: 'qq',

@@ -1,4 +1,8 @@
-import { pluginOwnerResourceKey, rootPluginId, type PluginId } from './identity.js';
+import type { PluginId } from './identity.js';
+import {
+  OwnerScopedResourceHost,
+  qualifyOwnedResourceName,
+} from './owner-scoped-resource-host.js';
 import { createToken } from './token.js';
 
 export interface DatabaseHostSelection {
@@ -111,82 +115,40 @@ export interface DatabaseHost {
  * the Runtime maps them to private physical table names before they reach the
  * process-wide DatabaseHost.
  */
-export interface PluginDatabaseHost {
-  readonly owner: PluginId;
-  readonly dialect: string;
-  readonly started: boolean;
-  define(name: string, definition: Record<string, unknown>): void;
-  tables(): readonly string[];
-  models: {
-    get(name: string): DatabaseHostModel | undefined;
-  };
-}
-
-const resourcePrefix = '__zhin_plugin__';
-const resourceSeparator = '__';
-const roots = new WeakMap<PluginDatabaseHost, DatabaseHost>();
-
 /**
  * Maps a plugin's logical resource name to its process-wide physical name.
- * Root keeps its historical bare names so existing projects do not need a
- * database migration merely to adopt scoped child plugins.
+ * Every owner, including the root plugin, uses the same private namespace.
  */
 export function qualifyPluginResourceName(owner: PluginId, name: string): string {
-  assertLogicalResourceName(name);
-  if (owner === rootPluginId()) return name;
-  return `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}${name}`;
+  return qualifyOwnedResourceName(owner, name);
 }
 
-/** Reverse `qualifyPluginResourceName` only when the name belongs to owner. */
-export function unqualifyPluginResourceName(owner: PluginId, name: string): string | undefined {
-  if (owner === rootPluginId()) return name.startsWith(resourcePrefix) ? undefined : name;
-  const prefix = `${resourcePrefix}${pluginOwnerResourceKey(owner)}${resourceSeparator}`;
-  return name.startsWith(prefix) ? name.slice(prefix.length) : undefined;
-}
+/** Owner-bound persistence facade without Console administration or raw DB access. */
+export class PluginDatabaseHost extends OwnerScopedResourceHost {
+  readonly models: { get(name: string): DatabaseHostModel | undefined };
 
-/** Creates a tenant facade without exposing Console administration or raw DB access. */
-export function createPluginDatabaseHost(
-  owner: PluginId,
-  host: DatabaseHost,
-): PluginDatabaseHost {
-  const facade = Object.freeze({
-    owner,
-    get dialect() { return host.dialect; },
-    get started() { return host.started; },
-    define(name: string, definition: Record<string, unknown>) {
-      host.define(qualifyPluginResourceName(owner, name), definition);
-    },
-    tables() {
-      return Object.freeze(host.tables().flatMap((name) => {
-        const logical = unqualifyPluginResourceName(owner, name);
-        return logical === undefined ? [] : [logical];
-      }));
-    },
-    models: Object.freeze({
-      get(name: string) {
-        return host.models.get(qualifyPluginResourceName(owner, name));
-      },
-    }),
-  });
-  roots.set(facade, host);
-  return facade;
-}
+  constructor(owner: PluginId, private readonly host: DatabaseHost) {
+    super(owner);
+    this.models = Object.freeze({ get: (name: string) => this.host.models.get(this.qualify(name)) });
+  }
 
-/**
- * Recovers a process host from the standard root token or a scoped facade.
- * This keeps custom RootRuntime installers written against the pre-facade
- * token working while child scopes begin receiving tenant boundaries.
- */
-export function unwrapPluginDatabaseHost(
-  host: DatabaseHost | PluginDatabaseHost,
-): DatabaseHost | undefined {
-  if ('getRawDatabase' in host) return host;
-  return roots.get(host);
-}
+  get dialect(): string {
+    return this.host.dialect;
+  }
 
-function assertLogicalResourceName(name: string): void {
-  if (!name || name.startsWith(resourcePrefix)) {
-    throw new TypeError(`Invalid plugin resource name: ${name}`);
+  get started(): boolean {
+    return this.host.started;
+  }
+
+  define(name: string, definition: Record<string, unknown>): void {
+    this.host.define(this.qualify(name), definition);
+  }
+
+  tables(): readonly string[] {
+    return Object.freeze(this.host.tables().flatMap((name) => {
+      const logical = this.unqualify(name);
+      return logical === undefined ? [] : [logical];
+    }));
   }
 }
 

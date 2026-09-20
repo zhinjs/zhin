@@ -1,13 +1,10 @@
 /**
  * 统一工具安全策略门面（policy facade）
  *
- * 背景：builtin 工具曾各自手写策略链且不一致（edit_file 七层、glob/list_dir 两层、
- * analyze_media 三层……），新工具容易漏层，新策略要改所有工具。
- *
  * 本模块把各策略层声明为一张按 priority 排序的策略表，`runToolPolicies` 依序执行，
  * 第一个终结决策（deny 或需 Owner 确认）即短路返回，`decisions` 记录已执行层。
  *
- * 层顺序（以 edit-file-tool 既有链路为基准）：
+ * 层顺序：
  *   role-gate → bash-command-safety → dangerous-tool-approval → bash-sensitive-read
  *   → file-permission-matrix（文件写类 + 显式 read）→ bash-file-permission
  *   → memory-write-path（写类且有 filePath）→ sensitive-path（有 filePath）
@@ -15,12 +12,11 @@
  *   → workspace-access（写类且有 filePath）
  *   → exec-policy（有 command 且给 config）
  *
- * 注意：memory-write-path / blocked-device-path / workspace-access 仅对写操作生效，
- * 这是为了严格保持 read 类工具（glob/list_dir/grep/analyze_media）迁移前的对外行为。
- * bash-tool 旧链不含 exec-policy，因此 bash 调用方不传 config，exec-policy 层不会激活。
+ * memory-write-path / blocked-device-path / workspace-access 仅对写操作生效；
+ * read 类工具由文件权限矩阵和显式 devicePathGuard 约束。
  */
 
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
 import {
@@ -48,13 +44,12 @@ import {
   type FileToolName,
 } from './dangerous-tool-policy.js';
 import { checkExecPolicyWithOptions, checkTurnExecPolicy, checkUnattendedExecPreset } from './exec-policy.js';
-import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approve-always-store.js';
+import { resolveToolRequesterRole, type ToolRequesterRole } from './owner-approval-runtime.js';
 import {
   checkUrlNetworkAccess,
   extractUrlsFromCommand,
   NETWORK_COMMAND_PATTERNS,
 } from './network-policy.js';
-import { attachTurnSandboxAuthority } from './turn-sandbox-authority.js';
 import type { ToolNetworkPolicy } from './network-policy-context.js';
 import type { ToolDescriptor } from '@zhin.js/tool';
 import type { TurnIngress } from '../turn/turn-ingress.js';
@@ -72,16 +67,13 @@ export interface ToolPolicyInput {
    * （旧实现中权限矩阵在 expandHome 之前执行，为保持等价单独透传）。
    */
   rawFilePath?: string;
+  /** Workspace root used to resolve and authorize relative file paths. */
+  workspaceDir?: string;
   /** 覆盖从 toolName 推导的文件操作类型（edit_file→update，write_file→create） */
   fileOperation?: FileOperation;
   /** bash 命令（exec-policy 与 bash 三层用） */
   command?: string;
-  /** bash-file-permission 层解析角色用的宿主插件（与 bash-tool 构造注入一致） */
-  hostPlugin?: Plugin;
-  /**
-   * 读类工具显式启用 blocked-device-path 层（仅 read_file；
-   * analyze_media 不启用以保持旧行为；拒绝文案也用读类措辞）。
-   */
+  /** 读类工具显式启用 blocked-device-path 层。 */
   devicePathGuard?: boolean;
   commMessage?: Message;
   /** exec policy 用配置 */
@@ -190,7 +182,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
               status: 'approval_required',
               policy: 'exec-policy',
               reason: exec.reason ?? 'shell command requires approval',
-              input: withTurnSandboxAuthority(input.turn, authorizedInput),
+              input: authorizedInput,
             });
           }
           return Object.freeze({
@@ -228,37 +220,34 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
         });
       }
     }
-    authorizedInput = withTurnSandboxAuthority(input.turn, authorizedInput);
   }
-  if (input.tool.approval !== 'never') {
+  if (requiresDeclarativeApproval(input.tool)) {
     return Object.freeze({
       status: 'approval_required',
       policy: 'approval',
-      reason: `tool approval policy is ${input.tool.approval}`,
+      reason: `tool approval policy is ${input.tool.requiresApproval}`,
       input: authorizedInput,
     });
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
 }
 
-function withTurnSandboxAuthority(
-  turn: TurnIngress,
-  input: Readonly<Record<string, unknown>>,
-): Readonly<Record<string, unknown>> {
-  const filesystem = turn.policy.filesystem;
-  const workingDirectory = filesystem?.workingDirectory ?? filesystem?.workspaceRoot;
-  const access = filesystem?.access;
-  const isolated = turn.policy.shell?.isolation === 'required'
-    && (access === 'read-only' || access === 'workspace-write');
-  const unrestricted = turn.policy.shell?.isolation === 'none' && access === 'danger-full-access';
-  if (!workingDirectory || (!isolated && !unrestricted)) {
-    return input;
-  }
-  return attachTurnSandboxAuthority(input, {
-    workingDirectory,
-    access,
-    networkAccess: turn.policy.network?.enabled === true,
-  });
+function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
+  if (tool.requiresApproval === 'never') return false;
+  if (tool.requiresApproval === 'always' || tool.requiresApproval === 'once') return true;
+  return !hasCanonicalRiskPolicy(tool.name);
+}
+
+/**
+ * Canonical tools reach this point only after their concrete network, file, or
+ * shell operation passed the dedicated policy layers above. Unknown plugin
+ * tools remain fail-closed under the default `on-risk` declaration.
+ */
+function hasCanonicalRiskPolicy(toolName: string): boolean {
+  return toolName === 'bash'
+    || toolName === 'web_fetch'
+    || toolName === 'web_search'
+    || resolveTurnFileOperation(toolName) !== undefined;
 }
 
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {
@@ -331,7 +320,7 @@ function resolveTurnFileOperation(toolName: string): FileOperation | undefined {
   if (toolName === 'write_file') return 'create';
   if (toolName === 'edit_file') return 'update';
   if (toolName === 'read_file' || toolName === 'list_dir' || toolName === 'glob'
-    || toolName === 'grep' || toolName === 'analyze_media') return 'read';
+    || toolName === 'grep') return 'read';
   return undefined;
 }
 
@@ -393,7 +382,7 @@ function fromDangerousDecision(d: DangerousToolDecision): ToolPolicyDecision {
 function isPermittedMemoryToolWrite(input: ToolPolicyInput): boolean {
   const filePath = input.rawFilePath ?? input.filePath;
   if (!filePath || !isWriteAccess(input)) return false;
-  const decision = checkMemoryWritePath(filePath, input.commMessage);
+  const decision = checkMemoryWritePath(filePath, input.commMessage, input.workspaceDir);
   return decision.scope !== 'none' && decision.allowed;
 }
 
@@ -422,7 +411,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
       // 与 checkMemoryWritePath 对齐：会话记忆写对任意角色放行（避免矩阵/危险工具层先拒）
       if (isPermittedMemoryToolWrite(input)) {
         const role = input.commMessage
-          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
         return { allowed: true, role };
       }
@@ -445,7 +434,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     check: (input) => {
       if (isPermittedMemoryToolWrite(input)) {
         const role = input.commMessage
-          ? resolveToolRequesterRole(input.hostPlugin ?? null, input.commMessage)
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
         return { allowed: true, role };
       }
@@ -458,7 +447,9 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     name: 'bash-sensitive-read',
     priority: 25,
     applies: (input) => input.toolName === 'bash' && Boolean(input.command),
-    check: (input) => fromDangerousDecision(checkBashSensitiveReadAccess(input.command!, input.commMessage)),
+    check: (input) => fromDangerousDecision(
+      checkBashSensitiveReadAccess(input.command!, input.commMessage, input.workspaceDir),
+    ),
   },
   {
     name: 'file-permission-matrix',
@@ -498,10 +489,9 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     priority: 35,
     applies: (input) => input.toolName === 'bash' && Boolean(input.command),
     check: (input) => {
-      // 与 bash-tool 旧链一致：hostPlugin + commMessage 齐全才解析角色，否则 'unknown'
       const requesterRole: ToolRequesterRole =
-        input.commMessage && input.hostPlugin
-          ? resolveToolRequesterRole(input.hostPlugin, input.commMessage)
+        input.commMessage
+          ? resolveToolRequesterRole(input.commMessage)
           : 'unknown';
       const role = toolRequesterRoleToFileRole(requesterRole);
       const permResult = checkBashFilePermission(role, input.command!);
@@ -522,7 +512,7 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     priority: 40,
     applies: (input) => isWriteAccess(input),
     check: (input) => {
-      const d = checkMemoryWritePath(input.filePath!, input.commMessage);
+      const d = checkMemoryWritePath(input.filePath!, input.commMessage, input.workspaceDir);
       return { allowed: d.allowed, reason: d.reason, payload: d };
     },
   },
@@ -532,7 +522,12 @@ const TOOL_POLICIES: ToolPolicyLayer[] = sortByPriority([
     applies: (input) => Boolean(input.filePath),
     check: (input) =>
       fromDangerousDecision(
-        checkSensitiveFilePathAccess(input.toolName as FileToolName, input.filePath!, input.commMessage),
+        checkSensitiveFilePathAccess(
+          input.toolName as FileToolName,
+          input.filePath!,
+          input.commMessage,
+          input.workspaceDir,
+        ),
       ),
   },
   {

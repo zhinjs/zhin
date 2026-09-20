@@ -10,7 +10,7 @@ import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import defineDiscordAdapter from '../adapters/discord.js';
+import defineDiscordAdapter from '../adapters/discord/index.js';
 import {
   DiscordGatewayEndpoint,
   DiscordInteractionsEndpoint,
@@ -205,13 +205,14 @@ describe('discord protocol helpers', () => {
   });
 
   it('resolves plugin config with gateway default', () => {
-    const resolved = resolveDiscordConfig({ token: 'tok' });
+    const resolved = resolveDiscordConfig({ id: 'discord-bot', token: 'tok' });
     expect(resolved.connection).toBe('gateway');
     expect(resolved.id).toBe('discord-bot');
   });
 
   it('selects interactions mode when configured', () => {
     const resolved = resolveDiscordConfig({
+      id: 'discord-bot',
       token: 'tok',
       connection: 'interactions',
       applicationId: 'app',
@@ -602,12 +603,13 @@ describe('discord plugin runtime adapter', () => {
   });
 
   it('creates interactions endpoint when httpHostToken provided', async () => {
-    const { default: adapter } = await import('../adapters/discord.js');
+    const { default: adapter } = await import('../adapters/discord/index.js');
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     const endpoint = adapter.create({
       id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
       name: 'discord',
       config: {
+        id: 'discord',
         token: 'tok',
         connection: 'interactions',
         applicationId: 'app',
@@ -641,6 +643,7 @@ describe('discord plugin runtime adapter', () => {
       gateway: { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') },
       http,
       config: resolveDiscordConfig({
+        id: 'discord',
         token: 'tok',
         connection: 'interactions',
         applicationId: 'app',
@@ -702,7 +705,7 @@ describe('discord plugin runtime adapter', () => {
 });
 
 
-describe('discord.endpoint management', () => {
+describe('discord endpoint management', () => {
   const GUILD_ID = '1234567890123456789';
 
   function managementMock() {

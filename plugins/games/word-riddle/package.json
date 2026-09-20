@@ -68,6 +68,10 @@
       {
         "package": "@zhin.js/middleware",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/game-kit",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []

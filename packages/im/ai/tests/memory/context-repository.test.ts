@@ -56,19 +56,14 @@ describe('ContextRepository', () => {
     expect(ctx.messages[1]?.role).toBe('assistant');
   });
 
-  it('loadContext applies sender extra for LLM while rows store clean payload', async () => {
-    const user = createUserMessage('你是谁');
+  it('loadContext renders the persisted actor while rows store clean payload', async () => {
+    const actor = {
+      subjectId: '1', displayName: '归雨', roles: ['master'], scope: 'group' as const,
+    };
+    const user = createUserMessage('你是谁', undefined, 1, actor);
     await repository.appendMessages(sessionId, [user]);
     const rows = await repository.loadMessageRows(sessionId);
     const row = rows[0]!;
-    row.extra = JSON.stringify({
-      sender: {
-        id: '1',
-        name: '归雨',
-        roles: ['master'],
-        scope: 'group',
-      },
-    });
     const memRepo = repository as MemoryContextRepository & { messages: Map<string, unknown[]> };
     memRepo['messages'].set(sessionId, rows);
 
@@ -84,6 +79,7 @@ describe('ContextRepository', () => {
     const stored = parseAgentMessageRow(row);
     if (stored?.role === 'user') {
       expect(stored.content[0]).toMatchObject({ type: 'text', text: '你是谁' });
+      expect(stored.actor).toEqual(actor);
     }
   });
 

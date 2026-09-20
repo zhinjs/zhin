@@ -6,7 +6,7 @@ import type {
 import type {
   WorkroomProjectionGovernancePort,
   WorkroomProjectionOutboxItem,
-} from '../../src/workroom/projection-outbox.js';
+} from '../../src/workroom/projection-outbox/index.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 /** Explicit test authority. Production has no plaintext/in-memory fallback. */

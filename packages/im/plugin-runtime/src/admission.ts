@@ -3,32 +3,51 @@
  * External callbacks may enter while the owning Resource is present in the
  * committed snapshot; candidate and retired Resources fail closed.
  */
+interface AdmissionLifecycle {
+  assertClaimable(gate: GenerationAdmissionGate, owner: object): void;
+  assertOwner(gate: GenerationAdmissionGate, owner: object): void;
+  claim(gate: GenerationAdmissionGate, owner: object): void;
+  activate(gate: GenerationAdmissionGate, acquire?: () => () => void): void;
+  deactivate(gate: GenerationAdmissionGate): void;
+}
+
+// Assigned once by the class static block. The closures are a package-private
+// friend seam: lifecycle publication can mutate #private state without adding
+// Runtime-only methods to the public gate contract.
+let admissionLifecycle: AdmissionLifecycle;
+
 export class GenerationAdmissionGate {
-  constructor() {
-    admissionState.set(this, { active: false });
-    admissionActivationListeners.set(this, new Set());
-    admissionDeactivationListeners.set(this, new Set());
+  #state: AdmissionState = { active: false };
+  #owner?: object;
+  readonly #activationListeners = new Set<() => void>();
+  readonly #deactivationListeners = new Set<() => void>();
+
+  static {
+    admissionLifecycle = {
+      assertClaimable: (gate, owner) => gate.#assertClaimable(owner),
+      assertOwner: (gate, owner) => gate.#assertOwner(owner),
+      claim: (gate, owner) => { gate.#owner = owner; },
+      activate: (gate, acquire) => gate.#activate(acquire),
+      deactivate: (gate) => gate.#deactivate(),
+    };
   }
 
   get active(): boolean {
-    return admissionState.get(this)?.active === true;
+    return this.#state.active;
   }
 
   acquire(): (() => void) | undefined {
-    const state = admissionState.get(this);
-    return state?.active ? state.acquire?.() : undefined;
+    return this.#state.active ? this.#state.acquire?.() : undefined;
   }
 
   /** Observe the first commit which publishes this generation. */
   onActivate(listener: () => void): () => void {
-    const listeners = admissionActivationListeners.get(this);
-    if (!listeners) throw new Error('Unknown generation admission gate');
     if (this.active) {
       listener();
       return () => undefined;
     }
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
+    this.#activationListeners.add(listener);
+    return () => { this.#activationListeners.delete(listener); };
   }
 
   /**
@@ -37,14 +56,12 @@ export class GenerationAdmissionGate {
    * ingress transports such as WebSocket connections.
    */
   onDeactivate(listener: () => void): () => void {
-    const listeners = admissionDeactivationListeners.get(this);
-    if (!listeners) throw new Error('Unknown generation admission gate');
     if (!this.active) {
       listener();
       return () => undefined;
     }
-    listeners.add(listener);
-    return () => { listeners.delete(listener); };
+    this.#deactivationListeners.add(listener);
+    return () => { this.#deactivationListeners.delete(listener); };
   }
 
   enter<T>(operation: () => T): T | undefined {
@@ -60,17 +77,49 @@ export class GenerationAdmissionGate {
       throw error;
     }
   }
+
+  #assertClaimable(owner: object): void {
+    if (this.#owner && this.#owner !== owner) {
+      throw new Error('Generation admission gate belongs to another SnapshotStore');
+    }
+  }
+
+  #assertOwner(owner: object): void {
+    if (this.#owner !== owner) {
+      throw new Error('SnapshotStore does not own generation admission gate');
+    }
+  }
+
+  #activate(acquire?: () => () => void): void {
+    this.#state = { active: true, acquire };
+    for (const listener of this.#activationListeners) {
+      try {
+        listener();
+      } catch {
+        // Admission publication is an infallible pointer switch. Buffered
+        // ingress reports through its own dispatch path.
+      }
+    }
+    this.#activationListeners.clear();
+  }
+
+  #deactivate(): void {
+    this.#state = { active: false };
+    for (const listener of this.#deactivationListeners) {
+      try {
+        listener();
+      } catch {
+        // Admission publication is an infallible pointer switch. Transport
+        // cleanup reports through its own lifecycle and cannot veto commit.
+      }
+    }
+  }
 }
 
 interface AdmissionState {
   readonly active: boolean;
   readonly acquire?: () => () => void;
 }
-
-const admissionState = new WeakMap<GenerationAdmissionGate, AdmissionState>();
-const admissionOwners = new WeakMap<GenerationAdmissionGate, object>();
-const admissionActivationListeners = new WeakMap<GenerationAdmissionGate, Set<() => void>>();
-const admissionDeactivationListeners = new WeakMap<GenerationAdmissionGate, Set<() => void>>();
 
 export function createGenerationAdmissionGate(): GenerationAdmissionGate {
   return new GenerationAdmissionGate();
@@ -127,48 +176,17 @@ export function replaceGenerationAdmissions(
 ): void {
   // Validate the complete switch before changing ownership or visibility. A
   // rejected cross-Root gate must leave both generations exactly untouched.
-  for (const gate of next) assertClaimableAdmission(gate, owner);
+  for (const gate of next) admissionLifecycle.assertClaimable(gate, owner);
   for (const gate of previous) {
-    assertAdmissionOwner(gate, owner);
+    admissionLifecycle.assertOwner(gate, owner);
   }
-  for (const gate of next) admissionOwners.set(gate, owner);
+  for (const gate of next) admissionLifecycle.claim(gate, owner);
   for (const gate of previous) {
     if (next.has(gate)) continue;
-    admissionState.set(gate, { active: false });
-    for (const listener of admissionDeactivationListeners.get(gate) ?? []) {
-      try {
-        listener();
-      } catch {
-        // Admission publication is an infallible pointer switch. Transport
-        // cleanup reports through its own lifecycle and cannot veto commit.
-      }
-    }
+    admissionLifecycle.deactivate(gate);
   }
   for (const gate of next) {
-    admissionState.set(gate, { active: true, acquire: acquireNext });
-    const listeners = admissionActivationListeners.get(gate);
-    for (const listener of listeners ?? []) {
-      try {
-        listener();
-      } catch {
-        // Admission publication is an infallible pointer switch. Buffered
-        // ingress reports through its own dispatch path.
-      }
-    }
-    listeners?.clear();
-  }
-}
-
-function assertClaimableAdmission(gate: GenerationAdmissionGate, owner: object): void {
-  const current = admissionOwners.get(gate);
-  if (current && current !== owner) {
-    throw new Error('Generation admission gate belongs to another SnapshotStore');
-  }
-}
-
-function assertAdmissionOwner(gate: GenerationAdmissionGate, owner: object): void {
-  if (admissionOwners.get(gate) !== owner) {
-    throw new Error('SnapshotStore does not own generation admission gate');
+    admissionLifecycle.activate(gate, acquireNext);
   }
 }
 

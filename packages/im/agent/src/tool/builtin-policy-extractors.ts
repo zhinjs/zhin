@@ -9,7 +9,7 @@
  */
 import { expandHome } from '../discovery/utils.js';
 import type { ToolPolicyInput } from '../security/policy-facade.js';
-import { registerPolicyExtractor, type ToolPolicyInputExtractor } from './tool-runtime.js';
+import type { ToolPolicyInputExtractor, ToolPolicyInputResolver } from './tool-runtime.js';
 
 const fileReadExtractor: ToolPolicyInputExtractor = (toolName, args, commMessage) => {
   const filePathArg = String(args.file_path || args.path || '');
@@ -42,11 +42,10 @@ const dirExtractor: ToolPolicyInputExtractor = (toolName, args, commMessage) => 
   return { toolName, filePath: dirPath, commMessage };
 };
 
-const bashExtractor: ToolPolicyInputExtractor = (toolName, args, commMessage, hostPlugin) => ({
+const bashExtractor: ToolPolicyInputExtractor = (toolName, args, commMessage) => ({
   toolName: 'bash',
   command: String(args.command || ''),
   commMessage,
-  hostPlugin,
 });
 
 const webFetchExtractor: ToolPolicyInputExtractor = (toolName, _args, commMessage) => ({
@@ -59,15 +58,22 @@ const webSearchExtractor: ToolPolicyInputExtractor = (toolName, _args, commMessa
   commMessage,
 });
 
-export function registerBuiltinPolicyExtractors(): void {
-  registerPolicyExtractor('read_file', fileReadExtractor);
-  registerPolicyExtractor('analyze_media', fileReadExtractor);
-  registerPolicyExtractor('write_file', fileWriteExtractor('create'));
-  registerPolicyExtractor('edit_file', fileWriteExtractor('update'));
-  registerPolicyExtractor('glob', dirExtractor);
-  registerPolicyExtractor('grep', dirExtractor);
-  registerPolicyExtractor('list_dir', dirExtractor);
-  registerPolicyExtractor('bash', bashExtractor);
-  registerPolicyExtractor('web_fetch', webFetchExtractor);
-  registerPolicyExtractor('web_search', webSearchExtractor);
-}
+const BUILTIN_POLICY_EXTRACTORS: Readonly<Record<string, ToolPolicyInputExtractor>> = Object.freeze({
+  read_file: fileReadExtractor,
+  write_file: fileWriteExtractor('create'),
+  edit_file: fileWriteExtractor('update'),
+  glob: dirExtractor,
+  grep: dirExtractor,
+  list_dir: dirExtractor,
+  bash: bashExtractor,
+  web_fetch: webFetchExtractor,
+  web_search: webSearchExtractor,
+});
+
+export const resolveBuiltinToolPolicyInput: ToolPolicyInputResolver =
+  (toolName, args, commMessage) => {
+    const extractor = BUILTIN_POLICY_EXTRACTORS[toolName];
+    return extractor
+      ? extractor(toolName, args, commMessage)
+      : { toolName, commMessage };
+  };

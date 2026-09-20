@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { parseAgentToolDefinition } from './definition.js';
 import { ToolIndex } from './tool-index.js';
 
@@ -10,10 +10,29 @@ const toolFeature = defineFeatureProvider({
   id: toolFeatureId,
   authoring: {
     setupMethod: 'addTool',
-    conventions: [typeScriptModules({
-      id: 'tools-ts',
-      directory: 'tools',
-      recursive: false,
+    conventions: [directoryModules({
+      id: 'tool-directories',
+      layouts: [
+        {
+          segments: ['tools', capture('tool', 'identifier')],
+          localName: (values) => captured(values, 'tool'),
+        },
+        {
+          segments: ['agents', capture('agent'), 'tools', capture('tool', 'identifier')],
+          localName: (values) => `agent/${captured(values, 'agent')}/${captured(values, 'tool')}`,
+        },
+        {
+          segments: ['skills', capture('skill'), 'tools', capture('tool', 'identifier')],
+          localName: (values) => `skill/${captured(values, 'skill')}/${captured(values, 'tool')}`,
+        },
+        {
+          segments: [
+            'agents', capture('agent'), 'skills', capture('skill'),
+            'tools', capture('tool', 'identifier'),
+          ],
+          localName: (values) => `agent/${captured(values, 'agent')}/skill/${captured(values, 'skill')}/${captured(values, 'tool')}`,
+        },
+      ],
     })],
     validate: parseAgentToolDefinition,
   },

@@ -1,7 +1,8 @@
-import { asRecord, asString, fetchApi } from '../api.js';
+import { asRecord, asString } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function (args: { city: string }) {
-  const data = await fetchApi('/weather', { query: args.city });
+export default async function (client: SixtySClient, args: { city: string }) {
+  const data = await client.fetch('/weather', { query: args.city });
   const w = asRecord(data.weather);
   const aq = asRecord(data.air_quality);
   const loc = asRecord(data.location);

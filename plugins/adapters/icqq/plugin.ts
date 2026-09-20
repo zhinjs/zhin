@@ -9,7 +9,7 @@ export default definePlugin({
     displayName: 'ICQQ Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（icqq.endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（icqq endpoint list 的"运行中"数据源）
     context.resources.provide(icqqRuntimeStateToken, createEndpointRuntimeState());
     const disposePlatform = context.resources.has(permissionHostToken)
       ? context.resources.use(permissionHostToken).registerPlatform(

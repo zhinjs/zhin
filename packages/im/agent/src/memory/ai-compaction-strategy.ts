@@ -7,6 +7,7 @@ import {
   estimateAgentMessagesTokens,
   type AgentCompactionConfig,
   type Model,
+  type LlmCompletionPort,
 } from '@zhin.js/ai';
 import type { CompactionStrategy, MemoryContext } from './contracts.js';
 
@@ -14,6 +15,7 @@ export class AiCompactionStrategy implements CompactionStrategy {
   private readonly state = createAgentCompactionState();
 
   constructor(
+    private readonly transport: LlmCompletionPort,
     private readonly model: Model,
     private readonly config: AgentCompactionConfig,
   ) {}
@@ -25,6 +27,7 @@ export class AiCompactionStrategy implements CompactionStrategy {
 
   async compact(context: MemoryContext): Promise<MemoryContext> {
     const result = await autoCompactAgentMessagesIfNeeded({
+      transport: this.transport,
       model: this.model,
       messages: context.messages,
       config: this.config,

@@ -11,11 +11,10 @@ describe('diagnoseOptionalPeers', () => {
     expect(result.speech?.missingFromPackageJson).toContain('@zhin.js/speech');
   });
 
-  it('requires html-renderer when kook adapter is configured', () => {
-    const result = diagnoseOptionalPeers('/tmp', {
+  it('rejects legacy list-form plugins', () => {
+    expect(() => diagnoseOptionalPeers('/tmp', {
       plugins: ['@zhin.js/adapter-kook'],
-    }, { dependencies: {} });
-    expect(result.htmlRenderer?.required).toBe(true);
+    }, { dependencies: {} })).toThrow(/plugins must be an object keyed by Plugin instanceKey/);
   });
 
   it('requires html-renderer for new runtime plugins map with html-image adapter instanceKey', () => {
@@ -27,7 +26,7 @@ describe('diagnoseOptionalPeers', () => {
 
   it('does not require html-renderer for plugins map without html-image adapters', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      plugins: { sandbox: { endpoints: [{ name: 'sandbox-bot' }] } },
+      plugins: { sandbox: { endpoints: [{ id: 'sandbox-bot' }] } },
     }, { dependencies: {} });
     expect(result.htmlRenderer).toBeUndefined();
   });

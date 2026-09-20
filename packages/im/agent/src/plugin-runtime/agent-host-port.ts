@@ -51,12 +51,6 @@ export interface AgentHostProtocolPort {
   execute(bindingName: string, request: TurnRequest): Promise<TurnOutcome>;
 }
 
-export interface AgentHostToolSummary {
-  readonly name: string;
-  readonly description?: string;
-  readonly hidden?: boolean;
-}
-
 export interface AgentHostMcpSummary {
   readonly name: string;
   readonly connected: boolean;
@@ -65,7 +59,6 @@ export interface AgentHostMcpSummary {
 
 /** Read-only projection for Console; no concrete ZhinAgent may escape through it. */
 export interface AgentHostIntrospectionPort {
-  listTools(): readonly AgentHostToolSummary[];
   listMcpServers(): readonly AgentHostMcpSummary[];
 }
 

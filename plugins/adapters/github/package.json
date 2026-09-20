@@ -50,11 +50,14 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -99,9 +102,10 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
+    "agents",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "prompt-sections"
   ],
   "publishConfig": {
     "access": "public",
@@ -123,6 +127,18 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/agent-feature",
         "api": "^1.0.0"
       }
     ],

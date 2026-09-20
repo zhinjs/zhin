@@ -21,24 +21,6 @@ export const createMockLogger = () => ({
 });
 
 // ============================================================================
-// Plugin Mock
-// ============================================================================
-
-export const createMockPlugin = (name = 'test-plugin') => ({
-  name,
-  root: {
-    inject: vi.fn(),
-    contexts: new Map(),
-    middleware: vi.fn(),
-  },
-  logger: createMockLogger(),
-  onDispose: vi.fn(),
-  provide: vi.fn(),
-  useContext: vi.fn(),
-  addMiddleware: vi.fn(),
-});
-
-// ============================================================================
 // Message Mock
 // ============================================================================
 

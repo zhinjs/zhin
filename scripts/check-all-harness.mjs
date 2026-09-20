@@ -3,7 +3,8 @@
  * 综合 harness 检查脚本
  * 运行所有 harness 检查并生成报告
  *
- * 并行执行独立检查，按 CPU 核心数限制并发。
+ * 并行执行只读检查，按 CPU 核心数限制并发；会原地构建 workspace
+ * 产物的检查单独串行，避免测试读取半写入的 lib/ 文件。
  * 设 HARNESS_SEQUENTIAL=1 回退到串行模式（调试用）。
  */
 import { exec } from 'node:child_process';
@@ -21,6 +22,12 @@ const concurrency = sequential ? 1 : Math.min(availableParallelism(), 4);
 const HEAVY_CHECKS = new Set([
   'Unit Tests', 'Install Size (IM core)', 'Lint', 'Type Check',
   'Plugin Runtime Migration Verify', 'L4-CI (deterministic subset)', 'Stable Smoke',
+]);
+
+const EXCLUSIVE_CHECKS = new Set([
+  // check:install-size runs workspace builds before packing. Running it beside
+  // native-import tests can expose partially rewritten lib/ modules.
+  'Install Size (IM core)',
 ]);
 
 const checks = [
@@ -81,9 +88,9 @@ const checks = [
     description: '检查插件是否符合标准规范',
   },
   {
-    name: 'Plugin Agent Publish',
-    command: 'pnpm check:plugin-agent-publish',
-    description: '带 agent/ 的插件 npm 发布清单（files、prepublishOnly、peer 依赖）',
+    name: 'Plugin Capability Publish',
+    command: 'pnpm check:plugin-capability-publish',
+    description: '插件能力目录 npm 发布清单（files、prepublishOnly、peer 依赖）',
   },
   {
     name: 'Publish Repository',
@@ -93,12 +100,22 @@ const checks = [
   {
     name: 'Agent Tool Schema',
     command: 'pnpm check:agent-tool-schema',
-    description: 'agent/tools inputSchema 与 defineAgentTool/execute 类型字段一致',
+    description: 'tools inputSchema 与 defineAgentTool/execute 类型字段一致',
   },
   {
-    name: 'No Package-Root skills/',
-    command: 'pnpm check:no-package-skills',
-    description: '插件包禁止顶层 skills/，须用 agent/skills/*.md',
+    name: 'Skill Authoring Boundaries',
+    command: 'pnpm check:skill-authoring-boundaries',
+    description: 'Skill 只使用 skills/<name>/SKILL.md，并显式发布目录、依赖和挂载 Feature',
+  },
+  {
+    name: 'Agent Authoring Boundaries',
+    command: 'pnpm check:agent-authoring-boundaries',
+    description: '主 Agent 使用 AGENTS.md，子 Agent 只使用 agents/<name>/ 目录契约',
+  },
+  {
+    name: 'Hook Authoring Boundaries',
+    command: 'pnpm check:hook-authoring-boundaries',
+    description: 'Hook 只使用 hooks/<name>/index.ts，并支持 Agent 与 Skill 私有作用域',
   },
   {
     name: 'Architecture Layers',
@@ -106,9 +123,39 @@ const checks = [
     description: '检查架构层级依赖是否正确',
   },
   {
+    name: 'Domain Module Boundaries',
+    command: 'pnpm check:domain-module-boundaries',
+    description: '深模块只能经 canonical index.ts 进入，禁止恢复旧平面入口或外部深层导入',
+  },
+  {
     name: 'Adapter Endpoint Boundaries',
     command: 'pnpm check:adapter-endpoint-boundaries',
     description: '检查 Adapter definition 与 Endpoint instance 职责不混淆',
+  },
+  {
+    name: 'Runtime Config Boundaries',
+    command: 'pnpm check:runtime-config-boundaries',
+    description: '正常运行与配置路径只接受 instanceKey map；旧 plugins 数组仅供迁移和诊断读取',
+  },
+  {
+    name: 'Console Client Boundaries',
+    command: 'pnpm check:console-client-boundaries',
+    description: 'Console 路由、运行时环境与网络连接必须归属显式 ConsoleClient 实例',
+  },
+  {
+    name: 'Console Protocol Boundaries',
+    command: 'pnpm check:console-protocol-boundaries',
+    description: 'Console 只接受 dot-named RPC 与顶层 camelCase payload，不恢复兼容归一化',
+  },
+  {
+    name: '60s Runtime Boundaries',
+    command: 'pnpm check:sixty-s-runtime-boundaries',
+    description: '60s API transport 必须归属当前 Plugin owner，不使用进程级注册栈',
+  },
+  {
+    name: 'Agent Tool Authoring Boundaries',
+    command: 'pnpm check:agent-tool-authoring-boundaries',
+    description: 'Agent Tool 只使用 @zhin.js/tool 与 tools/<name>/index.ts，并显式挂载 Feature',
   },
   {
     name: 'IM Session SSOT',
@@ -116,9 +163,14 @@ const checks = [
     description: '检查 IM 场景/session 身份解析是否使用 core SSOT',
   },
   {
-    name: 'getModel Import Disambiguation',
-    command: 'pnpm check:get-model-imports',
-    description: 'agent/zhin 运行时代码须使用 getLlmTransportModel 而非歧义 getModel',
+    name: 'LLM Runtime Boundaries',
+    command: 'pnpm check:llm-runtime-boundaries',
+    description: 'agent/zhin 运行时代码须经 owner-scoped LlmApiRuntime 解析模型',
+  },
+  {
+    name: 'Speech Runtime Boundaries',
+    command: 'pnpm check:speech-runtime-boundaries',
+    description: 'Speech 实现仅由 CLI composition root 装配，并以 owner-scoped 端口注入',
   },
   {
     name: 'Legacy AI Exports',
@@ -183,7 +235,7 @@ const checks = [
   {
     name: 'Release Plan',
     command: 'pnpm check:release-plan',
-    description: '默认只允许 patch；minor/major 必须有 owner 授权记录',
+    description: '所有 Changesets 声明与最终发布计划都只允许 patch',
   },
   {
     name: 'API Surface',
@@ -211,14 +263,9 @@ const checks = [
     description: '配置文档与 DEFAULT_CONFIG 关键字段对齐',
   },
   {
-    name: 'usePlugin Top-Level',
-    command: 'pnpm check:use-plugin-top-level',
-    description: '插件 usePlugin() 须在模块顶层',
-  },
-  {
-    name: 'getPlugin Runtime',
-    command: 'pnpm check:get-plugin-runtime',
-    description: '插件目录禁止在 middleware/action 等运行时回调内 getPlugin()',
+    name: 'Removed Plugin API',
+    command: 'pnpm check:no-removed-plugin-api',
+    description: '生产源码不得调用已删除的 Plugin lookup 或 latest-generation store API',
   },
   {
     name: 'Plugin Runtime Migration Readiness',
@@ -231,8 +278,8 @@ const checks = [
     description: 'zhin.features 引用的包须出现在 peerDependencies（runtime 1.0.12+）',
   },
   {
-    name: 'Rich Segment Adapters',
-    command: 'pnpm check:rich-segments',
+    name: 'Outbound Media Policies',
+    command: 'pnpm check:outbound-media-policies',
     description: '各 adapter 在 adapters/*.ts 声明 segments.outboundMedia（或豁免）',
   },
   {
@@ -328,13 +375,17 @@ async function main() {
     console.log('HARNESS_SKIP_TEST=1 — skipping Unit Tests (expect a separate coverage/test job)\n');
   }
 
-  const heavy = checks.filter((c) => HEAVY_CHECKS.has(c.name));
+  const exclusive = checks.filter((c) => EXCLUSIVE_CHECKS.has(c.name));
+  const heavy = checks.filter((c) => (
+    HEAVY_CHECKS.has(c.name) && !EXCLUSIVE_CHECKS.has(c.name)
+  ));
   const light = checks.filter((c) => !HEAVY_CHECKS.has(c.name));
 
   const mode = sequential ? 'sequential' : `parallel (concurrency=${concurrency})`;
   console.log(`Running ${checks.length} harness checks [${mode}]...`);
   console.log(`  Phase 1: ${light.length} lightweight checks`);
-  console.log(`  Phase 2: ${heavy.length} heavyweight checks\n`);
+  console.log(`  Phase 2: ${heavy.length} parallel-safe heavyweight checks`);
+  console.log(`  Phase 3: ${exclusive.length} exclusive workspace build checks\n`);
 
   const totalStart = performance.now();
 
@@ -344,7 +395,10 @@ async function main() {
   console.log('\n── Phase 2: heavyweight ──');
   const heavyResults = await runPool(heavy, Math.min(concurrency, 2));
 
-  const results = [...lightResults, ...heavyResults];
+  console.log('\n── Phase 3: exclusive workspace builds ──');
+  const exclusiveResults = await runPool(exclusive, 1);
+
+  const results = [...lightResults, ...heavyResults, ...exclusiveResults];
   const totalElapsed = ((performance.now() - totalStart) / 1000).toFixed(1);
   const cpuTotal = results.reduce((s, r) => s + parseFloat(r.elapsed), 0).toFixed(1);
   const allPassed = results.every((r) => r.status === 'PASSED');

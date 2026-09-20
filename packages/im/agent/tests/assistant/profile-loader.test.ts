@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import {
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
-  syncProfileCronRoutinesToStore,
+  syncProfileRoutinesToStore,
   pruneStaleProfileCronJobs,
   validateAssistantProfile,
 } from '../../src/assistant/profile-loader.js';
@@ -60,7 +60,7 @@ agents: |
     }
   });
 
-  it('syncProfileCronRoutinesToStore 写入早报与睡前巡检', async () => {
+  it('syncProfileRoutinesToStore 写入早报与睡前巡检', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-cron-'));
     try {
       const store = new ScheduleJobStore({ dataDir: dir });
@@ -76,7 +76,7 @@ agents: |
           },
         },
       };
-      const count = await syncProfileCronRoutinesToStore(store, {
+      const count = await syncProfileRoutinesToStore(store, {
         version: 1,
         defaults: { notify: imDefaults },
         routines: {
@@ -94,7 +94,7 @@ agents: |
     }
   });
 
-  it('syncProfileCronRoutinesToStore 同步 weatherReport 等扩展 routine', async () => {
+  it('syncProfileRoutinesToStore 同步 weatherReport 等扩展 routine', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-profile-weather-'));
     try {
       const store = new ScheduleJobStore({ dataDir: dir });
@@ -110,7 +110,7 @@ agents: |
           },
         },
       };
-      const count = await syncProfileCronRoutinesToStore(store, {
+      const count = await syncProfileRoutinesToStore(store, {
         version: 1,
         defaults: { notify: imDefaults },
         routines: {

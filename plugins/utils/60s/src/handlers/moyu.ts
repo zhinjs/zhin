@@ -1,7 +1,8 @@
-import { asArray, asRecord, asString, fetchApi, type ApiPayload } from '../api.js';
+import { asArray, asRecord, asString, type ApiPayload } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function () {
-  const data = await fetchApi<ApiPayload | string>('/moyu');
+export default async function (client: SixtySClient) {
+  const data = await client.fetch<ApiPayload | string>('/moyu');
   if (typeof data === 'string') return `🐟 摸鱼日历\n\n${data}`;
   const lines = ['🐟 摸鱼日历', ''];
   const date = asRecord(data.date);

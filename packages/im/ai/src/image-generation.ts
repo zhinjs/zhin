@@ -79,9 +79,12 @@ export function hasGenerateImage(
 
 const MAX_IMAGE_FETCH_BYTES = 26_214_400;
 
-export async function fetchImageUrlAsBase64(url: string): Promise<{ base64: string; mimeType: string } | null> {
+export async function fetchImageUrlAsBase64(
+  url: string,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
+): Promise<{ base64: string; mimeType: string } | null> {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(60_000) });
+    const res = await fetchFn(url, { signal: AbortSignal.timeout(60_000) });
     if (!res.ok) return null;
     const buf = Buffer.from(await res.arrayBuffer());
     if (buf.length > MAX_IMAGE_FETCH_BYTES) return null;
@@ -110,6 +113,7 @@ export async function resolveOpenAIImagesGenerationItem(
   item: OpenAIImagesGenerationItem | undefined,
   model: string,
   errorLabel = 'Image generation',
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<ImageGenerateResult> {
   if (!item) {
     throw new Error(`${errorLabel} returned no data`);
@@ -121,7 +125,7 @@ export async function resolveOpenAIImagesGenerationItem(
   if (item.b64_json) {
     base64 = item.b64_json;
   } else if (item.url) {
-    const fetched = await fetchImageUrlAsBase64(item.url);
+    const fetched = await fetchImageUrlAsBase64(item.url, fetchFn);
     if (!fetched) {
       throw new Error(`Failed to fetch generated image from URL: ${item.url}`);
     }

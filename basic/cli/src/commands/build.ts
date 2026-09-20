@@ -41,7 +41,7 @@ export const buildCommand = new Command("build")
           }
           if (!shouldUseSmartBuildInCwd(cwd)) {
             logger.error(
-              "--watch 仅适用于插件包或带 client 的 zhin 应用根目录（需含 plugin.yml、zhin.js-* 包名或 zhin.js 依赖 + src + client）",
+              "--watch 仅适用于显式声明 package.json#zhin 的插件包，或依赖 zhin.js 且含 src/client 的应用根目录",
             );
             process.exit(1);
           }
@@ -78,7 +78,7 @@ export const buildCommand = new Command("build")
             "当前目录不是 Zhin workspace 根（需存在 pnpm-workspace.yaml，且 package.json 的 dependencies / devDependencies / peerDependencies 之一声明 zhin.js），且也不满足插件/应用智能构建条件。",
           );
           logger.log(
-            "若要在 monorepo 根执行 zhin build：请在根 package.json 声明 zhin.js。若你在开发独立插件：请在插件根目录执行，并确保存在 plugin.yml 或包名为 zhin.js-* / @zhin.js/adapter-* 等。",
+            "若要在 monorepo 根执行 zhin build：请在根 package.json 声明 zhin.js。若你在开发独立插件：请在插件根目录执行，并显式声明 package.json#zhin。",
           );
           process.exit(1);
         }

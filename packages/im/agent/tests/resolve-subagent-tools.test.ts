@@ -19,9 +19,8 @@ describe('resolveSubagentAgentTools', () => {
     makeTool('write_file'),
     makeTool('bash'),
     makeTool('generate_image', ['画', 'draw', 'image', 'picture']),
-    makeTool('analyze_media', ['vision', 'image', '识图']),
+    makeTool('knowledge_search', ['knowledge', '文档', 'FAQ']),
     makeTool('spawn_task'),
-    makeTool('tool_search'),
     makeTool('unlisted_sensitive_tool'),
   ];
 
@@ -35,7 +34,6 @@ describe('resolveSubagentAgentTools', () => {
     const names = tools.map(t => t.name);
     expect(names).toContain('generate_image');
     expect(names).not.toContain('spawn_task');
-    expect(names).not.toContain('tool_search');
     expect(names).not.toContain('unlisted_sensitive_tool');
   });
 
@@ -79,6 +77,26 @@ describe('resolveSubagentAgentTools', () => {
     expect(tools.map(tool => tool.name)).toEqual(['read_file']);
   });
 
+  it('admits direct Agent-private Tools without bypassing Skill activation', () => {
+    const tools = resolveSubagentAgentTools({
+      allTools: [
+        ...catalog,
+        makeTool('plugin__agent__reviewer__inspect'),
+        makeTool('plugin__agent__reviewer__skill__audit__report'),
+        makeTool('plugin__agent__writer__publish'),
+      ],
+      task: 'review',
+      role: 'reviewer',
+      config: DEFAULT_CONFIG,
+      agentMeta: { name: 'reviewer', description: 'review', filePath: '/agents/reviewer' },
+    });
+
+    expect(tools.map((tool) => tool.name)).toContain('plugin__agent__reviewer__inspect');
+    expect(tools.map((tool) => tool.name))
+      .not.toContain('plugin__agent__reviewer__skill__audit__report');
+    expect(tools.map((tool) => tool.name)).not.toContain('plugin__agent__writer__publish');
+  });
+
   it('任务含 generate_image 时优先载入该工具', () => {
     const tools = resolveSubagentAgentTools({
       allTools: catalog,
@@ -87,6 +105,16 @@ describe('resolveSubagentAgentTools', () => {
       config: { ...DEFAULT_CONFIG, deferredToolMaxResults: 1 },
     });
     expect(tools.map(t => t.name)).toContain('generate_image');
+  });
+
+  it('configured project knowledge is available to matching subagent tasks', () => {
+    const tools = resolveSubagentAgentTools({
+      allTools: catalog,
+      task: '从项目 FAQ 文档查询退款政策',
+      role: 'researcher',
+      config: { ...DEFAULT_CONFIG, deferredToolMaxResults: 1 },
+    });
+    expect(tools.map((tool) => tool.name)).toContain('knowledge_search');
   });
 
   it('spawn_task 声明工具时仅暴露父会话已 load 的项 + load_tool/load_skill', () => {

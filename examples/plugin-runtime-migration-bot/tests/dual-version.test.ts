@@ -1,22 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
-import nextHello from '../commands/hello/[name].js';
-import statusCard from '../components/status-card.js';
-import { legacyHello } from '../legacy/hello.js';
-import audit from '../middlewares/audit.js';
+import nextHello from '../commands/hello/[name]/index.js';
+import statusCard from '../components/status-card/index.js';
+import audit from '../middlewares/audit/index.js';
 
-describe('dual-version migration tracer', () => {
-  it('preserves command callback behavior across the compatibility boundary', async () => {
+describe('Plugin Runtime migration result', () => {
+  it('executes the migrated command definition', async () => {
     const message = {
       $content: [{ type: 'text', data: { text: 'hello Alice' } }],
     };
-    const legacyResult = await legacyHello.handle(message as never, {} as never);
     const nextResult = await nextHello.execute({
       input: message,
       args: [],
       params: { name: 'Alice' },
     } as never);
 
-    expect(nextResult).toBe(legacyResult);
     expect(nextResult).toBe('hello Alice');
   });
 

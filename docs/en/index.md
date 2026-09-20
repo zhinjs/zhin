@@ -60,7 +60,7 @@ Open [console.zhin.dev](https://console.zhin.dev) →
 Sandbox → `/hello`.
 
 Want convention directories instead? Default-export the same
-`defineCommand(...)` from `commands/hello.ts` — see [minimal-bot](/en/examples/#minimal-bot-stable-minimal-path).
+`defineCommand(...)` from `commands/hello/index.ts` — see [minimal-bot](/en/examples/#minimal-bot-stable-minimal-path).
 
 </template>
 

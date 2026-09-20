@@ -11,7 +11,6 @@ import {
   type ImageGenerateResult,
   fetchImageUrlAsBase64,
 } from '../image-generation.js';
-import { resolveProxyFetch } from './proxy-fetch.js';
 
 const MINIMAX_IMAGE_API = 'https://api.minimaxi.com/v1/image_generation';
 
@@ -29,6 +28,7 @@ export async function generateMiniMaxImage(
   config: ProviderInstanceConfig,
   request: ImageGenerateRequest,
   defaults: { defaultModel?: string; aspectRatio?: string; promptSuffix?: string } = {},
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<ImageGenerateResult> {
   const apiKey = config.apiKey?.trim();
   if (!apiKey) {
@@ -67,8 +67,7 @@ export async function generateMiniMaxImage(
   // config.baseUrl is the LM endpoint (Anthropic-compatible); image API is always at api.minimaxi.com
   const url = MINIMAX_IMAGE_API;
 
-  const proxyFetch = resolveProxyFetch();
-  const res = await (proxyFetch ?? fetch)(url, {
+  const res = await fetchFn(url, {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
@@ -94,7 +93,7 @@ export async function generateMiniMaxImage(
 
   const urlList = json.data?.image_urls;
   if (urlList && urlList.length > 0 && urlList[0]) {
-    const fetched = await fetchImageUrlAsBase64(urlList[0]);
+    const fetched = await fetchImageUrlAsBase64(urlList[0], fetchFn);
     if (!fetched) {
       throw new Error(`Failed to fetch MiniMax generated image from URL`);
     }

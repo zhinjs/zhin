@@ -5,23 +5,18 @@
 
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef } from '@zhin.js/core';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('line');
 
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface LineAdapterConfig {
-  readonly id?: string;
-  readonly channelSecret?: string;
-  readonly channelAccessToken?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface LineEndpointConfig {
+  readonly id: string;
+  readonly channelSecret: string;
+  readonly channelAccessToken: string;
   readonly webhookPath?: string;
   readonly apiBaseUrl?: string;
-  /** Transitional: legacy root `endpoints[]` with `context: line`. */
-  readonly endpoints?: ReadonlyArray<Partial<ResolvedLineConfig> & {
-    readonly context?: string;
-  }>;
 }
 
 export interface ResolvedLineConfig {
@@ -161,27 +156,15 @@ export interface LineChannel {
   readonly channelId: string;
 }
 
-export function resolveLineConfig(config: LineAdapterConfig = {}): ResolvedLineConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'line');
-  const channelSecret = config.channelSecret
-    ?? entry?.channelSecret
-    ?? process.env.LINE_CHANNEL_SECRET;
-  const channelAccessToken = config.channelAccessToken
-    ?? entry?.channelAccessToken
-    ?? process.env.LINE_CHANNEL_ACCESS_TOKEN;
-  if (!channelSecret || !channelAccessToken) {
-    throw new TypeError(
-      'LINE adapter requires channelSecret + channelAccessToken (plugins.<key> or endpoints with context: line)',
-    );
-  }
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.LINE_BOT_NAME
-    || 'line-bot';
-  const webhookPath = normalizeWebhookPath(
-    config.webhookPath ?? entry?.webhookPath ?? '/line/webhook',
+export function resolveLineConfig(config: LineEndpointConfig): ResolvedLineConfig {
+  const id = requiredEndpointField(config.id, 'id');
+  const channelSecret = requiredEndpointField(config.channelSecret, 'channelSecret');
+  const channelAccessToken = requiredEndpointField(
+    config.channelAccessToken,
+    'channelAccessToken',
   );
-  const apiBaseUrl = (config.apiBaseUrl ?? entry?.apiBaseUrl ?? 'https://api.line.me').replace(/\/$/, '');
+  const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/line/webhook');
+  const apiBaseUrl = (config.apiBaseUrl ?? 'https://api.line.me').replace(/\/$/, '');
   return {
     context: 'line',
     id,
@@ -190,6 +173,16 @@ export function resolveLineConfig(config: LineAdapterConfig = {}): ResolvedLineC
     webhookPath,
     apiBaseUrl,
   };
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'channelSecret' | 'channelAccessToken',
+): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new TypeError(`LINE endpoint requires a non-empty ${field}`);
+  }
+  return value.trim();
 }
 
 export function normalizeWebhookPath(path: string): string {

@@ -10,7 +10,7 @@ import {
   MemoryWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
   WorkroomSequenceConflictError,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import type {
   WorkroomAcceptanceContractPinInput,
   WorkroomAcceptanceDecision,
