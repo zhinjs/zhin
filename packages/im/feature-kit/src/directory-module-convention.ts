@@ -21,6 +21,7 @@ export interface DirectoryModuleLayout {
 export interface DirectoryModulesOptions {
   readonly id: string;
   readonly layouts: readonly DirectoryModuleLayout[];
+  readonly extensions?: readonly ('ts' | 'tsx' | 'js' | 'mjs' | 'cjs')[];
 }
 
 /** Discovers `<name>/index.ts` modules from explicit, optionally captured layouts. */
@@ -29,7 +30,7 @@ export function directoryModules(options: DirectoryModulesOptions): SourceConven
     id: options.id,
     async *discover(context) {
       for (const layout of options.layouts) {
-        yield* discoverLayout(context, layout, context.packageRoot, 0, {});
+        yield* discoverLayout(context, layout, context.packageRoot, 0, {}, options.extensions);
       }
     },
     async load(source, context) {
@@ -47,16 +48,31 @@ export function capture(
   return Object.freeze({ capture: captureName, naming });
 }
 
+/** Reads a capture guaranteed by the matching layout and fails on an invalid custom layout. */
+export function captured(
+  captures: Readonly<Record<string, string>>,
+  name: string,
+): string {
+  const value = captures[name];
+  if (value === undefined) throw new TypeError(`Directory layout did not capture ${name}`);
+  return value;
+}
+
 async function* discoverLayout(
   context: DiscoveryContext,
   layout: DirectoryModuleLayout,
   directory: string,
   offset: number,
   captures: Readonly<Record<string, string>>,
+  extensions?: DirectoryModulesOptions['extensions'],
 ): AsyncIterable<DiscoveredSource> {
   if (offset === layout.segments.length) {
     const entries = await context.host.list(directory);
-    const source = preferredIndex(entries, context.packageRoot.split(sep).includes('node_modules'));
+    const source = preferredIndex(
+      entries,
+      context.packageRoot.split(sep).includes('node_modules'),
+      extensions,
+    );
     if (!source) return;
     yield Object.freeze({
       localName: layout.localName(captures),
@@ -70,7 +86,7 @@ async function* discoverLayout(
   }
   const segment = layout.segments[offset]!;
   if (typeof segment === 'string') {
-    yield* discoverLayout(context, layout, join(directory, segment), offset + 1, captures);
+    yield* discoverLayout(context, layout, join(directory, segment), offset + 1, captures, extensions);
     return;
   }
   const entries = [...await context.host.list(directory)]
@@ -80,13 +96,20 @@ async function* discoverLayout(
     yield* discoverLayout(context, layout, join(directory, entry.name), offset + 1, {
       ...captures,
       [segment.capture]: entry.name,
-    });
+    }, extensions);
   }
 }
 
-function preferredIndex(entries: readonly DirectoryEntry[], preferJavaScript: boolean): string | undefined {
+function preferredIndex(
+  entries: readonly DirectoryEntry[],
+  preferJavaScript: boolean,
+  accepted: DirectoryModulesOptions['extensions'] = ['ts', 'js', 'mjs', 'cjs'],
+): string | undefined {
   const files = new Set(entries.filter((entry) => entry.kind === 'file').map((entry) => entry.name));
-  const extensions = preferJavaScript ? ['js', 'mjs', 'cjs', 'ts'] : ['ts', 'js', 'mjs', 'cjs'];
+  const ranked = preferJavaScript
+    ? ['js', 'mjs', 'cjs', 'ts', 'tsx']
+    : ['ts', 'tsx', 'js', 'mjs', 'cjs'];
+  const extensions = ranked.filter((extension) => accepted.includes(extension as never));
   return extensions.map((extension) => `index.${extension}`).find((name) => files.has(name));
 }
 

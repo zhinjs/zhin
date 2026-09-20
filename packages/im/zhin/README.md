@@ -118,7 +118,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/$[name].ts — 路径即路由，类型在 params 中声明
+// commands/hello/[name]/index.ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({

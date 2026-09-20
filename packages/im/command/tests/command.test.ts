@@ -42,7 +42,7 @@ function slotFor(owner: TestPluginId, localName: string, result = 'ok') {
     owner,
     feature: commandFeatureId,
     localName,
-    source: `/commands/${localName}.ts`,
+    source: `/commands/${localName}/index.ts`,
     definition: defineCommand({ execute: () => result }),
   });
 }
@@ -94,7 +94,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'hello',
-      source: '/commands/$hello.ts',
+      source: '/commands/hello/index.ts',
       definition: command,
     });
     const snapshot = {
@@ -143,7 +143,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'who',
-      source: '/commands/$who.ts',
+      source: '/commands/who/index.ts',
       definition: command,
     });
     const snapshot = {
@@ -211,7 +211,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'client-id',
-      source: '/commands/$client-id.ts',
+      source: '/commands/client-id/index.ts',
       definition,
     });
     const index = new CommandIndex([slot], snapshotWithOwners([owner], [slot]));
@@ -231,15 +231,16 @@ describe('Command Feature', () => {
 
   it('discovers nested files as hierarchical command words', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/gh/issue/$list.ts';
+    const source = '/project/commands/gh/issue/list/index.ts';
     const command = defineCommand({ execute: ({ args }) => `issues:${args.join(',')}` });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'gh', kind: 'directory' }],
       '/project/commands/gh': [{ name: 'issue', kind: 'directory' }],
       '/project/commands/gh/issue': [
-        { name: '$list.ts', kind: 'file' },
+        { name: 'list', kind: 'directory' },
         { name: 'helper.ts', kind: 'file' },
       ],
+      '/project/commands/gh/issue/list': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -277,16 +278,17 @@ describe('Command Feature', () => {
   it('prefers compiled command files for installed npm packages', async () => {
     const owner = rootPluginId();
     const root = '/project/node_modules/@test/plugin';
-    const source = `${root}/commands/gh/$[issue].js`;
+    const source = `${root}/commands/gh/[issue]/index.js`;
     const command = defineCommand({
       params: { issue: { type: 'number' } },
       execute: ({ params }) => params.issue,
     });
     const host = new MemoryDiscoveryHost({
       [`${root}/commands`]: [{ name: 'gh', kind: 'directory' }],
-      [`${root}/commands/gh`]: [
-        { name: '$[issue].js', kind: 'file' },
-        { name: '$[issue].ts', kind: 'file' },
+      [`${root}/commands/gh`]: [{ name: '[issue]', kind: 'directory' }],
+      [`${root}/commands/gh/[issue]`]: [
+        { name: 'index.js', kind: 'file' },
+        { name: 'index.ts', kind: 'file' },
       ],
     }, new Map([[source, { default: command }]]));
 
@@ -308,7 +310,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'gh/issue/list',
-      source: '/commands/gh/issue/$list.ts',
+      source: '/commands/gh/issue/list/index.ts',
       definition: defineCommand<{}, string, { sender: string }>({
         execute: ({ args, input }) => `${input.sender?.id}:${args.join(',')}`,
       }),
@@ -328,7 +330,7 @@ describe('Command Feature', () => {
 
   it('compiles optional filename parameters and applies defaults from params', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/gh/pr/$[[title]].ts';
+    const source = '/project/commands/gh/pr/[[title]]/index.ts';
     const command = defineCommand({
       params: { title: { type: 'string', default: 'defaultTitle' } },
       execute: ({ params }) => `${typeof params.title}:${params.title}`,
@@ -336,10 +338,8 @@ describe('Command Feature', () => {
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'gh', kind: 'directory' }],
       '/project/commands/gh': [{ name: 'pr', kind: 'directory' }],
-      '/project/commands/gh/pr': [{
-        name: '$[[title]].ts',
-        kind: 'file',
-      }],
+      '/project/commands/gh/pr': [{ name: '[[title]]', kind: 'directory' }],
+      '/project/commands/gh/pr/[[title]]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -374,7 +374,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'gh/issue/$issue',
-      source: '/commands/gh/issue/$[issue].ts',
+      source: '/commands/gh/issue/[issue]/index.ts',
       definition: {
         ...definition,
         $parameter: { name: 'issue', type: 'number' } as const,
@@ -396,14 +396,14 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'gh/pr/list',
-      source: '/commands/gh/pr/$list.ts',
+      source: '/commands/gh/pr/list/index.ts',
       definition: defineCommand({ execute: () => 'literal' }),
     });
     const dynamic = createCapabilitySlot({
       owner,
       feature: commandFeatureId,
       localName: 'gh/pr/$title',
-      source: '/commands/gh/pr/$[title].ts',
+      source: '/commands/gh/pr/[title]/index.ts',
       definition: {
         ...defineCommand({ execute: ({ params }) => `dynamic:${params.title}` }),
         $parameter: { name: 'title', type: 'string' } as const,
@@ -421,7 +421,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: `gh/pr/$${name}`,
-      source: `/commands/gh/pr/$[${name}].ts`,
+      source: `/commands/gh/pr/[${name}]/index.ts`,
       definition: {
         ...defineCommand({ execute() {} }),
         $parameter: { name, type },
@@ -443,7 +443,7 @@ describe('Command Feature', () => {
       owner: qq,
       feature: commandFeatureId,
       localName: 'endpoint/list',
-      source: '/commands/endpoint/$list.ts',
+      source: '/commands/endpoint/list/index.ts',
       definition: defineCommand({
         alias: ['ep', 'e l'],
         execute: ({ args }) => `list:${args.join(',')}`,
@@ -473,7 +473,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'bugs/$id',
-      source: '/commands/bugs/$[id].ts',
+      source: '/commands/bugs/[id]/index.ts',
       definition: {
         ...defineCommand({
           alias: ['gh issue'],
@@ -498,14 +498,14 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'alpha',
-      source: '/commands/$alpha.ts',
+      source: '/commands/alpha/index.ts',
       definition: defineCommand({ alias: ['b'], execute: () => 'short' }),
     });
     const longer = createCapabilitySlot({
       owner,
       feature: commandFeatureId,
       localName: 'beta',
-      source: '/commands/$beta.ts',
+      source: '/commands/beta/index.ts',
       definition: defineCommand({ alias: ['b list'], execute: () => 'long' }),
     });
     const index = new CommandIndex([short, longer], snapshotFor(owner, [short, longer]));
@@ -520,7 +520,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'bugs/$id',
-      source: '/commands/bugs/$[id].ts',
+      source: '/commands/bugs/[id]/index.ts',
       definition: {
         ...defineCommand({
           shortcut: { '开虫': { id: 9 } },
@@ -535,7 +535,7 @@ describe('Command Feature', () => {
       owner: child,
       feature: commandFeatureId,
       localName: 'ping',
-      source: '/remind/commands/$ping.ts',
+      source: '/remind/commands/ping/index.ts',
       definition: defineCommand({
         shortcut: { '叮': {} },
         execute: () => 'pong',
@@ -564,7 +564,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'profile',
-      source: '/commands/$profile.ts',
+      source: '/commands/profile/index.ts',
       definition: defineCommand({
         shortcut: {
           '查看我的信息': {
@@ -609,7 +609,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'whoami',
-      source: '/commands/$whoami.ts',
+      source: '/commands/whoami/index.ts',
       definition: defineCommand({
         shortcut: {
           '我是谁': {
@@ -668,7 +668,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'secret',
-      source: '/commands/$secret.ts',
+      source: '/commands/secret/index.ts',
       definition: defineCommand({
         permit: ['adapter(icqq)', 'role(master)'],
         execute: () => 'ok',
@@ -719,14 +719,14 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'zan',
-      source: '/commands/$zan.ts',
+      source: '/commands/zan/index.ts',
       definition: defineCommand({ execute: () => 'a' }),
     });
     const aliasClash = createCapabilitySlot({
       owner,
       feature: commandFeatureId,
       localName: 'other',
-      source: '/commands/$other.ts',
+      source: '/commands/other/index.ts',
       definition: defineCommand({ alias: ['zan'], execute: () => 'b' }),
     });
     expect(() => new CommandIndex(
@@ -738,7 +738,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'hello',
-      source: '/commands/$hello.ts',
+      source: '/commands/hello/index.ts',
       definition: defineCommand({
         shortcut: { zan: {} },
         execute: () => 'c',
@@ -754,7 +754,7 @@ describe('Command Feature', () => {
         owner,
         feature: commandFeatureId,
         localName: 'bugs/$id',
-        source: '/commands/bugs/$[id].ts',
+        source: '/commands/bugs/[id]/index.ts',
         definition: {
           ...defineCommand({
             shortcut: { go: { nope: 1 } },
@@ -771,7 +771,7 @@ describe('Command Feature', () => {
   it('rejects legacy typed filenames during discovery', async () => {
     const owner = rootPluginId();
     const host = new MemoryDiscoveryHost({
-      '/project/commands': [{ name: '$[count:number].ts', kind: 'file' }],
+      '/project/commands': [{ name: '[count:number]', kind: 'directory' }],
     }, new Map());
 
     await expect(new FeatureDiscovery(host).discover(commandFeature, [{
@@ -781,19 +781,20 @@ describe('Command Feature', () => {
     await expect(new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
       packageRoot: '/project',
-    }])).rejects.toThrow('Invalid Command path [count:number].ts');
+    }])).rejects.toThrow('Invalid Command path [count:number]');
   });
 
   it('discovers structured parameter files via params declarations', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/upload/$[asset].ts';
+    const source = '/project/commands/upload/[asset]/index.ts';
     const command = defineCommand({
       params: { asset: { type: 'image' } },
       execute: ({ params }) => params.asset,
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'upload', kind: 'directory' }],
-      '/project/commands/upload': [{ name: '$[asset].ts', kind: 'file' }],
+      '/project/commands/upload': [{ name: '[asset]', kind: 'directory' }],
+      '/project/commands/upload/[asset]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
 
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
@@ -815,14 +816,14 @@ describe('Command Feature', () => {
       owner: root,
       feature: commandFeatureId,
       localName: 'child/status',
-      source: '/commands/child/$status.ts',
+      source: '/commands/child/status/index.ts',
       definition: defineCommand({ execute: () => 'root' }),
     });
     const childSlot = createCapabilitySlot({
       owner: child,
       feature: commandFeatureId,
       localName: 'status',
-      source: '/plugins/child/commands/$status.ts',
+      source: '/plugins/child/commands/status/index.ts',
       definition: defineCommand({ execute: () => 'child' }),
     });
     const snapshot = snapshotWithOwners([child], [rootSlot, childSlot]);
@@ -853,13 +854,45 @@ describe('Command Feature', () => {
     )).toThrow(/Duplicate Command route "status"/);
   });
 
+  it('uses only an explicitly configured plugin commandNamespace', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const rootSlot = slotFor(root, 'status', 'root');
+    const childSlot = createCapabilitySlot({
+      owner: child,
+      feature: commandFeatureId,
+      localName: 'status',
+      source: '/plugins/child/commands/status/index.ts',
+      definition: defineCommand({
+        alias: ['state'],
+        shortcut: { '状态': {} },
+        execute: () => 'child',
+      }),
+    });
+    const base = snapshotWithOwners([child], [rootSlot, childSlot]);
+    const snapshot: RuntimeSnapshot = {
+      ...base,
+      config: new Map([
+        [root, {}],
+        [child, { commandNamespace: 'child admin' }],
+      ]),
+    };
+    const index = new CommandIndex([rootSlot, childSlot], snapshot);
+
+    await expect(index.dispatch('status')).resolves.toMatchObject({ value: 'root' });
+    await expect(index.dispatch('child admin status')).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch('child admin state')).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch('child admin 状态')).resolves.toMatchObject({ value: 'child' });
+    await expect(index.dispatch('child status')).resolves.toEqual({ matched: false });
+  });
+
   it('dispatches Unicode command names (e.g. Chinese 赞我)', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
       feature: commandFeatureId,
       localName: '赞我',
-      source: '/commands/$赞我.ts',
+      source: '/commands/赞我/index.ts',
       definition: defineCommand({ execute: ({ args }) => `liked:${args[0] ?? 'self'}` }),
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
@@ -880,7 +913,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: '$delay',
-      source: '/commands/$[delay].ts',
+      source: '/commands/[delay]/index.ts',
       definition: {
         ...defineCommand({ execute: ({ params }) => `wait:${params.delay}` }),
         $parameter: { name: 'delay', type: 'number' } as const,
@@ -902,7 +935,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'gh/pr/$title',
-      source: '/commands/gh/pr/$[[title]].ts',
+      source: '/commands/gh/pr/[[title]]/index.ts',
       definition: {
         ...defineCommand({ execute: ({ params }) => `pr:${params.title}` }),
         $parameter: { name: 'title', type: 'string', defaultValue: 'defaultTitle' } as const,
@@ -921,7 +954,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'foo/$value',
-      source: '/commands/foo/$[value].ts',
+      source: '/commands/foo/[value]/index.ts',
       definition: {
         ...defineCommand({ execute: ({ params }) => `generic:${params.value}` }),
         $parameter: { name: 'value', type: 'string' } as const,
@@ -931,7 +964,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'foo/bar/$value',
-      source: '/commands/foo/bar/$[[value]].ts',
+      source: '/commands/foo/bar/[[value]]/index.ts',
       definition: {
         ...defineCommand({ execute: ({ params }) => `specific:${params.value}` }),
         $parameter: { name: 'value', type: 'string', defaultValue: 'fallback' } as const,
@@ -955,7 +988,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName: 'upload/$asset',
-      source: '/commands/upload/$[asset].ts',
+      source: '/commands/upload/[asset]/index.ts',
       definition: {
         ...defineCommand({
           execute: ({ params, args, segments }) => ({
@@ -991,14 +1024,15 @@ describe('Command Feature', () => {
 
   it('matches required catch-all [...slug] as string[] and ignores zero-segment input', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/files/$[...slug].ts';
+    const source = '/project/commands/files/[...slug]/index.ts';
     const command = defineCommand({
       params: { slug: { type: 'text' } },
       execute: ({ params }) => params.slug,
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'files', kind: 'directory' }],
-      '/project/commands/files': [{ name: '$[...slug].ts', kind: 'file' }],
+      '/project/commands/files': [{ name: '[...slug]', kind: 'directory' }],
+      '/project/commands/files/[...slug]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -1028,14 +1062,15 @@ describe('Command Feature', () => {
 
   it('matches optional catch-all [[...slug]] with zero segments as an empty array', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/files/$[[...slug]].ts';
+    const source = '/project/commands/files/[[...slug]]/index.ts';
     const command = defineCommand({
       params: { slug: { type: 'text', default: [] } },
       execute: ({ params }) => params.slug,
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'files', kind: 'directory' }],
-      '/project/commands/files': [{ name: '$[[...slug]].ts', kind: 'file' }],
+      '/project/commands/files': [{ name: '[[...slug]]', kind: 'directory' }],
+      '/project/commands/files/[[...slug]]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -1061,14 +1096,15 @@ describe('Command Feature', () => {
 
   it('splits word-typed catch-all [...slug] per word', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/files/$[...slug].ts';
+    const source = '/project/commands/files/[...slug]/index.ts';
     const command = defineCommand({
       params: { slug: { type: 'word' } },
       execute: ({ params }) => params.slug,
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'files', kind: 'directory' }],
-      '/project/commands/files': [{ name: '$[...slug].ts', kind: 'file' }],
+      '/project/commands/files': [{ name: '[...slug]', kind: 'directory' }],
+      '/project/commands/files/[...slug]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -1084,14 +1120,15 @@ describe('Command Feature', () => {
 
   it('casts number-typed catch-all per word and rejects non-numeric input', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/sum/$[...nums].ts';
+    const source = '/project/commands/sum/[...nums]/index.ts';
     const command = defineCommand({
       params: { nums: { type: 'number' } },
       execute: ({ params }) => params.nums,
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'sum', kind: 'directory' }],
-      '/project/commands/sum': [{ name: '$[...nums].ts', kind: 'file' }],
+      '/project/commands/sum': [{ name: '[...nums]', kind: 'directory' }],
+      '/project/commands/sum/[...nums]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -1107,7 +1144,7 @@ describe('Command Feature', () => {
 
   it('matches optional [[name]] without default as undefined when omitted', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/gh/pr/$[[title]].ts';
+    const source = '/project/commands/gh/pr/[[title]]/index.ts';
     const command = defineCommand({
       params: { title: { type: 'text' } },
       execute: ({ params }) => `title:${String(params.title)}`,
@@ -1115,7 +1152,8 @@ describe('Command Feature', () => {
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'gh', kind: 'directory' }],
       '/project/commands/gh': [{ name: 'pr', kind: 'directory' }],
-      '/project/commands/gh/pr': [{ name: '$[[title]].ts', kind: 'file' }],
+      '/project/commands/gh/pr': [{ name: '[[title]]', kind: 'directory' }],
+      '/project/commands/gh/pr/[[title]]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
     const slots = await new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
@@ -1143,7 +1181,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName,
-      source: `/commands/${localName.replace('$', '')}.ts`,
+      source: `/commands/${localName.replace('$', '[param]')}/index.ts`,
       definition: {
         ...defineCommand({ execute: () => 'ok' }),
         $parameter: parameter,
@@ -1167,11 +1205,12 @@ describe('Command Feature', () => {
 
   it('rejects dynamic filenames missing a matching params declaration', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/search/$[query].ts';
+    const source = '/project/commands/search/[query]/index.ts';
     const command = defineCommand({ execute: () => 'ok' });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'search', kind: 'directory' }],
-      '/project/commands/search': [{ name: '$[query].ts', kind: 'file' }],
+      '/project/commands/search': [{ name: '[query]', kind: 'directory' }],
+      '/project/commands/search/[query]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
 
     await expect(new FeatureDiscovery(host).discover(commandFeature, [{
@@ -1186,14 +1225,15 @@ describe('Command Feature', () => {
 
   it('rejects a required filename whose params entry declares a default', async () => {
     const owner = rootPluginId();
-    const source = '/project/commands/search/$[query].ts';
+    const source = '/project/commands/search/[query]/index.ts';
     const command = defineCommand({
       params: { query: { type: 'text', default: 'all' } },
       execute: () => 'ok',
     });
     const host = new MemoryDiscoveryHost({
       '/project/commands': [{ name: 'search', kind: 'directory' }],
-      '/project/commands/search': [{ name: '$[query].ts', kind: 'file' }],
+      '/project/commands/search': [{ name: '[query]', kind: 'directory' }],
+      '/project/commands/search/[query]': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([[source, { default: command }]]));
 
     await expect(new FeatureDiscovery(host).discover(commandFeature, [{
@@ -1203,7 +1243,7 @@ describe('Command Feature', () => {
     await expect(new FeatureDiscovery(host).discover(commandFeature, [{
       owner,
       packageRoot: '/project',
-    }])).rejects.toThrow('has a default but the file is required');
+    }])).rejects.toThrow('has a default but the directory is required');
   });
 });
 
@@ -1264,7 +1304,7 @@ describe('命令用户路由与 owner 身份分离', () => {
       owner: remind,
       feature: commandFeatureId,
       localName: '$note',
-      source: 'plugins/remind/commands/$[note].ts',
+      source: 'plugins/remind/commands/[note]/index.ts',
       definition: {
         ...defineCommand({ execute: () => 'x' }),
         $parameter: { name: 'note', type: 'string' } as const,
@@ -1309,14 +1349,14 @@ describe('内置菜单命令', () => {
         owner: root,
         feature: commandFeatureId,
         localName: 'ping',
-        source: '/commands/$ping.ts',
+        source: '/commands/ping/index.ts',
         definition: defineCommand({ description: '测试连通性', execute: () => 'pong' }),
       }),
       createCapabilitySlot({
         owner: qq,
         feature: commandFeatureId,
         localName: 'status',
-        source: '/commands/$status.ts',
+        source: '/commands/status/index.ts',
         definition: defineCommand({ description: 'QQ 状态', execute: () => 'ok' }),
       }),
     ];

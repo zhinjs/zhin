@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/lark/endpoint/$list.js';
-import addCommand from '../commands/lark/endpoint/add/$[id].js';
-import removeCommand from '../commands/lark/endpoint/remove/$[id].js';
+import listCommand from '../commands/lark/endpoint/list/index.js';
+import addCommand from '../commands/lark/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/lark/endpoint/remove/[id]/index.js';
 import { larkRuntimeStateToken } from '../src/lark-runtime-state.js';
 
 /**

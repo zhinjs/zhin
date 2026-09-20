@@ -4,9 +4,9 @@ import {
   createEndpointRuntimeState,
   endpointConfigurationStoreToken,
 } from 'zhin.js/adapter';
-import listCommand from '../commands/icqq/endpoint/$list.js';
-import addCommand from '../commands/icqq/endpoint/add/$[[id]].js';
-import removeCommand from '../commands/icqq/endpoint/remove/$[id].js';
+import listCommand from '../commands/icqq/endpoint/list/index.js';
+import addCommand from '../commands/icqq/endpoint/add/[[id]]/index.js';
+import removeCommand from '../commands/icqq/endpoint/remove/[id]/index.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 

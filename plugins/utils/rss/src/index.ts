@@ -10,4 +10,4 @@ export { getRssSeen, getRssSubs } from './db-store.js';
 export { rssRuntimeToken, type RssRuntime, type RssOutboundPush } from './runtime.js';
 export { extractChannelInfo, SMOKE_CHANNEL } from './channel.js';
 export { checkSubscriptions, pollAllFeeds, formatNewItems } from './poll.js';
-export type { RssOutboundPush, CheckResult } from './poll.js';
+export type { CheckResult } from './poll.js';

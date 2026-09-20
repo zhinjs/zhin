@@ -4,9 +4,9 @@
 
 ## 覆盖范围
 
-- `commands/hello/$[name].ts` 使用 convention 路由和原生 `defineCommand()`。
-- `middlewares/$audit.ts` 使用原生 `defineMiddleware()` 进入 Middleware Feature。
-- `components/$status-card.ts` 使用原生 `defineComponent()`，不再依赖 Plugin 注册副作用。
+- `commands/hello/[name]/index.ts` 使用 convention 路由和原生 `defineCommand()`。
+- `middlewares/audit/index.ts` 使用原生 `defineMiddleware()` 进入 Middleware Feature。
+- `components/status-card/index.ts` 使用原生 `defineComponent()`，不再依赖 Plugin 注册副作用。
 - `package.json#zhin` 同时声明三个 Feature provider，是 cutover 后的静态拓扑事实源。
 
 ## 验证

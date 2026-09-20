@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=266c20215c24eddf -->
+<!-- sync-adapter-docs:sha256=625f3e4f602bba7c -->
 
 # @zhin.js/adapter-satori
 
@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-satori
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$satori.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/satori/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - `@zhin.js/host-http` — Webhook 模式需 `httpHostToken` 注册 POST 路由

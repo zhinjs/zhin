@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/weixin-ilink/endpoint/$list.js';
-import addCommand from '../commands/weixin-ilink/endpoint/add/$[id].js';
-import removeCommand from '../commands/weixin-ilink/endpoint/remove/$[id].js';
+import listCommand from '../commands/weixin-ilink/endpoint/list/index.js';
+import addCommand from '../commands/weixin-ilink/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/weixin-ilink/endpoint/remove/[id]/index.js';
 import { weixinIlinkRuntimeStateToken } from '../src/weixin-ilink-runtime-state.js';
 
 /**

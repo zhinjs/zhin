@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=886d1226e9c58be4 -->
+<!-- sync-adapter-docs:sha256=b5bd894c17a69f75 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -36,10 +36,10 @@ Sandbox 不需要外部账号。只需由 `zhin runtime start` 装配 HTTP Host�
 
 ### Plugin Runtime（新，`zhin runtime start`）
 
-- `@zhin.js/adapter` — 约定式 `adapters/$sandbox.ts`
+- `@zhin.js/adapter` — 约定式 `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — Root 提供的 `httpHostToken`（WebSocket `/sandbox` + Console HTTP）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
-- `@zhin.js/page` + `pages/$index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
+- `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 约定页（`definePage`；路由 `/sandbox`）
 
 Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 与
 `ClientBuildModuleRuntime`。打开 `http://<host>:<port>/console` 可浏览页面；Sandbox 页

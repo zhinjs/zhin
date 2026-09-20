@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import zanCommand, { parseZanArgs } from '../commands/$赞我.js';
+import zanCommand, { parseZanArgs } from '../commands/赞我/index.js';
 
 describe('parseZanArgs', () => {
   it('无参数时给发送者默认次数', () => {

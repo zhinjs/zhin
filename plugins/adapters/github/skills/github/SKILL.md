@@ -76,7 +76,7 @@ requires:
 本技能提供三种操作方式：
 - **适配器内置工具**（`github_*`）：用户交互类操作，具备账号绑定、Device Flow 授权、频道级订阅等适配器专有逻辑
 - **Bot 写仓库工具**（`github_prepare_workspace` / `github_patch_file` / `github_push_branch` / `github_create_pr`）：Installation Token，UI 显示 **Bot** 身份；push/开 PR 需 HITL
-- **MCP server-github**（`mcp_github_*`，可选）：`ai.githubMcp.*` 配置已随 Plugin Runtime 迁移移除；如需 MCP 工具，按 `mcp/<name>.ts` 约定自行装配（PAT 为**人身份**，勿用于 Bot 写仓库）
+- **MCP server-github**（`mcp_github_*`，可选）：`ai.githubMcp.*` 配置已随 Plugin Runtime 迁移移除；如需 MCP 工具，按 `mcps/<name>/index.ts` 约定自行装配（PAT 为**人身份**，勿用于 Bot 写仓库）
 - **bash + gh CLI**：仓库自动化操作，灵活覆盖 GitHub API 全场景
 
 ## 一、适配器内置工具
@@ -128,7 +128,7 @@ Issue 线程：新分支 → 开发 → push → 开 PR。PR 线程：push 到�
 
 1. `github_star` 优先使用用户绑定的 GitHub 账号，未绑定则降级为 Endpoint 默认账号
 2. Bot 写仓库用 `github_*` 工具，不用 `mcp_github_*` 写操作
-3. MCP（`mcp_github_*`）仅在你按 `mcp/<name>.ts` 约定装配后可用（旧 `ai.githubMcp.enabled` 已移除），PAT 为人身份
+3. MCP（`mcp_github_*`）仅在你按 `mcps/<name>/index.ts` 约定装配后可用（旧 `ai.githubMcp.enabled` 已移除），PAT 为人身份
 4. 当用户想操作自己的 GitHub 账号进行 Star 时，先引导用户使用 `github_bind` 绑定
 5. Webhook 订阅关联到当前聊天通道，仅在该通道接收事件通知
 

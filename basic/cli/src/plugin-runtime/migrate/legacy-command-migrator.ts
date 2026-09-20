@@ -254,7 +254,7 @@ function analyzeMiddleware(
   return { change: {
     kind: 'middleware',
     source,
-    target: join(root, 'middlewares', `$${identity}.ts`),
+    target: join(root, 'middlewares', identity, 'index.ts'),
     identity,
     content: renderMiddleware(file, handler),
   } };
@@ -295,7 +295,7 @@ function analyzeComponent(
   return { change: {
     kind: 'component',
     source,
-    target: join(root, 'components', `$${identity}.${extension}`),
+    target: join(root, 'components', identity, `index.${extension}`),
     identity,
     content: renderComponent(file, component),
   } };
@@ -421,7 +421,7 @@ function commandRoute(
   for (const [index, word] of words.entries()) {
     if (/^[a-z0-9][a-z0-9-]*$/u.test(word)) {
       if (parameter) return 'Command literals cannot follow a dynamic parameter';
-      route.push(index === words.length - 1 ? `$${word}.ts` : word);
+      route.push(word);
       continue;
     }
     const match = /^<([a-z][a-zA-Z0-9]*):(text|string|number|boolean)>$/u.exec(word);
@@ -430,9 +430,9 @@ function commandRoute(
     }
     const type = match[2] === 'text' ? 'string' : match[2];
     parameter = { name: match[1]!, type };
-    route.push(`$[${match[1]}].ts`);
+    route.push(`[${match[1]}]`);
   }
-  return { route, ...(parameter ? { parameter } : {}) };
+  return { route: [...route, 'index.ts'], ...(parameter ? { parameter } : {}) };
 }
 
 interface CommandRouteParameter {

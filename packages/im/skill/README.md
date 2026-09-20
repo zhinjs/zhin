@@ -15,7 +15,7 @@ skills/
     └── references/
 ```
 
-公共 Skill 使用 `skills/<name>/SKILL.md`；Agent 私有 Skill 使用 `agents/<agent>/skills/<name>/SKILL.md`。Skill 的私有 Tool 放在该 Skill 的 `tools/<name>/index.ts`，会自动加入 Skill 的 Tool 白名单；参考资料继续与 Skill 共置。
+公共 Skill 使用 `skills/<name>/SKILL.md`；Agent 私有 Skill 使用 `agents/<agent>/skills/<name>/SKILL.md`。Skill 的私有 Tool 放在该 Skill 的 `tools/<name>/index.ts`，会自动加入 Skill 的 Tool 白名单；参考资料继续与 Skill 共置。默认只披露 Skill 名称、描述和检索字段，完整 instructions 与私有 Tool 要到 `load_skill` 后才进入当前会话能力集。
 
 ## Markdown 契约
 

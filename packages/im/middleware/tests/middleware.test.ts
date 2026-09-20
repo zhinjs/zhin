@@ -41,22 +41,25 @@ describe('Middleware Feature', () => {
     expect(() => defineMiddleware({ order: 1.5, handle() {} })).toThrow('safe integer');
   });
 
-  it('discovers nested TypeScript files and ignores TSX middleware modules', async () => {
+  it('discovers named middleware modules and ignores helpers', async () => {
     const definition = defineMiddleware({ handle: (_context, next) => next() });
-    const source = '/project/middlewares/auth/$guard.ts';
+    const source = '/project/middlewares/auth/index.ts';
     const host = new MemoryDiscoveryHost({
       '/project/middlewares': [
         { name: 'auth', kind: 'directory' },
-        { name: '$ignored.tsx', kind: 'file' },
+        { name: 'ignored.tsx', kind: 'file' },
       ],
-      '/project/middlewares/auth': [{ name: '$guard.ts', kind: 'file' }],
+      '/project/middlewares/auth': [
+        { name: 'index.ts', kind: 'file' },
+        { name: 'helper.ts', kind: 'file' },
+      ],
     }, new Map([[source, { default: definition }]]));
 
     const slots = await new FeatureDiscovery(host).discover(middlewareFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
 
-    expect(slots.map((slot) => slot.localName)).toEqual(['auth/guard']);
+    expect(slots.map((slot) => slot.localName)).toEqual(['auth']);
   });
 
   it('composes deterministic phase/order/topology execution and unwinds after next', async () => {
@@ -72,7 +75,7 @@ describe('Middleware Feature', () => {
       owner,
       feature: middlewareFeatureId,
       localName,
-      source: `/middlewares/${localName}.ts`,
+      source: `/middlewares/${localName}/index.ts`,
       definition: defineMiddleware<{ value: string }>({
         phase,
         order,
@@ -118,7 +121,7 @@ describe('Middleware Feature', () => {
       owner: root,
       feature: middlewareFeatureId,
       localName: 'broken',
-      source: '/middlewares/$broken.ts',
+      source: '/middlewares/broken/index.ts',
       definition,
     });
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
@@ -140,7 +143,7 @@ describe('Middleware Feature', () => {
       owner: root,
       feature: middlewareFeatureId,
       localName: 'native-client',
-      source: '/middlewares/$native-client.ts',
+      source: '/middlewares/native-client/index.ts',
       definition,
     });
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));

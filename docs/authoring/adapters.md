@@ -47,4 +47,4 @@ export default defineAdapter<{ readonly token: string }>({
 
 只有需要自定义多阶段连接行为的协议才应继承 `Endpoint`。WebSocket、SSE、心跳和重连使用 [`createEndpointLifecycle`](./endpoint-lifecycle.md)，不要重复实现状态机。平台特有的 `share`、音频或卡片结构应在 `send()` 的协议边界转换；统一发送链路仍从 `Message.$reply` 或 `Adapter.sendMessage` 进入。
 
-可运行实现见 [`examples/minimal-bot/adapters/$terminal.ts`](../../examples/minimal-bot/adapters/$terminal.ts)。
+可运行实现见 [`examples/minimal-bot/adapters/terminal/index.ts`](../../examples/minimal-bot/adapters/terminal/index.ts)。

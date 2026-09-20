@@ -5,10 +5,10 @@ description: commands/ 文件路由、execute 上下文、返回值渲染、mast
 
 # 命令（defineCommand）
 
-在插件包根目录建一个 `commands/` 目录、往里放一个 `$hello.ts`，用户就能在群里敲 `hello` 触发它——**带 `$` 的文件路径即命令名**，改完文件热重载立即生效，不用重启进程。这条链路由 `@zhin.js/command` Feature 提供（依赖 `zhin.js` 时经 `platformFeatures` 继承），无需手工注册；没有 `$` 的文件是普通模块，可与命令入口放在同一目录。作者从 `zhin.js/command` 导入即可，**不要**再 `pnpm add @zhin.js/command`。
+在插件包根目录创建 `commands/hello/index.ts`，用户就能输入 `hello` 触发它。只有路由目录内的 `index.ts` / `index.tsx` 是命令入口，同目录其他文件都是 helper。该链路由 `@zhin.js/command` Feature 提供；依赖 `zhin.js` 的 Root 会经 `platformFeatures` 自动挂载。
 
 ```ts
-// commands/$hello.ts
+// commands/hello/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -34,40 +34,40 @@ export default definePlugin({
 ```
 
 `addCommand` 与目录发现共用 `CommandIndex`、清单、冲突检测和 generation 生命周期。
-当命令变多时，把 definition 移到 `commands/$hello.ts` 默认导出即可；目录模式还能把
+当命令变多时，把 definition 移到 `commands/hello/index.ts` 默认导出即可；目录模式还能把
 HMR 粒度缩小到单个命令文件。
 
 ## 文件路由
 
-命令名只由 `commands/` 下的相对路径决定，目录段以空格连接。插件 owner 只参与 Capability 身份和配置隔离，不会隐式进入用户输入；需要产品命名空间时，把它明确写成目录。
+命令名由 `commands/` 下到 `index.ts` 的目录路径决定，目录段以空格连接。插件 owner 不会隐式进入用户输入。Endpoint 先处理自己的 `commandPrefix`（默认空字符串）；插件配置只有显式设置 `commandNamespace` 时才会在本插件所有命令、别名和 shortcut 前增加命名空间。
 
 | 文件 | 所属插件 | 命令名 |
 | --- | --- | --- |
-| `commands/$hello.ts` | root | `hello` |
-| `commands/qq/endpoint/$list.ts` | `qq` | `qq endpoint list` |
-| `commands/qq/endpoint/add/$[[name]].ts` | `qq` | `qq endpoint add [name]` |
-| `commands/$foo.ts` | `b` 下的 `a`（`root/b/a`） | `foo` |
+| `commands/hello/index.ts` | root | `hello` |
+| `commands/qq/endpoint/list/index.ts` | `qq` | `qq endpoint list` |
+| `commands/qq/endpoint/add/[[name]]/index.ts` | `qq` | `qq endpoint add [name]` |
+| `commands/foo/index.ts` + `commandNamespace: admin` | `b` 下的 `a` | `admin foo` |
 
 先看嵌套：`commands/` 递归扫描，嵌套目录直接映射为子命令段。静态段文件名 / 目录名须通过 `isCapabilityLocalSegment`（`zhin.js`）：
 
-- **ASCII kebab**：`/^[a-z0-9][a-z0-9-]*$/`（如 `$hello.ts`、`$lottery-today.ts`）
-- **Unicode 名**：含至少一个非 ASCII 字符、无 ASCII 大写，如 `$赞我.ts`（触发词即 `赞我`）
-- 动态参数文件仍限 ASCII：`$[name].ts` / `$[[name]].ts` 等
+- **ASCII kebab**：`/^[a-z0-9][a-z0-9-]*$/`（如 `hello/`、`lottery-today/`）
+- **Unicode 名**：含至少一个非 ASCII 字符、无 ASCII 大写，如 `赞我/`
+- 动态参数目录限 ASCII：`[name]/` / `[[name]]/` 等
 
-`instanceKey`、中间件等其它约定目录仍为 ASCII kebab。`tools/` 允许 ASCII kebab 或 snake（如 `send_user_like.ts`）。
+`instanceKey`、中间件等其它约定目录仍为 ASCII kebab。`tools/` 允许 ASCII kebab 或 snake（如 `send_user_like/`）。
 
-动态参数段用 Next.js 风格文件名声明形态，且必须是路径的最后一段；**类型与默认值不写进文件名**，统一在 `defineCommand({ params })` 里声明——`params.<name>.type` 必填，`default` 可选：
+动态参数段用 Next.js 风格目录名声明形态，且必须是路径的最后一段；**类型与默认值不写进目录名**，统一在 `defineCommand({ params })` 里声明——`params.<name>.type` 必填，`default` 可选：
 
-| 文件名 | 形态 | 帮助显示 | params 声明 |
+| 参数目录 | 形态 | 帮助显示 | params 声明 |
 | --- | --- | --- | --- |
-| `$[name].ts` | 必需参数 | `<name>` | `params: { name: { type: 'string' } }` |
-| `$[[name]].ts` | 可选参数 | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `$[...name].ts` | 捕获所有（消费剩余全部输入） | `<...name>` | `params: { name: { type: 'text' } }`，运行时 `params.name` 为数组 |
-| `$[[...name]].ts` | 可选捕获所有 | `[...name]` | 同上，未提供时为空数组 |
+| `[name]/index.ts` | 必需参数 | `<name>` | `params: { name: { type: 'string' } }` |
+| `[[name]]/index.ts` | 可选参数 | `[name]` | `params: { name: { type: 'string', default: '' } }` |
+| `[...name]/index.ts` | 捕获所有（消费剩余全部输入） | `<...name>` | `params: { name: { type: 'text' } }`，运行时 `params.name` 为数组 |
+| `[[...name]]/index.ts` | 可选捕获所有 | `[...name]` | 同上，未提供时为空数组 |
 
-一致性在启动期校验：有 `default` 时文件名必须用双方括号（`$[[name]]`），文件名声明了参数形态但 `params` 里缺对应声明，都会抛 `CommandPathSyntaxError`。
+一致性在启动期校验：有 `default` 时目录名必须用双方括号（`[[name]]`），目录声明了参数形态但 `params` 里缺对应声明，都会抛 `CommandPathSyntaxError`。
 
-动态参数可以直接作为顶层首段。无论 Root 还是子插件，`commands/$[note].ts` 都匹配顶层单段输入；放在静态目录 `commands/remind/$[note].ts` 时形成 `remind <note>`。每条命令仍只允许一个动态段，并且必须位于路径末尾。不同 owner 发布相同用户路由时，generation 构建会直接报告冲突。
+动态参数可以直接作为顶层首段。无论 Root 还是子插件，`commands/[note]/index.ts` 都匹配顶层单段输入；放在静态目录 `commands/remind/[note]/index.ts` 时形成 `remind <note>`。每条命令仍只允许一个动态段，并且必须位于路径末尾。不同 owner 发布相同用户路由时，generation 构建会直接报告冲突。
 
 捕获所有的数组元素粒度由 `params.<name>.type` 决定：`text` 逐消息段收集（纯文本输入整体为一个元素）；`word` / `string` 按空白逐词切分；`number` / `integer` / `float` / `boolean` 逐词切分后逐个转换，任一词转换失败即视为命令不匹配；`mention` / `image` 等结构化类型逐消息段收集。
 
@@ -81,9 +81,9 @@ HMR 粒度缩小到单个命令文件。
 结构化 IM 参数不支持默认值。运行时由 `segment-matcher` 直接在 canonical segments
 上匹配，不会先把 image、mention 等降级成文本；类型不匹配在派发时视为「命令不匹配」。
 
-路由冲突有两条规则：**静态优先**——`$list.ts` 永远赢过 `$[name].ts`，动态路由之间静态段多者（更具体）优先；**同形拒绝**——同一路由形状重复注册会在启动时报错（`Duplicate runtime Command`）。
+路由冲突有两条规则：**静态优先**——`list/index.ts` 永远赢过 `[name]/index.ts`，动态路由之间静态段多者优先；**有效路由同形拒绝**——应用显式 `commandNamespace` 后仍相同的路由会在 generation 启动时报错。用户可给冲突插件配置不同命名空间。
 
-真实示例（`plugins/adapters/qq/commands/qq/endpoint/remove/$[name].ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
+真实示例（`plugins/adapters/qq/commands/qq/endpoint/remove/[name]/index.ts`，命令定义由[endpoint 管理命令套件](#适配器-endpoint-管理命令套件)生成）：
 
 ```ts
 import { qqEndpointCommands } from '../../../../src/qq-endpoint-commands.js';
@@ -149,7 +149,7 @@ flowchart LR
 结构化参数示例：
 
 ```ts
-// commands/upload/$[asset].ts
+// commands/upload/[asset]/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -241,7 +241,7 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 // 1. src/telegram-runtime-state.ts —— 运行中 endpoint 注册表 token
 export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
 
-// 2. plugin.ts setup() —— provide 状态；adapters/$telegram.ts create() 里登记
+// 2. plugin.ts setup() —— provide 状态；adapters/telegram/index.ts create() 里登记
 context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
 // create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
 
@@ -255,7 +255,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/telegram/endpoint/$list.ts、add/$[[name]].ts、remove/$[name].ts
+// 4. commands/telegram/endpoint/list/index.ts、add/[[name]]/index.ts、remove/[name]/index.ts
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 

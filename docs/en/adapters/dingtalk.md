@@ -29,7 +29,7 @@ pnpm add @zhin.js/adapter-dingtalk
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based thin entry `adapters/$dingtalk.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based thin entry `adapters/dingtalk/index.ts` (`defineAdapter`)
 - Implementation: `src/endpoint.ts` (lifecycle/outbound/OpenAPI), `src/webhook.ts` (signature verification inbound), `src/protocol.ts`
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)

@@ -33,7 +33,7 @@ pnpm add @zhin.js/adapter-satori
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/$satori.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/satori/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - `@zhin.js/host-http` — Webhook mode requires `httpHostToken` to register POST route

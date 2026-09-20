@@ -25,17 +25,17 @@ describe("create_plugin 模板（新 Plugin Runtime 格式）", () => {
   it("command/middleware/component 走约定目录 defineX 格式", () => {
     const files = generatePluginFiles("my-tools", "工具集", ["command", "middleware", "component"]);
 
-    const command = files["commands/my-tools.ts"];
+    const command = files["commands/my-tools/index.ts"];
     expect(command).toContain("defineCommand");
     expect(command).toContain("export default defineCommand({");
     expect(command).not.toContain("usePlugin");
     expect(command).not.toContain("addCommand");
 
-    const middleware = files["middlewares/my-tools.ts"];
+    const middleware = files["middlewares/my-tools/index.ts"];
     expect(middleware).toContain("defineMiddleware");
     expect(middleware).not.toContain("usePlugin");
 
-    const component = files["components/my-tools.ts"];
+    const component = files["components/my-tools/index.ts"];
     expect(component).toContain("defineComponent");
     expect(component).not.toContain("usePlugin");
     expect(component).not.toContain("addComponent");
@@ -68,7 +68,7 @@ describe("create_plugin 模板（新 Plugin Runtime 格式）", () => {
       const pluginDir = path.join(projectRoot, "src/plugins/demo");
       expect(message).toContain(pluginDir);
       expect(fs.readFileSync(path.join(pluginDir, "plugin.ts"), "utf8")).toContain("definePlugin");
-      expect(fs.readFileSync(path.join(pluginDir, "commands/demo.ts"), "utf8")).toContain("defineCommand");
+      expect(fs.readFileSync(path.join(pluginDir, "commands/demo/index.ts"), "utf8")).toContain("defineCommand");
 
       await expect(createPlugin({
         name: "escape",

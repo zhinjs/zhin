@@ -49,7 +49,8 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "@zhin.js/skill": "workspace:*"
   },
   "peerDependencies": {
     "@icqqjs/icqq": "^1.12.2",
@@ -93,7 +94,7 @@
     "schema.json",
     "src",
     "lib",
-    "tools",
+    "skills",
     "README.md",
     "CHANGELOG.md",
     "PERMITS.md",
@@ -123,6 +124,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

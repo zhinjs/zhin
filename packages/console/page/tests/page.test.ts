@@ -9,10 +9,10 @@ import { FeatureDiscovery, type DiscoveryHost } from '@zhin.js/feature-kit';
 import pageFeature, { PageIndex } from '../src/index.js';
 
 describe('Page Feature', () => {
-  it('discovers only flat ordinary TS/TSX pages through the client adapter', async () => {
+  it('discovers only pages/<name>/index.tsx modules through the client adapter', async () => {
     const loaded: string[] = [];
     const host = memoryHost(
-      ['$home.tsx', '$service-status.ts', '$nav.tsx', 'helper.tsx', 'Bad.tsx'],
+      ['home', 'service-status', 'nav', 'helper.tsx', 'Bad'],
       loaded,
     );
     const slots = await new FeatureDiscovery(host).discover(pageFeature, [{
@@ -21,7 +21,7 @@ describe('Page Feature', () => {
     }]);
 
     expect(slots.map((slot) => slot.localName)).toEqual(['home', 'service-status']);
-    expect(loaded).toEqual(['/app/pages/$home.tsx', '/app/pages/$service-status.ts']);
+    expect(loaded).toEqual(['/app/pages/home/index.tsx', '/app/pages/service-status/index.ts']);
     expect(slots[0]?.definition).toMatchObject({ title: 'Home', module: '/assets/home.js' });
   });
 
@@ -39,17 +39,24 @@ describe('Page Feature', () => {
   });
 });
 
-function memoryHost(files: readonly string[], loaded: string[]): DiscoveryHost {
+function memoryHost(entries: readonly string[], loaded: string[]): DiscoveryHost {
   return {
     async list(directory) {
-      return directory === '/app/pages'
-        ? files.map((name) => ({ name, kind: 'file' as const }))
-        : [];
+      if (directory === '/app/pages') {
+        return entries.map((name) => ({
+          name,
+          kind: name.includes('.') ? 'file' as const : 'directory' as const,
+        }));
+      }
+      if (directory === '/app/pages/home') return [{ name: 'index.tsx', kind: 'file' as const }];
+      if (directory === '/app/pages/service-status') return [{ name: 'index.ts', kind: 'file' as const }];
+      if (directory === '/app/pages/nav') return [{ name: 'index.tsx', kind: 'file' as const }];
+      return [];
     },
     async loadModule<T>(): Promise<T> { throw new Error('Page source must not execute in Node'); },
     async loadClientModule<T>(source): Promise<T> {
       loaded.push(source);
-      const name = source.split('/').at(-1)?.split('.')[0]?.replace(/^\$/u, '');
+      const name = source.split('/').at(-2);
       return { module: `/assets/${name}.js`, hash: `hash-${name}` } as T;
     },
     async readText(): Promise<string> { throw new Error('Not used'); },

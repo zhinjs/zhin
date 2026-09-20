@@ -160,7 +160,7 @@ The adapter side retains only protocol-specific logic: the Client API transport,
 
 ## Adapter 1:N Endpoints and Per-Endpoint Config
 
-An Adapter package is declared once (`adapters/$napcat.ts` -> `defineAdapter`), but can be expanded into **multiple endpoint instances** in configuration. The expansion rules are in `packages/im/adapter/src/adapter-index.ts`'s `expandEndpointConfigs`: when the plugin instance config contains a non-empty `endpoints: [{ name, ...overrides }]`, endpoints are created per array item, with base config = instance config minus the `endpoints` key, shallow-merged per item, with `name` forcibly written; when `endpoints` is empty or absent, a single endpoint is created from the instance config. `name` must be a non-empty string without `~` or `\0`; duplicate names keep the first and warn. The expanded endpoint id is `<capabilityId>~<name>`.
+An Adapter package is declared once (`adapters/napcat/index.ts` -> `defineAdapter`), but can be expanded into **multiple endpoint instances** in configuration. The expansion rules are in `packages/im/adapter/src/adapter-index.ts`'s `expandEndpointConfigs`: when the plugin instance config contains a non-empty `endpoints: [{ name, ...overrides }]`, endpoints are created per array item, with base config = instance config minus the `endpoints` key, shallow-merged per item, with `name` forcibly written; when `endpoints` is empty or absent, a single endpoint is created from the instance config. `name` must be a non-empty string without `~` or `\0`; duplicate names keep the first and warn. The expanded endpoint id is `<capabilityId>~<name>`.
 
 ```yaml
 # examples/full-bot/zhin.config.yml (excerpt)

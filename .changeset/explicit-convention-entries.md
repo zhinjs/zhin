@@ -7,6 +7,7 @@
 '@zhin.js/component': minor
 '@zhin.js/tool': minor
 '@zhin.js/mcp-feature': minor
+'@zhin.js/schedule-feature': minor
 '@zhin.js/prompt-section': minor
 '@zhin.js/page': minor
 '@zhin.js/runtime': minor
@@ -58,10 +59,12 @@
 '@zhin.js/process-monitor': patch
 ---
 
-Require `$`-prefixed files for file-convention capability entries. Unprefixed files inside convention directories are now ordinary colocated modules and are never discovered as capabilities.
+Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
 
-Command entry names strip the marker, while `$[name].ts` and related bracket forms declare top-level dynamic parameters. A child plugin can therefore expose `namespace <value>` directly without an artificial static command segment.
+Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
 
 Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
 
-Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.

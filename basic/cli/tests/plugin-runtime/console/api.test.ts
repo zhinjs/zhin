@@ -132,7 +132,7 @@ function stubSnapshot(packageRoot: string, withFeatures = true): () => RuntimeSn
     owner: 'plugin-1' as RuntimeSnapshot['root'],
     feature: featureId('zhin.command'),
     localName: 'ping',
-    source: join(packageRoot, 'commands/$ping.ts'),
+    source: join(packageRoot, 'commands/ping/index.ts'),
     definition: {},
   });
   const otherCommand = createCapabilitySlot({
@@ -361,9 +361,9 @@ describe('displayConsolePath', () => {
 
   it('maps workspace paths to ./…', () => {
     expect(displayConsolePath(
-      `${projectRoot}/plugins/hello/commands/$ping.ts`,
+      `${projectRoot}/plugins/hello/commands/ping/index.ts`,
       projectRoot,
-    )).toBe('./plugins/hello/commands/$ping.ts');
+    )).toBe('./plugins/hello/commands/ping/index.ts');
   });
 
   it('leaves logical source names untouched', () => {

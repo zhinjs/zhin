@@ -6,7 +6,7 @@ import { onebot12RuntimeStateToken } from '../src/onebot12-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineOneBot12Adapter from '../adapters/$onebot12.js';
+import defineOneBot12Adapter from '../adapters/onebot12/index.js';
 import { OneBot12WebhookEndpoint } from '../src/webhook.js';
 import { OneBot12WsEndpoint } from '../src/ws-endpoint.js';
 import { OneBot12WssEndpoint } from '../src/wss-endpoint.js';

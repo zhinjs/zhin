@@ -2,8 +2,8 @@
  * AI Agent runtime and generation-owned support resources.
  *
  * Agent Tools are owned by `@zhin.js/tool` and published through the
- * generation ToolIndex. AgentResourceHub owns skills, subagents, MCP
- * connections, and hooks.
+ * generation ToolIndex. AgentResourceHub owns skills, subagents, and hooks;
+ * MCP connections are generation-owned by `@zhin.js/mcp-feature`.
  * @module @zhin.js/agent
  */
 
@@ -571,8 +571,6 @@ export type { FiveAgentRole } from './orchestration/five-agent/index.js';
 
 export {
   defineSkill,
-  defineSchedule,
-  defineConnection,
   defineHook,
   defineEval,
   disableTool,
@@ -583,8 +581,6 @@ export {
 } from './authoring/index.js';
 export type {
   AuthoringSkillDefinition,
-  AuthoringScheduleDefinition,
-  AuthoringConnectionDefinition,
   AuthoringHookDefinition,
   AuthoringEvalDefinition,
   AuthoringEvalContext,

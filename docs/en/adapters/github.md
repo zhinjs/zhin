@@ -74,7 +74,7 @@ plugins:
 
 ## Removed Capabilities
 
-- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**: After Plugin Runtime migration, `register-github-mcp` (stdio `@modelcontextprotocol/server-github`, PAT personal identity) has been removed, and this configuration no longer takes effect. For MCP tools, follow the new runtime `mcp/<name>.ts` (`@zhin.js/mcp-feature`) convention to set up on your own.
+- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**: After Plugin Runtime migration, `register-github-mcp` (stdio `@modelcontextprotocol/server-github`, PAT personal identity) has been removed, and this configuration no longer takes effect. For MCP tools, use the `mcps/<name>/index.ts` (`@zhin.js/mcp-feature`) convention.
 - Polling fallback has been deleted; inbound events use Webhooks only. No inert polling configuration field remains.
 
 ## Channel ID
@@ -93,7 +93,7 @@ See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_
 | Path | Responsibility |
 |------|----------------|
 | `plugin.ts` | Plugin metadata; defines `github_oauth_users` when DatabaseHost is available |
-| `adapters/$github.ts` | Thin `defineAdapter` entry point (convention discovery) |
+| `adapters/github/index.ts` | Thin `defineAdapter` entry point (convention discovery) |
 | `src/endpoint.ts` | Endpoint lifecycle, outbound, admit |
 | `src/webhook.ts` | HMAC signature verification and event dispatch |
 | `src/oauth-users.ts` | OAuth table SSOT + token lookup |

@@ -6,7 +6,7 @@ import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineMilkyAdapter from '../adapters/$milky.js';
+import defineMilkyAdapter from '../adapters/milky/index.js';
 import {
   MilkySseEndpoint,
   MilkyWebhookEndpoint,

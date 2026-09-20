@@ -1,13 +1,13 @@
 # @zhin.js/page
 
-标准 Page Feature provider。它把插件或项目根的平面 `pages/$*.ts|tsx` 发现为 owner-bound Page manifest，并从 Plugin path 确定性生成 route；未加 `$` 的文件不会被加载为页面。
+标准 Page Feature provider。它把插件或项目根的平面 `pages/*/index.ts|tsx` 发现为 owner-bound Page manifest，并从 Plugin path 确定性生成 route；未加 `$` 的文件不会被加载为页面。
 
 ## Convention
 
 - `pages/status.tsx` -> localName `status`。
 - Root route 为 `/p-status`；`root/a/b` 的 route 为 `/a/b/p-status`。
 - 首版不递归，不支持 `index`、`[param]` 或 route metadata override。
-- `$nav.tsx`、`$footer.tsx` 以及其他 `$` 文件不属于 Page。
+- `pages/nav/`、`pages/footer/` 由 Layout Feature 处理，不属于普通 Page。
 
 ## Client Boundary
 

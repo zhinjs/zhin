@@ -1,7 +1,6 @@
-import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
+import type { Skill, Tool } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
-  type AuthoringConnectionDefinition,
   type AuthoringHookDefinition,
   AUTHORING_KIND,
 } from './types.js';
@@ -41,35 +40,6 @@ export function bridgeAuthoringSkill(
     filePath: discovered.filePath,
     always: discovered.definition.always,
   };
-}
-
-export function bridgeAuthoringConnection(
-  discovered: {
-    runtimeName: string;
-    slotName: string;
-    pluginName: string;
-    definition: AuthoringConnectionDefinition;
-  },
-  configValue: unknown,
-): { ok: true; entry: McpServerEntry } | { ok: false; error: string } {
-  const parsed = discovered.definition.configSchema.safeParse(configValue ?? {});
-  if (!parsed.success) {
-    const detail = parsed.error.issues
-      .map((issue) => `${issue.path.map(String).join('.') || 'root'}: ${issue.message}`)
-      .join('; ');
-    return { ok: false, error: `Connection "${discovered.slotName}": ${detail}` };
-  }
-  const built = discovered.definition.buildEntry(parsed.data);
-  const entry: McpServerEntry = {
-    name: discovered.runtimeName,
-    transport: discovered.definition.transport,
-    url: built.url ?? discovered.definition.url,
-    command: built.command ?? discovered.definition.command,
-    args: built.args ?? discovered.definition.args,
-    env: built.env,
-    headers: { ...discovered.definition.headers, ...built.headers },
-  };
-  return { ok: true, entry };
 }
 
 export function bridgeAuthoringHook(

@@ -82,6 +82,7 @@
     "@zhin.js/middleware": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/schedule-feature": "workspace:*",
     "@zhin.js/schema": "workspace:*",
     "qrcode": "^1.5.4",
     "segment-matcher": "^1.0.5"
@@ -136,6 +137,10 @@
       },
       {
         "package": "@zhin.js/handler",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/schedule-feature",
         "api": "^1.0.0"
       }
     ],

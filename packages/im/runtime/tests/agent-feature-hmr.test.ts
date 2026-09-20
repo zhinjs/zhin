@@ -48,7 +48,7 @@ describe('Agent Feature slot HMR', () => {
     modules.set(join(project, 'packages/prompt/index.ts'), { default: promptSectionFeature });
     modules.set(join(project, 'prompt-sections/project-rules/index.ts'), { default: projectRules('fixture') });
     modules.set(join(project, 'tools/lookup/index.ts'), { default: lookupTool('fixture') });
-    modules.set(join(project, 'mcp/$memory.ts'), { default: memoryMcp([]) });
+    modules.set(join(project, 'mcps/memory/index.ts'), { default: memoryMcp([]) });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -81,7 +81,7 @@ describe('Agent Feature slot HMR', () => {
       prompt: join(project, 'packages/prompt/index.ts'),
     };
     const toolSource = join(project, 'tools/lookup/index.ts');
-    const mcpSource = join(project, 'mcp/$memory.ts');
+    const mcpSource = join(project, 'mcps/memory/index.ts');
     const agentSystemSource = join(project, 'agents/planner/system.md');
     const promptSource = join(project, 'prompt-sections/project-rules/index.ts');
     let setups = 0;
@@ -267,7 +267,7 @@ async function createProject(): Promise<string> {
     'plugin.ts',
     ...features.map((name) => `packages/${name}/index.ts`),
     'tools/lookup/index.ts',
-    'mcp/$memory.ts',
+    'mcps/memory/index.ts',
     'prompt-sections/project-rules/index.ts',
   ]) await touch(join(root, file));
   await touch(join(root, 'skills/research/SKILL.md'), '# Research v1\n\nResearch carefully.\n');

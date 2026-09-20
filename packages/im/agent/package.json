@@ -76,20 +76,10 @@
       "development": "./src/authoring/entries/skills.ts",
       "import": "./lib/authoring/entries/skills.js"
     },
-    "./schedules": {
-      "types": "./lib/authoring/entries/schedules.d.ts",
-      "development": "./src/authoring/entries/schedules.ts",
-      "import": "./lib/authoring/entries/schedules.js"
-    },
     "./hooks": {
       "types": "./lib/authoring/entries/hooks.d.ts",
       "development": "./src/authoring/entries/hooks.ts",
       "import": "./lib/authoring/entries/hooks.js"
-    },
-    "./connections": {
-      "types": "./lib/authoring/entries/connections.d.ts",
-      "development": "./src/authoring/entries/connections.ts",
-      "import": "./lib/authoring/entries/connections.js"
     },
     "./evals": {
       "types": "./lib/authoring/entries/evals.d.ts",
@@ -126,7 +116,6 @@
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/plugin-runtime": "workspace:*",
     "@zhin.js/prompt-section": "workspace:*",
-    "@zhin.js/schedule": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "he": "^1.2.0",

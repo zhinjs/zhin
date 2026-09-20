@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/telegram/endpoint/$list.js';
-import addCommand from '../commands/telegram/endpoint/add/$[id].js';
-import removeCommand from '../commands/telegram/endpoint/remove/$[id].js';
+import listCommand from '../commands/telegram/endpoint/list/index.js';
+import addCommand from '../commands/telegram/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/telegram/endpoint/remove/[id]/index.js';
 import { telegramRuntimeStateToken } from '../src/telegram-runtime-state.js';
 
 /**

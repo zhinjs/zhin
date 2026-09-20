@@ -8,7 +8,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 - **Webhook 入站**：HMAC-SHA256 验签 → `Endpoint.emit(...)`
 - **出站**：`send({ conversation, payload })` → Issue/PR comment（`conversation.id` 为 channel ID）
 - **GitHub App 认证**：JWT → Installation Token
-- **Agent 工具**：`tools/` 下提供 star、bind、subscribe、workspace 等能力
+- **Agent 工具**：`skills/github/tools/` 在 GitHub Skill 激活后提供 star、bind、subscribe、workspace 等能力
 
 ## 安装
 
@@ -64,7 +64,7 @@ plugins:
 
 ## 已移除的能力
 
-- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**：Plugin Runtime 迁移后 `register-github-mcp`（stdio `@modelcontextprotocol/server-github`，PAT 人身份）已移除，该配置不再生效。如需 MCP 工具，请按新运行时 `mcp/<name>.ts`（`@zhin.js/mcp-feature`）约定自行装配。
+- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**：Plugin Runtime 迁移后 `register-github-mcp`（stdio `@modelcontextprotocol/server-github`，PAT 人身份）已移除，该配置不再生效。如需 MCP 工具，请按 `mcps/<name>/index.ts`（`@zhin.js/mcp-feature`）约定自行装配。
 - 轮询降级已删除，入站只通过 Webhook；没有保留无效的轮询配置字段。
 
 ## Channel ID
@@ -76,14 +76,14 @@ plugins:
 
 ## AI 工具
 
-见 `tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
+见 `skills/github/tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
 
 ## 架构
 
 | 路径 | 职责 |
 |------|------|
 | `plugin.ts` | 插件元数据；有 DatabaseHost 时定义 `github_oauth_users` |
-| `adapters/$github.ts` | 薄 `defineAdapter` 入口（发现约定） |
+| `adapters/github/index.ts` | 薄 `defineAdapter` 入口（发现约定） |
 | `src/endpoint.ts` | Endpoint 生命周期、出站、admit |
 | `src/webhook.ts` | HMAC 验签与事件分发 |
 | `src/oauth-users.ts` | OAuth 表 SSOT + token 查找 |

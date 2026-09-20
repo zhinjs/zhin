@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import nextHello from '../commands/hello/$[name].js';
-import statusCard from '../components/$status-card.js';
-import audit from '../middlewares/$audit.js';
+import nextHello from '../commands/hello/[name]/index.js';
+import statusCard from '../components/status-card/index.js';
+import audit from '../middlewares/audit/index.js';
 
 describe('Plugin Runtime migration result', () => {
   it('executes the migrated command definition', async () => {

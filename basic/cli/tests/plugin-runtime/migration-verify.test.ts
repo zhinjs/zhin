@@ -27,14 +27,14 @@ describe('MigrationVerifier', () => {
 
   it('builds and packs a publish cutover without installing dependencies', async () => {
     const root = await fixture(false);
-    await writeFile(join(root, 'commands/$status.ts'), 'export default {};\n');
+    await writeFile(join(root, 'commands/status/index.ts'), 'export default {};\n');
     await cutover(root);
     await fakeTypeScript(root, [
       "printf 'export default {}\\n' > plugin.js",
       "printf 'declare const plugin: unknown; export default plugin;\\n' > plugin.d.ts",
       'mkdir -p commands',
-      "printf 'export default {}\\n' > 'commands/$status.js'",
-      "printf 'declare const command: unknown; export default command;\\n' > 'commands/$status.d.ts'",
+      "printf 'export default {}\\n' > 'commands/status/index.js'",
+      "printf 'declare const command: unknown; export default command;\\n' > 'commands/status.d/index.ts'",
       'exit 0',
     ].join('\n'));
 
@@ -48,7 +48,7 @@ describe('MigrationVerifier', () => {
       'package/package.json',
       'package/plugin.js',
       'package/plugin.d.ts',
-      'package/commands/$status.js',
+      'package/commands/status/index.js',
     ]));
   });
 
@@ -68,7 +68,7 @@ async function fixture(privatePackage: boolean): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-migration-verify-'));
   temporary.push(root);
   await Promise.all([
-    mkdir(join(root, 'commands'), { recursive: true }),
+    mkdir(join(root, 'commands/status'), { recursive: true }),
     writeFile(join(root, 'package.json'), `${JSON.stringify({
       name: '@test/migration-verify',
       version: '1.0.0',

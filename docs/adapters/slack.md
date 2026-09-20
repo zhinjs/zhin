@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e26c96e6dd2524aa -->
+<!-- sync-adapter-docs:sha256=0dab63c0a5b77a38 -->
 
 # @zhin.js/adapter-slack
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$slack.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/slack/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）

@@ -111,8 +111,11 @@ Capabilities are **discovered from convention directories**, not registered impe
 | `handlers/**/*.ts` | `defineHandler()` (`zhin.js/handler`) — path uses `/` (e.g. `handlers/message/receive.ts` → localName `message/receive` → event `message.receive` when `event` omitted); `this.prompt` available |
 | `components/*.tsx` | `defineComponent()` (`zhin.js/component`) |
 | `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
-| `pages/*.tsx` | `definePage()` (`$nav.tsx` / `$footer.tsx` for chrome) |
+| `pages/<name>/index.tsx` | `definePage()` (`nav/index.tsx` / `footer/index.tsx` for chrome) |
 | `skills/<name>/SKILL.md` | Markdown Skill package |
+| `skills/<name>/tools/<name>/index.ts` | Skill-private Tool, disclosed after Skill activation |
+| `agents/<name>/tools/<name>/index.ts` | Agent-private Tool |
+| `agents/<name>/skills/<name>/tools/<name>/index.ts` | Agent-Skill-private Tool |
 | `agents/<name>/` | `agent.json` + core Markdown sub-agent package |
 
 DI is **Scope + Token** based (`context.resources`), generation-scoped rather than a global registry. See `.github/skills/migrate-zhin-plugin-runtime/references/migration-map.md` for the full old→new mapping.

@@ -26,9 +26,6 @@
       "@zhin.js/agent/config": [
         "./packages/im/agent/src/config/index.ts"
       ],
-      "@zhin.js/agent/connections": [
-        "./packages/im/agent/src/authoring/entries/connections.ts"
-      ],
       "@zhin.js/agent/context": [
         "./packages/im/agent/src/context/index.ts"
       ],
@@ -52,9 +49,6 @@
       ],
       "@zhin.js/agent/runtime": [
         "./packages/im/agent/src/plugin-runtime/index.ts"
-      ],
-      "@zhin.js/agent/schedules": [
-        "./packages/im/agent/src/authoring/entries/schedules.ts"
       ],
       "@zhin.js/agent/security": [
         "./packages/im/agent/src/security/index.ts"
@@ -253,6 +247,9 @@
       ],
       "zhin.js/runtime": [
         "./packages/im/zhin/src/plugin-runtime.ts"
+      ],
+      "@zhin.js/schedule-feature": [
+        "./packages/im/schedule-feature/src/index.ts"
       ]
     },
     "types": []

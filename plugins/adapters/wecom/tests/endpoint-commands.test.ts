@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/wecom/endpoint/$list.js';
-import addCommand from '../commands/wecom/endpoint/add/$[id].js';
-import removeCommand from '../commands/wecom/endpoint/remove/$[id].js';
+import listCommand from '../commands/wecom/endpoint/list/index.js';
+import addCommand from '../commands/wecom/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/wecom/endpoint/remove/[id]/index.js';
 import { wecomRuntimeStateToken } from '../src/wecom-runtime-state.js';
 
 /**

@@ -42,11 +42,11 @@ describe('full-bot L4 配置契约', () => {
     for (const source of [
       'plugin.ts',
       'schema.json',
-      'commands/$hello.ts',
-      'commands/$card.ts',
-      'components/$status-card.ts',
+      'commands/hello/index.ts',
+      'commands/card/index.ts',
+      'components/status-card/index.ts',
       'tools/runtime-status/index.ts',
-      'pages/$workroom.tsx',
+      'pages/workroom/index.tsx',
     ]) {
       expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
     }

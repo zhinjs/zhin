@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-kook
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/$kook.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/kook/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — Webhook mode POST route (not needed for WebSocket)
 - `zhin.js` — `plugin.ts` (`definePlugin`)

@@ -21,7 +21,7 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$qq.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/qq/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`

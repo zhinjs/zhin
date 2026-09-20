@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/onebot11/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot11/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=e79e617d5e27ea4a -->
+<!-- sync-adapter-docs:sha256=c1b9304c3f3b101e -->
 
 # @zhin.js/adapter-onebot11
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-onebot11
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$onebot11.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/onebot11/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`

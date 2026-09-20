@@ -62,10 +62,10 @@ minimal-bot/
 ├── plugin.ts                 # definePlugin() entry
 ├── schema.json               # Config contract
 ├── zhin.config.yml           # plugin / plugins layered config
-├── adapters/$terminal.ts      # stdin/stdout terminal Endpoint
-├── commands/$hello.ts         # /hello
-├── commands/$card.ts          # /card -> component rendering
-└── components/$status-card.ts # Satori card component
+├── adapters/terminal/index.ts      # stdin/stdout terminal Endpoint
+├── commands/hello/index.ts         # /hello
+├── commands/card/index.ts          # /card -> component rendering
+└── components/status-card/index.ts # Satori card component
 ```
 
 ## capabilities-bot: definePlugin Capability Showcase

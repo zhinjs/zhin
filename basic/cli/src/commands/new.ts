@@ -420,7 +420,7 @@ export default defineCommand({
   },
 });
 `;
-    await fs.writeFile(path.join(pluginDir, 'commands', `$${pluginName}.ts`), commandTs, 'utf8');
+    await fs.outputFile(path.join(pluginDir, 'commands', pluginName, 'index.ts'), commandTs, 'utf8');
 
     const echoCommandTs = `import { defineCommand } from 'zhin.js/command';
 
@@ -438,8 +438,8 @@ export default defineCommand({
   },
 });
 `;
-    await fs.writeFile(
-      path.join(pluginDir, 'commands', `${pluginName}-echo`, '$[text].ts'),
+    await fs.outputFile(
+      path.join(pluginDir, 'commands', `${pluginName}-echo`, '[text]', 'index.ts'),
       echoCommandTs,
       'utf8',
     );
@@ -447,7 +447,7 @@ export default defineCommand({
 
   if (kind === 'adapter') {
     const adapterTs = `/**
- * Convention entry: discover \`adapters/$${pluginName}.ts\` → defineAdapter.
+ * Convention entry: discover \`adapters/${pluginName}/index.ts\` → defineAdapter.
  * 最小形态参考 plugins/adapters/sandbox 与 plugins/adapters/email。
  */
 import { Endpoint, defineAdapter, type EndpointSendRequest } from 'zhin.js/adapter';
@@ -515,7 +515,7 @@ export default defineAdapter<${capitalizedName}AdapterConfig>({
   },
 });
 `;
-    await fs.writeFile(path.join(pluginDir, 'adapters', `$${pluginName}.ts`), adapterTs, 'utf8');
+    await fs.outputFile(path.join(pluginDir, 'adapters', pluginName, 'index.ts'), adapterTs, 'utf8');
   }
 
   const readmeIntro =
@@ -571,7 +571,7 @@ ${readmeUse}
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
 - \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
-${kind === 'normal' ? '- `commands/`：`$` 开头的命令入口（`defineCommand`），目录段 `$[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：`$` 开头的适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
+${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
 ## AI 技能（skills）
@@ -667,7 +667,7 @@ async function generateTestFile(
     testContent = `import { describe, expect, it } from 'vitest';
 import { parseAdapterDefinition } from 'zhin.js/adapter';
 import plugin from '../plugin.ts';
-import adapter from '../adapters/$${pluginName}.ts';
+import adapter from '../adapters/${pluginName}/index.ts';
 
 describe('zhin.js-${pluginName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
@@ -734,8 +734,8 @@ describe('zhin.js-${pluginName}', () => {
     testContent = `import { describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
-import mainCommand from '../commands/$${pluginName}.ts';
-import echoCommand from '../commands/${pluginName}-echo/$[text].ts';
+import mainCommand from '../commands/${pluginName}/index.ts';
+import echoCommand from '../commands/${pluginName}-echo/[text]/index.ts';
 
 describe('zhin.js-${pluginName}', () => {
   it('defines a valid Plugin Runtime entry', () => {

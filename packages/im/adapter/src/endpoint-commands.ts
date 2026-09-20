@@ -17,11 +17,11 @@
  * 1. composition root 提供 `endpointConfigurationStoreToken`；CLI 默认提供 YAML/.env 实现。
  * 2. plugin.ts setup 里 `context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState())`，
  *    token 由 `defineEndpointRuntimeStateToken('telegram')` 创建。
- * 3. adapters/$telegram.ts create() 里 `context.use(token).endpoints.set(config.id, { id, mode })`。
+ * 3. adapters/telegram/index.ts create() 里 `context.use(token).endpoints.set(config.id, { id, mode })`。
  * 4. src 下 `export const telegramEndpointCommands = createEndpointCommands({ adapterKey: 'telegram', ... }, defineCommand)`
  *    （defineCommand 由调用方从 @zhin.js/command 传入——provider 包之间禁止互相 import，
  *    见 scripts/check-architecture-layers.mjs，故 defineCommand 走依赖注入）。
- * 5. commands/<adapter>/endpoint/{$list.ts, add/$[name].ts, remove/$[name].ts} 分别
+ * 5. commands/<adapter>/endpoint/{list/index.ts, add/[name]/index.ts, remove/[name]/index.ts} 分别
  *    `export default telegramEndpointCommands.list|add|remove`。
  *
  * 注意：adapterKey 即实例 key（zhin.config.yml 的 plugins.<key>）；多实例自定义 key 时

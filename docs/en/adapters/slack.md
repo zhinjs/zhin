@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/$slack.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/slack/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — only needed for HTTP mode to register Events route via `httpHostToken`
 - `zhin.js` — `plugin.ts` (`definePlugin`)

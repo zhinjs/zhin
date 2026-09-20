@@ -67,7 +67,7 @@ export default definePlugin({
 });
 ```
 
-The shortcut registration and the directory discovery of `commands/$hello.ts`, `components/$status.tsx` ultimately produce the same
+The shortcut registration and the directory discovery of `commands/hello/index.ts`, `components/status/index.tsx` ultimately produce the same
 `CapabilitySlot`. Having both with the same name will report `Duplicate Capability Slot` during the prepare phase; failing to mount the corresponding
 Feature will also refuse startup. Modifying the single-file entry rebuilds that plugin's Scope; splitting into convention directories enables
 single-capability file-level HMR.

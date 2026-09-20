@@ -21,13 +21,15 @@
 | API | 稳定性 | 作者 import | 实现包 | 一句话 |
 |-----|--------|-------------|--------|--------|
 | `definePlugin` | `stable` | `zhin.js` | `@zhin.js/plugin-runtime` | 约定式插件入口，`plugin.ts` 默认导出 |
-| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/$*.ts` 默认导出） |
-| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/$*.ts` 默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
-| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/$*.ts(x)` 默认导出） |
-| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/$*.ts` 默认导出） |
-| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/**/$*.ts` 默认导出；`/` → `.` 推断事件名） |
+| `defineCommand` | `stable` | `zhin.js/command` | `@zhin.js/command` | 命令模块（`commands/*/index.ts` 默认导出） |
+| `defineAdapter` | `stable` | `zhin.js/adapter` | `@zhin.js/adapter` | 适配器模块（`adapters/*/index.ts` 默认导出），`create(context)` 默认返回 `{ client, connect, activate?, send }`，复杂协议可返回 Endpoint 子类 |
+| `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/*/index.ts(x)` 默认导出） |
+| `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/*/index.ts` 默认导出） |
+| `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/<name>/index.ts` 默认导出；带点事件显式声明 `event`） |
 | `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/<name>/index.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
+| `defineMcp` | `experimental` | `@zhin.js/mcp-feature` | `@zhin.js/mcp-feature` | generation-owned MCP 连接（`mcps/<name>/index.ts`） |
+| `defineSchedule` | `experimental` | `@zhin.js/schedule-feature` | `@zhin.js/schedule-feature` | generation-owned 定时任务（`schedules/<name>/index.ts` 或 `plugin.ts` 注入） |
 
 > 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`skills/<name>/SKILL.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 
@@ -36,14 +38,16 @@
 | 约定 | 稳定性 | 消费方 | 一句话 |
 |------|--------|--------|--------|
 | `plugin.ts` | `stable` | `zhin.js` | 插件根入口，默认导出 `definePlugin(...)` |
-| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | 仅 `$` 文件是命令入口；支持 `$[name]` / `$[[name]]` / `$[...name]` 动态参数入口 |
-| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 仅 `$` 文件是适配器入口 |
-| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 仅 `$` 文件是中间件入口 |
-| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | 仅 `$` 文件是 Lifecycle 事件处理器入口（`/` 分段 localName，省略 `event` 时映为 `.`） |
+| `commands/` | `stable` | `@zhin.js/command`（作者 import：`zhin.js/command`） | `commands/**/index.ts`；支持 `[name]` / `[[name]]` / `[...name]` 动态参数目录 |
+| `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | `adapters/<name>/index.ts` |
+| `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | `middlewares/<name>/index.ts` |
+| `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | `handlers/<name>/index.ts`；同目录其他文件是 helper |
 | `tools/` | `experimental` | `@zhin.js/tool` | `tools/<name>/index.ts` 是公共 Tool；Agent/Skill 私有 Tool 放在所属目录的同构 `tools/` 下 |
 | `hooks/` | `experimental` | `zhin.js/agent/hooks` | `hooks/<name>/index.ts`；Agent/Skill 私有 Hook 放在所属目录的同构 `hooks/` 下 |
 | `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent 发现 | Skill Markdown，可在同目录附带参考资料与脚本（随 npm 包发布） |
-| `pages/` | `experimental` | `@zhin.js/console-page` | `$*.ts(x)` Console 页面模块目录；`$nav` / `$footer` 是布局槽 |
+| `mcps/` | `experimental` | `@zhin.js/mcp-feature` | `mcps/<name>/index.ts`，替代旧 connection 入口 |
+| `schedules/` | `experimental` | `@zhin.js/schedule-feature` | `schedules/<name>/index.ts`；也允许 `plugin.ts` 注入 |
+| `pages/` | `experimental` | `@zhin.js/console-page` | `pages/<name>/index.ts(x)`；`nav` / `footer` 是布局槽 |
 
 ### Host Token（`context.resources.use(token)` 消费）
 
@@ -59,7 +63,7 @@
 
 | API | 稳定性 | 来源包 | 一句话 |
 |-----|--------|--------|--------|
-| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Skill/SubAgent/MCP/Hook 支持资源；Tool 只通过 `context.addTool()` 进入 `ToolIndex` |
+| `ctx.agent` / `AgentResourceHub` | `experimental` | `@zhin.js/agent` | generation-scoped Skill/SubAgent/Hook 支持资源；Tool 与 MCP 分别由对应 Feature 投影 |
 
 ### Removed Legacy Hooks
 

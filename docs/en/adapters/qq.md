@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/$qq.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/qq/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`

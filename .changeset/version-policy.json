@@ -1095,6 +1095,15 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Replace competing flat Markdown and agent.ts authoring formats with the owner-directed canonical AGENTS.md and agents/<name>/ package contract, including generation-safe resource reload and governed permissions."
+    },
+    {
+      "changeset": "explicit-convention-entries.md",
+      "packages": [
+        "@zhin.js/schedule-feature"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Introduce the owner-directed generation-owned Schedule Feature and canonical schedules/<name>/index.ts contract as part of the explicit zero-compatibility capability directory refactor."
     }
   ]
 }

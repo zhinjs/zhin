@@ -63,7 +63,7 @@ export default defineAdapter({
 });
 `;
 
-describe('segment gate scripts（adapters/$*.ts 探测点）', () => {
+describe('segment gate scripts（adapters/*/index.ts 探测点）', () => {
   it('已声明 segments 的 adapter 通过三道段门禁', () => {
     const fixture = makeFixture({
       declared: { entry: DECLARED_ENTRY },

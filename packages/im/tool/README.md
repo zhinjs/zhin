@@ -13,6 +13,8 @@ tools/
 
 公共 Tool 使用 `tools/<name>/index.ts`。Agent 私有 Tool 使用 `agents/<agent>/tools/<name>/index.ts`；Skill 私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 内 Skill 的私有 Tool 使用 `agents/<agent>/skills/<skill>/tools/<name>/index.ts`。目录段提供稳定 identity，辅助模块与入口共置。
 
+四种位置同时是披露边界：插件启用后，模型基线只接收根 Tool 以及 Agent/Skill 的摘要；Agent Tool 仅在选择该 Agent 后进入其能力集，Skill Tool 仅在 `load_skill` 激活所属 Skill 后解锁，Agent Skill Tool 同时受这两层约束。所有 definition 仍在候选 generation 中完成校验，避免激活时才暴露语法、权限或依赖错误；渐进的是模型上下文和可调用能力，不是安全校验。
+
 ## 定义 Tool
 
 ```ts

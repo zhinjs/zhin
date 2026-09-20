@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import middleware from '../middlewares/$riddle-text.ts';
+import middleware from '../middlewares/riddle-text/index.ts';
 import { startGame } from '../src/game-flow.js';
 import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionService } from '../src/session-service.js';

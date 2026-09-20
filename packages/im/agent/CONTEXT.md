@@ -69,7 +69,7 @@ _避免使用_：Orchestrator 直写、回合 SSOT
 _避免使用_：主绑定 SSOT
 
 **MCP Feature projection**:
-`@zhin.js/mcp-feature` 把插件 setup 与显式 `mcp/$*.ts` 入口投影成 generation-owned `McpIndex`，由该 Index 持有连接生命周期与工具调用权威。
+`@zhin.js/mcp-feature` 把插件 setup 与显式 `mcps/*/index.ts` 入口投影成 generation-owned `McpIndex`，由该 Index 持有连接生命周期与工具调用权威。
 _避免使用_：已连接工具池、MCP host server
 
 **Capability Ingress**:

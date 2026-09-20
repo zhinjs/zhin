@@ -160,7 +160,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
 
 ## Adapter 1:N endpoints 与 per-endpoint config
 
-一个 Adapter 包声明一次（`adapters/$napcat.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。展开规则在 `packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`：插件实例配置含非空 `endpoints: [{ name, ...覆盖项 }]` 时，按数组逐项创建 endpoint，基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`name` 强制写入；`endpoints` 为空或缺省时按实例配置创建单个 endpoint。`name` 必须是非空字符串且不含 `~` / `\0`，重名项保留首个并告警。展开后的 endpoint id 为 `<capabilityId>~<name>`。
+一个 Adapter 包声明一次（`adapters/napcat/index.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。展开规则在 `packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`：插件实例配置含非空 `endpoints: [{ name, ...覆盖项 }]` 时，按数组逐项创建 endpoint，基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`name` 强制写入；`endpoints` 为空或缺省时按实例配置创建单个 endpoint。`name` 必须是非空字符串且不含 `~` / `\0`，重名项保留首个并告警。展开后的 endpoint id 为 `<capabilityId>~<name>`。
 
 ```yaml
 # examples/full-bot/zhin.config.yml（节选）

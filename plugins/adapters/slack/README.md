@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-slack
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$slack.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/slack/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — 仅 HTTP 模式需要 `httpHostToken` 注册 Events 路由
 - `zhin.js` — `plugin.ts`（`definePlugin`）

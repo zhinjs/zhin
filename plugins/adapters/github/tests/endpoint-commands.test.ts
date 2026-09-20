@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/github/endpoint/$list.js';
-import addCommand from '../commands/github/endpoint/add/$[id].js';
-import removeCommand from '../commands/github/endpoint/remove/$[id].js';
+import listCommand from '../commands/github/endpoint/list/index.js';
+import addCommand from '../commands/github/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/github/endpoint/remove/[id]/index.js';
 import { githubRuntimeStateToken } from '../src/github-runtime-state.js';
 
 /**

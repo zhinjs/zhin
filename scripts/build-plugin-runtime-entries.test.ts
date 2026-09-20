@@ -19,7 +19,7 @@ describe('build-plugin-runtime-entries', () => {
   it('emits standalone JS for plugin and nested convention modules', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-build-'));
     temporary.push(root);
-    await mkdir(join(root, 'commands/gh'), { recursive: true });
+    await mkdir(join(root, 'commands/gh/status'), { recursive: true });
     await mkdir(join(root, 'tools/lookup'), { recursive: true });
     await mkdir(join(root, 'hooks/audit'), { recursive: true });
     await mkdir(join(root, 'agents/reviewer/tools/inspect'), { recursive: true });
@@ -33,7 +33,7 @@ describe('build-plugin-runtime-entries', () => {
       "import value from './src/value.js';\nexport default value satisfies number;\n",
     );
     await writeFile(
-      join(root, 'commands/gh/$status.ts'),
+      join(root, 'commands/gh/status/index.ts'),
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(
@@ -53,11 +53,11 @@ describe('build-plugin-runtime-entries', () => {
       'agents/reviewer/tools/inspect/index.js',
       'tools/lookup/index.js',
       'hooks/audit/index.js',
-      'commands/gh/$status.js',
+      'commands/gh/status/index.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
       .toContain('./lib/value.js');
-    expect(await readFile(join(root, 'commands/gh/$status.js'), 'utf8'))
+    expect(await readFile(join(root, 'commands/gh/status/index.js'), 'utf8'))
       .toContain('../../lib/value.js');
     expect(await readFile(join(root, 'tools/lookup/index.js'), 'utf8'))
       .toContain('../../lib/value.js');

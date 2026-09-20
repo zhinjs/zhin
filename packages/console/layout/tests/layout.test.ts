@@ -12,10 +12,11 @@ describe('Layout Feature', () => {
   it('discovers only the two reserved TS/TSX slots without executing them', async () => {
     const host: DiscoveryHost = {
       async list(directory) {
-        return directory === '/app/pages'
-          ? ['$footer.tsx', '$nav.tsx', '$nav.ts', '$other.tsx', 'home.tsx']
-              .map((name) => ({ name, kind: 'file' as const }))
-          : [];
+        if (directory === '/app/pages') return ['footer', 'nav', 'other', 'home']
+          .map((name) => ({ name, kind: 'directory' as const }));
+        if (directory === '/app/pages/footer') return [{ name: 'index.tsx', kind: 'file' as const }];
+        if (directory === '/app/pages/nav') return [{ name: 'index.tsx', kind: 'file' as const }];
+        return [];
       },
       async loadModule<T>(): Promise<T> { throw new Error('Layout source must not execute in Node'); },
       async loadClientModule<T>(source): Promise<T> {
@@ -33,10 +34,12 @@ describe('Layout Feature', () => {
   it('discovers .ts layout slots alongside .tsx', async () => {
     const host: DiscoveryHost = {
       async list(directory) {
-        return directory === '/app/pages'
-          ? ['$footer.ts', '$nav.ts', 'home.tsx']
-              .map((name) => ({ name, kind: 'file' as const }))
-          : [];
+        if (directory === '/app/pages') return ['footer', 'nav', 'home']
+          .map((name) => ({ name, kind: 'directory' as const }));
+        if (directory === '/app/pages/footer' || directory === '/app/pages/nav') {
+          return [{ name: 'index.ts', kind: 'file' as const }];
+        }
+        return [];
       },
       async loadModule<T>(): Promise<T> { throw new Error('Layout source must not execute in Node'); },
       async loadClientModule<T>(source): Promise<T> {
@@ -49,16 +52,21 @@ describe('Layout Feature', () => {
       packageRoot: '/app',
     }]);
     expect(slots.map((slot) => slot.localName)).toEqual(['footer', 'nav']);
-    expect(slots.map((slot) => slot.source)).toEqual(['/app/pages/$footer.ts', '/app/pages/$nav.ts']);
+    expect(slots.map((slot) => slot.source)).toEqual([
+      '/app/pages/footer/index.ts',
+      '/app/pages/nav/index.ts',
+    ]);
   });
 
   it('prefers .tsx over .ts when both exist for the same slot', async () => {
     const host: DiscoveryHost = {
       async list(directory) {
-        return directory === '/app/pages'
-          ? ['$nav.ts', '$nav.tsx']
-              .map((name) => ({ name, kind: 'file' as const }))
-          : [];
+        if (directory === '/app/pages') return [{ name: 'nav', kind: 'directory' as const }];
+        if (directory === '/app/pages/nav') return [
+          { name: 'index.ts', kind: 'file' as const },
+          { name: 'index.tsx', kind: 'file' as const },
+        ];
+        return [];
       },
       async loadModule<T>(): Promise<T> { throw new Error('Layout source must not execute in Node'); },
       async loadClientModule<T>(source): Promise<T> {
@@ -70,7 +78,7 @@ describe('Layout Feature', () => {
       owner: rootPluginId(),
       packageRoot: '/app',
     }]);
-    expect(slots.map((slot) => slot.source)).toEqual(['/app/pages/$nav.tsx']);
+    expect(slots.map((slot) => slot.source)).toEqual(['/app/pages/nav/index.tsx']);
   });
 
   it('returns nearest-ancestor and ordered fallback layouts', () => {

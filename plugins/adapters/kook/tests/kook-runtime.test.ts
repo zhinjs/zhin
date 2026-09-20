@@ -5,7 +5,7 @@ import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineKookAdapter from '../adapters/$kook.js';
+import defineKookAdapter from '../adapters/kook/index.js';
 import {
   KookWebhookEndpoint,
   KookWebsocketEndpoint,

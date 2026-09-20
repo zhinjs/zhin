@@ -1,6 +1,6 @@
 # Convention Directories
 
-Place a `commands/` folder in your plugin package root, add a `$hello.ts` file, and the command appears -- no registration anywhere. These automatically scanned locations are **convention directories**. Single-file capabilities use `$name.ts`; Tools, Hooks, Skills, and Agents use named directories with fixed entry files. Supporting modules, types, and tests remain ordinary importable files beside their entry. The discovery flow:
+Create `commands/hello/index.ts` in a plugin package and the command appears without separate registration. These automatically scanned locations are **convention directories**. Code capabilities use named directories with fixed `index.ts` entries; Skills use `SKILL.md` and Agents use `agent.json`. Other files in a capability directory are ordinary helpers. The discovery flow:
 
 ```mermaid
 flowchart LR
@@ -22,50 +22,52 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 | Directory | File format | Recursive | target | Feature package | featureId | Default export |
 | --- | --- | --- | --- | --- | --- | --- |
-| `commands/` | `$*.ts` / `$*.tsx`, supports dynamic parameter files | Yes (subdirectories form hierarchy) | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
-| `middlewares/` | `$*.ts` | Yes | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
-| `handlers/` | `$*.ts` | Yes (`/` segments; omit `event` → map to `.` event name) | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
-| `components/` | `$*.ts` / `$*.tsx` | Yes | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
-| `adapters/` | `$*.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
+| `commands/` | route directories + `index.ts` / `index.tsx` | Yes (directory segments form hierarchy) | server | `@zhin.js/command` | `zhin.command` | `defineCommand(...)` |
+| `middlewares/` | `<name>/index.ts` | Named directory | server | `@zhin.js/middleware` | `zhin.middleware` | `defineMiddleware(...)` |
+| `handlers/` | `<name>/index.ts` | Named directory | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
+| `components/` | `<name>/index.ts` / `index.tsx` | Named directory | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
+| `adapters/` | `<name>/index.ts` | Named directory | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `<name>/index.ts` | Named directory | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `hooks/` | `<name>/index.ts` | Named directory | server | `zhin.js/agent` | Agent Hook | `defineHook(...)` |
 | `prompt-sections/<name>/` | `index.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
 | `agents/` | `<name>/agent.json` plus 3 core Markdown files | One level | server | `@zhin.js/agent-feature` | `zhin.agent` | Directory Agent definition |
-| `mcp/` | `$*.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
-| `pages/` | `$*.ts` / `$*.tsx`, with `$nav` / `$footer` layout slots | No | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | Page constructs |
+| `mcps/` | `<name>/index.ts` | Named directory | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
+| `schedules/` | `<name>/index.ts` | Named directory | server | `@zhin.js/schedule-feature` | `zhin.schedule` | `defineSchedule(...)` |
+| `pages/` | `<name>/index.ts(x)`, with `nav` / `footer` layout slots | Named directory | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | Page constructs |
 
 ## Naming Rules
 
-The `$` marker selects a single-file entry and is removed from its `localName`. Directory capabilities do not use `$`: Tools, Hooks, and Prompt Sections use `<name>/index.ts`, Skills use `<name>/SKILL.md`, and Agents use `<name>/agent.json`. Named directories use lowercase kebab-case; Tool names may also use snake_case.
+Code capabilities use named directories and a fixed `index.ts` entry. Sibling files are helpers and are not discovered. Skills use `<name>/SKILL.md`, and Agents use `<name>/agent.json`. Named directories use lowercase kebab-case; Tool names may also use snake_case.
 
-**Exception: `commands/`** static segments also allow Unicode names (e.g. `$赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`$[name].ts`, etc.) remain ASCII-only. Tool directories also allow ASCII snake (e.g. `send_user_like/`). Other convention directories are not relaxed.
+**Exception: `commands/`** static segments also allow Unicode names (e.g. `赞我/`), matching `isCapabilityLocalSegment` (`zhin.js`). Dynamic parameter directories (`[name]/`, etc.) remain ASCII-only. Tool directories also allow ASCII snake (e.g. `send_user_like/`).
 
 Supplementary rules per directory:
 
 | Directory | localName derivation | Example |
 | --- | --- | --- |
-| `commands/` | Subdirectories and file names joined with `/`; static segments may be ASCII kebab or Unicode names (e.g. `$赞我.ts`); dynamic entries use Next.js-style brackets and map to `$name` segments: `$[name].ts(x)` required, `$[[name]].ts(x)` optional, `$[...name].ts(x)` catch-all, `$[[...name]].ts(x)` optional catch-all; type and default value are declared in `defineCommand({ params })` | `commands/$lottery-today.ts` -> `lottery-today`; `commands/$赞我.ts` -> `赞我`; `commands/lottery/$[[game]].ts` -> `lottery/$game` |
-| `middlewares/` | Relative path without extension, joined with `/` | `middlewares/$keyword-reply.ts` -> `keyword-reply` |
-| `handlers/` | Relative path without extension, `/`-joined capability localName; when `event` is omitted, `/` maps to `.` for the Lifecycle event name | `handlers/message/$receive.ts` → localName `message/receive` → event `message.receive` |
-| `components/` | Relative path without extension, joined with `/` | `components/$share-music.ts` -> `share-music` |
-| `adapters/` | Same as above | `adapters/$napcat.ts` -> `napcat` |
+| `commands/` | Directories joined with `/`; dynamic directories use `[name]`, `[[name]]`, `[...name]`, or `[[...name]]`; type and default live in `defineCommand({ params })` | `commands/lottery/[[game]]/index.ts` -> `lottery/$game` |
+| `middlewares/` | One named directory | `middlewares/keyword-reply/index.ts` -> `keyword-reply` |
+| `handlers/` | One named directory; omit `event` only when the directory name is the event name | `handlers/message-receive/index.ts` with explicit `event: 'message.receive'` |
+| `components/` | One named directory | `components/share-music/index.ts` -> `share-music` |
+| `adapters/` | One named directory | `adapters/napcat/index.ts` -> `napcat` |
 | `tools/` | `<name>/index.ts`; ASCII kebab or snake | `tools/music-search/index.ts` -> `music-search`; `tools/send_user_like/index.ts` -> `send_user_like` |
 | `hooks/` | `<name>/index.ts`; private Hooks may be nested in an Agent or Skill | `hooks/audit/index.ts` -> `audit` |
 | `prompt-sections/` | First-level named directory | `prompt-sections/project-rules/index.ts` -> `project-rules` |
 | `skills/` | First-level directory name; only its `SKILL.md` is registered, while references and scripts may live beside it | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | First-level directory containing `agent.json` | `agents/planner/agent.json` -> `planner` |
-| `mcp/` | File name without extension (no recursion) | `mcp/$my-server.ts` -> `my-server` |
-| `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/$workroom.tsx` -> `workroom`; `pages/$nav.tsx` -> `nav` |
+| `mcps/` | One named directory | `mcps/my-server/index.ts` -> `my-server` |
+| `schedules/` | One named directory; `plugin.ts` injection is also supported | `schedules/daily-report/index.ts` -> `daily-report` |
+| `pages/` | One named directory; `nav` / `footer` are layout slots | `pages/workroom/index.tsx` -> `workroom`; `pages/nav/index.tsx` -> `nav` |
 
-Malformed bracket syntax in command dynamic parameter files throws `CommandPathSyntaxError`, with the message `expected $[name].ts(x), $[[name]].ts(x), $[...name].ts(x) or $[[...name]].ts(x)`; a default value requires double brackets in the file name, and the parameter must be declared in `params`, otherwise the same error is thrown.
+Malformed bracket syntax in command parameter directories throws `CommandPathSyntaxError`; a default value requires double brackets, and the parameter must be declared in `params`.
 
 ## Minimal Form for Each Directory
 
 ### commands/ -- `defineCommand`
 
 ```ts
-// plugins/utils/lottery/commands/$lottery-today.ts
+// plugins/utils/lottery/commands/lottery-today/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand<LotteryConfig>({
@@ -80,7 +82,7 @@ export default defineCommand<LotteryConfig>({
 ### middlewares/ -- `defineMiddleware`
 
 ```ts
-// plugins/utils/group-suite/middlewares/$keyword-reply.ts (excerpt)
+// plugins/utils/group-suite/middlewares/keyword-reply/index.ts (excerpt)
 import { defineMiddleware } from 'zhin.js/middleware';
 
 export default defineMiddleware<Message, GroupSuiteConfig>({
@@ -98,7 +100,7 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 
 ### handlers/ -- `defineHandler`
 
-Register listeners by **Runtime event name** (no `next()` chain). Directory paths use `/` as the capability localName; when `event` is omitted, `/` maps to `.` for the event name (e.g. `handlers/notice/$receive.ts` → `notice.receive`). `@zhin.js/core/feature/handler` declares the canonical IM event map directly, so `event: 'message.receive'` gets typed arguments without depending on a second Plugin lifecycle.
+Register listeners by **Runtime event name** (no `next()` chain). `handlers/<name>/index.ts` supplies a one-level capability name; when `event` is omitted, that name is the event. Declare dotted events such as `message.receive` explicitly in `defineHandler`; the canonical IM event map then supplies typed arguments.
 
 Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. `ImRuntime` dispatches:
 
@@ -115,7 +117,7 @@ Endpoint; delivery, approval, and interaction use generation-bound ports.
 vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
 
 ```ts
-// handlers/message/$receive.ts
+// handlers/message/receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -127,7 +129,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/request/$receive.ts
+// handlers/request/receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -143,7 +145,7 @@ You can also call `addHandler(localName, defineHandler(...))` in `setup`; it lan
 ### adapters/ -- `defineAdapter`
 
 ```ts
-// plugins/adapters/napcat/adapters/$napcat.ts (excerpt)
+// plugins/adapters/napcat/adapters/napcat/index.ts (excerpt)
 import { defineAdapter } from 'zhin.js/adapter';
 import { httpHostToken } from '@zhin.js/host-http';
 
@@ -200,8 +202,8 @@ tools:
 
 ### pages/ -- Console Pages
 
-`pages/$*.tsx` is compiled into browser artifacts and mounted in the Remote Console; `examples/full-bot/pages/$workroom.tsx` is a ready-made example. `$nav.tsx` / `$footer.tsx` are consumed by `@zhin.js/layout`, injecting navigation and footer.
+`pages/<name>/index.tsx` is compiled into browser artifacts and mounted in the Remote Console. `pages/nav/index.tsx` and `pages/footer/index.tsx` are consumed by `@zhin.js/layout`.
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/$[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/$receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/$share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/$napcat.ts`; `tools` -- see `plugins/utils/music/tools/` and `plugins/utils/group-suite/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/SKILL.md`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/$workroom.tsx`.
+For production references, see `plugins/utils/lottery/commands/` (including `lottery/[[game]]/index.ts`), `plugins/utils/group-suite/middlewares/`, `plugins/utils/music/components/share-music/index.ts`, `plugins/adapters/napcat/adapters/napcat/index.ts`, and `examples/full-bot/pages/workroom/index.tsx`.

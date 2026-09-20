@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 describe('@zhin.js/adapter-icqq package', () => {
   it('should have plugin entry and adapter module', () => {
     expect(fs.existsSync(path.resolve(__dirname, '../plugin.ts'))).toBe(true);
-    expect(fs.existsSync(path.resolve(__dirname, '../adapters/$icqq.ts'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../adapters/icqq/index.ts'))).toBe(true);
     expect(fs.existsSync(path.resolve(__dirname, '../src/endpoint.ts'))).toBe(true);
     expect(fs.existsSync(path.resolve(__dirname, '../schema.json'))).toBe(true);
   });
@@ -18,20 +18,23 @@ describe('@zhin.js/adapter-icqq package', () => {
     expect(pkg.zhin?.entry).toBe('./plugin.js');
     expect(pkg.dependencies['@zhin.js/adapter']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/tool']).toBe('workspace:*');
+    expect(pkg.dependencies['@zhin.js/skill']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/host-http']).toBeUndefined();
     expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/tool');
-    expect(pkg.files).toContain('tools');
+    expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/skill');
+    expect(pkg.files).toContain('skills');
+    expect(pkg.files).not.toContain('tools');
   });
 
-  it('plugin tools live under tools/ and use @zhin.js/tool', () => {
-    const like = path.resolve(__dirname, '../tools/send_user_like/index.ts');
+  it('ICQQ tools are disclosed through the ICQQ Skill and use @zhin.js/tool', () => {
+    const like = path.resolve(__dirname, '../skills/icqq/tools/send_user_like/index.ts');
     expect(fs.existsSync(like)).toBe(true);
     const src = fs.readFileSync(like, 'utf8');
     expect(src).toContain("from '@zhin.js/tool'");
   });
 
   it('send_user_like default-exports a branded @zhin.js/tool definition', async () => {
-    const like = path.resolve(__dirname, '../tools/send_user_like/index.ts');
+    const like = path.resolve(__dirname, '../skills/icqq/tools/send_user_like/index.ts');
     const mod = await import(pathToFileURL(like).href) as {
       default: { $feature: string; description: string; platforms?: readonly string[] };
     };
@@ -43,7 +46,7 @@ describe('@zhin.js/adapter-icqq package', () => {
 
   it('tool permissions use valid permit DSL (not platform(icqq) without a perm)', async () => {
     const { isBuiltinPermit, isPlatformPermit } = await import('@zhin.js/permission');
-    const dir = path.resolve(__dirname, '../tools');
+    const dir = path.resolve(__dirname, '../skills/icqq/tools');
     const files = fs.readdirSync(dir, { withFileTypes: true })
       .filter((entry) => entry.isDirectory())
       .map((entry) => path.join(entry.name, 'index.ts'))

@@ -3,10 +3,10 @@ import {
   endpointConfigurationStoreToken,
 } from 'zhin.js/adapter';
 import { parseCommandDefinition } from 'zhin.js/command';
-import listCommand from '../commands/qq/endpoint/$list.js';
-import addCommand from '../commands/qq/endpoint/add/$[[id]].js';
-import cancelCommand from '../commands/qq/endpoint/$cancel.js';
-import removeCommand from '../commands/qq/endpoint/remove/$[id].js';
+import listCommand from '../commands/qq/endpoint/list/index.js';
+import addCommand from '../commands/qq/endpoint/add/[[id]]/index.js';
+import cancelCommand from '../commands/qq/endpoint/cancel/index.js';
+import removeCommand from '../commands/qq/endpoint/remove/[id]/index.js';
 import { createQqRuntimeState, qqRuntimeStateToken } from '../src/qq-runtime-state.js';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 

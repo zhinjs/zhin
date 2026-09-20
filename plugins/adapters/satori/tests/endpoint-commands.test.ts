@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/satori/endpoint/$list.js';
-import addCommand from '../commands/satori/endpoint/add/$[id].js';
-import removeCommand from '../commands/satori/endpoint/remove/$[id].js';
+import listCommand from '../commands/satori/endpoint/list/index.js';
+import addCommand from '../commands/satori/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/satori/endpoint/remove/[id]/index.js';
 import { satoriRuntimeStateToken } from '../src/satori-runtime-state.js';
 
 /**

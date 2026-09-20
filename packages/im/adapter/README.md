@@ -1,6 +1,6 @@
 # @zhin.js/adapter
 
-Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/$*.ts` 默认导出一个
+Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/*/index.ts` 默认导出一个
 `defineAdapter()`；框架负责发现、多账号展开、热重载切代、事件准入和资源清理。
 
 ```ts

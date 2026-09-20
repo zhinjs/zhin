@@ -203,7 +203,7 @@ describe('Tool Feature', () => {
       owner,
       feature: toolFeatureId,
       localName: 'lookup',
-      source: `/${owner}/tools/$lookup.ts`,
+      source: `/${owner}/tools/lookup/index.ts`,
       definition: defineAgentTool<{ query: string }>({
         description: `Lookup ${value}`,
         approval: 'never',
@@ -230,7 +230,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'network-policy',
-      source: '/tools/$network-policy.ts',
+      source: '/tools/network-policy/index.ts',
       definition: defineAgentTool({
         description: 'Inspect execution policy',
         approval: 'never',
@@ -255,7 +255,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'client-id',
-      source: '/tools/$client-id.ts',
+      source: '/tools/client-id/index.ts',
       definition: defineAgentTool<Record<string, never>>({
         adapter: 'tool-test',
         description: 'Read the native client',
@@ -284,7 +284,7 @@ describe('Tool Feature', () => {
       owner: child,
       feature: toolFeatureId,
       localName: 'history',
-      source: '/plugins/lottery/tools/$history.ts',
+      source: '/plugins/lottery/tools/history/index.ts',
       definition: defineAgentTool<{ game: string }>({
         description: 'Lottery history',
         approval: 'never',
@@ -306,7 +306,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'save',
-      source: '/tools/$save.ts',
+      source: '/tools/save/index.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Save value',
         approval: 'never',

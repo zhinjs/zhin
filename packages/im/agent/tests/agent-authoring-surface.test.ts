@@ -3,9 +3,6 @@ import {
   namespaceAuthoringName,
   slotNameFromFile,
 } from '../src/authoring/index.js';
-import { z } from 'zod';
-import { bridgeAuthoringConnection } from '../src/authoring/bridge.js';
-import { defineConnection } from '../src/authoring/define-connection.js';
 import {
   discoverPluginAgentSurface,
   resolveAuthoringImportPath,
@@ -26,7 +23,7 @@ describe('namespaceAuthoringName', () => {
 
 describe('slotNameFromFile', () => {
   it('strips extension', () => {
-    expect(slotNameFromFile('/p/schedules/$get_weather.ts')).toBe('get_weather');
+    expect(slotNameFromFile('/p/evals/quality.eval.ts')).toBe('quality.eval');
   });
 });
 
@@ -64,49 +61,6 @@ describe('agent authoring entry discovery', () => {
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
-  });
-});
-
-describe('connection schema bridge', () => {
-  it('requires a Zod 4 object schema', () => {
-    expect(() => defineConnection({
-      description: 'Invalid connection',
-      transport: 'stdio',
-      configSchema: z.string() as never,
-      buildEntry: () => ({}),
-    })).toThrow('Connection configSchema must be a Zod 4 object schema');
-  });
-
-  it('validates config against zod schema', () => {
-    const def = defineConnection({
-      description: 'GitHub MCP',
-      transport: 'streamable-http',
-      configSchema: z.object({ token: z.string().min(1) }),
-      buildEntry: (cfg) => ({ headers: { Authorization: `Bearer ${cfg.token}` } }),
-      url: 'https://example.com/mcp',
-    });
-    const bridged = bridgeAuthoringConnection(
-      { runtimeName: 'lottery_github', slotName: 'github', pluginName: 'lottery', definition: def },
-      { token: 'abc' },
-    );
-    expect(bridged.ok).toBe(true);
-    if (bridged.ok) {
-      expect(bridged.entry.headers?.Authorization).toBe('Bearer abc');
-    }
-  });
-
-  it('rejects invalid config', () => {
-    const definition = defineConnection({
-      description: 'GitHub MCP',
-      transport: 'streamable-http',
-      configSchema: z.object({ token: z.string().min(1) }),
-      buildEntry: () => ({ url: 'https://example.com/mcp' }),
-    });
-    const bridged = bridgeAuthoringConnection(
-      { runtimeName: 'lottery_github', slotName: 'github', pluginName: 'lottery', definition },
-      {},
-    );
-    expect(bridged.ok).toBe(false);
   });
 });
 

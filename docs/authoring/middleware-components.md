@@ -57,14 +57,14 @@ sequenceDiagram
 
 两条约束：`next()` 最多调用一次，重复调用抛 `Middleware next() called more than once`；不调 `next()` 即中断链条，终点不执行。`context` 还带有 `config` / `use(token)` / `owner` / `generation`，与其它能力上下文一致。
 
-真实示例见 `plugins/games/rps/middlewares/$rps-choice.ts`：识别游戏 payload 文本（`rps:<session>:<choice>`）或数字 fallback（「1 石头 2 布 3 剪刀」），命中则处理并 `$reply`，否则 `next()` 放行给后续中间件与命令派发。
+真实示例见 `plugins/games/rps/middlewares/rps-choice/index.ts`：识别游戏 payload 文本（`rps:<session>:<choice>`）或数字 fallback（「1 石头 2 布 3 剪刀」），命中则处理并 `$reply`，否则 `next()` 放行给后续中间件与命令派发。
 
 ## defineComponent
 
 `components/` 是约定目录（支持 `.tsx`），每个文件默认导出 `defineComponent(...)`：
 
 ```tsx
-// components/$status-card.ts（提炼自 examples/minimal-bot）
+// components/status-card/index.ts（提炼自 examples/minimal-bot）
 import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';

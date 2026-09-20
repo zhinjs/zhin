@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=8acde51c671894d6 -->
+<!-- sync-adapter-docs:sha256=af616eabfbea406f -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$wechat-mp.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/wechat-mp/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）

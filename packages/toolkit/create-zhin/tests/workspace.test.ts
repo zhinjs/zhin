@@ -61,12 +61,12 @@ describe('createWorkspace', () => {
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
     const pluginEntry = await fs.readFile(path.join(projectPath, 'plugin.ts'), 'utf8')
-    const helloCommand = await fs.readFile(path.join(projectPath, 'commands', '$hello.ts'), 'utf8')
-    const cardCommand = await fs.readFile(path.join(projectPath, 'commands', '$card.ts'), 'utf8')
-    const statusCard = await fs.readFile(path.join(projectPath, 'components', '$status-card.ts'), 'utf8')
-    const page = await fs.readFile(path.join(projectPath, 'pages', '$index.tsx'), 'utf8')
-    const navigation = await fs.readFile(path.join(projectPath, 'pages', '$nav.tsx'), 'utf8')
-    const footer = await fs.readFile(path.join(projectPath, 'pages', '$footer.tsx'), 'utf8')
+    const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello', 'index.ts'), 'utf8')
+    const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card', 'index.ts'), 'utf8')
+    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card', 'index.ts'), 'utf8')
+    const page = await fs.readFile(path.join(projectPath, 'pages', 'index', 'index.tsx'), 'utf8')
+    const navigation = await fs.readFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'), 'utf8')
+    const footer = await fs.readFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'), 'utf8')
     const schema = await fs.readJson(path.join(projectPath, 'schema.json'))
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
@@ -145,15 +145,15 @@ describe('createWorkspace', () => {
     const projectPath = await makeProject({ ai: { enabled: false } })
     const expected = [
       'schema.json',
-      'commands/$hello.ts',
-      'components/$status-card.ts',
+      'commands/hello/index.ts',
+      'components/status-card/index.ts',
       'middlewares/.gitkeep',
       'tools/.gitkeep',
       'skills/skill-creator/SKILL.md',
       'agents/.gitkeep',
-      'pages/$index.tsx',
-      'pages/$nav.tsx',
-      'pages/$footer.tsx',
+      'pages/index/index.tsx',
+      'pages/nav/index.tsx',
+      'pages/footer/index.tsx',
       'plugins/.gitkeep',
       'packages/.gitkeep',
     ]

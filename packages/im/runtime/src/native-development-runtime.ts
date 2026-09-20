@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcp', 'middlewares', 'pages', 'prompt-sections', 'skills', 'tools',
+  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcps', 'middlewares', 'pages', 'prompt-sections', 'schedules', 'skills', 'tools',
 ]);
 
 /**
@@ -71,19 +71,26 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);
     const root = parts[capability];
-    if (root === 'pages') return !isFlatCapabilityEntry(parts.slice(capability + 1));
     if (root === 'agents' || root === 'skills') {
       const local = parts.slice(capability + 1);
       if (isNestedDirectoryEntry(local)) return false;
       return extname(normalized) !== '.md';
     }
-    if (root === 'hooks' || root === 'prompt-sections' || root === 'tools') {
-      return !isDirectoryCapabilityEntry(parts.slice(capability + 1));
+    if (root === 'commands') {
+      const local = parts.slice(capability + 1);
+      if (!isExecutableSource(normalized)) return extname(normalized) === '.json';
+      return local.length < 2
+        || !local.slice(0, -1).every(isCommandDirectorySegment);
     }
-    if (root === 'mcp') {
-      return !isFlatCapabilityEntry(parts.slice(capability + 1));
+    if (root === 'adapters' || root === 'components' || root === 'handlers'
+      || root === 'hooks' || root === 'mcps' || root === 'middlewares'
+      || root === 'pages' || root === 'prompt-sections' || root === 'schedules'
+      || root === 'tools') {
+      const local = parts.slice(capability + 1);
+      if (!isExecutableSource(normalized)) return extname(normalized) === '.json';
+      return local.length < 2
+        || !isNamedCapabilityDirectory(local[0] ?? '', root === 'tools');
     }
-    if (isCapabilityEntry(parts.slice(capability + 1))) return false;
     // Support files inside capability directories (e.g. commands/_utils.ts)
     // are not discovery entries: reloading the entry URL only bumps that
     // entry's zhin-generation, so the importer closure keeps the old code.
@@ -122,6 +129,18 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   #assertOpen(): void {
     if (this.#closed) throw new Error('NativeDevelopmentModuleRuntime is closed');
   }
+}
+
+function isCommandDirectorySegment(value: string): boolean {
+  return /^[a-z0-9][a-z0-9-]*$/u.test(value)
+    || (!/[A-Z]/u.test(value) && /[^\x00-\x7F]/u.test(value) && !/[\s/\\]/u.test(value))
+    || /^\[(?:\[)?(?:\.\.\.)?[a-zA-Z][a-zA-Z0-9]*\](?:\])?$/u.test(value);
+}
+
+function isNamedCapabilityDirectory(value: string, allowSnake: boolean): boolean {
+  return allowSnake
+    ? /^[a-z0-9][a-z0-9_-]*$/u.test(value)
+    : /^[a-z0-9][a-z0-9-]*$/u.test(value);
 }
 
 function isDirectoryCapabilityEntry(parts: readonly string[]): boolean {
@@ -263,28 +282,6 @@ function isWatchedSource(source: string): boolean {
 /** Mirrors sourceSnapshot: any path segment matching an ignored directory opts out. */
 function isIgnoredSource(root: string, source: string): boolean {
   return relative(root, source).split(sep).some((segment) => ignoredDirectories.has(segment));
-}
-
-/**
- * Discovery entries follow the typeScriptModules convention
- * (feature-kit typescript-convention.ts): lowercase segment directories and
- * lowercase .ts/.tsx module names only.
- */
-function isCapabilityEntry(segments: readonly string[]): boolean {
-  const file = segments[segments.length - 1] ?? '';
-  return segments.slice(0, -1).every(isCapabilitySegment) && isCapabilityModule(file);
-}
-
-function isCapabilitySegment(value: string): boolean {
-  return /^[a-z0-9][a-z0-9-]*$/u.test(value);
-}
-
-function isCapabilityModule(value: string): boolean {
-  return /^\$.+\.(?:tsx?|[cm]?js)$/u.test(value);
-}
-
-function isFlatCapabilityEntry(segments: readonly string[]): boolean {
-  return segments.length === 1 && isCapabilityModule(segments[0] ?? '');
 }
 
 function isExecutableSource(source: string): boolean {

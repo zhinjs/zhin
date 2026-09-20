@@ -3,15 +3,10 @@
  * Identity comes from the path; definitions do not carry name/id fields.
  */
 
-import type { z } from 'zod';
-
-
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
 
 export type AuthoringKind =
   | 'skill'
-  | 'schedule'
-  | 'connection'
   | 'hook'
   | 'eval';
 
@@ -28,33 +23,6 @@ export interface AuthoringSkillDefinition extends AuthoringMarker {
   toolNames?: string[];
   always?: boolean;
   platforms?: string[];
-}
-
-export interface AuthoringScheduleDefinition extends AuthoringMarker {
-  [AUTHORING_KIND]: 'schedule';
-  cron: string;
-  description?: string;
-  execute: () => void | Promise<void>;
-}
-
-export type ConnectionTransport = 'stdio' | 'streamable-http' | 'sse';
-
-export interface AuthoringConnectionDefinition extends AuthoringMarker {
-  [AUTHORING_KIND]: 'connection';
-  description: string;
-  transport: ConnectionTransport;
-  configSchema: z.ZodObject<z.ZodRawShape>;
-  url?: string;
-  command?: string;
-  args?: string[];
-  headers?: Record<string, string>;
-  buildEntry: (config: Record<string, unknown>) => {
-    url?: string;
-    command?: string;
-    args?: string[];
-    env?: Record<string, string>;
-    headers?: Record<string, string>;
-  };
 }
 
 export interface AuthoringHookDefinition extends AuthoringMarker {
@@ -82,22 +50,6 @@ export interface DiscoveredAuthoringSkill {
   pluginName: string;
   filePath: string;
   definition: AuthoringSkillDefinition;
-}
-
-export interface DiscoveredAuthoringSchedule {
-  runtimeName: string;
-  slotName: string;
-  pluginName: string;
-  filePath: string;
-  definition: AuthoringScheduleDefinition;
-}
-
-export interface DiscoveredAuthoringConnection {
-  runtimeName: string;
-  slotName: string;
-  pluginName: string;
-  filePath: string;
-  definition: AuthoringConnectionDefinition;
 }
 
 export interface DiscoveredAuthoringHook {

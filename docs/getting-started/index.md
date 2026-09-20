@@ -46,7 +46,7 @@ my-bot/
 
 ## 4. 修改并观察热重载
 
-打开 `commands/$hello.ts`，修改返回文案并保存，再发送 `/hello`。新请求应进入新 generation；已经开始的请求继续使用原快照。
+打开 `commands/hello/index.ts`，修改返回文案并保存，再发送 `/hello`。新请求应进入新 generation；已经开始的请求继续使用原快照。
 
 ## 遇到问题
 

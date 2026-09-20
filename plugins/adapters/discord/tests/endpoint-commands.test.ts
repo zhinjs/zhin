@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/discord/endpoint/$list.js';
-import addCommand from '../commands/discord/endpoint/add/$[id].js';
-import removeCommand from '../commands/discord/endpoint/remove/$[id].js';
+import listCommand from '../commands/discord/endpoint/list/index.js';
+import addCommand from '../commands/discord/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/discord/endpoint/remove/[id]/index.js';
 import { discordRuntimeStateToken } from '../src/discord-runtime-state.js';
 
 /**

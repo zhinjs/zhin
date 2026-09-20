@@ -7,7 +7,7 @@ import {
   type GameReply,
 } from '@zhin.js/game-kit';
 import plugin from '../plugin.ts';
-import gameCommand from '../commands/guess/$[[action]].ts';
+import gameCommand from '../commands/guess/[[action]]/index.ts';
 import { GUESS_HELP } from '../src/index.js';
 import { createServices } from '../src/session-service.js';
 let services: ReturnType<typeof createServices>;

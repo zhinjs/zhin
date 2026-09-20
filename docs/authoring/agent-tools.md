@@ -5,7 +5,16 @@ description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex �
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件放进 `tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`tools/<name>/index.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+想让模型替用户搜一首歌、查一次乐透推荐？先按披露范围选择 Tool 的目录。创作入口会写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+
+| 目录 | 归属 | 模型披露时机 |
+| --- | --- | --- |
+| `tools/<name>/index.ts` | 插件通用 Tool | 插件启用后进入公共 deferred catalog |
+| `agents/<agent>/tools/<name>/index.ts` | Agent 专用 Tool | 选择该 Agent 后进入能力集 |
+| `skills/<skill>/tools/<name>/index.ts` | Skill 专用 Tool | `load_skill` 激活该 Skill 后解锁 |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent 内 Skill 专用 Tool | 选择 Agent 且激活其 Skill 后解锁 |
+
+插件初始只向模型披露根 `tools/` 与根 `skills/`、`agents/` 的摘要。私有 Tool definition 会在 generation prepare 阶段统一校验，但不会提前进入模型 Tool catalog；这样既能在启动时发现无效能力，也不会用未激活能力占用提示词。
 
 ```mermaid
 flowchart LR
@@ -19,9 +28,9 @@ flowchart LR
     H --> I[模型可调用的工具集]
 ```
 
-## 路径一：`tools/<name>/index.ts` 约定
+## 路径一：目录约定
 
-挂载 `@zhin.js/tool` Feature 后，插件包的 `tools/<name>/index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
+挂载 `@zhin.js/tool` Feature 后，四种 Tool 目录中的 `index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
 
 ```ts
 // tools/echo/index.ts

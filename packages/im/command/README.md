@@ -1,16 +1,16 @@
 # @zhin.js/command
 
-Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/$*.ts(x)`，只把文件
+Zhin Plugin Runtime 的约定式 Command Feature。它发现 `commands/**/*/index.ts(x)`，只把文件
 相对路径投影为用户路由，并用 `segment-matcher` 同时匹配纯文本和 canonical IM segments。
 
-静态命令入口可为 ASCII kebab（`$hello.ts`）或 Unicode 名（`$赞我.ts`）；动态参数入口
-（`$[name].ts` 等）仍限 ASCII。未加 `$` 的文件是普通同目录模块。详见 [命令创作指南](../../../docs/authoring/commands.md)。
+静态命令目录可为 ASCII kebab（`hello/`）或 Unicode 名（`赞我/`）；动态参数目录
+（`[name]/` 等）仍限 ASCII。每个路由目录只识别 `index.ts(x)`，同目录其他文件是 helper。详见[命令创作指南](../../../docs/authoring/commands.md)。
 
 ## Authoring
 
 ```ts
-// commands/gh/issue/$list.ts -> gh issue list
-// commands/$赞我.ts -> 赞我
+// commands/gh/issue/list/index.ts -> gh issue list
+// commands/赞我/index.ts -> 赞我
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -25,9 +25,9 @@ export default defineCommand({
 最后一个文件名可以用 Next.js 风格方括号声明参数形态，类型与默认值在 `defineCommand({ params })` 中声明（`type` 必填，`default` 可选且有默认值时文件名必须用双方括号）：
 
 ```text
-commands/gh/pr/$[[title]].ts   -> gh pr [title]    （params: { title: { type: 'string', default: 'defaultTitle' } }）
-commands/upload/$[asset].ts    -> upload <asset>   （params: { asset: { type: 'image' } }）
-commands/search/$[...kw].ts    -> search <...kw>   （params: { kw: { type: 'text' } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
+commands/gh/pr/[[title]]/index.ts   -> gh pr [title]    （params: { title: { type: 'string', default: 'defaultTitle' } }）
+commands/upload/[asset]/index.ts    -> upload <asset>   （params: { asset: { type: 'image' } }）
+commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type: 'text' } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
 ```
 
 文本类型包括 `string`、`word`、`text`、`number`、`integer`、`float`、`boolean`；结构化

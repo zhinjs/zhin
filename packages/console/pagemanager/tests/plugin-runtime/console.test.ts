@@ -177,7 +177,7 @@ function page(
     owner,
     feature: pageFeatureId,
     localName,
-    source: `/app/pages/${localName}.tsx`,
+    source: `/app/pages/${localName}/index.tsx`,
     definition: Object.freeze({
       title: localName,
       order: 100,
@@ -200,7 +200,7 @@ function layout(owner: PluginId, slot: LayoutDefinition['slot'], module: string)
     owner,
     feature: layoutFeatureId,
     localName: slot,
-    source: `/app/pages/$${slot}.tsx`,
+    source: `/app/pages/${slot}/index.tsx`,
     definition: Object.freeze({ slot, module, hash: `hash-${slot}` }),
   });
 }

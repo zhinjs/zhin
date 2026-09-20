@@ -62,16 +62,19 @@ for (const workspaceRoot of workspaceRoots) {
         violations.push(`${relative(skillFile)}: name must match directory ${entry.name}`);
       }
       const localTools = new Set(Array.isArray(metadata.tools) ? metadata.tools : []);
-      const toolRoot = path.join(packageRoot, 'tools');
-      const availableTools = new Set(fs.existsSync(toolRoot)
+      const toolRoots = [
+        path.join(packageRoot, 'tools'),
+        path.join(skillsRoot, entry.name, 'tools'),
+      ];
+      const availableTools = new Set(toolRoots.flatMap((toolRoot) => fs.existsSync(toolRoot)
         ? fs.readdirSync(toolRoot, { withFileTypes: true })
           .filter((tool) => tool.isDirectory()
             && fs.existsSync(path.join(toolRoot, tool.name, 'index.ts')))
           .map((tool) => tool.name)
-        : []);
+        : []));
       for (const tool of localTools) {
         if (!availableTools.has(tool) && !nativeToolNames.has(tool)) {
-          violations.push(`${relative(skillFile)}: tools entry ${tool} has no tools/${tool}/index.ts`);
+          violations.push(`${relative(skillFile)}: tools entry ${tool} has no Skill-private or package-public tools/${tool}/index.ts`);
         }
       }
     }

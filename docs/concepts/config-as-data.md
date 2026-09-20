@@ -55,7 +55,7 @@ plugins:
 }
 ```
 
-写 schema 时有几点约束要知道。根必须是 object schema；没有 schema.json 时按空 object 处理。根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验，但会让配置投影静默变空，因此被显式拒绝。校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`：schema 里的 `default` 会在校验时回填进文档。校验失败抛 `ConfigValidationError`，错误信息会指出具体路径和冒名的键（`additionalProperty: xxx`）或合法枚举值。另外，子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，抛 `ConfigSchemaCollisionError`。
+写 schema 时有几点约束要知道。根必须是 object schema；没有 schema.json 时按空 object 处理。根上不允许纯组合式 schema（`anyOf`/`oneOf`/`allOf`/`$ref` 而无 `properties`）——它能通过校验，但会让配置投影静默变空，因此被显式拒绝。框架会为每个插件注入可选 `commandNamespace` 字段，插件 schema 不得重复声明；未配置时命令没有插件命名空间。校验用 Ajv 2020，`strict: true`、`allErrors: true`、`useDefaults: true`。子插件的 `instanceKey` 若与父插件自己 schema 的某个属性同名，也会抛 `ConfigSchemaCollisionError`。
 
 ## ConfigView：按 owner 投影
 

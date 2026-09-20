@@ -1,6 +1,6 @@
 # @zhin.js/component
 
-Zhin Plugin Runtime 的 Component Feature。它从 `components/**/$*.ts(x)` 发现纯渲染定义，
+Zhin Plugin Runtime 的 Component Feature。它从 `components/**/*/index.ts(x)` 发现纯渲染定义，
 按请求 Plugin 解析最近 owner override，并通过统一 IM 出站链路生成内容。
 
 ```ts

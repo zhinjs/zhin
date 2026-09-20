@@ -48,7 +48,7 @@ pnpm test:coverage
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import hello from '../commands/$hello.js';
+import hello from '../commands/hello/index.js';
 
 describe('commands/hello', () => {
   it('returns greeting', async () => {

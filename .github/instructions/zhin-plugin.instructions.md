@@ -19,22 +19,32 @@ applyTo: "plugins/**,examples/**"
 ## Convention directories
 
 ```text
-adapters/**/$*.ts                defineAdapter()      // import from zhin.js/adapter
-commands/**/$*.ts                defineCommand()      // import from zhin.js/command
-components/**/$*.ts              defineComponent()    // import from zhin.js/component
-middlewares/**/$*.ts             defineMiddleware()   // import from zhin.js/middleware
-handlers/**/$*.ts                defineHandler()      // import from zhin.js/handler; path `/` → event `.` when event omitted
-tools/*.ts                       defineAgentTool()
-skills/<name>/SKILL.md           Markdown Skill SSOT
-agents/$<name>.agent.md          Markdown Agent SSOT
-mcp/*.ts                         defineMcp()
-pages/*.ts|tsx                   definePage()
-pages/$nav.tsx|$footer.tsx       layout overrides
+adapters/<name>/index.ts              defineAdapter()      // import from zhin.js/adapter
+commands/**/index.ts                  defineCommand()      // directory path is the route
+components/<name>/index.ts            defineComponent()    // import from zhin.js/component
+middlewares/<name>/index.ts           defineMiddleware()   // import from zhin.js/middleware
+handlers/<name>/index.ts              defineHandler()      // explicit event supports dotted runtime names
+tools/<name>/index.ts                 defineAgentTool()
+skills/<name>/SKILL.md                Markdown Skill SSOT
+skills/<name>/tools/<name>/index.ts   Skill-private defineAgentTool()
+agents/<name>/agent.json              Agent metadata SSOT
+agents/<name>/tools/<name>/index.ts   Agent-private defineAgentTool()
+agents/<name>/skills/<name>/SKILL.md  Agent-private Skill SSOT
+agents/<name>/skills/<name>/tools/<name>/index.ts
+                                      Agent-Skill-private defineAgentTool()
+mcps/<name>/index.ts                  defineMcp()
+schedules/<name>/index.ts             defineSchedule()
+pages/<name>/index.tsx                definePage()
+pages/{nav,footer}/index.tsx           layout overrides
 ```
 
 Each TypeScript capability default-exports exactly one definition. Do not call `usePlugin()`,
 `getPlugin()` or `add*()` in new code. Migrate old code with
 `.github/skills/migrate-zhin-plugin-runtime`.
+
+Tool placement is an authority and disclosure boundary. Root Tools are plugin-wide; Agent Tools
+require that Agent; Skill Tools unlock only after `load_skill`; Agent-Skill Tools require both.
+Do not place a domain-specific Tool at package root merely to make discovery convenient.
 
 ## Imports and native TypeScript
 
@@ -43,19 +53,19 @@ Each TypeScript capability default-exports exactly one definition. Do not call `
   Import IM execution contracts from `zhin.js/core/runtime` (or `@zhin.js/core/runtime`).
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
   constructor parameter properties or TSX in server capability directories.
-- Browser `pages/$*.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
+- Browser `pages/*/index.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
 
 ## Command routes
 
 The file path is the route SSOT:
 
 ```text
-commands/gh/issue/list.ts    gh issue list
-commands/gh/pr/[[title]].ts  gh pr [title]
+commands/gh/issue/list/index.ts    gh issue list
+commands/gh/pr/[[title]]/index.ts  gh pr [title]
 ```
 
-Dynamic parameter files use Next.js-style brackets: `[name].ts` required, `[[name]].ts` optional,
-`[...name].ts` catch-all, `[[...name]].ts` optional catch-all. Type and default value are declared
+Dynamic parameter directories use Next.js-style brackets: `[name]` required, `[[name]]` optional,
+`[...name]` catch-all, `[[...name]]` optional catch-all. Type and default value are declared
 in `defineCommand({ params })` — `params.<name>.type` is required, `default` is optional (a default
 requires the double-bracket file form). Catch-all parameters are `string[]` at runtime.
 

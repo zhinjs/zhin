@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-kook
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/$kook.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/kook/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — Webhook 模式 POST 路由（WebSocket 不需要）
 - `zhin.js` — `plugin.ts`（`definePlugin`）

@@ -2,9 +2,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { createEndpointRuntimeState, endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
-import listCommand from '../commands/milky/endpoint/$list.js';
-import addCommand from '../commands/milky/endpoint/add/$[id].js';
-import removeCommand from '../commands/milky/endpoint/remove/$[id].js';
+import listCommand from '../commands/milky/endpoint/list/index.js';
+import addCommand from '../commands/milky/endpoint/add/[id]/index.js';
+import removeCommand from '../commands/milky/endpoint/remove/[id]/index.js';
 import { milkyRuntimeStateToken } from '../src/milky-runtime-state.js';
 
 /**

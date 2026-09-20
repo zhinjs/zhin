@@ -83,7 +83,7 @@ export default definePlugin<PingPongConfig>({
 });
 ```
 
-## 3. commands/$ping.ts
+## 3. commands/ping/index.ts
 
 `commands/` 下的文件由 Command Feature 自动发现，文件名即命令名：
 
@@ -178,14 +178,14 @@ zhin runtime start
 
 - 启动日志应出现 `[ping-pong] setup: reply=pong!`
 - 在接通的通道里发 `/ping`，Bot 回复 `pong!`
-- 改 `commands/$ping.ts` 或 `zhin.config.yml` 会触发热重载，无需重启进程
+- 改 `commands/ping/index.ts` 或 `zhin.config.yml` 会触发热重载，无需重启进程
 - `zhin runtime start --once` 可做装配冒烟（不进入交互）
 
 ```mermaid
 flowchart TD
   M[package.json#zhin 清单] --> R[Plugin Runtime]
   R --> F[Command Feature]
-  F -->|发现| C[commands/$ping.ts]
+  F -->|发现| C[commands/ping/index.ts]
   R --> E[plugin.ts setup]
   S[schema.json 默认值] --> CFG[分层配置]
   Y[zhin.config.yml 覆盖] --> CFG

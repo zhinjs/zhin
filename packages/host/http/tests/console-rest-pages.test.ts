@@ -414,7 +414,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
         { pattern: 'bar', desc: 'bar cmd', plugin: 'game' },
       ],
       middlewares: () => [{ name: 'audit', owner: 'root', phase: 'before-dispatch', target: 'inbound', order: 10 }],
-      components: () => [{ name: 'status-card', owner: 'root', source: './components/$status-card.ts' }],
+      components: () => [{ name: 'status-card', owner: 'root', source: './components/status-card/index.ts' }],
       renderComponent: async ({ requester, name, props }) => ({
         type: 'text', data: { text: `${requester}:${name}:${JSON.stringify(props)}` },
       }),

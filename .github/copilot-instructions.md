@@ -33,7 +33,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/$[name].ts — 路径即路由，类型在 params 中声明
+// commands/hello/[name]/index.ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -53,11 +53,14 @@ export default defineCommand({
 
 | 目录 | API |
 |------|-----|
-| `commands/**/$*.ts` | `defineCommand()` |
-| `middlewares/$*.ts` | `defineMiddleware()` |
-| `components/$*.tsx` | `defineComponent()` |
+| `commands/**/*/index.ts` | `defineCommand()` |
+| `middlewares/*/index.ts` | `defineMiddleware()` |
+| `components/*/index.tsx` | `defineComponent()` |
 | `tools/<name>/index.ts` | `defineAgentTool()` |
-| `pages/$*.tsx` | `definePage()` |
+| `agents/<agent>/tools/<name>/index.ts` | Agent-private `defineAgentTool()` |
+| `skills/<skill>/tools/<name>/index.ts` | Skill-private `defineAgentTool()` |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent-Skill-private `defineAgentTool()` |
+| `pages/*/index.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Skill |
 | `agents/$<name>.agent.md` | Agent |
 

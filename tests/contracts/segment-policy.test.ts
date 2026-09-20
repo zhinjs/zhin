@@ -6,26 +6,26 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { AdapterDefinition } from '@zhin.js/adapter';
-import defineDingTalkAdapter from '../../plugins/adapters/dingtalk/adapters/$dingtalk.js';
-import defineDiscordAdapter from '../../plugins/adapters/discord/adapters/$discord.js';
-import defineEmailAdapter from '../../plugins/adapters/email/adapters/$email.js';
-import defineGithubAdapter from '../../plugins/adapters/github/adapters/$github.js';
-import defineIcqqAdapter from '../../plugins/adapters/icqq/adapters/$icqq.js';
-import defineKookAdapter from '../../plugins/adapters/kook/adapters/$kook.js';
-import defineLarkAdapter from '../../plugins/adapters/lark/adapters/$lark.js';
-import defineLineAdapter from '../../plugins/adapters/line/adapters/$line.js';
-import defineMilkyAdapter from '../../plugins/adapters/milky/adapters/$milky.js';
-import defineNapCatAdapter from '../../plugins/adapters/napcat/adapters/$napcat.js';
-import defineOneBot11Adapter from '../../plugins/adapters/onebot11/adapters/$onebot11.js';
-import defineOneBot12Adapter from '../../plugins/adapters/onebot12/adapters/$onebot12.js';
-import defineQqAdapter from '../../plugins/adapters/qq/adapters/$qq.js';
-import defineSandboxAdapter from '../../plugins/adapters/sandbox/adapters/$sandbox.js';
-import defineSatoriAdapter from '../../plugins/adapters/satori/adapters/$satori.js';
-import defineSlackAdapter from '../../plugins/adapters/slack/adapters/$slack.js';
-import defineTelegramAdapter from '../../plugins/adapters/telegram/adapters/$telegram.js';
-import defineWechatMpAdapter from '../../plugins/adapters/wechat-mp/adapters/$wechat-mp.js';
-import defineWecomAdapter from '../../plugins/adapters/wecom/adapters/$wecom.js';
-import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapters/$weixin-ilink.js';
+import defineDingTalkAdapter from '../../plugins/adapters/dingtalk/adapters/dingtalk/index.js';
+import defineDiscordAdapter from '../../plugins/adapters/discord/adapters/discord/index.js';
+import defineEmailAdapter from '../../plugins/adapters/email/adapters/email/index.js';
+import defineGithubAdapter from '../../plugins/adapters/github/adapters/github/index.js';
+import defineIcqqAdapter from '../../plugins/adapters/icqq/adapters/icqq/index.js';
+import defineKookAdapter from '../../plugins/adapters/kook/adapters/kook/index.js';
+import defineLarkAdapter from '../../plugins/adapters/lark/adapters/lark/index.js';
+import defineLineAdapter from '../../plugins/adapters/line/adapters/line/index.js';
+import defineMilkyAdapter from '../../plugins/adapters/milky/adapters/milky/index.js';
+import defineNapCatAdapter from '../../plugins/adapters/napcat/adapters/napcat/index.js';
+import defineOneBot11Adapter from '../../plugins/adapters/onebot11/adapters/onebot11/index.js';
+import defineOneBot12Adapter from '../../plugins/adapters/onebot12/adapters/onebot12/index.js';
+import defineQqAdapter from '../../plugins/adapters/qq/adapters/qq/index.js';
+import defineSandboxAdapter from '../../plugins/adapters/sandbox/adapters/sandbox/index.js';
+import defineSatoriAdapter from '../../plugins/adapters/satori/adapters/satori/index.js';
+import defineSlackAdapter from '../../plugins/adapters/slack/adapters/slack/index.js';
+import defineTelegramAdapter from '../../plugins/adapters/telegram/adapters/telegram/index.js';
+import defineWechatMpAdapter from '../../plugins/adapters/wechat-mp/adapters/wechat-mp/index.js';
+import defineWecomAdapter from '../../plugins/adapters/wecom/adapters/wecom/index.js';
+import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.js';
 
 const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   dingtalk: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },

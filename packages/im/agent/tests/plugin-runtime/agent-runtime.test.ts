@@ -816,7 +816,7 @@ async function createFixture(access: {
     owner: child,
     feature: mcpFeatureId,
     localName: 'memory',
-    source: '/mcp/memory.ts',
+    source: '/mcps/memory/index.ts',
     definition: defineMcp({
       create: () => ({
         listTools: () => [{ name: 'search' }],

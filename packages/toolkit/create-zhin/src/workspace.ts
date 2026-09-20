@@ -451,17 +451,16 @@ ${projectName}/
 ├── schema.json            # 根插件配置契约（JSON Schema）
 ├── ${configFilename}     # 顶层 http/database/ai + plugins.<instanceKey> 配置
 ├── commands/
-│   ├── $hello.ts          # /hello 命令（defineCommand）
-│   └── $card.ts           # /card -> component("status-card")
+│   ├── hello/index.ts     # /hello 命令（defineCommand）
+│   └── card/index.ts      # /card -> component("status-card")
 ├── components/
-│   └── $status-card.ts    # defineComponent()，Satori 卡片
+│   └── status-card/index.ts # defineComponent()，Satori 卡片
 ├── middlewares/           # 消息中间件（约定目录）
 ├── pages/
-│   ├── $index.tsx         # Console 页面（/）
-│   ├── $nav.tsx           # 最近插件导航布局
-│   └── $footer.tsx        # 最近插件页脚布局
-├── agent/
-│   └── tools/             # <name>/index.ts AI 工具入口
+│   ├── index/index.tsx    # Console 页面（/）
+│   ├── nav/index.tsx      # 最近插件导航布局
+│   └── footer/index.tsx   # 最近插件页脚布局
+├── tools/                 # <name>/index.ts AI 工具入口
 ├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
 ├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
@@ -513,7 +512,7 @@ pnpm dev
 
 ### 新增命令
 
-在 \`commands/\` 下创建 \`$*.ts\` 入口文件（默认导出 \`defineCommand\`）。未加 \`$\` 的文件是普通模块，可以与命令入口放在同一目录并被导入：
+在 \`commands/<name>/index.ts\` 创建入口文件（默认导出 \`defineCommand\`）。同目录其他文件是普通模块，可以被入口自由导入：
 
 \`\`\`typescript
 import { defineCommand } from 'zhin.js/command';
@@ -526,8 +525,8 @@ export default defineCommand({
 
 ### Console 页面与布局
 
-在 \`pages/\` 下新增 \`$*.tsx\` 页面：\`$index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
-\`$nav.tsx\` 与 \`$footer.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
+在 \`pages/<name>/index.tsx\` 新增页面：\`pages/index/index.tsx\` 映射到插件路径，其他页面映射为 \`/p-<name>\`。
+\`pages/nav/index.tsx\` 与 \`pages/footer/index.tsx\` 分别覆盖当前插件及其子插件的最近导航、页脚布局。
 页面元数据必须用 \`@zhin.js/console-contract\` 的 \`definePage\` 声明；默认示例不依赖 React 或浏览器构建工具。
 
 ### 接入更多平台
@@ -654,7 +653,7 @@ export default definePlugin({
 
   // pages/ follows the Feature conventions. These components deliberately
   // return text, keeping the initial IM project free of a browser UI runtime.
-  await fs.writeFile(path.join(projectPath, 'pages', '$index.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'index', 'index.tsx'),
 `import { definePage } from '@zhin.js/console-contract';
 
 export const meta = definePage({
@@ -666,14 +665,14 @@ export default function HomePage() {
   return 'Zhin Console is ready. Add pages in pages/ to extend this plugin.';
 }
 `);
-  await fs.writeFile(path.join(projectPath, 'pages', '$nav.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'),
 `import type { NavSlotProps } from '@zhin.js/console-contract';
 
 export default function ProjectNavigation({ current }: NavSlotProps) {
   return current ? \`Current page: \${current}\` : '${projectName}';
 }
 `);
-  await fs.writeFile(path.join(projectPath, 'pages', '$footer.tsx'),
+  await fs.outputFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'),
 `import type { FooterSlotProps } from '@zhin.js/console-contract';
 
 export default function ProjectFooter({ owner }: FooterSlotProps) {
@@ -681,8 +680,8 @@ export default function ProjectFooter({ owner }: FooterSlotProps) {
 }
 `);
 
-  // commands/$hello.ts
-  await fs.writeFile(path.join(projectPath, 'commands', '$hello.ts'),
+  // commands/hello/index.ts
+  await fs.outputFile(path.join(projectPath, 'commands', 'hello', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -695,8 +694,8 @@ export default defineCommand({
 });
 `);
 
-  // commands/$card.ts（组件渲染示例，对齐 examples/minimal-bot）
-  await fs.writeFile(path.join(projectPath, 'commands', '$card.ts'),
+  // commands/card/index.ts（组件渲染示例，对齐 examples/minimal-bot）
+  await fs.outputFile(path.join(projectPath, 'commands', 'card', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 import { component } from 'zhin.js/core/runtime';
 
@@ -715,8 +714,8 @@ export default defineCommand({
 });
 `);
 
-  // components/$status-card.ts
-  await fs.writeFile(path.join(projectPath, 'components', '$status-card.ts'),
+  // components/status-card/index.ts
+  await fs.outputFile(path.join(projectPath, 'components', 'status-card', 'index.ts'),
 `import { defineComponent } from 'zhin.js/component';
 import { raw } from 'zhin.js/core/runtime';
 import {
@@ -827,7 +826,7 @@ export default defineAgentTool<{ message: string }>({
 `);
 
     // 生活助手命令与工具（工具需 AI 启用才挂载 @zhin.js/tool feature）
-    await fs.writeFile(path.join(projectPath, 'commands', '$remind.ts'),
+    await fs.outputFile(path.join(projectPath, 'commands', 'remind', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({

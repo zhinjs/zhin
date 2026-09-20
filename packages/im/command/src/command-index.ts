@@ -119,7 +119,8 @@ export class CommandIndex {
     };
 
     for (const slot of slots) {
-      const primarySegments = runtimeSegments(slot.localName);
+      const namespace = commandNamespace(this.snapshot, slot.owner);
+      const primarySegments = [...namespace, ...runtimeSegments(slot.localName)];
       const parameter = slot.definition.$parameter;
       assertParameterSegment(primarySegments, parameter, slot.source);
       const name = displayName(primarySegments, parameter);
@@ -158,7 +159,10 @@ export class CommandIndex {
 
       if (alias) {
         for (const entry of alias) {
-          const aliasSegments = aliasRuntimeSegments(entry, primarySegments);
+          const aliasSegments = [...namespace, ...aliasRuntimeSegments(
+            entry,
+            primarySegments.slice(namespace.length),
+          )];
           assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
           claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
           routes.push({
@@ -172,7 +176,7 @@ export class CommandIndex {
 
       if (slot.definition.shortcut) {
         for (const [rawTrigger, prefill] of Object.entries(slot.definition.shortcut)) {
-          const trigger = rawTrigger.trim();
+          const trigger = [...namespace, ...splitCommand(rawTrigger)].join(' ');
           claim(trigger, `${slot.source} shortcut ${JSON.stringify(trigger)}`);
           shortcuts.set(trigger, {
             record,
@@ -456,12 +460,31 @@ export function isCommandIndex(value: unknown): value is CommandIndex {
 }
 
 /**
- * 用户路由只来自命令的本地能力路径。owner 已经属于 CapabilityId，不能再次
- * 泄漏进用户输入；需要产品命名空间时，作者应把它写进 commands/ 下的目录。
- * 例：任意 owner + `foo` → `foo`；`qq/endpoint/list` → `qq endpoint list`。
+ * 用户路由来自命令的本地能力路径；只有插件配置显式声明 commandNamespace
+ * 时才在其前面增加命名空间。owner 始终只属于 CapabilityId。
  */
 function runtimeSegments(localName: string): string[] {
   return localName.split('/');
+}
+
+function commandNamespace(snapshot: RuntimeSnapshot, owner: PluginId): readonly string[] {
+  const config = snapshot.config.get(owner) as Readonly<Record<string, unknown>> | undefined;
+  const value = config?.commandNamespace;
+  if (value === undefined || value === '') return Object.freeze([]);
+  if (typeof value !== 'string') {
+    throw new TypeError(`Invalid commandNamespace for ${owner}: expected a string`);
+  }
+  const segments = splitCommand(value);
+  if (segments.length === 0 || segments.some((segment) => !isCommandNamespaceSegment(segment))) {
+    throw new TypeError(
+      `Invalid commandNamespace for ${owner}: expected space-separated command segments`,
+    );
+  }
+  return Object.freeze([...segments]);
+}
+
+function isCommandNamespaceSegment(value: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{N}_-]*$/u.test(value);
 }
 
 /**
@@ -573,7 +596,7 @@ function assertParameterSegment(
     `Invalid Command path for ${source}: the dynamic segment "${dynamic}" must be the only dynamic `
     + `segment and be the final path segment. `
     + (parameter
-      ? `Hint: keep only one dynamic entry, e.g. "commands/add/$[${parameter.name}].ts".`
+      ? `Hint: keep only one dynamic entry, e.g. "commands/add/[${parameter.name}]/index.ts".`
       : 'Hint: keep only one dynamic entry at the end of the command path.'),
   );
 }

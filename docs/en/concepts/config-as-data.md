@@ -55,7 +55,7 @@ The `schema.json` in each package's root directory is its configuration contract
 }
 ```
 
-There are a few constraints to be aware of when writing schemas. The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional schemas at the root level (`anyOf`/`oneOf`/`allOf`/`$ref` without `properties`) are not allowed -- they can pass validation, but cause the config projection to silently become empty, so they are explicitly rejected. Validation uses Ajv 2020 with `strict: true`, `allErrors: true`, `useDefaults: true`: `default` values in the schema are backfilled into the document during validation. Validation failure throws `ConfigValidationError`, with error messages indicating the specific path and offending keys (`additionalProperty: xxx`) or valid enum values. Additionally, if a child plugin's `instanceKey` collides with a property name in the parent plugin's own schema, a `ConfigSchemaCollisionError` is thrown.
+The root must be an object schema; packages without a schema.json are treated as an empty object. Purely compositional root schemas are rejected. The framework injects an optional `commandNamespace` field into every plugin config; plugin schemas must not redeclare it, and omitted values mean no plugin namespace. Validation uses Ajv 2020 with strict validation and defaults. A reserved-field collision or a child `instanceKey` collision throws `ConfigSchemaCollisionError`.
 
 ## ConfigView: Projection by Owner
 

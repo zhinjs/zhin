@@ -74,7 +74,7 @@ plugins:
 
 ## Architecture
 
-- `plugin.ts` + `adapters/$icqq.ts`: Plugin Runtime entry and `defineAdapter` declaration
+- `plugin.ts` + `adapters/icqq/index.ts`: Plugin Runtime entry and `defineAdapter` declaration
 - `src/endpoint.ts`: owns the native Client and coordinates transport, Zhin lifecycle, and capability ports
 - `src/content-resolver.ts`: stores observed messages and expands forwarded messages within explicit limits
 - `src/icqq-inbound.ts`: normalizes native ICQQ events into Zhin inbound messages

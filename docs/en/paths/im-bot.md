@@ -21,7 +21,7 @@ Connect Console with the API Base printed by the Host and `HTTP_TOKEN` from `.en
 
 ## 2. Add a command
 
-Create `commands/$roll.ts`:
+Create `commands/roll/index.ts`:
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
@@ -32,7 +32,7 @@ export default defineCommand({
 });
 ```
 
-Save and send `/roll`. The file path supplies the route; `commands/gh/$issue.ts` becomes `/gh issue`.
+Save and send `/roll`. The file path supplies the route; `commands/gh/issue/index.ts` becomes `/gh issue`.
 
 ## 3. Add a proactive notification
 

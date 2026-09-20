@@ -3,7 +3,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
-import defineQqAdapter from '../adapters/$qq.js';
+import defineQqAdapter from '../adapters/qq/index.js';
 import {
   QqWebsocketEndpoint,
   QqHttpEndpoint,

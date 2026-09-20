@@ -104,7 +104,7 @@ describe('Client build adapter', () => {
 
   it('requires Page and Layout modules to have a default export', async () => {
     const root = await temp();
-    const source = join(root, 'pages/$nav.tsx');
+    const source = join(root, 'pages/nav/index.tsx');
     await writeSource(source, 'export const value = 1;');
     const builder = new TypeScriptClientBuilder({ projectRoot: root, outDir: join(root, 'dist') });
     const request: ClientModuleRequest = {

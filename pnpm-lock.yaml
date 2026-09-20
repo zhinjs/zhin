@@ -1195,9 +1195,6 @@ importers:
       '@zhin.js/prompt-section':
         specifier: workspace:*
         version: link:../prompt-section
-      '@zhin.js/schedule':
-        specifier: workspace:*
-        version: link:../../../basic/schedule
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../skill
@@ -1390,6 +1387,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      '@zhin.js/schedule-feature':
+        specifier: workspace:*
+        version: link:../schedule-feature
       '@zhin.js/schema':
         specifier: workspace:*
         version: link:../../../basic/schema
@@ -1619,6 +1619,22 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../tool
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/schedule-feature:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2044,6 +2060,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool

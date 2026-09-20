@@ -26,16 +26,17 @@ describe('MCP Feature', () => {
     expect(() => parseMcpDefinition({ create() {} })).toThrow('defineMcp');
   });
 
-  it('discovers only flat mcp/$*.ts client definitions', async () => {
+  it('discovers only mcps/<name>/index.ts client definitions', async () => {
     const definition = defineMcp({
       create: () => ({ listTools: () => [], callTool: () => undefined }),
     });
     const host = new MemoryHost({
-      '/project/mcp': [
-        { name: '$memory.ts', kind: 'file' },
-        { name: 'nested', kind: 'directory' },
+      '/project/mcps': [
+        { name: 'memory', kind: 'directory' },
+        { name: 'helper.ts', kind: 'file' },
       ],
-    }, new Map([['/project/mcp/$memory.ts', { default: definition }]]));
+      '/project/mcps/memory': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([['/project/mcps/memory/index.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(mcpFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -50,7 +51,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'memory',
-      source: '/mcp/$memory.ts',
+      source: '/mcps/memory/index.ts',
       definition: defineMcp({
         create: () => ({
           start() { events.push('start'); },
@@ -82,7 +83,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: name,
-      source: `/mcp/${name}.ts`,
+      source: `/mcps/${name}/index.ts`,
       definition: defineMcp({
         create: () => ({
           start() {
@@ -116,7 +117,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'flaky',
-      source: '/mcp/$flaky.ts',
+      source: '/mcps/flaky/index.ts',
       definition: defineMcp({
         create: () => ({
           start() { events.push('start'); },
@@ -149,7 +150,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'server',
-      source: `/mcp/$server-${tag}.ts`,
+      source: `/mcps/server-${tag}/index.ts`,
       definition: defineMcp({
         create: () => ({
           start() { events.push(`${tag}:start`); },
@@ -190,7 +191,7 @@ describe('MCP Feature', () => {
       owner: root,
       feature: mcpFeatureId,
       localName: 'server',
-      source: `/mcp/$server-${tag}.ts`,
+      source: `/mcps/server-${tag}/index.ts`,
       definition: defineMcp({
         create: () => ({
           start() {

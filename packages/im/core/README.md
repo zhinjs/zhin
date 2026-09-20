@@ -41,7 +41,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/$hello.ts
+// commands/hello/index.ts
 import { defineCommand } from 'zhin.js/command'
 
 export default defineCommand({
@@ -59,7 +59,7 @@ export default defineCommand({
 Adapter 定义选择并创建 Endpoint；Endpoint 独占账号连接、平台 Client 和 IO。当前 generation 的 `AdapterIndex` 持有实例并提供发送、控制与 Client 查询。
 
 ```typescript
-// adapters/$example.ts
+// adapters/example/index.ts
 import { Endpoint, defineAdapter } from 'zhin.js/adapter'
 
 class ExampleEndpoint extends Endpoint<ExampleClient> {

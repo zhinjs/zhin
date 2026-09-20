@@ -5,7 +5,16 @@ description: tools/<name>/index.ts convention and setup addTool — one ToolInde
 
 # Agent Tools and Skills
 
-Want the model to search a song or check a lottery recommendation for the user? Put the logic in `tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
+Choose a Tool directory from the disclosure scope the capability needs. Every authoring path writes the same candidate-generation capability table and becomes visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
+
+| Directory | Ownership | Model disclosure |
+| --- | --- | --- |
+| `tools/<name>/index.ts` | Plugin-wide Tool | Enters the public deferred catalog when the plugin is enabled |
+| `agents/<agent>/tools/<name>/index.ts` | Agent-private Tool | Enters the capability set after that Agent is selected |
+| `skills/<skill>/tools/<name>/index.ts` | Skill-private Tool | Unlocks after `load_skill` activates that Skill |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Tool private to an Agent Skill | Requires both Agent selection and Skill activation |
+
+The initial model surface contains root Tools plus summaries for root Skills and Agents. Private Tool definitions are still validated while preparing the generation, but they do not enter the model Tool catalog before their owner is activated.
 
 ```mermaid
 flowchart LR
@@ -19,9 +28,9 @@ flowchart LR
     H --> I[Tool set callable by the model]
 ```
 
-## Path One: `tools/<name>/index.ts` Convention
+## Path One: Directory Conventions
 
-After mounting the `@zhin.js/tool` Feature, each `tools/<name>/index.ts` module is discovered and must default-export `defineAgentTool(...)`. Supporting modules stay beside the entry in the same named directory:
+After mounting the `@zhin.js/tool` Feature, `index.ts` in any of the four Tool locations is discovered and must default-export `defineAgentTool(...)`. Supporting modules stay beside the entry in the same named directory:
 
 ```ts
 // tools/echo/index.ts

@@ -58,10 +58,10 @@ describe('Plugin subtree HMR', () => {
       }),
     });
     modules.set(featureSource, { default: commandFeature });
-    modules.set(join(project, 'plugins/child/commands/child/$status.ts'), {
+    modules.set(join(project, 'plugins/child/commands/child/status/index.ts'), {
       default: defineCommand({ execute: ({ use }) => use(childValue) }),
     });
-    modules.set(join(project, 'plugins/sibling/commands/sibling/$status.ts'), {
+    modules.set(join(project, 'plugins/sibling/commands/sibling/status/index.ts'), {
       default: defineCommand({ execute: ({ use }) => use(siblingValue) }),
     });
 
@@ -219,9 +219,9 @@ async function createProject(): Promise<string> {
   for (const file of [
     'plugin.ts',
     'plugins/child/plugin.ts',
-    'plugins/child/commands/child/$status.ts',
+    'plugins/child/commands/child/status/index.ts',
     'plugins/sibling/plugin.ts',
-    'plugins/sibling/commands/sibling/$status.ts',
+    'plugins/sibling/commands/sibling/status/index.ts',
     'packages/command/index.ts',
   ]) await touch(join(root, file));
   return realpath(root);

@@ -5,7 +5,7 @@ import path from 'path';
 describe('@zhin.js/adapter-github package', () => {
   it('should have plugin entry and adapter module', () => {
     expect(fs.existsSync(path.resolve(__dirname, '../plugin.ts'))).toBe(true);
-    expect(fs.existsSync(path.resolve(__dirname, '../adapters/$github.ts'))).toBe(true);
+    expect(fs.existsSync(path.resolve(__dirname, '../adapters/github/index.ts'))).toBe(true);
     expect(fs.existsSync(path.resolve(__dirname, '../schema.json'))).toBe(true);
   });
 

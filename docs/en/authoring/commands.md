@@ -5,10 +5,10 @@ description: commands/ file routing, execute context, return value rendering, ma
 
 # Commands (defineCommand)
 
-Create a `commands/` directory in your plugin package root and drop a `$hello.ts` file in it -- users can then type `hello` in a group chat to trigger it. **A `$`-marked file path is the command name**, and after editing a file, hot reload takes effect immediately without restarting the process. This pipeline is provided by the `@zhin.js/command` Feature (inherited via `platformFeatures` when depending on `zhin.js`); no manual registration needed. Files without `$` are ordinary modules that entries can import. Authors import from `zhin.js/command` — **do not** `pnpm add @zhin.js/command`.
+Create `commands/hello/index.ts` in a plugin package and users can type `hello` to trigger it. Only `index.ts` or `index.tsx` is a command entry; sibling files are helpers. The `@zhin.js/command` Feature provides discovery and hot reload.
 
 ```ts
-// commands/$hello.ts
+// commands/hello/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -34,40 +34,40 @@ export default definePlugin({
 ```
 
 `addCommand` and directory discovery share the same `CommandIndex`, manifest, conflict detection, and generation lifecycle.
-When commands grow in number, move the definition to a `commands/$hello.ts` default export; the directory mode also narrows
+When commands grow in number, move the definition to a `commands/hello/index.ts` default export; the directory mode also narrows
 HMR granularity to individual command files.
 
 ## File Routing
 
-The command name comes only from the relative path under `commands/`, with directory segments joined by spaces. The plugin owner remains part of the Capability identity and configuration scope, but never leaks into user input. Put a product namespace in the directory path explicitly when needed.
+The command name comes from the directory path under `commands/`, with segments joined by spaces. The Endpoint first consumes its own `commandPrefix`, which defaults to an empty string. The plugin owner remains part of Capability identity and configuration scope; it enters user input only when plugin config explicitly sets `commandNamespace`.
 
 | File | Plugin | Command name |
 | --- | --- | --- |
-| `commands/$hello.ts` | root | `hello` |
-| `commands/qq/endpoint/$list.ts` | `qq` | `qq endpoint list` |
-| `commands/qq/endpoint/add/$[[name]].ts` | `qq` | `qq endpoint add [name]` |
-| `commands/$foo.ts` | `a` under `b` (`root/b/a`) | `foo` |
+| `commands/hello/index.ts` | root | `hello` |
+| `commands/qq/endpoint/list/index.ts` | `qq` | `qq endpoint list` |
+| `commands/qq/endpoint/add/[[name]]/index.ts` | `qq` | `qq endpoint add [name]` |
+| `commands/foo/index.ts` + `commandNamespace: admin` | `a` under `b` (`root/b/a`) | `admin foo` |
 
 First, nesting: `commands/` is scanned recursively, and nested directories map directly to subcommand segments. Static file / directory names must pass `isCapabilityLocalSegment` (`zhin.js`):
 
-- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `$hello.ts`, `$lottery-today.ts`)
-- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `$赞我.ts` (trigger word `赞我`)
-- Dynamic parameter files remain ASCII-only: `$[name].ts` / `$[[name]].ts`, etc.
+- **ASCII kebab**: `/^[a-z0-9][a-z0-9-]*$/` (e.g. `hello/`, `lottery-today/`)
+- **Unicode names**: at least one non-ASCII character and no ASCII uppercase, e.g. `赞我/` (trigger word `赞我`)
+- Dynamic parameter directories remain ASCII-only: `[name]/` / `[[name]]/`, etc.
 
-`instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like.ts`).
+`instanceKey` and other convention directories (middlewares / …) stay ASCII kebab. `tools/` allows ASCII kebab or snake (e.g. `send_user_like/`).
 
-Dynamic parameter segments use Next.js-style file names to declare their shape and must be the last segment of the path; **type and default value are not written into the file name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
+Dynamic parameter segments use Next.js-style directory names to declare their shape and must be the last segment of the path; **type and default value are not written into the directory name** — they are declared in `defineCommand({ params })`, where `params.<name>.type` is required and `default` is optional:
 
-| File name | Shape | Help display | params declaration |
+| Directory entry | Shape | Help display | params declaration |
 | --- | --- | --- | --- |
-| `$[name].ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
-| `$[[name]].ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
-| `$[...name].ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
-| `$[[...name]].ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
+| `[name]/index.ts` | Required parameter | `<name>` | `params: { name: { type: 'string' } }` |
+| `[[name]]/index.ts` | Optional parameter | `[name]` | `params: { name: { type: 'string', default: '' } }` |
+| `[...name]/index.ts` | Catch-all (consumes all remaining input) | `<...name>` | `params: { name: { type: 'text' } }`; at runtime `params.name` is an array |
+| `[[...name]]/index.ts` | Optional catch-all | `[...name]` | Same as above; an empty array when not provided |
 
-Consistency is validated at startup: when a `default` is present the file name must use double brackets (`$[[name]]`), and a parameter shape in the file name without a matching `params` declaration both throw `CommandPathSyntaxError`.
+Consistency is validated at startup: when a `default` is present the directory must use double brackets (`[[name]]`), and a parameter directory without a matching `params` declaration both throw `CommandPathSyntaxError`.
 
-A dynamic parameter may be the top-level first segment. In both Root and child plugins, `commands/$[note].ts` matches one top-level segment; `commands/remind/$[note].ts` becomes `remind <note>`. A command still allows only one dynamic segment, and it must be last. If different owners publish the same user route, generation construction fails with a conflict.
+A dynamic parameter may be the top-level first segment. In both Root and child plugins, `commands/[note]/index.ts` matches one top-level segment; `commands/remind/[note]/index.ts` becomes `remind <note>`. A command still allows only one dynamic segment, and it must be last. If different owners publish the same user route, generation construction fails with a conflict.
 
 The element granularity of a catch-all array depends on `params.<name>.type`: `text` collects per message segment (plain-text input arrives as a single element); `word` / `string` split on whitespace into words; `number` / `integer` / `float` / `boolean` split into words and convert each one — any word that fails conversion makes the whole command not match; structured types such as `mention` / `image` collect per message segment.
 
@@ -81,9 +81,9 @@ The element granularity of a catch-all array depends on `params.<name>.type`: `t
 Structured IM parameters do not support default values. At runtime, `segment-matcher` matches directly on canonical segments,
 without first degrading image, mention, etc. to text; type mismatches are treated as "command not matched" during dispatch.
 
-Route conflict has two rules: **static priority** -- `$list.ts` always wins over `$[name].ts`, and among dynamic routes, those with more static segments (more specific) take priority; **same-shape rejection** -- duplicate registration of the same route shape reports an error at startup (`Duplicate runtime Command`).
+Route conflict has two rules: **static priority** -- `list/index.ts` always wins over `[name]/index.ts`, and among dynamic routes, those with more static segments take priority; **effective-route rejection** -- routes that still collide after applying explicit `commandNamespace` values fail generation startup. Users can assign different namespaces to incompatible plugins.
 
-Real-world example (`plugins/adapters/qq/commands/qq/endpoint/remove/$[name].ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
+Real-world example (`plugins/adapters/qq/commands/qq/endpoint/remove/[name]/index.ts`, command definition generated by the [endpoint management command suite](#adapter-endpoint-management-command-suite)):
 
 ```ts
 import { qqEndpointCommands } from '../../../../src/qq-endpoint-commands.js';
@@ -149,7 +149,7 @@ Therefore `qq endpoint remove mybot` matches `qq endpoint remove <name>`, `args`
 Structured parameter example:
 
 ```ts
-// commands/upload/$[asset].ts
+// commands/upload/[asset]/index.ts
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -243,7 +243,7 @@ Integrating an adapter requires only four steps (using telegram as an example):
 // 1. src/telegram-runtime-state.ts -- runtime endpoint registry token
 export const telegramRuntimeStateToken = defineEndpointRuntimeStateToken('telegram');
 
-// 2. plugin.ts setup() -- provide state; register in adapters/$telegram.ts create()
+// 2. plugin.ts setup() -- provide state; register in adapters/telegram/index.ts create()
 context.resources.provide(telegramRuntimeStateToken, createEndpointRuntimeState());
 // create(): context.use(telegramRuntimeStateToken).endpoints.set(config.name, { name: config.name, mode: config.mode });
 
@@ -257,7 +257,7 @@ export const telegramEndpointCommands = createEndpointCommands({
   describeEntry: (entry) => `token: ${String(entry.token)}`,
 }, defineCommand);
 
-// 4. commands/telegram/endpoint/$list.ts, add/$[[name]].ts, remove/$[name].ts
+// 4. commands/telegram/endpoint/list/index.ts, add/[[name]]/index.ts, remove/[name]/index.ts
 export default telegramEndpointCommands.list; // / .add / .remove
 ```
 

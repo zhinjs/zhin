@@ -48,6 +48,36 @@ describe('hierarchical Plugin config', () => {
     });
   });
 
+  it('injects optional commandNamespace into root and child Plugin config views', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const config = await new ConfigComposer().compose(graph, {
+      plugin: { commandNamespace: 'root admin' },
+      plugins: { child: { commandNamespace: 'child' } },
+    });
+
+    expect(config.views.get(graph.root.id)).toEqual({ commandNamespace: 'root admin' });
+    expect(config.views.get(graph.root.children[0]!.id)).toEqual({ commandNamespace: 'child' });
+  });
+
+  it('reserves commandNamespace for the framework config contract', async () => {
+    const root = await configProject({
+      rootSchema: {
+        type: 'object',
+        properties: { commandNamespace: { type: 'string' } },
+      },
+      childSchema: {},
+    });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+
+    await expect(new ConfigComposer().compose(graph, {})).rejects.toMatchObject({
+      name: 'ConfigSchemaCollisionError',
+      instanceKey: 'commandNamespace',
+    });
+  });
+
   it('preserves an inactive child namespace without mounting or validating its Plugin view', async () => {
     const root = await configProject({
       rootSchema: {},

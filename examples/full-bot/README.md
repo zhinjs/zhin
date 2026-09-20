@@ -48,7 +48,7 @@ pnpm dev
 - `ai.memory.semantic.enabled: true`（`autoConsolidate: false`，由 skill 触发）
 - Runtime Host 按配置动态加载 `@zhin.js/a2a` / `@zhin.js/mcp`，统一 Bearer 鉴权
 - `package.json#zhin` 声明三 Adapter 子插件及 Command/Component/Skill/Tool/Page Feature
-- `pages/$workroom.tsx` 由轻量 TypeScript Client Builder 构建，不依赖 Vite
+- `pages/workroom/index.tsx` 由轻量 TypeScript Client Builder 构建，不依赖 Vite
 
 详见 [`zhin.config.yml`](./zhin.config.yml) 与 [`ACCEPTANCE.md`](./ACCEPTANCE.md)。
 

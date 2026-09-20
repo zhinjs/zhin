@@ -11,10 +11,11 @@ const CAPABILITY_DIRECTORIES = [
   'hooks',
   'commands',
   'components',
-  'mcp',
+  'mcps',
   'middlewares',
   'pages',
   'prompt-sections',
+  'schedules',
   'skills',
 ];
 const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);

@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { parseHandlerDefinition } from './definition.js';
 import { HandlerIndex } from './handler-index.js';
 
@@ -10,9 +10,9 @@ const handlerFeature = defineFeatureProvider({
   id: handlerFeatureId,
   authoring: {
     setupMethod: 'addHandler',
-    conventions: [typeScriptModules({
-      id: 'handlers-ts',
-      directory: 'handlers',
+    conventions: [directoryModules({
+      id: 'handlers-index',
+      layouts: [{ segments: ['handlers', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseHandlerDefinition,
   },

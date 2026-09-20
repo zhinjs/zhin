@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import middleware from '../middlewares/$ttt-choice.ts';
+import middleware from '../middlewares/ttt-choice/index.ts';
 import { startBotGame } from '../src/game-flow.js';
 import { createMemoryGameServices } from '@zhin.js/game-kit';
 import { createServices, type SessionServices } from '../src/session-service.js';

@@ -23,6 +23,7 @@ const skillFiles: SourceConvention = {
       yield {
         localName: entry.name,
         source: join(directory, 'SKILL.md'),
+        relatedSources: Object.freeze(await privateToolSources(context, directory)),
         target: 'server',
       };
     }
