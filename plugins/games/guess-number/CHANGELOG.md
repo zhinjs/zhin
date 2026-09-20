@@ -1,5 +1,61 @@
 # @zhin.js/plugin-guess-number
 
+## 1.1.2
+
+### Patch Changes
+
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- 0a6edaf: Replace the process-global game registry and implicit current database with a generation-owned Game Feature projection. Each game now publishes a typed Game capability with its own record port, while the hub reads the atomic GameIndex from the active operation snapshot.
+
+  This removes setup-order routing, cross-Root state, HMR registration stacks, and the legacy GameKit singleton APIs.
+
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [cd54131]
+- Updated dependencies [5855db7]
+- Updated dependencies [ec921d2]
+- Updated dependencies [9110ab8]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [d4c6175]
+- Updated dependencies [7a0e1ca]
+- Updated dependencies [103b5d3]
+- Updated dependencies [5a7a7f7]
+- Updated dependencies [b076eae]
+- Updated dependencies [0a6edaf]
+- Updated dependencies [1cb1163]
+- Updated dependencies [be3061e]
+- Updated dependencies [75f8332]
+- Updated dependencies [81935e2]
+- Updated dependencies [f9ed01b]
+- Updated dependencies [ac0ab50]
+- Updated dependencies [5140ce1]
+- Updated dependencies [522d75f]
+- Updated dependencies [a7611b3]
+- Updated dependencies [8823044]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [135ac91]
+- Updated dependencies [140cf0f]
+- Updated dependencies [251e4d2]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [e0f6478]
+- Updated dependencies [5c3858e]
+  - @zhin.js/core@1.1.37
+  - @zhin.js/game-kit@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes

@@ -1,5 +1,89 @@
 # @zhin.js/core
 
+## 1.1.37
+
+### Patch Changes
+
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- 1414ccb: Make `UserMessage.actor` the sole participant identity authority across IM trigger, Agent ingress, persistence, LLM rendering, session-tree previews, and compaction. Remove sender identity from `agent_messages.extra`, delete text-based sender recovery and duplicate sender types/helpers, and keep Core AI trigger results limited to canonical user content.
+- 743d470: Make `@zhin.js/tool` the sole owner of Agent Tool input Schema admission, JSON Schema projection, and pre-execution parsing. Require an object-root JSON Schema or the public Zod 4 `safeParse` plus `toJSONSchema` contract, remove Zod 3 structural compatibility, and delete the duplicate `@zhin.js/core/tool-zod` entry point.
+- 62dee52: Rename the Agent Tool policy field from `approval` to `requiresApproval`, so values such as `never` and `always` state when human approval is required. Remove the old field without a compatibility alias and migrate built-in, adapter, feature, and utility Tools to the canonical contract.
+- cd54131: Remove the deleted `usePlugin`, `getPlugin`, and host-root registry signatures
+  from the public runtime instead of retaining throwing or no-op compatibility
+  exports. Remove the module-global `registerAIHook` compatibility registry;
+  Agent hooks now belong to generation-owned resources and canonical stream events.
+- 5855db7: Decouple canonical Message, Side Event, and middleware contracts from the classic Adapter class registry. Adapter identity now follows the Plugin Runtime string contract, and the unused `RegisteredAdapters`, adapter-message inference, and classic Endpoint config aliases are removed.
+- ec921d2: Move conversational claims, typed question sequences, action routing, and keyboard fallback state into a dedicated runtime-owned interaction coordinator. `ImRuntime` now delegates interaction behavior instead of implementing a second state machine inside the message gateway.
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+- b853dba: Remove process-global ScheduleEngine and Scheduler getters and setters. Each assistant ScheduleJobEngine now owns and disposes an isolated scheduler, preventing cross-runtime job collisions and stale timers.
+- e561309: Give each IM runtime one dedicated conversation owner for event-store replacement, inbound and outbound fact recording, notice normalization, reference lookup, context aggregation, and consumer cursors. Split the conversation contract into reader and writer ports so Agent and CLI receive only the read capability while Core retains mutation authority.
+- d4c6175: Move generation-leased Endpoint discovery, capability lookup, Console delivery, controls, and management into a dedicated `EndpointRuntime`. Remove the flat Endpoint methods from `ImRuntime`, migrate Host composition to `im.endpoints`, and narrow the outbound Host dependency to its required runtime port.
+- 7a0e1ca: Move Endpoint ingress normalization, generation leases, inbound middleware, handlers, interaction and command routing, Agent fallback, and side-event action scopes into one `InboundRuntime`. Remove the flat `ImRuntime.receiveEndpointEvent()` entry and require Adapter ingress through the canonical `endpointEvents.receive()` gateway.
+- 103b5d3: Move rendering, outbound policy projection, middleware execution, Endpoint delivery, conversation recording, and observer publication into one `OutboundDeliveryRuntime`. Replace the flat `ImRuntime.onMessage()` method with a read-only `messageEvents` subscription source and narrow Console message and Inbox dependencies to explicit ports.
+- 5a7a7f7: Remove the duplicate classic interactive handler registry and process-global keyboard fallback store. `ImRuntime` now owns one encapsulated interactive router whose handlers and fallback mappings are isolated by runtime instance, generation, and conversation.
+- b076eae: Replace the permission host factory with an explicitly owned `PermissionHost` class. Each IM runtime now holds a private permission registry, so platform and custom checkers cannot leak between roots or generations.
+
+  Remove Core's duplicate permit parser, checker, legacy `PermissionFeature`, and process-global platform permit registry. Permit syntax and evaluation now have one owner in `@zhin.js/permission`, and scene-management tool construction no longer mutates global authorization state.
+
+- 1cb1163: Remove the unused process-global `Adapter.Registry`, `Adapter.register`, and `Adapter.Factory` APIs. Adapter definitions and live instances are now discovered and owned only by the current generation's `AdapterIndex`.
+- be3061e: Remove the classic Core `Adapter` class, Core `Endpoint` compatibility type, capability WeakMap, and their connection and lifecycle helpers. Platform integrations now have one model: `defineAdapter`, `Endpoint<TClient>`, and the current generation's `AdapterIndex` from `zhin.js/adapter`.
+- 75f8332: Remove the classic `MessageCommand` and `CommandFeature` runtime, its Plugin extension, legacy Endpoint command registration, and the command branch in the classic dispatcher. Commands now have one execution model: `defineCommand` definitions projected into the generation-owned `CommandIndex`.
+- 81935e2: Remove the unused classic `ComponentFeature` registry and `Plugin.addComponent` extension. Component definitions are discovered and projected by the generation-owned Component Feature, while Core keeps only the message and JSX rendering primitives it owns.
+- f9ed01b: Remove the unmounted classic Config and Schema Feature registries, schema-driven Endpoint provisioning service, and their service-locator based Adapter hooks. Runtime configuration now has one generation-owned authority through `ConfigComposer`, `ConfigView`, and `primaryConfigToken`; adapter endpoint configuration remains owned by `@zhin.js/adapter` and its explicit command surface.
+- ac0ab50: Remove the closed classic Core Plugin runtime, its duplicate dispatcher and inbound pipeline, and the public types that only described those dead paths. Handler authoring now derives canonical IM event types directly from the generation-owned Runtime contract.
+- 5140ce1: Remove the unmounted classic Database Feature, its `defineModel` extension, and the process-global post-start migration hook. Database tables and lifecycle now have one authority through the generation-owned Database Host. Also remove the inactive online `bot_id` compatibility migration; supported schemas must use `endpoint_id` directly.
+- 522d75f: Remove the classic `Plugin.adapters` directory and `Plugin.injectAdapter()` service-locator helper. Live Endpoint discovery now belongs exclusively to the current generation's `AdapterIndex`.
+- a7611b3: Remove the unmounted classic `ProcessAdapter`, `ProcessEndpoint`, and process stdin runtime helpers. Local interaction is owned by the Sandbox Adapter and CLI Host, so Core no longer exposes a second process-global transport path.
+- 8823044: Remove the disconnected classic Rich Segment class hierarchy, mutable registry, renderer policies, optional-peer loaders, and adapter contract facade. `segment.html`, `segment.markdown`, `segment.qrcode`, and `segment.tts` now create canonical message segments directly; Plugin Runtime's generation-owned outbound normalization remains the sole rendering and media-negotiation path.
+- 379439b: Remove the unmounted classic Core `ToolFeature` and `SkillFeature` registries and the unused Agent bridge that copied them into a mutable resource hub. Tool and Skill authority now comes only from generation-owned Feature projections consumed by Plugin Runtime `CapabilityIngress`; Core retains only the stateless IM access predicate used by the current path.
+- 11c9352: Remove dead deprecated aliases from Core and Agent, including legacy Tool and outbound segment types, the old interactive segment helper, duplicate Session and Schedule names, obsolete log formatters, and the process-global Task Executor drain shim. Current APIs now expose one name and one ownership model for each behavior.
+- 135ac91: Remove the unmounted classic Schedule, AgentPreset, and MessageFilter Feature registries. Plugin Runtime scheduling now has one owner-scoped authority through `scheduleHostToken`, Agent presets have one authority in the Agent Feature and Resource Hub, and message admission remains in the active middleware and guardrail pipeline.
+- 140cf0f: Remove the legacy composed side-event mapping aliases in favor of structured `mapNoticeParts` and `mapRequestParts`. Delete unmounted Agent default hook, tool, and subagent modules that exposed no runtime behavior.
+- 251e4d2: Remove the unused Plugin Runtime service tokens that referenced classic Core Feature registries. Runtime capabilities are exposed through their generation snapshot projections and owned resources instead of inert compatibility tokens.
+- 203ad34: Remove process-global expression and proxy caches from Kernel evaluation. Every evaluation now compiles independently and owns its proxy identity map for the lifetime of one sandbox, so unrelated runtimes cannot share hidden evaluator state.
+- e6c5113: Remove the unused Kernel PluginBase, mutable Feature registry, string-based dependency injection, and prototype extension registry. Plugin lifecycle now belongs solely to the generation-owned Plugin Runtime, while capability discovery and projection belong to Feature Kit.
+- e0f6478: Remove plugin.yml build detection, package-name heuristics, and the unused Core PluginManifest type. Smart builds now recognize plugins through the canonical package.json zhin manifest and applications through an explicit zhin.js dependency.
+- 5c3858e: Make `@zhin.js/im-contract` the explicit zero-dependency owner of transport identities, canonical segments, media guards, conversation facts, stores, and delivery contracts. Platform adapters now read media contracts from that foundation instead of reaching through Core.
+- Updated dependencies [13f7301]
+- Updated dependencies [a9e4a40]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [eb3227a]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [b076eae]
+- Updated dependencies [73a24b7]
+- Updated dependencies [4380cf9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [65d0391]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/command@1.1.1
+  - @zhin.js/adapter@1.1.14
+  - @zhin.js/middleware@1.1.1
+  - @zhin.js/handler@1.1.1
+  - @zhin.js/component@1.1.1
+  - @zhin.js/schedule-feature@1.1.1
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/kernel@1.1.1
+  - @zhin.js/im-contract@1.1.1
+  - @zhin.js/permission@1.1.1
+  - @zhin.js/database@1.1.1
+
 ## 1.1.36
 
 ### Patch Changes

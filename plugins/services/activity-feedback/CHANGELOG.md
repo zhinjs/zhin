@@ -1,5 +1,72 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.3
+
+### Patch Changes
+
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- 6b70e46: Remove deprecated runtime authoring aliases instead of carrying two names for one concept. AI setup now accepts only `agentProvider` and exposes `resolveAgentProviderFromConfig`, HTTP Host consumers use the canonical Console endpoint contract directly, and activity feedback resolution goes through `ActivityFeedbackPolicy`.
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [e1d77d2]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [eb0100a]
+- Updated dependencies [6b0415a]
+- Updated dependencies [cd54131]
+- Updated dependencies [8ededb6]
+- Updated dependencies [8740059]
+- Updated dependencies [25a845a]
+- Updated dependencies [103f2c3]
+- Updated dependencies [9110ab8]
+- Updated dependencies [d844144]
+- Updated dependencies [2a2b5d7]
+- Updated dependencies [1fa1c09]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [f4387ef]
+- Updated dependencies [75920c4]
+- Updated dependencies [5c1ea6c]
+- Updated dependencies [cd4f240]
+- Updated dependencies [535fed1]
+- Updated dependencies [5d990be]
+- Updated dependencies [cd55ee6]
+- Updated dependencies [98dbc85]
+- Updated dependencies [3abdc90]
+- Updated dependencies [2b7b271]
+- Updated dependencies [f19d598]
+- Updated dependencies [ba0ba3c]
+- Updated dependencies [5140ce1]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [4bc3d3c]
+- Updated dependencies [6012e3c]
+- Updated dependencies [31b42a8]
+- Updated dependencies [cb61227]
+- Updated dependencies [140cf0f]
+- Updated dependencies [774ed26]
+- Updated dependencies [adecba9]
+- Updated dependencies [019f5ff]
+- Updated dependencies [77d5a46]
+- Updated dependencies [da17137]
+- Updated dependencies [659b61d]
+- Updated dependencies [91adaa5]
+- Updated dependencies [1fed817]
+- Updated dependencies [698f16f]
+- Updated dependencies [e5d9795]
+- Updated dependencies [444ea45]
+- Updated dependencies [2fd8017]
+- Updated dependencies [5c3858e]
+- Updated dependencies [33ea736]
+  - @zhin.js/agent@1.1.26
+  - @zhin.js/logger@1.1.1
+
 ## 1.1.2
 
 ### Patch Changes

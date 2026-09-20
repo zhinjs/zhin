@@ -1,5 +1,42 @@
 # @zhin.js/adapter
 
+## 1.1.14
+
+### Patch Changes
+
+- a9e4a40: Derive Command user routes only from explicit `commands/**/*/index.ts(x)` entry paths instead of prepending the plugin owner. Child plugins can now publish top-level static or dynamic commands, while duplicate routes across owners fail during generation construction. Adapter endpoint commands move to explicit paths such as `commands/qq/endpoint/list/index.ts` and are invoked as `qq endpoint list`.
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- eb3227a: Move Endpoint project-configuration persistence behind the root-owned `EndpointConfigurationStore` resource. The Adapter package now owns only command semantics and no longer imports Node filesystem, path, or YAML APIs; CLI owns canonical YAML and `.env` persistence, while QQ and ICQQ special binding flows use the same injected boundary. Remove the old direct persistence helpers and reject legacy `plugins` arrays instead of promoting them at runtime.
+- 73a24b7: Reorganize the Adapter package into one-way authoring, Endpoint boundary, managed lifecycle, and Runtime projection modules without changing public imports. Extract ICQQ content resolution behind a focused module and document its source map.
+- df9f76b: Make Endpoint configuration persistence asynchronous and route it through the canonical transactional Root configuration port. Endpoint management now supports both YAML and JSON, materializes a missing Root config safely, serializes concurrent mutations, restores `.env` when the config commit fails, and restarts the development process after environment-file changes.
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [9110ab8]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [e561309]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [2fd8017]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/feature-kit@1.1.1
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/im-contract@1.1.1
+
 ## 1.1.13
 
 ### Patch Changes

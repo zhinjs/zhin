@@ -1,5 +1,23 @@
 # @zhin.js/layout
 
+## 1.1.1
+
+### Patch Changes
+
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [2fd8017]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/feature-kit@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes
