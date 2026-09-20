@@ -143,6 +143,17 @@ claim、超时与取消、连续问答、action handler 和编号 fallback。状
 AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导和 AI 追问不会各自维护一套
 平台按钮逻辑。
 
+## Endpoint 运行时所有权
+
+每个 `ImRuntime` 公开一个实例私有的 `EndpointRuntime`，作为 generation-owned
+`AdapterIndex` 的唯一运行时入口。Endpoint 列表、能力查询、Console 定向发送、回应、撤回、
+编辑、typing 与管理操作都由它取得并释放当前快照租约；上层 Host 只依赖所需操作组成的窄端口。
+`ImRuntime` 继续拥有统一的入站网关和 `render → before.sendMessage → AdapterIndex.send`
+出站管线，因此 Console 定向发送也不会绕过渲染与中间件。
+
+旧的 `ImRuntime.listEndpoints()`、`sendEndpointMessage()` 等平铺入口已删除。内部装配统一使用
+`im.endpoints.*`，不保留转发别名或双重 Endpoint 权威。
+
 ## Endpoint 1:N 展开
 
 一个适配器插件实例配置里声明 `endpoints: [{name, ...}]` 时，`AdapterIndex` 把它展开成 N 条独立 endpoint 记录（配置合并规则见 [配置即数据](./config-as-data.md)）：

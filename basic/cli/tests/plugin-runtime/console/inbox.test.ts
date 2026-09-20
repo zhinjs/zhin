@@ -83,7 +83,7 @@ function fakeIm(endpointId?: string): {
       listeners.add(listener);
       return () => listeners.delete(listener);
     },
-    getEndpoint: () => (endpointId ? { name: endpointId } : null),
+    endpoints: { get: () => (endpointId ? { name: endpointId } : null) },
   } as unknown as ImRuntime;
   return {
     im,
@@ -223,9 +223,11 @@ describe('InboxMessageRecorder', () => {
     let endpointId: string | null = null;
     let getEndpointCalls = 0;
     const im = {
-      getEndpoint: () => {
-        getEndpointCalls += 1;
-        return endpointId ? { name: endpointId } : null;
+      endpoints: {
+        get: () => {
+          getEndpointCalls += 1;
+          return endpointId ? { name: endpointId } : null;
+        },
       },
     } as unknown as ImRuntime;
     const recorder = new InboxMessageRecorder(im, host);

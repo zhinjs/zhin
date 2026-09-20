@@ -85,12 +85,12 @@ function createRpcContext(
       configuration.writeEnvironmentFile(filename, content),
     getSchema: (pluginName?: string) => configuration.readSchema(pluginName),
     getAllSchemas: () => configuration.readAllSchemas(),
-    listEndpoints: im ? async () => im.listEndpoints() : undefined,
+    listEndpoints: im ? async () => im.endpoints.list() : undefined,
     getEndpoint: im
-      ? async (adapter: string, endpointKey: string) => im.getEndpoint(adapter, endpointKey)
+      ? async (adapter: string, endpointKey: string) => im.endpoints.get(adapter, endpointKey)
       : undefined,
     sendEndpointMessage: im
-      ? async (input: RuntimeEndpointSendInput) => im.sendEndpointMessage(input)
+      ? async (input: RuntimeEndpointSendInput) => im.endpoints.send(input)
       : undefined,
     requestRestart: onRestart ? () => { onRestart(); } : undefined,
     dbInfo: databaseHost

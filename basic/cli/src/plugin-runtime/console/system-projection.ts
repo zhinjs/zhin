@@ -1,5 +1,5 @@
 import os from 'node:os';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import type { EndpointRuntimeSummary } from '@zhin.js/core/runtime';
 
 export type SystemOsMemory = {
   readonly freeMem: number;
@@ -75,7 +75,7 @@ export type ConsoleStatsData = {
   readonly runtime: 'node' | 'unknown';
 };
 
-type EndpointStatusView = Pick<ReturnType<ImRuntime['listEndpoints']>[number], 'status'>;
+type EndpointStatusView = Pick<EndpointRuntimeSummary, 'status'>;
 
 export function buildConsoleStats(
   pluginCount: number,

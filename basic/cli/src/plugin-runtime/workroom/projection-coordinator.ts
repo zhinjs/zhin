@@ -81,7 +81,7 @@ export class WorkroomProjectionCoordinator {
         if (!definition) return;
         const conversation = resolveCatalogWorkroomProjectionConversation(
           definition,
-          options.im.listEndpoints(),
+          options.im.endpoints.list(),
         );
         if (!conversation) return;
         await ensureCatalogWorkroomProjectionBinding({
@@ -90,11 +90,11 @@ export class WorkroomProjectionCoordinator {
           projectId,
           conversation,
           interactionBindingRevision: 1,
-          endpoints: options.im.listEndpoints(),
+          endpoints: options.im.endpoints.list(),
         });
       },
       resolveSponsorConversation: (_projectId, definition) =>
-        resolveCatalogSponsorProjectionConversation(definition, options.im.listEndpoints()),
+        resolveCatalogSponsorProjectionConversation(definition, options.im.endpoints.list()),
       ...(dataLifecycle ? { lifecycleOverdue: dataLifecycle.overdue } : {}),
       ...(options.portfolioSponsor
         ? { portfolioSponsor: options.portfolioSponsor }

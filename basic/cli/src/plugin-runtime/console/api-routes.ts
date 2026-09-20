@@ -62,7 +62,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerConsoleRestPages(http, {
     fullScope: true,
     projectRoot,
-    getEndpoints: im ? () => im.listEndpoints() : undefined,
+    getEndpoints: im ? () => im.endpoints.list() : undefined,
     acquireAgentRuntime: createAgentRuntimeLeaseResolver(projectRoot, snapshots),
     isKnownConversationSession: databaseHost
       ? (sessionKey) => isKnownConversationSession(databaseHost, sessionKey)

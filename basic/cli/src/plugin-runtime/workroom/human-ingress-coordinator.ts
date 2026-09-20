@@ -273,7 +273,7 @@ export class WorkroomHumanIngressCoordinator {
           projectId: decision.projectId,
           conversation: message.conversation,
           interactionBindingRevision: decision.bindingRevision,
-          endpoints: options.im.listEndpoints(),
+          endpoints: options.im.endpoints.list(),
         });
       },
       principalOwner: String(rootPluginId()),

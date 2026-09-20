@@ -178,7 +178,9 @@
     "export * from './message-bus.js';",
     "export * from './message-dispatcher.js';",
     "export * from './outbound-renderer.js';",
-    "export * from './outbound-segments.js';"
+    "export * from './outbound-segments.js';",
+    "export type{EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
+    "export{EndpointRuntime}from './endpoint-runtime.js';"
   ],
   "feature-kit": [
     "export * from './adapter-client.js';",

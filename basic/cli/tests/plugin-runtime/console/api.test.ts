@@ -111,10 +111,12 @@ function stubConsoleRuntime(): ConsoleRuntime {
 
 function stubIm(): ImRuntime {
   return {
-    listEndpoints: () => [
-      { name: 'bot', adapter: 'sandbox', owner: 'root/sandbox', connected: true, status: 'online' },
-      { name: '123456', adapter: 'icqq', owner: 'plugin-1', connected: false, status: 'offline' },
-    ],
+    endpoints: {
+      list: () => [
+        { name: 'bot', adapter: 'sandbox', owner: 'root/sandbox', connected: true, status: 'online' },
+        { name: '123456', adapter: 'icqq', owner: 'plugin-1', connected: false, status: 'offline' },
+      ],
+    },
   } as unknown as ImRuntime;
 }
 
@@ -1273,7 +1275,7 @@ describe('console SSE events', () => {
   it('streams sync/init-data then fans out message events from ImRuntime', async () => {
     let messageListener: ((event: RuntimeMessageEvent) => void) | undefined;
     const im = {
-      listEndpoints: () => [],
+      endpoints: { list: () => [] },
       onMessage(listener: (event: RuntimeMessageEvent) => void) {
         messageListener = listener;
         return () => { messageListener = undefined; };

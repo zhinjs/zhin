@@ -312,7 +312,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   }
   // TTY 交互启动：统一走 logger；裸 JSON 留给 --once / 管道（stable-path、脚本）
   if (process.stdout.isTTY && !parsed.once) {
-    const endpoints = im.listEndpoints();
+    const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
     const httpAddress = `${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;

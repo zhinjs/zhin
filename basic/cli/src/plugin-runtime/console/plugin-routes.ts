@@ -28,7 +28,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         projectRoot,
         pluginLifecycleFile,
         snap,
-        im?.listEndpoints() ?? [],
+        im?.endpoints.list() ?? [],
       );
       writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
     } catch (error) {
@@ -70,7 +70,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           node,
           await readPackageVersion(node.packageRoot),
           snap,
-          im?.listEndpoints(),
+          im?.endpoints.list(),
           projectRoot,
         ),
       });

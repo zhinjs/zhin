@@ -164,7 +164,7 @@ async function seedResourceHubAgentPresets(
 export function createRuntimeProactiveOutbound(im: ImRuntime): ProactiveOutboundService {
   return {
     async send(ctx, content) {
-      const result = await im.sendEndpointMessage({
+      const result = await im.endpoints.send({
         adapter: ctx.scene.platform,
         endpointKey: ctx.scene.endpointKey,
         conversation: {

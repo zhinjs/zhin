@@ -85,9 +85,10 @@ function resolveEndpointId(
   const [slotName, entryName] = localName.split('~');
   let resolved = entryName ?? localName;
   try {
-    const summary = typeof im.getEndpoint === 'function'
-      ? im.getEndpoint(slotName ?? localName, entryName ?? slotName ?? localName)
-      : null;
+    const summary = im.endpoints.get(
+      slotName ?? localName,
+      entryName ?? slotName ?? localName,
+    );
     if (summary?.name) {
       resolved = summary.name;
       cache.set(capabilityId, resolved);

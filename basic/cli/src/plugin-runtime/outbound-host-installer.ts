@@ -1,5 +1,5 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import type { EndpointRuntime } from '@zhin.js/core/runtime';
 import {
   outboundHostToken,
   type OutboundHost,
@@ -9,11 +9,25 @@ import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 const logger = getLogger('OutboundHost');
 
-export function createOutboundHost(im: ImRuntime): OutboundHost {
+export interface OutboundRuntimePort {
+  readonly endpoints: Pick<
+    EndpointRuntime,
+    | 'capabilities'
+    | 'send'
+    | 'addReaction'
+    | 'removeReaction'
+    | 'recall'
+    | 'edit'
+    | 'typing'
+  >;
+  runWithSnapshotView<T>(operation: () => Promise<T>): Promise<T>;
+}
+
+export function createOutboundHost(im: OutboundRuntimePort): OutboundHost {
   return {
     runWithView: (operation) => im.runWithSnapshotView(operation),
     capabilities(input) {
-      const capabilities = im.endpointCapabilities(input);
+      const capabilities = im.endpoints.capabilities(input);
       const operations = capabilities?.operations;
       if (!operations) return { operations: Object.freeze([]) };
       return {
@@ -25,7 +39,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     },
     async send(input: OutboundSendInput): Promise<string | null> {
       try {
-        const result = await im.sendEndpointMessage({
+        const result = await im.endpoints.send({
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           conversation: input.conversation,
@@ -49,7 +63,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     },
     async addReaction(input) {
       try {
-        return await im.addEndpointReaction({
+        return await im.endpoints.addReaction({
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           message: input.message,
@@ -69,7 +83,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     },
     async removeReaction(input) {
       try {
-        await im.removeEndpointReaction({
+        await im.endpoints.removeReaction({
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           message: input.message,
@@ -85,7 +99,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
       }
     },
     async recall(input) {
-      await im.recallEndpointMessage({
+      await im.endpoints.recall({
         adapter: input.adapter,
         endpointKey: input.endpointKey,
         message: input.message,
@@ -93,7 +107,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     },
     async edit(input) {
       try {
-        return await im.editEndpointMessage({
+        return await im.endpoints.edit({
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           message: input.message,
@@ -111,7 +125,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
     },
     async typing(input) {
       try {
-        await im.setEndpointTyping({
+        await im.endpoints.typing({
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           conversation: input.conversation,
@@ -129,7 +143,7 @@ export function createOutboundHost(im: ImRuntime): OutboundHost {
   };
 }
 
-export function installOutboundHost(im: ImRuntime): RootResourceInstaller {
+export function installOutboundHost(im: OutboundRuntimePort): RootResourceInstaller {
   return ({ resources }) => {
     resources.provide(outboundHostToken, createOutboundHost(im));
   };

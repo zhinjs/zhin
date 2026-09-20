@@ -28,7 +28,7 @@ export function registerConsoleSystemRoutes(options: RegisterConsoleSystemRoutes
 
   http.route('GET', `${base}/stats`, async (_request, response) => {
     try {
-      const endpoints = im ? im.listEndpoints() : [];
+      const endpoints = im ? im.endpoints.list() : [];
       const snap = readRuntimeSnapshot(snapshot);
       const commandIndex = snap?.projections.get(commandFeatureId);
       const commandCount = isCommandIndex(commandIndex) ? commandIndex.list().length : 0;

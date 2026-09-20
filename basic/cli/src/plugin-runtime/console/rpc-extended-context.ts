@@ -12,7 +12,7 @@ export function createExtendedConsoleRpcContext(
 ): Omit<ConsoleRpcExtendedCtx, 'fullScope'> {
   const { projectRoot, scheduleHost, im, databaseHost } = composition;
   const withEndpointManagement: ConsoleRpcExtendedCtx['withEndpointManagement'] = im
-    ? (adapter, endpointKey, run) => im.withEndpointManagement(adapter, endpointKey, run)
+    ? (adapter, endpointKey, run) => im.endpoints.withManagement(adapter, endpointKey, run)
     : undefined;
   return Object.freeze({
     projectRoot,

@@ -119,6 +119,12 @@ Command authoring uses `context.interaction` (`UserInteraction`). `ask()` descri
 
 `ImRuntime` delegates this concern to its private `RuntimeInteractionCoordinator`. The coordinator exclusively owns pending reply claims, timeouts and cancellation, sequences, action handlers, and numbered fallbacks. State is isolated by user, generation, and conversation, so a new generation cannot consume old keyboard mappings and separate Roots never share interaction state. The message gateway only decides when to invoke the coordinator; it does not implement the interaction state machine.
 
+## Endpoint runtime ownership
+
+Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and the `render -> before.sendMessage -> AdapterIndex.send` outbound pipeline, so Console-addressed delivery cannot bypass rendering or middleware.
+
+The former flat `ImRuntime.listEndpoints()`, `sendEndpointMessage()`, and related methods are removed. Internal composition uses `im.endpoints.*` without forwarding aliases or a second Endpoint authority.
+
 ## Endpoint 1:N Expansion
 
 When an adapter plugin instance configuration declares `endpoints: [{name, ...}]`, `AdapterIndex` expands it into N independent endpoint records (for configuration merge rules see [Config as Data](./config-as-data.md)):

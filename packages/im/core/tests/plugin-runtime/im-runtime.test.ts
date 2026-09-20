@@ -1033,7 +1033,7 @@ describe('IM Runtime', () => {
       conversation,
     }));
 
-    await fixture.im.sendEndpointMessage({
+    await fixture.im.endpoints.send({
       adapter: 'memory',
       endpointKey: 'memory',
       conversation,
@@ -1077,21 +1077,21 @@ describe('IM Runtime', () => {
     };
     const message = { conversation, id: 'message-1' };
 
-    expect(fixture.im.endpointCapabilities({ adapter: 'memory', endpointKey: 'memory' }))
+    expect(fixture.im.endpoints.capabilities({ adapter: 'memory', endpointKey: 'memory' }))
       .toEqual({
         inbound: true,
         outbound: true,
         operations: { recall: true, edit: true, reaction: true, typing: true },
       });
 
-    await fixture.im.recallEndpointMessage({ adapter: 'memory', endpointKey: 'memory', message });
-    await expect(fixture.im.editEndpointMessage({
+    await fixture.im.endpoints.recall({ adapter: 'memory', endpointKey: 'memory', message });
+    await expect(fixture.im.endpoints.edit({
       adapter: 'memory', endpointKey: 'memory', message, content: 'updated',
     })).resolves.toBe('edited');
-    await expect(fixture.im.addEndpointReaction({
+    await expect(fixture.im.endpoints.addReaction({
       adapter: 'memory', endpointKey: 'memory', message, emoji: '👍',
     })).resolves.toBe('👍');
-    await fixture.im.setEndpointTyping({
+    await fixture.im.endpoints.typing({
       adapter: 'memory', endpointKey: 'memory', conversation, active: true,
     });
 
@@ -1125,7 +1125,7 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const recalling = fixture.im.recallEndpointMessage({
+    const recalling = fixture.im.endpoints.recall({
       adapter: 'memory',
       endpointKey: 'memory',
       message: {
@@ -1174,7 +1174,7 @@ describe('IM Runtime', () => {
 
     const operation = fixture.im.runWithSnapshotView(async () => {
       await pending;
-      await fixture.im.recallEndpointMessage({
+      await fixture.im.endpoints.recall({
         adapter: 'memory', endpointKey: 'memory', message,
       });
     });
@@ -1205,7 +1205,7 @@ describe('IM Runtime', () => {
       id: 'room-1',
     };
 
-    await fixture.im.recallEndpointMessage({
+    await fixture.im.endpoints.recall({
       adapter: 'memory',
       endpointKey: 'memory',
       message: { conversation, id: 'message-1' },
@@ -1233,7 +1233,7 @@ describe('IM Runtime', () => {
       dispose: () => { disposed = true; },
     });
 
-    const listing = fixture.im.withEndpointManagement(
+    const listing = fixture.im.endpoints.withManagement(
       'memory',
       'memory',
       (management) => management.listFriends?.(),
@@ -1307,7 +1307,7 @@ describe('IM Runtime', () => {
     await adapters.start();
     adapters.open();
 
-    const listed = im.listEndpoints();
+    const listed = im.endpoints.list();
     expect(listed).toEqual([expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
@@ -1323,7 +1323,7 @@ describe('IM Runtime', () => {
     });
 
     // 用 slot localName 解析（inbox-installer 路径）
-    expect(im.getEndpoint('icqq', 'icqq')).toEqual(expect.objectContaining({
+    expect(im.endpoints.get('icqq', 'icqq')).toEqual(expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
       connected: true,
@@ -1332,11 +1332,11 @@ describe('IM Runtime', () => {
       managementCapabilities: ['listFriends', 'listGroups', 'kickGroupMember'],
     }));
     // 用 live name 解析（console endpoint.info 路径）
-    expect(im.getEndpoint('icqq', '111111')).toEqual(expect.objectContaining({
+    expect(im.endpoints.get('icqq', '111111')).toEqual(expect.objectContaining({
       name: '111111',
       adapter: 'icqq',
     }));
-    await expect(im.withEndpointManagement('icqq', '111111', (management) => {
+    await expect(im.endpoints.withManagement('icqq', '111111', (management) => {
       expect(management).toEqual(expect.objectContaining({
         listFriends: expect.any(Function),
         listGroups: expect.any(Function),
@@ -1344,7 +1344,7 @@ describe('IM Runtime', () => {
       }));
       return true;
     })).resolves.toBe(true);
-    await expect(im.withEndpointManagement('missing', 'missing', () => true))
+    await expect(im.endpoints.withManagement('missing', 'missing', () => true))
       .resolves.toBeNull();
 
     await adapters.stop();

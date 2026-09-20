@@ -16,14 +16,6 @@ import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
   AdapterIndex,
-  adapterFeatureId,
-  isAdapterIndex,
-  resolveEndpointManagement,
-  type AdapterOperation,
-  type EndpointControl,
-  type EndpointManagement,
-  type EndpointManagementCapability,
-  type AdapterEndpointPhase,
   type EndpointContentResolveContext,
   endpointEventGatewayToken,
   type EndpointEvent,
@@ -37,8 +29,6 @@ import {
   type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
-  type EndpointCapabilities,
-  type MessageRef,
 } from '@zhin.js/im-contract';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
@@ -47,7 +37,6 @@ import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import {
   Message,
   createOutboundEnvelope,
-  type ConversationAddress,
   type IncomingMessage,
   type MessageDispatchResult,
   type OutboundMessageService,
@@ -79,6 +68,11 @@ import {
   type UserInteractionSource,
 } from './interaction-runtime.js';
 import { ConversationRuntime } from './conversation-runtime.js';
+import {
+  EndpointRuntime,
+  adapterTypeName,
+  requireAdapters,
+} from './endpoint-runtime.js';
 
 const logger = getLogger('im');
 
@@ -150,6 +144,7 @@ export class ImRuntime implements OutboundMessageService {
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>();
   readonly #conversations: ConversationRuntime;
+  readonly endpoints: EndpointRuntime;
   readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
@@ -163,6 +158,11 @@ export class ImRuntime implements OutboundMessageService {
     );
     this.#renderer = options.renderer ?? new OutboundRenderer();
     this.#conversations = new ConversationRuntime(options.conversationEvents);
+    this.endpoints = new EndpointRuntime({
+      acquire: () => this.#acquire(),
+      release: (lease) => this.#release(lease),
+      send: (request, snapshot) => this.#sendWithSnapshot(request, snapshot),
+    });
     this.#inboundClaim = options.inboundClaim;
     this.#enrichSender = options.enrichSender;
   }
@@ -618,60 +618,6 @@ export class ImRuntime implements OutboundMessageService {
     await index.dispatch(event, args, options);
   }
 
-  /** Console `endpoint.list` — empty until Adapter Feature projection is ready. */
-  listEndpoints(): readonly {
-    readonly id: string;
-    readonly name: string;
-    readonly adapter: string;
-    readonly owner: string;
-    readonly connected: boolean;
-    readonly status: 'online' | 'offline';
-    readonly phase: AdapterEndpointPhase;
-    readonly operations: readonly AdapterOperation[];
-    readonly managementCapabilities: readonly EndpointManagementCapability[];
-  }[] {
-    try {
-      const lease = this.#acquire();
-      try {
-        return requireAdapters(lease.value).describe().map((row) => Object.freeze({
-          id: String(row.id),
-          name: row.name,
-          // adapter 列显示平台类型（owner 包名去 scope/adapter- 前缀），不是 slot localName
-          adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,
-          owner: row.owner,
-          connected: row.connected,
-          status: row.status,
-          phase: row.phase,
-          operations: row.operations,
-          managementCapabilities: row.managementCapabilities,
-        }));
-      } finally {
-        this.#release(lease);
-      }
-    } catch {
-      return Object.freeze([]);
-    }
-  }
-
-  /** Exact operation capabilities for one concrete live Endpoint. */
-  endpointCapabilities(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-  }): EndpointCapabilities | undefined {
-    try {
-      const lease = this.#acquire();
-      try {
-        const index = requireAdapters(lease.value);
-        const id = index.resolve(input.adapter, input.endpointKey);
-        return id ? index.capabilities(id) : undefined;
-      } finally {
-        this.#release(lease);
-      }
-    } catch {
-      return undefined;
-    }
-  }
-
   /**
    * Console `GET /api/stats` 同源计数：非 root 插件节点 + AdapterIndex endpoints。
    * 供命令 / 状态卡等在 Plugin Runtime 下读取（legacy `root.adapters` / `root.children` 已不存在）。
@@ -701,174 +647,6 @@ export class ImRuntime implements OutboundMessageService {
         plugins: 0,
         endpoints: Object.freeze({ total: 0, online: 0 }),
       });
-    }
-  }
-
-  getEndpoint(adapter: string, endpointKey: string): {
-    readonly name: string;
-    readonly adapter: string;
-    readonly connected: boolean;
-    readonly status: 'online' | 'offline';
-    readonly phase: AdapterEndpointPhase;
-    readonly operations: readonly AdapterOperation[];
-    readonly managementCapabilities: readonly EndpointManagementCapability[];
-  } | null {
-    try {
-      const lease = this.#acquire();
-      try {
-        const index = requireAdapters(lease.value);
-        const id = index.resolve(adapter, endpointKey);
-        if (!id) return null;
-        const row = index.describe().find((item) => item.id === id);
-        if (!row) return null;
-        // adapter 与 listEndpoints 对齐：平台类型（owner 包名去 scope/adapter- 前缀），
-        // 不是 live name（如 ICQQ uin）。此前误写 row.name 导致 endpoint.info 与 list 不一致。
-        return Object.freeze({
-          name: row.name,
-          adapter: adapterTypeName(lease.value.tree.get(row.owner)?.packageName) ?? row.name,
-          connected: row.connected,
-          status: row.status,
-          phase: row.phase,
-          operations: row.operations,
-          managementCapabilities: row.managementCapabilities,
-        });
-      } finally {
-        this.#release(lease);
-      }
-    } catch {
-      return null;
-    }
-  }
-
-  async sendEndpointMessage(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly conversation: ConversationAddress;
-    readonly content: unknown;
-  }): Promise<{ messageId: string }> {
-    const lease = this.#acquire();
-    try {
-      const index = requireAdapters(lease.value);
-      const resolved = index.resolve(input.adapter, input.endpointKey);
-      if (!resolved) throw new Error('endpoint not found');
-      const requester = index.owner(resolved);
-      const conversation: ConversationRef = {
-        endpoint: { id: String(resolved), adapter: String(requester) },
-        ...input.conversation,
-      };
-      const content = normalizeConsoleContent(input.content);
-      const result = await this.#sendWithSnapshot({
-        conversation,
-        requester,
-        content,
-      }, lease.value);
-      return { messageId: result.message?.id ?? '' };
-    } finally {
-      this.#release(lease);
-    }
-  }
-
-  /** Activity-feedback: add a message reaction when the live Endpoint supports it. */
-  async addEndpointReaction(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly message: MessageRef;
-    readonly emoji: string;
-    readonly sceneType?: string;
-    readonly channelId?: string;
-  }): Promise<string | null> {
-    return this.#withEndpointControl(input.adapter, input.endpointKey, 'reaction', (control) =>
-      control.addReaction?.(input.message, input.emoji, {
-        sceneType: input.sceneType,
-        channelId: input.channelId,
-      }) ?? null, null);
-  }
-
-  async removeEndpointReaction(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly message: MessageRef;
-    readonly reactionId: string;
-  }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, 'reaction', (control) =>
-      control.removeReaction?.(
-        input.message,
-        input.reactionId,
-      ), undefined);
-  }
-
-  /** Activity-feedback autoRemove: recall a previously sent status message. */
-  async recallEndpointMessage(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly message: MessageRef;
-  }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, 'recall', (control) =>
-      control.recall?.(input.message), undefined);
-  }
-
-  async editEndpointMessage(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly message: MessageRef;
-    readonly content: unknown;
-  }): Promise<string | null> {
-    return this.#withEndpointControl(input.adapter, input.endpointKey, 'edit', (control) =>
-      control.edit?.(input.message, input.content) ?? null,
-    null);
-  }
-
-  async setEndpointTyping(input: {
-    readonly adapter: string;
-    readonly endpointKey: string;
-    readonly conversation: ConversationRef;
-    readonly active?: boolean;
-  }): Promise<void> {
-    await this.#withEndpointControl(input.adapter, input.endpointKey, 'typing', (control) =>
-      control.typing?.(input.conversation, input.active), undefined);
-  }
-
-  async #withEndpointControl<T>(
-    adapter: string,
-    endpointKey: string,
-    operation: AdapterOperation,
-    run: (control: EndpointControl) => T | Promise<T>,
-    fallback: T,
-  ): Promise<T> {
-    let lease: SnapshotLease;
-    try {
-      lease = this.#acquire();
-    } catch {
-      return fallback;
-    }
-    try {
-      const index = requireAdapters(lease.value);
-      const id = index.resolve(adapter, endpointKey);
-      const control = id ? index.control(id, operation) : undefined;
-      return control ? await run(control) : fallback;
-    } finally {
-      this.#release(lease);
-    }
-  }
-
-  /** Run one management operation while the Endpoint generation stays leased. */
-  async withEndpointManagement<T>(
-    adapter: string,
-    endpointKey: string,
-    run: (management: EndpointManagement) => T | Promise<T>,
-  ): Promise<T | null> {
-    let lease: SnapshotLease;
-    try {
-      lease = this.#acquire();
-    } catch {
-      return null;
-    }
-    try {
-      const endpoint = requireAdapters(lease.value).connection(adapter, endpointKey);
-      if (!endpoint) return null;
-      return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
-    } finally {
-      this.#release(lease);
     }
   }
 
@@ -1011,14 +789,6 @@ function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefine
     : undefined;
 }
 
-function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {
-  const projection = snapshot.projections.get(adapterFeatureId);
-  if (!isAdapterIndex(projection)) {
-    throw new Error('Adapter Feature projection is not installed');
-  }
-  return projection;
-}
-
 /** Root resources 上的可选 html-renderer Host（未安装时降级为文本）。 */
 function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | undefined {
   const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id);
@@ -1112,12 +882,6 @@ function failedReceipt(code: string, retryable = false): DeliveryReceipt {
   });
 }
 
-/** `@zhin.js/adapter-icqq` → `icqq`；非 adapter 包名原样返回。 */
-function adapterTypeName(packageName: string | undefined): string | undefined {
-  if (!packageName) return undefined;
-  return packageName.replace(/^@[^/]+\/adapter-/, '');
-}
-
 function middleware(snapshot: RuntimeSnapshot): MiddlewareIndex | undefined {
   const projection = snapshot.projections.get(middlewareFeatureId);
   return isMiddlewareIndex(projection) ? projection : undefined;
@@ -1137,14 +901,6 @@ async function runMiddleware<TInput>(
 function handlers(snapshot: RuntimeSnapshot): HandlerIndex | undefined {
   const projection = snapshot.projections.get(handlerFeatureId);
   return isHandlerIndex(projection) ? projection : undefined;
-}
-
-function normalizeConsoleContent(content: unknown): SendContent {
-  if (typeof content === 'string') return content;
-  // Array content passes through untouched, matching the legacy console RPC
-  // contract (element arrays must not be stringified to '[object Object]').
-  if (Array.isArray(content)) return content as SendContent;
-  return String(content);
 }
 
 /** 日志用会话摘要（`kind:id@parentKind:parentId#threadId`），不拼 legacy target。 */

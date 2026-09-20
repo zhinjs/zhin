@@ -56,7 +56,7 @@ async function setWorkroomCatalog(
   const errors = validateWorkroomDefinitions(
     workrooms,
     agent.listBindings().map(binding => binding.name),
-    new Set((im?.listEndpoints() ?? []).map(endpoint => `${endpoint.adapter}:${endpoint.name}`)),
+    new Set((im?.endpoints.list() ?? []).map(endpoint => `${endpoint.adapter}:${endpoint.name}`)),
   );
   if (errors.length > 0) throw new Error(`Invalid Workroom Catalog: ${errors.join('; ')}`);
   const snapshot = await catalog.replace(
