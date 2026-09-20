@@ -1,5 +1,5 @@
 ---
-'@zhin.js/game-kit': minor
+'@zhin.js/game-kit': patch
 '@zhin.js/plugin-blackjack': patch
 '@zhin.js/plugin-dice-duel': patch
 '@zhin.js/plugin-dungeon-expedition': patch

@@ -1,6 +1,6 @@
 ---
-'@zhin.js/agent': minor
-'@zhin.js/cli': minor
+'@zhin.js/agent': patch
+'@zhin.js/cli': patch
 ---
 
 Replace the process-global Owner approval helpers with `OwnerApprovalRuntime`, owned by each `ZhinAgent` and injected into command handling and exec policy evaluation. Remove classic `Plugin` lookup wrappers, the unreachable pending-approval map and shorthand, and its misleading stability metric.

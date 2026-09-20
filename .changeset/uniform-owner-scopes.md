@@ -1,5 +1,5 @@
 ---
-"@zhin.js/plugin-runtime": minor
+"@zhin.js/plugin-runtime": patch
 "@zhin.js/runtime": patch
 ---
 

@@ -235,7 +235,7 @@ const checks = [
   {
     name: 'Release Plan',
     command: 'pnpm check:release-plan',
-    description: '默认只允许 patch；minor/major 必须有 owner 授权记录',
+    description: '所有 Changesets 声明与最终发布计划都只允许 patch',
   },
   {
     name: 'API Surface',

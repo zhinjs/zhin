@@ -1,5 +1,5 @@
 ---
-"@zhin.js/agent": minor
+"@zhin.js/agent": patch
 "@zhin.js/cli": patch
 ---
 

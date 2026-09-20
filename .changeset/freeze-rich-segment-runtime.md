@@ -1,5 +1,5 @@
 ---
-'@zhin.js/core': minor
+'@zhin.js/core': patch
 ---
 
 Make the Rich Segment runtime immutable. Built-in kinds and optional capability loaders are now fixed when Core initializes, while each send operation owns its capability cache.

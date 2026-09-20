@@ -1,6 +1,6 @@
 ---
-'@zhin.js/permission': minor
-'@zhin.js/core': minor
+'@zhin.js/permission': patch
+'@zhin.js/core': patch
 ---
 
 Replace the permission host factory with an explicitly owned `PermissionHost` class. Each IM runtime now holds a private permission registry, so platform and custom checkers cannot leak between roots or generations.

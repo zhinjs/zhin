@@ -1,7 +1,7 @@
 ---
-"@zhin.js/plugin-runtime": minor
-"@zhin.js/scaffold-wizard": minor
-"@zhin.js/cli": minor
+"@zhin.js/plugin-runtime": patch
+"@zhin.js/scaffold-wizard": patch
+"@zhin.js/cli": patch
 "create-zhin-app": patch
 ---
 

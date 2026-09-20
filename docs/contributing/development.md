@@ -144,21 +144,10 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 
 日常开发只需 `pnpm release` 提交 changeset 文件；`bump` 和 `pub` 由 CI 执行。
 
-版本策略默认只允许 `patch`。`pnpm check:release-plan` 会读取 Changesets 的完整发布计划，
-只要出现未授权的 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败。
-确需非 patch 发版时，由版本 owner 在 `.changeset/version-policy.json` 的
-`approvedNonPatchReleases` 中记录 changeset 文件名、包范围、级别、`approvedBy` 和原因；
-该策略文件由 `.github/CODEOWNERS` 指定 owner 审核。示例：
-
-```json
-{
-  "changeset": "intentional-breaking-change.md",
-  "packages": ["zhin.js"],
-  "type": "major",
-  "approvedBy": "lc-cn",
-  "reason": "Remove the deprecated compatibility API"
-}
-```
+版本策略只允许 `patch`。所有 changeset 声明都必须使用 `patch`，
+`.changeset/version-policy.json` 的 `approvedNonPatchReleases` 必须保持为空。
+`pnpm check:release-plan` 会同时检查原始声明和 Changesets 推导出的完整发布计划；
+只要出现 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败，不提供豁免入口。
 
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。

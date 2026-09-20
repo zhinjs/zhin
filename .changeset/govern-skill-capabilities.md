@@ -1,6 +1,6 @@
 ---
-"@zhin.js/skill": minor
-"@zhin.js/agent": minor
+"@zhin.js/skill": patch
+"@zhin.js/agent": patch
 "@zhin.js/cli": patch
 "@zhin.js/scaffold-wizard": patch
 "create-zhin-app": patch

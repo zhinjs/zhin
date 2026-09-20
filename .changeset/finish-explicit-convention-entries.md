@@ -1,6 +1,6 @@
 ---
-'@zhin.js/agent-feature': minor
-'@zhin.js/cli': minor
+'@zhin.js/agent-feature': patch
+'@zhin.js/cli': patch
 ---
 
 Require `$`-prefixed Markdown Agent entries and generate `$`-prefixed plugin Agent skills. Unprefixed files in both directories remain ordinary colocated documentation and support files.

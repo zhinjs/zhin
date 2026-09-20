@@ -1,5 +1,5 @@
 ---
-'@zhin.js/agent': minor
+'@zhin.js/agent': patch
 ---
 
 Move conversation compaction state into a host-owned `AgentCompactionRuntime`. Automatic compaction, manual compaction, lifecycle cleanup, and stability metrics now operate on the same explicit runtime instance, so multiple Agent hosts cannot share or evict each other's session state.

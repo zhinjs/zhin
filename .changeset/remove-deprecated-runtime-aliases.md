@@ -1,8 +1,8 @@
 ---
-"@zhin.js/scaffold-wizard": minor
-"@zhin.js/host-http": minor
-"@zhin.js/service-activity-feedback": minor
-"@zhin.js/cli": minor
+"@zhin.js/scaffold-wizard": patch
+"@zhin.js/host-http": patch
+"@zhin.js/service-activity-feedback": patch
+"@zhin.js/cli": patch
 "create-zhin-app": patch
 ---
 
