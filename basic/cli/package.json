@@ -28,6 +28,7 @@
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
     "@zhin.js/config-file": "workspace:*",
+    "@zhin.js/console-protocol": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/database": "workspace:*",
     "@zhin.js/host-http": "workspace:*",

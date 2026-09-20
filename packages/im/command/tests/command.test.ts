@@ -1181,7 +1181,7 @@ describe('Command Feature', () => {
       owner,
       feature: commandFeatureId,
       localName,
-      source: `/commands/${localName.replace('$', '[param]')}/index.ts`,
+      source: `/commands/${localName.replaceAll('$', '[param]')}/index.ts`,
       definition: {
         ...defineCommand({ execute: () => 'ok' }),
         $parameter: parameter,

@@ -131,6 +131,9 @@ importers:
       '@zhin.js/config-file':
         specifier: workspace:*
         version: link:../../packages/im/config-file
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../packages/console/protocol
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
