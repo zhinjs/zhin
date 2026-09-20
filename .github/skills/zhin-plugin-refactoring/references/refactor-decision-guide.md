@@ -36,12 +36,12 @@
 
 - 命令放 `commands/`
 - 中间件放 `middlewares/`
-- 事件监听和发送前钩子放 `events/`
-- 周期任务放 `crons/`
+- 事件处理放 `handlers/<name>/index.ts`，发送前等扩展点放 `hooks/<name>/index.ts`
+- 周期能力放 `schedules/<name>/index.ts`；需要 Host 持久调度时在 `plugin.ts` 通过 `scheduleHostToken` 注册
 - 数据访问和外部 SDK 放 `services/`
 - 模型定义放 `models/`
 - AI 工具放 `tools/`
-- 控制台页面放 `client/`
+- 控制台页面放 `pages/<name>/index.tsx`
 
 ## 一条实用规则
 

@@ -18,7 +18,7 @@
 ## 迁移后
 
 - 命令行为与参数解析不回退
-- `useContext()` 触发时机仍然正确
+- Host Resource 在 `setup(context)` 中解析，能力仍通过 `context.use(token)` 获得 owner Resource
 - 监听器、定时任务、Web 入口仍具备清理路径
 - 页面入口和服务端路由仍正常注册
 

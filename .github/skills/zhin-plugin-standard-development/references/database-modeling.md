@@ -7,11 +7,11 @@
 1. 先决定表名与行结构
 2. 写出 `Definition<T>`
 3. 在插件启动装配阶段注册模型
-4. 等 `database` Context 就绪后再获取 model 并挂命令或服务
+4. 在 `setup(context)` 中解析 `databaseHostToken`，定义表并提供 owner Resource
 
 ## 两种常见建模方式
 
-### 方式 1：通过 root 或 plugin 的 `defineModel()` 预注册
+### 方式 1：拆出纯表定义函数
 
 适用情况：
 
@@ -27,28 +27,29 @@
 
 1. 定义行接口，例如 `ProfileRow`
 2. 定义 `Definition<ProfileRow>`
-3. 写一个 `registerPluginModels()`，在里面调用 `defineModel()`
-4. 在插件入口里尽早调用模型注册逻辑
-5. 在 `useContext('database', ...)` 里通过 `db.models.get(name)` 获取 model
+3. 写一个 `definePluginTables(db)`，在里面调用 `db.define()`
+4. 在 `plugin.ts` 的 `setup(context)` 里先 `has(databaseHostToken)`，再 `context.resources.use(databaseHostToken)`
+5. 定义表后创建 store，并用 `context.resources.provide(storeToken, store)` 暴露给能力
 
-### 方式 2：在 `database` Context 就绪后直接 `db.define()`
+### 方式 2：在 `setup(context)` 中直接 `db.define()`
 
 适用情况：
 
 - 示例插件或实验性功能
 - 模型很少，而且不想单独拆 `models/` 文件
 
-仓库里的真实示例可参考 [examples/test-bot/src/plugins/test-plugin.ts](examples/test-bot/src/plugins/test-plugin.ts#L544)
+仓库里的真实示例可参考 `plugins/utils/lottery/plugin.ts` 与 `plugins/utils/lottery/src/db.ts`。
 
 这种方式的顺序是：
 
-1. `useContext('database', async (db) => { ... })`
-2. 在回调里 `db.define('table_name', definition)`
-3. 再通过 `db.models.get('table_name')` 取得 model
+1. 在 `setup(context)` 中确认 `context.resources.has(databaseHostToken)`
+2. 通过 `context.resources.use(databaseHostToken)` 取得 Host
+3. 调用 `db.define('table_name', definition)`，再通过 `db.models.get('table_name')` 取得 model
+4. 能力文件通过 `context.use(storeToken)` 使用数据能力，不 import 模块级可变单例
 
 ## 选型建议
 
-- 正式插件、可维护插件：优先 `defineModel()` 预注册
+- 正式插件、可维护插件：优先拆出纯表定义函数与 store Resource
 - 小型示例、一次性试验：可以直接 `db.define()`
 
 ## 模型设计注意点
