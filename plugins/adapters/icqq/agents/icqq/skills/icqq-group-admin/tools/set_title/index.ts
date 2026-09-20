@@ -10,7 +10,7 @@ export default defineAgentTool<{ group_id: number; user_id: number; title: strin
   }),
   adapter: 'icqq',
   scopes:['group'],
-  approval: 'always',
+  requiresApproval: 'always',
   async execute({ group_id, user_id, title, duration }, context) {
     const client = context.$client;
     const selfInfo= client.pickMember(group_id,client.uin);

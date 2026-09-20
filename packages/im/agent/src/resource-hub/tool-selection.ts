@@ -123,7 +123,7 @@ export function normalizeTool(input: NormalizableTool, message?: Message): Agent
   if (tool.preExecutable) agentTool.preExecutable = true;
   if (tool.kind) agentTool.kind = tool.kind;
   if (tool.source) agentTool.source = tool.source;
-  if (tool.approval) agentTool.approval = tool.approval;
+  if (tool.requiresApproval) agentTool.requiresApproval = tool.requiresApproval;
   if (tool.toModelOutput) agentTool.toModelOutput = tool.toModelOutput;
   const toolTimeout = (tool as { timeout?: number }).timeout;
   if (toolTimeout != null) agentTool.timeout = toolTimeout;

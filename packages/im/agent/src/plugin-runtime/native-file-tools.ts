@@ -27,7 +27,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         offset: { type: 'number', description: 'Zero-based first line' },
         limit: { type: 'number', description: 'Maximum lines to return' },
       }, ['file_path']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: readFile,
     })),
     feature('write_file', defineAgentTool({
@@ -36,7 +36,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         file_path: { type: 'string', description: 'Path relative to the authorized workspace' },
         content: { type: 'string', description: 'Complete file content' },
       }, ['file_path', 'content']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: writeFile,
     })),
     feature('edit_file', defineAgentTool({
@@ -46,13 +46,13 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         old_string: { type: 'string', description: 'Unique text to replace' },
         new_string: { type: 'string', description: 'Replacement text' },
       }, ['file_path', 'old_string', 'new_string']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: editFile,
     })),
     feature('list_dir', defineAgentTool({
       description: 'List entries in a directory inside the authorized workspace.',
       inputSchema: objectSchema({ path: { type: 'string', description: 'Directory path' } }, ['path']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: listDir,
     })),
     feature('glob', defineAgentTool({
@@ -61,7 +61,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         pattern: { type: 'string', description: 'Glob pattern such as **/*.ts' },
         cwd: { type: 'string', description: 'Search directory inside the workspace' },
       }, ['pattern']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: globFiles,
     })),
     feature('grep', defineAgentTool({
@@ -73,7 +73,7 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
         ignore_case: { type: 'boolean' },
         limit: { type: 'number', description: 'Maximum matching lines' },
       }, ['pattern']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: grepFiles,
     })),
   ]);

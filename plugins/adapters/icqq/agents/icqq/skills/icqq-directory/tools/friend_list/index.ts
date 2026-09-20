@@ -5,7 +5,7 @@ export default defineAgentTool<Record<string, never>>({
   description: '获取 QQ 好友列表',
   inputSchema: z.object({}),
   adapter: 'icqq',
-  approval: 'on-risk',
+  requiresApproval: 'on-risk',
   permissions: ['role(master,admin,trusted,owner)'],
   async execute(_input, context) {
     const client = context.$client;

@@ -2,7 +2,7 @@ import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool({
   description: 'Return a lightweight health snapshot for the full-bot Runtime',
-  approval: 'never',
+  requiresApproval: 'never',
   inputSchema: {
     type: 'object',
     properties: {},

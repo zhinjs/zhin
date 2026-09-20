@@ -53,14 +53,16 @@ export class RuntimeToolExecutionAuthority implements ToolExecutionAuthority {
     toolUseId: string,
   ): Promise<AgentCoreToolExecutionOutcome> {
     const options = this.#options;
-    const approvalDenied = options.rejectApproval && tool.approval && tool.approval !== 'never'
+    const approvalDenied = options.rejectApproval
+      && tool.requiresApproval
+      && tool.requiresApproval !== 'never'
       ? 'Error: unattended execution rejects tools that require approval'
       : await runToolApprovalGate({
         toolName: tool.name,
         args: { ...input },
         sessionId: options.sessionId,
         commMessage: options.message,
-        policy: tool.approval,
+        policy: tool.requiresApproval,
         bus: options.host.resourceHub?.agentStreamBus,
         port: isApprovalPortAvailable(options.host.approvalPort)
           ? options.host.approvalPort

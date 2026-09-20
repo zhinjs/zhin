@@ -264,7 +264,7 @@ function ceiling(id: string, revision: number) {
 }
 
 function toolDescriptor(name: string) {
-  return { name, description: name, approval: 'never' as const, hidden: false };
+  return { name, description: name, requiresApproval: 'never' as const, hidden: false };
 }
 
 function skillDescriptor(name: string) {

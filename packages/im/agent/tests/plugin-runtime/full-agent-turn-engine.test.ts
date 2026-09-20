@@ -525,7 +525,7 @@ describe('FullAgentTurnEngine', () => {
     });
     const weather = {
       owner: rootPluginId(), name: 'weather', qualifiedName: 'weather',
-      description: 'weather', approval: 'never' as const, source: 'test',
+      description: 'weather', requiresApproval: 'never' as const, source: 'test',
       execute: vi.fn(async () => 'sunny'),
     };
     const report = {

@@ -28,7 +28,7 @@ describe('Capability Seam production ingress', () => {
 
     expect(capabilities.tools.map((tool) => tool.name)).toEqual(['remote_lookup']);
     expect(capabilities.tools[0]).toMatchObject({
-      approval: 'never',
+      requiresApproval: 'never',
       source: 'seam:test:tools',
     });
     expect(capabilities.skills[0]).toMatchObject({
@@ -106,7 +106,7 @@ describe('Capability Seam production ingress', () => {
 
 function toolService(
   name: string,
-  approval: 'never' | 'always',
+  requiresApproval: 'never' | 'always',
 ): ToolService {
   return {
     id: 'test:tools',
@@ -118,7 +118,7 @@ function toolService(
         description: 'Remote lookup',
         parameters: { type: 'object', properties: {} },
       },
-      approval,
+      requiresApproval,
     }],
     execute: async () => ({ success: true, output: 'ok' }),
   };

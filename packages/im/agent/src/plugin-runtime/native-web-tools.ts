@@ -38,7 +38,7 @@ export function createNativeWebToolFeatures(
         url: { type: 'string', description: 'Absolute HTTP(S) URL' },
         max_length: { type: 'number', description: 'Maximum returned characters' },
       }, ['url']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: (input, context) => fetchWeb(input, context, transport),
     })),
     feature('web_search', defineAgentTool({
@@ -50,7 +50,7 @@ export function createNativeWebToolFeatures(
         allowed_domains: { type: 'array', items: { type: 'string' } },
         blocked_domains: { type: 'array', items: { type: 'string' } },
       }, ['query']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: (input, context) => searchWeb(input, context, transport),
     })),
   ]);

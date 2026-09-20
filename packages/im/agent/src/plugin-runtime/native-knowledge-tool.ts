@@ -122,7 +122,7 @@ export function createNativeKnowledgeToolFeature(index: KnowledgeIndex): NativeK
         query: { type: 'string', description: 'Search keywords or phrase' },
         limit: { type: 'number', minimum: 1, maximum: 20 },
       }, ['query']),
-      approval: 'never',
+      requiresApproval: 'never',
       tags: Object.freeze(['knowledge', 'file']),
       keywords: Object.freeze(['knowledge', 'search', '知识', '检索', '文档', 'FAQ']),
       execute: (input, context) => searchKnowledge(index, input, context),

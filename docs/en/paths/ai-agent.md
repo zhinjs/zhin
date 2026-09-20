@@ -48,7 +48,7 @@ import { z } from 'zod';
 export default defineAgentTool<{ city: string }>({
   description: 'Get current weather for a city',
   inputSchema: z.object({ city: z.string().min(1) }),
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ city }) {
     const response = await fetch(
       `https://wttr.in/${encodeURIComponent(city)}?format=3`,

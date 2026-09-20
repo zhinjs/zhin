@@ -24,7 +24,7 @@ export interface ToolSchema {
     parameters: ToolInputSchema;
   };
   /** Runtime policy metadata projected into the canonical Tool capability. */
-  approval?: ToolApproval;
+  requiresApproval?: ToolApproval;
   platforms?: readonly string[];
   scopes?: readonly ToolScope[];
   permissions?: readonly string[];

@@ -7,7 +7,7 @@ export default defineAgentTool<{ group_id: number; content: string }>({
     content: z.string().describe('公告内容'),
   }),
   adapter: 'icqq',
-  approval: 'once',
+  requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ group_id, content }, context) {

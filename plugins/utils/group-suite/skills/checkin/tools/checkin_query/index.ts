@@ -12,7 +12,7 @@ export default defineAgentTool<{ user_id?: string; group_id?: string }>({
       group_id: { type: 'string', description: '群 ID；省略时使用当前 IM 会话' },
     },
   },
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ user_id: userId, group_id: requestedGroupId }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     const model = getCheckinModel(runtime.db);

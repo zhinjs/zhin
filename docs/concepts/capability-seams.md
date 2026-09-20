@@ -29,14 +29,14 @@ Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立�
 
 - 当前 generation 退役或 operation 结束后，Provider 不再可执行；
 - `platforms`、`scopes`、`permissions` 和 `hidden` 先经过统一可见性过滤；
-- `approval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
+- `requiresApproval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
 - Tool call、denied、failed 和 result 进入同一 Turn Journal；
 - Feature 与 Seam 出现同名 Tool / Skill 时，候选能力快照直接拒绝，而不是静默覆盖。
 
 ## 服务契约
 
 `ToolService` 提供 schema 和最终 Provider 调用。schema 上的策略字段会进入 canonical
-Tool capability；未声明 `approval` 时默认 `on-risk`。
+Tool capability；未声明 `requiresApproval` 时默认 `on-risk`。
 
 ```ts
 import type {
@@ -61,7 +61,7 @@ export class SearchService implements ToolService {
           required: ['query'],
         },
       },
-      approval: 'never',
+      requiresApproval: 'never',
       permissions: ['authenticated'],
       source: 'remote:acme',
     }]

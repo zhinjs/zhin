@@ -118,7 +118,7 @@ export interface AgentToolDefinition<
   readonly $feature: typeof toolBrand;
   readonly description: string;
   readonly inputSchema?: ToolInputSchema<TInput>;
-  readonly approval: ToolApproval;
+  readonly requiresApproval: ToolApproval;
   /** Restrict this tool to one adapter and infer `context.$client`. */
   readonly adapter?: TAdapter;
   readonly platforms?: readonly string[];
@@ -166,15 +166,15 @@ declare module '@zhin.js/plugin-runtime' {
 type AgentToolAuthoringDefinition<TInput, TResult, TConfig> =
   | (Omit<
       AgentToolDefinition<TInput, TResult, TConfig, undefined>,
-      '$feature' | 'approval'
-    > & { readonly approval?: ToolApproval })
+      '$feature' | 'requiresApproval'
+    > & { readonly requiresApproval?: ToolApproval })
   | {
       [TAdapter in RegisteredAdapterName]: Omit<
         AgentToolDefinition<TInput, TResult, TConfig, TAdapter>,
-        '$feature' | 'approval'
+        '$feature' | 'requiresApproval'
       > & {
         readonly adapter: TAdapter;
-        readonly approval?: ToolApproval;
+        readonly requiresApproval?: ToolApproval;
       }
     }[RegisteredAdapterName];
 
@@ -201,9 +201,10 @@ export function defineAgentTool<
     && (definition.platforms.length !== 1 || definition.platforms[0] !== adapter)) {
     throw new TypeError('Agent Tool adapter and platforms must select the same single adapter');
   }
-  const approval = definition.approval ?? 'on-risk';
-  if (approval !== 'never' && approval !== 'on-risk' && approval !== 'once' && approval !== 'always') {
-    throw new TypeError(`Invalid Agent Tool approval: ${String(approval)}`);
+  const requiresApproval = definition.requiresApproval ?? 'on-risk';
+  if (requiresApproval !== 'never' && requiresApproval !== 'on-risk'
+    && requiresApproval !== 'once' && requiresApproval !== 'always') {
+    throw new TypeError(`Invalid Agent Tool requiresApproval: ${String(requiresApproval)}`);
   }
   validateStringList('platforms', definition.platforms);
   validateStringList('permissions', definition.permissions);
@@ -223,7 +224,7 @@ export function defineAgentTool<
     tags: freezeList(definition.tags),
     keywords: freezeList(definition.keywords),
     $feature: toolBrand,
-    approval,
+    requiresApproval,
   }) as Readonly<AgentToolDefinition<TInput, TResult, TConfig, string | undefined>>;
 }
 
@@ -241,10 +242,10 @@ export function parseAgentToolDefinition(
     || typeof definition.execute !== 'function'
     || (definition.inputSchema !== undefined && !isToolInputSchema(definition.inputSchema))
     || !validAdapterName((definition as { readonly adapter?: unknown }).adapter)
-    || (definition.approval !== 'never'
-      && definition.approval !== 'on-risk'
-      && definition.approval !== 'once'
-      && definition.approval !== 'always')
+    || (definition.requiresApproval !== 'never'
+      && definition.requiresApproval !== 'on-risk'
+      && definition.requiresApproval !== 'once'
+      && definition.requiresApproval !== 'always')
     || !validStringList(definition.platforms)
     || !validStringList(definition.permissions)
     || !validStringList(definition.tags)

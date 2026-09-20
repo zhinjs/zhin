@@ -13,7 +13,7 @@ export interface HostToolProjectionInput {
   readonly name: string;
   readonly description: string;
   readonly parameters?: unknown;
-  readonly approval?: ToolApproval;
+  readonly requiresApproval?: ToolApproval;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
@@ -41,7 +41,7 @@ export function projectHostTool(input: HostToolProjectionInput): HostToolProject
             input.parameters,
             `Host Tool ${input.name} parameters`,
           ),
-      approval: input.approval,
+      requiresApproval: input.requiresApproval,
       platforms: input.platforms,
       scopes: input.scopes,
       permissions: input.permissions,

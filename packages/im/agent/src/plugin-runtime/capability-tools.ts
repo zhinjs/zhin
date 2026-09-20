@@ -32,7 +32,7 @@ export function capabilityToTool(
     tags: tool.tags ? [...tool.tags] : undefined,
     keywords: tool.keywords ? [...tool.keywords] : undefined,
     hidden: tool.hidden,
-    approval: tool.approval,
+    requiresApproval: tool.requiresApproval,
     async execute(args) {
       return await tool.execute(args, invocation) as Awaited<ReturnType<Tool['execute']>>;
     },

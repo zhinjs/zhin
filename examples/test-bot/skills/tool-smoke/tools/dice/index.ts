@@ -4,7 +4,7 @@ import { rollDice } from '../../../../lib/dice.js';
 
 export default defineAgentTool<{ count?: number; faces?: number }>({
   description: 'Roll N dice with F faces (cryptographically weak; kitchen-sink utility)',
-  approval: 'never',
+  requiresApproval: 'never',
   inputSchema: z.object({
     count: z.number().int().min(1).max(20).default(1),
     faces: z.number().int().min(2).max(1000).default(6),

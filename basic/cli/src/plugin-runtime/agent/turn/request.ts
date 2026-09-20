@@ -578,9 +578,9 @@ export function adapterLiveEndpointId(message: Message): string {
 }
 
 export function runtimeApprovalPolicy(
-  approval: ToolCapability['approval'],
+  requiresApproval: ToolCapability['requiresApproval'],
 ): 'never' | 'always' | 'once' | 'on-risk' {
-  return approval;
+  return requiresApproval;
 }
 
 /** A small non-interactive ApprovalPort suitable for CLI/service hosts and tests. */

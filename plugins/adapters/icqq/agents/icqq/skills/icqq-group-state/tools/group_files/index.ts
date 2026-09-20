@@ -6,7 +6,7 @@ export default defineAgentTool<{ group_id: number }>({
     group_id: z.number().describe('群号'),
   }),
   adapter: 'icqq',
-  approval: 'once',
+  requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ group_id }, context) {

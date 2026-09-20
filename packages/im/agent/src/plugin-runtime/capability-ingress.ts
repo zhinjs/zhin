@@ -150,7 +150,7 @@ async function bindSeamTools(
     qualifiedName: entry.schema.function.name,
     description: entry.schema.function.description,
     inputSchema: entry.schema.function.parameters,
-    approval: entry.schema.approval ?? 'on-risk',
+    requiresApproval: entry.schema.requiresApproval ?? 'on-risk',
     platforms: entry.schema.platforms,
     scopes: entry.schema.scopes,
     permissions: entry.schema.permissions,

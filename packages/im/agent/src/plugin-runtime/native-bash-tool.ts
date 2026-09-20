@@ -87,7 +87,7 @@ export class NativeBashToolFeature {
         }),
         required: Object.freeze(['command']),
       }),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: (input, context) => this.execute(input, context),
     });
   }

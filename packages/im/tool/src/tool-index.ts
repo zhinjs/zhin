@@ -24,7 +24,7 @@ export interface ToolDescriptor {
   readonly qualifiedName: string;
   readonly description: string;
   readonly inputSchema?: ToolInputSchema;
-  readonly approval: ToolApproval;
+  readonly requiresApproval: ToolApproval;
   readonly adapter?: string;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
@@ -121,7 +121,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     qualifiedName: entry.qualifiedName,
     description: definition.description,
     inputSchema: definition.inputSchema,
-    approval: definition.approval,
+    requiresApproval: definition.requiresApproval,
     ...(definition.adapter ? { adapter: definition.adapter } : {}),
     platforms: definition.platforms,
     scopes: definition.scopes,

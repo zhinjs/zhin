@@ -6,7 +6,7 @@ export default defineAgentTool<{ user_id: number }>({
     user_id: z.number().describe('目标成员 QQ号'),
   }),
   adapter: 'icqq',
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ user_id }, context) {
     const profile = await context.$client.getProfile(user_id);
     return { success: true, message: `已获取 ${user_id} 的用户信息:${JSON.stringify(profile,null,2)}` };

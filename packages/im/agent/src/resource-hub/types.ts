@@ -70,7 +70,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   preExecutable?: boolean;
   kind?: string;
   /** Per-tool approval (ADR 0039 P1); stacks with ExecPolicy. */
-  approval?: ToolApprovalPolicy;
+  requiresApproval?: ToolApprovalPolicy;
   /** Model-facing output shaping (ADR 0039 P1). */
   toModelOutput?: ToolToModelOutputFn<TArgs>;
 }

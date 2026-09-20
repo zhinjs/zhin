@@ -22,7 +22,7 @@ export default defineAgentTool<{
     },
     required: ['keyword'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   execute: ({ keyword, source, limit }, context) =>
     searchMusic(
       context.use(musicRuntimeToken),

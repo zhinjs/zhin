@@ -8,7 +8,7 @@ export default defineAgentTool<{ group_id: number; user_id: number }>({
   }),
   adapter: 'icqq',
   scopes:['group'],
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ group_id, user_id }, context) {
     await context.$client.sendGroupPoke(group_id, user_id);
     return { success: true, message: `已戳了戳 ${user_id}` };

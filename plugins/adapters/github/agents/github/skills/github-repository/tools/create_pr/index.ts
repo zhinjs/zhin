@@ -13,7 +13,7 @@ export default defineAgentTool<{ repo?: string; title: string; body?: string; he
     base: z.string().optional().describe('base 分支，缺省为仓库默认分支'),
   }),
   tags: ['github'],
-  approval: 'always',
+  requiresApproval: 'always',
   async execute(input, context) {
     return executeGithubCreatePr(input, context.$client);
   },

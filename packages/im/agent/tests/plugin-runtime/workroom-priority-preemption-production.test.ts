@@ -614,7 +614,7 @@ function hostTool(
   execute: ToolCapability['execute'],
 ): ToolCapability {
   return Object.freeze({
-    owner, name, qualifiedName: name, description: name, approval: 'never',
+    owner, name, qualifiedName: name, description: name, requiresApproval: 'never',
     source: `/tools/${name}.ts`, execute,
   });
 }

@@ -38,7 +38,7 @@ describe('Tool Feature', () => {
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
     });
-    expect(definition.approval).toBe('on-risk');
+    expect(definition.requiresApproval).toBe('on-risk');
     expect(parseAgentToolDefinition(definition)).toBe(definition);
     const host = new MemoryHost({
       '/project/tools': [
@@ -142,7 +142,7 @@ describe('Tool Feature', () => {
       tags: ['moderation'],
       keywords: ['admin'],
       hidden: true,
-      approval: 'always',
+      requiresApproval: 'always',
       execute: () => 'ok',
     });
     const slot = createCapabilitySlot({
@@ -162,7 +162,7 @@ describe('Tool Feature', () => {
       tags: ['moderation'],
       keywords: ['admin'],
       hidden: true,
-      approval: 'always',
+      requiresApproval: 'always',
     });
     expect(Object.isFrozen(definition.permissions)).toBe(true);
   });
@@ -206,7 +206,7 @@ describe('Tool Feature', () => {
       source: `/${owner}/tools/lookup/index.ts`,
       definition: defineAgentTool<{ query: string }>({
         description: `Lookup ${value}`,
-        approval: 'never',
+        requiresApproval: 'never',
         execute(input, context) {
           return `${value}:${input.query}:${context.origin.kind}:${(context.config as { scope: string }).scope}:${context.use(secret)}`;
         },
@@ -233,7 +233,7 @@ describe('Tool Feature', () => {
       source: '/tools/network-policy/index.ts',
       definition: defineAgentTool({
         description: 'Inspect execution policy',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: (_input, context) => context.policy,
       }),
     });
@@ -287,7 +287,7 @@ describe('Tool Feature', () => {
       source: '/plugins/lottery/tools/history/index.ts',
       definition: defineAgentTool<{ game: string }>({
         description: 'Lottery history',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: ({ game }) => `history:${game}`,
       }),
     });
@@ -309,7 +309,7 @@ describe('Tool Feature', () => {
       source: '/tools/save/index.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Save value',
-        approval: 'never',
+        requiresApproval: 'never',
         inputSchema: {
           toJSONSchema: () => ({
             type: 'object',

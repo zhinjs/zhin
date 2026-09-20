@@ -11,7 +11,7 @@ export default defineAgentTool<{ limit?: number; group_id?: string }>({
       group_id: { type: 'string', description: '群 ID；省略时使用当前 IM 会话' },
     },
   },
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ limit, group_id: requestedGroupId }, context) {
     const model = getCheckinModel(context.use(groupSuiteRuntimeToken).db);
     if (!model) return '签到数据库尚未就绪';

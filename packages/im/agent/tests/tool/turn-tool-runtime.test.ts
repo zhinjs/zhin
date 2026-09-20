@@ -512,7 +512,7 @@ function fixture(options: {
 
 function tool(
   execute: ToolCapability['execute'],
-  approval: ToolCapability['approval'],
+  requiresApproval: ToolCapability['requiresApproval'],
   name = 'danger',
 ): ToolCapability {
   return {
@@ -520,7 +520,7 @@ function tool(
     name,
     qualifiedName: name,
     description: 'Dangerous tool',
-    approval,
+    requiresApproval,
     source: '/tools/danger.ts',
     execute,
   };

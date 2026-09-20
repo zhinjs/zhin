@@ -7,7 +7,7 @@ export default defineAgentTool<{ group_id: number; enable?: boolean }>({
     enable: z.boolean().optional().describe('true=开启，false=关闭，默认 true'),
   }),
   adapter: 'icqq',
-  approval: 'once',
+  requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,trusted,owner,admin)'],
   async execute({ group_id, enable }, context) {

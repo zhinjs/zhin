@@ -14,7 +14,7 @@ export default defineAgentTool<GroupMemberInfoInput>({
   adapter: 'icqq',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ group_id, user_id }, context) {
     const group = context.$client.pickGroup(group_id);
     if (!group) return { success: false, message: '目标群不存在' };

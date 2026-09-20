@@ -12,7 +12,7 @@ title: 受治理的业务 Agent
 | --- | --- | --- |
 | Prompt Section | 术语、规范、工具使用提示 | 不授予工具或数据权限 |
 | Tool Feature | 输入 Schema、执行与模型回传 | 不决定 Host 执行策略 |
-| `approval` | 哪类调用需要人确认 | 不扩大工具可见范围 |
+| `requiresApproval` | 哪类调用需要人确认 | 不扩大工具可见范围 |
 | `ai.agent` | 命令执行预设、白名单与迭代上限 | 不修改提示词正文 |
 
 ## 实施步骤

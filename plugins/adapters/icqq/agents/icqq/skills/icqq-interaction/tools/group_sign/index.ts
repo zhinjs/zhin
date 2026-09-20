@@ -7,7 +7,7 @@ export default defineAgentTool<{ group_id: number }>({
   }),
   adapter: 'icqq',
   scopes:['group'],
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ group_id }, context) {
     const client = context.$client;
     const groupInfo= client.pickGroup(group_id);

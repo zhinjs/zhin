@@ -7,7 +7,7 @@ export default defineAgentTool<{ message_id: string; action: 'add' | 'remove' }>
     action: z.enum(['add', 'remove']).describe('add=设为精华, remove=移除精华'),
   }),
   adapter: 'icqq',
-  approval: 'once',
+  requiresApproval: 'once',
   scopes:['group'],
   permissions: ['role(master,admin,trusted,owner)'],
   async execute({ message_id, action }, context) {

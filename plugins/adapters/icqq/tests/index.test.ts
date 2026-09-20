@@ -50,7 +50,7 @@ describe('@zhin.js/adapter-icqq package', () => {
     expect(mod.default.$feature).toBe('zhin.agent-tool/1');
     expect(mod.default.description).toContain('赞');
     expect(mod.default.platforms).toEqual(['icqq']);
-    expect(mod.default.approval).toBe('never');
+    expect(mod.default.requiresApproval).toBe('never');
   });
 
   it('tool permissions use valid permit DSL (not platform(icqq) without a perm)', async () => {
@@ -85,9 +85,9 @@ describe('@zhin.js/adapter-icqq package', () => {
         `../agents/icqq/skills/icqq-directory/tools/${name}/index.ts`,
       );
       const mod = await import(pathToFileURL(file).href) as {
-        default: { approval: string; permissions?: readonly string[] };
+        default: { requiresApproval: string; permissions?: readonly string[] };
       };
-      expect(mod.default.approval).toBe('on-risk');
+      expect(mod.default.requiresApproval).toBe('on-risk');
       expect(mod.default.permissions).toEqual(['role(master,admin,trusted,owner)']);
     }
   });

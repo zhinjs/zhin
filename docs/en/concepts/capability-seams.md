@@ -32,14 +32,14 @@ This preserves the production invariants:
 
 - a provider cannot execute after its Generation operation retires;
 - `platforms`, `scopes`, `permissions`, and `hidden` use canonical visibility checks;
-- `approval` is enforced by the Turn ApprovalPort and fails closed without an interactive port;
+- `requiresApproval` is enforced by the Turn ApprovalPort and fails closed without an interactive port;
 - Tool calls, denials, failures, and results enter the same Turn Journal;
 - duplicate Feature and Seam Tool or Skill names reject capability projection.
 
 ## Service contracts
 
 A `ToolService` supplies schemas and the final provider call. Policy metadata on `ToolSchema`
-is copied into the canonical Tool capability. Omitted `approval` defaults to `on-risk`.
+is copied into the canonical Tool capability. Omitted `requiresApproval` defaults to `on-risk`.
 
 ```ts
 import type {
@@ -64,7 +64,7 @@ export class SearchService implements ToolService {
           required: ['query'],
         },
       },
-      approval: 'never',
+      requiresApproval: 'never',
       permissions: ['authenticated'],
       source: 'remote:acme',
     }]

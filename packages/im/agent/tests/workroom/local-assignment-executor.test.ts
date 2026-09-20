@@ -501,7 +501,7 @@ function testTool(
     name,
     qualifiedName: name,
     description: name,
-    approval: 'never',
+    requiresApproval: 'never',
     source: `/tools/${name}.ts`,
     execute: async <TInput = unknown, TResult = unknown>(input: TInput) => input as TResult,
   });

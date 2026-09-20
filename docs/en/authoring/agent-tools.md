@@ -56,7 +56,7 @@ Definition fields (`packages/im/tool/src/definition.ts`):
 | --- | --- | --- |
 | `description` | Yes | Functional description for the model |
 | `inputSchema` | No | A Zod 4 object or an object-root JSON Schema; the Tool Feature owns projection and pre-execution validation |
-| `approval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
+| `requiresApproval` | No | When the Tool requires approval: `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
 | `platforms` | No | Restrict to adapter platforms (e.g., `['icqq']`), empty = all |
 | `scopes` | No | Restrict to session scenes `'private' \| 'group' \| 'channel'`, empty = all |
 | `permissions` | No | Permit string list (see access control below) |
@@ -80,7 +80,7 @@ export default definePlugin({
     if (!context.config.get().agentToolsEnabled) return;
     context.addTool('lottery_sync', defineAgentTool({
       description: 'Synchronize lottery draws',
-      approval: 'always',
+      requiresApproval: 'always',
       inputSchema: { type: 'object', properties: {} },
       execute: async (_input, toolContext) => toolContext.use(lotteryDatabaseToken).sync(),
     }));
@@ -98,7 +98,7 @@ context.addTool('lottery_sync', defineAgentTool({
   scopes: tool.scopes,
   permissions: tool.permissions,
   hidden: tool.hidden,
-  approval: 'never',
+  requiresApproval: 'never',
   execute: (input, context) => tool.execute(input, context),
 }));
 ```
@@ -120,7 +120,7 @@ Four-tuple semantics:
 
 Permit syntax is defined by `@zhin.js/permission` (`packages/im/permission/src/builtin.ts`): built-in `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`; platform identity `platform(adapter,perm)` (e.g., group owner/admin, determined by adapter checker); unrecognized permits are always rejected.
 
-`approval` is evaluated after Tool admission and immediately before execution. `always` asks every time; `once` lets the standard Host remember that Tool for the current session; `on-risk` keeps unknown plugin actions behind confirmation, while Bash, file, and network Tools do not ask twice after their dedicated policy has validated the concrete command, path, or URL. `never` skips only declarative confirmation and cannot bypass permission, network, filesystem, shell, or generation policies.
+`requiresApproval` is evaluated after Tool admission and immediately before execution. `always` asks every time; `once` lets the standard Host remember that Tool for the current session; `on-risk` keeps unknown plugin actions behind confirmation, while Bash, file, and network Tools do not ask twice after their dedicated policy has validated the concrete command, path, or URL. `never` skips only declarative confirmation and cannot bypass permission, network, filesystem, shell, or generation policies.
 
 ## Deferred Catalog and load_tool
 

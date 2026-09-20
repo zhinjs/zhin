@@ -248,7 +248,7 @@ describe('Agent CapabilityIngress', () => {
       source: '/plugins/child/tools/lookup.ts',
       definition: defineAgentTool<{ value: string }>({
         description: 'Replacement lookup',
-        approval: 'never',
+        requiresApproval: 'never',
         execute: (input) => `new:${input.value}`,
       }),
     });
@@ -278,13 +278,13 @@ describe('Agent CapabilityIngress', () => {
 
   it('preserves fail-closed approval semantics in the production Tool projection', async () => {
     const fixture = await createFixture({
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       tags: ['lookup'],
       keywords: ['find'],
     });
     const [capability] = (await new CapabilityIngress().read(fixture.snapshot, rootPluginId())).tools;
     expect(capabilityToTool(capability!, invocation())).toMatchObject({
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       tags: ['lookup'],
       keywords: ['find'],
     });
@@ -292,7 +292,7 @@ describe('Agent CapabilityIngress', () => {
   });
 
   it('fails closed for approval-gated external protocol tools', async () => {
-    const fixture = await createFixture({ approval: 'always' });
+    const fixture = await createFixture({ requiresApproval: 'always' });
     const store = new SnapshotStore(stateFrom(fixture.snapshot));
     const runtime = new ToolIngressRuntime();
     runtime.attach(store);
@@ -314,7 +314,7 @@ describe('Agent CapabilityIngress', () => {
       seen.push(turn);
       expect(capabilities.tools[0]?.name).toBe('child__lookup');
       expect(capabilities.tools.map((tool) => tool.name)).toContain('child__memory__search');
-      expect(capabilities.tools.find((tool) => tool.name === 'child__memory__search')?.approval)
+      expect(capabilities.tools.find((tool) => tool.name === 'child__memory__search')?.requiresApproval)
         .toBe('on-risk');
       expect('execute' in capabilities.tools[0]!).toBe(false);
       await expect(tools.execute('child__lookup', { value: 'runner' }, 'call-1')).resolves.toMatchObject({
@@ -749,7 +749,7 @@ async function createFixture(access: {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly approval?: 'never' | 'on-risk' | 'always';
+  readonly requiresApproval?: 'never' | 'on-risk' | 'once' | 'always';
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
@@ -769,7 +769,7 @@ async function createFixture(access: {
     definition: defineAgentTool<{ value: string }>({
       description: 'Lookup',
       ...access,
-      approval: access.approval ?? 'never',
+      requiresApproval: access.requiresApproval ?? 'never',
       execute(input) { return `old:${input.value}`; },
     }),
   });

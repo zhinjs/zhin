@@ -26,7 +26,7 @@ export function createConversationReferenceCapability(
       },
       required: ['reference'],
     } satisfies ToolInputJsonObjectSchema,
-    approval: 'never',
+    requiresApproval: 'never',
     source: 'builtin:conversation-context',
     async execute<TInput = unknown, TResult = unknown>(input: TInput): Promise<TResult> {
       const args = input && typeof input === 'object' ? input as Record<string, unknown> : {};

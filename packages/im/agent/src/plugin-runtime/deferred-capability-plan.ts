@@ -309,7 +309,7 @@ export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
     permissions: tool.permissions,
     tags: tool.tags ? [...tool.tags] : undefined,
     keywords: tool.keywords ? [...tool.keywords] : undefined,
-    approval: tool.approval,
+    requiresApproval: tool.requiresApproval,
     execute: async () => {
       throw new Error(`AgentCore must execute capability ${tool.name} through ToolExecutionAuthority`);
     },
@@ -396,7 +396,7 @@ function metaCapability(
     qualifiedName: name,
     description,
     inputSchema,
-    approval: 'never',
+    requiresApproval: 'never',
     source: 'builtin:agent-runtime',
     execute: <TInput = unknown, TResult = unknown>(input: TInput, context: ToolInvocationContext) =>
       execute(input, context) as Promise<TResult>,

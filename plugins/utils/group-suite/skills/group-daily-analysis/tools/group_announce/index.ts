@@ -7,7 +7,7 @@ export default defineAgentTool<{ message: string }>({
     properties: { message: { type: 'string', description: '公告内容' } },
     required: ['message'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   execute({ message }) {
     return `📢 群公告：\n${message}`;
   },

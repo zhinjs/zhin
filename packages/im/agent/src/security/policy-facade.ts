@@ -225,7 +225,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     return Object.freeze({
       status: 'approval_required',
       policy: 'approval',
-      reason: `tool approval policy is ${input.tool.approval}`,
+      reason: `tool approval policy is ${input.tool.requiresApproval}`,
       input: authorizedInput,
     });
   }
@@ -233,8 +233,8 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
 }
 
 function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
-  if (tool.approval === 'never') return false;
-  if (tool.approval === 'always' || tool.approval === 'once') return true;
+  if (tool.requiresApproval === 'never') return false;
+  if (tool.requiresApproval === 'always' || tool.requiresApproval === 'once') return true;
   return !hasCanonicalRiskPolicy(tool.name);
 }
 

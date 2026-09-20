@@ -14,7 +14,7 @@ export default defineAgentTool<{ user_id: string; group_id?: string }>({
     },
     required: ['user_id'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ user_id: userId, group_id: requestedGroupId }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     await flushStatsBuffer(runtime);

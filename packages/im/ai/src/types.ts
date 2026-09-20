@@ -192,7 +192,7 @@ export interface AgentTool {
    */
   isConcurrencySafe?: boolean;
   /** Per-tool approval policy (ADR 0039 P1); stacks with ExecPolicy. */
-  approval?: import('./tool-policy.js').ToolApprovalPolicy;
+  requiresApproval?: import('./tool-policy.js').ToolApprovalPolicy;
   /** Shapes tool output before it enters model context (IM rich payload may differ). */
   toModelOutput?: import('./tool-policy.js').ToolToModelOutputFn;
   /** Generation stamp — set when tools are collected; ToolRuntime validates before execution. */

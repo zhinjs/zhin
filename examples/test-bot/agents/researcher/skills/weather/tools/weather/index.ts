@@ -4,7 +4,7 @@ import { fetchWttrWeather } from '../../../../../../lib/wttr.js';
 
 export default defineAgentTool<{ city: string }>({
   description: 'Query live weather for a city via wttr.in',
-  approval: 'never',
+  requiresApproval: 'never',
   inputSchema: z.object({
     city: z.string().min(1).max(80),
   }),

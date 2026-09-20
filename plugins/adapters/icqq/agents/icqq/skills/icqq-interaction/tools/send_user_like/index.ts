@@ -6,7 +6,7 @@ export default defineAgentTool<{ user_id: number }>({
     user_id: z.number().describe('要点赞的目标用户 QQ号'),
   }),
   adapter: 'icqq',
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ user_id }, context) {
     const successArray: number[] = [];
     await Promise.all([20, 20, 10].map(async (times) => {

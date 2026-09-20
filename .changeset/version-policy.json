@@ -3,6 +3,24 @@
   "owner": "lc-cn",
   "approvedNonPatchReleases": [
     {
+      "changeset": "clarify-tool-approval-intent.md",
+      "packages": [
+        "@zhin.js/tool",
+        "@zhin.js/core",
+        "@zhin.js/ai",
+        "@zhin.js/agent",
+        "@zhin.js/cli",
+        "@zhin.js/adapter-github",
+        "@zhin.js/adapter-icqq",
+        "@zhin.js/process-monitor",
+        "@zhin.js/plugin-group-suite",
+        "@zhin.js/plugin-music"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Rename the ambiguous Agent Tool approval field to requiresApproval and remove the old field under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
       "changeset": "make-root-config-files-transactional.md",
       "packages": [
         "@zhin.js/runtime",

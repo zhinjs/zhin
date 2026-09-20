@@ -14,7 +14,7 @@ export default defineAgentTool<{ group_id?: string; period?: Period }>({
       period: { type: 'string', enum: ['today', 'week', 'month'], description: '统计时段' },
     },
   },
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ group_id: requestedGroupId, period = 'today' }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     await flushStatsBuffer(runtime);

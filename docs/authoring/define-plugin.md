@@ -142,7 +142,7 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
 // Agent 工具：与 tools/<name>/index.ts 共用同一个候选 capability table
 context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
-    approval: 'never',
+    requiresApproval: 'never',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' } },

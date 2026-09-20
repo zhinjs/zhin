@@ -20,7 +20,7 @@ export default defineAgentTool<{
     },
     required: ['id', 'source'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   execute: ({ id, source }, context) =>
     shareMusicDetail(context.use(musicRuntimeToken), String(id), source),
 });

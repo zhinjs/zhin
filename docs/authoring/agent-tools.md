@@ -61,7 +61,7 @@ export default defineAgentTool<{ message: string }>({
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
 | `inputSchema` | 否 | Zod 4 object 或根节点为 `object` 的 JSON Schema；由 Tool Feature 统一投影并在执行前校验 |
-| `approval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
+| `requiresApproval` | 否 | Tool 何时需要审批：`'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
 | `platforms` | 否 | 限定适配器平台（如 `['icqq']`），空 = 全部 |
 | `scopes` | 否 | 限定会话场景 `'private' \| 'group' \| 'channel'`，空 = 全部 |
 | `permissions` | 否 | permit 字符串列表（见下文准入） |
@@ -85,7 +85,7 @@ export default definePlugin({
     if (!context.config.get().agentToolsEnabled) return;
     context.addTool('lottery_sync', defineAgentTool({
       description: 'Synchronize lottery draws',
-      approval: 'always',
+      requiresApproval: 'always',
       inputSchema: { type: 'object', properties: {} },
       execute: async (_input, toolContext) => {
         const database = toolContext.use(lotteryDatabaseToken);
@@ -106,7 +106,7 @@ context.addTool('lottery_sync', defineAgentTool({
   scopes: tool.scopes,
   permissions: tool.permissions,
   hidden: tool.hidden,
-  approval: 'never',
+  requiresApproval: 'never',
   execute: (input, context) => tool.execute(input, context),
 }));
 ```
@@ -128,7 +128,7 @@ context.addTool('lottery_sync', defineAgentTool({
 
 permit 语法由 `@zhin.js/permission` 统一定义（`packages/im/permission/src/builtin.ts`）：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
 
-`approval` 在 Tool 通过上述准入后、执行之前判定。`always` 每次确认；`once` 可由标准 Host 在当前会话记住该 Tool；`on-risk` 对未知插件操作保持确认，但 `bash`、文件和网络工具在专用策略已经验证具体命令、路径或 URL 后不重复确认。`never` 只跳过声明式确认，不能绕过权限、网络、文件系统、Shell 或代际策略。
+`requiresApproval` 在 Tool 通过上述准入后、执行之前判定。`always` 每次确认；`once` 可由标准 Host 在当前会话记住该 Tool；`on-risk` 对未知插件操作保持确认，但 `bash`、文件和网络工具在专用策略已经验证具体命令、路径或 URL 后不重复确认。`never` 只跳过声明式确认，不能绕过权限、网络、文件系统、Shell 或代际策略。
 
 ## deferred catalog 与 load_tool
 

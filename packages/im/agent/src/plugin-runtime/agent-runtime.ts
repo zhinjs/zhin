@@ -389,7 +389,7 @@ export async function expandMcpTools(
         inputSchema: tool.inputSchema === undefined
           ? undefined
           : requireToolInputSchema(tool.inputSchema, `MCP Tool ${name} inputSchema`),
-        approval: 'on-risk' as const,
+        requiresApproval: 'on-risk' as const,
         source: connection.source,
         execute: <TInput = unknown, TResult = unknown>(input: TInput) =>
           connection.callTool<TResult>(tool.name, input),

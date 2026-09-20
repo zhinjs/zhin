@@ -42,7 +42,7 @@ export function createNativeImageToolFeature(
         num_steps: { type: 'number' },
         watermark_enabled: { type: 'boolean' },
       }, ['provider_alias', 'prompt']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: (input, context) => generateImage(input, context, resolveProvider, resolveDefaults),
     }),
   });

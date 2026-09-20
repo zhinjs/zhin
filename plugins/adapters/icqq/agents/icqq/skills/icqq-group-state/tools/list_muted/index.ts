@@ -7,7 +7,7 @@ export default defineAgentTool<{ group_id: number }>({
   }),
   adapter: 'icqq',
   scopes:['group'],
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ group_id }, context) {
     const members = await context.$client.getGroupMemberList(group_id);
     const now = Math.floor(Date.now() / 1000);

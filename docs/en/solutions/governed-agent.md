@@ -12,7 +12,7 @@ Use this when an Agent needs internal vocabulary, output rules, and business too
 | --- | --- | --- |
 | Prompt Section | Vocabulary, rules, and tool guidance | Tool or data authority |
 | Tool Feature | Input schema, execution, and model output | Host execution policy |
-| `approval` | Which calls require a person | Tool visibility |
+| `requiresApproval` | Which calls require a person | Tool visibility |
 | `ai.agent` | Execution preset, allowlist, and iteration limit | Prompt content |
 
 ## Implementation

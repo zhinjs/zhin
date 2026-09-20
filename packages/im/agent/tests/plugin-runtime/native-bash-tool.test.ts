@@ -20,7 +20,7 @@ describe('native bash ToolFeature', () => {
       context,
     )).resolves.toContain('STDOUT:\nhello');
     expect(feature.name).toBe('bash');
-    expect(feature.definition.approval).toBe('on-risk');
+    expect(feature.definition.requiresApproval).toBe('on-risk');
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({
       command: 'echo hello',
       cwd: '/workspace/project',

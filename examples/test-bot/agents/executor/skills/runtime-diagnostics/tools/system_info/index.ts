@@ -9,7 +9,7 @@ const schema = z.object({
 
 export default defineAgentTool<{ section?: 'time' | 'memory' | 'system' | 'all' }>({
   description: 'Read process/system facts (time, memory, platform)',
-  approval: 'never',
+  requiresApproval: 'never',
   inputSchema: schema,
   execute: (input) => {
     const { section } = schema.parse(input);

@@ -592,7 +592,7 @@ function generationToolProjection(tool: ToolDescriptor): Readonly<Record<string,
   return {
     name: tool.name,
     description: tool.description,
-    approval: tool.approval,
+    requiresApproval: tool.requiresApproval,
     platforms: [...(tool.platforms ?? [])].sort(),
     scopes: [...(tool.scopes ?? [])].sort(),
     permissions: [...(tool.permissions ?? [])].sort(),

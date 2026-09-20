@@ -30,7 +30,7 @@ export interface HostAgentTool {
   readonly scopes?: readonly ('private' | 'group' | 'channel')[];
   readonly permissions?: readonly string[];
   readonly hidden?: boolean;
-  readonly approval?: 'always' | 'once' | 'never' | 'on-risk';
+  readonly requiresApproval?: 'always' | 'once' | 'never' | 'on-risk';
 }
 
 interface RuntimeToolFeature {
@@ -64,7 +64,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
-      approval: tool.approval,
+      requiresApproval: tool.requiresApproval,
       platforms: tool.platforms,
       scopes: tool.scopes,
       permissions: tool.permissions,

@@ -179,7 +179,7 @@ export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: 
     properties: { keyword: { type: 'string', description: 'Search keyword' } },
     required: ['keyword'],
   },
-  approval: 'never',
+  requiresApproval: 'never',
   execute: ({ keyword, source, limit }) => searchMusic(String(keyword), source, limit ?? 5),
 });
 ```

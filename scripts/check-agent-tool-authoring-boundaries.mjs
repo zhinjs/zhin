@@ -53,6 +53,14 @@ for (const file of files) {
   if (oldImport) report(file, 'removed @zhin.js/tools import', lineOf(content, oldImport.index));
   const coreZodImport = /(?:from\s+|import\(\s*)['"]@zhin\.js\/core\/tool-zod['"]/u.exec(content);
   if (coreZodImport) report(file, 'removed @zhin.js/core/tool-zod import', lineOf(content, coreZodImport.index));
+  const removedApprovalField = /\bapproval\s*:\s*['"](?:never|on-risk|once|always)['"]/u.exec(content);
+  if (removedApprovalField) {
+    report(
+      file,
+      'removed Agent Tool approval field; use requiresApproval',
+      lineOf(content, removedApprovalField.index),
+    );
+  }
 
   const packageRoot = findPackageRoot(file);
   if (!packageRoot) continue;

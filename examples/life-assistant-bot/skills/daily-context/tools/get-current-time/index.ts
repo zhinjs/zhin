@@ -4,7 +4,7 @@ import { z } from 'zod';
 export default defineAgentTool({
   description: '获取当前日期和时间',
   inputSchema: z.object({}),
-  approval: 'never',
+  requiresApproval: 'never',
   async execute() {
     return new Date().toLocaleString('zh-CN', {
       timeZone: 'Asia/Shanghai',

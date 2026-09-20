@@ -11,7 +11,7 @@ export default defineAgentTool<{ repo?: string; branch?: string; message: string
     message: z.string().describe('commit message'),
   }),
   tags: ['github'],
-  approval: 'always',
+  requiresApproval: 'always',
   async execute(input, context) {
     return executeGithubPushBranch(input, context.$client);
   },
