@@ -49,7 +49,7 @@ function agentHasRoute(binding: AgentBindingConfig): boolean {
 }
 
 /**
- * 按 agents.<name>.priority 降序匹配；无 match 的 agent 不参与；无 .agent.md 跳过；无命中 → zhin。
+ * 按 agents.<name>.priority 降序匹配；无 match 的 agent 不参与；无目录化 Agent 定义则跳过；无命中 → zhin。
  */
 export function resolveRoutedAgentName(
   agents: Record<string, AgentBindingConfig>,

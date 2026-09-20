@@ -12,41 +12,65 @@ import {
 import agentFeature, {
   AgentIndex,
   agentFeatureId,
-  parseAgentMarkdown,
+  parseAgentPackage,
+  type AgentPackageSource,
 } from '../src/index.js';
 
 describe('Agent Feature', () => {
-  it('discovers only explicit agents/$<name>.agent.md entries', async () => {
-    const source = '/project/agents/$planner.agent.md';
+  it('discovers only complete agents/<name>/agent.json packages', async () => {
+    const source = '/project/agents/planner/agent.json';
     const host = new MemoryHost({
       '/project/agents': [
-        { name: '$planner.agent.md', kind: 'file' },
-        { name: 'helper.agent.md', kind: 'file' },
-        { name: 'legacy.md', kind: 'file' },
-        { name: 'nested', kind: 'directory' },
+        { name: 'planner', kind: 'directory' },
+        { name: '$legacy.agent.md', kind: 'file' },
+        { name: 'notes', kind: 'directory' },
       ],
-    }, new Map([[source, '# Planner\n\nPlan before acting.']]));
+      '/project/agents/planner': coreEntries(),
+      '/project/agents/planner/workflows': [{ name: 'create-api.md', kind: 'file' }],
+      '/project/agents/planner/tools': [],
+      '/project/agents/planner/knowledge': [],
+      '/project/agents/notes': [{ name: 'README.md', kind: 'file' }],
+    }, new Map([
+      [source, JSON.stringify(manifest())],
+      ...coreFiles('/project/agents/planner'),
+      ['/project/agents/planner/workflows/create-api.md', '# Create API'],
+    ]));
     const slots = await new FeatureDiscovery(host).discover(agentFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
 
     expect(slots.map((slot) => slot.localName)).toEqual(['planner']);
-    expect(slots[0]?.definition.description).toBe('Planner');
+    expect(slots[0]?.definition).toMatchObject({
+      displayName: 'Backend Engineer Agent',
+      description: 'Plan before acting',
+      triggerRules: { keywords: ['plan'] },
+      workflows: [{ path: 'workflows/create-api.md' }],
+    });
+  });
+
+  it('rejects incomplete core entry points and traversal', () => {
+    const source = packageSource();
+    expect(() => parseAgentPackage({
+      ...source,
+      manifest: { ...manifest(), entry_points: ['system.md', '../secret.md'] },
+    }, validation())).toThrow(/must include boundaries\.md/u);
+    expect(() => parseAgentPackage({
+      ...source,
+      manifest: {
+        ...manifest(),
+        entry_points: ['system.md', 'boundaries.md', 'conventions.md', '../secret.md'],
+      },
+    }, validation())).toThrow(/root Markdown file/u);
   });
 
   it('projects immutable Agent descriptors', () => {
     const root = rootPluginId();
-    const definition = parseAgentMarkdown('# Reviewer\n\nReview changes.', {
-      owner: root,
-      feature: agentFeatureId,
-      localName: 'reviewer',
-      source: '/agents/$reviewer.agent.md',
-    });
+    const definition = parseAgentPackage(packageSource(), validation());
     const slot = createCapabilitySlot({
       owner: root,
       feature: agentFeatureId,
       localName: 'reviewer',
-      source: '/agents/$reviewer.agent.md',
+      source: '/agents/reviewer/agent.json',
       definition,
     });
     const value: RuntimeSnapshot = {
@@ -60,10 +84,63 @@ describe('Agent Feature', () => {
     };
     const descriptor = new AgentIndex([slot], value).get(root, 'reviewer');
 
-    expect(descriptor).toMatchObject({ name: 'reviewer', qualifiedName: 'reviewer' });
+    expect(descriptor).toMatchObject({
+      name: 'reviewer',
+      displayName: 'Backend Engineer Agent',
+      qualifiedName: 'reviewer',
+    });
     expect(Object.isFrozen(descriptor)).toBe(true);
   });
 });
+
+function manifest() {
+  return {
+    name: 'Backend Engineer Agent',
+    version: '1.0.0',
+    description: 'Plan before acting',
+    trigger_rules: { file_patterns: ['src/**'], keywords: ['plan'] },
+    entry_points: ['system.md', 'boundaries.md', 'conventions.md'],
+  };
+}
+
+function packageSource(): AgentPackageSource {
+  return {
+    manifest: manifest(),
+    files: Object.fromEntries(coreFiles('/agents/reviewer').map(([path, content]) => [
+      path.split('/').at(-1)!, content,
+    ])),
+    workflows: [],
+    tools: [],
+    knowledge: [],
+  };
+}
+
+function validation() {
+  return {
+    owner: rootPluginId(),
+    feature: agentFeatureId,
+    localName: 'reviewer',
+    source: '/agents/reviewer/agent.json',
+  };
+}
+
+function coreEntries(): DirectoryEntry[] {
+  return [
+    { name: 'agent.json', kind: 'file' },
+    { name: 'system.md', kind: 'file' },
+    { name: 'boundaries.md', kind: 'file' },
+    { name: 'conventions.md', kind: 'file' },
+    { name: 'workflows', kind: 'directory' },
+  ];
+}
+
+function coreFiles(root: string): Array<[string, string]> {
+  return [
+    [`${root}/system.md`, '# System\n\nPlan carefully.'],
+    [`${root}/boundaries.md`, '# Boundaries\n\nStay in scope.'],
+    [`${root}/conventions.md`, '# Conventions\n\nFollow AGENTS.md.'],
+  ];
+}
 
 class MemoryHost implements DiscoveryHost {
   constructor(

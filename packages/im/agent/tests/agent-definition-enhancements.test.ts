@@ -19,14 +19,20 @@ const baseParams = {
   role: 'subtask' as const,
   config: DEFAULT_CONFIG as Required<typeof DEFAULT_CONFIG>,
 };
+const requiredMeta = {
+  displayName: 'Test Agent',
+  version: '1.0.0',
+  systemPrompt: 'Test system prompt',
+};
 
 describe('disallowedTools filtering', () => {
   it('removes tools in disallowedTools from pool', () => {
     const allTools = [makeTool('bash'), makeTool('read_file'), makeTool('write_file')];
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'test-agent',
       description: 'Test',
-      filePath: '/tmp/test.agent.md',
+      filePath: '/tmp/agents/test/agent.json',
       disallowedTools: ['bash'],
     };
 
@@ -37,9 +43,10 @@ describe('disallowedTools filtering', () => {
   it('accepts disableTool() sentinel via normalized AgentMeta', () => {
     const allTools = [makeTool('bash'), makeTool('read_file')];
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'test-agent',
       description: 'Test',
-      filePath: '/tmp/test.agent.md',
+      filePath: '/tmp/agents/test/agent.json',
       disallowedTools: [disableTool('bash').name],
     };
     const result = resolveSubagentAgentTools({ ...baseParams, allTools, agentMeta: meta });
@@ -49,9 +56,10 @@ describe('disallowedTools filtering', () => {
   it('no disallowedTools means no filtering', () => {
     const allTools = [makeTool('bash'), makeTool('read_file')];
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'test-agent',
       description: 'Test',
-      filePath: '/tmp/test.agent.md',
+      filePath: '/tmp/agents/test/agent.json',
     };
 
     const result = resolveSubagentAgentTools({ ...baseParams, allTools, agentMeta: meta });
@@ -67,9 +75,10 @@ describe('disallowedTools filtering', () => {
       makeTool('spawn_task'),
     ];
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'test-agent',
       description: 'Test',
-      filePath: '/tmp/test.agent.md',
+      filePath: '/tmp/agents/test/agent.json',
       disallowedTools: ['bash'],
     };
 
@@ -81,9 +90,10 @@ describe('disallowedTools filtering', () => {
   it('empty disallowedTools has no effect', () => {
     const allTools = [makeTool('bash'), makeTool('read_file')];
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'test-agent',
       description: 'Test',
-      filePath: '/tmp/test.agent.md',
+      filePath: '/tmp/agents/test/agent.json',
       disallowedTools: [],
     };
 
@@ -111,39 +121,18 @@ describe('effort level mapping', () => {
 describe('AgentMeta extended fields', () => {
   it('accepts all new fields without type errors', () => {
     const meta: AgentMeta = {
+      ...requiredMeta,
       name: 'full-agent',
       description: 'Agent with all new fields',
-      filePath: '/agents/$full-agent.agent.md',
+      filePath: '/agents/full-agent/agent.json',
       toolNames: ['read_file'],
       disallowedTools: ['bash'],
       effort: 'high',
       memory: 'agent',
-      toolAliases: {
-        'Bash': 'bash',
-        'ReadFile': 'read_file',
-      },
     };
 
     expect(meta.disallowedTools).toEqual(['bash']);
     expect(meta.effort).toBe('high');
     expect(meta.memory).toBe('agent');
-    expect(meta.toolAliases).toEqual({ Bash: 'bash', ReadFile: 'read_file' });
-  });
-
-  it('toolAliases resolves alias to real tool name', () => {
-    const aliases: Record<string, string> = {
-      'Bash': 'bash',
-      'ReadFile': 'read_file',
-    };
-    const inputName = 'Bash';
-    const resolvedName = aliases[inputName] ?? inputName;
-    expect(resolvedName).toBe('bash');
-  });
-
-  it('toolAliases passes through unknown names', () => {
-    const aliases: Record<string, string> = { 'Bash': 'bash' };
-    const inputName = 'write_file';
-    const resolvedName = aliases[inputName] ?? inputName;
-    expect(resolvedName).toBe('write_file');
   });
 });

@@ -64,7 +64,7 @@ plugin-package/
   handlers/**/$*.ts
   agent/tools/$*.ts
   skills/<name>/SKILL.md
-  agents/$<name>.agent.md
+  agents/<name>/agent.json
   pages/$*.ts(x)
   plugins/*                    # optional, one-level workspace children
   packages/*                   # optional Feature provider workspaces
@@ -124,7 +124,7 @@ disposal. Standard providers use the following conventions:
 | Adapter | `adapters/**/$*.ts` / `defineAdapter()` | AdapterIndex |
 | Tool | `agent/tools/$*.ts` / `defineAgentTool()` | Agent capability catalog |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
-| Agent | `agents/$<name>.agent.md` | Agent capability catalog |
+| Agent | `agents/<name>/agent.json` | Agent capability catalog |
 | Prompt Section | `agent/prompt-sections/**/$*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
 | Page | `pages/$*.ts(x)` / `definePage()` | Console PageIndex |
 | Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |

@@ -19,6 +19,7 @@
     "commands",
     "src",
     "lib",
+    "AGENTS.md",
     "agent",
     "skills",
     "evals",

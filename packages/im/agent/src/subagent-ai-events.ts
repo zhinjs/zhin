@@ -8,7 +8,7 @@ import type { AIEventPayload } from './ai-event-contract.js';
 export interface SubagentAiEventContext {
   taskId: string;
   label: string;
-  /** ai.agents / *.agent.md 名，如 researcher */
+  /** ai.agents / agents/<name>/agent.json 名，如 researcher */
   presetName?: string;
   /** 角色：researcher / executor / … */
   role?: string;

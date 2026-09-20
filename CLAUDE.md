@@ -112,7 +112,8 @@ Capabilities are **discovered from convention directories**, not registered impe
 | `components/*.tsx` | `defineComponent()` (`zhin.js/component`) |
 | `tools/*.ts` | `defineAgentTool()` (`@zhin.js/tool`) |
 | `pages/*.tsx` | `definePage()` (`$nav.tsx` / `$footer.tsx` for chrome) |
-| `skills/<name>/SKILL.md`, `agents/<name>.agent.md` | markdown + frontmatter |
+| `skills/<name>/SKILL.md` | Markdown Skill package |
+| `agents/<name>/` | `agent.json` + core Markdown sub-agent package |
 
 DI is **Scope + Token** based (`context.resources`), generation-scoped rather than a global registry. See `.github/skills/migrate-zhin-plugin-runtime/references/migration-map.md` for the full old→new mapping.
 

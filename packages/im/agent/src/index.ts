@@ -570,7 +570,6 @@ export {
 export type { FiveAgentRole } from './orchestration/five-agent/index.js';
 
 export {
-  defineAgent,
   defineSkill,
   defineSchedule,
   defineConnection,
@@ -583,7 +582,6 @@ export {
   slotNameFromDir,
 } from './authoring/index.js';
 export type {
-  AuthoringAgentDefinition,
   AuthoringSkillDefinition,
   AuthoringScheduleDefinition,
   AuthoringConnectionDefinition,

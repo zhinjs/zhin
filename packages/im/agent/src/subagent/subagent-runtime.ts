@@ -10,7 +10,6 @@
 
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import * as path from 'node:path';
 import type { Message } from '@zhin.js/core';
 import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, type Usage, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
@@ -27,7 +26,7 @@ import { applyExecPolicyToTools } from '../security/exec-policy.js';
 import { resolveSubagentAgentTools } from '../resource-hub/resolve-subagent-tools.js';
 import type { AgentRole } from '../resource-hub/role-configs.js';
 import { buildSubagentUserDelivery } from '../media/subagent-user-delivery.js';
-import { type AgentMeta, type AgentEffortLevel, loadAgentInstructionsBody } from '../discovery/agents.js';
+import { type AgentMeta, type AgentEffortLevel } from '../discovery/agents.js';
 const EFFORT_MAX_ITERATIONS: Record<AgentEffortLevel, number> = {
   low: 3,
   medium: 5,
@@ -73,11 +72,11 @@ export interface SpawnOptions {
   task: string;
   label?: string;
   origin: SubagentOrigin;
-  /** 配置/route 中的 agent 名（ai.agents + *.agent.md） */
+  /** 配置/route 中的 agent 名（ai.agents + agents/<name>/agent.json） */
   agent?: string;
   /** 显式绑定（优先于 agent 名解析） */
   binding?: ResolvedAgentBinding;
-  /** 来自 *.agent.md 正文的 system prompt */
+  /** 来自目录化 Agent entry_points 的 system prompt */
   systemPrompt?: string;
   /** Agent 角色（可选，默认为 'subtask'） */
   role?: AgentRole;
@@ -168,7 +167,7 @@ export interface SubagentRuntimeOptions {
   onSubagentComplete?: (payload: SubagentCompletePayload) => Promise<void>;
   /** 与主 ZhinAgent 相同的 AI 处理事件总线（processing / tool / mcp 等） */
   eventEmitter?: ZhinAgentEventEmitter | null;
-  /** 解析 *.agent.md 元数据 */
+  /** 解析 agents/<name>/agent.json 元数据 */
   resolveAgentMeta?: (agentName: string) => Promise<AgentMeta | null>;
   /** fork 模式：主会话 active_leaf 快照 */
   getParentContextSnapshot?: (origin: SubagentOrigin) => Promise<string | undefined>;
@@ -263,13 +262,7 @@ export class SubagentRuntime {
     const role = options.role ?? resolveSubagentRole(meta, agentName);
     const contextMode = resolveSubagentContextMode(meta, role, options.contextMode);
     let systemPrompt = options.systemPrompt;
-    if (!systemPrompt && meta?.filePath) {
-      try {
-        systemPrompt = await loadAgentInstructionsBody(path.dirname(meta.filePath));
-      } catch {
-        // ignore missing body
-      }
-    }
+    if (!systemPrompt && meta?.systemPrompt) systemPrompt = meta.systemPrompt;
     let contextPreamble = options.contextPreamble;
     if (contextMode === 'fork' && !contextPreamble && this.getParentContextSnapshotFn) {
       contextPreamble = await this.getParentContextSnapshotFn(options.origin);
@@ -549,9 +542,12 @@ export class SubagentRuntime {
     });
 
     const binding = opts?.binding ?? null;
+    const manifestProvider = opts?.agentMeta?.provider && this.getProviderFn
+      ? this.getProviderFn(opts.agentMeta.provider)
+      : undefined;
     const provider = binding && this.getProviderFn
       ? this.getProviderFn(binding.providerAlias)
-      : this.provider;
+      : manifestProvider ?? this.provider;
     try {
       let allTools = this.createTools();
       const mcps = this.getMcpRegistryFn?.() ?? null;
@@ -589,7 +585,7 @@ export class SubagentRuntime {
       if (opts?.contextPreamble?.trim()) {
         systemPrompt = `${systemPrompt}\n\n## Parent session context (fork)\n${opts.contextPreamble.trim()}`;
       }
-      const model = binding?.model || provider.models[0];
+      const model = binding?.model || opts?.agentMeta?.model || provider.models[0];
       const bashCommMessage = origin.message;
 
       await aiEvents?.agentStart(model);
@@ -604,7 +600,7 @@ export class SubagentRuntime {
         systemPrompt,
         tools,
         userInput: agentUserInput,
-        maxIterations: effortIterations ?? this.maxIterations,
+        maxIterations: effortIterations ?? opts?.agentMeta?.maxIterations ?? this.maxIterations,
         commMessage: bashCommMessage,
         callbacks: aiEvents?.createAgentLoopCallbacks(model),
         signal: opts?.signal,

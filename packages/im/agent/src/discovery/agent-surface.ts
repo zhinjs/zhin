@@ -8,7 +8,6 @@ import { getLogger } from '@zhin.js/logger';
 import {
   AUTHORING_KIND,
   isAuthoringDefinition,
-  type AuthoringAgentDefinition,
   type AuthoringConnectionDefinition,
   type AuthoringEvalDefinition,
   type AuthoringHookDefinition,
@@ -23,7 +22,6 @@ import {
 } from '../authoring/types.js';
 import {
   namespaceAuthoringName,
-  slotNameFromDir,
   slotNameFromFile,
 } from '../authoring/bridge.js';
 import { errMsg } from './utils.js';
@@ -92,17 +90,6 @@ function listSkillFiles(dir: string): string[] {
       .filter((f) => f.startsWith('$')
         && (f.endsWith('.md') || f.endsWith('.ts') || f.endsWith('.js')))
       .map((f) => path.join(dir, f));
-  } catch {
-    return [];
-  }
-}
-
-function listSubagentDirs(dir: string): string[] {
-  if (!fs.existsSync(dir)) return [];
-  try {
-    return fs.readdirSync(dir, { withFileTypes: true })
-      .filter((e) => e.isDirectory())
-      .map((e) => path.join(dir, e.name));
   } catch {
     return [];
   }
@@ -240,23 +227,6 @@ async function scanAgentDir(
   const schedules: DiscoveredAuthoringSchedule[] = [];
   const connections: DiscoveredAuthoringConnection[] = [];
   const hooks: DiscoveredAuthoringHook[] = [];
-  const subagents: DiscoveredPluginAgentSurface[] = [];
-
-  let agentDefinition: AuthoringAgentDefinition | undefined;
-  const agentTs = path.join(agentDir, 'agent.ts');
-  const agentJs = path.join(agentDir, 'agent.js');
-  const agentFile = fs.existsSync(agentTs) ? agentTs : (fs.existsSync(agentJs) ? agentJs : undefined);
-  if (agentFile) {
-    const exported = await importAuthoringModule(agentFile, packageRoot);
-    if (isAuthoringDefinition(exported, 'agent')) {
-      agentDefinition = exported as AuthoringAgentDefinition;
-    }
-  }
-
-  const instructionsPath = [path.join(agentDir, 'instructions.md')]
-    .find((p) => fs.existsSync(p));
-  const instructionsBody = instructionsPath ? await readTextIfExists(instructionsPath) : undefined;
-
   for (const file of listSkillFiles(path.join(agentDir, 'skills'))) {
     const item = await loadSkillFile(file, pluginName, bareNames, packageRoot);
     if (item) skills.push(item);
@@ -273,35 +243,11 @@ async function scanAgentDir(
     const item = await loadHookFile(file, pluginName, bareNames, packageRoot);
     if (item) hooks.push(item);
   }
-  for (const subDir of listSubagentDirs(path.join(agentDir, 'subagents'))) {
-    const subName = slotNameFromDir(subDir);
-    const subSurface = await scanAgentDir(subDir, pluginName, bareNames, packageRoot);
-    subagents.push({
-      pluginName,
-      agentDir: subDir,
-      ...subSurface,
-      evals: [],
-      subagents: subSurface.subagents,
-    });
-    // Subagent name overrides for registry
-    const sub = subagents.at(-1);
-    if (sub) {
-      sub.agentDefinition = {
-        ...(subSurface.agentDefinition ?? { [AUTHORING_KIND]: 'agent' as const }),
-        description: subSurface.agentDefinition?.description ?? `Subagent ${subName}`,
-      };
-    }
-  }
-
   return {
-    agentDefinition,
-    instructionsPath,
-    instructionsBody: instructionsBody?.trim() || undefined,
     skills,
     schedules,
     connections,
     hooks,
-    subagents,
   };
 }
 
@@ -317,7 +263,6 @@ export async function discoverPluginAgentSurface(
           schedules: [],
           connections: [],
           hooks: [],
-          subagents: [],
         };
 
     const evals: DiscoveredAuthoringEval[] = [];
@@ -339,50 +284,4 @@ export async function discoverPluginAgentSurface(
     logger.warn(`Failed to discover agent surface for ${roots.pluginName}: ${errMsg(e)}`);
     return null;
   }
-}
-
-export function workspaceAgentsDir(): string {
-  return path.join(process.cwd(), 'agents');
-}
-
-export async function discoverWorkspaceFractalAgent(
-  agentDir: string,
-): Promise<{
-  name: string;
-  agentDefinition?: AuthoringAgentDefinition;
-  instructionsBody?: string;
-  agentDir: string;
-} | null> {
-  const name = slotNameFromDir(agentDir);
-  if (!fs.existsSync(agentDir)) return null;
-  const scanned = await scanAgentDir(agentDir, 'workspace', true);
-  return {
-    name,
-    agentDefinition: scanned.agentDefinition,
-    instructionsBody: scanned.instructionsBody,
-    agentDir,
-  };
-}
-
-export async function discoverWorkspaceFractalAgents(): Promise<Array<{
-  name: string;
-  agentDefinition?: AuthoringAgentDefinition;
-  instructionsBody?: string;
-  agentDir: string;
-}>> {
-  const base = workspaceAgentsDir();
-  if (!fs.existsSync(base)) return [];
-  const agents: Array<{
-    name: string;
-    agentDefinition?: AuthoringAgentDefinition;
-    instructionsBody?: string;
-    agentDir: string;
-  }> = [];
-  for (const dir of listSubagentDirs(base)) {
-    const item = await discoverWorkspaceFractalAgent(dir);
-    if (item?.agentDefinition?.description || item?.instructionsBody) {
-      agents.push(item);
-    }
-  }
-  return agents;
 }

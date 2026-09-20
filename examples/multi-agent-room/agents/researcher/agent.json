@@ -1,0 +1,14 @@
+{
+  "name": "Researcher — 调研",
+  "version": "1.0.0",
+  "description": "Researcher — 调研",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": []
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ]
+}

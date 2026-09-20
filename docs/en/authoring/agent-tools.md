@@ -1,6 +1,6 @@
 ---
 title: Agent Tools and Skills
-description: agent/tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and $*.agent.md
+description: agent/tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and agents/<name>/agent.json
 ---
 
 # Agent Tools and Skills
@@ -127,77 +127,35 @@ The Anthropic SDK channel marks unloaded tools with `deferLoading`; other channe
 `ask_user` is a framework-provided, generation-owned Tool capability rather than Plugin Prompt middleware.
 It requests input through the current Turn's `QuestionPort` and matches replies by canonical session and authenticated subject. Plugin tools that need the same interaction must depend on `ToolExecutionContext.question` and handle an absent port. Unattended Turns, including Schedule, do not receive this port and must not fall back to global Message, Adapter, or user queues.
 
-## skills and agents/$*.agent.md
+## Skills, main Agents, and sub-agents
 
-Skills and named Agents are also file conventions, discovered by the `@zhin.js/skill` and `@zhin.js/agent-feature` Features respectively.
+Skills use `skills/<name>/SKILL.md`. A plugin main Agent uses the standard root `AGENTS.md`. Named sub-agents use self-contained `agents/<name>/` directories discovered by `@zhin.js/agent-feature`.
 
-Skills go in `skills/<name>/SKILL.md`. The root Agent can discover skills across the plugin tree; child-plugin skills use an owner-qualified name such as `music__recommend`. Each Skill directory may contain references and scripts; only `SKILL.md` is registered. Each Turn filters skills by `platforms`, `scopes`, and `permissions` before discovery. `load_skill` can only load an admitted skill and only unlocks associated tools from the same owner that already passed Tool admission.
+Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md) for the complete manifest and directory contract.
 
-YAML frontmatter can define catalog and access metadata. Frontmatter is removed from the model-facing instructions, and `name`, when present, must match the directory:
+The `tools` field in `agent.json` only requests Tool names; the runtime intersects them with Tools admitted for the current Turn. Scripts under `agents/<name>/tools/` gain no execution authority and must run through governed `bash` or an explicit Tool capability.
 
-```markdown
----
-name: research
-description: Produce traceable research from primary sources
-tools: [web_search, read_file]
-platforms: [qq, telegram]
-scopes: [private, group]
-permissions: [role(trusted)]
-keywords: [search, sources, citation]
-tags: [research]
-always: false
----
-
-# Research
-
-Search primary sources before presenting a cited conclusion.
-```
-
-`tools` contains local Tool names owned by the same plugin. The runtime resolves only Tools already admitted for the Turn, so a Skill cannot widen Tool authority. `always: true` injects instructions whenever the Skill itself is admitted; it does not bypass Tool permissions or execution approval. Without frontmatter, the first Markdown heading remains the description. Named Agents use `agents/$<name>.agent.md` (lowercase kebab-case, for example `agents/$planner.agent.md`); files without `$` are not registered. See `examples/test-bot/agents/$planner.agent.md` for a real example.
-
-```markdown
-<!-- agents/$planner.agent.md -->
-# planner
-
-You are **planner** (coordinator): break down user goals, define acceptance
-criteria, and coordinate specialist roles.
-```
-
-## Plugin Agent Authoring Directories
-
-Tool and Agent declarations live under `agent/`, while Skills use the top-level `skills/` package shape suited to references and scripts. Each capability is discovered by its Feature; there is no second Tool or Skill registry.
+## Plugin Agent authoring directories
 
 ```text
 my-plugin/
-├── agent/
-│   ├── agent.ts            # defineAgent: description, keywords, toolNames, systemPrompt
-│   ├── instructions.md     # system instructions
-│   ├── tools/
-│   │   ├── $short_url.ts   # defineAgentTool from '@zhin.js/tool'
-│   │   └── client.ts       # ordinary dependency, not a Tool entry
-│   └── subagents/<name>/
-└── skills/
-    └── short-url/
-        ├── SKILL.md
-        └── references/
+├── AGENTS.md
+├── agent/tools/
+│   ├── $short_url.ts
+│   └── client.ts
+├── skills/short-url/
+│   └── SKILL.md
+└── agents/reviewer/
+    ├── agent.json
+    ├── system.md
+    ├── boundaries.md
+    ├── conventions.md
+    ├── workflows/
+    ├── tools/
+    └── knowledge/
 ```
 
-`agent/tools/$*.ts` and `addTool()` in `setup()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`. Plugins must not recover the current Message or Runtime from global state.
-
-```ts
-// agent/tools/$short_url.ts
-import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
-
-export default defineAgentTool<{ url: string }>({
-  description: 'Shorten a URL',
-  inputSchema: z.object({ url: z.string().min(1) }),
-  keywords: ['short url', 'shorten'],
-  async execute({ url }, context) {
-    return context.use(shortUrlClientToken).shorten(url);
-  },
-});
-```
+`agent/tools/$*.ts` and `addTool()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`.
 
 ## Give an Agent plugin-owned context
 

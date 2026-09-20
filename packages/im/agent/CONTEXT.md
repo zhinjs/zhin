@@ -65,7 +65,7 @@ _避免使用_：tool service 真相源、双注册、registry bag
 _避免使用_：Orchestrator 直写、回合 SSOT
 
 **Agent Feature projection**:
-`@zhin.js/agent-feature` 把插件 setup 与显式 `$*.agent.md` 入口投影成 generation-owned `AgentIndex`；**不**替代配置里的主 Agent 选用。
+`@zhin.js/agent-feature` 把插件 setup 与显式 `agents/<name>/agent.json` 入口投影成 generation-owned `AgentIndex`；**不**替代配置里的主 Agent 选用。
 _避免使用_：主绑定 SSOT
 
 **MCP Feature projection**:

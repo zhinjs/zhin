@@ -97,7 +97,7 @@ export class AIService {
     return this.bindingRegistry;
   }
 
-  /** 运行时合并 *.agent.md 发现结果 */
+  /** 运行时合并 agents/<name>/agent.json 发现结果 */
   setDiscoveredAgents(fileMetas: import('./discovery/agents.js').AgentMeta[]): void {
     this.bindingRegistry = new AgentBindingRegistry(this.routing.agents, fileMetas);
   }

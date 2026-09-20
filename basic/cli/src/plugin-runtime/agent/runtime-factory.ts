@@ -138,7 +138,7 @@ async function seedResourceHubAgentPresets(
       resourceHub.addAgentPreset({
         name: meta.name,
         description: meta.description,
-        systemPrompt: '',
+        systemPrompt: meta.systemPrompt,
         tools: meta.toolNames,
         model: meta.model,
         filePath: meta.filePath,

@@ -9,7 +9,6 @@ import type { z } from 'zod';
 export const AUTHORING_KIND = Symbol.for('zhin.authoring.kind');
 
 export type AuthoringKind =
-  | 'agent'
   | 'skill'
   | 'schedule'
   | 'connection'
@@ -18,20 +17,6 @@ export type AuthoringKind =
 
 export interface AuthoringMarker {
   [AUTHORING_KIND]: AuthoringKind;
-}
-
-export interface AuthoringAgentDefinition extends AuthoringMarker {
-  [AUTHORING_KIND]: 'agent';
-  description?: string;
-  keywords?: string[];
-  tags?: string[];
-  role?: string;
-  contextMode?: 'fork' | 'fresh';
-  maxIterations?: number;
-  toolNames?: string[];
-  /** Tool names or {@link disableTool} sentinels to exclude from this agent. */
-  disallowedTools?: (string | import('./disable-tool.js').DisabledToolRef)[];
-  systemPrompt?: string;
 }
 
 export interface AuthoringSkillDefinition extends AuthoringMarker {
@@ -134,15 +119,11 @@ export interface DiscoveredAuthoringEval {
 export interface DiscoveredPluginAgentSurface {
   pluginName: string;
   agentDir: string;
-  agentDefinition?: AuthoringAgentDefinition;
-  instructionsPath?: string;
-  instructionsBody?: string;
   skills: DiscoveredAuthoringSkill[];
   schedules: DiscoveredAuthoringSchedule[];
   connections: DiscoveredAuthoringConnection[];
   hooks: DiscoveredAuthoringHook[];
   evals: DiscoveredAuthoringEval[];
-  subagents: DiscoveredPluginAgentSurface[];
 }
 
 export function isAuthoringDefinition(value: unknown, kind: AuthoringKind): boolean {

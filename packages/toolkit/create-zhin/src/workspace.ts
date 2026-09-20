@@ -463,7 +463,7 @@ ${projectName}/
 ├── agent/
 │   └── tools/             # $*.ts AI 工具入口
 ├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
-├── agents/                # $*.agent.md Agent 入口目录
+├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
 ├── packages/              # 贡献给 Zhin 的 Feature workspace
 ├── package.json           # zhin 清单（protocol 1 / features / plugins）

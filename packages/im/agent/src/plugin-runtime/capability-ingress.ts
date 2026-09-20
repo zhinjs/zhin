@@ -85,20 +85,38 @@ export class CapabilityIngress {
       'Skill',
       [...featureSkills, ...seamSkills].map((skill) => ({ name: skill.qualifiedName })),
     );
+    const featureAgents = await bindAgents(
+      projection(snapshot, agentFeatureId, AgentIndex),
+      owner,
+      turn,
+      resolvePermissionHost(snapshot),
+    );
     return Object.freeze({
       generation: snapshot.generation,
       owner,
       tools: Object.freeze([...featureTools, ...seamTools]),
       skills: Object.freeze([...featureSkills, ...seamSkills]),
-      agents: Object.freeze([
-        ...(projection(snapshot, agentFeatureId, AgentIndex)?.visible(owner) ?? []),
-      ]),
+      agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))),
     });
   }
+}
+
+async function bindAgents(
+  index: AgentIndex | undefined,
+  owner: PluginId,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
+): Promise<readonly AgentDescriptor[]> {
+  if (!index) return Object.freeze([]);
+  const access = await Promise.all(index.visible(owner).map(async (descriptor) => ({
+    descriptor,
+    allowed: await canAccessDescriptor(descriptor, turn, host),
+  })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
 }
 
 function resolveSeamIntegration(snapshot: RuntimeSnapshot): SeamIntegration | undefined {

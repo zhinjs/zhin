@@ -477,6 +477,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../packages/im/agent-feature
       ai:
         specifier: ^6.0.238
         version: 6.0.238(zod@4.4.3)

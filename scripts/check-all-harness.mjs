@@ -108,6 +108,11 @@ const checks = [
     description: 'Skill 只使用 skills/<name>/SKILL.md，并显式发布目录、依赖和挂载 Feature',
   },
   {
+    name: 'Agent Authoring Boundaries',
+    command: 'pnpm check:agent-authoring-boundaries',
+    description: '主 Agent 使用 AGENTS.md，子 Agent 只使用 agents/<name>/ 目录契约',
+  },
+  {
     name: 'Architecture Layers',
     command: 'pnpm check:architecture',
     description: '检查架构层级依赖是否正确',

@@ -1,0 +1,43 @@
+{
+  "name": "ops",
+  "version": "1.0.0",
+  "description": "运维工程师（Ops/SRE）角色：负责 CI/CD 流水线维护、Release 发布管理、 部署验证、监控告警响应、基础设施配置。监听 workflow 失败和 release 事件。",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "ops",
+      "运维",
+      "deploy",
+      "部署",
+      "release",
+      "发布",
+      "CI",
+      "CD",
+      "pipeline",
+      "workflow",
+      "监控",
+      "monitor",
+      "infrastructure"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "tools": [
+    "bash",
+    "read_file",
+    "write_file",
+    "edit_file",
+    "grep",
+    "todo_write"
+  ],
+  "tags": [
+    "github",
+    "operations",
+    "ci-cd",
+    "infrastructure"
+  ],
+  "max_iterations": 15
+}

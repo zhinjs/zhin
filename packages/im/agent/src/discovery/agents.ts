@@ -1,150 +1,158 @@
 /**
- * Agent 预设发现（分形 agents/<name>/ 目录）
+ * Canonical sub-agent discovery.
  *
- * 加载顺序：Workspace > ~/.zhin > data > 插件包 agent/subagents（由 register-agent-surface 处理）
- * 同名先发现者优先
+ * A main Agent reads the standard project AGENTS.md chain. Named sub-agents are
+ * self-contained packages under agents/<name>/ and are described by agent.json.
  */
 
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { getLogger } from '@zhin.js/logger';
-import { workspaceRoot } from './utils.js';
+import { rootPluginId } from '@zhin.js/plugin-runtime';
 import {
-  discoverWorkspaceFractalAgent,
-} from './agent-surface.js';
-import { isAuthoringDefinition, type AuthoringAgentDefinition } from '../authoring/types.js';
-import { normalizeToolDenylist } from '../authoring/disable-tool.js';
+  agentFeatureId,
+  parseAgentPackage,
+  type AgentDefinition,
+  type AgentPackageSource,
+  type AgentResource,
+} from '@zhin.js/agent-feature';
+import { workspaceRoot } from './utils.js';
 
 export type SubagentContextMode = 'fork' | 'fresh';
-
-const KNOWN_AGENT_ROLES = new Set([
-  'subtask', 'worker', 'researcher', 'evaluator', 'executor', 'reviewer', 'planner',
-]);
+export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
 
 const logger = getLogger('builtin-tools');
 
-export type AgentEffortLevel = 'low' | 'medium' | 'high' | 'max';
-
 export interface AgentMeta {
   name: string;
+  displayName: string;
+  version: string;
   description: string;
   keywords?: string[];
+  filePatterns?: string[];
   tags?: string[];
   toolNames?: string[];
   disallowedTools?: string[];
   filePath: string;
+  systemPrompt: string;
   model?: string;
   provider?: string;
   maxIterations?: number;
   role?: string;
   contextMode?: SubagentContextMode;
-  toolAliases?: Record<string, string>;
   effort?: AgentEffortLevel;
   memory?: 'user' | 'session' | 'agent';
 }
 
-async function importAgentDefinition(agentFile: string): Promise<AuthoringAgentDefinition | undefined> {
+async function readResourceDirectory(
+  agentDir: string,
+  name: 'workflows' | 'tools' | 'knowledge',
+): Promise<readonly AgentResource[]> {
+  const directory = path.join(agentDir, name);
+  let entries: fs.Dirent[];
   try {
-    const url = `file://${path.resolve(agentFile)}?t=${Date.now()}`;
-    const mod = await import(url);
-    const exported = mod.default ?? mod;
-    if (isAuthoringDefinition(exported, 'agent')) return exported as AuthoringAgentDefinition;
-  } catch (e) {
-    logger.debug(`Failed to import agent definition ${agentFile}: ${e}`);
+    entries = await fs.promises.readdir(directory, { withFileTypes: true });
+  } catch {
+    return [];
   }
-  return undefined;
+  return Promise.all(entries
+    .filter((entry) => entry.isFile() && /^[a-zA-Z0-9][a-zA-Z0-9._-]*\.(?:md|txt|json|ya?ml|csv|sh)$/u.test(entry.name))
+    .sort((left, right) => left.name.localeCompare(right.name))
+    .map(async (entry) => Object.freeze({
+      path: `${name}/${entry.name}`,
+      content: await fs.promises.readFile(path.join(directory, entry.name), 'utf8'),
+    })));
 }
 
-function agentMetaFromFractal(
-  name: string,
-  agentDir: string,
-  def: AuthoringAgentDefinition | undefined,
-  instructionsBody: string | undefined,
-): AgentMeta | null {
-  const description = def?.description;
-  if (!description && !instructionsBody) return null;
-  const agentFile = [path.join(agentDir, 'agent.ts'), path.join(agentDir, 'agent.js')]
-    .find((p) => fs.existsSync(p)) ?? path.join(agentDir, 'agent.ts');
-  const roleRaw = def?.role?.trim();
+async function loadAgentDefinition(agentDir: string): Promise<AgentDefinition> {
+  const manifestPath = path.join(agentDir, 'agent.json');
+  const manifest = JSON.parse(await fs.promises.readFile(manifestPath, 'utf8')) as unknown;
+  const entries = await fs.promises.readdir(agentDir, { withFileTypes: true });
+  const files = Object.fromEntries(await Promise.all(entries
+    .filter((entry) => entry.isFile() && entry.name !== 'agent.json')
+    .map(async (entry) => [
+      entry.name,
+      await fs.promises.readFile(path.join(agentDir, entry.name), 'utf8'),
+    ] as const)));
+  const source: AgentPackageSource = {
+    manifest,
+    files,
+    workflows: await readResourceDirectory(agentDir, 'workflows'),
+    tools: await readResourceDirectory(agentDir, 'tools'),
+    knowledge: await readResourceDirectory(agentDir, 'knowledge'),
+  };
+  return parseAgentPackage(source, {
+    owner: rootPluginId(),
+    feature: agentFeatureId,
+    localName: path.basename(agentDir),
+    source: manifestPath,
+  });
+}
+
+function toAgentMeta(definition: AgentDefinition, agentDir: string): AgentMeta {
   return {
-    name,
-    description: description ?? name,
-    keywords: def?.keywords,
-    tags: def?.tags,
-    toolNames: def?.toolNames,
-    disallowedTools: normalizeToolDenylist(def?.disallowedTools),
-    filePath: agentFile,
-    maxIterations: def?.maxIterations,
-    role: roleRaw && KNOWN_AGENT_ROLES.has(roleRaw) ? roleRaw : undefined,
-    contextMode: def?.contextMode,
+    name: definition.name,
+    displayName: definition.displayName,
+    version: definition.version,
+    description: definition.description,
+    keywords: [...definition.triggerRules.keywords],
+    filePatterns: [...definition.triggerRules.filePatterns],
+    tags: definition.tags ? [...definition.tags] : undefined,
+    toolNames: definition.toolNames ? [...definition.toolNames] : undefined,
+    disallowedTools: definition.disallowedTools ? [...definition.disallowedTools] : undefined,
+    filePath: path.join(agentDir, 'agent.json'),
+    systemPrompt: definition.instructions,
+    maxIterations: definition.maxIterations,
+    role: definition.role,
+    contextMode: definition.contextMode,
+    model: definition.model,
+    provider: definition.provider,
+    effort: definition.effort,
+    memory: definition.memory,
   };
 }
 
-async function discoverFractalAgentsInDir(
-  agentsDir: string,
-): Promise<AgentMeta[]> {
-  const agents: AgentMeta[] = [];
-  if (!fs.existsSync(agentsDir)) return agents;
-
+async function discoverAgentPackages(agentsDir: string): Promise<AgentMeta[]> {
   let entries: fs.Dirent[];
   try {
     entries = await fs.promises.readdir(agentsDir, { withFileTypes: true });
   } catch {
-    return agents;
+    return [];
   }
-
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+  const agents: AgentMeta[] = [];
+  for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
+    if (!entry.isDirectory() || !/^[a-z0-9][a-z0-9-]*$/u.test(entry.name)) continue;
     const agentDir = path.join(agentsDir, entry.name);
-    const fractal = await discoverWorkspaceFractalAgent(agentDir);
-    if (!fractal) continue;
-    const def = fractal.agentDefinition ?? await importAgentDefinition(path.join(agentDir, 'agent.ts'));
-    const meta = agentMetaFromFractal(
-      fractal.name,
-      agentDir,
-      def,
-      fractal.instructionsBody,
-    );
-    if (meta) agents.push(meta);
+    if (!fs.existsSync(path.join(agentDir, 'agent.json'))) continue;
+    agents.push(toAgentMeta(await loadAgentDefinition(agentDir), agentDir));
   }
   return agents;
 }
 
 /**
- * 扫描 workspace agents/ 分形目录。
+ * Discover named sub-agents. Earlier roots take precedence.
  */
 export async function discoverWorkspaceAgents(
   projectRoot = workspaceRoot(),
 ): Promise<AgentMeta[]> {
   const agents: AgentMeta[] = [];
   const seenNames = new Set<string>();
-
-  const agentDirs: string[] = [
+  const roots = [
     path.join(projectRoot, 'agents'),
     path.join(os.homedir(), '.zhin', 'agents'),
     path.join(projectRoot, 'data', 'agents'),
   ];
-
-  for (const agentsDir of agentDirs) {
-    const found = await discoverFractalAgentsInDir(agentsDir);
-    for (const meta of found) {
+  for (const root of roots) {
+    for (const meta of await discoverAgentPackages(root)) {
       if (seenNames.has(meta.name)) {
-        logger.debug(`Agent '${meta.name}' 已由先序目录加载，跳过: ${meta.filePath}`);
+        logger.debug(`Agent '${meta.name}' is already loaded; skipping ${meta.filePath}`);
         continue;
       }
       seenNames.add(meta.name);
       agents.push(meta);
-      logger.debug(`Agent发现成功: ${meta.name}`);
+      logger.debug(`Agent discovered: ${meta.name}`);
     }
   }
   return agents;
-}
-
-/** 读取分形 agent instructions.md 正文 */
-export async function loadAgentInstructionsBody(agentDir: string): Promise<string> {
-  const instructionsPath = path.join(agentDir, 'instructions.md');
-  if (!fs.existsSync(instructionsPath)) return '';
-  const content = await fs.promises.readFile(instructionsPath, 'utf-8');
-  return content.trim();
 }

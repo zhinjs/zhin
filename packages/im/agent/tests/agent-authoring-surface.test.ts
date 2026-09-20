@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  defineAgent,
   namespaceAuthoringName,
   slotNameFromFile,
-  isAuthoringDefinition,
-  AUTHORING_KIND,
 } from '../src/authoring/index.js';
 import { z } from 'zod';
 import { bridgeAuthoringConnection } from '../src/authoring/bridge.js';
@@ -16,15 +13,6 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
-
-describe('authoring define* helpers', () => {
-  it('defineAgent marks authoring kind', () => {
-    const def = defineAgent({ description: 'test agent' });
-    expect(isAuthoringDefinition(def, 'agent')).toBe(true);
-    expect(def[AUTHORING_KIND]).toBe('agent');
-  });
-
-});
 
 describe('namespaceAuthoringName', () => {
   it('prefixes plugin slot names', () => {
@@ -110,21 +98,28 @@ describe('connection schema bridge', () => {
   });
 });
 
-describe('discoverWorkspaceAgents fractal', () => {
-  it('discovers agents/<name>/ directories with instructions', async () => {
+describe('discoverWorkspaceAgents', () => {
+  it('discovers canonical agents/<name>/ packages', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-agents-'));
     const researcher = path.join(tmp, 'agents', 'researcher');
     fs.mkdirSync(researcher, { recursive: true });
-    fs.writeFileSync(
-      path.join(researcher, 'agent.ts'),
-      `const KIND = Symbol.for('zhin.authoring.kind');\nexport default { [KIND]: 'agent', description: 'Research specialist', role: 'researcher' };\n`,
-    );
-    fs.writeFileSync(path.join(researcher, 'instructions.md'), 'You research things.\n');
+    fs.writeFileSync(path.join(researcher, 'agent.json'), JSON.stringify({
+      name: 'Researcher',
+      version: '1.0.0',
+      description: 'Research specialist',
+      trigger_rules: { file_patterns: [], keywords: ['research'] },
+      entry_points: ['system.md', 'boundaries.md', 'conventions.md'],
+      role: 'researcher',
+    }));
+    fs.writeFileSync(path.join(researcher, 'system.md'), 'You research things.\n');
+    fs.writeFileSync(path.join(researcher, 'boundaries.md'), 'Stay in scope.\n');
+    fs.writeFileSync(path.join(researcher, 'conventions.md'), 'Follow AGENTS.md.\n');
     try {
       const { discoverWorkspaceAgents } = await import('../src/discovery/agents.js');
       const cwd = process.cwd();
       const metas = await discoverWorkspaceAgents(tmp);
       expect(metas.some((m) => m.name === 'researcher' && m.description.includes('Research'))).toBe(true);
+      expect(metas[0]?.systemPrompt).toContain('system.md');
       expect(process.cwd()).toBe(cwd);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });

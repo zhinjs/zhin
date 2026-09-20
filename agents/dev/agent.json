@@ -1,0 +1,42 @@
+{
+  "name": "dev",
+  "version": "1.0.0",
+  "description": "开发者（Developer）角色：负责代码实现、PR 创建与迭代、代码审查响应、 技术方案设计。监听 issues.assigned 事件，自动接收被指派的开发任务。",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "dev",
+      "developer",
+      "开发",
+      "编码",
+      "code",
+      "implement",
+      "pull request",
+      "重构",
+      "refactor",
+      "fix",
+      "feature"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "tools": [
+    "bash",
+    "read_file",
+    "edit_file",
+    "write_file",
+    "grep",
+    "glob",
+    "todo_write",
+    "spawn_task"
+  ],
+  "tags": [
+    "github",
+    "development",
+    "coding"
+  ],
+  "max_iterations": 20
+}

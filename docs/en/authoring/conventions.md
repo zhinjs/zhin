@@ -30,7 +30,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | `agent/tools/` | `$*.ts` | No | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `agent/prompt-sections/` | `$*.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
-| `agents/` | `$*.agent.md` | No | server | `@zhin.js/agent-feature` | `zhin.agent` | Markdown text |
+| `agents/` | `<name>/agent.json` plus 3 core Markdown files | One level | server | `@zhin.js/agent-feature` | `zhin.agent` | Directory Agent definition |
 | `mcp/` | `$*.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
 | `pages/` | `$*.ts` / `$*.tsx`, with `$nav` / `$footer` layout slots | No | client | `@zhin.js/page` / `@zhin.js/layout` | `zhin.page` / `zhin.layout` | Page constructs |
 
@@ -52,7 +52,7 @@ Supplementary rules per directory:
 | `agent/tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `agent/tools/$music-search.ts` -> `music-search`; `agent/tools/$send_user_like.ts` -> `send_user_like` |
 | `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/$rules.ts` -> `project/rules` |
 | `skills/` | First-level directory name; only its `SKILL.md` is registered, while references and scripts may live beside it | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
-| `agents/` | File name with `$` prefix and `.agent.md` suffix removed | `agents/$planner.agent.md` -> `planner` |
+| `agents/` | First-level directory containing `agent.json` | `agents/planner/agent.json` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/$my-server.ts` -> `my-server` |
 | `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/$workroom.tsx` -> `workroom`; `pages/$nav.tsx` -> `nav` |
 
@@ -180,7 +180,7 @@ export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: 
 });
 ```
 
-### skills/ and agents/ -- Markdown
+### skills/ and agents/ -- directory capabilities
 
 `skills/<name>/SKILL.md` has frontmatter (`name` / `description` / `tools` allowlist, etc.), such as `examples/full-bot/skills/memory-consolidate/SKILL.md`:
 
@@ -194,7 +194,7 @@ tools:
 ---
 ```
 
-`agents/$<name>.agent.md` is an Agent persona/instruction entry, such as `examples/multi-agent-room/agents/$planner.agent.md`; Markdown without `$` remains colocated reference material and is not registered.
+`agents/<name>/` requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`. The main Agent uses the plugin root `AGENTS.md`; sub-agent conventions only extend those root rules. Optional `workflows/`, `tools/`, and `knowledge/` hold scenario procedures, dedicated resources, and domain knowledge. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md).
 
 ### pages/ -- Console Pages
 

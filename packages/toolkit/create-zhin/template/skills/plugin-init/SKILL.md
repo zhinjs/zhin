@@ -84,7 +84,7 @@ plugins/{name}/
 | `agent/tools/$*.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Markdown Skill 入口 |
-| `agents/$<name>.agent.md` | Markdown Agent |
+| `agents/<name>/` | `agent.json` + `system.md` + `boundaries.md` + `conventions.md` 子 Agent |
 
 ### 第 3 步：生成 package.json
 

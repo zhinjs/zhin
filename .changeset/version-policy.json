@@ -1081,6 +1081,20 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Establish one governed Skill package convention, expose the existing plugin Skill catalog through generation-owned discovery, and tighten Tool approval semantics under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "standardize-agent-packages.md",
+      "packages": [
+        "@zhin.js/agent-feature",
+        "@zhin.js/agent",
+        "@zhin.js/feature-kit",
+        "@zhin.js/runtime",
+        "create-zhin-app",
+        "@zhin.js/plugin-lottery"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace competing flat Markdown and agent.ts authoring formats with the owner-directed canonical AGENTS.md and agents/<name>/ package contract, including generation-safe resource reload and governed permissions."
     }
   ]
 }

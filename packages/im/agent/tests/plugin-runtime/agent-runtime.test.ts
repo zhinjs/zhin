@@ -12,7 +12,7 @@ import {
 import {
   AgentIndex,
   agentFeatureId,
-  parseAgentMarkdown,
+  parseAgentPackage,
 } from '@zhin.js/agent-feature';
 import {
   McpIndex,
@@ -713,6 +713,20 @@ permissions: [role(trusted)]
 
     await fixture.mcp.stop();
   });
+
+  it('filters Agent packages with the canonical platform and permission predicate', async () => {
+    const fixture = await createFixture({ platforms: ['github'], permissions: ['role(admin)'] });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github')))
+      .agents).toHaveLength(0);
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('github', ['admin'])))
+      .agents.map((agent) => agent.name)).toEqual(['planner']);
+    expect((await ingress.read(fixture.snapshot, rootPluginId(), () => true, accessTurn('icqq', ['admin'])))
+      .agents).toHaveLength(0);
+
+    await fixture.mcp.stop();
+  });
 });
 
 async function createFixture(access: {
@@ -759,12 +773,27 @@ async function createFixture(access: {
     owner: root,
     feature: agentFeatureId,
     localName: 'planner',
-    source: '/agents/$planner.agent.md',
-    definition: parseAgentMarkdown('# Planner', validation(
+    source: '/agents/planner/agent.json',
+    definition: parseAgentPackage({
+      manifest: {
+        name: 'Planner', version: '1.0.0', description: 'Planner',
+        trigger_rules: { file_patterns: [], keywords: ['plan'] },
+        entry_points: ['system.md', 'boundaries.md', 'conventions.md'],
+        platforms: access.platforms,
+        scopes: access.scopes,
+        permissions: access.permissions,
+      },
+      files: {
+        'system.md': '# Planner',
+        'boundaries.md': '# Boundaries\n\nStay in scope.',
+        'conventions.md': '# Conventions\n\nFollow AGENTS.md.',
+      },
+      workflows: [], tools: [], knowledge: [],
+    }, validation(
       root,
       agentFeatureId,
       'planner',
-      '/agents/$planner.agent.md',
+      '/agents/planner/agent.json',
     )),
   });
   const mcpSlot = createCapabilitySlot({
@@ -809,15 +838,15 @@ async function createFixture(access: {
   return { snapshot, child, mcp, journal };
 }
 
-function accessTurn(platform: string) {
+function accessTurn(platform: string, roles: readonly string[] = ['trusted']) {
   return createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: 'trace', turnId: 'turn' },
     origin: { kind: 'im', platform, endpoint: 'bot', scope: 'group', sceneId: '100' },
-    principal: { subjectId: 'trusted-user', roles: ['trusted'] },
+    principal: { subjectId: 'trusted-user', roles },
     input: { text: 'lookup' },
     session: { key: `im:${platform}:bot:group:100` },
-    policy: { permissions: ['trusted'], unattended: false },
+    policy: { permissions: roles, unattended: false },
     capabilities: { tools: [], skills: [] },
     signal: new AbortController().signal,
     ports: { journal: { append: () => undefined } },

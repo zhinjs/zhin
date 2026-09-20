@@ -1,6 +1,6 @@
 ---
 title: Agent 工具与技能
-description: agent/tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 $*.agent.md
+description: agent/tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 agents/<name>/agent.json
 ---
 
 # Agent 工具与技能
@@ -132,77 +132,35 @@ Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其�
 插件工具若需要同类交互，应依赖 `ToolExecutionContext.question`，且必须处理端口缺失。
 unattended Turn（例如 Schedule）不会注入该端口，不能回退到全局 Message、Adapter 或用户队列。
 
-## skills 与 agents/$*.agent.md
+## Skills、主 Agent 与子 Agent
 
-技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。
+Skill 使用 `skills/<name>/SKILL.md`。主 Agent 使用插件根目录的标准 `AGENTS.md`。命名子 Agent 使用 `agents/<name>/` 自包含目录，由 `@zhin.js/agent-feature` 发现。
 
-技能放在 `skills/<name>/SKILL.md`。主 Agent 可以发现整个插件树中的技能，子插件技能使用 owner 限定名，例如 `music__recommend`。每个 Skill 目录可附带参考资料和脚本，只有 `SKILL.md` 会注册。每个 Turn 会先按技能的 `platforms`、`scopes`、`permissions` 过滤；`load_skill` 只能加载已通过准入的技能，并且只解锁同 owner、当前 Turn 已获准的关联工具。
+子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
 
-Skill 可用 YAML frontmatter 声明目录信息和准入条件；frontmatter 不会进入模型提示词。`name` 若存在必须与目录名一致：
-
-```markdown
----
-name: research
-description: 使用一手资料完成可追溯研究
-tools: [web_search, read_file]
-platforms: [qq, telegram]
-scopes: [private, group]
-permissions: [role(trusted)]
-keywords: [检索, 来源, citation]
-tags: [research]
-always: false
----
-
-# Research
-
-先检索一手资料，再给出带来源的结论。
-```
-
-`tools` 使用同一 owner 下的工具本地名；运行时只会解析已经通过 Tool 准入的项，Skill 不能扩大 Tool 权限。`always: true` 表示通过技能准入后始终注入指令，不代表跳过 Tool 权限或执行审批。没有 frontmatter 时，第一个 Markdown 标题仍作为描述。命名 Agent 入口是 `agents/$<name>.agent.md`（名称必须小写 kebab，如 `agents/$planner.agent.md`）；未加 `$` 的文件不会被注册。真实示例见 `examples/test-bot/agents/$planner.agent.md`。
-
-```markdown
-<!-- agents/$planner.agent.md -->
-# planner
-
-You are **planner** (协调者): break down user goals, define acceptance
-criteria, and coordinate specialist roles.
-```
+`agent.json` 的 `tools` 只声明该 Agent 可申请的 Tool 名称；最终仍与当前 Turn 已准入的 Tool 取交集。`agents/<name>/tools/` 中的脚本不会自动获得执行权，只能通过受控 `bash` 或显式 Tool capability 执行。
 
 ## 插件 Agent 创作目录
 
-Tool 与 Agent 声明放在 `agent/` 下，Skill 使用适合多文件资源包的顶层 `skills/`。各能力由自己的 Feature 发现；不存在第二套 Tool 或 Skill 注册表。
-
 ```text
 my-plugin/
-├── agent/
-│   ├── agent.ts            # defineAgent：描述、关键词、toolNames、systemPrompt
-│   ├── instructions.md     # 系统提示正文
-│   ├── tools/
-│   │   ├── $short_url.ts   # defineAgentTool（来自 '@zhin.js/tool'）
-│   │   └── client.ts       # 普通依赖模块，不会注册为 Tool
-│   └── subagents/<name>/
-└── skills/
-    └── short-url/
-        ├── SKILL.md
-        └── references/
+├── AGENTS.md
+├── agent/tools/
+│   ├── $short_url.ts
+│   └── client.ts
+├── skills/short-url/
+│   └── SKILL.md
+└── agents/reviewer/
+    ├── agent.json
+    ├── system.md
+    ├── boundaries.md
+    ├── conventions.md
+    ├── workflows/
+    ├── tools/
+    └── knowledge/
 ```
 
-`agent/tools/$*.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。插件不应从全局状态恢复当前 Message 或 Runtime。
-
-```ts
-// agent/tools/$short_url.ts
-import { defineAgentTool } from '@zhin.js/tool';
-import { z } from 'zod';
-
-export default defineAgentTool<{ url: string }>({
-  description: '缩短一个 URL，返回短链接',
-  inputSchema: z.object({ url: z.string().min(1) }),
-  keywords: ['短链', '缩短', 'shorten'],
-  async execute({ url }, context) {
-    return context.use(shortUrlClientToken).shorten(url);
-  },
-});
-```
+`agent/tools/$*.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。
 
 ## 让插件给 Agent 补充上下文
 
