@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=bb40c5bd96639d0f -->
+<!-- sync-adapter-docs:sha256=03dceb185d8c9876 -->
 
 # @zhin.js/adapter-telegram
 
@@ -128,7 +128,7 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 | Kind | Path |
 |------|------|
 | Platform tools (10) | `tools/`（invite / pin / admins / sticker / poll 等） |
-| Skill doc | `skills/telegram/SKILL.md` |
+| Skill doc | `skills/telegram-chat-admin/SKILL.md`, `skills/telegram-messages/SKILL.md` |
 
 ## 故障排查
 

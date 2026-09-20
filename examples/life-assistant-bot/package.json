@@ -13,6 +13,7 @@
     "@ai-sdk/openai-compatible": "^3.0.18",
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "ai": "^7.0.44",
     "zhin.js": "workspace:*",
@@ -35,6 +36,10 @@
     "features": [
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

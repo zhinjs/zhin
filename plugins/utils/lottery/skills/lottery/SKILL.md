@@ -1,5 +1,13 @@
 ---
 description: Automated daily pipeline — sync, review, recommend, publish
+tools:
+  - "compute-recommend"
+  - "get-model-state"
+  - "history"
+  - "list-pending"
+  - "save-prediction"
+  - "stats-snapshot"
+  - "sync"
 ---
 
 # Lottery pipeline skill

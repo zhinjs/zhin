@@ -3,10 +3,9 @@ import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 export default defineAgentPromptSection({
   title: 'ICQQ / QQ',
   content: [
-    'On icqq/QQ: if icqq__send_user_like is in your tool list, call it with { user_id, times }.',
-    'The current IM operation selects the bot Client automatically. user_id is the sender to like. times is 1-20.',
-    'Do not claim the tool is missing until calling it this turn or load_tool("icqq__send_user_like") fails.',
-    'Other social tools include icqq__poke and icqq__friend_list.',
+    'ICQQ capabilities are grouped into directory, interaction, group-admin, and group-state Skills.',
+    'Use discover for the user intent, then load only the matching Skill before calling its private Tool.',
+    'The current IM operation selects the bot Client automatically; never guess user_id or group_id.',
   ].join('\n'),
   layer: 'tools',
   order: 70,

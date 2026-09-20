@@ -3,8 +3,8 @@ import { parseCommandDefinition } from 'zhin.js/command';
 import { formatList } from '../src/api.js';
 import { DEFAULT_API_BASE, SixtySClient, sixtySClientToken } from '../src/client.js';
 import plugin from '../plugin.ts';
-import weatherTool from '../skills/60s/tools/weather/index.ts';
-import newsTool from '../skills/60s/tools/60s_news/index.ts';
+import weatherTool from '../skills/60s-life/tools/weather/index.ts';
+import newsTool from '../skills/60s-news/tools/60s_news/index.ts';
 import weatherCommand from '../commands/weather/[city]/index.ts';
 import newsCommand from '../commands/60s/index.ts';
 

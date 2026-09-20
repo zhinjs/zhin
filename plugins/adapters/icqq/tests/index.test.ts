@@ -27,14 +27,20 @@ describe('@zhin.js/adapter-icqq package', () => {
   });
 
   it('ICQQ tools are disclosed through the ICQQ Skill and use @zhin.js/tool', () => {
-    const like = path.resolve(__dirname, '../skills/icqq/tools/send_user_like/index.ts');
+    const like = path.resolve(
+      __dirname,
+      '../skills/icqq-interaction/tools/send_user_like/index.ts',
+    );
     expect(fs.existsSync(like)).toBe(true);
     const src = fs.readFileSync(like, 'utf8');
     expect(src).toContain("from '@zhin.js/tool'");
   });
 
   it('send_user_like default-exports a branded @zhin.js/tool definition', async () => {
-    const like = path.resolve(__dirname, '../skills/icqq/tools/send_user_like/index.ts');
+    const like = path.resolve(
+      __dirname,
+      '../skills/icqq-interaction/tools/send_user_like/index.ts',
+    );
     const mod = await import(pathToFileURL(like).href) as {
       default: { $feature: string; description: string; platforms?: readonly string[] };
     };
@@ -46,14 +52,18 @@ describe('@zhin.js/adapter-icqq package', () => {
 
   it('tool permissions use valid permit DSL (not platform(icqq) without a perm)', async () => {
     const { isBuiltinPermit, isPlatformPermit } = await import('@zhin.js/permission');
-    const dir = path.resolve(__dirname, '../skills/icqq/tools');
-    const files = fs.readdirSync(dir, { withFileTypes: true })
-      .filter((entry) => entry.isDirectory())
-      .map((entry) => path.join(entry.name, 'index.ts'))
-      .filter((file) => fs.existsSync(path.join(dir, file)));
-    expect(files.length).toBeGreaterThan(10);
+    const skills = path.resolve(__dirname, '../skills');
+    const files = fs.readdirSync(skills, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('icqq-'))
+      .flatMap((entry) => {
+        const dir = path.join(skills, entry.name, 'tools');
+        return fs.readdirSync(dir, { withFileTypes: true })
+          .filter((tool) => tool.isDirectory())
+          .map((tool) => path.join(dir, tool.name, 'index.ts'));
+      });
+    expect(files.length).toBeGreaterThan(15);
     for (const file of files) {
-      const mod = await import(pathToFileURL(path.join(dir, file)).href) as {
+      const mod = await import(pathToFileURL(file).href) as {
         default: { permissions?: readonly string[] };
       };
       for (const permit of mod.default.permissions ?? []) {
@@ -62,6 +72,20 @@ describe('@zhin.js/adapter-icqq package', () => {
           `${file}: invalid permit ${permit}`,
         ).toBe(true);
       }
+    }
+  });
+
+  it('protects friend and group directory reads with the intended authority', async () => {
+    for (const name of ['friend_list', 'group_list']) {
+      const file = path.resolve(
+        __dirname,
+        `../skills/icqq-directory/tools/${name}/index.ts`,
+      );
+      const mod = await import(pathToFileURL(file).href) as {
+        default: { approval: string; permissions?: readonly string[] };
+      };
+      expect(mod.default.approval).toBe('on-risk');
+      expect(mod.default.permissions).toEqual(['role(master,admin,trusted,owner)']);
     }
   });
 });

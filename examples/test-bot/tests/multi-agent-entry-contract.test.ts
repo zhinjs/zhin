@@ -18,4 +18,17 @@ describe('test-bot multi-Agent contract', () => {
     expect(configText).toMatch(/trigger:/);
     expect(configText).toContain('ai:');
   });
+
+  it('demonstrates Agent, Skill, and Agent-Skill Tool disclosure boundaries', () => {
+    for (const source of [
+      'agents/evaluator/tools/calculator/index.ts',
+      'skills/tool-smoke/tools/echo/index.ts',
+      'skills/tool-smoke/tools/dice/index.ts',
+      'agents/executor/skills/runtime-diagnostics/tools/system_info/index.ts',
+      'agents/researcher/skills/weather/tools/weather/index.ts',
+    ]) {
+      expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);
+    }
+    expect(fs.existsSync(path.join(botRoot, 'tools'))).toBe(false);
+  });
 });

@@ -16,6 +16,8 @@ Choose a Tool directory from the disclosure scope the capability needs. Every au
 
 The initial model surface contains root Tools plus summaries for root Skills and Agents. Private Tool definitions are still validated while preparing the generation, but they do not enter the model Tool catalog before their owner is activated.
 
+Reserve root `tools/` for cross-task, frequently useful capabilities that need no domain instructions. A Tool that only makes sense for a platform, workflow, or role belongs to that Skill or Agent. Split a Skill again when it contains independently triggered task domains, so a narrow request does not disclose every Tool schema for an entire platform.
+
 ```mermaid
 flowchart LR
     A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[Candidate capability table]

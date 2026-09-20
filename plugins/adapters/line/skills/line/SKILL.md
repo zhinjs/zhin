@@ -14,6 +14,9 @@ keywords:
 tags:
   - im
   - adapter
+tools:
+  - "get_group_members"
+  - "get_profile"
 ---
 # LINE Messaging API 技能
 

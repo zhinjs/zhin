@@ -16,6 +16,8 @@ description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex �
 
 插件初始只向模型披露根 `tools/` 与根 `skills/`、`agents/` 的摘要。私有 Tool definition 会在 generation prepare 阶段统一校验，但不会提前进入模型 Tool catalog；这样既能在启动时发现无效能力，也不会用未激活能力占用提示词。
 
+根 `tools/` 只用于跨任务、高频、无需额外领域说明的能力。只在某个平台、工作流或角色中成立的 Tool 必须归入对应 Skill 或 Agent。一个 Skill 若包含多个可以独立触发的任务域，也应继续拆分，避免加载一个简单查询时同时披露整个平台的所有 Tool Schema。
+
 ```mermaid
 flowchart LR
     A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[候选 capability table]

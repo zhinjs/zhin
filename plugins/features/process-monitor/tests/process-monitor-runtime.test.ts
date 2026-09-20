@@ -6,7 +6,7 @@ import { parseCommandDefinition } from 'zhin.js/command';
 import { parseAgentToolDefinition } from '@zhin.js/tool';
 import plugin from '../plugin.ts';
 import statusCommand from '../commands/process-status/index.ts';
-import statusTool from '../tools/process-status/index.ts';
+import statusTool from '../skills/process-monitor/tools/process-status/index.ts';
 import {
   classifyStartup,
   formatUptime,
@@ -17,6 +17,14 @@ import {
 describe('@zhin.js/process-monitor runtime', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('process-monitor');
+  });
+
+  it('publishes process status through an on-demand Skill', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../package.json'), 'utf8'));
+    expect(pkg.files).toContain('skills');
+    expect(pkg.files).not.toContain('tools');
+    expect(pkg.zhin.features.map((entry: { package: string }) => entry.package))
+      .toContain('@zhin.js/skill');
   });
 
   it('brands process-status command and tool', () => {

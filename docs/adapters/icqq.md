@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=90cae4b99bb83c69 -->
+<!-- sync-adapter-docs:sha256=0c9aa5433d77fb35 -->
 
 # @zhin.js/adapter-icqq
 
@@ -20,7 +20,7 @@ ICQQ Plugin Runtime 适配器 — 进程内直接使用 [@icqqjs/icqq](https://g
 - 入站：ICQQ Client 原始事件经 `Endpoint.emit(...)` 唯一入口上送；文本与图片 / 语音 / 视频 / 文件统一归一为 canonical `Segment` + `MediaRef`
 - 出站：canonical Segment 直接投影为 ICQQ 原生 `Sendable`，再由 `sendGroupMsg` / `sendPrivateMsg` / …发送
 - 群聊 reaction：`control.addReaction` / `removeReaction`（协议 ACK 失败不阻塞后续发送）
-- Agent 工具：`skills/icqq/tools/`（`@zhin.js/tool` Feature；模型侧名为 `icqq__send_user_like` 等）
+- Agent 工具：按职责拆分在 `skills/icqq-*/tools/`，只在对应 Skill 激活后披露
 - Console Endpoint 管理：`src/endpoint.ts` 显式实现 `EndpointManagement`（好友/群/群成员列表、请求审批、删好友、踢人、禁言、设管理）
 
 ## 安装
@@ -158,7 +158,7 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 - `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息
 - `src/protocol.ts`：配置解析、会话映射与出站目标转换
 - `src/client.ts`：向插件作者暴露 ICQQ `Client` / `EventMap` 类型注册
-- Agent 工具：`skills/icqq/tools/<name>/index.ts`；权限说明见 `PERMITS.md`
+- Agent 工具：`skills/icqq-*/tools/<name>/index.ts`；权限说明见 `PERMITS.md`
 
 阅读适配器实现时从 `endpoint.ts` 看能力装配，再进入对应能力文件。包外代码只从
 `@zhin.js/adapter-icqq` 与 `zhin.js/adapter` 的公开入口导入，不依赖上述源码路径。

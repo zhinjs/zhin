@@ -26,7 +26,12 @@ describe('life-assistant-bot 配置契约', () => {
     expect(manifest.scripts.dev).toBe('zhin runtime start')
     expect(manifest.zhin.entry).toBe('./plugin.ts')
     expect(fs.existsSync(path.join(botRoot, 'commands/remind/[text]/index.ts'))).toBe(true)
-    expect(fs.existsSync(path.join(botRoot, 'tools/get-current-time/index.ts'))).toBe(true)
+    expect(fs.existsSync(path.join(
+      botRoot,
+      'skills/daily-context/tools/get-current-time/index.ts',
+    ))).toBe(true)
+    expect(manifest.zhin.features.map((entry: { package: string }) => entry.package))
+      .toContain('@zhin.js/skill')
   })
 
   it('配置了 AI provider', () => {

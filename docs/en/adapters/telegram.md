@@ -103,7 +103,7 @@ The next milestone will register a POST route via `httpHostToken`, instead of us
 | Kind | Path |
 |------|------|
 | Platform tools (10) | `tools/` (invite / pin / admins / sticker / poll, etc.) |
-| Skill doc | `skills/telegram/SKILL.md` |
+| Skill doc | `skills/telegram-chat-admin/SKILL.md`, `skills/telegram-messages/SKILL.md` |
 
 ## Troubleshooting
 

@@ -9,7 +9,7 @@ import {
  * Process monitor Plugin Runtime cutover:
  * - setup() owns file-backed restart detection + signal cleanup
  * - commands/process-status for chat status
- * - tools/process-status kept as agent tool surface
+ * - skills/process-monitor owns the deferred process-status Tool
  */
 export default definePlugin<ProcessMonitorConfig>({
   name: 'process-monitor',

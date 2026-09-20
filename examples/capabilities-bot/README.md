@@ -23,7 +23,7 @@ pnpm dev        # zhin runtime start
 | schema.json（默认值 + 校验） | `schema.json` ↔ `zhin.config.yml` 的 `plugin:` 段 |
 | 数据库表 + 命令侧模型复用 | `plugin.ts` ③ ↔ `commands/stats/` |
 | 定时任务 + lifecycle 回收 | `plugin.ts` ④ |
-| Agent 工具注册（可选降级） | `plugin.ts` ⑤（`showcase_greet`） |
+| Agent 工具注册（可选降级） | `plugin.ts` ⑤（`showcase_greet`，刻意作为动态公共 Tool 示例） |
 | 主动出站 + handoff 时序 | `plugin.ts` ⑥⑦ |
 | setup 返回 Dispose | `plugin.ts` ⑧ |
 | metadata（Console 卡片） | `plugin.ts` `metadata` |
@@ -31,3 +31,7 @@ pnpm dev        # zhin runtime start
 
 硬依赖门控（`requires: [databaseHostToken]`）见 `docs/concepts/plugin-model.md` 的 Host Resources 一节；
 `./` 本地目录子插件见同文档「挂载子插件」。
+
+`showcase_greet` 用于验证 `plugin.ts` 能根据运行时配置动态注入 Tool，因此没有迁入
+`skills/<name>/tools/`。普通插件应优先把有明确任务领域的 Tool 放进 Skill，仅在激活 Skill
+后向模型披露。

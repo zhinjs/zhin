@@ -72,7 +72,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/<name>/index.ts` |
-| 技能说明 | `skills/napcat/SKILL.md` |
+| 技能说明 | `skills/napcat-*/SKILL.md`（按消息、群内容、群设置、文件历史、媒体和账号拆分） |
 
 ## 迁移说明（Plugin Runtime）
 

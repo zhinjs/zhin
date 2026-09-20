@@ -421,6 +421,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
@@ -2874,6 +2877,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
