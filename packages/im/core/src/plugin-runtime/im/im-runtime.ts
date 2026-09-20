@@ -67,14 +67,7 @@ import type { Notice } from '../../notice.js';
 import type { Request } from '../../request.js';
 import type { SystemEvent } from '../../system-event.js';
 import { sideEventSendChannel } from '../../side-event/base.js';
-import type {
-  UserInteraction,
-  UserInteractionRequest,
-  UserInteractionSequence,
-  UserInteractionSequenceResult,
-  UserInteractionStep,
-  UserInteractionValue,
-} from '@zhin.js/interaction';
+import type { UserInteraction } from '@zhin.js/interaction';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
 import { OutboundRenderer } from './outbound-renderer.js';
 import {
@@ -87,14 +80,9 @@ import {
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import {
-  assertUserInteractionRequest,
-  parseUserInteractionAnswer,
-  projectUserInteraction,
-  renderUserInteraction,
-  type UserInteractionProgress,
-  type UserInteractionView,
-} from '../../built/user-interaction.js';
-import { RuntimeInteractiveRouter } from './interactive.js';
+  RuntimeInteractionCoordinator,
+  type UserInteractionSource,
+} from './interaction-runtime.js';
 
 const logger = getLogger('im');
 
@@ -160,45 +148,11 @@ export interface ImRuntimeOptions {
   ) => MessageSenderRef | undefined;
 }
 
-interface UserInteractionClaim {
-  readonly resolve: (raw: string) => void;
-  readonly reject: (error: Error) => void;
-  readonly timer: ReturnType<typeof setTimeout>;
-}
-
-interface UserInteractionSource {
-  readonly conversation: ConversationRef;
-  readonly sender?: MessageSenderRef;
-  readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
-}
-
-class UserInteractionTimeoutError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'UserInteractionTimeoutError';
-  }
-}
-
-class UserInteractionSupersededError extends Error {
-  constructor() {
-    super('User interaction superseded');
-    this.name = 'UserInteractionSupersededError';
-  }
-}
-
-class UserInteractionDeliveryError extends Error {
-  constructor(receipt: DeliveryReceipt) {
-    super(`User interaction delivery failed: ${receipt.failure?.code ?? receipt.status}`);
-    this.name = 'UserInteractionDeliveryError';
-  }
-}
-
 export class ImRuntime implements OutboundMessageService {
   readonly #dispatcher: MessageDispatcher;
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
-  readonly #interactive = new RuntimeInteractiveRouter<GenerationAdmissionGate>();
-  readonly #interactionClaims = new Map<string, UserInteractionClaim>();
+  readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>();
   readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
@@ -332,7 +286,7 @@ export class ImRuntime implements OutboundMessageService {
       send: async (request: SendRequest) => gate.enter(() => this.send(request))
         ?? failedReceipt('generation_not_admitted'),
       registerInteractiveHandler: (prefix, handler) =>
-        this.#registerInteractiveHandler(prefix, handler, gate),
+        this.#interactions.register(prefix, handler, gate),
     };
     return Object.freeze(gateway);
   }
@@ -345,145 +299,7 @@ export class ImRuntime implements OutboundMessageService {
     prefix: string,
     handler: (message: Message) => Promise<boolean> | boolean,
   ): () => void {
-    return this.#registerInteractiveHandler(prefix, handler);
-  }
-
-  #registerInteractiveHandler(
-    prefix: string,
-    handler: (message: Message) => Promise<boolean> | boolean,
-    admission?: GenerationAdmissionGate,
-  ): () => void {
-    return this.#interactive.register(prefix, handler, admission);
-  }
-
-  // ==========================================================================
-  // User interaction claim — 命令/Agent 对话式交互
-  // ==========================================================================
-
-  #interactionConversationKey(message: UserInteractionSource, subjectId = message.sender?.id ?? ''): string {
-    return `${conversationRefKey(message.conversation)}:${subjectId}`;
-  }
-
-  #resolveInteractionClaim(message: Message): boolean {
-    const key = this.#interactionConversationKey(message);
-    const claim = this.#interactionClaims.get(key);
-    if (!claim) return false;
-    claim.resolve(this.#interactive.resolvePayload(message) ?? message.content);
-    return true;
-  }
-
-  #claimNextMessage(
-    message: UserInteractionSource,
-    timeout: number,
-    timeoutText: string,
-    signal?: AbortSignal,
-    subjectId?: string,
-  ): Promise<string> {
-    return new Promise<string>((resolve, reject) => {
-      if (signal?.aborted) {
-        reject(abortError(signal, timeoutText));
-        return;
-      }
-      const key = this.#interactionConversationKey(message, subjectId);
-      const existing = this.#interactionClaims.get(key);
-      if (existing) {
-        clearTimeout(existing.timer);
-        existing.reject(new UserInteractionSupersededError());
-      }
-      const timer = setTimeout(() => {
-        settle(undefined, new UserInteractionTimeoutError(timeoutText));
-      }, timeout);
-      const onAbort = () => settle(undefined, abortError(signal, timeoutText));
-      signal?.addEventListener('abort', onAbort, { once: true });
-      const settle = (value?: string, error?: Error) => {
-        if (this.#interactionClaims.get(key) !== claim) return;
-        this.#interactionClaims.delete(key);
-        clearTimeout(timer);
-        signal?.removeEventListener('abort', onAbort);
-        if (value !== undefined) resolve(value);
-        else reject(error ?? new UserInteractionTimeoutError(timeoutText));
-      };
-      const claim: UserInteractionClaim = {
-        resolve: (raw) => settle(raw),
-        reject: (error) => settle(undefined, error),
-        timer,
-      };
-      this.#interactionClaims.set(key, claim);
-    });
-  }
-
-  #buildUserInteraction(message: UserInteractionSource, subjectId?: string): UserInteraction {
-    const DEFAULT_TIMEOUT = 3 * 60 * 1000;
-    const DEFAULT_TIMEOUT_TEXT = '输入超时';
-    const claim = (timeout: number, timeoutText: string, signal?: AbortSignal) =>
-      this.#claimNextMessage(message, timeout, timeoutText, signal, subjectId);
-    const reply = async (view: UserInteractionView): Promise<void> => {
-      const receipt = await message.$reply(renderUserInteraction(view));
-      if (receipt.status !== 'sent') throw new UserInteractionDeliveryError(receipt);
-    };
-    const ask = async <Request extends UserInteractionRequest>(
-      request: Request,
-      progress?: UserInteractionProgress,
-    ): Promise<UserInteractionValue<Request>> => {
-      assertUserInteractionRequest(request);
-      const timeout = request.timeout ?? DEFAULT_TIMEOUT;
-      const timeoutText = request.timeoutText ?? DEFAULT_TIMEOUT_TEXT;
-      const deadline = Date.now() + timeout;
-      const view = projectUserInteraction(request, progress);
-      await reply(view);
-      while (true) {
-        try {
-          const raw = await claim(Math.max(1, deadline - Date.now()), timeoutText, request.signal);
-          const result = parseUserInteractionAnswer(request, raw);
-          if (result.ok) return result.value as UserInteractionValue<Request>;
-          await reply({
-            ...view,
-            tip: [request.invalidText ?? result.message, view.tip].filter(Boolean).join('\n'),
-          });
-        } catch (error) {
-          if (error instanceof UserInteractionTimeoutError && 'default' in request && request.default !== undefined) {
-            return request.default as UserInteractionValue<Request>;
-          }
-          if (error instanceof UserInteractionTimeoutError) {
-            await reply({ title: '交互已结束', description: error.message });
-          }
-          throw error;
-        }
-      }
-    };
-
-    const sequence = async <Steps extends readonly UserInteractionStep[]>(
-      definition: UserInteractionSequence<Steps>,
-    ): Promise<UserInteractionSequenceResult<Steps>> => {
-      if (!definition.title.trim()) throw new TypeError('User interaction sequence title must not be empty');
-      const ids = new Set<string>();
-      for (const step of definition.steps) {
-        if (!step.id.trim()) throw new TypeError('User interaction sequence step id must not be empty');
-        if (ids.has(step.id)) throw new TypeError(`Duplicate user interaction sequence step id: ${step.id}`);
-        ids.add(step.id);
-      }
-      const result: Record<string, unknown> = {};
-      for (let index = 0; index < definition.steps.length; index += 1) {
-        const step = definition.steps[index]!;
-        const request = {
-          ...step,
-          timeout: step.timeout ?? definition.timeout,
-          timeoutText: step.timeoutText ?? definition.timeoutText,
-          invalidText: step.invalidText ?? definition.invalidText,
-          signal: step.signal ?? definition.signal,
-        } as UserInteractionRequest;
-        result[step.id] = await ask(request, {
-          title: definition.title,
-          description: definition.description,
-          tip: definition.tip,
-          index: index + 1,
-          total: definition.steps.length,
-        });
-      }
-      return Object.freeze(result) as UserInteractionSequenceResult<Steps>;
-    };
-
-    return Object.freeze({ ask, sequence });
+    return this.#interactions.register(prefix, handler);
   }
 
   /**
@@ -494,17 +310,7 @@ export class ImRuntime implements OutboundMessageService {
     message: Message,
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
-    const subjectId = bind?.subjectId?.trim();
-    if (bind && !subjectId) return undefined;
-    if (typeof message.$reply !== 'function' || !message.conversation) return undefined;
-    return this.#buildUserInteraction(message, subjectId);
-  }
-
-  #createInteractionForSource(source: unknown): UserInteraction | undefined {
-    if (!source || typeof source !== 'object') return undefined;
-    const msg = source as Message;
-    if (typeof msg.$reply !== 'function' || !msg.conversation) return undefined;
-    return this.#buildUserInteraction(msg);
+    return this.#interactions.createForMessage(message, bind);
   }
 
   /**
@@ -609,10 +415,10 @@ export class ImRuntime implements OutboundMessageService {
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
         result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
-      } else if (this.#resolveInteractionClaim(message)) {
+      } else if (this.#interactions.resolveClaim(message)) {
         result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
       } else {
-        const interactionFactory = (source: unknown) => this.#createInteractionForSource(source);
+        const interactionFactory = (source: unknown) => this.#interactions.createFromUnknown(source);
         await runMiddleware(
           lease.value,
           message,
@@ -811,7 +617,7 @@ export class ImRuntime implements OutboundMessageService {
         content,
       }, snapshot),
     });
-    return this.#buildUserInteraction(source);
+    return this.#interactions.create(source);
   }
 
   async #runHandlers(
@@ -1141,7 +947,7 @@ export class ImRuntime implements OutboundMessageService {
               envelope.payload,
               request.conversation,
               snapshot,
-              (map) => this.#interactive.rememberFallback(
+              (map) => this.#interactions.rememberFallback(
                 request.conversation,
                 snapshot.generation,
                 map,
@@ -1234,7 +1040,7 @@ export class ImRuntime implements OutboundMessageService {
     requester: PluginId,
     admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult | undefined> {
-    const handled = await this.#interactive.dispatch(message, admission);
+    const handled = await this.#interactions.dispatch(message, admission);
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
@@ -1566,11 +1372,6 @@ function conversationSegmentsFromContent(content: unknown): readonly import('@zh
     }
   }
   return Object.freeze([{ type: 'text', data: Object.freeze({ text: flattenContent(content) }) }]);
-}
-
-function abortError(signal: AbortSignal | undefined, fallback: string): Error {
-  if (signal?.reason instanceof Error) return signal.reason;
-  return new Error(fallback);
 }
 
 function withEndpointEventPayload<TPayload, TClient, TName extends string>(

@@ -133,9 +133,10 @@ interface MediaRef {
 中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。多选和过多选项直接使用
 列表，避免平台按钮数量限制。
 
-交互 handler 与编号 fallback 映射由 `ImRuntime` 实例统一封装。映射同时按 owner、
-generation 和会话隔离；热重载后的新 generation 不会消费旧键盘映射，多 Root 也不会共享
-按钮状态。
+`ImRuntime` 把交互职责委托给实例私有的 `RuntimeInteractionCoordinator`：它统一拥有待回复
+claim、超时与取消、连续问答、action handler 和编号 fallback。状态同时按用户、generation
+和会话隔离；热重载后的新 generation 不会消费旧键盘映射，多 Root 也不会共享按钮状态。
+消息网关只决定何时交给 coordinator，不再实现交互状态机。
 
 AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导和 AI 追问不会各自维护一套
 平台按钮逻辑。

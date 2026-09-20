@@ -111,6 +111,12 @@ The current Turn registers `replyTo`, forward, and media values as scoped `TurnR
 
 **Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Segments without `data.media` are dropped with a warning -- the legacy `data.url/file/base64` shapes no longer exist.
 
+## User Interaction: Confirmation, Selection, and Input
+
+Command authoring uses `context.interaction` (`UserInteraction`). `ask()` describes a typed text, number, confirmation, selection, multiselection, or list request, while `sequence()` composes consecutive requests. Core projects each request into a transport-neutral view and renders it as markdown plus a canonical keyboard. Adapters that declare native interactive segments encode platform buttons; other adapters receive a numbered-list fallback whose button clicks and manual replies enter the same parser.
+
+`ImRuntime` delegates this concern to its private `RuntimeInteractionCoordinator`. The coordinator exclusively owns pending reply claims, timeouts and cancellation, sequences, action handlers, and numbered fallbacks. State is isolated by user, generation, and conversation, so a new generation cannot consume old keyboard mappings and separate Roots never share interaction state. The message gateway only decides when to invoke the coordinator; it does not implement the interaction state machine.
+
 ## Endpoint 1:N Expansion
 
 When an adapter plugin instance configuration declares `endpoints: [{name, ...}]`, `AdapterIndex` expands it into N independent endpoint records (for configuration merge rules see [Config as Data](./config-as-data.md)):
