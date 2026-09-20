@@ -154,7 +154,7 @@ unattended Turn（例如 Schedule）不会注入该端口，不能回退到全�
 
 Skill 使用 `skills/<name>/SKILL.md`。主 Agent 使用插件根目录的标准 `AGENTS.md`。命名子 Agent 使用 `agents/<name>/` 自包含目录，由 `@zhin.js/agent-feature` 发现。
 
-子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
+子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 GitHub 上的 [`@zhin.js/agent-feature` README](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md)。
 
 `agent.json` 的 `tools` 可声明额外公共 Tool；`agents/<agent>/tools/<name>/index.ts` 会自动成为该 Agent 的私有 Tool。Skill 的私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 私有 Skill 及其 Tool 使用 `agents/<agent>/skills/<skill>/SKILL.md` 和其下的 `tools/<name>/index.ts`。所有 Tool 仍经过统一的权限、审批和 generation 准入。
 

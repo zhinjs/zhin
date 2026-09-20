@@ -144,7 +144,7 @@ It requests input through the current Turn's `QuestionPort` and matches replies 
 
 Skills use `skills/<name>/SKILL.md`. A plugin main Agent uses the standard root `AGENTS.md`. Named sub-agents use self-contained `agents/<name>/` directories discovered by `@zhin.js/agent-feature`.
 
-Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, `skills/`, `hooks/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md) for the complete manifest and directory contract.
+Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, `skills/`, `hooks/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See the [`@zhin.js/agent-feature` README on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md) for the complete manifest and directory contract.
 
 The `tools` field in `agent.json` may request additional public Tools. `agents/<agent>/tools/<name>/index.ts` defines an Agent-private Tool. A Skill-private Tool lives at `skills/<skill>/tools/<name>/index.ts`; an Agent-private Skill and its Tools live at `agents/<agent>/skills/<skill>/SKILL.md` and its nested `tools/<name>/index.ts`. Every Tool still passes the same permission, approval, and generation admission path.
 

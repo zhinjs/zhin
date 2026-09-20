@@ -212,7 +212,7 @@ tools:
 ---
 ```
 
-`agents/<name>/` 必须包含 `agent.json`、`system.md`、`boundaries.md`、`conventions.md`。主 Agent 使用插件根目录 `AGENTS.md`；子 Agent 的 `conventions.md` 只能延伸根规则。可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 分别承载场景流程、私有 Tool、私有 Skill、私有 Hook 和知识库。Skill 内也可使用 `tools/<name>/index.ts` 与 `hooks/<name>/index.ts`。详见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
+`agents/<name>/` 必须包含 `agent.json`、`system.md`、`boundaries.md`、`conventions.md`。主 Agent 使用插件根目录 `AGENTS.md`；子 Agent 的 `conventions.md` 只能延伸根规则。可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 分别承载场景流程、私有 Tool、私有 Skill、私有 Hook 和知识库。Skill 内也可使用 `tools/<name>/index.ts` 与 `hooks/<name>/index.ts`。详见 GitHub 上的 [`@zhin.js/agent-feature` README](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md)。
 
 ### pages/ — Console 页面
 

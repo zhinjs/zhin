@@ -198,7 +198,7 @@ tools:
 ---
 ```
 
-`agents/<name>/` requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`. The main Agent uses the plugin root `AGENTS.md`; sub-agent conventions only extend those root rules. Optional `workflows/`, `tools/`, and `knowledge/` hold scenario procedures, dedicated resources, and domain knowledge. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md).
+`agents/<name>/` requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`. The main Agent uses the plugin root `AGENTS.md`; sub-agent conventions only extend those root rules. Optional `workflows/`, `tools/`, and `knowledge/` hold scenario procedures, dedicated resources, and domain knowledge. See the [`@zhin.js/agent-feature` README on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md).
 
 ### pages/ -- Console Pages
 
