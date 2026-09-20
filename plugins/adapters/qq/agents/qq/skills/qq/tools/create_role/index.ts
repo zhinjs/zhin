@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string; name: string; color?: number }>({
   description: '创建 QQ 频道角色',
@@ -11,7 +11,7 @@ export default defineAgentTool<{ guild_id: string; name: string; color?: number 
   }),
   adapter: 'qq',
   tags: ['qq'],
-  permissions: [platformPermit('guild_owner')],
+  permissions: [platformPermission('qq', 'guild_owner')],
   async execute({ guild_id, name, color  }: { guild_id: string; name: string; color?: number }, context) {
     const client = context.$client;
     const role = await client.createGuildRole(guild_id, name, color);

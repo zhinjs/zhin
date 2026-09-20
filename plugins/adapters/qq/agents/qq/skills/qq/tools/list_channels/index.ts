@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string }>({
   description: '获取 QQ 频道下的子频道列表',
@@ -9,7 +9,7 @@ export default defineAgentTool<{ guild_id: string }>({
   }),
   adapter: 'qq',
   tags: ['qq'],
-  permissions: [platformPermit('manage_channels')],
+  permissions: [platformPermission('qq', 'manage_channels')],
   async execute({ guild_id  }: { guild_id: string }, context) {
     const client = context.$client;
     const channels = await client.getChannels(guild_id);

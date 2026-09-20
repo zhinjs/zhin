@@ -1,3 +1,3 @@
-import { wechatMpEndpointCommands } from '../../../../../src/wechat-mp-endpoint-commands.js';
+import { wechatMpEndpointCommands } from '../../definition.js';
 
 export default wechatMpEndpointCommands.remove;

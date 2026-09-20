@@ -1,3 +1,3 @@
-import { onebot12EndpointCommands } from '../../../../../src/onebot12-endpoint-commands.js';
+import { onebot12EndpointCommands } from '../../definition.js';
 
 export default onebot12EndpointCommands.add;

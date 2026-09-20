@@ -1,3 +1,3 @@
-import { dingtalkEndpointCommands } from '../../../../src/dingtalk-endpoint-commands.js';
+import { dingtalkEndpointCommands } from '../definition.js';
 
 export default dingtalkEndpointCommands.list;

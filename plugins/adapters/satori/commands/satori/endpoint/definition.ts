@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { satoriRuntimeStateToken } from './satori-runtime-state.js';
+import { satoriRuntimeStateToken } from '../../../src/satori-runtime-state.js';
 
 export const satoriEndpointCommands = createEndpointCommands({
   adapterKey: 'satori',

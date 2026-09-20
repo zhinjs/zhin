@@ -9,7 +9,7 @@ import {
   runQqEndpointCancel,
   runQqEndpointList,
   runQqEndpointRemove,
-} from '../src/qq-endpoint-commands.js';
+} from '../commands/qq/endpoint/definition.js';
 import { createQqRuntimeState } from '../src/qq-runtime-state.js';
 
 const { startQqBindFlowMock } = vi.hoisted(() => ({

@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubWhoami } from '../../../../../../src/github-tool-handlers.js';
+import { executeGithubWhoami } from '../../handlers.js';
 
 export default defineAgentTool<{}>({
   description: '查看你绑定的 GitHub 账号信息',

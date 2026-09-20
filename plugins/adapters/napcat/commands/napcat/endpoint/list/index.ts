@@ -1,3 +1,3 @@
-import { napcatEndpointCommands } from '../../../../src/napcat-endpoint-commands.js';
+import { napcatEndpointCommands } from '../definition.js';
 
 export default napcatEndpointCommands.list;

@@ -1,3 +1,3 @@
-import { lineEndpointCommands } from '../../../../../src/line-endpoint-commands.js';
+import { lineEndpointCommands } from '../../definition.js';
 
 export default lineEndpointCommands.add;

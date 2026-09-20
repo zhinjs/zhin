@@ -2,9 +2,9 @@ import { defineCommand } from 'zhin.js/command';
 import {
   isQqEndpointOperator,
   QQ_ENDPOINT_FORBIDDEN,
+  qqRuntimeStateToken,
   runQqEndpointCancel,
-} from '../../../../src/qq-endpoint-commands.js';
-import { qqRuntimeStateToken } from '../../../../src/qq-runtime-state.js';
+} from '../definition.js';
 
 export default defineCommand({
   description: '取消进行中的 QQ 扫码绑定或公域/私域选择',

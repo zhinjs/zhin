@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { napcatRuntimeStateToken } from './napcat-runtime-state.js';
+import { napcatRuntimeStateToken } from '../../../src/napcat-runtime-state.js';
 
 export const napcatEndpointCommands = createEndpointCommands({
   adapterKey: 'napcat',

@@ -19,14 +19,16 @@ import {
   type EndpointConfigurationStore,
 } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { QQ_BOT_KIND_PROMPT, qqCommandSessionKey } from './qq-bot-kind-prompt.js';
-import { startQqBindFlow } from './qq-bind-flow.js';
-import { defaultQqEndpointIntentFields, type QqBotKind } from './qq-intents.js';
+import { QQ_BOT_KIND_PROMPT, qqCommandSessionKey } from '../../../src/qq-bot-kind-prompt.js';
+import { startQqBindFlow } from '../../../src/qq-bind-flow.js';
+import { defaultQqEndpointIntentFields, type QqBotKind } from '../../../src/qq-intents.js';
 import {
   qqRuntimeStateToken,
   type QqPendingBotKind,
   type QqRuntimeState,
-} from './qq-runtime-state.js';
+} from '../../../src/qq-runtime-state.js';
+
+export { qqRuntimeStateToken };
 
 export type QqCommandReply = EndpointCommandReply;
 

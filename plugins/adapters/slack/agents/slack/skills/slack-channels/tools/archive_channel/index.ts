@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
   channel: string;
@@ -11,7 +11,7 @@ export default defineAgentTool<{
   }),
   adapter: 'slack',
   tags: ['slack'],
-  permissions: [platformPermit('workspace_admin')],
+  permissions: [platformPermission('slack', 'workspace_admin')],
   async execute({ channel }, context) {
     const client = context.$client;
     await client.conversations.archive({ channel });

@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { normalizeSlackReactionName } from '../../../../../../src/slack-reaction.js';
+import { normalizeSlackReactionName } from '@zhin.js/adapter-slack';
 
 export default defineAgentTool<{
   channel: string;

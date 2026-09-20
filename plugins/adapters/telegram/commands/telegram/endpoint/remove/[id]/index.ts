@@ -1,3 +1,3 @@
-import { telegramEndpointCommands } from '../../../../../src/telegram-endpoint-commands.js';
+import { telegramEndpointCommands } from '../../definition.js';
 
 export default telegramEndpointCommands.remove;

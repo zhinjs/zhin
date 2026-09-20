@@ -1,3 +1,3 @@
-import { weixinIlinkEndpointCommands } from '../../../../../src/weixin-ilink-endpoint-commands.js';
+import { weixinIlinkEndpointCommands } from '../../definition.js';
 
 export default weixinIlinkEndpointCommands.remove;

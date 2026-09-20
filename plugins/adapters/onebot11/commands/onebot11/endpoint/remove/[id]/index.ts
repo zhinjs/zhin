@@ -1,3 +1,3 @@
-import { onebot11EndpointCommands } from '../../../../../src/onebot11-endpoint-commands.js';
+import { onebot11EndpointCommands } from '../../definition.js';
 
 export default onebot11EndpointCommands.remove;

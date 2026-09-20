@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubCreatePr } from '../../../../../../src/github-bot-handlers.js';
+import { executeGithubCreatePr } from '../../handlers.js';
 
 export default defineAgentTool<{ repo?: string; title: string; body?: string; head?: string; base?: string }>({
   description: '以 GitHub App Bot 身份创建 Pull Request（需 HITL 确认；Issue 场景常用）',

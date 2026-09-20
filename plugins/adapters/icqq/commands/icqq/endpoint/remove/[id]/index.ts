@@ -1,3 +1,3 @@
-import { icqqEndpointCommands } from '../../../../../src/icqq-endpoint-commands.js';
+import { icqqEndpointCommands } from '../../definition.js';
 
 export default icqqEndpointCommands.remove;

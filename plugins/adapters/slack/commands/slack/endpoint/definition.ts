@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { slackRuntimeStateToken } from './slack-runtime-state.js';
+import { slackRuntimeStateToken } from '../../../src/slack-runtime-state.js';
 
 export const slackEndpointCommands = createEndpointCommands({
   adapterKey: 'slack',

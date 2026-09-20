@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { wecomRuntimeStateToken } from './wecom-runtime-state.js';
+import { wecomRuntimeStateToken } from '../../../src/wecom-runtime-state.js';
 
 export const wecomEndpointCommands = createEndpointCommands({
   adapterKey: 'wecom',

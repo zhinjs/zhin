@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubUnsubscribe } from '../../../../../../src/github-tool-handlers.js';
+import { executeGithubUnsubscribe } from '../../handlers.js';
 
 export default defineAgentTool<{ repo: string }>({
   description: '取消订阅 GitHub 仓库的 Webhook 事件',

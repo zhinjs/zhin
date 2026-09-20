@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { weixinIlinkRuntimeStateToken } from './weixin-ilink-runtime-state.js';
+import { weixinIlinkRuntimeStateToken } from '../../../src/weixin-ilink-runtime-state.js';
 
 export const weixinIlinkEndpointCommands = createEndpointCommands({
   adapterKey: 'weixin-ilink',

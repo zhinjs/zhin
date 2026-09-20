@@ -1,3 +1,3 @@
-import { discordEndpointCommands } from '../../../../src/discord-endpoint-commands.js';
+import { discordEndpointCommands } from '../definition.js';
 
 export default discordEndpointCommands.list;

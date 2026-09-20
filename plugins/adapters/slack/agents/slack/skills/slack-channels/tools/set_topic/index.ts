@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{
   channel: string;
@@ -13,7 +13,7 @@ export default defineAgentTool<{
   }),
   adapter: 'slack',
   tags: ['slack'],
-  permissions: [platformPermit('channel_manager')],
+  permissions: [platformPermission('slack', 'channel_manager')],
   async execute({ channel, topic }, context) {
     const client = context.$client;
     await client.conversations.setTopic({ channel, topic });

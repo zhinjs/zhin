@@ -1,3 +1,3 @@
-import { satoriEndpointCommands } from '../../../../../src/satori-endpoint-commands.js';
+import { satoriEndpointCommands } from '../../definition.js';
 
 export default satoriEndpointCommands.remove;

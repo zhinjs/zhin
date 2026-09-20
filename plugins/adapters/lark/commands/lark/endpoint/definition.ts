@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { larkRuntimeStateToken } from './lark-runtime-state.js';
+import { larkRuntimeStateToken } from '../../../src/lark-runtime-state.js';
 
 export const larkEndpointCommands = createEndpointCommands({
   adapterKey: 'lark',

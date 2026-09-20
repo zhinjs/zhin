@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubUnbind } from '../../../../../../src/github-tool-handlers.js';
+import { executeGithubUnbind } from '../../handlers.js';
 
 export default defineAgentTool<{}>({
   description: '解除你绑定的 GitHub 账号',

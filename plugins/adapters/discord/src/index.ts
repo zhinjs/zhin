@@ -20,6 +20,7 @@ export {
 
 export {
   discordClient,
+  requireDiscordGatewayClient,
   type DiscordClient,
   type DiscordClientEventMap,
 } from './client.js';

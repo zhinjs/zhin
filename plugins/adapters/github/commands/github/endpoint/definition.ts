@@ -8,7 +8,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { githubRuntimeStateToken } from './github-runtime-state.js';
+import { githubRuntimeStateToken } from '../../../src/github-runtime-state.js';
 
 export const githubEndpointCommands = createEndpointCommands({
   adapterKey: 'github',

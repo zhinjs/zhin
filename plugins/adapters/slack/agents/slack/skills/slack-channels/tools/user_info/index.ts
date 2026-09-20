@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import type { SlackUserInfo } from '../../../../../../src/client.js';
+import type { SlackUserInfo } from '@zhin.js/adapter-slack';
 
 export default defineAgentTool<{
   user_id: string;

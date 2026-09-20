@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }>({
   description: '设置 Telegram 群组的默认成员权限',
@@ -18,7 +18,7 @@ export default defineAgentTool<{ chat_id: string; can_send_messages?: boolean; c
   }),
   adapter: 'telegram',
   tags: ['telegram'],
-  permissions: [platformPermit('manage_chat')],
+  permissions: [platformPermission('telegram', 'manage_chat')],
   async execute({ chat_id, ...perms  }: { chat_id: string; can_send_messages?: boolean; can_send_photos?: boolean; can_send_videos?: boolean; can_send_polls?: boolean; can_send_other_messages?: boolean; can_add_web_page_previews?: boolean; can_change_info?: boolean; can_invite_users?: boolean; can_pin_messages?: boolean }, context) {
     const endpoint = context.$client;
     const permissions: Record<string, boolean> = {};

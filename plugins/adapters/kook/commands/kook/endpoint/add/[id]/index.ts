@@ -1,3 +1,3 @@
-import { kookEndpointCommands } from '../../../../../src/kook-endpoint-commands.js';
+import { kookEndpointCommands } from '../../definition.js';
 
 export default kookEndpointCommands.add;

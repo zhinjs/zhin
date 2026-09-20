@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubPatchFile } from '../../../../../../src/github-bot-handlers.js';
+import { executeGithubPatchFile } from '../../handlers.js';
 
 export default defineAgentTool<{ repo?: string; path: string; content: string; message: string; branch?: string }>({
   description: '通过 Contents API 单文件更新（小改；Bot Installation Token 身份）',

@@ -67,6 +67,13 @@ flowchart BT
 目录存在的目的不是缩短单个文件，而是让调用方只依赖稳定入口，让状态、策略和 IO
 实现保持单向关系。`pnpm check:domain-module-boundaries` 禁止模块外深层导入和旧平面入口回归。
 
+插件的约定能力也遵循同一原则：`commands/<path>/index.ts`、`adapters/<name>/index.ts`、
+`agents/<name>/`、`skills/<name>/`、`tools/<name>/index.ts` 是能力所有权边界。仅供某个能力
+使用的 definition、handler 或 helper 放在该能力目录内；多个能力共享且属于插件运行态的实现
+才放在 `src/`，并通过稳定包入口或一个局部桥接模块使用。叶子 `index.ts` 不得用多层相对路径
+回穿包根 `src/`。适配器 Command 与 Agent Skill Tool 的这项约束由
+`pnpm check:agent-tool-authoring-boundaries` 强制检查。
+
 ## AGENTS.md 导读
 
 改代码前，先读仓库根目录的 [`AGENTS.md`](https://github.com/zhinjs/zhin/blob/main/AGENTS.md)——它是给 AI 编码代理和贡献者的最小入口。里面有项目概览与版本约束（Node `^20.19.0 || >=22.12.0`、pnpm 9、changesets 发布流）、常用命令（`pnpm dev` / `pnpm build` / `pnpm test` / `pnpm check:all`，详见[开发流程](./development.md)）、必须遵守的代码约定（`.js` 扩展名导入、**新插件走 `definePlugin` / 约定目录**、Legacy `usePlugin`/`getPlugin` 残留规则、消息统一链路等，详见[代码约定](./conventions.md)），还有一份任务路由：按改动领域列出该看的包和文档（核心 → `packages/im/core`，AI 引擎 → `packages/im/ai`，编排 → `packages/im/agent`，适配器 → `plugins/adapters`……），外加最常改动的高价值文件清单（`plugin.ts`、`adapter.ts`、`dispatcher.ts` 等）。

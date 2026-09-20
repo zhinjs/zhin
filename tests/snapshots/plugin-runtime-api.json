@@ -269,7 +269,7 @@
   ],
   "permission": [
     "export{PermissionHost,type PermissionChecker,type PlatformPermitChecker,}from './host.js';",
-    "export{createSceneRolePlatformChecker}from './helpers.js';",
+    "export{createSceneRolePlatformChecker,platformPermission}from './helpers.js';",
     "export{permissionHostToken}from './token.js';",
     "export{type PermissionDefinition,type PlatformPermissionDefinition,definePermission,definePlatformPermission,}from './define.js';",
     "export{type PermissionSubject,type PermissionScene,type PermissionSender,toPermissionSubject,}from './subject.js';",

@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { requireDiscordGatewayClient } from '../../../../../../src/client.js';
+import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 
 export default defineAgentTool<{ channel_id: string; message_id: string; emoji: string }>({
   description: '对 Discord 消息添加表情反应',

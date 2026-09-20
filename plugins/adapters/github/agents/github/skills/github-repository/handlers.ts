@@ -3,12 +3,12 @@
  */
 import type { Message } from 'zhin.js';
 import { getCurrentCommMessage } from '@zhin.js/agent/security';
-import type { GithubClient } from './client.js';
 import {
+  formatChannelContext,
   parseMessageChannel,
   resolveWorkspaceBranch,
-  formatChannelContext,
-} from './github-channel-context.js';
+} from '../../../../src/github-channel-context.js';
+import type { GithubClient } from '../../../../src/client.js';
 
 function requireBotGh(client: GithubClient) {
   const gh = client.api;

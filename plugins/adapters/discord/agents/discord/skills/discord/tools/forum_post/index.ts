@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { requireDiscordGatewayClient } from '../../../../../../src/client.js';
+import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 import { ChannelType } from 'discord.js';
 
 export default defineAgentTool<{ channel_id: string; name: string; content: string; tags?: string }>({

@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   description: '设置飞书群管理员',
@@ -10,7 +10,7 @@ export default defineAgentTool<{ chat_id: string; user_ids: string }>({
   }),
   adapter: 'lark',
   tags: ['lark'],
-  permissions: [platformPermit('manage_managers')],
+  permissions: [platformPermission('lark', 'manage_managers')],
   async execute({ chat_id, user_ids   }: { chat_id: string; user_ids: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.setChatManagers(chat_id, user_ids.split(','));

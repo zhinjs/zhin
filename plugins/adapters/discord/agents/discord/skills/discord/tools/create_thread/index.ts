@@ -1,7 +1,7 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { requireDiscordGatewayClient } from '../../../../../../src/client.js';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }>({
   description: '在 Discord 频道中创建帖子/子线程',
@@ -13,7 +13,7 @@ export default defineAgentTool<{ channel_id: string; name: string; message_id?: 
   }),
   adapter: 'discord',
   tags: ['discord'],
-  permissions: [platformPermit('manage_channels')],
+  permissions: [platformPermission('discord', 'manage_channels')],
   async execute({ channel_id, name, message_id, auto_archive_duration  }: { channel_id: string; name: string; message_id?: string; auto_archive_duration?: number }, context) {
     const client = requireDiscordGatewayClient(context.$client);
     const channel = await client.channels.fetch(channel_id);

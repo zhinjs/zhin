@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { telegramRuntimeStateToken } from './telegram-runtime-state.js';
+import { telegramRuntimeStateToken } from '../../../src/telegram-runtime-state.js';
 
 export const telegramEndpointCommands = createEndpointCommands({
   adapterKey: 'telegram',

@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string; message_id?: string }>({
   description: '取消置顶 Telegram 群组消息',
@@ -10,7 +10,7 @@ export default defineAgentTool<{ chat_id: string; message_id?: string }>({
   }),
   adapter: 'telegram',
   tags: ['telegram'],
-  permissions: [platformPermit('pin_messages')],
+  permissions: [platformPermission('telegram', 'pin_messages')],
   async execute({ chat_id, message_id  }: { chat_id: string; message_id?: string }, context) {
     const endpoint = context.$client;
     const success = await endpoint.unpinMessage(Number(chat_id), message_id ? Number(message_id) : undefined);

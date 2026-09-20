@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubSubscribe } from '../../../../../../src/github-tool-handlers.js';
+import { executeGithubSubscribe } from '../../handlers.js';
 
 export default defineAgentTool<{ repo: string; events?: string }>({
   description: '订阅 GitHub 仓库的 Webhook 事件，事件将推送到当前聊天通道',

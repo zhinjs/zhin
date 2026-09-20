@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { dingtalkRuntimeStateToken } from './dingtalk-runtime-state.js';
+import { dingtalkRuntimeStateToken } from '../../../src/dingtalk-runtime-state.js';
 
 export const dingtalkEndpointCommands = createEndpointCommands({
   adapterKey: 'dingtalk',

@@ -1,3 +1,3 @@
-import { githubEndpointCommands } from '../../../../../src/github-endpoint-commands.js';
+import { githubEndpointCommands } from '../../definition.js';
 
 export default githubEndpointCommands.add;

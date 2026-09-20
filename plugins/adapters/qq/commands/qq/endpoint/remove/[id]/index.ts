@@ -1,3 +1,3 @@
-import { qqEndpointCommands } from '../../../../../src/qq-endpoint-commands.js';
+import { qqEndpointCommands } from '../../definition.js';
 
 export default qqEndpointCommands.remove;

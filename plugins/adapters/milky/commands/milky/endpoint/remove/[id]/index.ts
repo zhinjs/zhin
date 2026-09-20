@@ -1,3 +1,3 @@
-import { milkyEndpointCommands } from '../../../../../src/milky-endpoint-commands.js';
+import { milkyEndpointCommands } from '../../definition.js';
 
 export default milkyEndpointCommands.remove;

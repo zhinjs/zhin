@@ -1,3 +1,3 @@
-import { wecomEndpointCommands } from '../../../../src/wecom-endpoint-commands.js';
+import { wecomEndpointCommands } from '../definition.js';
 
 export default wecomEndpointCommands.list;

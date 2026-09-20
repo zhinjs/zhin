@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ name: string; owner: string; members: string }>({
   description: '创建钉钉群聊',
@@ -11,7 +11,7 @@ export default defineAgentTool<{ name: string; owner: string; members: string }>
   }),
   adapter: 'dingtalk',
   tags: ['dingtalk'],
-  permissions: [platformPermit('chat_owner')],
+  permissions: [platformPermission('dingtalk', 'chat_owner')],
   async execute({ name, owner, members    }: { name: string; owner: string; members: string }, context) {
     const endpoint = context.$client;
     const chatId = await endpoint.createChat(name, owner, members.split(','));

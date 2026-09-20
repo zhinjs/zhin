@@ -57,6 +57,18 @@ for (const file of files) {
   const packageRoot = findPackageRoot(file);
   if (!packageRoot) continue;
   const packageRelative = path.relative(packageRoot, file).split(path.sep).join('/');
+  const isCapabilityLeaf = /^(?:commands\/.+|tools\/[^/]+|agents\/[^/]+\/tools\/[^/]+|skills\/[^/]+\/tools\/[^/]+|agents\/[^/]+\/skills\/[^/]+\/tools\/[^/]+)\/index\.ts$/u
+    .test(packageRelative);
+  if (relative(packageRoot).startsWith('plugins/adapters/') && isCapabilityLeaf) {
+    const deepSourceImport = /(?:from\s+|import\(\s*)['"](?:\.\.\/)+src\//u.exec(content);
+    if (deepSourceImport) {
+      report(
+        file,
+        'capability entry reaches into package src; colocate helpers with the owning command/skill/tool or use a package API',
+        lineOf(content, deepSourceImport.index),
+      );
+    }
+  }
   if (packageRelative.startsWith('agent/tools/')) {
     report(file, 'legacy agent/tools entry; use tools/<name>/index.ts');
   }

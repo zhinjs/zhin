@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ chat_id: string }>({
   description: '创建 Telegram 群组邀请链接',
@@ -9,7 +9,7 @@ export default defineAgentTool<{ chat_id: string }>({
   }),
   adapter: 'telegram',
   tags: ['telegram'],
-  permissions: [platformPermit('chat_administrator')],
+  permissions: [platformPermission('telegram', 'chat_administrator')],
   async execute({ chat_id  }: { chat_id: string }, context) {
     const endpoint = context.$client;
     const link = await endpoint.createInviteLink(Number(chat_id));

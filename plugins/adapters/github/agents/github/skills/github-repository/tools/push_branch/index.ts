@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubPushBranch } from '../../../../../../src/github-bot-handlers.js';
+import { executeGithubPushBranch } from '../../handlers.js';
 
 export default defineAgentTool<{ repo?: string; branch?: string; message: string }>({
   description: '在托管工作区 git commit 并 push 到远程分支（需 HITL 确认；Bot 身份）',

@@ -3,7 +3,7 @@ import type { CommandMessage } from 'zhin.js/command';
 import { endpointConfigurationStoreToken } from 'zhin.js/adapter';
 import {
   completeQqPendingBotKind,
-} from '../../src/qq-endpoint-commands.js';
+} from '../../commands/qq/endpoint/definition.js';
 import {
   parseQqBotKindAnswer,
   qqCommandSessionKey,

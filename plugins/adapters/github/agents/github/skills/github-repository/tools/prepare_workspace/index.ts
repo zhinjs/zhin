@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { executeGithubPrepareWorkspace } from '../../../../../../src/github-bot-handlers.js';
+import { executeGithubPrepareWorkspace } from '../../handlers.js';
 
 export default defineAgentTool<{ repo?: string }>({
   description: 'Clone/fetch 托管工作区并 checkout 到 Issue/PR 对应分支（GitHub App Bot 身份）',

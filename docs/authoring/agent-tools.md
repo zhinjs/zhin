@@ -36,6 +36,11 @@ flowchart LR
 
 挂载 `@zhin.js/tool` Feature 后，四种 Tool 目录中的 `index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
 
+Tool 专属 handler、schema 和格式化逻辑应放在所属 Tool 或 Skill 目录；同一 Skill 的多个 Tool
+共用实现可放在 Skill 根目录，例如 `skills/github-account/handlers.ts`。叶子 `index.ts` 只声明
+Tool 并调用同目录能力，不应通过 `../../../../src/...` 获取插件内部实现。确实由多个能力共享的
+运行态契约应形成稳定包 API，或由所属 Skill/Agent 的一个局部桥接模块集中接入。
+
 ```ts
 // tools/echo/index.ts
 import { defineAgentTool } from '@zhin.js/tool';

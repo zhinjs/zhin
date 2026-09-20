@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { editSlackContent } from '../../../../../../src/slack-outbound.js';
+import { editSlackContent } from '@zhin.js/adapter-slack';
 
 export default defineAgentTool<{
   channel: string;

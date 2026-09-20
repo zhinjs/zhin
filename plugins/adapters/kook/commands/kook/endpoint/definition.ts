@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { kookRuntimeStateToken } from './kook-runtime-state.js';
+import { kookRuntimeStateToken } from '../../../src/kook-runtime-state.js';
 
 export const kookEndpointCommands = createEndpointCommands({
   adapterKey: 'kook',

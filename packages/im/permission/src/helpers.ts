@@ -5,6 +5,19 @@
 
 import type { PermissionSubject } from './subject.js';
 import type { PlatformPermitChecker } from './host.js';
+import { assertPermitSyntax } from './builtin.js';
+
+/** Build a validated platform permission name for commands and tools. */
+export function platformPermission(adapter: string, permission: string): string {
+  const adapterName = adapter.trim();
+  const permissionName = permission.trim();
+  if (!adapterName || !permissionName) {
+    throw new TypeError('Platform permission requires non-empty adapter and permission names');
+  }
+  const name = `platform(${adapterName},${permissionName})`;
+  assertPermitSyntax([name]);
+  return name;
+}
 
 export function createSceneRolePlatformChecker(): PlatformPermitChecker {
   return (perm: string, subject: PermissionSubject): boolean => {

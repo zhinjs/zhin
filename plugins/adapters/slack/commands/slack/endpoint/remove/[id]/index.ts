@@ -1,3 +1,3 @@
-import { slackEndpointCommands } from '../../../../../src/slack-endpoint-commands.js';
+import { slackEndpointCommands } from '../../definition.js';
 
 export default slackEndpointCommands.remove;

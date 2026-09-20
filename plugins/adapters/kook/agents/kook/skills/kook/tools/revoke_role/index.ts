@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { platformPermit } from '../../../../../../src/platform-permit.js';
+import { platformPermission } from '@zhin.js/permission';
 
 export default defineAgentTool<{ guild_id: string; user_id: string; role_id: string }>({
   description: '撤销用户的 KOOK 服务器角色',
@@ -11,7 +11,7 @@ export default defineAgentTool<{ guild_id: string; user_id: string; role_id: str
   }),
   adapter: 'kook',
   tags: ['kook'],
-  permissions: [platformPermit('manage_roles')],
+  permissions: [platformPermission('kook', 'manage_roles')],
   async execute({ guild_id, user_id, role_id  }: { guild_id: string; user_id: string; role_id: string }, context) {
     const client = context.$client;
     const success = await client.pickGuildMember(guild_id, user_id).revoke(role_id);

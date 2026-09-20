@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { lineRuntimeStateToken } from './line-runtime-state.js';
+import { lineRuntimeStateToken } from '../../../src/line-runtime-state.js';
 
 export const lineEndpointCommands = createEndpointCommands({
   adapterKey: 'line',

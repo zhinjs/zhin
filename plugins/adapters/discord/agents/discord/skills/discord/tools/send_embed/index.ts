@@ -1,6 +1,6 @@
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
-import { requireDiscordGatewayClient } from '../../../../../../src/client.js';
+import { requireDiscordGatewayClient } from '@zhin.js/adapter-discord';
 
 export default defineAgentTool<{ channel_id: string; title?: string; description?: string; color?: number; url?: string; fields?: string }>({
   description: '发送 Discord 富文本嵌入消息（Embed）',

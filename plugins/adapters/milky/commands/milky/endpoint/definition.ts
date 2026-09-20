@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { milkyRuntimeStateToken } from './milky-runtime-state.js';
+import { milkyRuntimeStateToken } from '../../../src/milky-runtime-state.js';
 
 export const milkyEndpointCommands = createEndpointCommands({
   adapterKey: 'milky',

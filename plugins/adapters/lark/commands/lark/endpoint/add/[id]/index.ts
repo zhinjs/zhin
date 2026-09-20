@@ -1,3 +1,3 @@
-import { larkEndpointCommands } from '../../../../../src/lark-endpoint-commands.js';
+import { larkEndpointCommands } from '../../definition.js';
 
 export default larkEndpointCommands.add;

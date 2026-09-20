@@ -4,7 +4,7 @@
  */
 import { createEndpointCommands } from 'zhin.js/adapter';
 import { defineCommand } from 'zhin.js/command';
-import { onebot11RuntimeStateToken } from './onebot11-runtime-state.js';
+import { onebot11RuntimeStateToken } from '../../../src/onebot11-runtime-state.js';
 
 export const onebot11EndpointCommands = createEndpointCommands({
   adapterKey: 'onebot11',
