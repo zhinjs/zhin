@@ -364,13 +364,13 @@ describe('runtime console RPC', () => {
         listPages: async () => [],
         replaceConfigSource: async (source) => {
           stored = source;
-          return { revision: 'b'.repeat(64) };
+          return { revision: 'b'.repeat(64), restartRequired: false };
         },
       },
     );
     expect(pickRpcReply({ type: 'config:replace-source', requestId: 10 }, saved)).toMatchObject({
       requestId: 10,
-      data: { success: true, revision: 'b'.repeat(64) },
+      data: { success: true, revision: 'b'.repeat(64), restartRequired: false },
     });
     expect(stored).toContain('sandbox');
 
@@ -491,7 +491,10 @@ describe('runtime console RPC', () => {
       {
         authScope: 'full',
         listPages: async () => [],
-        replaceConfigSource: async () => ({ revision: 'b'.repeat(64) }),
+        replaceConfigSource: async () => ({
+          revision: 'b'.repeat(64),
+          restartRequired: false,
+        }),
         publishEvent,
       },
     );

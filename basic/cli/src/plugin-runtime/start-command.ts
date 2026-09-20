@@ -16,6 +16,7 @@ import {
   defineInboxTables,
   DEFAULT_ROOT_CONFIG_FILE_NAME,
   readPluginConfigurationMap,
+  rootPluginId,
   ROOT_CONFIG_FILE_NAMES,
   selectRootConfigFile,
   type ConfigDocumentPort,
@@ -24,6 +25,7 @@ import {
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
+  createEnvStore,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -55,7 +57,7 @@ import {
 import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import {
   NativeTypeScriptSupervisor,
-  loadRuntimeEnvironmentLayers,
+  ProjectEnvironmentFileSource,
   parseStartOptions,
   processRestartExitCode,
   startSupervisorWatchdog,
@@ -93,29 +95,37 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const parsed = parseStartOptions(options.args);
   if (await new NativeTypeScriptSupervisor(options.root, parsed).runIfRequired()) return;
   ensureTypeScriptSpecifierRemap();
-  const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
+  const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
+  const environmentVariables = await environmentSource.read();
   const { config, file: configFile } = await loadProjectConfig(options.root);
+  const runtimeEnvironment = Object.freeze({
+    name: parsed.environment,
+    mode: parsed.mode,
+    platform: 'node',
+  } as const);
+  const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
+  const hostConfig = hostEnvironment.expandMissingAsEmpty((await config.read()).document);
   const pluginLifecycleFile = resolvePluginLifecycleFile(options.root);
   const pluginLifecycle = await readPluginLifecycleState(pluginLifecycleFile);
   const pluginLifecycleStore = createPluginLifecycleStore();
-  await applyRuntimeLogLevel(config);
+  await applyRuntimeLogLevel(hostConfig);
   const envOverlay = environmentVariables.environments?.[parsed.environment];
-  const httpConfig = await resolveHttpConfig(config, envOverlay, options.root);
+  const httpConfig = await resolveHttpConfig(hostConfig, envOverlay, options.root);
   const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
   const httpHost = createHttpHostGroup([primaryHttpListener, ...additionalHttpListeners]);
-  const databaseConfig = await resolveDatabaseConfig(options.root, config);
+  const databaseConfig = await resolveDatabaseConfig(options.root, hostConfig);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
-  const agentHost = await loadConfiguredAgentHost(config);
-  const endpointRoles = await createEndpointRoleResolver(config);
-  const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(config));
-  const htmlRendererHost = await prepareHtmlRendererHost(config);
+  const agentHost = await loadConfiguredAgentHost(hostConfig);
+  const endpointRoles = await createEndpointRoleResolver(hostConfig);
+  const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
+  const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
   let complete!: () => void;
   const completed = new Promise<void>((resolve) => { complete = resolve; });
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
-  const senderEnricher = await createSenderEnricher(config, endpointRoles);
+  const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const databaseHost = createDatabaseHost(databaseConfig);
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
@@ -127,7 +137,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
   const systemLogStore = new SystemLogStore(
     databaseHost,
-    await resolveSystemLogConfig(config),
+    await resolveSystemLogConfig(hostConfig),
   );
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
@@ -150,12 +160,9 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     onGenerationCommit: (generation) => {
       consoleEventHub.publish('hmr:reload', { generation });
     },
-    environment: {
-      name: parsed.environment,
-      mode: parsed.mode,
-      platform: 'node',
-    },
+    environment: runtimeEnvironment,
     environmentVariables,
+    environmentSource,
     disabledPluginInstanceKeys: pluginLifecycle.disabled,
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
@@ -200,7 +207,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         })(context);
       }
       await installProtocolHosts({
-        config,
+        config: hostConfig,
         http: httpConfig,
         snapshots: host.runtime.snapshots,
         production: parsed.mode === 'production',
@@ -208,7 +215,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         secureCredentialProvider: {
           resolve(secretRef) {
             const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(secretRef);
-            return match ? process.env[match[1]!] : undefined;
+            return match ? hostEnvironment.get(match[1]!) : undefined;
           },
         },
       })(context);

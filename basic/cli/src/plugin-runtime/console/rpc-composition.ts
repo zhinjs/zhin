@@ -3,11 +3,11 @@ import type {
   AuthenticatedTokenPrincipal,
   AuthScope,
   ConsoleEventHub,
+  PluginManagementPort,
 } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { DatabaseHost, SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { PluginLifecycleStore } from '../plugin-lifecycle-store.js';
-import type { PluginManagementPort } from '@zhin.js/host-http';
 
 export interface ConsoleRpcComposition {
   readonly consoleRuntime: ConsoleRuntime;
@@ -32,7 +32,10 @@ export interface ConsoleRpcConfigurationPort {
     configKeys: readonly string[];
   }>>;
   readDocument(): Promise<Record<string, unknown>>;
-  replaceSource(source: string, expectedRevision: string): Promise<{ readonly revision: string }>;
+  replaceSource(
+    source: string,
+    expectedRevision: string,
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
   setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }>;
   removeKey(pluginName: string): Promise<{ restartRequired: boolean }>;
   readEnvironmentFile(filename: string): Promise<string>;

@@ -1,4 +1,4 @@
-export { loadRuntimeEnvironmentLayers } from './environment.js';
+export { loadRuntimeEnvironmentLayers, ProjectEnvironmentFileSource } from './environment.js';
 export { parseStartOptions, type StartOptions } from './options.js';
 export {
   MAX_RESPAWNS_PER_MINUTE,

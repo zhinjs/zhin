@@ -4,7 +4,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { createEnvStore, defineRuntimeEnvironment } from '@zhin.js/runtime';
-import { loadRuntimeEnvironmentLayers } from '../../../src/plugin-runtime/start/environment.js';
+import {
+  loadRuntimeEnvironmentLayers,
+  ProjectEnvironmentFileSource,
+} from '../../../src/plugin-runtime/start/environment.js';
 
 const temporary: string[] = [];
 
@@ -33,5 +36,26 @@ describe('start environment', () => {
     expect(process.env.ZHIN_LAYER_SHARED).toBe(before);
     expect(process.env.ZHIN_LAYER_BASE).toBeUndefined();
     expect(process.env.ZHIN_LAYER_DEV).toBeUndefined();
+  });
+
+  it('re-reads dotenv overlays while retaining the inherited process baseline', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-environment-reload-'));
+    temporary.push(root);
+    const inherited = process.env.ZHIN_LAYER_INHERITED;
+    process.env.ZHIN_LAYER_INHERITED = 'captured';
+    try {
+      const source = new ProjectEnvironmentFileSource(root, 'development');
+      await writeFile(join(root, '.env'), 'ZHIN_LAYER_VALUE=one\n');
+      expect((await source.read()).environments?.development?.ZHIN_LAYER_VALUE).toBe('one');
+
+      process.env.ZHIN_LAYER_INHERITED = 'changed-after-construction';
+      await writeFile(join(root, '.env'), 'ZHIN_LAYER_VALUE=two\n');
+      const reloaded = await source.read();
+      expect(reloaded.environments?.development?.ZHIN_LAYER_VALUE).toBe('two');
+      expect(reloaded.base?.ZHIN_LAYER_INHERITED).toBe('captured');
+    } finally {
+      if (inherited === undefined) delete process.env.ZHIN_LAYER_INHERITED;
+      else process.env.ZHIN_LAYER_INHERITED = inherited;
+    }
   });
 });

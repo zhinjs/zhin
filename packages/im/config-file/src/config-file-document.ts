@@ -57,10 +57,12 @@ export class ConfigDocumentConflictError extends ConfigFileDocumentError {
 /** Owns the format-independent transaction and optimistic concurrency lifecycle. */
 export abstract class ConfigFileDocument implements ConfigDocumentPort {
   readonly file: string;
+  readonly sources: readonly string[];
   abstract readonly format: ConfigFileFormat;
 
   constructor(file: string) {
     this.file = resolve(file);
+    this.sources = Object.freeze([this.file]);
   }
 
   async read(): Promise<ConfigDocumentSnapshot> {

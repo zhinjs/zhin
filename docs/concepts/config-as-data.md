@@ -123,4 +123,28 @@ composition root 只创建一个具体的 `ConfigFileDocument`。Root Runtime、
 
 事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 Root 配置和内存里的运行时都不会出现半更新状态。
 
-外部直接编辑配置文件也可以：配置文件本身被 watch，外部修改会触发一次全量重载，以磁盘内容为准。
+外部直接编辑配置文件也可以。配置文件适配器通过 `ConfigDocumentPort.sources` 声明受监视的
+权威文件，Runtime 重新读取、校验并比较实际投影后再决定影响范围：
+
+- `plugins.<instanceKey>` 只变化时，仅替换对应 Plugin 的最浅子树；兄弟 Plugin 和 Root
+  Resources 保持当前 generation；
+- Root Plugin 的 `plugin` 配置变化时，重建 Root generation；
+- `http` / `database` / `ai` / `mcp` / `a2a` / `speech` / `htmlRenderer` /
+  `assistant` / `log_level` 等 Host 配置变化时，请求进程重启，因为这些资源在 composition
+  root 启动阶段创建，不能用 Plugin generation 假装已经替换；
+- 只改注释、空白或等价值时，只采纳新的文档 revision，不创建无意义 generation。
+
+## 环境文件重载
+
+CLI 把 `.env` 与当前环境的 `.env.<environment>` 包装成 `EnvironmentLayersPort`。端口保留
+启动进程继承的基础环境，每次文件事件重新读取 dotenv overlay，不把项目密钥写回全局
+`process.env`。Runtime 随后用新的 owner-scoped `EnvStore` 重新展开配置中的 `${VAR}`、
+`${VAR:-default}` 和 `${VAR:=default}`：
+
+- 若 Host 配置的展开值变化，触发进程重启，新进程用新环境创建 HTTP、Database、Agent 等
+  Host 资源；
+- 否则重建 Root generation，使插件配置引用和直接使用 `EnvStore` 的插件同时切换到新快照；
+- dotenv 内容未产生有效环境变化时，不创建 generation。
+
+环境文件和配置文件都走同一个 HMR 串行队列。候选配置校验或 shadow setup 失败时，旧
+generation、旧环境快照和旧配置 revision 继续生效。

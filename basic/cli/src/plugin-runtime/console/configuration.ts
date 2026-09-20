@@ -1,4 +1,5 @@
 import type { ConfigFileDocument } from '@zhin.js/config-file';
+import { isDeepStrictEqual } from 'node:util';
 import type { ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
@@ -49,11 +50,18 @@ export class ConsoleConfigurationStore {
   replaceSource(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string }> {
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }> {
     return this.#serialize(async () => {
+      const current = await this.#document.read();
       const prepared = await this.#document.prepareReplacement(expectedRevision, source);
       const committed = await prepared.commit();
-      return Object.freeze({ revision: committed.revision });
+      return Object.freeze({
+        revision: committed.revision,
+        restartRequired: HOST_CONFIG_KEYS.some((key) => !isDeepStrictEqual(
+          current.document[key],
+          prepared.document[key],
+        )),
+      });
     });
   }
 
@@ -64,7 +72,7 @@ export class ConsoleConfigurationStore {
         configKeyPatch(current.document, pluginName, data),
       ]);
       await prepared.commit();
-      return Object.freeze({ restartRequired: true });
+      return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
     });
   }
 
@@ -75,7 +83,7 @@ export class ConsoleConfigurationStore {
         configKeyRemovePatch(current.document, pluginName),
       ]);
       await prepared.commit();
-      return Object.freeze({ restartRequired: true });
+      return Object.freeze({ restartRequired: HOST_CONFIG_KEYS.includes(pluginName) });
     });
   }
 

@@ -225,7 +225,7 @@ describe('EnvStore', () => {
 });
 
 describe('RootRuntime EnvStore ownership', () => {
-  it('publishes one validated Primary Config projection per resource generation', async () => {
+  it('keeps Root resources stable across a child Plugin config reload', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
     modules.set(join(project, 'plugin.ts'), {
@@ -264,15 +264,13 @@ describe('RootRuntime EnvStore ownership', () => {
       op: 'set', path: ['plugins', 'child', 'label'], value: 'v2',
     }]);
 
-    expect(observed).toHaveLength(2);
+    expect(observed).toHaveLength(1);
     expect(observed[0]).toMatchObject({
       raw: { apiKey: '${AI_KEY}' },
       expanded: { apiKey: 'secret-value' },
       defaults: {},
     });
-    expect(observed[1]?.defaults).toEqual({});
     expect(observed[0]?.injected).toBeDefined();
-    expect(observed[1]?.injected).not.toBe(observed[0]?.injected);
     await runtime.stop();
   });
 

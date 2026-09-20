@@ -2,6 +2,7 @@ import {
   NativeDevelopmentModuleRuntime,
   RootRuntime,
   type EnvironmentLayers,
+  type EnvironmentLayersPort,
   type InvalidationPlan,
   type ModuleRuntime,
   type ProcessInvalidationPlan,
@@ -19,6 +20,7 @@ export interface RootHostOptions {
   readonly config?: RuntimeConfigDocument | ConfigDocumentPort;
   readonly environment?: RuntimeEnvironment;
   readonly environmentVariables?: EnvironmentLayers;
+  readonly environmentSource?: EnvironmentLayersPort;
   readonly modules?: ModuleRuntime;
   readonly installResources?: RootResourceInstaller;
   readonly disabledPluginInstanceKeys?: readonly string[];
@@ -74,6 +76,7 @@ export class RootHost {
       config: options.config,
       installResources: options.installResources,
       environmentVariables: options.environmentVariables,
+      environmentSource: options.environmentSource,
       environment: options.environment ?? {
         name: 'development',
         mode: 'development',

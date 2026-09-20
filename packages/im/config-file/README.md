@@ -7,6 +7,8 @@ Root Runtime 的 YAML/JSON `ConfigDocumentPort`。两种格式共享文件事务
 `@zhin.js/plugin-runtime` 定义配置文档端口和结构化 patch 语义；`@zhin.js/runtime` 只负责 schema 校验、影响范围规划和 generation handoff；`@zhin.js/config-file` 实现 Node 文件适配器：
 
 - `ConfigFileDocument`：事务模板，封装 optimistic concurrency、commit 和 rollback。
+- `ConfigFileDocument.sources`：向 Runtime 声明当前权威文件，使外部编辑进入配置影响规划，
+  而不是按普通源码文件处理。
 - `YamlConfigDocument`：在 YAML AST 上应用 patch，保留注释、引号、anchor/alias、键顺序、缩进和换行风格。
 - `JsonConfigDocument`：复用 Runtime 的 `applyConfigPatches`，稳定输出原文件的缩进和换行风格。
 - `createConfigDocument(file)`：composition root 的格式选择入口。

@@ -131,7 +131,7 @@ export type RuntimeConsoleRpcContext = {
   replaceConfigSource?(
     source: string,
     expectedRevision: string,
-  ): Promise<{ readonly revision: string }>;
+  ): Promise<{ readonly revision: string; readonly restartRequired: boolean }>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
    * Returns whether a process restart is required.
@@ -369,7 +369,13 @@ export async function dispatchRuntimeConsoleRpc(
         ctx.publishEvent?.('config:updated', { pluginName: null, keys: [] });
         emit({
           requestId,
-          data: { success: true, revision: result.revision, message: '配置已保存，需重启生效' },
+          data: {
+            success: true,
+            ...result,
+            message: result.restartRequired
+              ? '配置已保存，需重启进程才能生效'
+              : '配置已保存',
+          },
         });
       } catch (error) {
         emit({

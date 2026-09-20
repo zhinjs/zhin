@@ -1,3 +1,7 @@
+---
+sidebar: false
+---
+
 # Console 插件管理闭环
 
 ## 目标

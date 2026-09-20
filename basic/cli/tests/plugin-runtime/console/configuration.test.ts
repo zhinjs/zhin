@@ -112,6 +112,22 @@ describe('config document flatten / write namespace', () => {
     expect(after.plugins.d).toEqual({ ok: true });
   });
 
+  it('requires a process restart only for Host configuration keys', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-impact-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  sandbox: {}\n');
+    const configuration = createStore(root, 'zhin.config.yml');
+
+    await expect(configuration.setKey('sandbox', { endpoints: [] }))
+      .resolves.toEqual({ restartRequired: false });
+    await expect(configuration.setKey('http', { port: 9090 }))
+      .resolves.toEqual({ restartRequired: true });
+    await expect(configuration.removeKey('sandbox'))
+      .resolves.toEqual({ restartRequired: false });
+    await expect(configuration.removeKey('http'))
+      .resolves.toEqual({ restartRequired: true });
+  });
+
   it('exposes and replaces JSON source without translating formats', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-json-'));
     tempRoots.push(root);
@@ -122,10 +138,29 @@ describe('config document flatten / write namespace', () => {
     expect(current.format).toBe('json');
     expect(current.configKeys).toEqual(['http']);
     const source = '{\n  "http": { "port": 2000 }\n}\n';
-    await configuration.replaceSource(source, current.revision);
+    await expect(configuration.replaceSource(source, current.revision)).resolves.toEqual({
+      revision: expect.any(String),
+      restartRequired: true,
+    });
 
     expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({
       http: { port: 2000 },
+    });
+  });
+
+  it('replaces Plugin-only source without requiring a process restart', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-plugin-source-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  sandbox:\n    enabled: false\n');
+    const configuration = createStore(root, 'zhin.config.yml');
+    const current = await configuration.readSource();
+
+    await expect(configuration.replaceSource(
+      'plugins:\n  sandbox:\n    enabled: true\n',
+      current.revision,
+    )).resolves.toEqual({
+      revision: expect.any(String),
+      restartRequired: false,
     });
   });
 

@@ -502,7 +502,12 @@ export class ConsoleTransport {
     return this.sendRequest<ConsoleConfigSource>({ type: CONFIG_RPC.GET_SOURCE });
   }
   async replaceConfigSource(source: string, expectedRevision: string) {
-    return this.sendRequest<{ success: boolean; revision: string; message?: string }>({
+    return this.sendRequest<{
+      success: boolean;
+      revision: string;
+      restartRequired: boolean;
+      message?: string;
+    }>({
       type: CONFIG_RPC.REPLACE_SOURCE,
       source,
       expectedRevision,

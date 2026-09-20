@@ -24,6 +24,8 @@ export interface PreparedConfigDocument {
 }
 
 export interface ConfigDocumentPort {
+  /** Files whose external edits invalidate this document snapshot. */
+  readonly sources?: readonly string[];
   read(): Promise<ConfigDocumentSnapshot>;
   prepare(
     current: ConfigDocumentSnapshot,
