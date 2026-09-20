@@ -19,7 +19,7 @@ user-invocable: true
 ## 何时使用
 
 - 一个插件把命令、数据库、路由、页面逻辑都堆在一个文件里
-- 需要拆分 `commands/`、`services/`、`models/`、`client/`
+- 需要拆分约定能力目录、`src/services/`、`src/models/` 或 `pages/`
 - 想减少重复逻辑、生命周期混乱、Context 使用散乱
 - 想把旧插件迁移到更标准的 Zhin 插件结构
 - 用户明确要求“重构插件”“整理插件结构”“拆模块但别改行为”
@@ -73,10 +73,10 @@ user-invocable: true
 
 根据当前复杂度选择目标结构，而不是追求最完整目录：
 
-- 小型插件：保留单文件，最多轻量抽服务
-- 中型插件：拆 `commands/`、`services/`、`models/`
-- 含控制台页面：再拆 `client/`
-- 含 AI 工具：补 `tools/`
+- 小型插件：保留最小 `plugin.ts`，只创建实际存在的命名能力目录
+- 中型插件：能力进入约定目录，共享实现拆到 `src/services/`、`src/models/`
+- 含控制台页面：使用 `pages/<name>/index.tsx`
+- 含 AI 工具：按最窄归属放入根、Agent、Skill 或 Agent-Skill 的 `tools/<name>/index.ts`
 
 目标结构可直接参考 [目标结构草图](./assets/refactor-target-layout.md)。
 
@@ -89,7 +89,7 @@ user-invocable: true
 3. 数据访问与共享服务
 4. 命令与中间件
 5. 事件、定时任务、AI 工具
-6. Router 与 Web 页面入口
+6. HTTP Host 与 Console 页面入口
 
 优先移动低耦合代码，再移动依赖较多的装配代码。
 
@@ -128,6 +128,11 @@ user-invocable: true
 ```bash
 pnpm --filter <pkg> build
 pnpm --filter <pkg> test
+pnpm check:plugin-capability-publish
+pnpm check:agent-tool-authoring-boundaries
+pnpm check:skill-authoring-boundaries
+pnpm check:agent-authoring-boundaries
+pnpm check:hook-authoring-boundaries
 # 手测：Sandbox 或 test-bot 触发原命令 / 访问原控制台路由
 ```
 
@@ -159,7 +164,7 @@ pnpm --filter <pkg> test
 - 不要在重构中顺带改功能或「优化」业务语义
 - 不要一次性拆出空目录填满占位文件
 - 不要把适配器协议逻辑迁入普通插件
-- 不要在未跑测试前大规模移动 `client/` 入口
+- 不要在未跑测试前大规模移动 `pages/` 或 Console RPC 契约
 - 不要用本 skill 从零新建插件
 
 ## 输出要求

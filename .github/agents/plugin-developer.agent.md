@@ -2,7 +2,7 @@
 name: "plugin-developer"
 description: "Use when building or modifying Zhin.js Plugin Runtime packages, including convention capabilities, Resources, schema, lifecycle, and plugin-side Console integrations. 适用于插件开发、能力目录、资源装配和 Console 接入。"
 tools: [read, search, edit, execute, todo]
-argument-hint: "Describe the plugin task, target package or plugin, and whether it involves commands, middleware, Context, schema, database, or web integration."
+argument-hint: "Describe the plugin task, target package, and whether it involves convention capabilities, Resources, schema, database, HTTP Host, or Console integration."
 user-invocable: true
 ---
 

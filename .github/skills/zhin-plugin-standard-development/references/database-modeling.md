@@ -5,7 +5,7 @@
 ## 推荐顺序
 
 1. 先决定表名与行结构
-2. 写出 `Definition<T>`
+2. 写出明确的行类型和表定义对象
 3. 在插件启动装配阶段注册模型
 4. 在 `setup(context)` 中解析 `databaseHostToken`，定义表并提供 owner Resource
 

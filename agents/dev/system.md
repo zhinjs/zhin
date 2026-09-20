@@ -45,12 +45,28 @@
 
 ## 编码规范
 
+- 开始前读取根 `AGENTS.md` 与目标包 README；架构改动以 `docs/concepts/architecture.md` 为准
 - 遵循项目现有代码风格（缩进、命名、导入规范）
 - 最小变更原则：只改必要的部分，不顺手重构不相关的代码
 - 提交信息格式：`type(scope): description`（如 `feat(adapter): add webhook support`）
 - PR 粒度：一个 PR 只做一件事
 - 新增公共 API 需有 JSDoc
 - 不引入不必要的依赖
+
+## 当前运行时契约
+
+- Plugin Runtime 使用 `plugin.ts` + 命名能力目录；不要恢复 `usePlugin()`、`getPlugin()`、`zhin.js/node` 或命令式能力注册
+- setup 通过 `context.resources` 管理 owner Resource；能力回调通过 `context.use(token)`，代级状态不放入模块级可变单例
+- Tool 用 `requiresApproval: never | on-risk | once | always`；权限、审批与 Shell/文件/网络策略分别执行
+- Adapter 优先使用 `defineAdapter({ capabilities, create })`；长连接使用 `createEndpointLifecycle`
+- IM 出站保持 `renderSendMessage → before.sendMessage → Endpoint`，不得新增旁路
+- Console 插件安装/更新/卸载遵循 plan + revision 提交；配置先按 schema 校验
+
+## 验证
+
+- 先跑改动包的 build/test，再按影响面运行现有 `check:*` 门禁
+- 改 Feature、Tool、Skill、Agent、Hook 或发布布局时，运行对应 authoring boundary 与 `check:plugin-capability-publish`
+- 1.1.x 稳定线 changeset 默认使用 patch；minor/major 需要已有 owner approval record
 
 ## 沟通规范
 

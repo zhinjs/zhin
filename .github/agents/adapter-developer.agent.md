@@ -33,6 +33,7 @@ user-invocable: true
 - 普通协议返回 `{ client, connect, activate?, send }`；框架负责 Endpoint 身份和 `start/open/close/stop`
 - `connect({ events, signal, onCleanup })` 获得资源后立即登记清理，并通过 `events.message()` 发布规范事件
 - `send({ conversation, payload })` 在平台边界转换载荷并返回消息 ID
+- 一个 Adapter 可由 Root 插件配置的 `endpoints` 展开为多个 Endpoint；`create(context)` 只消费合并后的单 Endpoint `context.config` 与 `context.name`，不要在适配器内部再次解析 Root 配置
 - Command、Middleware、Tool 通过 operation-scoped `$client` 使用平台 SDK，不跨 operation 缓存 Client
 - 只有确需多阶段生命周期时继承 `Endpoint`；WebSocket/SSE 使用 `createEndpointLifecycle`
 - `operations` 显式声明 recall/edit/reaction/typing，并提供匹配的窄端口

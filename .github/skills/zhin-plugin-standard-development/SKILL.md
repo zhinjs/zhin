@@ -1,7 +1,7 @@
 ---
 name: zhin-plugin-standard-development
-description: 'Implement Zhin.js plugins with Plugin Runtime. Use when asked to create a plugin, add commands, middleware, components, cron, AI tools/skills/agents, config, database, router, or console pages. 适用于 definePlugin / 约定目录能力落地。'
-argument-hint: 'Describe the plugin goal, target package, and required capabilities (commands, middleware, events, components, cron, AI tools, config, database, router, console).'
+description: 'Implement Zhin.js plugins with Plugin Runtime. Use when asked to create a plugin or add commands, middleware, handlers, components, schedules, Agent capabilities, config, database, HTTP Host integration, or Console pages. 适用于 definePlugin / 约定目录能力落地。'
+argument-hint: 'Describe the plugin goal, target package, and required capabilities (commands, middleware, handlers, components, schedules, Agent tools, config, database, HTTP, Console).'
 user-invocable: true
 ---
 
@@ -87,7 +87,7 @@ DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 | Agent | `agent.json` + 提示词与边界文件 | `agents/<name>/` |
 | 服务 / DI | `resources.provide` | `plugin.ts` setup |
 | 数据库 | `databaseHostToken`，`start` 前 `define` 表 | `plugin.ts` setup |
-| Web | `definePage` | `pages/*/index.tsx` |
+| Web | `definePage` | `pages/<name>/index.tsx` |
 
 多类型并存时先定主职责，再考虑拆分子包。
 
