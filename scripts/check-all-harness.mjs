@@ -113,6 +113,11 @@ const checks = [
     description: '检查架构层级依赖是否正确',
   },
   {
+    name: 'Domain Module Boundaries',
+    command: 'pnpm check:domain-module-boundaries',
+    description: '深模块只能经 canonical index.ts 进入，禁止恢复旧平面入口或外部深层导入',
+  },
+  {
     name: 'Adapter Endpoint Boundaries',
     command: 'pnpm check:adapter-endpoint-boundaries',
     description: '检查 Adapter definition 与 Endpoint instance 职责不混淆',

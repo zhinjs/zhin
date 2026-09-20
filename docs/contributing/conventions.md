@@ -27,6 +27,7 @@ import { DisposeStack } from './dispose';           // ❌
 - 纯契约模块可以依赖其他类型契约，但不能反向依赖生命周期、注册表或运行时编排。推荐依赖方向为“运行时编排 → 能力实现 → 边界契约”。
 - 避免新增 `utils.ts`、`common.ts`、`helpers.ts`。用能力命名模块，例如 `content-resolver.ts`、`endpoint-lifecycle.ts`，让调用方从文件名就能判断边界。
 - 包含多个主要模块的包，应在 README 提供“源码地图”，说明从哪个文件开始阅读，以及模块之间的单向依赖关系。
+- 已形成深模块的目录以 `index.ts` 作为唯一外部入口。模块内部可以直接引用协作文件，模块外只能引用入口，不能依赖 `contracts.ts`、Repository 或状态机等内部布局。`pnpm check:domain-module-boundaries` 当前保护 Workroom Journal、Projection Outbox 与 Host Extended Console RPC；新增受保护模块时同步登记目录，不以文件行数作为拆分门槛。
 
 ## 新插件：Plugin Runtime（默认）
 

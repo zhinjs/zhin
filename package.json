@@ -47,6 +47,7 @@
     "check:harness-paths": "node scripts/check-im-send-bypass.mjs",
     "check:no-koa": "node scripts/check-no-koa-imports.mjs",
     "check:architecture": "node scripts/check-architecture-layers.mjs",
+    "check:domain-module-boundaries": "node scripts/check-domain-module-boundaries.mjs",
     "check:console-client-boundaries": "node scripts/check-console-client-boundaries.mjs",
     "check:console-protocol-boundaries": "node scripts/check-console-protocol-boundaries.mjs",
     "check:sixty-s-runtime-boundaries": "node scripts/check-sixty-s-runtime-boundaries.mjs",
