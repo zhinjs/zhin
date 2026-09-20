@@ -823,13 +823,13 @@ export default function Sandbox() {
                         <label>
                             <span>审批策略</span>
                             <select
-                                value={activeChannel.runConfig.safetyMode === 'read-only' ? 'deny' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'allow' : activeChannel.runConfig.approvalMode}
+                                value={activeChannel.runConfig.safetyMode === 'read-only' ? 'auto' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'bypass' : activeChannel.runConfig.approvalMode}
                                 disabled={activeChannel.runConfig.safetyMode !== 'workspace-write'}
                                 onChange={(event) => updateRunConfig({ approvalMode: event.target.value as SandboxAgentRunConfig['approvalMode'] })}
                             >
                                 <option value="ask">按需确认</option>
-                                <option value="deny">自动拒绝</option>
-                                <option value="allow">自动允许</option>
+                                <option value="auto">审核 Agent 自动判断</option>
+                                <option value="bypass">绕过审批</option>
                             </select>
                         </label>
                         <label className="agent-playground-network-toggle">
@@ -1060,7 +1060,7 @@ export default function Sandbox() {
                         <div><dt>Scene</dt><dd>{activeChannel.id}</dd></div>
                         <div><dt>Workdir</dt><dd title={activeChannel.runConfig.workingDirectory}>{activeChannel.runConfig.workingDirectory || 'Host project root'}</dd></div>
                         <div><dt>Security</dt><dd>{activeChannel.runConfig.safetyMode}</dd></div>
-                        <div><dt>Approval</dt><dd>{activeChannel.runConfig.safetyMode === 'read-only' ? 'deny' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'allow' : activeChannel.runConfig.approvalMode}</dd></div>
+                        <div><dt>Approval</dt><dd>{activeChannel.runConfig.safetyMode === 'read-only' ? 'auto' : activeChannel.runConfig.safetyMode === 'danger-full-access' ? 'bypass' : activeChannel.runConfig.approvalMode}</dd></div>
                         <div><dt>Network</dt><dd>{activeChannel.runConfig.networkAccess ? 'enabled' : 'disabled'}</dd></div>
                         <div><dt>Isolation</dt><dd className={cn(shellIsolation?.available && 'is-online')}>{shellIsolation ? `${shellIsolation.provider}: ${shellIsolation.available ? 'ready' : 'unavailable'}` : 'checking'}</dd></div>
                         <div><dt>Transport</dt><dd className={cn(connected && 'is-online')}>{connected ? 'WebSocket online' : 'reconnecting'}</dd></div>

@@ -79,7 +79,7 @@ function executionContext(): ToolExecutionContext {
       permissions: ['master'],
       unattended: false,
       network: { enabled: false },
-      shell: { security: 'full', approvalMode: 'allow', isolation: 'required' },
+      shell: { security: 'full', approvalMode: 'bypass', isolation: 'required' },
       filesystem: {
         workspaceRoot: '/workspace',
         workingDirectory: '/workspace/project',

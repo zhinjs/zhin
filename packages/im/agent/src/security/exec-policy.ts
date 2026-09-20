@@ -7,7 +7,7 @@
  *   4. 复合命令拆分   — `&&` `||` `;` 与管道 `|` 逐段独立检查，deny 优先
  *   5. Shell 语法 fail-closed — 非 full 模式拒绝含换行 / `$(...)` / 反引号的命令
  *   6. 只读命令自动放行 — 与 file-policy classifyBashCommand 集成
- *   7. Owner 信号 — execApprovalMode=ask 时返回拒绝事实；一次性放行走 ApprovalPort，持久策略走 OwnerApprovalRuntime
+ *   7. 审批信号 — ask/auto 返回待审批事实；具体决定由 ApprovalPort 完成
  */
 
 import type { AgentTool } from '@zhin.js/ai';
@@ -402,7 +402,7 @@ export interface ExecPolicyResult {
   allowed: boolean;
   /** 如果不允许，拒绝原因 */
   reason?: string;
-  /** 如果需要用户确认（execApprovalMode=ask 且命令不在白名单但也不在黑名单） */
+  /** 如果需要审批（ask/auto 且命令不在白名单但也不在黑名单） */
   needsApproval?: boolean;
 }
 
@@ -522,20 +522,18 @@ function checkSingleCommand(
         reason: `icqq 敏感操作仅允许 owner 直接执行；admin 需 Owner 审批：${norm.slice(0, 280)}`,
       };
     }
-    if (approvalMode === 'allow') {
+    if (approvalMode === 'bypass') {
       return { allowed: true };
     }
-    if (approvalMode === 'ask') {
+    if (approvalMode === 'ask' || approvalMode === 'auto') {
       return {
         allowed: false,
         needsApproval: true,
-        reason: `icqq 敏感操作需 Endpoint Owner 确认：${norm.slice(0, 280)}`,
+        reason: approvalMode === 'auto'
+          ? `icqq 敏感操作需审核 Agent 确认：${norm.slice(0, 280)}`
+          : `icqq 敏感操作需 Endpoint Owner 确认：${norm.slice(0, 280)}`,
       };
     }
-    return {
-      allowed: false,
-      reason: `icqq 敏感操作已被拒绝（execApprovalMode=deny）：${norm.slice(0, 280)}`,
-    };
   }
 
   // 4. 白名单匹配
@@ -579,22 +577,20 @@ function checkSingleCommand(
   }
 
   // 5. 需审批或拒绝
-  if (approvalMode === 'allow') {
+  if (approvalMode === 'bypass') {
     return { allowed: true };
   }
 
-  if (approvalMode === 'ask') {
+  if (approvalMode === 'ask' || approvalMode === 'auto') {
     return {
       allowed: false,
       needsApproval: true,
-      reason: `命令「${cmdName}」不在允许列表中，需要用户确认后执行。`,
+      reason: approvalMode === 'auto'
+        ? `命令「${cmdName}」不在允许列表中，需要审核 Agent 确认后执行。`
+        : `命令「${cmdName}」不在允许列表中，需要用户确认后执行。`,
     };
   }
-
-  return {
-    allowed: false,
-    reason: `命令「${cmdName}」不在允许列表中，已被拒绝。可将命令加入 ai.agent.execAllowlist 或改用 execPreset。`,
-  };
+  return { allowed: false, reason: 'Unknown execution approval mode' };
 }
 
 /**
@@ -693,7 +689,7 @@ export function checkTurnExecPolicy(
     execSecurity: policy.security ?? 'deny',
     execPreset: policy.execPreset ?? 'custom',
     execAllowlist: [],
-    execApprovalMode: policy.approvalMode ?? 'deny',
+    execApprovalMode: policy.approvalMode ?? 'auto',
   } as unknown as Required<ZhinAgentConfig>;
   // Per-turn authority must not inherit the IM sender's global owner bypass.
   return checkExecPolicy(config, command, 'unknown');
@@ -713,7 +709,7 @@ export function checkUnattendedExecPreset(
     for (const segment of splitPipeSegments(sub)) {
       const name = extractCommandName(segment);
       if (!name) continue;
-      const result = checkSingleCommand(name, segment, allowlist, 'allowlist', 'deny', 'other');
+      const result = checkSingleCommand(name, segment, allowlist, 'allowlist', 'auto', 'other');
       if (!result.allowed) return { allowed: false, reason: result.reason };
     }
   }
@@ -722,7 +718,7 @@ export function checkUnattendedExecPreset(
 
 /**
  * Wrap `bash` tools with exec policy enforcement.
- * 当 execApprovalMode=ask 且命令需审批时，返回提示信息而非抛错。
+ * 当 execApprovalMode=ask/auto 且命令需审批时，返回提示信息而非抛错。
  */
 export function applyExecPolicyToTools(
   config: Required<ZhinAgentConfig>,

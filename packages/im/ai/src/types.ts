@@ -442,8 +442,11 @@ export interface AIConfig {
     execPreset?: 'readonly' | 'network' | 'development' | 'custom';
     /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 */
     execAllowlist?: string[];
-    /** allowlist 未命中时：true=需审批（当前实现为拒绝并提示），false=直接拒绝 */
-    execAsk?: boolean;
+    /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */
+    execApprovalMode?: 'ask' | 'auto' | 'bypass';
+    subagentExecApprovalMode?: 'ask' | 'auto' | 'bypass';
+    workerExecApprovalMode?: 'ask' | 'auto' | 'bypass';
+    taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
     phaseTrace?: boolean;
     /** 按模型 / provider 模式覆盖 model harness */

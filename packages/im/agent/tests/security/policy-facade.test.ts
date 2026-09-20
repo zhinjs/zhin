@@ -20,7 +20,7 @@ function makeExecConfig(overrides: Partial<ZhinAgentConfig> = {}): Required<Zhin
     execSecurity: 'allowlist',
     execPreset: 'custom',
     execAllowlist: [],
-    execApprovalMode: 'deny',
+    execApprovalMode: 'auto',
     ...overrides,
   } as unknown as Required<ZhinAgentConfig>;
 }

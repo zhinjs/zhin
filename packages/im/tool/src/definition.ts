@@ -27,7 +27,7 @@ export interface ToolInvocationPolicy {
     readonly preset?: 'readonly' | 'network';
     readonly security?: 'deny' | 'allowlist' | 'full';
     readonly execPreset?: 'readonly' | 'network' | 'development' | 'custom';
-    readonly approvalMode?: 'ask' | 'allow' | 'deny';
+    readonly approvalMode?: 'ask' | 'bypass' | 'auto';
     readonly isolation?: 'required' | 'none';
   }>;
   readonly filesystem?: Readonly<{

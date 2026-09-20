@@ -46,10 +46,10 @@ outline: [2, 3]
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | 否 | — | 覆盖较早的群聊排队回合，或按到达顺序处理全部回合。 |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
-| `ai.agent.execApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | 主 Agent 命令的审批策略。 |
-| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | 子 Agent 命令的审批策略。 |
-| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | Worker 命令的审批策略。 |
-| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | 否 | — | Task 命令的审批策略。 |
+| `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
+| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |
+| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Worker 命令的审批策略。 |
+| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Task 命令的审批策略。 |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | 否 | — | 同一模型步骤中的工具调用调度方式。 |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | 否 | — | 可选模型尺寸提示；空字符串表示清除提示。 |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |

@@ -134,7 +134,7 @@ describe('sandbox plugin runtime adapter', () => {
             agentRun: {
               workingDirectory: '/workspace/app',
               safetyMode: 'read-only',
-              approvalMode: 'deny',
+              approvalMode: 'auto',
               networkAccess: false,
             },
           }));
@@ -156,7 +156,7 @@ describe('sandbox plugin runtime adapter', () => {
         sandboxAgentRun: {
           workingDirectory: '/workspace/app',
           safetyMode: 'read-only',
-          approvalMode: 'deny',
+          approvalMode: 'auto',
           networkAccess: false,
         },
       }),

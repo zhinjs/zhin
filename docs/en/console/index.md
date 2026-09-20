@@ -82,7 +82,7 @@ The working directory and security policy belong to each run. They are not Promp
 | Field | Accepted values | How to choose |
 | --- | --- | --- |
 | `safetyMode` | `read-only` / `workspace-write` / `danger-full-access` | Use read-only for inspection, workspace-write for project edits, and full host access only for a local task whose risks are understood |
-| `approvalMode` | `ask` / `deny` / `allow` | Default to `ask`; choose `deny` for unattended fail-closed runs, and `allow` only behind external isolation and authorization |
+| `approvalMode` | `ask` / `auto` / `bypass` | Default to `ask`; `auto` uses a dedicated review Agent and asks the master when uncertain; `bypass` approves immediately while permissions and sandbox policy still apply |
 | `networkAccess` | `false` / `true` | Enable only when the task needs the network; `danger-full-access` inherently includes network authority |
 | `workingDirectory` | directory path | Point to the project directory this run may use; avoid a broad system root |
 

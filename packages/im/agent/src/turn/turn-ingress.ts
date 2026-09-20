@@ -102,7 +102,7 @@ export interface TurnPolicyContext {
     /** Per-turn shell policy resolved by a trusted product ingress. */
     readonly security?: 'deny' | 'allowlist' | 'full';
     readonly execPreset?: 'readonly' | 'network' | 'development' | 'custom';
-    readonly approvalMode?: 'ask' | 'allow' | 'deny';
+    readonly approvalMode?: 'ask' | 'bypass' | 'auto';
     /** Require an OS/container boundary for Shell execution. */
     readonly isolation?: 'required' | 'none';
   }>;

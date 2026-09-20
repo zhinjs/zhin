@@ -2,6 +2,9 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import {
   AIService,
+  ApprovalReviewAgent,
+  createAutoApprovalPort,
+  createBypassApprovalPort,
   type ApprovalPort,
   type AssistantConfig,
   type AudioTranscriptionPort,
@@ -52,6 +55,8 @@ interface AgentRuntimeFoundationState {
   readonly home: AssistantHomeRuntime;
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
   readonly seedPresets: RuntimeZhinAgent['seedPresets'];
+  readonly approvalReviewer: ApprovalReviewAgent;
+  readonly bypassApprovalPort: ApprovalPort;
 }
 
 /** A complete, validated Agent runtime candidate with all owned auxiliaries. */
@@ -67,6 +72,8 @@ export class AgentRuntimeFoundation {
   readonly homeTools: AssistantHomeRuntime['tools'];
   readonly assistantEnabled: boolean;
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
+  readonly approvalReviewer: ApprovalReviewAgent;
+  readonly bypassApprovalPort: ApprovalPort;
   readonly #seedPresetResources: RuntimeZhinAgent['seedPresets'];
 
   private constructor(state: AgentRuntimeFoundationState) {
@@ -81,6 +88,8 @@ export class AgentRuntimeFoundation {
     this.homeTools = state.home.tools;
     this.assistantEnabled = state.schedule.assistantEnabled;
     this.sessionTreeRuntime = state.sessionTreeRuntime;
+    this.approvalReviewer = state.approvalReviewer;
+    this.bypassApprovalPort = state.bypassApprovalPort;
     this.#seedPresetResources = state.seedPresets;
   }
 
@@ -99,13 +108,24 @@ export class AgentRuntimeFoundation {
       : null;
     if (semanticMemory) options.lifecycle.add(() => semanticMemory.dispose());
     const traceRuntime = createAgentTraceRuntime();
+    const binding = service.getBindingRegistry().requireZhinBinding();
+    const approvalReviewer = new ApprovalReviewAgent({
+      completion: service.getLlmRuntime(),
+      model: service.getLlmRuntime().model(binding.providerAlias, binding.model),
+    });
+    const bypassApprovalPort = createBypassApprovalPort();
+    const approvalMode = service.getAgentConfig()?.execApprovalMode ?? 'auto';
+    const defaultApprovalPort = options.approvalPort
+      ?? (approvalMode === 'auto'
+        ? createAutoApprovalPort(approvalReviewer)
+        : approvalMode === 'bypass' ? bypassApprovalPort : undefined);
 
     try {
       const created = createRuntimeZhinAgent(
         service,
         options.im,
         options.projectRoot,
-        options.approvalPort,
+        defaultApprovalPort,
         options.audioTranscriber,
         knowledgeIndex,
       );
@@ -151,6 +171,8 @@ export class AgentRuntimeFoundation {
         home,
         sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host),
         seedPresets: created.seedPresets,
+        approvalReviewer,
+        bypassApprovalPort,
       });
     } catch (error) {
       throw new Error('Agent Host candidate initialization failed', { cause: error });

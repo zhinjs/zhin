@@ -46,10 +46,10 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.inboundQueue.groupMode` | string: `"supersede"`, `"fifo"` | no | — | Replace an older queued group turn, or process all turns in arrival order. |
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |
-| `ai.agent.execApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for main Agent commands. |
-| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for sub-Agent commands. |
-| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for worker commands. |
-| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"allow"`, `"deny"` | no | — | Approval policy for task commands. |
+| `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for main Agent commands. |
+| `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for sub-Agent commands. |
+| `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for worker commands. |
+| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for task commands. |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | no | — | How tool calls in one model step are scheduled. |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | no | — | Optional model-size hint; an empty string clears the hint. |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | no | — | Provider prompt-cache retention policy. |

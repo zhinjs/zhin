@@ -62,9 +62,9 @@ ai:
     execSecurity: allowlist
     execPreset: custom
     execApprovalMode: ask
-    subagentExecApprovalMode: deny
-    workerExecApprovalMode: deny
-    taskExecApprovalMode: deny
+    subagentExecApprovalMode: auto
+    workerExecApprovalMode: auto
+    taskExecApprovalMode: auto
     execAllowlist:
       - echo
       - sort

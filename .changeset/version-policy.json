@@ -1122,6 +1122,20 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Introduce the owner-directed generation-owned Schedule Feature and canonical schedules/<name>/index.ts contract as part of the explicit zero-compatibility capability directory refactor."
+    },
+    {
+      "changeset": "scope-agent-approvals.md",
+      "packages": [
+        "@zhin.js/agent",
+        "@zhin.js/ai",
+        "@zhin.js/cli",
+        "@zhin.js/runtime",
+        "@zhin.js/tool",
+        "@zhin.js/adapter-sandbox"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Replace ambiguous approval modes with ask, auto, and bypass, introduce a fail-closed review Agent, and scope remembered decisions by invocation, sender, or conversation under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

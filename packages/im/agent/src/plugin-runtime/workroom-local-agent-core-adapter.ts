@@ -73,7 +73,7 @@ async function runAgentCoreLocalTurn(
       shell: Object.freeze({
         security: 'allowlist' as const,
         execPreset: 'development' as const,
-        approvalMode: 'deny' as const,
+        approvalMode: 'auto' as const,
         isolation: 'required' as const,
       }),
       filesystem: Object.freeze({

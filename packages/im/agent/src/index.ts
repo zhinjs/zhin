@@ -271,7 +271,22 @@ export {
   PROFILE_BEDTIME_CHECK_JOB_ID,
 } from './assistant/index.js';
 
-export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
+export type {
+  ApprovalDecision,
+  ApprovalDecisionMemory,
+  ApprovalDecisionPort,
+  ApprovalPort,
+  ApprovalRequestInput,
+} from './session/approval-port.js';
+export {
+  ApprovalReviewAgent,
+  createAutoApprovalPort,
+  createBypassApprovalPort,
+} from './session/approval-review-agent.js';
+export type {
+  ApprovalReviewAgentOptions,
+  ApprovalReviewDecision,
+} from './session/approval-review-agent.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
 export type {

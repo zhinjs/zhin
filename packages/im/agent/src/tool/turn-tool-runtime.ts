@@ -50,6 +50,11 @@ export class TurnToolRuntime {
       }
       const approved = await this.turn.ports.approval.requestApproval({
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
+        sessionKey: this.turn.session.key,
+        ...(this.turn.origin.kind === 'im'
+          ? { conversationScope: this.turn.origin.scope }
+          : {}),
+        requesterId: this.turn.principal.subjectId,
         toolName: name,
         scopeKey: tool.requiresApproval === 'once'
           ? name

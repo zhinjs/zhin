@@ -45,7 +45,7 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
         preset: run.networkAccess ? 'network' : 'readonly',
         security: 'allowlist',
         execPreset: run.networkAccess ? 'network' : 'readonly',
-        approvalMode: 'deny',
+        approvalMode: 'auto',
         isolation: 'required',
       })
     : run.safetyMode === 'workspace-write'
@@ -58,7 +58,7 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
       : Object.freeze({
           security: 'full',
           execPreset: 'custom',
-          approvalMode: 'allow',
+          approvalMode: 'bypass',
           isolation: 'none',
         });
   return Object.freeze({
@@ -75,14 +75,14 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
 function readRunConfig(value: unknown): Readonly<{
   workingDirectory: string;
   safetyMode: 'read-only' | 'workspace-write' | 'danger-full-access';
-  approvalMode: 'ask' | 'deny' | 'allow';
+  approvalMode: 'ask' | 'auto' | 'bypass';
   networkAccess: boolean;
 }> | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
   const item = value as Record<string, unknown>;
   if (typeof item.workingDirectory !== 'string') return undefined;
   if (item.safetyMode !== 'read-only' && item.safetyMode !== 'workspace-write' && item.safetyMode !== 'danger-full-access') return undefined;
-  if (item.approvalMode !== 'ask' && item.approvalMode !== 'deny' && item.approvalMode !== 'allow') return undefined;
+  if (item.approvalMode !== 'ask' && item.approvalMode !== 'auto' && item.approvalMode !== 'bypass') return undefined;
   return {
     workingDirectory: item.workingDirectory.trim().slice(0, 4096),
     safetyMode: item.safetyMode,

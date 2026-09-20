@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import {
+  createAutoApprovalPort,
   handleRuntimeManagementCommand,
   publishOutboundElements,
   type ApprovalPort,
@@ -78,7 +79,6 @@ export interface AgentTurnIngressRouteOptions {
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
-  readonly #rememberedToolApprovals = new Map<string, Set<string>>();
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {}
 
@@ -113,7 +113,6 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const binding = service.getBindingRegistry().requireZhinBinding();
     const ingress = options.ingress;
     const workroom = options.workroom;
-    const rememberedToolApprovals = this.#rememberedToolApprovals;
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const workroomAgentTurn = workroom.takeAgentTurn(message);
@@ -243,6 +242,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
               projectRoot: options.projectRoot,
               defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),
             });
+            const approvalInteraction = ownerId
+              ? options.im.createInteraction(message, { subjectId: ownerId })
+              : undefined;
+            const askApprovalPort = createRuntimeApprovalPort({
+              // Sandbox `ask` must be a real interaction, even though the
+              // authenticated Console user maps to the endpoint owner.
+              isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
+              interaction: approvalInteraction,
+              memory: options.agent.approvalReviewer,
+            });
+            const escalatedApprovalPort = createRuntimeApprovalPort({
+              isMaster: false,
+              interaction: approvalInteraction,
+              memory: options.agent.approvalReviewer,
+            });
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId: randomUUID(),
               turnId: randomUUID(),
@@ -295,28 +309,16 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 },
               }),
               ports: {
-                approval: options.approvalPort ?? createRuntimeApprovalPort({
-                  // Sandbox `ask` must be a real interaction, even though the
-                  // authenticated Console user maps to the endpoint owner.
-                  isMaster: senderRoles.isMaster && turnPolicy.shell?.approvalMode !== 'ask',
-                  interaction: ownerId
-                    ? options.im.createInteraction(message, { subjectId: ownerId })
-                    : undefined,
-                  rememberSession: {
-                    isApproved: (approval) => rememberedToolApprovals
-                      .get(sessionKey)
-                      ?.has(approval.scopeKey ?? approval.toolName) === true,
-                    grant: (approval) => {
-                      let sessionApprovals = rememberedToolApprovals.get(sessionKey);
-                      if (!sessionApprovals) {
-                        if (rememberedToolApprovals.size >= 64) rememberedToolApprovals.clear();
-                        sessionApprovals = new Set<string>();
-                        rememberedToolApprovals.set(sessionKey, sessionApprovals);
-                      }
-                      if (sessionApprovals.size >= 64) sessionApprovals.clear();
-                      sessionApprovals.add(approval.scopeKey ?? approval.toolName);
-                    },
-                  },
+                approval: options.approvalPort ?? resolveApprovalPort({
+                  mode: turnPolicy.shell?.approvalMode
+                    ?? service.getAgentConfig()?.execApprovalMode
+                    ?? 'auto',
+                  auto: createAutoApprovalPort(
+                    options.agent.approvalReviewer,
+                    escalatedApprovalPort,
+                  ),
+                  bypass: options.agent.bypassApprovalPort,
+                  ask: askApprovalPort,
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
                 reply: {
@@ -395,6 +397,17 @@ export class AgentTurnIngressRoute implements IngressRoute {
         capabilityActive = false;
       }
   }
+}
+
+function resolveApprovalPort(input: Readonly<{
+  mode: 'ask' | 'auto' | 'bypass';
+  ask: ApprovalPort;
+  auto: ApprovalPort;
+  bypass: ApprovalPort;
+}>): ApprovalPort {
+  if (input.mode === 'auto') return input.auto;
+  if (input.mode === 'bypass') return input.bypass;
+  return input.ask;
 }
 
 async function readCapabilities(

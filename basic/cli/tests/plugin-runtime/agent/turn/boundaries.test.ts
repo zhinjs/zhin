@@ -450,10 +450,17 @@ describe('canonical IM interaction adapter', () => {
       interaction: {
         async ask(request) {
           seen.push(request);
-          expect(request.type).toBe('confirm');
-          if (request.type === 'confirm') expect(request.default).toBe(false);
+          expect(request.type).toBe('select');
+          if (request.type === 'select') {
+            expect(request.default).toBe('reject');
+            expect(request.options?.map(option => option.value)).toEqual([
+              'reject',
+              'approve-once',
+              'approve-always',
+            ]);
+          }
           expect(request.signal).toBeDefined();
-          return true as never;
+          return 'approve-once' as never;
         },
         async sequence() { return {} as never; },
       },
@@ -461,12 +468,13 @@ describe('canonical IM interaction adapter', () => {
     await expect(port.requestApproval({
       requestId: 'a2',
       toolName: 'icqq__announce',
+      conversationScope: 'private',
       question: '工具「icqq__announce」需要确认后执行。是否继续？',
       signal: new AbortController().signal,
     })).resolves.toBe(true);
     expect(seen[0]?.title).toBe('操作确认');
     expect(seen[0]?.description).toContain('是否继续');
-    expect(seen[0]?.tip).toContain('master');
+    expect(seen[0]?.tip).toContain('当前 Host、当前会话和当前发起者');
   });
 
   it('fails closed when a non-master has no master UserInteraction', async () => {
@@ -480,20 +488,49 @@ describe('canonical IM interaction adapter', () => {
     })).resolves.toBe(false);
   });
 
-  it('can remember only the same concrete operation within one sandbox session', async () => {
+  it('rejects a conversation-wide decision returned for a private conversation', async () => {
+    const port = createRuntimeApprovalPort({
+      isMaster: false,
+      interaction: {
+        async ask() { return 'approve-session' as never; },
+        async sequence() { return {} as never; },
+      },
+    });
+    await expect(port.requestApproval({
+      requestId: 'private-invalid-scope',
+      sessionKey: 'private:123',
+      conversationScope: 'private',
+      requesterId: 'sender-a',
+      toolName: 'bash',
+      scopeKey: 'bash:test',
+      question: 'continue?',
+      signal: new AbortController().signal,
+    })).resolves.toBe(false);
+  });
+
+  it('can remember only the same sender and operation within one sandbox session', async () => {
     const remembered = new Set<string>();
-    const ask = vi.fn(async () => 'session' as never);
+    const ask = vi.fn(async () => 'approve-always' as never);
     const port = createRuntimeApprovalPort({
       isMaster: false,
       interaction: { ask, async sequence() { return {} as never; } },
-      rememberSession: {
-        isApproved: (input) => remembered.has(input.scopeKey ?? input.toolName),
-        grant: (input) => { remembered.add(input.scopeKey ?? input.toolName); },
+      memory: {
+        recall: (input) => remembered.has(`${input.sessionKey}:${input.requesterId}:${input.scopeKey ?? input.toolName}`)
+          ? true
+          : undefined,
+        remember: (input, decision) => {
+          if (decision === 'approve-always') {
+            remembered.add(`${input.sessionKey}:${input.requesterId}:${input.scopeKey ?? input.toolName}`);
+          }
+        },
       },
     });
     const input = {
       requestId: 'session-approval',
       toolName: 'bash',
+      sessionKey: 'group:123',
+      conversationScope: 'group' as const,
+      requesterId: 'sender-a',
       scopeKey: 'bash:{"command":"pnpm test"}',
       remember: 'session' as const,
       question: 'run cargo?',
@@ -507,7 +544,16 @@ describe('canonical IM interaction adapter', () => {
       scopeKey: 'bash:{"command":"pnpm build"}',
     })).resolves.toBe(true);
     expect(ask).toHaveBeenCalledTimes(2);
-    expect(remembered).toContain('bash:{"command":"pnpm test"}');
+    expect(ask.mock.calls[0]?.[0]).toMatchObject({
+      type: 'select',
+      options: [
+        { value: 'reject' },
+        { value: 'approve-once' },
+        { value: 'approve-session' },
+        { value: 'approve-always' },
+      ],
+    });
+    expect(remembered).toContain('group:123:sender-a:bash:{"command":"pnpm test"}');
   });
 });
 

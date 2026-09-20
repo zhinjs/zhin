@@ -8,7 +8,7 @@ import type { ModelHarnessConfig } from './model-harness.js';
 export type OnChunkCallback = (chunk: string, full: string) => void;
 
 export type ModelSizeHint = 'small' | 'medium' | 'large';
-export type ExecApprovalMode = 'ask' | 'allow' | 'deny';
+export type ExecApprovalMode = 'ask' | 'bypass' | 'auto';
 
 export type InboundGroupQueueMode = 'supersede' | 'fifo';
 

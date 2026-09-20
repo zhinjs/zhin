@@ -319,7 +319,7 @@ describe('TurnToolRuntime', () => {
       shell: {
         security: 'allowlist',
         execPreset: 'development',
-        approvalMode: 'deny',
+        approvalMode: 'auto',
         isolation: 'required',
       },
     });

@@ -88,7 +88,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 字段 | 可选值 | 怎么选 |
 | --- | --- | --- |
 | `safetyMode` | `read-only` / `workspace-write` / `danger-full-access` | 只检查时选只读；需要修改项目文件时选工作区写入；完整主机权限只用于明确理解风险的本地任务 |
-| `approvalMode` | `ask` / `deny` / `allow` | 默认 `ask`；无人值守但不允许越权时选 `deny`；仅在已有外部隔离与授权时选 `allow` |
+| `approvalMode` | `ask` / `auto` / `bypass` | 默认 `ask`；`auto` 由专用审核 Agent 裁决，拿不准时询问 master；`bypass` 直接通过审批，但仍受权限与沙箱约束 |
 | `networkAccess` | `false` / `true` | 只有任务确实要访问网络时开启；`danger-full-access` 会天然包含网络权限 |
 | `workingDirectory` | 目录路径 | 指向本次任务允许工作的项目目录，不要用宽泛的系统根目录 |
 

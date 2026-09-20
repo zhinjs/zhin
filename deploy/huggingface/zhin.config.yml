@@ -29,7 +29,7 @@ ai:
       model: openrouter/free
   agent:
     execSecurity: deny
-    execApprovalMode: deny
+    execApprovalMode: auto
     maxIterations: 8
   sessions:
     useDatabase: false

@@ -29,18 +29,18 @@ describe('sandbox per-session Turn policy', () => {
       platform: 'sandbox', isMaster: true, projectRoot: '/projects/zhin',
       metadata: { sandboxAgentRun: {
         workingDirectory: '/tmp/work', safetyMode: 'danger-full-access',
-        approvalMode: 'allow', networkAccess: false,
+        approvalMode: 'bypass', networkAccess: false,
       } },
     })).toMatchObject({
       filesystem: { workspaceRoot: '/', workingDirectory: '/tmp/work', access: 'danger-full-access' },
-      shell: { security: 'full', approvalMode: 'allow', isolation: 'none' },
+      shell: { security: 'full', approvalMode: 'bypass', isolation: 'none' },
       network: { enabled: true, httpsOnly: true, allowedDomains: [] },
     });
   });
 
   it('ignores execution metadata from non-sandbox or non-owner ingress', () => {
     const metadata = { sandboxAgentRun: {
-      workingDirectory: '/', safetyMode: 'danger-full-access', approvalMode: 'allow', networkAccess: true,
+      workingDirectory: '/', safetyMode: 'danger-full-access', approvalMode: 'bypass', networkAccess: true,
     } };
     expect(resolveSandboxTurnPolicy({ platform: 'sandbox', isMaster: false, projectRoot: '/safe', metadata }))
       .toEqual({ filesystem: { workspaceRoot: '/safe', workingDirectory: '/safe', access: 'workspace-write' } });
