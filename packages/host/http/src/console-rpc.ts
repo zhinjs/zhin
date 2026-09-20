@@ -752,7 +752,7 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'endpoint.info': {
       try {
-        const data = message as Record<string, unknown>;
+        const data = recordField(message.data) ?? message;
         const adapter = String(data.adapter ?? '');
         const endpointKey = String(data.endpointKey ?? '');
         if (!adapter || !endpointKey) {
@@ -778,8 +778,9 @@ export async function dispatchRuntimeConsoleRpc(
       return payloads;
     }
     case ENDPOINT_RPC.TEST: {
-      const adapter = stringField(message, 'adapter');
-      const endpointKey = stringField(message, 'endpointKey');
+      const data = recordField(message.data) ?? message;
+      const adapter = stringField(data, 'adapter');
+      const endpointKey = stringField(data, 'endpointKey');
       if (!adapter || !endpointKey) {
         emit({ requestId, error: 'adapter and endpointKey are required' });
         return payloads;
@@ -827,11 +828,11 @@ export async function dispatchRuntimeConsoleRpc(
     }
     case 'endpoint.send_message': {
       try {
-        const data = message as Record<string, unknown>;
+        const data = recordField(message.data) ?? message;
         const adapter = String(data.adapter ?? '');
         const endpointKey = String(data.endpointKey ?? '');
-        const channelId = String(data.channelId ?? '');
-        const channelType = String(data.channelType ?? '');
+        const channelId = String(data.channelId ?? data.id ?? '');
+        const channelType = String(data.channelType ?? data.type ?? '');
         const content = data.content;
         if (!adapter || !endpointKey || !channelId || !channelType || content === undefined) {
           emit({

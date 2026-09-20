@@ -287,7 +287,7 @@ describe('runtime console RPC', () => {
     });
 
     const info = await dispatchRuntimeConsoleRpc(
-      { type: 'endpoint.info', requestId: 61, adapter: 'sandbox', endpointKey: 'bot' },
+      { type: 'endpoint.info', requestId: 61, data: { adapter: 'sandbox', endpointKey: 'bot' } },
       ctx,
     );
     expect(pickRpcReply({ type: 'endpoint.info', requestId: 61 }, info)).toMatchObject({
@@ -299,12 +299,14 @@ describe('runtime console RPC', () => {
       {
         type: 'endpoint.send_message',
         requestId: 63,
-        adapter: 'sandbox',
-        endpointKey: 'bot',
-        channelId: '10001',
-        channelType: 'private',
-        content: [{ type: 'text', data: { text: 'hi' } }],
-        parent: { type: 'group', id: 'g1' },
+        data: {
+          adapter: 'sandbox',
+          endpointKey: 'bot',
+          id: '10001',
+          type: 'private',
+          content: [{ type: 'text', data: { text: 'hi' } }],
+          parent: { type: 'group', id: 'g1' },
+        },
       },
       ctx,
     );

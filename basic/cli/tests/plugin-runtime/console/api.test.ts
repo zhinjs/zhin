@@ -1130,6 +1130,42 @@ describe('console REST routes', () => {
     expect(body.data.instanceKey).toBe('icqq');
   });
 
+  it('serves detail for a declared plugin that is not active', async () => {
+    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
+      name: 'proj',
+      zhin: {
+        plugins: [{
+          package: '@zhin.js/adapter-icqq',
+          instanceKey: 'icqq',
+          enabled: false,
+        }],
+      },
+    }));
+    const packageDir = join(projectRoot, 'node_modules', '@zhin.js', 'adapter-icqq');
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(join(packageDir, 'package.json'), JSON.stringify({
+      name: '@zhin.js/adapter-icqq',
+      version: '1.2.0',
+    }));
+
+    const { port } = await startHost({ projectRoot, withTokens: true });
+    const res = await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`, {
+      headers: { authorization: 'Bearer full-token' },
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as { data: Record<string, unknown> };
+    expect(body.data).toMatchObject({
+      name: 'icqq',
+      instanceKey: 'icqq',
+      packageName: '@zhin.js/adapter-icqq',
+      status: 'inactive',
+      manageable: true,
+      version: '1.2.0',
+      packageRoot: './node_modules/@zhin.js/adapter-icqq',
+    });
+  });
+
   it('applies the demo scope HTTP matrix', async () => {
     const { port } = await startHost({
       projectRoot,

@@ -453,7 +453,14 @@ export class ConsoleTransport {
     pageSize?: number;
   } = {}) {
     const params = new URLSearchParams();
-    for (const [key, value] of Object.entries(query)) {
+    const normalized = {
+      q: query.keyword,
+      category: query.category,
+      official: query.official,
+      page: query.page,
+      size: query.pageSize,
+    };
+    for (const [key, value] of Object.entries(normalized)) {
       if (value !== undefined) params.set(key, String(value));
     }
     return this.getRest<unknown>(`/pub/marketplace/search${params.size ? `?${params}` : ''}`);

@@ -225,7 +225,7 @@ describe("ConsoleTransport REST/SSE transport", () => {
     await manager.getPluginUpdates();
     await manager.setPluginEnabled('telegram', false);
 
-    expect(String(fetchMock.mock.calls[0]![0])).toContain('/pub/marketplace/search?keyword=telegram&official=true');
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/pub/marketplace/search?q=telegram&official=true');
     expect(String(fetchMock.mock.calls[1]![0])).toContain('%40zhin.js%2Fadapter-telegram');
     expect(String(fetchMock.mock.calls[2]![0])).toContain('/api/marketplace/updates');
     const lifecycleBody = JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body));

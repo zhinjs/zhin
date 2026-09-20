@@ -3,6 +3,7 @@ import type { HttpHost } from '@zhin.js/host-http';
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import { writeJson } from './http-response.js';
+import { displayConsolePath } from './display-path.js';
 import {
   buildManagedPluginList,
   buildPluginDetail,
@@ -78,7 +79,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           success: true,
           data: {
             ...managed,
-            packageRoot: `node_modules/${managed.packageName}`,
+            packageRoot: displayConsolePath(packageDir, projectRoot),
             ...(version ? { version } : {}),
           },
         });
