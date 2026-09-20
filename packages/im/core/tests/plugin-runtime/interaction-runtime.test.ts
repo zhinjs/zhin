@@ -59,10 +59,10 @@ const ignoredEndpointEvents = Object.freeze({
 
 function receive(
   im: ImRuntime,
-  payload: Parameters<ImRuntime['receiveEndpointEvent']>[0]['payload'],
+  payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
 ): Promise<MessageDispatchResult> {
   const input = payload as { conversation?: { endpoint?: { id?: string } } };
-  return im.receiveEndpointEvent(Object.freeze({
+  return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
     endpoint: Object.freeze({

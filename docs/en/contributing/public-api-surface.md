@@ -108,7 +108,7 @@ Three tiers:
 | `CommandIndex` | `internal` | `@zhin.js/command` | Command projection, snapshot -> command routing table |
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex`, etc. | `internal` | Various feature packages | Other projections, all internal mechanisms |
 | `defineFeatureProvider` (Feature Provider protocol) | `internal` | `@zhin.js/feature-kit` | Protocol for adding new feature types, aimed at framework extenders, not plugin authors |
-| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `ImRuntime` |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |

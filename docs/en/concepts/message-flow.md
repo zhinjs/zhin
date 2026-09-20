@@ -41,7 +41,7 @@ The actual code locations for each step:
    }
    ```
 
-3. **Lease and Message**. `ImRuntime.endpointEvents.receive` acquires a lease on the event's generation (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)). Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended.
+3. **Lease and Message**. `ImRuntime.endpointEvents.receive` is the sole public ingress port and delegates events to the instance-owned `InboundRuntime`. That owner acquires the event generation lease (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)) and controls message construction, inbound middleware, handlers, interactions, command and Agent fallback routing, plus action scopes for notice/request/system side events. Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended. The former flat `ImRuntime.receiveEndpointEvent()` method is removed.
 
 4. **Inbound middleware**. `MiddlewareIndex` sorts by `phase` (`before-dispatch` first, `after-dispatch` later) and `order`, wrapping each around the terminal action:
 

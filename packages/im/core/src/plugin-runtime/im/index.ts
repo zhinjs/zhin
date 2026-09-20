@@ -10,6 +10,7 @@ export type {
   RuntimeEndpointSendInput,
   RuntimeEndpointTypingInput,
 } from './endpoint-runtime.js';
+export * from './ingress-route.js';
 export * from './im-runtime.js';
 export * from './login-assist-host.js';
 export * from './message-bus.js';

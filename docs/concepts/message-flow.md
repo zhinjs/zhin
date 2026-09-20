@@ -50,7 +50,7 @@ flowchart LR
    }
    ```
 
-3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)）。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。
+3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 是唯一公开入站端口，并把事件委托给实例私有的 `InboundRuntime`。后者在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)），统一拥有消息构造、入站中间件、handler、交互、命令与 Agent fallback 路由，以及 notice/request/system side event 的 action scope。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。旧的平铺 `ImRuntime.receiveEndpointEvent()` 已删除。
 
 4. **入站中间件**。`MiddlewareIndex` 按 `phase`（`before-dispatch` 先、`after-dispatch` 后）与 `order` 排序，逐个包住终端动作：
 

@@ -108,7 +108,7 @@
 | `CommandIndex` | `internal` | `@zhin.js/command` | 命令 projection，快照 → 命令路由表 |
 | `ToolIndex` / `SkillIndex` / `McpIndex` / `PageIndex` / `LayoutIndex` 等 | `internal` | 各 feature 包 | 其余 projection，同属内部机制 |
 | `defineFeatureProvider`（Feature Provider 协议） | `internal` | `@zhin.js/feature-kit` | 新增 feature 类型的协议，面向框架扩展者而非插件作者 |
-| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `ImRuntime` 持有的 generation-owned 消息分发器 |
+| `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | `InboundRuntime` 持有的 generation-owned 消息分发器 |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
