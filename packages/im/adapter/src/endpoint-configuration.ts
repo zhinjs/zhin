@@ -28,9 +28,9 @@ export interface RemoveConfiguredEndpointResult extends EndpointConfigurationMut
  * project-file discovery, serialization and secret persistence.
  */
 export interface EndpointConfigurationStore {
-  list(adapterKey: string): readonly ConfiguredEndpointEntry[];
-  add(request: AddConfiguredEndpointRequest): EndpointConfigurationMutation;
-  remove(adapterKey: string, endpointId: string): RemoveConfiguredEndpointResult;
+  list(adapterKey: string): Promise<readonly ConfiguredEndpointEntry[]>;
+  add(request: AddConfiguredEndpointRequest): Promise<EndpointConfigurationMutation>;
+  remove(adapterKey: string, endpointId: string): Promise<RemoveConfiguredEndpointResult>;
 }
 
 export const endpointConfigurationStoreToken = createToken<EndpointConfigurationStore>(

@@ -19,6 +19,39 @@ afterEach(async () => {
 });
 
 describe('JsonConfigDocument', () => {
+  it('materializes a missing document on commit and removes it on rollback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-json-missing-'));
+    temporary.push(root);
+    const file = join(root, 'zhin.config.json');
+    const document = new JsonConfigDocument(file);
+    const current = await document.read();
+
+    expect(current.document).toEqual({});
+    const prepared = await document.prepare(current, [{
+      op: 'set', path: ['plugins', 'demo', 'endpoints'], value: [{ id: 'bot' }],
+    }]);
+    await prepared.commit();
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual({
+      plugins: { demo: { endpoints: [{ id: 'bot' }] } },
+    });
+
+    await prepared.rollback();
+    await expect(readFile(file, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('detects a file created after an absent document was read', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-json-conflict-'));
+    temporary.push(root);
+    const file = join(root, 'zhin.config.json');
+    const document = new JsonConfigDocument(file);
+    const current = await document.read();
+    await writeFile(file, '{"external":true}\n');
+
+    await expect(document.prepare(current, [{
+      op: 'set', path: ['plugins'], value: {},
+    }])).rejects.toBeInstanceOf(ConfigDocumentConflictError);
+  });
+
   it('applies the shared patch semantics and preserves indentation and line endings', async () => {
     const original = '{\r\n    "plugins": {\r\n        "demo": {\r\n            "endpoints": [{ "id": "a" }, { "id": "b" }]\r\n        }\r\n    }\r\n}\r\n';
     const file = await configFile('config.json', original);

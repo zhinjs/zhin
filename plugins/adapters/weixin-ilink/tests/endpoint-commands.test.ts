@@ -35,15 +35,15 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('weixin-ilink endpoint command definitions', () => {
-  it('三个命令模块均为合法 defineCommand', () => {
+describe('weixin-ilink endpoint command definitions', async () => {
+  it('三个命令模块均为合法 defineCommand', async () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
     }
   });
 
-  it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}', () => {
-    const text = addCommand.execute(fakeContext({
+  it('add 走 kv 参数：凭据写 .env，yaml 存 ${REF}', async () => {
+    const text = await addCommand.execute(fakeContext({
       params: { id: 'bot1' },
       args: ['botToken=bt-1'],
     })) as string;
@@ -54,34 +54,34 @@ describe('weixin-ilink endpoint command definitions', () => {
     expect(config).toContain('${WEIXIN_ILINK_BOT1_BOT_TOKEN}');
   });
 
-  it('add 缺少必填字段时报错', () => {
-    expect(addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
+  it('add 缺少必填字段时报错', async () => {
+    expect(await addCommand.execute(fakeContext({ params: { id: 'bot1' } })))
       .toContain('缺少必填字段：botToken');
   });
 
-  it('list 显示运行中 + 配置中的 endpoints', () => {
+  it('list 显示运行中 + 配置中的 endpoints', async () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
       .endpoints.set('bot1', { id: 'bot1', mode: 'ws' });
-    addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['botToken=bt-1'] }));
+    await addCommand.execute(fakeContext({ params: { id: 'conf-bot' }, args: ['botToken=bt-1'] }));
 
-    const text = listCommand.execute(context) as string;
+    const text = await listCommand.execute(context) as string;
 
     expect(text).toContain('bot1（ws）');
     expect(text).toContain('conf-bot');
   });
 
-  it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['botToken=bt-1'] }));
+  it('remove 从配置移除并提示重启', async () => {
+    await addCommand.execute(fakeContext({ params: { id: 'bot1' }, args: ['botToken=bt-1'] }));
 
-    const text = removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
+    const text = await removeCommand.execute(fakeContext({ params: { id: 'bot1' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
     expect(store.configurationText('weixin-ilink')).not.toContain('id: bot1');
   });
 
-  it('配置 master 后非 master 拒绝 add/remove', () => {
+  it('配置 master 后非 master 拒绝 add/remove', async () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
@@ -89,7 +89,7 @@ describe('weixin-ilink endpoint command definitions', () => {
       args: ['botToken=bt-1'],
     });
 
-    expect(addCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令');
-    expect(removeCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令');
+    expect(await addCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令');
+    expect(await removeCommand.execute(denied)).toBe('仅 master 可执行 Weixin iLink endpoint 管理命令');
   });
 });

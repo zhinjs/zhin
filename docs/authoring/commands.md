@@ -225,13 +225,13 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 
 `@zhin.js/adapter` 的 `createEndpointCommands(spec, defineCommand)` 为适配器生成 `<adapter> endpoint` 的 **list / add / remove** 三个命令。除 email（smtp/imap 为嵌套对象，kv 无法表达）与 sandbox（内置调试适配器，无凭据）外，全部平台适配器均已接入：qq、icqq、napcat、onebot11、onebot12、milky、satori、slack、telegram、discord、kook、lark、dingtalk、line、wecom、wechat-mp、weixin-ilink、github。
 
-- `<adapter> endpoint list`：运行中的 endpoints（adapter `create()` 注册的 runtime state）+ `zhin.config.yml` 里 `plugins.<adapterKey>.endpoints` 的配置清单。
-- `<adapter> endpoint add <name> <key=value...>`：手动录入字段。`env: true` 的凭据字段值写入 `.env`（键名派生为 `<ADAPTER>_<NAME>_<FIELD>` 大写，如 `TELEGRAM_BOT1_TOKEN`、`SLACK_BOT1_SIGNING_SECRET`），yaml 中保存 `${REF}` 引用；其余字段内联写入。yaml 用 Document 节点级操作，保留既有注释；重名拒绝；`add`/`remove` 都走上面的 master 门禁。
+- `<adapter> endpoint list`：运行中的 endpoints（adapter `create()` 注册的 runtime state）+ 当前 Root 配置里 `plugins.<adapterKey>.endpoints` 的配置清单。
+- `<adapter> endpoint add <name> <key=value...>`：手动录入字段。`env: true` 的凭据字段值写入 `.env`（键名派生为 `<ADAPTER>_<NAME>_<FIELD>` 大写，如 `TELEGRAM_BOT1_TOKEN`、`SLACK_BOT1_SIGNING_SECRET`），Root 配置中保存 `${REF}` 引用；其余字段内联写入。YAML/JSON 均通过同一个事务端口更新，YAML 保留既有注释；重名拒绝；`add`/`remove` 都走上面的 master 门禁。
 - `<adapter> endpoint remove <name>`：从配置移除（重启生效，`.env` 键保留待手动清理）。
 - 特殊 add 流程（如 QQ 扫码绑定）经 `spec.bindFlow` 钩子接管 add 命令；QQ 因此多出第四个命令 `qq endpoint cancel`。
 
 命令本身只依赖 `EndpointConfigurationStore`，不读取文件系统。官方 CLI 在 composition root
-提供 `endpointConfigurationStoreToken`，负责当前 YAML 配置文件与 `.env` 的持久化。自行组装
+提供 `endpointConfigurationStoreToken`，负责当前 YAML/JSON Root 配置与 `.env` 的持久化。自行组装
 `RootRuntime` 且启用这些命令时，必须提供同一端口的实现。`plugins` 必须是对象映射；旧数组
 形态不会在运行时自动转换，应先执行显式迁移。
 

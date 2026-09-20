@@ -38,11 +38,11 @@ class MemoryEndpointConfigurationStore implements EndpointConfigurationStore {
   readonly environment = new Map<string, string>();
   readonly filePath = '/project/zhin.config.yml';
 
-  list(adapterKey: string): readonly ConfiguredEndpointEntry[] {
+  async list(adapterKey: string): Promise<readonly ConfiguredEndpointEntry[]> {
     return this.entries.get(adapterKey) ?? [];
   }
 
-  add(request: AddConfiguredEndpointRequest) {
+  async add(request: AddConfiguredEndpointRequest) {
     const entries = this.entries.get(request.adapterKey) ?? [];
     if (entries.some((entry) => entry.id === request.entry.id)) {
       throw new Error(`配置中已存在 ${request.adapterKey} endpoint「${request.entry.id}」`);
@@ -55,7 +55,7 @@ class MemoryEndpointConfigurationStore implements EndpointConfigurationStore {
     return { filePath: this.filePath };
   }
 
-  remove(adapterKey: string, endpointId: string) {
+  async remove(adapterKey: string, endpointId: string) {
     const entries = this.entries.get(adapterKey) ?? [];
     const next = entries.filter((entry) => entry.id !== endpointId);
     this.entries.set(adapterKey, next);
@@ -195,9 +195,9 @@ describe('formatEndpointList', () => {
 });
 
 describe('addEndpointFromKeyValues', () => {
-  it('kv 解析：env 字段写 .env + ${REF}，其余内联', () => {
+  it('kv 解析：env 字段写 .env + ${REF}，其余内联', async () => {
     const store = new MemoryEndpointConfigurationStore();
-    const text = addEndpointFromKeyValues(
+    const text = await addEndpointFromKeyValues(
       demoSpec,
       'my-bot',
       ['token=tok-9', 'baseUrl=https://api.example.com'],
@@ -207,46 +207,46 @@ describe('addEndpointFromKeyValues', () => {
     expect(text).toContain('✅');
     expect(text).toContain('重启');
     expect(store.environment.get('DEMO_MY_BOT_TOKEN')).toBe('tok-9');
-    expect(store.list('demo')).toEqual([
+    await expect(store.list('demo')).resolves.toEqual([
       { id: 'my-bot', token: '${DEMO_MY_BOT_TOKEN}', baseUrl: 'https://api.example.com' },
     ]);
   });
 
-  it('缺少必填字段 / 未知字段 / 非 kv 参数 / 空值分别报错', () => {
+  it('缺少必填字段 / 未知字段 / 非 kv 参数 / 空值分别报错', async () => {
     const store = new MemoryEndpointConfigurationStore();
-    expect(addEndpointFromKeyValues(demoSpec, 'b', [], store)).toContain('缺少必填字段：token');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token=t', 'ghost=x'], store)).toContain('未知字段「ghost」');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token'], store)).toContain('不是 key=value 形式');
-    expect(addEndpointFromKeyValues(demoSpec, 'b', ['token='], store)).toContain('值不能为空');
+    await expect(addEndpointFromKeyValues(demoSpec, 'b', [], store)).resolves.toContain('缺少必填字段：token');
+    await expect(addEndpointFromKeyValues(demoSpec, 'b', ['token=t', 'ghost=x'], store)).resolves.toContain('未知字段「ghost」');
+    await expect(addEndpointFromKeyValues(demoSpec, 'b', ['token'], store)).resolves.toContain('不是 key=value 形式');
+    await expect(addEndpointFromKeyValues(demoSpec, 'b', ['token='], store)).resolves.toContain('值不能为空');
   });
 
-  it('重名时返回添加失败且不写 .env', () => {
+  it('重名时返回添加失败且不写 .env', async () => {
     const store = new MemoryEndpointConfigurationStore();
     store.entries.set('demo', [{ id: 'dup', token: 't' }]);
 
-    const text = addEndpointFromKeyValues(demoSpec, 'dup', ['token=x'], store);
+    const text = await addEndpointFromKeyValues(demoSpec, 'dup', ['token=x'], store);
 
     expect(text).toContain('添加失败');
     expect(text).toContain('已存在');
     expect(store.environment.size).toBe(0);
   });
 
-  it('value 含 = 时按首个 = 切分', () => {
+  it('value 含 = 时按首个 = 切分', async () => {
     const store = new MemoryEndpointConfigurationStore();
-    addEndpointFromKeyValues(demoSpec, 'eq-bot', ['token=a=b=c'], store);
+    await addEndpointFromKeyValues(demoSpec, 'eq-bot', ['token=a=b=c'], store);
     expect(store.environment.get('DEMO_EQ_BOT_TOKEN')).toBe('a=b=c');
   });
 });
 
 describe('removeEndpointById', () => {
-  it('空 id 提示用法；不存在提示未找到；存在则移除并提示重启', () => {
+  it('空 id 提示用法；不存在提示未找到；存在则移除并提示重启', async () => {
     const store = new MemoryEndpointConfigurationStore();
     store.entries.set('demo', [{ id: 'a', token: '1' }]);
 
-    expect(removeEndpointById(demoSpec, '  ', store)).toContain('用法：demo endpoint remove <id>');
-    expect(removeEndpointById(demoSpec, 'ghost', store)).toContain('不存在');
-    expect(removeEndpointById(demoSpec, 'a', store)).toContain('重启');
-    expect(store.list('demo')).toEqual([]);
+    await expect(removeEndpointById(demoSpec, '  ', store)).resolves.toContain('用法：demo endpoint remove <id>');
+    await expect(removeEndpointById(demoSpec, 'ghost', store)).resolves.toContain('不存在');
+    await expect(removeEndpointById(demoSpec, 'a', store)).resolves.toContain('重启');
+    await expect(store.list('demo')).resolves.toEqual([]);
   });
 });
 
@@ -281,7 +281,7 @@ describe('createEndpointCommands', () => {
     }
   });
 
-  it('list execute 输出运行中 + 配置清单（不经权限）', () => {
+  it('list execute 输出运行中 + 配置清单（不经权限）', async () => {
     const store = new MemoryEndpointConfigurationStore();
     store.entries.set('demo', [{ id: 'conf', token: 't' }]);
     const state = createEndpointRuntimeState();
@@ -298,7 +298,7 @@ describe('createEndpointCommands', () => {
       },
     } as never;
 
-    const text = commands.list.execute(context) as string;
+    const text = await commands.list.execute(context) as string;
 
     expect(text).toContain('running（ws）');
     expect(text).toContain('conf');
@@ -314,9 +314,9 @@ describe('createEndpointCommands', () => {
       params: { id: 'x' },
     });
 
-    expect(commands.add.execute(denied)).toBe(forbidden);
-    expect(commands.remove.execute(denied)).toBe(forbidden);
-    expect(store.list('demo')).toEqual([]);
+    await expect(commands.add.execute(denied)).resolves.toBe(forbidden);
+    await expect(commands.remove.execute(denied)).resolves.toBe(forbidden);
+    await expect(store.list('demo')).resolves.toEqual([]);
 
     const allowed = fakeContext({
       config: { master: 'alice' },
@@ -324,13 +324,13 @@ describe('createEndpointCommands', () => {
       params: { id: 'x' },
       args: ['token=t'],
     }, store);
-    expect(commands.add.execute(allowed)).toContain('✅');
-    expect(store.list('demo').map((e) => e.id)).toEqual(['x']);
+    await expect(commands.add.execute(allowed)).resolves.toContain('✅');
+    expect((await store.list('demo')).map((e) => e.id)).toEqual(['x']);
   });
 
-  it('add 无 id 时返回用法', () => {
+  it('add 无 id 时返回用法', async () => {
     const commands = createEndpointCommands(demoSpec, defineCommand);
-    expect(commands.add.execute(fakeContext())).toContain('用法：demo endpoint add <id>');
+    await expect(commands.add.execute(fakeContext())).resolves.toContain('用法：demo endpoint add <id>');
   });
 
   it('bindFlow 钩子接管 add（忽略 kv）', async () => {
@@ -351,7 +351,7 @@ describe('createEndpointCommands', () => {
 
     expect(result).toBe('custom-flow');
     expect(seen).toEqual(['bot', 'function']);
-    expect(store.list('demo')).toEqual([]);
+    await expect(store.list('demo')).resolves.toEqual([]);
   });
 });
 

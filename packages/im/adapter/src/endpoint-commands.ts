@@ -326,7 +326,7 @@ export function formatEndpointList(
       lines.push(endpoint.mode ? `  - ${endpoint.id}（${endpoint.mode}）` : `  - ${endpoint.id}`);
     }
   }
-  lines.push(`【配置中的 ${spec.adapterDisplayName} endpoints】（zhin.config.yml → plugins.${spec.adapterKey}.endpoints）`);
+  lines.push(`【配置中的 ${spec.adapterDisplayName} endpoints】（Root 配置 → plugins.${spec.adapterKey}.endpoints）`);
   if (source.configured.length === 0) {
     lines.push('  （无）');
   } else {
@@ -354,13 +354,13 @@ function addUsage(spec: EndpointCommandsSpec): string {
   return `用法：${spec.adapterKey} endpoint add <id> <key=value...>${fieldText}`;
 }
 
-/** add（kv 模式）的完整业务逻辑：解析 kv → 凭据写 .env → 追加 yaml；返回回复文本。 */
-export function addEndpointFromKeyValues(
+/** add（kv 模式）的完整业务逻辑：解析 kv → 凭据写 .env → 更新 Root 配置。 */
+export async function addEndpointFromKeyValues(
   spec: EndpointCommandsSpec,
   id: string,
   args: readonly string[],
   store: EndpointConfigurationStore,
-): string {
+): Promise<string> {
   const fields = spec.fields ?? [];
   const known = new Map(fields.map((field) => [field.key, field]));
   const values = new Map<string, string>();
@@ -394,7 +394,7 @@ export function addEndpointFromKeyValues(
     }
   }
   try {
-    const { filePath } = store.add({
+    const { filePath } = await store.add({
       adapterKey: spec.adapterKey,
       entry: entry as ConfiguredEndpointEntry,
       environment: envValues,
@@ -409,16 +409,16 @@ export function addEndpointFromKeyValues(
   }
 }
 
-/** remove 的完整业务逻辑：从 yaml 移除；返回回复文本。 */
-export function removeEndpointById(
+/** remove 的完整业务逻辑：从 Root 配置移除；返回回复文本。 */
+export async function removeEndpointById(
   spec: Pick<EndpointCommandsSpec, 'adapterKey'>,
   id: string,
   store: EndpointConfigurationStore,
-): string {
+): Promise<string> {
   const trimmed = id.trim();
   if (!trimmed) return `用法：${spec.adapterKey} endpoint remove <id>`;
   try {
-    const { removed, filePath } = store.remove(spec.adapterKey, trimmed);
+    const { removed, filePath } = await store.remove(spec.adapterKey, trimmed);
     if (!removed) {
       return `配置中不存在 ${spec.adapterKey} endpoint「${trimmed}」（${filePath} → plugins.${spec.adapterKey}.endpoints）`;
     }
@@ -439,25 +439,25 @@ export function createEndpointCommands<TCommand>(
   const forbidden = endpointCommandForbidden(spec.adapterDisplayName);
   return Object.freeze({
     list: defineCommand({
-      description: `列出 ${spec.adapterDisplayName} endpoints（运行中 + zhin.config.yml 配置）`,
-      execute({ use }) {
+      description: `列出 ${spec.adapterDisplayName} endpoints（运行中 + Root 配置）`,
+      async execute({ use }) {
         const store = use(endpointConfigurationStoreToken);
         return formatEndpointList(spec, {
           running: spec.running?.(use) ?? [],
-          configured: store.list(spec.adapterKey),
+          configured: await store.list(spec.adapterKey),
           footer: spec.listFooter?.(use),
         });
       },
     }),
     add: defineCommand({
       description: spec.addDescription
-        ?? `手动添加 ${spec.adapterDisplayName} endpoint（凭据写入 .env 并追加到 zhin.config.yml，重启生效）`,
+        ?? `手动添加 ${spec.adapterDisplayName} endpoint（凭据写入 .env 并更新 Root 配置，重启生效）`,
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      execute({ config, input, params, args, use }) {
+      async execute({ config, input, params, args, use }) {
         if (!isEndpointOperator(config, input)) return forbidden;
         const id = endpointIdParam(params);
         if (spec.bindFlow) {
-          return spec.bindFlow({
+          return await spec.bindFlow({
             id,
             reply: createDurableEndpointCommandReply(input, use),
             config,
@@ -466,15 +466,15 @@ export function createEndpointCommands<TCommand>(
           });
         }
         if (!id) return addUsage(spec);
-        return addEndpointFromKeyValues(spec, id, args, use(endpointConfigurationStoreToken));
+        return await addEndpointFromKeyValues(spec, id, args, use(endpointConfigurationStoreToken));
       },
     }),
     remove: defineCommand({
-      description: `从 zhin.config.yml 的 plugins.${spec.adapterKey}.endpoints 移除指定 endpoint（重启生效）`,
+      description: `从 Root 配置的 plugins.${spec.adapterKey}.endpoints 移除指定 endpoint（重启生效）`,
       params: { id: { type: 'string', description: 'endpoint ID' } },
-      execute({ config, input, params, use }) {
+      async execute({ config, input, params, use }) {
         if (!isEndpointOperator(config, input)) return forbidden;
-        return removeEndpointById(
+        return await removeEndpointById(
           spec,
           String(params.id ?? ''),
           use(endpointConfigurationStoreToken),

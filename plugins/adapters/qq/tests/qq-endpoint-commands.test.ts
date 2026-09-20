@@ -127,14 +127,14 @@ describe('runQqEndpointAdd', () => {
     await firstReplyPromise;
     await lastCallbacks().onSuccess([{ appId: '102000009', appSecret: 'sec-9' }]);
 
-    const text = completeQqPendingBotKind(state.pendingBotKind!, 'private', store);
+    const text = await completeQqPendingBotKind(state.pendingBotKind!, 'private', store);
     state.pendingBotKind = null;
 
     expect(text).toContain('botKind=private');
     expect(text).toContain('GUILD_MESSAGES');
     expect(store.environment.get('QQ_NEWBOT_APPID')).toBe('102000009');
     expect(store.environment.get('QQ_NEWBOT_SECRET')).toBe('sec-9');
-    expect(store.list('qq')).toEqual([
+    await expect(store.list('qq')).resolves.toEqual([
       expect.objectContaining({
         id: 'newbot',
         botKind: 'private',
@@ -155,7 +155,7 @@ describe('runQqEndpointAdd', () => {
 
     expect(state.pendingBotKind).toBeNull();
     expect(store.environment.has('QQ_NEWBOT_APPID')).toBe(true);
-    expect(store.list('qq')[0]).toMatchObject({ botKind: 'public' });
+    expect((await store.list('qq'))[0]).toMatchObject({ botKind: 'public' });
     expect(replies.some((text) => text.includes('无法交互'))).toBe(true);
   });
 
@@ -264,26 +264,26 @@ describe('runQqEndpointCancel', () => {
 });
 
 describe('runQqEndpointRemove', () => {
-  it('存在时从配置移除并提示重启', () => {
+  it('存在时从配置移除并提示重启', async () => {
     store.entries.set('qq', [{ id: 'a', appid: '1', secret: '2' }]);
     const state = createQqRuntimeState();
 
-    const text = runQqEndpointRemove(state, 'a', store);
+    const text = await runQqEndpointRemove(state, 'a', store);
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(store.list('qq')).toEqual([]);
+    await expect(store.list('qq')).resolves.toEqual([]);
   });
 
-  it('不存在时提示未找到', () => {
+  it('不存在时提示未找到', async () => {
     const state = createQqRuntimeState();
 
-    expect(runQqEndpointRemove(state, 'ghost', store)).toContain('不存在');
+    await expect(runQqEndpointRemove(state, 'ghost', store)).resolves.toContain('不存在');
   });
 });
 
 describe('runQqEndpointList', () => {
-  it('同时列出运行中与配置中的 endpoints', () => {
+  it('同时列出运行中与配置中的 endpoints', async () => {
     const state = createQqRuntimeState();
     state.endpoints.set('running-bot', { id: 'running-bot', mode: 'websocket' });
     store.entries.set('qq', [{
@@ -292,31 +292,31 @@ describe('runQqEndpointList', () => {
       secret: '${QQ_CONF_BOT_SECRET}',
     }]);
 
-    const text = runQqEndpointList(state, store);
+    const text = await runQqEndpointList(state, store);
 
     expect(text).toContain('running-bot');
     expect(text).toContain('conf-bot');
     expect(text).toContain('${QQ_CONF_BOT_APPID}');
   });
 
-  it('空列表时占位提示', () => {
+  it('空列表时占位提示', async () => {
     const state = createQqRuntimeState();
 
-    const text = runQqEndpointList(state, store);
+    const text = await runQqEndpointList(state, store);
 
     expect(text).toContain('（无）');
   });
 
-  it('有进行中绑定时 footer 提示 qq endpoint cancel', () => {
+  it('有进行中绑定时 footer 提示 qq endpoint cancel', async () => {
     const state = createQqRuntimeState();
     state.bindFlow = { id: 'a', stop: vi.fn() };
 
-    const text = runQqEndpointList(state, store);
+    const text = await runQqEndpointList(state, store);
 
     expect(text).toContain('qq endpoint cancel');
   });
 
-  it('待选 botKind 时 footer 提示', () => {
+  it('待选 botKind 时 footer 提示', async () => {
     const state = createQqRuntimeState();
     state.pendingBotKind = {
       endpointId: 'wait-bot',
@@ -325,7 +325,7 @@ describe('runQqEndpointList', () => {
       sessionKey: 'k',
     };
 
-    const text = runQqEndpointList(state, store);
+    const text = await runQqEndpointList(state, store);
 
     expect(text).toContain('wait-bot');
     expect(text).toContain('公域/私域');

@@ -4,7 +4,7 @@ import {
   watch as watchDirectory,
   type FSWatcher,
 } from 'node:fs';
-import { extname, isAbsolute, relative, resolve, sep } from 'node:path';
+import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
@@ -66,6 +66,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // Installed packages and external paths are intentionally not watched.
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
+    if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
     const parts = relative(packageRoot, normalized).split(sep);
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);

@@ -91,10 +91,10 @@ Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool �
 `pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
 Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
 
-Endpoint 管理命令只依赖 `EndpointConfigurationStore`。项目配置文件定位、YAML 注释保留和
-`.env` 写入由 CLI composition root 的实现负责，并以根 Resource 注入。平台适配器不得直接
-导入 `node:fs`、`node:path` 或 YAML 库来修改项目配置；非 canonical 的 `plugins` 结构直接
-报错，由显式迁移命令处理。
+Endpoint 管理命令只依赖异步 `EndpointConfigurationStore`。Root 配置文件定位、YAML/JSON
+事务、YAML 注释保留和 `.env` 写入由 CLI composition root 的实现负责，并以根 Resource
+注入。平台适配器不得直接导入 `node:fs`、`node:path` 或序列化库来修改项目配置；非
+canonical 的 `plugins` 结构直接报错，由显式迁移命令处理。
 
 ## Transport Contract
 

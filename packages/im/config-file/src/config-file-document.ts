@@ -16,6 +16,14 @@ export interface PreparedConfigFileSource {
   readonly source: string;
 }
 
+interface ConfigFileState {
+  readonly exists: boolean;
+  readonly source: string;
+  readonly mode?: number;
+}
+
+const EMPTY_CONFIG_SOURCE = '{}\n';
+
 export class ConfigFileDocumentError extends Error {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);
@@ -51,25 +59,27 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
   }
 
   async read(): Promise<ConfigDocumentSnapshot> {
-    const source = await readFile(this.file, 'utf8');
-    return createConfigDocumentSnapshot(this.parseSource(source), source);
+    const state = await readConfigFileState(this.file);
+    return createConfigDocumentSnapshot(
+      this.parseSource(state.exists ? state.source : EMPTY_CONFIG_SOURCE),
+      state,
+    );
   }
 
   async prepare(
     current: ConfigDocumentSnapshot,
     patches: readonly ConfigPatch[],
   ): Promise<PreparedConfigDocument> {
-    const source = await readFile(this.file, 'utf8');
-    assertRevision(this.file, source, current.revision);
+    const state = await readConfigFileState(this.file);
+    assertRevision(this.file, state, current.revision);
+    const source = state.exists ? state.source : EMPTY_CONFIG_SOURCE;
     const candidate = this.prepareSource(source, patches);
-    const fileMode = (await stat(this.file)).mode;
     return new PreparedConfigFileDocument(
       this.file,
-      source,
+      state,
       current.revision,
       candidate.source,
       candidate.document,
-      fileMode,
     );
   }
 
@@ -83,29 +93,26 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
 class PreparedConfigFileDocument implements PreparedConfigDocument {
   readonly document: RuntimeConfigDocument;
   readonly #file: string;
-  readonly #previousSource: string;
+  readonly #previous: ConfigFileState;
   readonly #previousRevision: string;
   readonly #candidateSource: string;
-  readonly #mode: number;
   readonly #candidateRevision: string;
   #state: 'prepared' | 'committed' | 'rolled-back' = 'prepared';
   #committedSnapshot?: ConfigDocumentSnapshot;
 
   constructor(
     file: string,
-    previousSource: string,
+    previous: ConfigFileState,
     previousRevision: string,
     candidateSource: string,
     document: RuntimeConfigDocument,
-    mode: number,
   ) {
     this.#file = file;
-    this.#previousSource = previousSource;
+    this.#previous = previous;
     this.#previousRevision = previousRevision;
     this.#candidateSource = candidateSource;
-    this.#mode = mode;
     this.document = document;
-    this.#candidateRevision = revision(candidateSource);
+    this.#candidateRevision = revision({ exists: true, source: candidateSource });
   }
 
   async commit(): Promise<ConfigDocumentSnapshot> {
@@ -113,13 +120,13 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     if (this.#state === 'rolled-back') {
       throw new ConfigFileDocumentError('A rolled-back config transaction cannot commit');
     }
-    const source = await readFile(this.#file, 'utf8');
-    assertRevision(this.#file, source, this.#previousRevision);
+    const state = await readConfigFileState(this.#file);
+    assertRevision(this.#file, state, this.#previousRevision);
     const committed = Object.freeze({
       document: this.document,
       revision: this.#candidateRevision,
     });
-    await atomicReplace(this.#file, this.#candidateSource, this.#mode);
+    await atomicReplace(this.#file, this.#candidateSource, this.#previous.mode);
     this.#committedSnapshot = committed;
     this.#state = 'committed';
     return committed;
@@ -130,9 +137,13 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
       if (this.#state === 'prepared') this.#state = 'rolled-back';
       return;
     }
-    const source = await readFile(this.#file, 'utf8');
-    assertRevision(this.#file, source, this.#candidateRevision);
-    await atomicReplace(this.#file, this.#previousSource, this.#mode);
+    const state = await readConfigFileState(this.#file);
+    assertRevision(this.#file, state, this.#candidateRevision);
+    if (this.#previous.exists) {
+      await atomicReplace(this.#file, this.#previous.source, this.#previous.mode);
+    } else {
+      await rm(this.#file);
+    }
     this.#state = 'rolled-back';
   }
 }
@@ -150,24 +161,39 @@ export function requireConfigObject(
 
 function createConfigDocumentSnapshot(
   document: RuntimeConfigDocument,
-  source: string,
+  state: ConfigFileState,
 ): ConfigDocumentSnapshot {
-  return Object.freeze({ document, revision: revision(source) });
+  return Object.freeze({ document, revision: revision(state) });
 }
 
-function revision(source: string): string {
-  return createHash('sha256').update(source).digest('hex');
+function revision(state: Pick<ConfigFileState, 'exists' | 'source'>): string {
+  return createHash('sha256')
+    .update(state.exists ? 'present\0' : 'absent\0')
+    .update(state.source)
+    .digest('hex');
 }
 
-function assertRevision(file: string, source: string, expected: string): void {
-  if (revision(source) !== expected) throw new ConfigDocumentConflictError(file);
+function assertRevision(file: string, state: ConfigFileState, expected: string): void {
+  if (revision(state) !== expected) throw new ConfigDocumentConflictError(file);
 }
 
-async function atomicReplace(file: string, source: string, mode: number): Promise<void> {
+async function readConfigFileState(file: string): Promise<ConfigFileState> {
+  try {
+    const source = await readFile(file, 'utf8');
+    return Object.freeze({ exists: true, source, mode: (await stat(file)).mode });
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return Object.freeze({ exists: false, source: '' });
+    }
+    throw error;
+  }
+}
+
+async function atomicReplace(file: string, source: string, mode?: number): Promise<void> {
   const temporary = `${basename(file)}.${process.pid}.${randomUUID()}.tmp`;
   const target = resolve(dirname(file), temporary);
   try {
-    await writeFile(target, source, { mode });
+    await writeFile(target, source, mode === undefined ? undefined : { mode });
     await rename(target, file);
   } catch (error) {
     await rm(target, { force: true }).catch(() => undefined);

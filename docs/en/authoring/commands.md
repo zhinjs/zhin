@@ -225,14 +225,14 @@ The key points of this pattern: use `config` (plugin configuration) to get the d
 
 `@zhin.js/adapter`'s `createEndpointCommands(spec, defineCommand)` generates **list / add / remove** commands for `<adapter> endpoint`. Except for email (smtp/imap nested objects, not expressible in kv) and sandbox (built-in debug adapter, no credentials), all platform adapters are integrated: qq, icqq, napcat, onebot11, onebot12, milky, satori, slack, telegram, discord, kook, lark, dingtalk, line, wecom, wechat-mp, weixin-ilink, github.
 
-- `<adapter> endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) + the configuration list from `plugins.<adapterKey>.endpoints` in `zhin.config.yml`.
-- `<adapter> endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in yaml; other fields are written inline. YAML uses Document-node-level operations to preserve existing comments; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
+- `<adapter> endpoint list`: running endpoints (runtime state registered by the adapter's `create()`) plus `plugins.<adapterKey>.endpoints` from the active Root configuration.
+- `<adapter> endpoint add <name> <key=value...>`: manual field entry. Credential field values with `env: true` are written to `.env` (key names derived as `<ADAPTER>_<NAME>_<FIELD>` in uppercase, e.g., `TELEGRAM_BOT1_TOKEN`, `SLACK_BOT1_SIGNING_SECRET`), with `${REF}` references saved in the Root configuration; other fields are written inline. YAML and JSON use the same transaction port, and YAML comments are preserved; duplicate names are rejected; both `add`/`remove` go through the master gate described above.
 - `<adapter> endpoint remove <name>`: removes from configuration (takes effect on restart; `.env` keys are retained for manual cleanup).
 - Special add flows (such as QQ scan-code binding) are handled by the `spec.bindFlow` hook taking over the add command; QQ therefore has a fourth command `qq endpoint cancel`.
 
 The commands depend only on `EndpointConfigurationStore`; they do not access the
 filesystem. The official CLI provides `endpointConfigurationStoreToken` at the
-composition root and persists the active YAML file plus `.env`. Custom
+composition root and persists the active YAML or JSON Root configuration plus `.env`. Custom
 `RootRuntime` compositions that enable these commands must provide the same port.
 `plugins` must be an object map; legacy arrays are rejected and require an
 explicit migration.

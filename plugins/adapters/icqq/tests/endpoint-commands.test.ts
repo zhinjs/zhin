@@ -45,60 +45,60 @@ describe('icqq endpoint command definitions', () => {
     }
   });
 
-  it('add 无 id 时回复用法', () => {
-    const text = addCommand.execute(fakeContext()) as string;
+  it('add 无 id 时回复用法', async () => {
+    const text = await addCommand.execute(fakeContext()) as string;
     expect(text).toContain('用法：icqq endpoint add <uin>');
   });
 
-  it('add 非数字 id 拒绝', () => {
-    expect(addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
+  it('add 非数字 id 拒绝', async () => {
+    expect(await addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
       .toContain('纯数字');
   });
 
-  it('add 合法 uin：写入 { id } 配置项并引导重启', () => {
-    const text = addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
+  it('add 合法 uin：写入 { id } 配置项并引导重启', async () => {
+    const text = await addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('✅');
     expect(text).toContain('重启');
-    expect(store.list('icqq')).toEqual([{ id: '8596238' }]);
+    await expect(store.list('icqq')).resolves.toEqual([{ id: '8596238' }]);
   });
 
-  it('add 重名时报添加失败', () => {
-    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
-    expect(addCommand.execute(fakeContext({ params: { id: '8596238' } })))
+  it('add 重名时报添加失败', async () => {
+    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
+    expect(await addCommand.execute(fakeContext({ params: { id: '8596238' } })))
       .toContain('已存在');
   });
 
-  it('list 显示运行中 + 配置中的 endpoints', () => {
+  it('list 显示运行中 + 配置中的 endpoints', async () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
       .endpoints.set('8596238', { id: '8596238', mode: 'direct' });
-    addCommand.execute(fakeContext({ params: { id: '10001' } }));
+    await addCommand.execute(fakeContext({ params: { id: '10001' } }));
 
-    const text = listCommand.execute(context) as string;
+    const text = await listCommand.execute(context) as string;
 
     expect(text).toContain('8596238（direct）');
     expect(text).toContain('10001（direct（直连 @icqqjs/icqq））');
   });
 
-  it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
+  it('remove 从配置移除并提示重启', async () => {
+    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
 
-    const text = removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
+    const text = await removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(store.list('icqq')).toEqual([]);
+    await expect(store.list('icqq')).resolves.toEqual([]);
   });
 
-  it('配置 master 后非 master 拒绝 add/remove', () => {
+  it('配置 master 后非 master 拒绝 add/remove', async () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
       params: { id: '8596238' },
     });
 
-    expect(addCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
-    expect(removeCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    await expect(addCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    await expect(removeCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
   });
 });

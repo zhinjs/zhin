@@ -57,13 +57,13 @@ function busyFooter(state: QqRuntimeState): string | undefined {
 }
 
 /** `qq endpoint list`：运行中的 endpoints（本 generation adapter create 注册）+ 配置里的 endpoints */
-export function runQqEndpointList(
+export async function runQqEndpointList(
   state: QqRuntimeState,
   store: EndpointConfigurationStore,
-): string {
+): Promise<string> {
   return formatEndpointList(qqEndpointListSpec, {
     running: state.endpoints.values(),
-    configured: store.list('qq'),
+    configured: await store.list('qq'),
     footer: busyFooter(state),
   });
 }
@@ -74,15 +74,15 @@ const qqEndpointListSpec = {
   describeEntry: (entry: ConfiguredEndpointEntry) => `appid: ${String(entry.appid)}`,
 } as const;
 
-function writeEndpointWithBotKind(
+async function writeEndpointWithBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
   store: EndpointConfigurationStore,
-): string {
+): Promise<string> {
   const appidKey = buildEndpointEnvKey('qq', pending.endpointId, 'appid');
   const secretKey = buildEndpointEnvKey('qq', pending.endpointId, 'secret');
   const intentFields = defaultQqEndpointIntentFields(botKind);
-  const { filePath } = store.add({
+  const { filePath } = await store.add({
     adapterKey: 'qq',
     entry: {
       id: pending.endpointId,
@@ -107,12 +107,12 @@ function writeEndpointWithBotKind(
  * 完成 pending 的公域/私域选择：一次性写 .env + yaml。
  * @returns 成功文案；调用方负责清 pending。
  */
-export function completeQqPendingBotKind(
+export async function completeQqPendingBotKind(
   pending: QqPendingBotKind,
   botKind: QqBotKind,
   store: EndpointConfigurationStore,
-): string {
-  return writeEndpointWithBotKind(pending, botKind, store);
+): Promise<string> {
+  return await writeEndpointWithBotKind(pending, botKind, store);
 }
 
 /**
@@ -172,7 +172,7 @@ export function runQqEndpointAdd(
             // 无会话上下文（Host 等）时无法追问，直接按公域一次性写入
             if (!sessionKey) {
               settle(
-                writeEndpointWithBotKind(
+                await writeEndpointWithBotKind(
                   {
                     endpointId: finalName,
                     appId,
@@ -228,12 +228,12 @@ export function runQqEndpointCancel(state: QqRuntimeState): string {
 }
 
 /** `qq endpoint remove <id>`：从 zhin.config.yml 移除对应 endpoints 项 */
-export function runQqEndpointRemove(
+export async function runQqEndpointRemove(
   _state: QqRuntimeState,
   id: string,
   store: EndpointConfigurationStore,
-): string {
-  return removeEndpointById(qqEndpointListSpec, id, store);
+): Promise<string> {
+  return await removeEndpointById(qqEndpointListSpec, id, store);
 }
 
 /**

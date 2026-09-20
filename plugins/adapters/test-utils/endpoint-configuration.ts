@@ -11,7 +11,7 @@ export class MemoryEndpointConfigurationStore implements EndpointConfigurationSt
 
   constructor(readonly filePath = '/project/zhin.config.yml') {}
 
-  list(adapterKey: string): readonly ConfiguredEndpointEntry[] {
+  async list(adapterKey: string): Promise<readonly ConfiguredEndpointEntry[]> {
     return this.entries.get(adapterKey) ?? [];
   }
 
@@ -26,14 +26,14 @@ export class MemoryEndpointConfigurationStore implements EndpointConfigurationSt
   }
 
   configurationText(adapterKey: string): string {
-    return this.list(adapterKey)
+    return (this.entries.get(adapterKey) ?? [])
       .flatMap((entry) => Object.entries(entry).map(([key, value]) => (
         `${key}: ${Array.isArray(value) ? value.join(', ') : String(value)}`
       )))
       .join('\n');
   }
 
-  add(request: AddConfiguredEndpointRequest) {
+  async add(request: AddConfiguredEndpointRequest) {
     const entries = this.entries.get(request.adapterKey) ?? [];
     if (entries.some((entry) => entry.id === request.entry.id)) {
       throw new Error(`配置中已存在 ${request.adapterKey} endpoint「${request.entry.id}」`);
@@ -46,7 +46,7 @@ export class MemoryEndpointConfigurationStore implements EndpointConfigurationSt
     return { filePath: this.filePath };
   }
 
-  remove(adapterKey: string, endpointId: string) {
+  async remove(adapterKey: string, endpointId: string) {
     const entries = this.entries.get(adapterKey) ?? [];
     const next = entries.filter((entry) => entry.id !== endpointId);
     this.entries.set(adapterKey, next);

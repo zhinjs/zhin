@@ -14,6 +14,7 @@ import {
 import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
 import {
   defineInboxTables,
+  DEFAULT_ROOT_CONFIG_FILE_NAME,
   readPluginConfigurationMap,
   ROOT_CONFIG_FILE_NAMES,
   selectRootConfigFile,
@@ -42,7 +43,7 @@ import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
-import { YamlEndpointConfigurationStore } from './endpoint-configuration-store.js';
+import { ProjectEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
@@ -131,9 +132,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
   const consoleEventHub = createConsoleEventHub();
-  const endpointConfigurationStore = new YamlEndpointConfigurationStore({
+  const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
     projectRoot: options.root,
     configFile,
+    document: config,
   });
   const host = new RootHost({
     projectRoot: options.root,
@@ -638,14 +640,13 @@ async function readConfigDocumentValue(
 
 async function loadProjectConfig(
   root: string,
-): Promise<{ config: RuntimeConfigDocument | ConfigDocumentPort; file: string | undefined }> {
+): Promise<{ config: ConfigDocumentPort; file: string }> {
   const existing: string[] = [];
   for (const candidate of ROOT_CONFIG_FILE_NAMES) {
     const file = join(root, candidate);
     try { await access(file); existing.push(file); }
     catch { /* Missing candidates are expected. */ }
   }
-  const file = selectRootConfigFile(existing);
-  if (!file) return { config: Object.freeze({}), file: undefined };
+  const file = selectRootConfigFile(existing) ?? join(root, DEFAULT_ROOT_CONFIG_FILE_NAME);
   return { config: createConfigDocument(file), file };
 }

@@ -52,6 +52,8 @@ describe('NativeDevelopmentModuleRuntime', () => {
     expect(runtime.requiresProcessRestart(join(root, 'agent/tools/shared/client.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.ts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'schema.json'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, '.env'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, '.env.production'))).toBe(true);
     await runtime.close();
   });
 

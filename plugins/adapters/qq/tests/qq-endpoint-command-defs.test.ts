@@ -37,20 +37,20 @@ describe('qq endpoint command definitions', () => {
     }
   });
 
-  it('list execute 返回运行中 + 配置清单', () => {
+  it('list execute 返回运行中 + 配置清单', async () => {
     const state = createQqRuntimeState();
     state.endpoints.set('bot-1', { id: 'bot-1', mode: 'websocket' });
 
-    const text = listCommand.execute(fakeContext(state)) as string;
+    const text = await listCommand.execute(fakeContext(state)) as string;
 
     expect(text).toContain('bot-1');
   });
 
-  it('list execute 在有进行中绑定时提示 qq endpoint cancel', () => {
+  it('list execute 在有进行中绑定时提示 qq endpoint cancel', async () => {
     const state = createQqRuntimeState();
     state.bindFlow = { id: 'a', stop: vi.fn() };
 
-    const text = listCommand.execute(fakeContext(state)) as string;
+    const text = await listCommand.execute(fakeContext(state)) as string;
 
     expect(text).toContain('qq endpoint cancel');
   });
@@ -59,7 +59,7 @@ describe('qq endpoint command definitions', () => {
     expect(cancelCommand.execute(fakeContext())).toContain('没有进行中');
   });
 
-  it('remove execute 通过根级配置 Store 处理空 id', () => {
-    expect(removeCommand.execute(fakeContext())).toContain('用法');
+  it('remove execute 通过根级配置 Store 处理空 id', async () => {
+    await expect(removeCommand.execute(fakeContext())).resolves.toContain('用法');
   });
 });

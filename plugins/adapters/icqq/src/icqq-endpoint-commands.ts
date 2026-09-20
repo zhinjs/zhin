@@ -8,7 +8,7 @@ export const icqqEndpointCommands = createEndpointCommands({
   running: (use) => use(icqqRuntimeStateToken).endpoints.values(),
   describeEntry: () => 'direct（直连 @icqqjs/icqq）',
   addDescription: '登记 ICQQ endpoint（重启 zhin 生效）',
-  bindFlow: ({ id, use }) => {
+  bindFlow: async ({ id, use }) => {
     if (!id) {
       return '用法：icqq endpoint add <uin>（uin 为纯数字 QQ 号）';
     }
@@ -16,7 +16,7 @@ export const icqqEndpointCommands = createEndpointCommands({
       return 'icqq endpoint 名必须是纯数字 QQ 号（uin）';
     }
     try {
-      const { filePath } = use(endpointConfigurationStoreToken).add({
+      const { filePath } = await use(endpointConfigurationStoreToken).add({
         adapterKey: 'icqq',
         entry: { id },
         environment: {},

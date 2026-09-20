@@ -10,6 +10,9 @@ export const ROOT_CONFIG_FILE_NAMES = Object.freeze([
 export type RootConfigFileName = typeof ROOT_CONFIG_FILE_NAMES[number];
 export type RootConfigFormat = 'yaml' | 'json';
 
+/** File materialized when a project has no Root configuration yet. */
+export const DEFAULT_ROOT_CONFIG_FILE_NAME: RootConfigFileName = 'zhin.config.yml';
+
 /** Returns the only configuration formats accepted by Root Runtime. */
 export function rootConfigFormat(filePath: string): RootConfigFormat | undefined {
   const fileName = filePath.split(/[\\/]/u).pop();

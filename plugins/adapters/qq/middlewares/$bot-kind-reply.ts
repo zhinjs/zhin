@@ -49,7 +49,7 @@ export default defineMiddleware<CommandMessage>({
     }
 
     try {
-      const text = completeQqPendingBotKind(
+      const text = await completeQqPendingBotKind(
         pending,
         botKind,
         context.use(endpointConfigurationStoreToken),

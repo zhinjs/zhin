@@ -17,6 +17,37 @@ afterEach(async () => {
 });
 
 describe('YamlConfigDocument', () => {
+  it('materializes a missing document on commit and removes it on rollback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-yaml-missing-'));
+    temporary.push(root);
+    const file = join(root, 'zhin.config.yml');
+    const document = new YamlConfigDocument(file);
+    const current = await document.read();
+
+    expect(current.document).toEqual({});
+    const prepared = await document.prepare(current, [{
+      op: 'set', path: ['plugins', 'demo', 'endpoints'], value: [{ id: 'bot' }],
+    }]);
+    await prepared.commit();
+    expect(await readFile(file, 'utf8')).toContain('id: bot');
+
+    await prepared.rollback();
+    await expect(readFile(file, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('detects a file created after an absent document was read', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-runtime-yaml-conflict-'));
+    temporary.push(root);
+    const file = join(root, 'zhin.config.yml');
+    const document = new YamlConfigDocument(file);
+    const current = await document.read();
+    await writeFile(file, 'external: true\n');
+
+    await expect(document.prepare(current, [{
+      op: 'set', path: ['plugins'], value: {},
+    }])).rejects.toBeInstanceOf(ConfigDocumentConflictError);
+  });
+
   it('patches its AST while preserving comments, expressions, aliases and indentation', async () => {
     const { file } = await configFile(`# root comment
 plugin:

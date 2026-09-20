@@ -1034,6 +1034,21 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Make UserMessage.actor the sole participant identity authority and remove sender identity compatibility projections from Core, Agent, and AI under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "unify-endpoint-config-transactions.md",
+      "packages": [
+        "@zhin.js/adapter",
+        "@zhin.js/adapter-icqq",
+        "@zhin.js/adapter-qq",
+        "@zhin.js/cli",
+        "@zhin.js/config-file",
+        "@zhin.js/plugin-runtime",
+        "@zhin.js/runtime"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Move Endpoint configuration persistence onto the asynchronous transactional Root config port, add YAML and JSON parity, and make cross-file environment writes recoverable under the owner-directed architecture refactor."
     }
   ]
 }
