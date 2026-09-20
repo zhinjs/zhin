@@ -1,5 +1,11 @@
 # @zhin.js/mcp
 
+## 1.1.1
+
+### Patch Changes
+
+- @zhin.js/core@1.1.36
+
 ## 1.1.0
 
 ### Minor Changes

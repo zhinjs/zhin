@@ -1,5 +1,11 @@
 # @zhin.js/html-renderer
 
+## 1.1.1
+
+### Patch Changes
+
+- 33b1582: Update vulnerable dependencies and replace unsafe HTML and protocol-text regular expressions with bounded scanners.
+
 ## 1.1.0
 
 ### Minor Changes

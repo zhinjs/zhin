@@ -1,5 +1,11 @@
 # @zhin.js/adapter
 
+## 1.1.13
+
+### Patch Changes
+
+- 769e67f: Add a compact adapter authoring form with framework-owned Endpoint identity, transactional connection cleanup, and lifecycle. Adapter `create()` may now return `{ client, connect, activate, send }`, while existing Endpoint subclasses remain compatible.
+
 ## 1.1.12
 
 ### Patch Changes
