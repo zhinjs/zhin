@@ -1,5 +1,12 @@
 # @zhin.js/core
 
+## 1.1.36
+
+### Patch Changes
+
+- Updated dependencies [769e67f]
+  - @zhin.js/adapter@1.1.13
+
 ## 1.1.35
 
 ### Patch Changes

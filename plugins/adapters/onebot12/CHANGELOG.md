@@ -1,5 +1,14 @@
 # @zhin.js/adapter-onebot12
 
+## 1.1.1
+
+### Patch Changes
+
+- 33b1582: Update vulnerable dependencies and replace unsafe HTML and protocol-text regular expressions with bounded scanners.
+- Updated dependencies [769e67f]
+  - @zhin.js/adapter@1.1.13
+  - @zhin.js/core@1.1.36
+
 ## 1.1.0
 
 ### Minor Changes

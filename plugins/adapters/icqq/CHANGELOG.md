@@ -1,5 +1,15 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.1
+
+### Patch Changes
+
+- f0f4573: Fix ICQQ share segments to use the native share protocol instead of sending them as JSON cards.
+- 51df035: fix: 修复 icqq 点赞错误
+- Updated dependencies [769e67f]
+  - @zhin.js/adapter@1.1.13
+  - @zhin.js/core@1.1.36
+
 ## 1.1.0
 
 ### Minor Changes
