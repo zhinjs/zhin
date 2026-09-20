@@ -1276,9 +1276,11 @@ describe('console SSE events', () => {
     let messageListener: ((event: RuntimeMessageEvent) => void) | undefined;
     const im = {
       endpoints: { list: () => [] },
-      onMessage(listener: (event: RuntimeMessageEvent) => void) {
-        messageListener = listener;
-        return () => { messageListener = undefined; };
+      messageEvents: {
+        subscribe(listener: (event: RuntimeMessageEvent) => void) {
+          messageListener = listener;
+          return () => { messageListener = undefined; };
+        },
       },
     } as unknown as ImRuntime;
     const hub = createConsoleEventHub();

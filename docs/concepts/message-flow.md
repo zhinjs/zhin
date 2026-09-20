@@ -89,6 +89,7 @@ flowchart LR
 - **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
 - **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
+- **运行时所有权**集中在 `OutboundDeliveryRuntime`：它独占渲染、媒体与交互策略投影、出站中间件、Endpoint 投递、会话事实记账和消息观察事件发布。`ImRuntime` 只负责取得正确的 generation 租约并委托投递。
 - **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
 
 普通消息发送都应走这条统一管道（`$reply` / `$replyFrom` / `OutboundMessageService.send`），避免绕过渲染、中间件与事件广播。入群审批、角色管理、平台查询等非消息业务则应从当前事件/命令/工具 operation 解析 Client，直接调用平台 SDK；不要把 Client 缓存到 operation 之外。
@@ -148,11 +149,15 @@ AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导�
 每个 `ImRuntime` 公开一个实例私有的 `EndpointRuntime`，作为 generation-owned
 `AdapterIndex` 的唯一运行时入口。Endpoint 列表、能力查询、Console 定向发送、回应、撤回、
 编辑、typing 与管理操作都由它取得并释放当前快照租约；上层 Host 只依赖所需操作组成的窄端口。
-`ImRuntime` 继续拥有统一的入站网关和 `render → before.sendMessage → AdapterIndex.send`
-出站管线，因此 Console 定向发送也不会绕过渲染与中间件。
+`ImRuntime` 继续拥有统一入站网关，并把所有发送委托给实例私有的 `OutboundDeliveryRuntime`；
+因此 Console 定向发送同样经过 `render → before.sendMessage → AdapterIndex.send`，不会绕过
+渲染与中间件。
 
 旧的 `ImRuntime.listEndpoints()`、`sendEndpointMessage()` 等平铺入口已删除。内部装配统一使用
 `im.endpoints.*`，不保留转发别名或双重 Endpoint 权威。
+
+消息观察面通过只读 `im.messageEvents.subscribe()` 暴露。Console 与 Inbox 只能订阅截断后的
+消息投影，不能发布或伪造 Core 运行时事件；旧的平铺 `im.onMessage()` 已删除。
 
 ## Endpoint 1:N 展开
 

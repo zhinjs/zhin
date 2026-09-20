@@ -1,21 +1,27 @@
 import { describe, expect, it } from 'vitest';
-import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
+import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import { createConsoleEventHub } from '@zhin.js/host-http';
-import { ConsoleMessageBindings } from '../../../src/plugin-runtime/console/message-bindings.js';
+import {
+  ConsoleMessageBindings,
+  type ConsoleMessageRuntimePort,
+} from '../../../src/plugin-runtime/console/message-bindings.js';
 
 function createMessageSource(): {
-  readonly im: ImRuntime;
+  readonly im: ConsoleMessageRuntimePort;
   readonly emit: (event: RuntimeMessageEvent) => void;
   readonly listenerCount: () => number;
 } {
   const listeners = new Set<(event: RuntimeMessageEvent) => void>();
   return {
     im: {
-      onMessage(listener: (event: RuntimeMessageEvent) => void) {
-        listeners.add(listener);
-        return () => listeners.delete(listener);
+      messageEvents: {
+        subscribe(listener: (event: RuntimeMessageEvent) => void) {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
       },
-    } as unknown as ImRuntime,
+      endpoints: { get: () => null },
+    },
     emit(event) {
       for (const listener of listeners) listener(event);
     },

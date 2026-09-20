@@ -1351,11 +1351,12 @@ describe('IM Runtime', () => {
     await store.close();
   });
 
-  it('emits inbound and outbound message events via onMessage', async () => {
+  it('publishes inbound and outbound events through the message event source', async () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);
     const events: RuntimeMessageEvent[] = [];
-    const unsubscribe = fixture.im.onMessage((event) => events.push(event));
+    expect('publish' in fixture.im.messageEvents).toBe(false);
+    const unsubscribe = fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const groupConversation = {
       endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
@@ -1434,7 +1435,7 @@ describe('IM Runtime', () => {
       outboundMiddleware: async () => undefined,
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await expect(fixture.im.send({
       conversation: {
@@ -1461,7 +1462,7 @@ describe('IM Runtime', () => {
       },
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const receipt = await fixture.im.send({
       conversation: {
@@ -1501,7 +1502,7 @@ describe('IM Runtime', () => {
       },
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await expect(fixture.im.send({
       conversation: {
@@ -1524,7 +1525,7 @@ describe('IM Runtime', () => {
       endpointSend: () => { throw new Error('transport closed'); },
     });
     const failedEvents: RuntimeMessageEvent[] = [];
-    failed.im.onMessage((event) => failedEvents.push(event));
+    failed.im.messageEvents.subscribe((event) => failedEvents.push(event));
     await expect(failed.im.send({
       conversation: {
         endpoint: { id: String(failed.adapter.id), adapter: String(rootPluginId()) },
@@ -1542,7 +1543,7 @@ describe('IM Runtime', () => {
       adapterCapabilities: ['inbound'],
     });
     const unsupportedEvents: RuntimeMessageEvent[] = [];
-    unsupported.im.onMessage((event) => unsupportedEvents.push(event));
+    unsupported.im.messageEvents.subscribe((event) => unsupportedEvents.push(event));
     await expect(unsupported.im.send({
       conversation: {
         endpoint: { id: String(unsupported.adapter.id), adapter: String(rootPluginId()) },
@@ -1561,8 +1562,8 @@ describe('IM Runtime', () => {
     const sent: unknown[] = [];
     const fixture = await createFixture([], sent);
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage(() => { throw new Error('broken listener'); });
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe(() => { throw new Error('broken listener'); });
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     const longContent = 'x'.repeat(500);
     await receive(fixture.im, {
@@ -1589,7 +1590,7 @@ describe('IM Runtime', () => {
       middleware: false,
     });
     const events: RuntimeMessageEvent[] = [];
-    fixture.im.onMessage((event) => events.push(event));
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
 
     await fixture.im.send({
       conversation: {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dispatchExtendedConsoleRpc } from '@zhin.js/host-http';
-import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
+import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import {
   INBOX_TABLE_MESSAGE,
   INBOX_TABLE_REQUEST,
@@ -11,6 +11,7 @@ import {
   buildInboxMessageRow,
   conversationToInboxChannel,
   InboxMessageRecorder,
+  type InboxRuntimePort,
 } from '../../../src/plugin-runtime/console/inbox.js';
 
 /** 内存假 DatabaseHost：行存 Map，select/insert/update 按 where 等值匹配。 */
@@ -72,25 +73,11 @@ function fakeDatabaseHost(tableNames: string[]): {
   return { host, rows };
 }
 
-function fakeIm(endpointId?: string): {
-  im: ImRuntime;
-  emit: (event: RuntimeMessageEvent) => void;
-  listenerCount: () => number;
-} {
-  const listeners = new Set<(event: RuntimeMessageEvent) => void>();
-  const im = {
-    onMessage(listener: (event: RuntimeMessageEvent) => void) {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    endpoints: { get: () => (endpointId ? { name: endpointId } : null) },
-  } as unknown as ImRuntime;
+function fakeIm(endpointId?: string): { readonly im: InboxRuntimePort } {
   return {
-    im,
-    emit: (event) => {
-      for (const listener of listeners) listener(event);
+    im: {
+      endpoints: { get: () => (endpointId ? { name: endpointId } : null) },
     },
-    listenerCount: () => listeners.size,
   };
 }
 
@@ -229,7 +216,7 @@ describe('InboxMessageRecorder', () => {
           return endpointId ? { name: endpointId } : null;
         },
       },
-    } as unknown as ImRuntime;
+    } satisfies InboxRuntimePort;
     const recorder = new InboxMessageRecorder(im, host);
 
     // 启动早期 endpoint 未就绪：回退 localName，但不写缓存。

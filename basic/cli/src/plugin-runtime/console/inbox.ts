@@ -1,4 +1,4 @@
-import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
+import type { RuntimeMessageEvent } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   INBOX_TABLE_MESSAGE,
@@ -8,13 +8,19 @@ import {
 
 const logger = getLogger('console-inbox');
 
+export interface InboxRuntimePort {
+  readonly endpoints: {
+    get(adapter: string, endpointKey: string): { readonly name: string } | null;
+  };
+}
+
 /** Converts IM messages to durable inbox rows while owning endpoint identity caching. */
 export class InboxMessageRecorder {
-  readonly #im: ImRuntime;
+  readonly #im: InboxRuntimePort;
   readonly #databaseHost: DatabaseHost;
   readonly #endpointIds = new Map<string, string>();
 
-  constructor(im: ImRuntime, databaseHost: DatabaseHost) {
+  constructor(im: InboxRuntimePort, databaseHost: DatabaseHost) {
     this.#im = im;
     this.#databaseHost = databaseHost;
   }
@@ -74,7 +80,7 @@ export function buildInboxMessageRow(
 
 /** capabilityId → live endpoint 名（uin 等）；仅命中时写缓存，解析失败回退 localName（不写缓存，待下次重试）。 */
 function resolveEndpointId(
-  im: ImRuntime,
+  im: InboxRuntimePort,
   capabilityId: string,
   cache: Map<string, string>,
 ): string {

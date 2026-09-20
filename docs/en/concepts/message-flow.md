@@ -80,6 +80,7 @@ flowchart LR
 - **SendContent forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; canonical `Segment` (first-class citizen, see "Multimodal" below); `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of these.
 - **Envelope** carries `conversation` (structured conversation addressing, `ConversationRef` from `@zhin.js/im-contract`), `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
+- **Runtime ownership** belongs to `OutboundDeliveryRuntime`: it exclusively controls rendering, media and interaction policy projection, outbound middleware, Endpoint delivery, conversation fact recording, and observer event publication. `ImRuntime` only acquires the correct generation lease and delegates delivery.
 - **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
 
 Ordinary message delivery must go through this unified pipeline (`$reply` / `$replyFrom` / `OutboundMessageService.send`) so rendering, middleware, and event broadcasting are preserved. Non-message business operations such as join approval, role management, and platform queries should resolve the Client from the current event/command/tool operation and call the platform SDK directly. Do not retain a Client beyond that operation.
@@ -121,9 +122,11 @@ Command authoring uses `context.interaction` (`UserInteraction`). `ask()` descri
 
 ## Endpoint runtime ownership
 
-Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and the `render -> before.sendMessage -> AdapterIndex.send` outbound pipeline, so Console-addressed delivery cannot bypass rendering or middleware.
+Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and delegates every send to its private `OutboundDeliveryRuntime`, so Console-addressed delivery still follows `render -> before.sendMessage -> AdapterIndex.send` and cannot bypass rendering or middleware.
 
 The former flat `ImRuntime.listEndpoints()`, `sendEndpointMessage()`, and related methods are removed. Internal composition uses `im.endpoints.*` without forwarding aliases or a second Endpoint authority.
+
+Observers use the read-only `im.messageEvents.subscribe()` source. Console and Inbox can consume bounded message projections but cannot publish or forge Core runtime events. The former flat `im.onMessage()` method is removed.
 
 ## Endpoint 1:N Expansion
 

@@ -1,8 +1,12 @@
-import type { ImRuntime } from '@zhin.js/core/runtime';
+import type { RuntimeMessageEventSource } from '@zhin.js/core/runtime';
 import type { ConsoleEventHub } from '@zhin.js/host-http';
 import type { DatabaseHost } from '@zhin.js/plugin-runtime';
 import { publishMessageEvent } from './events.js';
-import { InboxMessageRecorder } from './inbox.js';
+import { InboxMessageRecorder, type InboxRuntimePort } from './inbox.js';
+
+export interface ConsoleMessageRuntimePort extends InboxRuntimePort {
+  readonly messageEvents: RuntimeMessageEventSource;
+}
 
 interface MessageBinding {
   refs: number;
@@ -16,7 +20,7 @@ export interface ConsoleMessageBindingsOptions {
 
 /** Owns the process-level IM message subscription shared by overlapping generations. */
 export class ConsoleMessageBindings {
-  readonly #bindings = new WeakMap<ImRuntime, MessageBinding>();
+  readonly #bindings = new WeakMap<ConsoleMessageRuntimePort, MessageBinding>();
   readonly #hub: ConsoleEventHub;
   readonly #databaseHost?: DatabaseHost;
 
@@ -25,7 +29,7 @@ export class ConsoleMessageBindings {
     this.#databaseHost = options.databaseHost;
   }
 
-  acquire(im: ImRuntime): () => void {
+  acquire(im: ConsoleMessageRuntimePort): () => void {
     const existing = this.#bindings.get(im);
     if (existing) {
       existing.refs += 1;
@@ -35,7 +39,7 @@ export class ConsoleMessageBindings {
     const inbox = this.#databaseHost
       ? new InboxMessageRecorder(im, this.#databaseHost)
       : undefined;
-    const unsubscribe = im.onMessage((event) => {
+    const unsubscribe = im.messageEvents.subscribe((event) => {
       publishMessageEvent(this.#hub, event);
       inbox?.record(event);
     });
@@ -44,7 +48,7 @@ export class ConsoleMessageBindings {
     return () => this.#release(im, binding);
   }
 
-  #release(im: ImRuntime, binding: MessageBinding): void {
+  #release(im: ConsoleMessageRuntimePort, binding: MessageBinding): void {
     if (this.#bindings.get(im) !== binding) return;
     binding.refs -= 1;
     if (binding.refs > 0) return;

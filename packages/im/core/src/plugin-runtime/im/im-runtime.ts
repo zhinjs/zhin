@@ -2,10 +2,8 @@ import {
   Scope,
   createToken,
   generationAdmissionBinder,
-  htmlRendererToken,
   type CapabilityId,
   type GenerationAdmissionGate,
-  type HtmlRendererHost,
   type PluginId,
   type RuntimeSnapshot,
   type SnapshotLease,
@@ -15,7 +13,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { PermissionHost, permissionHostToken } from '@zhin.js/permission';
 import { MessageBus, messageBusToken } from './message-bus.js';
 import {
-  AdapterIndex,
   type EndpointContentResolveContext,
   endpointEventGatewayToken,
   type EndpointEvent,
@@ -30,7 +27,6 @@ import {
   type ConversationRef,
   type DeliveryReceipt,
 } from '@zhin.js/im-contract';
-import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
@@ -41,7 +37,6 @@ import {
   type MessageDispatchResult,
   type OutboundMessageService,
   type MessageSenderRef,
-  type OutboundEnvelope,
   type SendContent,
   type SendRequest,
 } from './contracts.js';
@@ -53,16 +48,7 @@ import type { SystemEvent } from '../../system-event.js';
 import { sideEventSendChannel } from '../../side-event/base.js';
 import type { UserInteraction } from '@zhin.js/interaction';
 import { defaultCommandPrefixResolver, MessageDispatcher } from './message-dispatcher.js';
-import { OutboundRenderer } from './outbound-renderer.js';
-import {
-  applyOutboundInteractivePolicy,
-  applyOutboundMarkdownPolicy,
-  normalizeOutboundPayload,
-  resolveOutboundInteractivePolicy,
-  resolveOutboundMarkdownPolicy,
-  resolveOutboundMediaPolicy,
-} from './outbound-segments.js';
-import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
+import type { OutboundRenderer } from './outbound-renderer.js';
 import {
   RuntimeInteractionCoordinator,
   type UserInteractionSource,
@@ -70,9 +56,20 @@ import {
 import { ConversationRuntime } from './conversation-runtime.js';
 import {
   EndpointRuntime,
-  adapterTypeName,
   requireAdapters,
 } from './endpoint-runtime.js';
+import {
+  RuntimeMessageEventStream,
+  formatConversationLog,
+  previewMessageContent,
+  type RuntimeMessageEvent,
+  type RuntimeMessageEventSource,
+} from './message-events.js';
+import {
+  OutboundDeliveryRuntime,
+  failedDeliveryReceipt,
+} from './outbound-delivery-runtime.js';
+import { runRuntimeMiddleware } from './runtime-middleware.js';
 
 const logger = getLogger('im');
 
@@ -99,22 +96,6 @@ export interface IngressRoute {
 
 export const ingressRouteToken = createToken<IngressRoute>('zhin.im.ingress-route');
 
-/** Console 实时消息事件（SSE 推送源；content 仅为截断预览，不含完整原始段）。 */
-export interface RuntimeMessageEvent {
-  readonly direction: 'inbound' | 'outbound';
-  readonly conversation: ConversationRef;
-  /** inbound：发送者。 */
-  readonly sender?: MessageSenderRef;
-  /** outbound：发起方插件。 */
-  readonly requester?: PluginId;
-  /** 预览文本，截断至 200 字。 */
-  readonly contentPreview: string;
-  readonly messageId?: string;
-  readonly timestamp: number;
-}
-
-export const messagePreviewLimit = 200;
-
 export interface ImRuntimeOptions {
   /**
    * 全局静态命令前缀（如 `'/'`）。缺省时按适配器实例 config 的
@@ -140,10 +121,14 @@ export interface ImRuntimeOptions {
 
 export class ImRuntime implements OutboundMessageService {
   readonly #dispatcher: MessageDispatcher;
-  readonly #renderer: OutboundRenderer;
-  readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
+  readonly #messageEventStream = new RuntimeMessageEventStream();
+  readonly messageEvents: RuntimeMessageEventSource = Object.freeze({
+    subscribe: (listener: (event: RuntimeMessageEvent) => void) =>
+      this.#messageEventStream.subscribe(listener),
+  });
   readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>();
   readonly #conversations: ConversationRuntime;
+  readonly #outbound: OutboundDeliveryRuntime;
   readonly endpoints: EndpointRuntime;
   readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
@@ -156,12 +141,17 @@ export class ImRuntime implements OutboundMessageService {
         ? defaultCommandPrefixResolver
         : () => options.commandPrefix ?? '',
     );
-    this.#renderer = options.renderer ?? new OutboundRenderer();
     this.#conversations = new ConversationRuntime(options.conversationEvents);
+    this.#outbound = new OutboundDeliveryRuntime({
+      record: (request, receipt) => this.#conversations.recordOutbound(request, receipt),
+      rememberFallback: (conversation, generation, map) =>
+        this.#interactions.rememberFallback(conversation, generation, map),
+      publish: (event) => this.#messageEventStream.publish(event),
+    }, options.renderer);
     this.endpoints = new EndpointRuntime({
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),
-      send: (request, snapshot) => this.#sendWithSnapshot(request, snapshot),
+      send: (request, snapshot) => this.#outbound.deliver(request, snapshot),
     });
     this.#inboundClaim = options.inboundClaim;
     this.#enrichSender = options.enrichSender;
@@ -274,7 +264,7 @@ export class ImRuntime implements OutboundMessageService {
   [generationAdmissionBinder](gate: GenerationAdmissionGate): OutboundMessageService {
     const gateway: OutboundMessageService = {
       send: async (request: SendRequest) => gate.enter(() => this.send(request))
-        ?? failedReceipt('generation_not_admitted'),
+        ?? failedDeliveryReceipt('generation_not_admitted'),
       registerInteractiveHandler: (prefix, handler) =>
         this.#interactions.register(prefix, handler, gate),
     };
@@ -301,25 +291,6 @@ export class ImRuntime implements OutboundMessageService {
     bind?: { readonly subjectId: string },
   ): UserInteraction | undefined {
     return this.#interactions.createForMessage(message, bind);
-  }
-
-  /**
-   * 订阅消息事件（入站 dispatch 完成后 / 出站发送成功后回调）。
-   * 返回注销函数。listener 抛错不会阻断消息链路。
-   */
-  onMessage(listener: (event: RuntimeMessageEvent) => void): () => void {
-    this.#messageListeners.add(listener);
-    return () => { this.#messageListeners.delete(listener); };
-  }
-
-  #emitMessage(event: RuntimeMessageEvent): void {
-    for (const listener of this.#messageListeners) {
-      try {
-        listener(event);
-      } catch {
-        // listener 异常不得影响消息收发
-      }
-    }
   }
 
   async #receive(
@@ -351,7 +322,7 @@ export class ImRuntime implements OutboundMessageService {
           const effectiveConversation = targetConversation
             ? { endpoint: conversation.endpoint, ...targetConversation }
             : conversation;
-          return this.#sendWithSnapshot({
+          return this.#outbound.deliver({
             conversation: effectiveConversation,
             requester: replyRequester,
             content,
@@ -388,7 +359,7 @@ export class ImRuntime implements OutboundMessageService {
         result = Object.freeze({ matched: true, command: 'interaction', owner: requester });
       } else {
         const interactionFactory = (source: unknown) => this.#interactions.createFromUnknown(source);
-        await runMiddleware(
+        await runRuntimeMiddleware(
           lease.value,
           message,
           async () => {
@@ -443,11 +414,11 @@ export class ImRuntime implements OutboundMessageService {
           command: result.command,
         }));
       }
-      this.#emitMessage({
+      this.#messageEventStream.publish({
         direction: 'inbound',
         conversation,
         ...(input.sender !== undefined ? { sender: input.sender } : {}),
-        contentPreview: previewText(input.content),
+        contentPreview: previewMessageContent(input.content),
         ...(input.message?.id ? { messageId: input.message.id } : {}),
         timestamp: Date.now(),
       });
@@ -461,7 +432,7 @@ export class ImRuntime implements OutboundMessageService {
   async send(request: SendRequest): Promise<DeliveryReceipt> {
     const lease = this.#acquire();
     try {
-      return await this.#sendWithSnapshot(request, lease.value);
+      return await this.#outbound.deliver(request, lease.value);
     } finally {
       this.#release(lease);
     }
@@ -475,7 +446,7 @@ export class ImRuntime implements OutboundMessageService {
     if (!this.#snapshots?.owns(lease) || !lease.active) {
       throw new Error('Outbound message generation lease expired');
     }
-    return this.#sendWithSnapshot(request, lease.value);
+    return this.#outbound.deliver(request, lease.value);
   }
 
   async #receiveNotice(source: EndpointEvent<Notice>): Promise<void> {
@@ -579,7 +550,7 @@ export class ImRuntime implements OutboundMessageService {
       ...(payload.$actor?.id
         ? { sender: Object.freeze({ id: payload.$actor.id }) }
         : {}),
-      $reply: (content: SendContent) => this.#sendWithSnapshot({
+      $reply: (content: SendContent) => this.#outbound.deliver({
         conversation,
         requester,
         content,
@@ -650,108 +621,6 @@ export class ImRuntime implements OutboundMessageService {
     }
   }
 
-  async #sendWithSnapshot(
-    request: SendRequest,
-    snapshot: RuntimeSnapshot,
-  ): Promise<DeliveryReceipt> {
-    const adapter = request.conversation.endpoint.id as CapabilityId;
-    let initialPayload: unknown;
-    try {
-      const rendered = await this.#renderer.render(
-        request.content, request.requester, snapshot,
-        request.conversation, request.incoming,
-      );
-      initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
-    } catch {
-      return rejectedReceipt('outbound_payload_rejected');
-    }
-
-    let adapters: AdapterIndex;
-    try {
-      adapters = requireAdapters(snapshot);
-    } catch (error) {
-      return receiptFromEndpointError(error);
-    }
-    const envelope = createOutboundEnvelope({
-      conversation: request.conversation,
-      requester: request.requester,
-      generation: snapshot.generation,
-      clientAdapter: adapters.clientAdapter(adapter),
-    }, initialPayload, () => adapters.clientById(adapter));
-    let terminalEntered = false;
-    let receipt: DeliveryReceipt | undefined;
-
-    try {
-      await runMiddleware<OutboundEnvelope>(
-        snapshot,
-        envelope,
-        async () => {
-          terminalEntered = true;
-          let payload: unknown;
-          try {
-            payload = await prepareOutboundPayload(
-              envelope.payload,
-              request.conversation,
-              snapshot,
-              (map) => this.#interactions.rememberFallback(
-                request.conversation,
-                snapshot.generation,
-                map,
-              ),
-            );
-          } catch {
-            receipt = rejectedReceipt('outbound_payload_rejected');
-            return;
-          }
-
-          try {
-            const result = await requireAdapters(snapshot).send(adapter, {
-              conversation: request.conversation,
-              payload,
-            });
-            receipt = receiptFromEndpointResult(result, request.conversation);
-          } catch (error) {
-            receipt = receiptFromEndpointError(error);
-          }
-
-          if (receipt?.status === 'sent') {
-            await this.#conversations.recordOutbound(request, receipt);
-            this.#emitMessage({
-              direction: 'outbound',
-              conversation: request.conversation,
-              requester: request.requester,
-              contentPreview: previewText(payload),
-              ...(receipt.message?.id
-                ? { messageId: receipt.message.id }
-                : {}),
-              timestamp: Date.now(),
-            });
-          }
-        },
-        'outbound',
-      );
-    } catch {
-      return receipt ?? failedReceipt('outbound_middleware_failed');
-    }
-
-    if (!terminalEntered) {
-      logger.debug(formatCompact({
-        op: 'replychain_runtime_send',
-        status: 'suppressed',
-        reason: 'middleware_stopped_before_terminal',
-        conv: formatConversationLog(request.conversation),
-      }));
-      return suppressedReceipt();
-    }
-    logger.debug(formatCompact({
-      op: 'replychain_runtime_send',
-      status: receipt?.status ?? 'missing',
-      code: receipt?.failure?.code,
-      conv: formatConversationLog(request.conversation),
-    }));
-    return receipt ?? failedReceipt('outbound_delivery_incomplete');
-  }
-
   #acquire(): SnapshotLease {
     const inherited = this.#operationSnapshot.getStore();
     if (inherited?.active) return inherited;
@@ -789,159 +658,9 @@ function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefine
     : undefined;
 }
 
-/** Root resources 上的可选 html-renderer Host（未安装时降级为文本）。 */
-function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | undefined {
-  const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id);
-  return host && typeof (host as HtmlRendererHost).render === 'function'
-    ? host as HtmlRendererHost
-    : undefined;
-}
-
-/**
- * Sandbox（控制台 UI）按设计直接消费 html 段，不做 html→image/text 规范化。
- * 通过 adapter 能力 slot 的 owner 包名判断平台类型。
- */
-function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
-  const owner = snapshot.capabilities.get(adapter)?.owner;
-  return adapterTypeName(snapshot.tree.get(owner as PluginId)?.packageName) === 'sandbox';
-}
-
-async function prepareOutboundPayload(
-  rendered: unknown,
-  conversation: ConversationRef,
-  snapshot: RuntimeSnapshot,
-  rememberInteractiveFallback?: (map: Record<string, string>) => void,
-): Promise<unknown> {
-  const adapter = conversation.endpoint.id as CapabilityId;
-  const directHtml = isDirectHtmlConsumer(snapshot, adapter);
-  const markdownResolved = applyOutboundMarkdownPolicy(
-    rendered,
-    resolveOutboundMarkdownPolicy(adapter, snapshot),
-  );
-  let payload = directHtml
-    ? markdownResolved
-    : await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
-      mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
-    });
-  if (rememberInteractiveFallback) {
-    payload = applyOutboundInteractivePolicy(
-      payload,
-      resolveOutboundInteractivePolicy(adapter, snapshot),
-      rememberInteractiveFallback,
-    );
-  }
-  if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);
-  return payload;
-}
-
-function receiptFromEndpointResult(
-  messageId: string,
-  conversation: ConversationRef,
-): DeliveryReceipt {
-  return Object.freeze({
-    status: 'sent' as const,
-    message: Object.freeze({ conversation, id: messageId }),
-  });
-}
-
-function receiptFromEndpointError(error: unknown): DeliveryReceipt {
-  const message = error instanceof Error ? error.message : String(error);
-  if (/Unknown Adapter Endpoint|does not support outbound/u.test(message)) {
-    return unsupportedReceipt('outbound_unsupported');
-  }
-  if (/not active/u.test(message)) return failedReceipt('endpoint_inactive', true);
-  return failedReceipt('endpoint_send_failed', true);
-}
-
-function suppressedReceipt(): DeliveryReceipt {
-  return Object.freeze({ status: 'suppressed' as const });
-}
-
-function unsupportedReceipt(code: string): DeliveryReceipt {
-  return Object.freeze({
-    status: 'unsupported' as const,
-    failure: Object.freeze({ code, message: 'Outbound delivery is not supported.' }),
-  });
-}
-
-function rejectedReceipt(code: string): DeliveryReceipt {
-  return Object.freeze({
-    status: 'rejected' as const,
-    failure: Object.freeze({ code, message: 'Outbound payload was rejected.' }),
-  });
-}
-
-function failedReceipt(code: string, retryable = false): DeliveryReceipt {
-  return Object.freeze({
-    status: 'failed' as const,
-    failure: Object.freeze({
-      code,
-      message: 'Outbound delivery failed.',
-      ...(retryable ? { retryable: true } : {}),
-    }),
-  });
-}
-
-function middleware(snapshot: RuntimeSnapshot): MiddlewareIndex | undefined {
-  const projection = snapshot.projections.get(middlewareFeatureId);
-  return isMiddlewareIndex(projection) ? projection : undefined;
-}
-
-async function runMiddleware<TInput>(
-  snapshot: RuntimeSnapshot,
-  input: TInput,
-  terminal: () => Promise<void>,
-  target: 'inbound' | 'outbound',
-): Promise<void> {
-  const index = middleware(snapshot);
-  if (index) await index.run(input, terminal, target);
-  else await terminal();
-}
-
 function handlers(snapshot: RuntimeSnapshot): HandlerIndex | undefined {
   const projection = snapshot.projections.get(handlerFeatureId);
   return isHandlerIndex(projection) ? projection : undefined;
-}
-
-/** 日志用会话摘要（`kind:id@parentKind:parentId#threadId`），不拼 legacy target。 */
-function formatConversationLog(conversation: ConversationRef): string {
-  const base = `${conversation.kind}:${conversation.id}`;
-  const parent = conversation.parent
-    ? `@${conversation.parent.kind}:${conversation.parent.id}`
-    : '';
-  const thread = conversation.threadId ? `#${conversation.threadId}` : '';
-  return `${base}${parent}${thread}`;
-}
-
-/** 消息内容 → 预览文本（截断 200 字）；wire 段取 `data.text`，其余段记 `[type]`。 */
-function previewText(content: unknown): string {
-  const text = flattenContent(content);
-  return text.length > messagePreviewLimit
-    ? `${text.slice(0, messagePreviewLimit)}…`
-    : text;
-}
-
-function flattenContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (content == null) return '';
-  if (Array.isArray(content)) {
-    return content.map((item) => flattenContent(item)).join('');
-  }
-  if (typeof content === 'object') {
-    const record = content as Record<string, unknown>;
-    const data = record.data as Record<string, unknown> | undefined;
-    if (typeof record.type === 'string') {
-      if (data && typeof data.text === 'string') return data.text;
-      return `[${record.type}]`;
-    }
-    if (typeof record.text === 'string') return record.text;
-    try {
-      return JSON.stringify(content) ?? '';
-    } catch {
-      return String(content);
-    }
-  }
-  return String(content);
 }
 
 function withEndpointEventPayload<TPayload, TClient, TName extends string>(
