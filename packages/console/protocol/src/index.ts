@@ -354,13 +354,30 @@ export interface ConsoleRpcMessage {
   readonly [key: string]: unknown;
 }
 
+export const CONFIG_RPC = Object.freeze({
+  GET: 'config:get',
+  GET_ALL: 'config:get-all',
+  GET_SOURCE: 'config:get-source',
+  REPLACE_SOURCE: 'config:replace-source',
+  SET: 'config:set',
+} as const);
+
+export type ConsoleConfigFormat = 'yaml' | 'json';
+
+export interface ConsoleConfigSource {
+  readonly source: string;
+  readonly format: ConsoleConfigFormat;
+  readonly revision: string;
+  readonly configKeys: readonly string[];
+}
+
 export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'ping',
   'entries:get',
   'pages:list',
-  'config:get',
-  'config:get-all',
-  'config:get-yaml',
+  CONFIG_RPC.GET,
+  CONFIG_RPC.GET_ALL,
+  CONFIG_RPC.GET_SOURCE,
   'schema:get',
   'schema:get-all',
   'workrooms:get',
@@ -380,8 +397,8 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 ]);
 
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
-  'config:set',
-  'config:save-yaml',
+  CONFIG_RPC.SET,
+  CONFIG_RPC.REPLACE_SOURCE,
   'files:save',
   'env:save',
   'db:insert',

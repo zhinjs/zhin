@@ -27,7 +27,7 @@ export class JsonConfigDocument extends ConfigFileDocument {
     }
   }
 
-  protected prepareSource(
+  protected patchSource(
     source: string,
     patches: readonly ConfigPatch[],
   ): PreparedConfigFileSource {

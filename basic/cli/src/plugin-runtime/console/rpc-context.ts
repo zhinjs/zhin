@@ -55,7 +55,6 @@ function createRpcContext(
     im,
     onRestart,
     databaseHost,
-    primaryConfigDocument,
   } = composition;
   const principal = identity.authenticatedPrincipal
     ? Object.freeze({ principalId: identity.authenticatedPrincipal.principalId })
@@ -63,9 +62,10 @@ function createRpcContext(
   const context: RuntimeConsoleRpcContext = {
     authScope: identity.authScope,
     listPages: () => listPages(consoleRuntime),
-    readConfigYaml: () => configuration.readYaml(),
+    readConfigSource: () => configuration.readSource(),
     readConfigDocument: () => configuration.readDocument(),
-    writeConfigYaml: (yaml: string) => configuration.writeYaml(yaml),
+    replaceConfigSource: (source: string, expectedRevision: string) =>
+      configuration.replaceSource(source, expectedRevision),
     setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
     setPluginEnabled: async (instanceKey: string, enabled: boolean) =>
       pluginLifecycleStore.setPluginEnabled(
@@ -103,7 +103,6 @@ function createRpcContext(
     dbTables: databaseHost ? () => databaseHost.tables() : undefined,
     database: databaseHost?.console,
     extended: createExtendedConsoleRpcContext(composition, agent, principal),
-    listPluginKeys: () => configuration.listKeys(primaryConfigDocument),
     publishEvent: (type: string, data: unknown) => hub.publish(type, data),
   };
   return Object.freeze(context);

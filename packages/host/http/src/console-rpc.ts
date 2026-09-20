@@ -1,6 +1,8 @@
 import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
+  CONFIG_RPC,
+  type ConsoleConfigSource,
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
 } from '@zhin.js/console-protocol';
@@ -63,14 +65,13 @@ export type RuntimeConsoleRpcContext = {
   readonly authScope: AuthScope;
   listPages(): Promise<readonly RuntimeConsolePage[]>;
   /** Optional project config accessors for read-only config RPCs. */
-  readConfigYaml?(): Promise<string>;
-  listPluginKeys?(): Promise<readonly string[]>;
+  readConfigSource?(): Promise<ConsoleConfigSource>;
   readConfigDocument?(): Promise<Record<string, unknown>>;
-  /**
-   * Full-scope write: replace project config file contents (YAML or JSON text).
-   * Runtime Host does not hot-reload the process — callers should restart.
-   */
-  writeConfigYaml?(yaml: string): Promise<void>;
+  /** Full-scope, revision-checked replacement of the active Root config source. */
+  replaceConfigSource?(
+    source: string,
+    expectedRevision: string,
+  ): Promise<{ readonly revision: string }>;
   /**
    * Full-scope write: set `document[pluginName] = data` and persist.
    * Returns whether a process restart is required.
@@ -206,11 +207,12 @@ export async function dispatchRuntimeConsoleRpc(
       emit({ requestId, data: pages });
       return payloads;
     }
-    case 'config:get-yaml': {
+    case CONFIG_RPC.GET_SOURCE: {
       try {
-        const yaml = ctx.readConfigYaml ? await ctx.readConfigYaml() : '';
-        const pluginKeys = ctx.listPluginKeys ? await ctx.listPluginKeys() : [];
-        emit({ requestId, data: { yaml, pluginKeys } });
+        const config: ConsoleConfigSource = ctx.readConfigSource
+          ? await ctx.readConfigSource()
+          : { source: '', format: 'yaml', revision: '', configKeys: [] };
+        emit({ requestId, data: config });
       } catch (error) {
         emit({
           requestId,
@@ -219,7 +221,7 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:get-all': {
+    case CONFIG_RPC.GET_ALL: {
       try {
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
         emit({ requestId, data: document });
@@ -231,7 +233,7 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:get': {
+    case CONFIG_RPC.GET: {
       try {
         const key = String(message.pluginName ?? '');
         const document = ctx.readConfigDocument ? await ctx.readConfigDocument() : {};
@@ -277,22 +279,27 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:save-yaml': {
+    case CONFIG_RPC.REPLACE_SOURCE: {
       try {
-        const yaml = message.yaml;
-        if (typeof yaml !== 'string') {
-          emit({ requestId, error: 'yaml field is required' });
+        const source = message.source;
+        const expectedRevision = message.expectedRevision;
+        if (typeof source !== 'string') {
+          emit({ requestId, error: 'source field is required' });
           return payloads;
         }
-        if (!ctx.writeConfigYaml) {
+        if (typeof expectedRevision !== 'string' || !/^[a-f0-9]{64}$/u.test(expectedRevision)) {
+          emit({ requestId, error: 'expectedRevision is required' });
+          return payloads;
+        }
+        if (!ctx.replaceConfigSource) {
           emit({ requestId, error: 'Config write is not configured' });
           return payloads;
         }
-        await ctx.writeConfigYaml(yaml);
+        const result = await ctx.replaceConfigSource(source, expectedRevision);
         ctx.publishEvent?.('config:updated', { pluginName: null, keys: [] });
         emit({
           requestId,
-          data: { success: true, message: '配置已保存，需重启生效' },
+          data: { success: true, revision: result.revision, message: '配置已保存，需重启生效' },
         });
       } catch (error) {
         emit({
@@ -302,7 +309,7 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
-    case 'config:set': {
+    case CONFIG_RPC.SET: {
       try {
         const pluginName = message.pluginName;
         if (typeof pluginName !== 'string' || !pluginName) {

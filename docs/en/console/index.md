@@ -62,7 +62,7 @@ Runtime falls back to 8086 when no config exists; the current scaffold writes 80
 | Dashboard | `GET /api/system/status`, `GET /api/stats` | Runtime status, version, statistics overview |
 | Plugins | `GET /api/plugins`, `GET /api/plugins/<name>` | Plugin list and details (commands, tools, config schema) |
 | Endpoints | Endpoint summary + inbox table | Platform endpoint connection status; detail page includes unified inbox (messages / requests / notifications) |
-| Config | RPC `config:get-yaml` / `config:save-yaml` / `config:set` | View and edit `zhin.config.yml` online |
+| Config | RPC `config:get-source` / `config:replace-source` / `config:set` | View the active YAML/JSON Root source and edit it with revision checks |
 | Logs | `GET /api/logs`, `GET /api/logs/stats`, `DELETE /api/logs`, `POST /api/logs/cleanup` | System logs (`SystemLog` table, requires Database to be running) |
 | Cron | RPC `cron:*` | In-memory tasks registered by plugins (list); with Agent installed, can add/delete/pause persistent tasks |
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | Database browsing and editing, KV storage |

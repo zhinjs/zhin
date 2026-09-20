@@ -5,7 +5,6 @@ import type {
   DatabaseHost,
   RuntimeSnapshot,
   SnapshotReader,
-  RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import {
   createPluginLifecycleStore,
@@ -34,11 +33,10 @@ export interface RegisterConsoleRoutesOptions {
   readonly snapshot?: () => RuntimeSnapshot | undefined;
   readonly scheduleHost?: unknown;
   readonly eventHub: ConsoleEventHub;
-  readonly primaryConfigDocument?: RuntimeConfigDocument;
   readonly snapshots?: SnapshotReader;
   readonly pluginLifecycleFile?: string;
   readonly pluginLifecycleStore?: PluginLifecycleStore;
-  readonly configuration?: ConsoleConfigurationStore;
+  readonly configuration: ConsoleConfigurationStore;
 }
 
 /** Registers the Console HTTP surface without installing process-level subscriptions. */
@@ -54,11 +52,10 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     snapshot,
     scheduleHost,
     eventHub,
-    primaryConfigDocument,
     snapshots,
     pluginLifecycleFile = resolvePluginLifecycleFile(projectRoot),
     pluginLifecycleStore = createPluginLifecycleStore(),
-    configuration = new ConsoleConfigurationStore(projectRoot),
+    configuration,
   } = options;
   const base = normalizeBase(apiBase);
 
@@ -102,7 +99,6 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     onRestart,
     databaseHost,
     scheduleHost,
-    primaryConfigDocument,
     snapshots,
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });

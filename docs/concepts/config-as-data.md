@@ -119,6 +119,8 @@ interface PreparedConfigDocument {
 - **一致性**：候选文档与运行时校验过的候选不一致时抛 `ConfigDocumentDivergenceError`，宁可失败也不写分歧配置。
 - **格式多态**：`YamlConfigDocument` 在 AST 上应用 patch 并保留注释与缩进；`JsonConfigDocument` 复用 Runtime 的结构化 patch 语义并保留缩进与换行风格。
 
+composition root 只创建一个具体的 `ConfigFileDocument`。Root Runtime、Endpoint 配置命令和 Console 都接收这个实例，不再各自查找、解析或覆盖配置文件。Console 全文编辑通过 `readSource()` 取得原始文本、格式和 revision，再用 `prepareReplacement()` 提交；同一响应中的配置键也从该 revision 的文档投影，避免跨版本拼接结果。调用方之间发生竞争时明确返回 revision 冲突，不以最后写入者静默覆盖前一次修改。
+
 事务被编入 generation 交接：`RootRuntime.patchConfig` 先走影子 prepare（见 [generation 与生命周期](./generation-lifecycle.md)），文件 commit 发生在新一代资源激活之后；若交接失败，回滚顺序相反——先恢复文件，再停用影子代。任何一步失败，磁盘上的 Root 配置和内存里的运行时都不会出现半更新状态。
 
 外部直接编辑配置文件也可以：配置文件本身被 watch，外部修改会触发一次全量重载，以磁盘内容为准。

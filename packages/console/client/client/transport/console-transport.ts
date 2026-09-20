@@ -11,6 +11,7 @@ import { getApiBase, getToken, resolveApiUrl } from '../console-utils/remoteApi.
 import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
+  CONFIG_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
@@ -18,6 +19,7 @@ import {
   type ConsoleEventEnvelope,
   type ConsoleEventHistoryPage,
   type ConsoleEventHistoryQuery,
+  type ConsoleConfigSource,
 } from "@zhin.js/console-protocol";
 
 interface ConsoleEventCursor {
@@ -352,11 +354,11 @@ export class ConsoleTransport {
   }
 
   async getConfig(pluginName: string) {
-    return this.sendRequest<unknown>({ type: "config:get", pluginName });
+    return this.sendRequest<unknown>({ type: CONFIG_RPC.GET, pluginName });
   }
   async setConfig(pluginName: string, config: unknown) {
     return this.sendRequest<{ success?: boolean; reloaded?: boolean; message?: string }>({
-      type: "config:set",
+      type: CONFIG_RPC.SET,
       pluginName,
       data: config,
     });
@@ -365,16 +367,20 @@ export class ConsoleTransport {
     return this.sendRequest<unknown>({ type: "schema:get", pluginName });
   }
   async getAllConfigs() {
-    return this.sendRequest<Record<string, unknown>>({ type: "config:get-all" });
+    return this.sendRequest<Record<string, unknown>>({ type: CONFIG_RPC.GET_ALL });
   }
   async getAllSchemas() {
     return this.sendRequest<Record<string, unknown>>({ type: "schema:get-all" });
   }
-  async getConfigYaml() {
-    return this.sendRequest<{ yaml: string; pluginKeys: string[] }>({ type: "config:get-yaml" });
+  async getConfigSource() {
+    return this.sendRequest<ConsoleConfigSource>({ type: CONFIG_RPC.GET_SOURCE });
   }
-  async saveConfigYaml(yaml: string) {
-    return this.sendRequest<{ success: boolean; message?: string }>({ type: "config:save-yaml", yaml });
+  async replaceConfigSource(source: string, expectedRevision: string) {
+    return this.sendRequest<{ success: boolean; revision: string; message?: string }>({
+      type: CONFIG_RPC.REPLACE_SOURCE,
+      source,
+      expectedRevision,
+    });
   }
   async getEnvList() {
     return this.sendRequest<{ files: Array<{ name: string; exists: boolean }> }>({ type: "env:list" });

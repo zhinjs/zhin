@@ -79,6 +79,21 @@ plugins:
     expect(output).not.toContain('obsolete');
   });
 
+  it('replaces source with optimistic concurrency and preserves exact editor text', async () => {
+    const { file } = await configFile('http:\n  port: 1000\n');
+    const document = new YamlConfigDocument(file);
+    const current = await document.readSource();
+    const replacement = '# edited\nhttp:\n    port: 2000\n';
+    const prepared = await document.prepareReplacement(current.revision, replacement);
+
+    const committed = await prepared.commit();
+
+    expect(committed.document).toEqual({ http: { port: 2000 } });
+    expect(await readFile(file, 'utf8')).toBe(replacement);
+    await expect(document.prepareReplacement(current.revision, 'http: {}\n'))
+      .rejects.toBeInstanceOf(ConfigDocumentConflictError);
+  });
+
   it('restores the exact previous bytes when a committed transaction rolls back', async () => {
     const original = 'plugin:\r\n    mode: development # keep\r\nplugins: {}\r\n';
     const { file } = await configFile(original);

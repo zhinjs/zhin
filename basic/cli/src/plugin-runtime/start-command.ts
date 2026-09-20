@@ -2,7 +2,7 @@ import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
-import { createConfigDocument } from '@zhin.js/config-file';
+import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
 import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
@@ -30,6 +30,7 @@ import {
 } from '@zhin.js/runtime';
 import {
   createConsoleHostModules,
+  ConsoleConfigurationStore,
   installConsoleApi,
   installConsoleHttp,
   SystemLogStore,
@@ -137,6 +138,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     configFile,
     document: config,
   });
+  const consoleConfigurationStore = new ConsoleConfigurationStore({
+    projectRoot: options.root,
+    document: config,
+  });
   const host = new RootHost({
     projectRoot: options.root,
     config,
@@ -222,6 +227,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         eventHub: consoleEventHub,
         pluginLifecycleFile,
         pluginLifecycleStore,
+        configuration: consoleConfigurationStore,
         snapshot: () => host.runtime.snapshot,
         snapshots: host.runtime.snapshots,
         onRestart: () => {
@@ -640,7 +646,7 @@ async function readConfigDocumentValue(
 
 async function loadProjectConfig(
   root: string,
-): Promise<{ config: ConfigDocumentPort; file: string }> {
+): Promise<{ config: ConfigFileDocument; file: string }> {
   const existing: string[] = [];
   for (const candidate of ROOT_CONFIG_FILE_NAMES) {
     const file = join(root, candidate);

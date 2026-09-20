@@ -119,6 +119,8 @@ interface PreparedConfigDocument {
 - **Consistency**: If the candidate document diverges from the runtime-validated candidate, a `ConfigDocumentDivergenceError` is thrown -- preferring failure over writing divergent configuration.
 - **Format polymorphism**: `YamlConfigDocument` patches the AST and preserves comments and indentation; `JsonConfigDocument` reuses Runtime structural patch semantics and preserves indentation and line endings.
 
+The composition root creates one concrete `ConfigFileDocument`. Root Runtime, Endpoint configuration commands, and Console all receive that instance instead of discovering, parsing, or overwriting the configuration file independently. Console source editing reads the original text, format, and revision through `readSource()`, then commits through `prepareReplacement()`; configuration keys in the response are projected from the same revision. Competing callers receive an explicit revision conflict instead of silently overwriting the earlier update.
+
 Transactions are woven into generation handoff: `RootRuntime.patchConfig` first performs a shadow prepare (see [Generation and Lifecycle](./generation-lifecycle.md)), and the file commit happens after the new generation's resources are activated; if the handoff fails, the rollback order is reversed -- first restore the file, then deactivate the shadow generation. If any step fails, neither the Root config on disk nor the in-memory runtime will be left in a half-updated state.
 
 Direct external editing of the configuration file is also supported: the config file itself is watched, and external modifications trigger a full reload using the disk content as the source of truth.

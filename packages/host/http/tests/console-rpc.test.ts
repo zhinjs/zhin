@@ -41,27 +41,36 @@ describe('runtime console RPC', () => {
       }],
     });
 
-    const yaml = await dispatchRuntimeConsoleRpc(
-      { type: 'config:get-yaml', requestId: 4 },
+    const source = await dispatchRuntimeConsoleRpc(
+      { type: 'config:get-source', requestId: 4 },
       {
         authScope: 'demo',
         listPages: async () => pages,
-        readConfigYaml: async () => 'plugins: {}\n',
-        listPluginKeys: async () => ['@zhin.js/adapter-sandbox'],
+        readConfigSource: async () => ({
+          source: 'plugins: {}\n',
+          format: 'yaml',
+          revision: 'a'.repeat(64),
+          configKeys: ['@zhin.js/adapter-sandbox'],
+        }),
       },
     );
-    expect(pickRpcReply({ type: 'config:get-yaml', requestId: 4 }, yaml)).toEqual({
+    expect(pickRpcReply({ type: 'config:get-source', requestId: 4 }, source)).toEqual({
       requestId: 4,
-      data: { yaml: 'plugins: {}\n', pluginKeys: ['@zhin.js/adapter-sandbox'] },
+      data: {
+        source: 'plugins: {}\n',
+        format: 'yaml',
+        revision: 'a'.repeat(64),
+        configKeys: ['@zhin.js/adapter-sandbox'],
+      },
     });
   });
 
   it('enforces demo RPC allowlist and HTTP path allowlist', async () => {
     const denied = await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 3 },
+      { type: 'config:replace-source', requestId: 3 },
       { authScope: 'demo', listPages: async () => [] },
     );
-    expect(pickRpcReply({ type: 'config:save-yaml', requestId: 3 }, denied)?.error)
+    expect(pickRpcReply({ type: 'config:replace-source', requestId: 3 }, denied)?.error)
       .toMatch(/Demo scope/);
 
     expect(isDemoHttpAllowed('POST', '/api/console/request', '/api')).toBe(true);
@@ -173,23 +182,29 @@ describe('runtime console RPC', () => {
       .toMatchObject({ requestId: 71, error: expect.stringContaining('forbidden') });
   });
 
-  it('writes config via config:save-yaml and config:set on full scope', async () => {
+  it('writes config via config:replace-source and config:set on full scope', async () => {
     let stored = 'plugins: {}\n';
     const document: Record<string, unknown> = { plugins: {} };
 
     const saved = await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 10, yaml: 'plugins:\n  sandbox: {}\n' },
+      {
+        type: 'config:replace-source',
+        requestId: 10,
+        source: 'plugins:\n  sandbox: {}\n',
+        expectedRevision: 'a'.repeat(64),
+      },
       {
         authScope: 'full',
         listPages: async () => [],
-        writeConfigYaml: async (yaml) => {
-          stored = yaml;
+        replaceConfigSource: async (source) => {
+          stored = source;
+          return { revision: 'b'.repeat(64) };
         },
       },
     );
-    expect(pickRpcReply({ type: 'config:save-yaml', requestId: 10 }, saved)).toMatchObject({
+    expect(pickRpcReply({ type: 'config:replace-source', requestId: 10 }, saved)).toMatchObject({
       requestId: 10,
-      data: { success: true },
+      data: { success: true, revision: 'b'.repeat(64) },
     });
     expect(stored).toContain('sandbox');
 
@@ -251,7 +266,7 @@ describe('runtime console RPC', () => {
       .toMatch(/Demo scope/u);
   });
 
-  it('publishes config:updated after config:set / config:save-yaml and system:restarting on restart', async () => {
+  it('publishes config:updated after config:set / config:replace-source and system:restarting on restart', async () => {
     const published: Array<{ type: string; data: unknown }> = [];
     const publishEvent = (type: string, data: unknown) => {
       published.push({ type, data });
@@ -275,11 +290,16 @@ describe('runtime console RPC', () => {
 
     published.length = 0;
     await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 61, yaml: 'plugins: {}\n' },
+      {
+        type: 'config:replace-source',
+        requestId: 61,
+        source: 'plugins: {}\n',
+        expectedRevision: 'a'.repeat(64),
+      },
       {
         authScope: 'full',
         listPages: async () => [],
-        writeConfigYaml: async () => undefined,
+        replaceConfigSource: async () => ({ revision: 'b'.repeat(64) }),
         publishEvent,
       },
     );

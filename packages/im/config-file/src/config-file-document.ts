@@ -16,6 +16,11 @@ export interface PreparedConfigFileSource {
   readonly source: string;
 }
 
+export interface ConfigFileSourceSnapshot extends ConfigDocumentSnapshot {
+  readonly format: ConfigFileFormat;
+  readonly source: string;
+}
+
 interface ConfigFileState {
   readonly exists: boolean;
   readonly source: string;
@@ -59,10 +64,15 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
   }
 
   async read(): Promise<ConfigDocumentSnapshot> {
+    return this.readSource();
+  }
+
+  async readSource(): Promise<ConfigFileSourceSnapshot> {
     const state = await readConfigFileState(this.file);
-    return createConfigDocumentSnapshot(
+    return createConfigFileSourceSnapshot(
       this.parseSource(state.exists ? state.source : EMPTY_CONFIG_SOURCE),
       state,
+      this.format,
     );
   }
 
@@ -73,7 +83,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
     const state = await readConfigFileState(this.file);
     assertRevision(this.file, state, current.revision);
     const source = state.exists ? state.source : EMPTY_CONFIG_SOURCE;
-    const candidate = this.prepareSource(source, patches);
+    const candidate = this.patchSource(source, patches);
     return new PreparedConfigFileDocument(
       this.file,
       state,
@@ -83,8 +93,23 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
     );
   }
 
+  async prepareReplacement(
+    expectedRevision: string,
+    source: string,
+  ): Promise<PreparedConfigDocument> {
+    const state = await readConfigFileState(this.file);
+    assertRevision(this.file, state, expectedRevision);
+    return new PreparedConfigFileDocument(
+      this.file,
+      state,
+      expectedRevision,
+      source,
+      this.parseSource(source),
+    );
+  }
+
   protected abstract parseSource(source: string): RuntimeConfigDocument;
-  protected abstract prepareSource(
+  protected abstract patchSource(
     source: string,
     patches: readonly ConfigPatch[],
   ): PreparedConfigFileSource;
@@ -159,11 +184,17 @@ export function requireConfigObject(
   return Object.freeze(value as Record<string, unknown>);
 }
 
-function createConfigDocumentSnapshot(
+function createConfigFileSourceSnapshot(
   document: RuntimeConfigDocument,
   state: ConfigFileState,
-): ConfigDocumentSnapshot {
-  return Object.freeze({ document, revision: revision(state) });
+  format: ConfigFileFormat,
+): ConfigFileSourceSnapshot {
+  return Object.freeze({
+    document,
+    format,
+    source: state.exists ? state.source : EMPTY_CONFIG_SOURCE,
+    revision: revision(state),
+  });
 }
 
 function revision(state: Pick<ConfigFileState, 'exists' | 'source'>): string {

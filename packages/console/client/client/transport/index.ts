@@ -8,7 +8,7 @@ export {
 export {
   useConsoleTransport,
   useConfig,
-  useConfigYaml,
+  useConfigSource,
   useFiles,
   useEnvFiles,
   useDatabase,

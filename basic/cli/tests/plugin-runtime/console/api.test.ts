@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+import { createConfigDocument } from '@zhin.js/config-file';
 import { createHttpHost, createConsoleEventHub, type HttpHost } from '@zhin.js/host-http';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 import type { ImRuntime, RuntimeMessageEvent } from '@zhin.js/core/runtime';
@@ -16,6 +17,7 @@ import {
   type SnapshotReader,
 } from '@zhin.js/plugin-runtime';
 import { registerConsoleRoutes } from '../../../src/plugin-runtime/console/api-routes.js';
+import { ConsoleConfigurationStore } from '../../../src/plugin-runtime/console/configuration.js';
 import { isKnownConversationSession } from '../../../src/plugin-runtime/console/conversation-session.js';
 import { ConsoleMessageBindings } from '../../../src/plugin-runtime/console/message-bindings.js';
 import {
@@ -179,7 +181,6 @@ async function startHost(options: {
   projectRoot: string;
   snapshot?: () => RuntimeSnapshot;
   snapshots?: SnapshotReader;
-  primaryConfigDocument?: Readonly<Record<string, unknown>>;
 }): Promise<{ port: number }> {
   const host = createHttpHost({
     host: '127.0.0.1',
@@ -201,10 +202,17 @@ async function startHost(options: {
     im: stubIm(),
     eventHub: createConsoleEventHub(),
     snapshot: options.snapshot,
-    primaryConfigDocument: options.primaryConfigDocument,
+    configuration: configurationFor(options.projectRoot),
     snapshots: options.snapshots,
   });
   return host.listen();
+}
+
+function configurationFor(projectRoot: string): ConsoleConfigurationStore {
+  return new ConsoleConfigurationStore({
+    projectRoot,
+    document: createConfigDocument(join(projectRoot, 'zhin.config.yml')),
+  });
 }
 
 async function makePackageRoot(): Promise<string> {
@@ -1159,26 +1167,50 @@ describe('console REST routes', () => {
     expect(body.data).toEqual([]);
   });
 
-  it('rejects config:save-yaml with invalid YAML (400) and persists valid YAML', async () => {
+  it('revision-checks config:replace-source and rejects invalid source', async () => {
     const { port } = await startHost({ projectRoot });
-    const post = (yaml: string) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
+    const request = (body: Record<string, unknown>) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ type: 'config:save-yaml', requestId: 1, yaml }),
+      body: JSON.stringify(body),
     });
+    const sourceResponse = await request({ type: 'config:get-source', requestId: 1 });
+    const sourceBody = await sourceResponse.json() as {
+      data: { revision: string; format: string };
+    };
+    expect(sourceBody.data.format).toBe('yaml');
+    const expectedRevision = sourceBody.data.revision;
 
-    const bad = await post('http: [unclosed\n  port: }');
+    const bad = await request({
+      type: 'config:replace-source',
+      requestId: 2,
+      source: 'http: [unclosed\n  port: }',
+      expectedRevision,
+    });
     expect(bad.status).toBe(400);
     const badBody = await bad.json() as { success: boolean; error: string };
     expect(badBody.success).toBe(false);
-    expect(badBody.error).toContain('Invalid YAML');
+    expect(badBody.error).toContain('Cannot parse YAML config');
     // 非法 YAML 不得落盘
     expect(existsSync(join(projectRoot, 'zhin.config.yml'))).toBe(false);
 
-    const good = await post('http:\n  port: 8086\n');
+    const good = await request({
+      type: 'config:replace-source',
+      requestId: 3,
+      source: 'http:\n  port: 8086\n',
+      expectedRevision,
+    });
     expect(good.status).toBe(200);
     const saved = await readFile(join(projectRoot, 'zhin.config.yml'), 'utf8');
     expect(saved).toContain('port: 8086');
+
+    const stale = await request({
+      type: 'config:replace-source',
+      requestId: 4,
+      source: 'http:\n  port: 9090\n',
+      expectedRevision,
+    });
+    expect(stale.status).toBe(400);
   });
 
   it('rejects config:set with __proto__ as pluginName (400)', async () => {
@@ -1203,13 +1235,7 @@ describe('console REST routes', () => {
     // 磁盘文件是唯一数据源：即使 generation 内存快照不同，get-all 也读文件，
     // 且环境变量占位符原样保留。
     await writeFile(join(projectRoot, 'zhin.config.yml'), 'http:\n  port: 1000\n  token: ${HTTP_TOKEN}\n');
-    const { port } = await startHost({
-      projectRoot,
-      primaryConfigDocument: {
-        http: { port: 8086 },
-        plugins: { sandbox: { endpoints: [] } },
-      },
-    });
+    const { port } = await startHost({ projectRoot });
     const getAll = (requestId: number) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -1263,6 +1289,7 @@ describe('console SSE events', () => {
       projectRoot,
       im,
       eventHub: hub,
+      configuration: configurationFor(projectRoot),
     });
     const { port } = await host.listen();
 
@@ -1362,6 +1389,7 @@ describe('console SSE events', () => {
       consoleRuntime: stubConsoleRuntime(),
       projectRoot,
       eventHub: hub,
+      configuration: configurationFor(projectRoot),
     });
     const { port } = await host.listen();
 

@@ -71,6 +71,21 @@ describe('JsonConfigDocument', () => {
     expect(output).not.toMatch(/(?<!\r)\n/u);
   });
 
+  it('replaces source using the active JSON format and rejects YAML text', async () => {
+    const file = await configFile('zhin.config.json', '{"http":{"port":1000}}\n');
+    const document = new JsonConfigDocument(file);
+    const current = await document.readSource();
+    const replacement = '{\n    "http": { "port": 2000 }\n}\n';
+
+    await (await document.prepareReplacement(current.revision, replacement)).commit();
+
+    expect(await readFile(file, 'utf8')).toBe(replacement);
+    await expect(document.prepareReplacement(
+      (await document.readSource()).revision,
+      'http:\n  port: 3000\n',
+    )).rejects.toBeInstanceOf(ConfigDocumentParseError);
+  });
+
   it('restores exact bytes on rollback and rejects an external edit', async () => {
     const original = '{"plugins":{"demo":{"enabled":true}}}\n';
     const file = await configFile('zhin.config.json', original);

@@ -1049,6 +1049,19 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Move Endpoint configuration persistence onto the asynchronous transactional Root config port, add YAML and JSON parity, and make cross-file environment writes recoverable under the owner-directed architecture refactor."
+    },
+    {
+      "changeset": "unify-console-config-authority.md",
+      "packages": [
+        "@zhin.js/cli",
+        "@zhin.js/client",
+        "@zhin.js/config-file",
+        "@zhin.js/console-protocol",
+        "@zhin.js/host-http"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Make the shared transactional Root ConfigFileDocument the sole Console configuration authority and replace YAML-specific RPC compatibility names with one revision-checked YAML or JSON source contract under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

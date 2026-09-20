@@ -172,13 +172,21 @@ describe("ConsoleTransport REST/SSE transport", () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       status: 200,
-      json: async () => ({ success: true, data: { yaml: "http:\n  port: 1\n" } }),
+      json: async () => ({
+        success: true,
+        data: {
+          source: "http:\n  port: 1\n",
+          format: 'yaml',
+          revision: 'a'.repeat(64),
+          configKeys: [],
+        },
+      }),
     } as Response));
     vi.stubGlobal("fetch", fetchMock);
 
     const manager = new ConsoleTransport();
-    const data = await manager.getConfigYaml();
-    expect(data.yaml).toContain("port");
+    const data = await manager.getConfigSource();
+    expect(data.source).toContain("port");
     const init = fetchMock.mock.calls[0]![1] as RequestInit;
     expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
     expect(init.method).toBe("POST");

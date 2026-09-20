@@ -3,13 +3,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
+import { createConfigDocument } from '@zhin.js/config-file';
 import {
   ConsoleConfigurationStore,
 } from '../../../src/plugin-runtime/console/configuration.js';
 import {
+  configKeyPatch,
   flattenConfigDocument,
-  writeConfigKey,
-} from '../../../src/plugin-runtime/console/configuration-document.js';
+} from '../../../src/plugin-runtime/console/configuration-projection.js';
 
 const tempRoots: string[] = [];
 
@@ -52,36 +53,32 @@ describe('config document flatten / write namespace', () => {
     expect(Object.prototype.hasOwnProperty.call(flat, '__proto__')).toBe(false);
   });
 
-  it('writes host keys to top-level and plugins under plugins.*', () => {
-    const document: Record<string, unknown> = { plugins: { sandbox: {} } };
-    writeConfigKey(document, 'http', { port: 9 });
-    writeConfigKey(document, 'sandbox', { endpoints: [] });
-    writeConfigKey(document, 'new-plugin', { enabled: true });
-    expect(document.http).toEqual({ port: 9 });
-    expect((document.plugins as Record<string, unknown>).sandbox).toEqual({ endpoints: [] });
-    expect((document.plugins as Record<string, unknown>)['new-plugin']).toEqual({ enabled: true });
+  it('addresses host keys at the root and Plugin keys under plugins.*', () => {
+    const document = { plugins: { sandbox: {} } };
+    expect(configKeyPatch(document, 'http', { port: 9 }).path).toEqual(['http']);
+    expect(configKeyPatch(document, 'sandbox', { endpoints: [] }).path)
+      .toEqual(['plugins', 'sandbox']);
+    expect(configKeyPatch(document, 'new-plugin', { enabled: true }).path)
+      .toEqual(['plugins', 'new-plugin']);
   });
 
   it('rejects __proto__/constructor/prototype as config keys', () => {
     const document: Record<string, unknown> = {};
     for (const key of ['__proto__', 'constructor', 'prototype']) {
-      expect(() => writeConfigKey(document, key, { polluted: true })).toThrow(/Invalid config key/);
+      expect(() => configKeyPatch(document, key, { polluted: true })).toThrow(/Invalid config key/);
     }
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();
-    expect(document.plugins).toBeUndefined();
   });
 
   it('treats prototype-inherited names (toString) as plugin keys, not top-level keys', () => {
     const document: Record<string, unknown> = {};
-    writeConfigKey(document, 'toString', { enabled: true });
-    // 'toString' in document 为 true（原型链），但不得写到顶层
-    expect(Object.prototype.hasOwnProperty.call(document, 'toString')).toBe(false);
-    expect((document.plugins as Record<string, unknown>).toString).toEqual({ enabled: true });
+    expect(configKeyPatch(document, 'toString', { enabled: true }).path)
+      .toEqual(['plugins', 'toString']);
   });
 
   it('rejects plugins arrays instead of promoting legacy configuration', () => {
     const document: Record<string, unknown> = { plugins: ['sandbox', 'icqq'] };
-    expect(() => writeConfigKey(document, 'sandbox', { endpoints: [{ name: 'bot' }] }))
+    expect(() => configKeyPatch(document, 'sandbox', { endpoints: [{ name: 'bot' }] }))
       .toThrow(/plugins must be an object keyed by Plugin instanceKey/);
     expect(document.plugins).toEqual(['sandbox', 'icqq']);
   });
@@ -92,7 +89,7 @@ describe('config document flatten / write namespace', () => {
     await writeFile(join(root, 'zhin.config.yml'), 'plugins:\n  a: {}\n');
 
     // 无锁时两次 读-改-写 基于同一份旧文档，后写覆盖先写（丢一个键）。
-    const configuration = new ConsoleConfigurationStore(root);
+    const configuration = createStore(root, 'zhin.config.yml');
     await Promise.all([
       configuration.setKey('a', { x: 1 }),
       configuration.setKey('b', { y: 2 }),
@@ -115,26 +112,40 @@ describe('config document flatten / write namespace', () => {
     expect(after.plugins.d).toEqual({ ok: true });
   });
 
-  it('preserves JSON syntax when replacing config through the YAML editor contract', async () => {
+  it('exposes and replaces JSON source without translating formats', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-json-'));
     tempRoots.push(root);
     await writeFile(join(root, 'zhin.config.json'), '{"http":{"port":1000}}\n');
 
-    const configuration = new ConsoleConfigurationStore(root);
-    await configuration.writeYaml('http:\n  port: 2000\n');
+    const configuration = createStore(root, 'zhin.config.json');
+    const current = await configuration.readSource();
+    expect(current.format).toBe('json');
+    expect(current.configKeys).toEqual(['http']);
+    const source = '{\n  "http": { "port": 2000 }\n}\n';
+    await configuration.replaceSource(source, current.revision);
 
     expect(JSON.parse(await readFile(join(root, 'zhin.config.json'), 'utf8'))).toEqual({
       http: { port: 2000 },
     });
   });
 
-  it('rejects multiple Root configuration files instead of selecting one implicitly', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-multiple-'));
+  it('rejects stale whole-document replacements', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-conflict-'));
     tempRoots.push(root);
-    await writeFile(join(root, 'config.json'), '{}\n');
-    await writeFile(join(root, 'zhin.config.yml'), '{}\n');
+    const file = join(root, 'zhin.config.yml');
+    await writeFile(file, 'http:\n  port: 1000\n');
+    const configuration = createStore(root, 'zhin.config.yml');
+    const current = await configuration.readSource();
+    await writeFile(file, 'http:\n  port: 2000\n');
 
-    const configuration = new ConsoleConfigurationStore(root);
-    await expect(configuration.readDocument()).rejects.toThrow(/Multiple Root config files found/);
+    await expect(configuration.replaceSource('http:\n  port: 3000\n', current.revision))
+      .rejects.toThrow(/changed since it was read/);
   });
 });
+
+function createStore(root: string, fileName: string): ConsoleConfigurationStore {
+  return new ConsoleConfigurationStore({
+    projectRoot: root,
+    document: createConfigDocument(join(root, fileName)),
+  });
+}

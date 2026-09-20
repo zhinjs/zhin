@@ -123,11 +123,13 @@ export function useConfig(pluginName: string, options?: { autoLoad?: boolean; au
   );
 }
 
-export function useConfigYaml() {
+export function useConfigSource() {
   const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());
-  const [yaml, setYaml] = useState("");
-  const [pluginKeys, setPluginKeys] = useState<string[]>([]);
+  const [source, setSource] = useState("");
+  const [format, setFormat] = useState<'yaml' | 'json'>('yaml');
+  const [revision, setRevision] = useState("");
+  const [configKeys, setConfigKeys] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -137,9 +139,11 @@ export function useConfigYaml() {
     setLoading(true);
     setError(null);
     try {
-      const result = await wsManager.getConfigYaml();
-      setYaml(result.yaml);
-      setPluginKeys(result.pluginKeys);
+      const result = await wsManager.getConfigSource();
+      setSource(result.source);
+      setFormat(result.format);
+      setRevision(result.revision);
+      setConfigKeys([...result.configKeys]);
       return result;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown error");
@@ -154,8 +158,10 @@ export function useConfigYaml() {
       setLoading(true);
       setError(null);
       try {
-        const result = await wsManager.saveConfigYaml(content);
-        setYaml(content);
+        if (!revision) throw new Error('Config source must be loaded before it can be replaced');
+        const result = await wsManager.replaceConfigSource(content, revision);
+        setSource(content);
+        setRevision(result.revision);
         return result;
       } catch (e) {
         setError(e instanceof Error ? e.message : "Unknown error");
@@ -164,14 +170,17 @@ export function useConfigYaml() {
         setLoading(false);
       }
     },
-    [wsManager],
+    [revision, wsManager],
   );
 
-  useAutoLoadOnce(connected, "config-source", !!yaml || loading, () => {
+  useAutoLoadOnce(connected, "config-source", !!revision || loading, () => {
     load().catch(() => {});
   });
 
-  return useMemo(() => ({ yaml, pluginKeys, loading, error, load, save }), [yaml, pluginKeys, loading, error, load, save]);
+  return useMemo(
+    () => ({ source, format, revision, configKeys, loading, error, load, save }),
+    [source, format, revision, configKeys, loading, error, load, save],
+  );
 }
 
 export function useFiles() {

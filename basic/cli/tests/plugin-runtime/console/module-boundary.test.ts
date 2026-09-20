@@ -42,7 +42,7 @@ describe('Console Host module boundary', () => {
       'asset-server.ts',
       'agent-routes.ts',
       'configuration.ts',
-      'configuration-document.ts',
+      'configuration-projection.ts',
       'console-schema.ts',
       'conversation-session.ts',
       'data-lifecycle-routes.ts',

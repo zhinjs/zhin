@@ -36,19 +36,20 @@ export interface InstallConsoleApiOptions {
   readonly pluginLifecycleFile?: string;
   readonly pluginLifecycleStore: PluginLifecycleStore;
   readonly eventHub?: ConsoleEventHub;
+  readonly configuration: ConsoleConfigurationStore;
 }
 
 export function installConsoleApi(options: InstallConsoleApiOptions): RootResourceInstaller {
   const apiBase = normalizeBase(options.apiBase ?? '/api');
   const hub = options.eventHub ?? createConsoleEventHub();
-  const configuration = new ConsoleConfigurationStore(options.projectRoot);
+  const configuration = options.configuration;
   const loginAssistBindings = new ConsoleLoginAssistBindings();
   const messageBindings = new ConsoleMessageBindings({
     hub,
     databaseHost: options.databaseHost,
   });
 
-  return ({ resources, config, lifecycle }) => {
+  return ({ resources, lifecycle }) => {
     const http = resources.use(httpHostToken);
     resources.provide(runtimeEventPublisherToken, hub);
     resources.provide(consoleEventHubToken, hub);
@@ -68,7 +69,6 @@ export function installConsoleApi(options: InstallConsoleApiOptions): RootResour
       snapshot: options.snapshot,
       scheduleHost: options.scheduleHost,
       eventHub: hub,
-      primaryConfigDocument: config.document,
       snapshots: options.snapshots,
       pluginLifecycleFile: options.pluginLifecycleFile
         ?? resolvePluginLifecycleFile(options.projectRoot),

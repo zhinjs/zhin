@@ -23,7 +23,7 @@ export class YamlConfigDocument extends ConfigFileDocument {
     );
   }
 
-  protected prepareSource(
+  protected patchSource(
     source: string,
     patches: readonly ConfigPatch[],
   ): PreparedConfigFileSource {

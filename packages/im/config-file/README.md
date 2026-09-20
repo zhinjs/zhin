@@ -36,7 +36,9 @@ Root 先用组合后的 JSON Schema 校验候选文档，再执行受影响 Plug
 
 ## 文档事务
 
-`read()` 返回文档和值对应的 SHA-256 revision。`prepare()` 只构造候选内容，不写文件。`commit()` 再次核对 revision，然后通过同目录临时文件和原子 rename 落盘。`rollback()` 同样核对当前 revision，防止覆盖事务之外的编辑。
+`read()` 返回文档和值对应的 SHA-256 revision。`readSource()` 在同一快照中额外返回原始文本和格式。`prepare()` 只构造结构化 patch 的候选内容，`prepareReplacement(expectedRevision, source)` 则校验并准备一次保留原始字节的全文替换。两者都不提前写文件；`commit()` 再次核对 revision，然后通过同目录临时文件和原子 rename 落盘。`rollback()` 同样核对当前 revision，防止覆盖事务之外的编辑。
+
+同一进程内的 Root Runtime、Endpoint 配置命令和 Console 应共享 composition root 创建的同一个 `ConfigFileDocument`。调用方可以各自串行化业务操作；跨调用方竞争由 revision 冲突显式拒绝，不允许任何模块重新发现配置文件或直接覆盖磁盘。
 
 - `ConfigDocumentParseError`：配置无法解析或根节点不是对象。
 - `ConfigDocumentConflictError`：read、prepare、commit 或 rollback 之间文件被其他写入者修改。

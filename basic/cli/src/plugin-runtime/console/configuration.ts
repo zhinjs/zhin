@@ -1,45 +1,70 @@
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import type { ConfigFileDocument } from '@zhin.js/config-file';
+import type { ConsoleConfigSource } from '@zhin.js/console-protocol';
 import {
-  flattenConfigDocument,
-  listConsoleConfigKeys,
-  readProjectConfigDocument,
-  readProjectConfigYaml,
-  writeProjectConfigKey,
-  writeProjectConfigYaml,
-} from './configuration-document.js';
+  readPluginConfigurationMap,
+  type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
+import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import { readPluginPackageMap } from './plugin-package-map.js';
+import { configKeyPatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 
-/** Owns one project's Console configuration I/O and serializes mutations. */
+/** Owns one project's Console configuration projection over the Root config authority. */
 export class ConsoleConfigurationStore {
   readonly #projectRoot: string;
+  readonly #document: ConfigFileDocument;
   readonly #schemas: PluginSchemaCatalog;
-  #writeTail: Promise<unknown> = Promise.resolve();
+  #mutationTail: Promise<void> = Promise.resolve();
 
-  constructor(projectRoot: string) {
-    this.#projectRoot = projectRoot;
-    this.#schemas = new PluginSchemaCatalog(projectRoot);
+  constructor(options: {
+    readonly projectRoot: string;
+    readonly document: ConfigFileDocument;
+  }) {
+    this.#projectRoot = options.projectRoot;
+    this.#document = options.document;
+    this.#schemas = new PluginSchemaCatalog(options.projectRoot);
   }
 
-  readYaml(): Promise<string> {
-    return readProjectConfigYaml(this.#projectRoot);
+  readSource(): Promise<ConsoleConfigSource> {
+    return this.#afterMutations(async () => {
+      const snapshot = await this.#document.readSource();
+      return Object.freeze({
+        source: snapshot.source,
+        format: snapshot.format === 'YAML' ? 'yaml' : 'json',
+        revision: snapshot.revision,
+        configKeys: await this.#listKeys(snapshot.document),
+      });
+    });
   }
 
-  async readDocument(): Promise<Record<string, unknown>> {
-    return flattenConfigDocument(await readProjectConfigDocument(this.#projectRoot));
+  readDocument(): Promise<Record<string, unknown>> {
+    return this.#afterMutations(async () => {
+      const snapshot = await this.#document.read();
+      return flattenConfigDocument(snapshot.document);
+    });
   }
 
-  writeYaml(yaml: string): Promise<void> {
-    return writeProjectConfigYaml(this.#projectRoot, yaml);
+  replaceSource(
+    source: string,
+    expectedRevision: string,
+  ): Promise<{ readonly revision: string }> {
+    return this.#serialize(async () => {
+      const prepared = await this.#document.prepareReplacement(expectedRevision, source);
+      const committed = await prepared.commit();
+      return Object.freeze({ revision: committed.revision });
+    });
   }
 
   setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }> {
-    const run = this.#writeTail.then(
-      () => writeProjectConfigKey(this.#projectRoot, pluginName, data),
-      () => writeProjectConfigKey(this.#projectRoot, pluginName, data),
-    );
-    this.#writeTail = run.catch(() => undefined);
-    return run;
+    return this.#serialize(async () => {
+      const current = await this.#document.read();
+      const prepared = await this.#document.prepare(current, [
+        configKeyPatch(current.document, pluginName, data),
+      ]);
+      await prepared.commit();
+      return Object.freeze({ restartRequired: true });
+    });
   }
 
   readEnvironmentFile(filename: string): Promise<string> {
@@ -55,11 +80,34 @@ export class ConsoleConfigurationStore {
   }
 
   async readAllSchemas(): Promise<Record<string, unknown>> {
-    const keys = await listConsoleConfigKeys(this.#projectRoot);
-    return this.#schemas.readAll(keys);
+    return this.#schemas.readAll(await this.listKeys());
   }
 
-  listKeys(primaryConfigDocument?: RuntimeConfigDocument): Promise<string[]> {
-    return listConsoleConfigKeys(this.#projectRoot, primaryConfigDocument);
+  listKeys(): Promise<string[]> {
+    return this.#afterMutations(async () => {
+      const { document } = await this.#document.read();
+      return this.#listKeys(document);
+    });
+  }
+
+  async #listKeys(document: RuntimeConfigDocument): Promise<string[]> {
+    const keys = new Set<string>(Object.keys(readPluginConfigurationMap(document)));
+    for (const key of HOST_CONFIG_KEYS) {
+      if (Object.prototype.hasOwnProperty.call(document, key)) keys.add(key);
+    }
+    for (const key of (await readPluginPackageMap(this.#projectRoot)).keys()) keys.add(key);
+    return [...keys].sort((left, right) => left.localeCompare(right));
+  }
+
+  #afterMutations<T>(operation: () => Promise<T>): Promise<T> {
+    return this.#mutationTail.then(operation);
+  }
+
+  #serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#mutationTail.then(operation);
+    this.#mutationTail = result.then(() => undefined, () => undefined);
+    return result;
   }
 }
+
+export { configKeyPatch, flattenConfigDocument } from './configuration-projection.js';
