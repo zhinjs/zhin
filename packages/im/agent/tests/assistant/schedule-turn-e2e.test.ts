@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createTaskExecutor } from '../../src/task-executor.js';
+import { createNotificationRouter } from '../../src/assistant/notification-router.js';
 import type { ScheduleJob } from '../../src/assistant/types.js';
 
 describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
@@ -14,7 +15,8 @@ describe('schedule turn e2e (TaskExecutor → ScheduleExecutionDomain)', () => {
       },
     }));
     const executor = createTaskExecutor({
-      domain: { execute }, resolveAdapter: () => undefined,
+      domain: { execute },
+      router: createNotificationRouter({ resolveAdapter: () => undefined }),
     });
     const job: ScheduleJob = {
       id: 'sched-daily', enabled: true, schedule: { kind: 'every', everyMs: 60_000 },

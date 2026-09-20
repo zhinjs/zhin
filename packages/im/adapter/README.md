@@ -1,6 +1,6 @@
 # @zhin.js/adapter
 
-Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/*.ts` 默认导出一个
+Zhin Plugin Runtime 的平台接入创作面。项目只需在 `adapters/**/*/index.ts` 默认导出一个
 `defineAdapter()`；框架负责发现、多账号展开、热重载切代、事件准入和资源清理。
 
 ```ts
@@ -33,6 +33,34 @@ export default defineAdapter({
 完整入门见 [适配器开发](../../../docs/authoring/adapters.md)，重连与心跳见
 [端点生命周期](../../../docs/authoring/endpoint-lifecycle.md)。
 
+## 源码地图
+
+适配器包保持单层目录，避免为了分类制造更深的相对路径；文件按稳定责任划分：
+
+| 文件 | 只负责 |
+| --- | --- |
+| `definition.ts` | `defineAdapter()`、能力声明和配置策略；作者入口 |
+| `endpoint-contract.ts` | Client、事件、消息与紧凑实现的纯类型契约；不含运行时状态 |
+| `endpoint.ts` | 可继承的 Endpoint 平台边界、身份绑定与代际事件准入 |
+| `managed-endpoint.ts` | 把 `{ client, connect, activate?, send }` 转成完整 Endpoint；框架内部 |
+| `adapter-index.ts` | 展开配置并编排一代 Endpoint；框架内部 |
+| `endpoint-{client,control,content,management}.ts` | 四个相互独立的可选端口 |
+| `endpoint-lifecycle.ts` | WebSocket/SSE 的连接、重连与心跳基座 |
+| `endpoint-configuration.ts` | Endpoint 配置持久化端口；不包含文件系统实现 |
+| `endpoint-commands.ts` | Endpoint 配置命令语义与运行态投影；通过端口持久化 |
+
+核心 import 依赖固定为：
+
+```text
+adapter-index → managed-endpoint → endpoint → endpoint-contract
+definition ─────────────────────→ endpoint
+definition ───────────────────────────────→ endpoint-contract
+```
+
+平台包只从 `zhin.js/adapter` 导入，不引用这些源码路径。阅读普通适配器时先看
+`definition.ts` 和 `endpoint-contract.ts`；只有实现自定义生命周期时才需要看
+`endpoint.ts`，`managed-endpoint.ts` 与 `adapter-index.ts` 属于 Runtime 装配细节。
+
 本包只依赖 Kernel 与 Feature Kit，不包含具体平台 SDK。生产 manifest 指向
 `lib/provider.js`；开发时可通过 conditional export 读取源码。
 
@@ -57,11 +85,16 @@ AdapterIndex 和 generation lifecycle 管理。
 Endpoint 不得把自己注册进模块级 Map。需要从命令、Agent tool 或 Host 查找当前 Endpoint
 时，应解析当前 generation 的 AdapterIndex/Resource View，不能建立 second source of truth。
 
-旧 `@zhin.js/core` 的 `Adapter` class 同时承担集合、消息管线、发送和 Registry，属于兼容
-外壳，不是 Plugin Runtime 的 authoring model。新代码不得依赖、继承或伪造该 class；运行
+已移除的 `@zhin.js/core` `Adapter` class 曾同时承担集合、消息管线、发送和 Registry。
+新代码不得重新引入、继承或伪造该 class；运行
 期协作应依赖 `OutboundMessageService`、`OutboundHost`、`EndpointControl` 等窄 Interface。
 `pnpm check:adapter-endpoint-boundaries` 对现存 legacy Adapter consumer 与模块级 Agent
 Endpoint registry 使用基线 allowlist 做单调收缩门禁：允许逐项删除，但禁止新增。
+
+Endpoint 管理命令只依赖异步 `EndpointConfigurationStore`。Root 配置文件定位、YAML/JSON
+事务、YAML 注释保留和 `.env` 写入由 CLI composition root 的实现负责，并以根 Resource
+注入。平台适配器不得直接导入 `node:fs`、`node:path` 或序列化库来修改项目配置；非
+canonical 的 `plugins` 结构直接报错，由显式迁移命令处理。
 
 ## Transport Contract
 
@@ -133,7 +166,7 @@ stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈
 
 - `plugins.<adapter>` 配置该 adapter 所有 endpoint 的**通用配置**（如凭据共享字段、
   `master`、`intents`）。
-- `plugins.<adapter>.endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
+- `plugins.<adapter> endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
   配置，`name` 必填。
 - 不写 `endpoints` 时退化为单 endpoint（历史行为），实例 config 原样传给 `create()`。
 

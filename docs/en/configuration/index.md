@@ -270,7 +270,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` governs multimodal input and output. `ai.knowledge.baseDir` selects the local knowledge directory and defaults to `knowledge`.
+`ai.multimodal` governs multimodal input and output. `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
 
 Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
 
@@ -288,8 +288,7 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        name: sandbox-bot
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 

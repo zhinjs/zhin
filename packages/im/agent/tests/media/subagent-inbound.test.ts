@@ -10,7 +10,7 @@ import * as path from 'node:path';
 type SegmentMediaRef = Parameters<typeof buildSubagentInboundTask>[1][number];
 
 describe('buildSubagentInboundTask', () => {
-  it('应为图片落盘并写入 analyze_media 路径提示', async () => {
+  it('无视觉能力时应明确拒绝图片理解并保留落盘路径', async () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-subagent-inbound-'));
     const refs: SegmentMediaRef[] = [
       {
@@ -28,7 +28,7 @@ describe('buildSubagentInboundTask', () => {
     const text = typeof inbound.runInput === 'string'
       ? inbound.runInput
       : inbound.runInput.filter(p => p.type === 'text').map(p => p.text).join('\n');
-    expect(text).toContain('analyze_media');
+    expect(text).toContain('当前模型不支持图片输入');
     expect(text).toContain(inbound.spooledPaths[0]!);
   });
 

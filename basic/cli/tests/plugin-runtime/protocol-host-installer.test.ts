@@ -57,7 +57,7 @@ describe('Protocol Host composition', () => {
     } as never);
     resources.provide(agentHostToken, {
       protocol: { listBindings: () => [], execute: vi.fn() },
-      introspection: { listTools: () => [], listMcpServers: () => [] },
+      introspection: { listMcpServers: () => [] },
       console: {} as never,
     });
     resources.provide(workroomSchedulerAssignmentRouteRegistryToken, {

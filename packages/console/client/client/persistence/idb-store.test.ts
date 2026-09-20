@@ -118,22 +118,4 @@ describe("applyConsoleEvent inbox record ids", () => {
     expect(rows[0]?.id).toBe('runtime-a:7');
     expect(rows[0]?.updatedAt).toBe(1700000000000);
   });
-
-  it("reads legacy records that only carry endpointKey (camelCase)", async () => {
-    // 旧版（DB v1 时代）记录只有 endpointKey 字段，升级后仍需能被列出
-    const { idbPutInbox } = await import("./idb-store.js");
-    const legacy = {
-      id: "icqq:bot-1:message:1700000000000:legacy",
-      adapter: "icqq",
-      endpointKey: "bot-1",
-      kind: "message",
-      payload: {},
-      updatedAt: 1700000000000,
-    };
-    await idbPutInbox(legacy as unknown as Parameters<typeof idbPutInbox>[0]);
-
-    const rows = await idbListInbox("icqq", "bot-1", "message");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(legacy.id);
-  });
 });

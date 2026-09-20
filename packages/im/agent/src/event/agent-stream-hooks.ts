@@ -4,15 +4,6 @@
 import type { AIHookEvent, AIHookEventType } from '../resource-hub/types.js';
 import { AgentStreamEventType, type AgentStreamEvent, type AgentStreamEventTypeName } from '@zhin.js/ai/agent-stream';
 
-/** Legacy `type:action` hook keys → Eve-aligned stream event names. */
-export const LEGACY_HOOK_STREAM_ALIASES: Readonly<Record<string, AgentStreamEventTypeName>> = {
-  'message:received': AgentStreamEventType.MESSAGE_RECEIVED,
-  'message:sent': AgentStreamEventType.MESSAGE_COMPLETED,
-  'session:new': AgentStreamEventType.SESSION_STARTED,
-  'tool:call': AgentStreamEventType.ACTIONS_REQUESTED,
-  'tool:result': AgentStreamEventType.ACTION_RESULT,
-};
-
 export function isAgentStreamHookEventName(event: string): event is AgentStreamEventTypeName {
   return (Object.values(AgentStreamEventType) as string[]).includes(event);
 }

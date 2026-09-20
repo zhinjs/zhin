@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   checkFileAccess, assertFileAccess, checkBashCommandSafety, shellEscape,
-  isBlockedDevicePath, classifyBashCommand, isFileStale,
+  isBlockedDevicePath, isMemoryDataPath, classifyBashCommand, isFileStale,
   MAX_READ_FILE_SIZE, MAX_EDIT_FILE_SIZE,
 } from '../src/security/file-policy.js';
 
@@ -72,6 +72,16 @@ describe('file-policy', () => {
         expect(checkFileAccess('data/memory/global/MEMORY.md').allowed).toBe(true);
         expect(checkFileAccess('data/memory/platforms/icqq/RULES.md').allowed).toBe(true);
         expect(checkFileAccess('data/memory/sessions/abc/MEMORY.md').allowed).toBe(true);
+      });
+
+      it('阻止 data/memory 根目录文件与未知层', () => {
+        expect(checkFileAccess('data/memory/MEMORY.md').allowed).toBe(false);
+        expect(checkFileAccess('data/memory/notes/private.md').allowed).toBe(false);
+      });
+
+      it('memory 豁免严格锚定到指定工作区', () => {
+        expect(isMemoryDataPath('/tmp/ws/data/memory/global/MEMORY.md', '/tmp/ws')).toBe(true);
+        expect(isMemoryDataPath('/tmp/other/data/memory/global/MEMORY.md', '/tmp/ws')).toBe(false);
       });
 
       it('允许 data/media 入站/出站缓存路径', () => {

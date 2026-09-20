@@ -23,7 +23,7 @@ describe('RootRuntime tracer bullet', () => {
     const greeting = createToken<string>('test.greeting');
     const pluginSource = join(project, 'plugin.ts');
     const featureSource = join(project, 'packages/command/index.ts');
-    const commandSource = join(project, 'commands/gh/issue/list.ts');
+    const commandSource = join(project, 'commands/gh/issue/list/index.ts');
     let setupCalls = 0;
     let resourceDisposals = 0;
     modules.set(pluginSource, {
@@ -133,7 +133,7 @@ describe('RootRuntime tracer bullet', () => {
       default: definePlugin({ name: 'root' }),
     });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
-    modules.set(join(project, 'commands/gh/issue/list.ts'), {
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), {
       default: defineCommand({ execute: () => 'ok' }),
     });
     modules.closeError = new Error('module close failed');
@@ -168,7 +168,7 @@ describe('RootRuntime tracer bullet', () => {
       }),
     });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
-    modules.set(join(project, 'commands/gh/issue/list.ts'), {
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), {
       default: defineCommand({ execute: () => 'ok' }),
     });
     const runtime = new RootRuntime({
@@ -248,7 +248,7 @@ async function createProject(): Promise<string> {
   });
   await touch(join(root, 'plugin.ts'));
   await touch(join(root, 'packages/command/index.ts'));
-  await touch(join(root, 'commands/gh/issue/list.ts'));
+  await touch(join(root, 'commands/gh/issue/list/index.ts'));
   return realpath(root);
 }
 

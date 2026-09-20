@@ -35,7 +35,7 @@ export class ConventionCapabilityDeltaResolver {
   ): Promise<ConventionCapabilityDelta> {
     const capabilities = new Map<FeatureId, Set<CapabilityId>>();
     const unresolved: FallbackInvalidation[] = [];
-    const cache = new Map<string, readonly { readonly source: string; readonly id: CapabilityId }[]>();
+    const cache = new Map<string, readonly DiscoveredCapabilitySource[]>();
 
     for (const fallback of fallbacks) {
       let claimed = false;
@@ -46,7 +46,8 @@ export class ConventionCapabilityDeltaResolver {
           for (const root of roots) {
             const discovered = await this.#discover(cache, provider, root);
             for (const candidate of discovered) {
-              if (candidate.source !== fallback.source) continue;
+              if (candidate.source !== fallback.source
+                && !candidate.relatedSources.includes(fallback.source)) continue;
               const ids = capabilities.get(feature) ?? new Set<CapabilityId>();
               ids.add(candidate.id);
               capabilities.set(feature, ids);
@@ -66,7 +67,7 @@ export class ConventionCapabilityDeltaResolver {
   }
 
   async #discoverMoves(
-    cache: Map<string, readonly { readonly source: string; readonly id: CapabilityId }[]>,
+    cache: Map<string, readonly DiscoveredCapabilitySource[]>,
     capabilities: Map<FeatureId, Set<CapabilityId>>,
     selected: readonly CapabilityId[],
   ): Promise<void> {
@@ -91,19 +92,20 @@ export class ConventionCapabilityDeltaResolver {
   }
 
   async #discover(
-    cache: Map<string, readonly { readonly source: string; readonly id: CapabilityId }[]>,
+    cache: Map<string, readonly DiscoveredCapabilitySource[]>,
     provider: FeatureProvider,
     root: CapabilityRoot,
-  ): Promise<readonly { readonly source: string; readonly id: CapabilityId }[]> {
+  ): Promise<readonly DiscoveredCapabilitySource[]> {
     const key = `${provider.id}\0${root.owner}\0${root.packageRoot}`;
     const existing = cache.get(key);
     if (existing) return existing;
-    const discovered: Array<{ readonly source: string; readonly id: CapabilityId }> = [];
+    const discovered: DiscoveredCapabilitySource[] = [];
     const context = { ...root, host: this.#host };
     for (const convention of provider.authoring.conventions) {
       for await (const source of convention.discover(context)) {
         discovered.push(Object.freeze({
           source: resolve(source.source),
+          relatedSources: Object.freeze((source.relatedSources ?? []).map((item) => resolve(item))),
           id: capabilityId(root.owner, provider.id, source.localName),
         }));
       }
@@ -112,6 +114,12 @@ export class ConventionCapabilityDeltaResolver {
     cache.set(key, frozen);
     return frozen;
   }
+}
+
+interface DiscoveredCapabilitySource {
+  readonly source: string;
+  readonly relatedSources: readonly string[];
+  readonly id: CapabilityId;
 }
 
 export function capabilityDeltaFromSlots(

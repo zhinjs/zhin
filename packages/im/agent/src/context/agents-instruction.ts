@@ -6,27 +6,13 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadBootstrapFiles } from '../bootstrap.js';
 
-const agentsFileCache = new Map<string, { content: string; mtimeMs: number }>();
-
 async function readAgentsFile(filePath: string): Promise<string | null> {
   try {
-    const stats = await fs.promises.stat(filePath);
-    const cached = agentsFileCache.get(filePath);
-    if (cached && cached.mtimeMs === stats.mtimeMs) {
-      return cached.content;
-    }
     const content = (await fs.promises.readFile(filePath, 'utf-8')).trim();
-    if (!content) return null;
-    agentsFileCache.set(filePath, { content, mtimeMs: stats.mtimeMs });
-    return content;
+    return content || null;
   } catch {
-    agentsFileCache.delete(filePath);
     return null;
   }
-}
-
-export function clearAgentsInstructionCache(): void {
-  agentsFileCache.clear();
 }
 
 function displayAgentsPath(absPath: string, workspaceRoot: string): string {

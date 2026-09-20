@@ -42,10 +42,11 @@
     },
     "endpoints": {
       "type": "array",
+      "minItems": 1,
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -65,6 +66,15 @@
             },
             "description": "本 endpoint 的 trusted 列表"
           },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "ws",
+              "sse",
+              "webhook",
+              "wss"
+            ]
+          },
           "baseUrl": {
             "type": "string",
             "description": "Milky HTTP API base URL (required); WS event path is derived as ws(s)://host/event"
@@ -76,6 +86,15 @@
           "access_token": {
             "type": "string",
             "description": "Milky access token"
+          },
+          "reconnect_interval": {
+            "type": "number"
+          },
+          "heartbeat_interval": {
+            "type": "number"
+          },
+          "commandPrefix": {
+            "type": "string"
           },
           "id": {
             "type": "string",

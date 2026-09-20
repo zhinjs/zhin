@@ -18,7 +18,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/wechat-mp.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/wechat-mp/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -38,7 +38,8 @@ pnpm add @zhin.js/adapter-wechat-mp
 | **回复模式** | 默认 `replyMode: passive`（订阅号被动回复）；服务号可设 `customer_service` |
 | **消息加密** | 可选；`encrypt: true` + `encodingAESKey`；`encryptMode: compatible`（默认）或 `secure` |
 
-必填字段（`endpoints[i]`）：`name`、`appId`、`appSecret`、`token`。
+必填字段（`endpoints[i]`）：`id`、`appId`、`appSecret`、`token`。运行时由 AdapterIndex
+把实例级默认值与每个 endpoint 合并；协议实现只接收一份展开后的 endpoint 配置。
 
 ## 最小配置
 
@@ -48,7 +49,7 @@ plugins:
   wechat-mp:
     path: /wechat/webhook
     endpoints:
-      - name: my-wechat-bot
+      - id: my-wechat-bot
         appId: "${WECHAT_APP_ID}"
         appSecret: "${WECHAT_APP_SECRET}"
         token: "${WECHAT_TOKEN}"
@@ -84,7 +85,7 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 
 ## AI 工具
 
-技能说明见 `agent/skills/wechat-mp.md`。
+技能说明见 `skills/wechat-mp/SKILL.md`。
 
 ## 文档链接
 

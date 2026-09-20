@@ -3,7 +3,7 @@ import {
   assertFeatureApi,
   assertPackageEngine,
   runtimeEngineVersion,
-} from './compatibility.js';
+} from './package-contract.js';
 import type {
   ChildPluginReference,
   PackageReference,

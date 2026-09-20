@@ -9,7 +9,7 @@ import commandFeature, {
   defineCommand,
 } from '@zhin.js/command';
 import {
-  PackageCompatibilityError,
+  PackageContractError,
   RootProcessRestartExecutor,
   RootRuntime,
   type ModuleRuntime,
@@ -108,7 +108,7 @@ describe('Root/process boundary', () => {
   it('commits an ABI-safe manifest and Command change in one generation', async () => {
     const project = await createCommandProject();
     const modules = new FakeModules();
-    const commandSource = join(project, 'commands/status.ts');
+    const commandSource = join(project, 'commands/status/index.ts');
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
@@ -140,7 +140,7 @@ describe('Root/process boundary', () => {
   it('escalates a mixed manifest and Command batch when the manifest changes ABI', async () => {
     const project = await createCommandProject();
     const modules = new FakeModules();
-    const commandSource = join(project, 'commands/status.ts');
+    const commandSource = join(project, 'commands/status/index.ts');
     modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
     modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
     modules.set(commandSource, { default: defineCommand({ execute: () => 'before' }) });
@@ -232,7 +232,7 @@ describe('Root/process boundary', () => {
 
     await writeFeatureManifest(project, '2.0.0');
     await expect(hmr.enqueue(join(project, 'packages/command/package.json')))
-      .rejects.toBeInstanceOf(PackageCompatibilityError);
+      .rejects.toBeInstanceOf(PackageContractError);
 
     expect(runtime.snapshot).toBe(started);
     expect(restarts).toEqual([]);
@@ -306,7 +306,7 @@ async function createCommandProject(): Promise<string> {
   await writeFeatureRootManifest(root, '^1.0.0');
   await writeFeatureManifest(root, '1.0.0');
   await touch(join(root, 'packages/command/index.ts'));
-  await touch(join(root, 'commands/status.ts'));
+  await touch(join(root, 'commands/status/index.ts'));
   return root;
 }
 

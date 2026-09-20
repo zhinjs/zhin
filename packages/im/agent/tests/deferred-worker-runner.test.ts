@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { resetLlmApiRegistryForTests, type AgentTool, type AIProvider } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider } from '@zhin.js/ai';
 
 import { wireMockLlmApi, assistantTextReply, assistantToolCallReply } from './helpers/mock-llm-api.js';
 import { DeferredWorkerRunner } from '../src/deferred-worker-runner.js';
@@ -14,9 +14,6 @@ function makeTool(name: string, description = 'test'): AgentTool {
 }
 
 describe('DeferredWorkerRunner', () => {
-  beforeEach(() => {
-    resetLlmApiRegistryForTests();
-  });
 
   it('loads deferred tools and returns summary', async () => {
     const llm = wireMockLlmApi({
@@ -42,6 +39,7 @@ describe('DeferredWorkerRunner', () => {
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
       provider,
+      llmRuntime: llm.runtime,
       maxIterations: 3,
     });
 
@@ -65,6 +63,7 @@ describe('DeferredWorkerRunner', () => {
       origin: {},
       maxToolResults: 5,
       provider,
+      llmRuntime: llm.runtime,
     });
 
     expect(result.status).toBe('error');
@@ -101,6 +100,7 @@ describe('DeferredWorkerRunner', () => {
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
       provider,
+      llmRuntime: llm.runtime,
       maxIterations: 3,
     });
 
@@ -139,6 +139,7 @@ describe('DeferredWorkerRunner', () => {
       origin: {},
       maxToolResults: 5,
       provider,
+      llmRuntime: llm.runtime,
       maxIterations: 5,
     });
 
@@ -171,6 +172,7 @@ describe('DeferredWorkerRunner', () => {
       origin: { platform: 'qq', senderId: 'u1' },
       maxToolResults: 5,
       provider,
+      llmRuntime: llm.runtime,
       maxIterations: 3,
       onEvent,
     });

@@ -30,7 +30,7 @@ pnpm add @zhin.js/adapter-wechat-mp
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/wechat-mp.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/wechat-mp/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `@zhin.js/host-http` — `httpHostToken` registers Webhook route (**not** legacy host-router/Koa)
 - `zhin.js` — `plugin.ts` (`definePlugin`)
@@ -50,7 +50,8 @@ Outbound: `send({ conversation, payload })` -> passive reply XML (default) or Cu
 | **Reply mode** | Default `replyMode: passive` (subscription account passive reply); service accounts can set `customer_service` |
 | **Message encryption** | Optional; `encrypt: true` + `encodingAESKey`; `encryptMode: compatible` (default) or `secure` |
 
-Required fields (`endpoints[i]`): `name`, `appId`, `appSecret`, `token`.
+Required fields (`endpoints[i]`): `id`, `appId`, `appSecret`, `token`. AdapterIndex
+merges instance defaults into every endpoint; the protocol receives only one expanded endpoint config.
 
 ## Minimal Configuration
 
@@ -60,7 +61,7 @@ plugins:
   wechat-mp:
     path: /wechat/webhook
     endpoints:
-      - name: my-wechat-bot
+      - id: my-wechat-bot
         appId: "${WECHAT_APP_ID}"
         appSecret: "${WECHAT_APP_SECRET}"
         token: "${WECHAT_TOKEN}"
@@ -96,7 +97,7 @@ The Runtime Host (`http`) must already be listening for the Webhook to be reacha
 
 ## AI Tools
 
-See `agent/skills/wechat-mp.md` for skill documentation.
+See `skills/wechat-mp/SKILL.md` for skill documentation.
 
 ## Documentation Links
 

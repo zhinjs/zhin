@@ -1,6 +1,6 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveIMSessionIdFromMessage } from '@zhin.js/core';
-import type { AgentTool, ModelRegistry, AIProvider } from '@zhin.js/ai';
+import type { AgentTool, ModelRegistry, AIProvider, LlmApiRuntime } from '@zhin.js/ai';
 import { getActiveTurnTracker } from '../internal/turn-context.js';
 import type { ZhinAgentEventEmitter } from '../event/event-emitter.js';
 import type { ZhinAgentConfig } from '../config/index.js';
@@ -10,6 +10,7 @@ const logger = getLogger('ZhinAgent');
 
 export interface SubagentSystemInitOptions {
   provider: AIProvider;
+  llmRuntime: LlmApiRuntime;
   config: Required<ZhinAgentConfig>;
   modelRegistry: ModelRegistry | null;
   emitter: ZhinAgentEventEmitter;
@@ -21,6 +22,7 @@ export function createSubagentSystem(opts: SubagentSystemInitOptions): SubagentS
   const system = new SubagentSystem();
   system.attachRuntime({
     provider: opts.provider,
+    llmRuntime: opts.llmRuntime,
     workspace: process.cwd(),
     createTools: opts.createTools,
     subagentTools: opts.config.subagentTools,

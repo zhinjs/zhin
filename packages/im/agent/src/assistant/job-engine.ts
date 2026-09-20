@@ -1,8 +1,8 @@
 /**
  * ScheduleJobEngine — schedule-jobs.json 持久化调度
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
+import { ScheduleEngine } from '@zhin.js/kernel';
 import { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
 import type { ScheduleJobStore } from './job-store.js';
 import type { JobWorker } from './job-worker.js';
@@ -14,16 +14,17 @@ export interface ScheduleJobEngineOptions {
   store: ScheduleJobStore;
   worker: JobWorker;
   notifyOnFailure?: boolean;
-  router?: NotificationRouter;
+  router: NotificationRouter;
   defaultNotify?: import('./types.js').JobNotify;
 }
 
 export class ScheduleJobEngine {
+  readonly #scheduler = new ScheduleEngine();
   private store: ScheduleJobStore;
   private worker: JobWorker;
   private disposes = new Map<string, () => void>();
   private notifyOnFailure: boolean;
-  private router?: NotificationRouter;
+  private router: NotificationRouter;
   private defaultNotify?: import('./types.js').JobNotify;
 
   constructor(options: ScheduleJobEngineOptions) {
@@ -52,7 +53,7 @@ export class ScheduleJobEngine {
   }
 
   registerOne(job: ScheduleJob): void {
-    const dispose = registerJobSchedule(job, (jobId) => this.runJob(jobId));
+    const dispose = registerJobSchedule(this.#scheduler, job, (jobId) => this.runJob(jobId));
     if (dispose) {
       this.disposes.set(job.id, dispose);
     }
@@ -75,7 +76,7 @@ export class ScheduleJobEngine {
       lastError: result.success ? undefined : result.error,
     });
 
-    if (!result.success && this.router && (job.notifyOnFailure ?? this.notifyOnFailure)) {
+    if (!result.success && (job.notifyOnFailure ?? this.notifyOnFailure)) {
       const notify = resolveEffectiveNotify(job.notify, this.defaultNotify);
       if (notify.channel !== 'silent' && notify.channel !== 'log') {
         const msg = `[任务失败] ${job.label || jobId}: ${result.error || 'unknown error'}`;
@@ -157,5 +158,6 @@ export class ScheduleJobEngine {
       }
     }
     this.disposes.clear();
+    this.#scheduler.dispose();
   }
 }

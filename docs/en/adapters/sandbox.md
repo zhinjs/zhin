@@ -36,10 +36,10 @@ Sandbox needs no external account. Let `zhin runtime start` assemble the HTTP Ho
 
 ### Plugin Runtime (new, `zhin runtime start`)
 
-- `@zhin.js/adapter` — convention-based `adapters/sandbox.ts`
+- `@zhin.js/adapter` — convention-based `adapters/sandbox/index.ts`
 - `@zhin.js/host-http` — `httpHostToken` provided by Root (WebSocket `/sandbox` + Console HTTP)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
-- `@zhin.js/page` + `pages/index.tsx` — ADR 0046 convention page (`definePage`; route `/sandbox`)
+- `@zhin.js/page` + `pages/index/index.tsx` — ADR 0046 convention page (`definePage`; route `/sandbox`)
 
 Root loads `@zhin.js/host-http`, `ConsoleRuntime`, and `ClientBuildModuleRuntime` at `zhin runtime start`. Open `http://<host>:<port>/console` to browse pages. The Sandbox page (route `/sandbox`, sharing the same path as WebSocket `/sandbox`: GET opens the page, Upgrade goes to WS) has a built-in chat shell.
 
@@ -55,7 +55,7 @@ The outbound wire only does JSON wrapping; the old `segment-mapper` (canonical s
 
 ## Configuration
 
-**Recommended (consistent with [minimal-bot](/getting-started/))**: `plugins.sandbox.endpoints: []` — when the "Sandbox" page is opened in the Remote Console, a bot (e.g., `sandbox-xxxx`) is **auto-created** via the `/sandbox` WebSocket. No need to write `context: sandbox` in the YAML.
+**Recommended (consistent with [minimal-bot](/getting-started/))**: `plugins.sandbox.endpoints: []` creates the stable default endpoint `sandbox-bot` when the plugin starts.
 
 ```yaml
 # zhin.config.yml (Plugin Runtime)
@@ -70,8 +70,7 @@ Optional: if you want a **fixed-name** offline placeholder bot to appear in the 
 plugins:
   sandbox:
     endpoints:
-      - name: sandbox-bot
-        context: sandbox
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 
@@ -81,7 +80,7 @@ plugins:
 2. Open the **[Remote Console](https://console.zhin.dev)**, set the API Base to match the Host address, and set the Token to match `http.token` / `HTTP_TOKEN`
 3. Send messages for testing on the Console **Sandbox** page after connecting
 
-Each browser client creates a Sandbox Bot upon connection (named `sandbox-xxxx` when no fixed name is configured in YAML).
+The Sandbox plugin creates one endpoint from each configured entry. With an empty endpoint list, it creates the stable `sandbox-bot` default.
 
 The connection is established via `Router.ws("/sandbox")` (auto-mounted by the plugin's `useContext("router")`).
 
@@ -106,7 +105,7 @@ Sandbox uses a JSON message format:
 
 ## AI Tools
 
-See `agent/skills/sandbox.md` for skill documentation (local sandbox debugging constraints).
+See `skills/sandbox/SKILL.md` for skill documentation (local sandbox debugging constraints).
 
 
 ## Troubleshooting

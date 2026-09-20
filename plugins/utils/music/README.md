@@ -17,21 +17,23 @@
 ## 📦 安装
 
 ```bash
-pnpm add @zhin.js/plugin-music
+zhin install @zhin.js/plugin-music
 ```
 
 ## 🚀 使用
 
-### 配置
+### 挂载插件
 
-在 `zhin.config.ts` 中添加插件：
+`zhin install` 会安装依赖，并把插件实例写入 `package.json#zhin.plugins`。手工挂载时使用同一份拓扑契约：
 
-```typescript
-export default defineConfig({
-  plugins: [
-    'music'  // 添加音乐插件
-  ]
-})
+```json
+{
+  "zhin": {
+    "plugins": [
+      { "package": "@zhin.js/plugin-music", "instanceKey": "music" }
+    ]
+  }
+}
 ```
 
 ### 命令列表
@@ -200,22 +202,18 @@ interface ShareContent {
 }
 ```
 
-### 导出的服务
+### 运行时代码中使用服务
 
 ```typescript
-import { musicServices } from '@zhin.js/plugin-music'
+import { defineCommand } from 'zhin.js/command'
+import { musicRuntimeToken } from '@zhin.js/plugin-music'
 
-// 使用音乐搜索服务
-const qqMusic = musicServices.qq
-const results = await qqMusic.search('周杰伦', 10)
-const cover = await qqMusic.getCover('音乐ID')
-const detail = await qqMusic.getDetail('音乐ID')
-
-// 获取音频直链（需要 Meting API）
-const audioUrl = await qqMusic.getAudioUrl?.('音乐ID')
-
-// 获取歌词
-const lyric = await qqMusic.getLyric?.('音乐ID')
+export default defineCommand({
+  async execute({ use }) {
+    const qqMusic = use(musicRuntimeToken).services.qq
+    return qqMusic.search('周杰伦', 10)
+  },
+})
 ```
 
 ### 配置工具
@@ -266,10 +264,12 @@ export class MyMusicService implements MusicSearchService {
 // src/sources/index.ts
 import { MyMusicService } from './my-music.js'
 
-export const musicServices = {
-  qq: new QQMusicService(),
-  netease: new NeteaseMusicService(),
-  mymusic: new MyMusicService(), // 添加新服务
+export function createMusicServices(credentials: CredentialStore) {
+  return {
+    qq: new QQMusicService(credentials),
+    netease: new NeteaseMusicService(credentials),
+    mymusic: new MyMusicService(),
+  }
 }
 ```
 

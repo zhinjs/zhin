@@ -1,6 +1,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import { ROOT_CONFIG_FILE_NAMES } from '@zhin.js/plugin-runtime';
 
 export const ZHIN_PROJECT_ROOT_ENV = 'ZHIN_PROJECT_ROOT';
 
@@ -17,13 +18,6 @@ export interface ZhinGlobalInstance {
 }
 
 export type ZhinInstance = ZhinProjectInstance | ZhinGlobalInstance;
-
-const CONFIG_NAMES = [
-  'zhin.config.yml',
-  'zhin.config.yaml',
-  'zhin.config.json',
-  'zhin.config.toml',
-] as const;
 
 /** 全局 Zhin 实例目录（`~/.zhin`） */
 export function globalZhinHome(homeDir = os.homedir()): string {
@@ -49,7 +43,7 @@ export function hasZhinPackageJson(dir: string): boolean {
 }
 
 export function hasZhinConfig(dir: string): boolean {
-  return CONFIG_NAMES.some((name) => fs.existsSync(path.join(dir, name)));
+  return ROOT_CONFIG_FILE_NAMES.some((name) => fs.existsSync(path.join(dir, name)));
 }
 
 export function hasNodeModules(dir: string): boolean {

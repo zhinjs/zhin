@@ -5,7 +5,7 @@ import { collectAgentLoopTurnRun } from '../core/agent-core-run.js';
 import type { TurnEvent } from '../event/turn-event.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
-import { TurnToolRuntime, turnToolExecutionAuthority } from '../tool/turn-tool-runtime.js';
+import { TurnToolRuntime, TurnToolExecutionAuthority } from '../tool/turn-tool-runtime.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { createTurnIngress } from '../turn/turn-ingress.js';
 import type {
@@ -73,7 +73,7 @@ async function runAgentCoreLocalTurn(
       shell: Object.freeze({
         security: 'allowlist' as const,
         execPreset: 'development' as const,
-        approvalMode: 'deny' as const,
+        approvalMode: 'auto' as const,
         isolation: 'required' as const,
       }),
       filesystem: Object.freeze({
@@ -99,7 +99,7 @@ async function runAgentCoreLocalTurn(
     turnContext: turn,
     allTools: [...plan.allTools],
     resolvedTools: [...plan.resolvedTools],
-    toolExecution: turnToolExecutionAuthority(runtime),
+    toolExecution: new TurnToolExecutionAuthority(runtime),
     toolEventSource: 'authority',
     loopHooks: options.loopHooks,
     promptRuntime: {

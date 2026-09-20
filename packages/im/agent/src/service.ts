@@ -3,12 +3,10 @@
  * 统一管理多个模型提供商，提供会话和 Agent 能力
  */
 
-import { type AITriggerConfig, type AIAccessConfig, type Tool } from '@zhin.js/core';
-import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, registerLlmApiFromProviders } from '@zhin.js/ai';
+import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
+import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
 import { DEFAULT_CONFIG } from './config/index.js';
-import { normalizeTool } from './resource-hub/tool-selection.js';
-import { createWebSearchTool } from './builtin/web-search-tool.js';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
@@ -19,6 +17,7 @@ import {
   type AgentLoopStandaloneResult,
 } from './core/agent-loop-standalone.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
+import { StandaloneToolCatalog } from './standalone/standalone-tool-catalog.js';
 import {
   PluginAILoopHookRegistry,
   type PluginAfterToolCallHandler,
@@ -43,9 +42,9 @@ export interface CreateServiceAgentOptions {
   provider?: string;
   model?: string;
   systemPrompt?: string;
-  tools?: AgentTool[];
-  useBuiltinTools?: boolean;
-  collectExternalTools?: boolean;
+  tools?: readonly AgentTool[];
+  /** Include tools explicitly registered on this service. */
+  includeRegisteredTools?: boolean;
   maxIterations?: number;
   contextWindow?: number;
   /** Cancels provider I/O and releases the caller even for a non-cooperative provider. */
@@ -57,14 +56,14 @@ export class AIService {
   private defaultProvider: string;
   private routing: NormalizedAiRoutingConfig;
   private bindingRegistry: AgentBindingRegistry;
-  private builtinTools!: AgentTool[];
   private contextConfig: ContextConfig;
   private triggerConfig: AITriggerConfig;
   private accessConfig: AIAccessConfig;
   private agentConfig: AIConfig['agent'];
   private imageGenerationGlobal?: ImageGenerationDefaults;
-  private customTools: Map<string, AgentTool> = new Map();
+  private readonly standaloneTools = new StandaloneToolCatalog();
   private _modelRegistry: ModelRegistry | null = null;
+  private llmRuntime!: LlmApiRuntime;
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIConfig = {}) {
@@ -75,7 +74,7 @@ export class AIService {
     }
 
     this.providers = registerProviderInstances(this.routing.providers);
-    this.refreshLlmApiRegistry();
+    this.refreshLlmApiRuntime();
     const zhinProvider = this.routing.agents[DEFAULT_ZHIN_AGENT_NAME]?.provider;
     this.defaultProvider =
       zhinProvider
@@ -88,7 +87,6 @@ export class AIService {
     this.accessConfig = config.access || {};
     this.agentConfig = config.agent;
     this.imageGenerationGlobal = config.imageGeneration;
-    this.refreshBuiltinAgentTools();
   }
 
   getRoutingConfig(): NormalizedAiRoutingConfig {
@@ -99,7 +97,7 @@ export class AIService {
     return this.bindingRegistry;
   }
 
-  /** 运行时合并 *.agent.md 发现结果 */
+  /** 运行时合并 agents/<name>/agent.json 发现结果 */
   setDiscoveredAgents(fileMetas: import('./discovery/agents.js').AgentMeta[]): void {
     this.bindingRegistry = new AgentBindingRegistry(this.routing.agents, fileMetas);
   }
@@ -110,7 +108,10 @@ export class AIService {
 
   setModelRegistry(registry: ModelRegistry): void { this._modelRegistry = registry; }
   getModelRegistry(): ModelRegistry | null { return this._modelRegistry; }
-  registerTool(tool: AgentTool): () => void { this.customTools.set(tool.name, tool); return () => { this.customTools.delete(tool.name); }; }
+  getLlmRuntime(): LlmApiRuntime { return this.llmRuntime; }
+  registerTool(tool: AgentTool): () => void {
+    return this.standaloneTools.register(tool);
+  }
 
   /** ADR 0010 — bridge plugin beforeToolCall hooks to agentLoop. */
   onBeforeToolCall(handler: PluginBeforeToolCallHandler): () => void {
@@ -126,21 +127,9 @@ export class AIService {
     return this.loopHooks.onTransformContext(handler);
   }
 
-  collectAllTools(): AgentTool[] {
-    const tools: AgentTool[] = [...this.builtinTools, ...this.customTools.values()];
-    return tools;
-  }
-
-  /**
-   * IM / ZhinAgent 流水线用的常驻 Tool 实例（未经 normalize；与 ToolFeature 工具合并后由 collectRelevantTools 绑定 context）。
-   */
-  getResidentToolsAsTools(): Tool[] {
-    return [createWebSearchTool()];
-  }
-
-  /** Standalone service tools only; turn-owned interaction is projected by AgentRuntime. */
-  private refreshBuiltinAgentTools(): void {
-    this.builtinTools = [normalizeTool(createWebSearchTool())];
+  /** Snapshot the tools explicitly registered for standalone service agents. */
+  listRegisteredTools(): readonly AgentTool[] {
+    return this.standaloneTools.snapshot();
   }
 
   getContextConfig(): ContextConfig { return this.contextConfig; }
@@ -155,7 +144,14 @@ export class AIService {
     return { ...this.imageGenerationGlobal, ...inst };
   }
 
-  registerProvider(provider: AIProvider): void { this.providers.set(provider.name, provider); }
+  async registerProvider(provider: SdkProviderAdapter): Promise<void> {
+    const previous = this.providers.get(provider.name);
+    if (previous === provider) return;
+    if (previous instanceof SdkProviderAdapter) await previous.dispose();
+    this.providers.set(provider.name, provider);
+    const entry = sdkEntryFromProvider(provider);
+    this.llmRuntime.registerProvider(entry.alias, entry.config, entry.models, entry.fetch);
+  }
   getProvider(name?: string): AIProvider {
     const providerName = name || this.defaultProvider;
     const provider = this.providers.get(providerName);
@@ -174,14 +170,16 @@ export class AIService {
     return Array.isArray(models) && models.length > 0;
   }
 
-  /** 同步 api-registry 白名单：显式 models 用配置，否则留空并由 /v1/models 发现填充 provider.models */
-  refreshLlmApiRegistry(): void {
-    registerLlmApiFromProviders(
-      [...this.providers.entries()].map(([alias, provider]) => ({
-        alias,
-        config: this.routing.providers[alias]!,
-        models: this.hasExplicitModelList(alias) ? (provider.models ?? []) : [],
-      })),
+  /** Build the service-owned transport runtime and its configured model allowlists. */
+  private refreshLlmApiRuntime(): void {
+    this.llmRuntime = createLlmApiRuntime(
+      [...this.providers.entries()].map(([alias, provider]) => {
+        const entry = sdkEntryFromProvider(provider);
+        return {
+          ...entry,
+          models: this.hasExplicitModelList(alias) ? entry.models : [],
+        };
+      }),
       (alias: string) => this.providers.get(alias)?.models ?? [],
     );
   }
@@ -208,11 +206,10 @@ export class AIService {
   }
 
   private resolveServiceAgentTools(options: CreateServiceAgentOptions): AgentTool[] {
-    const tools: AgentTool[] = [];
-    if (options.useBuiltinTools !== false) tools.push(...this.builtinTools);
-    if (options.collectExternalTools !== false) tools.push(...this.customTools.values());
-    if (options.tools?.length) tools.push(...options.tools);
-    return tools;
+    return this.standaloneTools.resolve({
+      includeRegisteredTools: options.includeRegisteredTools !== false,
+      explicitTools: options.tools ?? [],
+    });
   }
 
   createAgent(options: CreateServiceAgentOptions = {}): ServiceAgent {
@@ -227,6 +224,7 @@ export class AIService {
       run: (userInput) => runAgentLoopStandaloneTurn({
         provider,
         resolveProvider: (alias) => this.providers.get(alias),
+        llmRuntime: this.llmRuntime,
         model,
         systemPrompt,
         tools,
@@ -258,7 +256,13 @@ export class AIService {
     return results;
   }
 
-  dispose(): void { this.providers.clear(); }
+  async dispose(): Promise<void> {
+    const providers = [...this.providers.values()];
+    this.providers.clear();
+    await Promise.all(providers.map((provider) => (
+      provider instanceof SdkProviderAdapter ? provider.dispose() : Promise.resolve()
+    )));
+  }
 }
 
 function toServiceAgentResult(result: AgentLoopStandaloneResult): ServiceAgentResult {

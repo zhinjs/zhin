@@ -1,6 +1,5 @@
 import { definePlugin, databaseHostToken } from 'zhin.js';
 import type { GroupSuiteConfig } from './src/config.js';
-import { registerGroupSuiteDb } from './src/db-store.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
 import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from './src/runtime-state.js';
 import { flushStatsBuffer } from './src/stats-lib.js';
@@ -29,7 +28,6 @@ export default definePlugin<GroupSuiteConfig>({
     })();
     const runtime = createGroupSuiteRuntime(db);
     context.resources.provide(groupSuiteRuntimeToken, runtime);
-    context.lifecycle.add(registerGroupSuiteDb(db));
 
     const flushTimer = setInterval(() => {
       void flushStatsBuffer(runtime);

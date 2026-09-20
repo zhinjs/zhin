@@ -37,10 +37,11 @@
     },
     "endpoints": {
       "type": "array",
-      "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
+      "minItems": 1,
+      "description": "多账号：每项定义一个 endpoint，id/baseUrl 必填，其余字段覆盖实例默认值",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -64,6 +65,13 @@
             "type": "string",
             "description": "Satori SDK HTTP/WS base URL (e.g. http://127.0.0.1:5140)"
           },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "ws",
+              "webhook"
+            ]
+          },
           "token": {
             "type": "string",
             "description": "Bearer token for API and WS IDENTIFY"
@@ -71,6 +79,12 @@
           "path": {
             "type": "string",
             "description": "Webhook POST path (connection: webhook)"
+          },
+          "heartbeat_interval": {
+            "type": "number"
+          },
+          "commandPrefix": {
+            "type": "string"
           },
           "id": {
             "type": "string",

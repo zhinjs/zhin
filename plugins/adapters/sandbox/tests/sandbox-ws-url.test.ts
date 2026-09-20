@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { buildSandboxWebSocketUrl } from '../pages/sandboxTransport.js';
+import { buildSandboxWebSocketUrl } from '../pages/index/sandboxTransport.js';
 
 const originalWindow = globalThis.window;
 const originalLocalStorage = globalThis.localStorage;

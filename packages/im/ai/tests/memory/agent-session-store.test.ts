@@ -3,8 +3,22 @@ import { Registry } from '@zhin.js/database';
 import {
   AGENT_SESSION_MODEL,
   AgentSessionStore,
+  MemoryAgentSessionStore,
   PersistenceUnavailableError,
 } from '../../src/index.js';
+
+describe('AgentSessionRepository identity', () => {
+  it('creates collision-resistant epoch ids without shared counters', async () => {
+    const firstStore = new MemoryAgentSessionStore();
+    const secondStore = new MemoryAgentSessionStore();
+    const first = await firstStore.getOrCreateActive({ session_key: 'shared' });
+    const second = await secondStore.getOrCreateActive({ session_key: 'shared' });
+
+    expect(first.session_id).toMatch(/^shared#[0-9a-f-]{36}$/);
+    expect(second.session_id).toMatch(/^shared#[0-9a-f-]{36}$/);
+    expect(first.session_id).not.toBe(second.session_id);
+  });
+});
 
 describe('AgentSessionStore persistence failures', () => {
   it('does not reinterpret a failed active-session lookup as NotFound', async () => {

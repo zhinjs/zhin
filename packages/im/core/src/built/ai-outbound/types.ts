@@ -11,16 +11,6 @@ export interface ZhinAiOutboundPayload {
   extensions?: Record<string, unknown>;
 }
 
-/**
- * @deprecated 使用 canonical `Segment`（`type` + `data` + 可选 `platform`）。
- * 历史 `kind` → `type`；`mode` 已删除。
- */
-export interface AiOutboundSegment {
-  kind: string;
-  mode?: string;
-  data?: Record<string, unknown>;
-}
-
 export interface AiOutboundCapabilities {
   mentions?: boolean;
   richSegments?: readonly string[];

@@ -6,7 +6,7 @@ import type {
   WorkroomRunState,
   WorkroomRunStatus,
 } from './kernel-contracts.js';
-import { WorkroomSequenceConflictError, type WorkroomJournal } from './journal.js';
+import { WorkroomSequenceConflictError, type WorkroomJournal } from './journal/index.js';
 import {
   assertAssignmentExecutionEnvelope,
   validateAssignmentExecutionObservation,

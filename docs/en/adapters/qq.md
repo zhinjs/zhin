@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-qq
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/qq.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/qq/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -83,14 +83,14 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Endpoint Management Commands
 
-The adapter comes with a `qq.endpoint` command group (used directly in chat, no prefix by default; affected by `commandPrefix`):
+The adapter comes with a `qq endpoint` command group (used directly in chat, no prefix by default; affected by `commandPrefix`):
 
 | Command | Description |
 |---------|-------------|
-| `qq.endpoint add [name]` | Bind via QR code on mobile QQ: sends a QR code link -> after confirmation, credentials are written to `.env` (`QQ_<NAME>_APPID/SECRET`) and appended to `plugins.qq.endpoints` (restart required to take effect) |
-| `qq.endpoint cancel` | Cancel an in-progress QR code binding (only one process allowed at a time) |
-| `qq.endpoint list` | List running and configured endpoints |
-| `qq.endpoint remove <name>` | Remove an endpoint from configuration (`.env` keys are preserved; manual cleanup possible) |
+| `qq endpoint add [name]` | Bind via QR code on mobile QQ: sends a QR code link -> after confirmation, credentials are written to `.env` (`QQ_<NAME>_APPID/SECRET`) and appended to `plugins.qq.endpoints` (restart required to take effect) |
+| `qq endpoint cancel` | Cancel an in-progress QR code binding (only one process allowed at a time) |
+| `qq endpoint list` | List running and configured endpoints |
+| `qq endpoint remove <name>` | Remove an endpoint from configuration (`.env` keys are preserved; manual cleanup possible) |
 
 add/cancel/remove are restricted by `master`: when the instance configuration declares a `master` (top-level or `endpoints[i]`), only the master can execute these; if unconfigured, access is open (the first person to bind via QR code becomes the owner). QR codes are currently delivered as link text (outbound rich media migration pending) — open the link on mobile QQ to scan.
 
@@ -110,9 +110,9 @@ add/cancel/remove are restricted by `master`: when the instance configuration de
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/` (channels, roles, etc.) |
-| Skill documentation | `agent/skills/qq.md` |
+| Permit vocabulary | `PERMITS.md` |
+| Platform tools | `tools/` (channels, roles, etc.) |
+| Skill documentation | `agents/qq/skills/qq/SKILL.md` |
 
 ## Platform Permissions (platform permit)
 

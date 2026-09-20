@@ -23,7 +23,10 @@ export function buildCanaryBundle(options, mode = 'frozen') {
   for (const [file, contents] of files) fs.writeFileSync(path.join(outputDirectory, 'artifacts', file), contents);
   fs.writeFileSync(path.join(outputDirectory, 'manifest.json'), bytes);
   if (lockfile) fs.writeFileSync(path.join(outputDirectory, 'pnpm-lock.yaml'), lockfile);
-  for (const name of ['plugin.ts', 'commands', 'adapters', 'tools', 'components', 'agents']) fs.cpSync(path.join(root, 'examples/minimal-bot', name), path.join(outputDirectory, name), { recursive: true });
+  for (const name of ['plugin.ts', 'commands', 'adapters', 'components', 'tools']) {
+    const source = path.join(root, 'examples/minimal-bot', name);
+    if (fs.existsSync(source)) fs.cpSync(source, path.join(outputDirectory, name), { recursive: true });
+  }
   const template = JSON.parse(fs.readFileSync(path.join(root, 'examples/minimal-bot/package.json')));
   template.name = 'zhin-self-delivery-canary'; template.scripts = {}; template.devDependencies = {};
   template.dependencies = Object.fromEntries(required.map(name => [name, overrides[name]])); template.pnpm = { overrides }; template.packageManager = 'pnpm@9.0.2';

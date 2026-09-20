@@ -12,21 +12,23 @@ This page is auto-generated from [`plugins/adapters/icqq/README.md`](https://git
 
 # @zhin.js/adapter-icqq
 
-ICQQ Plugin Runtime adapter — connects to a logged-in QQ account via the [@icqqjs/cli](https://github.com/icqqjs/cli) daemon process IPC (no `httpHostToken`).
+ICQQ Plugin Runtime adapter — runs an [@icqqjs/icqq](https://github.com/icqqjs/icqq) `Client` directly in the Zhin process.
 
 ## Features
 
 - Group chat / private chat / temporary group session / QQ channel messages
-- Inbound: `outboundMessageToken` (IPC event subscription)
-- Outbound: `send({ conversation, payload })` -> `send_group_msg` / `send_private_msg` / ... (`kind`/`id`/`parent` structured addressing)
-- Agent tools: `agent/tools/` (poke, group management, friend list, etc.) retained
+- Inbound native Client events enter Zhin through the single `Endpoint.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
+- Outbound canonical segments project to native ICQQ `Sendable` values and use `sendGroupMsg`, `sendPrivateMsg`, and the matching conversation operation
+- Group reactions use `control.addReaction` and `control.removeReaction`
+- Agent tools live under `tools/<name>/index.ts`
 - Console Endpoint management: `src/endpoint.ts` explicitly implements `EndpointManagement` (friend/group/group member lists, request approval, delete friend, kick member, mute, set admin). Console uses standardized RPCs such as `endpoint.friends` / `endpoint.groups` / `endpoint.group_members`
 
 ## Installation
 
 ```bash
-pnpm add @zhin.js/adapter-icqq
-pnpm add -g @icqqjs/cli   # or npx icqq login
+pnpm add @zhin.js/adapter-icqq @icqqjs/icqq
+# Optional local signing when signApiAddr is omitted
+pnpm add @icqqjs/qqsign
 ```
 
 ## Prerequisites
@@ -43,50 +45,50 @@ plugins:
     master: "1659488338"        # Required, shared at top level (/approve and master role)
     autoReconnect: true
     endpoints:
-      - name: "${ICQQ_ACCOUNT}"   # QQ number, must match icqq login
-      # rpc is an endpoint-level field:
-      # - name: "${ICQQ_ACCOUNT_2}"
-      #   rpc:
-      #     host: 10.0.0.2
-      #     port: 9527
-      #     token: ${ICQQ_RPC_TOKEN}
+      - id: "${ICQQ_ACCOUNT}"     # QQ number
+        # password: "${ICQQ_PASSWORD}"  # Optional; omit for QR login
 ```
 
-Multiple accounts: a single plugin instance can attach multiple endpoints (each item in the `endpoints` array overrides top-level fields; `name` is required):
+Multiple accounts: a single plugin instance can attach multiple endpoints. Each item overrides top-level defaults and requires `id`:
 
 ```yaml
 plugins:
   icqq:
     master: "1659488338"      # Top-level fields are shared by all endpoints
     endpoints:
-      - name: "${ICQQ_ACCOUNT}"
-      - name: "${ICQQ_ACCOUNT_2}"
-      - name: "${ICQQ_ACCOUNT_3}"   # Each account must be logged in via icqq login separately
+      - id: "${ICQQ_ACCOUNT}"
+      - id: "${ICQQ_ACCOUNT_2}"
+      - id: "${ICQQ_ACCOUNT_3}"
 ```
 
-Run `icqq login` first, then start Zhin.
+`AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables or inspect nested `endpoints`. The composition root resolves environment placeholders while loading project configuration.
 
-## Send Target
+## Send conversation
 
-| Type | target |
-|------|--------|
-| Private chat | `private:uin` |
-| Group chat | `group:gid` |
-| Temporary group session | `temp:gid:uin` |
-| Channel | `channel:guildId:channelId` |
+| Type | conversation |
+|------|--------------|
+| Private chat | `{ kind: 'private', id: uin }` |
+| Group chat | `{ kind: 'group', id: gid }` |
+| Temporary group session | `{ kind: 'private', id: uin, parent: { kind: 'group', id: gid } }` |
+| Channel | `{ kind: 'channel', id: channelId, parent: { kind: 'channel', id: guildId } }` |
 
 ## Architecture
 
-- `plugin.ts` + `adapters/icqq.ts` (`defineAdapter`)
-- Protocol constants / configuration: `src/protocol.ts`
-- IPC client: `src/ipc-client.ts` (no host-http)
-- Console loginAssist / host-router deferred
-- Old `usePlugin` / `extends Adapter` / Endpoint production entry points have been removed
+- `plugin.ts` + `adapters/icqq/index.ts`: Plugin Runtime entry and `defineAdapter` declaration
+- `src/endpoint.ts`: owns the native Client and coordinates transport, Zhin lifecycle, and capability ports
+- `src/content-resolver.ts`: stores observed messages and expands forwarded messages within explicit limits
+- `src/icqq-inbound.ts`: normalizes native ICQQ events into Zhin inbound messages
+- `src/protocol.ts`: resolves one expanded endpoint configuration and maps conversations and outbound targets
+- `src/client.ts`: registers the public ICQQ Client and event types for feature authors
+
+Start with `src/endpoint.ts` when reading the implementation, then follow the capability it composes. External code imports only from `@zhin.js/adapter-icqq` and the public Zhin entry points.
 
 ## Plugin Runtime Migration Notes
 
-- `autoReconnect` has been re-implemented: after an unexpected IPC/RPC disconnect, the adapter automatically reconnects with exponential backoff (`stop()` is a deliberate disconnect and does not trigger reconnection).
-- `outboundMedia: file | base64` has been re-implemented: in `file` mode, segment base64 data is written to a temporary file before sending `[image:path]`; in `base64` mode (default when `rpc` is configured), `[image:base64://...]` is sent for the daemon to decode.
+- The adapter no longer uses the `@icqqjs/cli` IPC daemon. It owns login state and the protocol Client in process.
+- `autoReconnect` reconnects the native Client after an unexpected disconnect. `stop()` is deliberate and does not reconnect.
+- With `outboundMedia: file`, base64 media is materialized to a temporary file for the duration of the send. `base64` uses ICQQ's native `base64://` file value.
+- ICQQ voice, video, and file elements are standalone messages. The adapter rejects unsupported mixed sends instead of silently dropping segments.
 - **Console social/group management RPC is now wired**: the endpoint within the Adapter normalizes ICQQ's `get_friend_list` / `get_group_list` / `get_group_member_list`, request approval, and group management operations into frozen `EndpointManagement` objects. The Host only consumes this semantic port and no longer probes for method aliases or reads `friends` / `groups` SDK caches.
 - Friend and group requests enter the unified Endpoint event gateway and expose approval through `Request` and `EndpointManagement`.
 - Login QR, slider, device, and auth challenges persist as Console login tasks and can also continue through terminal input.

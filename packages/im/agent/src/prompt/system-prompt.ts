@@ -52,7 +52,7 @@ function agentMessageToText(message: AgentMessage): string {
   return '';
 }
 
-/** @deprecated 主路径使用 contextRepository 原生 messages；保留供兼容调用。 */
+/** 将原生会话消息投影为需要内联历史的 prompt 文本。 */
 export function buildUserMessageWithHistory(history: AgentMessage[], currentContent: string): string {
   if (history.length === 0) return currentContent;
   const roleLabel = (role: string) => (role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'System');
@@ -267,7 +267,6 @@ function buildOrchestrationSection(modelSdk?: string): string {
       'Use discover(kind) to find deferred tools/skills, then load_skill / load_tool before calling them.',
       'Use spawn_task for complex, long-running, or specialist work that should run in a sub-agent.',
       'When subtasks are independent, spawn multiple spawn_task calls in one assistant turn (parallel).',
-    'Do not call deprecated orchestration tools such as tool_search or run_deferred_task.',
   ];
   return ['# Orchestration', ...prependBullets(items)].join('\n');
 }

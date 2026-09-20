@@ -4,6 +4,8 @@
  *
  * - agent / zhin must import resolveIMSessionId* from @zhin.js/core, not @zhin.js/ai
  * - forbid ad-hoc scene_id derivation (channel id before sender id) outside SSOT modules
+ * - UserMessage.actor is the only persisted participant identity authority
+ * - Core trigger results contain user content only; actor labels are rendered at the AI boundary
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -12,7 +14,9 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const scanRoots = [
+  'packages/im/ai/src',
   'packages/im/agent/src',
+  'packages/im/core/src',
   'packages/im/zhin/src',
 ];
 
@@ -48,6 +52,14 @@ const violations = [];
 const aiSessionImportRe = /from\s+['"]@zhin\.js\/ai['"]/;
 const sessionSymbolImportRe = /\bresolveIMSessionId(?:FromMessage|FromScene)?\b/;
 const adhocSceneIdRe = /\$channel\?\.\s*id\s*(?:\|\||\?\?)\s*\$sender/;
+const duplicateActorAuthorityPatterns = [
+  [/\bAgentMessageSenderExtra\b/, 'Store participant identity only in UserMessage.actor'],
+  [/\bSenderScope\b/, 'Use ConversationActor.scope instead of a duplicate sender scope type'],
+  [/\bextra\??\.sender\b/, 'Read participant identity from UserMessage.actor, not message extra'],
+  [/\bbuildSenderPrefixForMessage\b/, 'Core must not serialize participant identity into trigger content'],
+  [/\bstripSenderPrefixFromText\b/, 'Do not infer participant identity from persisted text'],
+  [/sender-extra\.js/, 'Use the actor-owned user-message-presentation module'],
+];
 
 for (const rel of scanRoots) {
   const abs = path.join(repoRoot, rel);
@@ -80,8 +92,27 @@ for (const rel of scanRoots) {
           text: trimmed,
         });
       }
+
+      for (const [pattern, reason] of duplicateActorAuthorityPatterns) {
+        if (pattern.test(line)) {
+          violations.push({ file: relFile, line: i + 1, reason, text: trimmed });
+        }
+      }
     }
   }
+}
+
+const triggerSource = fs.readFileSync(
+  path.join(repoRoot, 'packages/im/core/src/built/ai-trigger.ts'),
+  'utf8',
+);
+if (triggerSource.includes('[sender:')) {
+  violations.push({
+    file: 'packages/im/core/src/built/ai-trigger.ts',
+    line: 1,
+    reason: 'Core AI trigger content must not contain serialized participant labels',
+    text: '[sender:',
+  });
 }
 
 if (violations.length) {

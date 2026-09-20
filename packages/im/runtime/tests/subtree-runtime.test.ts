@@ -58,10 +58,10 @@ describe('Plugin subtree HMR', () => {
       }),
     });
     modules.set(featureSource, { default: commandFeature });
-    modules.set(join(project, 'plugins/child/commands/status.ts'), {
+    modules.set(join(project, 'plugins/child/commands/child/status/index.ts'), {
       default: defineCommand({ execute: ({ use }) => use(childValue) }),
     });
-    modules.set(join(project, 'plugins/sibling/commands/status.ts'), {
+    modules.set(join(project, 'plugins/sibling/commands/sibling/status/index.ts'), {
       default: defineCommand({ execute: ({ use }) => use(siblingValue) }),
     });
 
@@ -75,8 +75,8 @@ describe('Plugin subtree HMR', () => {
     });
     const first = await runtime.start();
     const oldLease = runtime.snapshots.acquire();
-    await expect(commandIndex(first).execute('child.status')).resolves.toBe('v1');
-    await expect(commandIndex(first).execute('child.inline')).resolves.toBe('inline:v1');
+    await expect(commandIndex(first).execute('child status')).resolves.toBe('v1');
+    await expect(commandIndex(first).execute('child inline')).resolves.toBe('inline:v1');
     expect(handoffs).toEqual([
       'root:activate',
       'child-v1:activate',
@@ -93,9 +93,9 @@ describe('Plugin subtree HMR', () => {
     const second = runtime.snapshot;
 
     expect(second.generation).toBe(2);
-    await expect(commandIndex(second).execute('child.status')).resolves.toBe('v2');
-    await expect(commandIndex(second).execute('child.inline')).resolves.toBe('inline:v2');
-    await expect(commandIndex(second).execute('sibling.status')).resolves.toBe('sibling');
+    await expect(commandIndex(second).execute('child status')).resolves.toBe('v2');
+    await expect(commandIndex(second).execute('child inline')).resolves.toBe('inline:v2');
+    await expect(commandIndex(second).execute('sibling status')).resolves.toBe('sibling');
     expect(setupCalls).toEqual({ root: 1, child: 2, sibling: 1 });
     expect(modules.loadCount(rootSource)).toBe(1);
     expect(modules.loadCount(siblingSource)).toBe(1);
@@ -116,7 +116,7 @@ describe('Plugin subtree HMR', () => {
     await expect(hmr.enqueue(childSource)).rejects.toThrow('child setup failed');
     expect(runtime.snapshot).toBe(second);
     expect(disposed).toEqual(['broken']);
-    await expect(commandIndex(runtime.snapshot).execute('child.status')).resolves.toBe('v2');
+    await expect(commandIndex(runtime.snapshot).execute('child status')).resolves.toBe('v2');
     expect(errors).toHaveLength(1);
 
     oldLease.release();
@@ -139,7 +139,7 @@ describe('Plugin subtree HMR', () => {
           requires: [shared],
           setup({ resources, handoff, addCommand }) {
             setupCalls.child += 1;
-            addCommand('inline', defineCommand({ execute: () => `inline:${version}` }));
+            addCommand('child/inline', defineCommand({ execute: () => `inline:${version}` }));
             resources.provide(childValue, version, () => {
               disposed.push(`child-${version}`);
             });
@@ -219,9 +219,9 @@ async function createProject(): Promise<string> {
   for (const file of [
     'plugin.ts',
     'plugins/child/plugin.ts',
-    'plugins/child/commands/status.ts',
+    'plugins/child/commands/child/status/index.ts',
     'plugins/sibling/plugin.ts',
-    'plugins/sibling/commands/status.ts',
+    'plugins/sibling/commands/sibling/status/index.ts',
     'packages/command/index.ts',
   ]) await touch(join(root, file));
   return realpath(root);

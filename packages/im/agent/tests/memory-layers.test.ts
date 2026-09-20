@@ -8,8 +8,6 @@ import {
   buildMemoryPrompt,
   checkMemoryWritePath,
   classifyMemoryWritePath,
-  migrateLegacyMemoryFiles,
-  resetMemoryMigrationForTests,
   getSessionMemoryDir,
 } from '../src/memory-layers.js';
 import { mockCommMessage } from './helpers/mock-comm-message.js';
@@ -18,7 +16,6 @@ describe('memory-layers', () => {
   let tmpDir: string;
 
   beforeEach(() => {
-    resetMemoryMigrationForTests();
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-memory-'));
   });
 
@@ -75,14 +72,29 @@ describe('memory-layers', () => {
     expect(out.length).toBeLessThan(2000);
   });
 
-  it('migrateLegacyMemoryFiles 复制旧 MEMORY.md', () => {
+  it('does not read or copy files outside the canonical layer directories', () => {
     const memDir = path.join(tmpDir, 'data', 'memory');
     fs.mkdirSync(memDir, { recursive: true });
     fs.writeFileSync(path.join(memDir, 'MEMORY.md'), 'legacy content');
-    migrateLegacyMemoryFiles(tmpDir);
     const globalFile = path.join(memDir, 'global', 'MEMORY.md');
-    expect(fs.existsSync(globalFile)).toBe(true);
-    expect(fs.readFileSync(globalFile, 'utf-8')).toBe('legacy content');
+
+    expect(loadMemoryLayers({ workspaceDir: tmpDir }).slices).toEqual([]);
+    expect(fs.existsSync(globalFile)).toBe(false);
+    expect(checkMemoryWritePath(path.join(memDir, 'MEMORY.md'), undefined, tmpDir)).toMatchObject({
+      allowed: false,
+      scope: 'none',
+    });
+  });
+
+  it('anchors classification to the selected workspace without creating directories', () => {
+    const workspace = path.join(tmpDir, 'empty-workspace');
+    const canonical = 'data/memory/global/MEMORY.md';
+    const foreign = path.join(tmpDir, 'other-workspace', canonical);
+
+    expect(classifyMemoryWritePath(canonical, workspace)).toBe('global');
+    expect(classifyMemoryWritePath(foreign, workspace)).toBe('none');
+    expect(loadMemoryLayers({ workspaceDir: workspace }).slices).toEqual([]);
+    expect(fs.existsSync(path.join(workspace, 'data', 'memory'))).toBe(false);
   });
 
   it('checkMemoryWritePath：global 仅 master', () => {

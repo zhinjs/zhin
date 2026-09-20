@@ -16,6 +16,11 @@ export interface MediaBinaryPayload {
   };
 }
 
+/** Host-owned speech boundary used by media consumers that need STT. */
+export interface AudioTranscriptionPort {
+  transcribe(payload: MediaBinaryPayload, signal?: AbortSignal): Promise<string | undefined>;
+}
+
 export interface MultimodalConfig {
   enabled: boolean;
   maxFileBytes: number;

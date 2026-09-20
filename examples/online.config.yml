@@ -28,7 +28,7 @@ inbox:
   enabled: true
 
 # AI：providers（命名实例）+ agents（绑定 + 可选 priority/match 入站路由）
-# 已移除 defaultProvider、agent.chatModel、ai.agent.toolSearch（编排默认走 tool_search + run_deferred_task）
+# 编排使用 discover / load_tool 按需加载能力，并通过 spawn_task 委派复杂任务
 ai:
   providers:
     openai-main:
@@ -62,9 +62,9 @@ ai:
     execSecurity: allowlist
     execPreset: custom
     execApprovalMode: ask
-    subagentExecApprovalMode: deny
-    workerExecApprovalMode: deny
-    taskExecApprovalMode: deny
+    subagentExecApprovalMode: auto
+    workerExecApprovalMode: auto
+    taskExecApprovalMode: auto
     execAllowlist:
       - echo
       - sort

@@ -2,81 +2,40 @@
  * Canonical IM messages, Endpoints, rendering, and plugin-facing core types.
  * @module @zhin.js/core
  */
-// ── Core 类模块 ──────────────────────────────────────────────────────
-export * from './endpoint.js'
-export * from './endpoint-capabilities.js'
-export * from './plugin.js'
-export * from './command.js'
 export * from './component.js'
-export * from './adapter.js'
 export * from './message.js'
 export * from './im-scene.js'
 export * from './notice.js'
 export * from './request.js'
 export * from './system-event.js'
 export * from './side-event/index.js'
-export * from './schema-interaction.js'
 export type * from '@zhin.js/interaction'
 export * from './types.js'
 export * from './utils.js'
 export * from './errors.js'
 
 // ── Built 模块 ──────────────────────────────────────────────────────
-export * from './built/config.js'
-export * from './built/command.js'
-export * from './built/schedule.js'
-export type { ScheduleDescriptor, ScheduleHandle, ScheduleContextExtensions } from './built/schedule.js'
 // Models
 export * from './models/system-log.js'
 export * from './models/user.js'
-export * from './built/permit-parse.js'
-export * from './built/permit-check.js'
-export * from './built/platform-permit.js'
-export * from './built/authorization.js'
 export * from './built/message-enrich.js'
 export type { AgentTurnMessage, SyntheticMessageInput } from './built/message-enrich.js'
-export * from './built/runtime-io.js'
-export * from './built/database.js'
-export * from './built/message-filter.js'
-export * from './built/tool.js'
-export * from './built/skill.js'
-export * from './built/agent-preset.js'
+export * from './built/tool-access.js'
 export * from './built/common-adapter-tools.js'
 export * from './built/roles.js'
 export * from './im-session-id.js'
 export * from './built/ai-trigger.js'
 export * from './built/ai-access.js'
-export * from './built/dispatcher.js'
-export * from './built/schema-feature.js'
 export * from './built/login-assist.js'
 export * from './built/generated-qrcode.js'
-export * from './built/rich-segments/index.js'
+export { markdownToPlainText } from './built/rich-segments/markdown-to-text.js'
 export * from './built/interactive-segments/index.js'
 export * from './built/user-interaction.js'
 export * from './built/ai-outbound/index.js'
-export { loadHtmlRenderer, seedHtmlRenderer, HTML_RENDERER_PACKAGE } from './built/html-renderer-loader.js'
-export { loadSpeechPipeline, seedSpeechPipeline, SPEECH_PACKAGE } from './built/speech-loader.js'
 export * from './built/outbound-media-utils.js'
-export * from './built/outbound-media-contract.js'
-export * from './built/interactive-segment-contract.js'
 export * from './built/segment-contract/index.js'
 export type { SegmentMediaRef } from './built/segment-contract/media.js'
 export * from './built/generic-segment-mapper.js'
-export * from './built/adapter-process.js'
-export * from './built/component.js'
-export * from './built/inbound-runner.js'
-export type { RunInboundMessageOptions, InboundRunResult } from './built/inbound-runner.js'
-export * from './built/connect-endpoint-instance.js'
-export type { ConnectEndpointInstanceOptions } from './built/connect-endpoint-instance.js'
-export * from './built/endpoint-lifecycle.js'
-export type { EndpointLifecycleKind, EndpointLifecyclePayload } from './built/endpoint-lifecycle.js'
-export * from './built/endpoint-manager.js'
-export type { EndpointConfigRecord, EndpointManager, ProvisionContext } from './built/endpoint-manager.js'
-export * from './built/endpoint-lifecycle-service.js'
-export * from './built/schema-endpoint-manager.js'
-export * from './built/endpoint-commands.js'
-export * from './built/introspection-format.js'
-export * from './built/management-command-guard.js'
 export * from './built/html-to-text.js'
 export * from './built/html-segment-fallback.js'
 
@@ -84,19 +43,11 @@ export * from './built/html-segment-fallback.js'
 export * from '@zhin.js/database'
 export * from '@zhin.js/logger'
 export { Schema } from '@zhin.js/schema'
-export type { PluginLike } from '@zhin.js/kernel'
 export {
-  Feature,
   ScheduleEngine,
-  getScheduleEngine,
-  setScheduleEngine,
   Scheduler,
-  getScheduler,
-  setScheduler,
 } from '@zhin.js/kernel'
 export type {
-  FeatureJSON,
-  FeatureListener,
   Schedule,
   JobPayload,
   JobState,

@@ -110,12 +110,12 @@ Key `spawn_task` parameters:
 | Parameter | Description |
 |-----------|-------------|
 | `task` | Task description (goal, scope, expected output) |
-| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/*.agent.md` presets) |
+| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/<name>/agent.json` presets) |
 | `wait` | When `true`, waits synchronously; result returns to the current turn via tool result |
 | `context` | `fork` (inject recent messages from parent session) / `fresh` (empty context) |
 | `tools` / `skills` | Declare tools and skills needed for the sub-task |
 
-Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Additionally, sub-agent presets can be declared as files using `agents/<name>.agent.md` (YAML frontmatter + description), auto-discovered and registered at startup.
+Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Sub-agent presets use `agents/<name>/agent.json` plus the three required Markdown entry points and are discovered at startup.
 
 ## Workroom Kernel
 
@@ -218,17 +218,17 @@ ai:
 
 | Category | Tools |
 |----------|-------|
-| Execution | `bash`, `run_deferred_task` |
+| Execution | `bash` |
 | File | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
 | Network | `web_search`, `web_fetch` |
 | Interaction | `ask_user` |
 | Task | `spawn_task`, `todo_read`, `todo_write` |
 | Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
-| Media | `generate_image`, `analyze_media` |
-| Meta | `discover`, `load_tool`, `load_skill`, `install_skill` |
+| Media | `generate_image`; inbound images go directly to vision-capable models |
+| Meta | `discover`, `load_tool`, `load_skill` |
 | Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
 
-File tools run only inside the project workspace explicitly authorized for the current Turn. Relative paths resolve from that workspace; absolute paths must still remain inside it; `~`, directory traversal, and symlinks targeting paths outside the workspace fail closed in the shared policy facade. Only the canonical path approved by policy reaches the ToolFeature executor, and `glob` / `grep` do not spawn shell processes.
+File tools run only inside the project workspace explicitly authorized for the current Turn. Relative paths resolve from that workspace; absolute paths must still remain inside it; `~`, directory traversal, and symlinks targeting paths outside the workspace fail closed in the shared policy facade. Only the canonical path approved by policy reaches the current generation's Tool capability, and `glob` / `grep` do not spawn shell processes.
 
 Network tools receive HTTPS authority only with `ai.agent.execPreset: network`. `web_fetch` revalidates protocol, domain, and SSRF policy for the initial URL and every redirect target. DNS results in private, link-local, CGNAT, or multicast ranges are denied, and the actual connection is pinned to the reviewed address. Other presets, including `readonly`, do not implicitly enable network access.
 

@@ -4,7 +4,6 @@
 
 export {
   resolveWorkspacePrompt,
-  clearWorkspacePromptCache,
 } from './workspace-prompt.js';
 export type { WorkspacePromptRole } from './workspace-prompt.js';
 

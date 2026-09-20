@@ -1,30 +1,24 @@
-import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { createEndpointRuntimeState } from 'zhin.js/adapter';
-import listCommand from '../commands/endpoint/list.js';
-import addCommand from '../commands/endpoint/add/[[id]].js';
-import removeCommand from '../commands/endpoint/remove/[id].js';
+import {
+  createEndpointRuntimeState,
+  endpointConfigurationStoreToken,
+} from 'zhin.js/adapter';
+import listCommand from '../commands/icqq/endpoint/list/index.js';
+import addCommand from '../commands/icqq/endpoint/add/[[id]]/index.js';
+import removeCommand from '../commands/icqq/endpoint/remove/[id]/index.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
+import { MemoryEndpointConfigurationStore } from '../../test-utils/endpoint-configuration.js';
 
 /**
  * commands/ 下的命令定义冒烟 + add（bindFlow 引导式登记）/ remove 基本行为
  * （通用套件逻辑见 packages/im/adapter/tests/endpoint-commands.test.ts）。
  */
 
-let root: string;
+let store: MemoryEndpointConfigurationStore;
 
 beforeEach(() => {
-  root = fs.mkdtempSync(path.join(os.tmpdir(), 'icqq-cmd-'));
-  fs.writeFileSync(path.join(root, 'zhin.config.yml'), 'plugins: {}\n');
-  process.env.ZHIN_PROJECT_ROOT = root;
-});
-
-afterEach(() => {
-  delete process.env.ZHIN_PROJECT_ROOT;
-  fs.rmSync(root, { recursive: true, force: true });
+  store = new MemoryEndpointConfigurationStore();
 });
 
 function fakeContext(overrides: Record<string, unknown> = {}) {
@@ -33,6 +27,7 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
     state,
     use: (token: unknown) => {
       if (token === icqqRuntimeStateToken) return state;
+      if (token === endpointConfigurationStoreToken) return store;
       throw new Error(`unexpected token: ${String(token)}`);
     },
     params: Object.freeze({}),
@@ -43,68 +38,67 @@ function fakeContext(overrides: Record<string, unknown> = {}) {
   } as never;
 }
 
-describe('icqq.endpoint command definitions', () => {
+describe('icqq endpoint command definitions', () => {
   it('三个命令模块均为合法 defineCommand', () => {
     for (const definition of [listCommand, addCommand, removeCommand]) {
       expect(() => parseCommandDefinition(definition)).not.toThrow();
     }
   });
 
-  it('add 无 id 时回复用法', () => {
-    const text = addCommand.execute(fakeContext()) as string;
-    expect(text).toContain('用法：icqq.endpoint add <uin>');
+  it('add 无 id 时回复用法', async () => {
+    const text = await addCommand.execute(fakeContext()) as string;
+    expect(text).toContain('用法：icqq endpoint add <uin>');
   });
 
-  it('add 非数字 id 拒绝', () => {
-    expect(addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
+  it('add 非数字 id 拒绝', async () => {
+    expect(await addCommand.execute(fakeContext({ params: { id: 'my-bot' } })))
       .toContain('纯数字');
   });
 
-  it('add 合法 uin：写入 { id } 配置项并引导重启', () => {
-    const text = addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
+  it('add 合法 uin：写入 { id } 配置项并引导重启', async () => {
+    const text = await addCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('✅');
     expect(text).toContain('重启');
-    const config = fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8');
-    expect(config).toContain('id: "8596238"');
+    await expect(store.list('icqq')).resolves.toEqual([{ id: '8596238' }]);
   });
 
-  it('add 重名时报添加失败', () => {
-    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
-    expect(addCommand.execute(fakeContext({ params: { id: '8596238' } })))
+  it('add 重名时报添加失败', async () => {
+    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
+    expect(await addCommand.execute(fakeContext({ params: { id: '8596238' } })))
       .toContain('已存在');
   });
 
-  it('list 显示运行中 + 配置中的 endpoints', () => {
+  it('list 显示运行中 + 配置中的 endpoints', async () => {
     const context = fakeContext();
     (context as { state: ReturnType<typeof createEndpointRuntimeState> }).state
       .endpoints.set('8596238', { id: '8596238', mode: 'direct' });
-    addCommand.execute(fakeContext({ params: { id: '10001' } }));
+    await addCommand.execute(fakeContext({ params: { id: '10001' } }));
 
-    const text = listCommand.execute(context) as string;
+    const text = await listCommand.execute(context) as string;
 
     expect(text).toContain('8596238（direct）');
     expect(text).toContain('10001（direct（直连 @icqqjs/icqq））');
   });
 
-  it('remove 从配置移除并提示重启', () => {
-    addCommand.execute(fakeContext({ params: { id: '8596238' } }));
+  it('remove 从配置移除并提示重启', async () => {
+    await addCommand.execute(fakeContext({ params: { id: '8596238' } }));
 
-    const text = removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
+    const text = await removeCommand.execute(fakeContext({ params: { id: '8596238' } })) as string;
 
     expect(text).toContain('移除');
     expect(text).toContain('重启');
-    expect(fs.readFileSync(path.join(root, 'zhin.config.yml'), 'utf-8')).not.toContain('8596238');
+    await expect(store.list('icqq')).resolves.toEqual([]);
   });
 
-  it('配置 master 后非 master 拒绝 add/remove', () => {
+  it('配置 master 后非 master 拒绝 add/remove', async () => {
     const denied = fakeContext({
       config: { master: 'alice' },
       input: { sender: { id: 'bob' } },
       params: { id: '8596238' },
     });
 
-    expect(addCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
-    expect(removeCommand.execute(denied)).toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    await expect(addCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
+    await expect(removeCommand.execute(denied)).resolves.toBe('仅 master 可执行 ICQQ endpoint 管理命令');
   });
 });

@@ -1,4 +1,9 @@
-import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import {
+  rootPluginId,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
+  type SnapshotReader,
+} from '@zhin.js/plugin-runtime';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -11,9 +16,7 @@ import type {
 } from '@zhin.js/agent';
 import {
   expandEnvironmentValue,
-  type ConfigDocumentPort,
   type RootResourceInstaller,
-  type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
 
 interface ProtocolConfig {

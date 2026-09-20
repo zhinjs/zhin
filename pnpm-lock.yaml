@@ -128,9 +128,12 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../packages/im/component
-      '@zhin.js/config-yaml':
+      '@zhin.js/config-file':
         specifier: workspace:*
-        version: link:../../packages/im/config-yaml
+        version: link:../../packages/im/config-file
+      '@zhin.js/console-protocol':
+        specifier: workspace:*
+        version: link:../../packages/console/protocol
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../packages/im/core
@@ -200,9 +203,6 @@ importers:
       ora:
         specifier: ^9.4.1
         version: 9.4.1
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -424,6 +424,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
@@ -452,9 +455,15 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../packages/toolkit/satori
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../packages/im/tool
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       '@zhin.js/cli':
         specifier: workspace:*
@@ -462,15 +471,9 @@ importers:
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
-      '@zhin.js/tool':
-        specifier: workspace:*
-        version: link:../../packages/im/tool
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      zod:
-        specifier: ^4.4.3
-        version: 4.4.3
 
   examples/multi-agent-room:
     dependencies:
@@ -480,6 +483,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../packages/im/agent-feature
       ai:
         specifier: ^6.0.238
         version: 6.0.238(zod@4.4.3)
@@ -505,9 +511,6 @@ importers:
 
   examples/plugin-runtime-migration-bot:
     dependencies:
-      '@zhin.js/core':
-        specifier: workspace:*
-        version: link:../../packages/im/core
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../../packages/im/runtime
@@ -1016,6 +1019,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../im/core
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../im/feature-kit
       '@zhin.js/html-renderer':
         specifier: workspace:^
         version: link:../toolkit/html-renderer
@@ -1149,9 +1155,6 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1165,6 +1168,9 @@ importers:
 
   packages/im/agent:
     dependencies:
+      '@zhin.js/adapter':
+        specifier: workspace:*
+        version: link:../adapter
       '@zhin.js/agent-feature':
         specifier: workspace:*
         version: link:../agent-feature
@@ -1195,9 +1201,6 @@ importers:
       '@zhin.js/prompt-section':
         specifier: workspace:*
         version: link:../prompt-section
-      '@zhin.js/schedule':
-        specifier: workspace:*
-        version: link:../../../basic/schedule
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../skill
@@ -1333,11 +1336,11 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/im/config-yaml:
+  packages/im/config-file:
     dependencies:
-      '@zhin.js/runtime':
+      '@zhin.js/plugin-runtime':
         specifier: workspace:*
-        version: link:../runtime
+        version: link:../plugin-runtime
       yaml:
         specifier: 2.9.0
         version: 2.9.0
@@ -1345,9 +1348,9 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/plugin-runtime':
+      '@zhin.js/runtime':
         specifier: workspace:*
-        version: link:../plugin-runtime
+        version: link:../runtime
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1390,6 +1393,9 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      '@zhin.js/schedule-feature':
+        specifier: workspace:*
+        version: link:../schedule-feature
       '@zhin.js/schema':
         specifier: workspace:*
         version: link:../../../basic/schema
@@ -1399,15 +1405,6 @@ importers:
       segment-matcher:
         specifier: ^1.0.5
         version: 1.0.5
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
-      zod:
-        specifier: ^4.0.0
-        version: 4.4.3
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1499,15 +1496,6 @@ importers:
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../../../basic/schedule
-      '@zhin.js/schema':
-        specifier: workspace:*
-        version: link:../../../basic/schema
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
-      yaml:
-        specifier: ^2.9.0
-        version: 2.9.0
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1641,7 +1629,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
 
-  packages/im/skill:
+  packages/im/schedule-feature:
     dependencies:
       '@zhin.js/feature-kit':
         specifier: workspace:*
@@ -1650,6 +1638,28 @@ importers:
         specifier: workspace:*
         version: link:../plugin-runtime
     devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/skill:
+    dependencies:
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+      js-yaml:
+        specifier: ^5.2.2
+        version: 5.2.2
+    devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -1672,6 +1682,9 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   packages/im/zhin:
     dependencies:
@@ -1703,15 +1716,9 @@ importers:
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../toolkit/html-renderer
-      '@zhin.js/kernel':
-        specifier: workspace:*
-        version: link:../kernel
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime
-      '@zhin.js/speech':
-        specifier: workspace:*
-        version: link:../../toolkit/speech
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1787,6 +1794,9 @@ importers:
 
   packages/toolkit/scaffold-wizard:
     dependencies:
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../../im/plugin-runtime
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -1799,9 +1809,6 @@ importers:
       qrcode:
         specifier: ^1.5.4
         version: 1.5.4
-      smol-toml:
-        specifier: ^1.7.1
-        version: 1.7.1
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -1836,6 +1843,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -1857,13 +1867,16 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1882,6 +1895,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -1903,6 +1919,12 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       discord.js:
         specifier: ^14.27.0
         version: 14.27.0
@@ -1910,9 +1932,6 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1943,6 +1962,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imap:
         specifier: ^0.8.19
         version: 0.8.19
@@ -1980,6 +2002,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -1998,6 +2023,12 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2026,6 +2057,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2044,6 +2078,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2054,9 +2091,6 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       '@zhin.js/prompt-section':
         specifier: workspace:*
         version: link:../../../packages/im/prompt-section
@@ -2078,6 +2112,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2099,6 +2136,12 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       kook-client:
         specifier: ^1.0.4
         version: 1.0.4
@@ -2106,9 +2149,6 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2127,6 +2167,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2148,13 +2191,16 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2173,6 +2219,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2191,13 +2240,16 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2237,6 +2289,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2271,6 +2326,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2292,6 +2350,12 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       ws:
         specifier: ^8.21.1
         version: 8.21.1
@@ -2302,9 +2366,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2326,6 +2387,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2347,6 +2411,12 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2360,9 +2430,6 @@ importers:
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2402,6 +2469,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2430,6 +2500,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2454,6 +2527,12 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       qq-official-bot:
         specifier: ^1.3.0
         version: 1.3.0
@@ -2461,9 +2540,6 @@ importers:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2506,6 +2582,9 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.8)
@@ -2564,6 +2643,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2598,6 +2680,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2619,13 +2704,16 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2644,6 +2732,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2665,13 +2756,16 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2708,6 +2802,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       axios:
         specifier: ^1.19.0
         version: 1.19.0
@@ -2736,6 +2833,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2757,13 +2857,16 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -2816,6 +2919,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3110,13 +3216,13 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
     devDependencies:
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3135,10 +3241,13 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
-    devDependencies:
-      '@zhin.js/agent':
+      '@zhin.js/skill':
         specifier: workspace:*
-        version: link:../../../packages/im/agent
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3188,10 +3297,13 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../../packages/toolkit/satori
-    devDependencies:
-      '@zhin.js/agent':
+      '@zhin.js/skill':
         specifier: workspace:*
-        version: link:../../../packages/im/agent
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3216,6 +3328,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3232,6 +3347,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3269,6 +3387,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3291,10 +3412,13 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
-    devDependencies:
-      '@zhin.js/agent':
+      '@zhin.js/skill':
         specifier: workspace:*
-        version: link:../../../packages/im/agent
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3319,6 +3443,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3335,13 +3462,16 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
       rss-parser:
         specifier: ^3.13.0
         version: 3.13.0
     devDependencies:
-      '@zhin.js/agent':
-        specifier: workspace:*
-        version: link:../../../packages/im/agent
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3360,10 +3490,13 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
-    devDependencies:
-      '@zhin.js/agent':
+      '@zhin.js/skill':
         specifier: workspace:*
-        version: link:../../../packages/im/agent
+        version: link:../../../packages/im/skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../../../packages/im/tool
+    devDependencies:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -8246,10 +8379,6 @@ packages:
   slash@3.0.0:
     resolution: {integrity: sha512-g9Q1haeby36OSStwb4ntCGGGaKsaVSjQ68fBxoQcutl5fS1vuY18H3wSt3jFyFtrkx+Kz0V1G85A4MyAdDMi2Q==}
     engines: {node: '>=8'}
-
-  smol-toml@1.7.1:
-    resolution: {integrity: sha512-PPlsspAZ4jbMBu5DMFhfUGDQLu/vrL4SyBROVS37x8ynnVmFIs1VPBz1Co8Xks3TvpIaZXmU85y4DrQ+UyVFoQ==}
-    engines: {node: '>= 18'}
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -14054,8 +14183,6 @@ snapshots:
       totalist: 3.0.1
 
   slash@3.0.0: {}
-
-  smol-toml@1.7.1: {}
 
   source-map-js@1.2.1: {}
 

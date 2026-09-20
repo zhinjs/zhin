@@ -8,7 +8,7 @@ import {
   type ApproveJoinRequestOptions,
   type Sendable,
 } from 'qq-official-bot';
-import type { MediaRef, Segment } from '@zhin.js/core';
+import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
 

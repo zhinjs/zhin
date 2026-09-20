@@ -86,7 +86,7 @@ npm create zhin-app my-awesome-bot
 **交互式配置流程：**
 1. 📝 输入项目名称
 2. ⚙️ 选择运行时（Node.js / Bun）
-3. 📄 选择配置格式（YAML / JSON / TOML）
+3. 📄 选择配置格式（YAML / JSON）
 4. 🔐 配置 Web 控制台 Token
    - Token（默认：随机 32 位 hex 字符串，用于 Authorization: Bearer 或 ?token= 认证）
 5. 🗄️ 配置数据库
@@ -183,14 +183,14 @@ my-awesome-bot/
 ├── commands/                 # 消息命令
 ├── components/               # 消息组件
 ├── middlewares/              # 消息中间件
-├── tools/                    # 可选 AI tools（默认空）
-├── skills/                   # SKILL.md 能力目录
+├── tools/              # 可选 AI tools（默认空）
+├── skills/<name>/SKILL.md    # Skill 能力包，可附带参考资料与脚本
 ├── agents/                   # 可选 Agent 定义（默认空）
 ├── pages/                    # Console page + $nav/$footer 布局
 ├── plugins/                  # 仅一级的本地子插件 workspace
 ├── packages/                 # 提供给 Zhin 的 Feature workspace
 ├── data/                     # 数据存储目录
-├── zhin.config.yml           # 配置文件（可选 YAML / JSON / TOML）
+├── zhin.config.yml           # Root 配置文件（YAML 或 JSON）
 ├── package.json             # 根 package.json（包含依赖和脚本）
 ├── tsconfig.json            # TypeScript 根配置
 ├── pnpm-workspace.yaml      # workspace 配置
@@ -214,47 +214,34 @@ packages:
 ```json
 {
   "scripts": {
-    "dev": "zhin dev",                          // 开发模式
-    "start": "zhin start",                      // 生产启动
-    "daemon": "zhin start --daemon",            // 后台运行
-    "stop": "zhin stop",                        // 停止服务
-    "build": "zhin build"                          // 构建插件和客户端页面
+    "dev": "zhin runtime start",
+    "start": "zhin runtime start --mode production --no-watch",
+    "build": "tsc --noEmit"
   }
 }
 ```
 
 ## 配置文件格式
 
-脚手架当前支持 YAML、JSON、TOML。`-y` 默认生成 `zhin.config.yml`（节选）：
+脚手架生成 Runtime 可直接加载的 YAML 或 JSON。`-y` 默认生成 `zhin.config.yml`（节选）：
 
 ```yaml
-endpoints: []
-
-plugins:
-  - "@zhin.js/adapter-sandbox"
-  - example
-
 http:
   token: ${HTTP_TOKEN}
+  port: 8068
+  base: /api
   corsOrigins:
     - "https://console.zhin.dev"
 
-ai:
-  providers:
-    ollama:
-      sdk: ollama
-      host: http://127.0.0.1:11434
-  agents:
-    zhin:
-      provider: ollama
-      model: qwen3:14b
-  agent:
-    toolSearch: false
-    execSecurity: allowlist
-    execPreset: readonly
+plugins:
+  sandbox:
+    commandPrefix: /
+    endpoints:
+      - id: sandbox-bot
+        owner: sandbox-user
 ```
 
-交互式选择 SQLite 等数据库时会追加 `database:` 与 `inbox: enabled: true`。Remote Console 用法见 [docs/console-remote.md](../../docs/console-remote.md)；Stable 手测见 [examples/minimal-bot/README.md](../../examples/minimal-bot/README.md)。
+交互式选择数据库时会追加 `database:`。Remote Console 用法见 [Console 文档](../../docs/console/index.md)；Stable 手测见 [examples/minimal-bot/README.md](../../examples/minimal-bot/README.md)。
 
 ## 完整工作流
 

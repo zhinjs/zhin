@@ -14,15 +14,14 @@ import {
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
 } from './llm/sdk-default-models.js';
 
-import { registerLanguageModel } from './llm/language-model-store.js';
 import { generateTextViaAiSdk } from './llm/bridge/ai-sdk-stream.js';
 import { generateImageViaAiSdk } from './llm/bridge/ai-sdk-image.js';
 import { createContext } from './llm/types/context.js';
 import { createUserMessage } from './llm/types/agent-message.js';
 import { assistantText } from './llm/convert/openai-bridge.js';
 import type { ImageGenerateRequest, ImageGenerateResult } from './image-generation.js';
-import { getLlmTransportModel } from './llm/api-registry.js';
-import { resolveProxyFetch } from './llm/proxy-fetch.js';
+import { createLlmTransportModel } from './llm/llm-api-runtime.js';
+import { AiHttpTransport, createAiHttpTransport } from './llm/http-transport.js';
 
 function stripTrailingSlashes(s: string): string {
   let i = s.length;
@@ -30,7 +29,10 @@ function stripTrailingSlashes(s: string): string {
   return s.slice(0, i);
 }
 
-async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Promise<string[]> {
+async function fetchOpenAiCompatibleModels(
+  config: ProviderInstanceConfig,
+  fetchFn: typeof globalThis.fetch,
+): Promise<string[]> {
   let baseUrl = config.baseUrl?.trim();
   if (!baseUrl && config.host?.trim()) {
     const host = stripTrailingSlashes(config.host);
@@ -48,8 +50,7 @@ async function fetchOpenAiCompatibleModels(config: ProviderInstanceConfig): Prom
       : `${config.authScheme ?? 'Bearer '}${config.apiKey}`.trim();
   }
 
-  const proxyFetch = resolveProxyFetch();
-  const res = await (proxyFetch ?? fetch)(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
+  const res = await fetchFn(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
   if (!res.ok) return [];
   const json = await res.json() as { data?: Array<{ id?: string }> };
   return (json.data ?? []).map((m) => m.id).filter((id): id is string => !!id?.trim());
@@ -69,7 +70,10 @@ function parseGoogleModelId(name: string): string {
 }
 
 /** Google Gemini API: GET /v1beta/models (x-goog-api-key) */
-export async function fetchGoogleModels(config: ProviderInstanceConfig): Promise<string[]> {
+export async function fetchGoogleModels(
+  config: ProviderInstanceConfig,
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
+): Promise<string[]> {
   const apiKey = config.apiKey?.trim();
   if (!apiKey) return [];
 
@@ -82,15 +86,12 @@ export async function fetchGoogleModels(config: ProviderInstanceConfig): Promise
 
   const ids: string[] = [];
   let pageToken: string | undefined;
-  const proxyFetch = resolveProxyFetch();
-  const doFetch = proxyFetch ?? fetch;
-
   do {
     const url = new URL(`${base}/models`);
     url.searchParams.set('pageSize', '100');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-    const res = await doFetch(url.toString(), { headers });
+    const res = await fetchFn(url.toString(), { headers });
     if (!res.ok) return ids.length > 0 ? ids : [];
 
     const json = await res.json() as GoogleModelsListResponse;
@@ -114,27 +115,29 @@ export async function fetchGoogleModels(config: ProviderInstanceConfig): Promise
 
 export class SdkProviderAdapter implements AIProvider {
   name: string;
+  readonly sdk: SdkId;
+  readonly config: ProviderInstanceConfig;
   models: string[];
   contextWindow?: number;
   imageGenerationDefaults: ProviderInstanceConfig['imageGeneration'];
+  readonly #transport: AiHttpTransport;
 
   constructor(
     alias: string,
-    readonly sdk: SdkId,
-    readonly config: ProviderInstanceConfig,
+    sdk: SdkId,
+    config: ProviderInstanceConfig,
     initialModels: string[] = [],
+    transport: AiHttpTransport = createAiHttpTransport(),
   ) {
     this.name = alias;
+    this.sdk = sdk;
+    this.config = config;
+    this.#transport = transport;
     this.models = initialModels.length > 0
       ? [...initialModels]
       : resolveSdkProviderModels(sdk, config);
     this.contextWindow = config.contextWindow;
     this.imageGenerationDefaults = config.imageGeneration;
-  }
-
-  private ensureLanguageModel(modelId: string): void {
-    const lm = createLanguageModel(this.sdk, this.config, modelId);
-    registerLanguageModel(this.name, modelId, lm);
   }
 
   /**
@@ -147,11 +150,10 @@ export class SdkProviderAdapter implements AIProvider {
     opts: TextCompleteOptions = {},
   ): Promise<string> {
     const modelId = opts.model ?? this.models[0];
-    this.ensureLanguageModel(modelId);
-    const model = getLlmTransportModel(this.name, modelId);
+    const model = createLlmTransportModel(this.name, this.config, modelId);
     const ctx = createContext(system, [createUserMessage(user)]);
     const assistant = await generateTextViaAiSdk(
-      createLanguageModel(this.sdk, this.config, modelId),
+      createLanguageModel(this.sdk, this.config, modelId, this.#transport.fetch),
       model,
       ctx,
       { temperature: opts.temperature, maxTokens: opts.maxTokens },
@@ -161,7 +163,7 @@ export class SdkProviderAdapter implements AIProvider {
 
   async listModels(): Promise<string[]> {
     if (this.sdk === 'google' && !hasExplicitYamlModels(this.config)) {
-      const discovered = await fetchGoogleModels(this.config);
+      const discovered = await fetchGoogleModels(this.config, this.#transport.fetch);
       if (discovered.length > 0) {
         this.models = discovered;
         return this.models;
@@ -172,7 +174,7 @@ export class SdkProviderAdapter implements AIProvider {
       return this.models;
     }
     if (SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY.has(this.sdk)) {
-      const discovered = await fetchOpenAiCompatibleModels(this.config);
+      const discovered = await fetchOpenAiCompatibleModels(this.config, this.#transport.fetch);
       if (discovered.length > 0) {
         this.models = discovered;
         return this.models;
@@ -189,13 +191,23 @@ export class SdkProviderAdapter implements AIProvider {
       this.config,
       request,
       this.imageGenerationDefaults,
+      this.#transport.fetch,
     );
+  }
+
+  get fetch(): typeof globalThis.fetch {
+    return this.#transport.fetch;
+  }
+
+  async dispose(): Promise<void> {
+    await this.#transport.dispose();
   }
 }
 
 export function createSdkProviderAdapter(
   alias: string,
   config: ProviderInstanceConfig,
+  transport?: AiHttpTransport,
 ): SdkProviderAdapter | null {
   if (config.sdk === 'ollama') {
     // Ollama does not require apiKey
@@ -207,15 +219,22 @@ export function createSdkProviderAdapter(
   }
 
   const models = resolveSdkProviderModels(config.sdk, config);
-  return new SdkProviderAdapter(alias, config.sdk, config, models);
+  return new SdkProviderAdapter(
+    alias,
+    config.sdk,
+    config,
+    models,
+    transport ?? createAiHttpTransport(),
+  );
 }
 
-export function sdkEntryFromProvider(provider: AIProvider): import('./llm/register-api-layer.js').SdkProviderEntry {
+export function sdkEntryFromProvider(provider: AIProvider): import('./llm/llm-runtime-factory.js').SdkProviderEntry {
   if (provider instanceof SdkProviderAdapter) {
     return {
       alias: provider.name,
       config: provider.config,
       models: [...provider.models],
+      fetch: provider.fetch,
     };
   }
   throw new TypeError(

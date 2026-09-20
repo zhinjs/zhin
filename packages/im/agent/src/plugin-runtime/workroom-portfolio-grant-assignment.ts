@@ -2,7 +2,7 @@ import type { AssignmentExecutionEnvelope } from '../workroom/assignment-executo
 import type { WorkroomLocalAssignmentClaimRequest } from '../workroom/local-assignment-issuance.js';
 import type { WorkroomRemoteAssignmentClaimRequest } from '../workroom/remote-assignment-issuance.js';
 import type { WorkroomKernel } from '../workroom/workroom-kernel.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import {
   parseWorkroomDispatchTaskDecision,

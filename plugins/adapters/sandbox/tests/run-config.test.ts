@@ -6,12 +6,12 @@ describe('sandbox agent run config', () => {
     expect(normalizeSandboxAgentRunConfig({
       workingDirectory: ' /workspace/app ',
       safetyMode: 'read-only',
-      approvalMode: 'deny',
+      approvalMode: 'auto',
       networkAccess: true,
     })).toEqual({
       workingDirectory: '/workspace/app',
       safetyMode: 'read-only',
-      approvalMode: 'deny',
+      approvalMode: 'auto',
       networkAccess: true,
     });
   });
@@ -23,7 +23,7 @@ describe('sandbox agent run config', () => {
 
   it('makes danger-full-access explicitly include network authority', () => {
     expect(normalizeSandboxAgentRunConfig({
-      safetyMode: 'danger-full-access', approvalMode: 'allow', networkAccess: false,
+      safetyMode: 'danger-full-access', approvalMode: 'bypass', networkAccess: false,
     })).toMatchObject({ safetyMode: 'danger-full-access', networkAccess: true });
   });
 });

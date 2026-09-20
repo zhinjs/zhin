@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import { AgentStreamEventType } from '@zhin.js/ai/agent-stream';
 import { HookRegistry, AgentResourceHub } from '../../src/resource-hub/index.js';
 import {
-  LEGACY_HOOK_STREAM_ALIASES,
   agentStreamEventToAIHookEvent,
   isAgentStreamHookEventName,
 } from '../../src/event/agent-stream-hooks.js';
@@ -28,11 +27,9 @@ describe('HookRegistry stream vocabulary (ADR 0039 P0)', () => {
     expect(handler.mock.calls[0][0].context.streamType).toBe(AgentStreamEventType.TURN_STARTED);
   });
 
-  it('legacy message:received also fires message.received stream hooks via bus sink', async () => {
+  it('bus events only invoke hooks using canonical stream names', async () => {
     const resourceHub = new AgentResourceHub();
-    const legacyHandler = vi.fn();
     const streamHandler = vi.fn();
-    resourceHub.hooks.add({ name: 'legacy', event: 'message:received', handler: legacyHandler });
     resourceHub.hooks.add({ name: 'stream', event: AgentStreamEventType.MESSAGE_RECEIVED, handler: streamHandler });
 
     await resourceHub.agentStreamBus.publish({
@@ -40,13 +37,7 @@ describe('HookRegistry stream vocabulary (ADR 0039 P0)', () => {
       data: { message: 'hi' },
     }, { sessionId: 'ses_1' });
 
-    expect(legacyHandler).toHaveBeenCalledTimes(1);
     expect(streamHandler).toHaveBeenCalledTimes(1);
-  });
-
-  it('maps legacy aliases to stream event names', () => {
-    expect(LEGACY_HOOK_STREAM_ALIASES['message:received']).toBe(AgentStreamEventType.MESSAGE_RECEIVED);
-    expect(LEGACY_HOOK_STREAM_ALIASES['tool:call']).toBe(AgentStreamEventType.ACTIONS_REQUESTED);
   });
 
   it('isAgentStreamHookEventName recognizes contract vocabulary', () => {

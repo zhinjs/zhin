@@ -5,7 +5,7 @@ import { defineGithubOauthUsersTable } from './src/oauth-users.js';
 
 /**
  * github_subscriptions — repo event subscriptions per chat channel
- * (used by github_subscriptions agent tool; schema matches legacy defineModel).
+ * (used by github_subscriptions agent tool; schema is registered through DatabaseHost).
  */
 const GITHUB_SUBSCRIPTIONS_SCHEMA = {
   id: { type: 'integer', primary: true },
@@ -19,7 +19,7 @@ const GITHUB_SUBSCRIPTIONS_SCHEMA = {
 
 /**
  * Plugin Runtime GitHub adapter.
- * - Endpoint: `adapters/github.ts`
+ * - Endpoint: `adapters/github/index.ts`
  * - OAuth user tokens: define `github_oauth_users` when DatabaseHost is present
  */
 export default definePlugin({
@@ -28,7 +28,7 @@ export default definePlugin({
     displayName: 'GitHub Adapter',
   },
   setup(context) {
-    // 运行中 endpoint 注册表（github.endpoint list 的"运行中"数据源）
+    // 运行中 endpoint 注册表（github endpoint list 的"运行中"数据源）
     context.resources.provide(githubRuntimeStateToken, createEndpointRuntimeState());
     if (context.resources.has(databaseHostToken)) {
       const host = context.resources.use(databaseHostToken);

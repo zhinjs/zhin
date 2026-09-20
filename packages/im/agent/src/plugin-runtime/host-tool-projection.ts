@@ -1,5 +1,6 @@
 import {
   defineAgentTool,
+  requireToolInputSchema,
   toolFeatureId,
   type AgentToolDefinition,
   type ToolApproval,
@@ -12,7 +13,7 @@ export interface HostToolProjectionInput {
   readonly name: string;
   readonly description: string;
   readonly parameters?: unknown;
-  readonly approval?: ToolApproval;
+  readonly requiresApproval?: ToolApproval;
   readonly platforms?: readonly string[];
   readonly scopes?: readonly ToolScope[];
   readonly permissions?: readonly string[];
@@ -34,8 +35,13 @@ export function projectHostTool(input: HostToolProjectionInput): HostToolProject
     name: input.name,
     definition: defineAgentTool<Record<string, unknown>, unknown>({
       description: input.description,
-      inputSchema: input.parameters,
-      approval: input.approval,
+      inputSchema: input.parameters === undefined
+        ? undefined
+        : requireToolInputSchema<Record<string, unknown>>(
+            input.parameters,
+            `Host Tool ${input.name} parameters`,
+          ),
+      requiresApproval: input.requiresApproval,
       platforms: input.platforms,
       scopes: input.scopes,
       permissions: input.permissions,

@@ -15,15 +15,16 @@ user-invocable: true
 ## 只处理这些事
 
 - 分析 packages、plugins、basic 之间的职责边界与依赖方向
-- 审查 Context 注入、Plugin 生命周期、消息分发和发送链的一致性
+- 审查 generation Resource、Plugin 生命周期、消息分发和发送链的一致性
 - 发现跨包耦合、职责泄漏、重复抽象、时序复杂度和可维护性问题
 - 优化模块划分、接口边界、扩展点设计和关键调用链
+- 对 Agent 域保持 `workroom/portfolio/data-governance → ports` 与 `plugin-runtime/config → composition` 的单向边界，运行 `check:domain-module-boundaries`
 
 ## 不要做的事
 
 - 不要把普通业务改动伪装成架构优化
 - 不要在没有证据前推动大规模重构
-- 不要脱离现有文档约束，尤其是 AGENTS.md 和 architecture-overview
+- 不要脱离现有文档约束，尤其是 `AGENTS.md` 和 `docs/concepts/architecture.md`
 - 不要把前端视觉优化或普通插件功能开发当作主任务
 
 ## 工作方式

@@ -9,6 +9,7 @@ import {
   checkBuiltinPermitList,
 } from '../src/builtin.js';
 import type { PermissionSubject } from '../src/subject.js';
+import { platformPermission } from '../src/helpers.js';
 
 function makeSubject(overrides: Partial<PermissionSubject> = {}): PermissionSubject {
   return {
@@ -95,6 +96,17 @@ describe('assertPermitSyntax', () => {
 
   it('includes source in error message', () => {
     expect(() => assertPermitSyntax(['bad'], 'my-command')).toThrow(/for my-command/);
+  });
+});
+
+describe('platformPermission', () => {
+  it('builds a validated platform permission name', () => {
+    expect(platformPermission(' qq ', ' scene_admin ')).toBe('platform(qq,scene_admin)');
+  });
+
+  it('rejects empty components', () => {
+    expect(() => platformPermission('', 'scene_admin')).toThrow(/non-empty/);
+    expect(() => platformPermission('qq', '')).toThrow(/non-empty/);
   });
 });
 

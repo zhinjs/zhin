@@ -8,5 +8,3 @@ export class KeyboardSegment {
     return { type: this.segmentType, data: this.data };
   }
 }
-
-/** @deprecated 使用 {@link KeyboardSegment} */

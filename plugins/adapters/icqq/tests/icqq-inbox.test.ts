@@ -172,7 +172,7 @@ describe('icqq inbox row builders', () => {
   });
 });
 
-describe('icqq.endpoint side-event wiring (no inbox dual-write)', () => {
+describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
   it('dispatches request events to SideEventGateway', async () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });

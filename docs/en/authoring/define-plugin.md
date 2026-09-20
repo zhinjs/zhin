@@ -67,7 +67,7 @@ export default definePlugin({
 });
 ```
 
-The shortcut registration and the directory discovery of `commands/hello.ts`, `components/status.tsx` ultimately produce the same
+The shortcut registration and the directory discovery of `commands/hello/index.ts`, `components/status/index.tsx` ultimately produce the same
 `CapabilitySlot`. Having both with the same name will report `Duplicate Capability Slot` during the prepare phase; failing to mount the corresponding
 Feature will also refuse startup. Modifying the single-file entry rebuilds that plugin's Scope; splitting into convention directories enables
 single-capability file-level HMR.
@@ -137,10 +137,10 @@ if (config.heartbeatCron && context.resources.has(scheduleHostToken)) {
   }));
 }
 
-// Agent tool: shares the same candidate capability table as tools/*.ts
+// Agent tool: shares the same candidate capability table as tools/<name>/index.ts
 context.addTool('showcase_greet', defineAgentTool<{ name?: string }>({
     description: 'Return the configured greeting for a name',
-    approval: 'never',
+    requiresApproval: 'never',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' } },

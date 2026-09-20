@@ -6,7 +6,6 @@ import {
 } from '../resource-hub/mcp-lifecycle.js';
 import { rehydrateTurnActiveSkills } from '../assistant/schedule-skills.js';
 import { captureDeferredSnapshotBefore, cloneDeferredSnapshot } from '../internal/turn-context.js';
-import { attachWebSearchLocale } from './web-search-locale-attach.js';
 import type { ZhinAgentPrivate, Tool } from '../internal/agent-host.js';
 import { defaultToolSystem } from '../tool/tool-system.js';
 import type { ResolvedToolsForTurn } from './deferred-resolution.js';
@@ -38,7 +37,7 @@ export async function prepareTurnTools(
   },
 ): Promise<TurnToolsPrep> {
   const userId = opts.userId;
-  const contextForTools = await attachWebSearchLocale(opts.commMessage, userId, host.userProfiles);
+  const contextForTools = opts.commMessage;
 
   if (host.resourceHub && opts.mcpServerNames.length > 0) {
     await ensureMcpConnectionsForBinding(host.resourceHub.mcps, opts.mcpServerNames, (event) => {

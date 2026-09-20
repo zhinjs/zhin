@@ -5,7 +5,7 @@
 import { generateText, Output, jsonSchema, streamText, type SystemModelMessage, type LanguageModel, type JSONValue } from 'ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
-import { createAssistantMessageEventStream, getProviderConfig, type StreamFn, type StreamOptions } from '../api-registry.js';
+import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
@@ -26,8 +26,6 @@ import {
   resolvePromptCacheApplyInput,
   wrapSystemForPromptCache,
 } from './ai-sdk-prompt-cache.js';
-import { getLanguageModel } from '../language-model-store.js';
-import { ensureLanguageModelRegistered } from '../register-api-layer.js';
 
 const llmContextLogger = getLogger('LLM');
 
@@ -235,17 +233,10 @@ function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
   return '';
 }
 
-export function createAiSdkStreamFn(): StreamFn {
+export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
   return (model, context, options) => {
     return createAssistantMessageEventStream(async (push) => {
-      let languageModel = getLanguageModel(model.provider, model.id);
-      if (!languageModel) {
-        const entry = getProviderConfig(model.provider);
-        if (entry) {
-          ensureLanguageModelRegistered(model.provider, model.id, entry.config);
-          languageModel = getLanguageModel(model.provider, model.id);
-        }
-      }
+      const languageModel = runtime.resolveLanguageModel(model.provider, model.id);
       if (!languageModel) {
         throw new Error(`No LanguageModel registered for provider ${model.provider}`);
       }

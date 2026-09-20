@@ -12,7 +12,7 @@ describe('projectHostTool', () => {
         properties: { timezone: { type: 'string' } },
         required: ['timezone'],
       },
-      approval: 'never',
+      requiresApproval: 'never',
       platforms: ['telegram'],
       execute: async (input) => `time:${String(input.timezone)}`,
     });

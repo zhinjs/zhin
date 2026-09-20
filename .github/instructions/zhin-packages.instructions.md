@@ -8,8 +8,9 @@ applyTo: "basic/**,packages/**"
 
 ## 分层边界
 
-- 依赖方向保持单向：basic → kernel → ai → core → agent → zhin。
-- kernel 和 ai 不应引入 IM 概念，如 Adapter、Bot、Message。
+- 以 `docs/concepts/architecture.md` 和各包 `package.json` 为准；运行 `pnpm check:architecture` 验证。
+- `plugin-runtime → feature-kit → Feature packages`；`im-contract` 供 adapter/core/agent 使用；`core → zhin`，`core + ai → agent`。
+- kernel 和 ai 不应引入 IM 概念，如 Adapter、Endpoint、Message。
 
 ## 目录语义
 
@@ -25,7 +26,8 @@ applyTo: "basic/**,packages/**"
 
 ## 运行时不变量
 
-- 如果改动涉及 Plugin 上下文，usePlugin() 只能在模块顶层调用。
+- `usePlugin()` / `getPlugin()` 已移除；依赖必须通过 setup 的 `context.resources`、能力执行上下文的 `context.use(token)` 或当前 operation 的 Generation View 取得。
+- 代级状态走 snapshot Resource；不要新增模块级 latest-value 单例或恢复 `createGenerationStore`。
 - 如果改动涉及 IM 出站消息，必须保留统一链路：Message.$reply 或 Adapter.sendMessage → renderSendMessage → before.sendMessage → 平台 Endpoint。
 - 不要新增绕过 before.sendMessage 的发送捷径。
 
@@ -41,4 +43,4 @@ applyTo: "basic/**,packages/**"
 
 - 优先运行最小范围验证：pnpm --filter <pkg> build、pnpm --filter <pkg> test。
 - 跨包类型改动再运行 pnpm type-check。
-- 如果改动影响架构边界、目录约定或包导出，检查 docs/architecture-overview.md 和 docs/contributing/repo-structure.md 是否需要同步。
+- 如果改动影响架构边界、目录约定或包导出，检查 `docs/concepts/architecture.md` 和 `docs/contributing/repo-structure.md` 是否需要同步。

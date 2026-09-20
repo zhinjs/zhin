@@ -1,0 +1,20 @@
+{
+  "name": "LARK Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles lark platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "lark",
+      "adapter:lark"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "lark"
+  ]
+}

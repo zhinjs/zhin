@@ -2,8 +2,7 @@
  * HomeStateWatch — alias filter, debounce, format, NotificationRouter deliver.
  * Does not go through HomeFacade (system push path).
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 import type { NotificationRouter } from '../notification-router.js';
 import type { JobNotify } from '../types.js';
 import { DEFAULT_DEBOUNCE_MS } from '../home-config.js';

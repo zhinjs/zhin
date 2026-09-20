@@ -1,4 +1,3 @@
-import type { Adapters } from '../adapter.js';
 import type { MessageSender } from '../types.js';
 
 /**
@@ -10,7 +9,7 @@ import type { MessageSender } from '../types.js';
 export interface SideEventBase {
   /** 平台侧去重键 / flag（非 DB 行 id） */
   $id: string;
-  $adapter: keyof Adapters;
+  $adapter: string;
   $endpoint: string;
   /** 命名空间：`notice` 或 `request` */
   $type: string;

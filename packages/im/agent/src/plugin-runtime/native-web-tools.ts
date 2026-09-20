@@ -2,6 +2,8 @@ import {
   defineAgentTool,
   toolFeatureId,
   type AgentToolDefinition,
+  type ToolInputJsonObjectSchema,
+  type ToolInputJsonSchema,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
 import { htmlToPlainText } from '@zhin.js/core';
@@ -10,9 +12,9 @@ import {
   buildBingSearchUrl,
   extractBingResults,
   hostnameMatchesList,
-} from '../builtin/bing-search-html.js';
-import { DEFAULT_WEB_SEARCH_MARKET } from '../builtin/web-search-locale.js';
-import { ZHIN_WEB_USER_AGENT } from '../builtin/web-tool-utils.js';
+} from '../web/bing-search-html.js';
+import { DEFAULT_WEB_SEARCH_MARKET } from '../web/web-search-locale.js';
+import { ZHIN_WEB_USER_AGENT } from '../web/web-tool-utils.js';
 import {
   NodeNetworkTransport,
   TurnNetworkClient,
@@ -36,7 +38,7 @@ export function createNativeWebToolFeatures(
         url: { type: 'string', description: 'Absolute HTTP(S) URL' },
         max_length: { type: 'number', description: 'Maximum returned characters' },
       }, ['url']),
-      approval: 'on-risk',
+      requiresApproval: 'on-risk',
       execute: (input, context) => fetchWeb(input, context, transport),
     })),
     feature('web_search', defineAgentTool({
@@ -48,7 +50,7 @@ export function createNativeWebToolFeatures(
         allowed_domains: { type: 'array', items: { type: 'string' } },
         blocked_domains: { type: 'array', items: { type: 'string' } },
       }, ['query']),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: (input, context) => searchWeb(input, context, transport),
     })),
   ]);
@@ -129,7 +131,10 @@ function feature(
   return Object.freeze({ feature: toolFeatureId, name, definition });
 }
 
-function objectSchema(properties: Record<string, unknown>, required: readonly string[]): Readonly<Record<string, unknown>> {
+function objectSchema(
+  properties: Record<string, ToolInputJsonSchema>,
+  required: readonly string[],
+): ToolInputJsonObjectSchema {
   return Object.freeze({ type: 'object', properties: Object.freeze(properties), required: Object.freeze([...required]) });
 }
 

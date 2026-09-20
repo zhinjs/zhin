@@ -19,7 +19,8 @@ import {
   type AdapterSegmentPolicy,
   type EndpointSendRequest,
 } from './definition.js';
-import { bindEndpoint, materializeEndpoint, type Endpoint } from './endpoint.js';
+import { bindEndpoint, type Endpoint } from './endpoint.js';
+import { materializeEndpoint } from './managed-endpoint.js';
 import {
   listEndpointManagementCapabilities,
   type EndpointManagementCapability,

@@ -6,18 +6,16 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   databaseHostToken,
   databaseRootHostToken,
-  createPluginDatabaseHost,
+  PluginDatabaseHost,
   rootPluginId,
   type DatabaseHost,
   type DatabaseHostConsole,
   type DatabaseHostModel,
   type DatabaseHostSelection,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import type {
-  ConfigDocumentPort,
-  RootResourceInstaller,
-  RuntimeConfigDocument,
-} from '@zhin.js/runtime';
+import type { RootResourceInstaller } from '@zhin.js/runtime';
 
 const logger = getLogger('Database');
 
@@ -347,7 +345,7 @@ export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
     // Plugins receive a root-scoped facade through the historical token. The
     // raw host remains available only to CLI composition through its root token.
     resources.provide(databaseRootHostToken, host);
-    resources.provide(databaseHostToken, createPluginDatabaseHost(rootPluginId(), host));
+    resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), host));
     // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
     // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
     handoff.add({

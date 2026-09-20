@@ -21,7 +21,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) adapter (Plugin Runtime,
 - **Forward WebSocket** (`connection: ws`): the application connects to NapCat WS
 - `access_token` authentication (Bearer + query)
 - Inbound via `Endpoint.emit(...)` (deduplication + self-message filtering); outbound `send({ conversation, payload })`
-- 41 AI tools (`agent/tools/`)
+- 41 AI tools (`tools/`)
 
 ## Installation
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-napcat
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/napcat.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/napcat/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
@@ -55,10 +55,13 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: my-bot
+      - id: my-bot
         url: "ws://127.0.0.1:3001"
         access_token: "${NAPCAT_TOKEN}"
 ```
+
+AdapterIndex merges instance connection defaults into every endpoint. The protocol receives only
+one expanded endpoint config and does not infer endpoint ids from environment variables.
 
 The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapter-napcat` (`instanceKey: napcat`).
 
@@ -79,15 +82,15 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/*.ts` |
-| Skill documentation | `agent/skills/napcat.md` |
+| Permit vocabulary | `PERMITS.md` |
+| Platform tools | `tools/<name>/index.ts` |
+| Skill documentation | `agents/napcat/skills/napcat-*/SKILL.md` split by messaging, group content, settings, files/history, media, and account |
 
 ## Migration Notes (Plugin Runtime)
 
 - **Notice / request / meta side events** enter the unified `Endpoint.emit(...)` ingress and dispatch to handlers. Requests expose `$approve` / `$reject`; messages continue through `outboundMessageToken`.
-- **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, `agent/tools/` only covers NapCat extension APIs. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
-- **Platform permission access control**: `plugin.ts` setup has registered `registerDefaultScenePlatformPermitChecker('napcat')`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
+- **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, `tools/` only covers NapCat extension APIs. Other group management capabilities can be invoked via `callApi` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
+- **Platform permission access control**: `plugin.ts` setup registers `createSceneRolePlatformChecker()` through the generation-owned `permissionHostToken`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
 
 ## Documentation Links
 

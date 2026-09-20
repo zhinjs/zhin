@@ -30,10 +30,12 @@ pnpm add @zhin.js/adapter-onebot11
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — convention-based `adapters/onebot11.ts` (`defineAdapter`)
+- `@zhin.js/adapter` — convention-based `adapters/onebot11/index.ts` (`defineAdapter`)
 - `@zhin.js/core` — `Endpoint.emit(...)` inbound, `outboundMessageToken` outbound
 - `zhin.js` — `plugin.ts` (`definePlugin`)
 - Configuration goes to `plugins.<instanceKey>` via the plugin's `schema.json`
+
+`AdapterIndex` merges instance defaults with each `endpoints[]` override. The protocol receives one expanded endpoint configuration and no longer reads nested endpoint rows, the old `type: ws_reverse` alias, or process environment variables.
 
 Inbound: `gateway.receive({ conversation, message, content, sender, metadata })` (`kind: 'private'|'group'`)
 Outbound: `send({ conversation, payload })` -> WS `send_private_msg` / `send_group_msg` (payload is rendered by gateway/core; no segment-mapper)
@@ -54,7 +56,7 @@ plugins:
     reconnect_interval: 5000
     heartbeat_interval: 30000
     endpoints:
-      - name: ob11-bot
+      - id: ob11-bot
         url: "ws://127.0.0.1:6700"
         access_token: "${ONEBOT11_ACCESS_TOKEN}"
 ```
@@ -82,15 +84,15 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools | `agent/tools/set_title.ts` -> `onebot11_set_title` |
-| Skill documentation | `agent/skills/onebot11.md` |
+| Permit vocabulary | `PERMITS.md` |
+| Platform tools | `tools/set_title/index.ts` -> `onebot11_set_title` |
+| Skill documentation | `agents/onebot11/skills/onebot11/SKILL.md` |
 
 ## Migration Notes (Plugin Runtime)
 
 - **Notice / request / meta side events** enter the unified `Endpoint.emit(...)` ingress and dispatch to handlers. Messages continue through `outboundMessageToken`.
 - **Group management tools have not been migrated yet**: the old Adapter registered a full set of agent tools (kick/mute/group card, etc.) via `createSceneManagementTools`; after migration, only `onebot11_set_title` is retained. Other group management capabilities can be invoked via `$client.call()` (e.g., `set_group_kick`, `set_group_ban`) as an escape hatch.
-- **Platform permission access control**: `plugin.ts` setup has registered `registerDefaultScenePlatformPermitChecker('onebot11')`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
+- **Platform permission access control**: `plugin.ts` setup registers `createSceneRolePlatformChecker()` through the generation-owned `permissionHostToken`. `scene_admin` / `scene_owner` are determined based on the sender's `role` (owner / admin) in the inbound metadata.
 
 ## Documentation Links
 

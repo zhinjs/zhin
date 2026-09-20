@@ -1,7 +1,7 @@
 /**
  * SkillRegistry — AI skill management with common/specialized support.
  *
- * Absorbs: core/built/skill.ts (SkillFeature, search scoring)
+ * Owns Agent-side Skill lookup and search scoring.
  */
 
 import {

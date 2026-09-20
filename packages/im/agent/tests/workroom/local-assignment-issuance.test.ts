@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import type { WorkroomAcceptancePolicyDecisionPort } from '../../src/workroom/acceptance-policy.js';
 import type { WorkroomLocalAssignmentAuthorityPort } from '../../src/workroom/local-assignment-issuance.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 const SHA_A = `sha256:${'a'.repeat(64)}`;

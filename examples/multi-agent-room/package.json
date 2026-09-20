@@ -13,6 +13,7 @@
   "dependencies": {
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "ai": "^6.0.238",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
@@ -32,7 +33,12 @@
     "entry": "./plugin.ts",
     "engine": "^1.0.0",
     "runtime": "trusted",
-    "features": [],
+    "features": [
+      {
+        "package": "@zhin.js/agent-feature",
+        "api": "^1.0.0"
+      }
+    ],
     "plugins": [
       {
         "package": "@zhin.js/adapter-sandbox",

@@ -5,7 +5,7 @@ import { napcatRuntimeStateToken } from '../src/napcat-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineNapCatAdapter from '../adapters/napcat.js';
+import defineNapCatAdapter from '../adapters/napcat/index.js';
 import {
   NapCatHttpEndpoint,
   NapCatWssEndpoint,
@@ -19,6 +19,7 @@ import {
   napcatInboundConversation,
   napcatOutboundTarget,
   resolveNapCatConfig,
+  type NapCatEndpointConfig,
   type NapCatEvent,
   type NapCatWsConfig,
 } from '../src/protocol.js';
@@ -85,6 +86,7 @@ function createMockWs(): NapCatWsSocket & {
 
 afterEach(async () => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close().catch(() => undefined)));
 });
 
@@ -104,15 +106,12 @@ describe('napcat protocol helpers', () => {
     });
   });
 
-  it('resolves http mode from legacy endpoints', () => {
+  it('resolves http mode from expanded endpoint config', () => {
     const resolved = resolveNapCatConfig({
-      endpoints: [{
-        context: 'napcat',
-        connection: 'http',
-        id: 'http-bot',
-        http_url: 'http://127.0.0.1:3000',
-        post_path: '/napcat/post',
-      }],
+      connection: 'http',
+      id: 'http-bot',
+      http_url: 'http://127.0.0.1:3000',
+      post_path: '/napcat/post',
     });
     expect(resolved).toMatchObject({
       connection: 'http',
@@ -120,6 +119,23 @@ describe('napcat protocol helpers', () => {
       http_url: 'http://127.0.0.1:3000',
       post_path: '/napcat/post',
     });
+  });
+
+  it('requires one expanded endpoint config without environment or nested fallbacks', () => {
+    vi.stubEnv('NAPCAT_BOT_NAME', 'legacy-bot');
+    expect(() => resolveNapCatConfig({
+      connection: 'ws',
+      id: '',
+      url: 'ws://127.0.0.1:3001',
+    })).toThrow(/non-empty id/);
+    expect(() => resolveNapCatConfig({
+      endpoints: [{
+        context: 'napcat',
+        connection: 'ws',
+        id: 'nested-bot',
+        url: 'ws://127.0.0.1:3001',
+      }],
+    } as unknown as NapCatEndpointConfig)).toThrow(/non-empty id/);
   });
 
   it('normalizes inbound conversation and content', () => {
@@ -743,5 +759,49 @@ describe('napcat ws lifecycle', () => {
     expect(pingCalls(ws)).toBe(pingsBeforeClose);
 
     await endpoint.stop();
+  });
+});
+
+describe('napcat reverse ws lifecycle', () => {
+  it('owns the accepted connection heartbeat and closes it on stop', async () => {
+    let acceptConnection: ((connection: unknown) => void) | undefined;
+    const releaseRoute = vi.fn();
+    const http = {
+      ws: vi.fn(() => ({
+        onConnection(listener: (connection: unknown) => void) {
+          acceptConnection = listener;
+          return releaseRoute;
+        },
+        close: vi.fn(),
+      })),
+    };
+    const ws = createMockWs();
+    const endpoint = bindTestEndpoint(new NapCatWssEndpoint({
+      id: capabilityId(rootPluginId(), adapterFeature, 'napcat'),
+      gateway: { receive: vi.fn(), send: vi.fn(async () => 'sent') },
+      http: http as never,
+      config: resolveNapCatConfig({
+        connection: 'wss',
+        id: 'reverse-bot',
+        path: '/napcat/ws',
+        heartbeat_interval: 20,
+      }) as NapCatWssConfig,
+    }), { receive: vi.fn(), send: vi.fn(async () => 'sent') }, undefined);
+
+    await endpoint.start();
+    endpoint.open();
+    acceptConnection?.({
+      socket: ws,
+      request: { headers: {}, url: '/', socket: { remoteAddress: '127.0.0.1' } },
+      authScope: 'full',
+    });
+    await vi.waitFor(() => expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThan(0));
+
+    await endpoint.stop();
+    const pingsAfterStop = (ws.ping as ReturnType<typeof vi.fn>).mock.calls.length;
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect((ws.ping as ReturnType<typeof vi.fn>).mock.calls.length).toBe(pingsAfterStop);
+    expect(ws.close).toHaveBeenCalled();
+    expect(releaseRoute).toHaveBeenCalledOnce();
   });
 });

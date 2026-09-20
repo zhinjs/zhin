@@ -1,5 +1,5 @@
 export type SandboxSafetyMode = 'read-only' | 'workspace-write' | 'danger-full-access';
-export type SandboxApprovalMode = 'ask' | 'deny' | 'allow';
+export type SandboxApprovalMode = 'ask' | 'auto' | 'bypass';
 
 export interface SandboxAgentRunConfig {
   readonly workingDirectory: string;
@@ -16,7 +16,7 @@ export const DEFAULT_SANDBOX_AGENT_RUN_CONFIG: SandboxAgentRunConfig = Object.fr
 });
 
 const SAFETY_MODES = new Set<SandboxSafetyMode>(['read-only', 'workspace-write', 'danger-full-access']);
-const APPROVAL_MODES = new Set<SandboxApprovalMode>(['ask', 'deny', 'allow']);
+const APPROVAL_MODES = new Set<SandboxApprovalMode>(['ask', 'auto', 'bypass']);
 
 export function normalizeSandboxAgentRunConfig(value: unknown): SandboxAgentRunConfig | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;

@@ -1,13 +1,10 @@
 import type {
   AIProvider,
-  AgentSessionStore,
+  AgentSessionRepository,
   ContextRepository,
-  IMSessionStore,
-  MemoryAgentSessionStore,
-  MemoryIMSessionStore,
   ModelRegistry,
+  LlmApiRuntime,
 } from '@zhin.js/ai';
-import type { Plugin } from '@zhin.js/core';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
 import type { ContextSystem } from '../context/context-system.js';
@@ -18,6 +15,7 @@ import type { AgentResourceHub } from '../resource-hub/index.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
+import type { AudioTranscriptionPort } from '../media/media-types.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
@@ -29,11 +27,11 @@ export interface ZhinAgentDependencies {
   memorySystem?: MemorySystem;
   sessionSystem?: SessionSystem;
   eventSystem?: EventSystem;
-  imSessionStore: IMSessionStore | MemoryIMSessionStore;
-  agentSessionStore: AgentSessionStore | MemoryAgentSessionStore;
+  agentSessionStore: AgentSessionRepository;
   contextRepository: ContextRepository;
   modelRegistry: ModelRegistry;
-  hostPlugin: Plugin;
+  llmRuntime: LlmApiRuntime;
+  audioTranscriber: AudioTranscriptionPort;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

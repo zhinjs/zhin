@@ -171,7 +171,7 @@ ai:
     execSecurity: allowlist       # deny | allowlist（默认）| full
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # execPreset=custom 时的白名单
-    execApprovalMode: ask         # ask（默认）| allow | deny
+    execApprovalMode: ask         # ask（默认）| bypass | auto
     gitStatus: true               # 默认 true：Runtime 段注入单行 git 状态摘要（非 git 仓库自动跳过）
     contextPaths: []              # 追加注入系统提示词的上下文文件（支持 ~ 与相对路径）
     systemPromptMaxChars: 100000  # 系统提示词总字符上限；优先移除 opportunistic，required 放不下则明确失败
@@ -181,7 +181,7 @@ ai:
 
 `execPreset` 预设白名单逐档放宽：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 类操作硬阻断。
 
-完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时越权命令触发 **Owner 审批**，由 master 在 IM 内 `/approve` 放行；`allow` 全部放行，`deny` 全部拒绝。
+完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时，当前 Turn 通过 `ApprovalPort` 请求 master 审批；`auto` 交给无工具的专用审核 Agent，审核 Agent 无法判断时再通过同一端口询问 master，模型错误、超时或无效输出直接拒绝；`bypass` 跳过审批，但不能绕过危险黑名单、Tool 权限、文件/网络边界或沙箱。群聊和频道提供拒绝、仅本次、当前会话与始终允许四种决定：当前会话对所有发送者生效，始终允许只对当前发送者生效；私聊只有拒绝、仅本次与始终允许三种决定。所有持续决定都只绑定当前会话，群聊中的不同发送者互不继承个人决定。`/approve always bash` 与 `/approve rule <正则>` 只管理本 Endpoint 的持久放行。旧版 V1 审批文件不会在线迁移，升级前必须显式重建规则。
 
 ## 下一步
 

@@ -8,7 +8,7 @@ export {
   parseEmailMessage,
   resolveEmailConfig,
   senderDisplayName,
-  type EmailAdapterConfig,
+  type EmailEndpointConfig,
   type EmailAttachmentsConfig,
   type EmailMessage,
   type EmailWireSegment,

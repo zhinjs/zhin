@@ -3,7 +3,6 @@ import {
   DeterministicRandom,
   VersionedSessionService,
   channelKey,
-  gameSessionCoordinator,
   generateCompactId,
   type GameMessageLike,
   type GameOutcome,
@@ -98,8 +97,7 @@ export class SessionService extends VersionedSessionService<DungeonSessionRow> {
       });
     }
     if (options.action.type === 'join') {
-      await gameSessionCoordinator.assertAvailable(
-        this.gameId,
+      await this.assertPlayersAvailable(
         existing.channel_key,
         [options.actorId],
       );

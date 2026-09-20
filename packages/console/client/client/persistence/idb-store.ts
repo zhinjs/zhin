@@ -5,8 +5,6 @@ const DB_VERSION = 2;
 const STORE_INBOX = "inbox";
 const STORE_PENDING = "pending";
 
-let inboxEventSeq = 0;
-
 export type InboxRecord = {
   id: string;
   adapter: string;
@@ -60,8 +58,7 @@ export async function idbListInbox(
   return all.filter(
     (r) =>
       r.adapter === adapter &&
-      (r.endpoint_id === endpoint_id ||
-        (r as { endpointKey?: string }).endpointKey === endpoint_id) &&
+      r.endpoint_id === endpoint_id &&
       r.kind === kind,
   );
 }
@@ -86,9 +83,9 @@ export async function applyConsoleEvent(event: {
     : null;
   await idbPutInbox({
     // Resumable Host events are idempotent across history/live redelivery.
-    // Legacy/unsequenced sources retain collision-safe append ids.
+    // Unsequenced sources use a collision-safe append id without shared state.
     id: resumableId
-      ?? `${parsed.adapter}:${parsed.endpointKey}:${parsed.type}:${updatedAt}:${inboxEventSeq++}:${Math.random().toString(36).slice(2, 8)}`,
+      ?? `${parsed.adapter}:${parsed.endpointKey}:${parsed.type}:${updatedAt}:${crypto.randomUUID()}`,
     adapter: parsed.adapter,
     endpoint_id: parsed.endpointKey,
     kind: parsed.kind,

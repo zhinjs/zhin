@@ -10,7 +10,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
+import { isMediaRef, type MediaRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { downloadRemoteImageToTemp } from './upload.js';
 import { getExtensionFromMime } from './mime.js';

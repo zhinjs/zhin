@@ -2,7 +2,7 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, getLlmTransportModel, agentToolsToLlmTools, registerLlmApiFromProviders, sdkEntryFromProvider, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
+import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../resource-hub/types.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from '../core/text-sanitize.js';
@@ -15,8 +15,9 @@ import {
   TOOLS_MUTATED_MARKER,
 } from '../tool-catalog/deferred-turn-controller.js';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
-import { createToolRuntime } from '../tool/tool-runtime.js';
-import { registerBuiltinPolicyExtractors } from '../tool/builtin-policy-extractors.js';
+import { ToolRuntime } from '../tool/tool-runtime.js';
+import { resolveBuiltinToolPolicyInput } from '../tool/builtin-policy-extractors.js';
+import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 const logger = getLogger('AgentLoopStandalone');
 
 function toolResultToAgentMessage(
@@ -56,8 +57,11 @@ function buildUserMessages(input: AgentRunInput): AgentMessage[] {
   return [createUserMessage(texts.join(' ') || '[多模态消息]', media.length > 0 ? media : undefined)];
 }
 
-function ensureLlmApi(provider: AIProvider, resolveProvider?: (alias: string) => AIProvider | undefined): void {
-  registerLlmApiFromProviders(
+function createStandaloneLlmRuntime(
+  provider: AIProvider,
+  resolveProvider?: (alias: string) => AIProvider | undefined,
+): LlmApiRuntime {
+  return createLlmApiRuntime(
     [sdkEntryFromProvider(provider)],
     (alias) => {
       const p = alias === provider.name ? provider : resolveProvider?.(alias);
@@ -74,6 +78,7 @@ export interface AgentLoopStandaloneCallbacks {
 export interface AgentLoopStandaloneInput {
   provider: AIProvider;
   resolveProvider?: (alias: string) => AIProvider | undefined;
+  llmRuntime?: LlmApiRuntime;
   model: string;
   systemPrompt: string;
   tools: AgentTool[];
@@ -120,9 +125,9 @@ export async function runAgentLoopStandaloneTurn(
   } = input;
   signal?.throwIfAborted();
 
-  ensureLlmApi(provider, input.resolveProvider);
-
-  const llmModel = getLlmTransportModel(provider.name, model);
+  const llmRuntime = input.llmRuntime
+    ?? createStandaloneLlmRuntime(provider, input.resolveProvider);
+  const llmModel = llmRuntime.model(provider.name, model);
   const { repository } = createMemoryContextRepository();
   const sessionId = `standalone:${Date.now()}`;
   const loaded = await repository.loadContext(sessionId);
@@ -133,18 +138,17 @@ export async function runAgentLoopStandaloneTurn(
   const initialTools = childDeferred
     ? [...tools.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
     : tools;
-  const legacyByName = new Map(initialTools.map((tool) => [tool.name, tool]));
+  const executableTools = new ExecutableToolRegistry(initialTools);
   let llmTools = agentToolsToLlmTools(initialTools);
 
   /** load_tool 命中后把 catalog 里的完整工具并入可执行集并重建 schema 列表 */
   const reloadDeferredTools = (): void => {
     if (!childDeferred) return;
     for (const name of childDeferred.loadedToolNames()) {
-      if (legacyByName.has(name)) continue;
       const tool = childDeferred.tool(name);
-      if (tool) legacyByName.set(name, tool);
+      if (tool) executableTools.addMissing([tool]);
     }
-    llmTools = agentToolsToLlmTools([...legacyByName.values()]);
+    llmTools = agentToolsToLlmTools(executableTools.list());
   };
 
   const toolCalls: ToolCallRecord[] = [];
@@ -152,26 +156,26 @@ export async function runAgentLoopStandaloneTurn(
   let lastAssistantText = '';
   let lastUsage: TokenUsage | undefined;
 
-  registerBuiltinPolicyExtractors();
-  const toolRuntime = createToolRuntime({
+  const toolRuntime = new ToolRuntime({
     generation: 0,
     signal: signal ?? AbortSignal.timeout(600_000),
     sessionId,
     commMessage,
+    policyInputResolver: resolveBuiltinToolPolicyInput,
   });
 
   const runTool = async (toolCall: ParsedToolCall) => {
-    const legacy = legacyByName.get(toolCall.name);
-    if (!legacy) {
+    const tool = executableTools.resolve(toolCall.name);
+    if (!tool) {
       return toolResultToAgentMessage(toolCall, `Unknown tool: ${toolCall.name}`, true);
     }
     try {
       const exec = () => directExecution
         ? runWithDirectAgentExecution(commMessage, () =>
-            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+            toolRuntime.execute(tool, toolCall.arguments, { toolCallId: toolCall.id }),
           )
         : runWithCommMessage(commMessage, () =>
-            toolRuntime.execute(legacy, toolCall.arguments, { toolCallId: toolCall.id }),
+            toolRuntime.execute(tool, toolCall.arguments, { toolCallId: toolCall.id }),
           );
       const outcome = await exec();
       if (outcome.denied) {
@@ -209,6 +213,7 @@ export async function runAgentLoopStandaloneTurn(
 
   const loopConfig = {
     model: llmModel,
+    transport: llmRuntime,
     maxIterations,
     streamOptions: {
       promptCache: input.promptCache !== false,

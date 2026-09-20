@@ -1,9 +1,9 @@
 import {
-  gameEvents,
+  GameEventBus,
   type GameEventSession,
   type GameOutcome,
 } from './game-events.js';
-import { gameSessionCoordinator, type GameSessionProvider } from './session-coordinator.js';
+import type { GameSessionAvailability, GameSessionProvider } from './session-coordinator.js';
 
 export interface BaseGameSessionRow extends GameEventSession {
   id: string;
@@ -53,11 +53,13 @@ export type SessionTimeoutListener<TRow extends BaseGameSessionRow> = (
 export abstract class BaseSessionService<TRow extends BaseGameSessionRow>
 implements GameSessionProvider {
   readonly gameId: string;
+  readonly events = new GameEventBus();
   readonly #activeStatus: string;
   readonly #abortedStatus: string;
   readonly #userFields: readonly (keyof TRow & string)[];
   readonly #projectOutcomes?: BaseSessionServiceOptions<TRow>['projectOutcomes'];
   readonly #model: GameSessionModel<TRow>;
+  #availability: GameSessionAvailability = { assertAvailable: async () => undefined };
 
   protected constructor(
     database: GameSessionDatabase<TRow>,
@@ -128,7 +130,7 @@ implements GameSessionProvider {
     const session = await this.getById(previous.id);
     if (!session) return null;
     if (patch.turn !== undefined && patch.turn !== previous.turn) {
-      await gameEvents.emit('turn:change', {
+      await this.events.emit('turn:change', {
         gameId: this.gameId,
         session,
         previousTurn: previous.turn,
@@ -138,7 +140,7 @@ implements GameSessionProvider {
     if (patch.status !== undefined
       && previous.status === this.#activeStatus
       && patch.status !== this.#activeStatus) {
-      await gameEvents.emit('game:end', {
+      await this.events.emit('game:end', {
         gameId: this.gameId,
         session,
         previousStatus: previous.status,
@@ -169,7 +171,7 @@ implements GameSessionProvider {
         },
       );
       if (!session) continue;
-      await gameEvents.emit('session:timeout', {
+      await this.events.emit('session:timeout', {
         gameId: this.gameId,
         session,
         idleMs,
@@ -188,8 +190,12 @@ implements GameSessionProvider {
     return count;
   }
 
-  registerCoordinator(): () => void {
-    return gameSessionCoordinator.register(this);
+  bindAvailability(availability: GameSessionAvailability): void {
+    this.#availability = availability;
+  }
+
+  protected assertPlayersAvailable(channelKey: string, userIds: readonly string[]): Promise<void> {
+    return this.#availability.assertAvailable(this.gameId, channelKey, userIds);
   }
 
   protected async createRow(row: TRow): Promise<TRow> {
@@ -198,9 +204,9 @@ implements GameSessionProvider {
       const value: unknown = row[field];
       if (typeof value === 'string') userIds.push(value);
     }
-    await gameSessionCoordinator.assertAvailable(this.gameId, row.channel_key, userIds);
+    await this.assertPlayersAvailable(row.channel_key, userIds);
     await this.#model.create(row);
-    await gameEvents.emit('game:start', { gameId: this.gameId, session: row });
+    await this.events.emit('game:start', { gameId: this.gameId, session: row });
     return row;
   }
 

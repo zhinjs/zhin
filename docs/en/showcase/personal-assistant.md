@@ -39,8 +39,7 @@ zhin's fit: **IM framework and AI are separable** -- in this case AI is fully lo
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        name: assistant
+      - id: assistant
         owner: assistant-user
 
 ai:

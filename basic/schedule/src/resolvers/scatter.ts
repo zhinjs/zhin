@@ -1,8 +1,5 @@
 import type { ResolvedJob, ScatterDayFilter, ScatterRunState } from '../types.js';
-import {
-  collectAfterHolidayDates,
-  collectHolidayEveDates,
-} from '../calendar-helpers.js';
+import { HolidayCalendar } from '../holiday-calendar.js';
 import {
   generateDailySlots,
   type ScatterSlotOptions,
@@ -38,7 +35,11 @@ export function getDailySlotSeconds(
   );
 }
 
-function isScatterDayAllowed(date: Date, job: ResolvedScatterJob): boolean {
+function isScatterDayAllowed(
+  date: Date,
+  job: ResolvedScatterJob,
+  holidays: HolidayCalendar,
+): boolean {
   const key = formatDateKey(date, job.timezone);
 
   if (typeof job.on === 'string') {
@@ -46,9 +47,9 @@ function isScatterDayAllowed(date: Date, job: ResolvedScatterJob): boolean {
       case 'all':
         return true;
       case 'workday':
-        return isWorkday(date, job.timezone);
+        return isWorkday(date, job.timezone, holidays);
       case 'freeDay':
-        return isFreeDay(date, job.timezone);
+        return isFreeDay(date, job.timezone, holidays);
       default:
         return false;
     }
@@ -61,11 +62,14 @@ function isScatterDayAllowed(date: Date, job: ResolvedScatterJob): boolean {
         job.on.festivals ?? 'all',
         job.on.everyDayOfHoliday ?? false,
         job.timezone,
+        holidays,
       );
     case 'holidayEve':
-      return collectHolidayEveDates(job.on.festivals ?? 'all', job.on.daysBefore ?? 1).has(key);
+      return holidays
+        .collectHolidayEveDates(job.on.festivals ?? 'all', job.on.daysBefore ?? 1)
+        .has(key);
     case 'afterHoliday':
-      return collectAfterHolidayDates(job.on.festivals, job.on.daysAfter).has(key);
+      return holidays.collectAfterHolidayDates(job.on.festivals, job.on.daysAfter).has(key);
     default:
       return false;
   }
@@ -95,10 +99,11 @@ export function listScatterSlots(
   jobId: string,
   dateKey: string,
   state: ScatterRunState = { dateKey: '', firedCount: 0 },
+  holidays = new HolidayCalendar(),
 ): Date[] {
   const parts = dateKey.split('-').map((v) => parseInt(v, 10));
   const probe = zonedTimeToUtc(parts[0], parts[1], parts[2], 12, 0, 0, job.timezone);
-  if (!isScatterDayAllowed(probe, job)) {
+  if (!isScatterDayAllowed(probe, job, holidays)) {
     return [];
   }
 
@@ -111,10 +116,11 @@ export function listScatterSlotsForDay(
   job: ResolvedScatterJob,
   jobId: string,
   dateKey: string,
+  holidays = new HolidayCalendar(),
 ): Date[] {
   const parts = dateKey.split('-').map((v) => parseInt(v, 10));
   const probe = zonedTimeToUtc(parts[0], parts[1], parts[2], 12, 0, 0, job.timezone);
-  if (!isScatterDayAllowed(probe, job)) {
+  if (!isScatterDayAllowed(probe, job, holidays)) {
     return [];
   }
   return getDailySlotSeconds(job, jobId, dateKey).map((sec) =>
@@ -127,13 +133,14 @@ export function getScatterNextRun(
   job: ResolvedScatterJob,
   jobId: string,
   state: ScatterRunState = { dateKey: '', firedCount: 0 },
+  holidays = new HolidayCalendar(),
 ): Date | null {
   let cursor = from;
 
   for (let day = 0; day < MAX_SCAN_DAYS; day++) {
     const dateKey = formatDateKey(cursor, job.timezone);
 
-    if (!isScatterDayAllowed(cursor, job)) {
+    if (!isScatterDayAllowed(cursor, job, holidays)) {
       cursor = startOfNextCalendarDay(cursor, job.timezone);
       continue;
     }
@@ -164,8 +171,9 @@ export function isScatterDue(
   job: ResolvedScatterJob,
   jobId: string,
   state: ScatterRunState = { dateKey: '', firedCount: 0 },
+  holidays = new HolidayCalendar(),
 ): boolean {
-  if (!isScatterDayAllowed(at, job)) {
+  if (!isScatterDayAllowed(at, job, holidays)) {
     return false;
   }
 

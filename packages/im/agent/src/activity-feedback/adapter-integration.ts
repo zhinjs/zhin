@@ -3,7 +3,7 @@
  */
 
 import { getLogger } from '@zhin.js/logger';
-import type { EndpointControl } from '@zhin.js/core';
+import type { EndpointControl } from '@zhin.js/adapter';
 import type { ConversationRef, MessageRef } from '@zhin.js/im-contract';
 import {
   MessageTypingIndicator,

@@ -6,7 +6,8 @@ export {
   resolveChannelKind,
   resolveDiscordConfig,
   senderDisplayName,
-  type DiscordAdapterConfig,
+  type DiscordActivity,
+  type DiscordEndpointConfig,
   type DiscordButtonInbound,
   type DiscordInboundAttachment,
   type DiscordInboundMessage,
@@ -19,6 +20,7 @@ export {
 
 export {
   discordClient,
+  requireDiscordGatewayClient,
   type DiscordClient,
   type DiscordClientEventMap,
 } from './client.js';

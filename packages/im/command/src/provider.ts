@@ -1,4 +1,4 @@
-import { basename, join, parse, sep } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 import { featureId, isCapabilityLocalSegment } from '@zhin.js/plugin-runtime';
 import {
   defineFeatureProvider,
@@ -20,12 +20,19 @@ const commandFiles: SourceConvention = {
   id: 'commands-ts',
   async *discover(context) {
     const directory = join(context.packageRoot, 'commands');
-    yield* discoverCommandDirectory(context, directory, []);
+    const entries = [...await context.host.list(directory)]
+      .filter((entry) => entry.kind === 'directory')
+      .sort((left, right) => left.name.localeCompare(right.name));
+    for (const entry of entries) {
+      const segment = parseCommandDirectory(entry.name);
+      if (!segment) continue;
+      yield* discoverCommandDirectory(context, join(directory, entry.name), [segment]);
+    }
   },
   async load(source, context) {
     const module = await context.host.loadModule<{ default?: unknown }>(source.source);
     const definition = parseCommandDefinition(module.default);
-    const file = parseCommandFile(basename(source.source));
+    const file = parseCommandDirectory(basename(dirname(source.source)));
     return bindCommandParameter(definition, resolveParameter(definition, file, source.source));
   },
 };
@@ -33,44 +40,29 @@ const commandFiles: SourceConvention = {
 async function* discoverCommandDirectory(
   context: DiscoveryContext,
   directory: string,
-  ancestors: readonly string[],
+  ancestors: readonly ParsedCommandFile[],
 ): AsyncIterable<DiscoveredSource> {
   const entries = [...await context.host.list(directory)]
     .sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0);
-  const files = entries.flatMap((entry) => {
-    if (entry.kind !== 'file') return [];
-    const parsed = parseCommandFile(entry.name);
-    return parsed ? [{ entry, parsed }] : [];
-  });
   const preferJavaScript = context.packageRoot
     .split(sep)
     .includes('node_modules');
-  const preferredFiles = new Map<string, string>();
-  for (const { entry, parsed } of files) {
-    const current = preferredFiles.get(parsed.localSegment);
-    if (!current || commandFilePriority(entry.name, preferJavaScript)
-      < commandFilePriority(current, preferJavaScript)) {
-      preferredFiles.set(parsed.localSegment, entry.name);
-    }
-  }
-  for (const entry of entries) {
-    if (entry.kind === 'directory' && isCapabilityLocalSegment(entry.name)) {
-      yield* discoverCommandDirectory(
-        context,
-        join(directory, entry.name),
-        [...ancestors, entry.name],
-      );
-      continue;
-    }
-    if (entry.kind !== 'file') continue;
-    const file = parseCommandFile(entry.name);
-    if (!file) continue;
-    if (preferredFiles.get(file.localSegment) !== entry.name) continue;
+  const index = preferredCommandIndex(entries, preferJavaScript);
+  if (index) {
     yield {
-      localName: [...ancestors, file.localSegment].join('/'),
-      source: join(directory, entry.name),
+      localName: ancestors.map((segment) => segment.localSegment).join('/'),
+      source: join(directory, index),
+      relatedSources: Object.freeze(entries
+        .filter((entry) => entry.kind === 'file' && entry.name !== index)
+        .map((entry) => join(directory, entry.name))),
       target: 'server',
     };
+  }
+  for (const entry of entries) {
+    if (entry.kind !== 'directory') continue;
+    const segment = parseCommandDirectory(entry.name);
+    if (!segment) continue;
+    yield* discoverCommandDirectory(context, join(directory, entry.name), [...ancestors, segment]);
   }
 }
 
@@ -97,18 +89,9 @@ const dynamicCommandFilePatterns: ReadonlyArray<{
   { pattern: /^\[([a-zA-Z][a-zA-Z0-9]*)\]\.(?:tsx?|[cm]?js)$/, optional: false, rest: false },
 ];
 
-const commandModuleExtension = /\.(?:tsx?|[cm]?js)$/u;
-
-function parseCommandFile(value: string): ParsedCommandFile | undefined {
-  // 静态段：ASCII kebab（hello.ts）或 Unicode 名（赞我.ts）；与 isCapabilityLocalSegment 对齐。
-  if (commandModuleExtension.test(value)) {
-    const localSegment = parse(value).name;
-    if (isCapabilityLocalSegment(localSegment)) {
-      return { localSegment };
-    }
-  }
+function parseCommandDirectory(value: string): ParsedCommandFile | undefined {
   for (const { pattern, optional, rest } of dynamicCommandFilePatterns) {
-    const match = pattern.exec(value);
+    const match = pattern.exec(`${value}.ts`);
     if (!match || !match[1]) continue;
     const name = match[1];
     // Metadata can change during HMR while $name keeps the Capability identity stable.
@@ -116,6 +99,9 @@ function parseCommandFile(value: string): ParsedCommandFile | undefined {
       localSegment: `$${name}`,
       parameter: { name, optional, rest },
     };
+  }
+  if (isCapabilityLocalSegment(value)) {
+    return { localSegment: value };
   }
   if (value.startsWith('[') || value.includes(']')) {
     throw new CommandPathSyntaxError(value);
@@ -141,7 +127,7 @@ function resolveParameter(
   if (!hint.optional && schema.default !== undefined) {
     throw new CommandPathSyntaxError(
       source,
-      `params.${hint.name} has a default but the file is required: rename to [[${hint.name}]]`,
+      `params.${hint.name} has a default but the directory is required: rename it to [[${hint.name}]]`,
     );
   }
   return {
@@ -163,10 +149,20 @@ function commandFilePriority(value: string, preferJavaScript: boolean): number {
   return priority < 0 ? Number.MAX_SAFE_INTEGER : priority;
 }
 
+function preferredCommandIndex(
+  entries: readonly { readonly name: string; readonly kind: 'file' | 'directory' }[],
+  preferJavaScript: boolean,
+): string | undefined {
+  return entries
+    .filter((entry) => entry.kind === 'file' && /^index\.(?:tsx?|[cm]?js)$/u.test(entry.name))
+    .sort((left, right) => commandFilePriority(left.name, preferJavaScript)
+      - commandFilePriority(right.name, preferJavaScript))[0]?.name;
+}
+
 export class CommandPathSyntaxError extends TypeError {
   constructor(
     file: string,
-    detail = 'expected [name].ts(x), [[name]].ts(x), [...name].ts(x) or [[...name]].ts(x)',
+    detail = 'expected commands/foo/index.ts or commands/foo/[name]/index.ts',
   ) {
     super(`Invalid Command path ${file}: ${detail}`);
     this.name = 'CommandPathSyntaxError';

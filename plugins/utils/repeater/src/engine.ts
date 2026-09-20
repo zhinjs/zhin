@@ -150,20 +150,5 @@ export class RepeaterEngine {
     this.#cleanupTimer = undefined;
     this.#groupStates.clear();
     this.#cooldownSet.clear();
-    // 单例 dispose 后不得继续服役：下个 getRepeaterEngine() 必须拿到新实例。
-    if (shared === this) shared = undefined;
   }
-}
-
-let shared: RepeaterEngine | undefined;
-
-export function getRepeaterEngine(): RepeaterEngine {
-  if (!shared) shared = new RepeaterEngine();
-  return shared;
-}
-
-/** Test helper — reset the process-wide singleton. */
-export function resetRepeaterEngine(): void {
-  shared?.dispose();
-  shared = undefined;
 }

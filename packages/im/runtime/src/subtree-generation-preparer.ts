@@ -10,7 +10,7 @@ import {
 import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
-import type { RuntimeConfigDocument } from './config-composer.js';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ModuleRuntime } from './module-runtime.js';

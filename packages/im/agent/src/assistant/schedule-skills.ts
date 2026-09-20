@@ -1,5 +1,4 @@
-import { readSkillInstructions } from '../builtin/load-skill-tool.js';
-import { buildSkillLoadOptsForAgent } from '../skill/skill-load-opts.js';
+import { buildSkillInstructionReaderForAgent } from '../skill/skill-instruction-reader-factory.js';
 import { setTurnActiveSkills } from '../internal/turn-context.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 
@@ -15,13 +14,12 @@ export async function rehydrateTurnActiveSkills(
   }
 
   if (snapshot.loadedSkills.length && host.skillRegistry) {
-    const skillLoadOpts = buildSkillLoadOptsForAgent(host);
+    const skillInstructions = buildSkillInstructionReaderForAgent(host);
     for (const skillName of snapshot.loadedSkills) {
       const skill = host.skillRegistry.getByName(skillName);
       if (!skill) continue;
-      const instructions = await readSkillInstructions(skill.name, skillLoadOpts);
-      if (instructions.startsWith(`Skill '${skill.name}' not found`)) continue;
-      parts.push(instructions);
+      const result = await skillInstructions.read(skill.name);
+      if (result.status === 'found') parts.push(result.instructions);
     }
   }
 

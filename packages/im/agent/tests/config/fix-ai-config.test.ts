@@ -26,6 +26,23 @@ describe('applyAiConfigFixes', () => {
     expect(normalized.agents.vision?.priority).toBe(10);
   });
 
+  it('只移除旧模型字段并保留当前 ai.agent 配置', () => {
+    const { ai } = applyAiConfigFixes({
+      providers: { openai: { sdk: 'openai', apiKey: 'x' } },
+      agents: { zhin: { provider: 'openai', model: 'gpt-4o-mini' } },
+      agent: {
+        chatModel: 'legacy-model',
+        execPreset: 'readonly',
+        deferredTools: { discoverTopK: 7 },
+      },
+    } as never);
+
+    expect(ai?.agent).toEqual({
+      execPreset: 'readonly',
+      deferredTools: { discoverTopK: 7 },
+    });
+  });
+
 });
 
 describe('normalizeAiRoutingConfig breaking rejects', () => {

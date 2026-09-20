@@ -13,7 +13,7 @@
  * 不可映射的段一律降级为文本并 warn（保持既有 fallback 行为）。
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { isMediaRef } from '@zhin.js/core';
+import { isMediaRef } from '@zhin.js/im-contract';
 import type { QqWireSegment } from './protocol.js';
 
 const logger = getLogger('qq');

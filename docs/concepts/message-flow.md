@@ -50,7 +50,7 @@ flowchart LR
    }
    ```
 
-3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)）。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。
+3. **租约与 Message**。`ImRuntime.endpointEvents.receive` 是唯一公开入站端口，并把事件委托给实例私有的 `InboundRuntime`。后者在事件所属 generation 上取得租约（在途事件不被重载打断，见 [generation 与生命周期](./generation-lifecycle.md)），统一拥有消息构造、入站中间件、handler、交互、命令与 Agent fallback 路由，以及 notice/request/system side event 的 action scope。消息事件构造 `Message`，并注入按需读取当前平台 SDK 实例的 `$client` getter、`$reply(content)` 与 `$replyFrom(owner, content)`；dispatch 结束后作用域关闭，之后再读取 `$client` 或调用 `$reply` 都会失败。旧的平铺 `ImRuntime.receiveEndpointEvent()` 已删除。
 
 4. **入站中间件**。`MiddlewareIndex` 按 `phase`（`before-dispatch` 先、`after-dispatch` 后）与 `order` 排序，逐个包住终端动作：
 
@@ -70,6 +70,8 @@ flowchart LR
 
 6. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `OutboundMessageService` 上可变的插件 setter。
 
+   Core 只把干净正文交给该 route，不把发送者编码进文本。Agent ingress 将可信的 sender、角色和 scene scope 一次性投影为 `UserMessage.actor`；AI 持久层保存 actor，并仅在 LLM 边界渲染参与者标签。`agent_messages.extra` 只承载引用展示上下文，不能成为第二套身份来源。
+
 7. **事件广播**。dispatch 完成后向 `onMessage` 订阅者发出 `RuntimeMessageEvent`（含方向、conversation、sender、≤200 字的 `contentPreview`、时间戳），Console 的实时消息流就是消费它。
 
 ## 出站：$reply → 渲染 → 中间件 → Endpoint
@@ -87,6 +89,7 @@ flowchart LR
 - **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
 - **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
+- **运行时所有权**集中在 `OutboundDeliveryRuntime`：它独占渲染、媒体与交互策略投影、出站中间件、Endpoint 投递、会话事实记账和消息观察事件发布。`ImRuntime` 只负责取得正确的 generation 租约并委托投递。
 - **最终一公里**在 `AdapterIndex.send`：endpoint 必须声明 `outbound` 能力、且处于 `started && !stopped`，否则抛错；通过后调用 `endpoint.send()` 落到平台。
 
 普通消息发送都应走这条统一管道（`$reply` / `$replyFrom` / `OutboundMessageService.send`），避免绕过渲染、中间件与事件广播。入群审批、角色管理、平台查询等非消息业务则应从当前事件/命令/工具 operation 解析 Client，直接调用平台 SDK；不要把 Client 缓存到 operation 之外。
@@ -112,6 +115,8 @@ interface MediaRef {
 
 `ConversationEventStore` 是 IM 上下文的唯一事实源。入站/出站消息、撤回 tombstone、回应、成员加入/退出、禁言/解禁和角色变化按会话幂等追加；不再维护 `im_transcripts` 或文本型 `chat_history` 双轨。合并转发条目使用中性 `actor`，不映射成模型 `user/assistant/system` role。
 
+每个 `ImRuntime` 私有持有一个 `ConversationRuntime`，由它独占 Store 替换、事件规范化、消息记账、上下文聚合与 consumer cursor。消息网关只把已经确定的入站、出站和 notice 交给它；CLI 与 Agent 通过 `ImRuntime` 的只读 Store 视图和上下文方法消费事实，不直接更换所有者状态。
+
 会话中尚未被 Agent session 消费的入站消息也从该 Store 按游标读取，作为不可信 `user-context` 投影；当前触发 Turn 的消息会被排除，避免重复。不存在进程级 passive buffer，失败 Turn 不推进游标，HMR 与多 Root 也不会共享旁路状态。
 
 当前 Turn 把 `replyTo`、forward 与媒体注册为 scoped `TurnReference`。Agent 只暴露 `inspect_conversation_reference(reference, depth?)`：先查本地事实源，再通过持租约的 Endpoint 回源；跨会话、跨 Endpoint、过期 Turn 均 fail-closed。尚未消费的重要 notice 会作为明确标注的“不可信会话数据”附在下一次用户 Turn，永远不进入 system/developer prompt；只有 Turn 成功提交才推进 session cursor，失败会保留。高频 reaction/poke 会聚合，登录、二维码、断线等 process 事件只进入诊断日志。
@@ -131,8 +136,28 @@ interface MediaRef {
 中降级为编号列表，点击按钮和手动回复最终进入同一文本解析入口。多选和过多选项直接使用
 列表，避免平台按钮数量限制。
 
+`ImRuntime` 把交互职责委托给实例私有的 `RuntimeInteractionCoordinator`：它统一拥有待回复
+claim、超时与取消、连续问答、action handler 和编号 fallback。状态同时按用户、generation
+和会话隔离；热重载后的新 generation 不会消费旧键盘映射，多 Root 也不会共享按钮状态。
+消息网关只决定何时交给 coordinator，不再实现交互状态机。
+
 AI 工具 `ask_user` 也复用这一模块，因此工具审批、命令向导和 AI 追问不会各自维护一套
 平台按钮逻辑。
+
+## Endpoint 运行时所有权
+
+每个 `ImRuntime` 公开一个实例私有的 `EndpointRuntime`，作为 generation-owned
+`AdapterIndex` 的唯一运行时入口。Endpoint 列表、能力查询、Console 定向发送、回应、撤回、
+编辑、typing 与管理操作都由它取得并释放当前快照租约；上层 Host 只依赖所需操作组成的窄端口。
+`ImRuntime` 继续拥有统一入站网关，并把所有发送委托给实例私有的 `OutboundDeliveryRuntime`；
+因此 Console 定向发送同样经过 `render → before.sendMessage → AdapterIndex.send`，不会绕过
+渲染与中间件。
+
+旧的 `ImRuntime.listEndpoints()`、`sendEndpointMessage()` 等平铺入口已删除。内部装配统一使用
+`im.endpoints.*`，不保留转发别名或双重 Endpoint 权威。
+
+消息观察面通过只读 `im.messageEvents.subscribe()` 暴露。Console 与 Inbox 只能订阅截断后的
+消息投影，不能发布或伪造 Core 运行时事件；旧的平铺 `im.onMessage()` 已删除。
 
 ## Endpoint 1:N 展开
 

@@ -63,8 +63,7 @@ plugin: {}
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        id: full-bot-sandbox
+      - id: full-bot-sandbox
         owner: local-user
   napcat:
     connection: ws

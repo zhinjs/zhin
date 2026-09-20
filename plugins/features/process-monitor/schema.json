@@ -32,12 +32,8 @@
         "additionalProperties": false,
         "required": ["type", "target"],
         "properties": {
-          "type": {
-            "type": "string",
-            "enum": ["user", "group", "webhook"]
-          },
-          "target": { "type": "string" },
-          "platform": { "type": "string" }
+          "type": { "type": "string", "enum": ["webhook"] },
+          "target": { "type": "string" }
         }
       }
     }

@@ -1,117 +1,57 @@
 # 重构前后对照示例
 
-这个示例用于回答：一个旧插件如果把命令、数据库、定时任务、路由全堆在一个文件里，重构后应该怎样拆。
+这个示例说明怎样把命令、数据库、调度和 HTTP 路由混在一起的旧插件迁入当前 Plugin Runtime。
 
-## 重构前：单文件堆叠
+## 重构前：单文件命令式注册
 
 ```text
 src/
   index.ts
 ```
 
-典型问题：
+常见问题：入口同时声明配置、取得 Host、定义表、注册命令和定时器；业务逻辑重复；监听器与任务没有明确清理路径。
 
-- 顶部声明配置
-- 中间定义数据库模型
-- 后面混着命令、定时任务、HTTP 路由
-- 文件越来越长，新增功能时容易重复读取配置和数据库
-
-常见坏味道：
-
-- 一个文件超过数百行
-- 每个命令都自己查数据库、拼相同返回格式
-- Host 资源取用（数据库 / HTTP / 定时任务）与业务逻辑都写在一起
-
-## 重构后：按职责拆开
+## 重构后：约定目录 + owner Resource
 
 ```text
+plugin.ts
+schema.json
+commands/
+  feed/
+    index.ts
+handlers/
+  message-receive/
+    index.ts
+hooks/
+  before-send/
+    index.ts
+schedules/
+  refresh-feed/
+    index.ts
+pages/
+  dashboard/
+    index.tsx
 src/
-  index.ts
-  commands/
-    index.ts
-    feed.ts
-  crons/
-    index.ts
-  services/
-    database.ts
-    http.ts
-    feed.ts
-  models/
-    index.ts
+  models/feed.ts
+  services/feed.ts
 ```
 
-## 一个典型迁移方式
+`plugin.ts` default-export `definePlugin()`，只做装配：读取 `context.config.get()`，通过
+`context.resources.has/use()` 取得 `databaseHostToken`、`httpHostToken` 或
+`scheduleHostToken`，并将共享服务 `provide()` 为 owner Resource。每个订阅、路由或任务都把 disposer
+交给 `context.lifecycle.add()` 或从 `setup()` 返回。
 
-### 旧入口里原本同时做这些事
+`commands/feed/index.ts` default-export `defineCommand()`，只负责参数和响应；通过执行上下文的
+`context.use(feedServiceToken)` 调用共享服务。它不使用 `context.resources`，也不 import 模块级可变单例。
 
-1. 配置声明与默认值
-2. `defineModel()` 或 `db.define()`
-3. 数据库服务挂载
-4. 多个命令注册
-5. 定时任务注册
-6. HTTP 路由注册
+事件、Hook、Schedule、Console 页面分别进入对应的命名目录。Console 页面默认导出 React 组件，并
+命名导出 `meta = definePage(...)`。复杂数据访问与外部 SDK 仍可放在 `src/services/`，但它们由 owner
+装配，不自行注册运行时能力。
 
-### 新结构里推荐这样放（Plugin Runtime 约定目录）
+## 判断是否成功
 
-1. `plugin.ts`
-内容：
-- default-export `definePlugin()`
-- Host 资源装配（`context.resources.use(databaseHostToken)` 等）
-- `context.lifecycle.add(...)` 反注册
-- 配置经 `schema.json` + `context.config.get()`
-
-2. `models/` 或入口内
-内容：
-- 表定义（`db.define(...)`）
-
-3. `src/services/database.ts`
-内容：
-- 获取 model
-- 查询、写入、聚合等共享数据逻辑
-
-4. `commands/feed.ts`（约定目录，default-export `defineCommand`）
-内容：
-- 只保留命令入口和参数处理
-- 真正的数据读写调用 `services/database.ts` 或 `services/feed.ts`
-
-5. 定时任务
-内容：
-- 经 `scheduleHostToken` 注册，cron 表达式来自配置
-- `context.lifecycle.add` 挂反注册
-
-6. `src/services/http.ts`
-内容：
-- 经 `httpHostToken` 的路由注册逻辑
-
-## 一条具体迁移规则
-
-如果一段代码既依赖配置，又依赖数据库，还要被多个命令复用：
-
-- 不要继续留在命令文件里
-- 优先移到 `services/`
-
-如果一段代码只是命令参数解析和响应文案：
-
-- 保留在 `commands/`
-
-如果一段代码只是定时触发调度：
-
-- 放到 `crons/`
-
-## 不该这样拆
-
-错误示例：
-
-- 把每个命令都拆成一个目录，但逻辑仍然互相复制
-- 把模型定义散落到多个命令文件里
-- 入口文件依然保留所有 `useContext()` 里的业务细节
-
-## 判断是否重构成功
-
-重构后应当满足：
-
-- 入口文件主要负责装配
-- 共享业务逻辑从命令中抽离
-- 数据模型定义集中可见
-- Cron、Router、Web 等能力各自归位
-- 行为与用户入口基本不变
+- `plugin.ts` 只包含装配、Resource 与生命周期。
+- 每个能力位于 `<kind>/<name>/index.ts(x)`，且只有一个默认导出定义。
+- 配置 key、命令路由、模型名、HTTP 路径和用户可见行为保持不变。
+- generation 回滚后没有旧 listener、timer、socket 或路由残留。
+- `pnpm check:plugin-capability-publish` 与相关 authoring boundary 门禁通过。

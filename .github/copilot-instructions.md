@@ -33,7 +33,7 @@ export default definePlugin({
 ```
 
 ```typescript
-// commands/hello/[name].ts — 路径即路由，类型在 params 中声明
+// commands/hello/[name]/index.ts — 路径即路由，类型在 params 中声明
 import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
@@ -53,13 +53,20 @@ export default defineCommand({
 
 | 目录 | API |
 |------|-----|
-| `commands/**/*.ts` | `defineCommand()` |
-| `middlewares/*.ts` | `defineMiddleware()` |
-| `components/*.tsx` | `defineComponent()` |
-| `tools/*.ts` | `defineAgentTool()` |
-| `pages/*.tsx` | `definePage()` |
+| `commands/**/*/index.ts` | `defineCommand()` |
+| `middlewares/*/index.ts` | `defineMiddleware()` |
+| `handlers/<name>/index.ts` | `defineHandler()` |
+| `components/*/index.tsx` | `defineComponent()` |
+| `tools/<name>/index.ts` | `defineAgentTool()` |
+| `hooks/<name>/index.ts` | `defineHook()` |
+| `mcps/<name>/index.ts` | `defineMcp()` |
+| `schedules/<name>/index.ts` | `defineSchedule()` |
+| `agents/<agent>/tools/<name>/index.ts` | Agent-private `defineAgentTool()` |
+| `skills/<skill>/tools/<name>/index.ts` | Skill-private `defineAgentTool()` |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent-Skill-private `defineAgentTool()` |
+| `pages/*/index.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Skill |
-| `agents/<name>.agent.md` | Agent |
+| `agents/<name>/agent.json` | Agent 元数据；同目录包含 `system.md`、`boundaries.md`、`conventions.md` |
 
 `package.json#zhin` 声明 `entry` / `features`。详情见 instructions 文件。
 
@@ -85,9 +92,11 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 
 ## 适配器要点
 
-- `$sendMessage` 返回消息 ID；`$formatMessage` 的 Message 含 `$recall`。
-- 入站事件：`message.receive` / `message.private.receive` / `message.group.receive`。
-- 新适配器：`defineAdapter` + 约定目录；不要 `extends Adapter` / `usePlugin`。
+- 默认导出 `defineAdapter({ capabilities, create })`；`create()` 返回 `{ client, connect, activate?, send }`。
+- `connect({ events, signal, onCleanup })` 将平台事件投影到 `events.message()`，并即时登记 listener、连接与 SDK 资源的清理函数。
+- `send({ conversation, payload })` 在平台边界完成协议转换并返回平台消息 ID；不要绕过统一发送链路。
+- WebSocket、SSE、心跳和重连使用 `createEndpointLifecycle`；只有确需自定义多阶段连接时才继承 `Endpoint`。
+- 完整契约与可运行示例见 `docs/authoring/adapters.md`。
 
 ## JSX
 

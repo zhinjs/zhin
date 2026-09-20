@@ -1,8 +1,7 @@
 /**
  * MCP Tool/Resource/Prompt → AgentTool bridge
  *
- * Converts MCP server capabilities into Zhin's AgentTool format
- * so they can be seamlessly registered in the ToolRegistry.
+ * Converts MCP server capabilities into the model-facing AgentTool format.
  */
 
 import type { AgentTool, JsonSchema } from '@zhin.js/ai';

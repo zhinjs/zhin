@@ -15,10 +15,13 @@ export {
   type GenerationAdmissionBindable,
   type GenerationAdmissionSource,
 } from './admission.js';
-export * from './generation-store.js';
 export * from './handoff.js';
 /** @public 用户侧创作面：`definePlugin`（`plugin.ts` 约定入口，承诺 semver）。 */
 export * from './plugin.js';
+/** @public Root configuration contract shared by Runtime and composition tooling. */
+export * from './plugin-configuration.js';
+export * from './root-config-file.js';
+export * from './root-config-document.js';
 /** @internal Runtime 内部：RootRuntime / RootController。 */
 export * from './root-controller.js';
 export * from './shared-lifetime.js';

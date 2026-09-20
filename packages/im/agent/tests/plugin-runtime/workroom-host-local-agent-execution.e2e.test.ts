@@ -15,7 +15,7 @@ import {
 import {
   LocalAssignmentExecutor,
   type LocalAssignmentCapabilityProjectionPort,
-} from '../../src/workroom/local-assignment-executor.js';
+} from '../../src/plugin-runtime/workroom-local-assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySnapshot,
@@ -219,7 +219,7 @@ function assignmentCapabilities(): AgentCapabilities {
 
 function tool(owner: ReturnType<typeof rootPluginId>, name: string): ToolCapability {
   return Object.freeze({
-    owner, name, qualifiedName: name, description: name, approval: 'never',
+    owner, name, qualifiedName: name, description: name, requiresApproval: 'never',
     source: `/tools/${name}.ts`,
     execute: async <TInput = unknown, TResult = unknown>(input: TInput) => input as TResult,
   });

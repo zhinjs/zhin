@@ -68,7 +68,7 @@ const pluginNamePattern = /^[a-z][a-z0-9-]*$/;
  * });
  * ```
  *
- * Put capabilities in convention files such as `commands/hello.ts`, each with
+ * Put capabilities in convention files such as `commands/hello/index.ts`, each with
  * one default export.
  */
 export function definePlugin<TConfig = unknown>(
@@ -93,7 +93,7 @@ export {
   type DatabaseHostSelectResult,
   type DatabaseHostTable,
   type DatabaseHostType,
-  type PluginDatabaseHost,
+  PluginDatabaseHost,
 } from './database-host.js';
 export {
   outboundHostToken,
@@ -112,6 +112,6 @@ export {
 } from './outbound-host.js';
 export {
   scheduleHostToken,
-  type PluginScheduleHost,
+  PluginScheduleHost,
   type ScheduleJobRegistration,
 } from './schedule-host.js';

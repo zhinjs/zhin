@@ -14,7 +14,7 @@ describe('subagent-preset', () => {
     const m = meta({
       name: 'custom',
       description: 'x',
-      filePath: '/tmp/x.agent.md',
+      filePath: '/tmp/agents/x/agent.json',
       role: 'planner',
     });
     expect(resolveSubagentRole(m, 'reviewer')).toBe('planner');

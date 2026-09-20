@@ -1,38 +1,31 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * WeixinIlinkEndpoint — lifecycle, long-poll inbound, outbound send.
  */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import type {
-  EndpointFriend,
-  EndpointControl,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  Endpoint,
+  type EndpointFriend,
+  type EndpointControl,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { getUpdates, notifyStart, notifyStop } from './ilink-api.js';
-import { configureIlinkMeta } from './ilink-meta.js';
+import { IlinkClientMetadata } from './ilink-meta.js';
 import {
-  loadSyncBuf,
-  resolveStateDir,
-  saveSyncBuf,
   type WeixinIlinkCredentials,
+  WeixinIlinkStateStore,
 } from './credentials.js';
 import { resolveCredentials } from './login.js';
 import {
-  listContextTokenUserIds,
-  restoreContextTokens,
-  setContextToken,
-  flushContextTokenPersist,
+  WeixinContextTokenStore,
 } from './context-store.js';
 import { WeixinConfigManager } from './ilink-config-cache.js';
 import {
-  getRemainingPauseMs,
-  isSessionPaused,
-  pauseSession,
+  IlinkSessionGuard,
   SESSION_EXPIRED_ERRCODE,
 } from './ilink-session-guard.js';
 import { downloadMediaFromItem } from './media-download.js';
@@ -74,6 +67,8 @@ export interface WeixinIlinkEndpointOptions {
   readonly config: ResolvedWeixinIlinkConfig;
   readonly resolveCredentials?: (
     config: ResolvedWeixinIlinkConfig,
+    metadata: IlinkClientMetadata,
+    state: WeixinIlinkStateStore,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   /** Test / internal: override network side effects. */
@@ -81,6 +76,9 @@ export interface WeixinIlinkEndpointOptions {
   readonly notifyStop?: WeixinIlinkNotifyStop;
   readonly getUpdates?: WeixinIlinkGetUpdates;
   readonly sendText?: WeixinIlinkSendText;
+  readonly state?: WeixinIlinkStateStore;
+  readonly contextTokens?: WeixinContextTokenStore;
+  readonly sessionGuard?: IlinkSessionGuard;
 }
 
 export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
@@ -90,12 +88,18 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   readonly #options: WeixinIlinkEndpointOptions;
   readonly #resolveCredentials: (
     config: ResolvedWeixinIlinkConfig,
+    metadata: IlinkClientMetadata,
+    state: WeixinIlinkStateStore,
     signal?: AbortSignal,
   ) => Promise<WeixinIlinkCredentials>;
   readonly #notifyStart: WeixinIlinkNotifyStart;
   readonly #notifyStop: WeixinIlinkNotifyStop;
   readonly #getUpdates: WeixinIlinkGetUpdates;
   readonly #sendText: WeixinIlinkSendText;
+  readonly #state: WeixinIlinkStateStore;
+  readonly #contextTokens: WeixinContextTokenStore;
+  readonly #sessionGuard: IlinkSessionGuard;
+  readonly #metadata: IlinkClientMetadata;
   #creds: WeixinIlinkCredentials | null = null;
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
@@ -123,11 +127,18 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     this.#notifyStop = options.notifyStop ?? notifyStop;
     this.#getUpdates = options.getUpdates ?? getUpdates;
     this.#sendText = options.sendText ?? sendMessageWeixin;
+    this.#state = options.state
+      ?? new WeixinIlinkStateStore(options.config.id, options.config.dataDir);
+    this.#contextTokens = options.contextTokens ?? new WeixinContextTokenStore(this.#state);
+    this.#sessionGuard = options.sessionGuard ?? new IlinkSessionGuard(options.config.id);
+    this.#metadata = new IlinkClientMetadata({ botAgent: options.config.botAgent });
     this.client = new WeixinIlinkClient(
       options.config,
+      this.#metadata,
       () => this.#creds,
       () => this.#configManager,
       this.#sendText,
+      this.#contextTokens,
     );
   }
 
@@ -139,19 +150,28 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (this.#started) return;
     this.#started = true;
     try {
-      configureIlinkMeta({ botAgent: this.#options.config.botAgent });
       // QR 登录最长 8 分钟：stop() 必须能打断
       this.#loginAbort = new AbortController();
-      this.#creds = await this.#resolveCredentials(this.#options.config, this.#loginAbort.signal);
-      restoreContextTokens(this.#options.config.id);
+      this.#creds = await this.#resolveCredentials(
+        this.#options.config,
+        this.#metadata,
+        this.#state,
+        this.#loginAbort.signal,
+      );
+      this.#contextTokens.restore();
 
       await this.#notifyStart({
         baseUrl: this.client.apiBaseUrl,
+        metadata: this.#metadata,
         token: this.#creds.botToken,
       });
 
       this.#configManager = new WeixinConfigManager(
-        { baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken },
+        {
+          baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
+          token: this.#creds.botToken,
+        },
         (msg) => this.#logger.debug(msg),
       );
 
@@ -191,10 +211,14 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     }
     this.#stopMediaSweep();
     // 防抖中的 context token 落盘，避免 stop 丢尾部写入
-    flushContextTokenPersist(this.#options.config.id);
+    this.#contextTokens.flush();
     if (this.#creds?.botToken) {
       try {
-        await this.#notifyStop({ baseUrl: this.client.apiBaseUrl, token: this.#creds.botToken });
+        await this.#notifyStop({
+          baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
+          token: this.#creds.botToken,
+        });
       } catch (err) {
         this.#logger.warn(formatCompact({
           op: 'notify_stop',
@@ -229,7 +253,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
       throw new Error(`missing context_token for peer ${target}`);
     }
 
-    const outboundDir = path.join(resolveStateDir(), 'media', 'outbound');
+    const outboundDir = this.#state.mediaDirectory('outbound');
     const wire = formatOutboundSegments(payload);
     const materialized = await materializeOutboundMedia(wire, outboundDir);
     const segments = Array.isArray(materialized) ? materialized : [materialized];
@@ -283,7 +307,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (!this.#open) return;
     const userId = msg.from_user_id ?? '';
     if (msg.context_token && userId) {
-      setContextToken(this.#options.config.id, userId, msg.context_token);
+      this.#contextTokens.set(userId, msg.context_token);
     }
     const conversation = weixinIlinkInboundConversation(String(this.#options.id), userId);
     const replyTo = weixinReplyTo(msg);
@@ -311,20 +335,20 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   async #pollLoop(abortSignal: AbortSignal): Promise<void> {
     if (!this.#creds?.botToken) return;
 
-    const endpointId = this.#options.config.id;
-    let getUpdatesBuf = loadSyncBuf(endpointId);
+    let getUpdatesBuf = this.#state.loadSyncBuf();
     let nextTimeoutMs = this.#options.config.longPollTimeoutMs;
     let consecutiveFailures = 0;
 
     while (!abortSignal.aborted) {
-      if (isSessionPaused(endpointId)) {
-        await sleep(getRemainingPauseMs(endpointId), abortSignal);
+      if (this.#sessionGuard.paused) {
+        await sleep(this.#sessionGuard.remainingMs, abortSignal);
         continue;
       }
 
       try {
         const resp = await this.#getUpdates({
           baseUrl: this.client.apiBaseUrl,
+          metadata: this.#metadata,
           token: this.#creds.botToken,
           get_updates_buf: getUpdatesBuf,
           timeoutMs: nextTimeoutMs,
@@ -343,9 +367,9 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
           const sessionExpired =
             resp.errcode === SESSION_EXPIRED_ERRCODE || resp.ret === SESSION_EXPIRED_ERRCODE;
           if (sessionExpired) {
-            pauseSession(endpointId);
+            this.#sessionGuard.pause();
             consecutiveFailures = 0;
-            await sleep(getRemainingPauseMs(endpointId), abortSignal);
+            await sleep(this.#sessionGuard.remainingMs, abortSignal);
             continue;
           }
           consecutiveFailures += 1;
@@ -366,7 +390,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
         }
         if (nextBuf) {
           getUpdatesBuf = nextBuf;
-          saveSyncBuf(endpointId, getUpdatesBuf);
+          this.#state.saveSyncBuf(getUpdatesBuf);
         }
       } catch (err) {
         if (abortSignal.aborted) return;
@@ -388,9 +412,6 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   async #handleInboundMessage(full: WeixinMessage): Promise<void> {
     void this.#emitPlatformEvent(`message.${full.message_type ?? 'unknown'}`, full);
     const fromUserId = full.from_user_id ?? '';
-    if (full.context_token && fromUserId) {
-      setContextToken(this.#options.config.id, fromUserId, full.context_token);
-    }
 
     const mediaOpts = await this.#downloadInboundMedia(full);
     this.admit({ ...full, _media: mediaOpts });
@@ -452,7 +473,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
     if (buffer.length > maxBytes) {
       throw new Error(`media exceeds max size ${maxBytes}`);
     }
-    const dir = path.join(resolveStateDir(), 'media', subdir);
+    const dir = this.#state.mediaDirectory(subdir);
     fs.mkdirSync(dir, { recursive: true });
     const resolvedMime = contentType ?? sniffMimeFromBuffer(buffer);
     const ext = originalFilename
@@ -486,7 +507,7 @@ export class WeixinIlinkEndpoint extends Endpoint<WeixinIlinkClient> {
   }
 
   #sweepInboundMedia(): void {
-    const dir = path.join(resolveStateDir(), 'media', 'inbound');
+    const dir = this.#state.mediaDirectory('inbound');
     let entries: fs.Dirent[];
     try {
       entries = fs.readdirSync(dir, { withFileTypes: true });
@@ -521,7 +542,7 @@ function createWeixinIlinkEndpointManagement(
     // "好友"只能从会话推导：凡持有 context_token 的对端（来过消息，含重启后从磁盘恢复的）
     // 即为可达私聊对端；昵称不可得，用 user_id 占位并在 remark 注明来源。
     async listFriends(): Promise<readonly EndpointFriend[]> {
-      return listContextTokenUserIds(requireClient().config.id).map((userId) => ({
+      return requireClient().reachableUserIds().map((userId) => ({
         user_id: userId,
         nickname: userId,
         remark: 'ilink: 从会话 context_token 推导，非通讯录',

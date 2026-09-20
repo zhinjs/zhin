@@ -1,7 +1,7 @@
 /**
  * Per-tool approval gate — stacks with ExecPolicy (ADR 0039 P1).
  */
-import type { Message, Plugin } from '@zhin.js/core';
+import type { Message } from '@zhin.js/core';
 import { AgentRunJournal, AgentStreamEventType, type AgentRunEventInput } from '@zhin.js/ai/agent-stream';
 import type { ToolApprovalPolicy } from '@zhin.js/ai/tool-policy';
 import type { AgentStreamBus, AgentStreamPublishContext } from '../event/agent-stream-bus.js';
@@ -30,7 +30,6 @@ export interface ToolApprovalGateOptions {
   sessionId: string;
   commMessage: Message;
   policy?: ToolApprovalGatePolicy;
-  plugin?: Plugin;
   bus?: AgentStreamBus;
   port?: ApprovalPort;
   onceStore?: ToolApprovalOnceStore;
@@ -68,6 +67,8 @@ export async function runToolApprovalGate(
     data: {
       sessionId: options.sessionId,
       requestId,
+      sessionKey: options.sessionId,
+      requesterId: options.commMessage.$sender?.id,
       toolName: options.toolName,
       kind: 'approval',
       args: options.args,
@@ -80,7 +81,11 @@ export async function runToolApprovalGate(
   try {
     approved = await options.port.requestApproval({
       requestId,
+      sessionKey: options.sessionId,
+      conversationScope: options.commMessage.$channel.type,
+      requesterId: options.commMessage.$sender.id,
       toolName: options.toolName,
+      scopeKey: `${options.toolName}:${stableApprovalValue(options.args)}`,
       question,
       signal: options.signal,
     });
@@ -110,6 +115,18 @@ export async function runToolApprovalGate(
     options.onceStore.add(options.sessionId, options.toolName);
   }
   return null;
+}
+
+function stableApprovalValue(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableApprovalValue).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableApprovalValue(entry)}`)
+      .join(',')}}`;
+  }
+  if (typeof value === 'undefined') return 'undefined';
+  try { return JSON.stringify(value); } catch { return String(value); }
 }
 
 async function publishApprovalEvent(

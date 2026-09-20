@@ -24,8 +24,8 @@ import {
   type RemoteAssignmentDispatchSchedulerOptions,
 } from '../workroom/remote-dispatch-scheduler.js';
 import { RemoteAssignmentDispatchCommandService } from '../workroom/remote-assignment-dispatch-command.js';
-import type { WorkroomRemoteExecutorPort } from './workroom-remote-executor.js';
-import type { WorkroomDisclosureManifestAuthorityPort } from './workroom-data-governance-runtime.js';
+import type { WorkroomRemoteExecutorPort } from '../workroom/remote-executor.js';
+import type { WorkroomDisclosureManifestAuthorityPort } from '../data-governance/disclosure-authority.js';
 import { join } from 'node:path';
 
 export interface WorkroomRemoteCallbackRuntimeOptions {

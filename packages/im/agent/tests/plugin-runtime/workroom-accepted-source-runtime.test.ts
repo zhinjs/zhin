@@ -6,7 +6,7 @@ import {
   FileWorkroomContextReleaseJournal,
   WorkroomAcceptedSourceRuntime,
 } from '../../src/plugin-runtime/workroom-accepted-source-runtime.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { MemoryProjectMemoryApplicationRepository } from '../../src/workroom/accepted-source-memory-application.js';
 import { createWorkroomProjectMemorySchemaSnapshot } from '../../src/workroom/accepted-source-projector.js';
 import type { WorkroomAcceptanceRecord } from '../../src/workroom/acceptance-policy.js';

@@ -2,7 +2,7 @@
 
 ## 概述
 
-Zhin 组件支持异步渲染（类似 Next.js 的异步组件）：组件的 `render` 可以返回 Promise，在组件内执行异步操作（API 调用、数据库查询等）。本插件的 `components/share-music.ts` 即示例。
+Zhin 组件支持异步渲染（类似 Next.js 的异步组件）：组件的 `render` 可以返回 Promise，在组件内执行异步操作（API 调用、数据库查询等）。本插件的 `components/share-music/index.ts` 即示例。
 
 > 本文已更新为 Plugin Runtime 写法（`defineComponent` + 约定目录）。旧的 `addComponent` / `MessageCommand` 写法已下线。
 
@@ -35,7 +35,7 @@ export default defineComponent<UserCardProps>({
 命令放在 `commands/` 约定目录，default-export `defineCommand()`；用 `component(name, props)` 引用组件，返回值交给统一出站管道渲染：
 
 ```ts
-// commands/user-info/[userId].ts
+// commands/user-info/[userId]/index.ts
 import { defineCommand, component } from 'zhin.js/core/runtime';
 
 export default defineCommand({

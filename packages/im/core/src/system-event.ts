@@ -1,4 +1,3 @@
-import type { Adapters } from './adapter.js';
 import type { SideEventBase } from './side-event/base.js';
 
 /**
@@ -7,7 +6,7 @@ import type { SideEventBase } from './side-event/base.js';
  * `$sub_type`：`qrcode` / `slider` / `device` / `kickoff` / `network` 等。
  */
 export interface SystemEventBase extends SideEventBase {
-  $adapter: keyof Adapters;
+  $adapter: string;
   $type: 'system';
 }
 

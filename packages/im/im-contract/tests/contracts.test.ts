@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MemoryConversationEventStore,
   DatabaseConversationEventStore,
+  isMediaRef,
   isDeliveryReceipt,
   supportsEndpointOperation,
   type ConversationEvent,
@@ -52,6 +53,12 @@ class FakeModel {
 }
 
 describe('@zhin.js/im-contract', () => {
+  it('owns the canonical media guard without depending on Core', () => {
+    expect(isMediaRef({ kind: 'url', value: 'https://example.com/a.png' })).toBe(true);
+    expect(isMediaRef({ kind: 'unknown', value: 'x' })).toBe(false);
+    expect(isMediaRef({ kind: 'path', value: '/tmp/a', size: 'large' })).toBe(false);
+  });
+
   it('makes endpoint operations declarative', () => {
     const capabilities = {
       inbound: true,

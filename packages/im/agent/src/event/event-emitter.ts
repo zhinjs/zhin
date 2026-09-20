@@ -1,42 +1,17 @@
-import type { Message, Plugin } from '@zhin.js/core';
-import { formatCompact, getLogger } from '@zhin.js/logger';
-import { EventSystem } from './event-system.js';
-import type { EventHandler } from './contracts.js';
+import type { Message } from '@zhin.js/core';
 import { getActivityFeedbackEligible } from '../internal/turn-context.js';
-import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
-
-const logger = getLogger('ZhinAgent');
+import type { AIEventName, AIEventPayload } from '../ai-event-contract.js';
+import { AgentEventBus } from './ai-event-bus.js';
 
 export class ZhinAgentEventEmitter {
-  private readonly eventSystem: EventSystem;
-
-  constructor(private hostPlugin: Plugin | null = null) {
-    this.eventSystem = new EventSystem({ source: 'zhin-agent' });
-  }
-
-  /** Agent turn 域事件订阅（EventSystem）；plugin lifecycle 仍走 dispatch/emit。 */
-  on(eventType: string, handler: EventHandler): () => void {
-    return this.eventSystem.on(eventType, handler);
-  }
-
-  getEventSystem(): EventSystem {
-    return this.eventSystem;
-  }
-
-  setHostPlugin(plugin: Plugin): void {
-    this.hostPlugin = plugin.root ?? plugin;
-  }
-
-  getHostPlugin(): Plugin | null {
-    return this.hostPlugin;
-  }
+  constructor(readonly events: AgentEventBus = new AgentEventBus()) {}
 
   createPayload(
     sessionId: string,
     commMessage: Message,
-    mode: Plugin.AIEventPayload['mode'],
-    extra: Partial<Plugin.AIEventPayload> = {},
-  ): Plugin.AIEventPayload {
+    mode: AIEventPayload['mode'],
+    extra: Partial<AIEventPayload> = {},
+  ): AIEventPayload {
     const { source = 'zhin-agent', hookContext: extraHookContext, ...rest } = extra;
     const hookContext: Record<string, unknown> = {
       ...(extraHookContext && typeof extraHookContext === 'object' ? extraHookContext : {}),
@@ -58,25 +33,14 @@ export class ZhinAgentEventEmitter {
   }
 
   async dispatch(
-    name: keyof Plugin.Lifecycle,
-    payload: Plugin.AIEventPayload,
+    name: AIEventName,
+    payload: AIEventPayload,
   ): Promise<void> {
-    // Always fan-out for Plugin Runtime subscribers (activity-feedback, etc.).
-    // Legacy Feature path still receives the same event via root.dispatch below.
-    await activityFeedbackAiBus.dispatch(String(name), payload);
-    const root = this.hostPlugin?.root ?? this.hostPlugin;
-    if (!root) return;
-    await root.dispatch(name as any, payload);
+    // Runtime subscribers use the explicit Agent event bus.
+    await this.events.dispatch(String(name), payload);
   }
 
-  emit(name: keyof Plugin.Lifecycle, payload: Plugin.AIEventPayload): void {
-    this.eventSystem.emitFireAndForget(String(name), payload);
-    // Fan-out happens inside dispatch (avoid double-emit on the module bus).
-    this.dispatch(name, payload).catch((error) => {
-      logger.warn(formatCompact({
-        ai_event: String(name),
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+  emit(name: AIEventName, payload: AIEventPayload): void {
+    this.events.emit(String(name), payload);
   }
 }

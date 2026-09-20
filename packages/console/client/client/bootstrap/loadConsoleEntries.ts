@@ -17,24 +17,6 @@ export type LoadConsoleEntriesOptions = FetchConsoleEntriesOptions & {
   onEntryError?: (entry: ConsoleClientEntry, error: unknown) => void;
 };
 
-export type CreatePluginRegisterHostApiOptions = {
-  React: PluginRegisterHostApi["React"];
-  addRoute: PluginRegisterHostApi["addRoute"];
-  addTool: PluginRegisterHostApi["addTool"];
-};
-
-export function createPluginRegisterHostApi(
-  options: CreatePluginRegisterHostApiOptions,
-): PluginRegisterHostApi {
-  const addRoute = options.addRoute;
-  return {
-    React: options.React,
-    addRoute,
-    addPage: addRoute,
-    addTool: options.addTool,
-  };
-}
-
 const CONSOLE_API_BASE_STORAGE_KEY = "zhin_api_base";
 
 function resolveStoredApiBase(): string {
@@ -112,7 +94,7 @@ export function resolveEntryRegister(
     ? entry.route
     : `/${entry.id}`;
   const meta = mod["meta"] && typeof mod["meta"] === "object"
-    ? mod["meta"] as { title?: string; icon?: unknown; hideInNav?: boolean }
+    ? mod["meta"] as { title?: string; icon?: string; hideInNav?: boolean }
     : undefined;
   const name = (typeof meta?.title === "string" && meta.title)
     || (typeof entry.title === "string" && entry.title)
@@ -178,4 +160,3 @@ export async function loadConsoleEntries(options: LoadConsoleEntriesOptions): Pr
     options.assetOrigin,
   );
 }
-

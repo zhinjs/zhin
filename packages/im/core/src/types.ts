@@ -1,10 +1,6 @@
 import type { MessageChannel, Message, MessageComponent } from './message.js';
-import {Adapter, Adapters} from './adapter.js';
-import { Endpoint } from './endpoint.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
-import { Databases,Registry } from '@zhin.js/database';
-import { ProcessAdapter } from './built/adapter-process.js';
 import type { SenderRole } from './built/roles.js';
 export type { SenderRole } from "./built/roles.js";
 
@@ -14,39 +10,10 @@ export interface Models extends Record<string,object>{
   User: User,
 }
 export type MaybePromise<T> = [T] extends [Promise<infer U>] ? T|U : T|Promise<T>;
-export interface RegisteredAdapters extends Adapters {
-  process: ProcessAdapter;
-}
-/**
- * 数据库配置类型，支持多种数据库驱动
- */
-export type DatabaseConfig<T extends keyof Databases=keyof Databases>={
-  dialect:T
-} & Registry.Config[T]
 /**
  * 获取对象所有value类型
  */
 export type ObjectItem<T extends object>=T[keyof T]
-/**
- * 已注册适配器名类型
- */
-export type RegisteredAdapter=Extract<keyof RegisteredAdapters, string>
-/**
- * 指定适配器的消息类型
- */
-export type AdapterMessage<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?EndpointMessage<R>:{}
-/**
- * 指定适配器的配置类型
- */
-export type AdapterConfig<T extends keyof RegisteredAdapters=keyof RegisteredAdapters>=RegisteredAdapters[T] extends Adapter<infer R>?PlatformConfig<R>:Endpoint.Config
-/**
- * Bot实例的配置类型
- */
-export type PlatformConfig<T>=T extends Endpoint<infer L,infer R>?R:Endpoint.Config
-/**
- * Bot实例的消息类型
- */
-export type EndpointMessage<T extends Endpoint>=T extends Endpoint<infer R>?R:{}
 /**
  * 消息段结构，支持 text/image/at/face 等类型
  */
@@ -74,30 +41,6 @@ export interface EditMessageOptions {
   content: SendContent;
 }
 
-/** 出站回复来源（指令 / AI / proactive），仅当经 MessageDispatcher.replyWithPolish 或 runWithOutboundPolish 发出时由框架填入异步上下文 */
-export type OutboundReplySource = 'command' | 'ai' | 'proactive'
-
-export type OutboundReplyTrigger = 'inbound' | 'proactive';
-
-export interface OutboundReplyStore {
-  message: Message
-  source: OutboundReplySource
-  trigger: OutboundReplyTrigger
-  proactiveSource?: string
-}
-
-/**
- * 出站润色上下文（`dispatcher.addOutboundPolish` 的 handler 签名的同构类型）。
- * 与 {@link Adapter.sendMessage} → `before.sendMessage` 同一管道；需 `message`/`source` 时见 `getOutboundReplyStore`（dispatcher 导出）。
- */
-export interface OutboundPolishContext {
-  message: Message
-  content: SendContent
-  source: OutboundReplySource
-}
-
-/** 返回 `SendContent` 则替换后续 `before.sendMessage` 与发送中的 content */
-export type OutboundPolishMiddleware = (ctx: OutboundPolishContext) => MaybePromise<SendContent | void>
 /**
  * 消息发送者信息
  */
@@ -138,7 +81,7 @@ export interface Group {
 }
 
 /** 消息中间件函数 */
-export type MessageMiddleware<P extends RegisteredAdapter=RegisteredAdapter> = (message: Message<AdapterMessage<P>>, next: () => Promise<void>) => MaybePromise<void>;
+export type MessageMiddleware = (message: Message, next: () => Promise<void>) => MaybePromise<void>;
 
 
 /**
@@ -152,17 +95,6 @@ export interface SendOptions extends MessageChannel{
   content:SendContent
   quoteId?: string
   threadId?: string
-}
-
-/** `Adapter.sendMessage` 成功发出后由 core 分发的载荷 */
-export interface MessageSendPayload {
-  adapter: string;
-  options: SendOptions;
-  messageId: string;
-  /** 经 `replyWithPolish` 发出时由 dispatcher 填入 */
-  replySource?: OutboundReplySource;
-  /** 触发回复的入站消息（replyWithPolish 时可用） */
-  replyMessage?: Message;
 }
 
 export interface ProcessMessage {
@@ -269,13 +201,11 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
  * 统一的 Tool 定义
  * 可同时用于：
  * - AI Agent 工具调用
- * - 自动生成 Command
  * - MCP 工具暴露
  * 
  * @example
  * ```typescript
- * // 使用 defineTool 获得类型安全
- * const weatherTool = defineTool<{ city: string }>({
+ * const weatherTool: Tool<{ city: string }> = {
  *   name: 'weather',
  *   description: '查询天气',
  *   parameters: {
@@ -288,9 +218,8 @@ export interface ToolParametersSchema<TArgs extends Record<string, any> = Record
  *   execute: async (args) => {
  *     return `${args.city} 的天气是晴天`;  // args.city 有类型提示
  *   },
- * });
+ * };
  * 
- * plugin.addTool(weatherTool);  // 无需类型断言
  * ```
  */
 /**
@@ -317,14 +246,6 @@ export type FileRole = 'owner' | 'admin' | 'user';
  */
 export type ToolResult = string | void | null | undefined | { text: string } | { data: unknown; format?: string } | Record<string, unknown> | unknown[];
 
-/** 工具关联的聊天命令配置（可选；需自行 addCommand 注册） */
-export interface ToolCommandConfig {
-  pattern: string;
-  alias?: string[];
-  usage?: string | string[];
-  examples?: string | string[];
-}
-
 /**
  * 统一的 Tool 定义（支持泛型参数类型推断）。
  *
@@ -332,15 +253,15 @@ export interface ToolCommandConfig {
  *
  * @example
  * ```typescript
- * // 无泛型 — 兼容旧代码
+ * // 无泛型
  * const tool: Tool = { name: 'ping', ... };
  *
- * // 有泛型 — 通过 defineTool 获得类型安全
- * const tool = defineTool<{ city: string }>({
+ * // 有泛型
+ * const tool: Tool<{ city: string }> = {
  *   name: 'weather',
  *   parameters: { type: 'object', properties: { city: { type: 'string', description: '城市' } }, required: ['city'] },
  *   execute: async (args) => args.city, // args.city 有类型提示
- * });
+ * };
  * ```
  */
 export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
@@ -370,14 +291,11 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 触发关键词（用户消息包含这些词时优先选择此工具） */
   keywords?: string[];
   
-  /** 
-   * 权限要求（旧版，保留兼容）
-   * 执行此工具需要的权限列表
-   */
+  /** 执行此工具需要满足的权限列表。 */
   permissions?: string[];
 
   /** Per-tool approval policy; `on-risk` remains fail-closed at Agent boundaries. */
-  approval?: 'always' | 'once' | 'never' | 'on-risk';
+  requiresApproval?: 'always' | 'once' | 'never' | 'on-risk';
   
   /**
    * 支持的平台列表
@@ -410,47 +328,4 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
   /** 工具分类（如 file / shell / web），用于展示与 TOOLS.md 协同 */
   kind?: string;
 
-  /**
-   * 可选：关联的 IM 命令模式（历史字段；需自行 addCommand 注册聊天命令）。
-   * `false` 表示明确不暴露为命令。
-   */
-  command?: ToolCommandConfig | false;
 }
-
-
-export namespace Tool {
-  /**
-   * 参数信息
-   */
-  export interface ParamInfo {
-    name: string;
-    type: string;
-    required: boolean;
-    description?: string;
-    default?: any;
-    enum?: any[];
-  }
-}
-
-// ============================================================================
-// 插件清单（plugin.yml）
-// ============================================================================
-
-/**
- * 插件清单元数据（从 plugin.yml 解析）
- */
-export interface PluginManifest {
-  /** 插件名称 */
-  name: string;
-  /** 插件描述 */
-  description?: string;
-  /** 插件版本 */
-  version?: string;
-}
-
-// ============================================================================
-// 兼容性别名（逐步废弃）
-// ============================================================================
-
-/** @deprecated 使用 Tool 替代 */
-export type AITool = Tool;

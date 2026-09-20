@@ -1,11 +1,9 @@
-import { spawn, type ChildProcess } from 'node:child_process';
-import { openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { access, mkdir, readFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { access } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import chalk from 'chalk';
-import { parse as parseDotenv } from 'dotenv';
 import open from 'open';
-import { YamlConfigDocument } from '@zhin.js/config-yaml';
+import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
+import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -14,30 +12,41 @@ import {
   type ConversationDbModel,
 } from '@zhin.js/im-contract';
 import { createConsoleEventHub, createHttpHostGroup } from '@zhin.js/host-http';
-import { defineInboxTables } from '@zhin.js/plugin-runtime';
+import {
+  defineInboxTables,
+  DEFAULT_ROOT_CONFIG_FILE_NAME,
+  readPluginConfigurationMap,
+  rootPluginId,
+  ROOT_CONFIG_FILE_NAMES,
+  selectRootConfigFile,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
   ConfigValidationError,
-  supportsNativeTypeScript,
-  type ConfigDocumentPort,
-  type RuntimeConfigDocument,
-  type RuntimeMode,
-  type EnvironmentLayers,
+  createEnvStore,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
 } from '@zhin.js/runtime';
-import { createConsoleHostModules, installConsoleHttp } from './console-host-installer.js';
-import { installConsoleApi } from './console-api-installer.js';
+import {
+  createConsoleHostModules,
+  ConsoleConfigurationStore,
+  installConsoleApi,
+  installConsoleHttp,
+  SystemLogStore,
+  resolveSystemLogConfig,
+} from './console/module.js';
 import { installHttpHost, resolveHttpConfig } from './http-host-installer.js';
 import { createDatabaseHost, installDatabaseHost, resolveDatabaseConfig } from './database-host-installer.js';
-import { installSystemLogStore, resolveSystemLogConfig } from './log-transport.js';
 import { installHtmlRendererHost, prepareHtmlRendererHost } from './html-renderer-host-installer.js';
 import { installComponentHost } from './component-host-installer.js';
 import { installOutboundHost } from './outbound-host-installer.js';
 import { installScheduleHost, createScheduleHost } from './schedule-host-installer.js';
 import { installSpeechHost, prepareSpeechHost, resolveSpeechConfig } from './speech-host-installer.js';
 import { installProtocolHosts } from './protocol-host-installer.js';
+import { ProjectEndpointConfigurationStore } from './endpoint-configuration-store.js';
 import { RootHost } from './root-host.js';
 import { registerReadinessRoutes, type ReadinessSource } from './readiness.js';
 import {
@@ -45,52 +54,28 @@ import {
   readPluginLifecycleState,
   resolvePluginLifecycleFile,
 } from './plugin-lifecycle-store.js';
+import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import {
-  DEFAULT_SHUTDOWN_BUDGET_MS,
-  installProcessLifecycle,
-  nodeProcessLifecycleAdapter,
-} from './process-lifecycle.js';
-const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
+  NativeTypeScriptSupervisor,
+  ProjectEnvironmentFileSource,
+  parseStartOptions,
+  processRestartExitCode,
+  startSupervisorWatchdog,
+} from './start/module.js';
 
-export const processRestartExitCode = 75;
+export {
+  MAX_RESPAWNS_PER_MINUTE,
+  RESPAWN_DELAY_MS,
+  SUPERVISOR_CHILD_EXIT_GRACE_MS,
+  loadRuntimeEnvironmentLayers,
+  parseStartOptions,
+  planRespawn,
+  processRestartExitCode,
+  type RespawnPlan,
+  type StartOptions,
+} from './start/module.js';
+
 const REMOTE_CONSOLE_URL = 'https://console.zhin.dev';
-
-/** Storm guard parity with the `zhin start` daemon: 10 restarts/minute, 3s delay. */
-export const MAX_RESPAWNS_PER_MINUTE = 10;
-export const RESPAWN_DELAY_MS = 3_000;
-/** Gives the Runtime its complete shutdown budget before fencing leaked handles. */
-export const SUPERVISOR_CHILD_EXIT_GRACE_MS = DEFAULT_SHUTDOWN_BUDGET_MS + 1_000;
-const RESPAWN_WINDOW_MS = 60_000;
-
-export interface RespawnPlan {
-  readonly respawn: boolean;
-  readonly attempts: readonly number[];
-}
-
-/**
- * Pure backoff decision for native-TS child respawns.
- * `attempts` holds timestamps of respawns already scheduled; `once` mode never
- * respawns. Exit 75 (restartRequired) always respawns (subject to the storm
- * budget); in daemon mode any crash (non-zero exit / signal) also respawns.
- * Exceeding the per-minute budget stops respawning and the parent exits.
- */
-export function planRespawn(
-  exitCode: number | null,
-  once: boolean,
-  daemon: boolean,
-  attempts: readonly number[],
-  now = Date.now(),
-): RespawnPlan {
-  if (once) return Object.freeze({ respawn: false, attempts });
-  const shouldRespawn = exitCode === processRestartExitCode
-    || (daemon && exitCode !== 0);
-  if (!shouldRespawn) return Object.freeze({ respawn: false, attempts });
-  const recent = attempts.filter((timestamp) => now - timestamp < RESPAWN_WINDOW_MS);
-  if (recent.length >= MAX_RESPAWNS_PER_MINUTE) {
-    return Object.freeze({ respawn: false, attempts: recent });
-  }
-  return Object.freeze({ respawn: true, attempts: Object.freeze([...recent, now]) });
-}
 
 export interface StartCommandOptions {
   readonly root: string;
@@ -108,45 +93,65 @@ function readableCapabilityId(value: string): string {
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
   // Parse before any relaunch so invalid options fail fast instead of looping.
   const parsed = parseStartOptions(options.args);
-  if (await relaunchWithNativeTypeScript(parsed, options.root)) return;
+  if (await new NativeTypeScriptSupervisor(options.root, parsed).runIfRequired()) return;
   ensureTypeScriptSpecifierRemap();
-  const environmentVariables = await loadRuntimeEnvironmentLayers(options.root, parsed.environment);
+  const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
+  const environmentVariables = await environmentSource.read();
   const { config, file: configFile } = await loadProjectConfig(options.root);
+  const runtimeEnvironment = Object.freeze({
+    name: parsed.environment,
+    mode: parsed.mode,
+    platform: 'node',
+  } as const);
+  const hostEnvironment = createEnvStore(rootPluginId(), runtimeEnvironment, environmentVariables);
+  const hostConfig = hostEnvironment.expandMissingAsEmpty((await config.read()).document);
   const pluginLifecycleFile = resolvePluginLifecycleFile(options.root);
   const pluginLifecycle = await readPluginLifecycleState(pluginLifecycleFile);
   const pluginLifecycleStore = createPluginLifecycleStore();
-  await applyRuntimeLogLevel(config);
+  await applyRuntimeLogLevel(hostConfig);
   const envOverlay = environmentVariables.environments?.[parsed.environment];
-  const httpConfig = await resolveHttpConfig(config, envOverlay, options.root);
+  const httpConfig = await resolveHttpConfig(hostConfig, envOverlay, options.root);
   const {listeners: additionalHttpListeners = [], ...primaryHttpListener} = httpConfig;
   const httpHost = createHttpHostGroup([primaryHttpListener, ...additionalHttpListeners]);
-  const databaseConfig = await resolveDatabaseConfig(options.root, config);
+  const databaseConfig = await resolveDatabaseConfig(options.root, hostConfig);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
-  const agentHost = await loadConfiguredAgentHost(config);
-  const endpointRoles = await createEndpointRoleResolver(config);
-  const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(config));
-  const htmlRendererHost = await prepareHtmlRendererHost(config);
+  const agentHost = await loadConfiguredAgentHost(hostConfig);
+  const endpointRoles = await createEndpointRoleResolver(hostConfig);
+  const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
+  const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
   let complete!: () => void;
   const completed = new Promise<void>((resolve) => { complete = resolve; });
   const control: { stop(): Promise<void> } = {
     stop: async () => { throw new Error('RootHost stop is not bound'); },
   };
-  const senderEnricher = await createSenderEnricher(config, endpointRoles);
+  const senderEnricher = await createSenderEnricher(hostConfig, endpointRoles);
   const im = new ImRuntime({ enrichSender: senderEnricher });
   const databaseHost = createDatabaseHost(databaseConfig);
   databaseHost.define('conversation_events', CONVERSATION_EVENT_MODEL);
   databaseHost.define('conversation_event_cursors', CONVERSATION_CURSOR_MODEL);
   // console endpoint-detail 收件箱三张表（unified_inbox_message/request/notice）；
-  // 必须在 installResources（host.start）之前 define，写入订阅在 console-api-installer 挂载。
+  // 必须在 installResources（host.start）之前 define，写入订阅由 Console API 挂载。
   defineInboxTables(databaseHost);
   // console logs 页数据源（SystemLog 表 + 根 logger transport）；
   // 表必须在 installResources（host.start）之前 define，写入在 host started 后才生效。
-  installSystemLogStore(databaseHost, await resolveSystemLogConfig(config));
+  const systemLogStore = new SystemLogStore(
+    databaseHost,
+    await resolveSystemLogConfig(hostConfig),
+  );
   const scheduleHost = createScheduleHost();
   const consoleHost = createConsoleHostModules(options.root, !parsed.once && !parsed.noWatch);
   // Console SSE 事件枢纽：/api/events 订阅方 + HMR/消息/配置事件 publish 方共享。
   const consoleEventHub = createConsoleEventHub();
+  const endpointConfigurationStore = new ProjectEndpointConfigurationStore({
+    projectRoot: options.root,
+    configFile,
+    document: config,
+  });
+  const consoleConfigurationStore = new ConsoleConfigurationStore({
+    projectRoot: options.root,
+    document: config,
+  });
   const host = new RootHost({
     projectRoot: options.root,
     config,
@@ -155,15 +160,13 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     onGenerationCommit: (generation) => {
       consoleEventHub.publish('hmr:reload', { generation });
     },
-    environment: {
-      name: parsed.environment,
-      mode: parsed.mode,
-      platform: 'node',
-    },
+    environment: runtimeEnvironment,
     environmentVariables,
+    environmentSource,
     disabledPluginInstanceKeys: pluginLifecycle.disabled,
     installResources: async (context) => {
       await options.installTrustedResources?.(context);
+      context.resources.provide(endpointConfigurationStoreToken, endpointConfigurationStore);
       im.install(context.resources);
       installHttpHost(httpHost)(context);
       installDatabaseHost(databaseHost)(context);
@@ -197,13 +200,14 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
           resolveConfiguredEndpointKeys: () => readConfiguredEndpointKeys(config),
           extraTools: speechHandle?.tools,
+          audioTranscriber: speechHandle,
           transcribeUrl: speechHandle
             ? (url) => speechHandle.transcribeUrl(url)
             : undefined,
         })(context);
       }
       await installProtocolHosts({
-        config,
+        config: hostConfig,
         http: httpConfig,
         snapshots: host.runtime.snapshots,
         production: parsed.mode === 'production',
@@ -211,7 +215,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         secureCredentialProvider: {
           resolve(secretRef) {
             const match = /^env:\/\/([A-Z_][A-Z0-9_]*)$/u.exec(secretRef);
-            return match ? process.env[match[1]!] : undefined;
+            return match ? hostEnvironment.get(match[1]!) : undefined;
           },
         },
       })(context);
@@ -230,6 +234,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
         eventHub: consoleEventHub,
         pluginLifecycleFile,
         pluginLifecycleStore,
+        configuration: consoleConfigurationStore,
         snapshot: () => host.runtime.snapshot,
         snapshots: host.runtime.snapshots,
         onRestart: () => {
@@ -285,10 +290,14 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           scheduleHost.stop();
         } finally {
           try {
-            await databaseHost.stop();
+            systemLogStore.dispose();
           } finally {
-            pluginLifecycleStore.dispose();
-            complete();
+            try {
+              await databaseHost.stop();
+            } finally {
+              pluginLifecycleStore.dispose();
+              complete();
+            }
           }
         }
       }
@@ -301,6 +310,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     snapshot = await host.start();
   } catch (error) {
     await httpHost.close().catch(() => undefined);
+    systemLogStore.dispose();
     // Annotate schema validation failures with the source config file name.
     if (configFile && error instanceof ConfigValidationError) {
       throw new ConfigValidationError(error.issues, configFile);
@@ -309,7 +319,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   }
   // TTY 交互启动：统一走 logger；裸 JSON 留给 --once / 管道（stable-path、脚本）
   if (process.stdout.isTTY && !parsed.once) {
-    const endpoints = im.listEndpoints();
+    const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
     const httpAddress = `${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
@@ -341,7 +351,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const reportStopError = (error: unknown): void => {
     options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
   };
-  const orphanWatchdog = startOrphanWatchdog(() => {
+  const orphanWatchdog = startSupervisorWatchdog(() => {
     void control.stop().then(() => process.exit(0), (error) => {
       reportStopError(error);
       process.exit(1);
@@ -369,6 +379,7 @@ interface ConfiguredAgentHost {
     readonly resolveEndpointTrusted: (adapter: string, endpoint: string) => readonly string[];
     readonly resolveConfiguredEndpointKeys: () => Promise<ReadonlySet<string>>;
     readonly extraTools?: readonly unknown[];
+    readonly audioTranscriber?: import('@zhin.js/agent').AudioTranscriptionPort;
     readonly transcribeUrl?: (url: string) => Promise<string | null>;
   }): RootResourceInstaller;
 }
@@ -378,15 +389,17 @@ async function loadConfiguredAgentHost(
 ): Promise<ConfiguredAgentHost | undefined> {
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
-  const module = await import('./agent-host-installer.js');
-  const { createLocalWorkroomDataGovernanceAuthority } = await import('./local-workroom-data-governance.js');
+  const [agentHost, workroom] = await Promise.all([
+    import('./agent/module.js'),
+    import('./workroom/module.js'),
+  ]);
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
-  const initialAi = await module.resolveAiConfig(document);
-  const workroomStorageMode = module.resolveWorkroomStorageMode(initialAi);
-  const runtime = new module.AgentRuntime({ coordinator: new module.AgentTurnCoordinator() });
+  const initialAi = await agentHost.resolveAiConfig(document);
+  const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
+  const runtime = new agentHost.AgentRuntime({ coordinator: new agentHost.AgentTurnCoordinator() });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<
-    typeof createLocalWorkroomDataGovernanceAuthority
+    typeof workroom.createLocalWorkroomDataGovernanceAuthority
   > | undefined;
   const configured: ConfiguredAgentHost = {
     bindings: (snapshot) => {
@@ -400,17 +413,17 @@ async function loadConfiguredAgentHost(
     },
     install: (options) => {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
-      localWorkroomDataGovernance ??= createLocalWorkroomDataGovernanceAuthority({
+      localWorkroomDataGovernance ??= workroom.createLocalWorkroomDataGovernanceAuthority({
         stateRoot: join(options.projectRoot, '.zhin'),
       });
-      return module.installAgentHost({
+      return agentHost.installAgentHost({
         ...options,
         runtime,
         snapshots: snapshotReader,
         workroomStorageMode,
-        workroomTrustedPackPublishers: module.resolveWorkroomTrustedPackPublishers(initialAi),
+        workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,
-        extraTools: options.extraTools as Parameters<typeof module.installAgentHost>[0]['extraTools'],
+        extraTools: options.extraTools as Parameters<typeof agentHost.installAgentHost>[0]['extraTools'],
       });
     },
   };
@@ -457,252 +470,6 @@ function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
     && typeof (value as Partial<ConfigDocumentPort>).read === 'function');
 }
 
-/** Poll parent liveness; when the supervisor (or any parent) is gone, shut down. */
-function startOrphanWatchdog(onOrphaned: () => void): NodeJS.Timeout {
-  const supervisorPid = Number(process.env.ZHIN_SUPERVISOR_PID ?? '');
-  const logger = getLogger('runtime');
-  return setInterval(() => {
-    if (Number.isInteger(supervisorPid) && supervisorPid > 0) {
-      try {
-        process.kill(supervisorPid, 0);
-        return;
-      } catch {
-        // ESRCH — supervisor is gone
-      }
-    } else if (process.ppid && process.ppid !== 1) {
-      return;
-    }
-    logger.error(formatCompact({
-      op: 'orphan_shutdown',
-      reason: Number.isInteger(supervisorPid) && supervisorPid > 0
-        ? `supervisor ${supervisorPid} exited`
-        : 'reparented to init (parent died)',
-    }));
-    onOrphaned();
-  }, 2_000).unref();
-}
-
-function processEnvSource(): Readonly<Record<string, string | undefined>> {
-  const result: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(key)) continue;
-    result[key] = value;
-  }
-  return Object.freeze(result);
-}
-
-/**
- * Read project dotenv files into Runtime EnvironmentLayers without changing
- * the CLI process. `.env.<environment>` deliberately overrides `.env`; the
- * Runtime applies that overlay after inherited process variables.
- */
-export async function loadRuntimeEnvironmentLayers(
-  root: string,
-  environment: string,
-): Promise<Readonly<EnvironmentLayers>> {
-  const overlay: Record<string, string> = {};
-  for (const name of ['.env', `.env.${environment}`]) {
-    try {
-      Object.assign(overlay, parseDotenv(await readFile(join(root, name), 'utf8')));
-    } catch (error) {
-      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') continue;
-      throw error;
-    }
-  }
-  return Object.freeze({
-    base: processEnvSource(),
-    environments: Object.freeze({
-      [environment]: Object.freeze(overlay),
-    }),
-  });
-}
-
-async function relaunchWithNativeTypeScript(parsed: StartOptions, root: string): Promise<boolean> {
-  // The respawned child runs in-process (marker env), so this wrapper only
-  // runs once per supervisor.
-  if (process.env.ZHIN_RUNTIME_CHILD) return false;
-  if (supportsNativeTypeScript() && !parsed.daemon) return false;
-  const [major = 0, minor = 0] = process.versions.node.split('.').map(Number);
-  if (major < 22 || (major === 22 && minor < 6)) {
-    throw new Error(
-      `zhin runtime start requires Node >=22.6.0 for native TypeScript; found ${process.versions.node}`,
-    );
-  }
-  const entry = process.argv[1];
-  if (!entry) throw new Error('Cannot determine the zhin runtime executable path');
-
-  // Daemon supervision: same contract as the legacy `zhin start --daemon` —
-  // supervisor stays alive, writes .zhin.pid (so `zhin stop` works), logs to
-  // file, respawns the bot on crash / exit 75 with storm-guard backoff.
-  const daemon = parsed.daemon;
-  const pidFile = join(root, '.zhin.pid');
-  let stdio: 'inherit' | ['ignore', number, number] = 'inherit';
-  if (daemon) {
-    const logFile = parsed.logFile ?? join(root, '.zhin', 'runtime.log');
-    await mkdir(dirname(logFile), { recursive: true });
-    const fd = openSync(logFile, 'a');
-    stdio = ['ignore', fd, fd];
-    writeFileSync(pidFile, String(process.pid));
-    getLogger('runtime').info(formatCompact({
-      op: 'daemon_start', pid: process.pid, log: logFile,
-      hint: `stop: zhin stop 或 kill -TERM ${process.pid}`,
-    }));
-  }
-  const removePidFile = (): void => {
-    if (!daemon) return;
-    try {
-      if (readFileSync(pidFile, 'utf8').trim() === String(process.pid)) rmSync(pidFile, { force: true });
-    } catch { /* already gone */ }
-  };
-
-  // Exit 75 (restartRequired) has no supervisor here — consume it ourselves by
-  // respawning the child with storm-guard backoff until the budget runs out.
-  let attempts: readonly number[] = [];
-  let interrupted = false;
-  let activeChild: ChildProcess | undefined;
-  let forceChildExitTimer: ReturnType<typeof setTimeout> | undefined;
-  // Forward the other terminal signals too, and never leave the child behind:
-  // a bot whose wrapper died keeps platform connections (and file watchers)
-  // alive as a zombie.
-  const forward = (signal: NodeJS.Signals) => (): void => {
-    interrupted = true;
-    const child = activeChild;
-    if (!child) return;
-    child.kill(signal);
-    if (!forceChildExitTimer) {
-      forceChildExitTimer = setTimeout(() => {
-        if (activeChild === child && child.exitCode === null && child.signalCode === null) {
-          child.kill('SIGKILL');
-        }
-      }, SUPERVISOR_CHILD_EXIT_GRACE_MS);
-    }
-  };
-  const onSigint = forward('SIGINT');
-  const onSigterm = forward('SIGTERM');
-  const onSighup = forward('SIGHUP');
-  const onExit = (): void => {
-    try { activeChild?.kill('SIGTERM'); } catch { /* already gone */ }
-    removePidFile();
-  };
-  process.on('SIGINT', onSigint);
-  process.on('SIGTERM', onSigterm);
-  process.on('SIGHUP', onSighup);
-  process.on('exit', onExit);
-  try {
-    for (;;) {
-      const child = spawn(process.execPath, [
-        '--experimental-strip-types',
-        DISABLE_EXPERIMENTAL_WARNING_FLAG,
-        entry,
-        ...process.argv.slice(2),
-      ], {
-        stdio,
-        // Lets the child self-terminate if this wrapper dies without forwarding.
-        env: {
-          ...process.env,
-          ZHIN_SUPERVISOR_PID: String(process.pid),
-          ZHIN_RUNTIME_CHILD: '1',
-        },
-      });
-      activeChild = child;
-      const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
-        (resolve, reject) => {
-          child.once('error', reject);
-          child.once('exit', (code, signal) => resolve({ code, signal }));
-        },
-      );
-      if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
-      forceChildExitTimer = undefined;
-      activeChild = undefined;
-      if (interrupted) {
-        process.exitCode = result.code ?? 130;
-        return true;
-      }
-      // Daemon treats any crash (signal or non-zero exit) as respawnable;
-      // foreground keeps the historical behavior (signal = fatal).
-      if (result.signal && !daemon) {
-        throw new Error(`Native TypeScript child exited from ${result.signal}`);
-      }
-      const plan = planRespawn(result.code ?? 1, parsed.once, daemon, attempts);
-      attempts = plan.attempts;
-      if (!plan.respawn) {
-        process.exitCode = result.code ?? 1;
-        return true;
-      }
-      if (daemon) {
-        getLogger('runtime').warn(formatCompact({
-          op: 'daemon_respawn',
-          code: result.code,
-          signal: result.signal,
-          attempts: attempts.length,
-        }));
-      }
-      await new Promise((resolve) => { setTimeout(resolve, RESPAWN_DELAY_MS); });
-      if (interrupted) {
-        process.exitCode = 130;
-        return true;
-      }
-    }
-  } finally {
-    if (forceChildExitTimer) clearTimeout(forceChildExitTimer);
-    removePidFile();
-    process.off('SIGINT', onSigint);
-    process.off('SIGTERM', onSigterm);
-    process.off('SIGHUP', onSighup);
-    process.off('exit', onExit);
-  }
-}
-
-interface StartOptions {
-  readonly once: boolean;
-  readonly noWatch: boolean;
-  readonly open: boolean;
-  readonly environment: string;
-  readonly mode: RuntimeMode;
-  readonly daemon: boolean;
-  readonly logFile?: string;
-}
-
-export function parseStartOptions(args: readonly string[]): StartOptions {
-  let once = false;
-  let noWatch = false;
-  let openConsole = false;
-  let environment = 'development';
-  let mode: RuntimeMode = 'development';
-  let daemon = false;
-  let logFile: string | undefined;
-  for (let index = 0; index < args.length; index += 1) {
-    const argument = args[index];
-    if (argument === '--') continue;
-    if (argument === '--once') once = true;
-    else if (argument === '--no-watch') noWatch = true;
-    else if (argument === '--open') openConsole = true;
-    else if (argument === '--daemon' || argument === '-d') daemon = true;
-    else if (argument === '--log-file') {
-      logFile = args[index + 1] ?? '';
-      index += 1;
-    } else if (argument?.startsWith('--log-file=')) {
-      logFile = argument.slice('--log-file='.length);
-    } else if (argument === '--environment') {
-      environment = args[index + 1] ?? '';
-      index += 1;
-    } else if (argument?.startsWith('--environment=')) {
-      environment = argument.slice('--environment='.length);
-    } else if (argument === '--mode') {
-      mode = parseMode(args[index + 1]);
-      index += 1;
-    } else if (argument?.startsWith('--mode=')) {
-      mode = parseMode(argument.slice('--mode='.length));
-    } else {
-      throw new Error(`Unknown start option: ${String(argument)}`);
-    }
-  }
-  if (!/^[a-z0-9][a-z0-9-]*$/u.test(environment)) {
-    throw new Error(`Invalid environment name: ${environment || '<empty>'}`);
-  }
-  return { once, noWatch, open: openConsole, environment, mode, daemon, logFile };
-}
-
 function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): void {
   const startup = getLogger('setup');
   const consoleUrl = `${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(`http://${httpAddress}`)}`;
@@ -720,11 +487,6 @@ function openBrowser(url: string): void {
       error: error instanceof Error ? error.message : String(error),
     }));
   });
-}
-
-function parseMode(value: string | undefined): RuntimeMode {
-  if (value === 'development' || value === 'test' || value === 'production') return value;
-  throw new Error(`Invalid Runtime mode: ${value || '<empty>'}`);
 }
 
 /**
@@ -745,10 +507,7 @@ export async function createEndpointRoleResolver(
   if (!document || typeof document !== 'object') {
     return { resolveOwner: () => undefined, resolveTrusted: () => [] };
   }
-  const plugins = (document as Record<string, unknown>).plugins;
-  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) {
-    return { resolveOwner: () => undefined, resolveTrusted: () => [] };
-  }
+  const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
   const addMaster = (key: string, raw: unknown) => {
     if (raw == null || String(raw).trim() === '') return;
     map.set(key, String(raw));
@@ -798,10 +557,8 @@ export async function readConfiguredEndpointKeys(
 ): Promise<ReadonlySet<string>> {
   const document = await readConfigDocumentValue(config);
   const keys = new Set<string>();
-  const plugins = document && typeof document === 'object'
-    ? (document as Record<string, unknown>).plugins
-    : undefined;
-  if (!plugins || typeof plugins !== 'object' || Array.isArray(plugins)) return keys;
+  if (!document || typeof document !== 'object') return keys;
+  const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
   const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;
   for (const [adapter, raw] of Object.entries(expanded)) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
@@ -896,28 +653,13 @@ async function readConfigDocumentValue(
 
 async function loadProjectConfig(
   root: string,
-): Promise<{ config: RuntimeConfigDocument | ConfigDocumentPort; file: string | undefined }> {
-  const candidates = [
-    'config.yml', 'config.yaml', 'config.json',
-    'zhin.config.yml', 'zhin.config.yaml', 'zhin.config.json',
-  ];
+): Promise<{ config: ConfigFileDocument; file: string }> {
   const existing: string[] = [];
-  for (const candidate of candidates) {
+  for (const candidate of ROOT_CONFIG_FILE_NAMES) {
     const file = join(root, candidate);
     try { await access(file); existing.push(file); }
     catch { /* Missing candidates are expected. */ }
   }
-  if (existing.length > 1) {
-    throw new Error(`Multiple Root config files found: ${existing.join(', ')}`);
-  }
-  const file = existing[0];
-  if (!file) return { config: Object.freeze({}), file: undefined };
-  if (file.endsWith('.yml') || file.endsWith('.yaml')) {
-    return { config: new YamlConfigDocument(file), file };
-  }
-  const value = JSON.parse(await readFile(file, 'utf8')) as unknown;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`${file} must contain an object`);
-  }
-  return { config: Object.freeze(value as RuntimeConfigDocument), file };
+  const file = selectRootConfigFile(existing) ?? join(root, DEFAULT_ROOT_CONFIG_FILE_NAME);
+  return { config: createConfigDocument(file), file };
 }

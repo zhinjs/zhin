@@ -1,4 +1,3 @@
-import type { Adapters } from './adapter.js';
 import type { NoticeKind } from './side-event/types.js';
 import type { SideEventBase } from './side-event/base.js';
 
@@ -34,7 +33,7 @@ export {
  * ```
  */
 export interface NoticeBase extends SideEventBase {
-  $adapter: keyof Adapters;
+  $adapter: string;
   $type: NoticeKind;
 }
 

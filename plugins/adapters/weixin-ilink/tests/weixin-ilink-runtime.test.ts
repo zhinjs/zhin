@@ -7,11 +7,9 @@ import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import { WeixinIlinkEndpoint } from '../src/endpoint.js';
 import {
-  setContextToken,
-  clearContextTokensForAccount,
-  flushContextTokenPersist,
+  WeixinContextTokenStore,
 } from '../src/context-store.js';
-import { saveSyncBuf } from '../src/credentials.js';
+import { WeixinIlinkStateStore } from '../src/credentials.js';
 import { MessageItemType, MessageState, MessageType } from '../src/ilink-types.js';
 import {
   formatInboundContent,
@@ -19,14 +17,8 @@ import {
   formatOutboundSegments,
   resolveWeixinIlinkConfig,
   type ResolvedWeixinIlinkConfig,
+  type WeixinIlinkEndpointConfig,
 } from '../src/protocol.js';
-
-vi.mock('../src/credentials.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/credentials.js')>();
-  return { ...actual, saveSyncBuf: vi.fn(actual.saveSyncBuf) };
-});
-
-const mockedSaveSyncBuf = vi.mocked(saveSyncBuf);
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -40,11 +32,7 @@ function privateConversation(userId: string) {
   };
 }
 
-const baseConfig: ResolvedWeixinIlinkConfig = resolveWeixinIlinkConfig({
-  id: 'test-ilink',
-  botToken: 'test-token',
-  longPollTimeoutMs: 1000,
-});
+let baseConfig: ResolvedWeixinIlinkConfig;
 
 function idleGetUpdates(opts: { abortSignal?: AbortSignal }) {
   return new Promise<{ msgs: []; get_updates_buf: string }>((resolve) => {
@@ -62,13 +50,15 @@ let tmpDataDir: string;
 
 beforeEach(() => {
   tmpDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'weixin-ilink-test-'));
-  vi.stubEnv('ZHIN_DATA_DIR', tmpDataDir);
-  mockedSaveSyncBuf.mockClear();
+  baseConfig = resolveWeixinIlinkConfig({
+    id: 'test-ilink',
+    botToken: 'test-token',
+    longPollTimeoutMs: 1000,
+    dataDir: path.join(tmpDataDir, 'weixin-ilink'),
+  });
 });
 
 afterEach(() => {
-  clearContextTokensForAccount(baseConfig.id);
-  flushContextTokenPersist();
   vi.unstubAllEnvs();
   fs.rmSync(tmpDataDir, { recursive: true, force: true });
   vi.useRealTimers();
@@ -76,11 +66,12 @@ afterEach(() => {
 
 describe('weixin-ilink protocol helpers', () => {
   it('resolves config from plugin config', () => {
-    const resolved = resolveWeixinIlinkConfig({
+    const config: WeixinIlinkEndpointConfig = {
       id: 'my-wechat',
       botToken: 'tok',
       longPollTimeoutMs: 20_000,
-    });
+    };
+    const resolved = resolveWeixinIlinkConfig(config);
     expect(resolved).toMatchObject({
       context: 'weixin-ilink',
       id: 'my-wechat',
@@ -88,6 +79,17 @@ describe('weixin-ilink protocol helpers', () => {
       longPollTimeoutMs: 20_000,
     });
     expect(resolved.baseUrl).toContain('ilinkai.weixin.qq.com');
+    expect(resolved.dataDir).toBe('data/weixin-ilink');
+  });
+
+  it('does not infer endpoint identity or token from process state and nested config', () => {
+    vi.stubEnv('WEIXIN_ILINK_BOT_NAME', 'env-bot');
+    vi.stubEnv('WEIXIN_ILINK_TOKEN', 'env-token');
+    const resolve = resolveWeixinIlinkConfig as (config: unknown) => unknown;
+    expect(() => resolve({})).toThrow(/endpoint id/);
+    expect(() => resolve({
+      endpoints: [{ context: 'weixin-ilink', id: 'nested-bot', botToken: 'nested-token' }],
+    })).toThrow(/endpoint id/);
   });
 
   it('keeps inbound text and media as separate canonical facts', () => {
@@ -180,6 +182,7 @@ describe('weixin-ilink plugin runtime adapter', () => {
       content: '你好',
       sender: expect.objectContaining({ id: 'user-1' }),
     }));
+    await endpoint.stop();
   });
 
   it('does not admit when closed', async () => {
@@ -247,7 +250,11 @@ describe('weixin-ilink plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
-    setContextToken(baseConfig.id, 'user-1', 'ctx-token');
+    endpoint.admit({
+      from_user_id: 'user-1',
+      context_token: 'ctx-token',
+      item_list: [],
+    });
 
     const messageId = await endpoint.send({ conversation: privateConversation('user-1'), payload: 'hello world' });
     expect(messageId).toBe('mid-1');
@@ -261,11 +268,14 @@ describe('weixin-ilink plugin runtime adapter', () => {
 
   it('分发成功后才推进 sync buf（崩溃不丢消息）', async () => {
     const receive = vi.fn(async () => Object.freeze({ matched: true, value: 'ok' }));
+    const state = new WeixinIlinkStateStore(baseConfig.id, baseConfig.dataDir);
+    const saveSyncBuf = vi.spyOn(state, 'saveSyncBuf');
     let polled = 0;
     const endpoint = bindTestEndpoint(new WeixinIlinkEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'weixin-ilink'),
       gateway: { receive, send: vi.fn(async () => 'sent') },
       config: baseConfig,
+      state,
       resolveCredentials: async () => ({ botToken: 'tok' }),
       notifyStart: vi.fn(async () => undefined),
       notifyStop: vi.fn(async () => undefined),
@@ -292,34 +302,33 @@ describe('weixin-ilink plugin runtime adapter', () => {
     endpoint.open();
     await endpoint.start();
     await vi.waitFor(() => {
-      expect(mockedSaveSyncBuf).toHaveBeenCalledWith(baseConfig.id, 'buf-1');
+      expect(saveSyncBuf).toHaveBeenCalledWith('buf-1');
     });
     expect(receive).toHaveBeenCalled();
     // 旧实现先 saveSyncBuf 再分发；现在必须先 receive 后推进 buf
     expect(receive.mock.invocationCallOrder[0]!)
-      .toBeLessThan(mockedSaveSyncBuf.mock.invocationCallOrder[0]!);
+      .toBeLessThan(saveSyncBuf.mock.invocationCallOrder[0]!);
     await endpoint.stop();
   });
 
   it('context token 防抖批量落盘', () => {
-    setContextToken(baseConfig.id, 'u1', 't1');
-    setContextToken(baseConfig.id, 'u2', 't2');
-    const file = path.join(
-      tmpDataDir,
-      'weixin-ilink',
-      'context-tokens',
-      `${baseConfig.id}.context-tokens.json`,
-    );
+    const state = new WeixinIlinkStateStore(baseConfig.id, baseConfig.dataDir);
+    const store = new WeixinContextTokenStore(state);
+    store.set('u1', 't1');
+    store.set('u2', 't2');
+    const file = state.contextTokensPath();
     // 防抖窗口内不落盘
     expect(fs.existsSync(file)).toBe(false);
-    flushContextTokenPersist(baseConfig.id);
+    store.flush();
     expect(fs.existsSync(file)).toBe(true);
     const tokens = JSON.parse(fs.readFileSync(file, 'utf-8')) as Record<string, string>;
     expect(tokens).toEqual({ u1: 't1', u2: 't2' });
+    store.clear();
   });
 
   it('start 时清扫超过 TTL 的入站媒体', async () => {
-    const mediaDir = path.join(tmpDataDir, 'weixin-ilink', 'media', 'inbound');
+    const mediaDir = new WeixinIlinkStateStore(baseConfig.id, baseConfig.dataDir)
+      .mediaDirectory('inbound');
     fs.mkdirSync(mediaDir, { recursive: true });
     const oldFile = path.join(mediaDir, 'old.png');
     const newFile = path.join(mediaDir, 'new.png');

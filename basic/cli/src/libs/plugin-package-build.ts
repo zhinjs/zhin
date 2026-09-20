@@ -50,6 +50,7 @@ function readPackageJson(cwd: string): {
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
   peerDependencies?: Record<string, string>;
+  zhin?: unknown;
 } | null {
   const p = path.join(cwd, "package.json");
   if (!fs.existsSync(p)) return null;
@@ -60,6 +61,7 @@ function readPackageJson(cwd: string): {
       dependencies?: Record<string, string>;
       devDependencies?: Record<string, string>;
       peerDependencies?: Record<string, string>;
+      zhin?: unknown;
     };
   } catch {
     return null;
@@ -78,11 +80,8 @@ function hasZhinJsDep(pkg: NonNullable<ReturnType<typeof readPackageJson>>): boo
   return false;
 }
 
-function isPluginLikePackageName(name: string | undefined): boolean {
-  if (!name) return false;
-  if (name.startsWith("@zhin.js/")) return true;
-  if (name.startsWith("zhin.js-")) return true;
-  return false;
+function hasZhinManifest(pkg: NonNullable<ReturnType<typeof readPackageJson>>): boolean {
+  return typeof pkg.zhin === 'object' && pkg.zhin !== null && !Array.isArray(pkg.zhin);
 }
 
 export function shouldUseSmartBuildInCwd(cwd: string): boolean {
@@ -91,8 +90,7 @@ export function shouldUseSmartBuildInCwd(cwd: string): boolean {
   const hasSrc = fs.existsSync(path.join(cwd, "src"));
   const hasClient = fs.existsSync(path.join(cwd, "client"));
   if (!hasSrc && !hasClient) return false;
-  if (fs.existsSync(path.join(cwd, "plugin.yml"))) return true;
-  if (isPluginLikePackageName(pkg.name)) return true;
+  if (hasZhinManifest(pkg)) return true;
   if (hasZhinJsDep(pkg)) return true;
   return false;
 }

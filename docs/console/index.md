@@ -60,9 +60,9 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 页面 | 数据来源 | 说明 |
 |------|----------|------|
 | Dashboard | `GET /api/system/status`、`GET /api/stats` | 运行状态、版本、统计概览 |
-| Plugins | `GET /api/plugins`、`GET /api/plugins/<name>` | 插件列表与详情（命令、工具、配置 schema） |
-| Endpoints | Endpoint 摘要 + 收件箱表 | 各平台端点连接状态；详情页含统一收件箱（消息 / 请求 / 通知） |
-| Config | RPC `config:get-yaml` / `config:save-yaml` / `config:set` | 在线查看、编辑 `zhin.config.yml` |
+| Plugins | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*` | 插件列表与详情；安装/更新/卸载计划与提交、配置校验、诊断和启停管理 |
+| Endpoints | Endpoint 摘要 + RPC `endpoint.test` + 收件箱表 | 各平台端点连接状态和连通性诊断；详情页含统一收件箱（消息 / 请求 / 通知） |
+| Config | RPC `config:get-source` / `config:replace-source` / `config:set` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置 |
 | Logs | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |
 | Cron | RPC `cron:*` | 插件注册的内存任务（list）；安装 Agent 后可增删暂停持久化任务 |
 | Database | RPC `db:info` / `db:tables` / `db:select` / `db:insert` / `db:update` / `db:delete` / `db:kv:*` | 数据库浏览与编辑、KV 存储 |
@@ -75,6 +75,12 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
 
+插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、
+`plugin:plan-update` 或 `plugin:plan-uninstall` 展示变更，再携带当前配置 revision 提交。
+安装、更新和卸载会维护 package manifest、锁文件、`zhin.plugins` 与插件配置；失败时恢复文件快照。
+配置保存前调用 `plugin:validate-config`，详情页可用 `plugin:diagnose` 汇总安装、挂载、schema
+与环境变量状态。
+
 ## Agent 工作台运行策略
 
 工作目录与安全策略属于每一次运行，不写入 Prompt，也不会由模型自行提升。新手可以从默认组合开始：工作目录留空时使用当前项目目录，`safetyMode` 选 `workspace-write`，`approvalMode` 选 `ask`，`networkAccess` 保持关闭。
@@ -82,7 +88,7 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 字段 | 可选值 | 怎么选 |
 | --- | --- | --- |
 | `safetyMode` | `read-only` / `workspace-write` / `danger-full-access` | 只检查时选只读；需要修改项目文件时选工作区写入；完整主机权限只用于明确理解风险的本地任务 |
-| `approvalMode` | `ask` / `deny` / `allow` | 默认 `ask`；无人值守但不允许越权时选 `deny`；仅在已有外部隔离与授权时选 `allow` |
+| `approvalMode` | `ask` / `auto` / `bypass` | 默认 `ask`；`auto` 由专用审核 Agent 裁决，拿不准时询问 master；`bypass` 直接通过审批，但仍受权限与沙箱约束 |
 | `networkAccess` | `false` / `true` | 只有任务确实要访问网络时开启；`danger-full-access` 会天然包含网络权限 |
 | `workingDirectory` | 目录路径 | 指向本次任务允许工作的项目目录，不要用宽泛的系统根目录 |
 

@@ -273,7 +273,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站；`ai.knowledge.baseDir` 指定本地知识库目录，默认 `knowledge`。
+`ai.multimodal` 管理多模态入出站。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
 远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 
@@ -291,8 +291,7 @@ plugin:
 plugins:
   sandbox:
     endpoints:
-      - context: sandbox
-        name: sandbox-bot
+      - id: sandbox-bot
         owner: sandbox-user
 ```
 

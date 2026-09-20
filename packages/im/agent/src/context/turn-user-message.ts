@@ -10,13 +10,12 @@ export function buildTurnUserMessages(
   userMessageExtra?: AgentMessageExtra;
   promptMessages: UserMessage[];
 } {
-  const { content, extra, llmMessage } = resolveTurnUserMessage(
+  const { content, llmMessage } = resolveTurnUserMessage(
     commMessage as import('@zhin.js/core').AgentTurnMessage,
     rawContent,
   );
   return {
     rawContent: content,
-    userMessageExtra: extra,
     promptMessages: [llmMessage],
   };
 }

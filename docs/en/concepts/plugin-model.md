@@ -25,7 +25,7 @@ Using `examples/minimal-bot/package.json` as an example:
 }
 ```
 
-The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`packages/im/runtime/src/manifest.ts`). Any invalid field throws a `ManifestValidationError` listing all issues.
+The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`packages/im/runtime/src/manifest.ts`). Any invalid field throws a `ManifestValidationError` listing all issues. After parsing, the `package-contract` module enforces the current engine and Feature API semver contracts and throws `PackageContractError` on a contract violation.
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -37,6 +37,12 @@ The fields are strictly validated by `@zhin.js/runtime`'s manifest parser (`pack
 | `platformFeatures` | Boolean, optional | Default `true`; whether the Root inherits platform Stable Features (see "platformFeatures Inheritance" below) |
 | `features` | Array | Feature capability packages this package depends on: `{ "package": "...", "api": "^1.0.0", "optional": false }` |
 | `plugins` | Array | Child plugins mounted by this package: `{ "package": "...", "instanceKey": "...", "optional": false }` |
+
+This array belongs only to `package.json#zhin.plugins` and describes the static
+mount graph. Runtime `zhin.config.*#plugins` is an object map keyed by
+`instanceKey`; the two documents deliberately use different shapes. Runtime,
+Console, scaffolding, and install/uninstall commands accept only the map. Only
+the explicit `zhin migrate` pipeline reads the former configuration array.
 
 Packages with `type: "feature"` have fewer fields: `protocol` / `type` / `entry` / `engine` / `featureApi`. For example, `@zhin.js/adapter`:
 
@@ -62,7 +68,7 @@ Example projects are private workspaces, so they can use `plugin.ts` as the entr
 After a plugin declares a dependency on a capability type via the `features` array, it can provide capability implementations following that Feature's conventions. For example, the sandbox adapter plugin (`@zhin.js/adapter-sandbox`) declares the `@zhin.js/adapter` capability and places a convention-based entry in the `adapters/` directory:
 
 ```ts
-// plugins/adapters/sandbox/adapters/sandbox.ts
+// plugins/adapters/sandbox/adapters/sandbox/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
 import { outboundMessageToken } from '@zhin.js/core/runtime';
 import { SandboxWsEndpoint } from '../src/endpoint.js';

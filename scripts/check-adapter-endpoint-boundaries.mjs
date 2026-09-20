@@ -4,17 +4,42 @@ import path from 'node:path';
 
 const repoRoot = path.resolve(import.meta.dirname, '..');
 const adaptersRoot = path.join(repoRoot, 'plugins/adapters');
+const adapterFeatureRoot = path.join(repoRoot, 'packages/im/adapter/src');
 const errors = [];
-const legacyAdapterConsumers = new Set([
-  'packages/im/agent/src/init/introspection-collectors.ts',
-  'packages/im/agent/src/security/owner-approve-always-store.ts',
-  'packages/im/agent/src/stability/registry-cleanup.ts',
-  'packages/im/agent/src/typing-indicator/integration.ts',
-]);
+const legacyAdapterConsumers = new Set();
+const directEnvironmentConsumers = new Set();
+const observedDirectEnvironmentConsumers = new Set();
+
+for (const file of typescriptFiles(adapterFeatureRoot)) {
+  const relative = path.relative(repoRoot, file).split(path.sep).join('/');
+  const source = fs.readFileSync(file, 'utf8');
+  if (/from\s+['"](?:node:(?:fs|path)|yaml)['"]/u.test(source)
+    || /\b(?:process\.cwd|ZHIN_PROJECT_ROOT|ZHIN_CONFIG)\b/u.test(source)) {
+    errors.push(
+      `${relative}: platform-neutral Adapter code must use EndpointConfigurationStore; `
+      + 'project files and YAML belong to the composition root',
+    );
+  }
+}
 
 for (const file of typescriptFiles(adaptersRoot)) {
   const relative = path.relative(repoRoot, file).split(path.sep).join('/');
   const source = fs.readFileSync(file, 'utf8');
+
+  // Passing a copy to a child process preserves PATH/HOME and is not
+  // configuration discovery. Reading an individual key remains owner debt.
+  const directEnvironmentRead = /\bprocess\.env(?:\.[A-Za-z_$][\w$]*|\s*\[)/u.test(source);
+  const unsupportedEnvironmentAccess = /\bprocess\.env\b/u.test(source)
+    && !/\{\s*\.\.\.process\.env\s*,/u.test(source);
+  if (directEnvironmentRead || unsupportedEnvironmentAccess) {
+    if (directEnvironmentConsumers.has(relative)) {
+      observedDirectEnvironmentConsumers.add(relative);
+    } else {
+      errors.push(
+        `${relative}: Adapter code must receive resolved owner configuration instead of reading process.env`,
+      );
+    }
+  }
 
   if (/\bextends\s+Adapter\b/u.test(source)
     || importsLegacyAdapter(source)) {
@@ -24,6 +49,10 @@ for (const file of typescriptFiles(adaptersRoot)) {
   if (/^const\s+endpoints\s*=\s*new\s+Map\b/mu.test(source)
     && /-agent-deps\.ts$/u.test(relative)) {
     errors.push(`${relative}: module-level Agent Endpoint registries are forbidden; resolve the current generation Client instead`);
+  }
+
+  if (/^let\s+[A-Za-z_$][\w$]*(?:\s*:[^=;]+)?\s*(?:=|;)/mu.test(source)) {
+    errors.push(`${relative}: adapter runtime state must be owned by an Endpoint or Client, not a mutable module binding`);
   }
 
   if (/-agent-deps\.ts$/u.test(relative) || /from\s+['"][^'"]*-agent-deps\.js['"]/u.test(source)) {
@@ -58,6 +87,12 @@ for (const file of typescriptFiles(adaptersRoot)) {
     if (/\bclass\s+\w+Endpoint\s+extends\s+Endpoint\s*\{/u.test(source)) {
       errors.push(`${relative}: Endpoint must declare Endpoint<TClient> explicitly`);
     }
+  }
+}
+
+for (const relative of directEnvironmentConsumers) {
+  if (!observedDirectEnvironmentConsumers.has(relative)) {
+    errors.push(`${relative}: stale direct environment access allowlist entry`);
   }
 }
 
@@ -103,7 +138,8 @@ if (errors.length > 0) {
   console.log(
     `Adapter/Endpoint responsibility check passed `
     + `(distinct registered Clients, no Agent Endpoint registries; `
-    + `${legacyAdapterConsumers.size} legacy Adapter consumers remain ratcheted debt).`,
+    + `${legacyAdapterConsumers.size} legacy Adapter consumers and `
+    + `${directEnvironmentConsumers.size} direct environment consumers remain ratcheted debt).`,
   );
 }
 

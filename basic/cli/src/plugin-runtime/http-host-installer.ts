@@ -5,12 +5,14 @@ import {
   type ProcessHttpHost,
   type ScopedTokenConfig,
 } from '@zhin.js/host-http';
-import { bindGenerationAdmission } from '@zhin.js/plugin-runtime';
+import {
+  bindGenerationAdmission,
+  type ConfigDocumentPort,
+  type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
 import {
   expandEnvironmentValue,
-  type ConfigDocumentPort,
   type RootResourceInstaller,
-  type RuntimeConfigDocument,
 } from '@zhin.js/runtime';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, resolve } from 'node:path';

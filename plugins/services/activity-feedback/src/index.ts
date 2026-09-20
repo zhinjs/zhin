@@ -13,7 +13,6 @@ export { ActivityFeedbackOrchestrator } from './orchestrator.js';
 export { ActivityFeedbackPolicy } from './policy.js';
 export {
   loadActivityFeedbackServiceConfig,
-  resolveActivityFeedbackForTarget,
   type ActivityFeedbackServiceConfig,
 } from './config.js';
 export type { ActivityFeedbackEndpointAccess } from './executor.js';

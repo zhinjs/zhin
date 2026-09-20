@@ -1,7 +1,6 @@
 import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
-import { activityFeedbackAiBus } from '../activity-feedback/ai-bus.js';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
 import { applyInboundMediaInjection, resolveTurnMediaInjection } from '../turn/inbound-media.js';
 import { isTurnTerminalEvent, type TurnEndEvent, type TurnEvent, type TurnTerminalEvent } from '../event/turn-event.js';
@@ -9,7 +8,7 @@ import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import type { AgentLoopTurnResult } from '../core/agent-core-run.js';
 import type { AgentCore } from '../core/agent-core.js';
-import { turnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
+import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
@@ -121,9 +120,12 @@ async function* runInteractiveTurn(
     : undefined;
   const media = await resolveTurnMediaInjection(
     context.turn.input.media,
-    context.turn.ports.references,
-    context.turn.signal,
-    providerInput,
+    {
+      references: context.turn.ports.references,
+      signal: context.turn.signal,
+      providerInput,
+      transcriber: host.audioTranscriber,
+    },
   );
   for (const [index, outcome] of media.outcomes.entries()) {
     yield Object.freeze({
@@ -181,7 +183,7 @@ async function* runInteractiveTurn(
       turnContext: context.turn,
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
-      toolExecution: turnToolExecutionAuthority(toolRuntime),
+      toolExecution: new TurnToolExecutionAuthority(toolRuntime),
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,
@@ -348,7 +350,7 @@ async function* runScheduleTurn(
       turnContext: context.turn,
       allTools: [...plan.allTools],
       resolvedTools: [...plan.resolvedTools],
-      toolExecution: turnToolExecutionAuthority(toolRuntime),
+      toolExecution: new TurnToolExecutionAuthority(toolRuntime),
       toolEventSource: 'authority',
       loopHooks: options.loopHooks,
       promptRuntime,
@@ -458,11 +460,7 @@ function emitActivityEvent(
   event: string,
   payload: AIEventPayload,
 ): void {
-  if (host.emitter) {
-    host.emitter.emit(event, payload);
-    return;
-  }
-  activityFeedbackAiBus.emit(event, payload);
+  host.emitter.emit(event, payload);
 }
 
 function emitActivityStop(

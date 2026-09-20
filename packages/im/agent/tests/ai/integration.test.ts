@@ -5,9 +5,8 @@
  * 1. AI 服务初始化
  * 2. 工具服务功能
  * 3. AI 触发中间件
- * 4. 内置工具
+ * 4. 显式工具注册
  */
-import { createPermissionHost } from '@zhin.js/permission';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Mock Logger first
@@ -15,17 +14,12 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   const original = await importOriginal() as any;
   return {
     ...original,
-    defineModel: vi.fn(),
     Logger: class {
       debug = vi.fn();
       info = vi.fn();
       warn = vi.fn();
       error = vi.fn();
     },
-    resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[] }) => ({
-      scope: 'private',
-      roles: message?._roles ?? ['user'],
-    })),
     segment: {
       toString: (elements: any[]) => {
         if (!Array.isArray(elements)) return String(elements);
@@ -45,10 +39,10 @@ vi.mock('@zhin.js/core', async (importOriginal) => {
   };
 });
 
-// Import after mocking — AIService + builtin tools from agent; Tool/trigger from core
+// Import after mocking — AIService from agent; Tool/trigger contracts from core
 import { AIService } from '@zhin.js/agent';
-import * as core from '@zhin.js/core';
-import { ToolFeature, ZhinTool, shouldTriggerAI, resolveSenderRoles, type Tool, type Message, type AgentTool } from '@zhin.js/core';
+import { createSdkProviderAdapter } from '@zhin.js/ai';
+import { shouldTriggerAI, resolveSenderRoles, type AgentTool } from '@zhin.js/core';
 
 // ============================================================================
 // AI Service 测试
@@ -66,8 +60,8 @@ describe('AI Service 集成测试', () => {
     });
   });
 
-  afterEach(() => {
-    aiService?.dispose();
+  afterEach(async () => {
+    await aiService?.dispose();
   });
 
   describe('服务初始化', () => {
@@ -88,7 +82,7 @@ describe('AI Service 集成测试', () => {
       expect(() => aiService.getProvider('nonexistent')).toThrow();
     });
 
-    it('应该根据配置初始化所有 Provider', () => {
+    it('应该根据配置初始化所有 Provider', async () => {
       const fullService = new AIService({
         providers: {
           openai: { sdk: 'openai', apiKey: 'sk-test' },
@@ -112,10 +106,28 @@ describe('AI Service 集成测试', () => {
       expect(providers).toContain('ollama');
       expect(providers).toHaveLength(6);
 
-      fullService.dispose();
+      await fullService.dispose();
     });
 
-    it('应该只初始化有 apiKey 的 Provider', () => {
+    it('动态 Provider 加入既有 service-owned runtime', async () => {
+      const runtime = aiService.getLlmRuntime();
+      const provider = createSdkProviderAdapter('secondary', {
+        sdk: 'openai',
+        apiKey: 'sk-secondary',
+        models: ['gpt-secondary'],
+      });
+      expect(provider).not.toBeNull();
+
+      await aiService.registerProvider(provider!);
+
+      expect(aiService.getLlmRuntime()).toBe(runtime);
+      expect(runtime.model('secondary', 'gpt-secondary')).toMatchObject({
+        provider: 'secondary',
+        id: 'gpt-secondary',
+      });
+    });
+
+    it('应该只初始化有 apiKey 的 Provider', async () => {
       const partialService = new AIService({
         providers: {
           openai: { sdk: 'openai', apiKey: 'sk-test' },
@@ -133,7 +145,7 @@ describe('AI Service 集成测试', () => {
       expect(providers).not.toContain('deepseek');
       expect(providers).toHaveLength(2);
 
-      partialService.dispose();
+      await partialService.dispose();
     });
   });
 
@@ -148,7 +160,7 @@ describe('AI Service 集成测试', () => {
       expect(config).toBeDefined();
     });
 
-    it('应该返回 access 配置', () => {
+    it('应该返回 access 配置', async () => {
       const svc = new AIService({
         providers: { mock: { sdk: 'openai', apiKey: 'sk-test' } },
         agents: { zhin: { provider: 'mock', model: 'gpt-4o-mini' } },
@@ -161,21 +173,13 @@ describe('AI Service 集成测试', () => {
         mode: 'whitelist',
         users: ['vip'],
       });
-      svc.dispose();
+      await svc.dispose();
     });
   });
 
   describe('工具管理', () => {
-    it('应该收集内置工具', () => {
-      const tools = aiService.collectAllTools();
-      expect(Array.isArray(tools)).toBe(true);
-      const names = tools.map(t => t.name);
-      expect(names).toEqual(['web_search']);
-    });
-
-    it('getResidentToolsAsTools 应包含 web_search', () => {
-      const resident = aiService.getResidentToolsAsTools();
-      expect(resident.map(t => t.name)).toEqual(['web_search']);
+    it('standalone agents do not receive implicit tools', () => {
+      expect(aiService.listRegisteredTools()).toEqual([]);
     });
 
     it('应该注册自定义工具', () => {
@@ -188,207 +192,41 @@ describe('AI Service 集成测试', () => {
 
       const dispose = aiService.registerTool(customTool);
       
-      const tools = aiService.collectAllTools();
+      const tools = aiService.listRegisteredTools();
       expect(tools.some(t => t.name === 'custom_tool')).toBe(true);
+      expect(Object.isFrozen(tools)).toBe(true);
       
       dispose();
-      const toolsAfter = aiService.collectAllTools();
+      const toolsAfter = aiService.listRegisteredTools();
       expect(toolsAfter.some(t => t.name === 'custom_tool')).toBe(false);
+    });
+
+    it('rejects ambiguous duplicate registrations', () => {
+      const tool: AgentTool = {
+        name: 'duplicate',
+        description: 'first',
+        parameters: { type: 'object', properties: {} },
+        execute: async () => 'result',
+      };
+      aiService.registerTool(tool);
+
+      expect(() => aiService.registerTool({ ...tool, description: 'second' }))
+        .toThrow('already registered');
+      expect(() => aiService.registerTool({ ...tool, name: ' duplicate ' }))
+        .toThrow('canonical name');
+      expect(() => aiService.createAgent({ tools: [tool] }))
+        .toThrow('Duplicate standalone Agent Tool');
+      expect(() => aiService.createAgent({
+        tools: [tool],
+        includeRegisteredTools: false,
+      })).not.toThrow();
     });
   });
 
   describe('dispose', () => {
-    it('应该正确清理资源', () => {
-      aiService.dispose();
+    it('应该正确清理资源', async () => {
+      await aiService.dispose();
       expect(aiService.listProviders()).toEqual([]);
-    });
-  });
-});
-
-// ============================================================================
-// Tool Service 测试
-// ============================================================================
-
-describe('Tool Service 集成测试', () => {
-  let service: ToolFeature;
-
-  beforeEach(() => {
-    vi.clearAllMocks();
-    service = new ToolFeature();
-  });
-
-  describe('Context 创建', () => {
-    it('应该创建正确的 Context', () => {
-      expect(service.name).toBe('tool');
-      expect(service.desc).toBeDefined();
-      expect(service.icon).toBe('Wrench');
-    });
-  });
-
-  describe('工具注册', () => {
-    it('应该注册 Tool 对象', () => {
-      const tool: Tool = {
-        name: 'test_tool',
-        description: '测试工具',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => 'result',
-      };
-
-      const dispose = service.addTool(tool, 'test-plugin', false);
-      
-      expect(service.get('test_tool')).toBeDefined();
-      expect(service.getAll()).toHaveLength(1);
-      
-      dispose();
-      expect(service.get('test_tool')).toBeUndefined();
-    });
-
-    it('应该注册 ZhinTool 实例', () => {
-      const zhinTool = new ZhinTool('zhin_tool')
-        .desc('ZhinTool 测试')
-        .execute(async () => 'result');
-
-      service.addTool(zhinTool, 'test-plugin', false);
-      
-      const registered = service.get('zhin_tool');
-      expect(registered).toBeDefined();
-      expect(registered?.description).toBe('ZhinTool 测试');
-    });
-
-    it('应该正确移除工具', () => {
-      const tool: Tool = {
-        name: 'removable',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => '',
-      };
-
-      service.addTool(tool, 'test', false);
-      expect(service.removeTool('removable')).toBe(true);
-      expect(service.removeTool('removable')).toBe(false);
-    });
-
-    it('应该自动添加来源标识', () => {
-      const tool: Tool = {
-        name: 'sourced_tool',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => '',
-      };
-
-      service.addTool(tool, 'my-plugin', false);
-      
-      const registered = service.get('sourced_tool');
-      expect(registered?.source).toContain('my-plugin');
-      expect(registered?.tags).toContain('my-plugin');
-    });
-  });
-
-  describe('工具执行', () => {
-    it('应该执行已注册的工具', async () => {
-      const tool: Tool = {
-        name: 'executable',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        execute: async (args) => `received: ${JSON.stringify(args)}`,
-      };
-
-      service.addTool(tool, 'test', false);
-      
-      const result = await service.execute('executable', { key: 'value' });
-      expect(result).toBe('received: {"key":"value"}');
-    });
-
-    it('执行不存在的工具应抛出错误', async () => {
-      await expect(service.execute('nonexistent', {})).rejects.toThrow('not found');
-    });
-  });
-
-  describe('标签过滤', () => {
-    it('应该按标签过滤工具', () => {
-      service.addTool({
-        name: 'tagged1',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        tags: ['utility'],
-        execute: async () => '',
-      }, 'test', false);
-      
-      service.addTool({
-        name: 'tagged2',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        tags: ['helper'],
-        execute: async () => '',
-      }, 'test', false);
-
-      const utilityTools = service.getByTags(['utility']);
-      expect(utilityTools).toHaveLength(1);
-      expect(utilityTools[0].name).toBe('tagged1');
-    });
-  });
-
-  describe('上下文过滤', () => {
-    it('应该按平台过滤工具', async () => {
-      service.addTool({
-        name: 'qq_only',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        platforms: ['qq'],
-        execute: async () => '',
-      }, 'test', false);
-      
-      service.addTool({
-        name: 'all_platforms',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        execute: async () => '',
-      }, 'test', false);
-
-      const qqContext = { $adapter: 'qq', $endpoint: 'b1', $sender: { id: 'u1' }, $channel: { type: 'group', id: 'g1' } } as import('@zhin.js/core').Message<any>;
-      const telegramContext = { $adapter: 'telegram', $endpoint: 'b1', $sender: { id: 'u1' }, $channel: { type: 'group', id: 'g1' } } as import('@zhin.js/core').Message<any>;
-      
-      const allTools = service.getAll();
-      
-      const qqFiltered = await service.filterByContext(allTools, qqContext);
-      expect(qqFiltered.some(t => t.name === 'qq_only')).toBe(true);
-      expect(qqFiltered.some(t => t.name === 'all_platforms')).toBe(true);
-      
-      const telegramFiltered = await service.filterByContext(allTools, telegramContext);
-      expect(telegramFiltered.some(t => t.name === 'qq_only')).toBe(false);
-      expect(telegramFiltered.some(t => t.name === 'all_platforms')).toBe(true);
-    });
-
-    it('应该按权限过滤工具', async () => {
-      service.addTool({
-        name: 'admin_tool',
-        description: '',
-        parameters: { type: 'object', properties: {} },
-        permissions: ['role(master)'],
-        execute: async () => '',
-      }, 'test', false);
-
-      const allTools = service.getAll();
-      
-      const userContext = {
-        $adapter: 'qq',
-        $endpoint: 'b1',
-        $sender: { id: 'user1', isMaster: false, isTrusted: false },
-        $channel: { type: 'private', id: 'user1' },
-      } as import('@zhin.js/core').Message<any>;
-      const adminContext = {
-        $adapter: 'process',
-        $endpoint: 'b1',
-        $sender: { id: 'admin1', isMaster: true },
-        $channel: { type: 'private', id: 'admin1' },
-      } as import('@zhin.js/core').Message<any>;
-      
-      const host = createPermissionHost();
-      const userFiltered = await service.filterByContext(allTools, userContext, host);
-      expect(userFiltered.some(t => t.name === 'admin_tool')).toBe(false);
-      
-      const adminFiltered = await service.filterByContext(allTools, adminContext, host);
-      expect(adminFiltered.some(t => t.name === 'admin_tool')).toBe(true);
     });
   });
 });
@@ -465,70 +303,5 @@ describe('AI Trigger 工具函数测试', () => {
       const result = resolveSenderRoles(message as any, {});
       expect(result.roles).toEqual(['user']);
     });
-  });
-});
-
-// ============================================================================
-// ZhinTool 完整流程测试
-// ============================================================================
-
-describe('ZhinTool 完整流程', () => {
-  it('应该支持完整的工具定义流程', async () => {
-    const tool = new ZhinTool('complete_tool')
-      .desc('完整测试工具')
-      .param('required_param', { type: 'string', description: '必填参数' }, true)
-      .param('optional_param', { type: 'number', description: '可选参数' }, false)
-      .platform('qq', 'telegram')
-      .scope('group', 'private')
-      .tag('test', 'example')
-      .execute(async (args, message) => {
-        return {
-          received: args,
-          platform: message?.$adapter,
-        };
-      });
-
-    // 转换为 Tool
-    const toolObj = tool.toTool();
-    
-    // 验证基本属性
-    expect(toolObj.name).toBe('complete_tool');
-    expect(toolObj.description).toBe('完整测试工具');
-    expect(toolObj.platforms).toEqual(['qq', 'telegram']);
-    expect(toolObj.scopes).toEqual(['group', 'private']);
-    expect(toolObj.tags).toContain('test');
-    expect(toolObj.tags).toContain('example');
-    
-    // 验证参数
-    expect(toolObj.parameters.properties).toHaveProperty('required_param');
-    expect(toolObj.parameters.properties).toHaveProperty('optional_param');
-    expect(toolObj.parameters.required).toContain('required_param');
-    
-    // 验证执行
-    const commMessage = {
-      $adapter: 'qq',
-      $endpoint: 'bot1',
-      $sender: { id: 'user1' },
-      $channel: { type: 'group' as const, id: 'g1' },
-    } as import('@zhin.js/core').Message<any>;
-    const result = await toolObj.execute(
-      { required_param: 'test', optional_param: 42 },
-      commMessage,
-    );
-    
-    expect(result.received.required_param).toBe('test');
-    expect(result.received.optional_param).toBe(42);
-    expect(result.platform).toBe('qq');
-    
-    // 验证 JSON 输出
-    const json = tool.toJSON();
-    expect(json.name).toBe('complete_tool');
-    expect(json).not.toHaveProperty('execute');
-    
-    // 验证帮助信息
-    const help = tool.help;
-    expect(help).toContain('complete_tool');
-    expect(help).toContain('必填参数');
-    expect(help).toContain('可选参数');
   });
 });

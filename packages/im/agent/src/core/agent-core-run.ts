@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, getLlmTransportModel, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -15,7 +15,6 @@ import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
-import { transformContextWithCompaction } from '../memory/compaction-runtime.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
 import type { HostPromptTurnHooks } from '../internal/host-types.js';
@@ -36,6 +35,7 @@ import type { TurnContextView } from '../context/turn-envelope.js';
 import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
+import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -198,7 +198,7 @@ async function* runAgentLoopVisionTurnOnceRun(
   const { host, sessionId, visionSystemPrompt, modelId, onChunk, promptHooks, signal } = input;
   const repo = host.contextRepository;
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getLlmTransportModel(providerAlias, modelId);
+  const llmModel = host.llmRuntime.model(providerAlias, modelId);
   const loaded = await repo.loadContext(sessionId);
   const promptMessages = input.userMessages;
 
@@ -216,6 +216,7 @@ async function* runAgentLoopVisionTurnOnceRun(
 
   const loopConfig = {
     model: llmModel,
+    transport: host.llmRuntime,
     maxIterations: 1,
     streamOptions: buildAgentPromptCacheStreamOptions(host.config, {
       modelSdk: llmModel.sdk,
@@ -367,7 +368,7 @@ export async function* runAgentLoopTextTurnRun(
   const repo = host.contextRepository;
 
   const providerAlias = host.getTurnProvider().name;
-  const llmModel = getLlmTransportModel(providerAlias, modelId);
+  const llmModel = host.llmRuntime.model(providerAlias, modelId);
   const persistentConversation = input.conversationPersistence !== 'none';
   const loaded = persistentConversation
     ? await repo.loadContext(sessionId)
@@ -469,7 +470,7 @@ export async function* runAgentLoopTextTurnRun(
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
 
-  const legacyByName = new Map(agentTools.map((t) => [t.name, t]));
+  const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
     ? agentToolsToLlmTools(agentTools)
     : buildLlmToolsForProvider(
@@ -507,8 +508,7 @@ export async function* runAgentLoopTextTurnRun(
       : applyExecPolicyToTools(execPolicyConfig, refreshed, {
           approvalMode: execPolicyConfig.execApprovalMode,
         });
-    legacyByName.clear();
-    for (const t of nextAgentTools) legacyByName.set(t.name, t);
+    executableTools.replace(nextAgentTools);
     llmTools = directTools
       ? agentToolsToLlmTools(nextAgentTools)
       : buildLlmToolsForProvider(
@@ -526,6 +526,7 @@ export async function* runAgentLoopTextTurnRun(
 
   const loopConfig = {
     model: llmModel,
+    transport: host.llmRuntime,
     maxIterations,
     sessionId,
     streamOptions: {
@@ -539,9 +540,10 @@ export async function* runAgentLoopTextTurnRun(
     },
     convertToLlm: (messages: AgentMessage[]) => messages,
     transformContext: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
+        transport: host.llmRuntime,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -549,9 +551,10 @@ export async function* runAgentLoopTextTurnRun(
         loopHooks,
       }) : messages,
     onContextOverflow: async (messages: AgentMessage[], ctxSignal?: AbortSignal) =>
-      persistentConversation ? transformContextWithCompaction(messages, ctxSignal, {
+      persistentConversation ? host.compactionRuntime.transformContext(messages, ctxSignal, {
         host,
         sessionId,
+        transport: host.llmRuntime,
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
@@ -573,7 +576,7 @@ export async function* runAgentLoopTextTurnRun(
           type: 'preToolUse',
           toolName: resolvedName,
           toolInput: effectiveArgs,
-          toolSource: legacyByName.get(resolvedName)?.source,
+          toolSource: executableTools.resolve(resolvedName)?.source,
           sessionId,
           turn: input.turnContext,
         });
@@ -587,13 +590,13 @@ export async function* runAgentLoopTextTurnRun(
         }
       }
 
-      const legacy = legacyByName.get(resolvedName);
-      if (!legacy) {
+      const tool = executableTools.resolve(resolvedName);
+      if (!tool) {
         return toolResultToAgentMessage(toolCall, `工具「${resolvedName}」执行失败：工具不存在或所属插件未启用。`, true);
       }
 
       try {
-        const outcome = await input.toolExecution.execute(legacy, effectiveArgs, toolCall.id, cause);
+        const outcome = await input.toolExecution.execute(tool, effectiveArgs, toolCall.id, cause);
         if (outcome.status === 'cancelled') {
           const cancellation = signal?.reason instanceof Error
             ? signal.reason
@@ -605,7 +608,7 @@ export async function* runAgentLoopTextTurnRun(
           toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: reason });
           return toolResultToAgentMessage(toolCall, reason, true);
         }
-        const rawText = await applyToolToModelOutput(legacy, outcome.output, effectiveArgs);
+        const rawText = await applyToolToModelOutput(tool, outcome.output, effectiveArgs);
 
         // PostToolUse interception
         let resultText = rawText;
@@ -745,7 +748,6 @@ export async function* runAgentLoopTextTurnRun(
     await host.getActiveTurnTracker()?.waitForPendingSubagents();
   }
   const delegatedOnly = shouldSuppressReplyForSpawnDelegation(toolCalls)
-    && !toolCalls.some(tc => tc.tool === 'run_deferred_task')
     && !toolCalls.some(tc =>
       tc.tool === 'generate_image'
       && tc.result

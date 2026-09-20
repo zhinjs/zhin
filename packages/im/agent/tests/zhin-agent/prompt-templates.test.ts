@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   PromptTemplateManager,
-  initTemplateManager,
-  getTemplateManager,
+  createDefaultPromptTemplateManager,
   DEFAULT_TEMPLATES,
 } from '../../src/prompt/templates.js';
 
@@ -498,21 +497,14 @@ More text`;
     });
   });
 
-  describe('全局实例', () => {
-    it('应该获取全局实例', () => {
-      const instance = getTemplateManager();
-      expect(instance).toBeDefined();
-    });
-
-    it('应该初始化全局实例', () => {
-      const instance = initTemplateManager();
-      expect(instance).toBeDefined();
-    });
-
-    it('应该使用预定义模板', () => {
-      const manager = initTemplateManager();
+  describe('默认模板工厂', () => {
+    it('每次创建独立且包含预定义模板的管理器', () => {
+      const manager = createDefaultPromptTemplateManager();
+      const other = createDefaultPromptTemplateManager();
       const templates = manager.getAllTemplates();
       expect(templates.length).toBeGreaterThan(0);
+      expect(other).not.toBe(manager);
+      expect(other.getAllTemplates()).toEqual(templates);
     });
   });
 });

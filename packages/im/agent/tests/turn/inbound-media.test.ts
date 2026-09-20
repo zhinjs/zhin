@@ -43,7 +43,7 @@ describe('resolveTurnMediaInjection', () => {
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'url', value: 'https://cdn.example/a.jpg' }, mimeType: 'image/jpeg' },
       { kind: 'image', source: { kind: 'base64', value: png }, mimeType: 'application/pdf' },
-    ], undefined, new AbortController().signal, ['text', 'image']);
+    ], { signal: new AbortController().signal, providerInput: ['text', 'image'] });
     expect(injection.blocks.map((block) => block.data.media)).toEqual([
       { kind: 'base64', value: '/9j/4A==', mime_type: 'image/jpeg' },
       { kind: 'base64', value: png, mime_type: 'image/png' },
@@ -61,7 +61,7 @@ describe('resolveTurnMediaInjection', () => {
     fs.writeFileSync(file, png);
     const injection = await resolveTurnMediaInjection([
       { kind: 'image', source: { kind: 'path', value: file } },
-    ], undefined, new AbortController().signal, ['text', 'image']);
+    ], { signal: new AbortController().signal, providerInput: ['text', 'image'] });
     expect(injection.blocks).toHaveLength(1);
     const block = injection.blocks[0]!;
     expect(block.type).toBe('image');
@@ -85,13 +85,36 @@ describe('resolveTurnMediaInjection', () => {
       { kind: 'audio', source: { kind: 'base64', value: mp3 }, mimeType: 'audio/mpeg' },
       { kind: 'video', source: { kind: 'url', value: 'https://cdn.example/v.mp4' } },
       { kind: 'file', source: { kind: 'url', value: 'https://cdn.example/f.zip' }, name: 'f.zip' },
-    ], undefined, new AbortController().signal, ['text', 'audio', 'video', 'file']);
+    ], { signal: new AbortController().signal, providerInput: ['text', 'audio', 'video', 'file'] });
     expect(injection.blocks.map((block) => block.type)).toEqual(['audio', 'video', 'file']);
     expect(injection.textAppends).toEqual([]);
     expect(injection.outcomes).toEqual([
       { kind: 'audio', status: 'accepted', code: 'validated_provider_input' },
       { kind: 'video', status: 'accepted', code: 'validated_provider_input' },
       { kind: 'file', status: 'accepted', code: 'validated_provider_input' },
+    ]);
+  });
+
+  it('audio transcription uses only the explicitly injected host port', async () => {
+    const transcribe = vi.fn(async () => '宿主转写结果');
+    const mp3 = Buffer.from([0x49, 0x44, 0x33, 0x04, 0x00, 0x00]).toString('base64');
+    const signal = new AbortController().signal;
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'audio', source: { kind: 'base64', value: mp3 }, mimeType: 'audio/mpeg' },
+    ], {
+      signal,
+      providerInput: ['text'],
+      transcriber: { transcribe },
+    });
+
+    expect(transcribe).toHaveBeenCalledWith(expect.objectContaining({
+      kind: 'audio',
+      mimeType: 'audio/mpeg',
+    }), signal);
+    expect(injection.blocks).toEqual([]);
+    expect(injection.textAppends).toEqual(['[语音转写] 宿主转写结果']);
+    expect(injection.outcomes).toEqual([
+      { kind: 'audio', status: 'derived', code: 'speech_transcription' },
     ]);
   });
 
@@ -124,7 +147,7 @@ describe('resolveTurnMediaInjection', () => {
       kind: 'image',
       source: { kind: 'platform_ref', value: 'opaque-image-id' },
       referenceKey: 'ref-1',
-    }], {
+    }], { references: {
       async resolve(key) {
         expect(key).toBe('ref-1');
         return {
@@ -132,7 +155,7 @@ describe('resolveTurnMediaInjection', () => {
           content: { kind: 'url', value: 'https://cdn.example/resolved.png', mime_type: 'image/png' },
         };
       },
-    }, new AbortController().signal, ['text', 'image']);
+    }, signal: new AbortController().signal, providerInput: ['text', 'image'] });
     expect(injection.blocks[0]).toMatchObject({
       type: 'image',
       data: { media: { kind: 'base64', mime_type: 'image/png' } },

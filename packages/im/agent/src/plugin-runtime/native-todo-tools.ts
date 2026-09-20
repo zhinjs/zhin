@@ -93,7 +93,7 @@ export function createNativeTodoToolFeatures(store: TodoStore): readonly NativeT
     feature('todo_read', defineAgentTool({
       description: 'Read the task plan owned by the current canonical session.',
       inputSchema: Object.freeze({ type: 'object', properties: Object.freeze({}), required: Object.freeze([]) }),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: async (_input, context) => formatTodos(await store.read(context.sessionKey, context.signal)),
     })),
     feature('todo_write', defineAgentTool({
@@ -117,7 +117,7 @@ export function createNativeTodoToolFeatures(store: TodoStore): readonly NativeT
         }),
         required: Object.freeze(['items']),
       }),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: async (input, context) => writeTodos(input, context, store),
     })),
   ]);

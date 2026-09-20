@@ -10,7 +10,10 @@ import {
 describe('zhin-stack-deps', () => {
   it('uses latest for scaffolded user project dependencies', () => {
     const base = getCreateBotBaseDependencies();
-    expect(base).toEqual({ 'zhin.js': 'latest' });
+    expect(base).toEqual({
+      'zhin.js': 'latest',
+      '@zhin.js/skill': 'latest',
+    });
     // Stable Features / runtime 由平台（CLI）与 zhin.js 传递依赖提供，不直列
     expect(base).not.toHaveProperty('@zhin.js/plugin-runtime');
     expect(base).not.toHaveProperty('@zhin.js/runtime');
@@ -20,20 +23,20 @@ describe('zhin-stack-deps', () => {
     expect(getCreateBotPnpmConfig(true)).not.toHaveProperty('peerDependencyRules');
   });
 
-  it('requires plugins declared in zhin.config', () => {
+  it('derives host dependencies without treating instance keys as package names', () => {
     const required = getRequiredZhinDependenciesForConfig({
-      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/mcp'],
+      plugins: { sandbox: {}, mcp: {} },
       database: { dialect: 'sqlite', filename: './data/bot.db' },
     });
-    expect(required['@zhin.js/adapter-sandbox']).toBe('latest');
-    expect(required['@zhin.js/mcp']).toBe('latest');
+    expect(required['@zhin.js/adapter-sandbox']).toBeUndefined();
+    expect(required['@zhin.js/mcp']).toBeUndefined();
     expect(required['@zhin.js/database']).toBe('latest');
   });
 
   it('diagnoses zhin.js versions before the 1.1 stable line when AI is enabled', () => {
     const config = {
       ai: { enabled: true, agents: { zhin: { provider: 'openai' } }, providers: { openai: { sdk: 'openai' } } },
-      plugins: ['@zhin.js/adapter-sandbox', '@zhin.js/mcp'],
+      plugins: { sandbox: {}, mcp: {} },
     };
     const pkg = {
       dependencies: {

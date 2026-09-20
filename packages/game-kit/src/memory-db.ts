@@ -1,6 +1,6 @@
 /**
  * Minimal in-memory models for game SessionService (findAll/findOne/create/updateWhere/deleteWhere).
- * Slice-2 fallback while Plugin Runtime has no DatabaseFeature Resource path.
+ * In-memory fallback for runtimes without a DatabaseHost.
  */
 
 type Row = Record<string, unknown>;

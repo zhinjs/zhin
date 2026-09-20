@@ -99,9 +99,9 @@ export interface TextCompleteOptions {
 /**
  * Provider 接口。
  *
- * 传输面只有两类：结构化 agent 会话走 `registerLlmApiFromProviders` /
- * `getLlmTransportModel` 的 ai-sdk 传输；轻量"system+user→文本"补全走
- * `completeText`。不再有 OpenAI wire 形态的 chat/chatStream 双轨。
+ * 传输面只有两类：结构化 agent 会话走 owner-scoped `LlmApiRuntime`；
+ * 轻量"system+user→文本"补全走 `completeText`。不再有 OpenAI wire
+ * 形态的 chat/chatStream 双轨。
  */
 export interface AIProvider {
   name: string;
@@ -192,7 +192,7 @@ export interface AgentTool {
    */
   isConcurrencySafe?: boolean;
   /** Per-tool approval policy (ADR 0039 P1); stacks with ExecPolicy. */
-  approval?: import('./tool-policy.js').ToolApprovalPolicy;
+  requiresApproval?: import('./tool-policy.js').ToolApprovalPolicy;
   /** Shapes tool output before it enters model context (IM rich payload may differ). */
   toModelOutput?: import('./tool-policy.js').ToolToModelOutputFn;
   /** Generation stamp — set when tools are collected; ToolRuntime validates before execution. */
@@ -406,8 +406,8 @@ export interface AIConfig {
    * 放置 .md / .txt 文件到 baseDir，Agent 可通过 knowledge_search 工具检索。
    */
   knowledge?: {
-    /** 知识库目录路径（相对于项目根目录，默认 "knowledge"） */
-    baseDir?: string;
+    /** 项目根目录内的知识库目录路径。配置该段时必须显式声明。 */
+    baseDir: string;
   };
   /** PAT for adapter-github auto-registered server-github MCP (overrides env when set). */
   githubMcp?: {
@@ -442,8 +442,11 @@ export interface AIConfig {
     execPreset?: 'readonly' | 'network' | 'development' | 'custom';
     /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 */
     execAllowlist?: string[];
-    /** allowlist 未命中时：true=需审批（当前实现为拒绝并提示），false=直接拒绝 */
-    execAsk?: boolean;
+    /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */
+    execApprovalMode?: 'ask' | 'auto' | 'bypass';
+    subagentExecApprovalMode?: 'ask' | 'auto' | 'bypass';
+    workerExecApprovalMode?: 'ask' | 'auto' | 'bypass';
+    taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
     phaseTrace?: boolean;
     /** 按模型 / provider 模式覆盖 model harness */

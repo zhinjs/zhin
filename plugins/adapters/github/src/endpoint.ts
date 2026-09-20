@@ -162,8 +162,8 @@ export class GithubEndpoint extends Endpoint<GithubClient> {
 }
 
 export function defaultCreateClient(config: ResolvedGithubConfig): GhClient {
-  const appAuth = config.appId && config.privateKey
-    ? { appId: config.appId, privateKey: config.privateKey }
-    : undefined;
-  return new GhClient({ host: config.host, appAuth });
+  return new GhClient({
+    host: config.host,
+    appAuth: { appId: config.appId, privateKey: config.privateKey },
+  });
 }

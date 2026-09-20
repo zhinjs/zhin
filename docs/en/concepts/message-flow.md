@@ -41,7 +41,7 @@ The actual code locations for each step:
    }
    ```
 
-3. **Lease and Message**. `ImRuntime.endpointEvents.receive` acquires a lease on the event's generation (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)). Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended.
+3. **Lease and Message**. `ImRuntime.endpointEvents.receive` is the sole public ingress port and delegates events to the instance-owned `InboundRuntime`. That owner acquires the event generation lease (in-flight events are not interrupted by reloads, see [Generation and Lifecycle](./generation-lifecycle.md)) and controls message construction, inbound middleware, handlers, interactions, command and Agent fallback routing, plus action scopes for notice/request/system side events. Message events construct a `Message` with a lazy `$client` getter for the current platform SDK instance, `$reply(content)`, and `$replyFrom(owner, content)`; after dispatch ends, reading `$client` or calling `$reply` fails because the operation scope has ended. The former flat `ImRuntime.receiveEndpointEvent()` method is removed.
 
 4. **Inbound middleware**. `MiddlewareIndex` sorts by `phase` (`before-dispatch` first, `after-dispatch` later) and `order`, wrapping each around the terminal action:
 
@@ -61,6 +61,8 @@ The actual code locations for each step:
 
 6. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `OutboundMessageService`.
 
+   Core passes canonical user content to this route without encoding sender identity into text. Agent ingress projects the trusted sender, roles, and scene scope once into `UserMessage.actor`; AI persistence stores that actor and renders participant labels only at the LLM boundary. `agent_messages.extra` carries quote presentation context only and cannot become a second identity source.
+
 7. **Event broadcast**. After dispatch completes, a `RuntimeMessageEvent` is emitted to `onMessage` subscribers (containing direction, conversation, sender, a `contentPreview` of up to 200 characters, and timestamp). The Console's real-time message stream consumes this.
 
 ## Outbound: $reply -> Render -> Middleware -> Endpoint
@@ -78,6 +80,7 @@ flowchart LR
 - **SendContent forms** (`packages/im/core/src/plugin-runtime/im/contracts.ts`): string; canonical `Segment` (first-class citizen, see "Multimodal" below); `component(name, props)` component call (recursively rendered via `ComponentIndex`, depth limit 32); `raw(payload)` passthrough; and nested arrays of any of these.
 - **Envelope** carries `conversation` (structured conversation addressing, `ConversationRef` from `@zhin.js/im-contract`), `requester` (the originating plugin, used for component permissions and auditing), `generation`, and provides `replace(payload)` for outbound middleware to rewrite content.
 - **Outbound middleware** shares the same definition as inbound; `target: 'outbound'` intercepts outbound messages.
+- **Runtime ownership** belongs to `OutboundDeliveryRuntime`: it exclusively controls rendering, media and interaction policy projection, outbound middleware, Endpoint delivery, conversation fact recording, and observer event publication. `ImRuntime` only acquires the correct generation lease and delegates delivery.
 - **The last mile** is in `AdapterIndex.send`: the endpoint must declare `outbound` capability and be in `started && !stopped` state, otherwise an error is thrown; once passed, `endpoint.send()` is called to deliver to the platform.
 
 Ordinary message delivery must go through this unified pipeline (`$reply` / `$replyFrom` / `OutboundMessageService.send`) so rendering, middleware, and event broadcasting are preserved. Non-message business operations such as join approval, role management, and platform queries should resolve the Client from the current event/command/tool operation and call the platform SDK directly. Do not retain a Client beyond that operation.
@@ -103,11 +106,27 @@ interface MediaRef {
 
 `ConversationEventStore` is the sole IM-context fact source. Inbound/outbound messages, recall tombstones, reactions, member joins/leaves, mute/unmute, and role changes are appended idempotently in conversation order. There is no parallel `im_transcripts` or text `chat_history` ledger. Merged-forward entries use neutral `actor` data and are never assigned model `user/assistant/system` roles.
 
+Each `ImRuntime` privately owns one `ConversationRuntime`. It exclusively controls Store replacement, event normalization, message recording, context aggregation, and consumer cursors. The message gateway submits established inbound, outbound, and notice facts to that owner; CLI and Agent consume a read-only Store view and context methods through `ImRuntime` instead of replacing owner state directly.
+
 Unread inbound conversation messages are consumed from that same Store by the Agent-session cursor and projected as untrusted `user-context`; the message that triggered the current Turn is excluded to prevent duplication. There is no process-global passive buffer. Failed Turns do not advance the cursor, and HMR or multiple Roots cannot share side-channel state.
 
 The current Turn registers `replyTo`, forward, and media values as scoped `TurnReference`s. The Agent exposes only `inspect_conversation_reference(reference, depth?)`: it checks local facts first, then resolves through the lease-bound Endpoint. Cross-conversation, cross-Endpoint, and expired-Turn access fails closed. Important unread notices are attached to the next user Turn as explicitly untrusted conversation data, never as system/developer instructions. The session cursor advances only after a successful Turn; failed Turns retain the events. High-frequency reactions/pokes are aggregated, while login, QR, disconnect, and other process events remain diagnostics only.
 
 **Outbound**: AI reply → `OutputElement[]` → canonical `Segment[]` (`publishOutboundElements`) → `$reply` (Segment is first-class `SendContent`) → `normalizeOutboundPayload` (html→image/text, keyboard, media negotiation) → endpoint. Negotiation is driven by the adapter definition's `segments.outboundMedia` declaration (`'url' | 'path' | 'base64' | 'upload'`): only `url-or-text` endpoints degrade non-URL media to text centrally; other adapters materialize along the platform-optimal path (URL pass-through / base64 / platform upload / disk read). Segments without `data.media` are dropped with a warning -- the legacy `data.url/file/base64` shapes no longer exist.
+
+## User Interaction: Confirmation, Selection, and Input
+
+Command authoring uses `context.interaction` (`UserInteraction`). `ask()` describes a typed text, number, confirmation, selection, multiselection, or list request, while `sequence()` composes consecutive requests. Core projects each request into a transport-neutral view and renders it as markdown plus a canonical keyboard. Adapters that declare native interactive segments encode platform buttons; other adapters receive a numbered-list fallback whose button clicks and manual replies enter the same parser.
+
+`ImRuntime` delegates this concern to its private `RuntimeInteractionCoordinator`. The coordinator exclusively owns pending reply claims, timeouts and cancellation, sequences, action handlers, and numbered fallbacks. State is isolated by user, generation, and conversation, so a new generation cannot consume old keyboard mappings and separate Roots never share interaction state. The message gateway only decides when to invoke the coordinator; it does not implement the interaction state machine.
+
+## Endpoint runtime ownership
+
+Each `ImRuntime` exposes one instance-owned `EndpointRuntime` as the sole runtime entry to the generation-owned `AdapterIndex`. Endpoint listing, capability lookup, Console-addressed delivery, reactions, recalls, edits, typing, and management operations acquire and release the current snapshot lease there. Upper-layer Hosts depend on narrow ports containing only the operations they use. `ImRuntime` retains the canonical inbound gateway and delegates every send to its private `OutboundDeliveryRuntime`, so Console-addressed delivery still follows `render -> before.sendMessage -> AdapterIndex.send` and cannot bypass rendering or middleware.
+
+The former flat `ImRuntime.listEndpoints()`, `sendEndpointMessage()`, and related methods are removed. Internal composition uses `im.endpoints.*` without forwarding aliases or a second Endpoint authority.
+
+Observers use the read-only `im.messageEvents.subscribe()` source. Console and Inbox can consume bounded message projections but cannot publish or forge Core runtime events. The former flat `im.onMessage()` method is removed.
 
 ## Endpoint 1:N Expansion
 

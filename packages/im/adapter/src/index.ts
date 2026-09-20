@@ -8,6 +8,9 @@ export * from './credentials.js';
 /** @public 用户侧创作面：`defineAdapter`（`adapters/` 约定目录默认导出，承诺 semver）。 */
 export * from './definition.js';
 export * from './endpoint.js';
+export * from './endpoint-configuration.js';
+/** @internal Compact Endpoint materialization; exported for Runtime and test harness compatibility. */
+export { materializeEndpoint } from './managed-endpoint.js';
 export * from './endpoint-commands.js';
 export * from './endpoint-lifecycle.js';
 export * from './endpoint-management.js';

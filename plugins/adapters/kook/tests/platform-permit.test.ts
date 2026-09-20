@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
-import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import { KookPermission } from '../src/protocol.js';
 import {
   checkKookPlatformPermit,
@@ -28,7 +28,7 @@ describe('kook platform-permit', () => {
   let host: PermissionHost;
 
   beforeEach(() => {
-    host = createPermissionHost();
+    host = new PermissionHost();
     host.registerPlatform('kook', (perm, subject) => checkKookPlatformPermit(perm, subject));
   });
 

@@ -1,40 +1,59 @@
 # @zhin.js/agent-feature
 
-下一代 Markdown Agent Feature。它从 `agents/<name>.agent.md` 构造 immutable Agent definition，不读取旧分形 `agent.ts`、`instructions.md` 或模块级 SubAgent registry。
+目录化子 Agent Feature。主 Agent 使用插件根目录的标准 `AGENTS.md`；命名子 Agent 使用 `agents/<name>/` 自包含模块。运行时只识别 `agent.json`，不扫描单文件 `.agent.md`、`agent.ts` 或 `instructions.md`。
 
 ## 目录约定
 
 ```text
-agents/
-├── planner.agent.md
-└── reviewer.agent.md
+my-plugin/
+├── AGENTS.md
+└── agents/
+    └── backend-engineer/
+        ├── agent.json
+        ├── system.md
+        ├── boundaries.md
+        ├── conventions.md
+        ├── workflows/
+        │   └── create-api.md
+        ├── tools/
+        │   └── schema-validator/
+        │       └── index.ts
+        ├── skills/
+        │   └── db-migration/
+        │       ├── SKILL.md
+        │       └── tools/
+        │           └── schema-check/
+        │               └── index.ts
+        ├── hooks/
+        │   └── audit/
+        │       └── index.ts
+        └── knowledge/
+            └── internal-architecture.md
 ```
 
-Agent 目录只允许一级、精确 `.agent.md` 后缀。`planner.agent.md` 的 local name 是 `planner`；child Plugin 的 qualified name 自动包含 Plugin instance path。
+`agents/<name>` 必须使用小写 kebab-case。四个核心文件缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可省略。`entry_points` 决定提示词的组合顺序，并且必须包含三个核心 Markdown 文件。
 
-## Markdown 契约
-
-```markdown
-# Planner
-
-Break the request into verifiable steps. Prefer reversible actions.
+```json
+{
+  "name": "Backend Engineer Agent",
+  "version": "1.0.0",
+  "description": "负责后端业务逻辑与 API 设计",
+  "trigger_rules": {
+    "file_patterns": ["src/backend/**", "database/**"],
+    "keywords": ["api", "service", "migration"]
+  },
+  "entry_points": ["system.md", "boundaries.md", "conventions.md"],
+  "permissions": ["role(developer)"]
+}
 ```
 
-完整 Markdown 是 `instructions` SSOT。首个 heading 作为 description；没有 heading 时使用文件 identity。Feature 不绑定模型、system prompt 模板、tool policy 或 session store，这些属于 orchestrator adapter。
+`system.md` 定义身份与任务，`boundaries.md` 定义权限和行为边界，`conventions.md` 只扩展、具象化根 `AGENTS.md`。反复出现的项目坑应补充到 `conventions.md`。
 
-单文件插件可用 `setup({ addAgent })` 注册 Markdown Agent，例如
-`addAgent('planner', '# Planner\n\nBreak work into verifiable steps.')`；目录模式和 setup
-模式共用 AgentIndex。
+`workflows/` 与 `knowledge/` 进入 Agent 指令；`tools/<name>/index.ts` 是由 `@zhin.js/tool` 校验、审批和审计的私有 Tool；`skills/<name>/SKILL.md` 是由 `@zhin.js/skill` 投影的私有 Skill。目录结构只声明归属，不绕过 Feature 准入。
 
-## Projection
+## Projection 与热重载
 
-`AgentIndex.list()` 返回全树 qualified descriptors；`visible(owner)` 和 `get(owner, name)` 使用 nearest-owner inheritance。不同 Plugin owner 的同名 Agent 不通过扫描顺序覆盖。
-
-Agent definition 是纯数据，没有 runtime disposer。单文件 HMR 只替换 Agent Slot，旧 turn lease 继续使用旧 instructions。
-
-## 依赖
-
-只依赖 Next Kernel 与 Feature Kit，不引入 AI SDK、模型 provider、Markdown/YAML parser 或数据库。
+`AgentIndex.list()` 返回全树 qualified descriptors；`visible(owner)` 和 `get(owner, name)` 使用 nearest-owner inheritance。Agent 的 manifest、入口文件及资源文件变化只替换对应 Slot，进行中的 turn 继续使用原 generation。
 
 ## 验证
 

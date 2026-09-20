@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { IlinkClientMetadata } from "./ilink-meta.js";
 
 vi.mock("./ilink-logger.js", () => ({
   logger: {
@@ -29,6 +30,8 @@ const { mockFetch } = vi.hoisted(() => ({
   mockFetch: vi.fn(),
 }));
 vi.stubGlobal("fetch", mockFetch);
+
+const metadata = new IlinkClientMetadata({ version: "1.2.3" });
 
 function mockCdnResponse(params: {
   ok?: boolean;
@@ -99,7 +102,7 @@ describe("uploadFileToWeixin", () => {
       const result = await uploadFileToWeixin({
         filePath,
         toUserId: "user1",
-        opts: { baseUrl: "https://api.com", token: "tok" },
+        opts: { baseUrl: "https://api.com", metadata, token: "tok" },
         cdnBaseUrl: "https://cdn.com",
       });
 
@@ -127,7 +130,7 @@ describe("uploadFileToWeixin", () => {
       const result = await uploadFileToWeixin({
         filePath,
         toUserId: "user1",
-        opts: { baseUrl: "https://api.com", token: "tok" },
+        opts: { baseUrl: "https://api.com", metadata, token: "tok" },
         cdnBaseUrl: "https://ignored-cdn.com",
       });
 
@@ -152,7 +155,7 @@ describe("uploadFileToWeixin", () => {
         uploadFileToWeixin({
           filePath,
           toUserId: "user1",
-          opts: { baseUrl: "https://api.com" },
+          opts: { baseUrl: "https://api.com", metadata },
           cdnBaseUrl: "https://cdn.com",
         }),
       ).rejects.toThrow("no upload URL");
@@ -184,7 +187,7 @@ describe("uploadFileToWeixin", () => {
       const result = await uploadFileToWeixin({
         filePath,
         toUserId: "user1",
-        opts: { baseUrl: "https://api.com" },
+        opts: { baseUrl: "https://api.com", metadata },
         cdnBaseUrl: "https://cdn.com",
       });
       expect(result.downloadEncryptedQueryParam).toBe("dl-retry");
@@ -214,7 +217,7 @@ describe("uploadFileToWeixin", () => {
         uploadFileToWeixin({
           filePath,
           toUserId: "user1",
-          opts: { baseUrl: "https://api.com" },
+          opts: { baseUrl: "https://api.com", metadata },
           cdnBaseUrl: "https://cdn.com",
         }),
       ).rejects.toThrow("client error");
@@ -240,7 +243,7 @@ describe("uploadFileToWeixin", () => {
         uploadFileToWeixin({
           filePath,
           toUserId: "user1",
-          opts: { baseUrl: "https://api.com" },
+          opts: { baseUrl: "https://api.com", metadata },
           cdnBaseUrl: "https://cdn.com",
         }),
       ).rejects.toThrow("x-encrypted-param");
@@ -265,7 +268,7 @@ describe("uploadVideoToWeixin", () => {
       const result = await uploadVideoToWeixin({
         filePath,
         toUserId: "user1",
-        opts: { baseUrl: "https://api.com" },
+        opts: { baseUrl: "https://api.com", metadata },
         cdnBaseUrl: "https://cdn.com",
       });
 
@@ -293,7 +296,7 @@ describe("uploadFileAttachmentToWeixin", () => {
         filePath,
         fileName: "doc.pdf",
         toUserId: "user1",
-        opts: { baseUrl: "https://api.com" },
+        opts: { baseUrl: "https://api.com", metadata },
         cdnBaseUrl: "https://cdn.com",
       });
       expect(result.filekey).toBeDefined();

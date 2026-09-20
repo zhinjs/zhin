@@ -1,5 +1,5 @@
 /**
- * In-memory group-suite models (slice-2) until Plugin Runtime DatabaseFeature Resource lands.
+ * In-memory group-suite models used when no DatabaseHost is available.
  *
  * 模型表面与 `@zhin.js/plugin-runtime` 的 DatabaseHostModel 结构兼容
  * （where 返回 PromiseLike，host 侧是链式 Selection），

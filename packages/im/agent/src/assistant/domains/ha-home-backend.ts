@@ -1,8 +1,7 @@
 /**
  * HaHomeBackend — Home Assistant REST client（别名解析 + 服务调用）
  */
-import { getLogger } from '@zhin.js/core';
-import { formatCompact } from '@zhin.js/logger';
+import { getLogger, formatCompact } from '@zhin.js/logger';
 import { type AssistantHomeConfig, resolveAssistantHomeConfig, type ResolvedAssistantHomeConfig } from '../home-config.js';
 import { parseEntityDomain } from './home-entity.js';
 

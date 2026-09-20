@@ -4,19 +4,13 @@
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { senderRolesFromMessage, type Message, getLogger } from '@zhin.js/core';
+import { senderRolesFromMessage, type Message } from '@zhin.js/core';
 import { getDataDir } from './bootstrap.js';
 
-/** 获取文件制长期记忆目录（data/memory），不存在则创建 */
+/** 解析文件制长期记忆目录（data/memory），不执行文件系统写入。 */
 export function getMemoryDir(workspaceDir?: string): string {
-  const dir = path.join(getDataDir(workspaceDir), 'memory');
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  return dir;
+  return path.join(getDataDir(workspaceDir), 'memory');
 }
-const logger = getLogger('MemoryLayers');
-
 export interface MemoryLayerBudgets {
   session: number;
   platform: number;
@@ -96,49 +90,8 @@ function readTrimmedFile(filePath: string): string {
   }
 }
 
-const migratedWorkspaces = new Set<string>();
-
-/** 测试用：重置迁移标记 */
-export function resetMemoryMigrationForTests(): void {
-  migratedWorkspaces.clear();
-}
-
-/** 将旧版 data/memory/MEMORY.md 迁移到 global/MEMORY.md（每个工作区一次） */
-export function migrateLegacyMemoryFiles(workspaceDir?: string): void {
-  const cwd = path.resolve(workspaceDir || process.cwd());
-  if (migratedWorkspaces.has(cwd)) return;
-  migratedWorkspaces.add(cwd);
-
-  const memoryDir = getMemoryRoot(workspaceDir);
-  const legacyFile = path.join(memoryDir, 'MEMORY.md');
-  const globalDir = getGlobalMemoryDir(workspaceDir);
-  const globalFile = path.join(globalDir, 'MEMORY.md');
-
-  if (!fs.existsSync(legacyFile) || fs.existsSync(globalFile)) return;
-
-  try {
-    fs.mkdirSync(globalDir, { recursive: true });
-    fs.copyFileSync(legacyFile, globalFile);
-    logger.info(`Migrated legacy ${legacyFile} → ${globalFile}`);
-  } catch (err) {
-    logger.warn('Legacy memory migration failed:', err);
-  }
-
-  const legacyDaily = path.join(memoryDir, `${todayDate()}.md`);
-  const globalDaily = path.join(globalDir, `${todayDate()}.md`);
-  if (fs.existsSync(legacyDaily) && !fs.existsSync(globalDaily)) {
-    try {
-      fs.copyFileSync(legacyDaily, globalDaily);
-      logger.info(`Migrated legacy daily notes → ${globalDaily}`);
-    } catch {
-      // ignore
-    }
-  }
-}
-
 export function loadMemoryLayers(input: MemoryLayersInput = {}): LoadedMemoryLayers {
   const { workspaceDir, platform, sessionKey } = input;
-  migrateLegacyMemoryFiles(workspaceDir);
 
   const slices: MemoryLayerSlice[] = [];
 
@@ -190,19 +143,6 @@ export function loadMemoryLayers(input: MemoryLayersInput = {}): LoadedMemoryLay
         title: `Session (${sessionKey})`,
         content: sessionBody,
         chars: sessionBody.length,
-      });
-    }
-  }
-
-  // 兼容：仍读取根目录旧版（只读，未迁移时）
-  if (!globalLong) {
-    const legacy = readTrimmedFile(path.join(getMemoryRoot(workspaceDir), 'MEMORY.md'));
-    if (legacy) {
-      slices.push({
-        key: 'global',
-        title: 'Global (legacy path)',
-        content: `### Long-term\n${legacy}`,
-        chars: legacy.length,
       });
     }
   }
@@ -296,34 +236,30 @@ export function getFileMemoryContext(
 
 export type MemoryWriteScope = 'session' | 'platform' | 'global' | 'none';
 
-function memoryRelativeFromPath(filePath: string): string | null {
+function memoryRelativeFromPath(filePath: string, workspaceDir?: string): string | null {
   const expanded = filePath.replace(/^~(?=$|[\\/])/, process.env.HOME || '');
-  const normalized = path.resolve(expanded).split(path.sep).join('/');
-  const marker = '/data/memory/';
-  const idx = normalized.indexOf(marker);
-  if (idx >= 0) {
-    return normalized.slice(idx + marker.length);
+  const workspaceRoot = path.resolve(workspaceDir ?? process.cwd());
+  const memoryRoot = path.join(workspaceRoot, 'data', 'memory');
+  const target = path.isAbsolute(expanded) ? path.resolve(expanded) : path.resolve(workspaceRoot, expanded);
+  const relative = path.relative(memoryRoot, target);
+  if (relative === '' || relative === '..' || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    return relative === '' ? '' : null;
   }
-  const rel = expanded.replace(/\\/g, '/');
-  if (rel.startsWith('data/memory/')) {
-    return rel.slice('data/memory/'.length);
-  }
-  return null;
+  return relative.split(path.sep).join('/');
 }
 
 function classifyMemoryRelative(rel: string): MemoryWriteScope {
   if (rel.startsWith('sessions/')) return 'session';
   if (rel.startsWith('platforms/')) return 'platform';
   if (rel.startsWith('global/')) return 'global';
-  if (rel === 'MEMORY.md' || /^\d{4}-\d{2}-\d{2}\.md$/.test(rel)) return 'global';
   return 'none';
 }
 
 export function classifyMemoryWritePath(
   filePath: string,
-  _workspaceDir?: string,
+  workspaceDir?: string,
 ): MemoryWriteScope {
-  const rel = memoryRelativeFromPath(filePath);
+  const rel = memoryRelativeFromPath(filePath, workspaceDir);
   if (!rel) return 'none';
   return classifyMemoryRelative(rel);
 }
@@ -339,11 +275,18 @@ export function checkMemoryWritePath(
   context?: Message<any>,
   workspaceDir?: string,
 ): MemoryWriteDecision {
-  const scope = classifyMemoryWritePath(filePath, workspaceDir);
-  if (scope === 'none') {
-    return { allowed: true, scope };
+  const relative = memoryRelativeFromPath(filePath, workspaceDir);
+  if (relative === null) {
+    return { allowed: true, scope: 'none' };
   }
-
+  const scope = classifyMemoryRelative(relative);
+  if (scope === 'none') {
+    return {
+      allowed: false,
+      scope,
+      reason: '记忆文件必须位于 data/memory/global、platforms/<platform> 或 sessions/<session>。',
+    };
+  }
   if (scope === 'session') {
     return { allowed: true, scope };
   }

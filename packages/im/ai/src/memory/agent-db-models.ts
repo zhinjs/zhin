@@ -8,7 +8,7 @@ import {
   parseAgentMessageExtra,
   renderUserMessageForLlm,
   type AgentMessageExtra,
-} from './sender-extra.js';
+} from './user-message-presentation.js';
 
 // ── agent_sessions ──
 
@@ -48,7 +48,7 @@ export const AGENT_MESSAGE_MODEL = {
   role: { type: 'text' as const, nullable: false },
   payload: { type: 'text' as const, nullable: false },
   parent_id: { type: 'integer' as const, nullable: true },
-  /** JSON compatibility projection for sender/quote metadata; actor also lives in user payload. */
+  /** JSON presentation context; participant identity lives only in user payload actor. */
   extra: { type: 'text' as const, default: '' },
   timestamp: { type: 'integer' as const, nullable: false },
 };
@@ -64,7 +64,7 @@ export interface AgentMessageRow {
   timestamp: number;
 }
 
-export type { AgentMessageExtra, AgentMessageSenderExtra, SenderScope } from './sender-extra.js';
+export type { AgentMessageExtra } from './user-message-presentation.js';
 
 export function serializeAgentMessage(
   message: AgentMessage,
@@ -104,13 +104,13 @@ export function parseAgentMessageRow(row: AgentMessageRow): AgentMessage | null 
   return parsed;
 }
 
-/** 加载 LLM 上下文：按需从 `extra` 拼接 sender 前缀 */
+/** 加载 LLM 上下文：从 actor 与引用上下文渲染模型输入。 */
 export function agentMessageRowToLlm(row: AgentMessageRow): AgentMessage | null {
   const parsed = parseAgentMessageRow(row);
   if (!parsed) return null;
   if (parsed.role !== 'user') return parsed;
   const extra = parseAgentMessageExtra(row.extra);
-  if (extra?.sender || extra?.quote || (parsed as UserMessage).actor) {
+  if (extra?.quote || (parsed as UserMessage).actor) {
     return renderUserMessageForLlm(parsed as UserMessage, extra);
   }
   return parsed;

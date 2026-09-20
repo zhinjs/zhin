@@ -14,14 +14,14 @@ In the Plugin Runtime, plugins consume Host capabilities by token: `context.use(
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `databaseHostToken` (`zhin.js`) | `PluginDatabaseHost` (tables isolated per owner) | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`; `select()` requires explicit column names (`'*'` rejected) |
+| `databaseHostToken` (`zhin.js`) | `PluginDatabaseHost` (tables isolated for every owner, including root) | `define(name, def)` / `models.get(name)` → `select / insert / update / delete / count`; `select()` requires explicit column names (`'*'` rejected) |
 | `databaseRootHostToken` (`zhin.js`, root only) | `DatabaseHost` | Process-wide host for Console administration and custom composition roots |
 
 ## Scheduling
 
 | Token | Yields | Key methods |
 | --- | --- | --- |
-| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated per owner) | Register/cancel cron jobs; combine with `outboundMessageToken` for scheduled pushes |
+| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated for every owner, including root) | Register/cancel cron jobs; combine with `outboundMessageToken` for scheduled pushes |
 | `scheduleRootHostToken` (`zhin.js`, root only) | `ScheduleHost` | Process-wide schedule host |
 
 ## Agent

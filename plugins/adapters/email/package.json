@@ -21,7 +21,8 @@
     "@zhin.js/logger": "workspace:*",
     "imap": "^0.8.19",
     "mailparser": "^3.9.14",
-    "nodemailer": "^10.0.10"
+    "nodemailer": "^10.0.10",
+    "@zhin.js/skill": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -69,7 +70,7 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
+    "skills",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -96,6 +97,10 @@
     "features": [
       {
         "package": "@zhin.js/adapter",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

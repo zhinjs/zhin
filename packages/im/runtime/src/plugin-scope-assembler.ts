@@ -6,16 +6,14 @@ import {
   capabilityId,
   createGenerationAdmissionGate,
   createToken,
-  createPluginDatabaseHost,
-  createPluginScheduleHost,
+  PluginDatabaseHost,
+  PluginScheduleHost,
   databaseHostToken,
   databaseRootHostToken,
   featureId,
   rootPluginId,
   scheduleHostToken,
   scheduleRootHostToken,
-  unwrapPluginDatabaseHost,
-  unwrapPluginScheduleHost,
   type CapabilityId,
   type ConfigView,
   type Dispose,
@@ -46,7 +44,7 @@ import {
   primaryConfigToken,
   type PrimaryConfig,
 } from './primary-config.js';
-import type { RuntimeConfigDocument } from './config-composer.js';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
 export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 
@@ -306,32 +304,24 @@ export class PluginScopeAssembler {
     return Object.freeze([...this.#setupCapabilities.values()]);
   }
 
-  /**
-   * Root resources are process-owned. A Plugin Scope receives only a facade
-   * that translates logical table/job names to its owner namespace. The root
-   * owner deliberately keeps bare names for backward-compatible projects.
-   */
+  /** Root resources are process-owned; every Plugin Scope receives an owner-bound facade. */
   private installOwnerScopedHosts(scope: Scope, owner: PluginId): void {
     const database = scope.has(databaseRootHostToken)
       ? scope.use(databaseRootHostToken)
-      : scope.has(databaseHostToken)
-        ? unwrapPluginDatabaseHost(scope.use(databaseHostToken))
-        : undefined;
+      : undefined;
     if (database) {
       scope.provide(
         databaseHostToken,
-        createPluginDatabaseHost(owner, database),
+        new PluginDatabaseHost(owner, database),
       );
     }
     const schedule = scope.has(scheduleRootHostToken)
       ? scope.use(scheduleRootHostToken)
-      : scope.has(scheduleHostToken)
-        ? unwrapPluginScheduleHost(scope.use(scheduleHostToken))
-        : undefined;
+      : undefined;
     if (schedule) {
       scope.provide(
         scheduleHostToken,
-        createPluginScheduleHost(owner, schedule),
+        new PluginScheduleHost(owner, schedule),
       );
     }
   }

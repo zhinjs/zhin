@@ -119,7 +119,8 @@ export class CommandIndex {
     };
 
     for (const slot of slots) {
-      const primarySegments = runtimeSegments(slot.owner, slot.localName);
+      const namespace = commandNamespace(this.snapshot, slot.owner);
+      const primarySegments = [...namespace, ...runtimeSegments(slot.localName)];
       const parameter = slot.definition.$parameter;
       assertParameterSegment(primarySegments, parameter, slot.source);
       const name = displayName(primarySegments, parameter);
@@ -158,7 +159,10 @@ export class CommandIndex {
 
       if (alias) {
         for (const entry of alias) {
-          const aliasSegments = aliasRuntimeSegments(slot.owner, entry, primarySegments);
+          const aliasSegments = [...namespace, ...aliasRuntimeSegments(
+            entry,
+            primarySegments.slice(namespace.length),
+          )];
           assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
           claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
           routes.push({
@@ -172,7 +176,7 @@ export class CommandIndex {
 
       if (slot.definition.shortcut) {
         for (const [rawTrigger, prefill] of Object.entries(slot.definition.shortcut)) {
-          const trigger = rawTrigger.trim();
+          const trigger = [...namespace, ...splitCommand(rawTrigger)].join(' ');
           claim(trigger, `${slot.source} shortcut ${JSON.stringify(trigger)}`);
           shortcuts.set(trigger, {
             record,
@@ -456,31 +460,43 @@ export function isCommandIndex(value: unknown): value is CommandIndex {
 }
 
 /**
- * 命令运行时名 = 插件树路径段（instanceKey，去掉 root）以 `.` 连接后，再与命令
- * 文件路径首段以 `.` 连接；命令内部嵌套段仍为空格分隔。Root 插件无前缀。
- * 例：`root/qq` + `endpoint/list` → `qq.endpoint list`；
- * `root/b/a` + `foo` → `b.a.foo`；root + `foo` → `foo`。
+ * 用户路由来自命令的本地能力路径；只有插件配置显式声明 commandNamespace
+ * 时才在其前面增加命名空间。owner 始终只属于 CapabilityId。
  */
-function runtimeSegments(owner: string, localName: string): string[] {
-  const localSegments = localName.split('/');
-  if (owner === 'root') return localSegments;
-  const prefix = owner.slice('root/'.length).split('/').join('.');
-  return [`${prefix}.${localSegments[0]}`, ...localSegments.slice(1)];
+function runtimeSegments(localName: string): string[] {
+  return localName.split('/');
+}
+
+function commandNamespace(snapshot: RuntimeSnapshot, owner: PluginId): readonly string[] {
+  const config = snapshot.config.get(owner) as Readonly<Record<string, unknown>> | undefined;
+  const value = config?.commandNamespace;
+  if (value === undefined || value === '') return Object.freeze([]);
+  if (typeof value !== 'string') {
+    throw new TypeError(`Invalid commandNamespace for ${owner}: expected a string`);
+  }
+  const segments = splitCommand(value);
+  if (segments.length === 0 || segments.some((segment) => !isCommandNamespaceSegment(segment))) {
+    throw new TypeError(
+      `Invalid commandNamespace for ${owner}: expected space-separated command segments`,
+    );
+  }
+  return Object.freeze([...segments]);
+}
+
+function isCommandNamespaceSegment(value: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{N}_-]*$/u.test(value);
 }
 
 /**
- * 用 alias 词序列替换全部本地静态段，再按 owner 规则重挂前缀；动态段保留。
+ * 用 alias 词序列替换全部本地静态段；动态段保留。
  */
 function aliasRuntimeSegments(
-  owner: string,
   alias: string,
   primarySegments: readonly string[],
 ): string[] {
   const aliasTokens = alias.trim().split(/\s+/u).filter(Boolean);
   const dynamicTail = primarySegments.filter((segment) => segment.startsWith('$'));
-  if (owner === 'root') return [...aliasTokens, ...dynamicTail];
-  const prefix = owner.slice('root/'.length).split('/').join('.');
-  return [`${prefix}.${aliasTokens[0]}`, ...aliasTokens.slice(1), ...dynamicTail];
+  return [...aliasTokens, ...dynamicTail];
 }
 
 function occupancyKey(
@@ -578,11 +594,10 @@ function assertParameterSegment(
   const dynamic = dynamicSegments[0] ?? (parameter ? `$${parameter.name}` : '$?');
   throw new Error(
     `Invalid Command path for ${source}: the dynamic segment "${dynamic}" must be the only dynamic `
-    + `segment and come after a static segment (child plugin commands are prefixed by the plugin `
-    + `path, so a dynamic first segment is never reachable). `
+    + `segment and be the final path segment. `
     + (parameter
-      ? `Hint: move the file under a static directory, e.g. "commands/add/[${parameter.name}:${parameter.type}].ts".`
-      : 'Hint: put the file under a static directory, e.g. "commands/add/<file>.ts".'),
+      ? `Hint: keep only one dynamic entry, e.g. "commands/add/[${parameter.name}]/index.ts".`
+      : 'Hint: keep only one dynamic entry at the end of the command path.'),
   );
 }
 

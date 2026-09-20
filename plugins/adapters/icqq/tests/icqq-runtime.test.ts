@@ -9,13 +9,14 @@ import type { EndpointEventGateway } from 'zhin.js/adapter';
 
 vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 
-import defineIcqqAdapter from '../adapters/icqq.js';
+import defineIcqqAdapter from '../adapters/icqq/index.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import {
   formatOutboundBody,
   icqqInboundConversation,
   icqqOutboundTarget,
   resolveIcqqConfig,
+  type IcqqEndpointConfig,
 } from '../src/protocol.js';
 import { defineHandler } from 'zhin.js/handler';
 import {
@@ -60,6 +61,7 @@ function createEndpoint(overrides: {
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe('icqq protocol helpers', () => {
@@ -70,16 +72,21 @@ describe('icqq protocol helpers', () => {
     expect(resolved.context).toBe('icqq');
   });
 
-  it('prefers the direct password and keeps transitional endpoint fallback', () => {
-    expect(resolveIcqqConfig({
+  it('preserves the expanded endpoint credentials', () => {
+    const config: IcqqEndpointConfig = {
       id: '12345',
       password: 'direct-secret',
-      endpoints: [{ context: 'icqq', id: '54321', password: 'legacy-secret' }],
-    }).password).toBe('direct-secret');
+    };
+    expect(resolveIcqqConfig(config).password).toBe('direct-secret');
+  });
 
-    expect(resolveIcqqConfig({
-      endpoints: [{ context: 'icqq', id: '12345', password: 'legacy-secret' }],
-    }).password).toBe('legacy-secret');
+  it('does not infer endpoint identity from process state or nested configuration', () => {
+    vi.stubEnv('ICQQ_ACCOUNT', '12345');
+    const resolve = resolveIcqqConfig as (config: unknown) => unknown;
+    expect(() => resolve({})).toThrow(/numeric id/);
+    expect(() => resolve({
+      endpoints: [{ context: 'icqq', id: '12345' }],
+    })).toThrow(/numeric id/);
   });
 
   it('rejects non-numeric id', () => {

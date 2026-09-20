@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7e3ec215bf2fd57a -->
+<!-- sync-adapter-docs:sha256=ec72824c9641e88c -->
 
 # @zhin.js/adapter-telegram
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-telegram
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/telegram.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/telegram/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -74,8 +74,8 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `TELEGRAM_TOKEN` / `TELEGRAM_BOT_TOKEN` | Bot Token |
-| `TELEGRAM_BOT_NAME` | 可选，默认 endpoint 名 |
+| `TELEGRAM_TOKEN` | 示例中由 YAML `${TELEGRAM_TOKEN}` 引用的 Bot Token；变量名可自行定义 |
+| `TELEGRAM_WEBHOOK_SECRET` | 示例中由 YAML `${TELEGRAM_WEBHOOK_SECRET}` 引用的 webhook secret；变量名可自行定义 |
 
 ## Webhook
 
@@ -127,8 +127,8 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 
 | Kind | Path |
 |------|------|
-| Platform tools (10) | `agent/tools/`（invite / pin / admins / sticker / poll 等） |
-| Skill doc | `agent/skills/telegram.md` |
+| Platform tools (10) | `tools/`（invite / pin / admins / sticker / poll 等） |
+| Skill doc | `agents/telegram/skills/telegram-chat-admin/SKILL.md`, `agents/telegram/skills/telegram-messages/SKILL.md` |
 
 ## 故障排查
 

@@ -1,0 +1,21 @@
+{
+  "name": "executor",
+  "version": "1.0.0",
+  "description": "五角色执行，按方案落地改动",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "execute",
+      "执行",
+      "实现"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "role": "executor",
+  "context_mode": "fresh",
+  "max_iterations": 10
+}

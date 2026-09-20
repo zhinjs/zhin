@@ -6,7 +6,6 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
-import { readTurnSandboxAuthority } from '../../src/security/turn-sandbox-authority.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
@@ -38,6 +37,41 @@ describe('TurnToolRuntime', () => {
     });
     expect(execute).not.toHaveBeenCalled();
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
+  });
+
+  it('lets canonical on-risk reads execute after their dedicated policy passes', async () => {
+    const execute = vi.fn(async () => 'contents');
+    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'on-risk', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'safe-read'))
+      .resolves.toMatchObject({ status: 'completed', output: 'contents' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unknown on-risk plugin tools behind approval', async () => {
+    const execute = vi.fn(async () => 'unsafe');
+    const { turn } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'on-risk', 'plugin_action')]);
+
+    await expect(runtime.execute('plugin_action', {}, 'unknown-risk')).resolves.toMatchObject({
+      status: 'denied', policy: 'approval',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('marks once approvals as session grants scoped to the Tool', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({ approval: { available: true, requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'once', 'plugin_action')]);
+
+    await runtime.execute('plugin_action', { value: 1 }, 'once-approval');
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: 'plugin_action',
+      scopeKey: 'plugin_action',
+      remember: 'session',
+    }));
   });
 
   it('denies canonical file writes for a non-owner before execution', async () => {
@@ -276,7 +310,7 @@ describe('TurnToolRuntime', () => {
     );
   });
 
-  it('injects a fail-closed isolation contract for workspace shell execution', async () => {
+  it('passes the fail-closed isolation contract through the typed execution context', async () => {
     const execute = vi.fn(async () => 'ok');
     const workspace = join(process.cwd(), 'packages');
     const { turn } = fixture({
@@ -285,7 +319,7 @@ describe('TurnToolRuntime', () => {
       shell: {
         security: 'allowlist',
         execPreset: 'development',
-        approvalMode: 'deny',
+        approvalMode: 'auto',
         isolation: 'required',
       },
     });
@@ -295,12 +329,16 @@ describe('TurnToolRuntime', () => {
       .resolves.toMatchObject({ status: 'completed' });
     expect(execute).toHaveBeenCalledWith(expect.objectContaining({ cwd: workspace }), expect.any(Object));
     const authorizedInput = execute.mock.calls[0]?.[0];
-    expect(readTurnSandboxAuthority(authorizedInput)).toEqual({
-      workingDirectory: workspace,
-      access: 'workspace-write',
-      networkAccess: false,
+    const executionContext = execute.mock.calls[0]?.[1];
+    expect(executionContext?.policy).toMatchObject({
+      filesystem: {
+        workingDirectory: workspace,
+        access: 'workspace-write',
+      },
+      network: { enabled: false },
+      shell: { isolation: 'required' },
     });
-    expect(JSON.stringify(authorizedInput)).not.toContain('workspace-write');
+    expect(authorizedInput).toEqual({ command: 'node -e "console.log(1)"', cwd: workspace });
   });
 
   it('routes per-turn shell ask decisions through ApprovalPort', async () => {
@@ -474,7 +512,7 @@ function fixture(options: {
 
 function tool(
   execute: ToolCapability['execute'],
-  approval: ToolCapability['approval'],
+  requiresApproval: ToolCapability['requiresApproval'],
   name = 'danger',
 ): ToolCapability {
   return {
@@ -482,7 +520,7 @@ function tool(
     name,
     qualifiedName: name,
     description: 'Dangerous tool',
-    approval,
+    requiresApproval,
     source: '/tools/danger.ts',
     execute,
   };

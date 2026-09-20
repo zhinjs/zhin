@@ -7,18 +7,19 @@ export {
   INBOX_RPC,
   SIDE_EVENT_PUSH,
   SIDE_EVENT_RPC,
-  normalizeConsolePushMessage,
-  normalizeConsolePushType,
   parseConsoleInboxEvent,
   type ConsoleInboxEvent,
   type ConsoleInboxEventKind,
+  type ConsoleInboxMessageRow,
   type ConsoleInboxNoticeRow,
   type ConsoleInboxNoticesQuery,
   type ConsoleInboxNoticesResult,
+  type ConsoleInboxRequestRow,
   type ConsoleEndpointPhase,
   type ConsoleEndpointSummary,
   type ConsoleEventActor,
   type ConsoleEventChannel,
+  type ConsoleEventParent,
   type EndpointManagementCapability,
   parseConsoleSseFrame,
   type ConsoleEventDelivery,
@@ -64,22 +65,32 @@ export {
 // Segment IM visibility (inbox vs agent panel)
 export { segmentsForImDelivery, segmentsForAgentPanel } from "./segments.js";
 
-// Console app singleton (pagemanager / registry style)
+// Owner-scoped Console client and application registry
 export {
-  app,
-  type ConsoleApp,
+  ConsoleApp,
+  createConsoleApp,
   type AddRouteInput,
   type AddToolInput,
   type ConsoleRouteRecord,
   type RouteTreeNode,
   type ToolTreeNode,
+  type SidebarRenderer,
+  type ToolbarRenderer,
   type ConsoleRouteRenderer,
-} from "./app";
+} from "./app.js";
+export {
+  ConsoleClient,
+  createConsoleClient,
+  type ConsoleClientOptions,
+} from './console-client.js';
+export {
+  ConsoleClientProvider,
+  useConsoleClient,
+  type ConsoleClientProviderProps,
+} from './console-client-context.js';
 
-// WebSocket (business data only)
-export * from "./websocket";
-
-export { configureConsole, getRuntimeEnv } from "./runtime/index.js";
+// Owner-scoped REST/SSE transport
+export * from "./transport/index.js";
 
 export {
   createRegistryStore,
@@ -94,17 +105,14 @@ export {
   getApiBase,
   getToken,
   resolveApiUrl,
-  resolveWebSocketUrl,
 } from "./console-utils/remoteApi.js";
 
 export {
   fetchConsoleEntries,
-  createPluginRegisterHostApi,
   getRegisterFn,
   loadConsoleEntries,
   registerConsolePluginsFromEntries,
   resolveEntryRegister,
-  type CreatePluginRegisterHostApiOptions,
   type FetchConsoleEntriesOptions,
   type LoadConsoleEntriesOptions,
 } from "./bootstrap/loadConsoleEntries.js";

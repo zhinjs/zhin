@@ -6,6 +6,15 @@ export interface ActiveGameSession {
 export interface GameSessionProvider {
   readonly gameId: string;
   getActiveForUser(channelKey: string, userId: string): Promise<ActiveGameSession | null>;
+  bindAvailability(availability: GameSessionAvailability): void;
+}
+
+export interface GameSessionAvailability {
+  assertAvailable(
+    requestedGameId: string,
+    channelKey: string,
+    userIds: readonly string[],
+  ): Promise<void>;
 }
 
 export class GameSessionConflictError extends Error {
@@ -24,23 +33,13 @@ export class GameSessionConflictError extends Error {
 }
 
 /**
- * Cross-game active-session index. Registrations form per-game stacks so HMR
- * can install a new generation before disposing the old one without a gap.
+ * Immutable cross-game active-session index for one projected generation.
  */
-export class GameSessionCoordinator {
-  readonly #providers = new Map<string, GameSessionProvider[]>();
+export class GameSessionCoordinator implements GameSessionAvailability {
+  readonly #providers: readonly GameSessionProvider[];
 
-  register(provider: GameSessionProvider): () => void {
-    const providers = this.#providers.get(provider.gameId) ?? [];
-    providers.push(provider);
-    this.#providers.set(provider.gameId, providers);
-    return () => {
-      const current = this.#providers.get(provider.gameId);
-      if (!current) return;
-      const index = current.lastIndexOf(provider);
-      if (index >= 0) current.splice(index, 1);
-      if (current.length === 0) this.#providers.delete(provider.gameId);
-    };
+  constructor(providers: readonly GameSessionProvider[]) {
+    this.#providers = Object.freeze([...providers]);
   }
 
   async assertAvailable(
@@ -48,16 +47,14 @@ export class GameSessionCoordinator {
     channelKey: string,
     userIds: readonly string[],
   ): Promise<void> {
-    for (const [gameId, registrations] of this.#providers) {
-      if (gameId === requestedGameId) continue;
-      const provider = registrations[registrations.length - 1];
-      if (!provider) continue;
+    for (const provider of this.#providers) {
+      if (provider.gameId === requestedGameId) continue;
       for (const userId of new Set(userIds.filter(Boolean))) {
         const active = await provider.getActiveForUser(channelKey, userId);
         if (active) {
           throw new GameSessionConflictError(
             requestedGameId,
-            gameId,
+            provider.gameId,
             active.id,
             userId,
           );
@@ -66,9 +63,4 @@ export class GameSessionCoordinator {
     }
   }
 
-  clear(): void {
-    this.#providers.clear();
-  }
 }
-
-export const gameSessionCoordinator = new GameSessionCoordinator();

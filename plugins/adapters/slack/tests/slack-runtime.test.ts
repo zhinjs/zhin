@@ -119,6 +119,7 @@ afterEach(async () => {
 describe('slack protocol helpers', () => {
   it('resolves socket mode by default', () => {
     const resolved = resolveSlackConfig({
+      id: 'slack-bot',
       token: 'xoxb-a',
       appToken: 'xapp-a',
     });
@@ -129,6 +130,7 @@ describe('slack protocol helpers', () => {
 
   it('selects http mode when socketMode is false', () => {
     const resolved = resolveSlackConfig({
+      id: 'slack-bot',
       token: 'xoxb-a',
       signingSecret: 'sec',
       socketMode: false,
@@ -136,12 +138,25 @@ describe('slack protocol helpers', () => {
     expect(resolved.mode).toBe('http');
   });
 
+  it('requires expanded endpoint identity and bot token', () => {
+    expect(() => resolveSlackConfig({
+      id: ' ',
+      token: 'xoxb-a',
+      appToken: 'xapp-a',
+    })).toThrow('Slack endpoint requires a non-empty id');
+    expect(() => resolveSlackConfig({
+      id: 'slack-bot',
+      token: ' ',
+      appToken: 'xapp-a',
+    })).toThrow('Slack endpoint requires a non-empty token');
+  });
+
   it('requires appToken for socket mode', () => {
-    expect(() => resolveSlackConfig({ token: 'xoxb-a', socketMode: true })).toThrow(/appToken/);
+    expect(() => resolveSlackConfig({ id: 'slack-bot', token: 'xoxb-a', socketMode: true })).toThrow(/appToken/);
   });
 
   it('requires signingSecret for http mode', () => {
-    expect(() => resolveSlackConfig({ token: 'xoxb-a', socketMode: false })).toThrow(/signingSecret/);
+    expect(() => resolveSlackConfig({ id: 'slack-bot', token: 'xoxb-a', socketMode: false })).toThrow(/signingSecret/);
   });
 
   it('formats inbound / interaction / slash content', () => {

@@ -7,11 +7,12 @@ import {
 } from '../../src/turn/inbound-turn-queue.js';
 import { normalizeInboundQueueConfig } from '../../src/turn/inbound-queue-config.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
-import { activityFeedbackAiBus } from '../../src/activity-feedback/ai-bus.js';
+import { AgentEventBus } from '../../src/event/ai-event-bus.js';
 import { ZhinAgentEventEmitter } from '../../src/event/event-emitter.js';
 import { createInboundTurnQueue } from '../../src/turn/inbound-queue-runtime.js';
 
 describe('InboundTurnQueue', () => {
+  const events = new AgentEventBus();
   const fifoConfig = normalizeInboundQueueConfig({ groupMode: 'fifo' });
   let emitter: InboundQueueActivityEmitter & {
     starts: Array<{ sessionKey: string; messageId?: string }>;
@@ -19,7 +20,7 @@ describe('InboundTurnQueue', () => {
   };
 
   beforeEach(() => {
-    activityFeedbackAiBus.clear();
+    events.clear();
     emitter = {
       starts: [],
       clears: [],
@@ -35,10 +36,10 @@ describe('InboundTurnQueue', () => {
   it('marks every message queued behind a pending turn as activity-feedback eligible', async () => {
     const runtime = createInboundTurnQueue({
       inboundQueue: { groupMode: 'fifo', coalesceWindowMs: 0 },
-    } as never, new ZhinAgentEventEmitter());
+    } as never, new ZhinAgentEventEmitter(events));
     const sessionKey = 'sandbox:b1:group:g1';
     const starts: Array<{ messageId?: string; eligible?: unknown }> = [];
-    activityFeedbackAiBus.on('ai.activity.queued.start', (payload) => {
+    events.on('ai.activity.queued.start', (payload) => {
       starts.push({
         messageId: payload.messageId,
         eligible: payload.hookContext?.activityFeedbackEligible,

@@ -40,10 +40,11 @@
     },
     "endpoints": {
       "type": "array",
+      "minItems": 1,
       "description": "多账号：一个插件实例挂多个 endpoint。每项与顶层字段同构（id 必填，其余覆盖顶层）",
       "items": {
         "type": "object",
-        "additionalProperties": true,
+        "additionalProperties": false,
         "properties": {
           "master": {
             "type": [
@@ -63,6 +64,13 @@
             },
             "description": "本 endpoint 的 trusted 列表"
           },
+          "connection": {
+            "type": "string",
+            "enum": [
+              "ws",
+              "wss"
+            ]
+          },
           "url": {
             "type": "string",
             "description": "OneBot implementation WebSocket URL (required for connection: ws)"
@@ -74,6 +82,15 @@
           "access_token": {
             "type": "string",
             "description": "OneBot access token"
+          },
+          "reconnect_interval": {
+            "type": "number"
+          },
+          "heartbeat_interval": {
+            "type": "number"
+          },
+          "commandPrefix": {
+            "type": "string"
           },
           "id": {
             "type": "string",

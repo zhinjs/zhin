@@ -26,24 +26,25 @@ describe('Component Feature', () => {
     expect(() => parseComponentDefinition({ render() {} })).toThrow('defineComponent');
   });
 
-  it('discovers nested TS and TSX component modules', async () => {
+  it('discovers named TS and TSX component modules', async () => {
     const definition = defineComponent({ render: () => 'ok' });
     const host = new MemoryDiscoveryHost({
-      '/project/components': [{ name: 'forms', kind: 'directory' }],
-      '/project/components/forms': [
-        { name: 'input.tsx', kind: 'file' },
-        { name: 'label.ts', kind: 'file' },
+      '/project/components': [
+        { name: 'input', kind: 'directory' },
+        { name: 'label', kind: 'directory' },
       ],
+      '/project/components/input': [{ name: 'index.tsx', kind: 'file' }],
+      '/project/components/label': [{ name: 'index.ts', kind: 'file' }],
     }, new Map([
-      ['/project/components/forms/input.tsx', { default: definition }],
-      ['/project/components/forms/label.ts', { default: definition }],
+      ['/project/components/input/index.tsx', { default: definition }],
+      ['/project/components/label/index.ts', { default: definition }],
     ]));
 
     const slots = await new FeatureDiscovery(host).discover(componentFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
 
-    expect(slots.map((slot) => slot.localName)).toEqual(['forms/input', 'forms/label']);
+    expect(slots.map((slot) => slot.localName)).toEqual(['input', 'label']);
   });
 
   it('resolves exact owner overrides before inherited ancestor Components', async () => {
@@ -80,7 +81,7 @@ function componentSlot(
     owner,
     feature: componentFeatureId,
     localName,
-    source: `/components/${localName}.tsx`,
+    source: `/components/${localName}/index.tsx`,
     definition: defineComponent({ render: (_props, context) => render(context) }),
   });
 }

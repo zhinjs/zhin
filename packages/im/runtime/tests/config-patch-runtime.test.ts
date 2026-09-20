@@ -4,19 +4,19 @@ import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   childPluginId,
+  ConfigDocumentDivergenceError,
   definePlugin,
   rootPluginId,
-} from '@zhin.js/plugin-runtime';
-import {
-  ConfigDocumentDivergenceError,
-  ConfigValidationError,
-  RootRuntime,
   type ConfigDocumentPort,
   type ConfigDocumentSnapshot,
   type ConfigPatch,
-  type ModuleRuntime,
   type PreparedConfigDocument,
   type RuntimeConfigDocument,
+} from '@zhin.js/plugin-runtime';
+import {
+  ConfigValidationError,
+  RootRuntime,
+  type ModuleRuntime,
 } from '../src/index.js';
 
 const temporary: string[] = [];

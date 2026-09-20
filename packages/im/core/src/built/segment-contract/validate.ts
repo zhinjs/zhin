@@ -1,6 +1,8 @@
 import { Schema } from '@zhin.js/schema';
 import type { MediaRef, Segment } from './types.js';
 
+export { isMediaRef } from '@zhin.js/im-contract';
+
 const platformSchema = Schema.dict(Schema.any());
 
 const mediaKindSchema = Schema.union([
@@ -182,10 +184,6 @@ export const canonicalSegmentSchema = Schema.discriminatedUnion('type', {
 });
 
 export const segmentArraySchema = Schema.list(canonicalSegmentSchema);
-
-export function isMediaRef(value: unknown): value is MediaRef {
-  return mediaRefSchema.safeParse(value).success;
-}
 
 /** 严格 canonical 段校验（@zhin.js/schema validate-only） */
 export function isStrictCanonicalSegment(value: unknown): value is Segment {

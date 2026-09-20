@@ -1,6 +1,6 @@
 # @zhin.js/agent
 
-Zhin AI Agent 组合层：在 `@zhin.js/core` 的类型与 Provider 之上，提供会话管理、Agent 执行循环、ZhinAgent 与框架挂载（init）。
+Zhin AI Agent 组合层：根入口提供 Agent 创作与领域 API；`@zhin.js/agent/runtime` 提供 CLI composition root 使用的 Host 装配和 generation-owned 执行机制。
 
 领域词汇见 [CONTEXT.md](./CONTEXT.md)。用户向文档：[AI 模块](https://zhin.js.org/advanced/ai)、[消息如何流转](../../docs/essentials/message-flow.md)。
 
@@ -39,7 +39,12 @@ Tool/MCP 执行 handle 只在 turn lease 内有效，防止访问已 retire 的 
 Turn engine 也只从该 lease 的 snapshot 解析；缺失时 fail-closed，不回退到进程全局
 runner 或其他 generation。这是迁移完成后的唯一权威契约，不能用缩减执行器替代。
 
-`ask_user` 也是 generation-owned ToolFeature：工具只拿当前 Turn 的 `QuestionPort`，
+`ZhinAgent` 的 Host 装配函数 `composeZhinAgentRuntime` 属于 runtime 内部面，统一从
+`@zhin.js/agent/runtime` 导入；它返回显式的 `host` 契约，composition root 不再通过
+`asPrivate` 取得内部状态。根入口也不再导出 classic `ToolRuntime`、builtin policy resolver、
+数据库激活或运行时内省函数，避免插件作者依赖生产 `TurnToolRuntime` 之外的第二套执行权威。
+
+`ask_user` 也是 generation-owned Tool capability：工具只拿当前 Turn 的 `QuestionPort`，
 Root-owned `InteractionRouter` 用 canonical session + authenticated subject 匹配后续回复。
 IM adapter 在 middleware/command/Agent fallback 前 claim 回复；Router 不保存 `Message`、
 Adapter 或过期回复句柄。HTTP/A2A 等入口若要支持交互，必须显式提供自己的 QuestionPort；
@@ -92,7 +97,7 @@ turn 会跨代执行。
 - 🤖 **agentLoop 统一路径**：ZhinAgent、Subagent、Deferred Worker、AIService 均经 `agentLoop`（legacy `Agent.run` 仅保留在 `@zhin.js/ai` 供单测）
 - 📝 **会话持久化**：`AgentSessionStore` + `ContextRepository`；IM 事实由 `ConversationEventStore` 独占
 - 🧠 **ZhinAgent**：与 Zhin 消息流集成的智能体（SOUL/TOOLS/AGENTS、工具收集、执行策略）
-- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 `getLlmTransportModel()` 校验
+- 🔍 **模型自动发现**：`ModelRegistry` 调用 `listModels()`；结果写入 `provider.models` 并供 owner-scoped `LlmApiRuntime` 校验
 - 🔄 **模型自动降级**：首选模型失败时按 `resolveModelCandidates` 候选链 fallback（文本 / 多模态 / standalone 均走 agentLoop）
 - 🛡️ **6 层 Bash 安全**：`ExecPolicy` 纵深防御（危险黑名单、环境变量剥离、wrapper 剥离、复合命令拆分、只读放行、交互式审批）
 - 📂 **文件访问安全**：`FilePolicy` 路径检查、设备路径拦截、命令读写分类
@@ -104,7 +109,7 @@ turn 会跨代执行。
 - 🔧 **内置工具**：bash、read_file、write_file、ask_user、web_search、`inspect_conversation_reference` 等
 - 📐 **Compaction（ADR 0010）**：生产 `agentLoop` 接线 L1 micro + L2 LLM；IM `/compact`；yaml `ai.agent.compaction`
 - 🌳 **会话树**：`parent_id` + `active_leaf`；IM `/tree`、`/reset`；branch summarization；Console `GET/POST /api/agent/sessions/...`
-- 🪝 **Hook 系统**：`registerAIHook`、`triggerAIHook` 等
+- 🪝 **Hook 系统**：generation-owned `AgentResourceHub.hooks` 与 canonical stream events
 
 ## 依赖关系
 
@@ -129,21 +134,41 @@ packages/im/agent/src/
   session/       Session System — Agent session/history；IM conversation context 由 ConversationEventStore 游标提供
   event/         Event System — Agent turn 域事件（不替代 Kernel RunEvent）
   skill/         Skill System — SkillRegistry 统一出口
-  memory/        Memory System — Port → ContextRepository + compaction
+  memory/        Memory System — Port → ContextRepository + host-owned compaction runtime
   subagent/      Subagent System — SubagentSystem + ImResultSink
   context/       Context System — builder/injector 链、tail limit
   prompt/        系统提示词、assembly、workspace 模板
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
-  resource-hub/  Tool / Skill capability orchestration（不拥有 Workroom facts）
+  resource-hub/  Skill / SubAgent / MCP / Hook support resources
   workroom/      Workroom Kernel — versioned Journal + pure replay/decision
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
+Workroom Journal 以 `workroom/journal/index.ts` 作为唯一领域入口。入口只公开 Journal
+端口、错误、适配器和稳定的摘要函数；内部依赖保持单向：事件校验与受治理载荷引用位于
+底层，存储事件编解码和控制投影建立在其上，载荷发布/回放复用控制投影，Memory、File、
+Database 适配器只组合这些机制。新增存储实现应实现 `WorkroomJournal`，不应把数据库、
+文件系统或载荷治理逻辑重新放进领域入口。
+
+Workroom Projection Outbox 同样以 `workroom/projection-outbox/index.ts` 为唯一领域入口。
+Binding 和持久 Item 必须显式携带 `audience` 与绑定代际 `cursorId`；运行时不会猜测旧
+快照的默认 audience，也不会把旧 Run cursor 在线迁移到新绑定。Repository 只负责 CAS
+状态，Tracer 只把权威事实投影为草稿，Governance 物化可披露内容，Delivery Worker
+负责租约和外部投递，四者通过窄端口协作。
+
 普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；标准 Host 已装配 generation-owned Scheduler、Executor、Reviewer authority/view 与 Sponsor typed control，但不会发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作。Reviewer verdict 只能由独立 claimed Reviewer Assignment 的认证提交产生；Sponsor decision 只能经 Catalog/Profile 绑定的认证 typed control 进入，普通 discussion 不能改变状态。缺少受治理 Acceptance Projection source、可信 Risk Header、typed Check、Artifact/Effect facts 或 Context provider 时会形成可恢复的持久 blocker，而不是降级验收。
 
-`AgentResourceHub` 是 4.x 的能力资源入口，替代已删除的 `AgentOrchestrator` / `ResourceHub` 兼容名称。它只注册 Tool、Skill、SubAgent、MCP 与 Hook，不拥有 Workroom Run/Task/Assignment 状态；持久编排只能通过 Workroom Kernel 与专用 typed ports。
+`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 或 Workroom Run/Task/Assignment 状态。Tool 只通过 `tools/<name>/index.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排只能通过 Workroom Kernel 与专用 typed ports。
+
+Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
+`subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
+也不再写入经典 `Plugin.dispatch()` 链或依赖 Plugin AsyncLocalStorage 恢复隐式上下文。
+组合根为每个 generation 创建 `AgentEventBus`，以 `agentEventBusToken` 发布给同代服务并在
+retire 时清理；旧代在途事件不会进入候选代。`ZhinAgent`、ToolRuntime 与事件系统都不持有
+经典 `Plugin` 对象。请求者角色来自 IM 入站阶段写入的消息身份，Skill 来自 generation
+capability projection 与标准工作区目录，不再遍历可变 Plugin 树。
 
 Root Host 若要接入远程 Tool / Skill Provider，可在 generation Scope 提供
 `capabilitySeamToken`。`CapabilityIngress` 会把 `SeamIntegration` 投影进同一份 immutable
@@ -186,7 +211,6 @@ pnpm add @ai-sdk/openai   # 示例：按厂商安装 provider SDK
 import {
   ZhinAgent,
   AIService,
-  registerAIHook,
 } from 'zhin.js/agent'
 
 // 使用 ctx.ai (AIService)
@@ -221,17 +245,17 @@ useContext('ai', async (ai) => {
 | Agent | `ServiceAgent`、`CreateServiceAgentOptions`（`AIService.createAgent`）；legacy `Agent` / `createAgent` re-export 自 `@zhin.js/ai` |
 | Model harness | `MODEL_HARNESS_DEFAULTS`, `resolveModelHarness`, `mergeModelHarnessValues` |
 | 服务与会话 | `AIService`；会话/context 类型见 `@zhin.js/ai`（`ContextRepository`、`AgentSessionStore`） |
-| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt / builtin-tools 等 |
-| 安全策略 | `checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
+| ZhinAgent | `ZhinAgent`，以及 config / exec-policy / file-policy / `@zhin.js/agent/tool` / prompt 等 |
+| 安全策略 | `OwnerApprovalRuntime`；`checkExecPolicy`, `applyExecPolicyToTools`, `isDangerousCommand`, `stripEnvVarPrefix`, `stripSafeWrappers`, `splitCompoundCommand`, `extractCommandName`, `ExecPolicyResult`, `checkFileAccess`, `classifyBashCommand`, `isBlockedDevicePath` |
 | 提示词构建 | `buildRichSystemPrompt`, `buildEnhancedPersona`, `buildUserMessageWithHistory`, `buildContextHint` |
 | 上下文与记忆 | `ContextRepository`, `AgentSessionStore`（`@zhin.js/ai`）；`ConversationEventStore`（`@zhin.js/im-contract`） |
 | 跟进与定时 | `FollowUpManager`, `PersistentCronEngine`, `createCronTools`, `setCronManager`, `getCronManager` |
-| 压缩与 Bootstrap | `compactSession`, `estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
-| Hook | `registerAIHook`, `unregisterAIHook`, `triggerAIHook`, `createAIHookEvent` |
-| IM 内置工具工厂 | `createBuiltinTools`、`BuiltinBaseTool`；具体工具见 `src/builtin/*` |
+| 压缩与 Bootstrap | `compactSession`；`@zhin.js/agent/memory` 导出实例级 `AgentCompactionRuntime`；`estimateTokens`, `loadBootstrapFiles`, `loadSoulPersona`, `loadToolsGuide`, `loadAgentsMemory` |
+| Hook | `AgentResourceHub`、`HookRegistry`、`aiHookRuntimeBus` |
+| 内置工具 | generation-owned definitions 见 `src/plugin-runtime/native-*-tools.ts`；回合统一经 `ToolIndex` / `TurnToolRuntime` 执行 |
 | 输出与检测 | `parseOutput`, `renderToPlainText`, `renderToSatori`, `detectTone` |
 | 子代理 | `SubagentSystem` |
-| 能力资源 | `AgentResourceHub`、`ToolRegistry`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
+| 支持资源 | `AgentResourceHub`、`SkillRegistry`、`SubAgentRegistry`、`McpRegistry`、`HookRegistry` |
 | MCP 客户端 | `McpClientManager`、`McpClientConnection`、`mcpToolToAgentTool`、`ensureMcpConnections`（见下方「MCP」） |
 | 限流 | `RateLimiter` |
 | 存储抽象 | `StorageBackend`, `MemoryStorageBackend`, `DatabaseStorageBackend`, `createSwappableBackend` |
@@ -247,7 +271,7 @@ declare module '@zhin.js/core' {
   namespace Plugin {
     interface Contexts {
       ai: AIService              // 会话、Provider、ZhinAgent、runAgent 等
-      agent: AgentResourceHub    // 工具/技能/子代理/MCP 条目/Hook 注册表
+      agent: AgentResourceHub    // 技能/子代理/MCP 条目/Hook 注册表
     }
   }
 }
@@ -256,7 +280,7 @@ declare module '@zhin.js/core' {
 | Context | 用途 |
 |---------|------|
 | `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
-| `ctx.agent` | `AgentResourceHub` 能力注册：`ctx.agent.addTool(...)`、`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；内置注册走 `root.inject('agent')`，不承担 Workroom 状态编排 |
+| `ctx.agent` | `AgentResourceHub` 支持资源注册：`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；Tool 使用 `context.addTool()`，不承担 Workroom 状态编排 |
 
 主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
 
@@ -321,7 +345,6 @@ useContext('ai', async (ai) => {
     provider: 'openai',
     model: 'gpt-4o',
     systemPrompt: '你只负责代码审查与建议，不闲聊。',
-    useBuiltinTools: true,
   })
   const codeResult = await codeAgent.run('审查这段 TypeScript 的类型安全')
 
@@ -329,13 +352,14 @@ useContext('ai', async (ai) => {
     provider: 'ollama',
     model: 'qwen2.5',
     systemPrompt: '只做中英互译，不解释。',
-    useBuiltinTools: false,
-    collectExternalTools: false,
+    includeRegisteredTools: false,
   })
   const translated = await translateAgent.run('Hello world')
 })
 ```
 
+Standalone Agent 不隐式继承主 Agent 的 native Tool。能力必须通过 `tools` 显式传入，或先用
+`ai.registerTool()` 注册；`includeRegisteredTools: false` 可为单次 Agent 建立空白能力边界。
 适合：按场景/按接口使用不同「角色」的 Agent（代码、翻译、总结等），彼此独立。
 
 ### 3. 一次调用、单次任务（不持有 Agent 实例）
@@ -367,7 +391,7 @@ useContext('ai', async (ai) => {
 `AIService` 构造时：
 
 1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
-2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
+2. `AIService` 创建独立的 `LlmApiRuntime`：**未写 `models` 的 provider** 先使用空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
 3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
 
 `agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
@@ -394,7 +418,7 @@ ai:
 `AIService` 构造时：
 
 1. 按 `ai.providers.<别名>` 实例化 Provider（须配置 `sdk`，如 `openai` 或 `openai-compatible`）。
-2. `registerLlmApiFromProviders`：**未写 `models` 的 provider** 在 ApiRegistry 注册为空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
+2. `AIService` 创建独立的 `LlmApiRuntime`：**未写 `models` 的 provider** 先使用空白名单，由后台 `ModelRegistry.discover()` 填充 `provider.models`；**写了 `models`** 则用 yaml 白名单。
 3. `createZhinAgent` 启动时 `loadCache()` 先恢复上次发现结果，再异步刷新 `/v1/models`。
 
 `agents.<name>.model`（如 `mimo-v2.5-pro`）须在发现列表中，或在中转 API 的 `/v1/models` 响应里出现；无需为每个模型手写 yaml，除非要锁定白名单。
@@ -480,7 +504,6 @@ src/
 │   ├── index.ts                     # AgentResourceHub class
 │   ├── types.ts                     # ResourceScope, Skill, SubAgentDef, AIHook…
 │   ├── resource-registry.ts
-│   ├── tool-registry.ts
 │   ├── skill-registry.ts
 │   ├── subagent-registry.ts
 │   ├── mcp-registry.ts
@@ -498,8 +521,7 @@ src/
 ├── internal/                        # host 契约、asPrivate、turn-context、phase/prompt trace
 ├── discovery/                       # 文件化资源发现（tools / skills / agents）
 ├── security/                        # exec-policy、file-policy
-├── builtin/                         # IM 内置工具
-├── builtin-tools.ts                 # createBuiltinTools() 聚合
+├── builtin/                         # 尚未迁移的服务级 / turn meta 工具实现
 │
 ├── defaults/                        # ★ 各注册表的默认资源
 │   ├── skills.ts                    # 默认 common skills

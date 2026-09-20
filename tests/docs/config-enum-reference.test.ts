@@ -36,7 +36,7 @@ describe('source-owned configuration enums', () => {
     const safetyModes = stringLiterals(source, 'SandboxSafetyMode');
     const approvalModes = stringLiterals(source, 'SandboxApprovalMode');
     expect(safetyModes).toEqual(['read-only', 'workspace-write', 'danger-full-access']);
-    expect(approvalModes).toEqual(['ask', 'deny', 'allow']);
+    expect(approvalModes).toEqual(['ask', 'auto', 'bypass']);
 
     for (const relative of ['docs/console/index.md', 'docs/en/console/index.md']) {
       const page = fs.readFileSync(path.join(repoRoot, relative), 'utf8');

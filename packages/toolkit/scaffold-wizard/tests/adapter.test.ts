@@ -195,13 +195,13 @@ describe('collectAdapterPluginConfigs', () => {
       instances: [{
         package: '@zhin.js/adapter-sandbox',
         instanceKey: 'sandbox',
-        config: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
+        config: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
       }],
       envVars: {},
     });
 
     expect(plugins).toEqual({
-      sandbox: { endpoints: [{ context: 'sandbox', id: 'sandbox-bot', owner: 'sandbox-user' }] },
+      sandbox: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
     });
   });
 });

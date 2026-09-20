@@ -1,11 +1,7 @@
 /**
  * Console REST pages — logs / marketplace / introspection / agent sessions。
  *
- * 响应形状对齐 legacy `packages/host/api/src/rest/`：
- * - logs-rest-api.ts（SystemLog 模型）
- * - marketplace-rest-api.ts（plugins.json + npmmirror）
- * - introspection-rest-api.ts（分页内省列表）
- * - agent-sessions-rest-api.ts（ADR 0010 D3 session tree）
+ * 统一提供日志、市场、Runtime snapshot 内省和 Agent session tree 页面。
  *
  * 数据源不可用时降级：读操作返回空数组 + `note` 说明，session tree 返回 503；
  * 写操作要求 `ctx.fullScope && authScope === 'full'`，否则 403。
@@ -15,6 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
+import { MarketplaceRegistry } from './marketplace-registry.js';
 import type { AuthScope } from './token-registry.js';
 
 /** 与 basic/cli 接线方对齐的上下文约定。 */
@@ -48,7 +45,7 @@ export interface ConsoleRestCtx {
   ) => boolean | undefined | Promise<boolean | undefined>;
 }
 
-/** 内省数据门面 — 由 basic/cli 用 agent 包 collectIntrospection* 装配。 */
+/** 内省数据门面 — 由 composition root 从当前 Runtime snapshot 装配。 */
 export interface ConsoleAgentIntrospection {
   commands?(): readonly unknown[];
   middlewares?(): readonly unknown[];
@@ -135,7 +132,6 @@ const INTROSPECTION_PAGE_SIZES = {
 
 type IntrospectionKind = keyof typeof INTROSPECTION_PAGE_SIZES;
 
-let pluginsCache: { data: unknown[]; ts: number } | null = null;
 const PLUGINS_CACHE_TTL = 5 * 60 * 1000;
 
 /**
@@ -342,19 +338,11 @@ function registerMarketplaceRoutes(
   pluginRegistryUrl: string,
   npmRegistryUrl: string,
 ): void {
-  const fetchPluginRegistry = async (): Promise<unknown[]> => {
-    if (pluginsCache && Date.now() - pluginsCache.ts < PLUGINS_CACHE_TTL) {
-      return pluginsCache.data;
-    }
-    const resp = await fetchFn(pluginRegistryUrl, {
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!resp.ok) throw new Error(`plugins.json fetch failed: ${resp.status}`);
-    const json = (await resp.json()) as { plugins?: unknown[] };
-    const list = json.plugins || [];
-    pluginsCache = { data: list, ts: Date.now() };
-    return list;
-  };
+  const registry = new MarketplaceRegistry({
+    fetchFn,
+    url: pluginRegistryUrl,
+    ttlMs: PLUGINS_CACHE_TTL,
+  });
 
   route('GET', '/pub/marketplace/search', async (_request, response, url) => {
     const q = url.searchParams.get('q') ?? url.searchParams.get('keyword') ?? '';
@@ -368,7 +356,7 @@ function registerMarketplaceRoutes(
     const searchKeyword = q.trim().toLowerCase();
 
     try {
-      const allPlugins = (await fetchPluginRegistry()) as Array<Record<string, unknown>>;
+      const allPlugins = (await registry.list()) as readonly Record<string, unknown>[];
       let plugins = allPlugins.map((p) => ({
         name: p.name,
         displayName: p.displayName || '',
@@ -429,11 +417,11 @@ function registerMarketplaceRoutes(
     try {
       let cachedDownloads = { weekly: 0, monthly: 0 };
       try {
-        const registry = (await fetchPluginRegistry()) as Array<{
+        const registryPlugins = (await registry.list()) as readonly {
           name?: string;
           downloads?: unknown;
-        }>;
-        const cached = registry.find((p) => p.name === pkgName);
+        }[];
+        const cached = registryPlugins.find((p) => p.name === pkgName);
         if (cached?.downloads && typeof cached.downloads === 'object') {
           cachedDownloads = cached.downloads as { weekly: number; monthly: number };
         }
@@ -562,7 +550,7 @@ async function listInstalledPluginPackages(
 }
 
 // ---------------------------------------------------------------------------
-// introspection（legacy introspection-rest-api.ts；分页形状对齐 IntrospectionJsonResponse）
+// Runtime snapshot introspection
 // ---------------------------------------------------------------------------
 
 function registerIntrospectionRoutes(
@@ -1030,7 +1018,7 @@ function parseSessionAction(
 }
 
 // ---------------------------------------------------------------------------
-// 内部分页 / 过滤（语义对齐 agent 包 introspection-pagination.ts）
+// 内部分页 / 过滤
 // ---------------------------------------------------------------------------
 
 function paginateItems<T>(

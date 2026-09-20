@@ -3,7 +3,7 @@ import {
   createWorkroomAssignmentAuthorityGrant,
   type WorkroomAssignmentAuthorityGrant,
   type WorkroomCapabilityCeilingInput,
-} from '../plugin-runtime/workroom-assignment-authority-provider.js';
+} from './assignment-authority.js';
 import { digestWorkroomCatalogProjectBinding } from './catalog-definition.js';
 import type {
   AssignmentExecutionFactAnchor,
@@ -21,7 +21,7 @@ import {
   workroomRemoteAssignmentId,
   type WorkroomRemoteAssignmentClaimRequest,
 } from './remote-assignment-issuance.js';
-import type { WorkroomJournal } from './journal.js';
+import type { WorkroomJournal } from './journal/index.js';
 import { replayWorkroom } from './kernel-state.js';
 import type { ProjectProfileRegistry } from './profile-registry.js';
 import type { WorkroomCatalog } from './catalog.js';

@@ -1,8 +1,9 @@
 /**
- * AI Agent orchestration hub.
+ * AI Agent runtime and generation-owned support resources.
  *
- * Provides AgentResourceHub as the central registry for
- * tools, skills, subagents, mcps, and hooks.
+ * Agent Tools are owned by `@zhin.js/tool` and published through the
+ * generation ToolIndex. AgentResourceHub owns skills, subagents, and hooks;
+ * MCP connections are generation-owned by `@zhin.js/mcp-feature`.
  * @module @zhin.js/agent
  */
 
@@ -38,16 +39,13 @@ export type {
   WorkroomAgentMemberDefinition,
   WorkroomConversationBindingDefinition,
   WorkroomDefinition,
-  WorkroomAgentMemberConfig,
-  WorkroomConversationBindingConfig,
-  WorkroomDefinitionConfig,
 } from './workroom/catalog-definition.js';
 export {
   resolveWorkroomBotIdentity,
   type WorkroomBotIdentityInput,
   type ResolvedWorkroomBotIdentity,
 } from './routing/workroom-bot-identity.js';
-export { validateWorkroomDefinitions } from './config/validate-ai-config.js';
+export { validateWorkroomDefinitions } from './workroom/validate-catalog.js';
 export type {
   IAgentTurnProcessor,
   IAgentSessionManager,
@@ -113,12 +111,13 @@ export {
 } from './security/exec-policy.js';
 export {
   OWNER_APPROVE_ALWAYS_TOOL,
-  handleRuntimeOwnerApproveCommand,
-  getEndpointMaster,
-  hasOwnerApproveAlways,
-  addOwnerApproveAlways,
-  formatBashApproveList,
-} from './security/owner-approve-always-store.js';
+  OwnerApprovalRuntime,
+} from './security/owner-approval-runtime.js';
+export type {
+  OwnerApprovalAddress,
+  OwnerApprovalCommandContext,
+  ToolRequesterRole,
+} from './security/owner-approval-runtime.js';
 export {
   handleRuntimeManagementCommand,
 } from './init/runtime-management-commands.js';
@@ -160,16 +159,14 @@ export type {
 export {
   buildAgentsEnvelopeContext,
   collectAgentsInstructionChain,
-  clearAgentsInstructionCache,
 } from './context/agents-instruction.js';
 export type { AgentsInstructionEntry } from './context/agents-instruction.js';
 export {
   resolveWorkspacePrompt,
-  clearWorkspacePromptCache,
 } from './prompt/workspace-prompt.js';
 export type { WorkspacePromptRole } from './prompt/workspace-prompt.js';
 export { createUserProfileTool } from './tool/context-tools.js';
-export { createSpawnTaskTool } from './builtin/spawn-task-tool.js';
+export { createSpawnTaskTool } from './spawn/spawn-task-tool.js';
 export * from './interaction/index.js';
 
 export { UserProfileStore, AI_USER_PROFILE_MODEL } from './user-profile.js';
@@ -184,18 +181,14 @@ export type {
   ToolExecutionResult,
   SkillService,
   SkillServiceProvider,
-  SkillInvocationRequest,
-  SkillInvocationResult,
-  SeamIntegrationToken,
   CapabilitySeamToken,
   ProjectedSeamTool,
   ProjectedSeamSkill,
 } from './seam/index.js';
 export { SeamProviderRegistry, SeamIntegration } from './seam/index.js';
-export { seamIntegrationToken, capabilitySeamToken } from './seam/index.js';
+export { capabilitySeamToken } from './seam/index.js';
 export { BuiltinToolService } from './builtins/builtin-tool-service.js';
 export { SkillRegistryAsService } from './skill/skill-registry-as-service.js';
-export { ToolRegistryAsService } from './tool/tool-registry-as-service.js';
 
 export { SubagentSystem } from './subagent/index.js';
 export { SubagentRuntime } from './subagent/subagent-runtime.js';
@@ -205,105 +198,11 @@ export type {
 } from './subagent/index.js';
 export { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from './reserved-tools.js';
 
-export { BuiltinBaseTool } from './builtin/builtin-base-tool.js';
 export {
-  ReadFileBuiltinTool,
-  createReadFileTool,
-  READ_FILE_PARAMETERS,
-} from './builtin/read-file-tool.js';
-export {
-  WriteFileBuiltinTool,
-  createWriteFileTool,
-  WRITE_FILE_PARAMETERS,
-} from './builtin/write-file-tool.js';
-export {
-  EditFileBuiltinTool,
-  createEditFileTool,
-  EDIT_FILE_PARAMETERS,
-} from './builtin/edit-file-tool.js';
-export {
-  ListDirBuiltinTool,
-  createListDirTool,
-  LIST_DIR_PARAMETERS,
-} from './builtin/list-dir-tool.js';
-export {
-  GlobBuiltinTool,
-  createGlobTool,
-  GLOB_PARAMETERS,
-  type GlobExecAsync,
-} from './builtin/glob-tool.js';
-export {
-  GrepBuiltinTool,
-  createGrepTool,
-  GREP_PARAMETERS,
-  type GrepExecAsync,
-} from './builtin/grep-tool.js';
-export {
-  BashBuiltinTool,
-  createBashTool,
-  BASH_PARAMETERS,
-  type BashExecAsync,
-} from './builtin/bash-tool.js';
-export {
-  WebSearchBuiltinTool,
-  createWebSearchTool,
-  WEB_SEARCH_PARAMETERS,
-  MAX_WEB_SEARCH_COUNT,
-} from './builtin/web-search-tool.js';
-export {
-  WEB_SEARCH_LOCALE_EXTRA_KEY,
-  DEFAULT_WEB_SEARCH_MARKET,
-  normalizeWebSearchLocaleHint,
-  acceptLanguageForMarket,
-  resolveWebSearchMarketFromContext,
-} from './builtin/web-search-locale.js';
-export { bingSearchFetchHeaders, buildBingSearchUrl } from './builtin/bing-search-html.js';
-export {
-  WebFetchBuiltinTool,
-  createWebFetchTool,
-  WEB_FETCH_PARAMETERS,
-  WEB_FETCH_DEFAULT_MAX_LENGTH,
-  stripFetchedHtmlToText,
-} from './builtin/web-fetch-tool.js';
-export {
-  TodoReadBuiltinTool,
-  createTodoReadTool,
-  TODO_READ_PARAMETERS,
-} from './builtin/todo-read-tool.js';
-export {
-  TodoWriteBuiltinTool,
-  createTodoWriteTool,
-  TODO_WRITE_PARAMETERS,
-} from './builtin/todo-write-tool.js';
-export {
-  readSkillInstructions,
-  LoadSkillBuiltinTool,
-  createLoadSkillTool,
-  LOAD_SKILL_PARAMETERS,
-  type LoadSkillToolOptions,
-} from './builtin/load-skill-tool.js';
-export {
-  InstallSkillBuiltinTool,
-  createInstallSkillTool,
-  INSTALL_SKILL_PARAMETERS,
-  type InstallSkillToolOptions,
-} from './builtin/install-skill-tool.js';
-export { createBuiltinTools, type BuiltinToolsOptions } from './builtin-tools.js';
-export {
-  createToolRuntime,
-  registerPolicyExtractor,
-  type ToolRuntime,
-  type ToolRuntimeTurnContext,
-  type ToolRuntimeJournalPort,
-  type ToolCallContext,
-  type ToolExecutionOutcome,
-  type ToolPolicyInputExtractor,
-} from './tool/tool-runtime.js';
-export { registerBuiltinPolicyExtractors } from './tool/builtin-policy-extractors.js';
-export { stampToolGeneration } from './tool/tool-system.js';
+  stampToolGeneration,
+} from './tool/tool-system.js';
 export { FileJournalStore } from './journal/index.js';
 export { PersistentTurnJournal } from './journal/index.js';
-export { ZHIN_WEB_USER_AGENT, WEB_TOOL_FETCH_TIMEOUT_MS } from './builtin/web-tool-utils.js';
 
 export {
   createScheduleTools,
@@ -361,7 +260,6 @@ export {
   loadAssistantProfileFile,
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
-  syncProfileCronRoutinesToStore,
   pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
@@ -373,10 +271,22 @@ export {
   PROFILE_BEDTIME_CHECK_JOB_ID,
 } from './assistant/index.js';
 
-/** Runtime Host（basic/cli）装配 session tree runtime 时的窄门面。 */
-export { asPrivate } from './internal/as-private.js';
-
-export type { ApprovalPort, ApprovalRequestInput } from './session/approval-port.js';
+export type {
+  ApprovalDecision,
+  ApprovalDecisionMemory,
+  ApprovalDecisionPort,
+  ApprovalPort,
+  ApprovalRequestInput,
+} from './session/approval-port.js';
+export {
+  ApprovalReviewAgent,
+  createAutoApprovalPort,
+  createBypassApprovalPort,
+} from './session/approval-review-agent.js';
+export type {
+  ApprovalReviewAgentOptions,
+  ApprovalReviewDecision,
+} from './session/approval-review-agent.js';
 export { beginIngressTurnSession } from './session/turn-ingress-session.js';
 
 export type {
@@ -395,6 +305,7 @@ export * from './workroom/project-knowledge-registry.js';
 export * from './workroom/database-project-knowledge-journal.js';
 export * from './workroom/workroom-assignment-knowledge-context.js';
 export * from './workroom/assignment-executor.js';
+export * from './workroom/assignment-authority.js';
 export * from './workroom/assignment-observation-ingress.js';
 export * from './workroom/interaction-space-router.js';
 export * from './workroom/file-interaction-space-binding-repository.js';
@@ -409,15 +320,14 @@ export * from './workroom/plan-approval-control.js';
 export * from './workroom/plan-revision.js';
 export * from './workroom/scheduler-priority-control.js';
 export * from './workroom/file-human-ingress.js';
-export * from './workroom/local-assignment-executor.js';
 export * from './workroom/local-assignment-issuance.js';
 export * from './workroom/workroom-task-report-store.js';
-export * from './workroom/projection-outbox.js';
+export * from './workroom/projection-outbox/index.js';
 export * from './plugin-runtime/workroom-projection-outbound.js';
 export * from './plugin-runtime/workroom-projection-runtime.js';
 export * from './plugin-runtime/workroom-journal-payload-composition.js';
 export * from './plugin-runtime/workroom-data-governance-root-provider.js';
-export * from './workroom/journal.js';
+export * from './workroom/journal/index.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/catalog.js';
 export * from './workroom/workroom-kernel.js';
@@ -467,28 +377,13 @@ export * from './data-governance/encrypted-database-payload-vault.js';
 export * from './data-governance/payload-vault-storage-handoff.js';
 export * from './data-governance/payload-hold-overdue-projection.js';
 
-export {
-  introspectionRestBindings,
-  introspectionRestEndpoints,
-  introspectionRestCommands,
-  introspectionRestMcp,
-  introspectionRestTools,
-} from './init/introspection-rest.js';
-export type { IntrospectionJsonResponse } from './init/introspection-rest.js';
-export { collectIntrospectionBindings, collectIntrospectionAgentTools, collectIntrospectionSkills, collectIntrospectionMcpLabels, collectIntrospectionMcpWithConfigFallback } from './init/introspection-collectors.js';
-export { ensureMcpConnections, ensureMcpConnectionsForBinding, getMcpToolsForBinding } from './resource-hub/mcp-lifecycle.js';
-export { composeZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
-export type { ComposedZhinAgentRuntime } from './init/compose-zhin-agent-runtime.js';
-export { activateAiDatabaseStorage } from './init/activate-ai-database-storage.js';
-export { defineAiDatabaseModels } from './init/define-ai-database-models.js';
-export type { AiDatabaseModelDefiner } from './init/define-ai-database-models.js';
 export * from './workroom/assignment-authority-grant-application.js';
 export * from './workroom/assignment-authority-grant-repository.js';
 
 export {
   loadBootstrapFiles, buildContextFiles, buildBootstrapContextSection,
   buildStableContextFiles, buildStableBootstrapSection,
-  loadSoulPersona, loadToolsGuide, loadAgentsMemory, clearBootstrapCache,
+  loadSoulPersona, loadToolsGuide, loadAgentsMemory,
   STABLE_BOOTSTRAP_FILENAMES,
 } from './bootstrap.js';
 export { getFileMemoryContext, getMemoryDir } from './memory-layers.js';
@@ -500,7 +395,7 @@ export {
   resolveMultimodalConfig,
   resolveOutboundCapabilities,
 } from './media/index.js';
-export type { MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
+export type { AudioTranscriptionPort, MediaBinaryPayload, MultimodalConfig, OutboundMediaCapabilities } from './media/index.js';
 
 export { filterImDeliveryContent } from './segment/filter-im-delivery.js';
 
@@ -514,7 +409,6 @@ export {
   formatMemoryPathsHint,
   resolveMemoryPromptOptions,
   DEFAULT_MEMORY_BUDGETS,
-  migrateLegacyMemoryFiles,
 } from './memory-layers.js';
 export type {
   MemoryLayerBudgets,
@@ -525,45 +419,35 @@ export type {
   MemoryWriteDecision,
 } from './memory-layers.js';
 
-export {
-  registerAIHook, unregisterAIHook, triggerAIHook,
-  createAIHookEvent as createLegacyAIHookEvent, clearAIHooks, getRegisteredAIHookKeys,
-} from './hooks.js';
-export type {
-  AIHookEvent as LegacyAIHookEvent, AIHookEventType as LegacyAIHookEventType, AIHookHandler as LegacyAIHookHandler,
-  MessageReceivedEvent, MessageSentEvent, SessionCompactEvent,
-  SessionNewEvent, AgentBootstrapEvent, ToolCallEvent,
-} from './hooks.js';
-
 export { aiHookRuntimeBus, AIHookRuntimeBus } from './ai-hook-runtime-bus.js';
 
 export {
   createAIHookBusPayload,
   isAISessionNewPayload,
   isAISessionCompactPayload,
-  onAIHook,
-  onAISessionNew,
-  onAISessionCompact,
 } from './ai-event-bus.js';
 export type {
-  AIEventPayload,
   AISessionNewPayload,
   AISessionCompactPayload,
 } from './ai-event-bus.js';
 export {
   AI_EVENT_NAMES,
-  subscribeAIEvents,
   subscribeAIEventsOnTarget,
 } from './ai-event-subscriber.js';
-export { originFromMessage } from './builtin/spawn-task-tool.js';
+export { originFromMessage } from './spawn/spawn-task-tool.js';
 export type {
-  AIEventName,
   AIEventFilter,
   AIEventHandlers,
   AIEventTarget,
 } from './ai-event-subscriber.js';
-
-export { registerEndpointKeyColumnMigrationHook } from './init/upgrade-endpoint-id-schema.js';
+export type {
+  AIEventName,
+  AIEventSource,
+  AIEventMode,
+  AIEventPath,
+  AIEventPayload,
+} from './ai-event-contract.js';
+export { AgentEventBus } from './event/ai-event-bus.js';
 
 // ── Activity Feedback（替代 endpoint typingIndicator）──
 export {
@@ -575,8 +459,6 @@ export {
   resolveActivityEventTargets,
   enableActivityFeedbackForBot,
   isGenericActivityFeedbackManager,
-  activityFeedbackAiBus,
-  ActivityFeedbackAIBus,
   resolveSubagentActivityTag,
   formatSubagentActivityPrefix,
   withSubagentActivityPrefix,
@@ -607,7 +489,7 @@ export type {
 } from './outbound/send-proactive.js';
 export { deliverScheduleToAdapter } from './assistant/deliver-schedule-to-adapter.js';
 export type { DeliverScheduleToAdapterInput } from './assistant/deliver-schedule-to-adapter.js';
-export { createTaskExecutor, drainTaskExecutorLocks } from './task-executor.js';
+export { createTaskExecutor } from './task-executor.js';
 export type {
   TaskExecutor,
   TaskExecutionOptions,
@@ -636,10 +518,6 @@ export {
   NativeTypingIndicatorAdapter,
   NativeTypingIndicator,
   GenericTypingIndicatorAdapter,
-  getTypingIndicatorManager,
-  provideTypingIndicatorManager,
-  startTypingIndicator,
-  stopTypingIndicator,
 } from './typing-indicator/index.js';
 export type {
   TypingIndicatorType,
@@ -656,7 +534,6 @@ export {
 } from './typing-indicator/adapter-integration.js';
 export type {
   PlatformFeatures,
-  BotWithEditing,
 } from './typing-indicator/adapter-integration.js';
 
 // ── MCP Client ──
@@ -674,9 +551,8 @@ export type { ISceneManagement, SceneManagementMethodSpec } from './common-adapt
 export { AgentResourceHub } from './resource-hub/index.js';
 export {
   ResourceRegistry,
-  ToolRegistry, ZhinTool, isZhinTool, defineTool, extractParamInfo,
   canAccessTool,
-  normalizeTool, sharedToolSelection,
+  normalizeTool,
   SkillRegistry,
   SubAgentRegistry,
   McpRegistry,
@@ -684,7 +560,7 @@ export {
   createAIHookEvent,
 } from './resource-hub/index.js';
 export type {
-  ToolInput, McpConnection,
+  McpConnection,
   ResourceScope, ResourceEntry,
   Tool, Message, SenderRole, ToolScope, FileRole,
   ToolParametersSchema, PropertySchema, ToolJsonSchema,
@@ -705,15 +581,11 @@ export {
   filterToolNamesForRole,
   filterToolsForRole,
   isToolAllowedForRole,
-} from './builtin/five-agent/index.js';
-export type { FiveAgentRole } from './builtin/five-agent/index.js';
+} from './orchestration/five-agent/index.js';
+export type { FiveAgentRole } from './orchestration/five-agent/index.js';
 
 export {
-  defineAgent,
-  defineAgentTool,
   defineSkill,
-  defineSchedule,
-  defineConnection,
   defineHook,
   defineEval,
   disableTool,
@@ -723,22 +595,14 @@ export {
   slotNameFromDir,
 } from './authoring/index.js';
 export type {
-  AuthoringAgentDefinition,
-  AuthoringToolDefinition,
   AuthoringSkillDefinition,
-  AuthoringScheduleDefinition,
-  AuthoringConnectionDefinition,
   AuthoringHookDefinition,
   AuthoringEvalDefinition,
-  AuthoringToolContext,
   AuthoringEvalContext,
   DiscoveredPluginAgentSurface,
-  DefineAgentToolInput,
 } from './authoring/index.js';
 export {
-  discoverAllPluginAgentSurfaces,
   discoverPluginAgentSurface,
-  collectPluginAgentRoots,
 } from './discovery/agent-surface.js';
 export {
   discoverWorkspaceAgents,
@@ -753,17 +617,3 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
-export {
-  AgentFeature,
-  MCPFeature,
-} from './features/index.js';
-export type { McpFeatureEntry } from './features/index.js';
-export {
-  FeatureCapabilityIngress,
-  createFeatureCapabilityIngress,
-} from './ingress/index.js';
-export type {
-  CapabilityFeatureBundle,
-  IngressTurnContext,
-  IngressTurnLease,
-} from './ingress/index.js';

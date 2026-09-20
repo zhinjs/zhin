@@ -1,2 +1,0 @@
-name: service-activity-feedback
-description: Activity Feedback 服务 — 订阅 AI 事件，按 endpoint 配置驱动 queued/active/thinking 三阶段反馈

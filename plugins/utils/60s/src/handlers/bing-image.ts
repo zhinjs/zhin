@@ -1,7 +1,8 @@
-import { asString, fetchApi } from '../api.js';
+import { asString } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function () {
-  const data = await fetchApi('/bing');
+export default async function (client: SixtySClient) {
+  const data = await client.fetch('/bing');
   const lines = ['🖼️ Bing 每日壁纸', ''];
   if (data.title) lines.push(`📌 ${data.title}`);
   if (data.headline) lines.push(`💡 ${data.headline}`);

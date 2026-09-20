@@ -7,8 +7,8 @@ import type { HandlerContext } from './context.js';
 const handlerBrand = 'zhin.handler/1' as const;
 
 /**
- * Augmentable event map. `@zhin.js/core` augments this with `Plugin.Lifecycle`
- * events so that `defineHandler({ event: 'message.receive', handle(msg) {} })`
+ * Augmentable event map. Higher-level packages add the events owned by their
+ * runtime so `defineHandler({ event: 'message.receive', handle(event) {} })`
  * infers the argument types automatically.
  */
 export interface HandlerEventMap {

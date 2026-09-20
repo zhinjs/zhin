@@ -1,5 +1,5 @@
 /** ICQQ 历史文本视图 → canonical MessageSegment。出站只使用原生 Sendable。 */
-import { isMediaRef, type MediaRef } from "@zhin.js/core";
+import { isMediaRef, type MediaRef } from '@zhin.js/im-contract';
 import type { MessageSegment } from "zhin.js";
 
 const MAX_CQ_PARSE_LEN = 256_000;

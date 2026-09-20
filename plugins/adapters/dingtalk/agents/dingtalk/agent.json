@@ -1,0 +1,20 @@
+{
+  "name": "DINGTALK Platform Agent",
+  "version": "1.0.0",
+  "description": "Handles dingtalk platform-specific operations and progressively loads only the required platform Skill.",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": [
+      "dingtalk",
+      "adapter:dingtalk"
+    ]
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ],
+  "platforms": [
+    "dingtalk"
+  ]
+}

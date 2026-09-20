@@ -2,11 +2,8 @@
  * Activity Feedback 平台能力与出站格式辅助（原 Typing Indicator 集成层已移除）。
  */
 
-import type { Endpoint, SendContent } from '@zhin.js/core';
+import type { SendContent } from '@zhin.js/core';
 import type { TypingIndicatorOptions } from './index.js';
-
-export type BotWithEditing = Endpoint
-  & { $updateMessage?(messageId: string, content: string): Promise<void> };
 
 /** QQ 群聊禁止无引用的主动消息（40034105），需 reply 触发消息 */
 export function buildTypingSendContent(

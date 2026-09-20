@@ -19,7 +19,6 @@ import type {
 } from './types.js';
 import { emitAIHookBusEvent } from '../plugin-ai-hook-bus.js';
 import {
-  LEGACY_HOOK_STREAM_ALIASES,
   agentStreamEventToAIHookEvent,
   isAgentStreamHookEventName,
 } from '../event/agent-stream-hooks.js';
@@ -32,7 +31,7 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
 
   /**
    * Trigger all hooks matching the event.
-   * Matches legacy `type:action`, `type`, and Eve-aligned stream names (`session.started`).
+   * Matches the structured hook type and action vocabulary.
    */
   async trigger(event: AIHookEvent, agentId?: string): Promise<void> {
     emitAIHookBusEvent(event, 'orchestrator-hook', agentId);
@@ -50,14 +49,6 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
       }
     }
 
-    const streamAlias = LEGACY_HOOK_STREAM_ALIASES[`${event.type}:${event.action}`];
-    if (streamAlias) {
-      await this.triggerStream({
-        type: streamAlias,
-        data: event.context,
-        timestamp: event.timestamp.getTime(),
-      }, agentId, event.sessionId, { skipBus: true });
-    }
   }
 
   /**
@@ -74,15 +65,8 @@ export class HookRegistry extends ResourceRegistry<AIHook> {
       emitAIHookBusEvent(hookEvent, 'orchestrator-hook', agentId);
     }
 
-    const legacyEvents = Object.entries(LEGACY_HOOK_STREAM_ALIASES)
-      .filter(([, stream]) => stream === streamEvent.type)
-      .map(([legacy]) => legacy);
-
     const hooks = agentId ? this.getForAgent(agentId) : this.getAll();
-    const matching = hooks.filter((h) =>
-      h.event === streamEvent.type
-      || (options?.fromBus === true && legacyEvents.includes(h.event)),
-    );
+    const matching = hooks.filter((h) => h.event === streamEvent.type);
 
     for (const hook of matching) {
       try {

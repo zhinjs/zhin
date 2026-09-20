@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  createPluginDatabaseHost,
-  createPluginScheduleHost,
+  PluginDatabaseHost,
+  PluginScheduleHost,
   childPluginId,
   databaseHostToken,
   databaseRootHostToken,
@@ -91,20 +91,20 @@ describe('PluginScopeAssembler owner-scoped hosts', () => {
       environment: { name: 'test', mode: 'test', platform: 'node' },
       installResources({ resources }) {
         resources.provide(databaseRootHostToken, database);
-        resources.provide(databaseHostToken, createPluginDatabaseHost(rootPluginId(), database));
+        resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), database));
         resources.provide(scheduleRootHostToken, schedule);
-        resources.provide(scheduleHostToken, createPluginScheduleHost(rootPluginId(), schedule));
+        resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedule));
       },
     });
 
     await runtime.start();
     expect(tables).toEqual([
-      'sessions',
+      qualifyPluginResourceName(rootPluginId(), 'sessions'),
       qualifyPluginResourceName(alpha, 'sessions'),
       qualifyPluginResourceName(beta, 'sessions'),
     ]);
     expect(jobs).toEqual([
-      'cleanup',
+      qualifyPluginScheduleId(rootPluginId(), 'cleanup'),
       qualifyPluginScheduleId(alpha, 'cleanup'),
       qualifyPluginScheduleId(beta, 'cleanup'),
     ]);

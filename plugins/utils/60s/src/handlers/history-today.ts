@@ -1,7 +1,8 @@
-import { asArray, asRecord, fetchApi } from '../api.js';
+import { asArray, asRecord } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function () {
-  const data = await fetchApi('/today-in-history');
+export default async function (client: SixtySClient) {
+  const data = await client.fetch('/today-in-history');
   const dateStr = data.date || `${data.month || ''}月${data.day || ''}日`;
   const lines = [`📅 历史上的今天 (${dateStr})`, ''];
   const items = asArray(data.items);

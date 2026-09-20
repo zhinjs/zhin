@@ -1,0 +1,119 @@
+import {
+  buildProjectFileTree,
+  listEnvFiles,
+  readProjectFile,
+  saveProjectFile,
+  type RuntimeConsoleRpcContext,
+  type RuntimeEndpointSendInput,
+} from '@zhin.js/host-http';
+import {
+  acquireGenerationAgentConsole,
+  type AgentConsolePort,
+} from './agent-console.js';
+import { listPages } from './entry-projection.js';
+import { createExtendedConsoleRpcContext } from './rpc-extended-context.js';
+import type {
+  ConsoleRpcComposition,
+  ConsoleRpcRequestIdentity,
+} from './rpc-composition.js';
+import { createWorkroomCatalogRpcContext } from './workroom-catalog-rpc.js';
+import { readDeclaredPlugins } from '../plugin-lifecycle-store.js';
+
+/** Owns the generation lease and capability context for one Console RPC request. */
+export class ConsoleRpcRequestScope {
+  readonly context: RuntimeConsoleRpcContext;
+  readonly #lease: ReturnType<typeof acquireGenerationAgentConsole>;
+  #closed = false;
+
+  constructor(
+    composition: ConsoleRpcComposition,
+    identity: ConsoleRpcRequestIdentity,
+  ) {
+    this.#lease = acquireGenerationAgentConsole(composition.snapshots);
+    this.context = createRpcContext(composition, identity, this.#lease?.value ?? null);
+  }
+
+  close(): void {
+    if (this.#closed) return;
+    this.#closed = true;
+    this.#lease?.release();
+  }
+}
+
+function createRpcContext(
+  composition: ConsoleRpcComposition,
+  identity: ConsoleRpcRequestIdentity,
+  agent: AgentConsolePort | null,
+): RuntimeConsoleRpcContext {
+  const {
+    consoleRuntime,
+    projectRoot,
+    hub,
+    pluginLifecycleFile,
+    pluginLifecycleStore,
+    configuration,
+    pluginManagement,
+    im,
+    onRestart,
+    databaseHost,
+  } = composition;
+  const principal = identity.authenticatedPrincipal
+    ? Object.freeze({ principalId: identity.authenticatedPrincipal.principalId })
+    : undefined;
+  const context: RuntimeConsoleRpcContext = {
+    authScope: identity.authScope,
+    listPages: () => listPages(consoleRuntime),
+    readConfigSource: () => configuration.readSource(),
+    readConfigDocument: () => configuration.readDocument(),
+    replaceConfigSource: (source: string, expectedRevision: string) =>
+      configuration.replaceSource(source, expectedRevision),
+    setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
+    pluginManagement,
+    setPluginEnabled: async (instanceKey: string, enabled: boolean) =>
+      pluginLifecycleStore.setPluginEnabled(
+        pluginLifecycleFile,
+        instanceKey,
+        enabled,
+        await readDeclaredPlugins(projectRoot),
+      ),
+    ...createWorkroomCatalogRpcContext(agent, im, principal),
+    listProjectFiles: () => buildProjectFileTree(projectRoot),
+    readProjectFile: (filePath: string) => readProjectFile(projectRoot, filePath),
+    saveProjectFile: (filePath: string, content: string) =>
+      saveProjectFile(projectRoot, filePath, content),
+    listEnvFiles: () => listEnvFiles(projectRoot),
+    readEnvFile: (filename: string) => configuration.readEnvironmentFile(filename),
+    writeEnvFile: (filename: string, content: string) =>
+      configuration.writeEnvironmentFile(filename, content),
+    getSchema: (pluginName?: string) => configuration.readSchema(pluginName),
+    getAllSchemas: () => configuration.readAllSchemas(),
+    validatePluginConfig: (pluginName: string, data: unknown) =>
+      configuration.validatePluginConfig(pluginName, data),
+    diagnosePlugin: async (pluginName: string) => {
+      const plan = await pluginManagement?.planInstall(pluginName);
+      const config = await configuration.readDocument();
+      const validation = await configuration.validatePluginConfig(pluginName, config[pluginName]);
+      return { pluginName, plan: plan ?? null, validation };
+    },
+    listEndpoints: im ? async () => im.endpoints.list() : undefined,
+    getEndpoint: im
+      ? async (adapter: string, endpointKey: string) => im.endpoints.get(adapter, endpointKey)
+      : undefined,
+    sendEndpointMessage: im
+      ? async (input: RuntimeEndpointSendInput) => im.endpoints.send(input)
+      : undefined,
+    requestRestart: onRestart ? () => { onRestart(); } : undefined,
+    dbInfo: databaseHost
+      ? () => ({
+          dialect: databaseHost.dialect,
+          connected: databaseHost.started,
+          tables: databaseHost.tables().length,
+        })
+      : undefined,
+    dbTables: databaseHost ? () => databaseHost.tables() : undefined,
+    database: databaseHost?.console,
+    extended: createExtendedConsoleRpcContext(composition, agent, principal),
+    publishEvent: (type: string, data: unknown) => hub.publish(type, data),
+  };
+  return Object.freeze(context);
+}

@@ -3,17 +3,15 @@
  * No legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
-import { isMediaRef, type MediaRef } from '@zhin.js/core';
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('napcat');
 
-/** Transitional legacy endpoint row (`endpoints[]` with `context: napcat`). */
-export interface NapCatLegacyEndpointRow {
-  readonly context?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface NapCatEndpointConfig {
   readonly connection?: 'ws' | 'wss' | 'http';
-  readonly id?: string;
+  readonly id: string;
   readonly access_token?: string;
   readonly url?: string;
   readonly path?: string;
@@ -22,22 +20,6 @@ export interface NapCatLegacyEndpointRow {
   readonly reconnect_interval?: number;
   readonly heartbeat_interval?: number;
   readonly poll_interval?: number;
-}
-
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface NapCatAdapterConfig {
-  readonly connection?: 'ws' | 'wss' | 'http';
-  readonly id?: string;
-  readonly access_token?: string;
-  readonly url?: string;
-  readonly path?: string;
-  readonly http_url?: string;
-  readonly post_path?: string;
-  readonly reconnect_interval?: number;
-  readonly heartbeat_interval?: number;
-  readonly poll_interval?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: napcat`. */
-  readonly endpoints?: ReadonlyArray<NapCatLegacyEndpointRow>;
 }
 
 export interface NapCatConfigBase {
@@ -70,7 +52,6 @@ export interface NapCatHttpConfig extends NapCatConfigBase {
 }
 
 export type ResolvedNapCatConfig = NapCatWsConfig | NapCatWssConfig | NapCatHttpConfig;
-export type NapCatEndpointConfig = ResolvedNapCatConfig;
 
 export interface NapCatSender {
   readonly role?: string;
@@ -140,52 +121,39 @@ function normalizeConnection(
   return 'ws';
 }
 
-export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedNapCatConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'napcat');
-  const connection = normalizeConnection(config.connection ?? entry?.connection);
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.NAPCAT_BOT_NAME
-    || 'napcat-bot';
-  const access_token = config.access_token ?? entry?.access_token;
+export function resolveNapCatConfig(config: NapCatEndpointConfig): ResolvedNapCatConfig {
+  const connection = normalizeConnection(config.connection);
+  const id = requiredEndpointField(config.id, 'id');
+  const access_token = optionalEndpointField(config.access_token);
 
   if (connection === 'ws') {
-    const url = config.url ?? entry?.url;
-    if (!url) {
-      throw new TypeError(
-        'NapCat connection:ws requires url (plugins.<key>.url or endpoints with context: napcat)',
-      );
-    }
+    const url = requiredEndpointField(config.url, 'url');
     return {
       context: 'napcat',
       connection: 'ws',
       id,
       access_token,
       url,
-      reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      reconnect_interval: config.reconnect_interval ?? 5000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   if (connection === 'wss') {
-    const path = config.path ?? entry?.path;
-    if (!path) throw new TypeError('NapCat connection:wss requires path');
+    const path = requiredEndpointField(config.path, 'path');
     return {
       context: 'napcat',
       connection: 'wss',
       id,
       access_token,
       path,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   if (connection === 'http') {
-    const http_url = config.http_url ?? entry?.http_url;
-    const post_path = config.post_path ?? entry?.post_path;
-    if (!http_url || !post_path) {
-      throw new TypeError('NapCat connection:http requires http_url and post_path');
-    }
+    const http_url = requiredEndpointField(config.http_url, 'http_url');
+    const post_path = requiredEndpointField(config.post_path, 'post_path');
     return {
       context: 'napcat',
       connection: 'http',
@@ -193,11 +161,26 @@ export function resolveNapCatConfig(config: NapCatAdapterConfig = {}): ResolvedN
       access_token,
       http_url,
       post_path,
-      poll_interval: config.poll_interval ?? entry?.poll_interval ?? 30_000,
+      poll_interval: config.poll_interval ?? 30_000,
     };
   }
 
   throw new TypeError(`Unknown NapCat connection: ${String(connection)}`);
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'url' | 'path' | 'http_url' | 'post_path',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`NapCat endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 export function isMessageEvent(

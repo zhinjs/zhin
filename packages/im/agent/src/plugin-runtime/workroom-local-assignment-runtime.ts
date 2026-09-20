@@ -5,7 +5,7 @@ import {
   type AssignmentExecutorPort,
 } from '../workroom/assignment-executor.js';
 import { AssignmentObservationIngress } from '../workroom/assignment-observation-ingress.js';
-import { WorkroomSequenceConflictError } from '../workroom/journal.js';
+import { WorkroomSequenceConflictError } from '../workroom/journal/index.js';
 import type {
   WorkroomKernel,
   WorkroomLocalAssignmentIssuanceReceipt,

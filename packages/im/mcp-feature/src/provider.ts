@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, captured, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { parseMcpDefinition } from './definition.js';
 import { McpIndex } from './mcp-index.js';
 
@@ -10,10 +10,9 @@ const mcpFeature = defineFeatureProvider({
   id: mcpFeatureId,
   authoring: {
     setupMethod: 'addMcp',
-    conventions: [typeScriptModules({
-      id: 'mcp-ts',
-      directory: 'mcp',
-      recursive: false,
+    conventions: [directoryModules({
+      id: 'mcps-index',
+      layouts: [{ segments: ['mcps', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseMcpDefinition,
   },

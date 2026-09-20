@@ -24,17 +24,12 @@ pnpm add @zhin.js/mcp
 
 ### 1. 启用插件
 
-MCP Server 由 `@zhin.js/cli` 作为 composition root 经 `@zhin.js/mcp/runtime` 自动装配，无需在 `plugins` 列表中启用 Host 插件；只需在 `zhin.config.ts` 中配置：
+MCP Server 由 `@zhin.js/cli` 作为 composition root 经 `@zhin.js/mcp/runtime` 自动装配，无需在 `plugins` 列表中启用 Host 插件；只需在 `zhin.config.yml` 中配置：
 
-```typescript
-import { defineConfig } from 'zhin.js'
-
-export default defineConfig({
-  mcp: {
-    enabled: true,    // 启用 MCP
-    path: '/mcp',     // HTTP Stream 端点路径
-  }
-})
+```yaml
+mcp:
+  enabled: true
+  path: /mcp
 ```
 
 ### 2. 配置 AI 助手

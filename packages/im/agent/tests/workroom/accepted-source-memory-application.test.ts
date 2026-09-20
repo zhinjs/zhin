@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   AcceptedSourceMemoryApplication,
   MemoryProjectMemoryApplicationRepository,

@@ -1,17 +1,16 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import yaml from 'yaml';
-import { parse as parseToml, stringify as stringifyToml } from 'smol-toml';
+import {
+  readPluginConfigurationMap,
+  ROOT_CONFIG_FILE_NAMES,
+  rootConfigFormat,
+  selectRootConfigFile,
+  type RootConfigFormat,
+} from '@zhin.js/plugin-runtime';
 import { providerSdkFor } from './ai.js';
 
 const CONSOLE_URL = 'https://console.zhin.dev';
-const CONFIG_CANDIDATES = [
-  'zhin.config.yml',
-  'zhin.config.yaml',
-  'zhin.config.json',
-  'zhin.config.toml',
-  'zhin.config.ts',
-] as const;
 const SANDBOX_PLUGIN = '@zhin.js/adapter-sandbox';
 const LEGACY_AI_PROVIDER_FIELDS = ['driver', 'api', 'preset', 'spec'] as const;
 
@@ -23,7 +22,7 @@ export function packageToInstanceKey(packageName: string): string {
   return name.replace(/^(adapter|plugin|service)-/, '');
 }
 
-export type ProjectConfigFormat = 'yaml' | 'json' | 'toml' | 'ts';
+export type ProjectConfigFormat = RootConfigFormat;
 
 export interface LoadedProjectConfig {
   status: 'loaded' | 'missing' | 'unsupported';
@@ -70,12 +69,7 @@ export interface ConsoleConfigDiagnosis {
 }
 
 function configFormatFromPath(filePath: string): ProjectConfigFormat | null {
-  const ext = path.extname(filePath).toLowerCase();
-  if (ext === '.yml' || ext === '.yaml') return 'yaml';
-  if (ext === '.json') return 'json';
-  if (ext === '.toml') return 'toml';
-  if (ext === '.ts') return 'ts';
-  return null;
+  return rootConfigFormat(filePath) ?? null;
 }
 
 function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
@@ -83,39 +77,28 @@ function cloneConfig(config: Record<string, unknown>): Record<string, unknown> {
 }
 
 function parseConfig(content: string, format: ProjectConfigFormat): Record<string, unknown> {
-  if (format === 'yaml') {
-    const parsed = yaml.parse(content) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  }
   if (format === 'json') {
     const parsed = JSON.parse(content) as unknown;
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
       ? parsed as Record<string, unknown>
       : {};
   }
-  if (format === 'toml') {
-    const parsed = parseToml(content) as unknown;
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Record<string, unknown>
-      : {};
-  }
-  return {};
+  const parsed = yaml.parse(content) as unknown;
+  return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
 }
 
 function serializeConfig(config: Record<string, unknown>, format: ProjectConfigFormat): string {
   if (format === 'json') return `${JSON.stringify(config, null, 2)}\n`;
-  if (format === 'toml') return stringifyToml(config as Record<string, unknown>);
   return yaml.stringify(config);
 }
 
 function findProjectConfigPath(cwd: string): string | null {
-  for (const candidate of CONFIG_CANDIDATES) {
-    const configPath = path.join(cwd, candidate);
-    if (fs.existsSync(configPath)) return configPath;
-  }
-  return null;
+  const existing = ROOT_CONFIG_FILE_NAMES
+    .map((candidate) => path.join(cwd, candidate))
+    .filter((configPath) => fs.existsSync(configPath));
+  return selectRootConfigFile(existing) ?? null;
 }
 
 export function loadProjectConfig(cwd = process.cwd(), configPath?: string): LoadedProjectConfig {
@@ -126,7 +109,7 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
       cwd,
       config: {},
       writable: false,
-      message: '未找到 zhin.config.yml/json/toml',
+      message: '未找到 Root YAML/JSON 配置文件',
     };
   }
 
@@ -144,51 +127,35 @@ export function loadProjectConfig(cwd = process.cwd(), configPath?: string): Loa
     };
   }
 
-  if (format === 'ts') {
+  const content = fs.readFileSync(resolvedPath, 'utf8');
+  const config = parseConfig(content, format);
+  try {
+    readPluginConfigurationMap(config, relativePath);
+  } catch (error) {
     return {
       status: 'unsupported',
       cwd,
       configPath: resolvedPath,
       relativePath,
       format,
-      config: {},
+      config,
       writable: false,
-      message: 'zhin.config.ts 只读；请迁移为 zhin.config.yml/json/toml 后自动修复',
+      message: `${error instanceof Error ? error.message : String(error)}；请先运行 zhin migrate`,
     };
   }
-
-  const content = fs.readFileSync(resolvedPath, 'utf8');
   return {
     status: 'loaded',
     cwd,
     configPath: resolvedPath,
     relativePath,
     format,
-    config: parseConfig(content, format),
+    config,
     writable: true,
   };
 }
 
 function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly string[], mutations: string[]): void {
-  if (Array.isArray(config.plugins)) {
-    // legacy 数组形式：保持原形态追加，避免改写旧项目结构
-    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
-    let changed = false;
-    for (const plugin of pluginsToAdd) {
-      if (plugins.includes(plugin)) continue;
-      plugins.push(plugin);
-      mutations.push(`added ${plugin} to plugins`);
-      changed = true;
-    }
-    if (changed) {
-      config.plugins = plugins;
-    }
-    return;
-  }
-  // 新 Plugin Runtime：plugins 为 <instanceKey>: <配置> 映射
-  const plugins = config.plugins && typeof config.plugins === 'object'
-    ? { ...(config.plugins as Record<string, unknown>) }
-    : {};
+  const plugins = { ...readPluginConfigurationMap(config) };
   let changed = false;
   for (const pkg of pluginsToAdd) {
     const instanceKey = packageToInstanceKey(pkg);
@@ -197,7 +164,7 @@ function ensurePlugins(config: Record<string, unknown>, pluginsToAdd: readonly s
     mutations.push(`added ${instanceKey} (${pkg}) to plugins`);
     changed = true;
   }
-  if (changed || !config.plugins || typeof config.plugins !== 'object') {
+  if (changed || config.plugins === undefined) {
     config.plugins = plugins;
   }
 }
@@ -321,6 +288,8 @@ function applyAiLegacyMigration(config: Record<string, unknown>, mutations: stri
 
 export function createProjectConfigPlan(options: ProjectConfigPlanOptions): ProjectConfigPlan {
   const cwd = options.cwd ?? options.loaded?.cwd ?? process.cwd();
+  const configuredFormat = options.format
+    ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined);
   const loaded = options.loaded ?? (
     options.config
       ? {
@@ -328,9 +297,9 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
         cwd,
         configPath: options.configPath,
         relativePath: options.configPath ? path.relative(cwd, options.configPath) : undefined,
-        format: options.format ?? (options.configPath ? configFormatFromPath(options.configPath) ?? undefined : undefined),
+        format: configuredFormat,
         config: options.config,
-        writable: Boolean(options.configPath && (options.format ?? configFormatFromPath(options.configPath)) !== 'ts'),
+        writable: Boolean(options.configPath && configuredFormat),
       }
       : loadProjectConfig(cwd, options.configPath)
   );
@@ -373,7 +342,7 @@ export function createProjectConfigPlan(options: ProjectConfigPlanOptions): Proj
 
 export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
   if (!plan.changed) return '配置无需改动。';
-  const format = plan.format && plan.format !== 'ts' ? plan.format : 'yaml';
+  const format = plan.format ?? 'yaml';
   const name = plan.relativePath ?? 'zhin.config.yml';
   return [
     `# ${name}`,
@@ -384,7 +353,7 @@ export function renderProjectConfigPatch(plan: ProjectConfigPlan): string {
 
 export async function applyProjectConfigPlan(plan: ProjectConfigPlan): Promise<boolean> {
   if (!plan.changed) return false;
-  if (!plan.writable || !plan.configPath || !plan.format || plan.format === 'ts') return false;
+  if (!plan.writable || !plan.configPath || !plan.format) return false;
   await fs.writeFile(plan.configPath, serializeConfig(plan.after, plan.format));
   return true;
 }
@@ -395,20 +364,7 @@ export function diagnoseConsoleConfig(config: Record<string, unknown>): ConsoleC
     : {};
   const corsOrigins = Array.isArray(http.corsOrigins) ? http.corsOrigins : [];
 
-  if (Array.isArray(config.plugins)) {
-    // legacy 数组形式配置
-    const plugins = config.plugins.filter((p): p is string => typeof p === 'string');
-    return {
-      missingSandboxPlugin: !plugins.includes(SANDBOX_PLUGIN),
-      missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),
-      missingHttpToken: typeof http.token !== 'string' || http.token.trim().length === 0,
-    };
-  }
-
-  // 新 Plugin Runtime：Console Host 由 CLI 装配，无需 host 插件；Sandbox 为 plugins.sandbox 实例
-  const plugins = config.plugins && typeof config.plugins === 'object'
-    ? config.plugins as Record<string, unknown>
-    : {};
+  const plugins = readPluginConfigurationMap(config);
   return {
     missingSandboxPlugin: !('sandbox' in plugins),
     missingConsoleOrigin: !hasConsoleOrigin(corsOrigins.filter((origin): origin is string => typeof origin === 'string')),

@@ -41,27 +41,36 @@ describe('runtime console RPC', () => {
       }],
     });
 
-    const yaml = await dispatchRuntimeConsoleRpc(
-      { type: 'config:get-yaml', requestId: 4 },
+    const source = await dispatchRuntimeConsoleRpc(
+      { type: 'config:get-source', requestId: 4 },
       {
         authScope: 'demo',
         listPages: async () => pages,
-        readConfigYaml: async () => 'plugins: []\n',
-        listPluginKeys: async () => ['@zhin.js/adapter-sandbox'],
+        readConfigSource: async () => ({
+          source: 'plugins: {}\n',
+          format: 'yaml',
+          revision: 'a'.repeat(64),
+          configKeys: ['@zhin.js/adapter-sandbox'],
+        }),
       },
     );
-    expect(pickRpcReply({ type: 'config:get-yaml', requestId: 4 }, yaml)).toEqual({
+    expect(pickRpcReply({ type: 'config:get-source', requestId: 4 }, source)).toEqual({
       requestId: 4,
-      data: { yaml: 'plugins: []\n', pluginKeys: ['@zhin.js/adapter-sandbox'] },
+      data: {
+        source: 'plugins: {}\n',
+        format: 'yaml',
+        revision: 'a'.repeat(64),
+        configKeys: ['@zhin.js/adapter-sandbox'],
+      },
     });
   });
 
   it('enforces demo RPC allowlist and HTTP path allowlist', async () => {
     const denied = await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 3 },
+      { type: 'config:replace-source', requestId: 3 },
       { authScope: 'demo', listPages: async () => [] },
     );
-    expect(pickRpcReply({ type: 'config:save-yaml', requestId: 3 }, denied)?.error)
+    expect(pickRpcReply({ type: 'config:replace-source', requestId: 3 }, denied)?.error)
       .toMatch(/Demo scope/);
 
     expect(isDemoHttpAllowed('POST', '/api/console/request', '/api')).toBe(true);
@@ -72,6 +81,170 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('GET', '/api/introspection/prompt-sections', '/api')).toBe(true);
     expect(isDemoHttpAllowed('POST', '/api/introspection/components/render', '/api')).toBe(false);
     expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
+  });
+
+  it('returns a shared plugin install plan for full-scope Console clients', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:plan-install', requestId: 91, packageName: '@zhin.js/adapter-telegram' },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        pluginManagement: {
+          planInstall: async (packageName) => ({
+            packageName,
+            instanceKey: 'adapter-telegram',
+            alreadyDeclared: false,
+            alreadyInstalled: false,
+            restartRequired: true,
+            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+            warnings: ['插件尚未安装'],
+          }),
+        },
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:plan-install', requestId: 91 }, replies)).toMatchObject({
+      requestId: 91,
+      data: { packageName: '@zhin.js/adapter-telegram', restartRequired: true },
+    });
+  });
+
+  it('passes the config revision to the install transaction', async () => {
+    let receivedRevision: string | undefined;
+    const replies = await dispatchRuntimeConsoleRpc(
+      {
+        type: 'plugin:install',
+        requestId: 92,
+        packageName: '@zhin.js/adapter-telegram',
+        expectedRevision: 'rev-1',
+      },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        pluginManagement: {
+          planInstall: async () => ({
+            packageName: '@zhin.js/adapter-telegram',
+            instanceKey: 'adapter-telegram',
+            alreadyDeclared: false,
+            alreadyInstalled: false,
+            restartRequired: true,
+            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+            warnings: [],
+          }),
+          install: async (_packageName, revision) => {
+            receivedRevision = revision;
+            return {
+              plan: await Promise.resolve({
+                packageName: '@zhin.js/adapter-telegram',
+                instanceKey: 'adapter-telegram',
+                alreadyDeclared: false,
+                alreadyInstalled: false,
+                restartRequired: true,
+                changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+                warnings: [],
+              }),
+              restartRequired: true,
+            };
+          },
+        },
+      },
+    );
+    expect(receivedRevision).toBe('rev-1');
+    expect(pickRpcReply({ type: 'plugin:install', requestId: 92 }, replies)).toMatchObject({
+      requestId: 92,
+      data: { success: true, restartRequired: true },
+    });
+  });
+
+  it('requires exact confirmation before uninstalling a plugin', async () => {
+    let calls = 0;
+    const ctx = {
+      authScope: 'full' as const,
+      listPages: async () => [],
+      pluginManagement: {
+        planInstall: async () => ({
+          packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
+          alreadyDeclared: true, alreadyInstalled: true, restartRequired: false,
+          changes: { packageManifest: 'unchanged' as const, config: 'unchanged' as const },
+          warnings: [],
+        }),
+        uninstall: async () => {
+          calls += 1;
+          return {
+            plan: {
+              packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
+              installed: true, declared: true, hasConfig: true, restartRequired: true,
+            },
+            restartRequired: true,
+          };
+        },
+      },
+    };
+    const denied = await dispatchRuntimeConsoleRpc({
+      type: 'plugin:uninstall', requestId: 95,
+      packageName: '@zhin.js/adapter-telegram', confirmation: 'telegram',
+    }, ctx);
+    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 95 }, denied)?.error)
+      .toContain('confirmation');
+    expect(calls).toBe(0);
+
+    const accepted = await dispatchRuntimeConsoleRpc({
+      type: 'plugin:uninstall', requestId: 96,
+      packageName: '@zhin.js/adapter-telegram', confirmation: '@zhin.js/adapter-telegram',
+    }, ctx);
+    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 96 }, accepted)).toMatchObject({
+      data: { success: true, restartRequired: true },
+    });
+    expect(calls).toBe(1);
+  });
+
+  it('validates plugin config through the shared Console context', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:validate-config', requestId: 93, pluginName: 'adapter-demo', data: {} },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        validatePluginConfig: async (pluginName, data) => ({
+          valid: pluginName === 'adapter-demo' && typeof data === 'object',
+          errors: [],
+          missingEnv: ['BOT_TOKEN'],
+        }),
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:validate-config', requestId: 93 }, replies)).toMatchObject({
+      requestId: 93,
+      data: { valid: true, missingEnv: ['BOT_TOKEN'] },
+    });
+  });
+
+  it('returns plugin diagnostics through the shared Console context', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:diagnose', requestId: 94, pluginName: 'adapter-demo' },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        diagnosePlugin: async (pluginName) => ({ pluginName, healthy: false, reasons: ['missing token'] }),
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:diagnose', requestId: 94 }, replies)).toMatchObject({
+      requestId: 94,
+      data: { pluginName: 'adapter-demo', healthy: false },
+    });
+  });
+
+  it('reports endpoint connectivity from the current generation', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint.test', requestId: 97, adapter: 'telegram', endpointKey: 'bot' },
+      {
+        authScope: 'demo',
+        listPages: async () => [],
+        getEndpoint: async () => ({
+          name: 'bot', adapter: 'telegram', connected: true, status: 'online', phase: 'online',
+        }),
+      },
+    );
+    expect(pickRpcReply({ type: 'endpoint.test', requestId: 97 }, replies)).toMatchObject({
+      data: { reachable: true, connected: true, phase: 'online', message: 'Endpoint 已连接' },
+    });
   });
 
   it('allows read-only status/stats/plugins GETs in demo scope', () => {
@@ -87,7 +260,7 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('GET', '/api/config', '/api')).toBe(false);
   });
 
-  it('maps colon-named SDK aliases onto the canonical endpoint RPCs', async () => {
+  it('dispatches canonical endpoint RPCs', async () => {
     const endpoints = [{
       name: 'bot',
       adapter: 'sandbox',
@@ -107,31 +280,24 @@ describe('runtime console RPC', () => {
       },
     };
 
-    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint:list', requestId: 60 }, ctx);
-    expect(pickRpcReply({ type: 'endpoint:list', requestId: 60 }, listed)).toMatchObject({
+    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint.list', requestId: 60 }, ctx);
+    expect(pickRpcReply({ type: 'endpoint.list', requestId: 60 }, listed)).toMatchObject({
       requestId: 60,
       data: { endpoints: [{ name: 'bot', adapter: 'sandbox' }] },
     });
 
     const info = await dispatchRuntimeConsoleRpc(
-      { type: 'endpoint:info', requestId: 61, data: { adapter: 'sandbox', endpointKey: 'bot' } },
+      { type: 'endpoint.info', requestId: 61, data: { adapter: 'sandbox', endpointKey: 'bot' } },
       ctx,
     );
-    expect(pickRpcReply({ type: 'endpoint:info', requestId: 61 }, info)).toMatchObject({
+    expect(pickRpcReply({ type: 'endpoint.info', requestId: 61 }, info)).toMatchObject({
       requestId: 61,
       data: { name: 'bot', adapter: 'sandbox', status: 'online' },
     });
 
-    const canonicalInfo = await dispatchRuntimeConsoleRpc(
-      { type: 'endpoint.info', requestId: 62, data: { $adapter: 'sandbox', $endpoint: 'bot' } },
-      ctx,
-    );
-    expect(pickRpcReply({ type: 'endpoint.info', requestId: 62 }, canonicalInfo))
-      .toMatchObject({ requestId: 62, data: { name: 'bot' } });
-
     const sent_reply = await dispatchRuntimeConsoleRpc(
       {
-        type: 'endpoint:sendMessage',
+        type: 'endpoint.send_message',
         requestId: 63,
         data: {
           adapter: 'sandbox',
@@ -144,8 +310,8 @@ describe('runtime console RPC', () => {
       },
       ctx,
     );
-    expect(pickRpcReply({ type: 'endpoint:sendMessage', requestId: 63 }, sent_reply))
-      .toMatchObject({ requestId: 63, data: { message_id: 'msg-1', messageId: 'msg-1' } });
+    expect(pickRpcReply({ type: 'endpoint.send_message', requestId: 63 }, sent_reply))
+      .toMatchObject({ requestId: 63, data: { messageId: 'msg-1' } });
     expect(sent).toEqual([{
       adapter: 'sandbox',
       endpointKey: 'bot',
@@ -154,47 +320,57 @@ describe('runtime console RPC', () => {
     }]);
   });
 
-  it('normalizes aliases before the demo scope check', async () => {
+  it('applies demo scope to canonical RPC names', async () => {
     const ctx = {
       authScope: 'demo' as const,
       listPages: async () => [],
       listEndpoints: async () => [],
       sendEndpointMessage: async () => ({ messageId: 'msg-demo' }),
     };
-    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint:list', requestId: 70 }, ctx);
-    expect(pickRpcReply({ type: 'endpoint:list', requestId: 70 }, listed)?.error).toBeUndefined();
+    const listed = await dispatchRuntimeConsoleRpc({ type: 'endpoint.list', requestId: 70 }, ctx);
+    expect(pickRpcReply({ type: 'endpoint.list', requestId: 70 }, listed)?.error).toBeUndefined();
 
     // endpoint.send_message is a write op; demo token must NOT be allowed
     // to drive bots into sending messages on arbitrary channels.
     const sentReply = await dispatchRuntimeConsoleRpc(
       {
-        type: 'endpoint:sendMessage',
+        type: 'endpoint.send_message',
         requestId: 71,
-        data: { adapter: 'sandbox', endpointKey: 'bot', id: '1', type: 'private', content: 'hi' },
+        adapter: 'sandbox',
+        endpointKey: 'bot',
+        channelId: '1',
+        channelType: 'private',
+        content: 'hi',
       },
       ctx,
     );
-    expect(pickRpcReply({ type: 'endpoint:sendMessage', requestId: 71 }, sentReply))
+    expect(pickRpcReply({ type: 'endpoint.send_message', requestId: 71 }, sentReply))
       .toMatchObject({ requestId: 71, error: expect.stringContaining('forbidden') });
   });
 
-  it('writes config via config:save-yaml and config:set on full scope', async () => {
-    let stored = 'plugins: []\n';
-    const document: Record<string, unknown> = { plugins: [] };
+  it('writes config via config:replace-source and config:set on full scope', async () => {
+    let stored = 'plugins: {}\n';
+    const document: Record<string, unknown> = { plugins: {} };
 
     const saved = await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 10, yaml: 'plugins:\n  - sandbox\n' },
+      {
+        type: 'config:replace-source',
+        requestId: 10,
+        source: 'plugins:\n  sandbox: {}\n',
+        expectedRevision: 'a'.repeat(64),
+      },
       {
         authScope: 'full',
         listPages: async () => [],
-        writeConfigYaml: async (yaml) => {
-          stored = yaml;
+        replaceConfigSource: async (source) => {
+          stored = source;
+          return { revision: 'b'.repeat(64), restartRequired: false };
         },
       },
     );
-    expect(pickRpcReply({ type: 'config:save-yaml', requestId: 10 }, saved)).toMatchObject({
+    expect(pickRpcReply({ type: 'config:replace-source', requestId: 10 }, saved)).toMatchObject({
       requestId: 10,
-      data: { success: true },
+      data: { success: true, revision: 'b'.repeat(64), restartRequired: false },
     });
     expect(stored).toContain('sandbox');
 
@@ -214,6 +390,32 @@ describe('runtime console RPC', () => {
       data: { success: true, reloaded: false },
     });
     expect(document.http).toEqual({ port: 8080 });
+  });
+
+  it('does not persist config when shared validation rejects it', async () => {
+    let writes = 0;
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'config:set', requestId: 12, pluginName: 'adapter-demo', data: {} },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        validatePluginConfig: async () => ({
+          valid: false,
+          errors: [{ path: '$.token', message: '必填项不能为空' }],
+          missingEnv: [],
+        }),
+        setConfigKey: async () => {
+          writes += 1;
+          return { restartRequired: true };
+        },
+      },
+    );
+    expect(pickRpcReply({ type: 'config:set', requestId: 12 }, replies)).toMatchObject({
+      requestId: 12,
+      error: '配置校验失败',
+      data: { valid: false },
+    });
+    expect(writes).toBe(0);
   });
 
   it('reads and revision-checks the Workroom-only config RPC', async () => {
@@ -256,7 +458,7 @@ describe('runtime console RPC', () => {
       .toMatch(/Demo scope/u);
   });
 
-  it('publishes config:updated after config:set / config:save-yaml and system:restarting on restart', async () => {
+  it('publishes config:updated after config:set / config:replace-source and system:restarting on restart', async () => {
     const published: Array<{ type: string; data: unknown }> = [];
     const publishEvent = (type: string, data: unknown) => {
       published.push({ type, data });
@@ -280,11 +482,19 @@ describe('runtime console RPC', () => {
 
     published.length = 0;
     await dispatchRuntimeConsoleRpc(
-      { type: 'config:save-yaml', requestId: 61, yaml: 'plugins: []\n' },
+      {
+        type: 'config:replace-source',
+        requestId: 61,
+        source: 'plugins: {}\n',
+        expectedRevision: 'a'.repeat(64),
+      },
       {
         authScope: 'full',
         listPages: async () => [],
-        writeConfigYaml: async () => undefined,
+        replaceConfigSource: async () => ({
+          revision: 'b'.repeat(64),
+          restartRequired: false,
+        }),
         publishEvent,
       },
     );

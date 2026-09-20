@@ -31,6 +31,7 @@ describe('native web ToolFeatures', () => {
     await expect(searchTool.definition.execute({ query: 'guide' }, context))
       .resolves.toContain('https://docs.example/guide');
     expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[0].searchParams.get('setmkt')).toBe('zh-CN');
   });
 
   it('never follows a redirect outside the Turn allowlist', async () => {

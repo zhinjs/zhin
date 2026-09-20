@@ -12,7 +12,7 @@ describe('logAgentLoopIterationEnd', () => {
         model: 'claude-haiku',
         label: 'orchestrator',
         stopReason: 'toolCalls',
-        toolNames: 'run_deferred_task',
+        toolNames: 'spawn_task',
         usage: {
           input: 5855,
           output: 42,
@@ -29,7 +29,7 @@ describe('logAgentLoopIterationEnd', () => {
       extra: expect.objectContaining({
         iteration: 2,
         cacheReadTokens: 4536,
-        toolNames: 'run_deferred_task',
+        toolNames: 'spawn_task',
         stopReason: 'toolCalls',
       }),
     }));

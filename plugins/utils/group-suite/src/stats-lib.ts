@@ -25,8 +25,6 @@ export function monthStartStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
-const buffer = new Map<string, PendingStatsIncrement>();
-
 function bufferKey(userId: string, groupId: string, date: string): string {
   return `${userId}:${groupId}:${date}`;
 }
@@ -50,8 +48,8 @@ export function recordMessage(input: {
   sender?: { readonly id: string; readonly name?: string };
   conversation?: { readonly kind?: string; readonly id?: string };
   metadata?: Readonly<Record<string, unknown>>;
-}, runtime?: GroupSuiteRuntime): void {
-  const targetBuffer = runtime?.statsBuffer ?? buffer;
+}, runtime: GroupSuiteRuntime): void {
+  const targetBuffer = runtime.statsBuffer;
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return;
   const groupId = resolveGroupId(input);
@@ -71,9 +69,9 @@ export function recordMessage(input: {
   }
 }
 
-export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<void> {
-  const targetBuffer = runtime?.statsBuffer ?? buffer;
-  const M = getStatsModel(runtime?.db);
+export async function flushStatsBuffer(runtime: GroupSuiteRuntime): Promise<void> {
+  const targetBuffer = runtime.statsBuffer;
+  const M = getStatsModel(runtime.db);
   if (!M || targetBuffer.size === 0) return;
   for (const [key, entry] of [...targetBuffer.entries()]) {
     // 快照本次要落库的计数；flush 期间新累计的部分留在缓冲
@@ -116,9 +114,9 @@ export async function flushStatsBuffer(runtime?: GroupSuiteRuntime): Promise<voi
 export async function queryStats(
   groupId: string,
   fromDate: string,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<Map<string, { name: string; count: number }>> {
-  const M = getStatsModel(runtime?.db);
+  const M = getStatsModel(runtime.db);
   if (!M) return new Map();
   const all = (groupId
     ? await M.select().where({ group_id: groupId })
@@ -152,7 +150,7 @@ export async function statsRankText(
   cfg: GroupSuiteConfig,
   fromDate: string,
   title: string,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
   await flushStatsBuffer(runtime);
   const groupId = resolveGroupId(input);
@@ -162,9 +160,9 @@ export async function statsRankText(
   return formatRankText(data);
 }
 
-export async function myStatsText(input: MessageInput, runtime?: GroupSuiteRuntime): Promise<string> {
+export async function myStatsText(input: MessageInput, runtime: GroupSuiteRuntime): Promise<string> {
   await flushStatsBuffer(runtime);
-  const M = getStatsModel(runtime?.db);
+  const M = getStatsModel(runtime.db);
   if (!M) return '统计数据库尚未就绪';
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return '无法获取用户信息';
@@ -197,9 +195,4 @@ export async function myStatsText(input: MessageInput, runtime?: GroupSuiteRunti
     activeDays: rows.length,
   };
   return formatMyStatsText(data);
-}
-
-/** Test helper */
-export function resetStatsBuffer(): void {
-  buffer.clear();
 }

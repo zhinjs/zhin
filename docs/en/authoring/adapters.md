@@ -47,4 +47,4 @@ Implement synchronous `activate({ events })` when a listener or input stream mus
 
 Only protocols that need custom multi-stage connection behavior should extend `Endpoint`. Use [`createEndpointLifecycle`](./endpoint-lifecycle.md) for WebSocket, SSE, heartbeat, and reconnect behavior. Translate platform-specific share, audio, and card structures at the `send()` protocol boundary.
 
-See [`examples/minimal-bot/adapters/terminal.ts`](../../../examples/minimal-bot/adapters/terminal.ts) for a runnable implementation.
+See [`examples/minimal-bot/adapters/terminal/index.ts`](../../../examples/minimal-bot/adapters/terminal/index.ts) for a runnable implementation.

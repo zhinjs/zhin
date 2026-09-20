@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
@@ -19,8 +20,6 @@ const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));
 
 export type JsonSchema = Readonly<Record<string, unknown>>;
-export type RuntimeConfigDocument = Readonly<Record<string, unknown>>;
-
 export interface ComposedConfig {
   readonly effectiveSchema: JsonSchema;
   readonly document: RuntimeConfigDocument;
@@ -228,12 +227,25 @@ async function readOwnSchema(node: PluginGraphNode): Promise<JsonSchema> {
       `${file} root schema must declare properties; composition keywords (anyOf/oneOf/allOf/$ref) are not supported`,
     );
   }
+  const properties = schemaProperties(schema);
+  if (Object.hasOwn(properties, 'commandNamespace')) {
+    throw new ConfigSchemaCollisionError(node.id, 'commandNamespace');
+  }
   return Object.freeze({
     $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,
     type: 'object',
     additionalProperties: false,
     ...schema,
-    properties: schemaProperties(schema),
+    properties: {
+      commandNamespace: {
+        type: 'string',
+        minLength: 1,
+        pattern: '^\\S+(?: \\S+)*$',
+        description: 'Explicit command namespace prepended after the Endpoint commandPrefix.',
+        'x-descriptionZh': '显式指令命名空间；在 Endpoint commandPrefix 之后参与路由。',
+      },
+      ...properties,
+    },
   });
 }
 

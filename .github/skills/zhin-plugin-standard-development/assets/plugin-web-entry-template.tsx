@@ -1,7 +1,12 @@
-// @ts-nocheck
-import type { PluginRegisterHostApi } from '@zhin.js/contract'
+// @ts-nocheck — 说明性骨架：复制为 pages/dashboard/index.tsx。
+import { definePage } from 'zhin.js/page';
 
-function PluginDashboard() {
+export const meta = definePage({
+  title: 'Plugin Dashboard',
+  order: 20,
+});
+
+export default function PluginDashboard() {
   return (
     <main className="p-6">
       <header className="mb-6">
@@ -9,13 +14,5 @@ function PluginDashboard() {
         <p className="text-sm opacity-70">Replace this page with your plugin UI.</p>
       </header>
     </main>
-  )
-}
-
-export function register(api: PluginRegisterHostApi) {
-  api.addRoute({
-    path: '/console/plugins/plugin-dashboard',
-    name: 'Plugin Dashboard',
-    element: api.React.createElement(PluginDashboard),
-  })
+  );
 }

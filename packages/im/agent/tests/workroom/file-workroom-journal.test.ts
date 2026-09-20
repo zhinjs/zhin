@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import {
   FileWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 
 describe('FileWorkroomJournal durability boundary', () => {
   it('requires a pre-existing durable parent instead of recursively inventing state roots', async () => {

@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/kernel",
   "version": "1.1.0",
-  "description": "Framework-agnostic runtime kernel: Plugin DI, Feature, Config, Cron, Scheduler, errors, utilities",
+  "description": "Framework-agnostic scheduling, error, identity, and utility primitives",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -18,14 +18,11 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --config ../../vitest.config.ts"
+    "test": "vitest run --root ../../.. packages/im/kernel/tests"
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*",
-    "@zhin.js/schedule": "workspace:*",
-    "@zhin.js/schema": "workspace:*",
-    "smol-toml": "^1.7.1",
-    "yaml": "^2.9.0"
+    "@zhin.js/schedule": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

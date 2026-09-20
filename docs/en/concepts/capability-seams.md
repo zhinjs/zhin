@@ -1,7 +1,7 @@
 # Capability Seam
 
 Capability Seam is an **Advanced / experimental** provider extension for the Agent Runtime. Regular
-plugins should continue to use `tools/*.ts`, `agent/skills/*.md`, `addTool`, or `addSkill`.
+plugins should continue to use `tools/<name>/index.ts`, `skills/<name>/SKILL.md`, `addTool`, or `addSkill`.
 Those Feature paths provide manifest ownership, owner visibility, Generation HMR, and conflict
 validation. Seam is intended for a Root Host that must connect a remote capability service or an
 existing generation-owned registry.
@@ -25,21 +25,21 @@ Root Capability Seam ─┘                         │
 
 `CapabilityIngress` reads `capabilitySeamToken` from the Root resources in one fixed Runtime
 snapshot. It projects the services into the same capability snapshot as Tool and Skill Features.
-Only `TurnToolRuntime` executes a projected Tool. The deprecated `executeTool(name, args)` method
-is retained for source compatibility, but always returns a fail-closed migration error.
+There is no independent `executeTool(name, args)` path for Seam Tools. Only `TurnToolRuntime`
+executes a projected Tool.
 
 This preserves the production invariants:
 
 - a provider cannot execute after its Generation operation retires;
 - `platforms`, `scopes`, `permissions`, and `hidden` use canonical visibility checks;
-- `approval` is enforced by the Turn ApprovalPort and fails closed without an interactive port;
+- `requiresApproval` is enforced by the Turn ApprovalPort and fails closed without an interactive port;
 - Tool calls, denials, failures, and results enter the same Turn Journal;
 - duplicate Feature and Seam Tool or Skill names reject capability projection.
 
 ## Service contracts
 
 A `ToolService` supplies schemas and the final provider call. Policy metadata on `ToolSchema`
-is copied into the canonical Tool capability. Omitted `approval` defaults to `on-risk`.
+is copied into the canonical Tool capability. Omitted `requiresApproval` defaults to `on-risk`.
 
 ```ts
 import type {
@@ -64,7 +64,7 @@ export class SearchService implements ToolService {
           required: ['query'],
         },
       },
-      approval: 'never',
+      requiresApproval: 'never',
       permissions: ['authenticated'],
       source: 'remote:acme',
     }]
@@ -83,7 +83,7 @@ export class SearchService implements ToolService {
 
 A `SkillService` is a declarative catalog. `catalog()` returns names and summaries, while
 `describe()` returns complete instructions. Skill loading, prompt assembly, and Tool selection
-remain under the Agent capability plan. Direct Skill invocation is deprecated and fail-closed.
+remain under the Agent capability plan; direct Skill invocation is not part of the contract.
 
 ```ts
 import type { SkillService } from '@zhin.js/agent'
@@ -132,9 +132,9 @@ export default definePlugin({
 Do not store `SeamIntegration` in module-level state or mutate a retired Generation. Dynamic
 provider changes should produce a new Runtime Generation.
 
-The old `seamIntegrationToken` Symbol remains only for source compatibility and is not consumed
-by Plugin Runtime Scope. Migrate to `capabilitySeamToken`. The old `executeTool()` and
-`invokeSkill()` methods also return fail-closed errors.
+Capability Seam enters Plugin Runtime Scope only through `capabilitySeamToken`. `SeamIntegration`
+only registers providers and projects capabilities; it does not expose direct `executeTool()` or
+`invokeSkill()` methods.
 
 ## Scope and conflicts
 
@@ -149,7 +149,6 @@ by Plugin Runtime Scope. Migrate to `capabilitySeamToken`. The old `executeTool(
 | Class | Purpose |
 |---|---|
 | `BuiltinToolService` | Adapts QuestionPort interaction for custom Host compositions |
-| `ToolRegistryAsService` | Explicitly bridges a generation-owned `ToolRegistry` |
 | `SkillRegistryAsService` | Explicitly bridges a generation-owned `SkillRegistry` and reads Skill documents |
 
 The standard Agent Host does not publish these adapters globally. Built-in Tool and Skill
@@ -161,7 +160,7 @@ capabilities continue to use Feature projection, preserving one visibility and l
 |---|---|
 | Regular Tool or Skill in an npm plugin | Feature directory or `addTool` / `addSkill` |
 | Manifest ownership and file-level HMR | Feature |
-| Root Host remote provider or existing registry | Capability Seam |
+| Root Host remote provider | Capability Seam |
 | Bypassing approval or direct execution by name | Unsupported; use a Turn capability |
 
 See also: [Plugin Model](./plugin-model.md) · [Generation Lifecycle](./generation-lifecycle.md) ·

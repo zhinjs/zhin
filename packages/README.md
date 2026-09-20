@@ -18,9 +18,9 @@ packages/
     agent-feature/
     mcp-feature/
     runtime/         # Root control plane、配置合成、发现与 HMR
-    config-yaml/     # 保留注释与格式的 YAML ConfigDocument adapter
+    config-file/     # 事务化 YAML/JSON ConfigDocument adapter
     isolate/        # 可选 Worker/process 隔离运行时
-    kernel/          # 旧 PluginBase / Feature / Schedule 兼容层
+    kernel/          # 调度、错误、IM identity 与通用工具
     ai/
     core/
     agent/
@@ -47,8 +47,8 @@ packages/
 
 Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core` → `agent` → `zhin`
 
-旧 `kernel` 暂时承载 PluginBase / 可变 Feature / Schedule，存量迁移完成前由 Core 兼容使用；
-新 Plugin Runtime 与 Feature provider 不依赖它。
+`kernel` 只承载框架无关机制；Plugin lifecycle 属于 `plugin-runtime`，能力发现与投影属于
+`feature-kit` 及领域 Feature 包，不再存在第二套 PluginBase / 可变 Feature registry。
 
 各子包 README 摘要：
 
@@ -59,10 +59,10 @@ Plugin 主链：`plugin-runtime` → `feature-kit` → 领域 Feature → `core`
 | [`im/adapter`](im/adapter/README.md) · [`command`](im/command/README.md) · [`component`](im/component/README.md) · [`middleware`](im/middleware/README.md) | IM 领域 Feature npm 包 |
 | [`im/tool`](im/tool/README.md) · [`skill`](im/skill/README.md) · [`agent-feature`](im/agent-feature/README.md) · [`mcp-feature`](im/mcp-feature/README.md) | Agent 领域 Feature npm 包 |
 | [`im/ai`](im/ai/README.md) | Provider、`agentLoop`、`ModelRegistry` + `getModel` 白名单、`ContextRepository` |
-| [`im/core`](im/core/README.md) | Plugin、Adapter、MessageDispatcher、出站 `before.sendMessage` 链 |
+| [`im/core`](im/core/README.md) | canonical IM Runtime、消息/侧事件契约与出站渲染 |
 | [`im/agent`](im/agent/README.md) | ZhinAgent、`AIService`、工具与安全策略、模型 `/v1/models` 发现 |
 | [`im/runtime`](im/runtime/README.md) | Root control plane、Plugin graph、配置、发现、generation transaction 与 HMR |
-| [`im/config-yaml`](im/config-yaml/README.md) | 可选 YAML AST 配置文档 adapter，保留注释、格式并校验 revision |
+| [`im/config-file`](im/config-file/README.md) | YAML/JSON 配置文档 adapter，共享事务、revision、原子提交与回滚生命周期 |
 | [`im/isolate`](im/isolate/README.md) | 可选 Worker/process 隔离、RPC、generation handoff 与 crash propagation |
 | [`im/zhin`](im/zhin/README.md) | 主入口 re-export、`registerChatMessageStore` |
 

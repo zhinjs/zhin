@@ -1,15 +1,9 @@
-import type { Message } from '@zhin.js/core';
-import { readOperationClient } from '@zhin.js/tool';
-import type { Skill, Tool, McpServerEntry } from '../resource-hub/types.js';
+import type { Skill, Tool } from '../resource-hub/types.js';
 import {
   type AuthoringSkillDefinition,
-  type AuthoringConnectionDefinition,
   type AuthoringHookDefinition,
-  type BridgedToolFromAuthoring,
-  type DiscoveredAuthoringTool,
   AUTHORING_KIND,
 } from './types.js';
-import { parseConfigWithZodSchema, parseWithZodSchema, zodObjectToParameters } from './zod-schema.js';
 
 export function namespaceAuthoringName(pluginName: string, slotName: string, bare = false): string {
   if (bare) return slotName;
@@ -20,69 +14,11 @@ export function namespaceAuthoringName(pluginName: string, slotName: string, bar
 
 export function slotNameFromFile(filePath: string): string {
   const base = filePath.split(/[/\\]/).pop() ?? filePath;
-  return base.replace(/\.(ts|js|md)$/i, '');
+  return base.replace(/^\$/u, '').replace(/\.(ts|js|md)$/i, '');
 }
 
 export function slotNameFromDir(dirPath: string): string {
   return dirPath.split(/[/\\]/).filter(Boolean).pop() ?? dirPath;
-}
-
-export function bridgeAuthoringTool(
-  discovered: DiscoveredAuthoringTool,
-): BridgedToolFromAuthoring {
-  const { definition, runtimeName, pluginName, filePath } = discovered;
-  const parameters = zodObjectToParameters(definition.inputSchema);
-  const execute = async (args: Record<string, unknown>, message?: Message) => {
-    const parsed = parseWithZodSchema<Record<string, unknown>>(definition.inputSchema, args);
-    if (!parsed.ok) return `Error: ${parsed.error}`;
-    const context = {
-      pluginName,
-      runtimeName,
-      filePath,
-      ...(message ? { message } : {}),
-    } as Record<string, unknown>;
-    Object.defineProperty(context, '$client', {
-      configurable: false,
-      enumerable: true,
-      get: () => readOperationClient(message, definition.adapter),
-    });
-    return definition.execute(parsed.data, context as never);
-  };
-
-  return {
-    name: runtimeName,
-    description: definition.description,
-    parameters,
-    execute,
-    platforms: definition.adapter ? [definition.adapter] : definition.platforms,
-    scopes: definition.scopes,
-    permissions: definition.permissions,
-    tags: definition.tags,
-    keywords: definition.keywords,
-    hidden: definition.hidden,
-    source: pluginName,
-    filePath,
-    approval: definition.approval,
-    toModelOutput: definition.toModelOutput,
-  };
-}
-
-export function bridgeAuthoringToolToOrchestratorTool(bridged: BridgedToolFromAuthoring): Tool {
-  return {
-    name: bridged.name,
-    description: bridged.description,
-    parameters: bridged.parameters,
-    execute: bridged.execute,
-    platforms: bridged.platforms,
-    scopes: bridged.scopes,
-    permissions: bridged.permissions,
-    tags: bridged.tags,
-    keywords: bridged.keywords,
-    hidden: bridged.hidden,
-    source: bridged.source,
-    approval: bridged.approval,
-    toModelOutput: bridged.toModelOutput,
-  };
 }
 
 export function bridgeAuthoringSkill(
@@ -104,32 +40,6 @@ export function bridgeAuthoringSkill(
     filePath: discovered.filePath,
     always: discovered.definition.always,
   };
-}
-
-export function bridgeAuthoringConnection(
-  discovered: {
-    runtimeName: string;
-    slotName: string;
-    pluginName: string;
-    definition: AuthoringConnectionDefinition;
-  },
-  configValue: unknown,
-): { ok: true; entry: McpServerEntry } | { ok: false; error: string } {
-  const parsed = parseConfigWithZodSchema(discovered.definition.configSchema, configValue);
-  if (!parsed.ok) {
-    return { ok: false, error: `Connection "${discovered.slotName}": ${parsed.error}` };
-  }
-  const built = discovered.definition.buildEntry(parsed.data);
-  const entry: McpServerEntry = {
-    name: discovered.runtimeName,
-    transport: discovered.definition.transport,
-    url: built.url ?? discovered.definition.url,
-    command: built.command ?? discovered.definition.command,
-    args: built.args ?? discovered.definition.args,
-    env: built.env,
-    headers: { ...discovered.definition.headers, ...built.headers },
-  };
-  return { ok: true, entry };
 }
 
 export function bridgeAuthoringHook(

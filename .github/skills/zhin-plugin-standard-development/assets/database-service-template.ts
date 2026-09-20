@@ -6,7 +6,7 @@
 //
 //   my-plugin/
 //     plugin.ts               ← 本文件的 default export
-//     commands/profile.ts     ← 见文件末尾
+//     commands/profile/index.ts ← 见文件末尾
 import { createToken, definePlugin, databaseHostToken } from 'zhin.js';
 
 export const PROFILE_MODEL = 'plugin_profiles';
@@ -57,14 +57,14 @@ export default definePlugin({
   },
 });
 
-// ── commands/profile.ts ──────────────────────────────────────────────────────
+// ── commands/profile/index.ts ────────────────────────────────────────────────
 // import { defineCommand } from 'zhin.js/command';
-// import { profileStoreToken } from '../plugin.js';
+// import { profileStoreToken } from '../../plugin.js';
 //
 // export default defineCommand({
 //   description: 'Show current user profile',
 //   async execute(context) {
-//     const store = context.resources.use(profileStoreToken);
+//     const store = context.use(profileStoreToken);
 //     const [profile] = await store.list(context.input.sender.id);
 //     return profile ? `${profile.nickname}: ${profile.points}` : 'profile not found';
 //   },

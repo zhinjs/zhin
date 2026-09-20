@@ -7,9 +7,8 @@ import {
 } from '../../src/core/text-sanitize.js';
 
 const DSML_SAMPLE = `<｜｜DSML｜｜tool_calls>
-<｜｜DSML｜｜invoke name="run_deferred_task">
+<｜｜DSML｜｜invoke name="spawn_task">
 <｜｜DSML｜｜parameter name="goal" string="true">搜索成都房价</｜｜DSML｜｜parameter>
-<｜｜DSML｜｜parameter name="tool_query" string="true">web_search 成都</｜｜DSML｜｜parameter>
 </｜｜DSML｜｜invoke>
 </｜｜DSML｜｜tool_calls>`;
 

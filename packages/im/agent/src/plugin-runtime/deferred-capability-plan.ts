@@ -2,10 +2,14 @@ import {
   addSkillToSnapshot,
   getLoadedToolNamesFromSnapshot,
   touchToolInSnapshot,
+  touchToolsInSnapshot,
   type AgentTool,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
-import { toolInputSchemaToParameters } from '@zhin.js/core/tool-zod';
+import {
+  toolInputSchemaToParameters,
+  type ToolInputSchema,
+} from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
@@ -153,16 +157,21 @@ export function createDeferredCapabilityPlan(
   const config = resolveDeferredToolsConfig(options.config);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
   const projected = projectCapabilities(options.capabilities, options.authority);
-  const baseCapabilities = projected.tools.filter(
-    (tool) => !DEFERRED_META_TOOL_NAMES.has(tool.name) && !isWorkroomControl(tool.name),
+  const executableCapabilities = projected.tools.filter(
+    (tool) => (!tool.hidden || tool.placement !== undefined)
+      && !DEFERRED_META_TOOL_NAMES.has(tool.name)
+      && !isWorkroomControl(tool.name),
+  );
+  const publicCapabilities = executableCapabilities.filter(
+    (tool) => !tool.hidden
   );
   // Platform-scoped adapter tools already passed canAccess for this turn.
   // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
-  for (const tool of baseCapabilities) {
+  for (const tool of publicCapabilities) {
     if (tool.platforms?.length) alwaysLoaded.add(tool.name);
   }
-  const baseTools = baseCapabilities.map(capabilityAsAgentTool);
-  const baseCatalog = buildToolCatalog({ tools: baseTools, alwaysLoaded });
+  const publicTools = publicCapabilities.map(capabilityAsAgentTool);
+  const publicCatalog = buildToolCatalog({ tools: publicTools, alwaysLoaded });
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
@@ -172,15 +181,16 @@ export function createDeferredCapabilityPlan(
 
   const metaCapabilities = createMetaCapabilities({
     owner: options.capabilities.owner,
-    catalog: baseCatalog,
+    catalog: publicCatalog,
     skills: projected.skills,
+    tools: executableCapabilities,
     platform: options.platform,
     topK: config.discoverTopK,
     maxLoaded: config.maxLoadedPerSession,
     getSnapshot: () => snapshot,
     persist,
   });
-  const capabilities = Object.freeze([...baseCapabilities, ...metaCapabilities]);
+  const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
   const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
   const controller: DeferredCapabilityController = Object.freeze({
@@ -269,30 +279,37 @@ function projectSessionSnapshot(
   snapshot: DeferredToolSessionSnapshot,
   capabilities: Readonly<Pick<AgentCapabilities, 'tools' | 'skills'>>,
 ): DeferredToolSessionSnapshot {
-  const allowedTools = new Set(capabilities.tools.map(tool => tool.name));
   const allowedSkills = new Set(capabilities.skills.flatMap(
     skill => [skill.qualifiedName, skill.name],
   ));
+  const loadedSkills = snapshot.loadedSkills.filter(name => allowedSkills.has(name));
+  const allowedTools = new Set(capabilities.tools
+    .filter((tool) => !tool.hidden)
+    .map((tool) => tool.name));
+  const loadedSkillNames = new Set(loadedSkills);
+  for (const skill of capabilities.skills) {
+    if (!loadedSkillNames.has(skill.qualifiedName) && !loadedSkillNames.has(skill.name)) continue;
+    for (const tool of resolveSkillTools(skill, capabilities.tools)) allowedTools.add(tool);
+  }
   return {
     loadedTools: Object.fromEntries(Object.entries(snapshot.loadedTools)
       .filter(([name]) => allowedTools.has(name))),
-    loadedSkills: snapshot.loadedSkills.filter(name => allowedSkills.has(name)),
+    loadedSkills,
   };
 }
 
 export function capabilityAsAgentTool(tool: ToolCapability): AgentTool {
   const parameters = toolInputSchemaToParameters(tool.inputSchema);
+  const modelParameters = structuredClone(parameters) as AgentTool['parameters'];
   return Object.freeze({
     name: tool.name,
     description: tool.description,
-    parameters: {
-      type: 'object',
-      properties: parameters.properties ?? {},
-      ...(parameters.required?.length ? { required: parameters.required } : {}),
-    },
+    parameters: modelParameters,
     source: tool.source,
     permissions: tool.permissions,
-    approval: tool.approval,
+    tags: tool.tags ? [...tool.tags] : undefined,
+    keywords: tool.keywords ? [...tool.keywords] : undefined,
+    requiresApproval: tool.requiresApproval,
     execute: async () => {
       throw new Error(`AgentCore must execute capability ${tool.name} through ToolExecutionAuthority`);
     },
@@ -303,6 +320,7 @@ interface MetaCapabilityOptions {
   readonly owner: AgentCapabilities['owner'];
   readonly catalog: readonly ToolCatalogItem[];
   readonly skills: readonly SkillDescriptor[];
+  readonly tools: readonly ToolCapability[];
   readonly platform?: string;
   readonly topK: number;
   readonly maxLoaded: number;
@@ -356,8 +374,11 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const name = String(recordOf(raw).name ?? '');
       const skill = resolveSkill(options.skills, name);
       if (!skill) return `Skill '${name}' not found in the active generation.`;
-      await options.persist(addSkillToSnapshot(options.getSnapshot(), skill.qualifiedName));
-      return `${skill.instructions}\n__zhin_tools_mutated__`;
+      const toolNames = resolveSkillTools(skill, options.tools);
+      const withSkill = addSkillToSnapshot(options.getSnapshot(), skill.qualifiedName);
+      await options.persist(touchToolsInSnapshot(withSkill, toolNames, options.maxLoaded));
+      const unlocked = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
+      return `${skill.instructions}${unlocked}\n__zhin_tools_mutated__`;
     }),
   ]);
 }
@@ -366,7 +387,7 @@ function metaCapability(
   owner: AgentCapabilities['owner'],
   name: string,
   description: string,
-  inputSchema: unknown,
+  inputSchema: ToolInputSchema,
   execute: (input: unknown, context: ToolInvocationContext) => Promise<unknown>,
 ): ToolCapability {
   return Object.freeze({
@@ -375,7 +396,7 @@ function metaCapability(
     qualifiedName: name,
     description,
     inputSchema,
-    approval: 'never',
+    requiresApproval: 'never',
     source: 'builtin:agent-runtime',
     execute: <TInput = unknown, TResult = unknown>(input: TInput, context: ToolInvocationContext) =>
       execute(input, context) as Promise<TResult>,
@@ -389,7 +410,12 @@ function discoverSkills(
 ): Array<{ kind: 'skill'; name: string; brief: string }> {
   const needle = query.toLocaleLowerCase();
   return skills
-    .filter((skill) => !needle || `${skill.qualifiedName} ${skill.description}`.toLocaleLowerCase().includes(needle))
+    .filter((skill) => !needle || [
+      skill.qualifiedName,
+      skill.description,
+      ...(skill.keywords ?? []),
+      ...(skill.tags ?? []),
+    ].join(' ').toLocaleLowerCase().includes(needle))
     .slice(0, topK)
     .map((skill) => ({ kind: 'skill', name: skill.qualifiedName, brief: skill.description }));
 }
@@ -405,8 +431,21 @@ function loadedSkillInstructions(
 ): string[] {
   const loaded = new Set(snapshot.loadedSkills);
   return skills
-    .filter((skill) => loaded.has(skill.qualifiedName) || loaded.has(skill.name))
+    .filter((skill) => skill.always === true
+      || loaded.has(skill.qualifiedName)
+      || loaded.has(skill.name))
     .map((skill) => skill.instructions);
+}
+
+function resolveSkillTools(
+  skill: SkillDescriptor,
+  tools: readonly ToolCapability[],
+): string[] {
+  const requested = new Set(skill.toolNames ?? []);
+  if (requested.size === 0) return [];
+  return tools.filter((tool) => tool.owner === skill.owner && [...requested].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  )).map((tool) => tool.name);
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { canAccessTool } from '@zhin.js/core';
-import { createPermissionHost, type PermissionHost } from '@zhin.js/permission';
+import { PermissionHost } from '@zhin.js/permission';
 import {
   checkWecomPlatformPermit,
   normalizeWecomSenderForPermit,
@@ -27,7 +27,7 @@ describe('wecom platform-permit', () => {
   let host: PermissionHost;
 
   beforeEach(() => {
-    host = createPermissionHost();
+    host = new PermissionHost();
     host.registerPlatform('wecom', (perm, subject) => checkWecomPlatformPermit(perm, subject));
   });
 

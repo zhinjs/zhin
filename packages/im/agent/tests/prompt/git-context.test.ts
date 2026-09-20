@@ -1,9 +1,9 @@
-import { describe, it, expect, beforeEach, afterAll } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { getGitStatusLine, clearGitStatusCache } from '../../src/prompt/git-context.js';
+import { getGitStatusLine } from '../../src/prompt/git-context.js';
 
 const tmpDirs: string[] = [];
 
@@ -24,10 +24,6 @@ afterAll(() => {
 });
 
 describe('getGitStatusLine', () => {
-  beforeEach(() => {
-    clearGitStatusCache();
-  });
-
   it('非 git 仓库返回 null', async () => {
     const dir = mkTmp();
     expect(await getGitStatusLine(dir)).toBeNull();
@@ -62,12 +58,14 @@ describe('getGitStatusLine', () => {
     expect(line).not.toContain('a.txt');
   });
 
-  it('结果写入缓存，重复调用一致', async () => {
+  it('每次读取当前仓库快照', async () => {
     const dir = mkTmp();
     git(dir, ['init', '-b', 'main']);
     const first = await getGitStatusLine(dir);
+    fs.writeFileSync(path.join(dir, 'new.txt'), 'new');
     const second = await getGitStatusLine(dir);
-    expect(second).toBe(first);
+    expect(first).toBe('Git: main | clean');
+    expect(second).toBe('Git: main | 1?');
   });
 
   it('单行且不超过 256 字符', async () => {

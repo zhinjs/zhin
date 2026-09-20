@@ -38,20 +38,21 @@ minimal-bot/
 ├── plugin.ts                 # definePlugin(), Root lifecycle entry
 ├── schema.json               # Root-owned configuration contract
 ├── zhin.config.yml           # plugin / plugins hierarchical config document
-├── adapters/terminal.ts      # defineAdapter(), stdin + stdout Endpoint
-├── commands/hello.ts         # /hello
-├── commands/card.ts          # /card -> component("status-card")
-├── components/status-card.ts # defineComponent(), compiler-free Satori h()
-├── agents/hello.agent.md     # optional Agent capability authoring example
-└── tools/echo.ts             # optional defineAgentTool() example
+├── adapters/terminal/index.ts      # defineAdapter(), stdin + stdout Endpoint
+├── commands/hello/index.ts         # /hello
+├── commands/card/index.ts          # /card -> component("status-card")
+├── components/status-card/index.ts # defineComponent(), compiler-free Satori h()
+└── tools/echo/index.ts       # optional defineAgentTool() example
 ```
 
 `package.json#zhin` is the topology SSOT. It mounts `@zhin.js/adapter`, `@zhin.js/command` and
 `@zhin.js/component`; the Feature providers discover the corresponding directories. There are
 no module-level registration side effects.
 
-The Agent and Tool examples are intentionally not mounted by Stable. Add `@zhin.js/agent`, Zod
-and the Agent/Tool Feature providers when enabling AI; the default IM installation stays small.
+The Tool authoring Feature is mounted for discovery. Install `@zhin.js/agent`,
+`@zhin.js/agent-feature`, Zod, AI SDK packages, and a model provider when enabling Agent execution;
+the default IM installation stays small. The complete directory-based Agent examples live in
+[`multi-agent-room`](../multi-agent-room/) and [`test-bot`](../test-bot/).
 See [agent authoring](../../docs/authoring/agent-tools.md).
 
 ## Validate

@@ -12,7 +12,7 @@ export {
   resolveGithubConfig,
   shouldAutoReplyRepo,
   verifyWebhookSignature,
-  type GithubAdapterConfig,
+  type GithubEndpointConfig,
   type GithubInboundComment,
   type GithubWireSegment,
   type ResolvedGithubConfig,

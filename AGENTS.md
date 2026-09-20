@@ -29,7 +29,7 @@
 - 全仓库 TypeScript（ESM），测试 Vitest，Lint ESLint 10 + typescript-eslint，构建产物经 turbo 并行。
 - workspace 覆盖：`basic/*`、`packages/im/*`、`packages/console/*`、`packages/toolkit/*`、`packages/host/*`、`packages/game-kit`、`plugins/{adapters,features,games,services,utils}/*`、`examples/*`、`docs`。
 - `basic/`：基础层（cli / database / logger / schedule / schema）。
-- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-yaml、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
+- `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-file、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
 - `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
 - `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、satori、html-renderer、speech。
@@ -39,20 +39,30 @@
 
 ### 分层架构（依赖方向单向，由 harness 强制）
 
+架构 SSOT 是 [docs/concepts/architecture.md](docs/concepts/architecture.md)，实际依赖以各包
+`package.json` 为准。阅读代码时使用下面的最小依赖图：
+
 ```
-basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp）
+plugin-runtime → feature-kit → adapter / command / component / middleware / handler
+im-contract ───────────────────────────────→ adapter / core / agent
+logger / schema / schedule → kernel ──────→ core / agent
+logger ─────────────────────→ ai ─────────→ agent
+feature packages + kernel ────────────────→ core → zhin
+plugin-runtime + feature-kit ─────────────→ runtime → cli
 ```
 
 | 层 | 包 | 一句话 |
 |----|-----|--------|
-| 基础层 | `basic/*`（`@zhin.js/logger` `database` `schema` `cli`） | 日志、数据库、配置校验、命令行 |
-| 内核 | `@zhin.js/kernel` | 插件系统、定时任务、错误体系（无 IM 概念） |
-| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆（无 IM 概念） |
-| IM 层 | `@zhin.js/core` | Plugin、Adapter、Endpoint、命令、中间件 |
+| 基础契约 | `@zhin.js/plugin-runtime` `im-contract` `interaction` | generation、身份、消息与交互语义；零/近零依赖 |
+| Feature 机制 | `@zhin.js/feature-kit` 与各 Feature 包 | 能力声明、发现和运行时投影 |
+| 基础服务 | `basic/logger` `schema` `schedule` `database`、`@zhin.js/kernel` | 日志、校验、存储、调度与通用机制 |
+| AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆；无 IM 概念 |
+| IM 组装 | `@zhin.js/core` | 组合 Adapter、Command、Component、Middleware 与消息链路 |
 | Agent | `@zhin.js/agent` | ZhinAgent、多模型编排、安全沙箱、MCP |
-| 应用 | `zhin.js` | 启动入口、配置解析、插件加载 |
+| 门面与运行时 | `zhin.js`、`@zhin.js/runtime`、`@zhin.js/cli` | 公共入口、generation 编排和进程装配 |
 
-依赖方向由 `pnpm check:architecture` 强制检查，不要逆向依赖、不要让低层依赖 IM 概念。例外：`basic/cli` 是 Plugin Runtime composition root（`zhin runtime start` 装配 IM/Agent/Console Host），允许导入 packages/im 各层，仅限 basic/cli。
+`pnpm check:architecture` 强制依赖方向。`basic/cli` 是唯一 composition root，可装配 IM、
+Agent 与 Console Host；其他低层包不跨层取用上层实现。
 
 ### 示例分层（跑哪个 example 取决于任务层级）
 
@@ -82,7 +92,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - `pnpm type-check` / `pnpm lint` / `pnpm test`：也可单独跑（已含于 check:all）。
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
-- `pnpm check:plugin-agent-publish`：带 `agent/` 的插件 `package.json` 须含 `files`（`agent`、`lib` 等）与 `prepublishOnly`。
+- `pnpm check:plugin-capability-publish`：插件 `package.json` 须发布实际存在的能力目录与文档，并用 `prepublishOnly` 先构建。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。
@@ -97,12 +107,12 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 ## 必须遵守的约束（代码约定）
 
 - TypeScript 本地导入通常必须使用 `.js` 扩展名。
-- **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；能力用约定目录（`defineCommand` / `defineMiddleware` / `defineHandler` / `defineAgentTool` 等）。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
-- **Legacy API 已移除**：勿调用 `usePlugin()` / `getPlugin()`，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:use-plugin-top-level` / `pnpm check:get-plugin-runtime` 防止仓库内残留引用。
+- **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；代码能力统一使用命名目录与固定入口：`commands/**/index.ts`、`adapters|components|handlers|middlewares|pages|mcps|schedules/<name>/index.ts`、`tools|hooks/<name>/index.ts`。Skill 使用 `skills/<name>/SKILL.md`，Agent 使用 `agents/<name>/agent.json`。同一能力目录的其他文件都是 helper。Tool 的四个正式位置是根 `tools/`、`agents/<name>/tools/`、`skills/<name>/tools/`、`agents/<name>/skills/<name>/tools/`；后三者只随 Agent 选择或 Skill 激活渐进披露。主 Agent 使用插件根 `AGENTS.md`；子 Agent 必须同时包含 `system.md`、`boundaries.md`、`conventions.md`，后者只能延伸根规则。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
+- **Legacy API 已移除**：`usePlugin()` / `getPlugin()` 已不再导出，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:no-removed-plugin-api` 防止仓库内重新引入这些调用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
-- 保持依赖方向单向：basic → kernel → ai → core → agent → zhin；不要让低层依赖 IM 概念。例外仅限 `basic/cli`（见上）。
-- 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例、latest-value stack 或 `createGenerationStore`（现存调用是待删除技术债）。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
+- 保持 [架构 SSOT](docs/concepts/architecture.md) 中的依赖方向；契约与运行时底座不依赖 Core/Agent。例外仅限 composition root `basic/cli`（见上）。
+- 代级运行时状态必须通过 snapshot Resource / 当前 operation 的 Generation View 解析；禁止新增裸模块级单例或 latest-value stack；`createGenerationStore` 已删除并由门禁禁止回归。WS 类端点的 start/stop/重连/心跳统一走 `createEndpointLifecycle`（`zhin.js/adapter`），不要手写状态机。
 - Node 侧源码放 `src/`，产物放 `lib/`；浏览器侧源码放 `client/`，产物放 `dist/`。
 - 新增 workspace 包必须落在 `pnpm-workspace.yaml` 覆盖的目录里，并带独立 `package.json`。
 - 依赖策略受 `pnpm check:dependency-policy` 门禁约束；根 `pnpm-workspace.yaml` 的 `overrides` 承担大量安全版本抬升，不要随手删改。
@@ -125,7 +135,7 @@ basic → kernel → ai → core → agent → zhin（→ host/http → host/mcp
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
 - AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/ai/index.md](docs/ai/index.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
-- **插件 AI 创作面**（`agent/tools`、`agent/skills`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
+- **插件 AI 创作面**（`tools/<name>/index.ts`、`skills/<name>/SKILL.md`、`agents/<name>/`、`hooks/<name>/index.ts`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
 - 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（canonical `conversation_events` 由 CLI Database Host 装配）。
 - Host 运行时（http / mcp / a2a）：看 packages/host。
 - 可选服务插件：看 plugins/services。

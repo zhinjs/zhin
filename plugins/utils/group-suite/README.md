@@ -1,7 +1,7 @@
 # @zhin.js/plugin-group-suite
 
 Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键词回复与群问答。所有能力
-由 `commands/`、`middlewares/` 和 `agent/` 约定目录发现，不注册 legacy Plugin 回调。
+由 `commands/`、`middlewares/` 和 `skills/` 约定目录发现，不注册 legacy Plugin 回调。
 
 ## 安装与拓扑
 
@@ -51,7 +51,7 @@ plugins:
 | `teach` / `teach-regex` / `teach-list` / `forget` | 群问答管理 |
 | `keyword-add` / `keyword-list` / `keyword-remove` | 关键词回复管理 |
 | `middlewares/*` | 入站统计、关键词和问答匹配 |
-| `agent/tools/group_announce.ts` | 可选 Agent 群公告工具 |
+| `skills/<name>/tools/<tool>/index.ts` | Skill 激活后披露签到查询、排行、消息统计和群公告 Tool |
 
 本 major 不包含 Adapter side-event 欢迎/撤回、AI 群日报或 HTML 报表。这些旧能力
 需要独立的事件与渲染 Feature，已从 schema 移除，避免出现“可配置但不生效”的字段。

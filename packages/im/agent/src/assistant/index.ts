@@ -43,7 +43,6 @@ export {
   loadBootstrapWithProfile,
   syncProfileHeartbeatToStore,
   syncProfileRoutinesToStore,
-  syncProfileCronRoutinesToStore,
   pruneStaleProfileCronJobs,
   mergeProfileDeviceAliases,
   validateAssistantProfile,
@@ -52,7 +51,7 @@ export {
   buildScheduleJobFromRoutine,
 } from './profile-loader.js';
 
-export { registerJobSchedule, isRuntimeSchedulable } from './job-scheduler.js';
+export { isRuntimeSchedulable } from './job-scheduler.js';
 export { validateHomeMcpServer, listConfiguredMcpServerNames, isHomeMcpMode } from './home-mcp-bridge.js';
 export type { ScheduleDispose } from './job-scheduler.js';
 

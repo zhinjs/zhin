@@ -136,7 +136,7 @@ describe('create-zhin config', () => {
             instances: [{
               package: '@zhin.js/adapter-sandbox',
               instanceKey: 'sandbox',
-              config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] }
+              config: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] }
             }],
             envVars: {}
           },

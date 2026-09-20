@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ManifestValidationError,
   NodePackageResolver,
-  PackageCompatibilityError,
+  PackageContractError,
   PackageResolutionError,
   ProjectGraphService,
   parsePackageJson,
@@ -242,10 +242,10 @@ describe('static Project Graph', () => {
 
     await expect(new ProjectGraphService(resolver).inspect(root))
       .rejects.toMatchObject({
-        name: 'PackageCompatibilityError',
+        name: 'PackageContractError',
         contract: 'engine',
         packageName: '@test/root',
-      } satisfies Partial<PackageCompatibilityError>);
+      } satisfies Partial<PackageContractError>);
   });
 
   it('inherits features from @zhin.js/core when Root depends on it directly', async () => {

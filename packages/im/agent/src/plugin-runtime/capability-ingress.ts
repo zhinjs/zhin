@@ -60,6 +60,7 @@ export class CapabilityIngress {
     owner: PluginId,
     isActive: () => boolean = () => true,
     turn?: TurnAccessContext,
+    selectedAgent?: string,
   ): Promise<AgentCapabilities> {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
@@ -67,29 +68,64 @@ export class CapabilityIngress {
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
-    const featureTools = await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot));
-    const featureSkills = projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? [];
+    const featureTools = await bindTools(
+      tools,
+      owner,
+      isActive,
+      turn,
+      resolvePermissionHost(snapshot),
+      selectedAgent,
+    );
+    const featureSkills = await bindSkills(
+      projection(snapshot, skillFeatureId, SkillIndex),
+      turn,
+      resolvePermissionHost(snapshot),
+      selectedAgent,
+    );
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
       ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
       : [];
-    const seamSkills = seam ? await bindSeamSkills(seam, owner) : [];
+    const seamSkills = seam
+      ? await bindSeamSkills(seam, owner, turn, resolvePermissionHost(snapshot))
+      : [];
     assertDistinctCapabilities('Tool', [...featureTools, ...seamTools]);
-    assertDistinctCapabilities('Skill', [...featureSkills, ...seamSkills]);
+    assertDistinctCapabilities(
+      'Skill',
+      [...featureSkills, ...seamSkills].map((skill) => ({ name: skill.qualifiedName })),
+    );
+    const featureAgents = await bindAgents(
+      projection(snapshot, agentFeatureId, AgentIndex),
+      owner,
+      turn,
+      resolvePermissionHost(snapshot),
+    );
     return Object.freeze({
       generation: snapshot.generation,
       owner,
       tools: Object.freeze([...featureTools, ...seamTools]),
       skills: Object.freeze([...featureSkills, ...seamSkills]),
-      agents: Object.freeze([
-        ...(projection(snapshot, agentFeatureId, AgentIndex)?.visible(owner) ?? []),
-      ]),
+      agents: featureAgents,
       mcp: bindMcp(mcp, owner, isActive),
       promptSections: Object.freeze([...(promptSections?.visible(owner, promptProfile) ?? [])]
         .filter((section) => !section.platforms
           || (turn?.origin.kind === 'im' && section.platforms.includes(turn.origin.platform)))),
     });
   }
+}
+
+async function bindAgents(
+  index: AgentIndex | undefined,
+  owner: PluginId,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
+): Promise<readonly AgentDescriptor[]> {
+  if (!index) return Object.freeze([]);
+  const access = await Promise.all(index.visible(owner).map(async (descriptor) => ({
+    descriptor,
+    allowed: await canAccessDescriptor(descriptor, turn, host),
+  })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
 }
 
 function resolveSeamIntegration(snapshot: RuntimeSnapshot): SeamIntegration | undefined {
@@ -114,7 +150,7 @@ async function bindSeamTools(
     qualifiedName: entry.schema.function.name,
     description: entry.schema.function.description,
     inputSchema: entry.schema.function.parameters,
-    approval: entry.schema.approval ?? 'on-risk',
+    requiresApproval: entry.schema.requiresApproval ?? 'on-risk',
     platforms: entry.schema.platforms,
     scopes: entry.schema.scopes,
     permissions: entry.schema.permissions,
@@ -132,7 +168,7 @@ async function bindSeamTools(
   } satisfies ToolCapability));
   const access = await Promise.all(projected.map(async (descriptor) => ({
     descriptor,
-    allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
+    allowed: await canAccessDescriptor(descriptor, turn, host),
   })));
   return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
 }
@@ -140,16 +176,50 @@ async function bindSeamTools(
 async function bindSeamSkills(
   seam: SeamIntegration,
   owner: PluginId,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
 ): Promise<readonly SkillDescriptor[]> {
-  return Object.freeze((await seam.projectSkills(String(owner))).map((entry) => Object.freeze({
+  const projected = (await seam.projectSkills(String(owner))).map((entry) => Object.freeze({
     $feature: 'zhin.skill/1' as const,
     owner,
     name: entry.metadata.name,
     qualifiedName: entry.metadata.name,
     description: entry.metadata.description,
     instructions: entry.instructions,
+    toolNames: entry.metadata.toolNames,
+    platforms: entry.metadata.platforms,
+    scopes: entry.metadata.scopes,
+    permissions: entry.metadata.permissions,
+    keywords: entry.metadata.keywords,
+    tags: entry.metadata.tags,
+    always: entry.metadata.always,
     source: `seam:${entry.providerId}`,
+  } satisfies SkillDescriptor));
+  const access = await Promise.all(projected.map(async (descriptor) => ({
+    descriptor,
+    allowed: await canAccessDescriptor(descriptor, turn, host),
   })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
+}
+
+async function bindSkills(
+  index: SkillIndex | undefined,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
+  selectedAgent?: string,
+): Promise<readonly SkillDescriptor[]> {
+  if (!index) return Object.freeze([]);
+  const access = await Promise.all(index.list().map(async (descriptor) => ({
+    descriptor,
+    allowed: belongsToSelectedAgent(descriptor.agentName, selectedAgent)
+      && await canAccessDescriptor(descriptor, turn, host),
+  })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
+}
+
+function belongsToSelectedAgent(agentName: string | undefined, selectedAgent: string | undefined): boolean {
+  if (!agentName) return true;
+  return selectedAgent === agentName || selectedAgent?.endsWith(`__${agentName}`) === true;
 }
 
 function assertDistinctCapabilities(
@@ -169,19 +239,23 @@ async function bindTools(
   isActive: () => boolean,
   turn?: TurnAccessContext,
   host?: PermissionHost,
+  selectedAgent?: string,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
-  const visibleDescriptors = index.list();
+  const descriptors = index.list();
   const accessResults = await Promise.all(
-    visibleDescriptors.map(async (descriptor) => ({
+    descriptors.map(async (descriptor) => ({
       descriptor,
-      allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
+      allowed: await canAccessDescriptor(descriptor, turn, host),
     })),
   );
   return Object.freeze(accessResults
     .filter((r) => r.allowed)
     .map((r) => Object.freeze({
       ...r.descriptor,
+      hidden: isSelectedAgentTool(r.descriptor.placement, selectedAgent)
+        ? false
+        : r.descriptor.hidden,
       name: r.descriptor.qualifiedName,
       execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
@@ -190,8 +264,16 @@ async function bindTools(
     })));
 }
 
+function isSelectedAgentTool(
+  placement: ToolDescriptor['placement'],
+  selectedAgent: string | undefined,
+): boolean {
+  return placement?.kind === 'agent'
+    && belongsToSelectedAgent(placement.agent, selectedAgent);
+}
+
 async function canAccessDescriptor(
-  descriptor: ToolDescriptor,
+  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions'>,
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {

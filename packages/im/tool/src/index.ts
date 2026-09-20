@@ -4,6 +4,7 @@
  */
 /** @public Agent Tool authoring contract and `defineAgentTool`. */
 export * from './definition.js';
+export * from './input-schema.js';
 export {
   readOperationClient,
   type AdapterClient,

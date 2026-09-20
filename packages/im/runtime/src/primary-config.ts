@@ -1,6 +1,6 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { EnvStore } from './environment-store.js';
-import type { RuntimeConfigDocument } from './config-composer.js';
+import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
 /**
  * Generation-owned, validated Root configuration.

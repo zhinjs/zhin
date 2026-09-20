@@ -17,15 +17,7 @@ export {
   defaultMemorySystem,
 } from './memory-system.js';
 
-export type { CompactionRuntimeOptions } from './compaction-runtime.js';
-
-export {
-  getCompactionStateCount,
-  evictCompactionStatesIfOverPressure,
-  clearCompactionStates,
-  touchCompactionState,
-  transformContextWithCompaction,
-  manualCompactSession,
-} from './compaction-runtime.js';
+export type { CompactionContextHost, CompactionRuntimeOptions } from './compaction-runtime.js';
+export { AgentCompactionRuntime } from './compaction-runtime.js';
 
 export type { ContextRepository } from '@zhin.js/ai';

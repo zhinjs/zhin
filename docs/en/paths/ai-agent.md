@@ -39,7 +39,7 @@ ai:
 
 ## 3. Declare a Tool
 
-Create `tools/weather.ts`:
+Create `tools/weather/index.ts`:
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
@@ -48,7 +48,7 @@ import { z } from 'zod';
 export default defineAgentTool<{ city: string }>({
   description: 'Get current weather for a city',
   inputSchema: z.object({ city: z.string().min(1) }),
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ city }) {
     const response = await fetch(
       `https://wttr.in/${encodeURIComponent(city)}?format=3`,
@@ -62,7 +62,7 @@ The file path supplies the local name. The Tool enters the generation catalog, t
 
 ## 4. Add plugin-owned context
 
-Create `agent/prompt-sections/product-language.ts`:
+Create `prompt-sections/product-language/index.ts`:
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -90,6 +90,8 @@ Three Markdown memory layers are read by default:
 | Session | `data/memory/sessions/<hash>/` | current conversation notes |
 
 Loading memory does not grant write access. Writes still pass through Turn file policy and Tools. Global and platform memory are owner-only; normal conversations use session notes.
+
+These three layer directories are the only valid layout. The runtime neither reads nor migrates root-level files such as `data/memory/MEMORY.md`, and file policy rejects unknown layers. Move retained content into the canonical directories explicitly before upgrading.
 
 ## 6. Accept the result in Console
 

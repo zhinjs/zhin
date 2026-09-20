@@ -8,7 +8,7 @@ import {
   createWorkroomDeferredCapabilityPlan,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import {
-  createCatalogWorkroomPriorityAuthority,
+  CatalogWorkroomPriorityAuthority,
   workroomPriorityAuthorityReference,
 } from '../../src/plugin-runtime/workroom-priority-authority.js';
 import {
@@ -30,7 +30,7 @@ import type {
   WorkroomAcceptancePolicyDecisionPort,
 } from '../../src/workroom/acceptance-policy.js';
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 import { buildLegacyRunOfflineReport } from '../../src/workroom/legacy-run-offline-migration.js';
 import { materializeWorkroomRemoteAssignment } from '../../src/workroom/remote-assignment-issuance.js';
@@ -117,7 +117,7 @@ describe('Workroom priority and preemption production composition', () => {
       catalogRevision: sha('a'), projectDigest: digestCanonicalWorkroomValue(definition),
       orchestratorAgentDefinitionId: 'agent:orchestrator',
     };
-    const authority = createCatalogWorkroomPriorityAuthority({
+    const authority = new CatalogWorkroomPriorityAuthority({
       read: async () => ({ revision: sha('a'), definitions: { project: definition } }),
     });
     const sponsorRef = workroomPriorityAuthorityReference({
@@ -614,8 +614,8 @@ function hostTool(
   execute: ToolCapability['execute'],
 ): ToolCapability {
   return Object.freeze({
-    owner, name, qualifiedName: name, description: name, approval: 'never',
-    source: `/agent/tools/${name}.ts`, execute,
+    owner, name, qualifiedName: name, description: name, requiresApproval: 'never',
+    source: `/tools/${name}.ts`, execute,
   });
 }
 

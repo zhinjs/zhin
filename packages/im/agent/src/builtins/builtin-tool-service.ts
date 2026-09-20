@@ -28,7 +28,7 @@ const ASK_USER_SCHEMA: ToolSchema = {
       required: ['question'],
     },
   },
-  approval: 'never',
+  requiresApproval: 'never',
   source: 'builtin:interaction',
 };
 

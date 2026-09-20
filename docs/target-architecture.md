@@ -58,14 +58,19 @@ plugin-package/
   package.json                 # zhin manifest, package dependencies
   plugin.ts                    # default definePlugin()
   schema.json                  # only this Plugin's own config fields
-  commands/**/*.ts(x)
-  components/**/*.ts(x)
-  middlewares/**/*.ts
-  handlers/**/*.ts
-  tools/**/*.ts
+  commands/**/*/index.ts(x)
+  components/**/*/index.ts(x)
+  middlewares/**/*/index.ts
+  handlers/**/*/index.ts
+  tools/<name>/index.ts
+  hooks/<name>/index.ts
   skills/<name>/SKILL.md
-  agents/<name>.agent.md
-  pages/**/*.ts(x)
+  skills/<name>/tools/<name>/index.ts
+  agents/<name>/agent.json
+  agents/<name>/tools/<name>/index.ts
+  agents/<name>/skills/<name>/SKILL.md
+  agents/<name>/skills/<name>/tools/<name>/index.ts
+  pages/*/index.ts(x)
   plugins/*                    # optional, one-level workspace children
   packages/*                   # optional Feature provider workspaces
 ```
@@ -117,21 +122,27 @@ disposal. Standard providers use the following conventions:
 
 | Feature | Convention | Runtime consumer |
 | --- | --- | --- |
-| Command | `commands/**/*.ts(x)` / `defineCommand()` | CommandIndex |
-| Component | `components/**/*.ts(x)` / `defineComponent()` | OutboundRenderer |
-| Middleware | `middlewares/**/*.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
-| Handler | `handlers/**/*.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
-| Adapter | `adapters/**/*.ts` / `defineAdapter()` | AdapterIndex |
-| Tool | `tools/**/*.ts` / `defineAgentTool()` | Agent capability catalog |
+| Command | `commands/**/*/index.ts(x)` / `defineCommand()` | CommandIndex |
+| Component | `components/**/*/index.ts(x)` / `defineComponent()` | OutboundRenderer |
+| Middleware | `middlewares/**/*/index.ts` / `defineMiddleware()` | Inbound/outbound pipeline |
+| Handler | `handlers/**/*/index.ts` / `defineHandler()` (`.`-joined localName) | HandlerIndex (`message.receive` wired in ImRuntime) |
+| Adapter | `adapters/**/*/index.ts` / `defineAdapter()` | AdapterIndex |
+| Tool | root, Agent, Skill, or Agent-Skill `tools/<name>/index.ts` / `defineAgentTool()` | Progressive Agent capability catalog |
+| Hook | `hooks/<name>/index.ts` / `defineHook()` | Agent lifecycle hook registry |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
-| Agent | `agents/<name>.agent.md` | Agent capability catalog |
-| Prompt Section | `agent/prompt-sections/**/*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
-| Page | `pages/**/*.ts(x)` / `definePage()` | Console PageIndex |
-| Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |
+| Agent | `agents/<name>/agent.json` | Agent capability catalog |
+| Prompt Section | `prompt-sections/<name>/index.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
+| Page | `pages/*/index.ts(x)` / `definePage()` | Console PageIndex |
+| Layout | `pages/nav/index.tsx`, `pages/footer/index.tsx` | Console layout projection |
 
 The canonical capability identity is `(pluginId, featureId, localName)`. Display
 names, command patterns, component tags, and platform endpoint names do not
 replace it.
+
+Root Tools enter the plugin-wide deferred catalog. Agent-private Tools appear only
+for the selected Agent; Skill-private Tools unlock only through `load_skill`; an
+Agent-Skill Tool requires both scopes. Generation preparation validates all four
+locations before commit, while model disclosure remains progressive.
 
 ```mermaid
 flowchart LR
@@ -225,9 +236,9 @@ they never fabricate an IM message or silently borrow the current generation.
 
 ## Console Pages and Navigation
 
-`pages/<name>.tsx` belongs to its Plugin owner. Its route derives from the Plugin
-path: root `pages/status.tsx` is `/p-status`; `root/a/b/pages/status.tsx` is
-`/a/b/p-status`. `$nav.tsx` and `$footer.tsx` are owner-scoped layout slots;
+`pages/<name>/index.tsx` belongs to its Plugin owner. Its route derives from the Plugin
+path: root `pages/status/index.tsx` is `/p-status`; `root/a/b/pages/status/index.tsx` is
+`/a/b/p-status`. `pages/nav/index.tsx` and `pages/footer/index.tsx` are owner-scoped layout slots;
 they are not pages and resolve by nearest-ancestor fallback. Navigation is always
 derived from the PageIndex plus Plugin tree, so layout code cannot create a
 competing navigation registry.

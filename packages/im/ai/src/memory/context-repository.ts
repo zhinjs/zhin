@@ -7,10 +7,13 @@ import { createUserMessage, type AgentMessage, type UserMessage } from '../llm/t
 import { createContext, type Context } from '../llm/types/context.js';
 
 import { agentMessageRowToLlm, serializeAgentMessage, type AgentMessageRow, type AgentSummaryRecord } from './agent-db-models.js';
-import type { AgentMessageExtra } from './sender-extra.js';
+import type { AgentMessageExtra } from './user-message-presentation.js';
 
 import { findKeepRecentStartIndex } from '../compaction/agent-message-tokens.js';
-import { AgentSessionStore, MemoryAgentSessionStore } from './agent-session-store.js';
+import {
+  MemoryAgentSessionStore,
+  type AgentSessionRepository,
+} from './agent-session-store.js';
 import { branchSummaryAsUserMessage } from './branch-summarization.js';
 import {
   buildActivePathRows,
@@ -33,7 +36,7 @@ export interface SaveSummaryOptions {
 }
 
 export interface AppendMessagesOptions {
-  /** 与 `messages` 同下标；显式 extra 优先于从正文解析（本轮 user 消息） */
+  /** 与 `messages` 同下标；仅承载引用等展示上下文。 */
   messageExtras?: (AgentMessageExtra | undefined)[];
 }
 
@@ -166,7 +169,7 @@ function resolveSaveSummaryOptions(
 export class DatabaseContextRepository implements ContextRepository {
   private readonly messageModel: MessageDbModel;
   private readonly summaryModel: SummaryDbModel;
-  private readonly sessionStore: AgentSessionStore;
+  private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
@@ -174,7 +177,7 @@ export class DatabaseContextRepository implements ContextRepository {
   constructor(
     messageModel: MessageDbModel,
     summaryModel: SummaryDbModel,
-    sessionStore: AgentSessionStore,
+    sessionStore: AgentSessionRepository,
     config: ContextRepositoryConfig = {},
   ) {
     this.messageModel = messageModel;
@@ -396,13 +399,13 @@ export class DatabaseContextRepository implements ContextRepository {
 export class MemoryContextRepository implements ContextRepository {
   private readonly messages = new Map<string, AgentMessageRow[]>();
   private readonly summaries = new Map<string, AgentSummaryRecord[]>();
-  private readonly sessionStore: MemoryAgentSessionStore;
+  private readonly sessionStore: AgentSessionRepository;
   private readonly writeLock = new SessionWriteLock();
   private readonly config: Required<Pick<ContextRepositoryConfig, 'tailMessageLimit'>>;
   private readonly deferredToolSnapshots = new Map<string, DeferredToolSessionSnapshot>();
 
   constructor(
-    sessionStore: MemoryAgentSessionStore,
+    sessionStore: AgentSessionRepository,
     config: ContextRepositoryConfig = {},
   ) {
     this.sessionStore = sessionStore;

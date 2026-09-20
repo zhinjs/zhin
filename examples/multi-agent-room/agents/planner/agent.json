@@ -1,0 +1,14 @@
+{
+  "name": "Planner — 协调者",
+  "version": "1.0.0",
+  "description": "Planner — 协调者",
+  "trigger_rules": {
+    "file_patterns": [],
+    "keywords": []
+  },
+  "entry_points": [
+    "system.md",
+    "boundaries.md",
+    "conventions.md"
+  ]
+}

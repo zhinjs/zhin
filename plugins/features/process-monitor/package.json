@@ -17,7 +17,7 @@
     "plugin.js",
     "schema.json",
     "commands",
-    "tools",
+    "skills",
     "src",
     "lib",
     "README.md"
@@ -46,6 +46,7 @@
     "directory": "plugins/features/process-monitor"
   },
   "dependencies": {
+    "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
@@ -74,6 +75,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

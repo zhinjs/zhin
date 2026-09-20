@@ -9,15 +9,8 @@
 
 // ── LLM engine core (ADR 0009) ──
 export {
-  registerApiProvider,
-  registerProviderInstance,
-  getApiProvider,
-  getProviderConfig,
-  getLlmTransportModel,
-  stream,
-  complete,
-  streamSimple,
-  completeSimple,
+  LlmApiRuntime,
+  createLlmTransportModel,
   createAssistantMessageEventStream,
   createContext,
   createUserMessage,
@@ -34,9 +27,7 @@ export {
   agentLoop,
   agentContextFrom,
   assistantText,
-  registerLlmApiFromProviders,
-  resetLlmApiRegistryForTests,
-  setLiveModelsResolver,
+  createLlmApiRuntime,
   isSdkId,
   SDK_IDS,
   createSdkProviderAdapter,
@@ -62,11 +53,15 @@ export {
   mediaRefToInline,
   isMediaBlockRef,
   isMediaContentBlock,
+  AiHttpTransport,
+  createAiHttpTransport,
+  resolveAiProxyUrl,
 } from './llm/index.js';
 export type {
   PromptCacheRetention,
   ProviderGatewayPreset,
   ProviderMediaKind,
+  AiHttpTransportOptions,
 } from './llm/index.js';
 export type {
   Context,
@@ -104,6 +99,7 @@ export type {
   ToolExecutionCause,
   TokenUsage,
   SdkId,
+  LlmCompletionPort,
 } from './llm/index.js';
 export { renderContextMessage } from './llm/index.js';
 
@@ -181,17 +177,6 @@ export type {
 // ── Agent memory scope ──
 export { resolveAgentScopedSessionId } from './memory/agent-scoped-session.js';
 export type { AgentMemoryScope } from './memory/agent-scoped-session.js';
-
-export {
-  IMSessionStore,
-  MemoryIMSessionStore,
-  createSessionEpochId,
-} from './memory/im-session-store.js';
-export type {
-  IMSessionRecord,
-  CreateIMSessionInput,
-  IMSessionStoreConfig,
-} from './memory/im-session-store.js';
 
 // ── Context & Compaction ──
 export {
@@ -305,8 +290,6 @@ export type {
   AgentMessageRow,
   AgentSummaryRecord,
   AgentMessageExtra,
-  AgentMessageSenderExtra,
-  SenderScope,
 } from './memory/agent-db-models.js';
 export {
   MEMORY_ENTRY_MODEL,
@@ -325,24 +308,24 @@ export {
 } from './memory/memory-entry-repository.js';
 export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
 export {
-  buildSenderPrefix,
+  buildActorPrefix,
   parseAgentMessageExtra,
-  applySenderExtraToUserMessage,
   renderUserMessageForLlm,
   normalizeUserMessageForStorage,
-  stripSenderPrefixFromText,
-  splitQuoteFromUserText,
+  userMessageBody,
   userMessagePlainText,
   type AgentMessageQuoteExtra,
-} from './memory/sender-extra.js';
+} from './memory/user-message-presentation.js';
 export type { AppendMessagesOptions } from './memory/context-repository.js';
 
 export {
   AgentSessionStore,
   MemoryAgentSessionStore,
-  createAgentSessionEpochId,
 } from './memory/agent-session-store.js';
-export type { AgentSessionStoreConfig } from './memory/agent-session-store.js';
+export type {
+  AgentSessionRepository,
+  AgentSessionStoreConfig,
+} from './memory/agent-session-store.js';
 export { PersistenceUnavailableError } from './memory/persistence-error.js';
 
 export {

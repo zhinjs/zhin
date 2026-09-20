@@ -173,4 +173,4 @@ Job/包：… | 首条错误：…
 |------|------|
 | Issue/PR 正文 | skill `github` |
 | ADR | `docs/adr/` |
-| 记忆落盘 | `examples/full-bot/skills/memory-consolidate/` |
+| 记忆落盘 | `examples/full-bot/skills/memory-consolidate/SKILL.md` |

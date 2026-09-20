@@ -57,10 +57,3 @@ export interface WorkroomDefinition {
 export function digestWorkroomCatalogProjectBinding(definition: WorkroomDefinition): string {
   return digest({ version: 1, definition: structuredClone(definition) });
 }
-
-/** @deprecated Use WorkroomAgentMemberDefinition. */
-export type WorkroomAgentMemberConfig = WorkroomAgentMemberDefinition;
-/** @deprecated Use WorkroomConversationBindingDefinition. */
-export type WorkroomConversationBindingConfig = WorkroomConversationBindingDefinition;
-/** @deprecated Use WorkroomDefinition. */
-export type WorkroomDefinitionConfig = WorkroomDefinition;

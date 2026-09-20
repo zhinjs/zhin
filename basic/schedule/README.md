@@ -15,7 +15,7 @@ basic/ (@zhin.js/logger, schema, database, schedule, cli)
   ↓
 @zhin.js/kernel          ScheduleEngine 包装 CalendarScheduler
   ↓
-@zhin.js/core            Plugin.addSchedule
+@zhin.js/plugin-runtime  scheduleHostToken（owner-scoped）
   ↓
 @zhin.js/agent           ScheduleJobEngine、schedule_* 工具
 ```
@@ -62,16 +62,18 @@ scheduler.stop();
 
 ## 节假日数据
 
-内置 2019–2026 年国务院公示数据（`src/data/holidays/*.json`）。可运行时更新：
+内置 2019–2026 年国务院公示数据（`src/data/holidays/*.json`）。每个调度器拥有独立日历，可运行时更新：
 
 ```typescript
-import { updateData, onHolidayDataUpdate } from '@zhin.js/schedule';
+import { CalendarScheduler } from '@zhin.js/schedule';
 
-onHolidayDataUpdate(() => console.log('holiday data refreshed'));
-await updateData({ year: 2027, force: true });
+const scheduler = new CalendarScheduler();
+const unsubscribe = scheduler.holidays.onUpdate(() => console.log('holiday data refreshed'));
+await scheduler.holidays.update(2027, { force: true });
+unsubscribe();
 ```
 
-同步脚本：`scripts/sync-holiday.mjs`、`scripts/generate-holiday-registry.mjs`。
+同步脚本：`scripts/sync-holiday.mjs`、`scripts/generate-holiday-calendar.mjs`。
 
 ## 持久化 JobStore
 
@@ -93,11 +95,12 @@ pnpm vitest run basic/schedule/tests
 
 ## 主要导出
 
-- `CalendarScheduler` — 调度引擎
+- `CalendarScheduler` — 拥有独立节假日日历的调度引擎
+- `HolidayCalendar` — 节假日数据、缓存、查询、更新与订阅
 - `getNextRun` / `isJobDue` — 单次/next-run 计算
 - `resolveSolarJob` / `resolveLunarJob` / … — 解析 schedule 输入
 - `simulateNextRuns` — 预览未来触发
-- `updateData` / `fetchHolidayYearData` — 节假日数据源
+- `HolidayCalendar.update` / `fetchHolidayYearData` — 节假日数据源
 - `createLocalJsonStore` / `createSqliteStore` / `createRedisStore` — 持久化
 
 完整 API 见 `src/index.ts`。

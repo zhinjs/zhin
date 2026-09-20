@@ -13,7 +13,7 @@ import {
   MemoryWorkroomJournal,
   WorkroomSequenceConflictError,
   type WorkroomJournal,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { WorkflowPlanBuilder } from '../../src/workroom/workflow-plan-builder.js';
 

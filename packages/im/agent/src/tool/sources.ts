@@ -1,5 +1,6 @@
 import { isReservedToolName, type AgentTool } from '@zhin.js/ai';
-import { canAccessTool, getLogger, type Tool as CoreTool } from '@zhin.js/core';
+import { canAccessTool, type Tool as CoreTool } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import type { PermissionHost } from '@zhin.js/permission';
 import type { Tool, Message } from '../resource-hub/types.js';
 import type { SkillRegistry } from '../resource-hub/skill-registry.js';
@@ -7,7 +8,7 @@ import type { ZhinAgentConfig } from '../config/zhin-agent-config.js';
 import { KEYWORD_TRIGGERS } from '../config/keyword-triggers.js';
 import { createUserProfileTool } from '../tool/context-tools.js';
 import type { UserProfileStore } from '../user-profile.js';
-import { sharedToolSelection } from '../resource-hub/tool-selection.js';
+import { normalizeTool } from '../resource-hub/tool-selection.js';
 import { RESERVED_TOOL_NAMES, RESERVED_TOOL_NAME_PREFIXES } from '../reserved-tools.js';
 import type { RegisteredAgentTool, ToolFilter, ToolSource } from './contracts.js';
 const logger = getLogger('ToolSystem');
@@ -37,7 +38,7 @@ export class ExternalToolSource implements ToolSource {
     const tools: AgentTool[] = [];
     for (const tool of this.externalTools) {
       if (!(await canAccessTool(tool as unknown as CoreTool, context.message, context.permissionHost))) continue;
-      tools.push(sharedToolSelection.normalize(tool, context.message));
+      tools.push(normalizeTool(tool, context.message));
     }
     return tools;
   }
@@ -52,7 +53,7 @@ export class SkillToolSource implements ToolSource {
   collectTools(context: CollectToolsContext): AgentTool[] {
     if (!this.skillRegistry) return [];
     return this.skillRegistry.collectAllTools().map((tool) =>
-      sharedToolSelection.normalize(tool, context.message),
+      normalizeTool(tool, context.message),
     );
   }
 }

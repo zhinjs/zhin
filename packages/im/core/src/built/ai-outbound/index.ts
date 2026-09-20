@@ -4,6 +4,5 @@ export * from './plain-mention-rewrite.js';
 export * from './resolve.js';
 export * from './prompt.js';
 export * from './structured-detect.js';
-export * from './adapter-access.js';
 export * from './extensions/onebot-keyboard.js';
 export * from './extensions/qq-message.js';

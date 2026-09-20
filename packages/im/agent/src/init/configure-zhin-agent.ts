@@ -1,5 +1,5 @@
 import { getLogger } from '@zhin.js/logger';
-import { registerLlmApiFromProviders, sdkEntryFromProvider, AIProvider, ModelRegistry } from '@zhin.js/ai';
+import { createLlmApiRuntime, sdkEntryFromProvider, AIProvider, ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import { createSkillSystem, SkillSystem } from '../skill/skill-system.js';
 import type { AgentCore } from '../core/agent-core.js';
 import type { ToolSystem } from '../tool/tool-system.js';
@@ -19,8 +19,10 @@ export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
-  | 'imSessionStore' | 'agentSessionStore' | 'contextRepository'
-  | 'modelRegistry' | 'subagentSystem' | 'emitter' | 'activeBinding'
+  | 'agentSessionStore' | 'contextRepository'
+  | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
+  | 'llmRuntime'
+  | 'audioTranscriber'
   | 'bootstrapContext' | 'globalContext' | 'skillsSummaryXML' | 'deferred'
 > & {
   /** 接口外的运行时模块（declare 在类上，不经 ZhinAgentPrivate 暴露） */
@@ -29,13 +31,15 @@ export type ConfigureZhinAgentTarget = Pick<
   providerResolver: ((alias: string) => AIProvider) | null;
   alwaysSkillsBaseline: string;
   turnContextState: TurnContextBridgeState;
-  wireLlmApiLayer(): void;
 };
 
 export function applyZhinAgentConfigure(
   target: ConfigureZhinAgentTarget,
   deps: Partial<ZhinAgentDependencies>,
 ): void {
+  if (deps.providerResolver !== undefined && deps.llmRuntime === undefined) {
+    throw new Error('providerResolver requires an owner-scoped llmRuntime');
+  }
   if (deps.skillRegistry !== undefined) {
     target.skillRegistry = deps.skillRegistry;
     target.skillSystem = deps.skillRegistry ? createSkillSystem(deps.skillRegistry) : null;
@@ -51,18 +55,17 @@ export function applyZhinAgentConfigure(
   if (deps.memorySystem !== undefined) target.memorySystem = deps.memorySystem;
   if (deps.sessionSystem !== undefined) target.sessionSystem = deps.sessionSystem;
   if (deps.eventSystem !== undefined) target.eventSystem = deps.eventSystem;
-  if (deps.imSessionStore !== undefined) target.imSessionStore = deps.imSessionStore;
   if (deps.agentSessionStore !== undefined) target.agentSessionStore = deps.agentSessionStore;
   if (deps.contextRepository !== undefined) target.contextRepository = deps.contextRepository;
   if (deps.modelRegistry !== undefined) {
     target.modelRegistry = deps.modelRegistry;
     target.subagentSystem?.setModelRegistry(deps.modelRegistry);
   }
-  if (deps.hostPlugin !== undefined) target.emitter.setHostPlugin(deps.hostPlugin);
   if (deps.providerResolver !== undefined) {
     target.providerResolver = deps.providerResolver;
-    target.wireLlmApiLayer();
   }
+  if (deps.llmRuntime !== undefined) target.llmRuntime = deps.llmRuntime;
+  if (deps.audioTranscriber !== undefined) target.audioTranscriber = deps.audioTranscriber;
   if (deps.activeBinding !== undefined) {
     target.activeBinding = deps.activeBinding;
     if (deps.activeBinding) {
@@ -92,8 +95,8 @@ export function applyZhinAgentConfigure(
 export function wireZhinAgentLlmApiLayer(
   provider: AIProvider,
   providerResolver: ((alias: string) => AIProvider) | null,
-): void {
-  registerLlmApiFromProviders(
+): LlmApiRuntime {
+  return createLlmApiRuntime(
     [sdkEntryFromProvider(provider)],
     (alias) => {
       const p = alias === provider.name ? provider : providerResolver?.(alias);

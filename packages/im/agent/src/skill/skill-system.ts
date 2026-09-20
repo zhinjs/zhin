@@ -1,5 +1,5 @@
 import type { AgentTool } from '@zhin.js/ai';
-import { sharedToolSelection } from '../resource-hub/tool-selection.js';
+import { normalizeTool } from '../resource-hub/tool-selection.js';
 import type { Skill as ResourceHubSkill } from '../resource-hub/types.js';
 import { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type {
@@ -14,7 +14,7 @@ function toBlueprintSkill(skill: ResourceHubSkill): Skill {
   return {
     name: skill.name,
     description: skill.description,
-    tools: skill.tools.map((tool) => sharedToolSelection.normalize(tool) as AgentTool),
+    tools: skill.tools.map((tool) => normalizeTool(tool) as AgentTool),
     keywords: skill.keywords ?? [],
     tags: skill.tags ?? [],
     platforms: skill.platforms,
@@ -53,7 +53,7 @@ export class SkillSystem {
 
   collectTools(context: TurnContext, agentId?: string): AgentTool[] {
     const tools = this.registry.collectAllTools(agentId);
-    return tools.map((tool) => sharedToolSelection.normalize(tool, context.message));
+    return tools.map((tool) => normalizeTool(tool, context.message));
   }
 
   getAlwaysSkills(agentId?: string): ResourceHubSkill[] {

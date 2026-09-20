@@ -4,36 +4,21 @@
  * Spec: https://milky.ntqqrev.org/
  */
 
-import { isMediaRef } from '@zhin.js/core';
+import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('milky');
 
-/** Transitional legacy endpoint row (`endpoints[]` with `context: milky`). */
-export interface MilkyLegacyEndpointRow {
-  readonly context?: string;
+/** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
+export interface MilkyEndpointConfig {
   readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
-  readonly id?: string;
-  readonly baseUrl?: string;
+  readonly id: string;
+  readonly baseUrl: string;
   readonly access_token?: string;
   readonly path?: string;
   readonly reconnect_interval?: number;
   readonly heartbeat_interval?: number;
-}
-
-/** Plugin Runtime owner config (`plugins.<instanceKey>` / schema.json). */
-export interface MilkyAdapterConfig {
-  readonly connection?: 'ws' | 'sse' | 'webhook' | 'wss';
-  readonly id?: string;
-  readonly baseUrl?: string;
-  readonly access_token?: string;
-  readonly path?: string;
-  readonly reconnect_interval?: number;
-  readonly heartbeat_interval?: number;
-  /** Transitional: legacy root `endpoints[]` with `context: milky`. */
-  readonly endpoints?: ReadonlyArray<MilkyLegacyEndpointRow>;
 }
 
 export interface MilkyConfigBase {
@@ -74,7 +59,6 @@ export type ResolvedMilkyConfig =
   | MilkySseConfig
   | MilkyWebhookConfig
   | MilkyWssConfig;
-export type MilkyEndpointConfig = ResolvedMilkyConfig;
 
 export interface MilkyApiResponse<T = unknown> {
   status: 'ok' | 'failed';
@@ -127,20 +111,11 @@ function normalizeConnection(connection: string | undefined): 'ws' | 'sse' | 'we
   return 'ws';
 }
 
-export function resolveMilkyConfig(config: MilkyAdapterConfig = {}): ResolvedMilkyConfig {
-  const entry = config.endpoints?.find((item) => item.context === 'milky');
-  const connection = normalizeConnection(config.connection ?? entry?.connection);
-  const id = (typeof config.id === 'string' && config.id)
-    || (typeof entry?.id === 'string' && entry.id)
-    || process.env.MILKY_BOT_NAME
-    || 'milky-bot';
-  const baseUrl = config.baseUrl ?? entry?.baseUrl;
-  if (!baseUrl) {
-    throw new TypeError(
-      'Milky requires baseUrl (plugins.<key>.baseUrl or endpoints with context: milky)',
-    );
-  }
-  const access_token = config.access_token ?? entry?.access_token;
+export function resolveMilkyConfig(config: MilkyEndpointConfig): ResolvedMilkyConfig {
+  const connection = normalizeConnection(config.connection);
+  const id = requiredEndpointField(config.id, 'id');
+  const baseUrl = requiredEndpointField(config.baseUrl, 'baseUrl');
+  const access_token = optionalEndpointField(config.access_token);
   const base = {
     context: 'milky' as const,
     id,
@@ -152,8 +127,8 @@ export function resolveMilkyConfig(config: MilkyAdapterConfig = {}): ResolvedMil
     return {
       ...base,
       connection: 'ws',
-      reconnect_interval: config.reconnect_interval ?? entry?.reconnect_interval ?? 5000,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      reconnect_interval: config.reconnect_interval ?? 5000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
@@ -161,30 +136,41 @@ export function resolveMilkyConfig(config: MilkyAdapterConfig = {}): ResolvedMil
     return {
       ...base,
       connection: 'sse',
-      reconnect_interval: config.reconnect_interval
-        ?? entry?.reconnect_interval
-        ?? 5_000,
+      reconnect_interval: config.reconnect_interval ?? 5_000,
     };
   }
 
   if (connection === 'webhook') {
-    const path = config.path ?? entry?.path;
-    if (!path) throw new TypeError('Milky connection:webhook requires path');
+    const path = requiredEndpointField(config.path, 'path');
     return { ...base, connection: 'webhook', path };
   }
 
   if (connection === 'wss') {
-    const path = config.path ?? entry?.path;
-    if (!path) throw new TypeError('Milky connection:wss requires path');
+    const path = requiredEndpointField(config.path, 'path');
     return {
       ...base,
       connection: 'wss',
       path,
-      heartbeat_interval: config.heartbeat_interval ?? entry?.heartbeat_interval ?? 30_000,
+      heartbeat_interval: config.heartbeat_interval ?? 30_000,
     };
   }
 
   throw new TypeError(`Unknown Milky connection: ${String(connection)}`);
+}
+
+function requiredEndpointField(
+  value: unknown,
+  field: 'id' | 'baseUrl' | 'path',
+): string {
+  const resolved = optionalEndpointField(value);
+  if (!resolved) {
+    throw new TypeError(`Milky endpoint requires a non-empty ${field}`);
+  }
+  return resolved;
+}
+
+function optionalEndpointField(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
 /** 鉴权：Header Authorization: Bearer {token} 或 URL query access_token=xxx */

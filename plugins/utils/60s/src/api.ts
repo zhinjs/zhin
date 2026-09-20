@@ -1,52 +1,7 @@
-/**
- * 60s API 共享模块 — 供 *.tool.md handler 使用
- */
-
-import { resolveApiBase } from './runtime-deps.js';
-
 export type ListItem = string | Record<string, unknown>;
 
-/** Untyped 60s API JSON payload (handlers narrow fields at runtime). */
+/** Untyped 60s API JSON payload narrowed by handlers. */
 export type ApiPayload = Record<string, unknown>;
-
-export async function fetchApi<T = ApiPayload>(
-  endpoint: string,
-  params?: Record<string, string>,
-): Promise<T> {
-  const url = new URL(`${resolveApiBase()}/v2${endpoint}`);
-  if (params) {
-    Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  }
-  let res: Response;
-  try {
-    res = await fetch(url.toString(), { signal: AbortSignal.timeout(30_000) });
-  } catch (e) {
-    const err = e as Error;
-    throw new Error(
-      err.name === 'TimeoutError' ? '请求超时（30s）' : `请求失败: ${err.message}`,
-      { cause: e },
-    );
-  }
-  if (!res.ok) {
-    throw new Error(`API 请求失败: ${res.status} ${res.statusText}`);
-  }
-  const contentType = res.headers.get('content-type') ?? '';
-  if (!contentType.includes('application/json')) {
-    throw new Error(`API 返回非 JSON 响应 (content-type: ${contentType || 'unknown'})`);
-  }
-  const data = (await res.json()) as {
-    error?: string;
-    code?: number;
-    message?: string;
-    msg?: string;
-    data?: T;
-  };
-  if (data.error) throw new Error(data.error);
-  if (data.code !== undefined && data.code !== 200 && data.code !== 0) {
-    throw new Error(data.message || data.msg || `API 错误: ${data.code}`);
-  }
-  return (data.data ?? data) as T;
-}
 
 /** Coerce nested API JSON objects for property access in handlers. */
 export function asRecord(value: unknown): ApiPayload {

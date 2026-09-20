@@ -50,30 +50,32 @@ async function getOrCreateUser(
  * 同一 user_id+context 的签到串行化（per-user promise 链），
  * 避免 check-then-act 竞态导致连发两条都签到成功。
  */
-const checkinChains = new Map<string, Promise<unknown>>();
-
-function serializedCheckin<T>(key: string, task: () => Promise<T>): Promise<T> {
-  const prev = checkinChains.get(key) ?? Promise.resolve();
+function serializedCheckin<T>(
+  chains: Map<string, Promise<unknown>>,
+  key: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  const prev = chains.get(key) ?? Promise.resolve();
   const next = prev.then(task, task);
-  checkinChains.set(key, next);
+  chains.set(key, next);
   return next.finally(() => {
-    if (checkinChains.get(key) === next) checkinChains.delete(key);
+    if (chains.get(key) === next) chains.delete(key);
   });
 }
 
 export async function doCheckin(
   input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel(runtime?.db);
+  const M = getCheckinModel(runtime.db);
   if (!M) return '签到数据库尚未就绪，请稍后重试';
 
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return '无法获取用户信息';
 
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
-  return serializedCheckin(`${userId}:${ctxType}:${ctxId}`, async () => {
+  return serializedCheckin(runtime.checkinChains, `${userId}:${ctxType}:${ctxId}`, async () => {
     const user = await getOrCreateUser(M, userId, userName, ctxType, ctxId);
     if (!user) return '签到失败，请重试';
 
@@ -112,9 +114,9 @@ export async function doCheckin(
 
 export async function myPoints(
   input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel(runtime?.db);
+  const M = getCheckinModel(runtime.db);
   if (!M) return '签到数据库尚未就绪';
   const { id: userId } = resolveSender(input);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
@@ -139,9 +141,9 @@ export async function myPoints(
 export async function pointsRank(
   input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
   cfg: GroupSuiteConfig,
-  runtime?: GroupSuiteRuntime,
+  runtime: GroupSuiteRuntime,
 ): Promise<string> {
-  const M = getCheckinModel(runtime?.db);
+  const M = getCheckinModel(runtime.db);
   if (!M) return '签到数据库尚未就绪';
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const all = (await M.select().where(

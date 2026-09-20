@@ -108,12 +108,14 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 始终验证和清理用户输入
    - 使用 Schema 系统进行类型检查
    ```typescript
-   import { Schema, defineSchema } from 'zhin.js'
-   
-   defineSchema(Schema.object({
+   import { Schema } from '@zhin.js/schema'
+
+   const Input = Schema.object({
      url: Schema.string().pattern(/^https?:\/\//),  // 验证 URL 格式
      count: Schema.number().min(1).max(100)         // 限制数值范围
-   }))
+   })
+
+   const input = Input(untrustedInput)
    ```
 
 2. **防止注入攻击**
@@ -184,8 +186,8 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 审查插件代码，特别是涉及文件系统和网络访问的部分
 
 3. **配置文件**
-   - TypeScript 配置文件（`zhin.config.ts`）在运行时执行
-   - 不要从不可信来源加载配置文件
+   - Root Runtime 只读取 YAML/JSON 数据文件，不执行配置代码
+   - 密钥使用 `${ENV_VAR}` 引用并存放在环境变量中，不要写入配置文件
 
 4. **热重载功能**
    - 开发环境功能，不建议在生产环境中启用
@@ -321,12 +323,14 @@ We currently do not have a formal bug bounty program, but we will:
    - Always validate and sanitize user input
    - Use Schema system for type checking
    ```typescript
-   import { Schema, defineSchema } from 'zhin.js'
-   
-   defineSchema(Schema.object({
+   import { Schema } from '@zhin.js/schema'
+
+   const Input = Schema.object({
      url: Schema.string().pattern(/^https?:\/\//),  // Validate URL format
      count: Schema.number().min(1).max(100)         // Limit numeric range
-   }))
+   })
+
+   const input = Input(untrustedInput)
    ```
 
 2. **Prevent Injection Attacks**
@@ -398,8 +402,8 @@ We currently do not have a formal bug bounty program, but we will:
    - Review plugin code, especially filesystem and network access
 
 3. **Configuration Files**
-   - TypeScript config files (`zhin.config.ts`) execute at runtime
-   - Don't load config files from untrusted sources
+   - Root Runtime reads YAML/JSON data files only and does not execute configuration code
+   - Keep secrets in environment variables and reference them as `${ENV_VAR}`
 
 4. **Hot Reload Feature**
    - Development environment feature, not recommended for production
@@ -431,4 +435,3 @@ We plan to introduce in future versions:
 ---
 
 **Last Updated**: November 2025
-

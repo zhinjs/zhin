@@ -1,6 +1,5 @@
 import {
   subscribeAIEventsOnTarget,
-  activityFeedbackAiBus,
   isActivityFeedbackEnabled,
   type AIEventHandlers,
   type AIEventPayload,
@@ -120,10 +119,10 @@ export function createActivityFeedbackAIEventHandlers(
 }
 
 /**
- * Plugin Runtime path: subscribe on module-level `activityFeedbackAiBus`
- * (fed by ZhinAgentEventEmitter.emit). No usePlugin / Adapter inject.
+ * Plugin Runtime path: subscribe to the generation-owned Agent event bus.
  */
 export function bindActivityFeedbackToAIEventBus(
+  source: AIEventTarget,
   orchestrator: ActivityFeedbackOrchestrator,
   admission: GenerationAdmissionGate,
   runWithView: <T>(operation: () => Promise<T>) => Promise<T>,
@@ -138,7 +137,7 @@ export function bindActivityFeedbackToAIEventBus(
     });
   };
   const serialized = createGenerationSerializedTarget(
-    activityFeedbackAiBus,
+    source,
     admission,
     runWithView,
     watchRetirement,

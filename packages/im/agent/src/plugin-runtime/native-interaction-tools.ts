@@ -31,7 +31,7 @@ export function createNativeInteractionToolFeatures(): readonly NativeInteractio
         }),
         required: Object.freeze(['question']),
       }),
-      approval: 'never',
+      requiresApproval: 'never',
       execute: askUser,
     }),
   })]);

@@ -18,10 +18,9 @@ export {
 } from './redact.js';
 export {
   ModerationEngine,
-  getModerationEngine,
-  resetModerationEngine,
   mergeResults,
 } from './engine.js';
+export { moderationEngineToken } from './runtime.js';
 export type {
   Severity,
   Action,

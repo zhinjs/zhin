@@ -27,9 +27,10 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
+    "skills",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "PERMITS.md"
   ],
   "keywords": [
     "zhin",
@@ -55,7 +56,8 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "imhelper": "1.0.7",
-    "ws": "^8.21.1"
+    "ws": "^8.21.1",
+    "@zhin.js/skill": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
@@ -114,6 +116,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

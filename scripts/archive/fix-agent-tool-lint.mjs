@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * One-shot codemod: plugin agent/tools with `execute(input: any)` → typed destructuring.
+ * One-shot codemod: plugin tools with `execute(input: any)` → typed destructuring.
  */
 import fs from 'node:fs';
 import path from 'node:path';

@@ -39,7 +39,7 @@ ai:
 
 ## 3. 声明一个 Tool
 
-创建 `tools/weather.ts`：
+创建 `tools/weather/index.ts`：
 
 ```ts
 import { defineAgentTool } from '@zhin.js/tool';
@@ -48,7 +48,7 @@ import { z } from 'zod';
 export default defineAgentTool<{ city: string }>({
   description: '查询城市实时天气',
   inputSchema: z.object({ city: z.string().min(1) }),
-  approval: 'never',
+  requiresApproval: 'never',
   async execute({ city }) {
     const response = await fetch(
       `https://wttr.in/${encodeURIComponent(city)}?format=3`,
@@ -62,7 +62,7 @@ export default defineAgentTool<{ city: string }>({
 
 ## 4. 给插件补充业务上下文
 
-创建 `agent/prompt-sections/product-language.ts`：
+创建 `prompt-sections/product-language/index.ts`：
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -90,6 +90,8 @@ Prompt Section 固定到 generation。热更后，新回合读取新版本；已
 | 会话级 | `data/memory/sessions/<hash>/` | 当前会话笔记 |
 
 “加载记忆”不等于“允许写入”。写文件仍要经过 Turn 的文件策略与 Tool；全局和平台记忆只有 Endpoint Owner 可以写，会话笔记用于普通会话。
+
+以上三层目录是唯一有效布局。运行时不会读取或迁移 `data/memory/MEMORY.md` 等根目录旧文件，未知层级也会被文件策略拒绝；升级前请显式把需要保留的内容整理到规范目录。
 
 ## 6. 在 Console 验收
 

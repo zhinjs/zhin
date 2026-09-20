@@ -63,10 +63,10 @@ minimal-bot/
 ├── plugin.ts                 # definePlugin() 入口
 ├── schema.json               # 配置契约
 ├── zhin.config.yml           # plugin / plugins 分层配置
-├── adapters/terminal.ts      # stdin/stdout 终端 Endpoint
-├── commands/hello.ts         # /hello
-├── commands/card.ts          # /card → 组件渲染
-└── components/status-card.ts # Satori 卡片组件
+├── adapters/terminal/index.ts      # stdin/stdout 终端 Endpoint
+├── commands/hello/index.ts         # /hello
+├── commands/card/index.ts          # /card → 组件渲染
+└── components/status-card/index.ts # Satori 卡片组件
 ```
 
 ## capabilities-bot：definePlugin 能力样板

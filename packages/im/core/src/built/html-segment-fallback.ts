@@ -1,9 +1,8 @@
 /**
- * 出站 `html` 消息段兜底：等价于 Adapter policy `html:'text'`。
- * 出站渲染首选 `resolveRichSegments`（renderSendMessage 首步）。
+ * Convert unresolved `html` segments to portable text content.
+ * Canonical outbound rendering owns when this fallback is applied.
  */
-import type { Plugin } from '../plugin.js';
-import type { MessageElement, SendContent, SendOptions } from '../types.js';
+import type { MessageElement, SendContent } from '../types.js';
 import { segment } from '../utils.js';
 import { htmlToFallbackText } from './html-to-text.js';
 
@@ -35,19 +34,4 @@ export function coerceHtmlSegmentsToText(content: SendContent): SendContent {
   if (out.length === 0) return segment.text('');
   if (out.length === 1) return out[0]!;
   return out;
-}
-
-/** 注册链尾 before.sendMessage：将未转换的 html 段降级为 text */
-export function registerHtmlSegmentFallback(plugin: Plugin): () => void {
-  const handler = (options: SendOptions): SendOptions => {
-    const content = options.content;
-    if (content == null) return options;
-    const items = asArray(content);
-    if (!items.some((item) => typeof item !== 'string' && item?.type === 'html')) {
-      return options;
-    }
-    return { ...options, content: coerceHtmlSegmentsToText(content) };
-  };
-  plugin.root.on('before.sendMessage', handler);
-  return () => plugin.root.off('before.sendMessage', handler);
 }

@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   AnomalyDetector,
-  initAnomalyDetector,
-  getAnomalyDetector,
+  createDefaultAnomalyDetector,
   DEFAULT_BEHAVIOR_PATTERNS,
   DEFAULT_DETECTION_RULES,
 } from '../../src/security/anomaly-detection.js';
@@ -303,25 +302,17 @@ describe('AnomalyDetector', () => {
     });
   });
 
-  describe('全局实例', () => {
-    it('应该获取全局实例', () => {
-      const instance = getAnomalyDetector();
-      expect(instance).toBeDefined();
-    });
-
-    it('应该初始化全局实例', () => {
-      const instance = initAnomalyDetector();
-      expect(instance).toBeDefined();
-    });
-
-    it('应该使用预定义模式和规则', () => {
-      const detector = initAnomalyDetector();
+  describe('默认检测器工厂', () => {
+    it('每次创建独立且包含预定义规则的检测器', () => {
+      const detector = createDefaultAnomalyDetector();
+      const other = createDefaultAnomalyDetector();
 
       // 测试预定义规则
       const anomalies = detector.detect({
         toolName: 'eval',
       });
 
+      expect(other).not.toBe(detector);
       expect(anomalies.length).toBeGreaterThan(0);
       expect(anomalies[0].type).toBe('security');
     });

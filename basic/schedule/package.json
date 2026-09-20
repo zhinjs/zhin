@@ -18,7 +18,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
-    "test": "vitest run --config ../../vitest.config.ts basic/schedule/tests"
+    "test": "cd ../.. && vitest run basic/schedule/tests"
   },
   "keywords": [
     "zhin",

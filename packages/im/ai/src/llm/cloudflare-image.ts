@@ -10,6 +10,7 @@ export async function generateCloudflareImage(
   config: ProviderInstanceConfig,
   request: ImageGenerateRequest,
   defaults: { defaultModel?: string; numSteps?: number } = {},
+  fetchFn: typeof globalThis.fetch = globalThis.fetch,
 ): Promise<ImageGenerateResult> {
   const accountId = config.accountId?.trim();
   if (!accountId) {
@@ -30,7 +31,7 @@ export async function generateCloudflareImage(
     ...config.headers,
   };
 
-  const res = await fetch(runUrl, {
+  const res = await fetchFn(runUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify({ prompt: request.prompt, num_steps: numSteps }),

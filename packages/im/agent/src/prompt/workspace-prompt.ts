@@ -13,27 +13,13 @@ const PACKAGE_PROMPTS_DIR = path.join(
 
 export type WorkspacePromptRole = 'orchestrator' | 'deferred-worker' | 'compaction';
 
-const promptFileCache = new Map<string, { content: string; mtimeMs: number }>();
-
 function readPromptFileSync(filePath: string): string | null {
   try {
-    const stats = fs.statSync(filePath);
-    const cached = promptFileCache.get(filePath);
-    if (cached && cached.mtimeMs === stats.mtimeMs) {
-      return cached.content;
-    }
     const content = fs.readFileSync(filePath, 'utf-8').trim();
-    if (!content) return null;
-    promptFileCache.set(filePath, { content, mtimeMs: stats.mtimeMs });
-    return content;
+    return content || null;
   } catch {
-    promptFileCache.delete(filePath);
     return null;
   }
-}
-
-export function clearWorkspacePromptCache(): void {
-  promptFileCache.clear();
 }
 
 function resolveFirstExisting(

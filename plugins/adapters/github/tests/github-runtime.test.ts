@@ -4,7 +4,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
-import defineGithubAdapter from '../adapters/github.js';
+import defineGithubAdapter from '../adapters/github/index.js';
 import { GithubEndpoint } from '../src/endpoint.js';
 import { GhClient } from '../src/gh-client.js';
 import {
@@ -13,6 +13,7 @@ import {
   resolveGithubConfig,
   shouldAutoReplyRepo,
   verifyWebhookSignature,
+  type GithubEndpointConfig,
 } from '../src/protocol.js';
 import { githubClient } from '../src/client.js';
 
@@ -47,18 +48,40 @@ function mockGhClient(overrides: Partial<GhClient> = {}): GhClient {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(hosts.splice(0).map((host) => host.close()));
 });
 
 describe('github protocol helpers', () => {
   it('resolves plugin config with defaults', () => {
-    const resolved = resolveGithubConfig({
+    const config: GithubEndpointConfig = {
+      id: 'github-bot',
       app_id: 42,
       private_key: 'key',
-    });
+    };
+    const resolved = resolveGithubConfig(config);
     expect(resolved.webhookPath).toBe('/github/webhook');
     expect(resolved.id).toBe('github-bot');
     expect(resolved.appId).toBe(42);
+    expect(resolved.workspaceRoot).toBe('data/github-workspaces');
+  });
+
+  it('does not infer credentials or identity from process state and compatibility shapes', () => {
+    vi.stubEnv('GITHUB_APP_ID', '42');
+    vi.stubEnv('GITHUB_BOT_NAME', 'github-bot');
+    vi.stubEnv('GITHUB_WEBHOOK_SECRET', 'secret');
+    const resolve = resolveGithubConfig as (config: unknown) => unknown;
+    expect(() => resolve({ private_key: 'key' })).toThrow(/non-empty id/);
+    expect(() => resolve({ id: 'github-bot', private_key: 'key' }))
+      .toThrow(/app_id and private_key/);
+    expect(() => resolve({
+      endpoints: [{ context: 'github', id: 'github-bot', app_id: 42, private_key: 'key' }],
+    })).toThrow(/non-empty id/);
+    expect(() => resolve({
+      id: 'github-bot',
+      appId: 42,
+      privateKey: 'key',
+    })).toThrow(/app_id and private_key/);
   });
 
   it('verifies HMAC-SHA256 webhook signatures', () => {

@@ -9,7 +9,7 @@ import {
   FileWorkroomJournal,
   MemoryWorkroomJournal,
   type WorkroomJournalPayloadPort,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import {
   canonicalWorkroomJson,
   digestCanonicalWorkroomValue as digest,

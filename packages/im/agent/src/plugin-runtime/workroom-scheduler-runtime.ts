@@ -1,7 +1,7 @@
 import { compareCanonicalWorkroomText } from '../workroom/canonical-value.js';
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { WorkroomEvent, WorkroomRunState } from '../workroom/kernel-contracts.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
 import type { RemoteAssignmentDispatchCommandService } from '../workroom/remote-assignment-dispatch-command.js';
 import {

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=badc7385025f5e84 -->
+<!-- sync-adapter-docs:sha256=52db6226ccc21ac6 -->
 
 # @zhin.js/adapter-lark
 
@@ -31,7 +31,7 @@ pnpm add @zhin.js/adapter-lark
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/lark.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/lark/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `@zhin.js/host-http` — `httpHostToken` 注册 Webhook 路由（**非** legacy host-router/Koa）
 - `zhin.js` — `plugin.ts`（`definePlugin`）
@@ -40,7 +40,7 @@ pnpm add @zhin.js/adapter-lark
 入站：`gateway.receive({ conversation, message: { conversation, id }, content: text, sender, metadata })`  
 出站：`send({ conversation, payload })` → `im/v1/messages`
 
-入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `name` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
+入站 `metadata.mentioned`：**未接线**。消息事件的 `mentions[]` 元素含 `id.open_id`，但本适配器拿不到 bot 自身的 open_id——配置（`appId` / `appSecret` / `id` 等）不含 bot open_id，代码也未调用 `bot/v3/info` 获取应用信息，故无可靠判据比对 mentions。
 
 ## 前置条件
 
@@ -49,7 +49,7 @@ pnpm add @zhin.js/adapter-lark
 3. 启用机器人能力并配置事件订阅 URL：`https://your-domain/lark/webhook`
 4. Runtime Host（`http`）须已 listen，Webhook 才可达
 
-必填字段（`endpoints[i]`）：`name`、`appId`、`appSecret`。
+必填字段（`endpoints[i]`）：`id`、`appId`、`appSecret`。
 
 ## 最小配置
 
@@ -61,7 +61,7 @@ plugins:
     isFeishu: true                      # 可选，默认 true
     # apiBaseUrl: https://open.feishu.cn/open-apis
     endpoints:
-      - name: my-lark-bot
+      - id: my-lark-bot
         appId: ${LARK_APP_ID}
         appSecret: ${LARK_APP_SECRET}
         # encryptKey: ${LARK_ENCRYPT_KEY}          # 可选
@@ -74,9 +74,8 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `LARK_APP_ID` | 应用 App ID |
-| `LARK_APP_SECRET` | 应用 App Secret |
-| `LARK_BOT_NAME` | 默认 endpoint 名称（可选） |
+| `LARK_APP_ID` | 示例中由 YAML `${LARK_APP_ID}` 引用的 App ID；变量名可自行定义 |
+| `LARK_APP_SECRET` | 示例中由 YAML `${LARK_APP_SECRET}` 引用的 App Secret；变量名可自行定义 |
 
 ## 消息类型映射
 
@@ -91,7 +90,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、群聊、管理员、上传文件等）。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
+`tools/` 目录提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

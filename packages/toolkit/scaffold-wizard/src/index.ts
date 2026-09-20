@@ -27,7 +27,6 @@ export {
   generateAIEnvVars,
   generateAIConfigYaml,
   generateAIConfigJSON,
-  generateAIConfigToml,
   RECOMMENDED_AI_DEFAULTS,
 } from './ai.js';
 
@@ -46,7 +45,7 @@ export {
   listAIDependencyNames,
   formatAIDependencyHint,
   isAiEnabledInConfig,
-  resolveDefaultProviderFromConfig,
+  resolveAgentProviderFromConfig,
   getRequiredAIDependenciesForConfig,
   diagnoseAIDependencies,
   formatAIDependencyFixCommand,
@@ -119,7 +118,7 @@ export {
   mergePluginManifestIntoPackageJson,
   finalizeWizardOptions,
   applyWizardOptionsToConfig,
-  normalizePluginsMap,
+  clonePluginConfigurationMap,
   materializeDatabaseConfig,
   buildRuntimeConfigDocument,
   serializeRuntimeConfig,

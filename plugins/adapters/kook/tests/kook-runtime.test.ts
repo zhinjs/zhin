@@ -5,7 +5,7 @@ import { kookRuntimeStateToken } from '../src/kook-runtime-state.js';
 import { capabilityId, featureId, rootPluginId } from 'zhin.js';
 import { outboundMessageToken, sideEventGatewayToken, type OutboundMessageService } from '@zhin.js/core/runtime';
 import { createHttpHost, httpHostToken } from '@zhin.js/host-http';
-import defineKookAdapter from '../adapters/kook.js';
+import defineKookAdapter from '../adapters/kook/index.js';
 import {
   KookWebhookEndpoint,
   KookWebsocketEndpoint,
@@ -140,13 +140,14 @@ function webhookMessageEvent(overrides: Partial<KookWebhookEventData> = {}): Koo
 
 describe('kook protocol helpers', () => {
   it('resolves plugin config with websocket default', () => {
-    const resolved = resolveKookConfig({ token: 'tok' });
+    const resolved = resolveKookConfig({ id: 'kook-bot', token: 'tok' });
     expect(resolved.connection).toBe('websocket');
     expect(resolved.id).toBe('kook-bot');
   });
 
   it('selects webhook mode when configured', () => {
     const resolved = resolveKookConfig({
+      id: 'kook-bot',
       token: 'tok',
       connection: 'webhook',
       verify_token: VERIFY_TOKEN,
@@ -376,6 +377,7 @@ describe('kook plugin runtime adapter', () => {
       id: capabilityId(rootPluginId(), adapterFeature, 'kook'),
       name: 'kook',
       config: {
+        id: 'kook',
         token: 'tok',
         connection: 'webhook',
         verify_token: VERIFY_TOKEN,
@@ -471,7 +473,7 @@ describe('kook plugin runtime adapter', () => {
 });
 
 
-describe('kook.endpoint management', () => {
+describe('kook endpoint management', () => {
   const GUILD_ID = '9876543210987654321';
 
   function createManagementEndpoint(mock: KookClientTransport) {

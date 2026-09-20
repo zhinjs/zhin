@@ -1,16 +1,21 @@
 # @zhin.js/skill
 
-下一代 Markdown Skill Feature。`skills/<name>/SKILL.md` 是 Skill 的唯一事实源，目录名提供稳定 identity，Markdown 内容作为 immutable instructions 进入 generation snapshot。
+Markdown Skill Feature。`skills/<name>/SKILL.md` 是 Skill 的唯一事实源，目录名提供稳定 identity，Markdown 内容作为 immutable instructions 进入 generation snapshot。
 
 ## 目录约定
 
 ```text
 skills/
 └── research/
-    └── SKILL.md
+    ├── SKILL.md
+    ├── tools/
+    │   └── search/
+    │       └── index.ts
+    ├── helper.md
+    └── references/
 ```
 
-只扫描一级 Skill 目录和其中精确命名的 `SKILL.md`。旧 `agent/skills/*.md`、任意散落 Markdown 和嵌套 Skill 不会被隐式发现。
+公共 Skill 使用 `skills/<name>/SKILL.md`；Agent 私有 Skill 使用 `agents/<agent>/skills/<name>/SKILL.md`。Skill 的私有 Tool 放在该 Skill 的 `tools/<name>/index.ts`，会自动加入 Skill 的 Tool 白名单；参考资料继续与 Skill 共置。默认只披露 Skill 名称、描述和检索字段，完整 instructions 与私有 Tool 要到 `load_skill` 后才进入当前会话能力集。
 
 ## Markdown 契约
 
@@ -20,7 +25,7 @@ skills/
 Prefer primary sources. Record uncertainty and citations.
 ```
 
-Feature 不解析或重写 Markdown frontmatter；完整文本原样保存为 `instructions`。首个 Markdown heading 用作 description，没有 heading 时回退到目录名。模型 adapter 可以按自身能力解释 Markdown，但不能维护第二份 Skill metadata registry。
+Feature 解析 YAML frontmatter 中的 `description`、`tools`、`platforms`、`scopes`、`permissions`、`keywords`、`tags` 与 `always`，并从模型 instructions 中移除 frontmatter。`name` 若存在必须与目录名一致；没有 description 时使用首个 Markdown heading。
 
 单文件插件可用 `setup({ addSkill })` 直接注册 Markdown：
 `addSkill('research', '# Research\n\nPrefer primary sources.')`。内容仍经过同一个
@@ -31,14 +36,14 @@ Markdown validator 并进入 SkillIndex。
 `SkillIndex` 提供：
 
 - `list()`：全树 Skill，包含 owner、qualified name、source 和 instructions。
-- `visible(owner)`：owner 可见的 Root/ancestor Skill，nearest owner override 生效。
+- `visible(owner)`：owner 可见的 Root/ancestor Skill，nearest owner override 生效（底层索引能力）。
 - `get(owner, name)`：按 owner 继承链解析单个 Skill。
 
 Skill definition 没有连接、timer 或 disposer。HMR 替换 Markdown Slot 后原子发布新 projection；进行中的 turn 继续读取旧文本。
 
 ## 依赖
 
-只依赖 Next Kernel 与 Feature Kit，不依赖 Markdown parser、YAML、AI SDK 或向量数据库。
+只依赖 Plugin Runtime、Feature Kit 与 YAML frontmatter parser，不依赖 AI SDK 或向量数据库。
 
 ## 验证
 

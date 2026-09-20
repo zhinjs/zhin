@@ -23,27 +23,25 @@ const BLOCKED_PROTO_PROPS: ReadonlySet<string | symbol> = new Set([
   '__lookupSetter__',
 ]);
 
-const proxyCache = new WeakMap<object, object>();
-
 /**
  * Wrap a host value in a Proxy that structurally prevents prototype-chain access.
  * Intercepts ALL property-access vectors: dot/bracket notation, string concatenation,
  * Reflect.get, Reflect.getOwnPropertyDescriptor, Object.getOwnPropertyDescriptor,
  * Object.getPrototypeOf, etc.
  */
-function createSafeProxy<T>(value: T): T {
+function createSafeProxy<T>(value: T, proxies: WeakMap<object, object>): T {
   if (value === null || value === undefined) return value;
   const type = typeof value;
   if (type !== 'object' && type !== 'function') return value;
 
   const obj = value as object;
-  const cached = proxyCache.get(obj);
+  const cached = proxies.get(obj);
   if (cached) return cached as T;
 
   const handler: ProxyHandler<any> = {
     get(target, prop) {
       if (BLOCKED_PROTO_PROPS.has(prop)) return undefined;
-      return createSafeProxy(Reflect.get(target, prop));
+      return createSafeProxy(Reflect.get(target, prop), proxies);
     },
     has(target, prop) {
       if (BLOCKED_PROTO_PROPS.has(prop)) return false;
@@ -66,10 +64,10 @@ function createSafeProxy<T>(value: T): T {
         return desc;
       }
       // Wrap descriptor values so leaked references are also proxied.
-      if ('value' in desc) desc.value = createSafeProxy(desc.value);
+      if ('value' in desc) desc.value = createSafeProxy(desc.value, proxies);
       if (desc.get) {
         const originalGet = desc.get;
-        desc.get = function(this: any) { return createSafeProxy(originalGet.call(target)); };
+        desc.get = function(this: any) { return createSafeProxy(originalGet.call(target), proxies); };
       }
       return desc;
     },
@@ -91,7 +89,7 @@ function createSafeProxy<T>(value: T): T {
   }
 
   const proxy = new Proxy(obj, handler) as T;
-  proxyCache.set(obj, proxy as object);
+  proxies.set(obj, proxy as object);
   return proxy;
 }
 
@@ -101,7 +99,7 @@ function createSafeProxy<T>(value: T): T {
  * Host objects are wrapped in Proxy to structurally prevent prototype-chain escapes.
  */
 export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: string, context: S): T | undefined => {
-  const script = getOrCompileScript(exp);
+  const script = compileScript(exp);
   if (!script) return undefined;
 
   try {
@@ -111,23 +109,12 @@ export const evaluate = <S extends Record<string, unknown>, T = unknown>(exp: st
   }
 };
 
-const MAX_EVAL_CACHE_SIZE = 1000;
-const scriptCache = new Map<string, vm.Script>();
-
-function getOrCompileScript(code: string): vm.Script | null {
-  let script = scriptCache.get(code);
-  if (script) return script;
+function compileScript(code: string): vm.Script | null {
   try {
-    script = new vm.Script(code);
+    return new vm.Script(code);
   } catch {
     return null;
   }
-  if (scriptCache.size >= MAX_EVAL_CACHE_SIZE) {
-    const oldest = scriptCache.keys().next().value;
-    if (oldest !== undefined) scriptCache.delete(oldest);
-  }
-  scriptCache.set(code, script);
-  return script;
 }
 
 /**
@@ -138,9 +125,10 @@ function getOrCompileScript(code: string): vm.Script | null {
  */
 function buildSandbox<S extends Record<string, unknown>>(context: S): Record<string, unknown> {
   const sandbox: Record<string, unknown> = Object.create(null);
+  const proxies = new WeakMap<object, object>();
 
   for (const [key, value] of Object.entries(context)) {
-    sandbox[key] = createSafeProxy(value);
+    sandbox[key] = createSafeProxy(value, proxies);
   }
 
   const safeProcess: Record<string, unknown> = Object.create(null);
@@ -179,22 +167,12 @@ function buildSandbox<S extends Record<string, unknown>>(context: S): Record<str
  */
 export const execute = <S extends Record<string, unknown>, T = unknown>(code: string, context: S): T => {
   const wrapped = `(function(){${code}})()`;
-  const script = getOrCompileScript(wrapped);
+  const script = compileScript(wrapped);
   if (!script) throw new SyntaxError(`Failed to compile: ${code.slice(0, 80)}`);
 
   return script.runInNewContext(buildSandbox(context), { timeout: 200 }) as T;
 };
 
-export function clearEvalCache(): void {
-  scriptCache.clear();
-}
-
-export function getEvalCacheStats(): { size: number; maxSize: number } {
-  return {
-    size: scriptCache.size,
-    maxSize: MAX_EVAL_CACHE_SIZE,
-  };
-}
 export function compiler(template: string, ctx: Dict) {
   for (const item of readTemplateRefs(template)) {
     const tpl = item.expr;

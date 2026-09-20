@@ -55,7 +55,7 @@ export function generatePluginFiles(
   };
 
   if (features.includes("command")) {
-    files[`commands/${name}.ts`] = `import { defineCommand } from 'zhin.js/command';
+    files[`commands/${name}/index.ts`] = `import { defineCommand } from 'zhin.js/command';
 
 export default defineCommand({
   description: '${description}',
@@ -68,7 +68,7 @@ export default defineCommand({
   }
 
   if (features.includes("middleware")) {
-    files[`middlewares/${name}.ts`] = `import { defineMiddleware } from '@zhin.js/middleware';
+    files[`middlewares/${name}/index.ts`] = `import { defineMiddleware } from '@zhin.js/middleware';
 
 export default defineMiddleware({
   // ${description}
@@ -80,7 +80,7 @@ export default defineMiddleware({
   }
 
   if (features.includes("component")) {
-    files[`components/${name}.ts`] = `import { defineComponent } from 'zhin.js/component';
+    files[`components/${name}/index.ts`] = `import { defineComponent } from 'zhin.js/component';
 
 export default defineComponent<{ title?: string; content?: string }>({
   render(props) {

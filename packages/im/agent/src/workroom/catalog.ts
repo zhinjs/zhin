@@ -5,7 +5,7 @@ import {
 } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import type { WorkroomDefinition } from './catalog-definition.js';
-import { validateWorkroomDefinitions } from '../config/validate-ai-config.js';
+import { validateWorkroomDefinitions } from './validate-catalog.js';
 import {
   compareCanonicalWorkroomText,
   canonicalWorkroomJson,

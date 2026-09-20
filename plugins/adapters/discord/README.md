@@ -19,7 +19,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 
 ## Plugin Runtime
 
-- `@zhin.js/adapter` — 约定式 `adapters/discord.ts`（`defineAdapter`）
+- `@zhin.js/adapter` — 约定式 `adapters/discord/index.ts`（`defineAdapter`）
 - `@zhin.js/core` — `Endpoint.emit(...)` 入站、`outboundMessageToken` 出站
 - `zhin.js` — `plugin.ts`（`definePlugin`）
 - 配置经插件 `schema.json` 落到 `plugins.<instanceKey>`
@@ -42,7 +42,7 @@ pnpm add @zhin.js/adapter-discord discord.js
 | **Gateway（默认）** | 本地/生产均可；discord.js 连接 Gateway，无需公网 HTTPS |
 | **host-http** | Gateway **不需要**；Interactions webhook 延期至下一棒 |
 
-必填字段（`endpoints[i]`）：`name`、`token`。
+必填字段（`endpoints[i]`）：`id`、`token`。
 
 ## 最小配置
 
@@ -52,7 +52,7 @@ plugins:
   discord:
     # connection: gateway   # 默认
     endpoints:
-      - name: my-discord-bot
+      - id: my-discord-bot
         token: ${DISCORD_BOT_TOKEN}
 ```
 
@@ -62,8 +62,7 @@ plugins:
 
 | 变量 | 说明 |
 |------|------|
-| `DISCORD_BOT_TOKEN` | Bot Token |
-| `DISCORD_BOT_NAME` | 可选，默认 endpoint 名 |
+| `DISCORD_BOT_TOKEN` | YAML 示例中 `token` 引用的 Bot Token |
 
 ## Interactions（HTTP）
 
@@ -73,9 +72,9 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具（7 个） | `agent/tools/`（`discord_*`：角色、Embed、反应等） |
-| 技能说明 | `agent/skills/discord.md` |
+| Permit 词汇 | `PERMITS.md` |
+| 平台工具（7 个） | `agents/discord/skills/discord/tools/`（Skill 激活后披露 `discord_*`：角色、Embed、反应等） |
+| 技能说明 | `agents/discord/skills/discord/SKILL.md` |
 
 工具使用 Discord Snowflake ID 标识 `guild_id`、`user_id`、`channel_id`。
 

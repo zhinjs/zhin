@@ -1,4 +1,4 @@
-import { type AgentMessage, type ModelInputModality, createUserMessage, getLlmTransportModel } from '@zhin.js/ai';
+import { type AgentMessage, type ModelInputModality, createUserMessage } from '@zhin.js/ai';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import { createDefaultContextBuilders } from './default-builders.js';
 import type { BuildContext, ContextBuilder, ContextInjector, ContextSystemConfig, InjectContext } from './contracts.js';
@@ -108,7 +108,7 @@ export class ContextSystem {
     );
     const modelId = modelCandidates[0] || host.getTurnProvider().models[0] || 'gpt-4o-mini';
     const providerAlias = host.getTurnProvider().name;
-    const llmModel = getLlmTransportModel(providerAlias, modelId);
+    const llmModel = host.llmRuntime.model(providerAlias, modelId);
     const agentsContext = await buildAgentsEnvelopeContext();
 
     const turnEnvelope = buildTurnContextEnvelope({

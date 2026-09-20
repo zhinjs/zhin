@@ -18,13 +18,13 @@ The API Reference reads Zhin's public authoring entries, Host contracts, and JSD
 | Author components | `zhin.js/component` |
 | Author middleware | `zhin.js/middleware` |
 | Author handlers | `zhin.js/handler` |
-| Author Agent Tools | `@zhin.js/tool`; `agent/tools/` may also import from `zhin.js/agent` |
+| Author Agent Tools | `@zhin.js/tool`; `tools/` may also import from `zhin.js/agent` |
 | Parse Skill Markdown | `@zhin.js/skill` |
 | Inject Prompt Sections | `@zhin.js/prompt-section` (experimental) |
 | Use database, scheduling, and cross-platform messaging Hosts | `databaseHostToken`, `scheduleHostToken`, and `outboundHostToken` from `zhin.js` |
 | Register HTTP / WebSocket routes | `httpHostToken` from `@zhin.js/host-http` |
 | Integrate with the IM message gateway | `outboundMessageToken` from `zhin.js/core/runtime` |
-| Register Agent capability resources | `AgentResourceHub` from `zhin.js/agent` (experimental) |
+| Register Agent support resources | `AgentResourceHub` from `zhin.js/agent` (Skill/SubAgent/MCP/Hook, experimental) |
 
 The reference answers “what is the signature?” Guides answer “how should these pieces work together?” Start with [plugin authoring](/en/authoring/define-plugin) and use the [Public API surface](/en/contributing/public-api-surface) for stability guarantees.
 

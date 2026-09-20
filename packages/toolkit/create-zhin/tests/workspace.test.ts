@@ -27,7 +27,7 @@ async function makeProject(options: Partial<InitOptions> = {}) {
       instances: [{
         package: '@zhin.js/adapter-sandbox',
         instanceKey: 'sandbox',
-        config: { endpoints: [{ context: 'sandbox', name: 'sandbox-bot', owner: 'sandbox-user' }] },
+        config: { endpoints: [{ id: 'sandbox-bot', owner: 'sandbox-user' }] },
       }],
       envVars: {},
     },
@@ -61,12 +61,12 @@ describe('createWorkspace', () => {
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
     const pluginEntry = await fs.readFile(path.join(projectPath, 'plugin.ts'), 'utf8')
-    const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello.ts'), 'utf8')
-    const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card.ts'), 'utf8')
-    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card.ts'), 'utf8')
-    const page = await fs.readFile(path.join(projectPath, 'pages', 'index.tsx'), 'utf8')
-    const navigation = await fs.readFile(path.join(projectPath, 'pages', '$nav.tsx'), 'utf8')
-    const footer = await fs.readFile(path.join(projectPath, 'pages', '$footer.tsx'), 'utf8')
+    const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello', 'index.ts'), 'utf8')
+    const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card', 'index.ts'), 'utf8')
+    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card', 'index.ts'), 'utf8')
+    const page = await fs.readFile(path.join(projectPath, 'pages', 'index', 'index.tsx'), 'utf8')
+    const navigation = await fs.readFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'), 'utf8')
+    const footer = await fs.readFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'), 'utf8')
     const schema = await fs.readJson(path.join(projectPath, 'schema.json'))
     const rootTsconfig = await fs.readJson(path.join(projectPath, 'tsconfig.json'))
 
@@ -81,6 +81,7 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies['@zhin.js/console-contract']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/page']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/layout']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/skill']).toBe('latest')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/agent')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/client')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/pagemanager')
@@ -102,6 +103,7 @@ describe('createWorkspace', () => {
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' },
     ])
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
@@ -143,15 +145,15 @@ describe('createWorkspace', () => {
     const projectPath = await makeProject({ ai: { enabled: false } })
     const expected = [
       'schema.json',
-      'commands/hello.ts',
-      'components/status-card.ts',
+      'commands/hello/index.ts',
+      'components/status-card/index.ts',
       'middlewares/.gitkeep',
       'tools/.gitkeep',
       'skills/skill-creator/SKILL.md',
       'agents/.gitkeep',
-      'pages/index.tsx',
-      'pages/$nav.tsx',
-      'pages/$footer.tsx',
+      'pages/index/index.tsx',
+      'pages/nav/index.tsx',
+      'pages/footer/index.tsx',
       'plugins/.gitkeep',
       'packages/.gitkeep',
     ]
@@ -210,10 +212,11 @@ describe('createWorkspace', () => {
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/tool', api: '^1.0.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ])
-    expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo', 'index.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     expect(config).toContain('ai:')

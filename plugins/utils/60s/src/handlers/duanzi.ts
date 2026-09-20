@@ -1,6 +1,6 @@
-import { fetchApi } from '../api.js';
+import type { SixtySClient } from '../client.js';
 
-export default async function () {
-  const data = await fetchApi('/duanzi');
+export default async function (client: SixtySClient) {
+  const data = await client.fetch('/duanzi');
   return `😂 段子\n\n${data.duanzi || data.content || data.text || (typeof data === 'string' ? data : '')}`;
 }

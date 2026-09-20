@@ -46,9 +46,9 @@ describe('Agent Feature slot HMR', () => {
     modules.set(join(project, 'packages/agent/index.ts'), { default: agentFeature });
     modules.set(join(project, 'packages/mcp/index.ts'), { default: mcpFeature });
     modules.set(join(project, 'packages/prompt/index.ts'), { default: promptSectionFeature });
-    modules.set(join(project, 'agent/prompt-sections/project-rules.ts'), { default: projectRules('fixture') });
-    modules.set(join(project, 'tools/lookup.ts'), { default: lookupTool('fixture') });
-    modules.set(join(project, 'mcp/memory.ts'), { default: memoryMcp([]) });
+    modules.set(join(project, 'prompt-sections/project-rules/index.ts'), { default: projectRules('fixture') });
+    modules.set(join(project, 'tools/lookup/index.ts'), { default: lookupTool('fixture') });
+    modules.set(join(project, 'mcps/memory/index.ts'), { default: memoryMcp([]) });
     const runtime = new RootRuntime({
       projectRoot: project,
       modules,
@@ -80,10 +80,10 @@ describe('Agent Feature slot HMR', () => {
       mcp: join(project, 'packages/mcp/index.ts'),
       prompt: join(project, 'packages/prompt/index.ts'),
     };
-    const toolSource = join(project, 'tools/lookup.ts');
-    const mcpSource = join(project, 'mcp/memory.ts');
-    const agentSource = join(project, 'agents/planner.agent.md');
-    const promptSource = join(project, 'agent/prompt-sections/project-rules.ts');
+    const toolSource = join(project, 'tools/lookup/index.ts');
+    const mcpSource = join(project, 'mcps/memory/index.ts');
+    const agentSystemSource = join(project, 'agents/planner/system.md');
+    const promptSource = join(project, 'prompt-sections/project-rules/index.ts');
     let setups = 0;
     modules.set(pluginSource, {
       default: definePlugin({ name: 'root', setup() { setups += 1; } }),
@@ -127,8 +127,8 @@ describe('Agent Feature slot HMR', () => {
     expect(modules.loadCount(mcpSource)).toBe(1);
     expect(setups).toBe(1);
 
-    await writeFile(agentSource, '# Planner v2\n\nUse the new plan.\n');
-    await hmr.enqueue(agentSource);
+    await writeFile(agentSystemSource, '# Planner v2\n\nUse the new plan.\n');
+    await hmr.enqueue(agentSystemSource);
     const third = runtime.snapshot;
 
     expect(readAgent(third)).toBe('Planner v2');
@@ -218,8 +218,9 @@ function readSkill(snapshot: RuntimeSnapshot): string | undefined {
 }
 
 function readAgent(snapshot: RuntimeSnapshot): string | undefined {
-  return projection(snapshot, agentFeatureId, AgentIndex)
-    .get(rootPluginId(), 'planner')?.description;
+  const instructions = projection(snapshot, agentFeatureId, AgentIndex)
+    .get(rootPluginId(), 'planner')?.instructions;
+  return instructions?.match(/^# (Planner v\d+)$/mu)?.[1];
 }
 
 function readPrompt(snapshot: RuntimeSnapshot): string | undefined {
@@ -265,12 +266,21 @@ async function createProject(): Promise<string> {
   for (const file of [
     'plugin.ts',
     ...features.map((name) => `packages/${name}/index.ts`),
-    'tools/lookup.ts',
-    'mcp/memory.ts',
-    'agent/prompt-sections/project-rules.ts',
+    'tools/lookup/index.ts',
+    'mcps/memory/index.ts',
+    'prompt-sections/project-rules/index.ts',
   ]) await touch(join(root, file));
   await touch(join(root, 'skills/research/SKILL.md'), '# Research v1\n\nResearch carefully.\n');
-  await touch(join(root, 'agents/planner.agent.md'), '# Planner v1\n\nPlan carefully.\n');
+  await writeJson(join(root, 'agents/planner/agent.json'), {
+    name: 'Planner',
+    version: '1.0.0',
+    description: 'Planner v1',
+    trigger_rules: { file_patterns: [], keywords: ['plan'] },
+    entry_points: ['system.md', 'boundaries.md', 'conventions.md'],
+  });
+  await touch(join(root, 'agents/planner/system.md'), '# Planner v1\n\nPlan carefully.\n');
+  await touch(join(root, 'agents/planner/boundaries.md'), '# Boundaries\n\nStay in scope.\n');
+  await touch(join(root, 'agents/planner/conventions.md'), '# Conventions\n\nFollow AGENTS.md.\n');
   return realpath(root);
 }
 

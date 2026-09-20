@@ -5,17 +5,14 @@
  * - memory-db：findAll/findOne 返回拷贝
  * - game-records：按 Host/插件作用域取库
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { buildGridKeyboard, type GridCell } from '../src/grid-keyboard.js';
 import { boardMessageMatches } from '../src/game-session.js';
 import { createInMemoryGameDb } from '../src/memory-db.js';
 import {
-  initGameRecordHost,
-  recordGameOutcome,
-  resetGameRecordsForTests,
-  type GameRecordDatabaseHost,
+  GameRecordStore,
+  type GameRecordDatabase,
 } from '../src/game-records.js';
-import { registerRuntimeGame, resetRuntimeGamesForTests } from '../src/runtime-hub.js';
 
 describe('audit fixes: grid fallback 编号', () => {
   it('postChoices 编号从可落子格子数后续起，不覆盖格子映射', () => {
@@ -87,25 +84,17 @@ describe('audit fixes: memory-db 返回拷贝', () => {
   });
 });
 
-describe('audit fixes: game-records 按 Host 作用域取库', () => {
-  beforeEach(() => {
-    resetGameRecordsForTests();
-    resetRuntimeGamesForTests();
-  });
-
-  function createHost() {
+describe('audit fixes: game-records 显式数据库所有权', () => {
+  function createDatabase() {
     const insert = vi.fn(async () => undefined);
     const model = {
-      select: () => ({ where: async () => [] }),
-      insert,
-      delete: () => ({ where: async () => undefined }),
-      update: () => ({ where: async () => undefined }),
+      create: insert,
+      findAll: async () => [],
     };
-    const host: GameRecordDatabaseHost = {
-      define: vi.fn(),
+    const database = {
       models: { get: () => model },
-    };
-    return { host, insert };
+    } as unknown as GameRecordDatabase;
+    return { database, insert };
   }
 
   const message = {
@@ -115,48 +104,15 @@ describe('audit fixes: game-records 按 Host 作用域取库', () => {
     $channel: { type: 'private', id: 'u1' },
   } as never;
 
-  const gameMeta = {
-    title: '骰子对决',
-    icon: '🎲',
-    description: 'desc',
-    commandPrefix: '/骰子',
-  };
+  it('不同游戏写入各自 store 的数据库', async () => {
+    const dice = createDatabase();
+    const blackjack = createDatabase();
+    await new GameRecordStore(dice.database).record(message, 'dice', 'won', 10);
+    await new GameRecordStore(blackjack.database).record(message, 'blackjack', 'lost');
 
-  it('不同游戏写入各自插件 Host 的库，而非全局最后注册者', async () => {
-    const diceHost = createHost();
-    const blackjackHost = createHost();
-
-    initGameRecordHost(diceHost.host);
-    const unregDice = registerRuntimeGame({ id: 'dice', ...gameMeta });
-
-    initGameRecordHost(blackjackHost.host);
-    const unregBlackjack = registerRuntimeGame({ id: 'blackjack', ...gameMeta });
-
-    await recordGameOutcome(message, 'dice', 'won', 10);
-    await recordGameOutcome(message, 'blackjack', 'lost');
-
-    expect(diceHost.insert).toHaveBeenCalledOnce();
-    expect(blackjackHost.insert).toHaveBeenCalledOnce();
-    // dice 的记录没有写进 blackjack 的库
-    expect(diceHost.insert.mock.calls[0][0]).toMatchObject({ game_id: 'dice' });
-    expect(blackjackHost.insert.mock.calls[0][0]).toMatchObject({ game_id: 'blackjack' });
-
-    unregDice();
-    unregBlackjack();
-  });
-
-  it('游戏注销后回退到全局活跃库', async () => {
-    const diceHost = createHost();
-    const otherHost = createHost();
-
-    initGameRecordHost(diceHost.host);
-    const unregDice = registerRuntimeGame({ id: 'dice', ...gameMeta });
-    initGameRecordHost(otherHost.host);
-    unregDice();
-
-    await recordGameOutcome(message, 'dice', 'won');
-    // 绑定已解绑，回退到全局最后活跃的 otherHost
-    expect(otherHost.insert).toHaveBeenCalledOnce();
-    expect(diceHost.insert).not.toHaveBeenCalled();
+    expect(dice.insert).toHaveBeenCalledOnce();
+    expect(blackjack.insert).toHaveBeenCalledOnce();
+    expect(dice.insert.mock.calls[0][0]).toMatchObject({ game_id: 'dice' });
+    expect(blackjack.insert.mock.calls[0][0]).toMatchObject({ game_id: 'blackjack' });
   });
 });

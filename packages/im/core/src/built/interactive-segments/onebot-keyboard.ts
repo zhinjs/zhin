@@ -19,8 +19,6 @@ export function keyboardToOneBotSegment(data: KeyboardSegmentData): MessageSegme
   };
 }
 
-/** @deprecated 使用 {@link keyboardToOneBotSegment} */
-
 function asKeyboardData(item: MessageElement | KeyboardSegment): KeyboardSegmentData | null {
   if (item instanceof KeyboardSegment) return item.data;
   if (isKeyboardSegment(item)) return item.data as KeyboardSegmentData;
@@ -50,5 +48,3 @@ export function expandKeyboardSegmentsInContent(content: SendContent): SendConte
   if (out.length === 1) return out[0]!;
   return out;
 }
-
-/** @deprecated 使用 {@link expandKeyboardSegmentsInContent} */

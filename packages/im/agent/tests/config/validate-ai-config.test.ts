@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { validateAiRoutingConfig, validateWorkroomDefinitions } from '../../src/config/validate-ai-config.js';
+import { validateAiRoutingConfig } from '../../src/config/validate-ai-config.js';
+import { validateWorkroomDefinitions } from '../../src/workroom/validate-catalog.js';
 import { normalizeAiRoutingConfig } from '../../src/config/normalize-ai-config.js';
 
 describe('validateAiRoutingConfig', () => {

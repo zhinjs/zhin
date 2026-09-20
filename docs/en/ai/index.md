@@ -172,7 +172,7 @@ ai:
     execSecurity: allowlist       # deny | allowlist (default) | full
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # Allowlist when execPreset=custom
-    execApprovalMode: ask         # ask (default) | allow | deny
+    execApprovalMode: ask         # ask (default) | bypass | auto
     gitStatus: true               # Default true: inject a one-line git status summary into the Runtime section (skipped outside git repos)
     contextPaths: []              # Extra context files injected into the system prompt (supports ~ and relative paths)
     systemPromptMaxChars: 100000  # Total prompt budget; opportunistic content yields first, required content fails explicitly if it cannot fit
@@ -182,7 +182,7 @@ In addition to `contextPaths`, the global context files `~/.config/zhin/AGENTS.m
 
 `execPreset` preset allowlists widen progressively: `readonly` (ls/cat/grep/find etc.) -> `network` (adds curl/wget/ping etc.) -> `development` (adds npm/node/git/python etc.). Regardless of the mode, dangerous commands like `sudo`, `eval`, `dd`, `export` are always rejected, and operations like `rm -rf node_modules` are hard-blocked.
 
-The full check chain is: dangerous blocklist -> environment variable prefix stripping (`FOO=bar cmd` matches against `cmd`) -> wrapper stripping (`timeout 10 cmd`) -> compound command splitting (`&&`/`|` checked segment by segment) -> non-full mode rejects newlines / `$(...)` / backticks -> read-only commands auto-approved. When `execApprovalMode: ask`, commands exceeding permissions trigger **Owner approval**, where a master approves via `/approve` in IM; `allow` approves everything, `deny` rejects everything.
+The full check chain is: dangerous blocklist -> environment variable prefix stripping (`FOO=bar cmd` matches against `cmd`) -> wrapper stripping (`timeout 10 cmd`) -> compound command splitting (`&&`/`|` checked segment by segment) -> non-full mode rejects newlines / `$(...)` / backticks -> read-only commands auto-approved. With `execApprovalMode: ask`, the current Turn requests master approval through its `ApprovalPort`; `auto` delegates to a dedicated tool-less review Agent and asks the master through the same port when that reviewer is uncertain, while model errors, timeouts, and invalid output fail closed; `bypass` skips approval without bypassing the dangerous-command blocklist, Tool permissions, filesystem/network boundaries, or sandbox. Group and channel conversations offer four decisions: reject, current invocation, current conversation, and always approve. Conversation approval covers every sender, while always approval covers only the current sender. Private conversations expose only reject, current invocation, and always approve. Every persistent decision stays bound to the current conversation, so one group member's personal decision does not affect another member. `/approve always bash` and `/approve rule <regex>` only manage persistent bypasses for that Endpoint. V1 approval files are not migrated online; rebuild retained rules explicitly before upgrading.
 
 ## Next steps
 

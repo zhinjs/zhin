@@ -3,7 +3,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   scheduleHostToken,
   scheduleRootHostToken,
-  createPluginScheduleHost,
+  PluginScheduleHost,
   rootPluginId,
   type PluginId,
   type ScheduleHost,
@@ -91,7 +91,7 @@ export function installScheduleHost(host?: ScheduleHost & { stop(): void }): Roo
   return ({ resources, lifecycle }) => {
     const instance = host ?? createScheduleHost();
     resources.provide(scheduleRootHostToken, instance);
-    resources.provide(scheduleHostToken, createPluginScheduleHost(rootPluginId(), instance));
+    resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), instance));
     // A supplied Host is process-owned and intentionally shared by overlapping
     // generations. Only an instance created by this installer belongs to Scope.
     if (!host) lifecycle.add(() => instance.stop());

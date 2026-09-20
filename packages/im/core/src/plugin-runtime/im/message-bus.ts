@@ -1,8 +1,8 @@
 /**
- * MessageBus — 独立于 Plugin 的 IM 生命周期事件总线。
+ * Generation-owned IM lifecycle event bus.
  *
- * 覆盖 Plugin.Lifecycle 中关键 IM 事件，供 Scope+Token 路径消费。
- * 遗留 Plugin.emit 通过短暂双写桥接（迁移窗口）。
+ * Runtime services resolve this bus through Scope+Token and never depend on a
+ * process-global event owner.
  */
 
 import { EventEmitter } from 'node:events';

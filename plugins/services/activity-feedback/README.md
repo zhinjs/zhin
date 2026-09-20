@@ -5,10 +5,10 @@
 ## 模块结构
 
 ```
-ZhinAgentEventEmitter.emit
+generation AgentEventBus (`agentEventBusToken`)
         │
         ▼
-activityFeedbackAiBus ──► ai-event-binder（薄） ──► ActivityFeedbackOrchestrator
+ai-event-binder（薄） ──► ActivityFeedbackOrchestrator
                                                         │
                                    ┌────────────────────┼────────────────────┐
                                    ▼                    ▼                    ▼
@@ -20,8 +20,8 @@ activityFeedbackAiBus ──► ai-event-binder（薄） ──► ActivityFeedb
 - **Policy**：根级 `activityFeedback` 合并与 phase 解析
 - **Executor**：隐藏 platform 自管 manager 与 generic manager 双路径，并按 Endpoint 声明能力选择 reaction / typing / message
 - **Adapter**：仅提供 `$activityFeedback` IO 能力
-- **Runtime**：`plugin.ts` setup 经 `activityFeedbackAiBus` 订阅（无 `usePlugin`），
-  通过 generation-owned `outboundHostToken` 访问当前 Endpoint；发送、撤回、编辑、
+- **Runtime**：`plugin.ts` setup 从 generation Resource 读取 `agentEventBusToken` 并订阅，
+  通过同代 `outboundHostToken` 访问当前 Endpoint；发送、撤回、编辑、
   reaction 与原生 typing 均走统一 IM Runtime 控制链路。
 
 同一 IM 会话的异步状态事件按产生顺序串行投影，主 Agent、工具迭代、子 Agent

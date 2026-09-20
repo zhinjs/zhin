@@ -5,7 +5,7 @@
 //   my-plugin/
 //     package.json        ← "zhin": { "protocol": 1, "type": "plugin", "entry": "./plugin.ts", ... }
 //     plugin.ts           ← 本文件：只做装配与生命周期
-//     commands/hello.ts   ← 命令（见文件末尾）
+//     commands/hello/index.ts   ← 命令（见文件末尾）
 import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
@@ -23,8 +23,8 @@ export default definePlugin({
   },
 });
 
-// ── commands/hello.ts ────────────────────────────────────────────────────────
-// 文件路径即命令路由：commands/hello.ts -> `hello`
+// ── commands/hello/index.ts ────────────────────────────────────────────────────────
+// 文件路径即命令路由：commands/hello/index.ts -> `hello`
 //
 // import { defineCommand } from 'zhin.js/command';
 //
@@ -36,6 +36,6 @@ export default definePlugin({
 // });
 //
 // 带参数的路由用 Next.js 风格方括号文件名，类型与默认值在 defineCommand({ params }) 中声明：
-//   commands/hello/[[name]].ts   ->  `hello [name]`（可选；params: { name: { type: 'string', default: 'world' } }）
-//   commands/hello/[name].ts     ->  `hello <name>`（必需；params: { name: { type: 'string' } }）
-//   commands/gh/issue/list.ts    ->  `gh issue list`
+//   commands/hello/[[name]]/index.ts  ->  `hello [name]`（可选；params: { name: { type: 'string', default: 'world' } }）
+//   commands/hello/[name]/index.ts    ->  `hello <name>`（必需；params: { name: { type: 'string' } }）
+//   commands/gh/issue/list/index.ts   ->  `gh issue list`

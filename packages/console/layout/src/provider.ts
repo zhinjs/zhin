@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { featureId } from '@zhin.js/plugin-runtime';
 import { defineFeatureProvider, type SourceConvention } from '@zhin.js/feature-kit';
 import { parseLayoutArtifact } from './definition.js';
@@ -12,13 +12,24 @@ const layoutFiles: SourceConvention = {
     const directory = join(context.packageRoot, 'pages');
     const entries = [...await context.host.list(directory)]
       .sort((left, right) => left.name.localeCompare(right.name));
-    const names = new Set(entries.map((entry) => entry.name));
     for (const entry of entries) {
       const slot = layoutSlot(entry.name);
-      if (entry.kind !== 'file' || !slot) continue;
-      // 同一 slot 同时存在 .ts 与 .tsx 时以 .tsx 为准，避免重复 slot
-      if (entry.name.endsWith('.ts') && names.has(`${entry.name}x`)) continue;
-      yield { localName: slot, source: join(directory, entry.name), target: 'client' };
+      if (entry.kind !== 'directory' || !slot) continue;
+      const moduleDirectory = join(directory, entry.name);
+      const moduleEntries = await context.host.list(moduleDirectory);
+      const index = preferredLayoutIndex(
+        moduleEntries,
+        context.packageRoot.split(sep).includes('node_modules'),
+      );
+      if (!index) continue;
+      yield {
+        localName: slot,
+        source: join(moduleDirectory, index),
+        relatedSources: moduleEntries
+          .filter((candidate) => candidate.kind === 'file' && candidate.name !== index)
+          .map((candidate) => join(moduleDirectory, candidate.name)),
+        target: 'client',
+      };
     }
   },
   load(source, context) {
@@ -42,10 +53,19 @@ const layoutFeature = defineFeatureProvider({
   },
 });
 
-function layoutSlot(file: string): 'nav' | 'footer' | undefined {
-  if (file === '$nav.tsx' || file === '$nav.ts') return 'nav';
-  if (file === '$footer.tsx' || file === '$footer.ts') return 'footer';
-  return undefined;
+function layoutSlot(directory: string): 'nav' | 'footer' | undefined {
+  return directory === 'nav' || directory === 'footer' ? directory : undefined;
+}
+
+function preferredLayoutIndex(
+  entries: readonly { readonly name: string; readonly kind: 'file' | 'directory' }[],
+  preferJavaScript: boolean,
+): string | undefined {
+  const files = new Set(entries.filter((entry) => entry.kind === 'file').map((entry) => entry.name));
+  const extensions = preferJavaScript
+    ? ['js', 'mjs', 'cjs', 'ts', 'tsx']
+    : ['tsx', 'ts', 'js', 'mjs', 'cjs'];
+  return extensions.map((extension) => `index.${extension}`).find((name) => files.has(name));
 }
 
 export { layoutFeature };

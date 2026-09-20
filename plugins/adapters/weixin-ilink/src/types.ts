@@ -1,6 +1,5 @@
 export type {
   WeixinIlinkEndpointConfig,
-  WeixinIlinkAdapterConfig,
   ResolvedWeixinIlinkConfig,
 } from './protocol.js';
 

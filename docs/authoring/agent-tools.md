@@ -1,15 +1,28 @@
 ---
 title: Agent 工具与技能
-description: tools/*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 *.agent.md
+description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 agents/<name>/agent.json
 ---
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件丢进 `tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`tools/*.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+想让模型替用户搜一首歌、查一次乐透推荐？先按披露范围选择 Tool 的目录。创作入口会写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+
+| 目录 | 归属 | 模型披露时机 |
+| --- | --- | --- |
+| `tools/<name>/index.ts` | 插件通用 Tool | 插件启用后进入公共 deferred catalog |
+| `agents/<agent>/tools/<name>/index.ts` | Agent 专用 Tool | 选择该 Agent 后进入能力集 |
+| `skills/<skill>/tools/<name>/index.ts` | Skill 专用 Tool | `load_skill` 激活该 Skill 后解锁 |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent 内 Skill 专用 Tool | 选择 Agent 且激活其 Skill 后解锁 |
+
+插件初始只向模型披露根 `tools/` 与根 `skills/`、`agents/` 的摘要。私有 Tool definition 会在 generation prepare 阶段统一校验，但不会提前进入模型 Tool catalog；这样既能在启动时发现无效能力，也不会用未激活能力占用提示词。
+
+根 `tools/` 只用于跨任务、高频、无需额外领域说明的能力。只在某个平台、工作流或角色中成立的 Tool 必须归入对应 Skill 或 Agent。一个 Skill 若包含多个可以独立触发的任务域，也应继续拆分，避免加载一个简单查询时同时披露整个平台的所有 Tool Schema。
+
+适配器提供的 Skill 应归入 `agents/<platform>/skills/<name>/`。平台 Agent 在对应 IM 平台入站时自动选中，其他平台回合不会看到它的私有 Skill 摘要；同一平台声明多个自动候选 Agent 会在路由时报出冲突，必须合并职责或由用户显式选择。
 
 ```mermaid
 flowchart LR
-    A["tools/*.ts<br/>defineAgentTool"] --> C[候选 capability table]
+    A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[候选 capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex 投影"]
     D --> E[CapabilityIngress]
@@ -19,12 +32,17 @@ flowchart LR
     H --> I[模型可调用的工具集]
 ```
 
-## 路径一：`tools/*.ts` 约定
+## 路径一：目录约定
 
-挂载 `@zhin.js/tool` Feature 后，插件包根目录的 `tools/`（不递归）下每个 `.ts` 文件默认导出 `defineAgentTool(...)`：
+挂载 `@zhin.js/tool` Feature 后，四种 Tool 目录中的 `index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
+
+Tool 专属 handler、schema 和格式化逻辑应放在所属 Tool 或 Skill 目录；同一 Skill 的多个 Tool
+共用实现可放在 Skill 根目录，例如 `skills/github-account/handlers.ts`。叶子 `index.ts` 只声明
+Tool 并调用同目录能力，不应通过 `../../../../src/...` 获取插件内部实现。确实由多个能力共享的
+运行态契约应形成稳定包 API，或由所属 Skill/Agent 的一个局部桥接模块集中接入。
 
 ```ts
-// tools/echo.ts（examples/minimal-bot）
+// tools/echo/index.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -42,15 +60,15 @@ export default defineAgentTool<{ message: string }>({
 | 字段 | 必填 | 说明 |
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
-| `inputSchema` | 否 | zod object 或 JSON Schema，驱动参数校验与 catalog 展示 |
-| `approval` | 否 | `'never' \| 'on-risk' \| 'always'`，默认 `'on-risk'` |
+| `inputSchema` | 否 | Zod 4 object 或根节点为 `object` 的 JSON Schema；由 Tool Feature 统一投影并在执行前校验 |
+| `requiresApproval` | 否 | Tool 何时需要审批：`'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
 | `platforms` | 否 | 限定适配器平台（如 `['icqq']`），空 = 全部 |
 | `scopes` | 否 | 限定会话场景 `'private' \| 'group' \| 'channel'`，空 = 全部 |
 | `permissions` | 否 | permit 字符串列表（见下文准入） |
 | `hidden` | 否 | 注册但不提供给模型（可按名调用） |
 | `execute(input, context)` | 是 | `context` 是能力上下文（`config` / `use(token)` / `owner` / `generation`） |
 
-文件名是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与文件名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
+命名目录是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与目录名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
 
 ## 路径二：setup 条件式声明
 
@@ -67,7 +85,7 @@ export default definePlugin({
     if (!context.config.get().agentToolsEnabled) return;
     context.addTool('lottery_sync', defineAgentTool({
       description: 'Synchronize lottery draws',
-      approval: 'always',
+      requiresApproval: 'always',
       inputSchema: { type: 'object', properties: {} },
       execute: async (_input, toolContext) => {
         const database = toolContext.use(lotteryDatabaseToken);
@@ -88,7 +106,7 @@ context.addTool('lottery_sync', defineAgentTool({
   scopes: tool.scopes,
   permissions: tool.permissions,
   hidden: tool.hidden,
-  approval: 'never',
+  requiresApproval: 'never',
   execute: (input, context) => tool.execute(input, context),
 }));
 ```
@@ -108,7 +126,9 @@ context.addTool('lottery_sync', defineAgentTool({
 | `permissions` | permit 列表，逐条校验（AND）；单条括号内逗号为 OR |
 | `hidden` | 不进入给模型的工具清单，但仍可按名执行 |
 
-permit 语法（`packages/im/core/src/built/permit-parse.ts`）分三类：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
+permit 语法由 `@zhin.js/permission` 统一定义（`packages/im/permission/src/builtin.ts`）：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
+
+`requiresApproval` 在 Tool 通过上述准入后、执行之前判定。`always` 每次确认；`once` 可由标准 Host 在当前会话记住该 Tool；`on-risk` 对未知插件操作保持确认，但 `bash`、文件和网络工具在专用策略已经验证具体命令、路径或 URL 后不重复确认。`never` 只跳过声明式确认，不能绕过权限、网络、文件系统、Shell 或代际策略。
 
 ## deferred catalog 与 load_tool
 
@@ -125,55 +145,49 @@ permit 语法（`packages/im/core/src/built/permit-parse.ts`）分三类：内�
 
 Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其它通道只下发已加载集合。
 
-`ask_user` 是框架提供的 generation-owned ToolFeature，不是 Plugin Prompt/middleware。
+`ask_user` 是框架提供的 generation-owned Tool capability，不是 Plugin Prompt/middleware。
 它通过当前 Turn 的 `QuestionPort` 请求输入，并按 canonical session 与认证主体匹配回复；
 插件工具若需要同类交互，应依赖 `ToolExecutionContext.question`，且必须处理端口缺失。
 unattended Turn（例如 Schedule）不会注入该端口，不能回退到全局 Message、Adapter 或用户队列。
 
-## skills 与 agents/*.agent.md
+## Skills、主 Agent 与子 Agent
 
-技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。
+Skill 使用 `skills/<name>/SKILL.md`。主 Agent 使用插件根目录的标准 `AGENTS.md`。命名子 Agent 使用 `agents/<name>/` 自包含目录，由 `@zhin.js/agent-feature` 发现。
 
-技能放在 `skills/<name>/SKILL.md`（每个子目录一个技能）：正文即给模型的指令，第一个 Markdown 标题行作为描述，`load_skill` 加载后解锁 `toolNames` 关联的工具。命名 Agent 是 `agents/<name>.agent.md`（文件名必须小写 kebab，如 `agents/planner.agent.md`）：整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述。真实示例见 `examples/test-bot/agents/planner.agent.md`。
+子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 GitHub 上的 [`@zhin.js/agent-feature` README](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md)。
 
-```markdown
-<!-- agents/planner.agent.md -->
-# planner
+`agent.json` 的 `tools` 可声明额外公共 Tool；`agents/<agent>/tools/<name>/index.ts` 会自动成为该 Agent 的私有 Tool。Skill 的私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 私有 Skill 及其 Tool 使用 `agents/<agent>/skills/<skill>/SKILL.md` 和其下的 `tools/<name>/index.ts`。所有 Tool 仍经过统一的权限、审批和 generation 准入。
 
-You are **planner** (协调者): break down user goals, define acceptance
-criteria, and coordinate specialist roles.
-```
-
-### 插件 `agent/` 目录（另一种组织方式）
-
-装了 `@zhin.js/agent` 的插件还可以用 `agent/` 目录集中声明 AI 面（`packages/im/agent/src/discovery/agent-surface.ts` 扫描）：
+## 插件 Agent 创作目录
 
 ```text
 my-plugin/
-├── agent/
-│   ├── agent.ts           # defineAgent：描述、关键词、toolNames、systemPrompt
-│   ├── instructions.md    # 系统提示正文
-│   ├── tools/*.ts         # defineAgentTool（来自 '@zhin.js/agent/tools'）
-│   ├── skills/*.{md,ts}   # .md 可带 frontmatter（description / tools / always）
-│   └── subagents/<name>/  # 递归同构的子 Agent
+├── AGENTS.md
+├── tools/
+│   └── short-url/
+│       ├── index.ts
+│       └── client.ts
+├── skills/short-url/
+│   ├── SKILL.md
+│   ├── tools/normalize/index.ts
+│   └── hooks/audit/index.ts
+├── hooks/audit/index.ts
+└── agents/reviewer/
+    ├── agent.json
+    ├── system.md
+    ├── boundaries.md
+    ├── conventions.md
+    ├── workflows/
+    ├── tools/check-result/index.ts
+    ├── skills/review/
+    │   ├── SKILL.md
+    │   ├── tools/check-result/index.ts
+    │   └── hooks/audit/index.ts
+    ├── hooks/audit/index.ts
+    └── knowledge/
 ```
 
-与 `@zhin.js/tool` 的 `defineAgentTool` 区别：`@zhin.js/agent/tools` 版本的 `execute(input, ctx)` 第二参是 `{ pluginName, runtimeName, filePath }` 上下文，`approval` 支持 `'always' | 'once' | 'never'` 或自定义谓词，且可配 `toModelOutput` 塑形回传模型的文本。真实示例：`plugins/utils/short-url/agent/tools/short_url.ts`。
-
-```ts
-// agent/tools/short_url.ts（plugins/utils/short-url，节选）
-import { defineAgentTool } from '@zhin.js/agent/tools';
-import { z } from 'zod';
-
-export default defineAgentTool<{ url: string }>({
-  description: '缩短一个 URL，返回短链接',
-  inputSchema: z.object({ url: z.string().min(1) }),
-  keywords: ['短链', '缩短', 'shorten'],
-  async execute({ url }) {
-    // …
-  },
-});
-```
+`tools/<name>/index.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。
 
 ## 让插件给 Agent 补充上下文
 
@@ -198,7 +212,7 @@ export default defineAgentTool<{ url: string }>({
 
 ### 2. 声明一段上下文
 
-在插件根目录创建 `agent/prompt-sections/project-rules.ts`：
+在插件根目录创建 `prompt-sections/project-rules/index.ts`：
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -214,7 +228,7 @@ export default defineAgentPromptSection({
 });
 ```
 
-文件相对路径是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
+一级目录名是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -229,6 +243,6 @@ export default defineAgentPromptSection({
 
 ### 3. 验证已生效的版本
 
-启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/agent/prompt-sections/custom.ts`。
+启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/prompt-sections/custom/index.ts`。
 
 Prompt Section 只影响模型上下文，**不会授予工具、数据或审批权限**。权限仍必须由 Tool Feature、Runtime resource 和 Host 策略提供。

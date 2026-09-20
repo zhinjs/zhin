@@ -12,6 +12,8 @@ export type SourceTarget = 'server' | 'client';
 export interface DiscoveredSource {
   readonly localName: string;
   readonly source: string;
+  /** Supporting files whose change must invalidate the same Capability slot. */
+  readonly relatedSources?: readonly string[];
   readonly target: SourceTarget;
 }
 

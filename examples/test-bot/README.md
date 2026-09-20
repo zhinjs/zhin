@@ -18,7 +18,7 @@
 
 - **Agent Host**：`ai: …` → **`ZhinAgent.process`**（入站队列 + IM session；CapabilityIngress tools + `ai.mcpServers` + speech tools + SOUL/AGENTS/TOOLS）。`ai: clear` 归档会话。含 **`SubagentSystem` + `spawn_task`**（可并行子代理）与 deferred meta（`discover` / `load_tool` / `load_skill`）。另含：`schedule_*`、assistant profile/events、`bash` + Owner `/approve`（需 `plugins.*.master` / sandbox `owner`）。
 - **Speech Host**：顶层 `speech:` → `voice_stt` / `voice_tts`（TTS 需 edge-tts；STT 需本机 Ollama whisper）；入站可 STT 后再进 ZhinAgent。
-- **项目 tools**：`tools/*.ts` 用 `defineAgentTool` + zod；与命令共享 `lib/`。
+- **渐进 Tool**：通用、Skill、Agent、Agent-Skill 四种目录都在本示例覆盖；仅 `minimal-bot` 保留根 Tool 黄金路径，本厨房水槽按任务归属延迟披露。
 
 会话 **DB 持久化已接**（DatabaseHost → `agent_*` / `conversation_events` / `conversation_event_cursors`）。legacy `src/plugins/*`（AOP enrich/出站润色样例）已随 `zhin dev` 旧路径一并移除。
 
@@ -62,7 +62,7 @@ pnpm add @icqqjs/icqq @icqqjs/qqsign
 ### 质量约定（本目录）
 
 - 禁止用 mock / stub /「deferred 命令」充场面；做不到就不要注册入口。
-- 共享逻辑进 `lib/`，命令与 `tools/*.ts` 共用；工具用 `defineAgentTool` + zod。
+- 共享逻辑进 `lib/`，命令与对应 Skill/Agent Tool 共用；工具用 `defineAgentTool` + zod。
 - 安全：禁止 `eval` / `Function` 执行用户输入；密钥不得写入日志或回显。
 
 ## 许可证

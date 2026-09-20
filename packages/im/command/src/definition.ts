@@ -261,8 +261,8 @@ export interface CommandDefinition<
    */
   readonly params?: Readonly<Record<string, CommandParamSchema>>;
   /**
-   * 本地静态段别名（可多词，如 `'gh issue'`）。替换全部本地静态段后仍挂
-   * owner 前缀；不打破子插件命名空间。
+   * 本地静态段别名（可多词，如 `'gh issue'`）。Capability owner 不参与
+   * 用户路由；alias 只替换文件路径提供的静态段。
    */
   readonly alias?: readonly string[];
   /**
@@ -272,7 +272,7 @@ export interface CommandDefinition<
   readonly permit?: readonly string[];
   /**
    * 全局整句快捷方式：触发串（trim 后全文相等）→ 预填 params。
-   * 可打破 owner 命名空间。
+   * 与普通路由一样是全局用户输入，冲突会在 generation 构建时拒绝。
    */
   readonly shortcut?: Readonly<Record<string, Readonly<Record<string, CommandDynamicValue>>>>;
   execute(context: CommandContext<TConfig, TInput, TAdapter>): TResult | Promise<TResult>;

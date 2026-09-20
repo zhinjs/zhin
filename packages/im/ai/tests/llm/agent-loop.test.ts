@@ -1,158 +1,192 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from "vitest";
 import {
+  LlmApiRuntime,
   agentLoop,
   agentContextFrom,
-  registerApiProvider,
-  registerProviderInstance,
-  getLlmTransportModel,
   createAssistantMessageEventStream,
-  clearApiRegistryForTests,
   createUserMessage,
   EMPTY_TOKEN_USAGE,
   z,
   type AssistantMessage,
   type LlmTool,
-} from '../../src/llm/index.js';
-import { agentLoop as runLoop } from '../../src/llm/agent-loop.js';
+} from "../../src/llm/index.js";
+import { agentLoop as runLoop } from "../../src/llm/agent-loop.js";
 
-describe('agentLoop', () => {
+describe("agentLoop", () => {
+  let runtime: LlmApiRuntime;
   const echoTool: LlmTool = {
-    name: 'echo',
-    description: 'echo',
+    name: "echo",
+    description: "echo",
     parameters: z.object({ message: z.string() }),
   };
 
   beforeEach(() => {
-    clearApiRegistryForTests();
-    registerProviderInstance('test', { sdk: 'openai' }, ['mock']);
-    registerApiProvider({
-      api: 'ai-sdk',
+    runtime = new LlmApiRuntime();
+    runtime.registerProvider("test", { sdk: "openai" }, ["mock"]);
+    runtime.registerApiProvider({
+      api: "ai-sdk",
       stream(_model, context) {
         const last = context.messages.at(-1);
-        const userText = last?.role === 'user'
-          ? last.content.find((b) => b.type === 'text')?.text ?? ''
-          : '';
+        const userText =
+          last?.role === "user"
+            ? last.content.find((b) => b.type === "text")?.text ?? ""
+            : "";
 
-        const hasToolResults = context.messages.some((m) => m.role === 'toolResult');
-        if (!hasToolResults && context.tools?.length && userText.startsWith('tool:')) {
+        const hasToolResults = context.messages.some(
+          (m) => m.role === "toolResult"
+        );
+        if (
+          !hasToolResults &&
+          context.tools?.length &&
+          userText.startsWith("tool:")
+        ) {
           const message: AssistantMessage = {
-            role: 'assistant',
-            content: [{
-              type: 'toolCall',
-              id: 'call_1',
-              name: 'echo',
-              arguments: { message: userText.slice(5) },
-            }],
-            api: 'ai-sdk',
-            provider: 'test',
-            model: 'mock',
+            role: "assistant",
+            content: [
+              {
+                type: "toolCall",
+                id: "call_1",
+                name: "echo",
+                arguments: { message: userText.slice(5) },
+              },
+            ],
+            api: "ai-sdk",
+            provider: "test",
+            model: "mock",
             usage: EMPTY_TOKEN_USAGE,
-            stopReason: 'toolCalls',
+            stopReason: "toolCalls",
             timestamp: Date.now(),
           };
           return createAssistantMessageEventStream(async (push) => {
-            push({ type: 'done', message });
+            push({ type: "done", message });
             return message;
           });
         }
 
         const reply = hasToolResults
-          ? `done:${context.messages.filter((m) => m.role === 'toolResult').map((m) => m.role === 'toolResult' ? m.content[0]?.type === 'text' ? m.content[0].text : '' : '').join('')}`
+          ? `done:${context.messages
+              .filter((m) => m.role === "toolResult")
+              .map((m) =>
+                m.role === "toolResult"
+                  ? m.content[0]?.type === "text"
+                    ? m.content[0].text
+                    : ""
+                  : ""
+              )
+              .join("")}`
           : userText;
 
         const message: AssistantMessage = {
-          role: 'assistant',
-          content: [{ type: 'text', text: reply }],
-          api: 'mock',
-          provider: 'test',
-          model: 'mock',
+          role: "assistant",
+          content: [{ type: "text", text: reply }],
+          api: "mock",
+          provider: "test",
+          model: "mock",
           usage: EMPTY_TOKEN_USAGE,
-          stopReason: 'stop',
+          stopReason: "stop",
           timestamp: Date.now(),
         };
         return createAssistantMessageEventStream(async (push) => {
-          push({ type: 'done', message });
+          push({ type: "done", message });
           return message;
         });
       },
     });
   });
 
-  it('single iteration when no tools (maxIterations=1)', async () => {
-    const model = getLlmTransportModel('test', 'mock');
+  it("single iteration when no tools (maxIterations=1)", async () => {
+    const model = runtime.model("test", "mock");
     const events = [];
     for await (const event of runLoop(
-      createUserMessage('hello'),
-      agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [] }),
-      { model, maxIterations: 1 },
+      createUserMessage("hello"),
+      agentContextFrom({ systemPrompt: "sys", messages: [], tools: [] }),
+      { model, transport: runtime, maxIterations: 1 }
     )) {
       events.push(event.type);
     }
-    expect(events).toContain('agent_end');
-    expect(events).toContain('turn_end');
+    expect(events).toContain("agent_end");
+    expect(events).toContain("turn_end");
   });
 
-  it('executes tool call then completes', async () => {
-    const model = getLlmTransportModel('test', 'mock');
+  it("executes tool call then completes", async () => {
+    const model = runtime.model("test", "mock");
     const events = [];
     for await (const event of runLoop(
-      createUserMessage('tool:ping'),
-      agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [echoTool] }),
+      createUserMessage("tool:ping"),
+      agentContextFrom({
+        systemPrompt: "sys",
+        messages: [],
+        tools: [echoTool],
+      }),
       {
         model,
+        transport: runtime,
         maxIterations: 4,
         executeTool: async (call) => ({
-          role: 'toolResult',
+          role: "toolResult",
           toolCallId: call.id,
           toolName: call.name,
-          content: [{ type: 'text', text: call.arguments.message as string }],
+          content: [{ type: "text", text: call.arguments.message as string }],
           isError: false,
           timestamp: Date.now(),
         }),
-      },
+      }
     )) {
       events.push(event.type);
     }
-    expect(events.filter((t) => t === 'tool_execution_end')).toHaveLength(1);
-    expect(events).toContain('agent_end');
+    expect(events.filter((t) => t === "tool_execution_end")).toHaveLength(1);
+    expect(events).toContain("agent_end");
   });
 
-  it('attributes a tool execution to the latest participant message', async () => {
-    const model = getLlmTransportModel('test', 'mock');
+  it("attributes a tool execution to the latest participant message", async () => {
+    const model = runtime.model("test", "mock");
     let causedBy: unknown;
     for await (const _event of runLoop(
       createUserMessage(
-        'tool:ping',
+        "tool:ping",
         undefined,
         1,
-        { subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group' },
-        { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+        {
+          subjectId: "bob-id",
+          displayName: "Bob",
+          roles: ["trusted"],
+          scope: "group",
+        },
+        { turnId: "turn-bob", intent: "steer", targetTurnId: "turn-alice" }
       ),
-      agentContextFrom({ systemPrompt: 'sys', messages: [], tools: [echoTool] }),
+      agentContextFrom({
+        systemPrompt: "sys",
+        messages: [],
+        tools: [echoTool],
+      }),
       {
         model,
+        transport: runtime,
         maxIterations: 4,
         executeTool: async (call, _tools, _signal, context) => {
           causedBy = context;
           return {
-            role: 'toolResult',
+            role: "toolResult",
             toolCallId: call.id,
             toolName: call.name,
-            content: [{ type: 'text', text: 'ok' }],
+            content: [{ type: "text", text: "ok" }],
             isError: false,
             timestamp: Date.now(),
           };
         },
-      },
+      }
     )) {
       // consume the authoritative stream
     }
 
     expect(causedBy).toEqual({
       principal: {
-        subjectId: 'bob-id', displayName: 'Bob', roles: ['trusted'], scope: 'group',
+        subjectId: "bob-id",
+        displayName: "Bob",
+        roles: ["trusted"],
+        scope: "group",
       },
-      turn: { turnId: 'turn-bob', intent: 'steer', targetTurnId: 'turn-alice' },
+      turn: { turnId: "turn-bob", intent: "steer", targetTurnId: "turn-alice" },
     });
   });
 });

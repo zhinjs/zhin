@@ -20,7 +20,7 @@ GitHub Plugin Runtime adapter — Issue/PR comment sections serve as chat channe
 - **Webhook inbound**: HMAC-SHA256 signature verification -> `Endpoint.emit(...)`
 - **Outbound**: `send({ conversation, payload })` -> Issue/PR comment (`conversation.id` is the channel ID, e.g. `owner/repo/issues/42`)
 - **GitHub App authentication**: JWT -> Installation Token
-- **Agent tools**: `agent/` retains star/bind/subscribe/workspace, etc.
+- **Agent tools**: `tools/` provides star, bind, subscribe, workspace, and related capabilities.
 
 ## Installation
 
@@ -48,37 +48,34 @@ plugins:
       - zhinjs/zhin
     workspace_root: ./data/github-workspaces
     endpoints:
-      - name: my-github-bot
-        app_id: 123456
+      - id: my-github-bot
+        app_id: "${GITHUB_APP_ID}"
         private_key: ./data/github-app.pem
-        webhook_secret: your-secret
-```
-
-```env
-GITHUB_APP_ID=123456
-GITHUB_WEBHOOK_SECRET=your-secret
+        webhook_secret: "${GITHUB_WEBHOOK_SECRET}"
 ```
 
 `private_key` supports both file paths and PEM content. When `webhook_secret` is not configured, only API outbound / agent tools are available (no inbound).
 
-Multiple Apps: a single plugin instance can attach multiple endpoints (each item in the `endpoints` array overrides top-level fields; `name` is required):
+`AdapterIndex` merges instance defaults with each endpoint override before invoking the adapter. The protocol accepts only that expanded endpoint configuration; it does not read environment variables, inspect nested `endpoints`, or accept camelCase aliases. The composition root expands `${...}` references while loading configuration.
+
+Multiple Apps: a single plugin instance can attach multiple endpoints. Each endpoint requires `id`, `app_id`, and `private_key`:
 
 ```yaml
 plugins:
   github:
     endpoints:
-      - name: app-a
+      - id: app-a
         app_id: 123456
         private_key: ./data/app-a.pem
-      - name: app-b
+      - id: app-b
         app_id: 234567
         private_key: ./data/app-b.pem
 ```
 
-## Removed Configuration
+## Removed Capabilities
 
-- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**: After Plugin Runtime migration, `register-github-mcp` (stdio `@modelcontextprotocol/server-github`, PAT personal identity) has been removed, and this configuration no longer takes effect. For MCP tools, follow the new runtime `mcp/<name>.ts` (`@zhin.js/mcp-feature`) convention to set up on your own.
-- **`poll_interval`**: Polling fallback has been deleted; only webhook inbound is supported. This field is currently parsed but does not take effect (deferred).
+- **`ai.githubMcp.enabled` / `ai.githubMcp.token`**: After Plugin Runtime migration, `register-github-mcp` (stdio `@modelcontextprotocol/server-github`, PAT personal identity) has been removed, and this configuration no longer takes effect. For MCP tools, use the `mcps/<name>/index.ts` (`@zhin.js/mcp-feature`) convention.
+- Polling fallback has been deleted; inbound events use Webhooks only. No inert polling configuration field remains.
 
 ## Channel ID
 
@@ -89,14 +86,14 @@ plugins:
 
 ## AI Tools
 
-See `agent/tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_workspace`, etc.
+See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_workspace`, etc.
 
 ## Architecture
 
 | Path | Responsibility |
 |------|----------------|
 | `plugin.ts` | Plugin metadata; defines `github_oauth_users` when DatabaseHost is available |
-| `adapters/github.ts` | Thin `defineAdapter` entry point (convention discovery) |
+| `adapters/github/index.ts` | Thin `defineAdapter` entry point (convention discovery) |
 | `src/endpoint.ts` | Endpoint lifecycle, outbound, admit |
 | `src/webhook.ts` | HMAC signature verification and event dispatch |
 | `src/oauth-users.ts` | OAuth table SSOT + token lookup |

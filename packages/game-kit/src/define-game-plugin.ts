@@ -14,17 +14,16 @@ import {
   type InMemoryGameDb,
 } from './memory-db.js';
 import {
-  initGameRecordHost,
-  recordGameOutcome,
+  defineGameRecordTable,
+  GameRecordStore,
+  type GameRecordDatabase,
   type GameRecordDatabaseHost,
 } from './game-records.js';
-import { gameEvents } from './game-events.js';
 import {
   DEFAULT_GAME_STALE_CRON,
   DEFAULT_GAME_STALE_IDLE_MS,
-  registerRuntimeGame,
-  type RuntimeRegisteredGame,
-} from './runtime-hub.js';
+} from './runtime-constants.js';
+import { defineGame, type RuntimeRegisteredGame } from './game-definition.js';
 import type {
   BaseGameSessionRow,
   BaseSessionService,
@@ -37,7 +36,10 @@ export interface GamePluginSession<
     idleMs: number,
     onTimeout?: (session: TRow) => void | Promise<void>,
   ): Promise<number>;
-  registerCoordinator?(): () => void;
+  readonly events: import('./game-events.js').GameEventBus;
+  readonly gameId: string;
+  getActiveForUser(channelKey: string, userId: string): Promise<{ readonly id: string; readonly channel_key: string } | null>;
+  bindAvailability(availability: import('./session-coordinator.js').GameSessionAvailability): void;
 }
 
 export interface DefineGamePluginOptions<
@@ -91,27 +93,23 @@ export function defineGamePlugin<
       if (context.resources.has(databaseHostToken)) {
         const host = context.resources.use(databaseHostToken);
         options.defineHostTables(host);
-        database = createHostGameDb(host, options.tables);
-        context.lifecycle.add(
-          initGameRecordHost(host as GameRecordDatabaseHost),
-        );
+        defineGameRecordTable(host as GameRecordDatabaseHost);
+        database = createHostGameDb(host, [...options.tables, 'game_records']);
       } else {
-        database = createInMemoryGameDb(options.tables);
+        database = createInMemoryGameDb([...options.tables, 'game_records']);
       }
 
       const services = options.createServices(database);
       context.resources.provide(options.servicesToken, services);
-
+      const records = new GameRecordStore(database as unknown as GameRecordDatabase);
       const session = options.session(services);
-      const disposeCoordinator = session.registerCoordinator?.();
-      if (disposeCoordinator) context.lifecycle.add(disposeCoordinator);
-      context.lifecycle.add(registerRuntimeGame(options.game));
-      context.lifecycle.add(gameEvents.on('game:end', async (event) => {
+      context.addGame(options.game.id, defineGame(options.game, records, session));
+      context.lifecycle.add(session.events.on('game:end', async (event) => {
         if (event.gameId !== options.game.id || event.outcomes.length === 0) return;
         const row = event.session;
         if (!row.adapter || !row.endpoint || !row.channel_type || !row.channel_id) return;
         for (const outcome of event.outcomes) {
-          await recordGameOutcome({
+          await records.record({
             $adapter: row.adapter,
             $endpoint: row.endpoint,
             $channel: { type: row.channel_type, id: row.channel_id },
