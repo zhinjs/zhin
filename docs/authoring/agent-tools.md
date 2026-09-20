@@ -18,6 +18,8 @@ description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex �
 
 根 `tools/` 只用于跨任务、高频、无需额外领域说明的能力。只在某个平台、工作流或角色中成立的 Tool 必须归入对应 Skill 或 Agent。一个 Skill 若包含多个可以独立触发的任务域，也应继续拆分，避免加载一个简单查询时同时披露整个平台的所有 Tool Schema。
 
+适配器提供的 Skill 应归入 `agents/<platform>/skills/<name>/`。平台 Agent 在对应 IM 平台入站时自动选中，其他平台回合不会看到它的私有 Skill 摘要；同一平台声明多个自动候选 Agent 会在路由时报出冲突，必须合并职责或由用户显式选择。
+
 ```mermaid
 flowchart LR
     A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[候选 capability table]

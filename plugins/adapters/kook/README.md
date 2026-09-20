@@ -87,7 +87,7 @@ Host 需注入 `httpHostToken`。Challenge（`type: 255`）会校验 `verify_tok
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/`（角色、黑名单等） |
-| 技能说明 | `skills/kook/SKILL.md` |
+| 技能说明 | `agents/kook/skills/kook/SKILL.md` |
 
 ## 平台权限（platform permit）
 

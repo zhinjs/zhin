@@ -87,7 +87,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools (7) | `tools/` (`discord_*`: roles, Embed, reactions, etc.) |
-| Skill documentation | `skills/discord/SKILL.md` |
+| Skill documentation | `agents/discord/skills/discord/SKILL.md` |
 
 Tools use Discord Snowflake IDs to identify `guild_id`, `user_id`, `channel_id`.
 

@@ -129,7 +129,7 @@ Common Markdown (e.g., `**bold**`) is converted to Slack mrkdwn and sent via Blo
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (invite, topic, reactions, pin, edit, etc.) |
-| Skill documentation | `skills/slack-channels/SKILL.md` and `skills/slack-messages/SKILL.md` |
+| Skill documentation | `agents/slack/skills/slack-channels/SKILL.md` and `agents/slack/skills/slack-messages/SKILL.md` |
 
 ## Limitations
 

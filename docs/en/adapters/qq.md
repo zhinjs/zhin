@@ -112,7 +112,7 @@ add/cancel/remove are restricted by `master`: when the instance configuration de
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (channels, roles, etc.) |
-| Skill documentation | `skills/qq/SKILL.md` |
+| Skill documentation | `agents/qq/skills/qq/SKILL.md` |
 
 ## Platform Permissions (platform permit)
 

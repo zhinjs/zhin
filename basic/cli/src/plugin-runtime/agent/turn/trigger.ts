@@ -44,6 +44,7 @@ export function routeSpecialistAgent(
   capabilities: Pick<AgentCapabilities, 'agents'>,
   preferredAgentDefinitionId?: string,
   defaultAgentDefinitionId?: string,
+  platform?: string,
 ): { readonly userText: string; readonly agent?: AgentCapabilities['agents'][number] } {
   if (preferredAgentDefinitionId) {
     if (preferredAgentDefinitionId === defaultAgentDefinitionId) return { userText };
@@ -56,11 +57,21 @@ export function routeSpecialistAgent(
     return { userText, agent: preferred };
   }
   const match = userText.match(/^@([^\s:：]+)[:：]?\s*/u);
-  if (!match) return { userText };
-  const name = match[1]!.toLowerCase();
-  const agent = capabilities.agents.find((item) => item.name.toLowerCase() === name);
-  if (!agent) return { userText };
-  return { userText: userText.slice(match[0].length).trim() || userText, agent };
+  if (match) {
+    const name = match[1]!.toLowerCase();
+    const agent = capabilities.agents.find((item) => item.name.toLowerCase() === name);
+    if (agent) return { userText: userText.slice(match[0].length).trim() || userText, agent };
+  }
+  if (!platform) return { userText };
+  const platformAgents = capabilities.agents.filter(
+    (agent) => agent.platforms?.includes(platform),
+  );
+  if (platformAgents.length > 1) {
+    throw new Error(
+      `Multiple specialist Agents target platform ${platform}: ${platformAgents.map((agent) => agent.qualifiedName).join(', ')}`,
+    );
+  }
+  return platformAgents[0] ? { userText, agent: platformAgents[0] } : { userText };
 }
 
 export function matchAiTrigger(

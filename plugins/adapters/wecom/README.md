@@ -114,7 +114,7 @@ Access Token 在过期前 5 分钟自动刷新。
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
 | 平台工具（4 个） | `tools/` |
-| 技能说明 | `skills/wecom/SKILL.md` |
+| 技能说明 | `agents/wecom/skills/wecom/SKILL.md` |
 
 ## 平台权限（platform permit）
 

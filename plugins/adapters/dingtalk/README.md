@@ -75,7 +75,7 @@ plugins:
 
 ## Agent 工具
 
-`skills/dingtalk/tools/` 在 DingTalk Skill 激活后提供 get_user、部门、群聊、工作通知等 Tool。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
+`agents/dingtalk/skills/dingtalk/tools/` 在 DingTalk Skill 激活后提供 get_user、部门、群聊、工作通知等 Tool。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

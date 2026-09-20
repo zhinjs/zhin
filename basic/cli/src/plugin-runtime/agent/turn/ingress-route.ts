@@ -220,6 +220,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           capabilities,
           workroomAgentTurn?.agentDefinitionId,
           binding.name,
+          turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : undefined,
         );
         // thinkingMessage：进入 AI 处理前先回占位（对齐 legacy inbound-turn-pipeline）。
         // 占位消息不 await 回包——平台 ack 慢不应拖住 turn 启动；

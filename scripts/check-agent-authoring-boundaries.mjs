@@ -71,6 +71,7 @@ function scanLegacy(directory) {
 
 function validateAgentsRoot(root, manifest) {
   if (!fs.existsSync(root)) return 0;
+  const adapter = relative(root).match(/^plugins\/adapters\/([^/]+)\/agents$/u)?.[1];
   let count = 0;
   for (const entry of safeEntries(root)) {
     const target = path.join(root, entry.name);
@@ -96,6 +97,13 @@ function validateAgentsRoot(root, manifest) {
       if (!agent.trigger_rules || !Array.isArray(agent.trigger_rules.file_patterns)
         || !Array.isArray(agent.trigger_rules.keywords)) {
         violations.push(`${relative(manifestPath)}: trigger_rules must declare file_patterns and keywords arrays`);
+      }
+      if (adapter && entry.name !== adapter) {
+        violations.push(`${relative(target)}: Adapter Agent name must match platform ${adapter}`);
+      }
+      if (adapter && (!Array.isArray(agent.platforms)
+        || agent.platforms.length !== 1 || agent.platforms[0] !== adapter)) {
+        violations.push(`${relative(manifestPath)}: Adapter Agent platforms must be [${adapter}]`);
       }
     } catch (error) {
       violations.push(`${relative(manifestPath)}: invalid JSON (${error.message})`);

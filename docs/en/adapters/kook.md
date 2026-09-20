@@ -100,7 +100,7 @@ The Host must inject `httpHostToken`. The Challenge (`type: 255`) validates `ver
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (roles, blocklist, etc.) |
-| Skill documentation | `skills/kook/SKILL.md` |
+| Skill documentation | `agents/kook/skills/kook/SKILL.md` |
 
 ## Platform Permissions (platform permit)
 

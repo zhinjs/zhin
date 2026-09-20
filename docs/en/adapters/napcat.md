@@ -84,7 +84,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/<name>/index.ts` |
-| Skill documentation | `skills/napcat-*/SKILL.md` split by messaging, group content, settings, files/history, media, and account |
+| Skill documentation | `agents/napcat/skills/napcat-*/SKILL.md` split by messaging, group content, settings, files/history, media, and account |
 
 ## Migration Notes (Plugin Runtime)
 

@@ -19,17 +19,20 @@ describe('@zhin.js/adapter-icqq package', () => {
     expect(pkg.dependencies['@zhin.js/adapter']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/tool']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/skill']).toBe('workspace:*');
+    expect(pkg.dependencies['@zhin.js/agent-feature']).toBe('workspace:*');
     expect(pkg.dependencies['@zhin.js/host-http']).toBeUndefined();
     expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/tool');
     expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/skill');
-    expect(pkg.files).toContain('skills');
+    expect(pkg.zhin.features.map((f: { package: string }) => f.package)).toContain('@zhin.js/agent-feature');
+    expect(pkg.files).toContain('agents');
+    expect(pkg.files).not.toContain('skills');
     expect(pkg.files).not.toContain('tools');
   });
 
   it('ICQQ tools are disclosed through the ICQQ Skill and use @zhin.js/tool', () => {
     const like = path.resolve(
       __dirname,
-      '../skills/icqq-interaction/tools/send_user_like/index.ts',
+      '../agents/icqq/skills/icqq-interaction/tools/send_user_like/index.ts',
     );
     expect(fs.existsSync(like)).toBe(true);
     const src = fs.readFileSync(like, 'utf8');
@@ -39,7 +42,7 @@ describe('@zhin.js/adapter-icqq package', () => {
   it('send_user_like default-exports a branded @zhin.js/tool definition', async () => {
     const like = path.resolve(
       __dirname,
-      '../skills/icqq-interaction/tools/send_user_like/index.ts',
+      '../agents/icqq/skills/icqq-interaction/tools/send_user_like/index.ts',
     );
     const mod = await import(pathToFileURL(like).href) as {
       default: { $feature: string; description: string; platforms?: readonly string[] };
@@ -52,7 +55,7 @@ describe('@zhin.js/adapter-icqq package', () => {
 
   it('tool permissions use valid permit DSL (not platform(icqq) without a perm)', async () => {
     const { isBuiltinPermit, isPlatformPermit } = await import('@zhin.js/permission');
-    const skills = path.resolve(__dirname, '../skills');
+    const skills = path.resolve(__dirname, '../agents/icqq/skills');
     const files = fs.readdirSync(skills, { withFileTypes: true })
       .filter((entry) => entry.isDirectory() && entry.name.startsWith('icqq-'))
       .flatMap((entry) => {
@@ -79,7 +82,7 @@ describe('@zhin.js/adapter-icqq package', () => {
     for (const name of ['friend_list', 'group_list']) {
       const file = path.resolve(
         __dirname,
-        `../skills/icqq-directory/tools/${name}/index.ts`,
+        `../agents/icqq/skills/icqq-directory/tools/${name}/index.ts`,
       );
       const mod = await import(pathToFileURL(file).href) as {
         default: { approval: string; permissions?: readonly string[] };

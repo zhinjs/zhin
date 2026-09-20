@@ -18,6 +18,8 @@ The initial model surface contains root Tools plus summaries for root Skills and
 
 Reserve root `tools/` for cross-task, frequently useful capabilities that need no domain instructions. A Tool that only makes sense for a platform, workflow, or role belongs to that Skill or Agent. Split a Skill again when it contains independently triggered task domains, so a narrow request does not disclose every Tool schema for an entire platform.
 
+Adapter Skills belong under `agents/<platform>/skills/<name>/`. The platform Agent is selected automatically for matching IM ingress, so turns from other platforms do not receive its private Skill summaries. Declaring multiple automatic Agent candidates for one platform is a routing conflict; merge their responsibilities or require an explicit user selection.
+
 ```mermaid
 flowchart LR
     A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[Candidate capability table]

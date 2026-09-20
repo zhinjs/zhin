@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/kook/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/kook/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ae094c2b06bcb21a -->
+<!-- sync-adapter-docs:sha256=a352b42ca0c012e2 -->
 
 # @zhin.js/adapter-kook
 
@@ -99,7 +99,7 @@ Host 需注入 `httpHostToken`。Challenge（`type: 255`）会校验 `verify_tok
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/`（角色、黑名单等） |
-| 技能说明 | `skills/kook/SKILL.md` |
+| 技能说明 | `agents/kook/skills/kook/SKILL.md` |
 
 ## 平台权限（platform permit）
 

@@ -100,7 +100,7 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools (2) | `tools/` (`line_get_profile`, `line_get_group_members`) |
-| Skill documentation | `skills/line/SKILL.md` |
+| Skill documentation | `agents/line/skills/line/SKILL.md` |
 
 ## Known Limitations
 

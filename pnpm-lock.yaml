@@ -1840,6 +1840,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -1889,6 +1892,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -1993,6 +1999,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2045,6 +2054,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2097,6 +2109,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2149,6 +2164,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2198,6 +2216,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2302,6 +2323,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2360,6 +2384,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2470,6 +2497,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2647,6 +2677,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2696,6 +2729,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
@@ -2794,6 +2830,9 @@ importers:
       '@zhin.js/adapter':
         specifier: workspace:*
         version: link:../../../packages/im/adapter
+      '@zhin.js/agent-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/agent-feature
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command

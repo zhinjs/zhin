@@ -43,15 +43,16 @@
   },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/feature-kit": "workspace:*",
     "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "qq-official-bot": "^1.3.0",
-    "@zhin.js/skill": "workspace:*"
+    "qq-official-bot": "^1.3.0"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -92,7 +93,7 @@
     "src",
     "lib",
     "tools",
-    "skills",
+    "agents",
     "README.md",
     "CHANGELOG.md",
     "PERMITS.md"
@@ -129,6 +130,10 @@
       },
       {
         "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/agent-feature",
         "api": "^1.0.0"
       }
     ],

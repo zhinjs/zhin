@@ -73,8 +73,8 @@ plugins:
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `PERMITS.md` |
-| 平台工具（7 个） | `skills/discord/tools/`（Skill 激活后披露 `discord_*`：角色、Embed、反应等） |
-| 技能说明 | `skills/discord/SKILL.md` |
+| 平台工具（7 个） | `agents/discord/skills/discord/tools/`（Skill 激活后披露 `discord_*`：角色、Embed、反应等） |
+| 技能说明 | `agents/discord/skills/discord/SKILL.md` |
 
 工具使用 Discord Snowflake ID 标识 `guild_id`、`user_id`、`channel_id`。
 

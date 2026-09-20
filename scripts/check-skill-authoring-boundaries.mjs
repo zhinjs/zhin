@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Harness: Skill authoring uses skills/<name>/SKILL.md, optionally under an Agent.
- * Packages that publish Skills must ship the directory, depend on @zhin.js/skill,
- * and mount the Feature so the files are reachable at runtime.
+ * Packages that publish Skills must ship their owning root, depend on @zhin.js/skill,
+ * and mount the Feature so the files are reachable at runtime. Adapter Skills are
+ * always private to their platform Agent.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -26,7 +27,8 @@ function relative(target) {
 for (const workspaceRoot of workspaceRoots) {
   for (const packageJson of packageManifests(path.join(repoRoot, workspaceRoot))) {
     const packageRoot = path.dirname(packageJson);
-    const skillRoots = [path.join(packageRoot, 'skills')];
+    const rootSkills = path.join(packageRoot, 'skills');
+    const skillRoots = [rootSkills];
     const agentsRoot = path.join(packageRoot, 'agents');
     if (fs.existsSync(agentsRoot)) {
       for (const agent of fs.readdirSync(agentsRoot, { withFileTypes: true })) {
@@ -34,6 +36,7 @@ for (const workspaceRoot of workspaceRoots) {
       }
     }
     let skillCount = 0;
+    let rootSkillCount = 0;
     for (const skillsRoot of skillRoots) {
       if (!fs.existsSync(skillsRoot)) continue;
       const entries = fs.readdirSync(skillsRoot, { withFileTypes: true });
@@ -48,6 +51,7 @@ for (const workspaceRoot of workspaceRoots) {
         continue;
       }
       skillCount += 1;
+      if (skillsRoot === rootSkills) rootSkillCount += 1;
       const skillFile = path.join(skillsRoot, entry.name, 'SKILL.md');
       const frontmatter = readFrontmatter(fs.readFileSync(skillFile, 'utf8'));
       let metadata;
@@ -60,6 +64,17 @@ for (const workspaceRoot of workspaceRoots) {
       const declaredName = typeof metadata.name === 'string' ? metadata.name : undefined;
       if (declaredName && declaredName !== entry.name) {
         violations.push(`${relative(skillFile)}: name must match directory ${entry.name}`);
+      }
+      const adapterMatch = relative(packageRoot).match(/^plugins\/adapters\/([^/]+)$/u);
+      if (adapterMatch && skillsRoot !== rootSkills) {
+        const adapter = adapterMatch[1];
+        const agent = path.basename(path.dirname(skillsRoot));
+        if (agent !== adapter) {
+          violations.push(`${relative(skillFile)}: Adapter Skill must belong to agents/${adapter}`);
+        }
+        if (!Array.isArray(metadata.platforms) || !metadata.platforms.includes(adapter)) {
+          violations.push(`${relative(skillFile)}: Adapter Skill must declare platform ${adapter}`);
+        }
       }
       const localTools = new Set(Array.isArray(metadata.tools) ? metadata.tools : []);
       const toolRoots = [
@@ -81,8 +96,11 @@ for (const workspaceRoot of workspaceRoots) {
     }
     if (skillCount === 0) continue;
     const manifest = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
-    if (manifest.private !== true && !manifest.files?.includes('skills')) {
+    if (rootSkillCount > 0 && manifest.private !== true && !manifest.files?.includes('skills')) {
       violations.push(`${relative(packageJson)}: files must include skills`);
+    }
+    if (rootSkillCount > 0 && relative(packageRoot).startsWith('plugins/adapters/')) {
+      violations.push(`${relative(rootSkills)}: Adapter Skills must live under agents/<platform>/skills`);
     }
     if (manifest.dependencies?.['@zhin.js/skill'] !== 'workspace:*') {
       violations.push(`${relative(packageJson)}: must depend on @zhin.js/skill`);

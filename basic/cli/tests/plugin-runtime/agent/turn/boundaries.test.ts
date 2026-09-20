@@ -43,6 +43,13 @@ describe('Workroom Orchestrator turn routing', () => {
     source: '/agents/support.md',
   };
 
+  const icqq = {
+    ...support,
+    name: 'icqq',
+    qualifiedName: 'adapter-icqq__icqq',
+    platforms: ['icqq'],
+  };
+
   it('pins a Workroom continuation to the catalog Orchestrator', () => {
     expect(routeSpecialistAgent('处理这个问题', { agents: [support] }, 'support', 'zhin'))
       .toEqual({ userText: '处理这个问题', agent: support });
@@ -51,6 +58,22 @@ describe('Workroom Orchestrator turn routing', () => {
   it('uses the default binding when it is the catalog Orchestrator', () => {
     expect(routeSpecialistAgent('处理这个问题', { agents: [support] }, 'zhin', 'zhin'))
       .toEqual({ userText: '处理这个问题' });
+  });
+
+  it('selects the sole specialist for the ingress platform', () => {
+    expect(routeSpecialistAgent('查询群列表', { agents: [support, icqq] }, undefined, 'zhin', 'icqq'))
+      .toEqual({ userText: '查询群列表', agent: icqq });
+  });
+
+  it('keeps an explicit specialist mention ahead of platform routing', () => {
+    expect(routeSpecialistAgent('@support 处理这个问题', { agents: [support, icqq] }, undefined, 'zhin', 'icqq'))
+      .toEqual({ userText: '处理这个问题', agent: support });
+  });
+
+  it('rejects ambiguous specialists for one platform', () => {
+    expect(() => routeSpecialistAgent('查询群列表', {
+      agents: [icqq, { ...icqq, name: 'qq-admin', qualifiedName: 'adapter-icqq__qq-admin' }],
+    }, undefined, 'zhin', 'icqq')).toThrow('Multiple specialist Agents target platform icqq');
   });
 
   it('isolates the Project session and removes classic subagent delegation', () => {

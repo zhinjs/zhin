@@ -127,7 +127,7 @@ Access Token is automatically refreshed 5 minutes before expiration.
 |----------|------|
 | Permit vocabulary | `PERMITS.md` |
 | Platform tools (4) | `tools/` |
-| Skill documentation | `skills/wecom/SKILL.md` |
+| Skill documentation | `agents/wecom/skills/wecom/SKILL.md` |
 
 ## Platform Permissions (platform permit)
 
