@@ -30,7 +30,7 @@ import type {
   WorkroomAcceptancePolicyDecisionPort,
 } from '../../src/workroom/acceptance-policy.js';
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 import { buildLegacyRunOfflineReport } from '../../src/workroom/legacy-run-offline-migration.js';
 import { materializeWorkroomRemoteAssignment } from '../../src/workroom/remote-assignment-issuance.js';

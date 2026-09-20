@@ -312,7 +312,7 @@ export * from './plugin-runtime/workroom-projection-outbound.js';
 export * from './plugin-runtime/workroom-projection-runtime.js';
 export * from './plugin-runtime/workroom-journal-payload-composition.js';
 export * from './plugin-runtime/workroom-data-governance-root-provider.js';
-export * from './workroom/journal.js';
+export * from './workroom/journal/index.js';
 export * from './workroom/journal-model.js';
 export * from './workroom/catalog.js';
 export * from './workroom/workroom-kernel.js';

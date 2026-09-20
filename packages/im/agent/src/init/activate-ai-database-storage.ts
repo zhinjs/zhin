@@ -8,7 +8,7 @@ import {
   ActivatableWorkroomJournal,
   DatabaseWorkroomJournal,
   type WorkroomJournalPayloadPort,
-} from '../workroom/journal.js';
+} from '../workroom/journal/index.js';
 import { ActivatableWorkroomCatalog, DatabaseWorkroomCatalog } from '../workroom/catalog.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 

@@ -5,7 +5,7 @@ import {
 import {
   MemoryWorkroomJournalPayloadPort,
   WorkroomJournalPayloadAuthorityUnavailableError,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 
 describe('generation-owned Workroom Journal payload composition', () => {
   it('fails closed until exact activation and cannot replace the generation authority', async () => {

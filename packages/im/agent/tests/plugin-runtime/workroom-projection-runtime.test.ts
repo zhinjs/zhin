@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   MemoryWorkroomProjectionRepository,
   WorkroomProjectionTracer,

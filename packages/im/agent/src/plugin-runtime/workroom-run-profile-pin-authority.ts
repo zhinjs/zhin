@@ -1,4 +1,4 @@
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,

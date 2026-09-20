@@ -8,7 +8,7 @@ import {
   type AssignmentExecutionEnvelope,
 } from '../../src/workroom/assignment-executor.js';
 import { AssignmentObservationIngress } from '../../src/workroom/assignment-observation-ingress.js';
-import { MemoryWorkroomJournal } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import {
   MemoryWorkroomProjectionRepository,
   FileWorkroomProjectionRepository,

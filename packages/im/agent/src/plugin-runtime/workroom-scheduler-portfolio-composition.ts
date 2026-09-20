@@ -1,6 +1,6 @@
 import type { Scope } from '@zhin.js/plugin-runtime';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import type { WorkroomRunState } from '../workroom/kernel-contracts.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
 import type { PortfolioResourceBundle } from '../portfolio/portfolio-journal.js';

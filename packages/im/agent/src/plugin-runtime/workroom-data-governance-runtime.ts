@@ -60,7 +60,7 @@ import {
   type WorkroomJournalPayloadPort,
   type WorkroomJournalPayloadReadInput,
   type WorkroomJournalPayloadWriteInput,
-} from '../workroom/journal.js';
+} from '../workroom/journal/index.js';
 import type {
   WorkroomEvidencePayloadWriteInput,
   WorkroomEvidencePayloadWriterPort,

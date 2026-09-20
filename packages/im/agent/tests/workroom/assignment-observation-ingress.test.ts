@@ -9,7 +9,7 @@ import {
   type AssignmentExecutionEnvelopeInput,
 } from '../../src/workroom/assignment-executor.js';
 import { AssignmentObservationIngress } from '../../src/workroom/assignment-observation-ingress.js';
-import { MemoryWorkroomJournal, WorkroomSequenceConflictError } from '../../src/workroom/journal.js';
+import { MemoryWorkroomJournal, WorkroomSequenceConflictError } from '../../src/workroom/journal/index.js';
 import { replayWorkroom } from '../../src/workroom/kernel-state.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 

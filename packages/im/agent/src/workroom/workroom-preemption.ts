@@ -1,5 +1,5 @@
 import type { WorkroomEvent, WorkroomEventDraft } from './kernel-contracts.js';
-import type { WorkroomJournal } from './journal.js';
+import type { WorkroomJournal } from './journal/index.js';
 import {
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,

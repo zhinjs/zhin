@@ -1,7 +1,7 @@
 import type { WorkroomCatalog, WorkroomCatalogSnapshot } from '../workroom/catalog.js';
 import type { WorkroomDefinition } from '../workroom/catalog-definition.js';
 import type { PortfolioSponsorProjection } from '../portfolio/sponsor-projection.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import {
   compareCanonicalWorkroomText,
   digestCanonicalWorkroomValue as digest,

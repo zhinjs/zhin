@@ -1,6 +1,6 @@
 import { createToken } from '@zhin.js/plugin-runtime';
 import type { AssignmentExecutionEnvelope } from '../workroom/assignment-executor.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import {
   replayWorkroomPreemptions,
   type WorkroomPreemptionState,

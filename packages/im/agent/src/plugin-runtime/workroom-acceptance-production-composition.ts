@@ -15,7 +15,7 @@ import {
 } from '../workroom/effect-ledger.js';
 import type { ProjectProfileRegistry } from '../workroom/profile-registry.js';
 import type { WorkroomCatalog } from '../workroom/catalog.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import type { WorkroomRunState } from '../workroom/kernel-contracts.js';
 import { workroomAcceptanceAuthorityToken } from './workroom-acceptance-authority.js';
 import { workroomAcceptancePolicyDecisionToken } from './workroom-acceptance-policy.js';

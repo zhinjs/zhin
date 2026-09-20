@@ -10,7 +10,7 @@ import {
   MemoryWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
   type WorkroomJournalPayloadReadInput,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 
 const SECRET_TITLE = 'customer password reset for alice@example.test';

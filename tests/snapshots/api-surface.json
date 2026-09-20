@@ -60,7 +60,7 @@
     "export * from './workroom/interaction-space-binding-service.js';",
     "export * from './workroom/interaction-space-router.js';",
     "export * from './workroom/journal-model.js';",
-    "export * from './workroom/journal.js';",
+    "export * from './workroom/journal/index.js';",
     "export * from './workroom/kernel-contracts.js';",
     "export * from './workroom/legacy-embedded-payload-migration.js';",
     "export * from './workroom/legacy-run-offline-migration.js';",

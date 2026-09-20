@@ -1,7 +1,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { WorkroomEvent, WorkroomExecutionRole } from './kernel-contracts.js';
-import type { WorkroomJournal } from './journal.js';
+import type { WorkroomJournal } from './journal/index.js';
 import { DurableFileStore } from './durable-file-store.js';
 import {
   compareCanonicalWorkroomText,

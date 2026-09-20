@@ -6,7 +6,7 @@ import {
   MemoryWorkroomJournalPayloadPort,
   digestStoredWorkroomEvent,
   digestWorkroomEventRowBinding,
-} from '../../src/workroom/journal.js';
+} from '../../src/workroom/journal/index.js';
 import { WORKROOM_EVENT_MODEL } from '../../src/workroom/journal-model.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { activateAiDatabaseStorage } from '../../src/init/activate-ai-database-storage.js';

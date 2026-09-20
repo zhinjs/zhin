@@ -2,7 +2,7 @@ import type {
   PortfolioControlAck,
   PortfolioControlOutboxItem,
 } from '../portfolio/capacity-control-outbox.js';
-import type { WorkroomJournal } from '../workroom/journal.js';
+import type { WorkroomJournal } from '../workroom/journal/index.js';
 import {
   readWorkroomPreemptionCheckpointAck,
   replayWorkroomPreemptions,

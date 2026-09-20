@@ -6,7 +6,7 @@ import { ActivatableWorkroomCatalog } from '../src/workroom/catalog.js';
 import {
   ActivatableWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
-} from '../src/workroom/journal.js';
+} from '../src/workroom/journal/index.js';
 
 describe('activateAiDatabaseStorage', () => {
   const requiredModels = [
