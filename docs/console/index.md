@@ -60,8 +60,8 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | 页面 | 数据来源 | 说明 |
 |------|----------|------|
 | Dashboard | `GET /api/system/status`、`GET /api/stats` | 运行状态、版本、统计概览 |
-| Plugins | `GET /api/plugins`、`GET /api/plugins/<name>` | 插件列表与详情（命令、工具、配置 schema） |
-| Endpoints | Endpoint 摘要 + 收件箱表 | 各平台端点连接状态；详情页含统一收件箱（消息 / 请求 / 通知） |
+| Plugins | `GET /api/plugins`、`GET /api/plugins/<name>`、RPC `plugin:*` | 插件列表与详情；安装/更新/卸载计划与提交、配置校验、诊断和启停管理 |
+| Endpoints | Endpoint 摘要 + RPC `endpoint.test` + 收件箱表 | 各平台端点连接状态和连通性诊断；详情页含统一收件箱（消息 / 请求 / 通知） |
 | Config | RPC `config:get-source` / `config:replace-source` / `config:set` | 按当前 YAML/JSON 格式在线查看、带 revision 编辑 Root 配置 |
 | Logs | `GET /api/logs`、`GET /api/logs/stats`、`DELETE /api/logs`、`POST /api/logs/cleanup` | 系统日志（`SystemLog` 表，需 Database 启动） |
 | Cron | RPC `cron:*` | 插件注册的内存任务（list）；安装 Agent 后可增删暂停持久化任务 |
@@ -74,6 +74,12 @@ Runtime 无配置时回退到 8086，当前脚手架默认写入 8068。连接�
 | Sandbox | WS `/sandbox` | 内置沙箱聊天，免平台联调直接对话 |
 
 实时推送走 SSE：`GET /api/events`（页面目录同步、HMR 重载、消息/配置事件）。
+
+插件写操作都采用“计划后提交”：Console 先调用 `plugin:plan-install`、
+`plugin:plan-update` 或 `plugin:plan-uninstall` 展示变更，再携带当前配置 revision 提交。
+安装、更新和卸载会维护 package manifest、锁文件、`zhin.plugins` 与插件配置；失败时恢复文件快照。
+配置保存前调用 `plugin:validate-config`，详情页可用 `plugin:diagnose` 汇总安装、挂载、schema
+与环境变量状态。
 
 ## Agent 工作台运行策略
 

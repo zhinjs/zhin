@@ -2,11 +2,13 @@ import type { AuthScope } from './token-registry.js';
 import type { DatabaseHostConsole } from '@zhin.js/plugin-runtime';
 import {
   CONFIG_RPC,
+  ENDPOINT_RPC,
   type ConsoleConfigSource,
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
 } from '@zhin.js/console-protocol';
 import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
+import { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';
 
 /**
  * Console RPC 请求结构：未锚定 endpoint 的会话地址（结构对齐
@@ -51,6 +53,64 @@ export type RuntimeConsoleRpcMessage = {
 
 export type RuntimeConsoleRpcReply = Record<string, unknown>;
 
+export interface PluginInstallPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly alreadyDeclared: boolean;
+  readonly alreadyInstalled: boolean;
+  readonly restartRequired: boolean;
+  readonly changes: Readonly<{
+    readonly packageManifest: 'unchanged' | 'add-plugin';
+    readonly config: 'unchanged' | 'create-entry' | 'schema-required';
+  }>;
+  readonly warnings: readonly string[];
+}
+
+export interface PluginUninstallPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly installed: boolean;
+  readonly declared: boolean;
+  readonly hasConfig: boolean;
+  readonly restartRequired: boolean;
+}
+
+export interface PluginUpdatePlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly currentVersion: string | null;
+  readonly targetVersion: string;
+  readonly installed: boolean;
+  readonly declared: boolean;
+  readonly alreadyCurrent: boolean;
+  readonly restartRequired: boolean;
+}
+
+export interface PluginManagementPort {
+  planInstall(packageName: string): Promise<PluginInstallPlan>;
+  install?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginInstallPlan;
+    readonly restartRequired: boolean;
+  }>>;
+  planUninstall?(packageName: string): Promise<PluginUninstallPlan>;
+  uninstall?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginUninstallPlan;
+    readonly restartRequired: boolean;
+  }>>;
+  planUpdate?(packageName: string, targetVersion: string): Promise<PluginUpdatePlan>;
+  update?(packageName: string, targetVersion: string, expectedRevision?: string): Promise<Readonly<{
+    readonly plan: PluginUpdatePlan;
+    readonly installedVersion: string;
+    readonly restartRequired: boolean;
+  }>>;
+}
+
+export interface PluginConfigValidation {
+  readonly valid: boolean;
+  readonly errors: readonly { readonly path: string; readonly message: string }[];
+  readonly missingEnv: readonly string[];
+}
+
 export type RuntimeConsolePage = {
   readonly id: string;
   readonly localName: string;
@@ -82,6 +142,10 @@ export type RuntimeConsoleRpcContext = {
     instanceKey: string,
     enabled: boolean,
   ): Promise<Readonly<{ disabled: readonly string[] }>>;
+  /** Read-only install planning shared by Console Web and CLI surfaces. */
+  pluginManagement?: PluginManagementPort;
+  validatePluginConfig?(pluginName: string, data: unknown): Promise<PluginConfigValidation>;
+  diagnosePlugin?(pluginName: string): Promise<unknown>;
   /** Atomic, revision-checked runtime Workroom Catalog read/write. */
   readWorkroomCatalog?(): Promise<Readonly<{
     agents: Readonly<Record<string, unknown>>;
@@ -180,6 +244,12 @@ export async function dispatchRuntimeConsoleRpc(
         : { requestId, data: extended.data });
       return payloads;
     }
+  }
+
+  const pluginReply = await dispatchPluginConsoleRpc(type, message, ctx);
+  if (pluginReply !== undefined) {
+    emit(pluginReply);
+    return payloads;
   }
 
   switch (type) {
@@ -319,6 +389,17 @@ export async function dispatchRuntimeConsoleRpc(
         if (!ctx.setConfigKey) {
           emit({ requestId, error: 'Config write is not configured' });
           return payloads;
+        }
+        if (ctx.validatePluginConfig) {
+          const validation = await ctx.validatePluginConfig(pluginName, message.data);
+          if (!validation.valid) {
+            emit({
+              requestId,
+              error: '配置校验失败',
+              data: validation,
+            });
+            return payloads;
+          }
         }
         const result = await ctx.setConfigKey(pluginName, message.data);
         ctx.publishEvent?.('config:updated', {
@@ -696,6 +777,54 @@ export async function dispatchRuntimeConsoleRpc(
       }
       return payloads;
     }
+    case ENDPOINT_RPC.TEST: {
+      const adapter = stringField(message, 'adapter');
+      const endpointKey = stringField(message, 'endpointKey');
+      if (!adapter || !endpointKey) {
+        emit({ requestId, error: 'adapter and endpointKey are required' });
+        return payloads;
+      }
+      if (!ctx.getEndpoint) {
+        emit({ requestId, error: 'Endpoint registry is not configured' });
+        return payloads;
+      }
+      const startedAt = Date.now();
+      try {
+        const endpoint = await ctx.getEndpoint(adapter, endpointKey);
+        if (!endpoint) {
+          emit({ requestId, data: {
+            reachable: false,
+            connected: false,
+            phase: 'unconfigured',
+            latencyMs: Date.now() - startedAt,
+            message: 'Endpoint 未注册到当前 generation',
+          } });
+          return payloads;
+        }
+        emit({ requestId, data: {
+          reachable: endpoint.connected && endpoint.status === 'online',
+          connected: endpoint.connected,
+          status: endpoint.status,
+          phase: endpoint.phase ?? (endpoint.connected ? 'online' : 'pending'),
+          pendingLogin: endpoint.pendingLogin ?? false,
+          latencyMs: Date.now() - startedAt,
+          message: endpoint.connected
+            ? 'Endpoint 已连接'
+            : endpoint.pendingLogin
+              ? 'Endpoint 等待登录操作'
+              : 'Endpoint 当前离线',
+        } });
+      } catch (error) {
+        emit({ requestId, data: {
+          reachable: false,
+          connected: false,
+          phase: 'failed',
+          latencyMs: Date.now() - startedAt,
+          message: error instanceof Error ? error.message : String(error),
+        } });
+      }
+      return payloads;
+    }
     case 'endpoint.send_message': {
       try {
         const data = message as Record<string, unknown>;
@@ -749,41 +878,6 @@ export async function dispatchRuntimeConsoleRpc(
           requestId,
           error: error instanceof Error ? error.message : String(error),
         });
-      }
-      return payloads;
-    }
-    case 'plugin:set-enabled': {
-      try {
-        const instanceKey = typeof message.instanceKey === 'string' ? message.instanceKey : '';
-        const enabled = message.enabled;
-        if (!instanceKey || typeof enabled !== 'boolean') {
-          emit({ requestId, error: 'instanceKey and boolean enabled are required' });
-          return payloads;
-        }
-        if (!ctx.setPluginEnabled) {
-          emit({ requestId, error: 'Plugin lifecycle management is not configured' });
-          return payloads;
-        }
-        const lifecycle = await ctx.setPluginEnabled(instanceKey, enabled);
-        ctx.publishEvent?.('plugin:lifecycle-updated', { instanceKey, enabled });
-        emit({
-          requestId,
-          data: {
-            success: true,
-            instanceKey,
-            enabled,
-            disabled: lifecycle.disabled,
-            restartRequired: true,
-            message: `${instanceKey} 已${enabled ? '启用' : '停用'}，Host 正在重启`,
-          },
-        });
-        if (ctx.requestRestart) {
-          setTimeout(() => {
-            void Promise.resolve(ctx.requestRestart?.()).catch(() => undefined);
-          }, 500);
-        }
-      } catch (error) {
-        emit({ requestId, error: error instanceof Error ? error.message : String(error) });
       }
       return payloads;
     }

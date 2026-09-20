@@ -1,12 +1,13 @@
 import type { ConfigFileDocument } from '@zhin.js/config-file';
 import type { ConsoleConfigSource } from '@zhin.js/console-protocol';
+import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   readPluginConfigurationMap,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
 import { readPluginPackageMap } from './plugin-package-map.js';
-import { configKeyPatch, flattenConfigDocument } from './configuration-projection.js';
+import { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 
@@ -67,6 +68,17 @@ export class ConsoleConfigurationStore {
     });
   }
 
+  removeKey(pluginName: string): Promise<{ restartRequired: boolean }> {
+    return this.#serialize(async () => {
+      const current = await this.#document.read();
+      const prepared = await this.#document.prepare(current, [
+        configKeyRemovePatch(current.document, pluginName),
+      ]);
+      await prepared.commit();
+      return Object.freeze({ restartRequired: true });
+    });
+  }
+
   readEnvironmentFile(filename: string): Promise<string> {
     return readEnvFile(this.#projectRoot, filename);
   }
@@ -77,6 +89,26 @@ export class ConsoleConfigurationStore {
 
   readSchema(pluginName?: string): Promise<unknown> {
     return this.#schemas.read(pluginName);
+  }
+
+  async validatePluginConfig(pluginName: string, data: unknown): Promise<PluginConfigValidation> {
+    const schema = await this.#schemas.read(pluginName);
+    const errors: Array<{ path: string; message: string }> = [];
+    const missingEnv = new Set<string>();
+    const envNames = new Set(Object.keys(process.env));
+    for (const file of ['.env', '.env.development', '.env.production']) {
+      const source = await readEnvFile(this.#projectRoot, file);
+      for (const line of source.split(/\r?\n/u)) {
+        const match = /^\s*([A-Z_][A-Z0-9_]*)\s*=/u.exec(line);
+        if (match) envNames.add(match[1]!);
+      }
+    }
+    validateValue(schema, data, '$', errors, missingEnv, envNames);
+    return Object.freeze({
+      valid: errors.length === 0,
+      errors: Object.freeze(errors),
+      missingEnv: Object.freeze([...missingEnv].sort()),
+    });
   }
 
   async readAllSchemas(): Promise<Record<string, unknown>> {
@@ -110,4 +142,51 @@ export class ConsoleConfigurationStore {
   }
 }
 
-export { configKeyPatch, flattenConfigDocument } from './configuration-projection.js';
+function validateValue(
+  schema: unknown,
+  value: unknown,
+  path: string,
+  errors: Array<{ path: string; message: string }>,
+  missingEnv: Set<string>,
+  envNames: ReadonlySet<string>,
+): void {
+  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
+  const definition = schema as Record<string, unknown>;
+  if (typeof value === 'string') {
+    for (const name of value.matchAll(/\$\{([A-Z_][A-Z0-9_]*)\}/gu)) {
+      if (!envNames.has(name[1]!)) missingEnv.add(name[1]!);
+    }
+  }
+  if (definition.required === true && (value === undefined || value === null || value === '')) {
+    errors.push({ path, message: '必填项不能为空' });
+    return;
+  }
+  if (value == null) return;
+  const type = typeof definition.type === 'string' ? definition.type : undefined;
+  const validType = type === 'number' || type === 'integer'
+    ? typeof value === 'number' && Number.isFinite(value) && (type !== 'integer' || Number.isInteger(value))
+    : type === 'boolean' ? typeof value === 'boolean'
+      : type === 'string' ? typeof value === 'string'
+        : type === 'list' ? Array.isArray(value)
+          : type === 'object' ? typeof value === 'object' && !Array.isArray(value)
+            : true;
+  if (!validType) errors.push({ path, message: `类型应为 ${type}` });
+  if (Array.isArray(definition.options) && !definition.options.some((option) => (
+    option && typeof option === 'object' && 'value' in option
+      ? (option as { value?: unknown }).value === value
+      : option === value
+  ))) errors.push({ path, message: '值不在允许范围内' });
+  if (type === 'object' && definition.object && typeof definition.object === 'object') {
+    const object = value as Record<string, unknown>;
+    for (const [key, child] of Object.entries(definition.object as Record<string, unknown>)) {
+      validateValue(child, object[key], `${path}.${key}`, errors, missingEnv, envNames);
+    }
+  }
+  if (type === 'list' && definition.inner) {
+    for (const [index, item] of (value as unknown[]).entries()) {
+      validateValue(definition.inner, item, `${path}[${index}]`, errors, missingEnv, envNames);
+    }
+  }
+}
+
+export { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';

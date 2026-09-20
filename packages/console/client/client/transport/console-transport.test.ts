@@ -207,6 +207,35 @@ describe("ConsoleTransport REST/SSE transport", () => {
     expect((init.headers as Record<string, string>).Authorization).toBe("Bearer t");
   });
 
+  it('exposes marketplace discovery and lifecycle methods for Console pages', async () => {
+    installBrowserGlobals(mockStorage({ zhin_api_token: 'token' }));
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: String(input).includes('/marketplace/search') ? { items: [] } : { ok: true },
+      }),
+      headers: init?.headers,
+    } as Response));
+    const manager = new ConsoleTransport({ fetch: fetchMock });
+
+    await manager.searchMarketplace({ keyword: 'telegram', official: true });
+    await manager.getMarketplacePlugin('@zhin.js/adapter-telegram');
+    await manager.getPluginUpdates();
+    await manager.setPluginEnabled('telegram', false);
+
+    expect(String(fetchMock.mock.calls[0]![0])).toContain('/pub/marketplace/search?keyword=telegram&official=true');
+    expect(String(fetchMock.mock.calls[1]![0])).toContain('%40zhin.js%2Fadapter-telegram');
+    expect(String(fetchMock.mock.calls[2]![0])).toContain('/api/marketplace/updates');
+    const lifecycleBody = JSON.parse(String((fetchMock.mock.calls[3]![1] as RequestInit).body));
+    expect(lifecycleBody).toMatchObject({
+      type: 'plugin:set-enabled',
+      instanceKey: 'telegram',
+      enabled: false,
+    });
+  });
+
   it("stops reconnecting after maxReconnectAttempts", async () => {
     installBrowserGlobals();
     const fetchMock = mockConsoleTransport(() => sseResponse(500, null));

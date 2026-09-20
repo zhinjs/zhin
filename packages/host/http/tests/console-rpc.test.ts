@@ -83,6 +83,170 @@ describe('runtime console RPC', () => {
     expect(isDemoHttpAllowed('POST', '/api/plugins', '/api')).toBe(false);
   });
 
+  it('returns a shared plugin install plan for full-scope Console clients', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:plan-install', requestId: 91, packageName: '@zhin.js/adapter-telegram' },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        pluginManagement: {
+          planInstall: async (packageName) => ({
+            packageName,
+            instanceKey: 'adapter-telegram',
+            alreadyDeclared: false,
+            alreadyInstalled: false,
+            restartRequired: true,
+            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+            warnings: ['插件尚未安装'],
+          }),
+        },
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:plan-install', requestId: 91 }, replies)).toMatchObject({
+      requestId: 91,
+      data: { packageName: '@zhin.js/adapter-telegram', restartRequired: true },
+    });
+  });
+
+  it('passes the config revision to the install transaction', async () => {
+    let receivedRevision: string | undefined;
+    const replies = await dispatchRuntimeConsoleRpc(
+      {
+        type: 'plugin:install',
+        requestId: 92,
+        packageName: '@zhin.js/adapter-telegram',
+        expectedRevision: 'rev-1',
+      },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        pluginManagement: {
+          planInstall: async () => ({
+            packageName: '@zhin.js/adapter-telegram',
+            instanceKey: 'adapter-telegram',
+            alreadyDeclared: false,
+            alreadyInstalled: false,
+            restartRequired: true,
+            changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+            warnings: [],
+          }),
+          install: async (_packageName, revision) => {
+            receivedRevision = revision;
+            return {
+              plan: await Promise.resolve({
+                packageName: '@zhin.js/adapter-telegram',
+                instanceKey: 'adapter-telegram',
+                alreadyDeclared: false,
+                alreadyInstalled: false,
+                restartRequired: true,
+                changes: { packageManifest: 'add-plugin', config: 'create-entry' },
+                warnings: [],
+              }),
+              restartRequired: true,
+            };
+          },
+        },
+      },
+    );
+    expect(receivedRevision).toBe('rev-1');
+    expect(pickRpcReply({ type: 'plugin:install', requestId: 92 }, replies)).toMatchObject({
+      requestId: 92,
+      data: { success: true, restartRequired: true },
+    });
+  });
+
+  it('requires exact confirmation before uninstalling a plugin', async () => {
+    let calls = 0;
+    const ctx = {
+      authScope: 'full' as const,
+      listPages: async () => [],
+      pluginManagement: {
+        planInstall: async () => ({
+          packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
+          alreadyDeclared: true, alreadyInstalled: true, restartRequired: false,
+          changes: { packageManifest: 'unchanged' as const, config: 'unchanged' as const },
+          warnings: [],
+        }),
+        uninstall: async () => {
+          calls += 1;
+          return {
+            plan: {
+              packageName: '@zhin.js/adapter-telegram', instanceKey: 'telegram',
+              installed: true, declared: true, hasConfig: true, restartRequired: true,
+            },
+            restartRequired: true,
+          };
+        },
+      },
+    };
+    const denied = await dispatchRuntimeConsoleRpc({
+      type: 'plugin:uninstall', requestId: 95,
+      packageName: '@zhin.js/adapter-telegram', confirmation: 'telegram',
+    }, ctx);
+    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 95 }, denied)?.error)
+      .toContain('confirmation');
+    expect(calls).toBe(0);
+
+    const accepted = await dispatchRuntimeConsoleRpc({
+      type: 'plugin:uninstall', requestId: 96,
+      packageName: '@zhin.js/adapter-telegram', confirmation: '@zhin.js/adapter-telegram',
+    }, ctx);
+    expect(pickRpcReply({ type: 'plugin:uninstall', requestId: 96 }, accepted)).toMatchObject({
+      data: { success: true, restartRequired: true },
+    });
+    expect(calls).toBe(1);
+  });
+
+  it('validates plugin config through the shared Console context', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:validate-config', requestId: 93, pluginName: 'adapter-demo', data: {} },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        validatePluginConfig: async (pluginName, data) => ({
+          valid: pluginName === 'adapter-demo' && typeof data === 'object',
+          errors: [],
+          missingEnv: ['BOT_TOKEN'],
+        }),
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:validate-config', requestId: 93 }, replies)).toMatchObject({
+      requestId: 93,
+      data: { valid: true, missingEnv: ['BOT_TOKEN'] },
+    });
+  });
+
+  it('returns plugin diagnostics through the shared Console context', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'plugin:diagnose', requestId: 94, pluginName: 'adapter-demo' },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        diagnosePlugin: async (pluginName) => ({ pluginName, healthy: false, reasons: ['missing token'] }),
+      },
+    );
+    expect(pickRpcReply({ type: 'plugin:diagnose', requestId: 94 }, replies)).toMatchObject({
+      requestId: 94,
+      data: { pluginName: 'adapter-demo', healthy: false },
+    });
+  });
+
+  it('reports endpoint connectivity from the current generation', async () => {
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'endpoint.test', requestId: 97, adapter: 'telegram', endpointKey: 'bot' },
+      {
+        authScope: 'demo',
+        listPages: async () => [],
+        getEndpoint: async () => ({
+          name: 'bot', adapter: 'telegram', connected: true, status: 'online', phase: 'online',
+        }),
+      },
+    );
+    expect(pickRpcReply({ type: 'endpoint.test', requestId: 97 }, replies)).toMatchObject({
+      data: { reachable: true, connected: true, phase: 'online', message: 'Endpoint 已连接' },
+    });
+  });
+
   it('allows read-only status/stats/plugins GETs in demo scope', () => {
     expect(isDemoHttpAllowed('GET', '/api/system/status', '/api')).toBe(true);
     expect(isDemoHttpAllowed('GET', '/api/stats', '/api')).toBe(true);
@@ -224,6 +388,32 @@ describe('runtime console RPC', () => {
       data: { success: true, reloaded: false },
     });
     expect(document.http).toEqual({ port: 8080 });
+  });
+
+  it('does not persist config when shared validation rejects it', async () => {
+    let writes = 0;
+    const replies = await dispatchRuntimeConsoleRpc(
+      { type: 'config:set', requestId: 12, pluginName: 'adapter-demo', data: {} },
+      {
+        authScope: 'full',
+        listPages: async () => [],
+        validatePluginConfig: async () => ({
+          valid: false,
+          errors: [{ path: '$.token', message: '必填项不能为空' }],
+          missingEnv: [],
+        }),
+        setConfigKey: async () => {
+          writes += 1;
+          return { restartRequired: true };
+        },
+      },
+    );
+    expect(pickRpcReply({ type: 'config:set', requestId: 12 }, replies)).toMatchObject({
+      requestId: 12,
+      error: '配置校验失败',
+      data: { valid: false },
+    });
+    expect(writes).toBe(0);
   });
 
   it('reads and revision-checks the Workroom-only config RPC', async () => {

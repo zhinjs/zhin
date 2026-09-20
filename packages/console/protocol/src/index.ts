@@ -30,6 +30,7 @@ export const INBOX_RPC = {
 export const ENDPOINT_RPC = {
   LIST: 'endpoint.list',
   INFO: 'endpoint.info',
+  TEST: 'endpoint.test',
   SEND_MESSAGE: 'endpoint.send_message',
   FRIENDS: 'endpoint.friends',
   GROUPS: 'endpoint.groups',
@@ -362,6 +363,19 @@ export const CONFIG_RPC = Object.freeze({
   SET: 'config:set',
 } as const);
 
+/** Console plugin management RPC names. Mutations remain full-scope only. */
+export const PLUGIN_RPC = Object.freeze({
+  PLAN_INSTALL: 'plugin:plan-install',
+  INSTALL: 'plugin:install',
+  PLAN_UNINSTALL: 'plugin:plan-uninstall',
+  UNINSTALL: 'plugin:uninstall',
+  PLAN_UPDATE: 'plugin:plan-update',
+  UPDATE: 'plugin:update',
+  VALIDATE_CONFIG: 'plugin:validate-config',
+  DIAGNOSE: 'plugin:diagnose',
+  SET_ENABLED: 'plugin:set-enabled',
+} as const);
+
 export type ConsoleConfigFormat = 'yaml' | 'json';
 
 export interface ConsoleConfigSource {
@@ -378,6 +392,11 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.GET,
   CONFIG_RPC.GET_ALL,
   CONFIG_RPC.GET_SOURCE,
+  PLUGIN_RPC.PLAN_INSTALL,
+  PLUGIN_RPC.PLAN_UNINSTALL,
+  PLUGIN_RPC.PLAN_UPDATE,
+  PLUGIN_RPC.VALIDATE_CONFIG,
+  PLUGIN_RPC.DIAGNOSE,
   'schema:get',
   'schema:get-all',
   'workrooms:get',
@@ -385,6 +404,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'cron:list',
   ENDPOINT_RPC.LIST,
   ENDPOINT_RPC.INFO,
+  ENDPOINT_RPC.TEST,
   ENDPOINT_RPC.FRIENDS,
   ENDPOINT_RPC.GROUPS,
   ENDPOINT_RPC.CHANNELS,
@@ -399,6 +419,10 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.SET,
   CONFIG_RPC.REPLACE_SOURCE,
+  PLUGIN_RPC.INSTALL,
+  PLUGIN_RPC.UNINSTALL,
+  PLUGIN_RPC.UPDATE,
+  PLUGIN_RPC.SET_ENABLED,
   'files:save',
   'env:save',
   'db:insert',

@@ -164,28 +164,19 @@ const pluginCommand = new Command('plugin')
 
     await removePluginFromConfig(cwd, name);
 
-    const pkg = await fs.readJson(pkgPath);
-    const removedFromManifest = removeFromZhinManifest(pkg, name);
-    let removedDep = false;
     if (options.removePkg) {
-      for (const depName of depNamesFor(name)) {
-        for (const field of ['dependencies', 'devDependencies'] as const) {
-          if (pkg[field]?.[depName]) {
-            delete pkg[field][depName];
-            removedDep = true;
-          }
-        }
+      const { createPluginManagementPort } = await import('../plugin-runtime/console/plugin-management.js');
+      await createPluginManagementPort(cwd).uninstall?.(name);
+      logger.success(`已移除插件依赖和 zhin.plugins 清单项 "${name}"`);
+    } else {
+      const pkg = await fs.readJson(pkgPath);
+      const removedFromManifest = removeFromZhinManifest(pkg, name);
+      if (removedFromManifest) {
+        await fs.writeJson(pkgPath, pkg, { spaces: 2 });
+        logger.success(`已从 package.json 的 zhin.plugins 清单中移除 "${name}"`);
+      } else {
+        logger.warn(formatCompact({ cmd: 'uninstall', op: 'manifest_not_found', name }));
       }
-    }
-    if (removedFromManifest || removedDep) {
-      await fs.writeJson(pkgPath, pkg, { spaces: 2 });
-      if (removedFromManifest) logger.success(`已从 package.json 的 zhin.plugins 清单中移除 "${name}"`);
-      if (removedDep) {
-        logger.success(`已从 package.json 中移除依赖 "${name}"`);
-        console.log(chalk.yellow('\n请运行 "pnpm install" 更新依赖'));
-      }
-    } else if (!options.removePkg) {
-      logger.warn(formatCompact({ cmd: 'uninstall', op: 'manifest_not_found', name }));
     }
 
     // 本地插件目录（./plugins/<name>）：默认不删，确认后删除
@@ -281,13 +272,6 @@ function removeFromZhinManifest(pkg: Record<string, any>, key: string, aliases: 
   zhin.plugins = zhin.plugins.filter((item: { package?: string; instanceKey?: string }) =>
     !candidates.includes(item?.package ?? '') && !candidates.includes(item?.instanceKey ?? ''));
   return zhin.plugins.length !== before;
-}
-
-/** 依赖候选名：原名 + @zhin.js/ 前缀包名。 */
-function depNamesFor(name: string): string[] {
-  const names = [name];
-  if (!name.startsWith('@') && !name.startsWith('.')) names.push(`@zhin.js/${name}`);
-  return names;
 }
 
 export const uninstallCommand = new Command('uninstall')

@@ -183,6 +183,214 @@ export function useConfigSource() {
   );
 }
 
+/** Shared Console flow for previewing and committing a plugin installation. */
+export function usePluginInstall() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [plan, setPlan] = useState<Awaited<ReturnType<typeof wsManager.planPluginInstall>> | null>(null);
+
+  const preview = useCallback(async (packageName: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await wsManager.planPluginInstall(packageName);
+      setPlan(next);
+      return next;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  const install = useCallback(async (packageName: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.installPlugin(packageName, expectedRevision);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+
+  return useMemo(() => ({ plan, loading, error, preview, install }), [
+    plan, loading, error, preview, install,
+  ]);
+}
+
+export function usePluginConfigValidation(pluginName: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const validate = useCallback(async (data: unknown) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.validatePluginConfig(pluginName, data);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [pluginName, wsManager]);
+  return useMemo(() => ({ loading, error, validate }), [loading, error, validate]);
+}
+
+export function usePluginDiagnostics(pluginName: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const diagnose = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.diagnosePlugin(pluginName);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [pluginName, wsManager]);
+  return useMemo(() => ({ loading, error, diagnose }), [loading, error, diagnose]);
+}
+
+export function usePluginLifecycle(instanceKey: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const setEnabled = useCallback(async (enabled: boolean) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.setPluginEnabled(instanceKey, enabled);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [instanceKey, wsManager]);
+  return useMemo(() => ({ loading, error, setEnabled }), [loading, error, setEnabled]);
+}
+
+export function usePluginUninstall() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = useCallback(async (packageName: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.planPluginUninstall(packageName);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+  const uninstall = useCallback(async (packageName: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.uninstallPlugin(packageName, expectedRevision);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [wsManager]);
+  return useMemo(() => ({ loading, error, preview, uninstall }), [
+    loading, error, preview, uninstall,
+  ]);
+}
+
+export function usePluginUpdate() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const preview = useCallback((packageName: string, targetVersion: string) => {
+    setLoading(true);
+    setError(null);
+    return wsManager.planPluginUpdate(packageName, targetVersion)
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Unknown error');
+        throw e;
+      })
+      .finally(() => setLoading(false));
+  }, [wsManager]);
+  const update = useCallback((packageName: string, targetVersion: string, expectedRevision?: string) => {
+    setLoading(true);
+    setError(null);
+    return wsManager.updatePlugin(packageName, targetVersion, expectedRevision)
+      .catch((e) => {
+        setError(e instanceof Error ? e.message : 'Unknown error');
+        throw e;
+      })
+      .finally(() => setLoading(false));
+  }, [wsManager]);
+  return useMemo(() => ({ loading, error, preview, update }), [loading, error, preview, update]);
+}
+
+export function useEndpointTest(adapter: string, endpointKey: string) {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const test = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await wsManager.testEndpoint(adapter, endpointKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, [adapter, endpointKey, wsManager]);
+  return useMemo(() => ({ loading, error, test }), [loading, error, test]);
+}
+
+export function usePluginMarketplace() {
+  const wsManager = useConsoleClient().transport;
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const run = useCallback(async <T>(operation: () => Promise<T>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      return await operation();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unknown error');
+      throw e;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  const search = useCallback(
+    (query?: Parameters<typeof wsManager.searchMarketplace>[0]) =>
+      run(() => wsManager.searchMarketplace(query)),
+    [run, wsManager],
+  );
+  const detail = useCallback(
+    (packageName: string) => run(() => wsManager.getMarketplacePlugin(packageName)),
+    [run, wsManager],
+  );
+  const updates = useCallback(() => run(() => wsManager.getPluginUpdates()), [run, wsManager]);
+  const installed = useCallback(() => run(() => wsManager.listPlugins()), [run, wsManager]);
+  return useMemo(() => ({ loading, error, search, detail, updates, installed }), [
+    loading, error, search, detail, updates, installed,
+  ]);
+}
+
 export function useFiles() {
   const wsManager = useConsoleClient().transport;
   const [connected, setConnected] = useState(wsManager.isConnected());

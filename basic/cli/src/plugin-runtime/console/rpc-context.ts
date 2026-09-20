@@ -52,6 +52,7 @@ function createRpcContext(
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration,
+    pluginManagement,
     im,
     onRestart,
     databaseHost,
@@ -67,6 +68,7 @@ function createRpcContext(
     replaceConfigSource: (source: string, expectedRevision: string) =>
       configuration.replaceSource(source, expectedRevision),
     setConfigKey: (pluginName: string, data: unknown) => configuration.setKey(pluginName, data),
+    pluginManagement,
     setPluginEnabled: async (instanceKey: string, enabled: boolean) =>
       pluginLifecycleStore.setPluginEnabled(
         pluginLifecycleFile,
@@ -85,6 +87,14 @@ function createRpcContext(
       configuration.writeEnvironmentFile(filename, content),
     getSchema: (pluginName?: string) => configuration.readSchema(pluginName),
     getAllSchemas: () => configuration.readAllSchemas(),
+    validatePluginConfig: (pluginName: string, data: unknown) =>
+      configuration.validatePluginConfig(pluginName, data),
+    diagnosePlugin: async (pluginName: string) => {
+      const plan = await pluginManagement?.planInstall(pluginName);
+      const config = await configuration.readDocument();
+      const validation = await configuration.validatePluginConfig(pluginName, config[pluginName]);
+      return { pluginName, plan: plan ?? null, validation };
+    },
     listEndpoints: im ? async () => im.endpoints.list() : undefined,
     getEndpoint: im
       ? async (adapter: string, endpointKey: string) => im.endpoints.get(adapter, endpointKey)

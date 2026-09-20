@@ -12,6 +12,8 @@ import { applyConsoleEvent } from "../persistence/idb-store.js";
 import { fetchConsoleEventHistory } from '../console-events.js';
 import {
   CONFIG_RPC,
+  PLUGIN_RPC,
+  ENDPOINT_RPC,
   CONSOLE_EVENT_RECOVERY_GAP_EVENT,
   SIDE_EVENT_PUSH,
   parseConsoleSseFrame,
@@ -356,6 +358,123 @@ export class ConsoleTransport {
   async getConfig(pluginName: string) {
     return this.sendRequest<unknown>({ type: CONFIG_RPC.GET, pluginName });
   }
+  async planPluginInstall(packageName: string) {
+    return this.sendRequest<{
+      packageName: string;
+      instanceKey: string;
+      alreadyDeclared: boolean;
+      alreadyInstalled: boolean;
+      restartRequired: boolean;
+      changes: { packageManifest: string; config: string };
+      warnings: string[];
+    }>({ type: PLUGIN_RPC.PLAN_INSTALL, packageName });
+  }
+  async installPlugin(packageName: string, expectedRevision?: string) {
+    return this.sendRequest<{
+      success: boolean;
+      plan: Awaited<ReturnType<ConsoleTransport['planPluginInstall']>>;
+      restartRequired: boolean;
+    }>({ type: PLUGIN_RPC.INSTALL, packageName, expectedRevision });
+  }
+  async planPluginUninstall(packageName: string) {
+    return this.sendRequest<{
+      packageName: string;
+      instanceKey: string;
+      installed: boolean;
+      declared: boolean;
+      hasConfig: boolean;
+      restartRequired: boolean;
+    }>({ type: PLUGIN_RPC.PLAN_UNINSTALL, packageName });
+  }
+  async uninstallPlugin(packageName: string, expectedRevision?: string) {
+    return this.sendRequest<{
+      success: boolean;
+      plan: Awaited<ReturnType<ConsoleTransport['planPluginUninstall']>>;
+      restartRequired: boolean;
+    }>({
+      type: PLUGIN_RPC.UNINSTALL,
+      packageName,
+      confirmation: packageName,
+      expectedRevision,
+    });
+  }
+  async planPluginUpdate(packageName: string, targetVersion: string) {
+    return this.sendRequest<{
+      packageName: string;
+      instanceKey: string;
+      currentVersion: string | null;
+      targetVersion: string;
+      installed: boolean;
+      declared: boolean;
+      alreadyCurrent: boolean;
+      restartRequired: boolean;
+    }>({ type: PLUGIN_RPC.PLAN_UPDATE, packageName, targetVersion });
+  }
+  async updatePlugin(packageName: string, targetVersion: string, expectedRevision?: string) {
+    return this.sendRequest<{
+      success: boolean;
+      plan: Awaited<ReturnType<ConsoleTransport['planPluginUpdate']>>;
+      installedVersion: string;
+      restartRequired: boolean;
+    }>({ type: PLUGIN_RPC.UPDATE, packageName, targetVersion, expectedRevision });
+  }
+  async validatePluginConfig(pluginName: string, data: unknown) {
+    return this.sendRequest<{
+      valid: boolean;
+      errors: Array<{ path: string; message: string }>;
+      missingEnv: string[];
+    }>({ type: PLUGIN_RPC.VALIDATE_CONFIG, pluginName, data });
+  }
+  async diagnosePlugin(pluginName: string) {
+    return this.sendRequest<{
+      pluginName: string;
+      plan: unknown;
+      validation: { valid: boolean; errors: Array<{ path: string; message: string }>; missingEnv: string[] };
+    }>({ type: PLUGIN_RPC.DIAGNOSE, pluginName });
+  }
+  async setPluginEnabled(instanceKey: string, enabled: boolean) {
+    return this.sendRequest<{
+      success: boolean;
+      instanceKey: string;
+      enabled: boolean;
+      disabled: string[];
+      restartRequired: boolean;
+      message: string;
+    }>({ type: PLUGIN_RPC.SET_ENABLED, instanceKey, enabled });
+  }
+  async listPlugins() {
+    return this.getRest<Array<Record<string, unknown>>>('/api/plugins');
+  }
+  async searchMarketplace(query: {
+    keyword?: string;
+    category?: string;
+    official?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) params.set(key, String(value));
+    }
+    return this.getRest<unknown>(`/pub/marketplace/search${params.size ? `?${params}` : ''}`);
+  }
+  async getMarketplacePlugin(packageName: string) {
+    return this.getRest<unknown>(`/pub/marketplace/detail/${encodeURIComponent(packageName)}`);
+  }
+  async getPluginUpdates() {
+    return this.getRest<Array<Record<string, unknown>>>('/api/marketplace/updates');
+  }
+  async testEndpoint(adapter: string, endpointKey: string) {
+    return this.sendRequest<{
+      reachable: boolean;
+      connected: boolean;
+      status?: 'online' | 'offline';
+      phase: string;
+      pendingLogin?: boolean;
+      latencyMs: number;
+      message: string;
+    }>({ type: ENDPOINT_RPC.TEST, adapter, endpointKey });
+  }
   async setConfig(pluginName: string, config: unknown) {
     return this.sendRequest<{ success?: boolean; reloaded?: boolean; message?: string }>({
       type: CONFIG_RPC.SET,
@@ -432,6 +551,21 @@ export class ConsoleTransport {
   }
   async kvGetEntries(table: string) {
     return this.sendRequest<{ entries: import("./types.js").KvEntry[] }>({ type: "db:kv:entries", table });
+  }
+
+  private async getRest<T>(path: string): Promise<T> {
+    const token = getToken();
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const response = await this.config.fetch(resolveApiUrl(path), {
+      headers,
+      signal: AbortSignal.timeout(this.config.requestTimeout),
+    });
+    const body = await response.json() as { success?: boolean; data?: T; error?: string };
+    if (!response.ok || body.success === false) {
+      throw new ConsoleTransportError(body.error ?? `HTTP ${response.status}`, 'SERVER_ERROR');
+    }
+    return body.data as T;
   }
 
   private setState(newState: ConnectionState): void {

@@ -19,6 +19,7 @@ import { registerConsoleEntryRoutes } from './entry-routes.js';
 import { registerConsoleEventRoutes } from './events.js';
 import { normalizeBase } from './http-response.js';
 import { registerConsolePluginRoutes } from './plugin-routes.js';
+import { createPluginManagementPort } from './plugin-management.js';
 import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
 
@@ -95,6 +96,11 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration,
+    pluginManagement: createPluginManagementPort(projectRoot, {
+      readConfigRevision: () => configuration.readSource().then(source => source.revision),
+      readConfigDocument: () => configuration.readDocument(),
+      removeConfigKey: (instanceKey) => configuration.removeKey(instanceKey),
+    }),
     im,
     onRestart,
     databaseHost,

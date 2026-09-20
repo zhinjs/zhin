@@ -94,10 +94,17 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     // 执行安装（使用 execFileSync 防止 shell 注入）
     try {
-      execFileSync('pnpm', installArgs, {
-        cwd: process.cwd(),
-        stdio: 'inherit'
-      });
+      let sharedTransaction = false;
+      if (pluginType === 'npm' && shouldEnable && pluginName) {
+        const { createPluginManagementPort } = await import('../plugin-runtime/console/plugin-management.js');
+        await createPluginManagementPort(process.cwd()).install?.(pluginName);
+        sharedTransaction = true;
+      } else {
+        execFileSync('pnpm', installArgs, {
+          cwd: process.cwd(),
+          stdio: 'inherit'
+        });
+      }
 
       logger.success('✓ 插件安装成功！');
       logger.log('');
@@ -108,7 +115,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
         logger.log('');
       }
 
-      if (shouldEnable && pluginName) {
+      if (shouldEnable && pluginName && !sharedTransaction) {
         const enableResult = await enablePluginInProjectConfig(process.cwd(), pluginName);
         logger.log(`🔌 ${enableResult.message}`);
         // 新 Plugin Runtime 按 package.json 的 zhin.plugins 清单挂载——光写配置不会加载

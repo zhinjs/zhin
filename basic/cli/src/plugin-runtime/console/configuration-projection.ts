@@ -50,6 +50,19 @@ export function configKeyPatch(
   });
 }
 
+/** Builds the canonical remove patch for a Console key. */
+export function configKeyRemovePatch(
+  document: RuntimeConfigDocument,
+  key: string,
+): ConfigPatch {
+  if (isForbiddenConfigKey(key)) throw new Error(`Invalid config key: ${key}`);
+  const plugins = readPluginConfigurationMap(document);
+  const inPlugins = Object.prototype.hasOwnProperty.call(plugins, key);
+  const topLevel = HOST_CONFIG_KEY_SET.has(key)
+    || (Object.prototype.hasOwnProperty.call(document, key) && key !== 'plugins' && !inPlugins);
+  return Object.freeze({ op: 'remove', path: Object.freeze(topLevel ? [key] : ['plugins', key]) });
+}
+
 function isForbiddenConfigKey(key: string): boolean {
   return FORBIDDEN_CONFIG_KEYS.has(key);
 }

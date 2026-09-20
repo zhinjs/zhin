@@ -43,6 +43,7 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
         writeJson(response, 400, {
           success: false,
           error: match.error,
+          ...(match.data !== undefined ? { data: match.data } : {}),
           requestId: match.requestId,
         });
         return;
