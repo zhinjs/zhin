@@ -32,7 +32,8 @@ describe('DeferredCapabilityPlan', () => {
         qualifiedName: 'research',
         description: 'Research workflow',
         instructions: 'Verify primary sources before answering.',
-        source: '/agent/skills/research.md',
+        toolNames: Object.freeze(['weather']),
+        source: '/skills/research/SKILL.md',
       })]),
       agents: Object.freeze([]),
       mcp: Object.freeze([]),
@@ -55,7 +56,32 @@ describe('DeferredCapabilityPlan', () => {
     expect(plan.controller.loadedSkillInstructions()).toEqual([
       'Verify primary sources before answering.',
     ]);
+    expect(plan.controller.loadedToolNames()).toEqual(['weather']);
     expect(saved).toHaveLength(2);
+  });
+
+  it('never unlocks a Skill tool that was filtered out of the Turn projection', async () => {
+    const owner = rootPluginId();
+    const plan = createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 1,
+        owner,
+        tools: Object.freeze([tool(owner, 'read_public', 'Read public data')]),
+        skills: Object.freeze([Object.freeze({
+          ...skill(owner, 'admin', 'Administrative workflow.'),
+          toolNames: Object.freeze(['read_public', 'delete_account']),
+        })]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+        promptSections: Object.freeze([]),
+      }),
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: {} },
+      persistSnapshot: async () => undefined,
+    });
+
+    await execute(plan.capabilities, 'load_skill', { name: 'admin' });
+    expect(plan.controller.loadedToolNames()).toEqual(['read_public']);
   });
 
   it('always loads platform-scoped plugin tools that already passed ingress', () => {
@@ -83,6 +109,31 @@ describe('DeferredCapabilityPlan', () => {
     expect(plan.resolvedTools.map((entry) => entry.name)).toEqual([
       'discover', 'load_tool', 'load_skill', 'icqq__send_user_like',
     ]);
+  });
+
+  it('keeps hidden capabilities callable internally but out of model catalogs', () => {
+    const owner = rootPluginId();
+    const plan = createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 1,
+        owner,
+        tools: Object.freeze([Object.freeze({
+          ...tool(owner, 'internal_lookup', 'Internal lookup'),
+          hidden: true,
+        })]),
+        skills: Object.freeze([]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+        promptSections: Object.freeze([]),
+      }),
+      sessionSnapshot: { loadedTools: { internal_lookup: 1 }, loadedSkills: [] },
+      config: { deferredTools: { alwaysLoadedTools: ['internal_lookup'] } },
+      persistSnapshot: async () => undefined,
+    });
+
+    expect(plan.allTools.map((entry) => entry.name)).not.toContain('internal_lookup');
+    expect(plan.catalog.map((entry) => entry.name)).not.toContain('internal_lookup');
+    expect(plan.controller.loadedToolNames()).toEqual([]);
   });
 
   it('fails closed on ambiguous or missing projected skills', async () => {
@@ -317,7 +368,7 @@ function skill(
     qualifiedName: name,
     description: name,
     instructions,
-    source: `/agent/skills/${name}/SKILL.md`,
+    source: `/skills/${name}/SKILL.md`,
   });
 }
 

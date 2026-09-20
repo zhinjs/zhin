@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/wechat-mp/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wechat-mp/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f66218ffce2bf2e3 -->
+<!-- sync-adapter-docs:sha256=8acde51c671894d6 -->
 
 # @zhin.js/adapter-wechat-mp
 
@@ -97,7 +97,7 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 
 ## AI 工具
 
-技能说明见 `agent/skills/$wechat-mp.md`。
+技能说明见 `skills/wechat-mp/SKILL.md`。
 
 ## 文档链接
 

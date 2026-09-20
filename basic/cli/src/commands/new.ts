@@ -56,6 +56,7 @@ function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
       '@zhin.js/command': 'workspace:*',
       '@zhin.js/adapter': 'workspace:*',
       '@zhin.js/core': 'workspace:*',
+      '@zhin.js/skill': 'workspace:*',
     };
   } catch {
     return null;
@@ -148,7 +149,7 @@ export const newCommand = new Command('new')
       logger.log(`  pnpm exec zhin pub ${name}`);
       logger.log(`  # 或嵌套目录: pnpm exec zhin pub adapters/<适配器名>`);
       logger.log('');
-      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/agent/skills/$' + name + '.md（随 npm 包发布）');
+      logger.log('🤖 AI 技能：可编辑 plugins/' + name + '/skills/' + name + '/SKILL.md（随 npm 包发布）');
 
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -169,7 +170,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
 
   await fs.ensureDir(pluginDir);
   await fs.ensureDir(path.join(pluginDir, 'tests'));
-  await fs.ensureDir(path.join(pluginDir, 'agent', 'skills'));
+  await fs.ensureDir(path.join(pluginDir, 'skills', pluginName));
   if (kind === 'normal') {
     await fs.ensureDir(path.join(pluginDir, 'commands', `${pluginName}-echo`));
   }
@@ -185,6 +186,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
       '@zhin.js/command': 'latest',
       '@zhin.js/adapter': 'latest',
       '@zhin.js/core': 'latest',
+      '@zhin.js/skill': 'latest',
     } satisfies Record<string, string>);
 
   const description =
@@ -204,6 +206,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   // 作者 import 走 zhin.js 门面；zhin.features 引用须在 peer/deps 声明（runtime 解析门禁）。
   // Stable Feature 用 optional peer，由 Root 的 zhin.js/@zhin.js/core 提供，勿装进 dependencies。
   const dependencies: Record<string, string> = {};
+  dependencies['@zhin.js/skill'] = zhinStack['@zhin.js/skill'];
   if (kind === 'adapter') {
     dependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
     dependencies['@zhin.js/core'] = zhinStack['@zhin.js/core'];
@@ -214,7 +217,9 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   };
   const peerDependenciesMeta: Record<string, { optional: true }> = {};
 
-  const features: Array<{ package: string; api: string }> = [];
+  const features: Array<{ package: string; api: string }> = [
+    { package: '@zhin.js/skill', api: '^1.0.0' },
+  ];
   if (kind === 'normal') {
     features.push({ package: '@zhin.js/command', api: '^1.0.0' });
     peerDependencies['@zhin.js/command'] = zhinStack['@zhin.js/command'];
@@ -246,7 +251,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   const files = ['plugin.ts', 'schema.json'];
   if (kind === 'normal') files.push('commands');
   if (kind === 'adapter') files.push('adapters');
-  files.push('src', 'agent', 'README.md', 'CHANGELOG.md');
+  files.push('src', 'skills', 'README.md', 'CHANGELOG.md');
 
   const packageJson: Record<string, unknown> = {
     name: packageName,
@@ -566,12 +571,12 @@ ${readmeUse}
 
 - \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
 - \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
-${kind === 'normal' ? '- `commands/`：`$` 开头的命令入口（`defineCommand`），目录段 `$[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：`$` 开头的适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`agent/skills/\`：\`$\` 开头的 AI 技能入口（随 npm 包发布）
+${kind === 'normal' ? '- `commands/`：`$` 开头的命令入口（`defineCommand`），目录段 `$[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/`：`$` 开头的适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
 
-## AI 技能（agent/skills）
+## AI 技能（skills）
 
-本包包含 \`agent/skills/$${pluginName}.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter；未加 \`$\` 的文件可作为同目录引用资料。
+本包包含 \`skills/${pluginName}/SKILL.md\`。请按实际能力修改 \`description\` / \`tools\` 等 frontmatter；参考资料和脚本可放在同一 Skill 目录。
 
 ## 开发
 
@@ -605,7 +610,7 @@ tools: []
 
 - 通过本插件注册的 \`${pluginName}_*\` 等工具完成具体任务；请根据实际工具名与参数补充说明。
 `;
-  await fs.writeFile(path.join(pluginDir, 'agent', 'skills', `$${pluginName}.md`), skillMdContent);
+  await fs.writeFile(path.join(pluginDir, 'skills', pluginName, 'SKILL.md'), skillMdContent);
 
   // 创建 CHANGELOG.md
   const changelogContent = `# ${packageName}

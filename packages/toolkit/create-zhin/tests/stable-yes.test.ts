@@ -91,6 +91,7 @@ describe('create-zhin -y Stable 默认值', () => {
 
     const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
     expect(pkg.dependencies['@zhin.js/agent']).toBeUndefined();
+    expect(pkg.dependencies['@zhin.js/skill']).toBe('latest');
     expect(pkg.dependencies['@modelcontextprotocol/sdk']).toBeUndefined();
     expect(pkg.dependencies.ai).toBeUndefined();
     expect(pkg.dependencies.zod).toBeUndefined();
@@ -102,6 +103,7 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' },
     ]);
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },

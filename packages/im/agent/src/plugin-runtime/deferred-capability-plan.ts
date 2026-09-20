@@ -2,6 +2,7 @@ import {
   addSkillToSnapshot,
   getLoadedToolNamesFromSnapshot,
   touchToolInSnapshot,
+  touchToolsInSnapshot,
   type AgentTool,
   type DeferredToolSessionSnapshot,
 } from '@zhin.js/ai';
@@ -157,7 +158,9 @@ export function createDeferredCapabilityPlan(
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
   const projected = projectCapabilities(options.capabilities, options.authority);
   const baseCapabilities = projected.tools.filter(
-    (tool) => !DEFERRED_META_TOOL_NAMES.has(tool.name) && !isWorkroomControl(tool.name),
+    (tool) => !tool.hidden
+      && !DEFERRED_META_TOOL_NAMES.has(tool.name)
+      && !isWorkroomControl(tool.name),
   );
   // Platform-scoped adapter tools already passed canAccess for this turn.
   // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
@@ -177,6 +180,7 @@ export function createDeferredCapabilityPlan(
     owner: options.capabilities.owner,
     catalog: baseCatalog,
     skills: projected.skills,
+    tools: baseCapabilities,
     platform: options.platform,
     topK: config.discoverTopK,
     maxLoaded: config.maxLoadedPerSession,
@@ -272,7 +276,9 @@ function projectSessionSnapshot(
   snapshot: DeferredToolSessionSnapshot,
   capabilities: Readonly<Pick<AgentCapabilities, 'tools' | 'skills'>>,
 ): DeferredToolSessionSnapshot {
-  const allowedTools = new Set(capabilities.tools.map(tool => tool.name));
+  const allowedTools = new Set(capabilities.tools
+    .filter((tool) => !tool.hidden)
+    .map((tool) => tool.name));
   const allowedSkills = new Set(capabilities.skills.flatMap(
     skill => [skill.qualifiedName, skill.name],
   ));
@@ -305,6 +311,7 @@ interface MetaCapabilityOptions {
   readonly owner: AgentCapabilities['owner'];
   readonly catalog: readonly ToolCatalogItem[];
   readonly skills: readonly SkillDescriptor[];
+  readonly tools: readonly ToolCapability[];
   readonly platform?: string;
   readonly topK: number;
   readonly maxLoaded: number;
@@ -358,8 +365,11 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const name = String(recordOf(raw).name ?? '');
       const skill = resolveSkill(options.skills, name);
       if (!skill) return `Skill '${name}' not found in the active generation.`;
-      await options.persist(addSkillToSnapshot(options.getSnapshot(), skill.qualifiedName));
-      return `${skill.instructions}\n__zhin_tools_mutated__`;
+      const toolNames = resolveSkillTools(skill, options.tools);
+      const withSkill = addSkillToSnapshot(options.getSnapshot(), skill.qualifiedName);
+      await options.persist(touchToolsInSnapshot(withSkill, toolNames, options.maxLoaded));
+      const unlocked = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
+      return `${skill.instructions}${unlocked}\n__zhin_tools_mutated__`;
     }),
   ]);
 }
@@ -391,7 +401,12 @@ function discoverSkills(
 ): Array<{ kind: 'skill'; name: string; brief: string }> {
   const needle = query.toLocaleLowerCase();
   return skills
-    .filter((skill) => !needle || `${skill.qualifiedName} ${skill.description}`.toLocaleLowerCase().includes(needle))
+    .filter((skill) => !needle || [
+      skill.qualifiedName,
+      skill.description,
+      ...(skill.keywords ?? []),
+      ...(skill.tags ?? []),
+    ].join(' ').toLocaleLowerCase().includes(needle))
     .slice(0, topK)
     .map((skill) => ({ kind: 'skill', name: skill.qualifiedName, brief: skill.description }));
 }
@@ -407,8 +422,21 @@ function loadedSkillInstructions(
 ): string[] {
   const loaded = new Set(snapshot.loadedSkills);
   return skills
-    .filter((skill) => loaded.has(skill.qualifiedName) || loaded.has(skill.name))
+    .filter((skill) => skill.always === true
+      || loaded.has(skill.qualifiedName)
+      || loaded.has(skill.name))
     .map((skill) => skill.instructions);
+}
+
+function resolveSkillTools(
+  skill: SkillDescriptor,
+  tools: readonly ToolCapability[],
+): string[] {
+  const requested = new Set(skill.toolNames ?? []);
+  if (requested.size === 0) return [];
+  return tools.filter((tool) => tool.owner === skill.owner && [...requested].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  )).map((tool) => tool.name);
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

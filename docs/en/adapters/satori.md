@@ -100,7 +100,7 @@ The SDK sends POST requests to `path`, with header `Satori-Opcode: 0` indicating
 
 ## AI Tools
 
-See `agent/skills/$satori.md` for skill documentation.
+See `skills/satori/SKILL.md` for skill documentation.
 
 ## Protocol Documentation
 

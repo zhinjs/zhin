@@ -97,7 +97,7 @@ The Runtime Host (`http`) must already be listening for the Webhook to be reacha
 
 ## AI Tools
 
-See `agent/skills/$wechat-mp.md` for skill documentation.
+See `skills/wechat-mp/SKILL.md` for skill documentation.
 
 ## Documentation Links
 

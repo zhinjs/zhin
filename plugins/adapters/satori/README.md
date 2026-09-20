@@ -92,7 +92,7 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 
 ## AI 工具
 
-技能说明见 `agent/skills/$satori.md`。
+技能说明见 `skills/satori/SKILL.md`。
 
 ## 协议文档
 

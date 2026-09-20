@@ -29,7 +29,7 @@
 | `defineAgentTool` | `experimental` | `@zhin.js/tool`（`agent/tools/$*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
 
-> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`agent/skills/$*.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
+> 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`skills/<name>/SKILL.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
 
 ### 约定目录与文件
 
@@ -41,7 +41,7 @@
 | `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 仅 `$` 文件是中间件入口 |
 | `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | 仅 `$` 文件是 Lifecycle 事件处理器入口（`/` 分段 localName，省略 `event` 时映为 `.`） |
 | `agent/tools/` | `experimental` | `@zhin.js/tool` | 仅 `$*.ts` 是 Agent Tool 入口；其他文件是普通模块 |
-| `agent/skills` | `experimental` | `@zhin.js/skill` / Agent 发现 | `$*.md` Agent 技能 Markdown（随 npm 包发布） |
+| `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent 发现 | Skill Markdown，可在同目录附带参考资料与脚本（随 npm 包发布） |
 | `pages/` | `experimental` | `@zhin.js/console-page` | `$*.ts(x)` Console 页面模块目录；`$nav` / `$footer` 是布局槽 |
 
 ### Host Token（`context.resources.use(token)` 消费）

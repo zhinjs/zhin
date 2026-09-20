@@ -4,6 +4,8 @@ export interface ApprovalRequestInput {
   toolName: string;
   /** Stable fingerprint for the concrete operation covered by a remembered grant. */
   scopeKey?: string;
+  /** Allow the approval surface to offer a Host-lifetime session grant. */
+  remember?: 'session';
   question: string;
   timeoutMs?: number;
   /** The adapter must settle promptly and deny when the owning Turn is cancelled. */

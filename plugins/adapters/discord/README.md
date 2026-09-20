@@ -74,7 +74,7 @@ plugins:
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（7 个） | `agent/tools/`（`discord_*`：角色、Embed、反应等） |
-| 技能说明 | `agent/skills/$discord.md` |
+| 技能说明 | `skills/discord/SKILL.md` |
 
 工具使用 Discord Snowflake ID 标识 `guild_id`、`user_id`、`channel_id`。
 

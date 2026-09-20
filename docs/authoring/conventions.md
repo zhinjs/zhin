@@ -36,7 +36,7 @@ flowchart LR
 
 ## 命名规则
 
-`$` 只标记入口，不属于 `localName`。没有 `$` 的文件不会被发现，也不会被校验为 capability。入口去掉 `$` 和扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）；目录段沿用同一规则。
+`$` 只标记单文件入口，不属于 `localName`。没有 `$` 的文件不会被发现，也不会被校验为 capability。入口去掉 `$` 和扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）；目录段沿用同一规则。Skill 使用 `skills/<name>/SKILL.md`，由目录名提供 `localName`。
 
 **例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。`agent/tools/` 额外允许 ASCII snake（如 `$send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
 
@@ -51,7 +51,7 @@ flowchart LR
 | `adapters/` | 同上 | `adapters/$napcat.ts` → `napcat` |
 | `agent/tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `agent/tools/$music-search.ts` → `music-search`；`agent/tools/$send_user_like.ts` → `send_user_like` |
 | `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
-| `skills/` | 子目录名即 localName，目录内必须含 `SKILL.md` | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
+| `skills/` | 一级子目录名；只识别其中的 `SKILL.md`，同目录可放参考资料与脚本 | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 文件名去掉 `$` 前缀与 `.agent.md` 后缀 | `agents/$planner.agent.md` → `planner` |
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/$my-server.ts` → `my-server` |
 | `pages/` | 文件名去扩展名；`$nav.tsx` / `$footer.tsx` 是布局槽（同 slot 同时有 `.ts` 和 `.tsx` 时以 `.tsx` 为准） | `pages/$workroom.tsx` → `workroom`；`pages/$nav.tsx` → `nav` |
@@ -216,4 +216,4 @@ tools:
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`agent/tools` 看 `plugins/utils/music/agent/tools/` 与 `plugins/utils/group-suite/agent/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`agent/tools` 看 `plugins/utils/music/agent/tools/` 与 `plugins/utils/group-suite/agent/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/SKILL.md`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。

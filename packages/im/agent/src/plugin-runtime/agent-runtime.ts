@@ -58,25 +58,27 @@ export class ToolIngressRuntime extends SnapshotAttachedRuntime {
     try {
       const capabilities = await this.#ingress.read(lease.value, owner, () => active, request);
       let invocationSequence = 0;
-      const tools = Object.freeze(capabilities.tools.map(({ execute: _execute, ...descriptor }) => Object.freeze({
-        ...descriptor,
-        execute: async (input: Readonly<Record<string, unknown>>, toolUseId: string) => {
-          if (!active) throw new Error('External Tool capability scope has ended');
-          invocationSequence += 1;
-          const invocationRequest: TurnRequest = {
-            ...request,
-            identity: {
-              traceId: request.identity.traceId,
-              turnId: `${request.identity.turnId}:${invocationSequence}`,
-            },
-          };
-          const turn = createIngressTurn(lease.value, invocationRequest, capabilities);
-          const runtime = new TurnToolRuntime(turn, capabilities.tools);
-          const outcome = await runtime.execute(descriptor.name, input, toolUseId);
-          await appendExternalToolTerminal(turn, outcome);
-          return outcome;
-        },
-      })));
+      const tools = Object.freeze(capabilities.tools
+        .filter((tool) => !tool.hidden)
+        .map(({ execute: _execute, ...descriptor }) => Object.freeze({
+          ...descriptor,
+          execute: async (input: Readonly<Record<string, unknown>>, toolUseId: string) => {
+            if (!active) throw new Error('External Tool capability scope has ended');
+            invocationSequence += 1;
+            const invocationRequest: TurnRequest = {
+              ...request,
+              identity: {
+                traceId: request.identity.traceId,
+                turnId: `${request.identity.turnId}:${invocationSequence}`,
+              },
+            };
+            const turn = createIngressTurn(lease.value, invocationRequest, capabilities);
+            const runtime = new TurnToolRuntime(turn, capabilities.tools);
+            const outcome = await runtime.execute(descriptor.name, input, toolUseId);
+            await appendExternalToolTerminal(turn, outcome);
+            return outcome;
+          },
+        })));
       return await operation(tools);
     } finally {
       active = false;

@@ -162,6 +162,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       features: [
         { package: '@zhin.js/page', api: '^1.0.0' },
         { package: '@zhin.js/layout', api: '^1.0.0' },
+        { package: '@zhin.js/skill', api: '^1.0.0' },
         ...(aiEnabled ? [{ package: '@zhin.js/tool', api: '^1.0.0' }] : []),
         ...(aiEnabled ? [{ package: '@zhin.js/prompt-section', api: '^1.0.0' }] : []),
       ],
@@ -459,8 +460,9 @@ ${projectName}/
 │   ├── $index.tsx         # Console 页面（/）
 │   ├── $nav.tsx           # 最近插件导航布局
 │   └── $footer.tsx        # 最近插件页脚布局
-├── tools/                 # AI 工具（启用 AI 后自动发现）
-├── skills/                # SKILL.md 能力目录
+├── agent/
+│   └── tools/             # $*.ts AI 工具入口
+├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
 ├── agents/                # $*.agent.md Agent 入口目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
 ├── packages/              # 贡献给 Zhin 的 Feature workspace
@@ -537,7 +539,7 @@ npx zhin setup --adapters   # 选择平台并写入 plugins.<instanceKey> 配置
 ## 🤖 AI Agent
 
 如果初始化时启用了 AI，配置会写入 \`${configFilename}\` 的 \`ai:\` 段，API Key 会写入 \`.env\`。
-启用后 \`tools/\` 约定目录下只有 \`$*.ts\` 中的 \`defineAgentTool\` 工具会被 Agent 自动发现。
+启用后 \`agent/tools/\` 约定目录下只有 \`$*.ts\` 中的 \`defineAgentTool\` 工具会被 Agent 自动发现。
 
 ## ✅ 验证项目
 
@@ -566,9 +568,10 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
     fs.ensureDir(path.join(projectPath, 'pages')),
     fs.ensureDir(path.join(projectPath, 'skills')),
     fs.ensureDir(path.join(projectPath, 'data')),
-    ...['agents', 'middlewares', 'tools', 'plugins', 'packages'].map(async (directory) => {
+    ...['agents', 'middlewares', 'plugins', 'packages'].map(async (directory) => {
       await fs.outputFile(path.join(projectPath, directory, '.gitkeep'), '');
     }),
+    fs.outputFile(path.join(projectPath, 'agent', 'tools', '.gitkeep'), ''),
   ]);
 
   // 创建 .env 文件（使用简单的变量名）
@@ -617,8 +620,8 @@ HTTP_TOKEN=change-me
       "components/**/*.tsx",
       "middlewares/**/*.ts",
       "middlewares/**/*.tsx",
-      "tools/**/*.ts",
-      "tools/**/*.tsx",
+      "agent/tools/**/*.ts",
+      "agent/tools/**/*.tsx",
       "pages/**/*.ts",
       "pages/**/*.tsx"
     ],

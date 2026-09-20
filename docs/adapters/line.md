@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/line/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/line/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=4aa027512b9d8512 -->
+<!-- sync-adapter-docs:sha256=a4e83071b1f457d6 -->
 
 # @zhin.js/adapter-line
 
@@ -100,7 +100,7 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
-| 技能说明 | `agent/skills/$line.md` |
+| 技能说明 | `skills/line/SKILL.md` |
 
 ## 已知限制
 

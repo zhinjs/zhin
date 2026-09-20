@@ -69,7 +69,7 @@ export default defineCommand({
 });
 ```
 
-**工具示例** `tools/get_weather.ts`：
+**工具示例** `agent/tools/$get_weather.ts`：
 
 ```typescript
 import { defineAgentTool } from 'zhin.js/tool';

@@ -43,7 +43,7 @@ Definition fields (`packages/im/tool/src/definition.ts`):
 | --- | --- | --- |
 | `description` | Yes | Functional description for the model |
 | `inputSchema` | No | A Zod 4 object or an object-root JSON Schema; the Tool Feature owns projection and pre-execution validation |
-| `approval` | No | `'never' \| 'on-risk' \| 'always'`, default `'on-risk'` |
+| `approval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
 | `platforms` | No | Restrict to adapter platforms (e.g., `['icqq']`), empty = all |
 | `scopes` | No | Restrict to session scenes `'private' \| 'group' \| 'channel'`, empty = all |
 | `permissions` | No | Permit string list (see access control below) |
@@ -107,6 +107,8 @@ Four-tuple semantics:
 
 Permit syntax is defined by `@zhin.js/permission` (`packages/im/permission/src/builtin.ts`): built-in `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`; platform identity `platform(adapter,perm)` (e.g., group owner/admin, determined by adapter checker); unrecognized permits are always rejected.
 
+`approval` is evaluated after Tool admission and immediately before execution. `always` asks every time; `once` lets the standard Host remember that Tool for the current session; `on-risk` keeps unknown plugin actions behind confirmation, while Bash, file, and network Tools do not ask twice after their dedicated policy has validated the concrete command, path, or URL. `never` skips only declarative confirmation and cannot bypass permission, network, filesystem, shell, or generation policies.
+
 ## Deferred Catalog and load_tool
 
 Tools are not included in the full prompt. Each turn first builds a **catalog** of tools that pass access control and creates its own deferred controller (`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`); by default only `alwaysLoadedTools` are exposed to the model. The controller creates three meta-tools for that turn: `discover` searches tools/skills by query (and can filter by MCP server), `load_tool` loads a tool schema by name, and `load_skill` loads complete skill instructions and unlocks associated tools. Concurrent turns and subagents use isolated controllers; IM `Message` identity is not a state key.
@@ -129,7 +131,29 @@ It requests input through the current Turn's `QuestionPort` and matches replies 
 
 Skills and named Agents are also file conventions, discovered by the `@zhin.js/skill` and `@zhin.js/agent-feature` Features respectively.
 
-Skills go in `skills/<name>/SKILL.md` (one skill per subdirectory): the body is the instruction for the model, the first Markdown heading line serves as the description, and `load_skill` unlocks tools associated via `toolNames`. Named Agent entries use `agents/$<name>.agent.md` (the name must be lowercase kebab, e.g., `agents/$planner.agent.md`): the entire Markdown file is that Agent's instructions, and the first heading line serves as the description. Files without `$` remain colocated reference material and are not registered. See `examples/test-bot/agents/$planner.agent.md` for a real-world example.
+Skills go in `skills/<name>/SKILL.md`. The root Agent can discover skills across the plugin tree; child-plugin skills use an owner-qualified name such as `music__recommend`. Each Skill directory may contain references and scripts; only `SKILL.md` is registered. Each Turn filters skills by `platforms`, `scopes`, and `permissions` before discovery. `load_skill` can only load an admitted skill and only unlocks associated tools from the same owner that already passed Tool admission.
+
+YAML frontmatter can define catalog and access metadata. Frontmatter is removed from the model-facing instructions, and `name`, when present, must match the directory:
+
+```markdown
+---
+name: research
+description: Produce traceable research from primary sources
+tools: [web_search, read_file]
+platforms: [qq, telegram]
+scopes: [private, group]
+permissions: [role(trusted)]
+keywords: [search, sources, citation]
+tags: [research]
+always: false
+---
+
+# Research
+
+Search primary sources before presenting a cited conclusion.
+```
+
+`tools` contains local Tool names owned by the same plugin. The runtime resolves only Tools already admitted for the Turn, so a Skill cannot widen Tool authority. `always: true` injects instructions whenever the Skill itself is admitted; it does not bypass Tool permissions or execution approval. Without frontmatter, the first Markdown heading remains the description. Named Agents use `agents/$<name>.agent.md` (lowercase kebab-case, for example `agents/$planner.agent.md`); files without `$` are not registered. See `examples/test-bot/agents/$planner.agent.md` for a real example.
 
 ```markdown
 <!-- agents/$planner.agent.md -->
@@ -139,9 +163,9 @@ You are **planner** (coordinator): break down user goals, define acceptance
 criteria, and coordinate specialist roles.
 ```
 
-## Plugin `agent/` Directory
+## Plugin Agent Authoring Directories
 
-A plugin's AI authoring surface lives under `agent/`. The `@zhin.js/tool` Feature discovers Tools; the corresponding Features or Agent authoring surfaces own the other declarations. There is no second Tool definition or scanner.
+Tool and Agent declarations live under `agent/`, while Skills use the top-level `skills/` package shape suited to references and scripts. Each capability is discovered by its Feature; there is no second Tool or Skill registry.
 
 ```text
 my-plugin/
@@ -151,8 +175,11 @@ my-plugin/
 │   ├── tools/
 │   │   ├── $short_url.ts   # defineAgentTool from '@zhin.js/tool'
 │   │   └── client.ts       # ordinary dependency, not a Tool entry
-│   ├── skills/*.{md,ts}
 │   └── subagents/<name>/
+└── skills/
+    └── short-url/
+        ├── SKILL.md
+        └── references/
 ```
 
 `agent/tools/$*.ts` and `addTool()` in `setup()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`. Plugins must not recover the current Message or Runtime from global state.

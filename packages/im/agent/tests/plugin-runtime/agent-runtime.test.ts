@@ -662,8 +662,36 @@ describe('Agent CapabilityIngress', () => {
     await restricted.mcp.stop();
 
     const hidden = await createFixture({ hidden: true });
-    expect((await ingress.read(hidden.snapshot, hidden.child)).tools).toEqual([]);
+    const hiddenCapabilities = await ingress.read(hidden.snapshot, hidden.child);
+    expect(hiddenCapabilities.tools.map((tool) => tool.name)).toEqual(['child__lookup']);
+    expect(hiddenCapabilities.tools[0]?.hidden).toBe(true);
     await hidden.mcp.stop();
+  });
+
+  it('projects child Skills to the root Agent and applies the canonical access predicate', async () => {
+    const fixture = await createFixture({
+      skillMarkdown: `---
+platforms: [qq]
+scopes: [group]
+permissions: [role(trusted)]
+---
+# Research`,
+    });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      accessTurn('qq'),
+    )).skills.map((skill) => skill.qualifiedName)).toEqual(['child__research']);
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      accessTurn('telegram'),
+    )).skills).toEqual([]);
+    await fixture.mcp.stop();
   });
 
   it('publishes platform prompt sections only to matching IM turns', async () => {
@@ -696,6 +724,7 @@ async function createFixture(access: {
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
+  readonly skillMarkdown?: string;
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
@@ -715,12 +744,12 @@ async function createFixture(access: {
     }),
   });
   const skill = createCapabilitySlot({
-    owner: root,
+    owner: child,
     feature: skillFeatureId,
     localName: 'research',
     source: '/skills/research/SKILL.md',
-    definition: parseSkillMarkdown('# Research', validation(
-      root,
+    definition: parseSkillMarkdown(access.skillMarkdown ?? '# Research', validation(
+      child,
       skillFeatureId,
       'research',
       '/skills/research/SKILL.md',

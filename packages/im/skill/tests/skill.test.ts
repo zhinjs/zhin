@@ -17,14 +17,19 @@ import skillFeature, {
 } from '../src/index.js';
 
 describe('Skill Feature', () => {
-  it('discovers only skills/<name>/SKILL.md and keeps Markdown as SSOT', async () => {
+  it('discovers only skills/<name>/SKILL.md and keeps colocated files as ordinary material', async () => {
     const source = '/project/skills/research/SKILL.md';
     const host = new MemoryHost({
       '/project/skills': [
         { name: 'research', kind: 'directory' },
-        { name: 'ignored.md', kind: 'file' },
+        { name: 'helper.md', kind: 'file' },
+        { name: 'references', kind: 'directory' },
       ],
-      '/project/skills/research': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/skills/research': [
+        { name: 'SKILL.md', kind: 'file' },
+        { name: 'notes.md', kind: 'file' },
+      ],
+      '/project/skills/references': [{ name: 'README.md', kind: 'file' }],
     }, new Map([[source, '# Research\n\nUse primary sources.']]));
     const slots = await new FeatureDiscovery(host).discover(skillFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
@@ -59,6 +64,56 @@ describe('Skill Feature', () => {
 
     expect(index.get(child, 'review')?.description).toBe('Child review');
     expect(index.get(root, 'review')?.description).toBe('Root review');
+  });
+
+  it('parses governed frontmatter and keeps only instructions in the prompt payload', () => {
+    const definition = parseSkillMarkdown(`---
+name: research
+description: Evidence-first research
+tools: [web_search, read_file]
+platforms: [qq]
+scopes: [private, group]
+permissions: [role(trusted)]
+keywords: [sources, citations]
+tags: [research]
+always: true
+---
+
+# Research
+
+Use primary sources.`, {
+      owner: rootPluginId(),
+      feature: skillFeatureId,
+      localName: 'research',
+      source: '/project/skills/research/SKILL.md',
+    });
+
+    expect(definition).toMatchObject({
+      name: 'research',
+      description: 'Evidence-first research',
+      instructions: '# Research\n\nUse primary sources.',
+      toolNames: ['web_search', 'read_file'],
+      platforms: ['qq'],
+      scopes: ['private', 'group'],
+      permissions: ['role(trusted)'],
+      keywords: ['sources', 'citations'],
+      tags: ['research'],
+      always: true,
+    });
+    expect(Object.isFrozen(definition.toolNames)).toBe(true);
+  });
+
+  it('rejects frontmatter that can redirect identity or weaken scope validation', () => {
+    const context = {
+      owner: rootPluginId(),
+      feature: skillFeatureId,
+      localName: 'research',
+      source: '/project/skills/research/SKILL.md',
+    };
+    expect(() => parseSkillMarkdown('---\nname: deploy\n---\n# Research', context))
+      .toThrow('must match directory research');
+    expect(() => parseSkillMarkdown('---\nscopes: [dm]\n---\n# Research', context))
+      .toThrow('scopes must be private, group, or channel');
   });
 });
 

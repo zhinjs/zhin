@@ -87,7 +87,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/$email.md`。
+技能说明见 `skills/email/SKILL.md`。
 
 ## 文档链接
 

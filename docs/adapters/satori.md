@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/satori/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/satori/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=42808b7568ca6b94 -->
+<!-- sync-adapter-docs:sha256=266c20215c24eddf -->
 
 # @zhin.js/adapter-satori
 
@@ -104,7 +104,7 @@ SDK 会向 `path` 发送 POST，请求头 `Satori-Opcode: 0` 表示事件；适�
 
 ## AI 工具
 
-技能说明见 `agent/skills/$satori.md`。
+技能说明见 `skills/satori/SKILL.md`。
 
 ## 协议文档
 

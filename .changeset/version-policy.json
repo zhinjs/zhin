@@ -1071,6 +1071,16 @@
       "type": "minor",
       "approvedBy": "lc-cn",
       "reason": "Remove online compatibility for implicit Workroom Projection audiences and legacy cursor migration, and require the canonical binding-generation cursor under the owner-directed zero-compatibility architecture refactor."
+    },
+    {
+      "changeset": "govern-skill-capabilities.md",
+      "packages": [
+        "@zhin.js/skill",
+        "@zhin.js/agent"
+      ],
+      "type": "minor",
+      "approvedBy": "lc-cn",
+      "reason": "Establish one governed Skill package convention, expose the existing plugin Skill catalog through generation-owned discovery, and tighten Tool approval semantics under the owner-directed zero-compatibility architecture refactor."
     }
   ]
 }

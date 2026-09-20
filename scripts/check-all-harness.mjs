@@ -103,9 +103,9 @@ const checks = [
     description: 'agent/tools inputSchema 与 defineAgentTool/execute 类型字段一致',
   },
   {
-    name: 'No Package-Root skills/',
-    command: 'pnpm check:no-package-skills',
-    description: '插件包禁止顶层 skills/，须用 agent/skills/*.md',
+    name: 'Skill Authoring Boundaries',
+    command: 'pnpm check:skill-authoring-boundaries',
+    description: 'Skill 只使用 skills/<name>/SKILL.md，并显式发布目录、依赖和挂载 Feature',
   },
   {
     name: 'Architecture Layers',

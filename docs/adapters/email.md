@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=c26c149b6da7af1b -->
+<!-- sync-adapter-docs:sha256=c633ac975ebdad79 -->
 
 # @zhin.js/adapter-email
 
@@ -99,7 +99,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/$email.md`。
+技能说明见 `skills/email/SKILL.md`。
 
 ## 文档链接
 

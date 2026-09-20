@@ -48,7 +48,8 @@
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "@zhin.js/skill": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -84,6 +85,7 @@
     "src",
     "lib",
     "agent",
+    "skills",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -111,6 +113,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

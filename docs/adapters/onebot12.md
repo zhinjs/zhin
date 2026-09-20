@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/onebot12/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/onebot12/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=342c56aa5624da53 -->
+<!-- sync-adapter-docs:sha256=3a819ba62192833d -->
 
 # @zhin.js/adapter-onebot12
 
@@ -87,7 +87,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/$onebot12.md`。
+技能说明见 `skills/onebot12/SKILL.md`。
 
 ## 文档链接
 

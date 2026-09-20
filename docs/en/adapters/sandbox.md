@@ -105,7 +105,7 @@ Sandbox uses a JSON message format:
 
 ## AI Tools
 
-See `agent/skills/$sandbox.md` for skill documentation (local sandbox debugging constraints).
+See `skills/sandbox/SKILL.md` for skill documentation (local sandbox debugging constraints).
 
 
 ## Troubleshooting

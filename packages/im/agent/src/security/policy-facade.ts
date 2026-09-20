@@ -221,7 +221,7 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
       }
     }
   }
-  if (input.tool.approval !== 'never') {
+  if (requiresDeclarativeApproval(input.tool)) {
     return Object.freeze({
       status: 'approval_required',
       policy: 'approval',
@@ -230,6 +230,24 @@ export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<T
     });
   }
   return Object.freeze({ status: 'allowed', input: authorizedInput });
+}
+
+function requiresDeclarativeApproval(tool: ToolDescriptor): boolean {
+  if (tool.approval === 'never') return false;
+  if (tool.approval === 'always' || tool.approval === 'once') return true;
+  return !hasCanonicalRiskPolicy(tool.name);
+}
+
+/**
+ * Canonical tools reach this point only after their concrete network, file, or
+ * shell operation passed the dedicated policy layers above. Unknown plugin
+ * tools remain fail-closed under the default `on-risk` declaration.
+ */
+function hasCanonicalRiskPolicy(toolName: string): boolean {
+  return toolName === 'bash'
+    || toolName === 'web_fetch'
+    || toolName === 'web_search'
+    || resolveTurnFileOperation(toolName) !== undefined;
 }
 
 function checkTurnNetworkPolicy(input: TurnToolPolicyInput): TurnToolPolicyDecision | undefined {

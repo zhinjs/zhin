@@ -9,7 +9,7 @@
 //     schema.json       ← 只声明本 package 自己的配置字段
 //     plugin.ts         ← 本文件
 //     commands/         middlewares/        components/
-//     tools/            agent/skills/       agent/schedules/
+//     agent/tools/      skills/<name>/SKILL.md       agent/schedules/
 import { createToken, definePlugin } from 'zhin.js';
 
 /** 供本包能力读取的 owner Resource（取代旧的模块级共享闭包/全局 registry）。 */

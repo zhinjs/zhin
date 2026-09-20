@@ -472,6 +472,7 @@ describe('canonical IM interaction adapter', () => {
       requestId: 'session-approval',
       toolName: 'bash',
       scopeKey: 'bash:{"command":"pnpm test"}',
+      remember: 'session' as const,
       question: 'run cargo?',
       signal: new AbortController().signal,
     };

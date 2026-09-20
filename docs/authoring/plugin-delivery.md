@@ -15,7 +15,7 @@ title: 插件完整交付
 | 文本指令 | `commands/$*.ts` |
 | 入站编排 | `middlewares/$*.ts` / `handlers/$*.ts` |
 | 富消息输出 | `components/$*.tsx` |
-| Agent 行为 | `agent/tools`、`agent/prompt-sections`、`agent/skills` |
+| Agent 行为 | `agent/tools`、`agent/prompt-sections`、`skills` |
 | 数据库、定时任务、主动推送 | `plugin.ts` + Host token |
 
 ## 2. 建立包与运行拓扑

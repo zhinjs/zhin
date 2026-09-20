@@ -136,7 +136,7 @@
     "check:publish-repository": "node scripts/check-publish-repository.mjs",
     "check:unpublished": "node scripts/check-unpublished-packages.mjs",
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",
-    "check:no-package-skills": "node scripts/check-no-package-skills.mjs",
+    "check:skill-authoring-boundaries": "node scripts/check-skill-authoring-boundaries.mjs",
     "check:install-size": "node scripts/check-install-size.mjs"
   },
   "devDependencies": {

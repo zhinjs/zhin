@@ -86,7 +86,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
 | Platform tools | `agent/tools/$set_title.ts` -> `onebot11_set_title` |
-| Skill documentation | `agent/skills/$onebot11.md` |
+| Skill documentation | `skills/onebot11/SKILL.md` |
 
 ## Migration Notes (Plugin Runtime)
 

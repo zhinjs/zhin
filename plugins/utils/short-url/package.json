@@ -20,6 +20,7 @@
     "src",
     "lib",
     "agent",
+    "skills",
     "README.md"
   ],
   "scripts": {
@@ -89,11 +90,16 @@
       {
         "package": "@zhin.js/tool",
         "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
       }
     ],
     "plugins": []
   },
   "dependencies": {
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "@zhin.js/skill": "workspace:*"
   }
 }

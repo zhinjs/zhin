@@ -85,7 +85,7 @@ Runtime Host（`http`）须已 listen，Webhook 才可达。
 
 ## AI 工具
 
-技能说明见 `agent/skills/$wechat-mp.md`。
+技能说明见 `skills/wechat-mp/SKILL.md`。
 
 ## 文档链接
 

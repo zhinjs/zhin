@@ -88,7 +88,7 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具（2 个） | `agent/tools/`（`line_get_profile`、`line_get_group_members`） |
-| 技能说明 | `agent/skills/$line.md` |
+| 技能说明 | `skills/line/SKILL.md` |
 
 ## 已知限制
 

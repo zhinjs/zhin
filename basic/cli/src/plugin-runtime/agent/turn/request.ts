@@ -413,8 +413,8 @@ export function createRuntimeApprovalPort(options: {
       if (options.isMaster) return true;
       if (!options.interaction) return false;
       try {
-        if (options.rememberSession?.isApproved(input)) return true;
-        if (options.rememberSession) {
+        if (input.remember === 'session' && options.rememberSession?.isApproved(input)) return true;
+        if (input.remember === 'session' && options.rememberSession) {
           const decision = await options.interaction.ask({
             type: 'select',
             title: '操作确认',

@@ -20,6 +20,7 @@
     "src",
     "lib",
     "agent",
+    "skills",
     "evals",
     "README.md"
   ],
@@ -50,7 +51,8 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/tool": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/skill": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/agent": "workspace:*",
@@ -96,6 +98,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

@@ -5,10 +5,10 @@
 //   my-plugin/
 //     tools/plugin-health.ts        ← 包顶层工具（@zhin.js/tool）
 //     agent/tools/run-code.ts       ← agent/ 授权面工具（@zhin.js/agent）
-//     agent/skills/<name>.md        ← Skill：标准 SKILL.md（frontmatter + 正文）
+//     skills/<name>/SKILL.md        ← Skill：标准 SKILL.md（frontmatter + 正文）
 //     agents/$<name>.agent.md       ← Agent 预设：frontmatter + 正文作为 systemPrompt
 //
-// 注意：插件包禁止**顶层 skills/**，必须用 `agent/skills/*.md`（check:no-package-skills）。
+// 注意：插件 Skill 统一使用 `skills/<name>/SKILL.md`（check:skill-authoring-boundaries）。
 import { defineAgentTool } from '@zhin.js/tool';
 
 interface HealthInput {

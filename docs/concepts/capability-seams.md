@@ -1,7 +1,7 @@
 # 能力接缝（Capability Seam）
 
 Capability Seam 是 Agent Runtime 的 **Advanced / experimental** Provider 扩展口。普通插件仍应优先使用
-`agent/tools/$*.ts`、`agent/skills/$*.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
+`agent/tools/$*.ts`、`skills/<name>/SKILL.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
 owner 可见性、Generation HMR 和冲突校验。Seam 用于 Root Host 需要接入远程能力服务、已有能力注册表，
 或不适合落成普通 Feature slot 的 Provider。
 

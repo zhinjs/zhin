@@ -15,7 +15,7 @@ List inputs, outputs, side effects, and acceptance before implementation. Choose
 | Explicit text command | `commands/$*.ts` |
 | Inbound orchestration | `middlewares/$*.ts` / `handlers/$*.ts` |
 | Rich message output | `components/$*.tsx` |
-| Agent behavior | `agent/tools`, `agent/prompt-sections`, `agent/skills` |
+| Agent behavior | `agent/tools`, `agent/prompt-sections`, `skills` |
 | Database, schedules, proactive delivery | `plugin.ts` + Host tokens |
 
 ## 2. Establish package and runtime topology

@@ -16,7 +16,7 @@ const expectedSurface = new Map([
     'AgentPromptSectionDefinition', 'AgentPromptSectionInput', 'PromptProfile',
     'PromptSectionLayer', 'PromptSectionRetention', 'defineAgentPromptSection',
   ]],
-  ['@zhin.js/skill', ['SkillDefinition', 'parseSkillMarkdown']],
+  ['@zhin.js/skill', ['SkillDefinition', 'SkillScope', 'parseSkillMarkdown']],
   ['@zhin.js/tool', [
     'AgentToolDefinition', 'ToolExecutionContext', 'ToolInvocationContext',
     'ToolInvocationPolicy', 'ToolQuestionPort', 'ToolQuestionRequest', 'ToolApproval',

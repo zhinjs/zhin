@@ -75,7 +75,7 @@ plugins:
 
 ## AI 工具
 
-技能说明见 `agent/skills/$onebot12.md`。
+技能说明见 `skills/onebot12/SKILL.md`。
 
 ## 文档链接
 

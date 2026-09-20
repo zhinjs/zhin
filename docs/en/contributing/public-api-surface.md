@@ -29,7 +29,7 @@ Three tiers:
 | `defineAgentTool` | `experimental` | `@zhin.js/tool` (`agent/tools/$*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | Generation-owned Prompt section with layer, retention budget, and profile scope |
 
-> Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`agent/skills/$*.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
+> Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`skills/<name>/SKILL.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
 
 ### Convention Directories and Files
 
@@ -41,7 +41,7 @@ Three tiers:
 | `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
 | `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (`/` localName segments; omit `event` → `.` event; runtime currently wires `message.receive`) |
 | `agent/tools/` | `experimental` | `@zhin.js/tool` | Only `$*.ts` files are Agent Tool entries; other files are ordinary modules |
-| `agent/skills` | `experimental` | `@zhin.js/skill` / Agent discovery | Agent skill Markdown (published with npm packages) |
+| `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent discovery | Skill Markdown with colocated references and scripts (published with npm packages) |
 | `pages/` | `experimental` | `@zhin.js/console-page` | Console page module directory |
 
 ### Host Tokens (consumed via `context.resources.use(token)`)

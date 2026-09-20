@@ -605,6 +605,13 @@ function generationSkillProjection(skill: SkillDescriptor): Readonly<Record<stri
     name: skill.name,
     description: skill.description,
     instructions: skill.instructions,
+    toolNames: [...(skill.toolNames ?? [])].sort(),
+    platforms: [...(skill.platforms ?? [])].sort(),
+    scopes: [...(skill.scopes ?? [])].sort(),
+    permissions: [...(skill.permissions ?? [])].sort(),
+    keywords: [...(skill.keywords ?? [])].sort(),
+    tags: [...(skill.tags ?? [])].sort(),
+    always: skill.always === true,
   };
 }
 

@@ -68,14 +68,23 @@ export class CapabilityIngress {
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
     const featureTools = await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot));
-    const featureSkills = projection(snapshot, skillFeatureId, SkillIndex)?.visible(owner) ?? [];
+    const featureSkills = await bindSkills(
+      projection(snapshot, skillFeatureId, SkillIndex),
+      turn,
+      resolvePermissionHost(snapshot),
+    );
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
       ? await bindSeamTools(seam, owner, isActive, turn, resolvePermissionHost(snapshot))
       : [];
-    const seamSkills = seam ? await bindSeamSkills(seam, owner) : [];
+    const seamSkills = seam
+      ? await bindSeamSkills(seam, owner, turn, resolvePermissionHost(snapshot))
+      : [];
     assertDistinctCapabilities('Tool', [...featureTools, ...seamTools]);
-    assertDistinctCapabilities('Skill', [...featureSkills, ...seamSkills]);
+    assertDistinctCapabilities(
+      'Skill',
+      [...featureSkills, ...seamSkills].map((skill) => ({ name: skill.qualifiedName })),
+    );
     return Object.freeze({
       generation: snapshot.generation,
       owner,
@@ -132,7 +141,7 @@ async function bindSeamTools(
   } satisfies ToolCapability));
   const access = await Promise.all(projected.map(async (descriptor) => ({
     descriptor,
-    allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
+    allowed: await canAccessDescriptor(descriptor, turn, host),
   })));
   return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
 }
@@ -140,16 +149,43 @@ async function bindSeamTools(
 async function bindSeamSkills(
   seam: SeamIntegration,
   owner: PluginId,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
 ): Promise<readonly SkillDescriptor[]> {
-  return Object.freeze((await seam.projectSkills(String(owner))).map((entry) => Object.freeze({
+  const projected = (await seam.projectSkills(String(owner))).map((entry) => Object.freeze({
     $feature: 'zhin.skill/1' as const,
     owner,
     name: entry.metadata.name,
     qualifiedName: entry.metadata.name,
     description: entry.metadata.description,
     instructions: entry.instructions,
+    toolNames: entry.metadata.toolNames,
+    platforms: entry.metadata.platforms,
+    scopes: entry.metadata.scopes,
+    permissions: entry.metadata.permissions,
+    keywords: entry.metadata.keywords,
+    tags: entry.metadata.tags,
+    always: entry.metadata.always,
     source: `seam:${entry.providerId}`,
+  } satisfies SkillDescriptor));
+  const access = await Promise.all(projected.map(async (descriptor) => ({
+    descriptor,
+    allowed: await canAccessDescriptor(descriptor, turn, host),
   })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
+}
+
+async function bindSkills(
+  index: SkillIndex | undefined,
+  turn?: TurnAccessContext,
+  host?: PermissionHost,
+): Promise<readonly SkillDescriptor[]> {
+  if (!index) return Object.freeze([]);
+  const access = await Promise.all(index.list().map(async (descriptor) => ({
+    descriptor,
+    allowed: await canAccessDescriptor(descriptor, turn, host),
+  })));
+  return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
 }
 
 function assertDistinctCapabilities(
@@ -171,11 +207,11 @@ async function bindTools(
   host?: PermissionHost,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
-  const visibleDescriptors = index.list();
+  const descriptors = index.list();
   const accessResults = await Promise.all(
-    visibleDescriptors.map(async (descriptor) => ({
+    descriptors.map(async (descriptor) => ({
       descriptor,
-      allowed: !descriptor.hidden && await canAccessDescriptor(descriptor, turn, host),
+      allowed: await canAccessDescriptor(descriptor, turn, host),
     })),
   );
   return Object.freeze(accessResults
@@ -191,7 +227,7 @@ async function bindTools(
 }
 
 async function canAccessDescriptor(
-  descriptor: ToolDescriptor,
+  descriptor: Pick<ToolDescriptor, 'platforms' | 'scopes' | 'permissions'>,
   turn: TurnAccessContext | undefined,
   host?: PermissionHost,
 ): Promise<boolean> {

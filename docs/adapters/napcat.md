@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=a12f4b9cf2767673 -->
+<!-- sync-adapter-docs:sha256=bb71dad2da2e4107 -->
 
 # @zhin.js/adapter-napcat
 
@@ -84,7 +84,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/$*.ts` |
-| 技能说明 | `agent/skills/$napcat.md` |
+| 技能说明 | `skills/napcat/SKILL.md` |
 
 ## 迁移说明（Plugin Runtime）
 

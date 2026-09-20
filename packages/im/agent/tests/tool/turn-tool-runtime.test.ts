@@ -39,6 +39,41 @@ describe('TurnToolRuntime', () => {
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_denied']);
   });
 
+  it('lets canonical on-risk reads execute after their dedicated policy passes', async () => {
+    const execute = vi.fn(async () => 'contents');
+    const { turn } = fixture({ roles: ['master'], workspaceRoot: process.cwd() });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'on-risk', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: 'README.md' }, 'safe-read'))
+      .resolves.toMatchObject({ status: 'completed', output: 'contents' });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps unknown on-risk plugin tools behind approval', async () => {
+    const execute = vi.fn(async () => 'unsafe');
+    const { turn } = fixture();
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'on-risk', 'plugin_action')]);
+
+    await expect(runtime.execute('plugin_action', {}, 'unknown-risk')).resolves.toMatchObject({
+      status: 'denied', policy: 'approval',
+    });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('marks once approvals as session grants scoped to the Tool', async () => {
+    const execute = vi.fn(async () => 'done');
+    const requestApproval = vi.fn(async () => true);
+    const { turn } = fixture({ approval: { available: true, requestApproval } });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'once', 'plugin_action')]);
+
+    await runtime.execute('plugin_action', { value: 1 }, 'once-approval');
+    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: 'plugin_action',
+      scopeKey: 'plugin_action',
+      remember: 'session',
+    }));
+  });
+
   it('denies canonical file writes for a non-owner before execution', async () => {
     const execute = vi.fn(async () => 'unsafe write');
     const { turn, events } = fixture({ workspaceRoot: process.cwd() });

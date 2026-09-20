@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/qq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/qq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=120ce5873d86d6a7 -->
+<!-- sync-adapter-docs:sha256=837c3becdc95e13a -->
 
 # @zhin.js/adapter-qq
 
@@ -144,7 +144,7 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
 | 平台工具 | `agent/tools/`（频道、角色等） |
-| 技能说明 | `agent/skills/$qq.md` |
+| 技能说明 | `skills/qq/SKILL.md` |
 
 ## 平台 Client 与 QQ API
 

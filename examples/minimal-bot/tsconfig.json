@@ -11,7 +11,7 @@
     "adapters/**/*.ts",
     "commands/**/*.ts",
     "components/**/*.ts",
-    "tools/**/*.ts"
+    "agent/tools/**/*.ts"
   ],
   "exclude": ["lib", "node_modules"]
 }

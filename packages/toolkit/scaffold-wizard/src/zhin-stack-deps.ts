@@ -23,6 +23,7 @@ export const ZHIN_STACK_VERSIONS = {
   '@zhin.js/layout': 'latest',
   '@zhin.js/page': 'latest',
   '@zhin.js/prompt-section': 'latest',
+  '@zhin.js/skill': 'latest',
   '@zhin.js/tool': 'latest',
   '@zhin.js/client': 'latest',
   '@zhin.js/contract': 'latest',
@@ -130,6 +131,7 @@ export function getCreateBotPnpmConfig(_aiEnabled?: boolean): Record<string, unk
 export function getCreateBotBaseDependencies(): Record<string, string> {
   return {
     'zhin.js': ZHIN_STACK_VERSIONS['zhin.js'],
+    '@zhin.js/skill': ZHIN_STACK_VERSIONS['@zhin.js/skill'],
   };
 }
 

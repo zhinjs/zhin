@@ -111,6 +111,11 @@ export interface SkillMetadata {
   description: string;
   keywords?: string[];
   tags?: string[];
+  toolNames?: string[];
+  platforms?: string[];
+  scopes?: ToolScope[];
+  permissions?: string[];
+  always?: boolean;
   category?: string;
   /** 依赖的其他 skill */
   prerequisites?: string[];

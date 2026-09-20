@@ -10,7 +10,10 @@ import {
 describe('zhin-stack-deps', () => {
   it('uses latest for scaffolded user project dependencies', () => {
     const base = getCreateBotBaseDependencies();
-    expect(base).toEqual({ 'zhin.js': 'latest' });
+    expect(base).toEqual({
+      'zhin.js': 'latest',
+      '@zhin.js/skill': 'latest',
+    });
     // Stable Features / runtime 由平台（CLI）与 zhin.js 传递依赖提供，不直列
     expect(base).not.toHaveProperty('@zhin.js/plugin-runtime');
     expect(base).not.toHaveProperty('@zhin.js/runtime');

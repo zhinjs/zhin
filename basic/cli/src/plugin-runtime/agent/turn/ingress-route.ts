@@ -78,7 +78,7 @@ export interface AgentTurnIngressRouteOptions {
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
-  readonly #rememberedSandboxApprovals = new Map<string, Set<string>>();
+  readonly #rememberedToolApprovals = new Map<string, Set<string>>();
 
   constructor(private readonly options: AgentTurnIngressRouteOptions) {}
 
@@ -113,7 +113,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const binding = service.getBindingRegistry().requireZhinBinding();
     const ingress = options.ingress;
     const workroom = options.workroom;
-    const rememberedSandboxApprovals = this.#rememberedSandboxApprovals;
+    const rememberedToolApprovals = this.#rememberedToolApprovals;
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const workroomAgentTurn = workroom.takeAgentTurn(message);
@@ -301,23 +301,21 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   interaction: ownerId
                     ? options.im.createInteraction(message, { subjectId: ownerId })
                     : undefined,
-                  ...(turnPolicy.shell?.approvalMode === 'ask' ? {
-                    rememberSession: {
-                      isApproved: (approval) => rememberedSandboxApprovals
-                        .get(sessionKey)
-                        ?.has(approval.scopeKey ?? approval.toolName) === true,
-                      grant: (approval) => {
-                        let sessionApprovals = rememberedSandboxApprovals.get(sessionKey);
-                        if (!sessionApprovals) {
-                          if (rememberedSandboxApprovals.size >= 64) rememberedSandboxApprovals.clear();
-                          sessionApprovals = new Set<string>();
-                          rememberedSandboxApprovals.set(sessionKey, sessionApprovals);
-                        }
-                        if (sessionApprovals.size >= 64) sessionApprovals.clear();
-                        sessionApprovals.add(approval.scopeKey ?? approval.toolName);
-                      },
+                  rememberSession: {
+                    isApproved: (approval) => rememberedToolApprovals
+                      .get(sessionKey)
+                      ?.has(approval.scopeKey ?? approval.toolName) === true,
+                    grant: (approval) => {
+                      let sessionApprovals = rememberedToolApprovals.get(sessionKey);
+                      if (!sessionApprovals) {
+                        if (rememberedToolApprovals.size >= 64) rememberedToolApprovals.clear();
+                        sessionApprovals = new Set<string>();
+                        rememberedToolApprovals.set(sessionKey, sessionApprovals);
+                      }
+                      if (sessionApprovals.size >= 64) sessionApprovals.clear();
+                      sessionApprovals.add(approval.scopeKey ?? approval.toolName);
                     },
-                  } : {}),
+                  },
                 }),
                 question: createRuntimeQuestionPort(options.im, message),
                 reply: {

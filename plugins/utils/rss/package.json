@@ -20,6 +20,7 @@
     "src",
     "lib",
     "agent",
+    "skills",
     "README.md"
   ],
   "scripts": {
@@ -49,7 +50,8 @@
   "license": "MIT",
   "dependencies": {
     "@zhin.js/tool": "workspace:*",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "@zhin.js/skill": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",
@@ -95,6 +97,10 @@
       },
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

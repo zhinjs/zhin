@@ -21,7 +21,8 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "axios": "^1.19.0",
-    "xml2js": "^0.6.2"
+    "xml2js": "^0.6.2",
+    "@zhin.js/skill": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -76,6 +77,7 @@
     "src",
     "lib",
     "agent",
+    "skills",
     "README.md",
     "CHANGELOG.md"
   ],
@@ -106,6 +108,10 @@
       },
       {
         "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
         "api": "^1.0.0"
       }
     ],

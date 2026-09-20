@@ -1628,7 +1628,13 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../plugin-runtime
+      js-yaml:
+        specifier: ^5.2.2
+        version: 5.2.2
     devDependencies:
+      '@types/js-yaml':
+        specifier: ^4.0.9
+        version: 4.0.9
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -1833,6 +1839,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -1879,6 +1888,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -1919,6 +1931,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imap:
         specifier: ^0.8.19
         version: 0.8.19
@@ -1974,6 +1989,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2075,6 +2093,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2124,6 +2145,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2167,6 +2191,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2213,6 +2240,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2268,6 +2298,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2323,6 +2356,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2378,6 +2414,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2430,6 +2469,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:*
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2482,6 +2524,9 @@ importers:
       '@zhin.js/page':
         specifier: workspace:*
         version: link:../../../packages/console/page
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       lucide-react:
         specifier: ^0.525.0
         version: 0.525.0(react@19.2.8)
@@ -2540,6 +2585,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       imhelper:
         specifier: 1.0.7
         version: 1.0.7
@@ -2595,6 +2643,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2641,6 +2692,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -2684,6 +2738,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       axios:
         specifier: ^1.19.0
         version: 1.19.0
@@ -2733,6 +2790,9 @@ importers:
       '@zhin.js/permission':
         specifier: workspace:^
         version: link:../../../packages/im/permission
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3086,6 +3146,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3108,6 +3171,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3161,6 +3227,9 @@ importers:
       '@zhin.js/satori':
         specifier: workspace:*
         version: link:../../../packages/toolkit/satori
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3189,6 +3258,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3205,6 +3277,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3242,6 +3317,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3264,6 +3342,9 @@ importers:
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3292,6 +3373,9 @@ importers:
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -3308,6 +3392,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
@@ -3333,6 +3420,9 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool

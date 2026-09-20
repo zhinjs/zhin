@@ -83,7 +83,7 @@ plugins/{name}/
 | `components/$*.tsx` | `defineComponent()` |
 | `agent/tools/$*.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()` |
-| `skills/<name>/SKILL.md` | Markdown Skill |
+| `skills/<name>/SKILL.md` | Markdown Skill 入口 |
 | `agents/$<name>.agent.md` | Markdown Agent |
 
 ### 第 3 步：生成 package.json
@@ -170,7 +170,7 @@ export default defineCommand({
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
-  "include": ["plugin.ts", "commands/**/*", "middlewares/**/*", "components/**/*", "tools/**/*"],
+  "include": ["plugin.ts", "commands/**/*", "middlewares/**/*", "components/**/*", "agent/tools/**/*"],
   "exclude": ["node_modules", "tests"]
 }
 ```

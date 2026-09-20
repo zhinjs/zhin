@@ -43,7 +43,7 @@ export default defineAgentTool<{ message: string }>({
 | --- | --- | --- |
 | `description` | 是 | 给模型看的功能描述 |
 | `inputSchema` | 否 | Zod 4 object 或根节点为 `object` 的 JSON Schema；由 Tool Feature 统一投影并在执行前校验 |
-| `approval` | 否 | `'never' \| 'on-risk' \| 'always'`，默认 `'on-risk'` |
+| `approval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
 | `platforms` | 否 | 限定适配器平台（如 `['icqq']`），空 = 全部 |
 | `scopes` | 否 | 限定会话场景 `'private' \| 'group' \| 'channel'`，空 = 全部 |
 | `permissions` | 否 | permit 字符串列表（见下文准入） |
@@ -110,6 +110,8 @@ context.addTool('lottery_sync', defineAgentTool({
 
 permit 语法由 `@zhin.js/permission` 统一定义（`packages/im/permission/src/builtin.ts`）：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
 
+`approval` 在 Tool 通过上述准入后、执行之前判定。`always` 每次确认；`once` 可由标准 Host 在当前会话记住该 Tool；`on-risk` 对未知插件操作保持确认，但 `bash`、文件和网络工具在专用策略已经验证具体命令、路径或 URL 后不重复确认。`never` 只跳过声明式确认，不能绕过权限、网络、文件系统、Shell 或代际策略。
+
 ## deferred catalog 与 load_tool
 
 工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，并创建独占的 deferred controller（`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`）；默认只对模型暴露 `alwaysLoadedTools`。其余工具由 controller 为本 turn 创建的三个 meta 工具按需发现与加载：`discover` 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称加简介；`load_tool` 按名加载工具 schema；`load_skill` 加载技能完整指令并解锁其关联工具。并发 turn 和 subagent 使用彼此隔离的 controller，不以 IM `Message` 作为状态键。
@@ -134,7 +136,29 @@ unattended Turn（例如 Schedule）不会注入该端口，不能回退到全�
 
 技能与命名 Agent 也是文件约定，分别由 `@zhin.js/skill` 与 `@zhin.js/agent-feature` 两个 Feature 发现。
 
-技能放在 `skills/<name>/SKILL.md`（每个子目录一个技能）：正文即给模型的指令，第一个 Markdown 标题行作为描述，`load_skill` 加载后解锁 `toolNames` 关联的工具。命名 Agent 入口是 `agents/$<name>.agent.md`（名称必须小写 kebab，如 `agents/$planner.agent.md`）：整份 Markdown 是该 Agent 的 instructions，首个标题行作为描述；未加 `$` 的文件不会被注册。真实示例见 `examples/test-bot/agents/$planner.agent.md`。
+技能放在 `skills/<name>/SKILL.md`。主 Agent 可以发现整个插件树中的技能，子插件技能使用 owner 限定名，例如 `music__recommend`。每个 Skill 目录可附带参考资料和脚本，只有 `SKILL.md` 会注册。每个 Turn 会先按技能的 `platforms`、`scopes`、`permissions` 过滤；`load_skill` 只能加载已通过准入的技能，并且只解锁同 owner、当前 Turn 已获准的关联工具。
+
+Skill 可用 YAML frontmatter 声明目录信息和准入条件；frontmatter 不会进入模型提示词。`name` 若存在必须与目录名一致：
+
+```markdown
+---
+name: research
+description: 使用一手资料完成可追溯研究
+tools: [web_search, read_file]
+platforms: [qq, telegram]
+scopes: [private, group]
+permissions: [role(trusted)]
+keywords: [检索, 来源, citation]
+tags: [research]
+always: false
+---
+
+# Research
+
+先检索一手资料，再给出带来源的结论。
+```
+
+`tools` 使用同一 owner 下的工具本地名；运行时只会解析已经通过 Tool 准入的项，Skill 不能扩大 Tool 权限。`always: true` 表示通过技能准入后始终注入指令，不代表跳过 Tool 权限或执行审批。没有 frontmatter 时，第一个 Markdown 标题仍作为描述。命名 Agent 入口是 `agents/$<name>.agent.md`（名称必须小写 kebab，如 `agents/$planner.agent.md`）；未加 `$` 的文件不会被注册。真实示例见 `examples/test-bot/agents/$planner.agent.md`。
 
 ```markdown
 <!-- agents/$planner.agent.md -->
@@ -144,9 +168,9 @@ You are **planner** (协调者): break down user goals, define acceptance
 criteria, and coordinate specialist roles.
 ```
 
-## 插件 `agent/` 目录
+## 插件 Agent 创作目录
 
-插件的 AI 创作面统一放在 `agent/` 下。Tool 由 `@zhin.js/tool` Feature 发现，其他声明由各自 Feature 或 Agent 作者面负责；不存在另一套 Tool 定义或扫描器。
+Tool 与 Agent 声明放在 `agent/` 下，Skill 使用适合多文件资源包的顶层 `skills/`。各能力由自己的 Feature 发现；不存在第二套 Tool 或 Skill 注册表。
 
 ```text
 my-plugin/
@@ -156,8 +180,11 @@ my-plugin/
 │   ├── tools/
 │   │   ├── $short_url.ts   # defineAgentTool（来自 '@zhin.js/tool'）
 │   │   └── client.ts       # 普通依赖模块，不会注册为 Tool
-│   ├── skills/*.{md,ts}
 │   └── subagents/<name>/
+└── skills/
+    └── short-url/
+        ├── SKILL.md
+        └── references/
 ```
 
 `agent/tools/$*.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。插件不应从全局状态恢复当前 Message 或 Runtime。

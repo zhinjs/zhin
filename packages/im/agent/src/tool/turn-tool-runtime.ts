@@ -51,7 +51,12 @@ export class TurnToolRuntime {
       const approved = await this.turn.ports.approval.requestApproval({
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         toolName: name,
-        scopeKey: approvalScopeKey(name, decision.input),
+        scopeKey: tool.approval === 'once'
+          ? name
+          : approvalScopeKey(name, decision.input),
+        ...(tool.approval === 'once' || decision.policy === 'exec-policy'
+          ? { remember: 'session' as const }
+          : {}),
         question: formatApprovalQuestion(name, decision.reason, decision.input),
         signal: this.turn.signal,
       });

@@ -81,6 +81,7 @@ describe('createWorkspace', () => {
     expect(pkg.dependencies['@zhin.js/console-contract']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/page']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/layout']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/skill']).toBe('latest')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/agent')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/client')
     expect(pkg.dependencies).not.toHaveProperty('@zhin.js/pagemanager')
@@ -102,6 +103,7 @@ describe('createWorkspace', () => {
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' },
     ])
     expect(pkg.zhin.plugins).toEqual([
       { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
@@ -146,7 +148,7 @@ describe('createWorkspace', () => {
       'commands/$hello.ts',
       'components/$status-card.ts',
       'middlewares/.gitkeep',
-      'tools/.gitkeep',
+      'agent/tools/.gitkeep',
       'skills/skill-creator/SKILL.md',
       'agents/.gitkeep',
       'pages/$index.tsx',
@@ -210,6 +212,7 @@ describe('createWorkspace', () => {
     expect(pkg.zhin.features).toEqual([
       { package: '@zhin.js/page', api: '^1.0.0' },
       { package: '@zhin.js/layout', api: '^1.0.0' },
+      { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/tool', api: '^1.0.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ])

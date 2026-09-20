@@ -83,7 +83,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## AI Tools
 
-See `agent/skills/$onebot12.md` for skill documentation.
+See `skills/onebot12/SKILL.md` for skill documentation.
 
 ## Documentation Links
 

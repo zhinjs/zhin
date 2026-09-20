@@ -99,7 +99,7 @@ It is recommended to use environment variables for storing email passwords. Do n
 
 ## AI Tools
 
-See `agent/skills/$email.md` for skill documentation.
+See `skills/email/SKILL.md` for skill documentation.
 
 ## Documentation Links
 

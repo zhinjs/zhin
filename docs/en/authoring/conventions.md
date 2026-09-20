@@ -36,7 +36,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 ## Naming Rules
 
-The `$` marker selects an entry and is removed from its `localName`. Files without `$` are neither discovered nor validated as capabilities. After removing the marker and extension, entry names and directory segments must match `^[a-z0-9][a-z0-9-]*$` (lowercase letter/digit start, hyphens allowed). Non-matching files are skipped.
+The `$` marker selects a single-file entry and is removed from its `localName`. Files without `$` are neither discovered nor validated as capabilities. After removing the marker and extension, entry names and directory segments must match `^[a-z0-9][a-z0-9-]*$` (lowercase letter/digit start, hyphens allowed). Non-matching files are skipped. Skills use `skills/<name>/SKILL.md`, with the directory name as `localName`.
 
 **Exception: `commands/`** static segments also allow Unicode names (e.g. `$赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`$[name].ts`, etc.) remain ASCII-only. `agent/tools/` also allows ASCII snake (e.g. `$send_user_like.ts`). Other convention directories (middlewares / adapters / …) are not relaxed.
 
@@ -51,7 +51,7 @@ Supplementary rules per directory:
 | `adapters/` | Same as above | `adapters/$napcat.ts` -> `napcat` |
 | `agent/tools/` | File name without extension (no subdirectory recursion); ASCII kebab or snake | `agent/tools/$music-search.ts` -> `music-search`; `agent/tools/$send_user_like.ts` -> `send_user_like` |
 | `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/$rules.ts` -> `project/rules` |
-| `skills/` | Subdirectory name is the localName, directory must contain `SKILL.md` | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
+| `skills/` | First-level directory name; only its `SKILL.md` is registered, while references and scripts may live beside it | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | File name with `$` prefix and `.agent.md` suffix removed | `agents/$planner.agent.md` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/$my-server.ts` -> `my-server` |
 | `pages/` | File name without extension; `$nav.tsx` / `$footer.tsx` are layout slots (when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence) | `pages/$workroom.tsx` -> `workroom`; `pages/$nav.tsx` -> `nav` |
@@ -182,7 +182,7 @@ export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: 
 
 ### skills/ and agents/ -- Markdown
 
-`skills/<name>/SKILL.md` has frontmatter (`name` / `description` / `tools` whitelist, etc.), such as `examples/full-bot/skills/memory-consolidate/SKILL.md`:
+`skills/<name>/SKILL.md` has frontmatter (`name` / `description` / `tools` allowlist, etc.), such as `examples/full-bot/skills/memory-consolidate/SKILL.md`:
 
 ```markdown
 ---
@@ -202,4 +202,4 @@ tools:
 
 ## Repository Examples
 
-When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/$[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/$receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/$share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/$napcat.ts`; `agent/tools` -- see `plugins/utils/music/agent/tools/` and `plugins/utils/group-suite/agent/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/$workroom.tsx`.
+When looking for production-grade references, browse these directories directly: `commands` -- see `plugins/utils/lottery/commands/` (including dynamic parameter `lottery/$[[game]].ts`); `middlewares` -- see `plugins/utils/group-suite/middlewares/` and `plugins/games/*/middlewares/`; `handlers` -- use `handlers/message/$receive.ts` + `defineHandler` (see the minimal form above; add in-repo examples as needed); `components` -- see `plugins/utils/music/components/$share-music.ts`; `adapters` -- see `plugins/adapters/napcat/adapters/$napcat.ts`; `agent/tools` -- see `plugins/utils/music/agent/tools/` and `plugins/utils/group-suite/agent/tools/`; `skills` -- see `examples/full-bot/skills/memory-consolidate/SKILL.md`; `agents` -- see `examples/multi-agent-room/agents/`; `pages` -- see `examples/full-bot/pages/$workroom.tsx`.

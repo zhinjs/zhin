@@ -96,7 +96,7 @@ Sandbox 使用 JSON 消息格式：
 
 ## AI 工具
 
-技能说明见 `agent/skills/$sandbox.md`（本地沙箱调试约束）。
+技能说明见 `skills/sandbox/SKILL.md`（本地沙箱调试约束）。
 
 
 ## 故障排查
