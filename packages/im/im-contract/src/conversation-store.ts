@@ -1,8 +1,7 @@
 import type { ConversationMessage, ConversationEvent, SequencedConversationEvent } from './conversation.js';
 import type { ConversationRef, MessageRef } from './identity.js';
 
-export interface ConversationEventStore {
-  append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>>;
+export interface ConversationEventReader {
   getMessage(ref: MessageRef): Promise<ConversationMessage | undefined>;
   /** Latest events in (afterExclusive, throughInclusive], returned in ascending sequence order. */
   listBetween(
@@ -12,8 +11,14 @@ export interface ConversationEventStore {
     limit: number,
   ): Promise<readonly SequencedConversationEvent[]>;
   getCursor(consumer: string, conversation: ConversationRef): Promise<number>;
+}
+
+export interface ConversationEventWriter {
+  append(event: ConversationEvent): Promise<Readonly<{ appended: boolean; sequence: number }>>;
   commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void>;
 }
+
+export interface ConversationEventStore extends ConversationEventReader, ConversationEventWriter {}
 
 /** Process-local implementation; database hosts provide the same contract. */
 export class MemoryConversationEventStore implements ConversationEventStore {

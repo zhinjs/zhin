@@ -97,7 +97,7 @@ export class WorkroomHumanIngressCoordinator {
     );
     const interactionSpaceRouter = new InteractionSpaceRouter(interactionSpaceBindings);
     const productionHumanIngressPort = new ProductionHumanIngressOrchestratorPort({
-      sources: new ConversationEventHumanIngressSourceReader(() => options.im.conversationEvents),
+      sources: new ConversationEventHumanIngressSourceReader(() => options.im.conversationEventReader),
       kernel: workroomKernel,
       resolveProject: async projectId => {
         const snapshot = await workroomCatalog.read();
@@ -244,7 +244,7 @@ export class WorkroomHumanIngressCoordinator {
       bindingRouter: interactionSpaceRouter,
       proposals: humanIngressProposals,
       application: Object.freeze({ drain: drainHumanIngressProject }),
-      sourceEvents: () => options.im.conversationEvents,
+      sourceEvents: () => options.im.conversationEventReader,
       resolveIntent: resolveWorkroomHumanIntent,
       createTargetResolver: (message, intent, decision) =>
         decision.space === 'sponsor_room' && intent === 'control'

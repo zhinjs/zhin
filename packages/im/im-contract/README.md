@@ -53,6 +53,9 @@ const receipt: DeliveryReceipt = { status: 'sent' };
   is presentation-only.
 - `DeliveryReceipt` contains serializable data only, so it can cross Console,
   HTTP, MCP, A2A, and activity-feedback boundaries.
+- Conversation consumers depend on `ConversationEventReader`; only the owning
+  runtime and persistence adapter require the combined `ConversationEventStore`
+  writer contract.
 
 ## Source map
 
@@ -63,7 +66,7 @@ The package keeps a shallow layout and a one-way dependency direction:
 | `identity.ts` | Endpoint, conversation, actor, and message identities |
 | `segment.ts` | Canonical segment/media contracts and zero-dependency guards |
 | `conversation.ts` | Conversation messages, references, and event facts |
-| `conversation-store.ts` | In-memory/database event-store implementations |
+| `conversation-store.ts` | Reader/writer ports and in-memory/database event-store implementations |
 | `endpoint.ts` | Endpoint capabilities and delivery receipts |
 | `index.ts` | Stable package facade; contains no implementation |
 

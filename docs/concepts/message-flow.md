@@ -114,6 +114,8 @@ interface MediaRef {
 
 `ConversationEventStore` 是 IM 上下文的唯一事实源。入站/出站消息、撤回 tombstone、回应、成员加入/退出、禁言/解禁和角色变化按会话幂等追加；不再维护 `im_transcripts` 或文本型 `chat_history` 双轨。合并转发条目使用中性 `actor`，不映射成模型 `user/assistant/system` role。
 
+每个 `ImRuntime` 私有持有一个 `ConversationRuntime`，由它独占 Store 替换、事件规范化、消息记账、上下文聚合与 consumer cursor。消息网关只把已经确定的入站、出站和 notice 交给它；CLI 与 Agent 通过 `ImRuntime` 的只读 Store 视图和上下文方法消费事实，不直接更换所有者状态。
+
 会话中尚未被 Agent session 消费的入站消息也从该 Store 按游标读取，作为不可信 `user-context` 投影；当前触发 Turn 的消息会被排除，避免重复。不存在进程级 passive buffer，失败 Turn 不推进游标，HMR 与多 Root 也不会共享旁路状态。
 
 当前 Turn 把 `replyTo`、forward 与媒体注册为 scoped `TurnReference`。Agent 只暴露 `inspect_conversation_reference(reference, depth?)`：先查本地事实源，再通过持租约的 Endpoint 回源；跨会话、跨 Endpoint、过期 Turn 均 fail-closed。尚未消费的重要 notice 会作为明确标注的“不可信会话数据”附在下一次用户 Turn，永远不进入 system/developer prompt；只有 Turn 成功提交才推进 session cursor，失败会保留。高频 reaction/poke 会聚合，登录、二维码、断线等 process 事件只进入诊断日志。

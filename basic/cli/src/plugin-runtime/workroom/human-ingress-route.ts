@@ -20,7 +20,7 @@ import {
 import {
   conversationRefKey,
   messageRefKey,
-  type ConversationEventStore,
+  type ConversationEventReader,
 } from '@zhin.js/im-contract';
 
 export interface CatalogWorkroomSpaceInput {
@@ -54,7 +54,7 @@ export interface WorkroomHumanIngressPreRouteOptions {
   readonly proposals: HumanIngressProposalRepository;
   readonly application: Pick<HumanIngressApplicationService, 'drain'>;
   /** Required by production composition; omitted only by isolated contract embedders. */
-  readonly sourceEvents?: ConversationEventStore | (() => ConversationEventStore);
+  readonly sourceEvents?: ConversationEventReader | (() => ConversationEventReader);
   readonly resolveCatalogSpace: (message: Message) => CatalogWorkroomSpaceResolution | Promise<CatalogWorkroomSpaceResolution>;
   readonly resolveIntent?: (message: Message) => HumanIngressIntent;
   readonly createTargetResolver?: (

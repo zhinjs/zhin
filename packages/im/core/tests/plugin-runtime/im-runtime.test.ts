@@ -46,6 +46,7 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
+import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import {
   ImRuntime,
   ingressRouteToken,
@@ -132,7 +133,7 @@ describe('IM Runtime', () => {
     await receiveEvent(fixture.im, 'notice.receive', notice as never);
     await receiveEvent(fixture.im, 'notice.receive', notice as never);
     await receiveEvent(fixture.im, 'notice.receive', { ...notice, $scene_id: 'room-2' } as never);
-    const events = await fixture.im.conversationEvents.listBetween({
+    const events = await fixture.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-1',
@@ -144,7 +145,7 @@ describe('IM Runtime', () => {
       actor: { id: 'admin', displayName: 'Admin' },
       durationSeconds: 60,
     });
-    await expect(fixture.im.conversationEvents.listBetween({
+    await expect(fixture.conversationEvents.listBetween({
       endpoint: { adapter: 'test', id: String(fixture.adapter.id) },
       kind: 'group',
       id: 'room-2',
@@ -306,7 +307,7 @@ describe('IM Runtime', () => {
       id: 'room-window',
     };
     for (let index = 1; index <= 55; index += 1) {
-      await fixture.im.conversationEvents.append(Object.freeze({
+      await fixture.conversationEvents.append(Object.freeze({
         eventId: `background-${index}`,
         conversation,
         timestamp: index,
@@ -319,7 +320,7 @@ describe('IM Runtime', () => {
         }),
       }));
     }
-    const current = await fixture.im.conversationEvents.append(Object.freeze({
+    const current = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'current-56',
       conversation,
       timestamp: 56,
@@ -331,7 +332,7 @@ describe('IM Runtime', () => {
         timestamp: 56,
       }),
     }));
-    const future = await fixture.im.conversationEvents.append(Object.freeze({
+    const future = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'future-57',
       conversation,
       timestamp: 57,
@@ -2068,11 +2069,15 @@ async function createFixture(
       : []),
   ]);
   const store = new SnapshotStore({ ...base, projections });
-  const im = new ImRuntime({ inboundClaim: options?.inboundClaim });
+  const conversationEvents = new MemoryConversationEventStore();
+  const im = new ImRuntime({
+    inboundClaim: options?.inboundClaim,
+    conversationEvents,
+  });
   im.attach(store);
   await adapters.start();
   adapters.open();
-  return { im, store, adapters, adapter };
+  return { im, store, adapters, adapter, conversationEvents };
 }
 
 function baseState(slots: readonly CapabilitySlot[]): SnapshotState {

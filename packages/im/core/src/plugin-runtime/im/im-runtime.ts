@@ -30,13 +30,9 @@ import {
   type EndpointEventGateway,
 } from '@zhin.js/adapter';
 import {
-  MemoryConversationEventStore,
-  conversationRefKey,
-  messageRefKey,
   type ConversationEventStore,
-  type ConversationEvent,
+  type ConversationEventReader,
   type ConversationContextBlock,
-  type ConversationMessage,
   type ConversationReference,
   type ConversationResolution,
   type ConversationRef,
@@ -44,7 +40,6 @@ import {
   type EndpointCapabilities,
   type MessageRef,
 } from '@zhin.js/im-contract';
-import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import { MiddlewareIndex, isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
@@ -83,6 +78,7 @@ import {
   RuntimeInteractionCoordinator,
   type UserInteractionSource,
 } from './interaction-runtime.js';
+import { ConversationRuntime } from './conversation-runtime.js';
 
 const logger = getLogger('im');
 
@@ -153,11 +149,11 @@ export class ImRuntime implements OutboundMessageService {
   readonly #renderer: OutboundRenderer;
   readonly #messageListeners = new Set<(event: RuntimeMessageEvent) => void>();
   readonly #interactions = new RuntimeInteractionCoordinator<GenerationAdmissionGate>();
+  readonly #conversations: ConversationRuntime;
   readonly #operationSnapshot = new AsyncLocalStorage<SnapshotLease>();
   #snapshots?: SnapshotReader;
   readonly #inboundClaim?: ImRuntimeOptions['inboundClaim'];
   readonly #enrichSender?: ImRuntimeOptions['enrichSender'];
-  conversationEvents: ConversationEventStore;
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#dispatcher = new MessageDispatcher(
@@ -166,14 +162,18 @@ export class ImRuntime implements OutboundMessageService {
         : () => options.commandPrefix ?? '',
     );
     this.#renderer = options.renderer ?? new OutboundRenderer();
-    this.conversationEvents = options.conversationEvents ?? new MemoryConversationEventStore();
+    this.#conversations = new ConversationRuntime(options.conversationEvents);
     this.#inboundClaim = options.inboundClaim;
     this.#enrichSender = options.enrichSender;
   }
 
   /** Process composition replaces the bootstrap memory store after required DB activation. */
   replaceConversationEventStore(store: ConversationEventStore): void {
-    this.conversationEvents = store;
+    this.#conversations.replaceStore(store);
+  }
+
+  get conversationEventReader(): ConversationEventReader {
+    return this.#conversations.reader;
   }
 
   /** Pins all nested IM operations to the snapshot current at operation ingress. */
@@ -197,10 +197,8 @@ export class ImRuntime implements OutboundMessageService {
     if (!this.#snapshots?.owns(lease) || !lease.active) {
       return Object.freeze({ status: 'expired', code: 'generation_lease_expired' });
     }
-    if (reference.kind === 'message') {
-      const local = await this.conversationEvents.getMessage(reference.message);
-      if (local) return Object.freeze({ status: 'resolved', reference, value: local });
-    }
+    const local = await this.#conversations.resolveLocal(reference);
+    if (local) return local;
     context.signal.throwIfAborted();
     const conversation = reference.kind === 'message' ? reference.message.conversation : reference.conversation;
     return requireAdapters(lease.value).resolveContent(
@@ -217,21 +215,13 @@ export class ImRuntime implements OutboundMessageService {
     limit = 50,
     excludeMessageId?: string,
   ): Promise<Readonly<{ blocks: readonly ConversationContextBlock[]; cursor: number }>> {
-    if (!Number.isSafeInteger(throughSequence) || throughSequence < 0) {
-      throw new TypeError('Conversation context throughSequence must be a non-negative integer');
-    }
-    const cursor = await this.conversationEvents.getCursor(consumer, conversation);
-    const events = await this.conversationEvents.listBetween(
+    return this.#conversations.readContext(
       conversation,
-      cursor,
+      consumer,
       throughSequence,
       limit,
+      excludeMessageId,
     );
-    const blocks = aggregateConversationContext(events, excludeMessageId);
-    return Object.freeze({
-      blocks: Object.freeze(blocks),
-      cursor: Math.max(cursor, throughSequence),
-    });
   }
 
   async commitConversationContext(
@@ -239,7 +229,7 @@ export class ImRuntime implements OutboundMessageService {
     consumer: string,
     cursor: number,
   ): Promise<void> {
-    await this.conversationEvents.commitCursor(consumer, conversation, cursor);
+    await this.#conversations.commitContext(conversation, consumer, cursor);
   }
 
   attach(snapshots: SnapshotReader): void {
@@ -389,28 +379,7 @@ export class ImRuntime implements OutboundMessageService {
         },
         source.endpoint.adapter,
       );
-      let conversationSequence: number | undefined;
-      if (input.message?.id) {
-        const appended = await this.conversationEvents.append(Object.freeze({
-          eventId: `message:${messageRefKey(input.message)}`,
-          conversation,
-          timestamp: Date.now(),
-          type: 'message.created',
-          message: Object.freeze({
-            ref: input.message,
-            ...(enrichedSender ? { actor: Object.freeze({
-              id: enrichedSender.id,
-              ...(enrichedSender.name ? { displayName: enrichedSender.name } : {}),
-            }) } : {}),
-            segments: Object.freeze(input.segments?.length
-              ? [...input.segments]
-              : [{ type: 'text', data: { text: input.content } }]),
-            timestamp: Date.now(),
-            ...(input.replyTo ? { replyTo: Object.freeze({ conversation, id: input.replyTo.id }) } : {}),
-          }),
-        }));
-        conversationSequence = appended.sequence;
-      }
+      const conversationSequence = await this.#conversations.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
       const claimed = await this.#inboundClaim?.(message) === true;
       if (claimed) {
@@ -511,8 +480,7 @@ export class ImRuntime implements OutboundMessageService {
 
   async #receiveNotice(source: EndpointEvent<Notice>): Promise<void> {
     const notice = source.payload;
-    const event = conversationEventFromNotice(notice);
-    if (event) await this.conversationEvents.append(event);
+    await this.#conversations.recordNotice(notice);
     await this.#receiveSideEvent(withEndpointEventPayload(source, notice));
   }
 
@@ -969,20 +937,7 @@ export class ImRuntime implements OutboundMessageService {
           }
 
           if (receipt?.status === 'sent') {
-            if (receipt.message?.id) {
-              const segments = conversationSegmentsFromContent(request.content);
-              await this.conversationEvents.append(Object.freeze({
-                eventId: `message:${messageRefKey(receipt.message)}`,
-                conversation: request.conversation,
-                timestamp: Date.now(),
-                type: 'message.created',
-                message: Object.freeze({
-                  ref: receipt.message,
-                  segments,
-                  timestamp: Date.now(),
-                }),
-              }));
-            }
+            await this.#conversations.recordOutbound(request, receipt);
             this.#emitMessage({
               direction: 'outbound',
               conversation: request.conversation,
@@ -1045,135 +1000,6 @@ export class ImRuntime implements OutboundMessageService {
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
   }
-}
-
-function conversationEventFromNotice(notice: Notice): ConversationEvent | undefined {
-  const sceneType = notice.$scene_type;
-  const kind = sceneType === 'group' ? 'group' as const
-    : sceneType === 'channel' ? 'channel' as const
-      : sceneType === 'friend' || sceneType === 'private' ? 'private' as const
-        : undefined;
-  if (!kind || !notice.$scene_id || !notice.$id) return undefined;
-  const conversation = Object.freeze({
-    endpoint: Object.freeze({ adapter: String(notice.$adapter), id: String(notice.$endpoint) }),
-    kind,
-    id: String(notice.$scene_id),
-  });
-  const actor = notice.$actor?.id
-    ? Object.freeze({ id: String(notice.$actor.id), ...(notice.$actor.name ? { displayName: notice.$actor.name } : {}) })
-    : undefined;
-  const target = notice.$target?.id
-    ? Object.freeze({ id: String(notice.$target.id), ...(notice.$target.name ? { displayName: notice.$target.name } : {}) })
-    : undefined;
-  const base = Object.freeze({
-    eventId: `notice:${conversationRefKey(conversation)}:${String(notice.$id)}`,
-    conversation,
-    timestamp: notice.$timestamp,
-  });
-  switch (notice.$sub_type) {
-    case 'member_increase':
-    case 'increase':
-      return target ? Object.freeze({ ...base, type: 'member.joined', member: target, ...(actor ? { actor } : {}) }) : undefined;
-    case 'member_decrease':
-      return target ? Object.freeze({ ...base, type: 'member.left', member: target, ...(actor ? { actor } : {}), reason: actor ? 'removed' : 'left' }) : undefined;
-    case 'ban':
-      if (!target) return undefined;
-      return notice.$duration_seconds === 0
-        ? Object.freeze({ ...base, type: 'member.unmuted', member: target, ...(actor ? { actor } : {}) })
-        : Object.freeze({ ...base, type: 'member.muted', member: target, ...(actor ? { actor } : {}), durationSeconds: notice.$duration_seconds ?? 0 });
-    case 'admin_change':
-      return target && notice.$role && typeof notice.$enabled === 'boolean'
-        ? Object.freeze({ ...base, type: 'member.role_changed', member: target, ...(actor ? { actor } : {}), role: notice.$role, enabled: notice.$enabled })
-        : undefined;
-    case 'recall':
-      return notice.$message_id
-        ? Object.freeze({ ...base, type: 'message.recalled', message: Object.freeze({ conversation, id: notice.$message_id }), ...(actor ? { actor } : {}) })
-        : undefined;
-    case 'emoji_reaction':
-      return notice.$message_id && notice.$reaction && notice.$operation
-        ? Object.freeze({ ...base, type: 'message.reaction_changed', message: Object.freeze({ conversation, id: notice.$message_id }), ...(actor ? { actor } : {}), reaction: notice.$reaction, operation: notice.$operation })
-        : undefined;
-    case 'poke':
-      return Object.freeze({ ...base, type: 'conversation.poked', ...(actor ? { actor } : {}), ...(target ? { target } : {}) });
-    default:
-      return undefined;
-  }
-}
-
-function describeConversationEvent(event: ConversationEvent): string {
-  const actor = 'actor' in event && event.actor ? `${event.actor.displayName ?? event.actor.id} (${event.actor.id})` : undefined;
-  switch (event.type) {
-    case 'message.recalled': return `${actor ?? 'Someone'} recalled message ${event.message.id}.`;
-    case 'message.reaction_changed': return `${actor ?? 'Someone'} ${event.operation} reaction ${event.reaction} on message ${event.message.id}.`;
-    case 'conversation.poked': return `${actor ?? 'Someone'} poked ${event.target ? `${event.target.displayName ?? event.target.id} (${event.target.id})` : 'someone'}.`;
-    case 'member.joined': return `${event.member.displayName ?? event.member.id} (${event.member.id}) joined the conversation.`;
-    case 'member.left': return `${event.member.displayName ?? event.member.id} (${event.member.id}) left the conversation (${event.reason ?? 'left'}).`;
-    case 'member.muted': return `${event.member.displayName ?? event.member.id} (${event.member.id}) was muted for ${event.durationSeconds} seconds${actor ? ` by ${actor}` : ''}.`;
-    case 'member.unmuted': return `${event.member.displayName ?? event.member.id} (${event.member.id}) was unmuted${actor ? ` by ${actor}` : ''}.`;
-    case 'member.role_changed': return `${event.member.displayName ?? event.member.id} (${event.member.id}) role ${event.role} was ${event.enabled ? 'enabled' : 'disabled'}${actor ? ` by ${actor}` : ''}.`;
-    case 'message.created': return '';
-  }
-}
-
-function describeConversationMessage(message: ConversationMessage): string {
-  const actor = message.actor
-    ? `${message.actor.displayName ?? message.actor.id} (${message.actor.id})`
-    : undefined;
-  if (!actor) return '';
-  const text = segmentsToPlainText(message.segments).trim();
-  const attachmentTypes = [...new Set(message.segments
-    .filter((segment) => segment.type !== 'text' && segment.type !== 'mention' && segment.type !== 'at')
-    .map((segment) => segment.type))];
-  const attachmentNote = attachmentTypes.length > 0
-    ? ` [message also contains ${attachmentTypes.join(', ')} data; inspect its reference before relying on that content]`
-    : '';
-  return `${actor}: ${text || '(no plain-text content)'}${attachmentNote}`;
-}
-
-function aggregateConversationContext(
-  events: readonly import('@zhin.js/im-contract').SequencedConversationEvent[],
-  excludeMessageId?: string,
-): readonly ConversationContextBlock[] {
-  const ordinary: ConversationContextBlock[] = [];
-  const noisy = new Map<string, { sequence: number; event: ConversationEvent; count: number }>();
-  for (const { sequence, event } of events) {
-    if (event.type === 'message.created') {
-      if (event.message.ref.id === excludeMessageId) continue;
-      const text = describeConversationMessage(event.message);
-      if (!text) continue;
-      ordinary.push(Object.freeze({
-        kind: 'conversation_event',
-        sequence,
-        eventType: event.type,
-        text,
-      }));
-      continue;
-    }
-    if (event.type === 'message.reaction_changed' || event.type === 'conversation.poked') {
-      const key = event.type === 'message.reaction_changed'
-        ? `${event.type}:${event.message.id}:${event.actor?.id ?? ''}:${event.reaction}:${event.operation}`
-        : `${event.type}:${event.actor?.id ?? ''}:${event.target?.id ?? ''}`;
-      const previous = noisy.get(key);
-      noisy.set(key, { sequence, event, count: (previous?.count ?? 0) + 1 });
-      continue;
-    }
-    ordinary.push(Object.freeze({
-      kind: 'conversation_event',
-      sequence,
-      eventType: event.type,
-      text: describeConversationEvent(event),
-    }));
-  }
-  for (const { sequence, event, count } of noisy.values()) {
-    ordinary.push(Object.freeze({
-      kind: 'conversation_event',
-      sequence,
-      eventType: event.type,
-      text: `${describeConversationEvent(event)}${count > 1 ? ` (${count} similar events.)` : ''}`,
-    }));
-  }
-  ordinary.sort((left, right) => left.sequence - right.sequence);
-  return Object.freeze(ordinary);
 }
 
 function resolveIngressRoute(snapshot: RuntimeSnapshot): IngressRoute | undefined {
@@ -1360,18 +1186,6 @@ function flattenContent(content: unknown): string {
     }
   }
   return String(content);
-}
-
-function conversationSegmentsFromContent(content: unknown): readonly import('@zhin.js/im-contract').Segment[] {
-  if (Array.isArray(content)) {
-    try {
-      assertCanonicalSegments(content);
-      return Object.freeze([...content]);
-    } catch {
-      // Fall through to a truthful text projection of non-canonical output.
-    }
-  }
-  return Object.freeze([{ type: 'text', data: Object.freeze({ text: flattenContent(content) }) }]);
 }
 
 function withEndpointEventPayload<TPayload, TClient, TName extends string>(
