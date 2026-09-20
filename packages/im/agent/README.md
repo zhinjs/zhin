@@ -152,6 +152,12 @@ Workroom Journal 以 `workroom/journal/index.ts` 作为唯一领域入口。入�
 Database 适配器只组合这些机制。新增存储实现应实现 `WorkroomJournal`，不应把数据库、
 文件系统或载荷治理逻辑重新放进领域入口。
 
+Workroom Projection Outbox 同样以 `workroom/projection-outbox/index.ts` 为唯一领域入口。
+Binding 和持久 Item 必须显式携带 `audience` 与绑定代际 `cursorId`；运行时不会猜测旧
+快照的默认 audience，也不会把旧 Run cursor 在线迁移到新绑定。Repository 只负责 CAS
+状态，Tracer 只把权威事实投影为草稿，Governance 物化可披露内容，Delivery Worker
+负责租约和外部投递，四者通过窄端口协作。
+
 普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；标准 Host 已装配 generation-owned Scheduler、Executor、Reviewer authority/view 与 Sponsor typed control，但不会发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作。Reviewer verdict 只能由独立 claimed Reviewer Assignment 的认证提交产生；Sponsor decision 只能经 Catalog/Profile 绑定的认证 typed control 进入，普通 discussion 不能改变状态。缺少受治理 Acceptance Projection source、可信 Risk Header、typed Check、Artifact/Effect facts 或 Context provider 时会形成可恢复的持久 blocker，而不是降级验收。
 
 `AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 或 Workroom Run/Task/Assignment 状态。Tool 只通过 `agent/tools/$*.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排只能通过 Workroom Kernel 与专用 typed ports。

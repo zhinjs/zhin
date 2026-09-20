@@ -5,7 +5,7 @@ import {
   WorkroomProjectionTracer,
   workroomProjectionMessageKey,
   type WorkroomProjectionBinding,
-} from '../../src/workroom/projection-outbox.js';
+} from '../../src/workroom/projection-outbox/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import {
   createProjectionHumanIngressTargetResolver,

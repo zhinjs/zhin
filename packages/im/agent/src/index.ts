@@ -307,7 +307,7 @@ export * from './workroom/scheduler-priority-control.js';
 export * from './workroom/file-human-ingress.js';
 export * from './workroom/local-assignment-issuance.js';
 export * from './workroom/workroom-task-report-store.js';
-export * from './workroom/projection-outbox.js';
+export * from './workroom/projection-outbox/index.js';
 export * from './plugin-runtime/workroom-projection-outbound.js';
 export * from './plugin-runtime/workroom-projection-runtime.js';
 export * from './plugin-runtime/workroom-journal-payload-composition.js';

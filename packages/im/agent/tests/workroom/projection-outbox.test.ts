@@ -20,7 +20,7 @@ import {
   type WorkroomProjectionDeliveryPort,
   type WorkroomProjectionBinding,
   type WorkroomProjectionOutboxItem,
-} from '../../src/workroom/projection-outbox.js';
+} from '../../src/workroom/projection-outbox/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 import { createTestProjectionGovernance } from './projection-governance-fixture.js';
@@ -59,15 +59,11 @@ afterEach(async () => {
 });
 
 describe('Workroom Projection Outbox', () => {
-  it('accepts an exact HEAD binding with the legacy implicit Workroom audience', async () => {
+  it('rejects a binding without an explicit audience', async () => {
     const repository = new MemoryWorkroomProjectionRepository();
     const { audience: _audience, ...legacyBinding } = binding();
-    const legacy = await repository.bind(0, legacyBinding);
-
-    const rebound = await repository.bind(legacy.revision, binding());
-
-    expect(rebound).toBe(legacy);
-    expect(rebound.revision).toBe(1);
+    await expect(repository.bind(0, legacyBinding as WorkroomProjectionBinding))
+      .rejects.toThrow('audience is invalid');
   });
 
   it('captures committed Kernel observations as named Agent work/progress projections exactly once', async () => {
@@ -206,7 +202,7 @@ describe('Workroom Projection Outbox', () => {
       .toBe(captured.revision + 1);
   });
 
-  it('migrates an exact legacy Run cursor without replaying historical projections', async () => {
+  it('rejects an outbox item without its binding-generation cursor', async () => {
     const fixture = await runningAssignment();
     const source = new MemoryWorkroomProjectionRepository();
     const captured = await new WorkroomProjectionTracer({
@@ -235,23 +231,11 @@ describe('Workroom Projection Outbox', () => {
     });
     const repository = new MemoryWorkroomProjectionRepository();
     const bound = await repository.bind(0, binding());
-    const legacy = await repository.capture(bound.revision, {
-      runId: 'run-1',
-      expectedCursor: -1,
+    await expect(repository.capture(bound.revision, {
+      runId: 'run-1', expectedCursor: -1,
       cursor: captured.cursors[Object.keys(captured.cursors)[0]!]!,
-      items: legacyItems,
-    });
-
-    const migrated = await new WorkroomProjectionTracer({
-      journal: fixture.journal,
-      repository,
-      governance,
-    }).capture(binding(), 'run-1');
-
-    expect(Object.keys(migrated.items)).toEqual(Object.keys(legacy.items));
-    expect(Object.keys(migrated.cursors)).toHaveLength(2);
-    expect(migrated.cursors['run-1']).toBeDefined();
-    expect(migrated.revision).toBe(legacy.revision + 1);
+      items: legacyItems as WorkroomProjectionOutboxItem[],
+    })).rejects.toThrow('Invalid Workroom Projection outbox item');
   });
 
   it('captures overdue lifecycle state through the governed durable outbox without duplicate restart sends', async () => {

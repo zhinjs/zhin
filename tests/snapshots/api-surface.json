@@ -70,7 +70,7 @@
     "export * from './workroom/profile-compiler.js';",
     "export * from './workroom/profile-registry.js';",
     "export * from './workroom/project-knowledge-registry.js';",
-    "export * from './workroom/projection-outbox.js';",
+    "export * from './workroom/projection-outbox/index.js';",
     "export * from './workroom/remote-assignment-dispatch-command.js';",
     "export * from './workroom/remote-assignment-issuance.js';",
     "export * from './workroom/remote-callback-application.js';",

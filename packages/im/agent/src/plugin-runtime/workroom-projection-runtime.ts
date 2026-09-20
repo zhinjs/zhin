@@ -26,7 +26,7 @@ import {
   type WorkroomProjectionGovernancePort,
   type WorkroomLifecycleHoldOverdueSnapshot,
   type WorkroomProjectionReplyTargetDecision,
-} from '../workroom/projection-outbox.js';
+} from '../workroom/projection-outbox/index.js';
 
 export interface WorkroomProjectionTickResult {
   readonly scannedRuns: number;
@@ -55,8 +55,8 @@ export interface WorkroomProjectionRuntimeOptions {
   readonly resolveSponsorConversation?: (
     projectId: string,
     definition: WorkroomDefinition,
-  ) => import('../workroom/projection-outbox.js').WorkroomProjectionConversation | undefined
-    | Promise<import('../workroom/projection-outbox.js').WorkroomProjectionConversation | undefined>;
+  ) => import('../workroom/projection-outbox/index.js').WorkroomProjectionConversation | undefined
+    | Promise<import('../workroom/projection-outbox/index.js').WorkroomProjectionConversation | undefined>;
   /** Optional P12 content-free source; capture still uses the normal governed Projection outbox. */
   readonly lifecycleOverdue?: Readonly<{
     project(projectId: string, signal: AbortSignal): Promise<WorkroomLifecycleHoldOverdueSnapshot>;
@@ -226,7 +226,7 @@ export class WorkroomProjectionRuntime {
   }
 
   async #authorizeDelivery(
-    item: import('../workroom/projection-outbox.js').WorkroomProjectionOutboxItem,
+    item: import('../workroom/projection-outbox/index.js').WorkroomProjectionOutboxItem,
   ): Promise<boolean> {
     const audience = projectionAudience(item);
     const catalog = await this.options.catalog.read();

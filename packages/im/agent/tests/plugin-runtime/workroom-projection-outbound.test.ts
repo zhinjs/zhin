@@ -3,7 +3,7 @@ import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import {
   createWorkroomProjectionOutboundMessageServicePort,
 } from '../../src/plugin-runtime/workroom-projection-outbound.js';
-import type { WorkroomProjectionOutboxItem } from '../../src/workroom/projection-outbox.js';
+import type { WorkroomProjectionOutboxItem } from '../../src/workroom/projection-outbox/index.js';
 
 describe('Workroom Projection unified outbound', () => {
   const body = new TextEncoder().encode('[Developer · executor] build：正在执行');
