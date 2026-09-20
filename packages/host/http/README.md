@@ -54,3 +54,8 @@ http:
 The legacy Koa `@zhin.js/host-router` stack and the `@zhin.js/host-api` management-plane plugin have
 been removed; the management-plane REST/RPC/SSE is now assembled by `@zhin.js/cli` (Console Host) on
 top of this package — no Host plugins need to be installed or enabled.
+
+Extended Console RPC uses `src/console-rpc-extended/index.ts` as its module boundary. The dispatcher
+only maps protocol method names to schedule, inbox, login, Endpoint-management, and Workroom control
+handlers. Shared request parsing and generation-leased Endpoint execution live behind internal helper
+ports, so adding one RPC domain does not enlarge the central dispatcher or couple unrelated domains.

@@ -6,7 +6,7 @@ import {
   type ConsoleEndpointSummary,
   assertDemoConsoleRpcAllowed,
 } from '@zhin.js/console-protocol';
-import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended.js';
+import { dispatchExtendedConsoleRpc, type ConsoleRpcExtendedCtx } from './console-rpc-extended/index.js';
 
 /**
  * Console RPC 请求结构：未锚定 endpoint 的会话地址（结构对齐

@@ -4,10 +4,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const extendedRpcDirectory = 'packages/host/http/src/console-rpc-extended';
 const files = [
   'packages/console/protocol/src/index.ts',
   'packages/host/http/src/console-rpc.ts',
-  'packages/host/http/src/console-rpc-extended.ts',
+  ...fs.readdirSync(path.join(repoRoot, extendedRpcDirectory), { withFileTypes: true })
+    .filter(entry => entry.isFile() && entry.name.endsWith('.ts'))
+    .map(entry => `${extendedRpcDirectory}/${entry.name}`)
+    .sort(),
   'packages/console/client/client/transport/console-transport.ts',
   'basic/cli/src/plugin-runtime/console/api-routes.ts',
 ];
@@ -47,7 +51,7 @@ if (snakeCaseContract) {
 }
 
 const hostSource = fs.readFileSync(
-  path.join(repoRoot, 'packages/host/http/src/console-rpc-extended.ts'),
+  path.join(repoRoot, extendedRpcDirectory, 'inbox-rpc.ts'),
   'utf8',
 );
 const mapperStart = hostSource.indexOf('function mapRequestRow');
@@ -56,7 +60,7 @@ const mapperSource = hostSource.slice(mapperStart, mapperEnd);
 const legacyResponseField = /^\s+(?:platform_(?:request|notice|message)_id|endpoint_id|sender_(?:id|name)|scene_(?:id|type)|channel_(?:id|type)|sub_type|created_at|resolved_at|consumed_at)\s*:/mu.exec(mapperSource);
 if (legacyResponseField) {
   violations.push({
-    file: 'packages/host/http/src/console-rpc-extended.ts',
+    file: `${extendedRpcDirectory}/inbox-rpc.ts`,
     line: hostSource.slice(0, mapperStart + legacyResponseField.index).split(/\r?\n/u).length,
     label: 'legacy snake_case Console response field',
   });

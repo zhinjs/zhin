@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   dispatchExtendedConsoleRpc,
   type ConsoleRpcExtendedCtx,
-} from '../src/console-rpc-extended.js';
+} from '../src/console-rpc-extended/index.js';
 
 function makeCtx(overrides: Partial<ConsoleRpcExtendedCtx> = {}): ConsoleRpcExtendedCtx {
   return {

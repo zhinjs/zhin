@@ -81,4 +81,4 @@ export {
   type ConsoleWorkroomProfileControlPort,
   type ConsoleWorkroomKnowledgeControlPort,
   type ExtendedRpcResult,
-} from './console-rpc-extended.js';
+} from './console-rpc-extended/index.js';
