@@ -103,7 +103,7 @@ user-invocable: true
 - 装配子模块与 Host 资源（`context.resources.has/use`，如 `databaseHostToken` / `scheduleHostToken` / `httpHostToken`）
 - 注册随 generation 回收的资源（`context.lifecycle.add(...)`）
 
-配置由 `schema.json` + `context.config.get()` 声明/读取（不再有 `declareConfig()`）；命令、中间件、Tool、Skill、Hook 等能力放各自约定目录，由运行时按目录装配，不要在入口手写注册。不要把业务细节继续留在入口文件里。
+配置由 `schema.json` + `context.config.get()` 声明/读取（不再有 `declareConfig()`）。能力放入明确的约定目录：命令用 `commands/**/index.ts`，中间件用 `middlewares/<name>/index.ts`，Handler 用 `handlers/<name>/index.ts`，Hook 用 `hooks/<name>/index.ts`，通用工具用 `tools/<name>/index.ts`，Skill 用 `skills/<name>/SKILL.md`，Agent 用 `agents/<name>/agent.json`；专用工具继续放在所属 Skill 或 Agent 的 `tools/<name>/index.ts`。运行时按目录装配，不要在入口手写注册，也不要把业务细节继续留在入口文件里。
 
 ### 第 6 步：校验生命周期与清理
 

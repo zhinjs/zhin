@@ -25,6 +25,7 @@ components/<name>/index.ts            defineComponent()    // import from zhin.j
 middlewares/<name>/index.ts           defineMiddleware()   // import from zhin.js/middleware
 handlers/<name>/index.ts              defineHandler()      // explicit event supports dotted runtime names
 tools/<name>/index.ts                 defineAgentTool()
+hooks/<name>/index.ts                 defineHook()         // import from zhin.js/agent
 skills/<name>/SKILL.md                Markdown Skill SSOT
 skills/<name>/tools/<name>/index.ts   Skill-private defineAgentTool()
 agents/<name>/agent.json              Agent metadata SSOT
@@ -35,7 +36,7 @@ agents/<name>/skills/<name>/tools/<name>/index.ts
 mcps/<name>/index.ts                  defineMcp()
 schedules/<name>/index.ts             defineSchedule()
 pages/<name>/index.tsx                definePage()
-pages/{nav,footer}/index.tsx           layout overrides
+pages/{nav,footer}/index.tsx          layout overrides
 ```
 
 Each TypeScript capability default-exports exactly one definition. Do not call `usePlugin()`,

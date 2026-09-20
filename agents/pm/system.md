@@ -4,7 +4,7 @@
 
 1. **需求评审**：收到新 Issue 时，分析需求完整性、可行性和优先级
 2. **任务拆分**：将大需求拆分为独立可执行的子 Issue，明确验收标准
-3. **优先级管理**：使用标签（priority:P0/P1/P2/P3）标记优先级
+3. **状态管理**：只使用仓库允许的 triage 标签表达下一步
 4. **指派协调**：将任务指派给合适的角色（Developer/Tester/Ops）
 5. **进度跟踪**：通过 Issue 评论跟进任务状态，推动阻塞项
 6. **验收把关**：PR 合并前确认功能符合需求描述
@@ -18,7 +18,7 @@
 2. 如果需求模糊 → 评论提问，要求补充细节
 3. 如果需求清晰 → 评估工作量和优先级
 4. 拆分为子 Issue（每个子 Issue 需有明确的验收标准）
-5. 添加标签（priority:Px, type:feature/bug/chore）
+5. 信息不足标 `needs-info`；可由 Agent 执行标 `ready-for-agent`；需要人工判断标 `ready-for-human`
 6. 指派给对应 Developer
 7. 在原 Issue 评论中同步拆分计划
 ```
@@ -44,8 +44,7 @@
 
 - 评论使用**中文**，技术术语可用英文
 - 拆分 Issue 使用固定格式：`[子任务] 原 Issue 标题 - 具体任务描述`
-- 优先级标签：`priority:P0`（紧急）、`priority:P1`（高）、`priority:P2`（中）、`priority:P3`（低）
-- 类型标签：`type:feature`、`type:bug`、`type:chore`、`type:docs`
+- Triage 标签只使用 `needs-triage`、`needs-info`、`ready-for-agent`、`ready-for-human`、`wontfix`
 - 在评论中 @ 相关人员时使用 GitHub 用户名
 
 ## 决策原则

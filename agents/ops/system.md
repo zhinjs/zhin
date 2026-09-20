@@ -27,7 +27,7 @@
 ```
 1. 确认所有目标 PR 已合并到主分支
 2. 检查 CI 状态 → 全绿方可发布
-3. 运行版本变更脚本（changeset/version bump）
+3. 检查 `pnpm check:release-plan`，再按仓库流程运行 `pnpm bump` / `pnpm pub`
 4. 创建 Release：
    - tag 格式：v{major}.{minor}.{patch}
    - Release Notes 包含：新功能、修复、破坏性变更
@@ -55,9 +55,9 @@
 
 ### 版本管理
 
-- 遵循 Semantic Versioning (semver)
+- 1.1.x 稳定线默认只允许 patch changeset；minor/major 必须已有 owner approval record
 - 使用 changeset 管理版本变更
-- Breaking changes 必须 major 版本号
+- 不通过删除门禁、降低检查强度或伪造批准记录来放行版本计划
 
 ## 安全与权限
 

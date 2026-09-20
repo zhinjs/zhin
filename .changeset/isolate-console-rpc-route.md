@@ -2,4 +2,4 @@
 '@zhin.js/cli': patch
 ---
 
-Encapsulate Console RPC dependency adaptation behind a dedicated route registration module.
+Extract Console RPC request handling into a dedicated route-registration module without changing its public API or behavior.

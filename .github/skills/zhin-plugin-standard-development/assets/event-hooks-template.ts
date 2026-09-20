@@ -2,14 +2,14 @@
 // 请复制到真实插件包中使用。
 //
 // 旧的 `plugin.on('message.group.receive')` / `plugin.on('before.sendMessage')` 事件钩子，
-// 在 Plugin Runtime 中由 `middlewares/*.ts` 承担：
+// 在 Plugin Runtime 中由 `middlewares/<name>/index.ts` 承担：
 //   - 收到消息   -> target: 'inbound'
 //   - 发送前改写 -> target: 'outbound'
 // 一个文件一个中间件，default export。
 //
 //   my-plugin/
 //     middlewares/
-//       audit.ts       ← 本文件
+//       audit/index.ts       ← 本文件
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from '@zhin.js/core/runtime';
 
@@ -28,7 +28,7 @@ export default defineMiddleware<Message>({
   },
 });
 
-// ── 发送前改写：middlewares/outbound-rewrite.ts ──────────────────────────────
+// ── 发送前改写：middlewares/outbound-rewrite/index.ts ────────────────────────
 // export default defineMiddleware({
 //   target: 'outbound',
 //   async handle(context, next) {

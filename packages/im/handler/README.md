@@ -1,7 +1,7 @@
 # @zhin.js/handler
 
-Zhin Plugin Runtime 的 Handler Feature。从 `handlers/**/*/index.ts` 发现定义：capability
-localName 用 `/` 分段；投影为 `HandlerIndex` 时把 `/` 映成 `.` 得到 Lifecycle 事件名。
+Zhin Plugin Runtime 的 Handler Feature。从 `handlers/<name>/index.ts` 发现定义；每个
+Handler 在定义中显式声明 Lifecycle 事件名。
 
 依赖 `zhin.js` 的应用请从门面导入：
 

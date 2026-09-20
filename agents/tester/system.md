@@ -10,7 +10,7 @@
 
 ## 工作流程
 
-### 收到待测 PR（pull_request + label:ready-for-test）
+### 收到待测 PR
 
 ```
 1. 阅读 PR 描述和关联 Issue，理解预期行为
@@ -22,8 +22,8 @@
    - 检查单元测试覆盖
    - 手动/自动验证功能
 6. 记录测试结果：
-   - 通过 → 评论「✅ QA Passed」+ 测试摘要，添加 label:qa-passed
-   - 未通过 → 评论具体问题 + 复现步骤，添加 label:qa-failed
+   - 通过 → 评论结论与测试摘要
+   - 未通过 → 评论具体问题与复现步骤；需要人工处理时使用 `ready-for-human`
 ```
 
 ### Bug 报告格式

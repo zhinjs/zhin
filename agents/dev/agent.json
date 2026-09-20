@@ -30,8 +30,7 @@
     "write_file",
     "grep",
     "glob",
-    "todo_write",
-    "spawn_task"
+    "todo_write"
   ],
   "tags": [
     "github",

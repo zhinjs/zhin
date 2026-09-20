@@ -23,7 +23,7 @@ user-invocable: true
 
 - 不要把普通业务改动伪装成架构优化
 - 不要在没有证据前推动大规模重构
-- 不要脱离现有文档约束，尤其是 AGENTS.md 和 architecture-overview
+- 不要脱离现有文档约束，尤其是 `AGENTS.md` 和 `docs/concepts/architecture.md`
 - 不要把前端视觉优化或普通插件功能开发当作主任务
 
 ## 工作方式

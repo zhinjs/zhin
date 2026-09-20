@@ -33,24 +33,18 @@
   - AI 类型在 `packages/im/ai/src/`
   - 无跨层类型泄漏
 
-## 2. AsyncLocalStorage [高]
+## 2. 运行时上下文 [高]
 
-- [ ] **usePlugin() 调用位置**
-  - 验证：只在模块顶层同步上下文中调用
-  - 搜索 `usePlugin()` 出现在 `async function` 内部的情况
-  - 搜索 `usePlugin()` 出现在 `setTimeout`/`setInterval` 回调中的情况
+- [ ] **已移除 Plugin API 不回归**
+  - 生产源码不得出现 `usePlugin()` / `getPlugin()`
+  - CI：`pnpm check:no-removed-plugin-api`
+  - 能力执行期间通过显式上下文、Resource Token 与 generation view 取得依赖
 
 - [ ] **上下文传播完整性**
   - 文件：`packages/im/core/src/plugin.ts`（`pluginAls`）
   - 文件：`packages/im/core/src/built/dispatcher.ts`（`outboundReplyAls`）
   - 验证：跨 `await` 边界上下文不丢失
   - 验证：`Promise.all`/`Promise.race` 中上下文正确
-
-- [ ] **getPlugin() 防护**
-  - 只能在插件初始化/装配阶段调用（register/init、注册 handler 之前）
-  - 中间件、命令 action、工具 execute、Cron、事件回调内必须使用注册时捕获的 plugin/root 闭包
-  - CI：`pnpm check:no-removed-plugin-api`（生产源码）
-  - 验证：上下文缺失时抛出明确错误（不是 undefined）
 
 ## 3. Plugin 生命周期 [中]
 

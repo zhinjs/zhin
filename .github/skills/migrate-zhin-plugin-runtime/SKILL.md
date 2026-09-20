@@ -78,9 +78,9 @@ export default definePlugin({
 ```
 
 ```ts
-// commands/profile.ts —— 文件路径即路由；参数写在文件名里
+// commands/profile/index.ts —— 目录路径即路由；参数写在目录名里
 import { defineCommand } from 'zhin.js/command';
-import { storeToken } from '../plugin.js';
+import { storeToken } from '../../plugin.js';
 
 export default defineCommand({
   description: 'Show current user profile',

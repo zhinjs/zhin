@@ -6,6 +6,7 @@
 "@zhin.js/adapter-discord": patch
 "@zhin.js/adapter-email": patch
 "@zhin.js/adapter-github": patch
+"@zhin.js/adapter-icqq": patch
 "@zhin.js/adapter-kook": patch
 "@zhin.js/adapter-lark": patch
 "@zhin.js/adapter-line": patch

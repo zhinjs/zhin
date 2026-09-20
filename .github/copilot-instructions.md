@@ -55,14 +55,18 @@ export default defineCommand({
 |------|-----|
 | `commands/**/*/index.ts` | `defineCommand()` |
 | `middlewares/*/index.ts` | `defineMiddleware()` |
+| `handlers/<name>/index.ts` | `defineHandler()` |
 | `components/*/index.tsx` | `defineComponent()` |
 | `tools/<name>/index.ts` | `defineAgentTool()` |
+| `hooks/<name>/index.ts` | `defineHook()` |
+| `mcps/<name>/index.ts` | `defineMcp()` |
+| `schedules/<name>/index.ts` | `defineSchedule()` |
 | `agents/<agent>/tools/<name>/index.ts` | Agent-private `defineAgentTool()` |
 | `skills/<skill>/tools/<name>/index.ts` | Skill-private `defineAgentTool()` |
 | `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent-Skill-private `defineAgentTool()` |
 | `pages/*/index.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Skill |
-| `agents/$<name>.agent.md` | Agent |
+| `agents/<name>/agent.json` | Agent 元数据；同目录包含 `system.md`、`boundaries.md`、`conventions.md` |
 
 `package.json#zhin` 声明 `entry` / `features`。详情见 instructions 文件。
 
