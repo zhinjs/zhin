@@ -1,6 +1,7 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { HttpHost } from '@zhin.js/host-http';
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { join } from 'node:path';
 import { writeJson } from './http-response.js';
 import {
   buildManagedPluginList,
@@ -61,7 +62,26 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       const node = listSnapshotPlugins(snap)
         .find(item => item.instanceKey === name || item.packageName === name);
       if (!node) {
-        writeJson(response, 404, { success: false, error: '插件不存在' });
+        const managed = (await buildManagedPluginList(
+          projectRoot,
+          pluginLifecycleFile,
+          snap,
+          im?.endpoints.list() ?? [],
+        )).find(item => item.instanceKey === name || item.packageName === name);
+        if (!managed) {
+          writeJson(response, 404, { success: false, error: '插件不存在' });
+          return;
+        }
+        const packageDir = join(projectRoot, 'node_modules', managed.packageName);
+        const version = await readPackageVersion(packageDir);
+        writeJson(response, 200, {
+          success: true,
+          data: {
+            ...managed,
+            packageRoot: `node_modules/${managed.packageName}`,
+            ...(version ? { version } : {}),
+          },
+        });
         return;
       }
       writeJson(response, 200, {
