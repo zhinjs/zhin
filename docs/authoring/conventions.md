@@ -29,7 +29,7 @@ flowchart LR
 | `adapters/` | `$*.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `<name>/index.ts` | 命名目录 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `hooks/` | `<name>/index.ts` | 命名目录 | server | `zhin.js/agent` | Agent Hook | `defineHook(...)` |
-| `agent/prompt-sections/` | `$*.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
+| `prompt-sections/<name>/` | `index.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
 | `agents/` | `<name>/agent.json` + 3 个核心 Markdown | 一层 | server | `@zhin.js/agent-feature` | `zhin.agent` | 目录化 Agent 定义 |
 | `mcp/` | `$*.ts` | 否 | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
@@ -37,7 +37,7 @@ flowchart LR
 
 ## 命名规则
 
-`$` 只标记单文件入口，不属于 `localName`。目录能力不使用 `$`：Tool 与 Hook 使用 `<name>/index.ts`，Skill 使用 `<name>/SKILL.md`，Agent 使用 `<name>/agent.json`。命名目录匹配小写 kebab；Tool 兼容现有 snake 名。
+`$` 只标记单文件入口，不属于 `localName`。目录能力不使用 `$`：Tool、Hook 与 Prompt Section 使用 `<name>/index.ts`，Skill 使用 `<name>/SKILL.md`，Agent 使用 `<name>/agent.json`。命名目录匹配小写 kebab；Tool 兼容现有 snake 名。
 
 **例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。Tool 命名目录额外允许 ASCII snake（如 `send_user_like/`）。其它约定目录不放宽。
 
@@ -52,7 +52,7 @@ flowchart LR
 | `adapters/` | 同上 | `adapters/$napcat.ts` → `napcat` |
 | `tools/` | `<name>/index.ts`；ASCII kebab 或 snake | `tools/music-search/index.ts` → `music-search`；`tools/send_user_like/index.ts` → `send_user_like` |
 | `hooks/` | `<name>/index.ts`；私有 Hook 可嵌入 Agent 或 Skill | `hooks/audit/index.ts` → `audit` |
-| `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
+| `prompt-sections/` | 一级命名目录 | `prompt-sections/project-rules/index.ts` → `project-rules` |
 | `skills/` | 一级子目录名；只识别其中的 `SKILL.md`，同目录可放参考资料与脚本 | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 一级目录名；只识别含 `agent.json` 的目录 | `agents/planner/agent.json` → `planner` |
 | `mcp/` | 文件名去扩展名（不递归） | `mcp/$my-server.ts` → `my-server` |

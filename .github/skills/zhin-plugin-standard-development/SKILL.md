@@ -74,7 +74,7 @@ DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 | 命令 | `defineCommand`，路径即路由 | `commands/**/$*.ts` |
 | 中间件 / 入站过滤 | `defineMiddleware`，`target: 'inbound'` | `middlewares/**/$*.ts` |
 | 出站改写 | `target: 'outbound'` | `middlewares/**/$*.ts` |
-| 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` 或 `agent/schedules/$*.ts` |
+| 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` |
 | 组件 | `defineComponent` | `components/**/$*.tsx` |
 | AI 工具 | `defineAgentTool` | `tools/<name>/index.ts` |
 | 服务 / DI | `resources.provide` | `plugin.ts` setup |

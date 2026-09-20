@@ -17,7 +17,7 @@ title: 受治理的业务 Agent
 
 ## 实施步骤
 
-1. 在插件 `agent/prompt-sections/` 声明必需或可选分段，并给出明确预算。
+1. 在插件 `prompt-sections/` 声明必需或可选分段，并给出明确预算。
 2. 在 `tools/` 暴露最小工具，输入使用结构化 Schema；有副作用的工具不得设为无条件免审批。
 3. 从 `execSecurity: deny` 或 `allowlist` 起步，仅在已知工作目录开放所需命令。
 4. 启动后在 Console 的“运行时能力 → Prompt Sections”核对 owner、来源、profile 与预算策略。

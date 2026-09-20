@@ -17,7 +17,7 @@ Use this when an Agent needs internal vocabulary, output rules, and business too
 
 ## Implementation
 
-1. Declare required or optional sections under `agent/prompt-sections/` with explicit budgets.
+1. Declare required or optional sections under `prompt-sections/` with explicit budgets.
 2. Expose minimal tools under `tools/` with structured schemas. Side-effecting tools must not bypass approval by default.
 3. Start with `execSecurity: deny` or `allowlist`; permit only required commands in known working directories.
 4. In Console Runtime Capabilities, inspect Prompt Section owner, source, profile, and budget policy.

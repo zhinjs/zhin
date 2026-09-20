@@ -280,7 +280,11 @@
     "plugins/*/*/plugin.ts",
     "plugins/*/*/commands/**/*.ts",
     "plugins/*/*/middlewares/**/*.ts",
-    "plugins/*/*/agent/**/*.ts",
+    "plugins/*/*/agents/**/*.ts",
+    "plugins/*/*/hooks/**/*.ts",
+    "plugins/*/*/prompt-sections/**/*.ts",
+    "plugins/*/*/skills/**/*.ts",
+    "plugins/*/*/tools/**/*.ts",
     "plugins/adapters/*/src/client.ts",
     "plugins/*/*/adapters/**/*.ts",
     "plugins/*/*/src/**/*.d.ts"

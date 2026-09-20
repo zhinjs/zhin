@@ -21,7 +21,6 @@
     "lib",
     "AGENTS.md",
     "tools",
-    "agent",
     "skills",
     "evals",
     "README.md"

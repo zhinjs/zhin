@@ -828,7 +828,7 @@ async function createFixture(access: {
     owner: root,
     feature: promptSectionFeatureId,
     localName: 'project-rules',
-    source: '/agent/prompt-sections/project-rules.ts',
+    source: '/prompt-sections/project-rules.ts',
     definition: defineAgentPromptSection({
       title: 'Project rules',
       content: 'Prefer repository-local conventions.',

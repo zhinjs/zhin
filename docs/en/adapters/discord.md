@@ -85,7 +85,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
+| Permit vocabulary | `PERMITS.md` |
 | Platform tools (7) | `tools/` (`discord_*`: roles, Embed, reactions, etc.) |
 | Skill documentation | `skills/discord/SKILL.md` |
 

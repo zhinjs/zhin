@@ -62,7 +62,7 @@ The file path supplies the local name. The Tool enters the generation catalog, t
 
 ## 4. Add plugin-owned context
 
-Create `agent/prompt-sections/$product-language.ts`:
+Create `prompt-sections/product-language/index.ts`:
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';

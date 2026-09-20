@@ -76,7 +76,6 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
     "skills",
     "README.md",
     "CHANGELOG.md"

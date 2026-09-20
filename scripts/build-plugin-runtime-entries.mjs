@@ -14,6 +14,7 @@ const CAPABILITY_DIRECTORIES = [
   'mcp',
   'middlewares',
   'pages',
+  'prompt-sections',
   'skills',
 ];
 const TYPESCRIPT_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);

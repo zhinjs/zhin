@@ -60,7 +60,7 @@ describe('product documentation operability', () => {
       expect(content, relativePath).toContain('package.json#zhin');
       expect(content, relativePath).toContain('lifecycle');
       expect(content, relativePath).toContain('handoff');
-      expect(content, relativePath).toContain('check:plugin-agent-publish');
+      expect(content, relativePath).toContain('check:plugin-capability-publish');
     }
   });
 

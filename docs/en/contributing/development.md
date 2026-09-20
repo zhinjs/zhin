@@ -67,7 +67,7 @@ Below are the checks grouped by responsibility (the command in parentheses can b
 | API Surface (`pnpm check:api-surface`) | Public API surface snapshot |
 | Plugin Runtime API (`pnpm check:plugin-runtime-api`) | Convention-based plugin runtime API surface snapshot |
 | Plugin Spec (`pnpm check:plugin`) | Plugins conform to standard spec |
-| Plugin Agent Publish (`pnpm check:plugin-agent-publish`) | Plugins with `agent/` have proper publish checklist (files, prepublishOnly, peer deps) |
+| Plugin Capability Publish (`pnpm check:plugin-capability-publish`) | Plugins publish their capability directories with the required files, prepublish build, and peer dependencies |
 | Publish Repository (`pnpm check:publish-repository`) | Publishable packages have `repository.url` matching github.com/zhinjs/zhin (npm provenance) |
 | Agent Tool Schema (`pnpm check:agent-tool-schema`) | `tools` inputSchema matches defineAgentTool/execute types |
 | Skill Authoring Boundaries (`pnpm check:skill-authoring-boundaries`) | Skills use `skills/<name>/SKILL.md` and explicitly mount the Feature |

@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/wecom/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/wecom/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=639e6fa3911038f6 -->
+<!-- sync-adapter-docs:sha256=7b16e4366da5e0fe -->
 
 # @zhin.js/adapter-wecom
 
@@ -124,7 +124,7 @@ Access Token 在过期前 5 分钟自动刷新。
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具（4 个） | `tools/` |
 | 技能说明 | `skills/wecom/SKILL.md` |
 

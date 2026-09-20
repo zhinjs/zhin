@@ -85,10 +85,10 @@
     "src",
     "lib",
     "tools",
-    "agent",
     "skills",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "PERMITS.md"
   ],
   "publishConfig": {
     "access": "public",

@@ -114,7 +114,7 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/`（邀请、话题、反应、置顶、编辑等） |
 | 技能说明 | `skills/slack/SKILL.md` |
 

@@ -69,7 +69,7 @@ export default definePlugin({ name: 'my-plugin', setup() {} })
 
 - 至少覆盖核心 `execute` 路径
 - README 写明命令触发方式与 Feature 依赖
-- 带 `agent/` 的包检查 `files` / `prepublishOnly`（`pnpm check:plugin-agent-publish`）
+- 带能力目录的包检查 `files` / `prepublishOnly`（`pnpm check:plugin-capability-publish`）
 
 ## 审查流程
 

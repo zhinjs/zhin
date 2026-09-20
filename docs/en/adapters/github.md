@@ -20,7 +20,7 @@ GitHub Plugin Runtime adapter — Issue/PR comment sections serve as chat channe
 - **Webhook inbound**: HMAC-SHA256 signature verification -> `Endpoint.emit(...)`
 - **Outbound**: `send({ conversation, payload })` -> Issue/PR comment (`conversation.id` is the channel ID, e.g. `owner/repo/issues/42`)
 - **GitHub App authentication**: JWT -> Installation Token
-- **Agent tools**: `agent/` retains star/bind/subscribe/workspace, etc.
+- **Agent tools**: `tools/` provides star, bind, subscribe, workspace, and related capabilities.
 
 ## Installation
 

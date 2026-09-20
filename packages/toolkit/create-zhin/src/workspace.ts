@@ -568,7 +568,7 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
     fs.ensureDir(path.join(projectPath, 'pages')),
     fs.ensureDir(path.join(projectPath, 'skills')),
     fs.ensureDir(path.join(projectPath, 'data')),
-    ...['agents', 'hooks', 'middlewares', 'plugins', 'packages', 'tools'].map(async (directory) => {
+    ...['agents', 'hooks', 'middlewares', 'plugins', 'packages', 'prompt-sections', 'tools'].map(async (directory) => {
       await fs.outputFile(path.join(projectPath, directory, '.gitkeep'), '');
     }),
   ]);

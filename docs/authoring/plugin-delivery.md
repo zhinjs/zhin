@@ -15,7 +15,7 @@ title: 插件完整交付
 | 文本指令 | `commands/$*.ts` |
 | 入站编排 | `middlewares/$*.ts` / `handlers/$*.ts` |
 | 富消息输出 | `components/$*.tsx` |
-| Agent 行为 | `tools`、`agent/prompt-sections`、`skills` |
+| Agent 行为 | `tools`、`prompt-sections`、`skills` |
 | 数据库、定时任务、主动推送 | `plugin.ts` + Host token |
 
 ## 2. 建立包与运行拓扑
@@ -52,7 +52,7 @@ title: 插件完整交付
 pnpm build
 pnpm check:plugin
 pnpm check:plugin-runtime-api
-pnpm check:plugin-agent-publish
+pnpm check:plugin-capability-publish
 ```
 
 发布前检查 `files`、ESM 入口、peer dependency、生成的约定目录 JavaScript 与 changeset。安装打包产物后再跑一次 Sandbox 黄金路径，不能只测试 workspace 源码。

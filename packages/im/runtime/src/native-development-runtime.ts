@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
+  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcp', 'middlewares', 'pages', 'prompt-sections', 'skills', 'tools',
 ]);
 
 /**
@@ -77,7 +77,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
       if (isNestedDirectoryEntry(local)) return false;
       return extname(normalized) !== '.md';
     }
-    if (root === 'hooks' || root === 'tools') {
+    if (root === 'hooks' || root === 'prompt-sections' || root === 'tools') {
       return !isDirectoryCapabilityEntry(parts.slice(capability + 1));
     }
     if (root === 'mcp') {

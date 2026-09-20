@@ -86,7 +86,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Agent Tools
 
-The `agent/` directory is retained (get_user, departments, group chat, work notifications, etc.). A tool declaring `adapter: 'dingtalk'` lazily receives the current operation's `DingTalkClient` through `context.$client`; the model no longer selects an Endpoint id.
+The `tools/` directory provides get_user, department, group chat, work notification, and related Tools. A tool declaring `adapter: 'dingtalk'` lazily receives the current operation's `DingTalkClient` through `context.$client`; the model no longer selects an Endpoint id.
 
 ## Platform Permissions (platform permit)
 

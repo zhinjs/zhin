@@ -27,10 +27,10 @@
     "schema.json",
     "src",
     "lib",
-    "agent",
     "skills",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "PERMITS.md"
   ],
   "keywords": [
     "zhin",

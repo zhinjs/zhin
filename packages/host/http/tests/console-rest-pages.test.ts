@@ -429,7 +429,7 @@ function fakeAgentRuntime(overrides: Partial<ConsoleAgentRuntime> = {}): Console
         order: 70,
         retention: 'preferred',
         profiles: ['interactive'],
-        source: './agent/prompt-sections/project-rules.ts',
+        source: './prompt-sections/project-rules.ts',
         generation: 7,
         contentChars: 36,
       }],

@@ -72,7 +72,7 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具（7 个） | `tools/`（`discord_*`：角色、Embed、反应等） |
 | 技能说明 | `skills/discord/SKILL.md` |
 

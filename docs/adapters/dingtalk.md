@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/dingtalk/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/dingtalk/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=874a21b1d0a20ffa -->
+<!-- sync-adapter-docs:sha256=b698e426807f9bd4 -->
 
 # @zhin.js/adapter-dingtalk
 
@@ -87,7 +87,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、部门、群聊、工作通知等）。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
+`tools/` 目录提供 get_user、部门、群聊、工作通知等 Tool。工具声明 `adapter: 'dingtalk'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `DingTalkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

@@ -9,12 +9,10 @@ import { namespaceAuthoringName, slotNameFromDir, slotNameFromFile } from '../au
 export interface AgentSurfacePluginInfo {
   pluginName: string;
   packageRoot: string;
-  agentDir: string;
   tools: string[];
   skills: string[];
-  schedules: string[];
-  connections: string[];
   hooks: string[];
+  promptSections: string[];
   subagents: string[];
   evals: string[];
   hasAgentsMd: boolean;
@@ -36,9 +34,8 @@ export interface AgentSurfaceInfoReport {
     plugins: number;
     tools: number;
     skills: number;
-    schedules: number;
-    connections: number;
     hooks: number;
+    promptSections: number;
     subagents: number;
     evals: number;
     workspaceAgents: number;
@@ -147,18 +144,18 @@ function collectPluginRoots(cwd: string): string[] {
     if (!fs.existsSync(base)) continue;
     for (const group of listSubdirs(base)) {
       for (const pkg of listSubdirs(group)) {
-        if (fs.existsSync(path.join(pkg, 'agent'))
-          || fs.existsSync(path.join(pkg, 'agents'))
+        if (fs.existsSync(path.join(pkg, 'agents'))
           || fs.existsSync(path.join(pkg, 'tools'))
           || fs.existsSync(path.join(pkg, 'skills'))
           || fs.existsSync(path.join(pkg, 'hooks'))
+          || fs.existsSync(path.join(pkg, 'prompt-sections'))
           || fs.existsSync(path.join(pkg, 'AGENTS.md'))) roots.add(pkg);
       }
-      if (fs.existsSync(path.join(group, 'agent'))
-        || fs.existsSync(path.join(group, 'agents'))
+      if (fs.existsSync(path.join(group, 'agents'))
         || fs.existsSync(path.join(group, 'tools'))
         || fs.existsSync(path.join(group, 'skills'))
         || fs.existsSync(path.join(group, 'hooks'))
+        || fs.existsSync(path.join(group, 'prompt-sections'))
         || fs.existsSync(path.join(group, 'AGENTS.md'))) roots.add(group);
     }
   }
@@ -166,13 +163,13 @@ function collectPluginRoots(cwd: string): string[] {
 }
 
 function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
-  const agentDir = path.join(packageRoot, 'agent');
   const evalsDir = path.join(packageRoot, 'evals');
-  if (!fs.existsSync(agentDir) && !fs.existsSync(evalsDir)
+  if (!fs.existsSync(evalsDir)
     && !fs.existsSync(path.join(packageRoot, 'agents'))
     && !fs.existsSync(path.join(packageRoot, 'tools'))
     && !fs.existsSync(path.join(packageRoot, 'skills'))
     && !fs.existsSync(path.join(packageRoot, 'hooks'))
+    && !fs.existsSync(path.join(packageRoot, 'prompt-sections'))
     && !fs.existsSync(path.join(packageRoot, 'AGENTS.md'))) return null;
 
   const pluginName = resolvePluginId(packageRoot);
@@ -180,12 +177,12 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
     .map((slot) => namespaceAuthoringName(pluginName, slot)));
   const skills = scopedSkillSlots(packageRoot)
     .map((slot) => namespaceAuthoringName(pluginName, slot));
-  const schedules = listFiles(path.join(agentDir, 'schedules'), /\.(ts|js)$/i)
-    .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
-  const connections = listFiles(path.join(agentDir, 'connections'), /\.(ts|js)$/i)
-    .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
   const hooks = scopedModuleSlots(packageRoot, 'hooks')
     .map((slot) => namespaceAuthoringName(pluginName, slot));
+  const promptSections = listNamedEntries(
+    path.join(packageRoot, 'prompt-sections'),
+    ['index.ts', 'index.js'],
+  ).map((entry) => namespaceAuthoringName(pluginName, slotNameFromDir(entry)));
   const subagents = listSubdirs(path.join(packageRoot, 'agents'))
     .filter((dir) => fs.existsSync(path.join(dir, 'agent.json')))
     .map((dir) => namespaceAuthoringName(pluginName, slotNameFromDir(dir), true));
@@ -195,12 +192,10 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
   return {
     pluginName,
     packageRoot,
-    agentDir,
     tools,
     skills,
-    schedules,
-    connections,
     hooks,
+    promptSections,
     subagents,
     evals,
     hasAgentsMd: fs.existsSync(path.join(packageRoot, 'AGENTS.md')),
@@ -237,9 +232,8 @@ export async function buildAgentSurfaceInfoReport(
     plugins: plugins.length,
     tools: plugins.reduce((n, p) => n + p.tools.length, 0),
     skills: plugins.reduce((n, p) => n + p.skills.length, 0),
-    schedules: plugins.reduce((n, p) => n + p.schedules.length, 0),
-    connections: plugins.reduce((n, p) => n + p.connections.length, 0),
     hooks: plugins.reduce((n, p) => n + p.hooks.length, 0),
+    promptSections: plugins.reduce((n, p) => n + p.promptSections.length, 0),
     subagents: plugins.reduce((n, p) => n + p.subagents.length, 0),
     evals: plugins.reduce((n, p) => n + p.evals.length, 0),
     workspaceAgents: workspaceAgents.length,
@@ -267,24 +261,23 @@ export function formatAgentSurfaceInfoReport(report: AgentSurfaceInfoReport): st
   }
 
   for (const p of report.plugins) {
-    lines.push(`${p.pluginName}  [${p.agentDir}]`);
+    lines.push(`${p.pluginName}  [${p.packageRoot}]`);
     if (p.tools.length) lines.push(`  tools: ${p.tools.join(', ')}`);
     if (p.skills.length) lines.push(`  skills: ${p.skills.join(', ')}`);
-    if (p.schedules.length) lines.push(`  schedules: ${p.schedules.join(', ')}`);
-    if (p.connections.length) lines.push(`  connections: ${p.connections.join(', ')}`);
     if (p.hooks.length) lines.push(`  hooks: ${p.hooks.join(', ')}`);
+    if (p.promptSections.length) lines.push(`  prompt sections: ${p.promptSections.join(', ')}`);
     if (p.subagents.length) lines.push(`  subagents: ${p.subagents.join(', ')}`);
     if (p.hasAgentsMd) lines.push('  main: AGENTS.md');
     if (p.evals.length) lines.push(`  evals: ${p.evals.join(', ')}`);
-    if (!p.tools.length && !p.skills.length && !p.schedules.length
-      && !p.connections.length && !p.hooks.length && !p.subagents.length && !p.evals.length) {
-      lines.push('  (empty agent/)');
+    if (!p.tools.length && !p.skills.length && !p.hooks.length
+      && !p.promptSections.length && !p.subagents.length && !p.evals.length) {
+      lines.push('  (no capabilities)');
     }
     lines.push('');
   }
 
   if (!report.plugins.length && !report.workspaceAgents.length) {
-    lines.push('No agent/ surfaces found under plugins/ or agents/.');
+    lines.push('No Agent capabilities found under plugins/ or agents/.');
   }
 
   return lines.join('\n').trimEnd();

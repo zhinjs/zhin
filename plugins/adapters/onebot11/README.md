@@ -76,7 +76,7 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/set_title/index.ts` → `onebot11_set_title` |
 | 技能说明 | `skills/onebot11/SKILL.md` |
 

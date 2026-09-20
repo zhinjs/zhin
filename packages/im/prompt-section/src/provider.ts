@@ -1,5 +1,5 @@
 import { featureId } from '@zhin.js/plugin-runtime';
-import { defineFeatureProvider, typeScriptModules } from '@zhin.js/feature-kit';
+import { capture, defineFeatureProvider, directoryModules } from '@zhin.js/feature-kit';
 import { parseAgentPromptSectionDefinition } from './definition.js';
 import { PromptSectionIndex } from './prompt-section-index.js';
 
@@ -10,10 +10,12 @@ const promptSectionFeature = defineFeatureProvider({
   id: promptSectionFeatureId,
   authoring: {
     setupMethod: 'addPromptSection',
-    conventions: [typeScriptModules({
-      id: 'agent-prompt-sections-ts',
-      directory: 'agent/prompt-sections',
-      recursive: true,
+    conventions: [directoryModules({
+      id: 'prompt-sections-directory-modules',
+      layouts: [{
+        segments: ['prompt-sections', capture('section')],
+        localName: ({ section = '' }) => section,
+      }],
     })],
     validate: parseAgentPromptSectionDefinition,
   },

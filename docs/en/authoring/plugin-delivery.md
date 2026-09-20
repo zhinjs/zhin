@@ -15,7 +15,7 @@ List inputs, outputs, side effects, and acceptance before implementation. Choose
 | Explicit text command | `commands/$*.ts` |
 | Inbound orchestration | `middlewares/$*.ts` / `handlers/$*.ts` |
 | Rich message output | `components/$*.tsx` |
-| Agent behavior | `tools`, `agent/prompt-sections`, `skills` |
+| Agent behavior | `tools`, `prompt-sections`, `skills` |
 | Database, schedules, proactive delivery | `plugin.ts` + Host tokens |
 
 ## 2. Establish package and runtime topology
@@ -52,7 +52,7 @@ Cover pure functions, capability discovery, one Runtime integration, and one fai
 pnpm build
 pnpm check:plugin
 pnpm check:plugin-runtime-api
-pnpm check:plugin-agent-publish
+pnpm check:plugin-capability-publish
 ```
 
 Before release, inspect `files`, ESM entry points, peer dependencies, generated convention JavaScript, and the changeset. Install the packed artifact and rerun the Sandbox golden path; workspace source alone is insufficient.

@@ -23,8 +23,8 @@ describe('Prompt Section Feature', () => {
     expect(isPromptSectionIndex({ $projection: 'zhin.prompt-section-index/2' })).toBe(false);
   });
 
-  it('discovers agent/prompt-sections modules as generation-owned sections', async () => {
-    const source = '/project/agent/prompt-sections/$project-rules.ts';
+  it('discovers prompt-sections modules as generation-owned sections', async () => {
+    const source = '/project/prompt-sections/project-rules/index.ts';
     const definition = defineAgentPromptSection({
       title: 'Project rules',
       content: 'Prefer repository-local conventions.',
@@ -36,9 +36,12 @@ describe('Prompt Section Feature', () => {
       platforms: ['github'],
     });
     const host = new MemoryHost({
-      '/project/agent/prompt-sections': [
-        { name: '$project-rules.ts', kind: 'file' },
+      '/project/prompt-sections': [
+        { name: 'project-rules', kind: 'directory' },
         { name: 'ignored.md', kind: 'file' },
+      ],
+      '/project/prompt-sections/project-rules': [
+        { name: 'index.ts', kind: 'file' },
       ],
     }, new Map([[source, { default: definition }]]));
 
@@ -74,14 +77,14 @@ describe('Prompt Section Feature', () => {
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/$rules.ts',
+        source: '/project/prompt-sections/rules/index.ts',
         definition: rootDefinition,
       }),
       createCapabilitySlot({
         owner: child,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/plugins/child/agent/prompt-sections/$rules.ts',
+        source: '/project/plugins/child/prompt-sections/rules/index.ts',
         definition: childDefinition,
       }),
     ];
@@ -100,14 +103,14 @@ describe('Prompt Section Feature', () => {
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/$rules.ts',
+        source: '/project/prompt-sections/rules/index.ts',
         definition,
       }),
       createCapabilitySlot({
         owner: root,
         feature: promptSectionFeatureId,
         localName: 'rules',
-        source: '/project/agent/prompt-sections/$duplicate.ts',
+        source: '/project/prompt-sections/duplicate/index.ts',
         definition,
       }),
     ];

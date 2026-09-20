@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/slack/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/slack/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=6d33d02393e66a2c -->
+<!-- sync-adapter-docs:sha256=e26c96e6dd2524aa -->
 
 # @zhin.js/adapter-slack
 
@@ -126,7 +126,7 @@ HTTP 模式下 Runtime Host（`http`）须已 listen；Slack App 的 Event Subsc
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/`（邀请、话题、反应、置顶、编辑等） |
 | 技能说明 | `skills/slack/SKILL.md` |
 

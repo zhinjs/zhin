@@ -18,7 +18,6 @@
     "schema.json",
     "commands",
     "tools",
-    "agent",
     "src",
     "lib",
     "README.md"

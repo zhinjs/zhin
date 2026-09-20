@@ -8,7 +8,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 - **Webhook 入站**：HMAC-SHA256 验签 → `Endpoint.emit(...)`
 - **出站**：`send({ conversation, payload })` → Issue/PR comment（`conversation.id` 为 channel ID）
 - **GitHub App 认证**：JWT → Installation Token
-- **Agent 工具**：`agent/` 下 star/bind/subscribe/workspace 等保留
+- **Agent 工具**：`tools/` 下提供 star、bind、subscribe、workspace 等能力
 
 ## 安装
 

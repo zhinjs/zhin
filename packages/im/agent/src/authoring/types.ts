@@ -120,10 +120,6 @@ export interface DiscoveredAuthoringEval {
 
 export interface DiscoveredPluginAgentSurface {
   pluginName: string;
-  agentDir: string;
-  skills: DiscoveredAuthoringSkill[];
-  schedules: DiscoveredAuthoringSchedule[];
-  connections: DiscoveredAuthoringConnection[];
   hooks: DiscoveredAuthoringHook[];
   evals: DiscoveredAuthoringEval[];
 }

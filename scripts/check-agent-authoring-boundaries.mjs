@@ -12,11 +12,15 @@ const requiredEntries = ['system.md', 'boundaries.md', 'conventions.md'];
 const violations = [];
 
 scanLegacy(repoRoot);
+rejectPackageRootAgentDirectory(repoRoot, undefined);
+validateNamedIndexRoot(path.join(repoRoot, 'prompt-sections'), 'Prompt Section');
 validateAgentsRoot(path.join(repoRoot, 'agents'), undefined);
 for (const workspaceRoot of workspaceRoots) {
   for (const packageJson of packageManifests(path.join(repoRoot, workspaceRoot))) {
     const packageRoot = path.dirname(packageJson);
     const manifest = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
+    rejectPackageRootAgentDirectory(packageRoot, manifest);
+    validateNamedIndexRoot(path.join(packageRoot, 'prompt-sections'), 'Prompt Section');
     const agentsRoot = path.join(packageRoot, 'agents');
     const count = validateAgentsRoot(agentsRoot, manifest);
     if (count > 0) {
@@ -98,6 +102,30 @@ function validateAgentsRoot(root, manifest) {
     }
   }
   return count;
+}
+
+function rejectPackageRootAgentDirectory(packageRoot, manifest) {
+  if (fs.existsSync(path.join(packageRoot, 'agent'))) {
+    violations.push(`${relative(path.join(packageRoot, 'agent'))}: package-root agent/ is removed`);
+  }
+  if (manifest?.files?.includes('agent')) {
+    violations.push(`${relative(path.join(packageRoot, 'package.json'))}: files must not include removed agent/`);
+  }
+}
+
+function validateNamedIndexRoot(root, label) {
+  if (!fs.existsSync(root)) return;
+  for (const entry of safeEntries(root)) {
+    const target = path.join(root, entry.name);
+    if (!entry.isDirectory() || !/^[a-z0-9][a-z0-9-]*$/u.test(entry.name)) {
+      violations.push(`${relative(target)}: ${label} must be a lowercase kebab-case directory`);
+      continue;
+    }
+    if (!['index.ts', 'index.js', 'index.mjs', 'index.cjs']
+      .some((name) => fs.existsSync(path.join(target, name)))) {
+      violations.push(`${relative(target)}: ${label} must provide index.ts or compiled JavaScript`);
+    }
+  }
 }
 
 function safeEntries(directory) {

@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=158dc0fc4ca017f9 -->
+<!-- sync-adapter-docs:sha256=9db73c7c78905be9 -->
 
 # @zhin.js/adapter-discord
 
@@ -84,7 +84,7 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具（7 个） | `tools/`（`discord_*`：角色、Embed、反应等） |
 | 技能说明 | `skills/discord/SKILL.md` |
 

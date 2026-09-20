@@ -1,7 +1,7 @@
 # @zhin.js/plugin-group-suite
 
 Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键词回复与群问答。所有能力
-由 `commands/`、`middlewares/` 和 `agent/` 约定目录发现，不注册 legacy Plugin 回调。
+由 `commands/`、`middlewares/` 和 `tools/` 约定目录发现，不注册 legacy Plugin 回调。
 
 ## 安装与拓扑
 

@@ -85,7 +85,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
+| Permit vocabulary | `PERMITS.md` |
 | Skill documentation | `skills/milky/SKILL.md` |
 
 ## Documentation Links

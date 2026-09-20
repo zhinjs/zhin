@@ -102,10 +102,10 @@
     "src",
     "lib",
     "tools",
-    "agent",
     "skills",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "prompt-sections"
   ],
   "publishConfig": {
     "access": "public",

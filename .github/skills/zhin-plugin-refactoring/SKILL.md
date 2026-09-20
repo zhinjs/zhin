@@ -103,7 +103,7 @@ user-invocable: true
 - 装配子模块与 Host 资源（`context.resources.has/use`，如 `databaseHostToken` / `scheduleHostToken` / `httpHostToken`）
 - 注册随 generation 回收的资源（`context.lifecycle.add(...)`）
 
-配置由 `schema.json` + `context.config.get()` 声明/读取（不再有 `declareConfig()`）；命令、中间件、AI 工具等能力放约定目录（`commands/` / `middlewares/` / `agent/`），由运行时按目录装配，不要在入口手写注册。不要把业务细节继续留在入口文件里。
+配置由 `schema.json` + `context.config.get()` 声明/读取（不再有 `declareConfig()`）；命令、中间件、Tool、Skill、Hook 等能力放各自约定目录，由运行时按目录装配，不要在入口手写注册。不要把业务细节继续留在入口文件里。
 
 ### 第 6 步：校验生命周期与清理
 

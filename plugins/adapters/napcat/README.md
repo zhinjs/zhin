@@ -70,7 +70,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/<name>/index.ts` |
 | 技能说明 | `skills/napcat/SKILL.md` |
 

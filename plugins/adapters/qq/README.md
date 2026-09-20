@@ -130,7 +130,7 @@ master 可执行；未配置则放行（首个扫码绑定者会写入该 endpoi
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具 | `tools/`（频道、角色等） |
 | 技能说明 | `skills/qq/SKILL.md` |
 

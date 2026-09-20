@@ -127,7 +127,7 @@ disposal. Standard providers use the following conventions:
 | Hook | `hooks/<name>/index.ts` / `defineHook()` | Agent lifecycle hook registry |
 | Skill | `skills/<name>/SKILL.md` | Agent capability catalog |
 | Agent | `agents/<name>/agent.json` | Agent capability catalog |
-| Prompt Section | `agent/prompt-sections/**/$*.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
+| Prompt Section | `prompt-sections/<name>/index.ts` / `defineAgentPromptSection()` | Fixed-generation Agent prompt assembly |
 | Page | `pages/$*.ts(x)` / `definePage()` | Console PageIndex |
 | Layout | `pages/$nav.tsx`, `pages/$footer.tsx` | Console layout projection |
 

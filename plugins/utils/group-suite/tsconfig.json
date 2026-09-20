@@ -20,5 +20,5 @@
     "src/stats-card.ts",
     "src/stats-data.ts"
   ],
-  "exclude": ["lib", "node_modules", "tests", "commands", "middlewares", "agent", "tools"]
+  "exclude": ["lib", "node_modules", "tests", "commands", "middlewares", "tools"]
 }

@@ -46,7 +46,7 @@ describe('Agent Feature slot HMR', () => {
     modules.set(join(project, 'packages/agent/index.ts'), { default: agentFeature });
     modules.set(join(project, 'packages/mcp/index.ts'), { default: mcpFeature });
     modules.set(join(project, 'packages/prompt/index.ts'), { default: promptSectionFeature });
-    modules.set(join(project, 'agent/prompt-sections/$project-rules.ts'), { default: projectRules('fixture') });
+    modules.set(join(project, 'prompt-sections/project-rules/index.ts'), { default: projectRules('fixture') });
     modules.set(join(project, 'tools/lookup/index.ts'), { default: lookupTool('fixture') });
     modules.set(join(project, 'mcp/$memory.ts'), { default: memoryMcp([]) });
     const runtime = new RootRuntime({
@@ -83,7 +83,7 @@ describe('Agent Feature slot HMR', () => {
     const toolSource = join(project, 'tools/lookup/index.ts');
     const mcpSource = join(project, 'mcp/$memory.ts');
     const agentSystemSource = join(project, 'agents/planner/system.md');
-    const promptSource = join(project, 'agent/prompt-sections/$project-rules.ts');
+    const promptSource = join(project, 'prompt-sections/project-rules/index.ts');
     let setups = 0;
     modules.set(pluginSource, {
       default: definePlugin({ name: 'root', setup() { setups += 1; } }),
@@ -268,7 +268,7 @@ async function createProject(): Promise<string> {
     ...features.map((name) => `packages/${name}/index.ts`),
     'tools/lookup/index.ts',
     'mcp/$memory.ts',
-    'agent/prompt-sections/$project-rules.ts',
+    'prompt-sections/project-rules/index.ts',
   ]) await touch(join(root, file));
   await touch(join(root, 'skills/research/SKILL.md'), '# Research v1\n\nResearch carefully.\n');
   await writeJson(join(root, 'agents/planner/agent.json'), {

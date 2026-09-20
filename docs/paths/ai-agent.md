@@ -62,7 +62,7 @@ export default defineAgentTool<{ city: string }>({
 
 ## 4. 给插件补充业务上下文
 
-创建 `agent/prompt-sections/$product-language.ts`：
+创建 `prompt-sections/product-language/index.ts`：
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';

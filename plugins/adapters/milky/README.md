@@ -79,7 +79,7 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 技能说明 | `skills/milky/SKILL.md` |
 
 ## 文档链接

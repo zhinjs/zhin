@@ -92,7 +92,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - `pnpm type-check` / `pnpm lint` / `pnpm test`：也可单独跑（已含于 check:all）。
 - `pnpm check:doc-links`：检查文档相对链接是否断裂。
 - `pnpm sync:adapter-docs` / `pnpm check:adapter-docs`：平台适配器文档与 `plugins/adapters/*/README.md` 同步。
-- `pnpm check:plugin-agent-publish`：带 `agent/` 的插件 `package.json` 须含 `files`（`agent`、`lib` 等）与 `prepublishOnly`。
+- `pnpm check:plugin-capability-publish`：插件 `package.json` 须发布实际存在的能力目录与文档，并用 `prepublishOnly` 先构建。
 - `pnpm --filter <pkg> build|test`：只验证单个包。
 - `pnpm check:l4-ci`：PR 门禁 L4 确定性子集（编排/记忆/full-bot 契约）。
 - `pnpm check:l4`：L4 全维度验收（编排 + 语义记忆 + full-bot 契约 + MCP 鉴权 + adapter L4；实机 IM 项 `L4_SKIP_PLATFORM=1` 跳过）；nightly workflow 跑全量。

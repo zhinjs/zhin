@@ -94,9 +94,10 @@
     "src",
     "lib",
     "tools",
-    "agent",
     "README.md",
-    "CHANGELOG.md"
+    "CHANGELOG.md",
+    "PERMITS.md",
+    "prompt-sections"
   ],
   "publishConfig": {
     "access": "public",

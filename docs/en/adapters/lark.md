@@ -89,7 +89,7 @@ The root plugin `zhin.plugins` (or project graph) must reference `@zhin.js/adapt
 
 ## Agent Tools
 
-The `agent/` directory is retained (get_user, group chat, administrators, file upload, etc.). A tool declaring `adapter: 'lark'` lazily receives the current operation's `LarkClient` through `context.$client`; the model no longer selects an Endpoint id.
+The `tools/` directory provides get_user, group chat, administrator, file upload, and related Tools. A tool declaring `adapter: 'lark'` lazily receives the current operation's `LarkClient` through `context.$client`; the model no longer selects an Endpoint id.
 
 ## Platform Permissions (platform permit)
 

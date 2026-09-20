@@ -63,3 +63,5 @@ Require `$`-prefixed files for file-convention capability entries. Unprefixed fi
 Command entry names strip the marker, while `$[name].ts` and related bracket forms declare top-level dynamic parameters. A child plugin can therefore expose `namespace <value>` directly without an artificial static command segment.
 
 Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.

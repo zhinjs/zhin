@@ -192,7 +192,7 @@ Declare both the dependency and the Feature:
 
 ### 2. Declare a context section
 
-Create `agent/prompt-sections/$project-rules.ts` at the plugin root:
+Create `prompt-sections/project-rules/index.ts` at the plugin root:
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -208,7 +208,7 @@ export default defineAgentPromptSection({
 });
 ```
 
-The relative file path supplies the local name; Zhin combines it with the plugin
+The first-level directory name supplies the local name; Zhin combines it with the plugin
 owner to form a globally unique identity. `order` controls presentation only.
 `retention` controls what happens when the prompt budget is tight:
 `required` must fit or the turn fails explicitly, `preferred` is retained before
@@ -223,7 +223,7 @@ The total budget is configured by `ai.agent.systemPromptMaxChars`.
 Open **Prompt Sections** in the Console capability catalog to inspect owner,
 source, generation, profiles, and budget policy. Introspection deliberately omits
 the prompt text because it can contain internal product policy. A runnable example
-is in `examples/full-bot/agent/prompt-sections/$custom.ts`.
+is in `examples/full-bot/prompt-sections/custom/index.ts`.
 
 A Prompt Section changes model context; it **does not grant tool, data, or approval
 authority**. Those permissions still come from Tool Features, Runtime resources,

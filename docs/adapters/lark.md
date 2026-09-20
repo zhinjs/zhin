@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=968d30e678a78127 -->
+<!-- sync-adapter-docs:sha256=37a8d4436d21bd1b -->
 
 # @zhin.js/adapter-lark
 
@@ -90,7 +90,7 @@ plugins:
 
 ## Agent 工具
 
-`agent/` 目录保留（get_user、群聊、管理员、上传文件等）。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
+`tools/` 目录提供 get_user、群聊、管理员、上传文件等 Tool。工具声明 `adapter: 'lark'` 后，通过惰性的 `context.$client` 自动取得当前操作的 `LarkClient`；无需把 Endpoint id 暴露给模型。
 
 ## 平台权限（platform permit）
 

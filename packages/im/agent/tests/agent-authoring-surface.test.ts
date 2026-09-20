@@ -31,29 +31,6 @@ describe('slotNameFromFile', () => {
 });
 
 describe('agent authoring entry discovery', () => {
-  it('leaves Agent Tool discovery to the Tool Feature', async () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-agent-surface-'));
-    const tools = path.join(root, 'agent', 'tools');
-    fs.mkdirSync(tools, { recursive: true });
-    fs.writeFileSync(path.join(tools, 'helper.js'), 'export const value = 1;\n');
-    fs.writeFileSync(path.join(tools, '$lookup.js'), [
-      "import { value } from './helper.js';",
-      "export default { description: 'lookup', execute: () => value };",
-      '',
-    ].join('\n'));
-    try {
-      const surface = await discoverPluginAgentSurface({
-        pluginName: 'fixture',
-        packageRoot: root,
-        agentDir: path.join(root, 'agent'),
-        evalsDir: path.join(root, 'evals'),
-      });
-      expect(surface).not.toHaveProperty('tools');
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
   it('discovers public and private Hooks from named index modules', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-hook-surface-'));
     const hook = [
@@ -74,7 +51,6 @@ describe('agent authoring entry discovery', () => {
       const surface = await discoverPluginAgentSurface({
         pluginName: 'fixture',
         packageRoot: root,
-        agentDir: path.join(root, 'agent'),
         evalsDir: path.join(root, 'evals'),
       });
       expect(surface?.hooks.map((entry) => entry.slotName)).toEqual([

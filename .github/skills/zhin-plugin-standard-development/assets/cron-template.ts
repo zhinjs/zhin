@@ -36,14 +36,3 @@ export default definePlugin<MyPluginConfig>({
     context.lifecycle.add(dispose);
   },
 });
-
-// ── 另一种：agent/ 授权面的定时任务（按目录发现） ─────────────────────────────
-// agent/schedules/poll.ts
-//
-// import { defineSchedule } from '@zhin.js/agent';
-//
-// export default defineSchedule({
-//   cron: '*/5 * * * *',
-//   description: '每 5 分钟轮询一次',
-//   async execute() {},
-// });

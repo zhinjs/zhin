@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/milky/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/milky/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=5e4b13265f16710a -->
+<!-- sync-adapter-docs:sha256=42eeb37559bde739 -->
 
 # @zhin.js/adapter-milky
 
@@ -91,7 +91,7 @@ plugins:
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 技能说明 | `skills/milky/SKILL.md` |
 
 ## 文档链接

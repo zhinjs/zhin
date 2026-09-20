@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=586945ef67779486 -->
+<!-- sync-adapter-docs:sha256=39e1766d82be4cb9 -->
 
 # @zhin.js/adapter-icqq
 
@@ -158,7 +158,7 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 - `src/icqq-inbound.ts`：把 ICQQ 原生消息归一为 Zhin 入站消息
 - `src/protocol.ts`：配置解析、会话映射与出站目标转换
 - `src/client.ts`：向插件作者暴露 ICQQ `Client` / `EventMap` 类型注册
-- Agent 工具：`tools/<name>/index.ts`；权限说明见 `agent/PERMITS.md`
+- Agent 工具：`tools/<name>/index.ts`；权限说明见 `PERMITS.md`
 
 阅读适配器实现时从 `endpoint.ts` 看能力装配，再进入对应能力文件。包外代码只从
 `@zhin.js/adapter-icqq` 与 `zhin.js/adapter` 的公开入口导入，不依赖上述源码路径。

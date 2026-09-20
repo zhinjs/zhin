@@ -22,7 +22,7 @@ describe('Agent generation feature projections', () => {
       owner: root,
       feature: promptSectionFeatureId,
       localName: 'project-rules',
-      source: '/project/agent/prompt-sections/project-rules.ts',
+      source: '/project/prompt-sections/project-rules/index.ts',
       definition: defineAgentPromptSection({
         title: 'Project rules',
         content: 'Keep internal policy private.',
@@ -47,7 +47,7 @@ describe('Agent generation feature projections', () => {
       name: 'project-rules',
       title: 'Project rules',
       retention: 'required',
-      source: './agent/prompt-sections/project-rules.ts',
+      source: './prompt-sections/project-rules/index.ts',
       generation: 12,
       contentChars: 29,
     })]);

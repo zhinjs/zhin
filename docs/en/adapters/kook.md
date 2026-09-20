@@ -98,7 +98,7 @@ The Host must inject `httpHostToken`. The Challenge (`type: 255`) validates `ver
 
 | Category | Path |
 |----------|------|
-| Permit vocabulary | `agent/PERMITS.md` |
+| Permit vocabulary | `PERMITS.md` |
 | Platform tools | `tools/` (roles, blocklist, etc.) |
 | Skill documentation | `skills/kook/SKILL.md` |
 

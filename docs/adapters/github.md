@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=65b16040792dd627 -->
+<!-- sync-adapter-docs:sha256=eb1e118234308bdd -->
 
 # @zhin.js/adapter-github
 
@@ -20,7 +20,7 @@ GitHub Plugin Runtime 适配器 — Issue/PR 评论区即聊天通道，GitHub A
 - **Webhook 入站**：HMAC-SHA256 验签 → `Endpoint.emit(...)`
 - **出站**：`send({ conversation, payload })` → Issue/PR comment（`conversation.id` 为 channel ID）
 - **GitHub App 认证**：JWT → Installation Token
-- **Agent 工具**：`agent/` 下 star/bind/subscribe/workspace 等保留
+- **Agent 工具**：`tools/` 下提供 star、bind、subscribe、workspace 等能力
 
 ## 安装
 

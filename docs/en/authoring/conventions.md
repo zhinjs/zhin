@@ -29,7 +29,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 | `adapters/` | `$*.ts` | Yes | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
 | `tools/` | `<name>/index.ts` | Named directory | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
 | `hooks/` | `<name>/index.ts` | Named directory | server | `zhin.js/agent` | Agent Hook | `defineHook(...)` |
-| `agent/prompt-sections/` | `$*.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
+| `prompt-sections/<name>/` | `index.ts` | Yes | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | Subdirectory + `SKILL.md` | One level | server | `@zhin.js/skill` | `zhin.skill` | Markdown text |
 | `agents/` | `<name>/agent.json` plus 3 core Markdown files | One level | server | `@zhin.js/agent-feature` | `zhin.agent` | Directory Agent definition |
 | `mcp/` | `$*.ts` | No | server | `@zhin.js/mcp-feature` | `zhin.mcp` | `defineMcp(...)` |
@@ -37,7 +37,7 @@ A few key points. The full capability id takes the form `owner\0feature\0localNa
 
 ## Naming Rules
 
-The `$` marker selects a single-file entry and is removed from its `localName`. Directory capabilities do not use `$`: Tools and Hooks use `<name>/index.ts`, Skills use `<name>/SKILL.md`, and Agents use `<name>/agent.json`. Named directories use lowercase kebab-case; Tool names may also use snake_case.
+The `$` marker selects a single-file entry and is removed from its `localName`. Directory capabilities do not use `$`: Tools, Hooks, and Prompt Sections use `<name>/index.ts`, Skills use `<name>/SKILL.md`, and Agents use `<name>/agent.json`. Named directories use lowercase kebab-case; Tool names may also use snake_case.
 
 **Exception: `commands/`** static segments also allow Unicode names (e.g. `$赞我.ts`), matching `isCapabilityLocalSegment` (`zhin.js`) — ASCII kebab, or a Unicode identifier with at least one non-ASCII character and no ASCII uppercase. Dynamic parameter files (`$[name].ts`, etc.) remain ASCII-only. Tool directories also allow ASCII snake (e.g. `send_user_like/`). Other convention directories are not relaxed.
 
@@ -52,7 +52,7 @@ Supplementary rules per directory:
 | `adapters/` | Same as above | `adapters/$napcat.ts` -> `napcat` |
 | `tools/` | `<name>/index.ts`; ASCII kebab or snake | `tools/music-search/index.ts` -> `music-search`; `tools/send_user_like/index.ts` -> `send_user_like` |
 | `hooks/` | `<name>/index.ts`; private Hooks may be nested in an Agent or Skill | `hooks/audit/index.ts` -> `audit` |
-| `agent/prompt-sections/` | Relative path without extension, joined with `/` | `agent/prompt-sections/project/$rules.ts` -> `project/rules` |
+| `prompt-sections/` | First-level named directory | `prompt-sections/project-rules/index.ts` -> `project-rules` |
 | `skills/` | First-level directory name; only its `SKILL.md` is registered, while references and scripts may live beside it | `skills/memory-consolidate/SKILL.md` -> `memory-consolidate` |
 | `agents/` | First-level directory containing `agent.json` | `agents/planner/agent.json` -> `planner` |
 | `mcp/` | File name without extension (no recursion) | `mcp/$my-server.ts` -> `my-server` |

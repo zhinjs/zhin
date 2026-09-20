@@ -1636,7 +1636,7 @@
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键词回复与群问答。所有能力\n由 commands/、middlewares/ 和 agent/ 约定目录发现，不注册 legacy Plugin 回调。\nbash\npnpm add @zhin.js/plugin-group-suite\n父插件在 package.json#zhin.plugins 中声明子插件：\njson\n{\n",
+      "readme": "Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键词回复与群问答。所有能力\n由 commands/、middlewares/ 和 tools/ 约定目录发现，不注册 legacy Plugin 回调。\nbash\npnpm add @zhin.js/plugin-group-suite\n父插件在 package.json#zhin.plugins 中声明子插件：\njson\n{\n",
       "license": "MIT",
       "engines": {
         "node": "^20.19.0 || >=22.12.0"
@@ -2546,7 +2546,7 @@
         "weekly": 0,
         "monthly": 0
       },
-      "readme": "Generation-owned Agent Prompt Section Feature。插件根目录的\nagent/prompt-sections//.ts 默认导出 defineAgentPromptSection(...)，并作为\nimmutable capability slot 进入当前 generation。\nPrompt Section 只贡献模型上下文，不授予 Tool、文件、网络",
+      "readme": "Generation-owned Agent Prompt Section Feature。插件根目录的\nprompt-sections/<name>/index.ts 默认导出 defineAgentPromptSection(...)，并作为\nimmutable capability slot 进入当前 generation。\nPrompt Section 只贡献模型上下文，不授予 Tool、文件、网络",
       "license": "MIT",
       "engines": {
         "node": "^20.19.0 || >=22.12.0"

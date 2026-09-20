@@ -10,7 +10,7 @@
 | `plugin.on('before.sendMessage')` | `middlewares/$*.ts` + `target: 'outbound'` |
 | `addComponent(fn)` | `components/$*.ts(x)` + `defineComponent()` |
 | `addTool()` / Tool registry | `tools/<name>/index.ts` + `defineAgentTool()` |
-| `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()`，或 `agent/schedules/*.ts` + `defineSchedule()` |
+| `addCron(new Cron(...))` | `plugin.ts` setup + `scheduleHostToken.register()` |
 | Skill registry | `skills/<name>/SKILL.md`（由 `check:skill-authoring-boundaries` 校验） |
 | Agent registry | `agents/$<name>.agent.md` |
 | MCP registry | `mcp/$*.ts` + MCP Feature definition |

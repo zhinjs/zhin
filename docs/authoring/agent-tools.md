@@ -194,7 +194,7 @@ my-plugin/
 
 ### 2. 声明一段上下文
 
-在插件根目录创建 `agent/prompt-sections/$project-rules.ts`：
+在插件根目录创建 `prompt-sections/project-rules/index.ts`：
 
 ```ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
@@ -210,7 +210,7 @@ export default defineAgentPromptSection({
 });
 ```
 
-文件相对路径是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
+一级目录名是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
 
 | 字段 | 含义 |
 | --- | --- |
@@ -225,6 +225,6 @@ export default defineAgentPromptSection({
 
 ### 3. 验证已生效的版本
 
-启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/agent/prompt-sections/$custom.ts`。
+启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/prompt-sections/custom/index.ts`。
 
 Prompt Section 只影响模型上下文，**不会授予工具、数据或审批权限**。权限仍必须由 Tool Feature、Runtime resource 和 Host 策略提供。

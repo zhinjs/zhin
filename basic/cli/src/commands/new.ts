@@ -244,7 +244,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     clean: 'rimraf lib',
     test: 'vitest run',
     'test:watch': 'vitest',
-    // 带 agent/ 的插件发布前必须构建（见 pnpm check:plugin-agent-publish）
+    // 插件能力目录发布前必须构建（见 pnpm check:plugin-capability-publish）
     prepublishOnly: 'pnpm run build',
   };
 

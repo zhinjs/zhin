@@ -112,7 +112,7 @@ Access Token 在过期前 5 分钟自动刷新。
 
 | 类别 | 路径 |
 |------|------|
-| Permit 词汇 | `agent/PERMITS.md` |
+| Permit 词汇 | `PERMITS.md` |
 | 平台工具（4 个） | `tools/` |
 | 技能说明 | `skills/wecom/SKILL.md` |
 
