@@ -18,7 +18,7 @@ The API Reference reads Zhin's public authoring entries, Host contracts, and JSD
 | Author components | `zhin.js/component` |
 | Author middleware | `zhin.js/middleware` |
 | Author handlers | `zhin.js/handler` |
-| Author Agent Tools | `@zhin.js/tool`; `agent/tools/` may also import from `zhin.js/agent` |
+| Author Agent Tools | `@zhin.js/tool`; `tools/` may also import from `zhin.js/agent` |
 | Parse Skill Markdown | `@zhin.js/skill` |
 | Inject Prompt Sections | `@zhin.js/prompt-section` (experimental) |
 | Use database, scheduling, and cross-platform messaging Hosts | `databaseHostToken`, `scheduleHostToken`, and `outboundHostToken` from `zhin.js` |

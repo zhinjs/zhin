@@ -45,7 +45,7 @@ describe('full-bot L4 配置契约', () => {
       'commands/$hello.ts',
       'commands/$card.ts',
       'components/$status-card.ts',
-      'agent/tools/$runtime-status.ts',
+      'tools/runtime-status/index.ts',
       'pages/$workroom.tsx',
     ]) {
       expect(fs.existsSync(path.join(botRoot, source)), source).toBe(true);

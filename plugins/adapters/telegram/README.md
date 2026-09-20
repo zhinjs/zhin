@@ -115,7 +115,7 @@ Webhook 接收确认不等于业务处理完成；需要幂等性的业务应自
 
 | Kind | Path |
 |------|------|
-| Platform tools (10) | `agent/tools/`（invite / pin / admins / sticker / poll 等） |
+| Platform tools (10) | `tools/`（invite / pin / admins / sticker / poll 等） |
 | Skill doc | `skills/telegram/SKILL.md` |
 
 ## 故障排查

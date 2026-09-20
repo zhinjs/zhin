@@ -183,7 +183,7 @@ my-awesome-bot/
 ├── commands/                 # 消息命令
 ├── components/               # 消息组件
 ├── middlewares/              # 消息中间件
-├── agent/tools/              # 可选 AI tools（默认空）
+├── tools/              # 可选 AI tools（默认空）
 ├── skills/<name>/SKILL.md    # Skill 能力包，可附带参考资料与脚本
 ├── agents/                   # 可选 Agent 定义（默认空）
 ├── pages/                    # Console page + $nav/$footer 布局

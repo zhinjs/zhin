@@ -292,7 +292,13 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     let active = true;
     try {
       if (!active) throw new Error('Agent generation operation is not active');
-      const discovered = await this.#ingress.read(lease.value, owner, () => active && lease.active, request);
+      const discovered = await this.#ingress.read(
+        lease.value,
+        owner,
+        () => active && lease.active,
+        request,
+        selection.agent,
+      );
       const referenceCapability = createConversationReferenceCapability(owner, request);
       const capabilities = Object.freeze({
         ...discovered,

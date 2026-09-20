@@ -4,7 +4,7 @@
 // AI 工具按目录发现，一个文件一个工具，default export：
 //   my-plugin/
 //     tools/plugin-health.ts        ← 包顶层工具（@zhin.js/tool）
-//     agent/tools/run-code.ts       ← agent/ 授权面工具（@zhin.js/agent）
+//     tools/run-code.ts       ← agent/ 授权面工具（@zhin.js/agent）
 //     skills/<name>/SKILL.md        ← Skill：标准 SKILL.md（frontmatter + 正文）
 //     agents/$<name>.agent.md       ← Agent 预设：frontmatter + 正文作为 systemPrompt
 //

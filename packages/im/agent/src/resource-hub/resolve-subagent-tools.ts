@@ -43,13 +43,22 @@ function applyExplicitCapabilityBoundary(
   config: Required<ZhinAgentConfig>,
   meta?: AgentMeta,
 ): AgentTool[] {
+  const privatePrefix = meta ? `agent__${meta.name}__` : undefined;
+  const privateSkillPrefix = privatePrefix ? `${privatePrefix}skill__` : undefined;
   const configured = new Set([
     ...DEFAULT_SUBAGENT_TOOL_NAMES,
     ...config.subagentTools,
     ...SUBAGENT_DEFER_META_TOOLS,
+    ...(meta?.toolNames ?? []),
   ]);
   const definition = meta?.toolNames?.length ? new Set(meta.toolNames) : null;
-  return pool.filter(tool => configured.has(tool.name) && (!definition || definition.has(tool.name)));
+  return pool.filter(tool => (privatePrefix
+    && tool.name.includes(privatePrefix)
+    && !tool.name.includes(privateSkillPrefix!)) || ([...configured].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  ) && (!definition || [...definition].some(
+    name => tool.name === name || tool.name.endsWith(`__${name}`),
+  ))));
 }
 
 function applySpawnDeclaredTools(

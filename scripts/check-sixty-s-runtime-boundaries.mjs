@@ -32,7 +32,7 @@ for (const relative of ['plugin.ts', 'src/api.ts', 'src/client.ts']) {
   }
 }
 
-for (const directory of ['commands', 'agent/tools']) {
+for (const directory of ['commands', 'tools']) {
   const root = path.join(pluginRoot, directory);
   for (const name of fs.readdirSync(root, {recursive: true})) {
     if (typeof name !== 'string' || !name.endsWith('.ts')) continue;

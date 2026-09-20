@@ -27,7 +27,10 @@ describe('Agent Feature', () => {
       ],
       '/project/agents/planner': coreEntries(),
       '/project/agents/planner/workflows': [{ name: 'create-api.md', kind: 'file' }],
-      '/project/agents/planner/tools': [],
+      '/project/agents/planner/tools': [{ name: 'inspect', kind: 'directory' }],
+      '/project/agents/planner/tools/inspect': [{ name: 'index.ts', kind: 'file' }],
+      '/project/agents/planner/skills': [{ name: 'review', kind: 'directory' }],
+      '/project/agents/planner/skills/review': [{ name: 'SKILL.md', kind: 'file' }],
       '/project/agents/planner/knowledge': [],
       '/project/agents/notes': [{ name: 'README.md', kind: 'file' }],
     }, new Map([
@@ -45,6 +48,8 @@ describe('Agent Feature', () => {
       description: 'Plan before acting',
       triggerRules: { keywords: ['plan'] },
       workflows: [{ path: 'workflows/create-api.md' }],
+      toolNames: ['agent__planner__inspect'],
+      skillNames: ['agent__planner__review'],
     });
   });
 
@@ -110,7 +115,6 @@ function packageSource(): AgentPackageSource {
       path.split('/').at(-1)!, content,
     ])),
     workflows: [],
-    tools: [],
     knowledge: [],
   };
 }
@@ -131,6 +135,8 @@ function coreEntries(): DirectoryEntry[] {
     { name: 'boundaries.md', kind: 'file' },
     { name: 'conventions.md', kind: 'file' },
     { name: 'workflows', kind: 'directory' },
+    { name: 'tools', kind: 'directory' },
+    { name: 'skills', kind: 'directory' },
   ];
 }
 

@@ -43,11 +43,12 @@ export interface AgentMeta {
   contextMode?: SubagentContextMode;
   effort?: AgentEffortLevel;
   memory?: 'user' | 'session' | 'agent';
+  skillNames?: string[];
 }
 
 async function readResourceDirectory(
   agentDir: string,
-  name: 'workflows' | 'tools' | 'knowledge',
+  name: 'workflows' | 'knowledge',
 ): Promise<readonly AgentResource[]> {
   const directory = path.join(agentDir, name);
   let entries: fs.Dirent[];
@@ -79,8 +80,11 @@ async function loadAgentDefinition(agentDir: string): Promise<AgentDefinition> {
     manifest,
     files,
     workflows: await readResourceDirectory(agentDir, 'workflows'),
-    tools: await readResourceDirectory(agentDir, 'tools'),
     knowledge: await readResourceDirectory(agentDir, 'knowledge'),
+    privateToolNames: (await childDirectories(path.join(agentDir, 'tools')))
+      .map((name) => `agent__${path.basename(agentDir)}__${name}`),
+    privateSkillNames: (await childDirectories(path.join(agentDir, 'skills')))
+      .map((name) => `agent__${path.basename(agentDir)}__${name}`),
   };
   return parseAgentPackage(source, {
     owner: rootPluginId(),
@@ -110,7 +114,19 @@ function toAgentMeta(definition: AgentDefinition, agentDir: string): AgentMeta {
     provider: definition.provider,
     effort: definition.effort,
     memory: definition.memory,
+    skillNames: definition.skillNames ? [...definition.skillNames] : undefined,
   };
+}
+
+async function childDirectories(directory: string): Promise<string[]> {
+  try {
+    return (await fs.promises.readdir(directory, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && /^[a-z0-9][a-z0-9-]*$/u.test(entry.name))
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return [];
+  }
 }
 
 async function discoverAgentPackages(agentsDir: string): Promise<AgentMeta[]> {

@@ -78,7 +78,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | Plugin Spec（`pnpm check:plugin`） | 插件符合标准规范 |
 | Plugin Agent Publish（`pnpm check:plugin-agent-publish`） | 带 `agent/` 的插件发布清单（files、prepublishOnly、peer 依赖） |
 | Publish Repository（`pnpm check:publish-repository`） | 可发布包 `repository.url` 匹配 github.com/zhinjs/zhin（npm provenance） |
-| Agent Tool Schema（`pnpm check:agent-tool-schema`） | `agent/tools` inputSchema 与 defineAgentTool/execute 类型一致 |
+| Agent Tool Schema（`pnpm check:agent-tool-schema`） | `tools` inputSchema 与 defineAgentTool/execute 类型一致 |
 | Skill Authoring Boundaries（`pnpm check:skill-authoring-boundaries`） | Skill 统一使用 `skills/<name>/SKILL.md`，并显式挂载 Feature |
 
 **IM 链路与运行时约定**

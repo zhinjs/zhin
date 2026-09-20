@@ -22,8 +22,9 @@ export interface AgentPackageSource {
   readonly manifest: unknown;
   readonly files: Readonly<Record<string, string>>;
   readonly workflows: readonly AgentResource[];
-  readonly tools: readonly AgentResource[];
   readonly knowledge: readonly AgentResource[];
+  readonly privateToolNames?: readonly string[];
+  readonly privateSkillNames?: readonly string[];
 }
 
 export interface AgentDefinition {
@@ -38,9 +39,9 @@ export interface AgentDefinition {
   readonly entryPoints: readonly string[];
   readonly instructions: string;
   readonly workflows: readonly AgentResource[];
-  readonly toolResources: readonly AgentResource[];
   readonly knowledge: readonly AgentResource[];
   readonly toolNames?: readonly string[];
+  readonly skillNames?: readonly string[];
   readonly disallowedTools?: readonly string[];
   readonly tags?: readonly string[];
   readonly role?: string;
@@ -65,6 +66,7 @@ interface AgentManifest {
   };
   readonly entry_points: readonly string[];
   readonly tools?: readonly string[];
+  readonly skills?: readonly string[];
   readonly disallowed_tools?: readonly string[];
   readonly tags?: readonly string[];
   readonly role?: string;
@@ -102,7 +104,6 @@ export function parseAgentPackage(value: unknown, context: ValidationContext): A
     }
   }
   const workflows = resources(source.workflows, 'workflows');
-  const toolResources = resources(source.tools, 'tools');
   const knowledge = resources(source.knowledge, 'knowledge');
   return Object.freeze({
     $feature: agentBrand,
@@ -115,11 +116,11 @@ export function parseAgentPackage(value: unknown, context: ValidationContext): A
       keywords: stringList(manifest.trigger_rules.keywords ?? [], 'trigger_rules.keywords'),
     }),
     entryPoints,
-    instructions: assembleInstructions(entryPoints, files, workflows, toolResources, knowledge),
+    instructions: assembleInstructions(entryPoints, files, workflows, knowledge),
     workflows,
-    toolResources,
     knowledge,
-    toolNames: optionalStringList(manifest.tools, 'tools'),
+    toolNames: combinedNames(manifest.tools, source.privateToolNames, 'tools'),
+    skillNames: combinedNames(manifest.skills, source.privateSkillNames, 'skills'),
     disallowedTools: optionalStringList(manifest.disallowed_tools, 'disallowed_tools'),
     tags: optionalStringList(manifest.tags, 'tags'),
     role: optionalText(manifest.role, 'role'),
@@ -139,20 +140,11 @@ function assembleInstructions(
   entryPoints: readonly string[],
   files: Readonly<Record<string, unknown>>,
   workflows: readonly AgentResource[],
-  toolResources: readonly AgentResource[],
   knowledge: readonly AgentResource[],
 ): string {
   const sections = entryPoints.map((entry) => `## ${entry}\n\n${String(files[entry]).trim()}`);
   for (const resource of [...workflows, ...knowledge]) {
     sections.push(`## ${resource.path}\n\n${resource.content.trim()}`);
-  }
-  if (toolResources.length) {
-    sections.push([
-      '## Dedicated tool resources',
-      '',
-      'These files provide Agent-specific helpers. Executing a script still requires an admitted governed Tool.',
-      ...toolResources.map((resource) => `- ${resource.path}`),
-    ].join('\n'));
   }
   return sections.join('\n\n');
 }
@@ -160,7 +152,7 @@ function assembleInstructions(
 function parseManifest(value: unknown, context: ValidationContext): AgentManifest {
   if (!isRecord(value)) throw new TypeError(`Agent ${context.source} agent.json must contain an object`);
   const allowed = new Set([
-    'name', 'version', 'description', 'trigger_rules', 'entry_points', 'tools',
+    'name', 'version', 'description', 'trigger_rules', 'entry_points', 'tools', 'skills',
     'disallowed_tools', 'tags', 'role', 'context_mode', 'max_iterations', 'model',
     'provider', 'effort', 'memory', 'platforms', 'scopes', 'permissions',
   ]);
@@ -201,6 +193,15 @@ function stringList(value: unknown, field: string, required = false): readonly s
 
 function optionalStringList(value: unknown, field: string): readonly string[] | undefined {
   return value === undefined ? undefined : stringList(value, field);
+}
+
+function combinedNames(
+  declared: unknown,
+  discovered: readonly string[] | undefined,
+  field: string,
+): readonly string[] | undefined {
+  const values = [...(optionalStringList(declared, field) ?? []), ...(discovered ?? [])];
+  return values.length ? Object.freeze([...new Set(values)]) : undefined;
 }
 
 function nonEmptyText(value: unknown, field: string): string {

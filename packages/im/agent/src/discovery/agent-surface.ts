@@ -45,6 +45,10 @@ export function resolvePluginPackageRoot(filePath: string): string {
 /** Prefer compiled lib/*.js for production plugin packages. */
 export function resolveAuthoringImportPath(packageRoot: string, sourcePath: string): string {
   const rel = path.relative(packageRoot, sourcePath);
+  if (rel.includes(`${path.sep}hooks${path.sep}`) || rel.startsWith(`hooks${path.sep}`)) {
+    const sibling = sourcePath.replace(/\.ts$/u, '.js');
+    if (fs.existsSync(sibling)) return sibling;
+  }
   if (rel.startsWith('agent/') || rel.startsWith('evals/')) {
     const jsRel = rel.replace(/\.ts$/, '.js');
     const libCandidate = path.join(packageRoot, 'lib', jsRel);
@@ -187,8 +191,9 @@ async function loadHookFile(
   pluginName: string,
   bareNames: boolean,
   packageRoot?: string,
+  placement?: { slotName: string; agentName?: string; skillName?: string },
 ): Promise<DiscoveredAuthoringHook | null> {
-  const slotName = slotNameFromFile(filePath);
+  const slotName = placement?.slotName ?? slotNameFromFile(filePath);
   const exported = await importAuthoringModule(filePath, packageRoot);
   if (!isAuthoringDefinition(exported, 'hook')) return null;
   return {
@@ -197,6 +202,8 @@ async function loadHookFile(
     pluginName,
     filePath,
     definition: exported as AuthoringHookDefinition,
+    ...(placement?.agentName ? { agentName: placement.agentName } : {}),
+    ...(placement?.skillName ? { skillName: placement.skillName } : {}),
   };
 }
 
@@ -239,10 +246,6 @@ async function scanAgentDir(
     const item = await loadConnectionFile(file, pluginName, bareNames, packageRoot);
     if (item) connections.push(item);
   }
-  for (const file of listTsFiles(path.join(agentDir, 'hooks'))) {
-    const item = await loadHookFile(file, pluginName, bareNames, packageRoot);
-    if (item) hooks.push(item);
-  }
   return {
     skills,
     schedules,
@@ -254,7 +257,9 @@ async function scanAgentDir(
 export async function discoverPluginAgentSurface(
   roots: PluginAgentRoots,
 ): Promise<DiscoveredPluginAgentSurface | null> {
-  if (!fs.existsSync(roots.agentDir) && !fs.existsSync(roots.evalsDir)) return null;
+  if (!fs.existsSync(roots.agentDir)
+    && !fs.existsSync(roots.evalsDir)
+    && !hasDirectoryHooks(roots.packageRoot)) return null;
   try {
     const scanned = fs.existsSync(roots.agentDir)
       ? await scanAgentDir(roots.agentDir, roots.pluginName, false, roots.packageRoot)
@@ -264,6 +269,11 @@ export async function discoverPluginAgentSurface(
           connections: [],
           hooks: [],
         };
+    scanned.hooks.push(...await discoverDirectoryHooks(
+      roots.packageRoot,
+      roots.pluginName,
+      false,
+    ));
 
     const evals: DiscoveredAuthoringEval[] = [];
     if (fs.existsSync(roots.evalsDir)) {
@@ -284,4 +294,73 @@ export async function discoverPluginAgentSurface(
     logger.warn(`Failed to discover agent surface for ${roots.pluginName}: ${errMsg(e)}`);
     return null;
   }
+}
+
+function hasDirectoryHooks(packageRoot: string): boolean {
+  if (listDirectories(path.join(packageRoot, 'hooks')).length > 0) return true;
+  for (const agent of listDirectories(path.join(packageRoot, 'agents'))) {
+    if (listDirectories(path.join(packageRoot, 'agents', agent, 'hooks')).length > 0) return true;
+    for (const skill of listDirectories(path.join(packageRoot, 'agents', agent, 'skills'))) {
+      if (listDirectories(path.join(packageRoot, 'agents', agent, 'skills', skill, 'hooks')).length > 0) {
+        return true;
+      }
+    }
+  }
+  return listDirectories(path.join(packageRoot, 'skills'))
+    .some((skill) => listDirectories(path.join(packageRoot, 'skills', skill, 'hooks')).length > 0);
+}
+
+async function discoverDirectoryHooks(
+  packageRoot: string,
+  pluginName: string,
+  bareNames: boolean,
+): Promise<DiscoveredAuthoringHook[]> {
+  const hooks: DiscoveredAuthoringHook[] = [];
+  const add = async (
+    root: string,
+    prefix: string,
+    placement: { agentName?: string; skillName?: string } = {},
+  ) => {
+    for (const entry of listDirectories(root)) {
+      const source = preferredIndex(path.join(root, entry));
+      if (!source) continue;
+      const slotName = prefix ? `${prefix}/${entry}` : entry;
+      const hook = await loadHookFile(source, pluginName, bareNames, packageRoot, {
+        slotName,
+        ...placement,
+      });
+      if (hook) hooks.push(hook);
+    }
+  };
+  await add(path.join(packageRoot, 'hooks'), '');
+  for (const agent of listDirectories(path.join(packageRoot, 'agents'))) {
+    await add(path.join(packageRoot, 'agents', agent, 'hooks'), `agent/${agent}`, { agentName: agent });
+    for (const skill of listDirectories(path.join(packageRoot, 'agents', agent, 'skills'))) {
+      await add(
+        path.join(packageRoot, 'agents', agent, 'skills', skill, 'hooks'),
+        `agent/${agent}/skill/${skill}`,
+        { agentName: agent, skillName: skill },
+      );
+    }
+  }
+  for (const skill of listDirectories(path.join(packageRoot, 'skills'))) {
+    await add(path.join(packageRoot, 'skills', skill, 'hooks'), `skill/${skill}`, { skillName: skill });
+  }
+  return hooks;
+}
+
+function listDirectories(directory: string): string[] {
+  if (!fs.existsSync(directory)) return [];
+  return fs.readdirSync(directory, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^[a-z0-9][a-z0-9-]*$/u.test(entry.name))
+    .map((entry) => entry.name)
+    .sort();
+}
+
+function preferredIndex(directory: string): string | undefined {
+  for (const name of ['index.ts', 'index.js', 'index.mjs', 'index.cjs']) {
+    const candidate = path.join(directory, name);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return undefined;
 }

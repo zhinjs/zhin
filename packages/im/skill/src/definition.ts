@@ -23,6 +23,13 @@ export interface SkillDefinition {
   readonly keywords?: readonly string[];
   readonly tags?: readonly string[];
   readonly always?: boolean;
+  /** @internal Parent Agent for an Agent-private Skill. */
+  readonly agentName?: string;
+}
+
+interface SkillPackageSource {
+  readonly markdown: string;
+  readonly privateToolNames?: readonly string[];
 }
 
 declare module '@zhin.js/plugin-runtime' {
@@ -41,24 +48,36 @@ declare module '@zhin.js/plugin-runtime' {
  * @experimental
  */
 export function parseSkillMarkdown(value: unknown, context: ValidationContext): SkillDefinition {
-  if (typeof value !== 'string' || !value.trim()) {
+  const source = typeof value === 'string'
+    ? { markdown: value, privateToolNames: [] }
+    : isSkillPackageSource(value) ? value : undefined;
+  if (!source || !source.markdown.trim()) {
     throw new TypeError(`Skill ${context.source} must contain Markdown instructions`);
   }
-  const parsed = parseFrontmatter(value, context);
+  const parsed = parseFrontmatter(source.markdown, context);
+  const name = context.localName.split('/').at(-1)!;
+  const declaredTools = optionalStringList(parsed.metadata.tools, 'tools') ?? [];
+  const toolNames = unique([...declaredTools, ...(source.privateToolNames ?? [])]);
   return Object.freeze({
     $feature: skillBrand,
-    name: context.localName,
+    name,
     description: optionalText(parsed.metadata.description, 'description')
-      ?? markdownSummary(parsed.instructions, context.localName),
+      ?? markdownSummary(parsed.instructions, name),
     instructions: parsed.instructions,
-    toolNames: optionalStringList(parsed.metadata.tools, 'tools'),
+    toolNames: toolNames.length ? Object.freeze(toolNames) : undefined,
     platforms: optionalStringList(parsed.metadata.platforms, 'platforms'),
     scopes: optionalScopes(parsed.metadata.scopes),
     permissions: optionalStringList(parsed.metadata.permissions, 'permissions'),
     keywords: optionalStringList(parsed.metadata.keywords, 'keywords'),
     tags: optionalStringList(parsed.metadata.tags, 'tags'),
     always: optionalBoolean(parsed.metadata.always, 'always'),
+    ...(agentName(context.localName) ? { agentName: agentName(context.localName) } : {}),
   });
+}
+
+function agentName(localName: string): string | undefined {
+  const segments = localName.split('/');
+  return segments[0] === 'agent' && segments.length === 3 ? segments[1] : undefined;
 }
 
 function parseFrontmatter(markdown: string, context: ValidationContext): {
@@ -73,14 +92,26 @@ function parseFrontmatter(markdown: string, context: ValidationContext): {
   }
   const metadata = (loaded ?? {}) as Record<string, unknown>;
   const declaredName = optionalText(metadata.name, 'name');
-  if (declaredName && declaredName !== context.localName) {
+  const directoryName = context.localName.split('/').at(-1)!;
+  if (declaredName && declaredName !== directoryName) {
     throw new TypeError(
-      `Skill ${context.source} name ${declaredName} must match directory ${context.localName}`,
+      `Skill ${context.source} name ${declaredName} must match directory ${directoryName}`,
     );
   }
   const instructions = markdown.slice(match[0].length).trim();
   if (!instructions) throw new TypeError(`Skill ${context.source} must contain Markdown instructions`);
   return { metadata, instructions };
+}
+
+function isSkillPackageSource(value: unknown): value is SkillPackageSource {
+  return typeof value === 'object' && value !== null
+    && typeof (value as SkillPackageSource).markdown === 'string'
+    && ((value as SkillPackageSource).privateToolNames === undefined
+      || Array.isArray((value as SkillPackageSource).privateToolNames));
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }
 
 function optionalText(value: unknown, field: string): string | undefined {

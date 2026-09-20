@@ -77,6 +77,26 @@ describe('resolveSubagentAgentTools', () => {
     expect(tools.map(tool => tool.name)).toEqual(['read_file']);
   });
 
+  it('admits direct Agent-private Tools without bypassing Skill activation', () => {
+    const tools = resolveSubagentAgentTools({
+      allTools: [
+        ...catalog,
+        makeTool('plugin__agent__reviewer__inspect'),
+        makeTool('plugin__agent__reviewer__skill__audit__report'),
+        makeTool('plugin__agent__writer__publish'),
+      ],
+      task: 'review',
+      role: 'reviewer',
+      config: DEFAULT_CONFIG,
+      agentMeta: { name: 'reviewer', description: 'review', filePath: '/agents/reviewer' },
+    });
+
+    expect(tools.map((tool) => tool.name)).toContain('plugin__agent__reviewer__inspect');
+    expect(tools.map((tool) => tool.name))
+      .not.toContain('plugin__agent__reviewer__skill__audit__report');
+    expect(tools.map((tool) => tool.name)).not.toContain('plugin__agent__writer__publish');
+  });
+
   it('任务含 generate_image 时优先载入该工具', () => {
     const tools = resolveSubagentAgentTools({
       allTools: catalog,

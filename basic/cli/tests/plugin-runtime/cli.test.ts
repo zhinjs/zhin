@@ -46,7 +46,7 @@ describe('Plugin Runtime CLI project tooling', () => {
       await readFile(join(root, 'tsconfig.json'), 'utf8'),
     ) as { include: string[] };
     expect(tsconfig.include).toContain('adapters/**/*.ts');
-    expect(tsconfig.include).toContain('agent/tools/*.ts');
+    expect(tsconfig.include).toContain('tools/<name>/index.ts');
     expect(tsconfig.include).toContain('mcp/*.ts');
     expect(tsconfig.include).toContain('pages/*.ts');
     expect(tsconfig.include).toContain('pages/*.tsx');

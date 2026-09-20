@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Harness: agent/tools/*.ts inputSchema keys must appear in defineAgentTool<> and execute param types.
+ * Harness: tools/<name>/index.ts inputSchema keys must appear in defineAgentTool<> and execute param types.
  * Monorepo files under plugins/ and examples/ must use the canonical defineAgentTool API.
  */
 import * as fs from 'node:fs';
@@ -21,16 +21,8 @@ function walkTsTools(dir, visit) {
   for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     if (ent.name === 'node_modules' || ent.name === 'lib' || ent.name === 'dist') continue;
     const abs = path.join(dir, ent.name);
-    if (ent.isDirectory()) {
-      if (ent.name === 'tools' && path.basename(path.dirname(abs)) === 'agent') {
-        for (const file of fs.readdirSync(abs)
-          .filter((f) => f.startsWith('$') && f.endsWith('.ts'))) {
-          visit(path.join(abs, file));
-        }
-      } else {
-        walkTsTools(abs, visit);
-      }
-    }
+    if (ent.isDirectory()) walkTsTools(abs, visit);
+    else if (ent.isFile() && ent.name === 'index.ts' && path.basename(path.dirname(path.dirname(abs))) === 'tools') visit(abs);
   }
 }
 

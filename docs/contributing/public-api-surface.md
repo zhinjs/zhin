@@ -26,7 +26,7 @@
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR 组件（`components/$*.ts(x)` 默认导出） |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | 中间件模块（`middlewares/$*.ts` 默认导出） |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle 事件处理器（`handlers/**/$*.ts` 默认导出；`/` → `.` 推断事件名） |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`agent/tools/$*.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool`（`tools/<name>/index.ts`） | `@zhin.js/tool` | AI 工具模块，Agent 自动发现 |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | generation-owned Prompt 分段，声明 layer、预算保留级别与适用 profile |
 
 > 注意：**没有 `defineAgentSkill`**。Agent 技能是纯 Markdown（`skills/<name>/SKILL.md`，由 `@zhin.js/skill` 的 `parseSkillMarkdown` 解析），不是代码符号。
@@ -40,7 +40,8 @@
 | `adapters/` | `stable` | `@zhin.js/adapter`（作者 import：`zhin.js/adapter`） | 仅 `$` 文件是适配器入口 |
 | `middlewares/` | `stable` | `@zhin.js/middleware`（作者 import：`zhin.js/middleware`） | 仅 `$` 文件是中间件入口 |
 | `handlers/` | `stable` | `@zhin.js/handler`（作者 import：`zhin.js/handler`） | 仅 `$` 文件是 Lifecycle 事件处理器入口（`/` 分段 localName，省略 `event` 时映为 `.`） |
-| `agent/tools/` | `experimental` | `@zhin.js/tool` | 仅 `$*.ts` 是 Agent Tool 入口；其他文件是普通模块 |
+| `tools/` | `experimental` | `@zhin.js/tool` | `tools/<name>/index.ts` 是公共 Tool；Agent/Skill 私有 Tool 放在所属目录的同构 `tools/` 下 |
+| `hooks/` | `experimental` | `zhin.js/agent/hooks` | `hooks/<name>/index.ts`；Agent/Skill 私有 Hook 放在所属目录的同构 `hooks/` 下 |
 | `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent 发现 | Skill Markdown，可在同目录附带参考资料与脚本（随 npm 包发布） |
 | `pages/` | `experimental` | `@zhin.js/console-page` | `$*.ts(x)` Console 页面模块目录；`$nav` / `$footer` 是布局槽 |
 
@@ -126,7 +127,7 @@
 | Core `ToolFeature` / `SkillFeature` | `removed` | 源码与 public surface 均已删除 | Tool / Skill 统一走 Feature provider、generation projection 与 Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | 源码与 public surface 均已删除 | Agent 只保留读取 Runtime snapshot 的 `CapabilityIngress` |
 | Agent `AgentFeature` / `MCPFeature` | `removed` | 源码与 public surface 均已删除 | Agent / MCP 声明统一由各自 Feature provider 投影为 generation-owned `AgentIndex` / `McpIndex` |
-| `@zhin.js/agent/tools` 与 Agent 作者侧 Tool bridge | `removed` | 子路径、重复 definition/context/discovery 均已删除 | Tool 创作统一使用 `@zhin.js/tool` 与 `agent/tools/$*.ts` |
+| `@zhin.js/tools` 与 Agent 作者侧 Tool bridge | `removed` | 子路径、重复 definition/context/discovery 均已删除 | Tool 创作统一使用 `@zhin.js/tool` 与 `tools/<name>/index.ts` |
 | `@zhin.js/core/tool-zod` | `removed` | Core 子路径与 Zod 3 结构兼容已删除 | Tool 输入 Schema 统一由 `@zhin.js/tool` 的 Zod 4 / JSON Schema 契约拥有 |
 | Core / Agent deprecated 同义 API | `removed` | 死别名、旧类型与始终失败的迁移函数已删除 | 使用 canonical Segment、Turn、Schedule、Prompt 与 executor-owned lifecycle API |
 | Schedule `resolveAdapter` delivery fallback | `removed` | `TaskExecutor` 与 `deliverScheduleToAdapter` 必须注入 `NotificationRouter` | Schedule 出站由 composition root 创建的 Router 独占路由与发送权威 |

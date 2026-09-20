@@ -32,6 +32,7 @@ export interface ToolDescriptor {
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly hidden?: boolean;
+  readonly placement?: AgentToolDefinition['placement'];
   readonly source: string;
 }
 
@@ -128,6 +129,7 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     tags: definition.tags,
     keywords: definition.keywords,
     hidden: definition.hidden,
+    placement: definition.placement,
     source: entry.source,
   });
 }

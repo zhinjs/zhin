@@ -99,7 +99,7 @@ After setup, click **Verify** in the LINE Developers Console to test connectivit
 | Category | Path |
 |----------|------|
 | Permit vocabulary | `agent/PERMITS.md` |
-| Platform tools (2) | `agent/tools/` (`line_get_profile`, `line_get_group_members`) |
+| Platform tools (2) | `tools/` (`line_get_profile`, `line_get_group_members`) |
 | Skill documentation | `skills/line/SKILL.md` |
 
 ## Known Limitations

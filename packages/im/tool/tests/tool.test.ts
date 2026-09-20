@@ -33,7 +33,7 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Tool Feature', () => {
-  it('brands definitions and discovers flat agent/tools/$*.ts', async () => {
+  it('brands definitions and discovers flat tools/<name>/index.ts', async () => {
     const definition = defineAgentTool({
       description: 'Get weather',
       execute: (input: { city: string }) => input.city,
@@ -41,11 +41,14 @@ describe('Tool Feature', () => {
     expect(definition.approval).toBe('on-risk');
     expect(parseAgentToolDefinition(definition)).toBe(definition);
     const host = new MemoryHost({
-      '/project/agent/tools': [
-        { name: '$weather.ts', kind: 'file' },
-        { name: 'nested', kind: 'directory' },
+      '/project/tools': [
+        { name: 'weather', kind: 'directory' },
       ],
-    }, new Map([['/project/agent/tools/$weather.ts', { default: definition }]]));
+      '/project/tools/weather': [
+        { name: 'index.ts', kind: 'file' },
+        { name: 'client.ts', kind: 'file' },
+      ],
+    }, new Map([['/project/tools/weather/index.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -59,7 +62,7 @@ describe('Tool Feature', () => {
       execute: () => 'ok',
     });
     const host = new MemoryHost({
-      '/project/tools': [
+      '/project/agent/tools': [
         { name: '$send_user_like.ts', kind: 'file' },
       ],
     }, new Map([['/project/tools/$send_user_like.ts', { default: definition }]]));
@@ -70,7 +73,7 @@ describe('Tool Feature', () => {
     expect(slots).toEqual([]);
   });
 
-  it('discovers plugin AI tools from agent/tools with the same owner context', async () => {
+  it('discovers plugin AI tools from tools with the same owner context', async () => {
     const definition = defineAgentTool({
       description: 'Get current news',
       tags: ['news'],
@@ -78,10 +81,11 @@ describe('Tool Feature', () => {
       execute: () => 'ok',
     });
     const host = new MemoryHost({
-      '/project/agent/tools': [
-        { name: '$news.ts', kind: 'file' },
+      '/project/tools': [
+        { name: 'news', kind: 'directory' },
       ],
-    }, new Map([['/project/agent/tools/$news.ts', { default: definition }]]));
+      '/project/tools/news': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([['/project/tools/news/index.ts', { default: definition }]]));
     const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
       owner: rootPluginId(), packageRoot: '/project',
     }]);
@@ -92,6 +96,40 @@ describe('Tool Feature', () => {
       tags: ['news'],
       keywords: ['today'],
     });
+  });
+
+  it('derives stable identities for Agent and Skill private tools', async () => {
+    const definition = defineAgentTool({ description: 'Private', execute: () => 'ok' });
+    const host = new MemoryHost({
+      '/project/agents': [{ name: 'reviewer', kind: 'directory' }],
+      '/project/agents/reviewer/tools': [{ name: 'inspect', kind: 'directory' }],
+      '/project/agents/reviewer/tools/inspect': [{ name: 'index.ts', kind: 'file' }],
+      '/project/agents/reviewer/skills': [{ name: 'audit', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools': [{ name: 'report', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools/report': [{ name: 'index.ts', kind: 'file' }],
+      '/project/skills': [{ name: 'research', kind: 'directory' }],
+      '/project/skills/research/tools': [{ name: 'search', kind: 'directory' }],
+      '/project/skills/research/tools/search': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([
+      ['/project/agents/reviewer/tools/inspect/index.ts', { default: definition }],
+      ['/project/agents/reviewer/skills/audit/tools/report/index.ts', { default: definition }],
+      ['/project/skills/research/tools/search/index.ts', { default: definition }],
+    ]));
+    const slots = await new FeatureDiscovery(host).discover(toolFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+
+    expect(slots.map((slot) => slot.localName)).toEqual([
+      'agent/reviewer/inspect',
+      'skill/research/search',
+      'agent/reviewer/skill/audit/report',
+    ]);
+    expect(slots.map((slot) => slot.definition.placement)).toEqual([
+      { kind: 'agent', agent: 'reviewer' },
+      { kind: 'skill', skill: 'research' },
+      { kind: 'agent-skill', agent: 'reviewer', skill: 'audit' },
+    ]);
+    expect(slots.every((slot) => slot.definition.hidden === true)).toBe(true);
   });
 
   it('keeps immutable visibility, permit, and approval metadata in the Tool index', () => {
@@ -111,7 +149,7 @@ describe('Tool Feature', () => {
       owner: root,
       feature: toolFeatureId,
       localName: 'moderate',
-      source: '/tools/$moderate.ts',
+      source: '/tools/moderate/index.ts',
       definition,
     });
     const snapshot = createSnapshot([slot], createToken('unused').id);

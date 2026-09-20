@@ -127,11 +127,25 @@ export interface AgentToolDefinition<
   readonly tags?: readonly string[];
   readonly keywords?: readonly string[];
   readonly hidden?: boolean;
+  /** @internal Filesystem-derived private capability binding. */
+  readonly placement?: ToolPlacement;
   execute(
     input: TInput,
     context: ToolExecutionContext<TConfig, TAdapter>,
   ): TResult | Promise<TResult>;
 }
+
+type ToolPlacement = Readonly<{
+  kind: 'agent';
+  agent: string;
+} | {
+  kind: 'skill';
+  skill: string;
+} | {
+  kind: 'agent-skill';
+  agent: string;
+  skill: string;
+}>;
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext<TConfig = unknown> {
@@ -214,7 +228,10 @@ export function defineAgentTool<
 }
 
 /** @internal Runtime validation for convention-discovered modules. */
-export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
+export function parseAgentToolDefinition(
+  value: unknown,
+  context?: import('@zhin.js/feature-kit').ValidationContext,
+): AgentToolDefinition {
   if (!value || typeof value !== 'object') throw invalidTool();
   const definition = value as Partial<AgentToolDefinition>;
   if (
@@ -236,7 +253,26 @@ export function parseAgentToolDefinition(value: unknown): AgentToolDefinition {
     || (definition.scopes?.some((scope) => scope !== 'private' && scope !== 'group' && scope !== 'channel') ?? false)
     || (definition.hidden !== undefined && typeof definition.hidden !== 'boolean')
   ) throw invalidTool();
-  return definition as AgentToolDefinition;
+  const placement = context?.localName
+    ? placementFromLocalName(context.localName)
+    : undefined;
+  return placement
+    ? Object.freeze({ ...definition, hidden: true, placement }) as AgentToolDefinition
+    : definition as AgentToolDefinition;
+}
+
+function placementFromLocalName(localName: string): ToolPlacement | undefined {
+  const segments = localName.split('/');
+  if (segments[0] === 'agent' && segments[2] === 'skill' && segments.length === 5) {
+    return Object.freeze({ kind: 'agent-skill', agent: segments[1]!, skill: segments[3]! });
+  }
+  if (segments[0] === 'agent' && segments.length === 3) {
+    return Object.freeze({ kind: 'agent', agent: segments[1]! });
+  }
+  if (segments[0] === 'skill' && segments.length === 3) {
+    return Object.freeze({ kind: 'skill', skill: segments[1]! });
+  }
+  return undefined;
 }
 
 function validateStringList(name: string, values: readonly string[] | undefined): void {

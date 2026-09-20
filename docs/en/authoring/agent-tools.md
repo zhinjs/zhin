@@ -1,15 +1,15 @@
 ---
 title: Agent Tools and Skills
-description: agent/tools/$*.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and agents/<name>/agent.json
+description: tools/<name>/index.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and agents/<name>/agent.json
 ---
 
 # Agent Tools and Skills
 
-Want the model to search a song or check a lottery recommendation for the user? Put the logic in `agent/tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
+Want the model to search a song or check a lottery recommendation for the user? Put the logic in `tools/`, or conditionally call `context.addTool()` from `setup()`. Both forms write the same candidate-generation capability table and become visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
 
 ```mermaid
 flowchart LR
-    A["agent/tools/$*.ts<br/>defineAgentTool"] --> C[Candidate capability table]
+    A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[Candidate capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex projection"]
     D --> E[CapabilityIngress]
@@ -19,12 +19,12 @@ flowchart LR
     H --> I[Tool set callable by the model]
 ```
 
-## Path One: `agent/tools/$*.ts` Convention
+## Path One: `tools/<name>/index.ts` Convention
 
-After mounting the `@zhin.js/tool` Feature, only `$*.ts` files directly under the plugin package's `agent/tools/` directory are discovered, and each default-exports `defineAgentTool(...)`. Unprefixed files such as `helper.ts` remain ordinary importable modules:
+After mounting the `@zhin.js/tool` Feature, each `tools/<name>/index.ts` module is discovered and must default-export `defineAgentTool(...)`. Supporting modules stay beside the entry in the same named directory:
 
 ```ts
-// agent/tools/$echo.ts
+// tools/echo/index.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -131,31 +131,40 @@ It requests input through the current Turn's `QuestionPort` and matches replies 
 
 Skills use `skills/<name>/SKILL.md`. A plugin main Agent uses the standard root `AGENTS.md`. Named sub-agents use self-contained `agents/<name>/` directories discovered by `@zhin.js/agent-feature`.
 
-Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md) for the complete manifest and directory contract.
+Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, `skills/`, `hooks/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See [`@zhin.js/agent-feature`](../../../packages/im/agent-feature/README.md) for the complete manifest and directory contract.
 
-The `tools` field in `agent.json` only requests Tool names; the runtime intersects them with Tools admitted for the current Turn. Scripts under `agents/<name>/tools/` gain no execution authority and must run through governed `bash` or an explicit Tool capability.
+The `tools` field in `agent.json` may request additional public Tools. `agents/<agent>/tools/<name>/index.ts` defines an Agent-private Tool. A Skill-private Tool lives at `skills/<skill>/tools/<name>/index.ts`; an Agent-private Skill and its Tools live at `agents/<agent>/skills/<skill>/SKILL.md` and its nested `tools/<name>/index.ts`. Every Tool still passes the same permission, approval, and generation admission path.
 
 ## Plugin Agent authoring directories
 
 ```text
 my-plugin/
 ├── AGENTS.md
-├── agent/tools/
-│   ├── $short_url.ts
-│   └── client.ts
+├── tools/
+│   └── short-url/
+│       ├── index.ts
+│       └── client.ts
 ├── skills/short-url/
-│   └── SKILL.md
+│   ├── SKILL.md
+│   ├── tools/normalize/index.ts
+│   └── hooks/audit/index.ts
+├── hooks/audit/index.ts
 └── agents/reviewer/
     ├── agent.json
     ├── system.md
     ├── boundaries.md
     ├── conventions.md
     ├── workflows/
-    ├── tools/
+    ├── tools/check-result/index.ts
+    ├── skills/review/
+    │   ├── SKILL.md
+    │   ├── tools/check-result/index.ts
+    │   └── hooks/audit/index.ts
+    ├── hooks/audit/index.ts
     └── knowledge/
 ```
 
-`agent/tools/$*.ts` and `addTool()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`.
+`tools/<name>/index.ts` and `addTool()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`.
 
 ## Give an Agent plugin-owned context
 

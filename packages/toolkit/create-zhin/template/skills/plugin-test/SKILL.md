@@ -69,9 +69,9 @@ describe('commands/hello', () => {
 
 ```typescript
 import { describe, it, expect } from 'vitest';
-import weather from '../agent/tools/$get_weather.js';
+import weather from '../tools/get_weather/index.js';
 
-describe('agent/tools/$get_weather', () => {
+describe('tools/get_weather', () => {
   it('formats city weather', async () => {
     const text = await weather.execute({ city: '上海' }, {} as never);
     expect(text).toContain('上海');
@@ -101,6 +101,6 @@ plugin = new Plugin('/plugins/my-plugin/src/index.ts', root)
 
 ```markdown
 ## 测试摘要
-- 覆盖：`commands/...` / `agent/tools/...`
+- 覆盖：`commands/...` / `tools/...`
 - 命令：`pnpm --filter <pkg> test`
 ```

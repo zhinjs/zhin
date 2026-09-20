@@ -133,7 +133,7 @@ export default defineCommand({
 ```
 
 ```typescript
-// agent/tools/$get_weather.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
+// tools/get_weather/index.ts — 须已安装 @zhin.js/agent 且挂载 tool Feature
 import { defineAgentTool } from 'zhin.js/tool';
 
 export default defineAgentTool({

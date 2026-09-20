@@ -60,6 +60,7 @@ export class CapabilityIngress {
     owner: PluginId,
     isActive: () => boolean = () => true,
     turn?: TurnAccessContext,
+    selectedAgent?: string,
   ): Promise<AgentCapabilities> {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
     const tools = projection(snapshot, toolFeatureId, ToolIndex);
@@ -67,11 +68,19 @@ export class CapabilityIngress {
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
-    const featureTools = await bindTools(tools, owner, isActive, turn, resolvePermissionHost(snapshot));
+    const featureTools = await bindTools(
+      tools,
+      owner,
+      isActive,
+      turn,
+      resolvePermissionHost(snapshot),
+      selectedAgent,
+    );
     const featureSkills = await bindSkills(
       projection(snapshot, skillFeatureId, SkillIndex),
       turn,
       resolvePermissionHost(snapshot),
+      selectedAgent,
     );
     const seam = resolveSeamIntegration(snapshot);
     const seamTools = seam
@@ -197,13 +206,20 @@ async function bindSkills(
   index: SkillIndex | undefined,
   turn?: TurnAccessContext,
   host?: PermissionHost,
+  selectedAgent?: string,
 ): Promise<readonly SkillDescriptor[]> {
   if (!index) return Object.freeze([]);
   const access = await Promise.all(index.list().map(async (descriptor) => ({
     descriptor,
-    allowed: await canAccessDescriptor(descriptor, turn, host),
+    allowed: belongsToSelectedAgent(descriptor.agentName, selectedAgent)
+      && await canAccessDescriptor(descriptor, turn, host),
   })));
   return Object.freeze(access.filter(({ allowed }) => allowed).map(({ descriptor }) => descriptor));
+}
+
+function belongsToSelectedAgent(agentName: string | undefined, selectedAgent: string | undefined): boolean {
+  if (!agentName) return true;
+  return selectedAgent === agentName || selectedAgent?.endsWith(`__${agentName}`) === true;
 }
 
 function assertDistinctCapabilities(
@@ -223,6 +239,7 @@ async function bindTools(
   isActive: () => boolean,
   turn?: TurnAccessContext,
   host?: PermissionHost,
+  selectedAgent?: string,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
   const descriptors = index.list();
@@ -236,12 +253,23 @@ async function bindTools(
     .filter((r) => r.allowed)
     .map((r) => Object.freeze({
       ...r.descriptor,
+      hidden: isSelectedAgentTool(r.descriptor.placement, selectedAgent)
+        ? false
+        : r.descriptor.hidden,
       name: r.descriptor.qualifiedName,
       execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
         return index.execute<TInput, TResult>(r.descriptor.owner, r.descriptor.name, input, invocation);
       },
     })));
+}
+
+function isSelectedAgentTool(
+  placement: ToolDescriptor['placement'],
+  selectedAgent: string | undefined,
+): boolean {
+  return placement?.kind === 'agent'
+    && belongsToSelectedAgent(placement.agent, selectedAgent);
 }
 
 async function canAccessDescriptor(

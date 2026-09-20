@@ -81,7 +81,7 @@ plugins/{name}/
 | `commands/**/$*.ts` | `defineCommand()`；未加 `$` 的文件是普通依赖模块 |
 | `middlewares/$*.ts` | `defineMiddleware()` |
 | `components/$*.tsx` | `defineComponent()` |
-| `agent/tools/$*.ts` | `defineAgentTool()` |
+| `tools/<name>/index.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()` |
 | `skills/<name>/SKILL.md` | Markdown Skill 入口 |
 | `agents/<name>/` | `agent.json` + `system.md` + `boundaries.md` + `conventions.md` 子 Agent |
@@ -170,7 +170,7 @@ export default defineCommand({
     "jsx": "react-jsx",
     "jsxImportSource": "zhin.js"
   },
-  "include": ["plugin.ts", "commands/**/*", "middlewares/**/*", "components/**/*", "agent/tools/**/*"],
+  "include": ["plugin.ts", "commands/**/*", "middlewares/**/*", "components/**/*", "tools/**/*"],
   "exclude": ["node_modules", "tests"]
 }
 ```

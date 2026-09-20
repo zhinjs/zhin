@@ -49,7 +49,7 @@ life-assistant-bot/
 ├── plugin.ts                # Root Plugin 生命周期入口
 ├── schema.json              # Root 配置约束
 ├── commands/                # remind / mood
-├── agent/tools/             # $get-current-time.ts
+├── tools/             # $get-current-time.ts
 └── README.md
 ```
 

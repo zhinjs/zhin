@@ -26,7 +26,7 @@ Three tiers:
 | `defineComponent` | `stable` | `zhin.js/component` | `@zhin.js/component` | Satori/SSR component (default export in `components/`) |
 | `defineMiddleware` | `stable` | `zhin.js/middleware` | `@zhin.js/middleware` | Middleware module (default export in `middlewares/`) |
 | `defineHandler` | `stable` | `zhin.js/handler` | `@zhin.js/handler` | Lifecycle event handler (default export in `handlers/`; `/` → `.` event inference) |
-| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`agent/tools/$*.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
+| `defineAgentTool` | `experimental` | `@zhin.js/tool` (`tools/<name>/index.ts`) | `@zhin.js/tool` | AI tool module, auto-discovered by Agent |
 | `defineAgentPromptSection` | `experimental` | `@zhin.js/prompt-section` | `@zhin.js/prompt-section` | Generation-owned Prompt section with layer, retention budget, and profile scope |
 
 > Note: **There is no `defineAgentSkill`**. Agent skills are pure Markdown (`skills/<name>/SKILL.md`, parsed by `parseSkillMarkdown` from `@zhin.js/skill`), not code symbols.
@@ -40,7 +40,8 @@ Three tiers:
 | `adapters/` | `stable` | `@zhin.js/adapter` (author import: `zhin.js/adapter`) | Adapter module directory |
 | `middlewares/` | `stable` | `@zhin.js/middleware` (author import: `zhin.js/middleware`) | Middleware module directory |
 | `handlers/` | `stable` | `@zhin.js/handler` (author import: `zhin.js/handler`) | Lifecycle event handler directory (`/` localName segments; omit `event` → `.` event; runtime currently wires `message.receive`) |
-| `agent/tools/` | `experimental` | `@zhin.js/tool` | Only `$*.ts` files are Agent Tool entries; other files are ordinary modules |
+| `tools/` | `experimental` | `@zhin.js/tool` | `tools/<name>/index.ts` is public; Agent/Skill-private Tools use the same nested `tools/` shape |
+| `hooks/` | `experimental` | `zhin.js/agent/hooks` | `hooks/<name>/index.ts`; Agent/Skill-private Hooks use the same nested `hooks/` shape |
 | `skills/<name>/SKILL.md` | `experimental` | `@zhin.js/skill` / Agent discovery | Skill Markdown with colocated references and scripts (published with npm packages) |
 | `pages/` | `experimental` | `@zhin.js/console-page` | Console page module directory |
 
@@ -122,7 +123,7 @@ Three tiers:
 | `MessageCommand` / classic `CommandFeature` | `removed` | Deleted from source and the public surface | Commands use `defineCommand` and Runtime `CommandIndex` |
 | Core `ToolFeature` / `SkillFeature` | `removed` | Deleted from source and the public surface | Tool / Skill use Feature providers, generation projections, and Agent `CapabilityIngress` |
 | Agent `FeatureCapabilityIngress` | `removed` | Deleted from source and the public surface | Agent retains only the `CapabilityIngress` that reads Runtime snapshots |
-| `@zhin.js/agent/tools` and the Agent authoring Tool bridge | `removed` | The subpath and duplicate definition/context/discovery were deleted | Author Tools through `@zhin.js/tool` and `agent/tools/$*.ts` |
+| `@zhin.js/tools` and the Agent authoring Tool bridge | `removed` | The subpath and duplicate definition/context/discovery were deleted | Author Tools through `@zhin.js/tool` and `tools/<name>/index.ts` |
 | `@zhin.js/core/tool-zod` | `removed` | The Core subpath and Zod 3 structural compatibility were deleted | `@zhin.js/tool` owns the single Zod 4 / JSON Schema input contract |
 | Classic Core `Adapter` / `Endpoint` runtime | `removed` | Classes, capability state, lifecycle helpers, and dedicated tests were deleted | Adapters use `defineAdapter`, `Endpoint<TClient>`, and the generation-owned `AdapterIndex` from `zhin.js/adapter` |
 | Classic Core `Plugin` runtime | `removed` | The Plugin class, Context ALS, duplicate Dispatcher, and inbound pipeline were deleted | Plugin lifecycle belongs to generation snapshots; IM dispatch only uses `ImRuntime` |

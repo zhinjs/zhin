@@ -18,7 +18,7 @@ API Reference 直接读取 Zhin 的公开创作入口、Host 契约和 JSDoc。�
 | 编写组件 | `zhin.js/component` |
 | 编写中间件 | `zhin.js/middleware` |
 | 编写 Handler | `zhin.js/handler` |
-| 编写 Agent Tool | `@zhin.js/tool`；`agent/tools/` 也可从 `zhin.js/agent` 导入 |
+| 编写 Agent Tool | `@zhin.js/tool`；`tools/` 也可从 `zhin.js/agent` 导入 |
 | 解析 Skill Markdown | `@zhin.js/skill` |
 | 注入 Prompt Section | `@zhin.js/prompt-section`（experimental） |
 | 使用数据库、调度与跨平台发送 Host | `zhin.js` 的 `databaseHostToken`、`scheduleHostToken`、`outboundHostToken` |

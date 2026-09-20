@@ -101,6 +101,7 @@
     "schema.json",
     "src",
     "lib",
+    "tools",
     "agent",
     "skills",
     "README.md",

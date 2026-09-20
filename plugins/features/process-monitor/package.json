@@ -17,6 +17,7 @@
     "plugin.js",
     "schema.json",
     "commands",
+    "tools",
     "agent",
     "src",
     "lib",

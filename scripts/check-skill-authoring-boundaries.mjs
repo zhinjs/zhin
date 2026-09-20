@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Harness: Skill authoring has one shape: skills/<name>/SKILL.md.
+ * Harness: Skill authoring uses skills/<name>/SKILL.md, optionally under an Agent.
  * Packages that publish Skills must ship the directory, depend on @zhin.js/skill,
  * and mount the Feature so the files are reachable at runtime.
  */
@@ -19,31 +19,24 @@ const nativeToolNames = new Set([
   'read_file', 'todo_read', 'todo_write', 'web_fetch', 'web_search', 'write_file',
 ]);
 
-function walk(directory) {
-  if (!fs.existsSync(directory)) return;
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (!entry.isDirectory() || ignored.has(entry.name)) continue;
-    const target = path.join(directory, entry.name);
-    if (entry.name === 'skills' && path.basename(directory) === 'agent') {
-      violations.push(`${relative(target)}: legacy agent/skills directory; use skills/<name>/SKILL.md`);
-    }
-    walk(target);
-  }
-}
-
 function relative(target) {
   return path.relative(repoRoot, target).split(path.sep).join('/');
 }
 
-for (const workspaceRoot of workspaceRoots) walk(path.join(repoRoot, workspaceRoot));
-
 for (const workspaceRoot of workspaceRoots) {
   for (const packageJson of packageManifests(path.join(repoRoot, workspaceRoot))) {
     const packageRoot = path.dirname(packageJson);
-    const skillsRoot = path.join(packageRoot, 'skills');
-    if (!fs.existsSync(skillsRoot)) continue;
-    const entries = fs.readdirSync(skillsRoot, { withFileTypes: true });
-    const skillDirectories = entries.filter((entry) => entry.isDirectory());
+    const skillRoots = [path.join(packageRoot, 'skills')];
+    const agentsRoot = path.join(packageRoot, 'agents');
+    if (fs.existsSync(agentsRoot)) {
+      for (const agent of fs.readdirSync(agentsRoot, { withFileTypes: true })) {
+        if (agent.isDirectory()) skillRoots.push(path.join(agentsRoot, agent.name, 'skills'));
+      }
+    }
+    let skillCount = 0;
+    for (const skillsRoot of skillRoots) {
+      if (!fs.existsSync(skillsRoot)) continue;
+      const entries = fs.readdirSync(skillsRoot, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isFile() && entry.name === '.gitkeep') continue;
       if (!entry.isDirectory() || !/^[a-z0-9][a-z0-9-]*$/u.test(entry.name)) {
@@ -54,6 +47,7 @@ for (const workspaceRoot of workspaceRoots) {
         violations.push(`${relative(path.join(skillsRoot, entry.name))}: missing SKILL.md`);
         continue;
       }
+      skillCount += 1;
       const skillFile = path.join(skillsRoot, entry.name, 'SKILL.md');
       const frontmatter = readFrontmatter(fs.readFileSync(skillFile, 'utf8'));
       let metadata;
@@ -68,19 +62,21 @@ for (const workspaceRoot of workspaceRoots) {
         violations.push(`${relative(skillFile)}: name must match directory ${entry.name}`);
       }
       const localTools = new Set(Array.isArray(metadata.tools) ? metadata.tools : []);
-      const toolRoot = path.join(packageRoot, 'agent', 'tools');
+      const toolRoot = path.join(packageRoot, 'tools');
       const availableTools = new Set(fs.existsSync(toolRoot)
         ? fs.readdirSync(toolRoot, { withFileTypes: true })
-          .filter((tool) => tool.isFile() && /^\$.*\.ts$/u.test(tool.name))
-          .map((tool) => tool.name.slice(1, -3))
+          .filter((tool) => tool.isDirectory()
+            && fs.existsSync(path.join(toolRoot, tool.name, 'index.ts')))
+          .map((tool) => tool.name)
         : []);
       for (const tool of localTools) {
         if (!availableTools.has(tool) && !nativeToolNames.has(tool)) {
-          violations.push(`${relative(skillFile)}: tools entry ${tool} has no agent/tools/$${tool}.ts`);
+          violations.push(`${relative(skillFile)}: tools entry ${tool} has no tools/${tool}/index.ts`);
         }
       }
     }
-    if (skillDirectories.length === 0) continue;
+    }
+    if (skillCount === 0) continue;
     const manifest = JSON.parse(fs.readFileSync(packageJson, 'utf8'));
     if (manifest.private !== true && !manifest.files?.includes('skills')) {
       violations.push(`${relative(packageJson)}: files must include skills`);

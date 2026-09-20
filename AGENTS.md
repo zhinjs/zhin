@@ -107,7 +107,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 ## 必须遵守的约束（代码约定）
 
 - TypeScript 本地导入通常必须使用 `.js` 扩展名。
-- **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；能力用约定目录（`defineCommand` / `defineMiddleware` / `defineHandler` / `defineAgentTool` 等）。单文件约定中只有 `$` 开头的文件是能力入口，运行时会剥离 `$` 形成 localName；目录能力使用 `skills/<name>/SKILL.md` 与 `agents/<name>/agent.json`。主 Agent 使用插件根 `AGENTS.md`；子 Agent 必须同时包含 `system.md`、`boundaries.md`、`conventions.md`，后者只能延伸根规则。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
+- **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；单文件能力入口使用 `$name.ts`。目录能力统一使用命名目录：`tools/<name>/index.ts`、`skills/<name>/SKILL.md`、`hooks/<name>/index.ts`、`agents/<name>/agent.json`。Agent/Skill 私有能力放在所属目录内并沿用同一结构。主 Agent 使用插件根 `AGENTS.md`；子 Agent 必须同时包含 `system.md`、`boundaries.md`、`conventions.md`，后者只能延伸根规则。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
 - **Legacy API 已移除**：`usePlugin()` / `getPlugin()` 已不再导出，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:no-removed-plugin-api` 防止仓库内重新引入这些调用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。
 - Endpoint 可按 `capabilities`（`inbound` / `outbound`）拆分 IO；跨平台出站用 `inject(adapter).sendMessage`，见 [docs/concepts/message-flow.md](docs/concepts/message-flow.md)。
@@ -135,7 +135,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 - 框架核心、Plugin/Adapter/Dispatcher：看 packages/im/core。
 - AI 引擎、Session、Compaction、Provider、ModelRegistry、`getModel`：看 [packages/im/ai](packages/im/ai/README.md) 与 [docs/ai/index.md](docs/ai/index.md)。
 - AI 编排、工具发现、安全策略、MCP client：看 [packages/im/agent](packages/im/agent/README.md)。
-- **插件 AI 创作面**（`agent/tools`、`skills/<name>/SKILL.md`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
+- **插件 AI 创作面**（`tools/<name>/index.ts`、`skills/<name>/SKILL.md`、`agents/<name>/`、`hooks/<name>/index.ts`）：看 [docs/authoring/agent-tools.md](docs/authoring/agent-tools.md)。
 - 应用入口（IM 核心 + 可选 agent 子路径）：看 [packages/im/zhin](packages/im/zhin/README.md)（canonical `conversation_events` 由 CLI Database Host 装配）。
 - Host 运行时（http / mcp / a2a）：看 packages/host。
 - 可选服务插件：看 plugins/services。

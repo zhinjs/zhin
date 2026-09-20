@@ -148,7 +148,7 @@ describe('createWorkspace', () => {
       'commands/$hello.ts',
       'components/$status-card.ts',
       'middlewares/.gitkeep',
-      'agent/tools/.gitkeep',
+      'tools/.gitkeep',
       'skills/skill-creator/SKILL.md',
       'agents/.gitkeep',
       'pages/$index.tsx',
@@ -216,7 +216,7 @@ describe('createWorkspace', () => {
       { package: '@zhin.js/tool', api: '^1.0.0' },
       { package: '@zhin.js/prompt-section', api: '^1.0.0' },
     ])
-    expect(await fs.pathExists(path.join(projectPath, 'agent', 'tools', '$echo.ts'))).toBe(true)
+    expect(await fs.pathExists(path.join(projectPath, 'tools', 'echo', 'index.ts'))).toBe(true)
     expect(await fs.pathExists(path.join(projectPath, 'SOUL.md'))).toBe(true)
     const config = await fs.readFile(path.join(projectPath, 'zhin.config.yml'), 'utf8')
     expect(config).toContain('ai:')

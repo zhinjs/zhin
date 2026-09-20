@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=bb71dad2da2e4107 -->
+<!-- sync-adapter-docs:sha256=8253ee91dd51044e -->
 
 # @zhin.js/adapter-napcat
 
@@ -21,7 +21,7 @@ Zhin.js [NapCatQQ](https://github.com/NapNeko/NapCatQQ) 适配器（Plugin Runti
 - **正向 WebSocket**（`connection: ws`）：应用连 NapCat WS
 - `access_token` 鉴权（Bearer + query）
 - 入站经 `Endpoint.emit(...)`（去重 + 自发过滤）；出站 `send({ conversation, payload })`
-- 41 个 AI 工具（`agent/tools/`）
+- 41 个 AI 工具（`tools/`）
 
 ## 安装
 
@@ -83,13 +83,13 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 | 类别 | 路径 |
 |------|------|
 | Permit 词汇 | `agent/PERMITS.md` |
-| 平台工具 | `agent/tools/$*.ts` |
+| 平台工具 | `tools/<name>/index.ts` |
 | 技能说明 | `skills/napcat/SKILL.md` |
 
 ## 迁移说明（Plugin Runtime）
 
 - **notice / request / meta 侧事件**：经 the unified `Endpoint.emit(...)` ingress 归一后分发到 `handlers`（`notice.receive` / `request.receive` / `system.receive`），请求带 `$approve` / `$reject`。消息仍走 `outboundMessageToken`。
-- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `agent/tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
+- **群管工具暂未迁移**：旧 Adapter 经 `createSceneManagementTools` 注册踢人 / 禁言 / 群名片等成套 agent 工具；迁移后 `tools/` 仅覆盖 NapCat 扩展 API，其余群管能力可通过 `callApi`（如 `set_group_kick`、`set_group_ban`）作为逃生舱调用。
 - **平台权限门禁**：`plugin.ts` setup 通过 generation-owned `permissionHostToken` 调用 `host.registerPlatform('napcat', createSceneRolePlatformChecker())`，`scene_admin` / `scene_owner` 依据入站 metadata 中的 sender `role`（owner / admin）判定。
 
 ## 文档链接

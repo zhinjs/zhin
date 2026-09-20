@@ -50,28 +50,35 @@ for (const file of files) {
     ? fs.readFileSync(file, 'utf8')
     : '';
   const oldImport = /(?:from\s+|import\(\s*)['"]@zhin\.js\/agent\/tools['"]/u.exec(content);
-  if (oldImport) report(file, 'removed @zhin.js/agent/tools import', lineOf(content, oldImport.index));
+  if (oldImport) report(file, 'removed @zhin.js/tools import', lineOf(content, oldImport.index));
   const coreZodImport = /(?:from\s+|import\(\s*)['"]@zhin\.js\/core\/tool-zod['"]/u.exec(content);
   if (coreZodImport) report(file, 'removed @zhin.js/core/tool-zod import', lineOf(content, coreZodImport.index));
 
-  if (!/^\$.*\.ts$/u.test(path.basename(file))) continue;
   const packageRoot = findPackageRoot(file);
   if (!packageRoot) continue;
   const packageRelative = path.relative(packageRoot, file).split(path.sep).join('/');
-  if (packageRelative.startsWith('tools/')) {
-    report(file, 'package-root tools/$*.ts entry; use agent/tools/$*.ts');
+  if (packageRelative.startsWith('agent/tools/')) {
+    report(file, 'legacy agent/tools entry; use tools/<name>/index.ts');
   }
-  if (packageRelative.startsWith('agent/tools/')) packageRoots.add(packageRoot);
+  if (/^(?:tools\/[^/]+|agents\/[^/]+\/tools\/[^/]+|skills\/[^/]+\/tools\/[^/]+|agents\/[^/]+\/skills\/[^/]+\/tools\/[^/]+)\/index\.ts$/u.test(packageRelative)) {
+    packageRoots.add(packageRoot);
+  } else if (packageRelative.includes('/tools/') && path.basename(file).startsWith('$')) {
+    report(file, 'legacy $ Tool entry; use a named directory with index.ts');
+  }
 }
 
 for (const packageRoot of packageRoots) {
   const manifestPath = path.join(packageRoot, 'package.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   if (manifest.dependencies?.['@zhin.js/tool'] !== 'workspace:*') {
-    report(manifestPath, 'agent/tools package must depend on @zhin.js/tool');
+    report(manifestPath, 'tools package must depend on @zhin.js/tool');
   }
   if (!manifest.zhin?.features?.some((feature) => feature.package === '@zhin.js/tool')) {
-    report(manifestPath, 'agent/tools package must mount the @zhin.js/tool Feature');
+    report(manifestPath, 'tools package must mount the @zhin.js/tool Feature');
+  }
+  if (manifest.private !== true && !manifest.files?.includes('tools')
+    && fs.existsSync(path.join(packageRoot, 'tools'))) {
+    report(manifestPath, 'published package with public tools must include tools');
   }
 }
 
@@ -194,7 +201,7 @@ if (coreManifest.exports?.['./tool-zod']) {
 
 if (violations.length > 0) {
   console.error('Agent Tool authoring boundary check: FAILED\n');
-  console.error('Use one authoring surface: @zhin.js/tool + agent/tools/$*.ts.\n');
+  console.error('Use one authoring surface: @zhin.js/tool + tools/<name>/index.ts.\n');
   for (const violation of violations) {
     console.error(`  ${violation.file}:${violation.line}  ${violation.label}`);
   }

@@ -66,6 +66,36 @@ describe('Skill Feature', () => {
     expect(index.get(root, 'review')?.description).toBe('Root review');
   });
 
+  it('binds colocated private tools and keeps Agent-private Skills scoped', async () => {
+    const publicSource = '/project/skills/research/SKILL.md';
+    const privateSource = '/project/agents/reviewer/skills/audit/SKILL.md';
+    const host = new MemoryHost({
+      '/project/skills': [{ name: 'research', kind: 'directory' }],
+      '/project/skills/research': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/skills/research/tools': [{ name: 'search', kind: 'directory' }],
+      '/project/skills/research/tools/search': [{ name: 'index.ts', kind: 'file' }],
+      '/project/agents': [{ name: 'reviewer', kind: 'directory' }],
+      '/project/agents/reviewer/skills': [{ name: 'audit', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit': [{ name: 'SKILL.md', kind: 'file' }],
+      '/project/agents/reviewer/skills/audit/tools': [{ name: 'report', kind: 'directory' }],
+      '/project/agents/reviewer/skills/audit/tools/report': [{ name: 'index.ts', kind: 'file' }],
+    }, new Map([
+      [publicSource, '# Research'],
+      [privateSource, '# Audit'],
+    ]));
+    const slots = await new FeatureDiscovery(host).discover(skillFeature, [{
+      owner: rootPluginId(), packageRoot: '/project',
+    }]);
+
+    expect(slots.map((slot) => slot.localName)).toEqual(['research', 'agent/reviewer/audit']);
+    expect(slots[0]?.definition.toolNames).toEqual(['skill__research__search']);
+    expect(slots[1]?.definition).toMatchObject({
+      name: 'audit',
+      agentName: 'reviewer',
+      toolNames: ['agent__reviewer__skill__audit__report'],
+    });
+  });
+
   it('parses governed frontmatter and keeps only instructions in the prompt payload', () => {
     const definition = parseSkillMarkdown(`---
 name: research

@@ -136,6 +136,40 @@ describe('DeferredCapabilityPlan', () => {
     expect(plan.controller.loadedToolNames()).toEqual([]);
   });
 
+  it('unlocks a Skill-private Tool only through its owning Skill', async () => {
+    const owner = rootPluginId();
+    const privateName = 'skill__research__search';
+    const plan = createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 1,
+        owner,
+        tools: Object.freeze([Object.freeze({
+          ...tool(owner, privateName, 'Private research search'),
+          hidden: true,
+          placement: Object.freeze({ kind: 'skill' as const, skill: 'research' }),
+        })]),
+        skills: Object.freeze([Object.freeze({
+          ...skill(owner, 'research', 'Research with private sources.'),
+          toolNames: Object.freeze([privateName]),
+        })]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+        promptSections: Object.freeze([]),
+      }),
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: {} },
+      persistSnapshot: async () => undefined,
+    });
+
+    expect(plan.allTools.map((entry) => entry.name)).toContain(privateName);
+    await expect(execute(plan.capabilities, 'load_tool', { name: privateName }))
+      .resolves.toContain('not found in catalog');
+    await expect(execute(plan.capabilities, 'discover', { query: 'research', kind: 'tool' }))
+      .resolves.toBe('No matches.');
+    await execute(plan.capabilities, 'load_skill', { name: 'research' });
+    expect(plan.controller.loadedToolNames()).toEqual([privateName]);
+  });
+
   it('fails closed on ambiguous or missing projected skills', async () => {
     const owner = rootPluginId();
     const plan = createDeferredCapabilityPlan({
@@ -351,7 +385,7 @@ function tool(
     qualifiedName: name,
     description,
     approval: 'never',
-    source: `/agent/tools/${name}.ts`,
+    source: `/tools/${name}.ts`,
     execute: async <TInput = unknown, TResult = unknown>(input: TInput) => input as TResult,
   });
 }

@@ -25,7 +25,7 @@ const agentPackages: SourceConvention = {
         ...children
           .filter((child) => child.kind === 'file' && child.name !== 'agent.json')
           .map((child) => join(directory, child.name)),
-        ...await discoverResourceSources(context.host, directory),
+        ...await discoverRelatedSources(context.host, directory),
       ];
       yield {
         localName: entry.name,
@@ -43,20 +43,36 @@ const agentPackages: SourceConvention = {
       manifest,
       files,
       workflows: await readResourceDirectory(context.host, directory, 'workflows'),
-      tools: await readResourceDirectory(context.host, directory, 'tools'),
       knowledge: await readResourceDirectory(context.host, directory, 'knowledge'),
+      privateToolNames: (await childDirectories(context.host, join(directory, 'tools')))
+        .map((name) => `agent__${source.localName}__${name}`),
+      privateSkillNames: (await childDirectories(context.host, join(directory, 'skills')))
+        .map((name) => `agent__${source.localName}__${name}`),
     };
   },
 };
 
-async function discoverResourceSources(host: DiscoveryHost, directory: string): Promise<string[]> {
+async function discoverRelatedSources(host: DiscoveryHost, directory: string): Promise<string[]> {
   const result: string[] = [];
-  for (const name of ['workflows', 'tools', 'knowledge'] as const) {
-    for (const entry of await host.list(join(directory, name))) {
-      if (entry.kind === 'file' && isResourceFile(entry.name)) result.push(join(directory, name, entry.name));
-    }
+  for (const name of ['workflows', 'tools', 'skills', 'knowledge'] as const) {
+    await collectFiles(host, join(directory, name), result);
   }
   return result;
+}
+
+async function collectFiles(host: DiscoveryHost, directory: string, result: string[]): Promise<void> {
+  for (const entry of await host.list(directory)) {
+    const target = join(directory, entry.name);
+    if (entry.kind === 'directory' && isAgentName(entry.name)) await collectFiles(host, target, result);
+    else if (entry.kind === 'file') result.push(target);
+  }
+}
+
+async function childDirectories(host: DiscoveryHost, directory: string): Promise<string[]> {
+  return [...await host.list(directory)]
+    .filter((entry) => entry.kind === 'directory' && isAgentName(entry.name))
+    .map((entry) => entry.name)
+    .sort();
 }
 
 const agentFeature = defineFeatureProvider({
@@ -84,7 +100,7 @@ async function readRootFiles(host: DiscoveryHost, directory: string): Promise<Re
 async function readResourceDirectory(
   host: DiscoveryHost,
   agentDirectory: string,
-  name: 'workflows' | 'tools' | 'knowledge',
+  name: 'workflows' | 'knowledge',
 ): Promise<readonly AgentResource[]> {
   const directory = join(agentDirectory, name);
   const entries = [...await host.list(directory)]

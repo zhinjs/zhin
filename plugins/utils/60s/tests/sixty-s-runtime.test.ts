@@ -3,8 +3,8 @@ import { parseCommandDefinition } from 'zhin.js/command';
 import { formatList } from '../src/api.js';
 import { DEFAULT_API_BASE, SixtySClient, sixtySClientToken } from '../src/client.js';
 import plugin from '../plugin.ts';
-import weatherTool from '../agent/tools/$weather.ts';
-import newsTool from '../agent/tools/$60s_news.ts';
+import weatherTool from '../tools/weather/index.ts';
+import newsTool from '../tools/60s_news/index.ts';
 import weatherCommand from '../commands/weather/$[city].ts';
 import newsCommand from '../commands/$60s.ts';
 
@@ -14,7 +14,7 @@ describe('@zhin.js/plugin-60s', () => {
   });
 
   it('exposes agent tools via defineAgentTool authoring surface', () => {
-    // Canonical tool definitions live under agent/tools/ (tags/keywords per README);
+    // Canonical tool definitions live under tools/ (tags/keywords per README);
     // there is no duplicate top-level tools/ directory.
     expect(typeof weatherTool.execute).toBe('function');
     expect(typeof newsTool.execute).toBe('function');

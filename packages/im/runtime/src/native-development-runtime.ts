@@ -21,7 +21,7 @@ const watchedExtensions = new Set([
   '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
-  'adapters', 'agent', 'agents', 'commands', 'components', 'handlers', 'mcp', 'middlewares', 'pages', 'skills',
+  'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcp', 'middlewares', 'pages', 'skills', 'tools',
 ]);
 
 /**
@@ -72,11 +72,13 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     if (capability < 0) return isExecutableSource(normalized);
     const root = parts[capability];
     if (root === 'pages') return !isFlatCapabilityEntry(parts.slice(capability + 1));
-    if (root === 'skills' || root === 'agents') return extname(normalized) !== '.md';
-    if (root === 'agent') {
+    if (root === 'agents' || root === 'skills') {
       const local = parts.slice(capability + 1);
-      if (local[0] === 'tools') return !isFlatCapabilityEntry(local.slice(1));
-      return local[0] !== 'prompt-sections' || !isCapabilityEntry(local.slice(1));
+      if (isNestedDirectoryEntry(local)) return false;
+      return extname(normalized) !== '.md';
+    }
+    if (root === 'hooks' || root === 'tools') {
+      return !isDirectoryCapabilityEntry(parts.slice(capability + 1));
     }
     if (root === 'mcp') {
       return !isFlatCapabilityEntry(parts.slice(capability + 1));
@@ -120,6 +122,19 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   #assertOpen(): void {
     if (this.#closed) throw new Error('NativeDevelopmentModuleRuntime is closed');
   }
+}
+
+function isDirectoryCapabilityEntry(parts: readonly string[]): boolean {
+  return parts.length === 2
+    && parts[1] === `index${extname(parts[1] ?? '')}`
+    && ['.cjs', '.js', '.mjs', '.ts'].includes(extname(parts[1] ?? ''));
+}
+
+function isNestedDirectoryEntry(parts: readonly string[]): boolean {
+  const index = parts.indexOf('tools');
+  const hookIndex = parts.indexOf('hooks');
+  const capability = index >= 0 ? index : hookIndex;
+  return capability >= 1 && isDirectoryCapabilityEntry(parts.slice(capability + 1));
 }
 
 export function supportsNativeTypeScript(

@@ -106,6 +106,8 @@ export interface DiscoveredAuthoringHook {
   pluginName: string;
   filePath: string;
   definition: AuthoringHookDefinition;
+  agentName?: string;
+  skillName?: string;
 }
 
 export interface DiscoveredAuthoringEval {

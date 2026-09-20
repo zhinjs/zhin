@@ -988,7 +988,7 @@
       ],
       "type": "minor",
       "approvedBy": "lc-cn",
-      "reason": "Route agent/tools through the owner-aware Tool Feature and replace the process-global 60s API base registration stack with an explicit owner-scoped client resource under the owner-directed zero-compatibility architecture refactor."
+      "reason": "Route tools through the owner-aware Tool Feature and replace the process-global 60s API base registration stack with an explicit owner-scoped client resource under the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "unify-agent-tool-authoring.md",
@@ -1022,7 +1022,7 @@
       ],
       "type": "minor",
       "approvedBy": "lc-cn",
-      "reason": "Remove the duplicate Agent Tool authoring model and package-root tools convention under the owner-directed zero-compatibility architecture refactor."
+      "reason": "Remove the duplicate Agent Tool authoring model and replace agent/tools files with package-root named Tool directories under the owner-directed zero-compatibility architecture refactor."
     },
     {
       "changeset": "canonical-conversation-actors.md",

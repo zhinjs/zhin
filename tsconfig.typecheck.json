@@ -77,9 +77,6 @@
       "@zhin.js/agent/tool": [
         "./packages/im/agent/src/tool/index.ts"
       ],
-      "@zhin.js/agent/tools": [
-        "./packages/im/agent/src/authoring/entries/tools.ts"
-      ],
       "@zhin.js/agent/turn": [
         "./packages/im/agent/src/turn/index.ts"
       ],

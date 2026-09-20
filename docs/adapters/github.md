@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/github/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/github/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=715d381c56e70262 -->
+<!-- sync-adapter-docs:sha256=65b16040792dd627 -->
 
 # @zhin.js/adapter-github
 
@@ -88,7 +88,7 @@ plugins:
 
 ## AI 工具
 
-见 `agent/tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
+见 `tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
 
 ## 架构
 

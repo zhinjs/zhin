@@ -1,6 +1,6 @@
 # 约定目录
 
-在插件包根目录下放一个 `commands/` 文件夹、往里放一个 `$hello.ts`，命令就出现了——不用在任何地方注册。这组会被 Feature 发现机制自动扫描的目录就是**约定目录**：每个目录对应一个 Feature 包（feature provider），只有 `$` 开头的文件会映射为能力（capability）。同目录的 `helper.ts`、类型和测试文件都是普通模块，可以被入口自由引用。发现流程：
+在插件包根目录下放一个 `commands/` 文件夹、往里放一个 `$hello.ts`，命令就出现了——不用在任何地方注册。这组会被 Feature 发现机制自动扫描的目录就是**约定目录**。单文件能力使用 `$name.ts`；Tool、Hook、Skill、Agent 使用命名目录和固定入口文件。同一能力目录内的辅助模块、类型和测试文件都是普通模块，可以被入口自由引用。发现流程：
 
 ```mermaid
 flowchart LR
@@ -27,7 +27,8 @@ flowchart LR
 | `handlers/` | `$*.ts` | 是（`/` 分段；省略 `event` 时映为 `.` 事件名） | server | `@zhin.js/handler` | `zhin.handler` | `defineHandler(...)` |
 | `components/` | `$*.ts` / `$*.tsx` | 是 | server | `@zhin.js/component` | `zhin.component` | `defineComponent(...)` |
 | `adapters/` | `$*.ts` | 是 | server | `@zhin.js/adapter` | `zhin.adapter` | `defineAdapter(...)` |
-| `agent/tools/` | `$*.ts` | 否 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `tools/` | `<name>/index.ts` | 命名目录 | server | `@zhin.js/tool` | `zhin.agent-tool` | `defineAgentTool(...)` |
+| `hooks/` | `<name>/index.ts` | 命名目录 | server | `zhin.js/agent` | Agent Hook | `defineHook(...)` |
 | `agent/prompt-sections/` | `$*.ts` | 是 | server | `@zhin.js/prompt-section` | `zhin.agent-prompt-section` | `defineAgentPromptSection(...)` |
 | `skills/` | 子目录 + `SKILL.md` | 一层 | server | `@zhin.js/skill` | `zhin.skill` | Markdown 文本 |
 | `agents/` | `<name>/agent.json` + 3 个核心 Markdown | 一层 | server | `@zhin.js/agent-feature` | `zhin.agent` | 目录化 Agent 定义 |
@@ -36,9 +37,9 @@ flowchart LR
 
 ## 命名规则
 
-`$` 只标记单文件入口，不属于 `localName`。没有 `$` 的文件不会被发现，也不会被校验为 capability。入口去掉 `$` 和扩展名后，默认须匹配 `^[a-z0-9][a-z0-9-]*$`（小写字母/数字开头、可含连字符）；目录段沿用同一规则。Skill 使用 `skills/<name>/SKILL.md`，由目录名提供 `localName`。
+`$` 只标记单文件入口，不属于 `localName`。目录能力不使用 `$`：Tool 与 Hook 使用 `<name>/index.ts`，Skill 使用 `<name>/SKILL.md`，Agent 使用 `<name>/agent.json`。命名目录匹配小写 kebab；Tool 兼容现有 snake 名。
 
-**例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。`agent/tools/` 额外允许 ASCII snake（如 `$send_user_like.ts`）。其它约定目录（middlewares / adapters / …）不放宽。
+**例外：`commands/`** 静态段还允许 Unicode 名（如 `$赞我.ts`），规则与 `isCapabilityLocalSegment`（`zhin.js`）一致——ASCII kebab，或含非 ASCII 字母且无 ASCII 大写的 Unicode 标识；动态参数文件（`$[name].ts` 等）仍限 ASCII。Tool 命名目录额外允许 ASCII snake（如 `send_user_like/`）。其它约定目录不放宽。
 
 各目录的补充规则：
 
@@ -49,7 +50,8 @@ flowchart LR
 | `handlers/` | 相对路径去扩展名，`/` 拼接为 capability localName；省略 `event` 时把 `/` 映成 `.` 作为 Lifecycle 事件名 | `handlers/message/$receive.ts` → localName `message/receive` → event `message.receive` |
 | `components/` | 相对路径去扩展名，`/` 拼接 | `components/$share-music.ts` → `share-music` |
 | `adapters/` | 同上 | `adapters/$napcat.ts` → `napcat` |
-| `agent/tools/` | 文件名去扩展名（不递归子目录）；ASCII kebab 或 snake | `agent/tools/$music-search.ts` → `music-search`；`agent/tools/$send_user_like.ts` → `send_user_like` |
+| `tools/` | `<name>/index.ts`；ASCII kebab 或 snake | `tools/music-search/index.ts` → `music-search`；`tools/send_user_like/index.ts` → `send_user_like` |
+| `hooks/` | `<name>/index.ts`；私有 Hook 可嵌入 Agent 或 Skill | `hooks/audit/index.ts` → `audit` |
 | `agent/prompt-sections/` | 相对路径去扩展名，`/` 拼接 | `agent/prompt-sections/project/$rules.ts` → `project/rules` |
 | `skills/` | 一级子目录名；只识别其中的 `SKILL.md`，同目录可放参考资料与脚本 | `skills/memory-consolidate/SKILL.md` → `memory-consolidate` |
 | `agents/` | 一级目录名；只识别含 `agent.json` 的目录 | `agents/planner/agent.json` → `planner` |
@@ -176,10 +178,10 @@ export default defineAdapter<NapCatEndpointConfig>({
 
 `capabilities` 至少含 `inbound` / `outbound` 之一；`create` 返回的 Endpoint 生命周期见 [WS/SSE 端点生命周期](./endpoint-lifecycle.md)。
 
-### agent/tools/ — `defineAgentTool`
+### tools/ — `defineAgentTool`
 
 ```ts
-// plugins/utils/music/agent/tools/$music-search.ts（节选）
+// plugins/utils/music/tools/music-search/index.ts（节选）
 import { defineAgentTool } from '@zhin.js/tool';
 
 export default defineAgentTool<{ keyword: string; source?: MusicSource; limit?: number }>({
@@ -208,7 +210,7 @@ tools:
 ---
 ```
 
-`agents/<name>/` 必须包含 `agent.json`、`system.md`、`boundaries.md`、`conventions.md`。主 Agent 使用插件根目录 `AGENTS.md`；子 Agent 的 `conventions.md` 只能延伸根规则。可选的 `workflows/`、`tools/`、`knowledge/` 作为同一 Agent 模块的场景流程、专属资源和知识库。详见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
+`agents/<name>/` 必须包含 `agent.json`、`system.md`、`boundaries.md`、`conventions.md`。主 Agent 使用插件根目录 `AGENTS.md`；子 Agent 的 `conventions.md` 只能延伸根规则。可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 分别承载场景流程、私有 Tool、私有 Skill、私有 Hook 和知识库。Skill 内也可使用 `tools/<name>/index.ts` 与 `hooks/<name>/index.ts`。详见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
 
 ### pages/ — Console 页面
 
@@ -216,4 +218,4 @@ tools:
 
 ## 仓库实例
 
-想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`agent/tools` 看 `plugins/utils/music/agent/tools/` 与 `plugins/utils/group-suite/agent/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/SKILL.md`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。
+想找生产级参照时，直接翻这些目录：`commands` 看 `plugins/utils/lottery/commands/`（含动态参数 `lottery/$[[game]].ts`）；`middlewares` 看 `plugins/utils/group-suite/middlewares/` 和 `plugins/games/*/middlewares/`；`handlers` 用 `handlers/message/$receive.ts` + `defineHandler`（见上文最小形态；仓库内示例可按需自加）；`components` 看 `plugins/utils/music/components/$share-music.ts`；`adapters` 看 `plugins/adapters/napcat/adapters/$napcat.ts`；`tools` 看 `plugins/utils/music/tools/` 与 `plugins/utils/group-suite/tools/`；`skills` 看 `examples/full-bot/skills/memory-consolidate/SKILL.md`；`agents` 看 `examples/multi-agent-room/agents/`；`pages` 看 `examples/full-bot/pages/$workroom.tsx`。

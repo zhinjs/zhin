@@ -86,7 +86,7 @@ plugins:
 
 ## AI Tools
 
-See `agent/tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_workspace`, etc.
+See `tools/`: `github_star`, `github_bind`, `github_subscribe`, `github_prepare_workspace`, etc.
 
 ## Architecture
 

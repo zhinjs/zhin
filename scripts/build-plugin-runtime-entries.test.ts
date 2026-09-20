@@ -20,7 +20,9 @@ describe('build-plugin-runtime-entries', () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-build-'));
     temporary.push(root);
     await mkdir(join(root, 'commands/gh'), { recursive: true });
-    await mkdir(join(root, 'agent/tools'), { recursive: true });
+    await mkdir(join(root, 'tools/lookup'), { recursive: true });
+    await mkdir(join(root, 'hooks/audit'), { recursive: true });
+    await mkdir(join(root, 'agents/reviewer/tools/inspect'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: '@test/plugin',
       type: 'module',
@@ -35,41 +37,48 @@ describe('build-plugin-runtime-entries', () => {
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(
-      join(root, 'agent/tools/$lookup.ts'),
+      join(root, 'tools/lookup/index.ts'),
       "import value from '../../src/value.js';\nexport default value as number;\n",
+    );
+    await writeFile(join(root, 'hooks/audit/index.ts'), 'export default {} as object;\n');
+    await writeFile(
+      join(root, 'agents/reviewer/tools/inspect/index.ts'),
+      'export default {} as object;\n',
     );
 
     const outputs = await buildPluginRuntimeEntries(root);
 
     expect(outputs.map((path) => path.slice(root.length + 1))).toEqual([
       'plugin.js',
-      'agent/tools/$lookup.js',
+      'agents/reviewer/tools/inspect/index.js',
+      'tools/lookup/index.js',
+      'hooks/audit/index.js',
       'commands/gh/$status.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
       .toContain('./lib/value.js');
     expect(await readFile(join(root, 'commands/gh/$status.js'), 'utf8'))
       .toContain('../../lib/value.js');
-    expect(await readFile(join(root, 'agent/tools/$lookup.js'), 'utf8'))
+    expect(await readFile(join(root, 'tools/lookup/index.js'), 'utf8'))
       .toContain('../../lib/value.js');
   });
 
   it('cleans only files carrying the generated marker', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-clean-'));
     temporary.push(root);
-    await mkdir(join(root, 'agent/tools'), { recursive: true });
+    await mkdir(join(root, 'tools'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: '@test/plugin',
       zhin: { protocol: 1, type: 'plugin', entry: './plugin.js' },
     }));
     await writeFile(join(root, 'plugin.ts'), 'export default {};\n');
-    await writeFile(join(root, 'agent/tools/custom.js'), 'export default 1;\n');
+    await writeFile(join(root, 'tools/custom.js'), 'export default 1;\n');
     await buildPluginRuntimeEntries(root);
 
     await cleanPluginRuntimeEntries(root);
 
     await expect(readFile(join(root, 'plugin.js'), 'utf8')).rejects.toThrow();
-    await expect(readFile(join(root, 'agent/tools/custom.js'), 'utf8'))
+    await expect(readFile(join(root, 'tools/custom.js'), 'utf8'))
       .resolves.toContain('export default 1');
   });
 });

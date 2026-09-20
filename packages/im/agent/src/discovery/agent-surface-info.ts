@@ -71,6 +71,48 @@ function listSubdirs(dir: string): string[] {
   }
 }
 
+function listNamedEntries(dir: string, entryNames: readonly string[]): string[] {
+  return listSubdirs(dir).filter((child) => entryNames.some(
+    (entryName) => fs.existsSync(path.join(child, entryName)),
+  ));
+}
+
+function scopedModuleSlots(
+  packageRoot: string,
+  kind: 'tools' | 'hooks',
+): string[] {
+  const entryNames = ['index.ts', 'index.js'];
+  const slots = listNamedEntries(path.join(packageRoot, kind), entryNames)
+    .map(slotNameFromDir);
+  for (const agentDir of listSubdirs(path.join(packageRoot, 'agents'))) {
+    const agent = slotNameFromDir(agentDir);
+    slots.push(...listNamedEntries(path.join(agentDir, kind), entryNames)
+      .map((entry) => `agent/${agent}/${slotNameFromDir(entry)}`));
+    for (const skillDir of listSubdirs(path.join(agentDir, 'skills'))) {
+      const skill = slotNameFromDir(skillDir);
+      slots.push(...listNamedEntries(path.join(skillDir, kind), entryNames)
+        .map((entry) => `agent/${agent}/skill/${skill}/${slotNameFromDir(entry)}`));
+    }
+  }
+  for (const skillDir of listSubdirs(path.join(packageRoot, 'skills'))) {
+    const skill = slotNameFromDir(skillDir);
+    slots.push(...listNamedEntries(path.join(skillDir, kind), entryNames)
+      .map((entry) => `skill/${skill}/${slotNameFromDir(entry)}`));
+  }
+  return slots;
+}
+
+function scopedSkillSlots(packageRoot: string): string[] {
+  const slots = listNamedEntries(path.join(packageRoot, 'skills'), ['SKILL.md'])
+    .map(slotNameFromDir);
+  for (const agentDir of listSubdirs(path.join(packageRoot, 'agents'))) {
+    const agent = slotNameFromDir(agentDir);
+    slots.push(...listNamedEntries(path.join(agentDir, 'skills'), ['SKILL.md'])
+      .map((entry) => `agent/${agent}/${slotNameFromDir(entry)}`));
+  }
+  return slots;
+}
+
 function readPackageName(packageRoot: string): string | undefined {
   try {
     const raw = fs.readFileSync(path.join(packageRoot, 'package.json'), 'utf-8');
@@ -107,10 +149,16 @@ function collectPluginRoots(cwd: string): string[] {
       for (const pkg of listSubdirs(group)) {
         if (fs.existsSync(path.join(pkg, 'agent'))
           || fs.existsSync(path.join(pkg, 'agents'))
+          || fs.existsSync(path.join(pkg, 'tools'))
+          || fs.existsSync(path.join(pkg, 'skills'))
+          || fs.existsSync(path.join(pkg, 'hooks'))
           || fs.existsSync(path.join(pkg, 'AGENTS.md'))) roots.add(pkg);
       }
       if (fs.existsSync(path.join(group, 'agent'))
         || fs.existsSync(path.join(group, 'agents'))
+        || fs.existsSync(path.join(group, 'tools'))
+        || fs.existsSync(path.join(group, 'skills'))
+        || fs.existsSync(path.join(group, 'hooks'))
         || fs.existsSync(path.join(group, 'AGENTS.md'))) roots.add(group);
     }
   }
@@ -122,22 +170,22 @@ function scanPluginSurface(packageRoot: string): AgentSurfacePluginInfo | null {
   const evalsDir = path.join(packageRoot, 'evals');
   if (!fs.existsSync(agentDir) && !fs.existsSync(evalsDir)
     && !fs.existsSync(path.join(packageRoot, 'agents'))
+    && !fs.existsSync(path.join(packageRoot, 'tools'))
+    && !fs.existsSync(path.join(packageRoot, 'skills'))
+    && !fs.existsSync(path.join(packageRoot, 'hooks'))
     && !fs.existsSync(path.join(packageRoot, 'AGENTS.md'))) return null;
 
   const pluginName = resolvePluginId(packageRoot);
-  const tools = uniqueNames([
-    ...listFiles(path.join(agentDir, 'tools'), /\.(ts|js)$/i),
-    ...listFiles(path.join(packageRoot, 'tools'), /\.(ts|js)$/i),
-  ].map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f))));
-  const skills = [
-    ...listFiles(path.join(agentDir, 'skills'), /\.(md|ts|js)$/i),
-  ].map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
+  const tools = uniqueNames(scopedModuleSlots(packageRoot, 'tools')
+    .map((slot) => namespaceAuthoringName(pluginName, slot)));
+  const skills = scopedSkillSlots(packageRoot)
+    .map((slot) => namespaceAuthoringName(pluginName, slot));
   const schedules = listFiles(path.join(agentDir, 'schedules'), /\.(ts|js)$/i)
     .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
   const connections = listFiles(path.join(agentDir, 'connections'), /\.(ts|js)$/i)
     .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
-  const hooks = listFiles(path.join(agentDir, 'hooks'), /\.(ts|js)$/i)
-    .map((f) => namespaceAuthoringName(pluginName, slotNameFromFile(f)));
+  const hooks = scopedModuleSlots(packageRoot, 'hooks')
+    .map((slot) => namespaceAuthoringName(pluginName, slot));
   const subagents = listSubdirs(path.join(packageRoot, 'agents'))
     .filter((dir) => fs.existsSync(path.join(dir, 'agent.json')))
     .map((dir) => namespaceAuthoringName(pluginName, slotNameFromDir(dir), true));

@@ -1,15 +1,15 @@
 ---
 title: Agent 工具与技能
-description: agent/tools/$*.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 agents/<name>/agent.json
+description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 agents/<name>/agent.json
 ---
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件放进 `agent/tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`agent/tools/$*.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+想让模型替用户搜一首歌、查一次乐透推荐？把这段逻辑写成一个文件放进 `tools/`，下一个 Agent turn 模型就能按名调用它。创作有两种形式：**`tools/<name>/index.ts` 文件约定**，以及按配置在 **`setup()` 中调用 `context.addTool()`**。两者都写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
 
 ```mermaid
 flowchart LR
-    A["agent/tools/$*.ts<br/>defineAgentTool"] --> C[候选 capability table]
+    A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[候选 capability table]
     B["setup() → context.addTool()"] --> C
     C --> D["commit → ToolIndex 投影"]
     D --> E[CapabilityIngress]
@@ -19,12 +19,12 @@ flowchart LR
     H --> I[模型可调用的工具集]
 ```
 
-## 路径一：`agent/tools/$*.ts` 约定
+## 路径一：`tools/<name>/index.ts` 约定
 
-挂载 `@zhin.js/tool` Feature 后，插件包的 `agent/tools/`（不递归）下只有 `$*.ts` 文件会被发现，并默认导出 `defineAgentTool(...)`。`helper.ts` 等未加 `$` 的文件是普通依赖模块：
+挂载 `@zhin.js/tool` Feature 后，插件包的 `tools/<name>/index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
 
 ```ts
-// agent/tools/$echo.ts
+// tools/echo/index.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -50,7 +50,7 @@ export default defineAgentTool<{ message: string }>({
 | `hidden` | 否 | 注册但不提供给模型（可按名调用） |
 | `execute(input, context)` | 是 | `context` 是能力上下文（`config` / `use(token)` / `owner` / `generation`） |
 
-文件名是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与文件名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
+命名目录是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与目录名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
 
 ## 路径二：setup 条件式声明
 
@@ -136,31 +136,40 @@ unattended Turn（例如 Schedule）不会注入该端口，不能回退到全�
 
 Skill 使用 `skills/<name>/SKILL.md`。主 Agent 使用插件根目录的标准 `AGENTS.md`。命名子 Agent 使用 `agents/<name>/` 自包含目录，由 `@zhin.js/agent-feature` 发现。
 
-子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
+子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 [`@zhin.js/agent-feature`](../../packages/im/agent-feature/README.md)。
 
-`agent.json` 的 `tools` 只声明该 Agent 可申请的 Tool 名称；最终仍与当前 Turn 已准入的 Tool 取交集。`agents/<name>/tools/` 中的脚本不会自动获得执行权，只能通过受控 `bash` 或显式 Tool capability 执行。
+`agent.json` 的 `tools` 可声明额外公共 Tool；`agents/<agent>/tools/<name>/index.ts` 会自动成为该 Agent 的私有 Tool。Skill 的私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 私有 Skill 及其 Tool 使用 `agents/<agent>/skills/<skill>/SKILL.md` 和其下的 `tools/<name>/index.ts`。所有 Tool 仍经过统一的权限、审批和 generation 准入。
 
 ## 插件 Agent 创作目录
 
 ```text
 my-plugin/
 ├── AGENTS.md
-├── agent/tools/
-│   ├── $short_url.ts
-│   └── client.ts
+├── tools/
+│   └── short-url/
+│       ├── index.ts
+│       └── client.ts
 ├── skills/short-url/
-│   └── SKILL.md
+│   ├── SKILL.md
+│   ├── tools/normalize/index.ts
+│   └── hooks/audit/index.ts
+├── hooks/audit/index.ts
 └── agents/reviewer/
     ├── agent.json
     ├── system.md
     ├── boundaries.md
     ├── conventions.md
     ├── workflows/
-    ├── tools/
+    ├── tools/check-result/index.ts
+    ├── skills/review/
+    │   ├── SKILL.md
+    │   ├── tools/check-result/index.ts
+    │   └── hooks/audit/index.ts
+    ├── hooks/audit/index.ts
     └── knowledge/
 ```
 
-`agent/tools/$*.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。
+`tools/<name>/index.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。
 
 ## 让插件给 Agent 补充上下文
 

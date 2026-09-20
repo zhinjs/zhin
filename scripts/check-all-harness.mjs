@@ -100,7 +100,7 @@ const checks = [
   {
     name: 'Agent Tool Schema',
     command: 'pnpm check:agent-tool-schema',
-    description: 'agent/tools inputSchema 与 defineAgentTool/execute 类型字段一致',
+    description: 'tools inputSchema 与 defineAgentTool/execute 类型字段一致',
   },
   {
     name: 'Skill Authoring Boundaries',
@@ -111,6 +111,11 @@ const checks = [
     name: 'Agent Authoring Boundaries',
     command: 'pnpm check:agent-authoring-boundaries',
     description: '主 Agent 使用 AGENTS.md，子 Agent 只使用 agents/<name>/ 目录契约',
+  },
+  {
+    name: 'Hook Authoring Boundaries',
+    command: 'pnpm check:hook-authoring-boundaries',
+    description: 'Hook 只使用 hooks/<name>/index.ts，并支持 Agent 与 Skill 私有作用域',
   },
   {
     name: 'Architecture Layers',
@@ -150,7 +155,7 @@ const checks = [
   {
     name: 'Agent Tool Authoring Boundaries',
     command: 'pnpm check:agent-tool-authoring-boundaries',
-    description: 'Agent Tool 只使用 @zhin.js/tool 与 agent/tools/$*.ts，并显式挂载 Feature',
+    description: 'Agent Tool 只使用 @zhin.js/tool 与 tools/<name>/index.ts，并显式挂载 Feature',
   },
   {
     name: 'IM Session SSOT',

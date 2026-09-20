@@ -26,7 +26,7 @@ describe('namespaceAuthoringName', () => {
 
 describe('slotNameFromFile', () => {
   it('strips extension', () => {
-    expect(slotNameFromFile('/p/agent/tools/$get_weather.ts')).toBe('get_weather');
+    expect(slotNameFromFile('/p/schedules/$get_weather.ts')).toBe('get_weather');
   });
 });
 
@@ -49,6 +49,42 @@ describe('agent authoring entry discovery', () => {
         evalsDir: path.join(root, 'evals'),
       });
       expect(surface).not.toHaveProperty('tools');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('discovers public and private Hooks from named index modules', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-hook-surface-'));
+    const hook = [
+      "const kind = Symbol.for('zhin.authoring.kind');",
+      "export default { [kind]: 'hook', event: 'turn.end', handler() {} };",
+      '',
+    ].join('\n');
+    for (const directory of [
+      'hooks/audit',
+      'agents/reviewer/hooks/audit',
+      'skills/research/hooks/audit',
+      'agents/reviewer/skills/research/hooks/audit',
+    ]) {
+      fs.mkdirSync(path.join(root, directory), { recursive: true });
+      fs.writeFileSync(path.join(root, directory, 'index.js'), hook);
+    }
+    try {
+      const surface = await discoverPluginAgentSurface({
+        pluginName: 'fixture',
+        packageRoot: root,
+        agentDir: path.join(root, 'agent'),
+        evalsDir: path.join(root, 'evals'),
+      });
+      expect(surface?.hooks.map((entry) => entry.slotName)).toEqual([
+        'audit',
+        'agent/reviewer/audit',
+        'agent/reviewer/skill/research/audit',
+        'skill/research/audit',
+      ]);
+      expect(surface?.hooks.find((entry) => entry.slotName.includes('agent/reviewer/skill')))
+        .toMatchObject({ agentName: 'reviewer', skillName: 'research' });
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -128,15 +164,14 @@ describe('discoverWorkspaceAgents', () => {
 });
 
 describe('resolveAuthoringImportPath', () => {
-  it('prefers lib output when present', () => {
+  it('prefers the colocated JavaScript Hook output when present', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-pkg-'));
-    const libTool = path.join(root, 'lib', 'agent', 'tools', '$sync.js');
-    fs.mkdirSync(path.dirname(libTool), { recursive: true });
-    fs.writeFileSync(libTool, 'export default {}');
-    const srcTool = path.join(root, 'agent', 'tools', '$sync.ts');
-    fs.mkdirSync(path.dirname(srcTool), { recursive: true });
-    fs.writeFileSync(srcTool, 'export default {}');
-    expect(resolveAuthoringImportPath(root, srcTool)).toBe(libTool);
+    const source = path.join(root, 'hooks', 'audit', 'index.ts');
+    const output = path.join(root, 'hooks', 'audit', 'index.js');
+    fs.mkdirSync(path.dirname(source), { recursive: true });
+    fs.writeFileSync(source, 'export default {}');
+    fs.writeFileSync(output, 'export default {}');
+    expect(resolveAuthoringImportPath(root, source)).toBe(output);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

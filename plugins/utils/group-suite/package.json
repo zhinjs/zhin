@@ -20,6 +20,7 @@
     "middlewares",
     "src",
     "lib",
+    "tools",
     "agent",
     "skills",
     "README.md"

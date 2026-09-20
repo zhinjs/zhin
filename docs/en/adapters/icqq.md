@@ -20,7 +20,7 @@ ICQQ Plugin Runtime adapter — runs an [@icqqjs/icqq](https://github.com/icqqjs
 - Inbound native Client events enter Zhin through the single `Endpoint.emit(...)` gateway and normalize media to canonical `Segment` + `MediaRef` values
 - Outbound canonical segments project to native ICQQ `Sendable` values and use `sendGroupMsg`, `sendPrivateMsg`, and the matching conversation operation
 - Group reactions use `control.addReaction` and `control.removeReaction`
-- Agent tools live under `agent/tools/$*.ts`
+- Agent tools live under `tools/<name>/index.ts`
 - Console Endpoint management: `src/endpoint.ts` explicitly implements `EndpointManagement` (friend/group/group member lists, request approval, delete friend, kick member, mute, set admin). Console uses standardized RPCs such as `endpoint.friends` / `endpoint.groups` / `endpoint.group_members`
 
 ## Installation

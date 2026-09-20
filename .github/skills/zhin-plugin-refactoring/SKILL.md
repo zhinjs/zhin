@@ -76,7 +76,7 @@ user-invocable: true
 - 小型插件：保留单文件，最多轻量抽服务
 - 中型插件：拆 `commands/`、`services/`、`models/`
 - 含控制台页面：再拆 `client/`
-- 含 AI 工具：补 `agent/tools/`
+- 含 AI 工具：补 `tools/`
 
 目标结构可直接参考 [目标结构草图](./assets/refactor-target-layout.md)。
 

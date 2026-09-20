@@ -8,11 +8,14 @@ Markdown Skill Feature。`skills/<name>/SKILL.md` 是 Skill 的唯一事实源�
 skills/
 └── research/
     ├── SKILL.md
+    ├── tools/
+    │   └── search/
+    │       └── index.ts
     ├── helper.md
     └── references/
 ```
 
-只扫描 `skills/` 一级子目录中的 `SKILL.md`。Skill 目录内的其他文件与子目录是该 Skill 的参考材料，不会单独注册。
+公共 Skill 使用 `skills/<name>/SKILL.md`；Agent 私有 Skill 使用 `agents/<agent>/skills/<name>/SKILL.md`。Skill 的私有 Tool 放在该 Skill 的 `tools/<name>/index.ts`，会自动加入 Skill 的 Tool 白名单；参考资料继续与 Skill 共置。
 
 ## Markdown 契约
 

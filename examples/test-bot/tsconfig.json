@@ -10,7 +10,7 @@
   "include": [
     "plugin.ts",
     "commands/**/*",
-    "agent/tools/**/*",
+    "tools/**/*",
     "components/**/*",
     "lib/**/*.ts",
     "lib/**/*.tsx",

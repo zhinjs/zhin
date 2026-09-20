@@ -16,13 +16,22 @@ my-plugin/
         ├── workflows/
         │   └── create-api.md
         ├── tools/
-        │   ├── schema-validator.sh
-        │   └── README.md
+        │   └── schema-validator/
+        │       └── index.ts
+        ├── skills/
+        │   └── db-migration/
+        │       ├── SKILL.md
+        │       └── tools/
+        │           └── schema-check/
+        │               └── index.ts
+        ├── hooks/
+        │   └── audit/
+        │       └── index.ts
         └── knowledge/
             └── internal-architecture.md
 ```
 
-`agents/<name>` 必须使用小写 kebab-case。四个核心文件缺一不可；`workflows/`、`tools/`、`knowledge/` 可省略。`entry_points` 决定提示词的组合顺序，并且必须包含三个核心 Markdown 文件。
+`agents/<name>` 必须使用小写 kebab-case。四个核心文件缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可省略。`entry_points` 决定提示词的组合顺序，并且必须包含三个核心 Markdown 文件。
 
 ```json
 {
@@ -34,14 +43,13 @@ my-plugin/
     "keywords": ["api", "service", "migration"]
   },
   "entry_points": ["system.md", "boundaries.md", "conventions.md"],
-  "tools": ["schema-validator"],
   "permissions": ["role(developer)"]
 }
 ```
 
 `system.md` 定义身份与任务，`boundaries.md` 定义权限和行为边界，`conventions.md` 只扩展、具象化根 `AGENTS.md`。反复出现的项目坑应补充到 `conventions.md`。
 
-`workflows/`、`tools/`、`knowledge/` 会作为结构化资源进入 Agent definition。目录中的脚本不会直接变成可执行 Tool；Agent 仍须经受控的 `bash` 或显式 `@zhin.js/tool` capability 执行，因此不能绕过 Tool 准入、审批和审计。
+`workflows/` 与 `knowledge/` 进入 Agent 指令；`tools/<name>/index.ts` 是由 `@zhin.js/tool` 校验、审批和审计的私有 Tool；`skills/<name>/SKILL.md` 是由 `@zhin.js/skill` 投影的私有 Skill。目录结构只声明归属，不绕过 Feature 准入。
 
 ## Projection 与热重载
 

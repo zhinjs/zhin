@@ -36,7 +36,7 @@ tags:
 | 能力 | 做法 | 目录 / 位置 |
 |------|------|-------------|
 | 聊天命令 | `defineCommand()` default export | `commands/**/$*.ts`（`$` 入口路径即路由） |
-| AI 工具 | `defineAgentTool()` | `agent/tools/$*.ts` |
+| AI 工具 | `defineAgentTool()` | `tools/<name>/index.ts` |
 | 中间件 | `defineMiddleware()` | `middlewares/$*.ts` |
 | 组件 | `defineComponent()` | `components/$*.tsx` |
 | 定时任务 | `scheduleHostToken.register(...)` + `lifecycle` | `plugin.ts` setup |
@@ -69,7 +69,7 @@ export default defineCommand({
 });
 ```
 
-**工具示例** `agent/tools/$get_weather.ts`：
+**工具示例** `tools/get_weather/index.ts`：
 
 ```typescript
 import { defineAgentTool } from 'zhin.js/tool';

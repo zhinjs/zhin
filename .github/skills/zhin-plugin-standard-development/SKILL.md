@@ -20,7 +20,7 @@ user-invocable: true
 | `commands/**/$*.ts` | `defineCommand()`（路径即路由；`$[name].ts` / `$[[name]].ts` / `$[...name].ts` 传参，类型与默认值在 `params` 中声明） |
 | `middlewares/**/$*.ts` | `defineMiddleware()` |
 | `components/**/$*.tsx` | `defineComponent()` |
-| `agent/tools/$*.ts` | `defineAgentTool()` |
+| `tools/<name>/index.ts` | `defineAgentTool()` |
 | `pages/$*.tsx` | `definePage()`（`$nav.tsx` / `$footer.tsx` 布局） |
 | `skills/<name>/SKILL.md` | Markdown Skill |
 | `agents/$<name>.agent.md` | Markdown Agent |
@@ -76,7 +76,7 @@ DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
 | 出站改写 | `target: 'outbound'` | `middlewares/**/$*.ts` |
 | 定时 | `scheduleHostToken.register` + lifecycle | `plugin.ts` 或 `agent/schedules/$*.ts` |
 | 组件 | `defineComponent` | `components/**/$*.tsx` |
-| AI 工具 | `defineAgentTool` | `agent/tools/$*.ts` |
+| AI 工具 | `defineAgentTool` | `tools/<name>/index.ts` |
 | 服务 / DI | `resources.provide` | `plugin.ts` setup |
 | 数据库 | `databaseHostToken`，`start` 前 `define` 表 | `plugin.ts` setup |
 | Web | `definePage` | `pages/$*.tsx` |

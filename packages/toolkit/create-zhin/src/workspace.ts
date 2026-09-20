@@ -461,7 +461,7 @@ ${projectName}/
 │   ├── $nav.tsx           # 最近插件导航布局
 │   └── $footer.tsx        # 最近插件页脚布局
 ├── agent/
-│   └── tools/             # $*.ts AI 工具入口
+│   └── tools/             # <name>/index.ts AI 工具入口
 ├── skills/                # <name>/SKILL.md，可同目录放参考资料与脚本
 ├── agents/                # <name>/agent.json + 核心 Markdown 子 Agent 目录
 ├── plugins/               # 本地子插件 workspace（仅一级）
@@ -539,7 +539,7 @@ npx zhin setup --adapters   # 选择平台并写入 plugins.<instanceKey> 配置
 ## 🤖 AI Agent
 
 如果初始化时启用了 AI，配置会写入 \`${configFilename}\` 的 \`ai:\` 段，API Key 会写入 \`.env\`。
-启用后 \`agent/tools/\` 约定目录下只有 \`$*.ts\` 中的 \`defineAgentTool\` 工具会被 Agent 自动发现。
+启用后 \`tools/<name>/index.ts\` 默认导出的 \`defineAgentTool\` 会被 Agent 自动发现；辅助模块与入口共置在命名目录中。
 
 ## ✅ 验证项目
 
@@ -568,10 +568,9 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
     fs.ensureDir(path.join(projectPath, 'pages')),
     fs.ensureDir(path.join(projectPath, 'skills')),
     fs.ensureDir(path.join(projectPath, 'data')),
-    ...['agents', 'middlewares', 'plugins', 'packages'].map(async (directory) => {
+    ...['agents', 'hooks', 'middlewares', 'plugins', 'packages', 'tools'].map(async (directory) => {
       await fs.outputFile(path.join(projectPath, directory, '.gitkeep'), '');
     }),
-    fs.outputFile(path.join(projectPath, 'agent', 'tools', '.gitkeep'), ''),
   ]);
 
   // 创建 .env 文件（使用简单的变量名）
@@ -620,8 +619,11 @@ HTTP_TOKEN=change-me
       "components/**/*.tsx",
       "middlewares/**/*.ts",
       "middlewares/**/*.tsx",
-      "agent/tools/**/*.ts",
-      "agent/tools/**/*.tsx",
+      "tools/**/*.ts",
+      "tools/**/*.tsx",
+      "hooks/**/*.ts",
+      "agents/**/*.ts",
+      "skills/**/*.ts",
       "pages/**/*.ts",
       "pages/**/*.tsx"
     ],
@@ -761,10 +763,10 @@ export default defineComponent<StatusCardProps>({
 });
 `);
 
-  // agent/tools/$echo.ts（AI 启用时生成，defineAgentTool 约定目录）
+  // tools/echo/index.ts（AI 启用时生成，defineAgentTool 约定目录）
   if (aiEnabled) {
-    await fs.ensureDir(path.join(projectPath, 'agent', 'tools'));
-    await fs.writeFile(path.join(projectPath, 'agent', 'tools', '$echo.ts'),
+    await fs.ensureDir(path.join(projectPath, 'tools', 'echo'));
+    await fs.writeFile(path.join(projectPath, 'tools', 'echo', 'index.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
@@ -835,8 +837,8 @@ export default defineCommand({
 `);
 
     if (aiEnabled) {
-      await fs.ensureDir(path.join(projectPath, 'agent', 'tools'));
-      await fs.writeFile(path.join(projectPath, 'agent', 'tools', '$get_current_time.ts'),
+      await fs.ensureDir(path.join(projectPath, 'tools', 'get_current_time'));
+      await fs.writeFile(path.join(projectPath, 'tools', 'get_current_time', 'index.ts'),
 `import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 

@@ -93,6 +93,7 @@
     "schema.json",
     "src",
     "lib",
+    "tools",
     "agent",
     "README.md",
     "CHANGELOG.md"

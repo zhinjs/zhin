@@ -74,7 +74,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
 
   it('uses a static manifest and convention directories without legacy registration', () => {
     expect(packageJson.zhin.entry).toBe('./plugin.ts');
-    // AI remains opt-in; the example mounts Tool explicitly for agent/tools/$echo.ts.
+    // AI remains opt-in; the example mounts Tool explicitly for tools/echo/index.ts.
     expect(packageJson.zhin.features).toEqual([
       { package: '@zhin.js/tool', api: '^1.0.0' },
     ]);
@@ -97,7 +97,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       .toContain('defineComponent');
     expect(fs.readFileSync(path.join(botRoot, 'adapters/$terminal.ts'), 'utf8'))
       .toContain('defineAdapter');
-    expect(fs.readFileSync(path.join(botRoot, 'agent/tools/$echo.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'tools/echo/index.ts'), 'utf8'))
       .toContain('defineAgentTool');
   });
 

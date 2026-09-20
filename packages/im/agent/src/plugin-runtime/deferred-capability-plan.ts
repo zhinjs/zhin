@@ -157,18 +157,21 @@ export function createDeferredCapabilityPlan(
   const config = resolveDeferredToolsConfig(options.config);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
   const projected = projectCapabilities(options.capabilities, options.authority);
-  const baseCapabilities = projected.tools.filter(
-    (tool) => !tool.hidden
+  const executableCapabilities = projected.tools.filter(
+    (tool) => (!tool.hidden || tool.placement !== undefined)
       && !DEFERRED_META_TOOL_NAMES.has(tool.name)
       && !isWorkroomControl(tool.name),
   );
+  const publicCapabilities = executableCapabilities.filter(
+    (tool) => !tool.hidden
+  );
   // Platform-scoped adapter tools already passed canAccess for this turn.
   // Keep them in the model tool list so QQ/social actions are not hidden behind discover.
-  for (const tool of baseCapabilities) {
+  for (const tool of publicCapabilities) {
     if (tool.platforms?.length) alwaysLoaded.add(tool.name);
   }
-  const baseTools = baseCapabilities.map(capabilityAsAgentTool);
-  const baseCatalog = buildToolCatalog({ tools: baseTools, alwaysLoaded });
+  const publicTools = publicCapabilities.map(capabilityAsAgentTool);
+  const publicCatalog = buildToolCatalog({ tools: publicTools, alwaysLoaded });
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, projected);
 
   const persist = async (next: DeferredToolSessionSnapshot): Promise<void> => {
@@ -178,16 +181,16 @@ export function createDeferredCapabilityPlan(
 
   const metaCapabilities = createMetaCapabilities({
     owner: options.capabilities.owner,
-    catalog: baseCatalog,
+    catalog: publicCatalog,
     skills: projected.skills,
-    tools: baseCapabilities,
+    tools: executableCapabilities,
     platform: options.platform,
     topK: config.discoverTopK,
     maxLoaded: config.maxLoadedPerSession,
     getSnapshot: () => snapshot,
     persist,
   });
-  const capabilities = Object.freeze([...baseCapabilities, ...metaCapabilities]);
+  const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
   const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
   const controller: DeferredCapabilityController = Object.freeze({
@@ -276,16 +279,22 @@ function projectSessionSnapshot(
   snapshot: DeferredToolSessionSnapshot,
   capabilities: Readonly<Pick<AgentCapabilities, 'tools' | 'skills'>>,
 ): DeferredToolSessionSnapshot {
-  const allowedTools = new Set(capabilities.tools
-    .filter((tool) => !tool.hidden)
-    .map((tool) => tool.name));
   const allowedSkills = new Set(capabilities.skills.flatMap(
     skill => [skill.qualifiedName, skill.name],
   ));
+  const loadedSkills = snapshot.loadedSkills.filter(name => allowedSkills.has(name));
+  const allowedTools = new Set(capabilities.tools
+    .filter((tool) => !tool.hidden)
+    .map((tool) => tool.name));
+  const loadedSkillNames = new Set(loadedSkills);
+  for (const skill of capabilities.skills) {
+    if (!loadedSkillNames.has(skill.qualifiedName) && !loadedSkillNames.has(skill.name)) continue;
+    for (const tool of resolveSkillTools(skill, capabilities.tools)) allowedTools.add(tool);
+  }
   return {
     loadedTools: Object.fromEntries(Object.entries(snapshot.loadedTools)
       .filter(([name]) => allowedTools.has(name))),
-    loadedSkills: snapshot.loadedSkills.filter(name => allowedSkills.has(name)),
+    loadedSkills,
   };
 }
 

@@ -138,6 +138,7 @@
     "check:agent-tool-schema": "node scripts/check-agent-tool-schema.mjs",
     "check:skill-authoring-boundaries": "node scripts/check-skill-authoring-boundaries.mjs",
     "check:agent-authoring-boundaries": "node scripts/check-agent-authoring-boundaries.mjs",
+    "check:hook-authoring-boundaries": "node scripts/check-hook-authoring-boundaries.mjs",
     "check:install-size": "node scripts/check-install-size.mjs"
   },
   "devDependencies": {

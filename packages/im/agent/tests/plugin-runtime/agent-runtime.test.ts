@@ -694,6 +694,21 @@ permissions: [role(trusted)]
     await fixture.mcp.stop();
   });
 
+  it('projects an Agent-private Skill only when that Agent is selected', async () => {
+    const fixture = await createFixture({ privateSkillAgent: 'planner' });
+    const ingress = new CapabilityIngress();
+
+    expect((await ingress.read(fixture.snapshot, rootPluginId())).skills).toEqual([]);
+    expect((await ingress.read(
+      fixture.snapshot,
+      rootPluginId(),
+      () => true,
+      undefined,
+      'planner',
+    )).skills).toMatchObject([{ name: 'research', agentName: 'planner' }]);
+    await fixture.mcp.stop();
+  });
+
   it('publishes platform prompt sections only to matching IM turns', async () => {
     const fixture = await createFixture({ promptPlatforms: ['github'] });
     const ingress = new CapabilityIngress();
@@ -739,6 +754,7 @@ async function createFixture(access: {
   readonly keywords?: readonly string[];
   readonly promptPlatforms?: readonly string[];
   readonly skillMarkdown?: string;
+  readonly privateSkillAgent?: string;
 } = {}) {
   const root = rootPluginId();
   const child = childPluginId(root, 'child');
@@ -760,12 +776,12 @@ async function createFixture(access: {
   const skill = createCapabilitySlot({
     owner: child,
     feature: skillFeatureId,
-    localName: 'research',
+    localName: access.privateSkillAgent ? `agent/${access.privateSkillAgent}/research` : 'research',
     source: '/skills/research/SKILL.md',
     definition: parseSkillMarkdown(access.skillMarkdown ?? '# Research', validation(
       child,
       skillFeatureId,
-      'research',
+      access.privateSkillAgent ? `agent/${access.privateSkillAgent}/research` : 'research',
       '/skills/research/SKILL.md',
     )),
   });
@@ -788,7 +804,7 @@ async function createFixture(access: {
         'boundaries.md': '# Boundaries\n\nStay in scope.',
         'conventions.md': '# Conventions\n\nFollow AGENTS.md.',
       },
-      workflows: [], tools: [], knowledge: [],
+      workflows: [], knowledge: [],
     }, validation(
       root,
       agentFeatureId,

@@ -76,7 +76,7 @@ plugins:
 
 ## AI 工具
 
-见 `agent/tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
+见 `tools/`：`github_star`、`github_bind`、`github_subscribe`、`github_prepare_workspace` 等。
 
 ## 架构
 
