@@ -738,6 +738,7 @@ describe('icqq plugin runtime adapter', () => {
           image: 'http://p1.music.126.net/cover.jpg',
           audio: 'http://iot201.music.126.net/song.mp3',
           content: '小B崽子，你的歌道了',
+          description: '经典粤语摇滚',
           artist: '信乐团',
           config: {
             appid: 100495085,
@@ -755,13 +756,29 @@ describe('icqq plugin runtime adapter', () => {
       image: 'http://p1.music.126.net/cover.jpg',
       audio: 'http://iot201.music.126.net/song.mp3',
       content: '小B崽子，你的歌道了',
-      summary: '信乐团',
+      summary: '经典粤语摇滚',
       config: {
         appid: 100495085,
       },
     });
     expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
     await endpoint.stop();
+  });
+
+  it('uses artist as the native share summary when description is absent', () => {
+    expect(formatOutboundBody({
+      type: 'share',
+      data: {
+        title: '海阔天空',
+        url: 'https://music.163.com/#/song?id=387717',
+        artist: '信乐团',
+      },
+    })).toEqual({
+      type: 'share',
+      title: '海阔天空',
+      url: 'https://music.163.com/#/song?id=387717',
+      summary: '信乐团',
+    });
   });
 
   it('send posts temp message (群容器内的 private 会话)', async () => {

@@ -100,6 +100,12 @@ export function formatSegmentPreview(item: SegmentBase): string {
       if (text && url) return clip(`${text} <${url}>`);
       return clip(url || text || '[link]');
     }
+    case 'share': {
+      const url = typeof data.url === 'string' ? data.url : '';
+      const title = typeof data.title === 'string' ? data.title : '';
+      if (title && url) return clip(`[share] ${title} <${url}>`);
+      return clip(title || url || '[share]');
+    }
     case 'dice':
       return data.result != null ? `{dice}(${data.result})` : '{dice}';
     case 'rps':

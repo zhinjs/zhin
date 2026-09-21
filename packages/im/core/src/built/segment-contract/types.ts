@@ -4,6 +4,7 @@ import type {
   MediaRef,
   MentionSegment,
   ReplySegment,
+  ShareSegment,
   Segment,
   SegmentBase,
   TextSegment,
@@ -14,6 +15,7 @@ export type {
   MediaRef,
   MentionSegment,
   ReplySegment,
+  ShareSegment,
   Segment,
   SegmentBase,
   TextSegment,
@@ -59,5 +61,5 @@ export interface RpsSegment extends SegmentBase {
   data: { result?: number };
 }
 
-/** 规范态 segment（严格校验 text / mention / image / audio / video / file / reply / forward / face / dice / rps） */
+/** 规范态 segment（严格校验 text / mention / image / audio / video / file / reply / forward / face / dice / rps / share） */
 export type LegacySpecificSegment = ImageSegment | AudioSegment | VideoSegment | FileSegment | FaceSegment | DiceSegment | RpsSegment;

@@ -6,10 +6,12 @@ describe('console segmentsForImDelivery', () => {
     const full = [
       { type: 'thinking', data: { text: 'plan' } },
       { type: 'text', data: { text: 'hi' } },
+      { type: 'share', data: { title: 'Example', url: 'https://example.com' } },
       { type: 'tool_call', data: { name: 'bash' } },
     ];
     expect(segmentsForImDelivery(full)).toEqual([
       { type: 'text', data: { text: 'hi' } },
+      { type: 'share', data: { title: 'Example', url: 'https://example.com' } },
     ]);
     expect(segmentsForAgentPanel(full)).toEqual(full);
   });

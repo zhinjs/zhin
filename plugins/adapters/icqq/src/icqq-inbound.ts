@@ -500,6 +500,45 @@ export function icqqElementsToSegments(
         });
         break;
       }
+      case "share": {
+        const url = typeof el.url === "string" ? el.url.trim() : "";
+        const title = typeof el.title === "string" ? el.title.trim() : "";
+        if (!url || !title) break;
+        const description = typeof el.summary === "string" && el.summary
+          ? el.summary
+          : undefined;
+        const image = typeof el.image === "string" && el.image ? el.image : undefined;
+        const audio = typeof el.audio === "string" && el.audio ? el.audio : undefined;
+        const content = typeof el.content === "string" && el.content ? el.content : undefined;
+        const rawConfig = el.config && typeof el.config === "object" && !Array.isArray(el.config)
+          ? el.config as Record<string, unknown>
+          : undefined;
+        const appid = Number(rawConfig?.appid);
+        const config = Number.isSafeInteger(appid) && appid > 0
+          ? {
+              appid,
+              ...(typeof rawConfig?.appname === "string" && rawConfig.appname
+                ? { package: rawConfig.appname }
+                : {}),
+              ...(typeof rawConfig?.appsign === "string" && rawConfig.appsign
+                ? { sign: rawConfig.appsign }
+                : {}),
+            }
+          : undefined;
+        out.push({
+          type: "share",
+          data: {
+            url,
+            title,
+            ...(description ? { description } : {}),
+            ...(image ? { image } : {}),
+            ...(audio ? { audio } : {}),
+            ...(content ? { content } : {}),
+            ...(config ? { config } : {}),
+          },
+        });
+        break;
+      }
       default:
         if (el.text != null && el.text !== "") {
           out.push({ type: "text", data: { text: String(el.text) } });

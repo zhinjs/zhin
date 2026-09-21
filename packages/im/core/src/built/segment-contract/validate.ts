@@ -113,6 +113,30 @@ export const rpsSegmentSchema = Schema.object({
   platform: platformSchema,
 });
 
+const shareConfigSchema = Schema.object({
+  appid: Schema.number().required(),
+  package: Schema.string(),
+  sign: Schema.string(),
+  icon: Schema.string(),
+  version: Schema.string(),
+});
+
+export const shareSegmentSchema = Schema.object({
+  type: Schema.const('share'),
+  data: Schema.object({
+    url: Schema.string().required(),
+    title: Schema.string().required(),
+    description: Schema.string(),
+    image: Schema.string(),
+    audio: Schema.string(),
+    content: Schema.string(),
+    artist: Schema.string(),
+    duration: Schema.number(),
+    config: shareConfigSchema,
+  }).required(),
+  platform: platformSchema,
+});
+
 export const canonicalSegmentSchema = Schema.discriminatedUnion('type', {
   text: {
     data: Schema.object({ text: Schema.string().required() }).required(),
@@ -184,8 +208,14 @@ export const canonicalSegmentSchema = Schema.discriminatedUnion('type', {
   share: {
     data: Schema.object({
       url: Schema.string().required(),
-      title: Schema.string(),
+      title: Schema.string().required(),
       description: Schema.string(),
+      image: Schema.string(),
+      audio: Schema.string(),
+      content: Schema.string(),
+      artist: Schema.string(),
+      duration: Schema.number(),
+      config: shareConfigSchema,
     }).required(),
     platform: platformSchema,
   },

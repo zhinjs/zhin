@@ -49,6 +49,22 @@ describe('normalizeOutboundPayload', () => {
     expect(await normalizeOutboundPayload(segment)).toEqual([segment]);
   });
 
+  it('preserves a complete share segment for adapter-native delivery', async () => {
+    const segment = {
+      type: 'share',
+      data: {
+        title: '海阔天空',
+        url: 'https://music.163.com/#/song?id=387717',
+        image: 'https://p1.music.126.net/cover.jpg',
+        audio: 'https://music.126.net/song.mp3',
+        artist: '信乐团',
+        duration: 277,
+        config: { appid: 100495085 },
+      },
+    };
+    expect(await normalizeOutboundPayload(segment)).toEqual([segment]);
+  });
+
   it('renders html segments to canonical image segments when a renderer is available', async () => {
     const base64 = Buffer.from('png:<b>hi</b>:400').toString('base64');
     const payload = await normalizeOutboundPayload(

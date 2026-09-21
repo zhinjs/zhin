@@ -55,12 +55,34 @@ export interface ForwardSegment extends SegmentBase {
   }>;
 }
 
+export interface ShareSegment extends SegmentBase {
+  readonly type: 'share';
+  readonly data: Readonly<{
+    url: string;
+    title: string;
+    description?: string;
+    image?: string;
+    audio?: string;
+    content?: string;
+    artist?: string;
+    duration?: number;
+    config?: Readonly<{
+      appid: number;
+      package?: string;
+      sign?: string;
+      icon?: string;
+      version?: string;
+    }>;
+  }>;
+}
+
 export type Segment =
   | TextSegment
   | MentionSegment
   | MediaSegment
   | ReplySegment
   | ForwardSegment
+  | ShareSegment
   | SegmentBase;
 
 const mediaKinds = new Set<MediaRef['kind']>(['url', 'path', 'base64', 'file']);

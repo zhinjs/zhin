@@ -17,6 +17,7 @@ const IM_VISIBLE_TYPES = new Set([
   'link',
   'dice',
   'rps',
+  'share',
   'markdown',
   'html',
   'qrcode',

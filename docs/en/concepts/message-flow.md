@@ -100,6 +100,12 @@ interface MediaRef {
 // image / audio / video / file segment data is always { media: MediaRef, alt?/duration?/name? }
 ```
 
+`share` is another strict canonical segment. `data.url` and `data.title` are required;
+`description`, `image`, `audio`, `content`, `artist`, `duration`, and application `config`
+are optional. Core preserves it through `$reply`, Agent structured output, and Console IM
+views. Adapters translate it to a platform-native share at the `send()` boundary and must
+reject unsupported delivery explicitly instead of silently dropping it.
+
 **Inbound**: adapters normalize platform payloads into `Segment[]` via `emit('message.receive', { segments })`. Opaque platform ids must be materialized through the current generation's `EndpointContentPort`; the snapshot lease remains held until resolution settles. URLs, paths, and base64 then share one pipeline: HTTPS/SSRF and redirect checks → byte limit → file-signature detection → declared/actual type validation → `UserMessage.media`. File extensions and adapter-declared MIME values are not trusted, and binary/base64 data is never persisted in the conversation fact store. Every media item reaches exactly one `accepted | derived | unsupported | rejected | failed` terminal state. Failures are explicit untrusted user-context data, never a placeholder pretending the model saw the media. Providers must explicitly declare `text/image/audio/video/file` input support; omission means text-only.
 
 ## Conversation facts, references, and notices

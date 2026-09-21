@@ -533,7 +533,7 @@ function formatShare(data: Record<string, unknown> | undefined): ShareElem {
         ...(appsign ? { appsign } : {}),
       }
     : undefined;
-  const summary = optionalString(data.artist);
+  const summary = optionalString(data.description) ?? optionalString(data.artist);
   const content = optionalString(data.content);
   const image = optionalString(data.image);
   const audio = optionalString(data.audio);
