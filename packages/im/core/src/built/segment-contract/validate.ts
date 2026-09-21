@@ -181,6 +181,14 @@ export const canonicalSegmentSchema = Schema.discriminatedUnion('type', {
     data: Schema.object({ result: Schema.number() }).required(),
     platform: platformSchema,
   },
+  share: {
+    data: Schema.object({
+      url: Schema.string().required(),
+      title: Schema.string(),
+      description: Schema.string(),
+    }).required(),
+    platform: platformSchema,
+  },
 });
 
 export const segmentArraySchema = Schema.list(canonicalSegmentSchema);
