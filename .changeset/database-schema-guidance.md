@@ -22,4 +22,4 @@
 
 Add schema-driven database setup with explicit live-tested server and driver versions, validate environment-backed connection options before startup, and generate safe database examples for new projects.
 
-Make durable timestamp columns portable across SQL dialects, preserve dialect-specific identity syntax, and encode canonical conversation keys at the database boundary so PostgreSQL accepts them.
+Make durable timestamp columns portable across SQL dialects, preserve dialect-specific identity syntax, migrate legacy inbox tables before their first millisecond timestamp write, and encode canonical conversation keys at the database boundary so PostgreSQL accepts them.

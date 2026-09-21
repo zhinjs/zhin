@@ -26,9 +26,17 @@ describe('untrusted candidate CI credential isolation', () => {
       expect(step.run ?? '').not.toMatch(/(?:echo|printf|Set-Content|Add-Content).*\.npmrc/);
     }
   });
-  it('preserves all six protected CI check identities and repository npm placeholders', () => {
+  it('preserves the protected matrix identities and isolated live-database gate', () => {
     const { config } = read('ci');
-    expect(Object.keys(config.jobs)).toEqual(['test']);
+    expect(Object.keys(config.jobs)).toEqual(['database-live', 'test']);
+    expect(config.jobs['database-live'].permissions).toEqual({ contents: 'read' });
+    expect(JSON.stringify(config.jobs['database-live'])).not.toMatch(/secrets\.|github\.token/);
+    expect(config.jobs['database-live'].services).toMatchObject({
+      mysql: { image: 'mysql:8.4' },
+      postgres: { image: 'postgres:17' },
+      mongodb: { image: 'mongo:8' },
+      redis: { image: 'redis:8' },
+    });
     expect(config.jobs.test.name).toBeUndefined();
     const matrix = config.jobs.test.strategy.matrix;
     expect(matrix.os.flatMap((os: string) => matrix['node-version'].map((node: number) => `test (${os}, ${node})`))).toEqual([

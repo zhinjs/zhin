@@ -6,6 +6,12 @@ import {
   messageRefKey,
   type ConversationEvent,
 } from '@zhin.js/im-contract';
+import {
+  INBOX_TABLE_DEFINITIONS,
+  INBOX_TABLE_MESSAGE,
+  INBOX_TABLE_NOTICE,
+  INBOX_TABLE_REQUEST,
+} from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
 
 const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
@@ -27,6 +33,9 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     const legacyDb = legacy.getRawDatabase() as { query(sql: string): Promise<unknown> };
     await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
     await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
+    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
+    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
     await legacyDb.query(`CREATE TABLE "zhin_live_conversation_events" (
       "id" INTEGER PRIMARY KEY,
       "event_id" TEXT NOT NULL UNIQUE,
@@ -40,10 +49,28 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
       "cursor_key" TEXT NOT NULL UNIQUE,
       "sequence" INTEGER NOT NULL
     )`);
+    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_MESSAGE}" (
+      "id" INTEGER PRIMARY KEY,
+      "created_at" INTEGER NOT NULL
+    )`);
+    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_REQUEST}" (
+      "id" INTEGER PRIMARY KEY,
+      "created_at" INTEGER NOT NULL,
+      "resolved_at" INTEGER,
+      "consumed_at" INTEGER
+    )`);
+    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_NOTICE}" (
+      "id" INTEGER PRIMARY KEY,
+      "created_at" INTEGER NOT NULL,
+      "consumed_at" INTEGER
+    )`);
     await legacy.stop();
 
     host.define('zhin_live_conversation_events', CONVERSATION_EVENT_MODEL);
     host.define('zhin_live_conversation_cursors', CONVERSATION_CURSOR_MODEL);
+    for (const [name, definition] of Object.entries(INBOX_TABLE_DEFINITIONS)) {
+      host.define(name, definition);
+    }
     await host.start();
     const db = host.getRawDatabase() as { query(sql: string): Promise<unknown> };
     const columns = await db.query(`SELECT column_name, data_type, is_identity
@@ -64,7 +91,46 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     const db = host.getRawDatabase() as { query(sql: string): Promise<unknown> };
     await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
     await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
+    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
+    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
     await host.stop();
+  });
+
+  it('migrates legacy inbox millisecond timestamps before the first write', async () => {
+    const db = host.getRawDatabase() as { query(sql: string, params?: unknown[]): Promise<unknown> };
+    const tables = [INBOX_TABLE_MESSAGE, INBOX_TABLE_REQUEST, INBOX_TABLE_NOTICE];
+    const columns = await db.query(
+      `SELECT table_name, column_name, data_type, is_identity
+       FROM information_schema.columns
+       WHERE table_name = ANY($1::text[])
+         AND (column_name = 'id' OR column_name LIKE '%_at')`,
+      [tables],
+    ) as Array<{ table_name: string; column_name: string; data_type: string; is_identity: string }>;
+
+    for (const table of tables) {
+      expect(columns).toContainEqual(expect.objectContaining({
+        table_name: table,
+        column_name: 'id',
+        is_identity: 'YES',
+      }));
+      expect(columns).toContainEqual(expect.objectContaining({
+        table_name: table,
+        column_name: 'created_at',
+        data_type: 'bigint',
+      }));
+    }
+    for (const row of columns.filter((column) => column.column_name.endsWith('_at'))) {
+      expect(row.data_type, `${row.table_name}.${row.column_name}`).toBe('bigint');
+    }
+
+    const timestamp = Date.now();
+    for (const table of tables) {
+      await expect(db.query(
+        `INSERT INTO "${table}" ("created_at") VALUES ($1)`,
+        [timestamp],
+      )).resolves.toBeDefined();
+    }
   });
 
   it('persists canonical NUL-delimited identities through PostgreSQL text columns', async () => {

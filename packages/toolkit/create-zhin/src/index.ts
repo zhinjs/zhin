@@ -6,7 +6,12 @@ import inquirer from 'inquirer';
 import chalk from 'chalk';
 
 import { InitOptions } from './types.js';
-import { generateToken, getDatabaseDisplayName, isValidProjectName } from './utils.js';
+import {
+  generateToken,
+  getDatabaseDisplayName,
+  getDatabasePersistenceLabel,
+  isValidProjectName,
+} from './utils.js';
 import {
   configureDatabaseOptions,
   configureAdapters,
@@ -267,6 +272,7 @@ async function main() {
       } else {
         console.log(`  ${chalk.yellow('⚠ 数据库连接信息已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
         console.log(`  ${chalk.gray('请根据实际情况修改数据库连接参数')}`);
+        console.log(`  ${chalk.gray('启动前校验:')} ${chalk.cyan('npx zhin config check')}`);
       }
     }
 
@@ -311,7 +317,7 @@ async function main() {
       }
       console.log(`  ${chalk.gray('依赖:')} ${chalk.cyan(formatAIDependencyHint(agentProvider))}`);
       if (options.database && options.ai.sessions?.useDatabase !== false) {
-        console.log(`  ${chalk.gray('会话存储:')} ${chalk.cyan('SQLite 持久化')}`);
+        console.log(`  ${chalk.gray('会话存储:')} ${chalk.cyan(getDatabasePersistenceLabel(options.database.dialect))}`);
       }
       const providerKey = options.ai.providers && Object.values(options.ai.providers)[0];
       if (providerKey && (providerKey as { apiKey?: string }).apiKey) {

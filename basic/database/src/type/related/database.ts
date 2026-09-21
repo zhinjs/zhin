@@ -84,15 +84,14 @@ export class RelatedDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 并行创建所有表以提高性能
+    // 单连接方言（PostgreSQL Client 等）不允许同一连接并发 query。
+    // 初始化只发生在启动阶段，按定义顺序建表也让失败位置保持确定。
     const tableEntries = Array.from(this.definitions.entries());
-    await Promise.all(
-      tableEntries.map(async ([tableName, definition]) => {
-        await this.create(tableName, definition);
-      })
-    );
+    for (const [tableName, definition] of tableEntries) {
+      await this.create(tableName, definition);
+    }
     await this.dialect.reconcileDefinitions(this.definitions);
-    // 创建完成后，统一设置 models（避免并发竞争）
+    // 创建完成后，统一设置 models。
     for (const [tableName, definition] of tableEntries) {
       this.models.set(tableName, new RelatedModel(this, tableName, definition));
     }
