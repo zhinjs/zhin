@@ -13,6 +13,7 @@ import {
   migrateAiLegacyConfig,
   validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
+import { expandEnvironmentValue } from '@zhin.js/runtime';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
 
@@ -52,10 +53,7 @@ function collectEnvRefs(
   issues: ConfigIssue[],
 ): void {
   if (typeof value === 'string') {
-    for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu)) {
-      const envKey = match[1];
-      const defaultValue = match[2];
-      if (env[envKey] !== undefined || defaultValue !== undefined) continue;
+    expandEnvironmentValue(value, (envKey) => env[envKey], (envKey) => {
       const databaseReference = keyPath === 'database' || keyPath.startsWith('database.');
       pushIssue(issues, {
         severity: databaseReference ? 'error' : 'warn',
@@ -67,7 +65,8 @@ function collectEnvRefs(
           ? `在项目根目录 .env 中设置 ${envKey}=...，或运行 zhin setup --database`
           : `在 .env 中设置 ${envKey}=...`,
       });
-    }
+      return '';
+    });
     return;
   }
   if (Array.isArray(value)) {

@@ -173,23 +173,64 @@ function expandEnvReferences(
   env: Readonly<Record<string, string | undefined>>,
   issues: DatabaseSchemaIssue[],
 ): string {
-  return input.replace(
-    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu,
-    (_reference, key: string, fallback: string | undefined) => {
-      const resolved = env[key];
-      if ((resolved === undefined || resolved === '') && fallback !== undefined) return fallback;
-      if (resolved === undefined) {
-        issues.push({
-          kind: 'env_missing',
-          path,
-          envKey: key,
-          message: `环境变量 ${key} 未设置（${path}）`,
-        });
-        return '';
+  let output = '';
+  let index = 0;
+  while (index < input.length) {
+    const start = input.indexOf('${', index);
+    if (start < 0) break;
+    let cursor = start + 2;
+    const first = input[cursor];
+    if (first === undefined || !isEnvKeyStart(first)) {
+      output += input.slice(index, start + 1);
+      index = start + 1;
+      continue;
+    }
+    cursor += 1;
+    while (cursor < input.length && isEnvKeyCharacter(input[cursor]!)) cursor += 1;
+    const key = input.slice(start + 2, cursor);
+    let fallback: string | undefined;
+    if (input[cursor] === ':' && (input[cursor + 1] === '-' || input[cursor + 1] === '=')) {
+      const close = input.indexOf('}', cursor + 2);
+      if (close < 0) {
+        output += input.slice(index, start + 1);
+        index = start + 1;
+        continue;
       }
-      return resolved;
-    },
-  );
+      fallback = input.slice(cursor + 2, close);
+      cursor = close;
+    }
+    if (input[cursor] !== '}') {
+      output += input.slice(index, start + 1);
+      index = start + 1;
+      continue;
+    }
+    output += input.slice(index, start);
+    const resolved = env[key];
+    if ((resolved === undefined || resolved === '') && fallback !== undefined) {
+      output += fallback;
+    } else if (resolved === undefined) {
+      issues.push({
+        kind: 'env_missing',
+        path,
+        envKey: key,
+        message: `环境变量 ${key} 未设置（${path}）`,
+      });
+    } else {
+      output += resolved;
+    }
+    index = cursor + 1;
+  }
+  return output + input.slice(index);
+}
+
+function isEnvKeyStart(character: string): boolean {
+  return (character >= 'A' && character <= 'Z')
+    || (character >= 'a' && character <= 'z')
+    || character === '_';
+}
+
+function isEnvKeyCharacter(character: string): boolean {
+  return isEnvKeyStart(character) || (character >= '0' && character <= '9');
 }
 
 function validateValue(
