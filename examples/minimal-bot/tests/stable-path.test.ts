@@ -74,13 +74,16 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
 
   it('uses a static manifest and convention directories without legacy registration', () => {
     expect(packageJson.zhin.entry).toBe('./plugin.ts');
-    // AI remains opt-in; the example mounts Tool explicitly for tools/echo/index.ts.
+    // AI remains opt-in; each convention directory mounts its owning Feature explicitly.
     expect(packageJson.zhin.features).toEqual([
       { package: '@zhin.js/tool', api: '^1.0.0' },
+      { package: '@zhin.js/command', api: '^1.0.0' },
+      { package: '@zhin.js/component', api: '^1.0.0' },
     ]);
     expect(packageJson.zhin.plugins).toEqual([]);
     expect(packageJson.dependencies).toHaveProperty('zhin.js');
-    expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/command');
+    expect(packageJson.dependencies).toHaveProperty('@zhin.js/command');
+    expect(packageJson.dependencies).toHaveProperty('@zhin.js/component');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/adapter-sandbox');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/host-api');
     expect(packageJson.dependencies).not.toHaveProperty('@zhin.js/host-router');
