@@ -12,6 +12,8 @@
     "test": "NODE_OPTIONS=--experimental-strip-types vitest run --root ../.. examples/minimal-bot/tests"
   },
   "dependencies": {
+    "@zhin.js/command": "workspace:*",
+    "@zhin.js/component": "workspace:*",
     "@zhin.js/satori": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zhin.js": "workspace:*",
@@ -34,6 +36,14 @@
     "features": [
       {
         "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/component",
         "api": "^1.0.0"
       }
     ],
