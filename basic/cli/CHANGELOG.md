@@ -1,5 +1,38 @@
 # @zhin.js/cli
 
+## 1.1.5
+
+### Patch Changes
+
+- 36c2eb9: Add schema-driven database setup with explicit live-tested server and driver versions, validate environment-backed connection options before startup, and generate safe database examples for new projects.
+
+  Make durable timestamp columns portable across SQL dialects, preserve dialect-specific identity syntax, migrate legacy inbox tables before their first millisecond timestamp write, and encode canonical conversation keys at the database boundary so PostgreSQL accepts them.
+
+  Keep legacy durable conversation rows readable, normalize transaction results consistently, and make production mode select the matching environment overlay by default.
+
+- a417170: Fix MySQL, PostgreSQL, MongoDB, and Redis behavior found by live database integration tests, including deterministic table initialization on single database connections. Generate endpoint IDs consistently, emit pnpm 11 workspace build permissions from new projects, and report the selected AI session database accurately during initialization.
+- 7a65d32: Load server TSX features through the active process loader or the CLI's scoped fallback loader, preserve explicit loaders across supervised restarts, and scaffold the JSX compiler settings advertised by the feature conventions.
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+- Updated dependencies [95b24d4]
+- Updated dependencies [a417170]
+- Updated dependencies [7a65d32]
+  - @zhin.js/im-contract@1.1.2
+  - @zhin.js/core@1.1.38
+  - @zhin.js/database@1.1.2
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/ai@1.1.35
+  - @zhin.js/scaffold-wizard@1.1.2
+  - @zhin.js/runtime@1.1.2
+  - @zhin.js/adapter@1.1.15
+  - @zhin.js/pagemanager@1.1.2
+  - @zhin.js/host-http@1.1.2
+  - @zhin.js/command@1.1.2
+  - @zhin.js/component@1.1.2
+  - @zhin.js/config-file@1.1.2
+  - @zhin.js/middleware@1.1.2
+  - @zhin.js/prompt-section@1.1.2
+
 ## 1.1.4
 
 ### Patch Changes

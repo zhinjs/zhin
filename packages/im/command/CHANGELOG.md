@@ -1,5 +1,14 @@
 # @zhin.js/command
 
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [36c2eb9]
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/feature-kit@1.1.2
+  - @zhin.js/permission@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes

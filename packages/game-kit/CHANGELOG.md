@@ -1,5 +1,22 @@
 # @zhin.js/game-shared
 
+## 1.1.3
+
+### Patch Changes
+
+- 36c2eb9: Add schema-driven database setup with explicit live-tested server and driver versions, validate environment-backed connection options before startup, and generate safe database examples for new projects.
+
+  Make durable timestamp columns portable across SQL dialects, preserve dialect-specific identity syntax, migrate legacy inbox tables before their first millisecond timestamp write, and encode canonical conversation keys at the database boundary so PostgreSQL accepts them.
+
+  Keep legacy durable conversation rows readable, normalize transaction results consistently, and make production mode select the matching environment overlay by default.
+
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+  - @zhin.js/core@1.1.38
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/feature-kit@1.1.2
+  - @zhin.js/middleware@1.1.2
+
 ## 1.1.2
 
 ### Patch Changes
