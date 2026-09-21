@@ -11,6 +11,7 @@ import {
   INBOX_TABLE_MESSAGE,
   INBOX_TABLE_NOTICE,
   INBOX_TABLE_REQUEST,
+  insertInboxRow,
 } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
 
@@ -52,17 +53,55 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     )`);
       await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_MESSAGE}" (
       "id" INTEGER PRIMARY KEY,
+      "adapter" TEXT NOT NULL,
+      "endpoint_id" TEXT NOT NULL,
+      "platform_message_id" TEXT NOT NULL,
+      "channel_id" TEXT NOT NULL,
+      "channel_type" TEXT NOT NULL,
+      "channel_name" TEXT,
+      "channel_parent_type" TEXT,
+      "channel_parent_id" TEXT,
+      "sender_id" TEXT NOT NULL,
+      "sender_name" TEXT,
+      "sender_payload" TEXT NOT NULL,
+      "content" TEXT NOT NULL,
+      "raw" TEXT,
       "created_at" INTEGER NOT NULL
     )`);
       await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_REQUEST}" (
       "id" INTEGER PRIMARY KEY,
+      "adapter" TEXT NOT NULL,
+      "endpoint_id" TEXT NOT NULL,
+      "platform_request_id" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
+      "scene_type" TEXT,
+      "scene_id" TEXT NOT NULL,
+      "sub_type" TEXT,
+      "actor_id" TEXT NOT NULL,
+      "actor_name" TEXT,
+      "comment" TEXT,
       "created_at" INTEGER NOT NULL,
+      "resolved" INTEGER NOT NULL DEFAULT 0,
       "resolved_at" INTEGER,
+      "consumed" INTEGER NOT NULL DEFAULT 0,
       "consumed_at" INTEGER
     )`);
       await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_NOTICE}" (
       "id" INTEGER PRIMARY KEY,
+      "adapter" TEXT NOT NULL,
+      "endpoint_id" TEXT NOT NULL,
+      "platform_notice_id" TEXT NOT NULL,
+      "type" TEXT NOT NULL,
+      "scene_type" TEXT,
+      "scene_id" TEXT NOT NULL,
+      "sub_type" TEXT,
+      "actor_id" TEXT,
+      "actor_name" TEXT,
+      "target_id" TEXT,
+      "target_name" TEXT,
+      "payload" TEXT NOT NULL,
       "created_at" INTEGER NOT NULL,
+      "consumed" INTEGER NOT NULL DEFAULT 0,
       "consumed_at" INTEGER
     )`);
     } finally {
@@ -133,12 +172,56 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
     }
 
     const timestamp = Date.now();
-    for (const table of tables) {
-      await expect(db.query(
-        `INSERT INTO "${table}" ("created_at") VALUES ($1)`,
-        [timestamp],
-      )).resolves.toBeDefined();
-    }
+    await expect(insertInboxRow(host, INBOX_TABLE_MESSAGE, {
+      adapter: 'icqq',
+      endpoint_id: 'bot',
+      platform_message_id: 'message-1',
+      channel_id: 'group-1',
+      channel_type: 'group',
+      channel_name: null,
+      channel_parent_type: null,
+      channel_parent_id: null,
+      sender_id: 'user-1',
+      sender_name: 'Alice',
+      sender_payload: '{}',
+      content: 'hello',
+      raw: null,
+      created_at: timestamp,
+    })).resolves.toBe(true);
+    await expect(insertInboxRow(host, INBOX_TABLE_REQUEST, {
+      adapter: 'icqq',
+      endpoint_id: 'bot',
+      platform_request_id: 'request-1',
+      type: 'friend',
+      scene_type: 'private',
+      scene_id: 'user-1',
+      sub_type: null,
+      actor_id: 'user-1',
+      actor_name: 'Alice',
+      comment: null,
+      created_at: timestamp,
+      resolved: 0,
+      resolved_at: null,
+      consumed: 0,
+      consumed_at: null,
+    })).resolves.toBe(true);
+    await expect(insertInboxRow(host, INBOX_TABLE_NOTICE, {
+      adapter: 'icqq',
+      endpoint_id: 'bot',
+      platform_notice_id: 'notice-1',
+      type: 'member_increase',
+      scene_type: 'group',
+      scene_id: 'group-1',
+      sub_type: null,
+      actor_id: 'user-1',
+      actor_name: 'Alice',
+      target_id: 'user-2',
+      target_name: 'Bob',
+      payload: '{}',
+      created_at: timestamp,
+      consumed: 0,
+      consumed_at: null,
+    })).resolves.toBe(true);
   });
 
   it('persists canonical NUL-delimited identities through PostgreSQL text columns', async () => {
