@@ -1,5 +1,211 @@
 # @zhin.js/cli
 
+## 1.1.3
+
+### Patch Changes
+
+- a450714: Move Agent Host MCP declaration validation and normalization into the Agent Host configuration boundary.
+- 6f3f2b9: Move Agent turn identity, inbound media transcription, terminal outcome handling, and outbound text fallback conversion into a cohesive content boundary.
+- c861789: Own the Agent lifecycle event contract inside the Agent package and remove the
+  classic Plugin event subscription bridges. Runtime consumers now subscribe
+  through explicit event targets instead of Plugin AsyncLocalStorage. Agent event
+  publication no longer double-writes into `Plugin.dispatch()`, and Core no longer
+  declares Agent or Schedule events in `Plugin.Lifecycle`. Replace the process-global
+  activity bus with a generation-owned Resource, and remove concrete Plugin objects
+  from ZhinAgent and its tool security path.
+- 5913cd1: Extract Agent Tool Feature publication from the composition root into one cohesive publisher. MCP, Host extension, schedule, home, native, todo, interaction, knowledge, image, and semantic-memory tools now enter a candidate generation through the same explicit boundary.
+- 62dee52: Rename the Agent Tool policy field from `approval` to `requiresApproval`, so values such as `never` and `always` state when human approval is required. Remove the old field without a compatibility alias and migrate built-in, adapter, feature, and utility Tools to the canonical contract.
+- eb0100a: Model per-turn tool execution, Workroom priority authorization, and generation-owned governed dispatch as concrete classes with private dependencies. Construct these implementations directly and remove their anonymous-object factories.
+- 13f7301: Model owner-scoped database and schedule hosts as concrete classes over a shared abstract resource-host base. Construct the classes directly and remove the anonymous-object host factories.
+- 6b0415a: Move Agent Host composition, database activation, runtime introspection, and MCP lifecycle helpers to `@zhin.js/agent/runtime`, and remove the classic `ToolRuntime` machinery from the package root. `composeZhinAgentRuntime` now returns the composed runtime carrying its internal Host contract, so the CLI no longer imports or calls `asPrivate` itself.
+- cdcdc18: Separate Agent Host configuration parsing, Workroom startup policy, and storage-mode validation from the runtime installer.
+- 4cdc603: Move Sponsor Room control target resolution and Catalog space identity into the Workroom Projection boundary.
+- 7d1c0be: Expose Workroom startup as one cohesive Host composition boundary instead of assembling every subsystem in the Agent Host installer.
+- 244e475: Add a shared CLI and Console plugin-management transaction for install, update,
+  uninstall, configuration validation, lifecycle control, diagnostics, Marketplace
+  discovery, and Endpoint connectivity checks. Console mutations use revision checks,
+  exact-version plans, post-operation verification, and recoverable manifest and
+  lockfile snapshots.
+- ab9bdb4: Construct each Agent Host candidate as one validated runtime foundation that owns AI services, Agent composition, semantic memory, schedules, Home integration, traces, and lifecycle cleanup.
+- 1886d15: Encapsulate Agent Host ports, turn infrastructure, and late-bound Console controls behind one generation-owned publisher.
+- 36d089f: Centralize Workroom acceptance projections, risk evidence, context release, effect authorization, and accepted-source replay in one coordinator.
+- 8bf94f5: Encapsulate Workroom Assignment authority, planning supply, capability projection, and local execution lifecycle behind one coordinator.
+- 534028e: Centralize Workroom data-governance authority resolution, storage activation, lifecycle publication, payload verification, and generation reconciliation in one coordinator.
+- c0035b0: Encapsulate durable Workroom Effect composition, blocker ownership, activation, and cleanup behind one coordinator.
+- 3327f45: Centralize Workroom scheduler, preemption, Portfolio control, and remote callback lifecycle ownership in one coordinator.
+- 20f3d04: Centralize Workroom portfolio, assignment, projection, scheduler, preemption, and remote callback lifecycle ownership in one coordinator.
+- 85ecb3c: Encapsulate durable Workroom human ingress authorization, proposal application, recovery, and turn handoff behind one coordinator.
+- 255f795: Encapsulate governed Project Knowledge, generation leases, Assignment context projection, and Sponsor control behind one coordinator.
+- b1712df: Move Workroom planning readiness, bootstrap publication, disclosure authority, and authenticated Console controls into a dedicated coordinator.
+- 6d51c25: Encapsulate durable Workroom Portfolio state, Sponsor authority, governance, and capacity admission behind one coordinator.
+- 205b716: Centralize Workroom Profile publication authority, generation views, run pinning, and acceptance projection in a dedicated coordinator.
+- 16eaeee: Encapsulate Workroom projection persistence, outbound delivery, binding renewal, and scheduler lifecycle behind one coordinator.
+- 8ededb6: Remove the classic Plugin-tree Agent discovery path. Workspace Agent discovery now accepts only a project root, package Agent surface discovery accepts a filesystem descriptor, and plugin-packaged Agents remain owned by the generation Feature provider.
+- f3c3cfc: Separate Agent instance construction and Assistant Schedule/Home runtime composition from the Agent Host installer.
+- 249c0d2: Move IM-to-Agent turn mapping, identity policy, interaction ports, intent resolution, and delivery receipt mapping into one cohesive runtime module.
+- c5d6ea6: Move Workroom planning bootstrap, acceptance policy, capability pack, profile overlay, and scheduler policy construction into one cohesive module.
+- 520f400: Move Workroom Projection binding, convergence, reply provenance, and ingress ownership policy into one cohesive runtime module.
+- d199cad: Replace the anonymous Agent ingress route with a generation-owned class that encapsulates trigger, authorization, reply, capability, and turn execution state.
+- 96ade3e: Encapsulate Console message bridging, event history, and SSE stream lifecycle in one event delivery module.
+- 4e6addc: Encapsulate Console login-assist subscriptions in an installation-owned class and isolate durable conversation lookup.
+- 79620bc: Encapsulate each Console RPC request's generation lease and capability context in a lifecycle-owned request scope.
+- 18b3bd6: Separate Console schema conversion from plugin manifest and filesystem lookup, and encapsulate project schema discovery in a reusable catalog.
+- fed5a27: Encapsulate native TypeScript process supervision, startup option parsing, and environment loading behind the CLI start-process module boundary.
+- 8740059: Standardize TypeScript capabilities on named module directories such as `commands/foo/index.ts`, `middlewares/audit/index.ts`, `handlers/message-receive/index.ts`, `pages/workroom/index.tsx`, and `mcps/filesystem/index.ts`. Only the fixed `index` entry is discovered; sibling files remain private helpers.
+
+  Command route segments come from directories, while `[name]`, `[[name]]`, `[...name]`, and `[[...name]]` directories declare dynamic parameters. Plugin owners do not enter the route unless their config explicitly sets `commandNamespace`; Endpoint `commandPrefix` remains platform-owned and defaults to an empty string.
+
+  Migrate the built-in adapters, plugins, examples, generators, migration tooling, hot reload classification, Agent authoring surfaces, documentation, and release artifacts to the explicit entry convention.
+
+  Make Tool ownership and progressive disclosure explicit across all four supported locations: plugin-public `tools/`, Agent-private `agents/<name>/tools/`, Skill-private `skills/<name>/tools/`, and Agent-Skill-private `agents/<name>/skills/<name>/tools/`. Move adapter and group-suite operations that require domain instructions into their owning Skills so `load_skill` is the only path that unlocks their schemas.
+
+  Remove the package-root `agent/` convention. Public capabilities now use named package-root directories, schedules use `schedules/<name>/index.ts` or `plugin.ts` injection, MCP connections use `mcps/<name>/index.ts`, Prompt Sections use `prompt-sections/<name>/index.ts`, Agent definitions use `agents/<name>/`, and permission vocabulary is published as `PERMITS.md`.
+
+- 3744c57: Extract Workroom persistence selection and activation from the Agent Host composition root into a lifecycle coordinator that owns file/database activation, migration, and readiness.
+- 63d1f7a: Require `$`-prefixed Markdown Agent entries and generate `$`-prefixed plugin Agent skills. Unprefixed files in both directories remain ordinary colocated documentation and support files.
+
+  This completes the explicit convention-entry rule across file-discovered framework capabilities; `skills/<name>/SKILL.md` remains a directory-bundle convention whose supporting files are already ignored.
+
+- 25a845a: Unify Skills on `skills/<name>/SKILL.md`, support Agent-private Skills and nested Skill-private Tools, publish and mount existing plugin Skills, add governed Skill metadata and Turn access filtering, unlock only already-admitted same-owner Tools, and make `on-risk` and `once` approval behavior precise.
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+- 7570bc7: Extract Console RPC request handling into a dedicated route-registration module without changing its public API or behavior.
+- 3d42fc9: Replace the YAML-only configuration adapter with the format-neutral `@zhin.js/config-file` module. YAML and JSON Root configurations now share one transactional file lifecycle with revision checks, atomic commit, rollback, and generation handoff; JSON is no longer loaded as a non-transactional startup snapshot. Configuration document ports and canonical immutable patch semantics now live in the foundational Plugin Runtime contract, so persistence adapters do not depend on schema composition and generation implementations.
+- eb3227a: Move Endpoint project-configuration persistence behind the root-owned `EndpointConfigurationStore` resource. The Adapter package now owns only command semantics and no longer imports Node filesystem, path, or YAML APIs; CLI owns canonical YAML and `.env` persistence, while QQ and ICQQ special binding flows use the same injected boundary. Remove the old direct persistence helpers and reject legacy `plugins` arrays instead of promoting them at runtime.
+- 193614d: Replace the positional Console route registration API with a self-describing named dependency contract.
+- 4ca0ac6: Route Agent turns through a narrow Workroom port instead of depending on internal execution, ingress, and projection coordinators.
+- d844144: Move Bash execution to a native generation ToolFeature backed by an explicit execution port and the typed Turn policy. Remove the classic Bash tool API, hidden input authority channel, and `createBuiltinTools` Bash entry.
+- c8d5a49: Organize Agent Host configuration, runtime composition, publication, tools, and turn routing behind one cohesive internal module.
+- 771d6de: Organize Console Host composition behind a narrow module boundary and encapsulate project configuration I/O with per-host write serialization.
+- aa73470: Organize Workroom Host implementation behind a cohesive module directory and narrow internal entry point.
+- 1fa1c09: Replace the process-wide proxy URL and fetch cache with provider-owned `AiHttpTransport` instances. Model discovery, text generation, image generation, and generated-image downloads now use the owning provider's transport, and disposing `AIService` waits for proxy agents to close.
+- 056d8a7: Separate Console API installation from route composition and bind IM message subscriptions to generation lifecycle ownership.
+- e561309: Give each IM runtime one dedicated conversation owner for event-store replacement, inbound and outbound fact recording, notice normalization, reference lookup, context aggregation, and consumer cursors. Split the conversation contract into reader and writer ports so Agent and CLI receive only the read capability while Core retains mutation authority.
+- d4c6175: Move generation-leased Endpoint discovery, capability lookup, Console delivery, controls, and management into a dedicated `EndpointRuntime`. Remove the flat Endpoint methods from `ImRuntime`, migrate Host composition to `im.endpoints`, and narrow the outbound Host dependency to its required runtime port.
+- 103b5d3: Move rendering, outbound policy projection, middleware execution, Endpoint delivery, conversation recording, and observer publication into one `OutboundDeliveryRuntime`. Replace the flat `ImRuntime.onMessage()` method with a read-only `messageEvents` subscription source and narrow Console message and Inbox dependencies to explicit ports.
+- f4387ef: Publish `generate_image` as a generation-owned native Tool Feature for both main and subagent turns. Provider lookup and image defaults now stay with the Host-owned `AIService`, execution follows the canonical `ToolIndex` and `TurnToolRuntime` path, and the detached class-based implementation is removed.
+- 75920c4: Replace the process-global LLM provider, transport, live-model resolver, and language-model caches with owner-scoped `LlmApiRuntime` instances. Agent loops and compaction now require an explicit completion port; AIService, ZhinAgent, subagents, deferred workers, and the CLI composition root retain and inject their own runtime. Remove the global registration, lookup, resolver, cache-reset, and test-reset APIs.
+- 5c1ea6c: Replace the process-global Owner approval helpers with `OwnerApprovalRuntime`, owned by each `ZhinAgent` and injected into command handling and exec policy evaluation. Remove classic `Plugin` lookup wrappers, the unreachable pending-approval map and shorthand, and its misleading stability metric.
+
+  Split strict V2 persistence into a private store that validates complete documents and writes atomically. V1 files are rejected without online migration or rewriting; retained approvals must be recreated explicitly.
+
+- cd4f240: Replace the detached class-based `knowledge_search` implementation with a generation-owned Tool Feature backed by the explicit `KnowledgeIndex` contract and encapsulated `MarkdownKnowledgeIndex`. The CLI publishes it to main and subagent turns only when `ai.knowledge.baseDir` is explicitly configured inside the project root. Knowledge indexing is bounded, abort-aware, deterministic, and shared by both execution paths.
+- 666fca5: Make the process composition explicitly own and dispose the Console system log transport and cleanup timer.
+- a35fa68: Encapsulate generation-scoped Workroom journals, catalogs, Kernel authorities, governed projections, and data-governance binding behind one runtime foundation.
+- ddbb92e: Isolate adapter Skills under platform-specific Agents and automatically select the matching platform Agent for IM ingress, preventing unrelated adapter Skills from entering another platform's prompt surface.
+- 2dbbc15: Classify watched Root configuration changes by their actual Host and Plugin projections, reload only affected Plugin subtrees, and request a process restart for Host configuration changes. Reload project dotenv layers as Runtime inputs so environment references are re-expanded without mutating global process state.
+- f19d598: Remove the remaining classic Agent Tool rail and the unmounted `install_skill` and retired `activate_skill` protocols. Skill loading now uses the polymorphic `SkillInstructionSource` contract and typed read results, `spawn_task` owns its explicit turn-bound definition, and Web, file, orchestration, spawn, and Skill modules replace the former catch-all `builtin` directory. Remove the unused ToolSelection collector and its compatibility exports so the generation Tool catalog remains the only production selection path.
+- 6b70e46: Remove deprecated runtime authoring aliases instead of carrying two names for one concept. AI setup now accepts only `agentProvider` and exposes `resolveAgentProviderFromConfig`, HTTP Host consumers use the canonical Console endpoint contract directly, and activity feedback resolution goes through `ActivityFeedbackPolicy`.
+- cb61227: Remove the implicit classic `web_search` Tool from standalone `AIService` agents. Standalone capabilities are now explicit through per-agent `tools` or the service-owned registration boundary, while the generation runtime remains the sole owner of native Web Tool Features. Move shared Web search infrastructure into the cohesive `web` module and reject ambiguous duplicate registrations.
+- e0f6478: Remove plugin.yml build detection, package-name heuristics, and the unused Core PluginManifest type. Smart builds now recognize plugins through the canonical package.json zhin manifest and applications through an explicit zhin.js dependency.
+- 019f5ff: Make the generation `ToolIndex` the sole Agent Tool catalog. Remove the empty ResourceHub Tool registry, its builder and Capability Seam adapter, and stop merging its empty projection into Console introspection. Agent support resources now own only Skill, SubAgent, MCP, and Hook state; plugins register Tools through `tools/<name>/index.ts` or `context.addTool()`.
+- 77d5a46: Remove the retired `tool_search` and `run_deferred_task` orchestration protocol from the Agent and CLI. `discover`, `load_tool`, and `spawn_task` are now the only documented and executable orchestration vocabulary; obsolete config migration, result formatting, prompt redaction, reserved names, subagent filtering, and the detached class-based tool are removed. Config repair now preserves canonical `ai.agent` fields while removing retired model fields.
+- baef56b: Require canonical dot-named Console RPCs with top-level camelCase request and response payloads, and remove legacy aliases and normalization paths.
+- 65d0391: Make the instance-keyed `zhin.config.*#plugins` map a shared Plugin Runtime contract. Runtime startup helpers, Console configuration, onboarding, setup, install/uninstall, dependency diagnosis, and scaffolding now reject legacy package-name arrays instead of ignoring or promoting them; only the explicit migration pipeline reads that old shape. Remove the legacy `normalizePluginsMap` authoring API and dead create-project configuration reader, then add a repository gate that prevents compatibility branches from returning to normal configuration paths.
+- 1fed817: Require the composition root to inject one `NotificationRouter` into Schedule execution and delivery. Remove the duplicate `resolveAdapter` construction path and the Task Executor adapter resolver exposure so scheduled output has one outbound routing authority.
+- 698f16f: Replace ambiguous command approval modes with `ask`, `auto`, and `bypass`, add a fail-closed review Agent, and scope remembered human decisions to the current invocation, sender, or conversation.
+- e5d9795: Separate Workroom, Portfolio, and Data Governance domain contracts from Agent runtime composition. Assignment grants, disclosure authority, remote execution, governed dispatch reasons, catalog validation, and effect blocker ports now belong to their domain modules; the local model assignment adapter moves to `@zhin.js/agent/runtime`. Remove the deprecated Workroom catalog config aliases and enforce the domain dependency direction in the architecture harness.
+- 3066912: Separate generation-owned Agent Console ports from command, middleware, component, tool, prompt, and MCP read projections.
+- 2e18385: Separate generation feature projections, persisted Agent configuration, and lease-owned Console Agent runtime assembly.
+- 87756cd: Move Assistant, Agent, and Workroom HTTP endpoints into a dedicated Console route module with shared response primitives.
+- 24ba833: Separate generation-bound Agent Console access and read-only Host projections from Console HTTP route orchestration.
+- 872c158: Separate Console configuration documents, environment files, and plugin schema conversion behind a small project store facade. Emit only the canonical `object` field for converted object schemas.
+- 30adcc4: Separate Console Host installation from static asset delivery and HTML page rendering.
+- 3fa0670: Split Console entry, system, plugin, path, and runtime snapshot projections into focused modules, and replace legacy plugin detail aliases and empty context placeholders with the canonical `packageRoot` field.
+- 4c0faef: Separate Console entry discovery, system overview, and plugin catalog read routes into focused modules.
+- 6754319: Separate Console RPC composition contracts, extended capabilities, and Workroom Catalog operations from the request lease scope.
+- 0989913: Separate authenticated Workroom governance endpoints from Assistant and Agent task routes in the Console Host.
+- f0b02b3: Separate Workroom run operations from Portfolio, lifecycle, and effect governance routes in the Console Host.
+- f76ca71: Separate Portfolio Sponsor, Data Lifecycle, and Effect Sponsor Console routes behind a small Workroom governance composition module.
+- fcc852e: Make Agent Host installation generation-owned and fail closed: configuration comes only from the active Primary Config, Workroom planning and governance use installed generation resources, sender authorization requires the typed Message sender, and turn timeouts require a cancellation-aware callback. Move trigger and specialist-routing policy into a dedicated module.
+- 507d602: Make the Root `ConfigFileDocument` the sole configuration authority for Runtime, Endpoint commands, and Console. Console source editing now preserves the active YAML or JSON format, uses optimistic revision checks, returns one consistent source-and-key snapshot, and exposes canonical `config:get-source` / `config:replace-source` RPCs without the former YAML-only compatibility names.
+- df9f76b: Make Endpoint configuration persistence asynchronous and route it through the canonical transactional Root configuration port. Endpoint management now supports both YAML and JSON, materializes a missing Root config safely, serializes concurrent mutations, restores `.env` when the config commit fails, and restarts the development process after environment-file changes.
+- 0724ddd: Define one Root configuration file contract across Runtime, CLI, Console, and scaffolding. Root projects now accept the documented YAML and JSON filenames, reject multiple configuration authorities, preserve JSON when edited through Console, and no longer expose TOML or TypeScript formats that Runtime cannot load.
+- 0ddf7fa: Unify token-bound Workroom request authorization and split Run queries from typed control commands.
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [13f7301]
+- Updated dependencies [cd54131]
+- Updated dependencies [244e475]
+- Updated dependencies [a9e4a40]
+- Updated dependencies [5855db7]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [ec921d2]
+- Updated dependencies [8740059]
+- Updated dependencies [25a845a]
+- Updated dependencies [103f2c3]
+- Updated dependencies [9110ab8]
+- Updated dependencies [cd2a888]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [eb3227a]
+- Updated dependencies [44cf8cb]
+- Updated dependencies [1fa1c09]
+- Updated dependencies [b853dba]
+- Updated dependencies [9a32872]
+- Updated dependencies [e561309]
+- Updated dependencies [d4c6175]
+- Updated dependencies [7a0e1ca]
+- Updated dependencies [103b5d3]
+- Updated dependencies [5a7a7f7]
+- Updated dependencies [75920c4]
+- Updated dependencies [b076eae]
+- Updated dependencies [cd4f240]
+- Updated dependencies [73a24b7]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [1cb1163]
+- Updated dependencies [be3061e]
+- Updated dependencies [75f8332]
+- Updated dependencies [81935e2]
+- Updated dependencies [f9ed01b]
+- Updated dependencies [ac0ab50]
+- Updated dependencies [5140ce1]
+- Updated dependencies [522d75f]
+- Updated dependencies [a7611b3]
+- Updated dependencies [8823044]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [6b70e46]
+- Updated dependencies [4bc3d3c]
+- Updated dependencies [31b42a8]
+- Updated dependencies [135ac91]
+- Updated dependencies [140cf0f]
+- Updated dependencies [251e4d2]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [e0f6478]
+- Updated dependencies [77d5a46]
+- Updated dependencies [baef56b]
+- Updated dependencies [65d0391]
+- Updated dependencies [698f16f]
+- Updated dependencies [da0a8e3]
+- Updated dependencies [2fd8017]
+- Updated dependencies [5c3858e]
+- Updated dependencies [cf83528]
+- Updated dependencies [33ea736]
+- Updated dependencies [507d602]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+- Updated dependencies [0b95351]
+  - @zhin.js/core@1.1.37
+  - @zhin.js/ai@1.1.34
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/runtime@1.1.1
+  - @zhin.js/console-protocol@1.1.6
+  - @zhin.js/host-http@1.1.1
+  - @zhin.js/command@1.1.1
+  - @zhin.js/adapter@1.1.14
+  - @zhin.js/middleware@1.1.1
+  - @zhin.js/component@1.1.1
+  - @zhin.js/prompt-section@1.1.1
+  - @zhin.js/scaffold-wizard@1.1.1
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/config-file@1.1.1
+  - @zhin.js/schedule@1.1.1
+  - @zhin.js/im-contract@1.1.1
+  - @zhin.js/pagemanager@1.1.1
+  - @zhin.js/database@1.1.1
+
 ## 1.1.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/console-protocol",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "Canonical Zhin Console RPC names, payload contracts, and scope policy",
   "type": "module",
   "main": "./lib/index.js",

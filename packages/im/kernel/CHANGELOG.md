@@ -1,5 +1,18 @@
 # @zhin.js/kernel
 
+## 1.1.1
+
+### Patch Changes
+
+- b853dba: Remove process-global ScheduleEngine and Scheduler getters and setters. Each assistant ScheduleJobEngine now owns and disposes an isolated scheduler, preventing cross-runtime job collisions and stale timers.
+- 203ad34: Remove process-global expression and proxy caches from Kernel evaluation. Every evaluation now compiles independently and owns its proxy identity map for the lifetime of one sandbox, so unrelated runtimes cannot share hidden evaluator state.
+- e6c5113: Remove the unused Kernel PluginBase, mutable Feature registry, string-based dependency injection, and prototype extension registry. Plugin lifecycle now belongs solely to the generation-owned Plugin Runtime, while capability discovery and projection belong to Feature Kit.
+- Updated dependencies [9110ab8]
+- Updated dependencies [9a32872]
+- Updated dependencies [0b95351]
+  - @zhin.js/logger@1.1.1
+  - @zhin.js/schedule@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes

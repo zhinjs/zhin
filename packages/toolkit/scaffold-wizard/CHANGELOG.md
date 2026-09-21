@@ -1,5 +1,24 @@
 # @zhin.js/scaffold-wizard
 
+## 1.1.1
+
+### Patch Changes
+
+- 25a845a: Unify Skills on `skills/<name>/SKILL.md`, support Agent-private Skills and nested Skill-private Tools, publish and mount existing plugin Skills, add governed Skill metadata and Turn access filtering, unlock only already-admitted same-owner Tools, and make `on-risk` and `once` approval behavior precise.
+- 6b70e46: Remove deprecated runtime authoring aliases instead of carrying two names for one concept. AI setup now accepts only `agentProvider` and exposes `resolveAgentProviderFromConfig`, HTTP Host consumers use the canonical Console endpoint contract directly, and activity feedback resolution goes through `ActivityFeedbackPolicy`.
+- 65d0391: Make the instance-keyed `zhin.config.*#plugins` map a shared Plugin Runtime contract. Runtime startup helpers, Console configuration, onboarding, setup, install/uninstall, dependency diagnosis, and scaffolding now reject legacy package-name arrays instead of ignoring or promoting them; only the explicit migration pipeline reads that old shape. Remove the legacy `normalizePluginsMap` authoring API and dead create-project configuration reader, then add a repository gate that prevents compatibility branches from returning to normal configuration paths.
+- 0724ddd: Define one Root configuration file contract across Runtime, CLI, Console, and scaffolding. Root projects now accept the documented YAML and JSON filenames, reject multiple configuration authorities, preserve JSON when edited through Console, and no longer expose TOML or TypeScript formats that Runtime cannot load.
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+
 ## 1.1.0
 
 ### Minor Changes

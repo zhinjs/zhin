@@ -1,5 +1,11 @@
 # @zhin.js/logger
 
+## 1.1.1
+
+### Patch Changes
+
+- 9110ab8: Move optional Speech loading and pipeline ownership into the CLI composition root. Agent media handling now depends on an explicitly injected `AudioTranscriptionPort`; Core no longer exposes a process-global Speech loader, and Logger no longer exposes the process-global warn-once registry.
+
 ## 1.1.0
 
 ### Minor Changes

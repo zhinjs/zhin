@@ -1,5 +1,46 @@
 # @zhin.js/a2a
 
+## 1.1.2
+
+### Patch Changes
+
+- Updated dependencies [c861789]
+- Updated dependencies [1414ccb]
+- Updated dependencies [743d470]
+- Updated dependencies [62dee52]
+- Updated dependencies [cd54131]
+- Updated dependencies [5855db7]
+- Updated dependencies [ec921d2]
+- Updated dependencies [9110ab8]
+- Updated dependencies [b853dba]
+- Updated dependencies [e561309]
+- Updated dependencies [d4c6175]
+- Updated dependencies [7a0e1ca]
+- Updated dependencies [103b5d3]
+- Updated dependencies [5a7a7f7]
+- Updated dependencies [b076eae]
+- Updated dependencies [1cb1163]
+- Updated dependencies [be3061e]
+- Updated dependencies [75f8332]
+- Updated dependencies [81935e2]
+- Updated dependencies [f9ed01b]
+- Updated dependencies [ac0ab50]
+- Updated dependencies [5140ce1]
+- Updated dependencies [522d75f]
+- Updated dependencies [a7611b3]
+- Updated dependencies [8823044]
+- Updated dependencies [379439b]
+- Updated dependencies [11c9352]
+- Updated dependencies [135ac91]
+- Updated dependencies [140cf0f]
+- Updated dependencies [251e4d2]
+- Updated dependencies [203ad34]
+- Updated dependencies [e6c5113]
+- Updated dependencies [e0f6478]
+- Updated dependencies [5c3858e]
+  - @zhin.js/core@1.1.37
+  - @zhin.js/logger@1.1.1
+
 ## 1.1.1
 
 ### Patch Changes

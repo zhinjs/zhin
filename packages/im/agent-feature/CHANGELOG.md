@@ -1,5 +1,28 @@
 # @zhin.js/agent-feature
 
+## 1.1.1
+
+### Patch Changes
+
+- 63d1f7a: Require `$`-prefixed Markdown Agent entries and generate `$`-prefixed plugin Agent skills. Unprefixed files in both directories remain ordinary colocated documentation and support files.
+
+  This completes the explicit convention-entry rule across file-discovered framework capabilities; `skills/<name>/SKILL.md` remains a directory-bundle convention whose supporting files are already ignored.
+
+- 2fd8017: Make root `AGENTS.md` the main Agent contract and `agents/<name>/agent.json` plus `system.md`, `boundaries.md`, and `conventions.md` the only named sub-agent authoring shape. Standardize Agent and Skill private Tools, Skills, and Hooks as nested named directories, enforce access predicates and governed Tool activation, and keep supporting-file changes on Agent Slot hot reloads.
+- Updated dependencies [13f7301]
+- Updated dependencies [ef92a6d]
+- Updated dependencies [8740059]
+- Updated dependencies [3d42fc9]
+- Updated dependencies [2dbbc15]
+- Updated dependencies [31b42a8]
+- Updated dependencies [65d0391]
+- Updated dependencies [2fd8017]
+- Updated dependencies [cf83528]
+- Updated dependencies [df9f76b]
+- Updated dependencies [0724ddd]
+  - @zhin.js/plugin-runtime@1.1.10
+  - @zhin.js/feature-kit@1.1.1
+
 ## 1.1.0
 
 ### Minor Changes

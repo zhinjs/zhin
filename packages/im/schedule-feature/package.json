@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/schedule-feature",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Generation-owned schedule Feature for Zhin Plugin Runtime",
   "type": "module",
   "main": "./lib/index.js",
@@ -12,7 +12,10 @@
       "import": "./lib/index.js"
     }
   },
-  "files": ["lib", "src"],
+  "files": [
+    "lib",
+    "src"
+  ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
@@ -33,7 +36,9 @@
     "engine": "^1.0.0",
     "featureApi": "1.0.0"
   },
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "license": "MIT",
   "private": false,
   "repository": {
@@ -41,5 +46,8 @@
     "url": "git+https://github.com/zhinjs/zhin.git",
     "directory": "packages/im/schedule-feature"
   },
-  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
 }
