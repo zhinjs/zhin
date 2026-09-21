@@ -178,6 +178,30 @@ describe('createWorkspace', () => {
     expect(parsed.http.token).toBe('${HTTP_TOKEN}')
   })
 
+  it('documents external database variables in the generated project', async () => {
+    const projectPath = await makeProject({
+      database: {
+        dialect: 'pg',
+        host: 'db.internal',
+        port: 15432,
+        user: 'private-user',
+        password: 'secret-password',
+        database: 'private-db',
+      },
+    })
+    const envExample = await fs.readFile(path.join(projectPath, '.env.example'), 'utf8')
+    const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+
+    expect(envExample).toContain('DB_HOST=127.0.0.1')
+    expect(envExample).toContain('DB_PORT=5432')
+    expect(envExample).toContain('DB_PASSWORD=change-me')
+    expect(envExample).not.toContain('secret-password')
+    expect(pkg.dependencies.pg).toBe('^8.22.0')
+    expect(readme).toContain('npx zhin config check')
+    expect(readme).toContain('PostgreSQL 的方言名固定为 `pg`')
+  })
+
   it('generates Windows scripts with matching encoding and interpolation-safe quoting', async () => {
     const projectPath = await makeProject()
 

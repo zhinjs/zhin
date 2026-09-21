@@ -175,6 +175,8 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
         return 'String';
       case 'integer':
         return 'Int32';
+      case 'bigint':
+        return 'Double';
       case 'float':
         return 'Double';
       case 'boolean':
@@ -526,6 +528,7 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       dataTypes: {
         'string': 'String',
         'integer': 'Int32',
+        'bigint': 'Double',
         'float': 'Double',
         'boolean': 'Boolean',
         'date': 'Date',

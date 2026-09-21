@@ -262,6 +262,12 @@ export const setupCommand = new Command('setup')
         console.log(chalk.gray(`配置文件: ${formatDisplayPath(configPath)}`));
       }
 
+      if (wizardOptions.database && !['sqlite', 'memory'].includes(wizardOptions.database.dialect)) {
+        console.log('');
+        console.log(chalk.gray('数据库连接参数已写入项目根目录 .env，配置文件仅保留环境变量引用。'));
+        console.log(chalk.gray('启动前运行 npx zhin config check；如连接失败，请确认数据库服务、端口和目标数据库均可访问。'));
+      }
+
       if (options.global) {
         console.log('');
         console.log(chalk.gray('正在安装全局实例依赖…'));

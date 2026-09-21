@@ -42,7 +42,7 @@ export function defineHostTables(
     player_cards_json: { type: 'text', default: '[]' },
     dealer_cards_json: { type: 'text', default: '[]' },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

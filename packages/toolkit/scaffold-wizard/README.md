@@ -51,6 +51,10 @@ import {
 3. `applyWizardOptionsToConfig(config, options)` — 合并进配置对象
 4. `appendWizardEnvVars` + `mergeDependenciesIntoPackageJson` — 写 `.env` 与依赖
 
+数据库方言的字段 Schema、默认值、环境变量校验、驱动版本和实机验收基线统一由
+`DATABASE_DIALECT_DEFINITIONS` 提供。选择界面会显示验收基线；`validateDatabaseConfig`
+供 CLI 在保存和 `zhin config check` 时复用，避免向导与启动校验漂移。
+
 ## 开发
 
 ```bash

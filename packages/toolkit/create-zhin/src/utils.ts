@@ -22,7 +22,8 @@ export function getDatabaseDisplayName(dialect: string): string {
     mysql: 'MySQL',
     pg: 'PostgreSQL', 
     mongodb: 'MongoDB',
-    redis: 'Redis'
+    redis: 'Redis',
+    memory: 'Memory'
   };
   return names[dialect as keyof typeof names] || dialect;
 }

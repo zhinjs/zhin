@@ -36,6 +36,13 @@ interface KeyValueSchema extends Record<string, object> {
   };
 }
 
+interface ReconcileSchema extends Record<string, object> {
+  zhin_live_schema_reconcile: {
+    id: number;
+    created_at: number;
+  };
+}
+
 describe.skipIf(!live)('live database dialects', () => {
   describe.each([
     {
@@ -168,6 +175,56 @@ describe.skipIf(!live)('live database dialects', () => {
       await users.deleteById(created._id);
       expect(await users.selectById(created._id)).toBeNull();
       expect(await db.healthCheck()).toBe(true);
+    });
+  });
+
+  describe('mysql schema reconciliation', () => {
+    const config = {
+      host: process.env.ZHIN_TEST_MYSQL_HOST ?? '127.0.0.1',
+      port: Number(process.env.ZHIN_TEST_MYSQL_PORT ?? 33306),
+      user: process.env.ZHIN_TEST_MYSQL_USER ?? 'zhin',
+      password: process.env.ZHIN_TEST_MYSQL_PASSWORD ?? 'zhin',
+      database: process.env.ZHIN_TEST_MYSQL_DATABASE ?? 'zhin_test',
+    };
+    const db = new MySQL<ReconcileSchema>(config, {
+      zhin_live_schema_reconcile: {
+        id: { type: 'integer', primary: true, autoIncrement: true },
+        created_at: { type: 'bigint', nullable: false },
+      },
+    });
+
+    beforeAll(async () => {
+      const legacy = new MySQL(config);
+      await legacy.start();
+      await legacy.query('DROP TABLE IF EXISTS `zhin_live_schema_reconcile`');
+      await legacy.query(`CREATE TABLE \`zhin_live_schema_reconcile\` (
+        \`id\` INT PRIMARY KEY,
+        \`created_at\` INT NOT NULL
+      ) ENGINE=InnoDB`);
+      await legacy.stop();
+      await db.start();
+    });
+
+    afterAll(async () => {
+      if (!db.isStarted) return;
+      await db.query('DROP TABLE IF EXISTS `zhin_live_schema_reconcile`');
+      await db.stop();
+    });
+
+    it('widens integer timestamps and restores auto increment on existing tables', async () => {
+      const columns = await db.query<Array<{ column_name: string; data_type: string; extra: string }>>(
+        `SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type, EXTRA AS extra
+         FROM INFORMATION_SCHEMA.COLUMNS
+         WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'zhin_live_schema_reconcile'`,
+      );
+      expect(columns).toEqual(expect.arrayContaining([
+        expect.objectContaining({ column_name: 'id', extra: 'auto_increment' }),
+        expect.objectContaining({ column_name: 'created_at', data_type: 'bigint' }),
+      ]));
+      await db.model('zhin_live_schema_reconcile').insert({ created_at: Date.now() } as never);
+      await expect(db.model('zhin_live_schema_reconcile').select()).resolves.toEqual([
+        expect.objectContaining({ id: 1, created_at: expect.any(Number) }),
+      ]);
     });
   });
 

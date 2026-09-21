@@ -166,6 +166,7 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const typeMap: Record<string, string> = {
       'text': 'TEXT',
       'integer': 'INTEGER',
+      'bigint': 'INTEGER',
       'float': 'REAL',
       'boolean': 'INTEGER',
       'date': 'TEXT',
@@ -241,11 +242,12 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
     const nullable = column.nullable === false ? ' NOT NULL' : '';
     const primary = column.primary ? ' PRIMARY KEY' : '';
     const unique = column.unique ? ' UNIQUE' : '';
+    const autoIncrement = column.autoIncrement ? ' AUTOINCREMENT' : '';
     const defaultVal = column.default !== undefined 
       ? ` DEFAULT ${this.formatDefaultValue(column.default)}` 
       : '';
     
-    return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
+    return `${name} ${type}${length}${primary}${autoIncrement}${unique}${nullable}${defaultVal}`;
   }
   
   formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {

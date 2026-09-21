@@ -1,12 +1,13 @@
 import { createRequire } from 'node:module';
 import fs from 'fs-extra';
 import path from 'node:path';
-import { DATABASE_PACKAGES } from './types.js';
+import { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
 import { findMissingPackageDependencies, findUnresolvedPackageInstalls, isAiEnabledInConfig, type PackageJsonLike } from './project-deps.js';
 
 /**
- * User project dependency policy: scaffolded dependencies intentionally float to latest.
- * WARNING: this is not reproducible; pin versions for production. See scaffold-wizard README.
+ * User project dependency policy: scaffolded Zhin packages intentionally float to latest.
+ * Database drivers use the live-tested ranges declared by the database definitions.
+ * WARNING: `latest` is not reproducible; pin Zhin package versions for production.
  */
 export const ZHIN_STACK_VERSIONS = {
   'zhin.js': 'latest',
@@ -151,7 +152,7 @@ export function getRequiredZhinDependenciesForConfig(config: Record<string, unkn
     const dialect = String((database as Record<string, unknown>).dialect ?? '');
     const driver = DATABASE_PACKAGES[dialect as keyof typeof DATABASE_PACKAGES];
     if (driver) {
-      deps[driver] = 'latest';
+      deps[driver] = DATABASE_DRIVER_VERSIONS[driver];
     }
   }
 

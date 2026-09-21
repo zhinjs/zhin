@@ -91,6 +91,7 @@ export class RelatedDatabase<
         await this.create(tableName, definition);
       })
     );
+    await this.dialect.reconcileDefinitions(this.definitions);
     // 创建完成后，统一设置 models（避免并发竞争）
     for (const [tableName, definition] of tableEntries) {
       this.models.set(tableName, new RelatedModel(this, tableName, definition));
@@ -402,17 +403,7 @@ export class RelatedDatabase<
   // ========================================================================
   
   protected formatColumnDefinition<T =any>(field: string, column: Column<T>): string {
-    const name = this.dialect.quoteIdentifier(String(field));
-    const type = this.dialect.mapColumnType(column.type);
-    const length = column.length ? `(${column.length})` : '';
-    const nullable = column.nullable === false ? ' NOT NULL' : '';
-    const primary = column.primary ? ' PRIMARY KEY' : '';
-    const unique = column.unique ? ' UNIQUE' : '';
-    const defaultVal = column.default !== undefined 
-      ? ` DEFAULT ${this.dialect.formatDefaultValue(column.default)}` 
-      : '';
-    
-    return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
+    return this.dialect.formatColumnDefinition(field, column);
   }
 
   protected formatAlteration<T=any>(field:string,alteration: AddDefinition<T> | ModifyDefinition<T> | DropDefinition): string {

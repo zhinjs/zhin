@@ -21,6 +21,32 @@ describe('config check', () => {
     await fs.remove(tmpDir);
   });
 
+  it('数据库连接变量缺失时应阻止启动并给出向导修复命令', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins: {}
+database:
+  dialect: pg
+  host: \${DB_HOST}
+  port: \${DB_PORT}
+  user: \${DB_USER}
+  password: \${DB_PASSWORD}
+  database: \${DB_DATABASE}
+`);
+
+    const result = await runConfigCheck(tmpDir, {
+      DB_HOST: '127.0.0.1',
+      DB_USER: 'postgres',
+      DB_PASSWORD: '',
+      DB_DATABASE: 'zhin_bot',
+    });
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'error',
+      code: 'database.env_unresolved',
+      path: 'database.port',
+      fixHint: expect.stringContaining('zhin setup --database'),
+    }));
+  });
+
   it('应检测废弃的 ai.defaultProvider 与 provider driver/api', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:

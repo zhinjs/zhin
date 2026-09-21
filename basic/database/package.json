@@ -27,10 +27,10 @@
     "@zhin.js/logger": "workspace:*"
   },
   "peerDependencies": {
-    "mongodb": ">=3.1.13",
-    "mysql2": ">=3.9.8",
-    "pg": ">=2.11.2",
-    "redis": "latest"
+    "mongodb": "^7.5.0",
+    "mysql2": "^3.23.2",
+    "pg": "^8.22.0",
+    "redis": "^6.1.0"
   },
   "peerDependenciesMeta": {
     "mysql2": {
@@ -51,7 +51,7 @@
     "mongodb": "^7.5.0",
     "mysql2": "^3.23.2",
     "pg": "^8.22.0",
-    "redis": "latest",
+    "redis": "^6.1.0",
     "typescript": "^6.0.3"
   },
   "repository": {

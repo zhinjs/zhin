@@ -311,7 +311,7 @@ export const WORKROOM_ASSIGNMENT_AUTHORITY_GRANT_MODEL = {
   revision: { type: 'integer' as const, nullable: false },
   digest: { type: 'text' as const, nullable: false },
   record_json: { type: 'text' as const, nullable: false },
-  created_at: { type: 'integer' as const, nullable: false },
+  created_at: { type: 'bigint' as const, nullable: false },
 };
 
 export function createDurableWorkroomAssignmentAuthorityGrantProvider(options: Readonly<{

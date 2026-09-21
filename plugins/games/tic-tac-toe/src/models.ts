@@ -81,15 +81,15 @@ export function defineHostTables(
     move_count: { type: 'integer', default: 0 },
     revision: { type: 'integer', default: 0 },
     processed_actions: { type: 'text', default: '[]' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
   db.define('ttt_queue', {
     id: { type: 'integer', primary: true },
     channel_key: { type: 'text', nullable: false },
     user_id: { type: 'text', nullable: false },
     user_name: { type: 'text', default: '' },
-    joined_at: { type: 'integer', default: 0 },
+    joined_at: { type: 'bigint', default: 0 },
   });
   db.define('ttt_moves', {
     id: { type: 'integer', primary: true },
@@ -97,12 +97,12 @@ export function defineHostTables(
     player_id: { type: 'text', nullable: false },
     cell: { type: 'integer', nullable: false },
     move_index: { type: 'integer', nullable: false },
-    created_at: { type: 'integer', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
   db.define('ttt_spectators', {
     id: { type: 'integer', primary: true },
     session_id: { type: 'text', nullable: false },
     user_id: { type: 'text', nullable: false },
-    joined_at: { type: 'integer', default: 0 },
+    joined_at: { type: 'bigint', default: 0 },
   });
 }

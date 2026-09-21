@@ -78,7 +78,7 @@ export const CONVERSATION_EVENT_MODEL = Object.freeze({
   conversation_key: { type: 'text' as const, nullable: false },
   message_key: { type: 'text' as const, default: '' },
   event_json: { type: 'text' as const, nullable: false },
-  time: { type: 'integer' as const, nullable: false },
+  time: { type: 'bigint' as const, nullable: false },
 });
 
 export const CONVERSATION_CURSOR_MODEL = Object.freeze({
@@ -111,9 +111,9 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     if (existing) return Object.freeze({ appended: false, sequence: Number(existing.id) });
     try {
       await Promise.resolve(this.events.insert({
-        event_id: event.eventId,
-        conversation_key: conversationRefKey(event.conversation),
-        message_key: event.type === 'message.created' ? messageRefKey(event.message.ref) : '',
+        event_id: databaseTextKey(event.eventId),
+        conversation_key: databaseTextKey(conversationRefKey(event.conversation)),
+        message_key: event.type === 'message.created' ? databaseTextKey(messageRefKey(event.message.ref)) : '',
         event_json: JSON.stringify(event),
         time: event.timestamp,
       }));
@@ -129,7 +129,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
     const rows = await this.events.select('id', 'event_json')
-      .where({ message_key: messageRefKey(ref) })
+      .where({ message_key: databaseTextKey(messageRefKey(ref)) })
       .orderBy?.('id', 'DESC')
       .limit?.(1) ?? [];
     const row = (await Promise.resolve(rows))[0];
@@ -146,7 +146,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   ): Promise<readonly SequencedConversationEvent[]> {
     let selection = this.events.select('id', 'event_json')
       .where({
-        conversation_key: conversationRefKey(conversation),
+        conversation_key: databaseTextKey(conversationRefKey(conversation)),
         id: { $gt: afterExclusive, $lte: throughInclusive },
       });
     selection = selection.orderBy?.('id', 'DESC') ?? selection;
@@ -160,14 +160,14 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
     const rows = await this.cursors.select('sequence')
-      .where({ cursor_key: cursorKey(consumer, conversation) })
+      .where({ cursor_key: databaseTextKey(cursorKey(consumer, conversation)) })
       .limit?.(1) ?? [];
     return Number((await Promise.resolve(rows))[0]?.sequence ?? 0);
   }
 
   async commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void> {
     if (!Number.isSafeInteger(sequence) || sequence < 0) throw new TypeError('Conversation cursor must be a non-negative integer');
-    const key = cursorKey(consumer, conversation);
+    const key = databaseTextKey(cursorKey(consumer, conversation));
     const current = await this.getCursor(consumer, conversation);
     if (sequence < current) throw new Error('Conversation cursor cannot move backwards');
     if (current === 0) {
@@ -188,7 +188,7 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   }
 
   async #eventById(eventId: string): Promise<Record<string, unknown> | undefined> {
-    const selected = this.events.select('id', 'event_json').where({ event_id: eventId });
+    const selected = this.events.select('id', 'event_json').where({ event_id: databaseTextKey(eventId) });
     const limited = selected.limit?.(1) ?? selected;
     return (await Promise.resolve(limited))[0];
   }
@@ -197,6 +197,17 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
 function parseConversationEvent(value: unknown): ConversationEvent {
   if (typeof value !== 'string') throw new TypeError('Conversation event row has invalid JSON');
   return JSON.parse(value) as ConversationEvent;
+}
+
+/**
+ * Database text columns cannot represent every JavaScript string. PostgreSQL
+ * rejects U+0000 in particular, while canonical IM keys deliberately use it as
+ * an unambiguous separator. Keep canonical keys unchanged in memory and encode
+ * only at the durable storage boundary. Percent is escaped first so the format
+ * remains collision-free and reversible.
+ */
+function databaseTextKey(value: string): string {
+  return `k1:${value.replaceAll('%', '%25').replaceAll('\0', '%00')}`;
 }
 
 function sameConversation(left: ConversationRef, right: ConversationRef): boolean {

@@ -24,7 +24,7 @@ export const AI_USER_PROFILE_MODEL = {
   user_id: { type: 'text' as const, nullable: false },
   key: { type: 'text' as const, nullable: false },
   value: { type: 'text' as const, nullable: false },
-  updated_at: { type: 'integer' as const, default: 0 },
+  updated_at: { type: 'bigint' as const, default: 0 },
 };
 
 // ============================================================================

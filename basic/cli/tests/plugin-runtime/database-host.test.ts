@@ -2,11 +2,41 @@ import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createDatabaseHost, installDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import {
+  createDatabaseHost,
+  installDatabaseHost,
+  resolveDatabaseConfig,
+} from '../../src/plugin-runtime/database-host-installer.js';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
 import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 
 describe('DatabaseHost', () => {
+  it('rejects an empty PostgreSQL port before the driver receives NaN', async () => {
+    await expect(resolveDatabaseConfig('/tmp/project', {
+      database: {
+        dialect: 'pg',
+        host: 'localhost',
+        port: '',
+        user: 'postgres',
+        password: '',
+        database: 'zhin_bot',
+      },
+    })).rejects.toThrow(/database\.port.*DB_PORT.*zhin setup --database/);
+  });
+
+  it('normalizes database ports expanded from dotenv strings', async () => {
+    await expect(resolveDatabaseConfig('/tmp/project', {
+      database: {
+        dialect: 'pg',
+        host: 'localhost',
+        port: '5432',
+        user: 'postgres',
+        password: '',
+        database: 'zhin_bot',
+      },
+    })).resolves.toMatchObject({ port: 5432 });
+  });
+
   it('tracks defined table names via tables()', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-db-host-'));
     const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 't.sqlite') });

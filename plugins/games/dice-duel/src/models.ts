@@ -46,7 +46,7 @@ export function defineHostTables(
     last_player_roll: { type: 'integer', default: 0 },
     last_bot_roll: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

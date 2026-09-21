@@ -1,5 +1,17 @@
 export type { InitOptions, DatabaseConfig } from './types.js';
-export { DATABASE_PACKAGES } from './types.js';
+export { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
+export {
+  DATABASE_DIALECT_DEFINITIONS,
+  databaseChoiceLabel,
+  getDatabaseDialectDefinition,
+  validateDatabaseConfig,
+} from './database-definitions.js';
+export type {
+  DatabaseDialect,
+  DatabaseDialectDefinition,
+  DatabaseDriverDefinition,
+  DatabaseSchemaIssue,
+} from './database-definitions.js';
 
 export type { AdapterSetupResult, AdapterPluginInstance, AdapterDefinition } from './adapter.js';
 export {
@@ -35,6 +47,7 @@ export { configureDatabaseOptions } from './database.js';
 export {
   formatEnvValue,
   mergeEnvText,
+  generateDatabaseEnvExample,
   generateDatabaseEnvVars,
 } from './env.js';
 

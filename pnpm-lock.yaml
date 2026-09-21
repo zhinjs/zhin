@@ -257,7 +257,7 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
       redis:
-        specifier: latest
+        specifier: ^6.1.0
         version: 6.1.0(@opentelemetry/api@1.9.1)
       typescript:
         specifier: ^6.0.3

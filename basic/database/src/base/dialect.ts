@@ -2,7 +2,13 @@
 // Database Dialect Interface
 // ============================================================================
 
-import { Transaction, TransactionOptions, IsolationLevel } from '../types.js';
+import {
+  Transaction,
+  TransactionOptions,
+  IsolationLevel,
+  type Column,
+  type Definition,
+} from '../types.js';
 
 // ============================================================================
 // SQL Builder Base Class
@@ -40,6 +46,26 @@ export abstract class Dialect<T,S extends Record<string, object>,Q> {
   abstract formatDropTable<T extends keyof S>(tableName: T, ifExists?: boolean): string;
   abstract formatDropIndex<T extends keyof S>(indexName: string, tableName: T, ifExists?: boolean): string;
   abstract dispose(): Promise<void>;
+
+  /** Format one column while preserving dialect-specific identity syntax. */
+  formatColumnDefinition(field: string, column: Column<any>): string {
+    const name = this.quoteIdentifier(field);
+    const type = this.mapColumnType(column.type);
+    const length = column.length ? `(${column.length})` : '';
+    const nullable = column.nullable === false ? ' NOT NULL' : '';
+    const primary = column.primary ? ' PRIMARY KEY' : '';
+    const unique = column.unique ? ' UNIQUE' : '';
+    const autoIncrement = column.autoIncrement ? ' AUTOINCREMENT' : '';
+    const defaultValue = column.default !== undefined
+      ? ` DEFAULT ${this.formatDefaultValue(column.default)}`
+      : '';
+    return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultValue}`;
+  }
+
+  /** Apply widening-only schema updates that CREATE TABLE IF NOT EXISTS cannot. */
+  async reconcileDefinitions(
+    _definitions: ReadonlyMap<keyof S, Definition<S[keyof S]>>,
+  ): Promise<void> {}
   
   // ============================================================================
   // Transaction Support (optional, default implementations)

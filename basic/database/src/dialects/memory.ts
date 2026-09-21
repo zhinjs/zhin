@@ -127,6 +127,7 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
     const typeMap: Record<string, string> = {
       'text': 'TEXT',
       'integer': 'INTEGER',
+      'bigint': 'INTEGER',
       'float': 'REAL',
       'boolean': 'BOOLEAN',
       'date': 'DATE',

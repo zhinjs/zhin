@@ -52,7 +52,7 @@ export function defineHostTables(
     hints_used: { type: 'integer', default: 0 },
     wrong_count: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

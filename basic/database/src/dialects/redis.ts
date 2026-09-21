@@ -580,6 +580,7 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
       dataTypes: {
         'string': 'String',
         'integer': 'Integer',
+        'bigint': 'Integer',
         'float': 'Float',
         'boolean': 'Boolean',
         'date': 'Timestamp',

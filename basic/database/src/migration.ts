@@ -498,6 +498,7 @@ function mapColumnType(type: string): string {
   const typeMap: Record<string, string> = {
     'text': 'TEXT',
     'integer': 'INTEGER',
+    'bigint': 'INTEGER',
     'float': 'REAL',
     'boolean': 'INTEGER',
     'date': 'DATETIME',
@@ -553,4 +554,3 @@ export function defineMigration(config: {
 }): Migration {
   return config as Migration;
 }
-

@@ -42,7 +42,7 @@ export function defineHostTables(
     bot_wins: { type: 'integer', default: 0 },
     round: { type: 'integer', default: 0 },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

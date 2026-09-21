@@ -262,6 +262,8 @@ async function main() {
         if (options.database.mode) {
           console.log(`  ${chalk.gray('模式:')} ${chalk.cyan(options.database.mode.toUpperCase())}`);
         }
+      } else if (options.database.dialect === 'memory') {
+        console.log(`  ${chalk.yellow('⚠ 仅用于测试，进程退出后数据不会保留')}`);
       } else {
         console.log(`  ${chalk.yellow('⚠ 数据库连接信息已保存到')} ${chalk.cyan('.env')} ${chalk.yellow('文件')}`);
         console.log(`  ${chalk.gray('请根据实际情况修改数据库连接参数')}`);

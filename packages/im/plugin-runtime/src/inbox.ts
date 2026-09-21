@@ -28,7 +28,7 @@ export const INBOX_MESSAGE_DEFINITION: Record<string, unknown> = {
   sender_payload: { type: 'text', nullable: false },
   content: { type: 'text', nullable: false },
   raw: { type: 'text', nullable: true },
-  created_at: { type: 'integer', nullable: false },
+  created_at: { type: 'bigint', nullable: false },
 };
 
 export const INBOX_REQUEST_DEFINITION: Record<string, unknown> = {
@@ -43,11 +43,11 @@ export const INBOX_REQUEST_DEFINITION: Record<string, unknown> = {
   actor_id: { type: 'text', nullable: false },
   actor_name: { type: 'text', nullable: true },
   comment: { type: 'text', nullable: true },
-  created_at: { type: 'integer', nullable: false },
+  created_at: { type: 'bigint', nullable: false },
   resolved: { type: 'integer', nullable: false, default: 0 },
-  resolved_at: { type: 'integer', nullable: true },
+  resolved_at: { type: 'bigint', nullable: true },
   consumed: { type: 'integer', nullable: false, default: 0 },
-  consumed_at: { type: 'integer', nullable: true },
+  consumed_at: { type: 'bigint', nullable: true },
 };
 
 export const INBOX_NOTICE_DEFINITION: Record<string, unknown> = {
@@ -64,9 +64,9 @@ export const INBOX_NOTICE_DEFINITION: Record<string, unknown> = {
   target_id: { type: 'text', nullable: true },
   target_name: { type: 'text', nullable: true },
   payload: { type: 'text', nullable: false },
-  created_at: { type: 'integer', nullable: false },
+  created_at: { type: 'bigint', nullable: false },
   consumed: { type: 'integer', nullable: false, default: 0 },
-  consumed_at: { type: 'integer', nullable: true },
+  consumed_at: { type: 'bigint', nullable: true },
 };
 
 export const INBOX_TABLE_DEFINITIONS: Readonly<Record<string, Record<string, unknown>>> =

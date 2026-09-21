@@ -5,7 +5,7 @@ export const WORKROOM_EVENT_MODEL = {
   version: { type: 'integer' as const, nullable: false },
   type: { type: 'text' as const, nullable: false },
   payload_json: { type: 'text' as const, nullable: false },
-  occurred_at: { type: 'integer' as const, nullable: false },
+  occurred_at: { type: 'bigint' as const, nullable: false },
   stored_event_digest: { type: 'text' as const, nullable: false },
   row_binding_digest: { type: 'text' as const, nullable: false },
 };

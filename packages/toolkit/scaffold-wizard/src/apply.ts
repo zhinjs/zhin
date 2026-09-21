@@ -260,6 +260,8 @@ export function materializeDatabaseConfig(config: DatabaseConfig): Record<string
         password: '${REDIS_PASSWORD}',
         database: '${REDIS_DB}',
       };
+    case 'memory':
+      return { dialect: 'memory' };
     case 'sqlite':
     default: {
       const sqlite: Record<string, unknown> = { dialect: 'sqlite' };

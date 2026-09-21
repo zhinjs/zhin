@@ -4,7 +4,7 @@ import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
-import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig} from "../types.js";
+import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig, type Definition} from "../types.js";
 
 const logger = getLogger('database');
 
@@ -134,6 +134,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     const typeMap: Record<string, string> = {
       'text': 'TEXT',
       'integer': 'INT',
+      'bigint': 'BIGINT',
       'float': 'FLOAT',
       'boolean': 'BOOLEAN',
       'date': 'DATETIME',
@@ -215,6 +216,48 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
       : '';
 
     return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
+  }
+
+  async reconcileDefinitions(
+    definitions: ReadonlyMap<keyof S, Definition<S[keyof S]>>,
+  ): Promise<void> {
+    const expected = new Map<string, Column<any>>();
+    for (const [tableName, definition] of definitions) {
+      for (const [columnName, column] of Object.entries(definition) as Array<[string, Column<any>]>) {
+        if (column.type === 'bigint' || column.autoIncrement) {
+          expected.set(`${String(tableName)}\0${columnName}`, column);
+        }
+      }
+    }
+    if (expected.size === 0) return;
+
+    const tableNames = [...new Set([...expected.keys()].map((key) => key.slice(0, key.indexOf('\0'))))];
+    const placeholders = tableNames.map(() => '?').join(', ');
+    const rows = await this.query<Array<{
+      table_name: string;
+      column_name: string;
+      data_type: string;
+      extra: string;
+    }>>(
+      `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE AS data_type, EXTRA AS extra
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (${placeholders})`,
+      tableNames,
+    );
+    const narrowTypes = new Set(['tinyint', 'smallint', 'mediumint', 'int', 'integer']);
+    for (const row of rows) {
+      const column = expected.get(`${row.table_name}\0${row.column_name}`);
+      if (!column) continue;
+      const needsBigint = column.type === 'bigint' && narrowTypes.has(row.data_type.toLowerCase());
+      const needsAutoIncrement = Boolean(column.autoIncrement) && !row.extra.toLowerCase().includes('auto_increment');
+      if (!needsBigint && !needsAutoIncrement) continue;
+      const definition = this.formatColumnDefinition(row.column_name, {
+        ...column,
+        primary: false,
+        unique: false,
+      });
+      await this.query(`ALTER TABLE ${this.quoteIdentifier(row.table_name)} MODIFY COLUMN ${definition}`);
+    }
   }
 
   formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {

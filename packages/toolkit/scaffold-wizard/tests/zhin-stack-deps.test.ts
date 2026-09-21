@@ -39,6 +39,13 @@ describe('zhin-stack-deps', () => {
     expect(required['@zhin.js/database']).toBe('latest');
   });
 
+  it('pins generated database drivers to the verified major line', () => {
+    const required = getRequiredZhinDependenciesForConfig({
+      database: { dialect: 'pg', host: '127.0.0.1', port: 5432 },
+    });
+    expect(required.pg).toBe('^8.22.0');
+  });
+
   it('diagnoses zhin.js versions before the 1.1 stable line when AI is enabled', () => {
     const config = {
       ai: { enabled: true, agents: { zhin: { provider: 'openai' } }, providers: { openai: { sdk: 'openai' } } },

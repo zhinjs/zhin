@@ -64,8 +64,8 @@ export function defineHostTables(
     ending_id: { type: 'text', default: '' },
     status: { type: 'text', default: 'active' },
     step_count: { type: 'integer', default: 0 },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
   db.define('adv_profiles', {
     player_id: { type: 'text', primary: true },
@@ -78,7 +78,7 @@ export function defineHostTables(
     runs_completed: { type: 'integer', default: 0 },
     total_steps: { type: 'integer', default: 0 },
     best_step_count: { type: 'integer', default: 0 },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

@@ -11,6 +11,7 @@ import {
   formatZhinStackFixCommand,
   packagesNeedingZhinStackFix,
   migrateAiLegacyConfig,
+  validateDatabaseConfig,
 } from '@zhin.js/scaffold-wizard';
 import { findConfigFile, readConfig, saveConfig } from './config-file.js';
 import { loadAiConfigUtils, type AiConfigUtils } from './ai-config-loader.js';
@@ -58,13 +59,16 @@ function collectEnvRefs(
     const envKey = bashDefault ? bashDefault[1] : content;
     const defaultValue = bashDefault ? bashDefault[2] : undefined;
     if (env[envKey] == null && defaultValue == null) {
+      const databaseReference = keyPath === 'database' || keyPath.startsWith('database.');
       pushIssue(issues, {
-        severity: 'warn',
-        code: 'env.unresolved',
+        severity: databaseReference ? 'error' : 'warn',
+        code: databaseReference ? 'database.env_unresolved' : 'env.unresolved',
         path: keyPath,
         message: `环境变量 ${envKey} 未设置（${keyPath}）`,
         fixable: false,
-        fixHint: `在 .env 中设置 ${envKey}=...`,
+        fixHint: databaseReference
+          ? `在项目根目录 .env 中设置 ${envKey}=...，或运行 zhin setup --database`
+          : `在 .env 中设置 ${envKey}=...`,
       });
     }
     return;
@@ -152,7 +156,11 @@ function checkLogLevel(config: Record<string, unknown>, issues: ConfigIssue[]): 
   }
 }
 
-function checkDatabase(config: Record<string, unknown>, issues: ConfigIssue[]): void {
+function checkDatabase(
+  config: Record<string, unknown>,
+  issues: ConfigIssue[],
+  env: Record<string, string | undefined>,
+): void {
   const database = config.database;
   if (!database || typeof database !== 'object' || Array.isArray(database)) return;
   const dialect = String((database as Record<string, unknown>).dialect ?? '');
@@ -164,6 +172,20 @@ function checkDatabase(config: Record<string, unknown>, issues: ConfigIssue[]): 
       message: 'database.dialect 应使用 pg 而非 postgres',
       fixable: true,
       fixHint: 'zhin config check --fix',
+    });
+    return;
+  }
+  for (const issue of validateDatabaseConfig(database, env)) {
+    const environmentMissing = issue.kind === 'env_missing';
+    pushIssue(issues, {
+      severity: 'error',
+      code: environmentMissing ? 'database.env_unresolved' : 'database.invalid',
+      path: issue.path,
+      message: issue.message,
+      fixable: false,
+      fixHint: environmentMissing
+        ? `在项目根目录 .env 中设置 ${issue.envKey}=...，或运行 zhin setup --database`
+        : '运行 zhin setup --database 重新配置',
     });
   }
 }
@@ -392,12 +414,13 @@ export async function runConfigCheck(
 
   checkPlugins(config, issues);
   checkLogLevel(config, issues);
-  checkDatabase(config, issues);
+  checkDatabase(config, issues, env);
   checkEndpoints(config, issues);
   checkZhinStackDependencies(cwd, config, issues);
   checkAiDependencies(cwd, config, issues);
   checkAi(config, issues, aiUtils);
-  collectEnvRefs(config, '', env, issues);
+  const { database: _database, ...configWithoutDatabase } = config;
+  collectEnvRefs(configWithoutDatabase, '', env, issues);
 
   return { configFile, config, issues, fixesApplied };
 }

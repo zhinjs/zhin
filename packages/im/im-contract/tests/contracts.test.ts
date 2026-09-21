@@ -5,16 +5,36 @@ import {
   isMediaRef,
   isDeliveryReceipt,
   supportsEndpointOperation,
+  messageRefKey,
   type ConversationEvent,
   type DeliveryReceipt,
 } from '../src/index.js';
 
 class FakeModel {
   rows: Record<string, unknown>[] = [];
+  constructor(private readonly rejectNul = false) {}
+
+  private assertPostgresTextSafe(value: unknown): void {
+    if (!this.rejectNul) return;
+    if (typeof value === 'string' && value.includes('\0')) {
+      throw new Error('invalid byte sequence for encoding "UTF8": 0x00');
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) this.assertPostgresTextSafe(entry);
+      return;
+    }
+    if (value && typeof value === 'object') {
+      for (const entry of Object.values(value as Record<string, unknown>)) {
+        this.assertPostgresTextSafe(entry);
+      }
+    }
+  }
+
   select(...fields: string[]) {
     let rows = this.rows;
     const chain = {
       where: (query: Record<string, unknown>) => {
+        this.assertPostgresTextSafe(query);
         rows = rows.filter((row) => Object.entries(query).every(([key, expected]) => {
           if (expected && typeof expected === 'object') {
             const range = expected as { $gt?: number; $lte?: number };
@@ -36,12 +56,15 @@ class FakeModel {
     return chain;
   }
   insert(row: Record<string, unknown>) {
+    this.assertPostgresTextSafe(row);
     const unique = String(row.event_id ?? row.cursor_key ?? '');
     if (this.rows.some((entry) => String(entry.event_id ?? entry.cursor_key ?? '') === unique)) throw new Error('unique');
     this.rows.push({ id: this.rows.length + 1, ...row });
   }
   update(patch: Record<string, unknown>) {
     return { where: (query: Record<string, unknown>) => {
+      this.assertPostgresTextSafe(patch);
+      this.assertPostgresTextSafe(query);
       for (const row of this.rows) if (Object.entries(query).every(([key, value]) => {
         if (value && typeof value === 'object' && '$lte' in value) {
           return Number(row[key]) <= Number((value as { $lte: number }).$lte);
@@ -137,6 +160,38 @@ describe('@zhin.js/im-contract', () => {
     await store.commitCursor('agent:u1', conversation, 2);
     expect(await store.getCursor('agent:u1', conversation)).toBe(2);
     await expect(store.commitCursor('agent:u1', conversation, 0)).rejects.toThrow(/backwards/);
+  });
+
+  it('encodes every durable lookup key for PostgreSQL text columns', async () => {
+    const events = new FakeModel(true);
+    const cursors = new FakeModel(true);
+    const store = new DatabaseConversationEventStore(events as never, cursors as never);
+    const conversation = { endpoint: { id: 'main', adapter: 'icqq' }, kind: 'group' as const, id: 'g1' };
+    const ref = { conversation, id: 'm1' };
+    const event: ConversationEvent = {
+      eventId: `message:${messageRefKey(ref)}`,
+      conversation,
+      timestamp: 10,
+      type: 'message.created',
+      message: {
+        ref,
+        actor: { id: 'u1' },
+        segments: [{ type: 'text', data: { text: 'hello' } }],
+        timestamp: 10,
+      },
+    };
+
+    await expect(store.append(event)).resolves.toEqual({ appended: true, sequence: 1 });
+    await expect(store.getMessage(ref)).resolves.toEqual(event.message);
+    await expect(store.listBetween(conversation, 0, 1, 10)).resolves.toHaveLength(1);
+    await expect(store.commitCursor('agent:u1', conversation, 1)).resolves.toBeUndefined();
+    await expect(store.getCursor('agent:u1', conversation)).resolves.toBe(1);
+
+    for (const row of [...events.rows, ...cursors.rows]) {
+      for (const key of ['event_id', 'conversation_key', 'message_key', 'cursor_key']) {
+        if (typeof row[key] === 'string') expect(row[key]).not.toContain('\0');
+      }
+    }
   });
 
   it('keeps forwarded speakers neutral instead of assigning model roles', () => {
