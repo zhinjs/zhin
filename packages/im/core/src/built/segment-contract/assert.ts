@@ -2,7 +2,8 @@ import type { Segment } from './types.js';
 import { isStrictCanonicalSegment } from './validate.js';
 
 const STRICT_CANONICAL_TYPES = new Set([
-  'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward', 'face', 'dice', 'rps',
+  'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
+  'face', 'dice', 'rps', 'share',
 ]);
 
 // These are Core-owned wire extensions rather than canonical data types. Keep

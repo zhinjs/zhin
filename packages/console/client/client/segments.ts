@@ -4,7 +4,7 @@ import type { MessageSegment } from './types.js';
 const IM_VISIBLE_TYPES = new Set([
   'text', 'mention', 'image', 'video', 'audio', 'voice', 'record', 'file',
   'face', 'reply', 'forward', 'link', 'dice', 'rps', 'markdown', 'html',
-  'qrcode', 'tts', 'keyboard', 'action',
+  'qrcode', 'tts', 'keyboard', 'action', 'share',
 ]);
 
 const AI_ONLY_TYPES = new Set(['thinking', 'tool_call']);

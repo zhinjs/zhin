@@ -89,6 +89,24 @@ describe('segment-contract schema', () => {
     expect(isCanonicalSegment({ type: 'dice', data: {} })).toBe(true);
     expect(isCanonicalSegment({ type: 'rps', data: { result: 2 } })).toBe(true);
   });
+
+  it('strictly validates share segments', () => {
+    const segment = {
+      type: 'share',
+      data: {
+        title: '海阔天空',
+        url: 'https://music.163.com/#/song?id=387717',
+        image: 'https://p1.music.126.net/cover.jpg',
+        audio: 'https://music.126.net/song.mp3',
+        artist: '信乐团',
+        duration: 277,
+        config: { appid: 100495085 },
+      },
+    };
+    expect(isCanonicalSegment(segment)).toBe(true);
+    expect(isCanonicalSegment({ type: 'share', data: { title: '海阔天空' } })).toBe(false);
+    expect(isCanonicalSegment({ type: 'share', data: { url: segment.data.url } })).toBe(false);
+  });
 });
 
 describe('assertCanonicalSegments', () => {
@@ -144,6 +162,7 @@ describe('segmentsForImDelivery', () => {
       { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.jpg' } } },
       { type: 'markdown', data: { content: '# hi' } },
       { type: 'keyboard', data: { rows: [] } },
+      { type: 'share', data: { url: 'https://example.com', title: 'Example' } },
     ];
     for (const seg of cases) {
       expect(segmentsForImDelivery([seg])).toEqual([seg]);

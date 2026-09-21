@@ -63,7 +63,7 @@ const looseBranch: JsonSchemaObject = {
   properties: {
     type: {
       type: 'string',
-      enum: ['video', 'audio', 'voice', 'record', 'file', 'link', 'markdown', 'html', 'keyboard', 'action'],
+      enum: ['voice', 'record', 'link', 'markdown', 'html', 'keyboard', 'action'],
     },
     data: { type: 'object' },
     platform: platformJsonSchema,
@@ -74,7 +74,8 @@ const looseBranch: JsonSchemaObject = {
 
 /** 严格段类型集合（SSOT：assert.ts STRICT_CANONICAL_TYPES） */
 export const STRICT_OUTBOUND_SEGMENT_TYPES = [
-  'text', 'mention', 'image', 'reply', 'forward', 'face', 'dice', 'rps',
+  'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
+  'face', 'dice', 'rps', 'share',
 ] as const;
 
 /**
@@ -95,6 +96,19 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
       media: mediaRefJsonSchema,
       alt: { type: 'string' },
     }, ['media'])),
+    strictBranch('audio', dataObject({
+      media: mediaRefJsonSchema,
+      duration: { type: 'number' },
+    }, ['media'])),
+    strictBranch('video', dataObject({
+      media: mediaRefJsonSchema,
+      duration: { type: 'number' },
+      alt: { type: 'string' },
+    }, ['media'])),
+    strictBranch('file', dataObject({
+      media: mediaRefJsonSchema,
+      name: { type: 'string' },
+    }, ['media'])),
     strictBranch('reply', dataObject({
       message_id: { type: 'string', description: '被引用消息的平台消息 id' },
     }, ['message_id'])),
@@ -113,6 +127,23 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
     strictBranch('rps', dataObject({
       result: { type: 'number' },
     }, [])),
+    strictBranch('share', dataObject({
+      url: { type: 'string', description: '分享跳转地址' },
+      title: { type: 'string', description: '分享标题' },
+      description: { type: 'string', description: '分享摘要' },
+      image: { type: 'string', description: '预览图地址' },
+      audio: { type: 'string', description: '音频地址' },
+      content: { type: 'string', description: '消息列表中的显示文字' },
+      artist: { type: 'string', description: '音乐分享的艺术家' },
+      duration: { type: 'number', description: '音频时长（秒）' },
+      config: dataObject({
+        appid: { type: 'number' },
+        package: { type: 'string' },
+        sign: { type: 'string' },
+        icon: { type: 'string' },
+        version: { type: 'string' },
+      }, ['appid']),
+    }, ['url', 'title'])),
     looseBranch,
   ],
 };
