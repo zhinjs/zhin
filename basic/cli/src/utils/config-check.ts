@@ -52,13 +52,10 @@ function collectEnvRefs(
   issues: ConfigIssue[],
 ): void {
   if (typeof value === 'string') {
-    const match = value.match(/^\$\{([^}]+)\}$/);
-    if (!match) return;
-    const content = match[1];
-    const bashDefault = content.match(/^([^:}]+):[-=](.*)$/);
-    const envKey = bashDefault ? bashDefault[1] : content;
-    const defaultValue = bashDefault ? bashDefault[2] : undefined;
-    if (env[envKey] == null && defaultValue == null) {
+    for (const match of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu)) {
+      const envKey = match[1];
+      const defaultValue = match[2];
+      if (env[envKey] !== undefined || defaultValue !== undefined) continue;
       const databaseReference = keyPath === 'database' || keyPath.startsWith('database.');
       pushIssue(issues, {
         severity: databaseReference ? 'error' : 'warn',
@@ -419,10 +416,13 @@ export async function runConfigCheck(
   checkZhinStackDependencies(cwd, config, issues);
   checkAiDependencies(cwd, config, issues);
   checkAi(config, issues, aiUtils);
-  const { database: _database, ...configWithoutDatabase } = config;
-  collectEnvRefs(configWithoutDatabase, '', env, issues);
+  collectEnvRefs(config, '', env, issues);
 
-  return { configFile, config, issues, fixesApplied };
+  const uniqueIssues = issues.filter((issue, index) => issues.findIndex((candidate) =>
+    candidate.code === issue.code
+    && candidate.path === issue.path
+    && candidate.message === issue.message) === index);
+  return { configFile, config, issues: uniqueIssues, fixesApplied };
 }
 
 export function applyConfigFixes(

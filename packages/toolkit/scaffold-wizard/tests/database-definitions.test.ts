@@ -67,6 +67,25 @@ describe('database dialect definitions', () => {
     expect(validateDatabaseConfig({ dialect: 'pg', port: '${DB_PORT:=5432}' }, { DB_PORT: '' })).toEqual([]);
   });
 
+  it('rejects empty ports and unresolved embedded references', () => {
+    expect(validateDatabaseConfig({ dialect: 'pg', port: '${DB_PORT}' }, { DB_PORT: '' }))
+      .toContainEqual(expect.objectContaining({ kind: 'invalid', path: 'database.port' }));
+    expect(validateDatabaseConfig({
+      dialect: 'mongodb',
+      url: 'mongodb://${DB_HOST}:27017',
+      dbName: 'zhin',
+    }, {})).toContainEqual(expect.objectContaining({
+      kind: 'env_missing',
+      path: 'database.url',
+      envKey: 'DB_HOST',
+    }));
+  });
+
+  it('enforces closed schemas', () => {
+    expect(validateDatabaseConfig({ dialect: 'memory', extra: true }))
+      .toContainEqual(expect.objectContaining({ kind: 'invalid', path: 'database.extra' }));
+  });
+
   it('keeps the PostgreSQL definition explicit about pg and its verified versions', () => {
     expect(getDatabaseDialectDefinition('pg')).toMatchObject({
       name: 'PostgreSQL',

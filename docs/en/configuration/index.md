@@ -102,8 +102,10 @@ npx zhin config check
 ```
 
 `setup` writes the non-secret structure to `zhin.config.yml` and the actual connection values to the
-project-root `.env`. Runtime reads `.env` first, then overrides matching keys from `.env.<mode>` (for
-example, `.env.production`).
+project-root `.env`. Runtime reads `.env` first, then overrides matching keys from the selected
+`.env.<environment>`. For example, use
+`zhin runtime start --mode production --no-watch` to load `.env.production` by default; an explicit
+`--environment <name>` selects a different environment overlay.
 
 ### SQLite
 
@@ -168,10 +170,12 @@ the database server protocol.
 | `memory` | none | none |
 
 The network database drivers are `mysql2`, `pg`, `mongodb`, and `redis`. When you select a database in
-project creation or `zhin setup --database`, the CLI writes the accepted driver version shown above to `package.json`;
-run `pnpm install` afterward.
+project creation or `zhin setup --database`, the CLI writes the accepted driver version shown above to
+`package.json`. `create-zhin-app` installs dependencies automatically; after `zhin setup`, run the prompted
+`pnpm install` command yourself.
 
-Run `npx zhin config check` before startup. Missing database environment variables are reported as errors.
+Run `npx zhin config check` before startup. If the values only exist in `.env.production`, run
+`npx zhin config check --environment production`. Missing database environment variables are reported as errors.
 An empty, non-integer, or out-of-range port is rejected before the driver loads, with the exact config path
 and `.env` variable in the message. On older versions, `ERR_SOCKET_BAD_PORT` / `Received type number (NaN)`
 usually means `${DB_PORT}` is missing from the project-root `.env`; add it or rerun

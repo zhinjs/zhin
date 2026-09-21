@@ -39,11 +39,26 @@ database:
       DB_PASSWORD: '',
       DB_DATABASE: 'zhin_bot',
     });
+    expect(summarizeIssues(result.issues).exitCode).toBe(1);
     expect(result.issues).toContainEqual(expect.objectContaining({
       severity: 'error',
       code: 'database.env_unresolved',
       path: 'database.port',
       fixHint: expect.stringContaining('zhin setup --database'),
+    }));
+  });
+
+  it('检查 schema 外的数据库连接串环境引用', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+database:
+  dialect: pg
+  connectionString: postgresql://\${DB_USER}:\${DB_PASSWORD}@localhost/zhin
+`);
+    const result = await runConfigCheck(tmpDir, { DB_USER: 'postgres' });
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      code: 'database.env_unresolved',
+      path: 'database.connectionString',
+      message: expect.stringContaining('DB_PASSWORD'),
     }));
   });
 

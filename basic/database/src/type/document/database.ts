@@ -183,15 +183,9 @@ export class DocumentDatabase<
    * 构建修改集合查询
    */
   protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
-    return {
-      query: {
-        collection: params.tableName as string,
-        operation: 'createIndex',
-        filter: {},
-        projection: {}
-      },
-      params: [params.alterations]
-    };
+    throw new TypeError(
+      `Document schema alteration is not supported for collection ${String(params.tableName)}`,
+    );
   }
 
   /**

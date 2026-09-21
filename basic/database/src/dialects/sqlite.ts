@@ -238,7 +238,8 @@ export class SQLiteDialect<S extends Record<string, object> = Record<string, obj
   formatColumnDefinition(field: string, column: Column<any>): string {
     const name = this.quoteIdentifier(String(field));
     const type = this.mapColumnType(column.type);
-    const length = column.length ? `(${column.length})` : '';
+    // SQLite only enables rowid auto-increment for the exact INTEGER PRIMARY KEY form.
+    const length = column.length && !column.autoIncrement ? `(${column.length})` : '';
     const nullable = column.nullable === false ? ' NOT NULL' : '';
     const primary = column.primary ? ' PRIMARY KEY' : '';
     const unique = column.unique ? ' UNIQUE' : '';

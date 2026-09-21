@@ -99,6 +99,9 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
     case 'mongodb':
       normalizeRequiredText(config, 'url', 'database.url', 'DB_URL=mongodb://127.0.0.1:27017');
       normalizeRequiredText(config, 'dbName', 'database.dbName', 'DB_NAME=zhin_bot');
+      if (!/^mongodb(?:\+srv)?:\/\//u.test(String(config.url))) {
+        throw configurationError('database.url', '必须使用 mongodb:// 或 mongodb+srv://');
+      }
       break;
     case 'redis': {
       normalizeOptionalText(config, 'url', 'database.url', 'REDIS_URL=redis://127.0.0.1:6379');
@@ -117,6 +120,7 @@ export function normalizeDatabaseHostConfig(input: DatabaseHostConfig): Database
       break;
     }
     case 'sqlite':
+      if (config.filename === undefined) config.filename = './data/bot.db';
       normalizeOptionalText(config, 'filename', 'database.filename');
       break;
     case 'memory':

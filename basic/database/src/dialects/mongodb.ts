@@ -508,7 +508,12 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
   private async executeCreateCollection(name: string): Promise<any[]> {
     const existing = await this.db.listCollections({ name }, { nameOnly: true }).hasNext();
     if (!existing) {
-      await this.db.createCollection(name);
+      try {
+        await this.db.createCollection(name);
+      } catch (error) {
+        const duplicate = error as { code?: number; codeName?: string };
+        if (duplicate.code !== 48 && duplicate.codeName !== 'NamespaceExists') throw error;
+      }
     }
     return [];
   }

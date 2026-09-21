@@ -158,7 +158,11 @@ export function toRow(event: StoredWorkroomEvent): Record<string, unknown> {
 }
 
 export function parseStoredRows(runId: string, rows: readonly Record<string, unknown>[]): readonly StoredWorkroomEvent[] {
-  const events = rows.map(row => {
+  const events = rows.map(storedRow => {
+    const occurredAt = normalizeSafeInteger(storedRow.occurred_at);
+    const row = occurredAt === storedRow.occurred_at
+      ? storedRow
+      : { ...storedRow, occurred_at: occurredAt };
     if (row.version === 1 || row.version === 2) throw legacyJournalPayloadError();
     if (!isDigest(row.stored_event_digest) || !isDigest(row.row_binding_digest)) {
       throw legacyJournalPayloadError();
@@ -172,7 +176,7 @@ export function parseStoredRows(runId: string, rows: readonly Record<string, unk
     }
     if (!envelope || !isNonEmptyString(envelope.eventId) || !isRecord(envelope.control)
       || !isRecord(envelope.payload)
-      || !isSequence(row.sequence) || !isFiniteNumber(row.occurred_at)
+      || !isSequence(row.sequence) || !isFiniteNumber(occurredAt)
       || !isWorkroomEventType(row.type)) {
       throw new Error('Invalid Workroom event payload envelope');
     }
@@ -189,7 +193,7 @@ export function parseStoredRows(runId: string, rows: readonly Record<string, unk
       eventId: envelope.eventId,
       runId,
       sequence: row.sequence,
-      occurredAt: row.occurred_at,
+      occurredAt,
       type: row.type,
       control: deepFreeze({ ...envelope.control }),
       payload: Object.freeze({ ...envelope.payload }),
@@ -205,6 +209,12 @@ export function parseStoredRows(runId: string, rows: readonly Record<string, unk
   const stored = Object.freeze(events);
   if (stored.length > 0) assertStoredEventReceiptBindings(stored);
   return stored;
+}
+
+function normalizeSafeInteger(value: unknown): unknown {
+  if (typeof value !== 'string' || !/^-?\d+$/u.test(value)) return value;
+  const number = Number(value);
+  return Number.isSafeInteger(number) ? number : value;
 }
 
 export function parseStoredRowGroups(

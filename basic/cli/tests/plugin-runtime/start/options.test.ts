@@ -25,4 +25,9 @@ describe('start options', () => {
     expect(() => parseStartOptions(['--environment', '../production'])).toThrow('Invalid environment name');
     expect(() => parseStartOptions(['--mode', 'staging'])).toThrow('Invalid Runtime mode');
   });
+
+  it('uses the runtime mode as the default environment while preserving explicit overlays', () => {
+    expect(parseStartOptions(['--mode', 'production']).environment).toBe('production');
+    expect(parseStartOptions(['--mode', 'production', '--environment', 'staging']).environment).toBe('staging');
+  });
 });

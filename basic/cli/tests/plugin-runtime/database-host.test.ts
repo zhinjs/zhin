@@ -37,6 +37,18 @@ describe('DatabaseHost', () => {
     })).resolves.toMatchObject({ port: 5432 });
   });
 
+  it('applies the SQLite filename default before constructing the driver', async () => {
+    await expect(resolveDatabaseConfig('/tmp/project', {
+      database: { dialect: 'sqlite' },
+    })).resolves.toMatchObject({ dialect: 'sqlite', filename: './data/bot.db' });
+  });
+
+  it('rejects non-MongoDB URL schemes before constructing the driver', async () => {
+    await expect(resolveDatabaseConfig('/tmp/project', {
+      database: { dialect: 'mongodb', url: 'https://localhost:27017', dbName: 'zhin' },
+    })).rejects.toThrow(/mongodb:\/\/.*mongodb\+srv:\/\//);
+  });
+
   it('tracks defined table names via tables()', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-db-host-'));
     const host = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 't.sqlite') });

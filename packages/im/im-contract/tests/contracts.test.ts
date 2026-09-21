@@ -192,6 +192,49 @@ describe('@zhin.js/im-contract', () => {
         if (typeof row[key] === 'string') expect(row[key]).not.toContain('\0');
       }
     }
+    expect(events.rows[0]).toMatchObject({
+      event_id: 'k1:message:icqq%00main%00group%00g1%00%00%00%00m1',
+      conversation_key: 'k1:icqq%00main%00group%00g1%00%00%00',
+      message_key: 'k1:icqq%00main%00group%00g1%00%00%00%00m1',
+    });
+    expect(cursors.rows[0]).toMatchObject({
+      cursor_key: 'k1:agent:u1%00icqq%00main%00group%00g1%00%00%00',
+    });
+  });
+
+  it('continues reading and updating legacy unencoded durable keys', async () => {
+    const events = new FakeModel();
+    const cursors = new FakeModel();
+    const store = new DatabaseConversationEventStore(events as never, cursors as never);
+    const conversation = { endpoint: { id: 'main', adapter: 'icqq' }, kind: 'group' as const, id: 'g1' };
+    const ref = { conversation, id: 'm1' };
+    const event: ConversationEvent = {
+      eventId: `message:${messageRefKey(ref)}`,
+      conversation,
+      timestamp: 10,
+      type: 'message.created',
+      message: { ref, actor: { id: 'u1' }, segments: [], timestamp: 10 },
+    };
+    events.rows.push({
+      id: 7,
+      event_id: event.eventId,
+      conversation_key: `${conversation.endpoint.adapter}\0${conversation.endpoint.id}\0group\0g1\0\0\0`,
+      message_key: messageRefKey(ref),
+      event_json: JSON.stringify(event),
+      time: 10,
+    });
+    cursors.rows.push({
+      id: 1,
+      cursor_key: `agent:u1\0${conversation.endpoint.adapter}\0${conversation.endpoint.id}\0group\0g1\0\0\0`,
+      sequence: 6,
+    });
+
+    await expect(store.append(event)).resolves.toEqual({ appended: false, sequence: 7 });
+    await expect(store.getMessage(ref)).resolves.toEqual(event.message);
+    await expect(store.listBetween(conversation, 0, 10, 10)).resolves.toEqual([{ sequence: 7, event }]);
+    await expect(store.getCursor('agent:u1', conversation)).resolves.toBe(6);
+    await store.commitCursor('agent:u1', conversation, 8);
+    expect(cursors.rows[0]?.sequence).toBe(8);
   });
 
   it('keeps forwarded speakers neutral instead of assigning model roles', () => {

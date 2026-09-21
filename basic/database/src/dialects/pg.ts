@@ -249,7 +249,8 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         const maximum = await this.query<Array<{ max_value: number | string | null }>>(
           `SELECT MAX(${column}) AS max_value FROM ${table}`,
         );
-        const next = Number(maximum[0]?.max_value ?? 0) + 1;
+        const maximumValue = maximum[0]?.max_value;
+        const next = (maximumValue == null ? 1n : BigInt(maximumValue) + 1n).toString();
         const relation = `"${row.table_name.replaceAll('"', '""')}"`;
         await this.query(
           'SELECT setval(pg_get_serial_sequence($1, $2), $3, false)',
@@ -289,6 +290,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
    * 在连接池模式下，会获取一个专用连接用于事务
    */
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    const dialect = this;
     if (this.usePool) {
       // 从连接池获取一个连接用于事务
       const client = await this.pool.connect();
@@ -319,7 +321,7 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
           const result = await client.query(sql, params);
-          return result.rows as T;
+          return dialect.normalizeResult(result) as T;
         }
       };
     } else {

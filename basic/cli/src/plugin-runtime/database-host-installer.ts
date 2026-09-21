@@ -180,10 +180,15 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     },
     async start() {
       if (started) return;
-      await db.start();
-      started = true;
-      wrapped.clear();
-      logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
+      try {
+        await db.start();
+        started = true;
+        wrapped.clear();
+        logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
+      } catch (error) {
+        await db.stop().catch(() => undefined);
+        throw error;
+      }
     },
     async stop() {
       if (!started) return;

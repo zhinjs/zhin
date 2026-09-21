@@ -27,6 +27,14 @@ describe('Database Workroom Journal row integrity', () => {
       .resolves.toMatchObject({ projectId: 'support', sequence: 1 });
   });
 
+  it('accepts safe BIGINT strings returned by MySQL without weakening row digests', async () => {
+    const fixture = await databaseFixture();
+    for (const row of fixture.rows) row.occurred_at = String(row.occurred_at);
+    await expect(fixture.journal().scanStoredHeaders()).resolves.toHaveLength(1);
+    await expect(new WorkroomKernel({ journal: fixture.journal() }).read('support', 'run-db-integrity'))
+      .resolves.toMatchObject({ projectId: 'support', sequence: 1 });
+  });
+
   it('rejects valid JSON tampering both without resigning and with only the event digest recomputed', async () => {
     const unsigned = await databaseFixture();
     rewriteEnvelope(unsigned.rows[0]!, envelope => {

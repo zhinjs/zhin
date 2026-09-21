@@ -221,9 +221,10 @@ describe.skipIf(!live)('live database dialects', () => {
         expect.objectContaining({ column_name: 'id', extra: 'auto_increment' }),
         expect.objectContaining({ column_name: 'created_at', data_type: 'bigint' }),
       ]));
-      await db.model('zhin_live_schema_reconcile').insert({ created_at: Date.now() } as never);
+      const timestamp = Date.now();
+      await db.model('zhin_live_schema_reconcile').insert({ created_at: timestamp } as never);
       await expect(db.model('zhin_live_schema_reconcile').select()).resolves.toEqual([
-        expect.objectContaining({ id: 1, created_at: expect.any(Number) }),
+        expect.objectContaining({ id: 1, created_at: timestamp }),
       ]);
     });
   });

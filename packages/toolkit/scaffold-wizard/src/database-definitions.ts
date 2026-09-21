@@ -167,9 +167,29 @@ export function databaseChoiceLabel(definition: DatabaseDialectDefinition): stri
   return `${definition.name}（${definition.description}；当前支持/实机验证 ${definition.verifiedServer}${driver}）`;
 }
 
-function envReference(value: string): { key: string; fallback?: string } | undefined {
-  const match = /^\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}$/u.exec(value);
-  return match ? { key: match[1], fallback: match[2] } : undefined;
+function expandEnvReferences(
+  input: string,
+  path: string,
+  env: Readonly<Record<string, string | undefined>>,
+  issues: DatabaseSchemaIssue[],
+): string {
+  return input.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::[-=]([^}]*))?\}/gu,
+    (_reference, key: string, fallback: string | undefined) => {
+      const resolved = env[key];
+      if ((resolved === undefined || resolved === '') && fallback !== undefined) return fallback;
+      if (resolved === undefined) {
+        issues.push({
+          kind: 'env_missing',
+          path,
+          envKey: key,
+          message: `环境变量 ${key} 未设置（${path}）`,
+        });
+        return '';
+      }
+      return resolved;
+    },
+  );
 }
 
 function validateValue(
@@ -181,23 +201,9 @@ function validateValue(
 ): void {
   let value = rawValue;
   if (typeof value === 'string') {
-    const reference = envReference(value);
-    if (reference) {
-      const resolved = env[reference.key];
-      if ((resolved === undefined || resolved === '') && reference.fallback !== undefined) {
-        value = reference.fallback;
-      } else if (resolved === undefined) {
-        issues.push({
-          kind: 'env_missing',
-          path,
-          envKey: reference.key,
-          message: `环境变量 ${reference.key} 未设置（${path}）`,
-        });
-        return;
-      } else {
-        value = resolved;
-      }
-    }
+    const before = issues.length;
+    value = expandEnvReferences(value, path, env, issues);
+    if (issues.length > before) return;
   }
 
   if ('const' in schema && value !== schema.const) {
@@ -212,6 +218,13 @@ function validateValue(
     }
     const record = value as Record<string, unknown>;
     const properties = (schema.properties ?? {}) as Record<string, Record<string, unknown>>;
+    if (schema.additionalProperties === false) {
+      for (const key of Object.keys(record)) {
+        if (!(key in properties)) {
+          issues.push({ kind: 'invalid', path: `${path}.${key}`, message: `${path}.${key} 不是受支持的配置项` });
+        }
+      }
+    }
     for (const required of (schema.required ?? []) as string[]) {
       if (!(required in record) || record[required] === undefined || record[required] === null) {
         issues.push({ kind: 'invalid', path: `${path}.${required}`, message: `${path}.${required} 不能为空` });

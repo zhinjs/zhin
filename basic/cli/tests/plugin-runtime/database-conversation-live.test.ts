@@ -29,14 +29,15 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
 
   beforeAll(async () => {
     const legacy = createDatabaseHost(config);
-    await legacy.start();
-    const legacyDb = legacy.getRawDatabase() as { query(sql: string): Promise<unknown> };
-    await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
-    await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
-    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
-    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
-    await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
-    await legacyDb.query(`CREATE TABLE "zhin_live_conversation_events" (
+    try {
+      await legacy.start();
+      const legacyDb = legacy.getRawDatabase() as { query(sql: string): Promise<unknown> };
+      await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
+      await legacyDb.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+      await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
+      await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
+      await legacyDb.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
+      await legacyDb.query(`CREATE TABLE "zhin_live_conversation_events" (
       "id" INTEGER PRIMARY KEY,
       "event_id" TEXT NOT NULL UNIQUE,
       "conversation_key" TEXT NOT NULL,
@@ -44,27 +45,29 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
       "event_json" TEXT NOT NULL,
       "time" INTEGER NOT NULL
     )`);
-    await legacyDb.query(`CREATE TABLE "zhin_live_conversation_cursors" (
+      await legacyDb.query(`CREATE TABLE "zhin_live_conversation_cursors" (
       "id" INTEGER PRIMARY KEY,
       "cursor_key" TEXT NOT NULL UNIQUE,
       "sequence" INTEGER NOT NULL
     )`);
-    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_MESSAGE}" (
+      await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_MESSAGE}" (
       "id" INTEGER PRIMARY KEY,
       "created_at" INTEGER NOT NULL
     )`);
-    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_REQUEST}" (
+      await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_REQUEST}" (
       "id" INTEGER PRIMARY KEY,
       "created_at" INTEGER NOT NULL,
       "resolved_at" INTEGER,
       "consumed_at" INTEGER
     )`);
-    await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_NOTICE}" (
+      await legacyDb.query(`CREATE TABLE "${INBOX_TABLE_NOTICE}" (
       "id" INTEGER PRIMARY KEY,
       "created_at" INTEGER NOT NULL,
       "consumed_at" INTEGER
     )`);
-    await legacy.stop();
+    } finally {
+      await legacy.stop();
+    }
 
     host.define('zhin_live_conversation_events', CONVERSATION_EVENT_MODEL);
     host.define('zhin_live_conversation_cursors', CONVERSATION_CURSOR_MODEL);
@@ -87,14 +90,19 @@ describe.skipIf(!live)('live PostgreSQL conversation store', () => {
   });
 
   afterAll(async () => {
-    if (!host.started) return;
-    const db = host.getRawDatabase() as { query(sql: string): Promise<unknown> };
-    await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
-    await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
-    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
-    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
-    await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
     await host.stop();
+    const cleanup = createDatabaseHost(config);
+    try {
+      await cleanup.start();
+      const db = cleanup.getRawDatabase() as { query(sql: string): Promise<unknown> };
+      await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_events"');
+      await db.query('DROP TABLE IF EXISTS "zhin_live_conversation_cursors"');
+      await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_MESSAGE}"`);
+      await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_REQUEST}"`);
+      await db.query(`DROP TABLE IF EXISTS "${INBOX_TABLE_NOTICE}"`);
+    } finally {
+      await cleanup.stop();
+    }
   });
 
   it('migrates legacy inbox millisecond timestamps before the first write', async () => {

@@ -220,9 +220,10 @@ describe('CLI new command integration', () => {
     expect(adapterTs).toContain('async stop()')
     expect(adapterTs).toContain('async send(')
 
-    // schema.json 带 name 字段
+    // schema.json 使用 endpoint 的稳定 id 字段
     const schema = await fs.readJson(path.join(pluginDir, 'schema.json'))
-    expect(schema.properties.name).toBeDefined()
+    expect(schema.properties.id).toBeDefined()
+    expect(schema.properties.name).toBeUndefined()
 
     // package.json：adapter feature + adapter/core 依赖
     const packageJson = await fs.readJson(path.join(pluginDir, 'package.json'))

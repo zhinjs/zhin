@@ -4,7 +4,7 @@ import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
-import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig, type Definition} from "../types.js";
+import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
 
 const logger = getLogger('database');
 
@@ -21,6 +21,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   private pool: any = null;
   private usePool: boolean = false;
   private readonly booleanColumns = new Set<string>();
+  private readonly bigintColumns = new Set<string>();
 
   constructor(config: MySQLDialectConfig) {
     super('mysql', config);
@@ -90,6 +91,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   registerTableSchema(table: string, definition: Record<string, { type: string }>): void {
     for (const [columnName, column] of Object.entries(definition)) {
       if (column.type === 'boolean') this.booleanColumns.add(`${table}.${columnName}`);
+      if (column.type === 'bigint') this.bigintColumns.add(`${table}.${columnName}`);
     }
   }
 
@@ -107,6 +109,14 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
           typeof normalized[outputName] === 'number'
         ) {
           normalized[outputName] = normalized[outputName] !== 0;
+        }
+        if (
+          this.bigintColumns.has(`${table}.${column}`) &&
+          typeof normalized[outputName] === 'string' &&
+          /^-?\d+$/u.test(normalized[outputName])
+        ) {
+          const number = Number(normalized[outputName]);
+          if (Number.isSafeInteger(number)) normalized[outputName] = number;
         }
       }
       return normalized;
@@ -290,6 +300,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
    * 在连接池模式下，会获取一个专用连接用于事务
    */
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    const dialect = this;
     if (this.usePool) {
       // 从连接池获取一个连接用于事务
       const connection = await this.pool.getConnection();
@@ -320,8 +331,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         },
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
-          const [rows] = await connection.execute(sql, params);
-          return rows as T;
+          const [rows, fields] = await connection.execute(sql, params);
+          return dialect.processQueryResults(rows, fields) as T;
         }
       };
     } else {
@@ -344,8 +355,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         },
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
-          const [rows] = await connection.execute(sql, params);
-          return rows as T;
+          const [rows, fields] = await connection.execute(sql, params);
+          return dialect.processQueryResults(rows, fields) as T;
         }
       };
     }

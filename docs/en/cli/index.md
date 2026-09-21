@@ -130,7 +130,7 @@ zhin setup --global        # Initialize a global instance in ~/.zhin
 The wizard modifies the corresponding sections of [`zhin.config.yml`](../configuration/index.md), and writes
 secrets to `.env`. For a network database, it validates the port range, stores environment references in the
 config, and writes the actual values to `.env`. Run `npx zhin config check` afterward to find missing database
-variables before startup.
+variables before startup. For `.env.production`, use `npx zhin config check --environment production`.
 
 ## onboard: Project Onboarding
 

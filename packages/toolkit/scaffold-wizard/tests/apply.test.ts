@@ -290,6 +290,13 @@ describe('collectWizardDependencies / collectWizardFeatures', () => {
     expect(deps).not.toHaveProperty('@zhin.js/agent');
     expect(collectWizardFeatures({ ai: { enabled: false } })).toEqual([]);
   });
+
+  it('adds the selected network database driver for existing projects', () => {
+    expect(collectWizardDependencies({ database: { dialect: 'pg' } })).toMatchObject({
+      pg: '^8.22.0',
+    });
+    expect(collectWizardDependencies({ database: { dialect: 'sqlite' } })).not.toHaveProperty('sqlite');
+  });
 });
 
 describe('mergeFeaturesIntoPackageJson', () => {

@@ -128,11 +128,18 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   }
 
   async getMessage(ref: MessageRef): Promise<ConversationMessage | undefined> {
-    const rows = await this.events.select('id', 'event_json')
-      .where({ message_key: databaseTextKey(messageRefKey(ref)) })
-      .orderBy?.('id', 'DESC')
-      .limit?.(1) ?? [];
-    const row = (await Promise.resolve(rows))[0];
+    const key = messageRefKey(ref);
+    const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
+      const rows = this.events.select('id', 'event_json')
+        .where({ message_key: storedKey })
+        .orderBy?.('id', 'DESC')
+        .limit?.(1) ?? [];
+      return Promise.resolve(rows);
+    };
+    const encoded = await select(databaseTextKey(key));
+    const legacy = await toleratePostgresNul(() => select(key), []);
+    const row = [...encoded, ...legacy]
+      .sort((left, right) => Number(right.id) - Number(left.id))[0];
     if (!row) return undefined;
     const event = parseConversationEvent(row.event_json);
     return event.type === 'message.created' ? event.message : undefined;
@@ -144,14 +151,22 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
     throughInclusive: number,
     limit: number,
   ): Promise<readonly SequencedConversationEvent[]> {
-    let selection = this.events.select('id', 'event_json')
-      .where({
-        conversation_key: databaseTextKey(conversationRefKey(conversation)),
-        id: { $gt: afterExclusive, $lte: throughInclusive },
-      });
-    selection = selection.orderBy?.('id', 'DESC') ?? selection;
-    selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
-    const rows = await Promise.resolve(selection);
+    const key = conversationRefKey(conversation);
+    const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
+      let selection = this.events.select('id', 'event_json')
+        .where({
+          conversation_key: storedKey,
+          id: { $gt: afterExclusive, $lte: throughInclusive },
+        });
+      selection = selection.orderBy?.('id', 'DESC') ?? selection;
+      selection = selection.limit?.(Math.max(0, Math.floor(limit))) ?? selection;
+      return Promise.resolve(selection);
+    };
+    const encoded = await select(databaseTextKey(key));
+    const legacy = await toleratePostgresNul(() => select(key), []);
+    const rows = [...encoded, ...legacy]
+      .sort((left, right) => Number(right.id) - Number(left.id))
+      .slice(0, Math.max(0, Math.floor(limit)));
     return Object.freeze(rows.map((row) => Object.freeze({
       sequence: Number(row.id),
       event: freezeConversationData(parseConversationEvent(row.event_json)),
@@ -159,10 +174,19 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
   }
 
   async getCursor(consumer: string, conversation: ConversationRef): Promise<number> {
-    const rows = await this.cursors.select('sequence')
-      .where({ cursor_key: databaseTextKey(cursorKey(consumer, conversation)) })
-      .limit?.(1) ?? [];
-    return Number((await Promise.resolve(rows))[0]?.sequence ?? 0);
+    const key = cursorKey(consumer, conversation);
+    const select = async (storedKey: string): Promise<Record<string, unknown>[]> => {
+      const rows = this.cursors.select('sequence')
+        .where({ cursor_key: storedKey })
+        .limit?.(1) ?? [];
+      return Promise.resolve(rows);
+    };
+    const encoded = await select(databaseTextKey(key));
+    const legacy = await toleratePostgresNul(() => select(key), []);
+    return Math.max(
+      Number(encoded[0]?.sequence ?? 0),
+      Number(legacy[0]?.sequence ?? 0),
+    );
   }
 
   async commitCursor(consumer: string, conversation: ConversationRef, sequence: number): Promise<void> {
@@ -185,12 +209,36 @@ export class DatabaseConversationEventStore implements ConversationEventStore {
       cursor_key: key,
       sequence: { $lte: sequence },
     }));
+    const legacyKey = cursorKey(consumer, conversation);
+    await toleratePostgresNul(
+      () => Promise.resolve(this.cursors.update({ sequence }).where({
+        cursor_key: legacyKey,
+        sequence: { $lte: sequence },
+      })),
+      undefined,
+    );
   }
 
   async #eventById(eventId: string): Promise<Record<string, unknown> | undefined> {
-    const selected = this.events.select('id', 'event_json').where({ event_id: databaseTextKey(eventId) });
-    const limited = selected.limit?.(1) ?? selected;
-    return (await Promise.resolve(limited))[0];
+    const select = async (storedKey: string): Promise<Record<string, unknown> | undefined> => {
+      const selected = this.events.select('id', 'event_json').where({ event_id: storedKey });
+      const limited = selected.limit?.(1) ?? selected;
+      return (await Promise.resolve(limited))[0];
+    };
+    const encoded = await select(databaseTextKey(eventId));
+    if (encoded && parseConversationEvent(encoded.event_json).eventId === eventId) return encoded;
+    const legacy = await toleratePostgresNul(() => select(eventId), undefined);
+    return legacy && parseConversationEvent(legacy.event_json).eventId === eventId ? legacy : undefined;
+  }
+}
+
+async function toleratePostgresNul<T>(operation: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/invalid byte sequence.*(?:0x00|U\+0000)/iu.test(message)) return fallback;
+    throw error;
   }
 }
 

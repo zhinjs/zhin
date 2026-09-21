@@ -554,7 +554,8 @@ export class RelatedDatabase<
                   clauses.push(`${quotedKey} IN (${subquery.sql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
+                  const placeholders = value[op].map((_: any, i: number) =>
+                    this.dialect.getParameterPlaceholder(parameterOffset + params.length + i));
                   clauses.push(`${quotedKey} IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 } else {
@@ -568,7 +569,8 @@ export class RelatedDatabase<
                   clauses.push(`${quotedKey} NOT IN (${subquery.sql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
+                  const placeholders = value[op].map((_: any, i: number) =>
+                    this.dialect.getParameterPlaceholder(parameterOffset + params.length + i));
                   clauses.push(`${quotedKey} NOT IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 }

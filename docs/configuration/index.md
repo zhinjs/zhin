@@ -102,7 +102,9 @@ npx zhin config check
 ```
 
 `setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
-先读取 `.env`，再用当前模式的 `.env.<mode>`（例如 `.env.production`）覆盖同名变量。
+先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
+`zhin runtime start --mode production --no-watch` 默认读取 `.env.production`；显式传入
+`--environment <name>` 可选择其他环境覆盖层。
 
 ### SQLite
 
@@ -163,9 +165,11 @@ CLI 的数据库选择项会同时显示当前支持的服务端实机验收版�
 | `memory` | 无 | 无 |
 
 网络数据库对应的驱动依赖分别是 `mysql2`、`pg`、`mongodb`、`redis`；通过创建项目或
-`zhin setup --database` 选择数据库时，CLI 会按上表把经过验收的驱动版本写入 `package.json`，随后运行 `pnpm install`。
+`zhin setup --database` 选择数据库时，CLI 会按上表把经过验收的驱动版本写入 `package.json`。
+`create-zhin-app` 会自动安装依赖；`zhin setup` 会提示你随后手动运行 `pnpm install`。
 
-启动前运行 `npx zhin config check`。数据库环境变量缺失会作为错误报告；端口为空、非整数或超出
+启动前运行 `npx zhin config check`；若连接值只在 `.env.production`，请运行
+`npx zhin config check --environment production`。数据库环境变量缺失会作为错误报告；端口为空、非整数或超出
 `1-65535` 时，Runtime 会在加载驱动前指出具体配置路径和 `.env` 变量。若旧版本出现
 `ERR_SOCKET_BAD_PORT` / `Received type number (NaN)`，通常是 `${DB_PORT}` 未在项目根目录 `.env`
 中设置；补齐变量或重新运行 `npx zhin setup --database`。

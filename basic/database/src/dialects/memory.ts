@@ -1,4 +1,4 @@
-import {Dialect} from '../base/index.js';
+import {Database, Dialect} from '../base/index.js';
 import {RelatedDatabase} from "../type/related/database.js";
 import {Registry} from "../registry.js";
 
@@ -60,6 +60,7 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
   private connected = false;
   private tables: Map<string, MemoryTable> = new Map();
   private autoIncrementCounters: Map<string, Map<string, number>> = new Map();
+  private declaredSchemas = new Map<string, Record<string, any>>();
 
   constructor(config: MemoryConfig = {}) {
     super('memory', config);
@@ -119,6 +120,10 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
 
   async dispose(): Promise<void> {
     await this.disconnect();
+  }
+
+  registerTableSchema(table: string, definition: Record<string, any>): void {
+    this.declaredSchemas.set(table, structuredClone(definition));
   }
 
   // SQL generation methods
@@ -222,7 +227,7 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
     const columnsStr = match[2];
     
     // 解析列定义
-    const schema: Record<string, any> = {};
+    const schema: Record<string, any> = structuredClone(this.declaredSchemas.get(tableName) ?? {});
     const columnDefs = columnsStr.split(',').map(col => col.trim());
     
     for (const colDef of columnDefs) {
@@ -230,6 +235,7 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
       const columnName = parts[0].replace(/"/g, '');
       const columnType = parts[1];
       
+      if (schema[columnName]) continue;
       schema[columnName] = {
         type: columnType,
         primary: colDef.toLowerCase().includes('primary key'),
@@ -918,8 +924,8 @@ export class MemoryDialect<S extends Record<string, object>> extends Dialect<Mem
   }
 }
 export class Memory<S extends Record<string, object>> extends RelatedDatabase<MemoryConfig, S> {
-  constructor(config: MemoryConfig = {}) {
-    super(new MemoryDialect<S>(config));
+  constructor(config: MemoryConfig = {}, definitions?: Database.DefinitionObj<S>) {
+    super(new MemoryDialect<S>(config), definitions);
   }
 }
 Registry.register('memory', Memory);
