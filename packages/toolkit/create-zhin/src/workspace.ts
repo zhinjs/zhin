@@ -642,6 +642,8 @@ HTTP_TOKEN=change-me${databaseEnvExample}
       "forceConsistentCasingInFileNames": true,
       "resolveJsonModule": true,
       "isolatedModules": true,
+      "jsx": "react-jsx",
+      "jsxImportSource": "zhin.js",
       "noEmit": true,
       "types": ["node"]
     },

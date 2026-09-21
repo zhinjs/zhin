@@ -133,6 +133,8 @@ describe('createWorkspace', () => {
     expect(footer).toContain('FooterSlotProps')
     expect(schema).toMatchObject({ type: 'object', properties: {} })
     expect(rootTsconfig.compilerOptions.noEmit).toBe(true)
+    expect(rootTsconfig.compilerOptions.jsx).toBe('react-jsx')
+    expect(rootTsconfig.compilerOptions.jsxImportSource).toBe('zhin.js')
     expect(rootTsconfig.include).toContain('plugin.ts')
     expect(rootTsconfig.include).toContain('commands/**/*.ts')
     expect(rootTsconfig.include).toContain('pages/**/*.tsx')

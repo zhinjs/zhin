@@ -66,6 +66,8 @@ export class ProjectScaffolder {
         moduleResolution: 'NodeNext',
         strict: true,
         noEmit: true,
+        jsx: 'react-jsx',
+        jsxImportSource: 'zhin.js',
         allowImportingTsExtensions: true,
         rewriteRelativeImportExtensions: true,
         erasableSyntaxOnly: true,
