@@ -1,5 +1,11 @@
 # @zhin.js/cli
 
+## 1.1.4
+
+### Patch Changes
+
+- e27d227: Make package cutover add the Feature declarations and direct provider dependencies required by discovered capability directories in existing plugins, while preserving customized plugin entry files.
+
 ## 1.1.3
 
 ### Patch Changes
