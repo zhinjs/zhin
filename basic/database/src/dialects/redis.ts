@@ -528,7 +528,7 @@ export class RedisDialect<S extends Record<string, object> = Record<string, obje
     }
 
     const key = `${keyPrefix}${query.key}`;
-    const ttl = params[0] || query.ttl;
+    const ttl = query.ttl ?? params[0];
     const result = await this.client.expire(key, ttl);
     return [{ key: query.key, result }];
   }

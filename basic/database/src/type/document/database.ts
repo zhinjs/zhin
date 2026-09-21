@@ -69,6 +69,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'createCollection',
         filter: {},
         projection: {}
       },
@@ -89,6 +90,7 @@ export class DocumentDatabase<
 
     const query: DocumentQueryResult = {
       collection: params.tableName as string,
+      operation: 'find',
       filter
     };
 
@@ -127,6 +129,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'insertOne',
         filter: {},
         projection: {}
       },
@@ -147,6 +150,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'updateMany',
         filter,
         projection: {}
       },
@@ -167,6 +171,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'deleteMany',
         filter,
         projection: {}
       },
@@ -181,6 +186,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'createIndex',
         filter: {},
         projection: {}
       },
@@ -195,6 +201,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'dropCollection',
         filter: {},
         projection: {}
       },
@@ -209,6 +216,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'dropIndex',
         filter: {},
         projection: {}
       },
@@ -281,4 +289,3 @@ export class DocumentDatabase<
     return Object.keys(this.definitions || {});
   }
 }
-

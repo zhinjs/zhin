@@ -19,7 +19,7 @@ describe('diagnoseOptionalPeers', () => {
 
   it('requires html-renderer for new runtime plugins map with html-image adapter instanceKey', () => {
     const result = diagnoseOptionalPeers('/tmp', {
-      plugins: { kook: { endpoints: [{ name: 'kook-bot', token: '${KOOK_TOKEN}' }] } },
+      plugins: { kook: { endpoints: [{ id: 'kook-bot', token: '${KOOK_TOKEN}' }] } },
     }, { dependencies: {} });
     expect(result.htmlRenderer?.required).toBe(true);
   });

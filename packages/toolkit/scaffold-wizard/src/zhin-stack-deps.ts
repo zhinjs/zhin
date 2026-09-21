@@ -114,13 +114,17 @@ function resolveStackVersion(packageName: string): string {
 /** create-zhin / minimal-bot 默认 Host 端口（避免与常见 8086 占用冲突） */
 export const DEFAULT_CREATE_BOT_HTTP_PORT = 8068;
 
-/** create-zhin 生成项目的 .npmrc（避免全局 strict-peer-dependencies 阻断 AI 栈安装） */
-export const CREATE_BOT_NPMRC = 'strict-peer-dependencies=false\n';
+/** create-zhin 生成项目固定使用的 pnpm 版本。 */
+export const CREATE_BOT_PACKAGE_MANAGER = 'pnpm@11.27.1';
 
-/** create-zhin 生成项目的 pnpm 配置 */
-export function getCreateBotPnpmConfig(_aiEnabled?: boolean): Record<string, unknown> {
+/** create-zhin 生成项目的 pnpm-workspace.yaml 配置。 */
+export function getCreateBotPnpmWorkspaceConfig(): Record<string, unknown> {
   return {
-    onlyBuiltDependencies: ['esbuild'],
+    packages: ['.', 'plugins/*', 'packages/*'],
+    strictPeerDependencies: false,
+    allowBuilds: {
+      esbuild: true,
+    },
   };
 }
 

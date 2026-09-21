@@ -682,7 +682,7 @@ describe('zhin.js-${pluginName}', () => {
     const endpoint = await adapter.create({
       id: 'root/${pluginName}' as never,
       name: '${pluginName}',
-      config: { name: 'test-bot' },
+      config: { id: 'test-bot' },
       use: () => ({
         receive: async () => ({ matched: false }),
         send: async () => undefined,

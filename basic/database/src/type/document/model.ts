@@ -56,7 +56,7 @@ export class DocumentModel<D=any, S extends Record<string, object> = Record<stri
    * 根据ID查找文档
    */
   async selectById(id: string){
-    return this.select('_id' as any).where({
+    return this.select().where({
       _id: id,
     } as Condition<S[T]>).limit(1).then((results: any) => results[0] || null);
   }

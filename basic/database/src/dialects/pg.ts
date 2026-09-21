@@ -35,12 +35,13 @@ export class PostgreSQLDialect<S extends Record<string, object> = Record<string,
     try {
       if (this.usePool) {
         const { Pool } = await import('pg');
+        const { pool, ...connectionOptions } = this.config;
         const poolConfig: PgPoolConfig = {
-          ...this.config,
-          max: this.config.pool?.max ?? 10,
-          min: this.config.pool?.min ?? 2,
-          idleTimeoutMillis: this.config.pool?.idleTimeoutMillis ?? 30000,
-          connectionTimeoutMillis: this.config.pool?.acquireTimeoutMillis ?? 10000,
+          ...connectionOptions,
+          max: pool?.max ?? 10,
+          min: pool?.min ?? 2,
+          idleTimeoutMillis: pool?.idleTimeoutMillis ?? 30000,
+          connectionTimeoutMillis: pool?.acquireTimeoutMillis ?? 10000,
         };
         this.pool = new Pool(poolConfig);
         logger.info(`PostgreSQL 连接池已创建 (max: ${poolConfig.max})`);

@@ -60,9 +60,9 @@ export type { AiStackIncompatibility } from './project-deps.js';
 export {
   ZHIN_STACK_VERSIONS,
   DEFAULT_CREATE_BOT_HTTP_PORT,
-  CREATE_BOT_NPMRC,
+  CREATE_BOT_PACKAGE_MANAGER,
   getCreateBotBaseDependencies,
-  getCreateBotPnpmConfig,
+  getCreateBotPnpmWorkspaceConfig,
   getRequiredZhinDependenciesForConfig,
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,

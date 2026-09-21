@@ -44,15 +44,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       return null;
     }
 
-    const row = results[0];
-    
-    // 检查是否过期
-    if (row.expires_at && Date.now() > row.expires_at) {
-      await this.deleteByKey(key);
-      return null;
-    }
-
-    return JSON.parse(row.value);
+    return results[0] as V;
   }
 
   /**
@@ -67,7 +59,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [key]
     );
-    return result.affectedRows > 0;
+    return result[0]?.deleted === true;
   }
 
   /**
@@ -82,7 +74,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [key, Date.now()]
     );
-    return results.length > 0;
+    return results[0] === true;
   }
 
   /**
@@ -96,7 +88,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [Date.now()]
     );
-    return results.map((row: any) => row.key);
+    return results as string[];
   }
 
   /**
@@ -110,7 +102,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [Date.now()]
     );
-    return results.map((row: any) => JSON.parse(row.value));
+    return results as V[];
   }
 
   /**
@@ -124,7 +116,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [Date.now()]
     );
-    return results.map((row: any) => [row.key, JSON.parse(row.value)]);
+    return results as Array<[string, V]>;
   }
 
   /**
@@ -148,26 +140,15 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [Date.now()]
     );
-    return results[0]?.count || 0;
+    return results[0] ?? 0;
   }
 
   /**
    * 批量设置
    */
   async setMany(entries: Array<[string, any]>, ttl?: number): Promise<void> {
-    const expiresAt = ttl ? Date.now() + ttl * 1000 : null;
-    
     for (const [key, value] of entries) {
-      await this.dialect.query(
-        {
-          operation: 'set',
-          bucket: this.name as string,
-          key,
-          value,
-          ttl,
-        },
-        [key, JSON.stringify(value), expiresAt]
-      );
+      await this.set(key, value, ttl);
     }
   }
 
@@ -175,7 +156,6 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
    * 设置过期时间
    */
   async expire(key: string, ttl: number): Promise<boolean> {
-    const expiresAt = Date.now() + ttl * 1000;
     const result = await this.dialect.query(
       {
         operation: 'expire',
@@ -183,9 +163,9 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
         key,
         ttl,
       },
-      [expiresAt, key]
+      []
     );
-    return result.affectedRows > 0;
+    return Boolean(result[0]?.result);
   }
 
   /**
@@ -205,13 +185,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       return null;
     }
 
-    const expiresAt = results[0].expires_at;
-    if (!expiresAt) {
-      return -1; // 永不过期
-    }
-
-    const remaining = Math.ceil((expiresAt - Date.now()) / 1000);
-    return remaining > 0 ? remaining : 0;
+    return results[0] as number;
   }
 
   /**
@@ -226,7 +200,7 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [key]
     );
-    return result.affectedRows > 0;
+    return Boolean(result[0]?.result);
   }
 
   /**
@@ -240,24 +214,22 @@ export class KeyValueModel<D=any, S extends Record<string, object> = Record<stri
       },
       [Date.now()]
     );
-    return result.affectedRows;
+    return result[0]?.cleaned ?? 0;
   }
 
   /**
    * 获取键的模式匹配
    */
   async keysByPattern(pattern: string): Promise<string[]> {
-    // 简单的通配符匹配，将 * 转换为 SQL 的 %
-    const sqlPattern = pattern.replace(/\*/g, '%');
     const results = await this.dialect.query(
       {
         operation: 'keysByPattern',
         bucket: this.name as string,
-        pattern: sqlPattern,
+        pattern,
       },
-      [sqlPattern, Date.now()]
+      []
     );
-    return results.map((row: any) => row.key);
+    return results as string[];
   }
 
   /**

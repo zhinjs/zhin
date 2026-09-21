@@ -285,7 +285,7 @@ export class RelatedDatabase<
     
     // WHERE clause
     if (params.conditions) {
-      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      const [condition, conditionParams] = this.parseCondition(params.conditions, undefined, queryParams.length);
       if (condition) {
         query += ` WHERE ${condition}`;
         queryParams.push(...conditionParams);
@@ -387,7 +387,7 @@ export class RelatedDatabase<
     
     // HAVING clause
     if (params.havingConditions && Object.keys(params.havingConditions).length) {
-      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions);
+      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions, undefined, queryParams.length);
       if (havingCondition) {
         query += ` HAVING ${havingCondition}`;
         queryParams.push(...havingParams);
@@ -451,7 +451,11 @@ export class RelatedDatabase<
    * @param condition 条件对象
    * @param tablePrefix 表名前缀（用于 JOIN 查询）
    */
-  protected parseCondition<T extends object>(condition: Condition<T>, tablePrefix?: string): [string, any[]] {
+  protected parseCondition<T extends object>(
+    condition: Condition<T>,
+    tablePrefix?: string,
+    parameterOffset = 0,
+  ): [string, any[]] {
     const clauses: string[] = [];
     const params: any[] = [];
     
@@ -467,7 +471,11 @@ export class RelatedDatabase<
       if (key === '$and' && Array.isArray((condition as any).$and)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$and) {
-          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
+          const [subClause, subParams] = this.parseCondition(
+            subCondition,
+            tablePrefix,
+            parameterOffset + params.length,
+          );
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -479,7 +487,11 @@ export class RelatedDatabase<
       } else if (key === '$or' && Array.isArray((condition as any).$or)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$or) {
-          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
+          const [subClause, subParams] = this.parseCondition(
+            subCondition,
+            tablePrefix,
+            parameterOffset + params.length,
+          );
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -489,7 +501,11 @@ export class RelatedDatabase<
           clauses.push(subClauses.join(' OR '));
         }
       } else if (key === '$not' && (condition as any).$not) {
-        const [subClause, subParams] = this.parseCondition((condition as any).$not, tablePrefix);
+        const [subClause, subParams] = this.parseCondition(
+          (condition as any).$not,
+          tablePrefix,
+          parameterOffset + params.length,
+        );
         if (subClause) {
           clauses.push(`NOT (${subClause})`);
           params.push(...subParams);
@@ -506,7 +522,7 @@ export class RelatedDatabase<
         if (isPlainObject) {
           for (const op in value) {
             const quotedKey = formatField(key);
-            const placeholder = this.dialect.getParameterPlaceholder(params.length);
+            const placeholder = this.dialect.getParameterPlaceholder(parameterOffset + params.length);
             
             switch (op) {
               case '$eq':
@@ -585,7 +601,7 @@ export class RelatedDatabase<
           if (value === null) {
             clauses.push(`${quotedKey} IS NULL`);
           } else {
-          const placeholder = this.dialect.getParameterPlaceholder(params.length);
+          const placeholder = this.dialect.getParameterPlaceholder(parameterOffset + params.length);
           clauses.push(`${quotedKey} = ${placeholder}`);
           params.push(value);
           }

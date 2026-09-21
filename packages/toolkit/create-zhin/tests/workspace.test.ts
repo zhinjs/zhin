@@ -1,6 +1,7 @@
 import fs from 'fs-extra'
 import os from 'node:os'
 import path from 'node:path'
+import { parse } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
@@ -161,9 +162,9 @@ describe('createWorkspace', () => {
       await expect(fs.pathExists(path.join(projectPath, relativePath))).resolves.toBe(true)
     }
 
-    const workspace = await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8')
-    expect(workspace).toContain("- 'plugins/*'")
-    expect(workspace).toContain("- 'packages/*'")
+    const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
+    expect(workspace.packages).toEqual(['.', 'plugins/*', 'packages/*'])
+    expect(workspace.allowBuilds).toEqual({ esbuild: true })
   })
 
   it('uses the real generated config filename for JSON projects', async () => {

@@ -1,6 +1,7 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { stringify } from 'yaml';
 import {
   DATABASE_PACKAGES,
   ZHIN_STACK_VERSIONS,
@@ -11,8 +12,8 @@ import {
   getAdapterDependencies,
   getAIDependencies,
   getCreateBotBaseDependencies,
-  CREATE_BOT_NPMRC,
-  getCreateBotPnpmConfig,
+  CREATE_BOT_PACKAGE_MANAGER,
+  getCreateBotPnpmWorkspaceConfig,
   type AdapterSetupResult,
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
@@ -71,14 +72,10 @@ export async function createWorkspace(projectPath: string, projectName: string, 
 
   await fs.ensureDir(projectPath);
 
-  await fs.writeFile(path.join(projectPath, '.npmrc'), CREATE_BOT_NPMRC);
-
-  await fs.writeFile(path.join(projectPath, 'pnpm-workspace.yaml'),
-`packages:
-  - '.'
-  - 'plugins/*'
-  - 'packages/*'
-`);
+  await fs.writeFile(
+    path.join(projectPath, 'pnpm-workspace.yaml'),
+    stringify(getCreateBotPnpmWorkspaceConfig()),
+  );
 
   // 根据数据库类型添加相应依赖
   const databaseDeps: Record<string, string> = {};
@@ -120,7 +117,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     name: projectName,
     private: true,
     version: '0.1.0',
-    packageManager: 'pnpm@9.0.2',
+    packageManager: CREATE_BOT_PACKAGE_MANAGER,
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
@@ -148,7 +145,6 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'typescript': '^6.0.0',
       'pm2': '^6.0.0'
     },
-    pnpm: getCreateBotPnpmConfig(aiEnabled),
     engines: {
       node: CREATE_NODE_REQUIREMENT
     },

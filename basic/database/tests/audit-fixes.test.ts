@@ -6,6 +6,7 @@
 import { createRequire } from 'node:module';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { Sqlite } from '../src/dialects/sqlite.js';
+import { PG } from '../src/dialects/pg.js';
 import { MigrationRunner, defineMigration } from '../src/migration.js';
 
 const require = createRequire(import.meta.url);
@@ -60,6 +61,31 @@ describe.skipIf(!sqliteAvailable)('audit fixes: parseCondition', () => {
         conditions: { id: { $bogus: 1 } },
       } as any),
     ).toThrow(/unknown operator/);
+  });
+});
+
+describe('audit fixes: PostgreSQL placeholders', () => {
+  const db = new PG<TestSchema>({});
+
+  it('continues numbering after update values', () => {
+    const { query, params } = db.buildQuery({
+      type: 'update',
+      tableName: 'events',
+      update: { name: 'renamed' },
+      conditions: { id: 1 },
+    });
+    expect(query).toBe('UPDATE "events" SET "name" = $1 WHERE "id" = $2');
+    expect(params).toEqual(['renamed', 1]);
+  });
+
+  it('numbers nested conditions without reusing placeholders', () => {
+    const { query, params } = db.buildQuery({
+      type: 'select',
+      tableName: 'events',
+      conditions: { $or: [{ id: 1 }, { name: 'second' }] },
+    });
+    expect(query).toContain(`("id" = $1) OR ("name" = $2)`);
+    expect(params).toEqual([1, 'second']);
   });
 });
 
