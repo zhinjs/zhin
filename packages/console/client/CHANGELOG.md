@@ -1,5 +1,12 @@
 # @zhin.js/client
 
+## 1.1.7
+
+### Patch Changes
+
+- 5b5d270: Complete the canonical share segment contract and preserve native ICQQ share delivery through Core and AI outbound pipelines.
+  - @zhin.js/contract@1.1.2
+
 ## 1.1.6
 
 ### Patch Changes

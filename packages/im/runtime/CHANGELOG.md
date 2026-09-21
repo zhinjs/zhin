@@ -1,5 +1,14 @@
 # @zhin.js/runtime
 
+## 1.1.2
+
+### Patch Changes
+
+- 7a65d32: Load server TSX features through the active process loader or the CLI's scoped fallback loader, preserve explicit loaders across supervised restarts, and scaffold the JSX compiler settings advertised by the feature conventions.
+- Updated dependencies [36c2eb9]
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/feature-kit@1.1.2
+
 ## 1.1.1
 
 ### Patch Changes

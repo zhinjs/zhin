@@ -1,5 +1,15 @@
 # @zhin.js/adapter
 
+## 1.1.15
+
+### Patch Changes
+
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+  - @zhin.js/im-contract@1.1.2
+  - @zhin.js/plugin-runtime@1.1.11
+  - @zhin.js/feature-kit@1.1.2
+
 ## 1.1.14
 
 ### Patch Changes

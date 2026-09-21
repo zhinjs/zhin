@@ -1,5 +1,21 @@
 # @zhin.js/adapter-icqq
 
+## 1.1.3
+
+### Patch Changes
+
+- 5b5d270: Complete the canonical share segment contract and preserve native ICQQ share delivery through Core and AI outbound pipelines.
+- Updated dependencies [5b5d270]
+- Updated dependencies [36c2eb9]
+  - @zhin.js/im-contract@1.1.2
+  - @zhin.js/core@1.1.38
+  - @zhin.js/adapter@1.1.15
+  - @zhin.js/agent-feature@1.1.2
+  - @zhin.js/feature-kit@1.1.2
+  - @zhin.js/permission@1.1.2
+  - @zhin.js/skill@1.1.2
+  - @zhin.js/tool@1.1.2
+
 ## 1.1.2
 
 ### Patch Changes
