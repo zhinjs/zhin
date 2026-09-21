@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { register } from 'tsx/esm/api';
 import {
   NativeDevelopmentModuleRuntime,
   supportsNativeTypeScript,
@@ -42,12 +43,51 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
+  it('delegates TSX to the configured process loader and reloads revisions', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.tsx');
+    const jsxPackage = join(root, 'node_modules/test-jsx');
+    await mkdir(jsxPackage, { recursive: true });
+    await writeFile(join(root, 'package.json'), '{"type":"module"}\n');
+    await writeFile(join(root, 'tsconfig.json'), JSON.stringify({
+      compilerOptions: { jsx: 'react-jsx', jsxImportSource: 'test-jsx' },
+    }));
+    await writeFile(join(jsxPackage, 'package.json'), JSON.stringify({
+      type: 'module',
+      exports: {
+        './jsx-runtime': './jsx-runtime.js',
+        './jsx-dev-runtime': './jsx-runtime.js',
+      },
+    }));
+    await writeFile(
+      join(jsxPackage, 'jsx-runtime.js'),
+      'export const jsx=(type,props)=>({type,props});export const jsxs=jsx;export const jsxDEV=jsx;export const Fragment=Symbol();\n',
+    );
+    const unregister = register({ tsconfig: join(root, 'tsconfig.json') });
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    try {
+      await writeFile(source, 'export default <status value={1}>ready</status>;\n');
+      expect((await runtime.load<{ default: { props: { value: number } } }>(source)).default.props.value)
+        .toBe(1);
+
+      await writeFile(source, 'export default <status value={2}>ready</status>;\n');
+      runtime.invalidate(source);
+      expect((await runtime.load<{ default: { props: { value: number } } }>(source)).default.props.value)
+        .toBe(2);
+    } finally {
+      await runtime.close();
+      await unregister();
+    }
+  });
+
   it('keeps direct capabilities local and escalates cached support modules', async () => {
     const root = await fixture();
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
 
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.tsx'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'components/card/index.ts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'components/card/index.tsx'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'tools/weather/index.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'tools/shared/client.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.ts'))).toBe(true);
@@ -83,7 +123,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
 
   it('reports source changes without a third-party watcher', async () => {
     const root = await fixture();
-    const source = join(root, 'commands/status/index.ts');
+    const source = join(root, 'commands/status/index.tsx');
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root });
     const observed = new Promise<string>((resolve, reject) => {
       // fs events can be delayed for seconds when the harness runs suites in

@@ -52,6 +52,7 @@
     "inquirer": "^14.0.2",
     "open": "^11.0.0",
     "ora": "^9.4.1",
+    "tsx": "^4.23.1",
     "yaml": "^2.9.0"
   },
   "devDependencies": {

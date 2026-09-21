@@ -3,9 +3,25 @@ import {
   MAX_RESPAWNS_PER_MINUTE,
   planRespawn,
   processRestartExitCode,
+  supervisedNodeArguments,
 } from '../../../src/plugin-runtime/start/process-supervisor.js';
 
 describe('native TypeScript process supervisor', () => {
+  it('preserves configured Node loaders in supervised and daemon children', () => {
+    expect(supervisedNodeArguments([
+      '--import', 'tsx',
+      '--conditions=development',
+      '--inspect=9229',
+      '--experimental-loader=./custom-loader.mjs',
+    ])).toEqual([
+      '--import', 'tsx',
+      '--conditions=development',
+      '--experimental-loader=./custom-loader.mjs',
+      '--experimental-strip-types',
+      '--disable-warning=ExperimentalWarning',
+    ]);
+  });
+
   it('respawns a requested restart and records the attempt', () => {
     const now = Date.now();
     const plan = planRespawn(processRestartExitCode, false, false, [], now);

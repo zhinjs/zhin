@@ -1,19 +1,23 @@
 import fs from 'fs-extra';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { stringify } from 'yaml';
 import {
   DATABASE_PACKAGES,
+  DATABASE_DRIVER_VERSIONS,
   ZHIN_STACK_VERSIONS,
   collectAdapterPluginManifest,
   formatEnvValue,
   generateAdapterEnvVars,
   generateAIEnvVars,
+  generateDatabaseEnvExample,
   getAdapterDependencies,
   getAIDependencies,
   getCreateBotBaseDependencies,
-  CREATE_BOT_NPMRC,
-  getCreateBotPnpmConfig,
+  CREATE_BOT_PACKAGE_MANAGER,
+  getCreateBotPnpmWorkspaceConfig,
   type AdapterSetupResult,
+  type DatabaseConfig,
   type InitOptions,
 } from '@zhin.js/scaffold-wizard';
 import { createConfigFile, generateDatabaseEnvVars } from './config.js';
@@ -45,6 +49,39 @@ function getConfigFilename(format: InitOptions['config']): string {
   }
 }
 
+function renderDatabaseReadme(database: DatabaseConfig | undefined, configFilename: string): string {
+  if (!database) return '';
+  if (database.dialect === 'sqlite') {
+    return `
+## 🗄️ 数据库
+
+当前使用 SQLite，文件路径在 \`${configFilename}\` 的 \`database.filename\` 中配置，不需要连接环境变量。
+如需切换数据库，运行 \`npx zhin setup --database\`。
+`;
+  }
+  if (database.dialect === 'memory') {
+    return `
+## 🗄️ 数据库
+
+当前使用进程内 Memory 数据库，仅适合测试，进程退出后数据不会保留。需要持久化时运行
+\`npx zhin setup --database\` 切换到 SQLite 或网络数据库。
+`;
+  }
+  return `
+## 🗄️ 数据库
+
+当前使用 \`${database.dialect}\`。连接字段在 \`${configFilename}\` 中引用环境变量，实际值保存在项目根目录 \`.env\`；
+\`.env.example\` 列出了该方言需要的变量，可复制后填写。启动前先确认数据库服务已创建目标数据库并允许当前机器连接，然后执行：
+
+\`\`\`bash
+npx zhin config check
+pnpm dev
+\`\`\`
+
+若端口、主机或数据库名为空，重新运行 \`npx zhin setup --database\`。PostgreSQL 的方言名固定为 \`pg\`。
+`;
+}
+
 /** 未显式配置适配器时默认挂载 Sandbox（对齐 examples/test-bot 的 sandbox 实例） */
 function resolveAdapterResult(options: InitOptions): AdapterSetupResult {
   if (options.adapters) return options.adapters;
@@ -71,21 +108,17 @@ export async function createWorkspace(projectPath: string, projectName: string, 
 
   await fs.ensureDir(projectPath);
 
-  await fs.writeFile(path.join(projectPath, '.npmrc'), CREATE_BOT_NPMRC);
-
-  await fs.writeFile(path.join(projectPath, 'pnpm-workspace.yaml'),
-`packages:
-  - '.'
-  - 'plugins/*'
-  - 'packages/*'
-`);
+  await fs.writeFile(
+    path.join(projectPath, 'pnpm-workspace.yaml'),
+    stringify(getCreateBotPnpmWorkspaceConfig()),
+  );
 
   // 根据数据库类型添加相应依赖
   const databaseDeps: Record<string, string> = {};
   if (options.database) {
     const dbPackage = DATABASE_PACKAGES[options.database.dialect];
     if (dbPackage) {
-      databaseDeps[dbPackage] = 'latest';
+      databaseDeps[dbPackage] = DATABASE_DRIVER_VERSIONS[dbPackage];
     }
     databaseDeps['@zhin.js/database'] = 'latest';
   }
@@ -120,7 +153,7 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     name: projectName,
     private: true,
     version: '0.1.0',
-    packageManager: 'pnpm@9.0.2',
+    packageManager: CREATE_BOT_PACKAGE_MANAGER,
     type: 'module',
     description: `${projectName} - Zhin.js Bot`,
     scripts: {
@@ -148,7 +181,6 @@ export async function createWorkspace(projectPath: string, projectName: string, 
       'typescript': '^6.0.0',
       'pm2': '^6.0.0'
     },
-    pnpm: getCreateBotPnpmConfig(aiEnabled),
     engines: {
       node: CREATE_NODE_REQUIREMENT
     },
@@ -474,6 +506,8 @@ ${projectName}/
 \`zhin.plugins\` 清单声明挂载的子插件（适配器）实例，实例配置写在 \`${configFilename}\` 的 \`plugins.<instanceKey>\`。
 根项目默认声明 page/layout Feature；它们只提供发现与拓扑契约，浏览器构建器并不作为项目依赖安装。
 
+${renderDatabaseReadme(options.database, configFilename)}
+
 ## 🚀 快速开始
 
 ### 开发模式
@@ -574,6 +608,7 @@ async function createRuntimeProjectFiles(projectPath: string, projectName: strin
 
   // 创建 .env 文件（使用简单的变量名）
   const databaseEnvVars = options.database ? generateDatabaseEnvVars(options.database) : '';
+  const databaseEnvExample = options.database ? generateDatabaseEnvExample(options.database) : '';
   const adapterEnvVars = options.adapters ? generateAdapterEnvVars(options.adapters) : '';
   const aiEnvVars = options.ai ? generateAIEnvVars(options.ai) : '';
   await fs.writeFile(path.join(projectPath, '.env'),
@@ -592,7 +627,7 @@ NODE_ENV=production
 `);
   await fs.writeFile(path.join(projectPath, '.env.example'),
 `# HTTP 服务配置（复制为 .env 后填写真实 Token）
-HTTP_TOKEN=change-me
+HTTP_TOKEN=change-me${databaseEnvExample}
 `);
 
   // tsconfig.json（独立项目，对齐 examples/minimal-bot 的编译选项）
@@ -607,6 +642,8 @@ HTTP_TOKEN=change-me
       "forceConsistentCasingInFileNames": true,
       "resolveJsonModule": true,
       "isolatedModules": true,
+      "jsx": "react-jsx",
+      "jsxImportSource": "zhin.js",
       "noEmit": true,
       "types": ["node"]
     },

@@ -278,17 +278,9 @@ export class MigrationRunner<D = any, S extends Record<string, object> = Record<
     
     return {
       async createTable(tableName: string, columns: Record<string, Column>): Promise<void> {
-        const columnDefs = Object.entries(columns).map(([name, col]) => {
-          let def = `"${name}" ${mapColumnType(col.type)}`;
-          if (col.primary) def += ' PRIMARY KEY';
-          if (col.autoIncrement) def += ' AUTOINCREMENT';
-          if (col.unique) def += ' UNIQUE';
-          if (!col.nullable) def += ' NOT NULL';
-          if (col.default !== undefined) def += ` DEFAULT ${formatDefault(col.default)}`;
-          return def;
-        }).join(', ');
-        
-        const sql = `CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`;
+        const columnDefs = Object.entries(columns)
+          .map(([name, column]) => db.dialect.formatColumnDefinition(name, column));
+        const sql = db.dialect.formatCreateTable(tableName, columnDefs);
         await db.query(sql);
       },
       
@@ -298,12 +290,8 @@ export class MigrationRunner<D = any, S extends Record<string, object> = Record<
       },
       
       async addColumn(tableName: string, columnName: string, column: Column): Promise<void> {
-        let def = `"${columnName}" ${mapColumnType(column.type)}`;
-        if (column.unique) def += ' UNIQUE';
-        if (!column.nullable) def += ' NOT NULL';
-        if (column.default !== undefined) def += ` DEFAULT ${formatDefault(column.default)}`;
-        
-        const sql = `ALTER TABLE "${tableName}" ADD COLUMN ${def}`;
+        const def = db.dialect.formatColumnDefinition(columnName, column);
+        const sql = `ALTER TABLE ${db.dialect.quoteIdentifier(tableName)} ADD COLUMN ${def}`;
         await db.query(sql);
       },
       
@@ -492,32 +480,6 @@ export class MigrationRunner<D = any, S extends Record<string, object> = Record<
 }
 
 /**
- * 映射列类型到 SQL 类型
- */
-function mapColumnType(type: string): string {
-  const typeMap: Record<string, string> = {
-    'text': 'TEXT',
-    'integer': 'INTEGER',
-    'float': 'REAL',
-    'boolean': 'INTEGER',
-    'date': 'DATETIME',
-    'json': 'TEXT'
-  };
-  return typeMap[type] || type.toUpperCase();
-}
-
-/**
- * 格式化默认值
- */
-function formatDefault(value: any): string {
-  if (value === null) return 'NULL';
-  // 与各方言 escapeString 一致：单引号 doubling，避免默认值中的引号破坏 SQL
-  if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`;
-  if (typeof value === 'boolean') return value ? '1' : '0';
-  return String(value);
-}
-
-/**
  * 创建迁移辅助函数
  * 
  * @example
@@ -553,4 +515,3 @@ export function defineMigration(config: {
 }): Migration {
   return config as Migration;
 }
-

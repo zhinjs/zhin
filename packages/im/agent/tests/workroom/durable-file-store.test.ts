@@ -22,6 +22,22 @@ afterEach(async () => {
 });
 
 describe('DurableFileStore', () => {
+  it('skips directory handles when the platform filesystem cannot sync them', async () => {
+    const root = temporaryRoot('unsupported-directory-sync');
+    await mkdir(root);
+    const leaf = join(root, 'durable');
+    const trace: string[] = [];
+    const fileSystem = tracingFileSystem(trace);
+    const store = new DurableFileStore(leaf, {
+      ...fileSystem,
+      supportsDirectorySync: false,
+    });
+
+    await store.ensureDurableLeaf('test repository');
+
+    expect(trace).toEqual([`mkdir:${leaf}`]);
+  });
+
   it('requires a pre-existing durable parent and syncs it after creating the leaf', async () => {
     const root = temporaryRoot('parent');
     await mkdir(root);

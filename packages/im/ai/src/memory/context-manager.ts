@@ -33,7 +33,7 @@ export const CHAT_MESSAGE_MODEL = {
   sender_role: { type: 'text' as const, default: 'user' },
   direction: { type: 'text' as const, nullable: false },
   message: { type: 'text' as const, nullable: false },
-  time: { type: 'integer' as const, nullable: false },
+  time: { type: 'bigint' as const, nullable: false },
 };
 
 /**
@@ -43,9 +43,9 @@ export const CONTEXT_SUMMARY_MODEL = {
   scene_id: { type: 'text' as const, nullable: false },      // 场景ID
   summary: { type: 'text' as const, nullable: false },       // 总结内容
   message_count: { type: 'integer' as const, default: 0 },   // 包含的消息数量
-  start_time: { type: 'integer' as const, default: 0 },      // 总结的起始时间
-  end_time: { type: 'integer' as const, default: 0 },        // 总结的结束时间
-  created_at: { type: 'integer' as const, default: 0 },      // 创建时间
+  start_time: { type: 'bigint' as const, default: 0 },      // 总结的起始时间
+  end_time: { type: 'bigint' as const, default: 0 },        // 总结的结束时间
+  created_at: { type: 'bigint' as const, default: 0 },      // 创建时间
 };
 
 // ============================================================================

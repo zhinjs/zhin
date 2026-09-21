@@ -127,7 +127,10 @@ zhin setup --bootstrap     # Generate bootstrap files only (SOUL.md / TOOLS.md /
 zhin setup --global        # Initialize a global instance in ~/.zhin
 ```
 
-The wizard modifies the corresponding sections of [`zhin.config.yml`](../configuration/index.md), and writes secrets to `.env`.
+The wizard modifies the corresponding sections of [`zhin.config.yml`](../configuration/index.md), and writes
+secrets to `.env`. For a network database, it validates the port range, stores environment references in the
+config, and writes the actual values to `.env`. Run `npx zhin config check` afterward to find missing database
+variables before startup. For `.env.production`, use `npx zhin config check --environment production`.
 
 ## onboard: Project Onboarding
 
@@ -148,7 +151,8 @@ zhin config path                 # Display the configuration file path
 zhin config check [--fix] [--json] [--strict]
 ```
 
-`config check` validates the configuration file and can automatically fix safely migratable fields; `--strict` treats warnings as errors (suitable for CI).
+`config check` validates the configuration file and can automatically fix safely migratable fields. Missing
+database connection variables are errors; `--strict` promotes other warnings to errors (suitable for CI).
 
 ## doctor: Environment Diagnostics
 

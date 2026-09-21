@@ -1,8 +1,6 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
-import path from 'path';
-import dotenv from 'dotenv';
-import fs from 'fs-extra';
+import path from 'node:path';
 import {
   applyConfigFixes,
   runConfigCheck,
@@ -11,6 +9,7 @@ import {
 } from '../utils/config-check.js';
 import { saveConfig } from '../utils/config-file.js';
 import { logger } from '../utils/logger.js';
+import { loadRuntimeEnvironmentLayers } from '../plugin-runtime/start/module.js';
 
 function printIssue(issue: ConfigIssue): void {
   const icon = issue.severity === 'error' ? '❌' : issue.severity === 'warn' ? '⚠️' : 'ℹ️';
@@ -33,21 +32,26 @@ export const configCheckCommand = new Command('check')
   .option('--fix', '自动修复可安全迁移的配置项并写回文件')
   .option('--json', '以 JSON 输出检查结果')
   .option('--strict', '将警告视为错误（用于 CI）')
-  .action(async (options: { fix?: boolean; json?: boolean; strict?: boolean }) => {
+  .option('--environment <name>', '加载 .env.<name> 环境覆盖', 'development')
+  .action(async (options: { fix?: boolean; json?: boolean; strict?: boolean; environment: string }) => {
     const cwd = process.cwd();
-    const envPath = path.join(cwd, '.env');
-    if (await fs.pathExists(envPath)) {
-      dotenv.config({ path: envPath });
+    if (!/^[a-z0-9][a-z0-9-]*$/u.test(options.environment)) {
+      throw new TypeError(`Invalid environment name: ${options.environment || '<empty>'}`);
     }
+    const layers = await loadRuntimeEnvironmentLayers(cwd, options.environment);
+    const env = {
+      ...layers.base,
+      ...layers.environments?.[options.environment],
+    };
 
-    let result = await runConfigCheck(cwd, process.env);
+    let result = await runConfigCheck(cwd, env);
 
     if (options.fix && result.configFile && Object.keys(result.config).length > 0) {
       const { config: fixed, fixes } = applyConfigFixes(result.config, cwd);
       if (fixes.length > 0) {
         await saveConfig(path.join(cwd, result.configFile), fixed);
         result.fixesApplied = fixes;
-        result = await runConfigCheck(cwd, process.env);
+        result = await runConfigCheck(cwd, env);
         result.fixesApplied = fixes;
       } else {
         logger.info('未发现可自动修复的配置项');

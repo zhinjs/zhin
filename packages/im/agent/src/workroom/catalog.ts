@@ -244,7 +244,7 @@ export const WORKROOM_CATALOG_MODEL = {
   sequence: { type: 'integer' as const, nullable: false },
   revision: { type: 'text' as const, nullable: false },
   definitions_json: { type: 'text' as const, nullable: false },
-  updated_at: { type: 'integer' as const, nullable: false },
+  updated_at: { type: 'bigint' as const, nullable: false },
 };
 
 export function emptyWorkroomCatalogRevision(): string {

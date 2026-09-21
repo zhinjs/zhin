@@ -208,6 +208,7 @@ export interface WorkroomRemoteDispatchOutboxFileHandle {
 
 /** Injectable only at the filesystem boundary; production defaults to real Node fs operations. */
 export interface WorkroomRemoteDispatchOutboxFileSystem {
+  readonly supportsDirectorySync?: boolean;
   mkdir(path: string): Promise<void>;
   readdir(path: string): Promise<readonly string[]>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
@@ -217,6 +218,7 @@ export interface WorkroomRemoteDispatchOutboxFileSystem {
 }
 
 const nodeFileSystem: WorkroomRemoteDispatchOutboxFileSystem = Object.freeze({
+  supportsDirectorySync: process.platform !== 'win32',
   mkdir: async (path: string): Promise<void> => {
     await nodeMkdir(path);
   },
@@ -522,6 +524,7 @@ implements WorkroomRemoteDispatchOutboxRepository {
   }
 
   async #syncDirectoryPath(path: string): Promise<void> {
+    if (this.fileSystem.supportsDirectorySync === false) return;
     const handle = await this.fileSystem.open(path, 'r');
     try {
       await handle.sync();

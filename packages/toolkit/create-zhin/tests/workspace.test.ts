@@ -1,6 +1,7 @@
 import fs from 'fs-extra'
 import os from 'node:os'
 import path from 'node:path'
+import { parse } from 'yaml'
 import { afterEach, describe, expect, it } from 'vitest'
 import { BASE_SKILL_NAMES, DEV_SKILL_NAMES, createWorkspace } from '../src/workspace'
 import type { InitOptions } from '../src/types'
@@ -132,6 +133,8 @@ describe('createWorkspace', () => {
     expect(footer).toContain('FooterSlotProps')
     expect(schema).toMatchObject({ type: 'object', properties: {} })
     expect(rootTsconfig.compilerOptions.noEmit).toBe(true)
+    expect(rootTsconfig.compilerOptions.jsx).toBe('react-jsx')
+    expect(rootTsconfig.compilerOptions.jsxImportSource).toBe('zhin.js')
     expect(rootTsconfig.include).toContain('plugin.ts')
     expect(rootTsconfig.include).toContain('commands/**/*.ts')
     expect(rootTsconfig.include).toContain('pages/**/*.tsx')
@@ -161,9 +164,9 @@ describe('createWorkspace', () => {
       await expect(fs.pathExists(path.join(projectPath, relativePath))).resolves.toBe(true)
     }
 
-    const workspace = await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8')
-    expect(workspace).toContain("- 'plugins/*'")
-    expect(workspace).toContain("- 'packages/*'")
+    const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'))
+    expect(workspace.packages).toEqual(['.', 'plugins/*', 'packages/*'])
+    expect(workspace.allowBuilds).toEqual({ esbuild: true })
   })
 
   it('uses the real generated config filename for JSON projects', async () => {
@@ -175,6 +178,30 @@ describe('createWorkspace', () => {
     const parsed = await fs.readJson(path.join(projectPath, 'zhin.config.json'))
     expect(parsed.plugins.sandbox).toBeDefined()
     expect(parsed.http.token).toBe('${HTTP_TOKEN}')
+  })
+
+  it('documents external database variables in the generated project', async () => {
+    const projectPath = await makeProject({
+      database: {
+        dialect: 'pg',
+        host: 'db.internal',
+        port: 15432,
+        user: 'private-user',
+        password: 'secret-password',
+        database: 'private-db',
+      },
+    })
+    const envExample = await fs.readFile(path.join(projectPath, '.env.example'), 'utf8')
+    const readme = await fs.readFile(path.join(projectPath, 'README.md'), 'utf8')
+    const pkg = await fs.readJson(path.join(projectPath, 'package.json'))
+
+    expect(envExample).toContain('DB_HOST=127.0.0.1')
+    expect(envExample).toContain('DB_PORT=5432')
+    expect(envExample).toContain('DB_PASSWORD=change-me')
+    expect(envExample).not.toContain('secret-password')
+    expect(pkg.dependencies.pg).toBe('^8.22.0')
+    expect(readme).toContain('npx zhin config check')
+    expect(readme).toContain('PostgreSQL 的方言名固定为 `pg`')
   })
 
   it('generates Windows scripts with matching encoding and interpolation-safe quoting', async () => {

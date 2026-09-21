@@ -51,7 +51,7 @@
     "mongodb": "^7.5.0",
     "mysql2": "^3.23.2",
     "pg": "^8.22.0",
-    "redis": "latest",
+    "redis": "^6.1.0",
     "typescript": "^6.0.3"
   },
   "repository": {

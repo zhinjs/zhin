@@ -21,6 +21,108 @@ env:
   NPM_TOKEN: ''
 
 jobs:
+  database-live:
+    permissions:
+      contents: read
+    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: zhin_test
+          MYSQL_USER: zhin
+          MYSQL_PASSWORD: zhin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uzhin -pzhin"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: zhin_test
+          POSTGRES_USER: zhin
+          POSTGRES_PASSWORD: zhin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U zhin -d zhin_test"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd="mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+      redis:
+        image: redis:8
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    steps:
+      - name: setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 9.0.2
+
+      - name: checkout repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: setup node.js
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: install dependencies
+        run: >-
+          pnpm --filter @zhin.js/database... --filter @zhin.js/cli...
+          install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+
+      - name: run dependency lifecycle scripts without registry credentials
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... rebuild
+
+      - name: build database acceptance dependencies
+        run: pnpm --filter @zhin.js/database... --filter @zhin.js/cli... build
+
+      - name: verify live database dialects and conversation storage
+        run: >-
+          pnpm exec vitest run
+          basic/database/tests/live-dialects.test.ts
+          basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
+          packages/im/ai/tests/memory/context-repository-database.test.ts
+        env:
+          NODE_OPTIONS: --throw-deprecation
+          ZHIN_TEST_EXTERNAL_DATABASES: '1'
+          ZHIN_TEST_MYSQL_HOST: 127.0.0.1
+          ZHIN_TEST_MYSQL_PORT: '3306'
+          ZHIN_TEST_MYSQL_USER: zhin
+          ZHIN_TEST_MYSQL_PASSWORD: zhin
+          ZHIN_TEST_MYSQL_DATABASE: zhin_test
+          ZHIN_TEST_PG_HOST: 127.0.0.1
+          ZHIN_TEST_PG_PORT: '5432'
+          ZHIN_TEST_PG_USER: zhin
+          ZHIN_TEST_PG_PASSWORD: zhin
+          ZHIN_TEST_PG_DATABASE: zhin_test
+          ZHIN_TEST_MONGODB_URL: mongodb://127.0.0.1:27017
+          ZHIN_TEST_MONGODB_DATABASE: zhin_test
+          ZHIN_TEST_REDIS_URL: redis://127.0.0.1:6379
+
   test:
     permissions:
       contents: read
@@ -89,16 +191,23 @@ jobs:
         run: |
           # Invoke pnpm through Start-Process so GitHub's pwsh wrapper cannot
           # terminate the script on a native STATUS_DLL_INIT_FAILED exit before
-          # the incremental retry starts.
+          # an incremental retry starts.
           $pnpm = (Get-Command pnpm.cmd -ErrorAction Stop).Source
-          $firstBuild = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
-          if ($firstBuild.ExitCode -eq 0) { exit 0 }
+          $statusDllInitFailed = -1073741502
+          $maxAttempts = 3
+          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            $build = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
+            if ($build.ExitCode -eq 0) { exit 0 }
+            if ($build.ExitCode -ne $statusDllInitFailed -or $attempt -eq $maxAttempts) {
+              exit $build.ExitCode
+            }
 
-          # The second pass reuses every completed Turbo task. Transient process
-          # initialization failures recover, while real compiler errors stay red.
-          Write-Warning "Windows build exited with $($firstBuild.ExitCode); retrying incremental build once."
-          $retryBuild = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
-          exit $retryBuild.ExitCode
+            # Turbo reuses completed tasks. Give Windows time to release the
+            # failed child process before starting the incremental retry.
+            $delaySeconds = 2 * $attempt
+            Write-Warning "Windows build attempt $attempt hit STATUS_DLL_INIT_FAILED; retrying in $delaySeconds seconds."
+            Start-Sleep -Seconds $delaySeconds
+          }
 
       - name: build packages
         if: runner.os != 'Windows'

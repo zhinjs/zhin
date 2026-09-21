@@ -11,7 +11,10 @@ import type { AgentCore } from '../core/agent-core.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
 import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
-import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
+import {
+  createDeferredCapabilityPlan,
+  primeAgentSkillForIntent,
+} from './deferred-capability-plan.js';
 import type {
   AgentTurnEngine,
   AgentTurnExecutionContext,
@@ -95,9 +98,18 @@ async function* runInteractiveTurn(
     ...context.capabilities,
     tools: context.toolCapabilities,
   };
-  const plan = createDeferredCapabilityPlan({
+  const primed = primeAgentSkillForIntent({
     capabilities: projected,
     sessionSnapshot: snapshot,
+    intent: prep.turnUser.rawContent,
+    config: host.config,
+  });
+  if (primed.skill) {
+    await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, primed.snapshot);
+  }
+  const plan = createDeferredCapabilityPlan({
+    capabilities: projected,
+    sessionSnapshot: primed.snapshot,
     config: host.config,
     platform: context.turn.origin.kind === 'im' ? context.turn.origin.platform : undefined,
     persistSnapshot: (next) => host.contextRepository.setDeferredToolSnapshot(prep.sessionId, next),

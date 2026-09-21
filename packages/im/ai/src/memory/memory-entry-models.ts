@@ -13,9 +13,9 @@ export const MEMORY_ENTRY_MODEL = {
   tags: { type: 'text' as const, default: '[]' },
   source: { type: 'text' as const, default: '' },
   confidence: { type: 'real' as const, default: 1 },
-  created_at: { type: 'integer' as const, default: 0 },
-  updated_at: { type: 'integer' as const, default: 0 },
-  expires_at: { type: 'integer' as const, nullable: true },
+  created_at: { type: 'bigint' as const, default: 0 },
+  updated_at: { type: 'bigint' as const, default: 0 },
+  expires_at: { type: 'bigint' as const, nullable: true },
 };
 
 export interface MemoryEntryRecord {

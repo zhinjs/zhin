@@ -44,7 +44,9 @@ describe('Plugin Runtime CLI project tooling', () => {
     expect(workspace).toBe('packages:\n  - packages/*\n  - plugins/*\n');
     const tsconfig = JSON.parse(
       await readFile(join(root, 'tsconfig.json'), 'utf8'),
-    ) as { include: string[] };
+    ) as { compilerOptions: Record<string, unknown>; include: string[] };
+    expect(tsconfig.compilerOptions.jsx).toBe('react-jsx');
+    expect(tsconfig.compilerOptions.jsxImportSource).toBe('zhin.js');
     expect(tsconfig.include).toContain('adapters/**/*.ts');
     expect(tsconfig.include).toContain('tools/**/*.ts');
     expect(tsconfig.include).toContain('mcps/**/*.ts');

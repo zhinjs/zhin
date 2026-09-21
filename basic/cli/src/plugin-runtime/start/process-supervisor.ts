@@ -9,6 +9,15 @@ import type { StartOptions } from './options.js';
 
 const DISABLE_EXPERIMENTAL_WARNING_FLAG = '--disable-warning=ExperimentalWarning';
 const RESPAWN_WINDOW_MS = 60_000;
+const NODE_LOADER_OPTIONS = new Set([
+  '--conditions',
+  '--experimental-loader',
+  '--import',
+  '--loader',
+  '--require',
+  '-C',
+  '-r',
+]);
 
 export const processRestartExitCode = 75;
 /** Storm guard parity with the `zhin start` daemon: 10 restarts/minute, 3s delay. */
@@ -37,6 +46,31 @@ export function planRespawn(
     return Object.freeze({ respawn: false, attempts: recent });
   }
   return Object.freeze({ respawn: true, attempts: Object.freeze([...recent, now]) });
+}
+
+/** Preserve process loader configuration when the supervisor creates a child. */
+export function supervisedNodeArguments(
+  execArguments: readonly string[] = process.execArgv,
+): readonly string[] {
+  const inherited: string[] = [];
+  for (let index = 0; index < execArguments.length; index += 1) {
+    const argument = execArguments[index]!;
+    const option = argument.split('=', 1)[0]!;
+    if (!NODE_LOADER_OPTIONS.has(option)) continue;
+    inherited.push(argument);
+    if (argument === option) {
+      const value = execArguments[index + 1];
+      if (value !== undefined) {
+        inherited.push(value);
+        index += 1;
+      }
+    }
+  }
+  return Object.freeze([
+    ...inherited,
+    '--experimental-strip-types',
+    DISABLE_EXPERIMENTAL_WARNING_FLAG,
+  ]);
 }
 
 /** Owns the parent process state for native-TypeScript child supervision. */
@@ -81,8 +115,7 @@ export class NativeTypeScriptSupervisor {
   ): Promise<true> {
     for (;;) {
       const child = spawn(process.execPath, [
-        '--experimental-strip-types',
-        DISABLE_EXPERIMENTAL_WARNING_FLAG,
+        ...supervisedNodeArguments(),
         entry,
         ...process.argv.slice(2),
       ], {

@@ -51,9 +51,9 @@ export function defineHostTables(
     schema_version: { type: 'integer', default: 1 },
     revision: { type: 'integer', default: 0 },
     processed_actions: { type: 'text', default: '[]' },
-    deadline_at: { type: 'integer', default: 0 },
+    deadline_at: { type: 'bigint', default: 0 },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

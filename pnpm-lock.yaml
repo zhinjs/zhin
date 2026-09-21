@@ -203,6 +203,9 @@ importers:
       ora:
         specifier: ^9.4.1
         version: 9.4.1
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -257,7 +260,7 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
       redis:
-        specifier: latest
+        specifier: ^6.1.0
         version: 6.1.0(@opentelemetry/api@1.9.1)
       typescript:
         specifier: ^6.0.3
@@ -1631,6 +1634,9 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../tool
+      tsx:
+        specifier: ^4.23.1
+        version: 4.23.1
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

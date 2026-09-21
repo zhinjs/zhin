@@ -104,10 +104,62 @@ export function generateDatabaseEnvVars(config: DatabaseConfig): string {
       );
       break;
     case 'sqlite':
+    case 'memory':
     default:
       // SQLite 不需要额外的环境变量
       break;
   }
 
   return envVars.length > 0 ? `\n\n${envVars.join('\n')}` : '';
+}
+
+/**
+ * Generate a version-control-safe database section for `.env.example`.
+ * User-entered passwords and credential-bearing connection URLs are never
+ * copied from the interactive wizard.
+ */
+export function generateDatabaseEnvExample(config: DatabaseConfig): string {
+  let lines: string[] = [];
+  switch (config.dialect) {
+    case 'mysql':
+      lines = [
+        '# MySQL 数据库配置',
+        'DB_HOST=127.0.0.1',
+        'DB_PORT=3306',
+        'DB_USER=root',
+        'DB_PASSWORD=change-me',
+        'DB_DATABASE=zhin_bot',
+      ];
+      break;
+    case 'pg':
+      lines = [
+        '# PostgreSQL 数据库配置',
+        'DB_HOST=127.0.0.1',
+        'DB_PORT=5432',
+        'DB_USER=postgres',
+        'DB_PASSWORD=change-me',
+        'DB_DATABASE=zhin_bot',
+      ];
+      break;
+    case 'mongodb':
+      lines = [
+        '# MongoDB 数据库配置',
+        'DB_URL=mongodb://127.0.0.1:27017',
+        'DB_NAME=zhin_bot',
+      ];
+      break;
+    case 'redis':
+      lines = [
+        '# Redis 数据库配置',
+        'REDIS_HOST=127.0.0.1',
+        'REDIS_PORT=6379',
+        'REDIS_PASSWORD=',
+        'REDIS_DB=0',
+      ];
+      break;
+    case 'sqlite':
+    case 'memory':
+      return '';
+  }
+  return `\n\n${lines.join('\n')}`;
 }

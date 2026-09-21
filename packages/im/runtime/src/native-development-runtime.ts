@@ -12,6 +12,13 @@ import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 export interface NativeDevelopmentModuleRuntimeOptions {
   readonly projectRoot: string;
   readonly watch?: boolean;
+  /** Optional scoped loader used only when the active Node loader rejects TSX. */
+  readonly tsxLoader?: TsxModuleLoader;
+}
+
+export interface TsxModuleLoader {
+  load<T = unknown>(source: string, parentURL: string): Promise<T>;
+  close?(): Promise<void>;
 }
 
 const ignoredDirectories = new Set([
@@ -32,6 +39,7 @@ const capabilityRoots = new Set([
 export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #projectRoot: string;
   readonly #watchEnabled: boolean;
+  readonly #tsxLoader: TsxModuleLoader | undefined;
   readonly #revisions = new Map<string, number>();
   readonly #watchers = new Set<PortableSourceWatcher>();
   #watchRoots: readonly string[];
@@ -40,19 +48,24 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
     this.#projectRoot = resolve(options.projectRoot);
     this.#watchEnabled = options.watch ?? true;
+    this.#tsxLoader = options.tsxLoader;
     this.#watchRoots = normalizeWatchRoots([this.#projectRoot]);
   }
 
   async load<T = unknown>(source: string): Promise<T> {
     this.#assertOpen();
     const normalized = resolve(source);
-    if (normalized.endsWith('.tsx')) {
-      throw new Error(`Node native TypeScript does not support TSX: ${normalized}`);
-    }
     if (normalized.endsWith('.ts')) assertNativeTypeScriptSupport();
     const url = pathToFileURL(normalized);
     url.searchParams.set('zhin-generation', String(this.#revisions.get(normalized) ?? 0));
-    return import(url.href) as Promise<T>;
+    try {
+      return await import(url.href) as T;
+    } catch (error) {
+      if (!normalized.endsWith('.tsx') || !isUnsupportedTsxError(error) || !this.#tsxLoader) {
+        throw error;
+      }
+      return this.#tsxLoader.load<T>(url.href, pathToFileURL(`${this.#projectRoot}${sep}`).href);
+    }
   }
 
   invalidate(source: string): void {
@@ -94,7 +107,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // Support files inside capability directories (e.g. commands/_utils.ts)
     // are not discovery entries: reloading the entry URL only bumps that
     // entry's zhin-generation, so the importer closure keeps the old code.
-    return ['.js', '.json', '.ts'].includes(extname(normalized));
+    return ['.js', '.json', '.ts', '.tsx'].includes(extname(normalized));
   }
 
   updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
@@ -124,6 +137,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#closed = true;
     for (const watcher of this.#watchers) watcher.close();
     this.#watchers.clear();
+    await this.#tsxLoader?.close?.();
   }
 
   #assertOpen(): void {
@@ -146,7 +160,7 @@ function isNamedCapabilityDirectory(value: string, allowSnake: boolean): boolean
 function isDirectoryCapabilityEntry(parts: readonly string[]): boolean {
   return parts.length === 2
     && parts[1] === `index${extname(parts[1] ?? '')}`
-    && ['.cjs', '.js', '.mjs', '.ts'].includes(extname(parts[1] ?? ''));
+    && ['.cjs', '.js', '.mjs', '.ts', '.tsx'].includes(extname(parts[1] ?? ''));
 }
 
 function isNestedDirectoryEntry(parts: readonly string[]): boolean {
@@ -175,6 +189,12 @@ export function assertNativeTypeScriptSupport(): void {
     `Node ${process.versions.node} does not enable native TypeScript by default.`,
     'Use Node >=22.18.0 or start Node with --experimental-strip-types.',
   ].join(' '));
+}
+
+function isUnsupportedTsxError(error: unknown): boolean {
+  return error instanceof Error
+    && 'code' in error
+    && error.code === 'ERR_UNKNOWN_FILE_EXTENSION';
 }
 
 class PortableSourceWatcher {

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { generateToken, getDatabaseDisplayName, isValidProjectName } from '../src/utils'
+import {
+  generateToken,
+  getDatabaseDisplayName,
+  getDatabasePersistenceLabel,
+  isValidProjectName,
+} from '../src/utils'
 
 describe('create-zhin utils', () => {
   describe('generateToken', () => {
@@ -68,6 +73,18 @@ describe('create-zhin utils', () => {
 
     it('should return original name for unknown dialect', () => {
       expect(getDatabaseDisplayName('unknown')).toBe('unknown')
+    })
+  })
+
+  describe('getDatabasePersistenceLabel', () => {
+    it('uses the selected durable database name', () => {
+      expect(getDatabasePersistenceLabel('sqlite')).toBe('SQLite 持久化')
+      expect(getDatabasePersistenceLabel('pg')).toBe('PostgreSQL 持久化')
+      expect(getDatabasePersistenceLabel('mysql')).toBe('MySQL 持久化')
+    })
+
+    it('does not claim that the in-memory dialect is durable', () => {
+      expect(getDatabasePersistenceLabel('memory')).toBe('Memory（仅进程内，不持久化）')
     })
   })
 })

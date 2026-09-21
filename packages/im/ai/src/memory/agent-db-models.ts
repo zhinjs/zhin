@@ -20,8 +20,8 @@ export const AGENT_SESSION_MODEL = {
   model: { type: 'text' as const, default: '' },
   status: { type: 'text' as const, default: 'active' },
   active_leaf_message_id: { type: 'integer' as const, nullable: true },
-  created_at: { type: 'integer' as const, default: 0 },
-  updated_at: { type: 'integer' as const, default: 0 },
+  created_at: { type: 'bigint' as const, default: 0 },
+  updated_at: { type: 'bigint' as const, default: 0 },
 };
 
 export interface AgentSessionRecord {
@@ -50,7 +50,7 @@ export const AGENT_MESSAGE_MODEL = {
   parent_id: { type: 'integer' as const, nullable: true },
   /** JSON presentation context; participant identity lives only in user payload actor. */
   extra: { type: 'text' as const, default: '' },
-  timestamp: { type: 'integer' as const, nullable: false },
+  timestamp: { type: 'bigint' as const, nullable: false },
 };
 
 export interface AgentMessageRow {
@@ -123,7 +123,7 @@ export const AGENT_SUMMARY_MODEL = {
   summary: { type: 'text' as const, nullable: false },
   anchor_message_id: { type: 'integer' as const, nullable: true },
   branch_anchor_message_id: { type: 'integer' as const, nullable: true },
-  created_at: { type: 'integer' as const, default: 0 },
+  created_at: { type: 'bigint' as const, default: 0 },
 };
 
 export interface AgentSummaryRecord {

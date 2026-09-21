@@ -15,6 +15,7 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
   let noWatch = false;
   let openConsole = false;
   let environment = 'development';
+  let environmentExplicit = false;
   let mode: RuntimeMode = 'development';
   let daemon = false;
   let logFile: string | undefined;
@@ -32,9 +33,11 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
       logFile = argument.slice('--log-file='.length);
     } else if (argument === '--environment') {
       environment = args[index + 1] ?? '';
+      environmentExplicit = true;
       index += 1;
     } else if (argument?.startsWith('--environment=')) {
       environment = argument.slice('--environment='.length);
+      environmentExplicit = true;
     } else if (argument === '--mode') {
       mode = parseMode(args[index + 1]);
       index += 1;
@@ -44,6 +47,7 @@ export function parseStartOptions(args: readonly string[]): StartOptions {
       throw new Error(`Unknown start option: ${String(argument)}`);
     }
   }
+  if (!environmentExplicit) environment = mode;
   if (!/^[a-z0-9][a-z0-9-]*$/u.test(environment)) {
     throw new Error(`Invalid environment name: ${environment || '<empty>'}`);
   }

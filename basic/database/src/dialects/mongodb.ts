@@ -71,7 +71,8 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       // 动态导入 mongodb 客户端
       const { MongoClient } = await import('mongodb');
       
-      this.client = new MongoClient(this.config.url, this.config);
+      const { url, dbName: _dbName, ...clientOptions } = this.config;
+      this.client = new MongoClient(url, clientOptions);
       await this.client.connect();
       this.db = this.client.db(this.config.dbName);
     } catch (error) {
@@ -131,6 +132,8 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
           return await this.executeDropIndex(collection, query, params) as T;
         case 'dropCollection':
           return await this.executeDropCollection(collection) as T;
+        case 'createCollection':
+          return await this.executeCreateCollection(query.collection) as T;
         default:
           throw new Error(`不支持的 MongoDB 操作: ${query.operation}`);
       }
@@ -172,6 +175,8 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
         return 'String';
       case 'integer':
         return 'Int32';
+      case 'bigint':
+        return 'Double';
       case 'float':
         return 'Double';
       case 'boolean':
@@ -500,6 +505,19 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
     return [{ result }];
   }
 
+  private async executeCreateCollection(name: string): Promise<any[]> {
+    const existing = await this.db.listCollections({ name }, { nameOnly: true }).hasNext();
+    if (!existing) {
+      try {
+        await this.db.createCollection(name);
+      } catch (error) {
+        const duplicate = error as { code?: number; codeName?: string };
+        if (duplicate.code !== 48 && duplicate.codeName !== 'NamespaceExists') throw error;
+      }
+    }
+    return [];
+  }
+
   get dialectInfo(): DatabaseDialect {
     return {
       name: this.name,
@@ -515,6 +533,7 @@ export class MongoDBDialect<S extends Record<string, object> = Record<string, ob
       dataTypes: {
         'string': 'String',
         'integer': 'Int32',
+        'bigint': 'Double',
         'float': 'Double',
         'boolean': 'Boolean',
         'date': 'Date',

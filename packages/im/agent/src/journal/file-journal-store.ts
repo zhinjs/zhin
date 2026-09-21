@@ -55,11 +55,15 @@ export class FileJournalStore implements JournalStore {
         await handle.close();
       }
       await rename(temporary, committed);
-      const directoryHandle = await open(directory, 'r');
-      try {
-        await directoryHandle.sync();
-      } finally {
-        await directoryHandle.close();
+      // Windows cannot flush an opened directory. The file itself was synced
+      // before the atomic rename; POSIX additionally persists the directory entry.
+      if (process.platform !== 'win32') {
+        const directoryHandle = await open(directory, 'r');
+        try {
+          await directoryHandle.sync();
+        } finally {
+          await directoryHandle.close();
+        }
       }
     } finally {
       await release();

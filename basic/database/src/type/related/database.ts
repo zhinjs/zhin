@@ -84,14 +84,14 @@ export class RelatedDatabase<
   }
 
   protected async initialize(): Promise<void> {
-    // 并行创建所有表以提高性能
+    // 单连接方言（PostgreSQL Client 等）不允许同一连接并发 query。
+    // 初始化只发生在启动阶段，按定义顺序建表也让失败位置保持确定。
     const tableEntries = Array.from(this.definitions.entries());
-    await Promise.all(
-      tableEntries.map(async ([tableName, definition]) => {
-        await this.create(tableName, definition);
-      })
-    );
-    // 创建完成后，统一设置 models（避免并发竞争）
+    for (const [tableName, definition] of tableEntries) {
+      await this.create(tableName, definition);
+    }
+    await this.dialect.reconcileDefinitions(this.definitions);
+    // 创建完成后，统一设置 models。
     for (const [tableName, definition] of tableEntries) {
       this.models.set(tableName, new RelatedModel(this, tableName, definition));
     }
@@ -285,7 +285,7 @@ export class RelatedDatabase<
     
     // WHERE clause
     if (params.conditions) {
-      const [condition, conditionParams] = this.parseCondition(params.conditions);
+      const [condition, conditionParams] = this.parseCondition(params.conditions, undefined, queryParams.length);
       if (condition) {
         query += ` WHERE ${condition}`;
         queryParams.push(...conditionParams);
@@ -387,7 +387,7 @@ export class RelatedDatabase<
     
     // HAVING clause
     if (params.havingConditions && Object.keys(params.havingConditions).length) {
-      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions);
+      const [havingCondition, havingParams] = this.parseCondition(params.havingConditions, undefined, queryParams.length);
       if (havingCondition) {
         query += ` HAVING ${havingCondition}`;
         queryParams.push(...havingParams);
@@ -402,17 +402,7 @@ export class RelatedDatabase<
   // ========================================================================
   
   protected formatColumnDefinition<T =any>(field: string, column: Column<T>): string {
-    const name = this.dialect.quoteIdentifier(String(field));
-    const type = this.dialect.mapColumnType(column.type);
-    const length = column.length ? `(${column.length})` : '';
-    const nullable = column.nullable === false ? ' NOT NULL' : '';
-    const primary = column.primary ? ' PRIMARY KEY' : '';
-    const unique = column.unique ? ' UNIQUE' : '';
-    const defaultVal = column.default !== undefined 
-      ? ` DEFAULT ${this.dialect.formatDefaultValue(column.default)}` 
-      : '';
-    
-    return `${name} ${type}${length}${primary}${unique}${nullable}${defaultVal}`;
+    return this.dialect.formatColumnDefinition(field, column);
   }
 
   protected formatAlteration<T=any>(field:string,alteration: AddDefinition<T> | ModifyDefinition<T> | DropDefinition): string {
@@ -451,7 +441,11 @@ export class RelatedDatabase<
    * @param condition 条件对象
    * @param tablePrefix 表名前缀（用于 JOIN 查询）
    */
-  protected parseCondition<T extends object>(condition: Condition<T>, tablePrefix?: string): [string, any[]] {
+  protected parseCondition<T extends object>(
+    condition: Condition<T>,
+    tablePrefix?: string,
+    parameterOffset = 0,
+  ): [string, any[]] {
     const clauses: string[] = [];
     const params: any[] = [];
     
@@ -467,7 +461,11 @@ export class RelatedDatabase<
       if (key === '$and' && Array.isArray((condition as any).$and)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$and) {
-          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
+          const [subClause, subParams] = this.parseCondition(
+            subCondition,
+            tablePrefix,
+            parameterOffset + params.length,
+          );
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -479,7 +477,11 @@ export class RelatedDatabase<
       } else if (key === '$or' && Array.isArray((condition as any).$or)) {
         const subClauses: string[] = [];
         for (const subCondition of (condition as any).$or) {
-          const [subClause, subParams] = this.parseCondition(subCondition, tablePrefix);
+          const [subClause, subParams] = this.parseCondition(
+            subCondition,
+            tablePrefix,
+            parameterOffset + params.length,
+          );
           if (subClause) {
             subClauses.push(`(${subClause})`);
             params.push(...subParams);
@@ -489,7 +491,11 @@ export class RelatedDatabase<
           clauses.push(subClauses.join(' OR '));
         }
       } else if (key === '$not' && (condition as any).$not) {
-        const [subClause, subParams] = this.parseCondition((condition as any).$not, tablePrefix);
+        const [subClause, subParams] = this.parseCondition(
+          (condition as any).$not,
+          tablePrefix,
+          parameterOffset + params.length,
+        );
         if (subClause) {
           clauses.push(`NOT (${subClause})`);
           params.push(...subParams);
@@ -506,7 +512,7 @@ export class RelatedDatabase<
         if (isPlainObject) {
           for (const op in value) {
             const quotedKey = formatField(key);
-            const placeholder = this.dialect.getParameterPlaceholder(params.length);
+            const placeholder = this.dialect.getParameterPlaceholder(parameterOffset + params.length);
             
             switch (op) {
               case '$eq':
@@ -548,7 +554,8 @@ export class RelatedDatabase<
                   clauses.push(`${quotedKey} IN (${subquery.sql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
+                  const placeholders = value[op].map((_: any, i: number) =>
+                    this.dialect.getParameterPlaceholder(parameterOffset + params.length + i));
                   clauses.push(`${quotedKey} IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 } else {
@@ -562,7 +569,8 @@ export class RelatedDatabase<
                   clauses.push(`${quotedKey} NOT IN (${subquery.sql})`);
                   params.push(...subquery.params);
                 } else if (Array.isArray(value[op]) && value[op].length) {
-                  const placeholders = value[op].map((_: any, i: number) => this.dialect.getParameterPlaceholder(params.length + i));
+                  const placeholders = value[op].map((_: any, i: number) =>
+                    this.dialect.getParameterPlaceholder(parameterOffset + params.length + i));
                   clauses.push(`${quotedKey} NOT IN (${placeholders.join(', ')})`);
                   params.push(...value[op]);
                 }
@@ -585,7 +593,7 @@ export class RelatedDatabase<
           if (value === null) {
             clauses.push(`${quotedKey} IS NULL`);
           } else {
-          const placeholder = this.dialect.getParameterPlaceholder(params.length);
+          const placeholder = this.dialect.getParameterPlaceholder(parameterOffset + params.length);
           clauses.push(`${quotedKey} = ${placeholder}`);
           params.push(value);
           }

@@ -6,6 +6,7 @@ import {
   bindWorkroomCapabilityRealization,
   createDeferredCapabilityPlan,
   createWorkroomDeferredCapabilityPlan,
+  primeAgentSkillForIntent,
   type WorkroomCapabilityRealization,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
@@ -168,6 +169,110 @@ describe('DeferredCapabilityPlan', () => {
       .resolves.toBe('No matches.');
     await execute(plan.capabilities, 'load_skill', { name: 'research' });
     expect(plan.controller.loadedToolNames()).toEqual([privateName]);
+  });
+
+  it('primes the uniquely matching Agent-private Skill from the turn intent', () => {
+    const owner = rootPluginId();
+    const muteTool = 'icqq__agent__icqq__skill__icqq-group-admin__set_mute';
+    const listMutedTool = 'icqq__agent__icqq__skill__icqq-group-state__list_muted';
+    const capabilities: AgentCapabilities = Object.freeze({
+      generation: 1,
+      owner,
+      tools: Object.freeze([
+        Object.freeze({
+          ...tool(owner, muteTool, 'Mute one group member'),
+          hidden: true,
+          placement: Object.freeze({
+            kind: 'agent-skill' as const,
+            agent: 'icqq',
+            skill: 'icqq-group-admin',
+          }),
+        }),
+        Object.freeze({
+          ...tool(owner, listMutedTool, 'List muted group members'),
+          hidden: true,
+          placement: Object.freeze({
+            kind: 'agent-skill' as const,
+            agent: 'icqq',
+            skill: 'icqq-group-state',
+          }),
+        }),
+      ]),
+      skills: Object.freeze([
+        Object.freeze({
+          ...skill(owner, 'icqq-group-admin', 'Administer an ICQQ group.'),
+          qualifiedName: 'icqq__agent__icqq__icqq-group-admin',
+          agentName: 'icqq',
+          keywords: Object.freeze(['icqq', '禁言', '踢人']),
+          toolNames: Object.freeze(['set_mute']),
+        }),
+        Object.freeze({
+          ...skill(owner, 'icqq-group-state', 'Inspect ICQQ group state.'),
+          qualifiedName: 'icqq__agent__icqq__icqq-group-state',
+          agentName: 'icqq',
+          keywords: Object.freeze(['icqq', '禁言列表']),
+          toolNames: Object.freeze(['list_muted']),
+        }),
+      ]),
+      agents: Object.freeze([]),
+      mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
+    });
+
+    const primed = primeAgentSkillForIntent({
+      capabilities,
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      intent: '请把 1830837693 禁言 1800 秒',
+      config: { deferredTools: {} },
+    });
+    expect(primed.skill?.name).toBe('icqq-group-admin');
+    expect(primed.snapshot.loadedSkills).toEqual([
+      'icqq__agent__icqq__icqq-group-admin',
+    ]);
+    expect(Object.keys(primed.snapshot.loadedTools)).toEqual([muteTool]);
+
+    const plan = createDeferredCapabilityPlan({
+      capabilities,
+      sessionSnapshot: primed.snapshot,
+      config: { deferredTools: {} },
+      persistSnapshot: async () => undefined,
+    });
+    expect(plan.resolvedTools.map((entry) => entry.name)).toContain(muteTool);
+    expect(plan.resolvedTools.map((entry) => entry.name)).not.toContain(listMutedTool);
+    expect(plan.controller.loadedSkillInstructions()).toEqual(['Administer an ICQQ group.']);
+  });
+
+  it('does not prime an Agent-private Skill when keyword affinity is ambiguous', () => {
+    const owner = rootPluginId();
+    const capabilities: AgentCapabilities = Object.freeze({
+      generation: 1,
+      owner,
+      tools: Object.freeze([]),
+      skills: Object.freeze([
+        Object.freeze({
+          ...skill(owner, 'directory', 'Directory'),
+          agentName: 'icqq',
+          keywords: Object.freeze(['icqq']),
+        }),
+        Object.freeze({
+          ...skill(owner, 'admin', 'Admin'),
+          agentName: 'icqq',
+          keywords: Object.freeze(['icqq']),
+        }),
+      ]),
+      agents: Object.freeze([]),
+      mcp: Object.freeze([]),
+      promptSections: Object.freeze([]),
+    });
+
+    const primed = primeAgentSkillForIntent({
+      capabilities,
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      intent: 'icqq',
+      config: { deferredTools: {} },
+    });
+    expect(primed.skill).toBeUndefined();
+    expect(primed.snapshot).toEqual({ loadedTools: {}, loadedSkills: [] });
   });
 
   it('fails closed on ambiguous or missing projected skills', async () => {

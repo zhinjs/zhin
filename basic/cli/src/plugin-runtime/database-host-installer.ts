@@ -16,12 +16,14 @@ import {
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
+import {
+  normalizeDatabaseHostConfig,
+  type DatabaseHostConfig,
+} from './database-config.js';
 
 const logger = getLogger('Database');
 
-export type DatabaseHostConfig = {
-  readonly dialect: string;
-} & Record<string, unknown>;
+export type { DatabaseHostConfig } from './database-config.js';
 
 type RawModel = {
   select: (...fields: string[]) => {
@@ -178,10 +180,15 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     },
     async start() {
       if (started) return;
-      await db.start();
-      started = true;
-      wrapped.clear();
-      logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
+      try {
+        await db.start();
+        started = true;
+        wrapped.clear();
+        logger.debug(formatCompact({ op: 'database_start', dialect: config.dialect }));
+      } catch (error) {
+        await db.stop().catch(() => undefined);
+        throw error;
+      }
     },
     async stop() {
       if (!started) return;
@@ -332,7 +339,7 @@ export async function resolveDatabaseConfig(
   if (configured && typeof configured === 'object' && !Array.isArray(configured)) {
     const value = configured as Record<string, unknown>;
     const dialect = typeof value.dialect === 'string' ? value.dialect : 'sqlite';
-    return Object.freeze({ ...value, dialect }) as DatabaseHostConfig;
+    return normalizeDatabaseHostConfig({ ...value, dialect });
   }
   const filename = join(projectRoot, '.zhin', 'data.sqlite');
   await mkdir(dirname(filename), { recursive: true });

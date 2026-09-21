@@ -40,6 +40,7 @@
     "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
+    "tsx": "^4.23.1",
     "typescript": "^6.0.3"
   },
   "repository": {

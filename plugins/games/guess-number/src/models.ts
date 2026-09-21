@@ -46,7 +46,7 @@ export function defineHostTables(
     attempts: { type: 'integer', default: 0 },
     max_attempts: { type: 'integer', default: 7 },
     status: { type: 'text', default: 'active' },
-    updated_at: { type: 'integer', default: 0 },
-    created_at: { type: 'integer', default: 0 },
+    updated_at: { type: 'bigint', default: 0 },
+    created_at: { type: 'bigint', default: 0 },
   });
 }

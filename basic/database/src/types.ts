@@ -30,6 +30,7 @@ export interface AggregateField<T extends object> {
 export type ColumnType = 
   | "text" 
   | "integer" 
+  | "bigint"
   | "float" 
   | "boolean" 
   | "date" 

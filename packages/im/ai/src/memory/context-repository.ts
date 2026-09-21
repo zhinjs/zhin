@@ -68,7 +68,11 @@ export interface ContextRepository {
   setDeferredToolSnapshot(sessionId: string, snapshot: DeferredToolSessionSnapshot): Promise<void>;
 }
 
-type SqlInsertResult = { lastID?: number; changes?: number };
+type SqlInsertResult = {
+  lastID?: number;
+  insertId?: number | string;
+  changes?: number;
+};
 
 type MessageDbModel = {
   select(...fields: string[]): {
@@ -78,7 +82,7 @@ type MessageDbModel = {
   insert?(data: Record<string, unknown>): Promise<SqlInsertResult>;
 };
 
-/** SQLite create() 不回填自增 id，需用 insert 的 lastID 维护 parent_id 链。 */
+/** Insert exactly once; dialects without an insert id are reconciled by the caller's tail query. */
 async function insertAgentMessageRow(
   model: MessageDbModel,
   row: AgentMessageRow,
@@ -86,8 +90,8 @@ async function insertAgentMessageRow(
   const payload = row as unknown as Record<string, unknown>;
   if (typeof model.insert === 'function') {
     const result = await model.insert(payload);
-    const lastID = result?.lastID;
-    if (lastID != null && lastID > 0) return lastID;
+    const insertedId = Number(result?.lastID ?? result?.insertId);
+    return Number.isSafeInteger(insertedId) && insertedId > 0 ? insertedId : undefined;
   }
   const created = await model.create(payload);
   const id = (created as { id?: number })?.id;

@@ -92,7 +92,7 @@ describe('create-zhin database', () => {
     })
 
     it('should validate all supported dialects', () => {
-      const dialects: DatabaseConfig['dialect'][] = ['sqlite', 'mysql', 'pg', 'mongodb', 'redis']
+      const dialects: DatabaseConfig['dialect'][] = ['sqlite', 'mysql', 'pg', 'mongodb', 'redis', 'memory']
       
       dialects.forEach(dialect => {
         const config: DatabaseConfig = { dialect }

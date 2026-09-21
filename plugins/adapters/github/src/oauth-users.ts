@@ -14,7 +14,7 @@ export const GITHUB_OAUTH_USERS_SCHEMA = {
   platform_uid: { type: 'text', nullable: false },
   github_login: { type: 'text', nullable: false },
   access_token: { type: 'text', nullable: false },
-  created_at: { type: 'integer', nullable: false },
+  created_at: { type: 'bigint', nullable: false },
 } as const;
 
 export function defineGithubOauthUsersTable(

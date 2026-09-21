@@ -8,10 +8,10 @@ import {
 } from '@zhin.js/ai';
 import {
   toolInputSchemaToParameters,
+  type ToolInvocationContext,
   type ToolInputSchema,
 } from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
-import type { ToolInvocationContext } from '@zhin.js/tool';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
@@ -57,6 +57,11 @@ export interface DeferredCapabilityPlanOptions {
   readonly config: Parameters<typeof resolveDeferredToolsConfig>[0];
   readonly platform?: string;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
+}
+
+export interface AgentSkillIntentPrimeResult {
+  readonly snapshot: DeferredToolSessionSnapshot;
+  readonly skill?: SkillDescriptor;
 }
 
 export interface WorkroomDeferredCapabilityAuthority {
@@ -144,6 +149,31 @@ export function createWorkroomDeferredCapabilityPlan(
   options: WorkroomDeferredCapabilityPlanOptions,
 ): DeferredCapabilityPlan {
   return createDeferredCapabilityPlan(options);
+}
+
+/**
+ * Deterministically activates one Agent-private Skill when the current intent
+ * has a unique best keyword match. Public Skills and ambiguous matches remain
+ * deferred so the runtime keeps its progressive-disclosure boundary.
+ */
+export function primeAgentSkillForIntent(options: Readonly<{
+  capabilities: Pick<AgentCapabilities, 'tools' | 'skills'>;
+  sessionSnapshot: DeferredToolSessionSnapshot;
+  intent: string;
+  config: DeferredCapabilityPlanOptions['config'];
+}>): AgentSkillIntentPrimeResult {
+  const snapshot = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
+  const skill = uniqueBestAgentSkill(options.capabilities.skills, options.intent);
+  if (!skill) return Object.freeze({ snapshot });
+
+  const config = resolveDeferredToolsConfig(options.config);
+  const withSkill = addSkillToSnapshot(snapshot, skill.qualifiedName);
+  const withTools = touchToolsInSnapshot(
+    withSkill,
+    resolveSkillTools(skill, options.capabilities.tools),
+    config.maxLoadedPerSession,
+  );
+  return Object.freeze({ snapshot: withTools, skill });
 }
 
 /**
@@ -446,6 +476,31 @@ function resolveSkillTools(
   return tools.filter((tool) => tool.owner === skill.owner && [...requested].some(
     name => tool.name === name || tool.name.endsWith(`__${name}`),
   )).map((tool) => tool.name);
+}
+
+function uniqueBestAgentSkill(
+  skills: readonly SkillDescriptor[],
+  intent: string,
+): SkillDescriptor | undefined {
+  const haystack = intent.normalize('NFKC').toLocaleLowerCase().trim();
+  if (!haystack) return undefined;
+  const scored = skills
+    .filter((skill) => skill.agentName && skill.keywords?.length)
+    .map((skill) => ({ skill, score: keywordAffinity(skill.keywords ?? [], haystack) }))
+    .filter((entry) => entry.score > 0)
+    .sort((left, right) => right.score - left.score
+      || left.skill.qualifiedName.localeCompare(right.skill.qualifiedName));
+  if (!scored[0] || scored[0].score === scored[1]?.score) return undefined;
+  return scored[0].skill;
+}
+
+function keywordAffinity(keywords: readonly string[], normalizedIntent: string): number {
+  let score = 0;
+  for (const value of new Set(keywords)) {
+    const keyword = value.normalize('NFKC').toLocaleLowerCase().trim();
+    if (keyword && normalizedIntent.includes(keyword)) score += [...keyword].length;
+  }
+  return score;
 }
 
 function recordOf(value: unknown): Record<string, unknown> {

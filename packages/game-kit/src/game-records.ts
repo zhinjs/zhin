@@ -43,7 +43,7 @@ export const GAME_RECORDS_DEFINITION: Record<string, unknown> = Object.freeze({
   game_id: { type: 'text', nullable: false },
   result: { type: 'text', nullable: false },
   score: { type: 'integer', default: 0 },
-  created_at: { type: 'integer', default: 0 },
+  created_at: { type: 'bigint', default: 0 },
 });
 
 /** Plugin Runtime DatabaseHost 的最小结构（与 @zhin.js/plugin-runtime 的 DatabaseHost 结构对齐） */

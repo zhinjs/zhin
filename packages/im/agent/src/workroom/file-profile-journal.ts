@@ -29,6 +29,7 @@ export interface ProjectProfileJournalFileHandle {
 
 /** Injectable only at the durable filesystem boundary. */
 export interface ProjectProfileJournalFileSystem {
+  readonly supportsDirectorySync?: boolean;
   mkdir(path: string): Promise<void>;
   readdir(path: string): Promise<readonly string[]>;
   readFile(path: string, encoding: 'utf8'): Promise<string>;
@@ -38,6 +39,7 @@ export interface ProjectProfileJournalFileSystem {
 }
 
 const nodeFileSystem: ProjectProfileJournalFileSystem = Object.freeze({
+  supportsDirectorySync: process.platform !== 'win32',
   mkdir: async (path: string): Promise<void> => {
     await nodeMkdir(path);
   },
@@ -232,6 +234,7 @@ export class FileProjectProfileJournal implements ProjectProfileJournal {
   }
 
   async #syncDirectoryPath(path: string): Promise<void> {
+    if (this.fileSystem.supportsDirectorySync === false) return;
     const handle = await this.fileSystem.open(path, 'r');
     try {
       await handle.sync();

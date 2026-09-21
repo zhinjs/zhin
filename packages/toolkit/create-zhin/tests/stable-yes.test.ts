@@ -40,7 +40,13 @@ describe('create-zhin -y Stable 默认值', () => {
     expect(validate(doc.plugins.sandbox), JSON.stringify(validate.errors)).toBe(true);
     expect(doc.plugins.sandbox.endpoints[0]).toMatchObject({ id: 'sandbox-bot' });
     const manifest = await fs.readJson(path.join(root, 'package.json'));
-    expect(manifest.packageManager).toBe('pnpm@9.0.2');
+    expect(manifest.packageManager).toBe('pnpm@11.27.1');
+    expect(manifest).not.toHaveProperty('pnpm');
+    const workspace = parse(await fs.readFile(path.join(root, 'pnpm-workspace.yaml'), 'utf8'));
+    expect(workspace).toMatchObject({
+      strictPeerDependencies: false,
+      allowBuilds: { esbuild: true },
+    });
     expect(manifest.engines.node).toBe('>=22.12.0');
   });
 

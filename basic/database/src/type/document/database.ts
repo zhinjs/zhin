@@ -69,6 +69,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'createCollection',
         filter: {},
         projection: {}
       },
@@ -89,6 +90,7 @@ export class DocumentDatabase<
 
     const query: DocumentQueryResult = {
       collection: params.tableName as string,
+      operation: 'find',
       filter
     };
 
@@ -127,6 +129,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'insertOne',
         filter: {},
         projection: {}
       },
@@ -147,6 +150,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'updateMany',
         filter,
         projection: {}
       },
@@ -167,6 +171,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'deleteMany',
         filter,
         projection: {}
       },
@@ -178,14 +183,9 @@ export class DocumentDatabase<
    * 构建修改集合查询
    */
   protected buildAlterQuery<T extends keyof S>(params: AlterQueryParams<S, T>): BuildQueryResult<DocumentQueryResult> {
-    return {
-      query: {
-        collection: params.tableName as string,
-        filter: {},
-        projection: {}
-      },
-      params: [params.alterations]
-    };
+    throw new TypeError(
+      `Document schema alteration is not supported for collection ${String(params.tableName)}`,
+    );
   }
 
   /**
@@ -195,6 +195,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'dropCollection',
         filter: {},
         projection: {}
       },
@@ -209,6 +210,7 @@ export class DocumentDatabase<
     return {
       query: {
         collection: params.tableName as string,
+        operation: 'dropIndex',
         filter: {},
         projection: {}
       },
@@ -281,4 +283,3 @@ export class DocumentDatabase<
     return Object.keys(this.definitions || {});
   }
 }
-

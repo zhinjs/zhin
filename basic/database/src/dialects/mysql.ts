@@ -4,7 +4,7 @@ import {Registry} from "../registry.js";
 import { getLogger } from '@zhin.js/logger';
 import type { ConnectionOptions, PoolOptions } from 'mysql2/promise';
 
-import {Column, Transaction, TransactionOptions, IsolationLevel, PoolConfig} from "../types.js";
+import {Column, Transaction, TransactionOptions, PoolConfig, type Definition} from "../types.js";
 
 const logger = getLogger('database');
 
@@ -20,6 +20,8 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   private connection: any = null;
   private pool: any = null;
   private usePool: boolean = false;
+  private readonly booleanColumns = new Set<string>();
+  private readonly bigintColumns = new Set<string>();
 
   constructor(config: MySQLDialectConfig) {
     super('mysql', config);
@@ -35,12 +37,13 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     try {
       if (this.usePool) {
         const { createPool } = await import('mysql2/promise');
+        const { pool, ...connectionOptions } = this.config;
         const poolConfig: PoolOptions = {
-          ...this.config,
+          ...connectionOptions,
           waitForConnections: true,
-          connectionLimit: this.config.pool?.max ?? 10,
+          connectionLimit: pool?.max ?? 10,
           queueLimit: 0,
-          idleTimeout: this.config.pool?.idleTimeoutMillis ?? 60000,
+          idleTimeout: pool?.idleTimeoutMillis ?? 60000,
         };
         this.pool = createPool(poolConfig);
         logger.info(`MySQL 连接池已创建 (max: ${poolConfig.connectionLimit})`);
@@ -77,12 +80,47 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
 
   async query<U = any>(sql: string, params?: any[]): Promise<U> {
     if (this.usePool) {
-      const [rows] = await this.pool.execute(sql, params);
-      return rows as U;
+      const [rows, fields] = await this.pool.execute(sql, params);
+      return this.processQueryResults(rows, fields) as U;
     } else {
-    const [rows] = await this.connection.execute(sql, params);
-    return rows as U;
+    const [rows, fields] = await this.connection.execute(sql, params);
+    return this.processQueryResults(rows, fields) as U;
     }
+  }
+
+  registerTableSchema(table: string, definition: Record<string, { type: string }>): void {
+    for (const [columnName, column] of Object.entries(definition)) {
+      if (column.type === 'boolean') this.booleanColumns.add(`${table}.${columnName}`);
+      if (column.type === 'bigint') this.bigintColumns.add(`${table}.${columnName}`);
+    }
+  }
+
+  private processQueryResults(data: unknown, fields: any): unknown {
+    if (!Array.isArray(data)) return data;
+    return data.map((row) => {
+      if (!row || typeof row !== 'object') return row;
+      const normalized = { ...row } as Record<string, unknown>;
+      for (const field of Array.isArray(fields) ? fields : []) {
+        const table = String(field.orgTable ?? field.table ?? '');
+        const column = String(field.orgName ?? field.name ?? '');
+        const outputName = String(field.name ?? column);
+        if (
+          this.booleanColumns.has(`${table}.${column}`) &&
+          typeof normalized[outputName] === 'number'
+        ) {
+          normalized[outputName] = normalized[outputName] !== 0;
+        }
+        if (
+          this.bigintColumns.has(`${table}.${column}`) &&
+          typeof normalized[outputName] === 'string' &&
+          /^-?\d+$/u.test(normalized[outputName])
+        ) {
+          const number = Number(normalized[outputName]);
+          if (Number.isSafeInteger(number)) normalized[outputName] = number;
+        }
+      }
+      return normalized;
+    });
   }
 
   async dispose(): Promise<void> {
@@ -106,6 +144,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     const typeMap: Record<string, string> = {
       'text': 'TEXT',
       'integer': 'INT',
+      'bigint': 'BIGINT',
       'float': 'FLOAT',
       'boolean': 'BOOLEAN',
       'date': 'DATETIME',
@@ -189,6 +228,48 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
   }
 
+  async reconcileDefinitions(
+    definitions: ReadonlyMap<keyof S, Definition<S[keyof S]>>,
+  ): Promise<void> {
+    const expected = new Map<string, Column<any>>();
+    for (const [tableName, definition] of definitions) {
+      for (const [columnName, column] of Object.entries(definition) as Array<[string, Column<any>]>) {
+        if (column.type === 'bigint' || column.autoIncrement) {
+          expected.set(`${String(tableName)}\0${columnName}`, column);
+        }
+      }
+    }
+    if (expected.size === 0) return;
+
+    const tableNames = [...new Set([...expected.keys()].map((key) => key.slice(0, key.indexOf('\0'))))];
+    const placeholders = tableNames.map(() => '?').join(', ');
+    const rows = await this.query<Array<{
+      table_name: string;
+      column_name: string;
+      data_type: string;
+      extra: string;
+    }>>(
+      `SELECT TABLE_NAME AS table_name, COLUMN_NAME AS column_name, DATA_TYPE AS data_type, EXTRA AS extra
+       FROM INFORMATION_SCHEMA.COLUMNS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN (${placeholders})`,
+      tableNames,
+    );
+    const narrowTypes = new Set(['tinyint', 'smallint', 'mediumint', 'int', 'integer']);
+    for (const row of rows) {
+      const column = expected.get(`${row.table_name}\0${row.column_name}`);
+      if (!column) continue;
+      const needsBigint = column.type === 'bigint' && narrowTypes.has(row.data_type.toLowerCase());
+      const needsAutoIncrement = Boolean(column.autoIncrement) && !row.extra.toLowerCase().includes('auto_increment');
+      if (!needsBigint && !needsAutoIncrement) continue;
+      const definition = this.formatColumnDefinition(row.column_name, {
+        ...column,
+        primary: false,
+        unique: false,
+      });
+      await this.query(`ALTER TABLE ${this.quoteIdentifier(row.table_name)} MODIFY COLUMN ${definition}`);
+    }
+  }
+
   formatAlterTable<T extends keyof S>(tableName: T, alterations: string[]): string {
     return `ALTER TABLE ${this.quoteIdentifier(String(tableName))} ${alterations.join(', ')}`;
   }
@@ -219,22 +300,23 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
    * 在连接池模式下，会获取一个专用连接用于事务
    */
   async beginTransaction(options?: TransactionOptions): Promise<Transaction> {
+    const dialect = this;
     if (this.usePool) {
       // 从连接池获取一个连接用于事务
       const connection = await this.pool.getConnection();
       
       // 设置隔离级别
       if (options?.isolationLevel) {
-        await connection.execute(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+        await connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
       }
       
       // 开始事务
-      await connection.execute('START TRANSACTION');
+      await connection.beginTransaction();
       
       return {
         async commit(): Promise<void> {
           try {
-            await connection.execute('COMMIT');
+            await connection.commit();
           } finally {
             connection.release(); // 归还连接到池
           }
@@ -242,40 +324,39 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
         
         async rollback(): Promise<void> {
           try {
-            await connection.execute('ROLLBACK');
+            await connection.rollback();
           } finally {
             connection.release(); // 归还连接到池
           }
         },
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
-          const [rows] = await connection.execute(sql, params);
-          return rows as T;
+          const [rows, fields] = await connection.execute(sql, params);
+          return dialect.processQueryResults(rows, fields) as T;
         }
       };
     } else {
-      // 单连接模式
-      const dialect = this;
-      
       // 设置隔离级别
       if (options?.isolationLevel) {
-        await this.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
+        await this.connection.query(`SET TRANSACTION ISOLATION LEVEL ${this.formatIsolationLevel(options.isolationLevel)}`);
       }
       
       // 开始事务
-      await this.query('START TRANSACTION');
+      await this.connection.beginTransaction();
+      const connection = this.connection;
       
       return {
         async commit(): Promise<void> {
-          await dialect.query('COMMIT');
+          await connection.commit();
         },
         
         async rollback(): Promise<void> {
-          await dialect.query('ROLLBACK');
+          await connection.rollback();
         },
         
         async query<T = any>(sql: string, params?: any[]): Promise<T> {
-          return dialect.query<T>(sql, params);
+          const [rows, fields] = await connection.execute(sql, params);
+          return dialect.processQueryResults(rows, fields) as T;
         }
       };
     }

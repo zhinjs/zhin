@@ -6,6 +6,8 @@ title: zhin runtime start in Detail
 
 After modifying a command file, you don't need to restart the process -- the next message runs the new logic. In development mode, all of this is handled by `zhin runtime start`. It directly executes `.ts` plugin source code in your project using Node's native TypeScript capabilities, assembles various Hosts as needed (HTTP / database / Console / Agent / MCP / A2A), and provides in-process hot reloading in development mode.
 
+Server convention entries also support `.tsx`. The CLI first delegates to the process's active loader and enables a scoped TSX loader only when Node does not recognize the extension, so development watch, `--no-watch`, supervisor, and daemon modes use the same command. Set `"jsx": "react-jsx"` and an appropriate `"jsxImportSource"` in `tsconfig.json`; new scaffolds default to `zhin.js`, and a file can override it with `/** @jsxImportSource @zhin.js/satori */`.
+
 ```bash
 zhin runtime start                          # Development mode (default, watch + HMR)
 zhin runtime start --mode production --no-watch   # Production mode

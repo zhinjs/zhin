@@ -94,15 +94,85 @@ Runtime 无配置时回退到 8086；当前脚手架生成的项目默认写入 
 
 ## database
 
+推荐让 CLI 同时生成配置引用和 `.env` 连接参数：
+
+```bash
+npx zhin setup --database
+npx zhin config check
+```
+
+`setup` 会把非敏感结构写入 `zhin.config.yml`，把实际连接值写入项目根目录 `.env`。Runtime
+先读取 `.env`，再用所选环境的 `.env.<environment>` 覆盖同名变量；例如生产启动使用
+`zhin runtime start --mode production --no-watch` 默认读取 `.env.production`；显式传入
+`--environment <name>` 可选择其他环境覆盖层。
+
+### SQLite
+
 ```yaml
 database:
   dialect: sqlite            # 默认 sqlite
   filename: ./data/bot.db
 ```
 
-- `dialect` 可选：`sqlite`、`mysql`、`pg`、`mongodb`、`redis`、`memory`。
-- 除 `dialect` 外的字段原样传给对应方言（如 pg/mysql 的连接参数）。
-- 完全不写 `database` 时，默认使用 `<项目根>/.zhin/data.sqlite`。
+完全不写 `database` 时，默认使用 `<项目根>/.zhin/data.sqlite`。SQLite 使用 Node 内置驱动，不需要连接环境变量。
+
+### PostgreSQL
+
+配置中的方言名是 `pg`（不是 `postgres`）：
+
+```yaml
+database:
+  dialect: pg
+  host: ${DB_HOST}
+  port: ${DB_PORT}
+  user: ${DB_USER}
+  password: ${DB_PASSWORD}
+  database: ${DB_DATABASE}
+```
+
+```dotenv
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_USER=postgres
+DB_PASSWORD=change-me
+DB_DATABASE=zhin_bot
+```
+
+`DB_PORT` 只写端口数字，不要写 `http://`、主机名或 `host:port`。目标数据库 `DB_DATABASE`
+必须已经创建，并允许 `DB_USER` 从 Bot 所在机器连接。在容器中运行 Bot 时，`127.0.0.1`
+指向容器自身，应改成 PostgreSQL 服务名或宿主机可访问地址。
+
+### 其他方言
+
+CLI 的数据库选择项会同时显示当前支持的服务端实机验收版本与生成项目使用的驱动版本：
+
+| 方言 | 当前支持（实机验收版本） | 生成的驱动依赖 |
+| --- | --- | --- |
+| `sqlite` | Node.js 内置 `node:sqlite`（Node.js 22.5+） | 无 |
+| `mysql` | MySQL 8.4 LTS | `mysql2 ^3.23.2` |
+| `pg` | PostgreSQL 17 | `pg ^8.22.0` |
+| `mongodb` | MongoDB 8 | `mongodb ^7.5.0` |
+| `redis` | Redis 8 | `redis ^6.1.0` |
+| `memory` | Zhin 内置实现 | 无 |
+
+“实机验收基线”表示维护测试覆盖的明确版本，不表示驱动只能连接这一版服务端；更宽的兼容范围由对应驱动和数据库服务端协议共同决定。
+
+| 方言 | 配置字段 | CLI 生成的环境变量 |
+| --- | --- | --- |
+| `mysql` | `host`、`port`、`user`、`password`、`database` | `DB_HOST`、`DB_PORT`（默认 `3306`）、`DB_USER`、`DB_PASSWORD`、`DB_DATABASE` |
+| `mongodb` | `url`、`dbName` | `DB_URL`（如 `mongodb://127.0.0.1:27017`）、`DB_NAME` |
+| `redis` | `socket.host`、`socket.port`、`password`、`database` | `REDIS_HOST`、`REDIS_PORT`（默认 `6379`）、`REDIS_PASSWORD`、`REDIS_DB` |
+| `memory` | 无 | 无 |
+
+网络数据库对应的驱动依赖分别是 `mysql2`、`pg`、`mongodb`、`redis`；通过创建项目或
+`zhin setup --database` 选择数据库时，CLI 会按上表把经过验收的驱动版本写入 `package.json`。
+`create-zhin-app` 会自动安装依赖；`zhin setup` 会提示你随后手动运行 `pnpm install`。
+
+启动前运行 `npx zhin config check`；若连接值只在 `.env.production`，请运行
+`npx zhin config check --environment production`。数据库环境变量缺失会作为错误报告；端口为空、非整数或超出
+`1-65535` 时，Runtime 会在加载驱动前指出具体配置路径和 `.env` 变量。若旧版本出现
+`ERR_SOCKET_BAD_PORT` / `Received type number (NaN)`，通常是 `${DB_PORT}` 未在项目根目录 `.env`
+中设置；补齐变量或重新运行 `npx zhin setup --database`。
 
 ## speech
 

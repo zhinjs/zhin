@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { formatEnvValue, generateDatabaseEnvVars, mergeEnvText } from '../src/env.js';
+import {
+  formatEnvValue,
+  generateDatabaseEnvExample,
+  generateDatabaseEnvVars,
+  mergeEnvText,
+} from '../src/env.js';
 
 describe('formatEnvValue', () => {
   it('keeps simple values unquoted', () => {
@@ -67,5 +72,26 @@ describe('generateDatabaseEnvVars', () => {
 
   it('returns empty string for sqlite', () => {
     expect(generateDatabaseEnvVars({ dialect: 'sqlite', filename: './data/bot.db' })).toBe('');
+  });
+});
+
+describe('generateDatabaseEnvExample', () => {
+  it('documents PostgreSQL variables without copying wizard credentials', () => {
+    const example = generateDatabaseEnvExample({
+      dialect: 'pg',
+      host: 'db.internal',
+      port: 15432,
+      user: 'private-user',
+      password: 'secret-password',
+      database: 'private-db',
+    });
+    expect(example).toContain('DB_PORT=5432');
+    expect(example).toContain('DB_PASSWORD=change-me');
+    expect(example).not.toContain('secret-password');
+    expect(example).not.toContain('db.internal');
+  });
+
+  it('does not add variables for SQLite', () => {
+    expect(generateDatabaseEnvExample({ dialect: 'sqlite' })).toBe('');
   });
 });

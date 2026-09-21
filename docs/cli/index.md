@@ -128,6 +128,10 @@ zhin setup --global        # 在 ~/.zhin 初始化全局实例
 ```
 
 向导改动的正是 [`zhin.config.yml`](../configuration/index.md) 的对应段落，并把密钥写入 `.env`。
+网络数据库配置完成后运行 `npx zhin config check`；若连接值只在 `.env.production`，使用
+`npx zhin config check --environment production`。
+选择网络数据库时，CLI 会验证端口范围，把连接字段写成环境变量引用，并在 `.env` 写入实际值；
+完成后运行 `npx zhin config check` 可在启动前发现缺失的数据库变量。
 
 ## onboard：项目引导
 
@@ -148,7 +152,8 @@ zhin config path                 # 显示配置文件路径
 zhin config check [--fix] [--json] [--strict]
 ```
 
-`config check` 校验配置文件并可自动修复可安全迁移的字段；`--strict` 把警告视为错误（适合 CI）。
+`config check` 校验配置文件并可自动修复可安全迁移的字段；数据库连接变量缺失本身就是错误，
+其他警告可通过 `--strict` 提升为错误（适合 CI）。
 
 ## doctor：环境诊断
 

@@ -6,6 +6,8 @@ title: zhin runtime start 详解
 
 改完一个命令文件，不用重启进程，下一条消息就走新逻辑——开发模式下这一切由 `zhin runtime start` 完成。它直接以 Node 原生 TypeScript 能力执行项目里的 `.ts` 插件源码，按需装配各 Host（HTTP / 数据库 / Console / Agent / MCP / A2A），并在开发模式下提供进程内热重载。
 
+服务端约定入口也支持 `.tsx`。CLI 会优先交给进程现有 loader；Node 不识别 `.tsx` 时，再为该入口启用隔离的 TSX loader，因此开发 watch、`--no-watch`、supervisor 与 daemon 使用同一条启动命令。项目的 `tsconfig.json` 需设置 `"jsx": "react-jsx"` 和合适的 `"jsxImportSource"`；新脚手架默认使用 `zhin.js`，单文件可用 `/** @jsxImportSource @zhin.js/satori */` 覆盖。
+
 ```bash
 zhin runtime start                          # 开发模式（默认，watch + HMR）
 zhin runtime start --mode production --no-watch   # 生产模式

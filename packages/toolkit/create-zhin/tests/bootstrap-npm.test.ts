@@ -7,6 +7,7 @@ import { createWorkspace } from '../src/workspace.js';
 import { applyStableYesDefaults } from '../src/stable-yes-defaults.js';
 import type { InitOptions } from '../src/types.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT } from '@zhin.js/scaffold-wizard';
+import { parse } from 'yaml';
 
 const tmpRoots: string[] = [];
 const e2eTimeoutMs = 180_000;
@@ -118,9 +119,12 @@ describe.skipIf(process.env.ZHIN_RUN_NETWORK_BOOTSTRAP !== '1')('create-zhin npm
       await createWorkspace(projectPath, 'ai-bootstrap-bot', aiEnabledOptions());
 
       const pkg = await fs.readJson(path.join(projectPath, 'package.json'));
-      expect(pkg.pnpm?.peerDependencyRules).toBeUndefined();
+      expect(pkg.pnpm).toBeUndefined();
       expect(pkg.dependencies.ai).toBe('latest');
-      expect(await fs.readFile(path.join(projectPath, '.npmrc'), 'utf8')).toContain('strict-peer-dependencies=false');
+      const workspace = parse(await fs.readFile(path.join(projectPath, 'pnpm-workspace.yaml'), 'utf8'));
+      expect(workspace.strictPeerDependencies).toBe(false);
+      expect(workspace.allowBuilds).toEqual({ esbuild: true });
+      expect(await fs.pathExists(path.join(projectPath, '.npmrc'))).toBe(false);
 
       execSync('pnpm install', {
         cwd: projectPath,

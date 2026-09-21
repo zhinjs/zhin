@@ -22,7 +22,13 @@ export function getDatabaseDisplayName(dialect: string): string {
     mysql: 'MySQL',
     pg: 'PostgreSQL', 
     mongodb: 'MongoDB',
-    redis: 'Redis'
+    redis: 'Redis',
+    memory: 'Memory'
   };
   return names[dialect as keyof typeof names] || dialect;
+}
+
+export function getDatabasePersistenceLabel(dialect: string): string {
+  if (dialect === 'memory') return 'Memory（仅进程内，不持久化）';
+  return `${getDatabaseDisplayName(dialect)} 持久化`;
 }

@@ -16,6 +16,7 @@ import {
 import { serveCanonicalEsm, serveClientAsset } from './asset-server.js';
 import { writeHtml, writeJson } from './http-response.js';
 import { renderConsoleIndex, renderPageShell } from './page-renderer.js';
+import { createTsxModuleLoader } from '../start/tsx-module-loader.js';
 
 const publicAccess = Object.freeze({ permissions: [] as string[], roles: [] as string[] });
 const clientPublicBase = '/assets/client';
@@ -29,7 +30,11 @@ export interface ConsoleHostModules {
 
 export function createConsoleHostModules(projectRoot: string, watch: boolean): ConsoleHostModules {
   const clientOutDir = join(projectRoot, '.zhin', 'client');
-  const server = new NativeDevelopmentModuleRuntime({ projectRoot, watch });
+  const server = new NativeDevelopmentModuleRuntime({
+    projectRoot,
+    watch,
+    tsxLoader: createTsxModuleLoader(projectRoot),
+  });
   const client = new TypeScriptClientBuilder({
     projectRoot,
     outDir: clientOutDir,

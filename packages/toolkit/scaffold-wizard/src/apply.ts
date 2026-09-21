@@ -11,6 +11,7 @@ import {
 } from './adapter.js';
 import { generateAIEnvVars, materializeAIConfig } from './ai.js';
 import { generateDatabaseEnvVars, mergeEnvText } from './env.js';
+import { getDatabaseDialectDefinition } from './database-definitions.js';
 import { ensureDatabaseForAdapters, ensureDatabaseForAI, getAIDependencies } from './project-deps.js';
 import { DEFAULT_CREATE_BOT_HTTP_PORT, ZHIN_STACK_VERSIONS } from './zhin-stack-deps.js';
 
@@ -141,10 +142,14 @@ export async function appendWizardEnvVars(
 }
 
 export function collectWizardDependencies(
-  options: Pick<InitOptions, 'adapters' | 'ai'>,
+  options: Pick<InitOptions, 'adapters' | 'ai' | 'database'>,
 ): Record<string, string> {
+  const databaseDriver = options.database
+    ? getDatabaseDialectDefinition(options.database.dialect)?.driver
+    : undefined;
   return {
     ...(options.adapters ? getAdapterDependencies(options.adapters) : {}),
+    ...(databaseDriver ? { [databaseDriver.package]: databaseDriver.version } : {}),
     ...getAIDependencies(options.ai),
     // AI authoring conventions（与 create-zhin 路径对齐）
     ...(options.ai?.enabled ? {
@@ -260,6 +265,8 @@ export function materializeDatabaseConfig(config: DatabaseConfig): Record<string
         password: '${REDIS_PASSWORD}',
         database: '${REDIS_DB}',
       };
+    case 'memory':
+      return { dialect: 'memory' };
     case 'sqlite':
     default: {
       const sqlite: Record<string, unknown> = { dialect: 'sqlite' };

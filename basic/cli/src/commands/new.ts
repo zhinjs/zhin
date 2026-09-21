@@ -285,7 +285,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
 
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
 
-  // schema.json：plugins.<instanceKey> 配置的 JSON Schema；适配器带 name 字段
+  // schema.json：plugins.<instanceKey> 配置的 JSON Schema；适配器带稳定的 endpoint id
   const schemaJson: Record<string, unknown> = {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     type: 'object',
@@ -293,10 +293,10 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     properties:
       kind === 'adapter'
         ? {
-            name: {
+            id: {
               type: 'string',
               default: `${pluginName}-bot`,
-              description: 'Endpoint 名称',
+              description: 'Endpoint 唯一标识',
             },
           }
         : {},
@@ -453,8 +453,8 @@ export default defineCommand({
 import { Endpoint, defineAdapter, type EndpointSendRequest } from 'zhin.js/adapter';
 
 export interface ${capitalizedName}AdapterConfig {
-  /** Endpoint 名称（对应 schema.json 的 name 字段） */
-  name: string;
+  /** Endpoint 唯一标识（对应 schema.json 的 id 字段） */
+  id: string;
   /** 平台凭证等，按实际协议扩展 */
   token?: string;
 }
@@ -544,7 +544,7 @@ Endpoint 配置写在 \`zhin.config.yml\` 的 \`plugins.${pluginName}\` 下（�
 \`\`\`yaml
 plugins:
   ${pluginName}:
-    name: ${pluginName}-bot
+    id: ${pluginName}-bot
     token: your-token-here
 \`\`\`
 
@@ -682,7 +682,7 @@ describe('zhin.js-${pluginName}', () => {
     const endpoint = await adapter.create({
       id: 'root/${pluginName}' as never,
       name: '${pluginName}',
-      config: { name: 'test-bot' },
+      config: { id: 'test-bot' },
       use: () => ({
         receive: async () => ({ matched: false }),
         send: async () => undefined,

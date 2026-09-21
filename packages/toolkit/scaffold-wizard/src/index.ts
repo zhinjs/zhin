@@ -1,5 +1,17 @@
 export type { InitOptions, DatabaseConfig } from './types.js';
-export { DATABASE_PACKAGES } from './types.js';
+export { DATABASE_DRIVER_VERSIONS, DATABASE_PACKAGES } from './types.js';
+export {
+  DATABASE_DIALECT_DEFINITIONS,
+  databaseChoiceLabel,
+  getDatabaseDialectDefinition,
+  validateDatabaseConfig,
+} from './database-definitions.js';
+export type {
+  DatabaseDialect,
+  DatabaseDialectDefinition,
+  DatabaseDriverDefinition,
+  DatabaseSchemaIssue,
+} from './database-definitions.js';
 
 export type { AdapterSetupResult, AdapterPluginInstance, AdapterDefinition } from './adapter.js';
 export {
@@ -35,6 +47,7 @@ export { configureDatabaseOptions } from './database.js';
 export {
   formatEnvValue,
   mergeEnvText,
+  generateDatabaseEnvExample,
   generateDatabaseEnvVars,
 } from './env.js';
 
@@ -60,9 +73,9 @@ export type { AiStackIncompatibility } from './project-deps.js';
 export {
   ZHIN_STACK_VERSIONS,
   DEFAULT_CREATE_BOT_HTTP_PORT,
-  CREATE_BOT_NPMRC,
+  CREATE_BOT_PACKAGE_MANAGER,
   getCreateBotBaseDependencies,
-  getCreateBotPnpmConfig,
+  getCreateBotPnpmWorkspaceConfig,
   getRequiredZhinDependenciesForConfig,
   diagnoseZhinStackDependencies,
   formatZhinStackFixCommand,
