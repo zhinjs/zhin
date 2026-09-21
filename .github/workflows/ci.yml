@@ -105,6 +105,7 @@ jobs:
           pnpm exec vitest run
           basic/database/tests/live-dialects.test.ts
           basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
+          packages/im/ai/tests/memory/context-repository-database.test.ts
         env:
           NODE_OPTIONS: --throw-deprecation
           ZHIN_TEST_EXTERNAL_DATABASES: '1'

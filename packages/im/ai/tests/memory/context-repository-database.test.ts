@@ -19,6 +19,8 @@ type AgentDbSchema = {
   agent_summaries: Record<string, unknown>;
 };
 
+const live = process.env.ZHIN_TEST_EXTERNAL_DATABASES === '1';
+
 describe('DatabaseContextRepository (sqlite)', () => {
   let db: ReturnType<typeof Registry.create<AgentDbSchema, 'sqlite'>>;
   let sessionId: string;
@@ -100,5 +102,50 @@ describe('DatabaseContextRepository persistence failures', () => {
       name: 'PersistenceUnavailableError',
       operation: 'agent_context.load_summaries',
     });
+  });
+});
+
+describe.skipIf(!live)('DatabaseContextRepository (postgresql)', () => {
+  const db = Registry.create<AgentDbSchema, 'pg'>('pg', {
+    host: process.env.ZHIN_TEST_PG_HOST ?? '127.0.0.1',
+    port: Number(process.env.ZHIN_TEST_PG_PORT ?? 35432),
+    user: process.env.ZHIN_TEST_PG_USER ?? 'zhin',
+    password: process.env.ZHIN_TEST_PG_PASSWORD ?? 'zhin',
+    database: process.env.ZHIN_TEST_PG_DATABASE ?? 'zhin_test',
+  });
+
+  beforeAll(async () => {
+    db.define('agent_sessions', AGENT_SESSION_MODEL);
+    db.define('agent_messages', AGENT_MESSAGE_MODEL);
+    db.define('agent_summaries', AGENT_SUMMARY_MODEL);
+    await db.start();
+    await db.query('DELETE FROM "agent_summaries"');
+    await db.query('DELETE FROM "agent_messages"');
+    await db.query('DELETE FROM "agent_sessions"');
+  });
+
+  afterAll(async () => {
+    if (!db.isStarted) return;
+    await db.query('DROP TABLE IF EXISTS "agent_summaries"');
+    await db.query('DROP TABLE IF EXISTS "agent_messages"');
+    await db.query('DROP TABLE IF EXISTS "agent_sessions"');
+    await db.stop();
+  });
+
+  it('writes each appended message exactly once when INSERT returns no id', async () => {
+    const sessionStore = new AgentSessionStore(db.models.get('agent_sessions')!);
+    const session = await sessionStore.getOrCreateActive({ session_key: 'pg:private:u1' });
+    const repository = new DatabaseContextRepository(
+      db.models.get('agent_messages')!,
+      db.models.get('agent_summaries')!,
+      sessionStore,
+    );
+
+    await repository.appendMessages(session.session_id, [createUserMessage('one')]);
+
+    await expect(db.query<Array<{ count: number }>>(
+      'SELECT COUNT(*)::int AS count FROM "agent_messages" WHERE "session_id" = $1',
+      [session.session_id],
+    )).resolves.toEqual([{ count: 1 }]);
   });
 });

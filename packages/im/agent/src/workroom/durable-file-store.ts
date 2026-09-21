@@ -15,6 +15,8 @@ export interface DurableFileHandle {
 
 /** The intentionally narrow filesystem seam used by immutable Workroom facts. */
 export interface DurableFileSystem {
+  /** False when the platform cannot open and flush directory handles (Windows). */
+  readonly supportsDirectorySync?: boolean;
   mkdir(path: string): Promise<void>;
   open(path: string, flags: 'wx' | 'r'): Promise<DurableFileHandle>;
   link(existingPath: string, newPath: string): Promise<void>;
@@ -22,6 +24,7 @@ export interface DurableFileSystem {
 }
 
 export const nodeDurableFileSystem: DurableFileSystem = Object.freeze({
+  supportsDirectorySync: process.platform !== 'win32',
   mkdir: async (path: string): Promise<void> => { await nodeMkdir(path); },
   open: async (path: string, flags: 'wx' | 'r'): Promise<DurableFileHandle> =>
     await nodeOpen(path, flags),
@@ -78,6 +81,7 @@ export class DurableFileStore {
   }
 
   async syncPath(path: string): Promise<void> {
+    if (this.fileSystem.supportsDirectorySync === false) return;
     const handle = await this.fileSystem.open(path, 'r');
     try {
       await handle.sync();

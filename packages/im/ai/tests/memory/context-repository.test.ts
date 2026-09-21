@@ -235,6 +235,45 @@ describe('DatabaseContextRepository parent_id chain', () => {
     const active = await sessionStore.getBySessionId(session.session_id);
     expect(active?.active_leaf_message_id).toBe(2);
   });
+
+  it('does not insert a second row when a dialect returns no insert id', async () => {
+    const stored: Array<Record<string, unknown>> = [];
+    const messageModel = {
+      select: () => ({
+        where: async () => stored.map((row, index) => ({ ...row, id: index + 1 })),
+      }),
+      insert: vi.fn(async (data: Record<string, unknown>) => {
+        stored.push({ ...data });
+        return {};
+      }),
+      create: vi.fn(async (data: Record<string, unknown>) => {
+        stored.push({ ...data });
+        return data;
+      }),
+    };
+    const summaryModel = {
+      select: () => ({ where: async () => [] }),
+      create: vi.fn(),
+    };
+    const sessionStore = new MemoryAgentSessionStore();
+    const session = await sessionStore.getOrCreateActive({ session_key: 'db:postgres' });
+    const repository = new DatabaseContextRepository(
+      messageModel,
+      summaryModel,
+      sessionStore,
+    );
+
+    await repository.appendMessages(session.session_id, [
+      createUserMessage('one'),
+      createUserMessage('two'),
+    ]);
+
+    expect(messageModel.insert).toHaveBeenCalledTimes(2);
+    expect(messageModel.create).not.toHaveBeenCalled();
+    expect(stored).toHaveLength(2);
+    expect(stored[0]?.parent_id).toBeNull();
+    expect(stored[1]?.parent_id).toBe(1);
+  });
 });
 
 describe('agent-db-models serialization', () => {
