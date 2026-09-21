@@ -109,6 +109,11 @@ interface MediaRef {
 // image / audio / video / file 段的 data 一律为 { media: MediaRef, alt?/duration?/name? }
 ```
 
+`share` 是另一种严格 canonical 段：`data.url` 和 `data.title` 必填，可选提供
+`description`、`image`、`audio`、`content`、`artist`、`duration` 与应用 `config`。
+Core 会在 `$reply`、Agent 结构化输出和 Console IM 视图中保留它，Adapter
+在 `send()` 边界转换为平台原生分享结构；不支持的 Adapter 应显式拒绝，不得静默丢弃。
+
 **入站**：适配器把平台载荷归一为 `Segment[]` 随 `emit('message.receive', { segments })` 上送。不透明平台 id 必须经当前 generation 的 `EndpointContentPort` 物化；引用解析期间快照租约一直持有。所有 URL、path 与 base64 随后进入同一条流水线：HTTPS/SSRF 与重定向检查 → 字节上限 → 文件魔数识别 → 声明 MIME/实际类型一致性检查 → `UserMessage.media`。框架不信任扩展名或 Adapter 声明的 MIME，也不把二进制/base64 写入会话事实源。每项媒体恰好产生 `accepted | derived | unsupported | rejected | failed` 终态；失败以明确的不可信 user-context 文本呈现，绝不伪装成“模型已看到图片”。Provider 必须显式声明 `text/image/audio/video/file` 输入能力，缺省仅 `text`；不支持的类型不会猜测放行。
 
 ## 会话事实、引用与通知

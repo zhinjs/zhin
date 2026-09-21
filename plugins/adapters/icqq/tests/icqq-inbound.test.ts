@@ -329,6 +329,28 @@ describe("icqqElementsToSegments", () => {
       },
     ]);
   });
+
+  it("将原生 share 段归一为 canonical share", () => {
+    expect(icqqElementsToSegments([{
+      type: "share",
+      title: "海阔天空",
+      url: "https://music.163.com/#/song?id=387717",
+      summary: "信乐团",
+      image: "https://p1.music.126.net/cover.jpg",
+      audio: "https://music.126.net/song.mp3",
+      config: { appid: 100495085 },
+    }])).toEqual([{
+      type: "share",
+      data: {
+        title: "海阔天空",
+        url: "https://music.163.com/#/song?id=387717",
+        description: "信乐团",
+        image: "https://p1.music.126.net/cover.jpg",
+        audio: "https://music.126.net/song.mp3",
+        config: { appid: 100495085 },
+      },
+    }]);
+  });
 });
 
 describe("resolveIcqqInboundMedia", () => {

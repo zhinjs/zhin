@@ -10,6 +10,7 @@ export type {
   FileSegment,
   ReplySegment,
   ForwardSegment,
+  ShareSegment,
   FaceSegment,
   DiceSegment,
   RpsSegment,
@@ -27,6 +28,7 @@ export {
   faceSegmentSchema,
   diceSegmentSchema,
   rpsSegmentSchema,
+  shareSegmentSchema,
   canonicalSegmentSchema,
   segmentArraySchema,
 } from './validate.js';

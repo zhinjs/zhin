@@ -19,11 +19,24 @@ describe('outboundSegmentJsonSchema', () => {
       { type: 'mention', data: { target: '1001', name: 'alice' } },
       { type: 'image', data: { media: { kind: 'url', value: 'https://x/y.png' } } },
       { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=', mime_type: 'image/png' }, alt: 'p' } },
+      { type: 'audio', data: { media: { kind: 'url', value: 'https://x/a.mp3' }, duration: 42 } },
+      { type: 'video', data: { media: { kind: 'url', value: 'https://x/v.mp4' }, alt: 'clip' } },
+      { type: 'file', data: { media: { kind: 'file', value: 'file-1' }, name: 'a.zip' } },
       { type: 'reply', data: { message_id: 'm-1' } },
       { type: 'face', data: { id: 14 } },
       { type: 'face', data: { id: 'smile', name: '微笑' } },
       { type: 'dice', data: {} },
       { type: 'rps', data: { result: 2 } },
+      {
+        type: 'share',
+        data: {
+          url: 'https://example.com/song',
+          title: 'Song',
+          description: 'Artist',
+          audio: 'https://example.com/song.mp3',
+          config: { appid: 100495085 },
+        },
+      },
     ];
     for (const seg of valid) {
       expect(validateSegment(seg), JSON.stringify(validateSegment.errors)).toBe(true);
@@ -38,13 +51,16 @@ describe('outboundSegmentJsonSchema', () => {
     // image 必须是 canonical media 形态（legacy url/base64 直挂 data 不被解析侧接受）
     expect(validateSegment({ type: 'image', data: { url: 'https://x/y.png' } })).toBe(false);
     expect(validateSegment({ type: 'image', data: {} })).toBe(false);
+    expect(validateSegment({ type: 'audio', data: { url: 'https://x/a.mp3' } })).toBe(false);
+    expect(validateSegment({ type: 'video', data: { url: 'https://x/v.mp4' } })).toBe(false);
+    expect(validateSegment({ type: 'file', data: { url: 'https://x/a.zip' } })).toBe(false);
     expect(validateSegment({ type: 'reply', data: {} })).toBe(false);
+    expect(validateSegment({ type: 'share', data: { title: 'missing url' } })).toBe(false);
+    expect(validateSegment({ type: 'share', data: { url: 'https://example.com' } })).toBe(false);
     expect(validateSegment({ data: { text: 'x' } })).toBe(false);
   });
 
   it('accepts loose segment types with only top-level shape', () => {
-    expect(validateSegment({ type: 'video', data: { url: 'https://x/v.mp4' } })).toBe(true);
-    expect(validateSegment({ type: 'file', data: { url: 'https://x/a.zip', name: 'a.zip' } })).toBe(true);
     expect(validateSegment({ type: 'markdown', data: { content: '# t' } })).toBe(true);
   });
 
@@ -55,7 +71,8 @@ describe('outboundSegmentJsonSchema', () => {
       .filter((v): v is string => typeof v === 'string');
     expect([...strictBranchTypes].sort()).toEqual([...STRICT_OUTBOUND_SEGMENT_TYPES].sort());
     expect(STRICT_OUTBOUND_SEGMENT_TYPES).toEqual([
-      'text', 'mention', 'image', 'reply', 'forward', 'face', 'dice', 'rps',
+      'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
+      'face', 'dice', 'rps', 'share',
     ]);
   });
 });

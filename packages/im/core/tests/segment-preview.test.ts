@@ -33,6 +33,17 @@ describe('formatSegmentPreview', () => {
     expect(formatSegmentPreview({ type: 'dice', data: { result: 4 } })).toBe('{dice}(4)');
   });
 
+  it('renders share title and target without exposing media metadata', () => {
+    expect(formatSegmentPreview({
+      type: 'share',
+      data: {
+        title: '海阔天空',
+        url: 'https://music.example/song/1',
+        audio: 'https://music.example/private.mp3',
+      },
+    })).toBe('[share] 海阔天空 <https://music.example/song/1>');
+  });
+
   it('renders AI-only segments for agent logs', () => {
     expect(formatSegmentPreview({ type: 'thinking', data: { text: 'planning' } }))
       .toBe('[thinking] planning');
