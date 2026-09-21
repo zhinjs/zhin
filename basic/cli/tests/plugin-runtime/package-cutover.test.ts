@@ -159,7 +159,7 @@ describe('package cutover', () => {
     await expect(new PackageCutover().plan(manifested)).rejects.toThrow('migrate it manually');
   });
 
-  it('does not accept an incomplete manifest as an idempotent cutover', async () => {
+  it('repairs capability declarations in an existing Plugin manifest', async () => {
     const root = await fixture({
       zhin: {
         protocol: 1,
@@ -173,13 +173,28 @@ describe('package cutover', () => {
     await writeFile(join(root, 'plugin.ts'), [
       "import { definePlugin } from 'zhin.js';",
       '',
-      "export default definePlugin({ name: 'fixture-plugin' });",
+      "export default definePlugin({ name: 'fixture-plugin', metadata: { displayName: 'Fixture' } });",
       '',
     ].join('\n'));
+    const entryBefore = await readFile(join(root, 'plugin.ts'), 'utf8');
 
-    await expect(new PackageCutover().plan(root)).rejects.toThrow(
-      'does not match discovered capability directories',
-    );
+    const cutover = new PackageCutover();
+    const plan = await cutover.plan(root);
+
+    expect(plan.changed).toBe(true);
+    expect(plan.dependencies).toMatchObject({
+      '@zhin.js/command': 'latest',
+      'zhin.js': 'latest',
+    });
+    expect((JSON.parse(plan.candidatePackage) as {
+      zhin: { features: Array<{ package: string }> };
+    }).zhin.features).toEqual([
+      { package: '@zhin.js/command', api: '^1.0.0' },
+    ]);
+
+    await cutover.apply(plan);
+    await expect(readFile(join(root, 'plugin.ts'), 'utf8')).resolves.toBe(entryBefore);
+    await expect(cutover.plan(root)).resolves.toMatchObject({ changed: false });
   });
 
   it('rejects a forged plan outside the project transaction files', async () => {

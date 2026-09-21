@@ -60,7 +60,7 @@ export class PackageCutover {
     const value = parsePackage(packageFile, originalPackage);
     const mode = cutoverMode(value);
     const manifestEntry = mode === 'development' ? './plugin.ts' : './plugin.js';
-    const entryContent = renderEntry(pluginName(value.name));
+    const scaffoldEntryContent = renderEntry(pluginName(value.name));
     const capabilities = await discoverCapabilities(root);
     const existingManifest = parseManifest(value.zhin, packageFile);
 
@@ -68,12 +68,22 @@ export class PackageCutover {
       throw new Error(`${packageFile} already contains a zhin manifest; migrate it manually`);
     }
 
-    if (existingManifest) {
-      await assertExistingEntry(entryFile);
-      await assertCompletedDependencies(root, value, existingManifest, capabilities);
-    }
+    if (existingManifest) await assertExistingEntry(entryFile);
+    const entryContent = existingManifest
+      ? await readFile(entryFile, 'utf8')
+      : scaffoldEntryContent;
 
-    const dependencies = withRuntimeDependencies(value.dependencies, capabilities, !existingManifest);
+    const mountedCapabilities = [
+      ...new Set([
+        ...capabilitiesFromManifest(existingManifest ?? {}),
+        ...capabilities,
+      ]),
+    ];
+    const dependencies = withRuntimeDependencies(
+      value.dependencies,
+      mountedCapabilities,
+      !existingManifest,
+    );
     const devDependencies = withDevelopmentDependencies(value.devDependencies);
     const candidate = createCandidatePackage(value, {
       mode,
@@ -277,11 +287,10 @@ function withRuntimeDependencies(
 ): Record<string, string> {
   const dependencies = { ...existing };
   setRequiredDependency(dependencies, 'zhin.js');
-  // 仅全新 cutover（尚无 zhin manifest）按约定目录补齐能力依赖；
-  // 已迁移项目尊重作者声明——Stable Features 可由 zhin.js 挂载，不强制逐项依赖。
-  if (!scaffold) return dependencies;
-  // definePlugin / Host tokens 经 zhin.js 主入口 re-export，勿再强制装 @zhin.js/plugin-runtime
-  setRequiredDependency(dependencies, '@zhin.js/runtime');
+  // definePlugin / Host tokens 经 zhin.js 主入口 re-export，勿再强制装 @zhin.js/plugin-runtime。
+  // CLI Runtime 只需在首次 cutover 时补齐；Feature provider 则必须由每个
+  // 声明该能力的 Plugin 直接依赖，不能依靠 Root 或传递依赖隐式挂载。
+  if (scaffold) setRequiredDependency(dependencies, '@zhin.js/runtime');
   for (const capability of capabilities) setRequiredDependency(dependencies, capabilityProviders[capability]);
   return dependencies;
 }
@@ -317,14 +326,13 @@ function createCandidatePackage(
     entry: options.manifestEntry,
     engine: '^1.0.0',
     runtime: 'trusted',
-    // 已有 manifest 时尊重作者声明的 features（Stable Features 由 runtime 挂载，
-    // 无需重复声明）；仅全新 cutover 才按发现的约定目录生成声明。
-    features: Array.isArray(options.existingManifest?.features)
-      ? options.existingManifest.features
-      : options.capabilities.map((capability) => ({
-        package: capabilityProviders[capability],
-        api: '^1.0.0',
-      })),
+    // 每个 Plugin 都是独立的 Feature 挂载边界。Root 的 Stable Features 不会
+    // 隐式替子 Plugin 声明约定目录，否则这些文件没有 Slot 所有权，HMR 只能
+    // 退化为整个 Root generation 重建。
+    features: mergeCapabilityFeatures(
+      options.existingManifest?.features,
+      options.capabilities,
+    ),
     plugins: Array.isArray(options.existingManifest?.plugins) ? options.existingManifest.plugins : [],
   };
   const scripts = runtimeScripts(pkg.scripts, options.mode);
@@ -424,35 +432,23 @@ function capabilitiesFromManifest(manifest: Record<string, unknown>): CutoverCap
   });
 }
 
-async function assertCompletedDependencies(
-  root: string,
-  pkg: MutablePackage,
-  manifest: Record<string, unknown>,
+function mergeCapabilityFeatures(
+  current: unknown,
   capabilities: readonly CutoverCapability[],
-): Promise<void> {
-  const declared = capabilitiesFromManifest(manifest).sort();
-  const discovered = [...capabilities].sort();
-  if (declared.some((value) => !discovered.includes(value))) {
-    throw new Error('Existing zhin manifest does not match discovered capability directories');
+): readonly unknown[] {
+  const features = Array.isArray(current) ? [...current] : [];
+  const packages = new Set(features.flatMap((feature) => {
+    if (!feature || typeof feature !== 'object') return [];
+    const packageName = (feature as Record<string, unknown>).package;
+    return typeof packageName === 'string' ? [packageName] : [];
+  }));
+  for (const capability of capabilities) {
+    const packageName = capabilityProviders[capability];
+    if (packages.has(packageName)) continue;
+    features.push({ package: packageName, api: '^1.0.0' });
+    packages.add(packageName);
   }
-  const hasFacadeOrCarrier = typeof pkg.dependencies?.['zhin.js'] === 'string'
-    || typeof pkg.dependencies?.['@zhin.js/core'] === 'string';
-  if (!hasFacadeOrCarrier
-    && (declared.length !== discovered.length
-      || declared.some((value, index) => value !== discovered[index]))) {
-    throw new Error('Existing zhin manifest does not match discovered capability directories');
-  }
-  const required = hasFacadeOrCarrier
-    ? []
-    : [
-      '@zhin.js/runtime',
-      'zhin.js',
-      ...capabilities.map((capability) => capabilityProviders[capability]),
-    ];
-  const missing = required.filter((dependency) => typeof pkg.dependencies?.[dependency] !== 'string');
-  if (missing.length > 0) {
-    throw new Error(`Existing cutover is missing dependencies: ${missing.join(', ')}`);
-  }
+  return features;
 }
 
 async function preparedEntry(file: string, expected: string): Promise<boolean> {
