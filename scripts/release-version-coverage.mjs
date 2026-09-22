@@ -1,4 +1,4 @@
-const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.test\.[cm]?[jt]sx?$|(?:^|\/)CHANGELOG\.md$/;
+const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)CHANGELOG\.md$/;
 
 export function isReleaseRelevantPath(file) {
   return !NON_RELEASE_PATH.test(file.replaceAll('\\', '/'));
@@ -19,4 +19,14 @@ export function findUncoveredPackageChanges({ packages, plannedPackages }) {
   }
 
   return failures.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+export function findMissingVersionTags({ packages, plannedPackages, existingTags }) {
+  return packages
+    .filter((pkg) => (
+      !plannedPackages.has(pkg.name)
+      && !existingTags.has(`${pkg.name}@${pkg.version}`)
+    ))
+    .map((pkg) => `${pkg.name}@${pkg.version}`)
+    .sort();
 }

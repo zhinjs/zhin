@@ -4,7 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { findUncoveredPackageChanges } from './release-version-coverage.mjs';
+import {
+  findMissingVersionTags,
+  findUncoveredPackageChanges,
+} from './release-version-coverage.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const changesetDir = path.join(root, '.changeset');
@@ -37,7 +40,7 @@ function readChangesetDeclarations() {
   return declarations;
 }
 
-function readWorkspacePackagesWithVersionTags() {
+function readWorkspacePackagesWithVersionTags(plannedPackages) {
   const listed = spawnSync(
     'pnpm',
     ['-r', 'ls', '--json', '--depth', '-1'],
@@ -49,17 +52,26 @@ function readWorkspacePackagesWithVersionTags() {
     process.exit(listed.status ?? 1);
   }
 
-  return JSON.parse(listed.stdout)
-    .filter((pkg) => !pkg.private && pkg.name && pkg.version && pkg.path)
-    .flatMap((pkg) => {
-      const tag = `${pkg.name}@${pkg.version}`;
-      const tagCheck = spawnSync(
-        'git',
-        ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`],
-        { cwd: root, encoding: 'utf8' },
-      );
-      if (tagCheck.status !== 0) return [];
+  const packages = JSON.parse(listed.stdout)
+    .filter((pkg) => !pkg.private && pkg.name && pkg.version && pkg.path);
+  const tags = spawnSync('git', ['tag', '--list'], { cwd: root, encoding: 'utf8' });
+  if (tags.status !== 0) {
+    process.stderr.write(tags.stdout);
+    process.stderr.write(tags.stderr);
+    process.exit(tags.status ?? 1);
+  }
+  const existingTags = new Set(tags.stdout.trim().split('\n').filter(Boolean));
+  const missingTags = findMissingVersionTags({ packages, plannedPackages, existingTags });
+  if (missingTags.length > 0) {
+    console.error('Unplanned publishable packages are missing current version tags:');
+    for (const tag of missingTags) console.error(`- ${tag}`);
+    process.exit(1);
+  }
 
+  return packages
+    .filter((pkg) => !plannedPackages.has(pkg.name))
+    .map((pkg) => {
+      const tag = `${pkg.name}@${pkg.version}`;
       const directory = path.relative(root, pkg.path).replaceAll('\\', '/');
       const diff = spawnSync(
         'git',
@@ -72,12 +84,12 @@ function readWorkspacePackagesWithVersionTags() {
         process.exit(diff.status ?? 1);
       }
 
-      return [{
+      return {
         name: pkg.name,
         version: pkg.version,
         directory,
         changedFiles: diff.stdout.trim().split('\n').filter(Boolean),
-      }];
+      };
     });
 }
 
@@ -180,9 +192,10 @@ try {
   }
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
+  const plannedPackages = new Set(plannedReleases.map((release) => release.name));
   const uncovered = findUncoveredPackageChanges({
-    packages: readWorkspacePackagesWithVersionTags(),
-    plannedPackages: new Set(plannedReleases.map((release) => release.name)),
+    packages: readWorkspacePackagesWithVersionTags(plannedPackages),
+    plannedPackages,
   });
   if (uncovered.length > 0) {
     console.error('Publishable package changes are missing patch changesets:');
