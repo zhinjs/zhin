@@ -30,6 +30,18 @@ export class ClientBuildModuleRuntime implements ModuleRuntime {
     return this.server.requiresProcessRestart?.(source) ?? false;
   }
 
+  beginGeneration(): void {
+    this.server.beginGeneration?.();
+  }
+
+  commitGeneration(sources: readonly string[]): void {
+    this.server.commitGeneration?.(sources);
+  }
+
+  rollbackGeneration(): void {
+    this.server.rollbackGeneration?.();
+  }
+
   updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
     this.server.updateWatchRoots?.(roots);
   }

@@ -118,6 +118,15 @@ export class SourceOwnershipIndex {
     return Object.freeze([...owners]);
   }
 
+  moduleSources(): readonly string[] {
+    return Object.freeze([...this.#records.entries()]
+      .filter(([, records]) => records.some((record) => (
+        record.role === 'plugin' || record.role === 'feature' || record.role === 'capability'
+      )))
+      .map(([source]) => source)
+      .sort());
+  }
+
   watchRoots(): readonly ModuleWatchRoot[] {
     return Object.freeze([...this.#watchRoots.values()]);
   }
