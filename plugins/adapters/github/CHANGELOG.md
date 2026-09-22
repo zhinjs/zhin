@@ -1,5 +1,15 @@
 # @zhin.js/adapter-github
 
+## 1.1.4
+
+### Patch Changes
+
+- 0de4836: Expose the canonical Plugin Runtime `Message` contract from `@zhin.js/core`, `@zhin.js/core/runtime`, and the `zhin.js` root entries, and migrate Agent, permission, and GitHub integrations to the fields middleware actually receives. Document and lock the `EndpointEvent<Notice | Request>` handler boundary so side-event payload fields match editor inference.
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/adapter@1.1.15
+
 ## 1.1.3
 
 ### Patch Changes

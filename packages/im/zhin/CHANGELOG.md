@@ -1,5 +1,19 @@
 # zhin.js
 
+## 1.1.4
+
+### Patch Changes
+
+- 43eda99: Unify Notice and Request payloads with their public types and runtime exports. Use camelCase fields, preserve native data under metadata, and bind canonical endpoint identity and request actions to the held generation. Remove legacy data aliases and from factories.
+
+  Keep login and lifecycle signals as independent SystemEvent payloads on system.receive, without chat conversation fields or user interaction. Update built-in adapter projections and authoring guidance.
+
+- 0de4836: Expose the canonical Plugin Runtime `Message` contract from `@zhin.js/core`, `@zhin.js/core/runtime`, and the `zhin.js` root entries, and migrate Agent, permission, and GitHub integrations to the fields middleware actually receives. Document and lock the `EndpointEvent<Notice | Request>` handler boundary so side-event payload fields match editor inference.
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/permission@1.1.3
+
 ## 1.1.3
 
 ### Patch Changes

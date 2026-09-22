@@ -1,5 +1,14 @@
 # @zhin.js/adapter-weixin-ilink
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/adapter@1.1.15
+
 ## 1.1.3
 
 ### Patch Changes

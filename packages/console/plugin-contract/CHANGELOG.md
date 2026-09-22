@@ -1,5 +1,11 @@
 # @zhin.js/console-contract
 
+## 1.1.1
+
+### Patch Changes
+
+- fa542a2: Publish the accumulated Console page contract and schema documentation updates that were not covered by their original changesets.
+
 ## 1.1.0
 
 ### Minor Changes
