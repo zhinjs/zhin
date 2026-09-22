@@ -102,6 +102,29 @@ describe('Client build adapter', () => {
     expect(serverLoads).toBe(1);
   });
 
+  it('preserves server dependency and watch-root invalidation ports', async () => {
+    const roots: unknown[] = [];
+    const server: ModuleRuntime = {
+      async load<T>(): Promise<T> { return {} as T; },
+      affectedSources: (source) => [source, '/project/commands/status/index.ts'],
+      requiresProcessRestart: () => true,
+      updateWatchRoots: (next) => { roots.push(next); },
+      async close() {},
+    };
+    const modules = new ClientBuildModuleRuntime(server, {
+      async load<T>(): Promise<T> { return {} as T; },
+    });
+    const watchRoots = [{ root: '/project', source: 'workspace' as const }];
+
+    expect(modules.affectedSources('/project/src/helper.ts')).toEqual([
+      '/project/src/helper.ts',
+      '/project/commands/status/index.ts',
+    ]);
+    expect(modules.requiresProcessRestart('/project/src/helper.ts')).toBe(true);
+    modules.updateWatchRoots(watchRoots);
+    expect(roots).toEqual([watchRoots]);
+  });
+
   it('requires Page and Layout modules to have a default export', async () => {
     const root = await temp();
     const source = join(root, 'pages/nav/index.tsx');
