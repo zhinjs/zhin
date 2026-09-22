@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { findUncoveredPackageChanges } from './release-version-coverage.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const changesetDir = path.join(root, '.changeset');
@@ -34,6 +35,50 @@ function readChangesetDeclarations() {
   }
 
   return declarations;
+}
+
+function readWorkspacePackagesWithVersionTags() {
+  const listed = spawnSync(
+    'pnpm',
+    ['-r', 'ls', '--json', '--depth', '-1'],
+    { cwd: root, encoding: 'utf8' },
+  );
+  if (listed.status !== 0) {
+    process.stderr.write(listed.stdout);
+    process.stderr.write(listed.stderr);
+    process.exit(listed.status ?? 1);
+  }
+
+  return JSON.parse(listed.stdout)
+    .filter((pkg) => !pkg.private && pkg.name && pkg.version && pkg.path)
+    .flatMap((pkg) => {
+      const tag = `${pkg.name}@${pkg.version}`;
+      const tagCheck = spawnSync(
+        'git',
+        ['rev-parse', '--verify', '--quiet', `refs/tags/${tag}`],
+        { cwd: root, encoding: 'utf8' },
+      );
+      if (tagCheck.status !== 0) return [];
+
+      const directory = path.relative(root, pkg.path).replaceAll('\\', '/');
+      const diff = spawnSync(
+        'git',
+        ['diff', '--name-only', `${tag}..HEAD`, '--', directory],
+        { cwd: root, encoding: 'utf8' },
+      );
+      if (diff.status !== 0) {
+        process.stderr.write(diff.stdout);
+        process.stderr.write(diff.stderr);
+        process.exit(diff.status ?? 1);
+      }
+
+      return [{
+        name: pkg.name,
+        version: pkg.version,
+        directory,
+        changedFiles: diff.stdout.trim().split('\n').filter(Boolean),
+      }];
+    });
 }
 
 const versionPolicy = JSON.parse(fs.readFileSync(versionPolicyPath, 'utf8'));
@@ -135,6 +180,19 @@ try {
   }
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
+  const uncovered = findUncoveredPackageChanges({
+    packages: readWorkspacePackagesWithVersionTags(),
+    plannedPackages: new Set(plannedReleases.map((release) => release.name)),
+  });
+  if (uncovered.length > 0) {
+    console.error('Publishable package changes are missing patch changesets:');
+    for (const pkg of uncovered) {
+      console.error(`- ${pkg.name}@${pkg.version}`);
+      for (const file of pkg.changedFiles) console.error(`  - ${file}`);
+    }
+    process.exit(1);
+  }
+
   console.log(
     `Release plan check passed (${plannedReleases.length} patch releases).`,
   );
