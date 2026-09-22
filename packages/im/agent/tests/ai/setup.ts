@@ -52,38 +52,24 @@ export interface MockMessageOptions {
 
 export const createMockMessage = (options: MockMessageOptions = {}): Partial<Message> => {
   const {
-    content = '测试消息',
-    elements,
-    platform = 'test',
-    channelType = 'group',
-    channelId = 'channel-1',
-    senderId = 'user-1',
-    senderPermissions = [],
-    senderRole,
-    endpointKey = 'bot-1',
+    content = '测试消息', elements, platform = 'test', channelType = 'group',
+    channelId = 'channel-1', senderId = 'user-1', senderPermissions = [],
+    senderRole, endpointKey = 'bot-1',
   } = options;
-
-  const $content: MessageElement[] = elements || [
-    { type: 'text', data: { text: content } },
-  ];
-
+  const segments: MessageElement[] = elements || [{ type: 'text', data: { text: content } }];
   return {
-    $content,
-    $endpoint: endpointKey,
-    $adapter: platform,
-    $channel: {
-      type: channelType,
+    content,
+    segments,
+    endpointId: endpointKey,
+    clientAdapter: platform,
+    conversation: {
+      endpoint: { adapter: platform, id: endpointKey },
+      kind: channelType === 'guild' ? 'channel' : channelType,
       id: channelId,
-      name: 'Test Channel',
     },
-    $sender: {
-      id: senderId,
-      name: 'Test User',
-      permissions: senderPermissions,
-      role: senderRole,
-    },
-    $reply: vi.fn().mockResolvedValue(undefined),
-    $quote: vi.fn().mockResolvedValue(undefined),
+    sender: { id: senderId, name: 'Test User', roles: senderPermissions },
+    metadata: senderRole ? { senderRole } : {},
+    $reply: vi.fn().mockResolvedValue({ status: 'sent' }),
   };
 };
 

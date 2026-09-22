@@ -1,21 +1,21 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Message } from '../src/message.js';
+import type { Message } from '../src/plugin-runtime/im/contracts.js';
+import { createSyntheticMessage } from '../src/built/message-enrich.js';
 import type { MessageMiddleware } from '../src/types.js';
 import { compose } from '../src/utils.js';
 
 function makeMessage(text: string): Message {
-  return {
-    $id: `msg-${Math.random().toString(36).slice(2, 8)}`,
-    $content: [{ type: 'text', data: { text } }],
-    $raw: text,
-    $sender: { id: 'u1', name: 'U' },
-    $channel: { id: 'ch1', type: 'group' },
-    $adapter: 'test',
-    $endpoint: 'bot1',
-    $timestamp: Date.now(),
-    $reply: vi.fn(async () => 'ok'),
-    $recall: vi.fn(async () => undefined),
-  } as Message;
+  return createSyntheticMessage({
+    conversation: {
+      endpoint: { id: 'bot1', adapter: 'test' },
+      kind: 'group',
+      id: 'ch1',
+    },
+    sender: { id: 'u1', name: 'U' },
+    content: text,
+    segments: [{ type: 'text', data: { text } }],
+    messageId: `msg-${Math.random().toString(36).slice(2, 8)}`,
+  });
 }
 
 describe('compose stress', () => {
@@ -39,7 +39,7 @@ describe('compose stress', () => {
     let successes = 0;
     const run = compose([
       async (message, next) => {
-        if (message.$raw === 'bomb') throw new Error('boom');
+        if (message.content === 'bomb') throw new Error('boom');
         await next();
       },
     ]);

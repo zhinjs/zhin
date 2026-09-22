@@ -1,4 +1,5 @@
-import type { MessageChannel, Message, MessageComponent } from './message.js';
+import type { MessageChannel, MessageComponent } from './message.js';
+import type { Message } from './plugin-runtime/im/contracts.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
 import type { SenderRole } from './built/roles.js';
@@ -280,7 +281,7 @@ export interface Tool<TArgs extends Record<string, any> = Record<string, any>> {
    * @param message 通讯上下文（入站 Message 或合成 Message）
    * @returns 执行结果
    */
-  execute: (args: TArgs, message?: Message<any>) => MaybePromise<ToolResult>;
+  execute: (args: TArgs, message?: Message) => MaybePromise<ToolResult>;
   
   /** 工具来源标识（自动填充：adapter:xxx / plugin:xxx） */
   source?: string;

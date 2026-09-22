@@ -27,10 +27,10 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
   const { origin, delivery, send } = params;
   const message = origin.message;
   const base: Omit<SendOptions, 'content'> = {
-    context: String(message.$adapter),
-    endpoint: message.$endpoint,
-    id: message.$channel?.id ?? message.$sender.id,
-    type: (message.$channel?.type ?? 'private') as MessageType,
+    context: String(message.clientAdapter ?? message.conversation.endpoint.adapter),
+    endpoint: message.endpointId ?? message.conversation.endpoint.id,
+    id: message.conversation.id,
+    type: (message.conversation.kind ?? 'private') as MessageType,
   };
 
   const elements = delivery.elements?.length
@@ -39,7 +39,10 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
       parseOutput(delivery.text),
       delivery.toolCalls ?? [],
     );
-  const segments = await publishOutboundElements(elements, String(message.$adapter));
+  const segments = await publishOutboundElements(
+    elements,
+    String(message.clientAdapter ?? message.conversation.endpoint.adapter),
+  );
   if (!segments.length) {
     await send({ ...base, content: delivery.text });
     return;

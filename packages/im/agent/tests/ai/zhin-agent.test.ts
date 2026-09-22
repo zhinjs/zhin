@@ -34,11 +34,15 @@ function makeCommMessage(overrides: {
   const scope = overrides.scope ?? 'private';
   const sceneId = overrides.sceneId ?? 'scene1';
   return {
-    $adapter: adapter,
-    $endpoint: endpoint,
-    $sender: { id: senderId },
-    $channel: { type: scope, id: sceneId },
+    clientAdapter: adapter,
+    endpointId: endpoint,
+    conversation: { endpoint: { adapter, id: endpoint }, kind: scope, id: sceneId },
+    content: '', generation: 1, metadata: {}, sender: { id: senderId, roles: ['user'] },
     extra: overrides.extra,
+    get $client() { return undefined; },
+    $reply: async () => ({ status: 'sent' }), $replyFrom: async () => ({ status: 'sent' }),
+    $sendTo: async () => ({ status: 'sent' }), $replyToPrivate: async () => ({ status: 'sent' }),
+    $replyToGroup: async () => ({ status: 'sent' }), $replyToChannel: async () => ({ status: 'sent' }),
   } as import('@zhin.js/core').Message<any>;
 }
 

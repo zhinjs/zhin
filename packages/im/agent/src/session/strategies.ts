@@ -8,7 +8,7 @@ export class GroupSessionStrategy implements SessionStrategy {
   }
 
   shouldArchive(message: Message): boolean {
-    return message.$channel?.type === 'group';
+    return message.conversation.kind === 'group';
   }
 }
 

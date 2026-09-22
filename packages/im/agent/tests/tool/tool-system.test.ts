@@ -79,16 +79,12 @@ describe('ToolSystem', () => {
       permissionHost: new PermissionHost(),
     };
     const trusted = createSyntheticMessage({
-      adapter: 'qq',
-      endpoint: 'bot',
-      sender: { id: 'u1', isTrusted: true },
-      channel: { type: 'group', id: 'g1' },
+      conversation: { endpoint: { adapter: 'qq', id: 'bot' }, kind: 'group', id: 'g1' },
+      endpointId: 'bot', clientAdapter: 'qq', sender: { id: 'u1', roles: ['trusted'] },
     });
     const user = createSyntheticMessage({
-      adapter: 'qq',
-      endpoint: 'bot',
-      sender: { id: 'u2' },
-      channel: { type: 'group', id: 'g1' },
+      conversation: { endpoint: { adapter: 'qq', id: 'bot' }, kind: 'group', id: 'g1' },
+      endpointId: 'bot', clientAdapter: 'qq', sender: { id: 'u2', roles: ['user'] },
     });
 
     expect(await source.collectTools({ ...base, message: trusted })).toHaveLength(1);
@@ -107,16 +103,12 @@ describe('ToolSystem', () => {
       permissionHost: new PermissionHost(),
     };
     const trustedGroup = createSyntheticMessage({
-      adapter: 'qq',
-      endpoint: 'bot',
-      sender: { id: 'u1', isTrusted: true },
-      channel: { type: 'group', id: 'g1' },
+      conversation: { endpoint: { adapter: 'qq', id: 'bot' }, kind: 'group', id: 'g1' },
+      endpointId: 'bot', clientAdapter: 'qq', sender: { id: 'u1', roles: ['trusted'] },
     });
     const plainGroup = createSyntheticMessage({
-      adapter: 'qq',
-      endpoint: 'bot',
-      sender: { id: 'u2' },
-      channel: { type: 'group', id: 'g1' },
+      conversation: { endpoint: { adapter: 'qq', id: 'bot' }, kind: 'group', id: 'g1' },
+      endpointId: 'bot', clientAdapter: 'qq', sender: { id: 'u2', roles: ['user'] },
     });
 
     function sourceOf(...tools: RegisteredAgentTool[]): RegisteredToolSource {

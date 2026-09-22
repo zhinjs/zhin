@@ -26,7 +26,7 @@ function depsLogger() {
 export async function executeGithubBind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const log = depsLogger();
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
+  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
 
   const clientId = client.clientId;
   if (!clientId) return '❌ Endpoint 未配置 GitHub App 或 App 无 client_id，无法进行账号绑定';
@@ -34,7 +34,7 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
   const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
-  const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
+  const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
   if (existing) {
     return `⚠️ 你已绑定 GitHub 账号: ${existing.github_login}\n如需重新绑定，请先执行 github_unbind`;
   }
@@ -57,7 +57,7 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
 
     tokenPromise.then(async (tokenData) => {
       if (!tokenData) {
-        log.warn(formatCompact({ op: 'device_flow', ok: false, platform: msg.$adapter, sender: msg.$sender.id }));
+        log.warn(formatCompact({ op: 'device_flow', ok: false, platform: msg.clientAdapter, sender: msg.sender!.id }));
         return;
       }
 
@@ -67,13 +67,13 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
 
       await model.insert({
         id: Date.now(),
-        platform: msg.$adapter,
-        platform_uid: msg.$sender.id,
+        platform: msg.clientAdapter,
+        platform_uid: msg.sender!.id,
         github_login: login,
         access_token: tokenData.access_token,
         created_at: Date.now(),
       });
-      log.debug(formatCompact({ op: 'bind', platform: msg.$adapter, sender: msg.$sender.id, login }));
+      log.debug(formatCompact({ op: 'bind', platform: msg.clientAdapter, sender: msg.sender!.id, login }));
 
       if (msg?.$reply) {
         await msg.$reply(`✅ GitHub 账号绑定成功！\n👤 ${login}`);
@@ -90,12 +90,12 @@ export async function executeGithubBind(_args: Record<string, never>, client: Gi
 
 export async function executeGithubUnbind(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
+  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
 
   const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
-  const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
+  const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
   if (!existing) return '📭 你尚未绑定 GitHub 账号';
 
   await model.delete().where({ id: existing.id });
@@ -104,12 +104,12 @@ export async function executeGithubUnbind(_args: Record<string, never>, client: 
 
 export async function executeGithubWhoami(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$sender?.id) return '❌ 无法获取当前用户信息';
+  if (!msg?.clientAdapter || !msg?.sender?.id) return '❌ 无法获取当前用户信息';
 
   const model = oauthModel(client);
   if (!model) return '❌ 数据库未就绪';
 
-  const [existing] = await model.select().where({ platform: msg.$adapter, platform_uid: msg.$sender.id });
+  const [existing] = await model.select().where({ platform: msg.clientAdapter, platform_uid: msg.sender.id });
   if (!existing) return '📭 你尚未绑定 GitHub 账号\n🔗 使用 github_bind 绑定你的账号';
 
   const userGh = new GhClient({ host: client.host, token: existing.access_token });

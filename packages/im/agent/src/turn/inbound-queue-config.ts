@@ -48,7 +48,7 @@ export function validateInboundQueueConfig(raw?: InboundQueueConfig | null): str
 }
 
 export function isGroupOrChannelMessage(message: Message): boolean {
-  const kind = message.$channel?.type;
+  const kind = message.conversation.kind;
   return kind === 'group' || kind === 'channel';
 }
 

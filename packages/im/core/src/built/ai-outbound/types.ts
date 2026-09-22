@@ -1,4 +1,4 @@
-import type { Message } from '../../message.js';
+import type { Message } from '../../plugin-runtime/im/contracts.js';
 import type { MessageElement } from '../../types.js';
 import type { InteractivePolicy } from '../interactive-segments/types.js';
 import type { Segment } from '../segment-contract/types.js';

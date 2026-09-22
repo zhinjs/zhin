@@ -5,6 +5,7 @@
 export { outboundMessageToken } from './im-runtime.js';
 export {
   Message,
+  type MessageBase,
   type ComponentCall,
   type ConversationAddress,
   type IncomingContext,

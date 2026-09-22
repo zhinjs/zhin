@@ -9,14 +9,14 @@ import type { TurnMedia } from '../turn/turn-ingress.js';
 
 /** IM ingress-only adapter. Agent context implementation consumes TurnContextView. */
 export function turnContextViewFromMessage(message: Message): TurnContextView {
-  const scope = message.$channel?.type;
+  const scope = message.conversation.kind;
   if (scope !== 'private' && scope !== 'group' && scope !== 'channel') {
     throw new TypeError('IM Turn context requires a private, group, or channel scope');
   }
-  const platform = String(message.$adapter ?? '').trim();
-  const endpoint = String(message.$endpoint ?? '').trim();
-  const sceneId = String(message.$channel?.id ?? '').trim();
-  const subjectId = String(message.$sender?.id ?? '').trim();
+  const platform = String(message.clientAdapter ?? '').trim();
+  const endpoint = String(message.endpointId ?? '').trim();
+  const sceneId = String(message.conversation.id ?? '').trim();
+  const subjectId = String(message.sender?.id ?? '').trim();
   if (!platform || !endpoint || !sceneId || !subjectId) {
     throw new TypeError('IM Turn context requires platform, endpoint, scene, and sender identity');
   }
@@ -27,11 +27,11 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
       endpoint,
       scope,
       sceneId,
-      ...(message.$id ? { messageId: String(message.$id) } : {}),
+      ...(message.id ? { messageId: String(message.id) } : {}),
     }),
     principal: Object.freeze({
       subjectId,
-      ...(message.$sender?.name ? { displayName: message.$sender.name } : {}),
+      ...(message.sender?.name ? { displayName: message.sender.name } : {}),
       roles: Object.freeze([...senderRolesFromMessage(message)]),
     }),
     session: Object.freeze({ key: resolveIMSessionIdFromMessage(message) }),

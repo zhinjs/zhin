@@ -10,7 +10,7 @@ export interface GitHubChannelContext extends ParsedChannel {
 }
 
 export function parseMessageChannel(message: Message): GitHubChannelContext | null {
-  const channelId = message.$channel?.id;
+  const channelId = message.conversation.id;
   if (!channelId) return null;
   const parsed = parseChannelId(channelId);
   if (!parsed) return null;

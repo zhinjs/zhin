@@ -1,97 +1,97 @@
 /**
- * Message enrich — 入站鉴权快照与合成通讯上下文
+ * Message enrich — inbound authorization snapshots and synthetic communication context.
  */
-import { Message, type MessageChannel } from '../message.js';
-import type { MessageElement, SendContent } from '../types.js';
+import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
+import type {
+  Message,
+  MessageSenderRef,
+  Segment,
+  SendContent,
+} from '../plugin-runtime/im/contracts.js';
 import type { SenderRole } from './roles.js';
 
-/** Agent turn 可挂载在 Message 扩展字段上的元数据 */
+/** Agent turns may attach host-owned metadata to the canonical runtime message. */
 export type AgentTurnMessage = Message<{ extra?: Record<string, unknown> }>;
 
-function frameworkRolesFromSenderFlags(sender: {
-  isMaster?: boolean;
-  isTrusted?: boolean;
-}): readonly SenderRole[] {
-  if (sender.isMaster) return ['master'];
-  if (sender.isTrusted) return ['trusted'];
-  return ['user'];
-}
-
-export function senderRolesFromMessage(message: Message<any>): readonly SenderRole[] {
-  const sender = message.$sender;
-  if (sender.isMaster !== undefined || sender.isTrusted !== undefined) {
-    return frameworkRolesFromSenderFlags(sender);
-  }
-  return ['user'];
+export function senderRolesFromMessage(message: Message): readonly SenderRole[] {
+  const roles = message.sender?.roles?.filter(
+    (role): role is SenderRole => role === 'master' || role === 'trusted' || role === 'user',
+  );
+  return roles?.length ? roles : ['user'];
 }
 
 export interface SyntheticMessageInput {
-  adapter: string;
-  endpoint: string;
-  sender: {
-    id: string;
-    name?: string;
-    role?: string;
-    isMaster?: boolean;
-    isTrusted?: boolean;
-  };
-  channel: MessageChannel;
-  id?: string;
-  reply?: (content: SendContent, quote?: boolean | string) => Promise<string>;
+  conversation: ConversationRef;
+  sender?: MessageSenderRef;
+  content?: string;
+  segments?: readonly Segment[];
+  messageId?: string;
+  generation?: number;
+  endpointId?: string;
+  clientAdapter?: string;
+  reply?: (content: SendContent) => Promise<DeliveryReceipt>;
   extra?: Record<string, unknown>;
 }
 
-/** cron / subagent / mission 等无真实入站时构造最小 Message */
+/** Construct a canonical Message for cron, subagent, and mission turns without live ingress. */
 export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnMessage {
-  const id = input.id ?? `synthetic:${Date.now()}`;
-  const reply = input.reply ?? (async () => id);
-  return Message.from(
-    { extra: input.extra },
-    {
-      $id: id,
-      $adapter: input.adapter,
-      $endpoint: input.endpoint,
-      $content: [] as MessageElement[],
-      $sender: { ...input.sender },
-      $reply: reply,
-      $recall: async () => {},
-      $channel: input.channel,
-      $timestamp: Date.now(),
-      $raw: '',
+  const messageId = input.messageId ?? `synthetic:${Date.now()}`;
+  const unsupportedReply = async (): Promise<DeliveryReceipt> => Object.freeze({
+    status: 'sent',
+    message: Object.freeze({ conversation: input.conversation, id: messageId }),
+  });
+  const reply = input.reply ?? unsupportedReply;
+  return Object.freeze({
+    conversation: input.conversation,
+    content: input.content ?? '',
+    generation: input.generation ?? 0,
+    metadata: Object.freeze({}),
+    segments: input.segments,
+    sender: input.sender,
+    message: Object.freeze({ conversation: input.conversation, id: messageId }),
+    endpointId: input.endpointId,
+    clientAdapter: input.clientAdapter,
+    id: messageId,
+    extra: input.extra,
+    get $client(): unknown {
+      throw new Error('Synthetic Message has no Endpoint Client context');
     },
-  );
+    $reply: reply,
+    $replyFrom: (_requester, content) => reply(content),
+    $sendTo: (_conversation, content) => reply(content),
+    $replyToPrivate: (content) => reply(content),
+    $replyToGroup: (_groupId, content) => reply(content),
+    $replyToChannel: (_channelId, _guildId, content) => reply(content),
+  });
 }
 
-/** hook context 中的 commMessage 字段（AIHookEvent.context） */
-export function commMessageFromHookContext(context: Record<string, unknown>): Message<any> | undefined {
+/** Read a canonical communication message from an AI hook context. */
+export function commMessageFromHookContext(context: Record<string, unknown>): Message | undefined {
   const raw = context.commMessage;
-  if (raw && typeof raw === 'object' && '$sender' in raw) {
-    return raw as Message<any>;
+  if (raw && typeof raw === 'object' && 'conversation' in raw && 'content' in raw) {
+    return raw as Message;
   }
   return undefined;
 }
 
-/** 兼容 tool parameters 上的 contextKey（endpointKey / sceneId / scope 等） */
-export function resolveContextKey(message: Message<any>, key: string): unknown {
+/** Resolve tool context injection keys from the canonical Message contract. */
+export function resolveContextKey(message: Message, key: string): unknown {
   switch (key) {
     case 'platform':
-      return message.$adapter;
+      return message.clientAdapter ?? message.conversation.endpoint.adapter;
     case 'endpointKey':
-      return message.$endpoint;
+      return message.endpointId ?? message.conversation.endpoint.id;
     case 'messageId':
-      return message.$id;
+      return message.id;
     case 'sceneId':
-      return message.$channel?.id ?? message.$sender.id;
+      return message.conversation.id ?? message.sender?.id;
     case 'senderId':
-      return message.$sender.id;
+      return message.sender?.id;
     case 'scope':
-      return message.$channel?.type ?? 'private';
+      return message.conversation.kind;
     default: {
-      if (key in message) {
-        return (message as Record<string, unknown>)[key];
-      }
-      const extra = (message as AgentTurnMessage).extra;
-      return extra?.[key];
+      if (key in message) return (message as unknown as Record<string, unknown>)[key];
+      return (message as AgentTurnMessage).extra?.[key];
     }
   }
 }

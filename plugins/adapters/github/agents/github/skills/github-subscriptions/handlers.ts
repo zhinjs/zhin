@@ -17,7 +17,7 @@ function subscriptionsModel(client: GithubClient) {
 
 export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'check'; repo: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  const gh = await client.getUserOrDefaultApi(msg?.$adapter, msg?.$sender.id);
+  const gh = await client.getUserOrDefaultApi(msg?.clientAdapter, msg?.sender?.id);
   switch (args.action) {
     case 'star': {
       const r = await gh.starRepo(args.repo);
@@ -38,7 +38,7 @@ export async function executeGithubStar(args: { action: 'star' | 'unstar' | 'che
 
 export async function executeGithubSubscribe(args: { repo: string; events?: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$sender.id || !msg?.$channel?.id || !msg?.$endpoint) {
+  if (!msg?.clientAdapter || !msg?.sender?.id || !msg?.conversation.id || !msg?.endpointId) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
@@ -53,12 +53,12 @@ export async function executeGithubSubscribe(args: { repo: string; events?: stri
 
   const [existing] = await model.select().where({
     repo: args.repo,
-    target_id: msg.$channel?.id,
-    adapter: msg.$adapter,
-    endpoint: msg.$endpoint,
+    target_id: msg.conversation.id,
+    adapter: msg.clientAdapter,
+    endpoint: msg.endpointId,
   });
   if (existing) {
-    await model.update({ events, target_type: msg.$channel?.type || 'private' }).where({ id: existing.id });
+    await model.update({ events, target_type: msg.conversation.kind || 'private' }).where({ id: existing.id });
     return `✅ 已更新订阅 ${args.repo}\n📡 事件: ${events.join(', ')}`;
   }
 
@@ -66,17 +66,17 @@ export async function executeGithubSubscribe(args: { repo: string; events?: stri
     id: Date.now(),
     repo: args.repo,
     events,
-    target_id: msg.$channel?.id,
-    target_type: msg.$channel?.type || 'private',
-    adapter: msg.$adapter,
-    endpoint: msg.$endpoint,
+    target_id: msg.conversation.id,
+    target_type: msg.conversation.kind || 'private',
+    adapter: msg.clientAdapter,
+    endpoint: msg.endpointId,
   });
   return `✅ 已订阅 ${args.repo}\n📡 事件: ${events.join(', ')}\n📌 通知将推送到当前通道`;
 }
 
 export async function executeGithubUnsubscribe(args: { repo: string }, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$channel?.id || !msg?.$endpoint) {
+  if (!msg?.clientAdapter || !msg?.conversation.id || !msg?.endpointId) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
@@ -85,9 +85,9 @@ export async function executeGithubUnsubscribe(args: { repo: string }, client: G
 
   const [existing] = await model.select().where({
     repo: args.repo,
-    target_id: msg.$channel?.id,
-    adapter: msg.$adapter,
-    endpoint: msg.$endpoint,
+    target_id: msg.conversation.id,
+    adapter: msg.clientAdapter,
+    endpoint: msg.endpointId,
   });
   if (!existing) return `📭 当前通道未订阅 ${args.repo}`;
 
@@ -97,7 +97,7 @@ export async function executeGithubUnsubscribe(args: { repo: string }, client: G
 
 export async function executeGithubSubscriptions(_args: Record<string, never>, client: GithubClient, commMessage?: Message) {
   const msg = commMessage ?? getCurrentCommMessage();
-  if (!msg?.$adapter || !msg?.$channel?.id || !msg?.$endpoint) {
+  if (!msg?.clientAdapter || !msg?.conversation.id || !msg?.endpointId) {
     return '❌ 无法获取当前聊天通道信息';
   }
 
@@ -105,9 +105,9 @@ export async function executeGithubSubscriptions(_args: Record<string, never>, c
   if (!model) return '❌ 数据库未就绪';
 
   const subs = await model.select().where({
-    target_id: msg.$channel?.id,
-    adapter: msg.$adapter,
-    endpoint: msg.$endpoint,
+    target_id: msg.conversation.id,
+    adapter: msg.clientAdapter,
+    endpoint: msg.endpointId,
   });
   if (!subs?.length) return '📭 当前通道没有任何 GitHub 订阅';
 

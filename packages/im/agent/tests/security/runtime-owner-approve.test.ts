@@ -24,10 +24,9 @@ describe('OwnerApprovalRuntime commands', () => {
 
   function ownerMessage() {
     return createSyntheticMessage({
-      adapter: 'icqq',
-      endpoint: '8596238',
-      sender: { id: '1659488338', name: 'owner', isMaster: true },
-      channel: { type: 'private', id: '1659488338' },
+      conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'private', id: '1659488338' },
+      endpointId: '8596238', clientAdapter: 'icqq',
+      sender: { id: '1659488338', name: 'owner', roles: ['master'] },
       extra: { endpointMaster: '1659488338' },
     });
   }

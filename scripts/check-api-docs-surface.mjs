@@ -60,7 +60,7 @@ const expectedSurface = new Map([
   ]],
   ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [
-    'Message', 'ComponentCall', 'IncomingContext', 'IncomingMessage',
+    'Message', 'MessageBase', 'ComponentCall', 'IncomingContext', 'IncomingMessage',
     'MessageDispatchResult', 'OutboundMessageService', 'MessageSenderRef', 'OutboundEnvelope',
     'RawContent', 'SendRequest', 'ConversationAddress', 'SendContent',
     'outboundMessageToken',
@@ -85,7 +85,7 @@ assert.equal(app.logger.warningCount, 0, 'TypeDoc reported warnings');
 
 const actualModules = new Map((project.children ?? []).map((module) => [
   module.name,
-  (module.children ?? []).map((child) => child.name).sort(),
+  [...new Set((module.children ?? []).map((child) => child.name))].sort(),
 ]));
 assert.deepEqual([...actualModules.keys()].sort(), [...expectedSurface.keys()].sort());
 for (const [module, expected] of expectedSurface) {
@@ -100,7 +100,7 @@ const expectedMembers = new Map([
     'getSkillsForAgent', 'getSubAgentsForAgent', 'removeHook',
     'removeMcp', 'removeSkill', 'removeSubAgent', 'triggerHook',
   ]],
-  ['zhin.js/core/runtime.Message', [
+  ['zhin.js/core/runtime.MessageBase', [
     '$client', '$reply', '$replyFrom', '$replyToChannel', '$replyToGroup', '$replyToPrivate',
     '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
     'mentioned', 'message', 'metadata', 'replyTo', 'segments', 'sender',

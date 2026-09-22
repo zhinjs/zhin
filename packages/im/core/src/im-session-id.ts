@@ -35,28 +35,28 @@ export function resolveIMSceneIdForSession(
 }
 
 export function resolveIMSessionIdFromMessage(message: {
-  $adapter?: string;
-  $endpoint?: string;
-  $channel?: { type?: IMSceneKind; id?: string };
-  $sender?: { id?: string };
+  clientAdapter?: string;
+  endpointId?: string;
+  conversation?: { endpoint: { adapter: string; id: string }; kind: IMSceneKind; id: string };
+  sender?: { id?: string };
 }): string {
   const scene = sceneRefFromMessage(message as any);
   if (scene) return resolveIMSceneSessionId(scene);
-  const kind = (message.$channel?.type || 'private') as IMSceneKind;
+  const kind = (message.conversation?.kind || 'private') as IMSceneKind;
   return resolveIMSessionId({
-    platform: String(message.$adapter || ''),
-    endpointKey: String(message.$endpoint || ''),
+    platform: String(message.clientAdapter || message.conversation?.endpoint.adapter || ''),
+    endpointKey: String(message.endpointId || message.conversation?.endpoint.id || ''),
     kind,
-    sceneId: resolveIMSceneIdForSession(kind, message.$channel?.id, message.$sender?.id),
+    sceneId: resolveIMSceneIdForSession(kind, message.conversation?.id, message.sender?.id),
   });
 }
 
 /** Canonical scene fields for transcript / session persistence (ADR 0028 SSOT). */
 export function resolveSceneFieldsFromMessage(message: {
-  $adapter?: string;
-  $endpoint?: string;
-  $channel?: { type?: IMSceneKind; id?: string };
-  $sender?: { id?: string };
+  clientAdapter?: string;
+  endpointId?: string;
+  conversation?: { endpoint: { adapter: string; id: string }; kind: IMSceneKind; id: string };
+  sender?: { id?: string };
 }): {
   platform: string;
   endpointKey: string;
@@ -72,11 +72,11 @@ export function resolveSceneFieldsFromMessage(message: {
       sceneType: scene.kind,
     };
   }
-  const sceneType = (message.$channel?.type || 'private') as IMSceneKind;
+  const sceneType = (message.conversation?.kind || 'private') as IMSceneKind;
   return {
-    platform: String(message.$adapter || ''),
-    endpointKey: String(message.$endpoint || ''),
+    platform: String(message.clientAdapter || message.conversation?.endpoint.adapter || ''),
+    endpointKey: String(message.endpointId || message.conversation?.endpoint.id || ''),
     sceneType,
-    sceneId: resolveIMSceneIdForSession(sceneType, message.$channel?.id, message.$sender?.id),
+    sceneId: resolveIMSceneIdForSession(sceneType, message.conversation?.id, message.sender?.id),
   };
 }

@@ -3,7 +3,8 @@
  * @module @zhin.js/core
  */
 export * from './component.js'
-export * from './message.js'
+export type { MessageChannel, MessageComponent, MessageType } from './message.js'
+export { Message, type MessageBase } from './plugin-runtime/im/contracts.js'
 export * from './im-scene.js'
 export * from './notice.js'
 export * from './request.js'

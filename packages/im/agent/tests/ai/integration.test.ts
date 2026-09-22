@@ -243,26 +243,25 @@ describe('AI Trigger 工具函数测试', () => {
     senderId?: string;
     senderPermissions?: string[];
   }) {
-    const content = typeof options.content === 'string' 
+    const segments = typeof options.content === 'string'
       ? [{ type: 'text', data: { text: options.content } }]
       : options.content;
-    
+    const endpointId = options.endpoint || 'bot123';
     return {
-      $content: content,
-      $endpoint: options.endpoint || 'bot123',
-      $channel: options.channelType ? { type: options.channelType, id: 'channel1' } : null,
-      $sender: { 
-        id: options.senderId || 'user1', 
-        permissions: options.senderPermissions || [],
-      },
-      $adapter: 'test',
+      content: segments.filter((item: any) => item.type === 'text').map((item: any) => item.data.text).join(''),
+      segments,
+      endpointId,
+      clientAdapter: 'test',
+      conversation: { endpoint: { adapter: 'test', id: endpointId }, kind: options.channelType || 'private', id: 'channel1' },
+      sender: { id: options.senderId || 'user1', roles: options.senderPermissions || [] },
+      metadata: {},
     };
   }
 
   describe('shouldTriggerAI', () => {
     it('应该检测前缀触发', () => {
       const message = createMockMessage({ content: '# 你好' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'] });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
       
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('你好');
@@ -270,7 +269,7 @@ describe('AI Trigger 工具函数测试', () => {
 
     it('没有匹配前缀时不应触发', () => {
       const message = createMockMessage({ content: '普通消息' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'] });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
       
       expect(result.triggered).toBe(false);
     });

@@ -82,7 +82,7 @@ export async function prepareTurnTools(
     host,
     allTools,
     opts.sessionId,
-    String(contextForTools.$adapter),
+    String(contextForTools.clientAdapter),
   );
   const { tools: resolvedTools, deferredStats, catalog, sessionSnapshot: initialSnapshot } = resolved;
 

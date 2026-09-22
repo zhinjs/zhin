@@ -16,7 +16,8 @@ import type { Request } from '../../request.js';
 import type { SystemEvent } from '../../system-event.js';
 import { sideEventSendChannel } from '../../side-event/base.js';
 import {
-  Message,
+  RuntimeMessage,
+  type Message,
   type IncomingMessage,
   type MessageDispatchResult,
   type MessageSenderRef,
@@ -123,7 +124,7 @@ export class InboundRuntime {
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
         : input.sender;
-      const message = new Message(
+      const message = new RuntimeMessage(
         conversation,
         input.content,
         lease.value.generation,
@@ -274,7 +275,7 @@ export class InboundRuntime {
       resolveInteraction: (name, interactionArgs) => {
         const eventContext = interactionArgs[0] as EndpointEvent | undefined;
         const payload = eventContext?.payload;
-        if (name === 'message.receive' && payload instanceof Message) {
+        if (name === 'message.receive' && payload instanceof RuntimeMessage) {
           return this.createInteraction(payload);
         }
         if (

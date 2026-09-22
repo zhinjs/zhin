@@ -226,7 +226,6 @@
     "export * from './errors.js'",
     "export * from './im-scene.js'",
     "export * from './im-session-id.js'",
-    "export * from './message.js'",
     "export * from './models/system-log.js'",
     "export * from './models/user.js'",
     "export * from './notice.js'",
@@ -239,8 +238,10 @@
     "export * from '@zhin.js/logger'",
     "export type * from '@zhin.js/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
+    "export type{MessageChannel,MessageComponent,MessageType}from './message.js'",
     "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
+    "export{Message,type MessageBase}from './plugin-runtime/im/contracts.js'",
     "export{ScheduleEngine,Scheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
     "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"

@@ -22,45 +22,29 @@ afterEach(() => {
 
 function mockCommMessage(overrides: Record<string, any> = {}) {
   const scope = overrides.scope ?? 'private';
-  const sender_roles = overrides.sender_roles as string[] | undefined;
-  let isMaster = overrides.isMaster;
-  let isTrusted = overrides.isTrusted;
-  if (sender_roles?.includes('master')) isMaster = true;
-  else if (sender_roles?.includes('trusted')) isTrusted = true;
-  else if (sender_roles) {
-    isMaster = false;
-    isTrusted = false;
-  }
+  const roles = overrides.sender_roles as string[] | undefined
+    ?? (overrides.isMaster ? ['master'] : overrides.isTrusted ? ['trusted'] : ['user']);
+  const adapter = overrides.adapter ?? 'qq';
+  const endpoint = overrides.endpoint ?? 'bot1';
   return {
-    $adapter: overrides.adapter ?? 'qq',
-    $endpoint: overrides.endpoint ?? 'bot1',
-    $sender: {
-      id: overrides.senderId ?? 'user1',
-      ...(overrides.sender ?? {}),
-      ...(overrides.role !== undefined ? { role: overrides.role } : {}),
-      ...(isMaster !== undefined ? { isMaster } : {}),
-      ...(isTrusted !== undefined ? { isTrusted } : {}),
-    },
-    $channel: { type: scope, id: overrides.sceneId ?? 'scene1' },
+    clientAdapter: adapter,
+    endpointId: endpoint,
+    conversation: { endpoint: { adapter, id: endpoint }, kind: scope, id: overrides.sceneId ?? 'scene1' },
+    sender: { id: overrides.senderId ?? 'user1', roles, ...(overrides.sender ?? {}) },
+    metadata: overrides.role ? { senderRole: overrides.role } : {},
   };
 }
 
 function mockMessage(role: 'user' | 'scene_admin' | 'scene_owner' | 'master' = 'user') {
-  const platformRole = role === 'scene_admin'
-    ? 'admin'
-    : role === 'scene_owner'
-      ? 'owner'
-      : undefined;
   const adapter = role === 'master' ? 'process' : 'qq';
+  const senderRoles = role === 'master' ? ['master'] : ['user'];
+  const senderRole = role === 'scene_admin' ? 'admin' : role === 'scene_owner' ? 'owner' : undefined;
   return {
-    $adapter: adapter,
-    $endpoint: 'b1',
-    $sender: {
-      id: 'u1',
-      ...(platformRole ? { role: platformRole } : {}),
-      ...(role === 'master' ? { isMaster: true } : { isMaster: false, isTrusted: false }),
-    },
-    $channel: { type: 'group', id: 'g1' },
+    clientAdapter: adapter,
+    endpointId: 'b1',
+    conversation: { endpoint: { adapter, id: 'b1' }, kind: 'group', id: 'g1' },
+    sender: { id: 'u1', roles: senderRoles },
+    metadata: senderRole ? { senderRole } : {},
   } as any;
 }
 
@@ -124,11 +108,11 @@ describe('canAccessTool 函数', () => {
     };
     const okMsg = mockMessage('scene_admin');
 
-    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'group', id: 'g1' } }, host)).toBe(true);
+    expect(await canAccessTool(tool, { ...okMsg, clientAdapter: 'qq', conversation: { ...okMsg.conversation, kind: 'group' } }, host)).toBe(true);
 
-    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'telegram', $channel: { type: 'group', id: 'g1' } }, host)).toBe(false);
+    expect(await canAccessTool(tool, { ...okMsg, clientAdapter: 'telegram', conversation: { ...okMsg.conversation, kind: 'group' } }, host)).toBe(false);
 
-    expect(await canAccessTool(tool, { ...okMsg, $adapter: 'qq', $channel: { type: 'private', id: 'u1' } }, host)).toBe(false);
+    expect(await canAccessTool(tool, { ...okMsg, clientAdapter: 'qq', conversation: { ...okMsg.conversation, kind: 'private', id: 'u1' } }, host)).toBe(false);
 
     expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group' }), host)).toBe(false);
   });

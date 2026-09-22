@@ -29,7 +29,7 @@ import {
   MessageMiddleware,
   SendContent,
 } from "./types.js";
-import { Message } from "./message.js";
+import type { Message } from "./plugin-runtime/im/contracts.js";
 import { formatSegmentPreview } from "./built/segment-contract/preview.js";
 import { KeyboardSegment } from "./built/interactive-segments/keyboard-segment.js";
 import { ButtonSpec, normalizeKeyboardRows, type KeyboardRowInput } from "./built/interactive-segments/button-spec.js";

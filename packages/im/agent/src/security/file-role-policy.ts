@@ -306,7 +306,7 @@ export function formatFilePermissionMessage(result: FilePermissionResult, toolNa
 
 /**
  * 会话级静态说明：各 SenderRole 对应的文件/工具权限（不注入「当前用户」档位）。
- * 执行层只消费 composition root 写入 Message.$sender 的 isMaster/isTrusted 快照；群聊 User 行前缀仅供模型辨认发言者。
+ * 执行层只消费 composition root 写入 Message.sender 的 isMaster/isTrusted 快照；群聊 User 行前缀仅供模型辨认发言者。
  */
 export function buildSenderRolesFilePermissionsPrompt(): string {
   return [

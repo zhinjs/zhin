@@ -1,7 +1,7 @@
 /**
  * AI Access Gate — 控制 LLM 回复路径是否对当前会话开放（平台 AIGC 合规等）
  */
-import type { Message } from '../message.js';
+import type { Message } from '../plugin-runtime/im/contracts.js';
 
 export type AIAccessMode = 'open' | 'closed' | 'whitelist';
 
@@ -52,21 +52,21 @@ export function resolveAIAccessConfig(
   };
 }
 
-function isWhitelisted(message: Message<any>, config: ResolvedAIAccessConfig): boolean {
-  const userId = String(message.$sender?.id ?? '');
+function isWhitelisted(message: Message, config: ResolvedAIAccessConfig): boolean {
+  const userId = String(message.sender?.id ?? '');
   if (userId && config.users.includes(userId)) return true;
 
-  const scope = message.$channel?.type;
+  const scope = message.conversation.kind;
   if (scope === 'group' || scope === 'channel') {
-    const channelId = String(message.$channel?.id ?? '');
+    const channelId = String(message.conversation.id ?? '');
     if (channelId && config.groups.includes(channelId)) return true;
   }
 
   return false;
 }
 
-function denyResult(message: Message<any>, config: ResolvedAIAccessConfig, reason: string): AIAccessResult {
-  const scope = message.$channel?.type;
+function denyResult(message: Message, config: ResolvedAIAccessConfig, reason: string): AIAccessResult {
+  const scope = message.conversation.kind;
   const replyMessage = scope === 'private' ? config.denyMessage : undefined;
   return { allowed: false, reason, replyMessage };
 }
@@ -76,7 +76,7 @@ function denyResult(message: Message<any>, config: ResolvedAIAccessConfig, reaso
  * 不影响命令、游戏等其它 Dispatcher 分支。
  */
 export function checkAIAccess(
-  message: Message<any>,
+  message: Message,
   globalConfig: AIAccessConfig | undefined,
   endpointScope?: AIAccessScopeConfig,
 ): AIAccessResult {

@@ -104,7 +104,7 @@ export class SessionSystem {
   ): Promise<TurnSessionPrep> {
     const deps = this.sessionDeps(host);
     const sessionKey = this.resolveSessionKey(commMessage, options?.strategyName);
-    const userId = commMessage.$sender.id || 'unknown';
+    const userId = commMessage.sender?.id || 'unknown';
     const turnUser = buildTurnUserMessages(commMessage, content);
     const isNewSession = await resolveSessionIsNewBeforeCreate(deps, sessionKey);
 

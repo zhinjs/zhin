@@ -6,8 +6,8 @@ export interface SessionIODeps {
 }
 
 function resolveSenderDisplayName(message: Message): string {
-  if (!message?.$sender) return 'unknown';
-  const sender = message.$sender as { nickname?: string; name?: string; id?: string };
+  if (!message?.sender) return 'unknown';
+  const sender = message.sender as { nickname?: string; name?: string; id?: string };
   const raw = sender.nickname || sender.name || sender.id;
   const displayName = raw == null ? '' : String(raw).trim();
   return displayName || 'unknown';
@@ -25,17 +25,21 @@ function resolveSenderRoleLabels(commMessage: Message): string[] {
     .split(',')
     .map((r) => r.trim())
     .filter((r) => r && r !== 'user');
-  const platform = mapPlatformRoleForLabel(commMessage.$sender.role);
+  const platform = mapPlatformRoleForLabel(
+    typeof commMessage.metadata.senderRole === 'string'
+      ? commMessage.metadata.senderRole
+      : undefined,
+  );
   if (platform && !labels.includes(platform)) labels.push(platform);
   return labels.length > 0 ? labels : ['user'];
 }
 
 /** 将 IM 参与者投影为 AgentMessage 的唯一身份权威。 */
 export function buildUserMessageActor(commMessage: Message): ConversationActor {
-  const scope = commMessage.$channel?.type || 'private';
+  const scope = commMessage.conversation.kind || 'private';
   const roleLabels = resolveSenderRoleLabels(commMessage);
   return {
-    subjectId: String(commMessage.$sender.id || 'unknown'),
+    subjectId: String(commMessage.sender?.id || 'unknown'),
     displayName: resolveSenderDisplayName(commMessage),
     roles: roleLabels.length > 0 ? roleLabels : ['user'],
     scope: scope === 'group' || scope === 'channel' ? scope : 'private',

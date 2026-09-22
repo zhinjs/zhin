@@ -31,7 +31,7 @@ export type MessageType = 'group' | 'private' | 'channel'
 /**
  * 消息基础结构
  */
-export interface MessageBase {
+export interface LegacyMessageBase {
     $id: string;
     $adapter:string
     $endpoint:string
@@ -46,17 +46,18 @@ export interface MessageBase {
 /**
  * 完整消息类型，支持扩展
  */
-export type Message<T extends object={}>=MessageBase&T;
-/** @internal Legacy static helpers; not part of Agent resource authoring. */
-export namespace Message{
+/** @deprecated Classic adapter message shape. Runtime middleware receives `Message`. */
+export type LegacyMessage<T extends object={}> = LegacyMessageBase&T;
+/** @internal Legacy static helpers; not part of Runtime resource authoring. */
+export namespace LegacyMessage{
     /**
      * 工具方法：合并自定义字段与基础消息结构
      */
-    export function from<T extends object>(input:T,format:MessageBase):Message<T>{
+    export function from<T extends object>(input:T,format:LegacyMessageBase):LegacyMessage<T>{
         return Object.assign({},input,format)
     }
 
-    export function actionPayload(message: Message<any>): string | undefined {
+    export function actionPayload(message: LegacyMessage<any>): string | undefined {
         for (const item of message.$content ?? []) {
             if (typeof item === 'string') continue;
             if (item.type === 'action' && item.data?.payload) {
@@ -66,7 +67,7 @@ export namespace Message{
         return undefined;
     }
 
-    export function isAction(message: Message<any>): boolean {
+    export function isAction(message: LegacyMessage<any>): boolean {
         return isActionMessageImpl(message);
     }
 }
