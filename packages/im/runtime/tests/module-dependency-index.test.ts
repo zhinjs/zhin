@@ -129,6 +129,27 @@ describe('ModuleDependencyIndex', () => {
     expect([...refreshed.dependencies]).toContain(secondLeaf);
   });
 
+  it('re-analyzes cross-package closures when a dependency package changes module type', async () => {
+    const root = await fixture();
+    const dependencyRoot = join(root, 'packages/dependency');
+    const dependencyManifest = join(dependencyRoot, 'package.json');
+    const helper = join(dependencyRoot, 'helper.js');
+    const entry = join(root, 'commands/status/index.js');
+    await mkdir(dependencyRoot, { recursive: true });
+    await writeFile(dependencyManifest, '{"type":"module"}\n');
+    await writeFile(helper, 'export default 1;\n');
+    await writeFile(entry, "import '../../packages/dependency/helper.js';\n");
+    const index = new ModuleDependencyIndex();
+    index.commit(entry, await index.analyze(entry));
+    expect(index.hasCommonJsImpact(helper)).toBe(false);
+
+    await writeFile(dependencyManifest, '{"type":"commonjs"}\n');
+    index.invalidate(dependencyManifest);
+    index.commit(entry, await index.analyze(entry));
+
+    expect(index.hasCommonJsImpact(helper)).toBe(true);
+  });
+
   it('removes reverse mappings for entries absent from committed ownership', async () => {
     const root = await fixture();
     const firstEntry = join(root, 'commands/status/index.js');

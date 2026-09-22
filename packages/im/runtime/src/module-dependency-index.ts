@@ -65,8 +65,13 @@ export class ModuleDependencyIndex {
     if (basename(normalized) === 'package.json') {
       this.#commonJsByDirectory.clear();
       const packageRoot = dirname(normalized);
-      for (const entry of this.#dependenciesByEntry.keys()) {
-        if (isWithin(packageRoot, entry)) this.#dirtyEntries.add(entry);
+      for (const [entry, dependencies] of this.#dependenciesByEntry) {
+        if (
+          isWithin(packageRoot, entry)
+          || [...dependencies].some((dependency) => isWithin(packageRoot, dependency))
+        ) {
+          this.#dirtyEntries.add(entry);
+        }
       }
     }
     if (this.#dependenciesByEntry.has(normalized)) this.#dirtyEntries.add(normalized);
