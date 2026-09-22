@@ -1,4 +1,4 @@
-import { buildNotice, buildSystem, senderFromId } from '@zhin.js/core';
+import { composeSideEventName, sideEventConversation, buildNotice, buildSystem, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import { resolveChatType, type WecomMessage } from './protocol.js';
@@ -27,14 +27,12 @@ export function receiveWecomSideEvent(
   const eventName = msg.Event ?? 'unknown';
   if (eventName === 'enter_agent') {
     void emit('system.receive', buildSystem(msg, {
-      $id: `wecom:enter_agent:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
-      $adapter: 'wecom' as never,
-      $endpoint: configId,
-      $type: 'system',
-      $scene_id: msg.FromUserName,
-      $scene_type: 'wecom',
-      $sub_type: 'enter_agent',
-      $timestamp: msg.CreateTime ?? Date.now(),
+      id: `wecom:enter_agent:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
+      clientAdapter: 'wecom',
+      endpointId: configId,
+      type: 'system',
+      name: composeSideEventName('system', 'wecom', 'enter_agent'),
+      timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
     })).catch((err) => {
       logger.warn(formatCompact({
         op: 'wecom_system_side_event_failed',
@@ -49,15 +47,14 @@ export function receiveWecomSideEvent(
   if (!parts) return false;
   const sceneType = resolveChatType(msg.FromUserName);
   void emit('notice.receive', buildNotice(msg, {
-    $id: `wecom:${eventName}:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
-    $adapter: 'wecom' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: msg.FromUserName,
-    $scene_type: parts.scene_type === 'friend' ? parts.scene_type : sceneType,
-    $sub_type: parts.sub_type,
-    $actor: senderFromId(msg.FromUserName),
-    $timestamp: msg.CreateTime ?? Date.now(),
+    id: `wecom:${eventName}:${msg.FromUserName}:${msg.CreateTime ?? Date.now()}`,
+    clientAdapter: 'wecom',
+    endpointId: configId,
+    type: 'notice',
+    conversation: sideEventConversation(parts.scene_type === 'friend' ? parts.scene_type : sceneType, msg.FromUserName),
+    name: composeSideEventName('notice', parts.scene_type === 'friend' ? parts.scene_type : sceneType, parts.sub_type),
+    actor: senderFromId(msg.FromUserName),
+    timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'wecom_side_event_failed',

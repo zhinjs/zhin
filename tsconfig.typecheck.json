@@ -259,6 +259,7 @@
     "packages/im/ai/src/**/*",
     "packages/im/kernel/src/**/*",
     "packages/im/core/src/**/*",
+    "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
     "examples/minimal-bot/plugin.ts",
     "examples/minimal-bot/adapters/**/*",

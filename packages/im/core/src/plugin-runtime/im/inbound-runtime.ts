@@ -9,12 +9,12 @@ import type { EndpointEvent } from '@zhin.js/adapter';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
+import type { DeliveryReceipt } from '@zhin.js/im-contract';
 import type { UserInteraction } from '@zhin.js/interaction';
-import type { Notice } from '../../notice.js';
-import type { Request } from '../../request.js';
-import type { SystemEvent } from '../../system-event.js';
-import { sideEventSendChannel } from '../../side-event/base.js';
+import { RuntimeNotice, type IncomingNotice, type Notice } from '../../notice.js';
+import { RuntimeRequest, type IncomingRequest, type Request } from '../../request.js';
+import { RuntimeSystemEvent, type IncomingSystemEvent, type SystemEvent } from '../../system-event.js';
+import type { EndpointEventContext } from '../../side-event/base.js';
 import {
   RuntimeMessage,
   type Message,
@@ -94,11 +94,11 @@ export class InboundRuntime {
       case 'message.receive':
         return this.#receiveMessage(event as EndpointEvent<IncomingMessage>, admission);
       case 'notice.receive':
-        return this.#receiveNotice(event as EndpointEvent<Notice>);
+        return this.#receiveCanonicalEndpointEvent(event as EndpointEvent<IncomingNotice>);
       case 'request.receive':
-        return this.#receiveRequest(event as EndpointEvent<Request>);
+        return this.#receiveCanonicalEndpointEvent(event as EndpointEvent<IncomingRequest>);
       case 'system.receive':
-        return this.#receiveSideEvent(event as EndpointEvent<SystemEvent>);
+        return this.#receiveCanonicalEndpointEvent(event as EndpointEvent<IncomingSystemEvent>);
       default:
         return this.#receiveSideEvent(event);
     }
@@ -244,15 +244,49 @@ export class InboundRuntime {
     }
   }
 
-  async #receiveNotice(source: EndpointEvent<Notice>): Promise<void> {
-    await this.context.recordNotice(source.payload);
-    await this.#receiveSideEvent(withEndpointEventPayload(source, source.payload));
-  }
-
-  async #receiveRequest(source: EndpointEvent<Request>): Promise<void> {
-    await withRequestActionScope(source.payload, async (scoped) => {
-      await this.#receiveSideEvent(withEndpointEventPayload(source, scoped));
-    });
+  async #receiveCanonicalEndpointEvent(
+    source: EndpointEvent<IncomingNotice | IncomingRequest | IncomingSystemEvent>,
+  ): Promise<void> {
+    const lease = this.context.acquire();
+    let active = true;
+    try {
+      const context: EndpointEventContext = {
+        endpoint: {
+          id: source.endpoint.id,
+          adapter: String(requireAdapters(lease.value).owner(source.endpoint.id)),
+        },
+        generation: lease.value.generation,
+        client: () => {
+          if (!active) throw new Error('Endpoint event Client context expired with its generation operation');
+          return source.client;
+        },
+      };
+      const dispatch = async (payload: Notice | Request | SystemEvent) => {
+        await this.#runHandlers(lease.value, source.name, [withEndpointEventPayload(source, payload)]);
+      };
+      if (source.payload.type !== source.name.split('.')[0]) {
+        throw new TypeError('Endpoint event payload type does not match its gateway event');
+      }
+      switch (source.payload.type) {
+        case 'notice': {
+          const notice = new RuntimeNotice(source.payload, context);
+          await this.context.recordNotice(notice);
+          await dispatch(notice);
+          break;
+        }
+        case 'request':
+          await withRequestActionScope(source.payload, async (input) => {
+            await dispatch(new RuntimeRequest(input, context));
+          });
+          break;
+        case 'system':
+          await dispatch(new RuntimeSystemEvent(source.payload, context));
+          break;
+      }
+    } finally {
+      active = false;
+      this.context.release(lease);
+    }
   }
 
   async #receiveSideEvent(event: EndpointEvent): Promise<void> {
@@ -281,10 +315,9 @@ export class InboundRuntime {
         if (
           name === 'notice.receive'
           || name === 'request.receive'
-          || name === 'system.receive'
         ) {
           return this.#createInteractionForSideEvent(
-            payload as Notice | Request | SystemEvent,
+            payload as Notice | Request,
             snapshot,
           );
         }
@@ -295,23 +328,16 @@ export class InboundRuntime {
   }
 
   #createInteractionForSideEvent(
-    payload: Notice | Request | SystemEvent,
+    payload: Notice | Request,
     snapshot: RuntimeSnapshot,
   ): UserInteraction | undefined {
-    const adapter = String(payload.$adapter);
-    const endpointKey = String(payload.$endpoint);
-    if (!adapter || !endpointKey) return undefined;
-    const channel = sideEventSendChannel(payload);
-    const conversation: ConversationRef = Object.freeze({
-      endpoint: Object.freeze({ adapter, id: endpointKey }),
-      kind: channel.type,
-      id: channel.id || endpointKey,
-    });
+    const conversation = payload.conversation;
+    if (!conversation) return undefined;
     const requester = snapshot.root;
     const source: UserInteractionSource = Object.freeze({
       conversation,
-      ...(payload.$actor?.id
-        ? { sender: Object.freeze({ id: payload.$actor.id }) }
+      ...(payload.actor?.id
+        ? { sender: Object.freeze({ id: payload.actor.id }) }
         : {}),
       $reply: (content: SendContent) => this.context.deliver({
         conversation,
@@ -339,8 +365,8 @@ function interactionResult(requester: PluginId): MessageDispatchResult {
 }
 
 async function withRequestActionScope(
-  request: Request,
-  dispatch: (request: Request) => Promise<void>,
+  request: IncomingRequest,
+  dispatch: (request: IncomingRequest) => Promise<void>,
 ): Promise<void> {
   let active = true;
   const actions = new Set<Promise<void>>();
@@ -354,10 +380,10 @@ async function withRequestActionScope(
     );
     return operation;
   };
-  const scoped = Object.assign(Object.create(Object.getPrototypeOf(request)), request, {
+  const scoped: IncomingRequest = Object.freeze({ ...request,
     $approve: async (remark?: string) => run(() => request.$approve(remark)),
     $reject: async (reason?: string) => run(() => request.$reject(reason)),
-  }) as Request;
+  });
   try {
     await dispatch(scoped);
   } finally {

@@ -1,4 +1,4 @@
-import { buildNotice, senderFromId } from '@zhin.js/core';
+import { composeSideEventName, sideEventConversation, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import { formatInboundId, type WeChatMessage } from './protocol.js';
@@ -24,15 +24,14 @@ export function receiveWeChatMpSideEvent(
   const eventName = msg.Event ?? 'unknown';
   const parts = mapWeChatMpEventParts(eventName);
   void emit('notice.receive', buildNotice(msg, {
-    $id: `wechat-mp:${formatInboundId(msg)}`,
-    $adapter: 'wechat-mp' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: msg.FromUserName,
-    $scene_type: parts.scene_type,
-    $sub_type: parts.sub_type,
-    $actor: senderFromId(msg.FromUserName),
-    $timestamp: msg.CreateTime ?? Date.now(),
+    id: `wechat-mp:${formatInboundId(msg)}`,
+    clientAdapter: 'wechat-mp',
+    endpointId: configId,
+    type: 'notice',
+    conversation: sideEventConversation('private', msg.FromUserName),
+    name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
+    actor: senderFromId(msg.FromUserName),
+    timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'wechat_mp_side_event_failed',

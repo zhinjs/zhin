@@ -18,7 +18,7 @@ import {
   type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
-import { receiveOneBotLikeSideEvent, SystemEvent, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
+import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
 import type { MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -659,16 +659,13 @@ export class IcqqEndpoint extends Endpoint<Client> {
   }
 
   #dispatchIcqqSystemSideEvent(type: string, payload: Record<string, unknown> | null): void {
-    const { scene_type, sub_type } = parseIcqqSystemScene(type);
-    void this.emit('system.receive', SystemEvent.from(payload ?? {}, {
-      $id: `system:${this.endpointName}:${type}:${Date.now()}`,
-      $adapter: 'icqq' as never,
-      $endpoint: this.endpointName,
-      $type: 'system',
-      $scene_id: this.endpointName,
-      $scene_type: scene_type,
-      $sub_type: sub_type,
-      $timestamp: Date.now(),
+    void this.emit('system.receive', buildSystem(payload ?? {}, {
+      id: `system:${this.endpointName}:${type}:${Date.now()}`,
+      clientAdapter: 'icqq',
+      endpointId: this.endpointName,
+      type: 'system',
+      name: `system.${type}`,
+      timestamp: Date.now(),
     })).catch((err) => {
       this.#logger.warn(formatCompact({
         op: 'icqq_system_side_event_failed',
@@ -1061,22 +1058,6 @@ function serializeIcqqEvent(event: unknown): Record<string, unknown> | null {
     out[key] = value;
   }
   return Object.keys(out).length > 0 ? out : null;
-}
-
-function parseIcqqSystemScene(type: string): { scene_type: string; sub_type: string } {
-  if (type.startsWith('login.')) {
-    return { scene_type: 'login', sub_type: type.slice('login.'.length) || 'unknown' };
-  }
-  if (type.startsWith('offline.')) {
-    return { scene_type: 'offline', sub_type: type.slice('offline.'.length) || 'unknown' };
-  }
-  if (type === 'online') {
-    return { scene_type: 'online', sub_type: 'online' };
-  }
-  if (type === 'offline') {
-    return { scene_type: 'offline', sub_type: 'offline' };
-  }
-  return { scene_type: 'system', sub_type: type };
 }
 
 const INBOUND_HOLD_LIMIT = 32;

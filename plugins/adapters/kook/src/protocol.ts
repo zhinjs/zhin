@@ -76,6 +76,16 @@ export interface KookWebhookEventData {
   readonly verify_token?: string;
   readonly challenge?: string;
   readonly extra?: {
+    readonly type?: string | number;
+    readonly body?: {
+      readonly user_id?: string;
+      readonly channel_id?: string;
+      readonly msg_id?: string;
+      readonly author_id?: string;
+      readonly target_id?: string;
+      readonly chat_code?: string;
+      readonly emoji?: { readonly id?: string; readonly name?: string };
+    };
     readonly guild_id?: string;
     readonly author?: {
       readonly id?: string;

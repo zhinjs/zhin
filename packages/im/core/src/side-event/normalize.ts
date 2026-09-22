@@ -1,6 +1,6 @@
-import { Notice, type NoticeBase } from '../notice.js';
-import { Request, type RequestBase } from '../request.js';
-import { SystemEvent, type SystemEventBase } from '../system-event.js';
+import type { IncomingNotice } from '../notice.js';
+import type { IncomingRequest } from '../request.js';
+import type { IncomingSystemEvent } from '../system-event.js';
 import { parseSideEventName } from './base.js';
 import { KOOK_NOTICE_PARTS_MAP, ONEBOT_NOTICE_PARTS_MAP, SLACK_NOTICE_PARTS_MAP, type SideEventParts } from './types.js';
 
@@ -56,7 +56,7 @@ function resolveEssenceNoticeParts(subType: string | undefined): SideEventParts 
 }
 
 /**
- * 将平台原始 notice_type 映射为标准 `$scene_type` + `$sub_type`。
+ * 将平台原始 notice_type 映射为标准 `scene_type` + `sub_type`。
  */
 export function mapNoticeParts(
   platform: SideEventPlatform,
@@ -87,6 +87,10 @@ export function mapNoticeParts(
     return resolveEssenceNoticeParts(subType);
   }
 
+  if (platform === 'icqq' && (raw === 'group' || raw === 'friend') && subType) {
+    return ONEBOT_NOTICE_PARTS_MAP[`${raw}.${subType}`] ?? { scene_type: raw, sub_type: subType };
+  }
+
   if (ONEBOT_NOTICE_PARTS_MAP[raw]) {
     return ONEBOT_NOTICE_PARTS_MAP[raw];
   }
@@ -114,7 +118,7 @@ export function mapNoticeParts(
 }
 
 /**
- * 将平台原始 request_type 映射为标准 `$scene_type` + `$sub_type`。
+ * 将平台原始 request_type 映射为标准 `scene_type` + `sub_type`。
  */
 export function mapRequestParts(
   _platform: SideEventPlatform,
@@ -143,14 +147,15 @@ export function senderFromId(id: unknown, name?: string) {
   return { id: s, name: name ?? s };
 }
 
-export function buildNotice<T extends object>(input: T, format: NoticeBase) {
-  return Notice.from(input, format);
+/** Keep native fields under metadata; never mutate or flatten the platform event. */
+export function buildNotice<T extends object>(input: T, format: Omit<IncomingNotice, 'metadata'>): IncomingNotice {
+  return Object.freeze({ ...format, metadata: Object.freeze({ ...input }) });
 }
 
-export function buildRequest<T extends object>(input: T, format: RequestBase) {
-  return Request.from(input, format);
+export function buildRequest<T extends object>(input: T, format: Omit<IncomingRequest, 'metadata'>): IncomingRequest {
+  return Object.freeze({ ...format, metadata: Object.freeze({ ...input }) });
 }
 
-export function buildSystem<T extends object>(input: T, format: SystemEventBase) {
-  return SystemEvent.from(input, format);
+export function buildSystem<T extends object>(input: T, format: Omit<IncomingSystemEvent, 'metadata'>): IncomingSystemEvent {
+  return Object.freeze({ ...format, metadata: Object.freeze({ ...input }) });
 }

@@ -1,49 +1,54 @@
-import type { NoticeKind } from './side-event/types.js';
-import type { SideEventBase } from './side-event/base.js';
+import type { ComposedNoticeName } from './side-event/types.js';
+import { RuntimeSideEvent, type IncomingSideEvent, type SideEventBase, type EndpointEventContext } from './side-event/base.js';
 
 export type { NoticeKind, ComposedNoticeName } from './side-event/types.js';
-export type { SideEventBase } from './side-event/base.js';
-export {
-  composeSideEventName,
-  formatSideEventName,
-  matchesSideEventName,
-  parseSideEventName,
-  sideEventSendChannel,
-} from './side-event/base.js';
+export type { SideEventBase, IncomingSideEvent } from './side-event/base.js';
+export { composeSideEventName, formatSideEventName, matchesSideEventName, parseSideEventName, sideEventConversation, sideEventSendChannel } from './side-event/base.js';
 
-/**
- * 通知基础结构 — 继承 SideEventBase。
- *
- * @example
- * ```typescript
- * const notice = Notice.from(rawEvent, {
- *   $id: rawEvent.id,
- *   $adapter: 'icqq',
- *   $endpoint: endpointKey,
- *   $type: 'notice',
- *   $scene_id: groupId,
- *   $scene_type: 'group',
- *   $sub_type: 'member_decrease',
- *   $actor: { id: operatorId, name: '管理员' },
- *   $target: { id: userId, name: '被踢者' },
- *   $timestamp: Date.now(),
- * });
- * // formatSideEventName(notice) === 'notice.group.member_decrease'
- * this.adapter.emit('notice.receive', notice);
- * ```
- */
-export interface NoticeBase extends SideEventBase {
-  $adapter: string;
-  $type: NoticeKind;
+export interface IncomingNotice extends IncomingSideEvent {
+  readonly type: 'notice';
+  readonly name: ComposedNoticeName;
+  readonly messageId?: string;
+  readonly reaction?: string;
+  readonly operation?: 'added' | 'removed';
+  readonly durationSeconds?: number;
+  readonly role?: string;
+  readonly enabled?: boolean;
 }
 
-/**
- * 完整通知类型，支持平台原始数据扩展
- */
+export interface NoticeBase extends SideEventBase {
+  readonly type: 'notice';
+  readonly name: ComposedNoticeName;
+  readonly messageId?: string;
+  readonly reaction?: string;
+  readonly operation?: 'added' | 'removed';
+  readonly durationSeconds?: number;
+  readonly role?: string;
+  readonly enabled?: boolean;
+}
+
 export type Notice<T extends object = {}> = NoticeBase & T;
 
-export namespace Notice {
-  export function from<T extends object>(input: T, format: NoticeBase): Notice<T> {
-    return Object.assign(input, format);
+/** @internal Generation-scoped implementation of the public Notice contract. */
+export class RuntimeNotice extends RuntimeSideEvent implements NoticeBase {
+  declare readonly type: 'notice';
+  declare readonly name: ComposedNoticeName;
+  readonly messageId?: string;
+  readonly reaction?: string;
+  readonly operation?: 'added' | 'removed';
+  readonly durationSeconds?: number;
+  readonly role?: string;
+  readonly enabled?: boolean;
+  constructor(input: IncomingNotice, context: EndpointEventContext) {
+    super(input, context);
+    this.messageId = input.messageId;
+    this.reaction = input.reaction;
+    this.operation = input.operation;
+    this.durationSeconds = input.durationSeconds;
+    this.role = input.role;
+    this.enabled = input.enabled;
+    Object.freeze(this);
   }
 }
+
+export const Notice = RuntimeNotice;

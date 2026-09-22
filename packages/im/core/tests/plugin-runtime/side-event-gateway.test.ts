@@ -1,9 +1,11 @@
+import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   SnapshotStore,
   createCapabilitySlot,
   createSnapshotView,
   rootPluginId,
+  type FeatureId,
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
@@ -18,15 +20,24 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
-import { ImRuntime } from '../../src/plugin-runtime/im/index.js';
+import { buildNotice, buildRequest, buildSystem } from '../../src/side-event/normalize.js';
+import { ImRuntime, type Notice as RuntimeNotice, type Request as RuntimeRequest, type SystemEvent as RuntimeSystemEvent } from '../../src/plugin-runtime/im/index.js';
 import { Notice } from '../../src/notice.js';
 import { SystemEvent } from '../../src/system-event.js';
 import { receiveOneBotLikeSideEvent } from '../../src/side-event/dispatch.js';
-import { Request } from '../../src/request.js';
-import type { Notice as PublicNotice, Request as PublicRequest } from '../../src/index.js';
+import { Request, type IncomingRequest } from '../../src/request.js';
+import type { Notice as PublicNotice, Request as PublicRequest, SystemEvent as PublicSystemEvent } from '../../src/index.js';
 
 describe('ImRuntime side-event handlers', () => {
-  it('exports the Notice and Request payload contracts received by handlers', () => {
+  it('exports one canonical payload contract per event across public entry points', () => {
+    expectTypeOf<PublicNotice>().toEqualTypeOf<RuntimeNotice>();
+    expectTypeOf<PublicRequest>().toEqualTypeOf<RuntimeRequest>();
+    expectTypeOf<PublicSystemEvent>().toEqualTypeOf<RuntimeSystemEvent>();
+    expectTypeOf<Extract<keyof PublicSystemEvent, 'conversation' | 'actor' | 'target'>>().toBeNever();
+    defineHandler({
+      event: 'system.receive',
+      handle(event) { expectTypeOf(event.payload).toEqualTypeOf<PublicSystemEvent>(); },
+    });
     defineHandler({
       event: 'notice.receive',
       handle(event) {
@@ -45,10 +56,10 @@ describe('ImRuntime side-event handlers', () => {
   });
 
   it('expires request action ports when gateway dispatch settles', async () => {
-    let captured: Request | undefined;
+    let captured: IncomingRequest | undefined;
     const approve = vi.fn(async () => undefined);
     const emit: EndpointEventEmitter = async (name, payload) => {
-      if (name === 'request.receive') captured = payload as Request;
+      if (name === 'request.receive') captured = payload as IncomingRequest;
     };
     await receiveOneBotLikeSideEvent(emit, {
       adapter: 'onebot11',
@@ -63,12 +74,12 @@ describe('ImRuntime side-event handlers', () => {
   it('keeps request dispatch alive until fire-and-forget actions settle', async () => {
     let release!: () => void;
     const action = new Promise<void>((resolve) => { release = resolve; });
-    let captured: Request | undefined;
+    let captured: IncomingRequest | undefined;
     const approve = vi.fn(() => action);
     let dispatchSettled = false;
     const emit: EndpointEventEmitter = async (name, payload) => {
       if (name !== 'request.receive') return;
-      const request = payload as Request;
+      const request = payload as IncomingRequest;
       captured = request;
       void request.$approve();
     };
@@ -89,7 +100,7 @@ describe('ImRuntime side-event handlers', () => {
   });
 
   it('normalizes member targets and reaction operations at the adapter boundary', async () => {
-    const receiveNotice = vi.fn(async () => undefined);
+    const receiveNotice = vi.fn(async (_notice: unknown) => undefined);
     const emit: EndpointEventEmitter = async (name, payload) => {
       if (name === 'notice.receive') await receiveNotice(payload);
     };
@@ -106,20 +117,43 @@ describe('ImRuntime side-event handlers', () => {
     });
 
     expect(receiveNotice.mock.calls[0]?.[0]).toMatchObject({
-      $sub_type: 'member_increase',
-      $actor: undefined,
-      $target: { id: '2' },
+      name: 'notice.group.member_increase',
+      actor: undefined,
+      target: { id: '2' },
     });
     expect(receiveNotice.mock.calls[1]?.[0]).toMatchObject({
-      $sub_type: 'emoji_reaction',
-      $operation: 'removed',
-      $message_id: '4',
+      name: 'notice.group.emoji_reaction',
+      operation: 'removed',
+      messageId: '4',
     });
+  });
+
+  it('does not use a user or bot id as a missing group conversation', async () => {
+    const emit = vi.fn(async (_name: string, _payload: unknown) => undefined);
+    await receiveOneBotLikeSideEvent(emit, {
+      adapter: 'onebot11', endpointKey: 'bot',
+      raw: { post_type: 'notice', notice_type: 'group_increase', user_id: 2, time: 3 },
+    });
+    expect(emit).toHaveBeenCalledWith('notice.receive', expect.objectContaining({ conversation: undefined }));
+  });
+
+  it.each([
+    [{ post_type: 'system.login.qrcode' }, 'system.login.qrcode'],
+    [{ post_type: 'system.online' }, 'system.online'],
+    [{ post_type: 'system.login', sub_type: 'qrcode' }, 'system.login.qrcode'],
+    [{ post_type: 'system.login.qrcode', sub_type: 'qrcode' }, 'system.login.qrcode'],
+    [{ post_type: 'meta_event', meta_event_type: 'lifecycle', sub_type: 'connect' }, 'system.lifecycle.connect'],
+  ])('preserves independent system names for %j', async (raw, name) => {
+    const emit = vi.fn(async (_name: string, _payload: unknown) => undefined);
+    await receiveOneBotLikeSideEvent(emit, { adapter: 'onebot11', endpointKey: 'bot', raw });
+    expect(emit).toHaveBeenCalledWith('system.receive', expect.objectContaining({ type: 'system', name }));
+    expect(emit.mock.calls[0]?.[1]).not.toHaveProperty('conversation');
   });
 
   async function createFixture(onRequest?: (request: Request) => void) {
     const noticed: unknown[] = [];
-    const systems: unknown[] = [];
+    const systems: Array<{ payload: SystemEvent }> = [];
+    const systemInteractions: unknown[] = [];
     const root = rootPluginId();
     const liveClient = Object.freeze({ tag: 'live-memory' });
     class MemoryEndpoint extends Endpoint<typeof liveClient> {
@@ -128,6 +162,7 @@ describe('ImRuntime side-event handlers', () => {
       open(): void {}
       close(): void {}
       stop(): void {}
+      receive(name: string, payload: unknown) { return this.emit(name, payload); }
       send() { return 'ok'; }
     }
     const liveEndpoint = new MemoryEndpoint();
@@ -162,6 +197,8 @@ describe('ImRuntime side-event handlers', () => {
         event: 'system.receive',
         handle(event) {
           systems.push(event);
+          systemInteractions.push(this.interaction);
+          expect(event.payload.$client).toBe(liveClient);
         },
       }),
     });
@@ -198,7 +235,7 @@ describe('ImRuntime side-event handlers', () => {
     };
     const view = createSnapshotView(0, base);
     const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-    const projections = new Map([
+    const projections = new Map<FeatureId, unknown>([
       [adapterFeatureId, adapters],
       [handlerFeatureId, new HandlerIndex([
         noticeHandler,
@@ -210,28 +247,32 @@ describe('ImRuntime side-event handlers', () => {
     im.attach(store);
     await adapters.start();
     adapters.open();
-    return { im, noticed, systems, liveClient, adapterLocalName: 'memory' };
+    return { im, noticed, systems, systemInteractions, liveClient, liveEndpoint, adapter,
+      receive: liveEndpoint.receive.bind(liveEndpoint),
+      close: async () => { await adapters.stop(); await store.close(); },
+    };
   }
 
   it('receiveNotice dispatches generation-safe handlers', async () => {
-    const { im, noticed, liveClient } = await createFixture();
-    const notice = Notice.from({}, {
-      $id: 'n1',
-      $adapter: 'memory' as never,
-      $endpoint: 'memory',
-      $type: 'notice',
-      $scene_id: 'g1',
-      $scene_type: 'group',
-      $sub_type: 'member_increase',
-      $timestamp: Date.now(),
+    const { receive, noticed, liveClient, adapter, close } = await createFixture();
+    const notice = buildNotice({}, {
+      id: 'n1',
+      clientAdapter: 'memory',
+      endpointId: 'memory',
+      type: 'notice',
+      conversation: sideEventConversation('group', 'g1'),
+      name: composeSideEventName('notice', 'group', 'member_increase'),
+      timestamp: Date.now(),
     });
-    await receiveEndpointEvent(im, 'notice.receive', notice, liveClient);
+    await receive('notice.receive', notice);
     expect(noticed).toHaveLength(1);
     expect(noticed[0]).toMatchObject({
       name: 'notice.receive',
-      payload: notice,
+      payload: { ...notice, conversation: { ...notice.conversation, endpoint: { id: adapter.id, adapter: String(adapter.owner) } }, generation: 0 },
       client: liveClient,
     });
+    expect(() => (noticed[0] as { payload: Notice }).payload.$client).toThrow('expired');
+    await close();
   });
 
   it('keeps ImRuntime request operation open until started actions settle', async () => {
@@ -239,25 +280,24 @@ describe('ImRuntime side-event handlers', () => {
     const action = new Promise<void>((resolve) => { release = resolve; });
     const approve = vi.fn(() => action);
     let captured: Request | undefined;
-    const { im } = await createFixture((request) => {
+    const { receive, close } = await createFixture((request) => {
       captured = request;
       void request.$approve();
     });
-    const request = Request.from({}, {
-      $id: 'request-1',
-      $adapter: 'memory' as never,
-      $endpoint: 'memory',
-      $type: 'request',
-      $scene_id: 'u1',
-      $scene_type: 'friend',
-      $sub_type: 'add',
-      $actor: { id: 'u1' },
-      $timestamp: Date.now(),
+    const request = buildRequest({}, {
+      id: 'request-1',
+      clientAdapter: 'memory',
+      endpointId: 'memory',
+      type: 'request',
+      conversation: sideEventConversation('friend', 'u1'),
+      name: composeSideEventName('request', 'friend', 'add'),
+      actor: { id: 'u1' },
+      timestamp: Date.now(),
       $approve: approve,
       $reject: async () => undefined,
     });
     let settled = false;
-    const dispatch = receiveEndpointEvent(im, 'request.receive', request, {}).finally(() => { settled = true; });
+    const dispatch = receive('request.receive', request).finally(() => { settled = true; });
     await Promise.resolve();
     await Promise.resolve();
     expect(approve).toHaveBeenCalledOnce();
@@ -265,36 +305,42 @@ describe('ImRuntime side-event handlers', () => {
     release();
     await dispatch;
     await expect(captured?.$approve()).rejects.toThrow('action port expired');
+    await close();
+  });
+
+  it('rejects an unregistered endpoint instead of inventing a canonical owner', async () => {
+    const { im, systems, close } = await createFixture();
+    await expect(im.endpointEvents.receive({
+      name: 'system.receive',
+      endpoint: { id: 'unregistered' as never, adapter: 'memory' },
+      payload: buildSystem({}, { id: 's', type: 'system', name: 'system.online', timestamp: 0 }),
+      client: {},
+    })).rejects.toThrow('Unknown Adapter Endpoint');
+    expect(systems).toHaveLength(0);
+    await close();
   });
 
   it('receiveSystem dispatches system.receive handlers', async () => {
-    const { im, systems } = await createFixture();
-    const event = SystemEvent.from({}, {
-      $id: 's1',
-      $adapter: 'memory' as never,
-      $endpoint: 'memory',
-      $type: 'system',
-      $scene_id: 'memory',
-      $scene_type: 'login',
-      $sub_type: 'qrcode',
-      $timestamp: Date.now(),
+    const { receive, systems, systemInteractions, noticed, close } = await createFixture();
+    const event = buildSystem({}, {
+      id: 's1',
+      clientAdapter: 'memory',
+      endpointId: 'memory',
+      type: 'system',
+      name: composeSideEventName('system', 'login', 'qrcode'),
+      timestamp: Date.now(),
     });
-    await receiveEndpointEvent(im, 'system.receive', event, {});
+    await expect(receive('notice.receive', event)).rejects.toThrow('payload type does not match');
+    await receive('system.receive', event);
     expect(systems).toHaveLength(1);
-    expect((systems[0] as { payload?: { $sub_type?: string } }).payload?.$sub_type).toBe('qrcode');
+    expect((systems[0] as { payload: SystemEvent }).payload.name).toBe('system.login.qrcode');
+    expect(systems[0]?.payload).toBeInstanceOf(SystemEvent);
+    expect(systems[0]?.payload).not.toHaveProperty('conversation');
+    expect(systems[0]?.payload).not.toHaveProperty('actor');
+    expect(systems[0]?.payload).not.toHaveProperty('target');
+    expect(() => systems[0]?.payload.$client).toThrow('expired');
+    expect(systemInteractions).toEqual([undefined]);
+    expect(noticed).toEqual([]);
+    await close();
   });
 });
-
-function receiveEndpointEvent(
-  im: ImRuntime,
-  name: string,
-  payload: unknown,
-  client: object,
-): Promise<unknown> {
-  return im.endpointEvents.receive(Object.freeze({
-    name,
-    payload,
-    endpoint: Object.freeze({ id: 'memory' as never, adapter: 'memory' }),
-    client,
-  }));
-}

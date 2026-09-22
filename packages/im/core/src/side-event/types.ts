@@ -1,10 +1,6 @@
-/**
- * Side Event 标准类型。
- * 运行时 `$type` 仅存命名空间（`notice` / `request` / `system`）；
- * 完整名由 `${$type}.${$scene_type}.${$sub_type}` 组合。
- */
-
-export type SideEventKind = 'notice' | 'request' | 'system';
+/** Semantic names for independent Notice, Request and SystemEvent contracts. */
+export type SideEventKind = 'notice' | 'request';
+export type EndpointEventKind = SideEventKind | 'system';
 
 export type NoticeKind = 'notice';
 export type RequestKind = 'request';

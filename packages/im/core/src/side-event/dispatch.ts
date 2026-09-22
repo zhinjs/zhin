@@ -1,3 +1,4 @@
+import { composeSideEventName, sideEventConversation } from './base.js';
 import type { EndpointEventEmitter } from '@zhin.js/adapter';
 import {
   buildNotice,
@@ -52,26 +53,25 @@ export async function receiveOneBotLikeSideEvent(
           ? raw.user_id
           : undefined;
     const notice = buildNotice(raw, {
-      $id: id,
-      $adapter: input.adapter as never,
-      $endpoint: input.endpointKey,
-      $type: 'notice',
-      $scene_id: String(raw.group_id ?? raw.user_id ?? input.endpointKey),
-      $scene_type: parts.scene_type,
-      $sub_type: parts.sub_type,
-      $actor: senderFromId(actorId),
-      $target: senderFromId(targetId),
-      $timestamp: toMillis(raw.time),
-      ...(raw.message_id != null ? { $message_id: String(raw.message_id) } : {}),
+      id,
+      clientAdapter: input.adapter,
+      endpointId: input.endpointKey,
+      type: 'notice',
+      conversation: oneBotConversation(parts.scene_type, raw),
+      name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
+      actor: senderFromId(actorId),
+      target: senderFromId(targetId),
+      timestamp: toMillis(raw.time),
+      ...(raw.message_id != null ? { messageId: String(raw.message_id) } : {}),
       ...(raw.emoji_id != null || raw.code != null
-        ? { $reaction: String(raw.emoji_id ?? raw.code) }
+        ? { reaction: String(raw.emoji_id ?? raw.code) }
         : {}),
       ...(parts.sub_type === 'emoji_reaction'
-        ? { $operation: /delete|remove/i.test(String(raw.sub_type ?? noticeType)) ? 'removed' as const : 'added' as const }
+        ? { operation: /delete|remove/i.test(String(raw.sub_type ?? noticeType)) ? 'removed' as const : 'added' as const }
         : {}),
-      ...(raw.duration != null ? { $duration_seconds: Math.max(0, Number(raw.duration) || 0) } : {}),
+      ...(raw.duration != null ? { durationSeconds: Math.max(0, Number(raw.duration) || 0) } : {}),
       ...(parts.sub_type === 'admin_change'
-        ? { $role: 'admin', $enabled: String(raw.sub_type ?? '') === 'set' }
+        ? { role: 'admin', enabled: String(raw.sub_type ?? '') === 'set' }
         : {}),
     });
     await emit('notice.receive', notice);
@@ -105,16 +105,15 @@ export async function receiveOneBotLikeSideEvent(
       return operation;
     };
     const request = buildRequest(raw, {
-      $id: id,
-      $adapter: input.adapter as never,
-      $endpoint: input.endpointKey,
-      $type: 'request',
-      $scene_id: String(raw.group_id ?? raw.user_id ?? input.endpointKey),
-      $scene_type: parts.scene_type,
-      $sub_type: parts.sub_type,
-      $actor: actor,
-      $comment: raw.comment != null ? String(raw.comment) : undefined,
-      $timestamp: toMillis(raw.time),
+      id,
+      clientAdapter: input.adapter,
+      endpointId: input.endpointKey,
+      type: 'request',
+      conversation: oneBotConversation(parts.scene_type, raw),
+      name: composeSideEventName('request', parts.scene_type, parts.sub_type),
+      actor,
+      comment: raw.comment != null ? String(raw.comment) : undefined,
+      timestamp: toMillis(raw.time),
       async $approve(remark?: string) {
         if (!approve || !flag) throw new Error('Request approve is not available');
         await runAction(() => approve(flag, remark));
@@ -145,26 +144,30 @@ export async function receiveOneBotLikeSideEvent(
       ?? (postType.replace(/^(meta_event|meta|system)\.?/, '') || 'unknown'),
     );
     const subType = raw.sub_type != null ? String(raw.sub_type) : undefined;
-    const sceneType = postType.startsWith('system.')
-      ? (postType.split('.')[1] ?? 'system')
-      : metaType === 'lifecycle' || metaType === 'heartbeat'
-        ? metaType
-        : 'meta';
+    const name = postType.startsWith('system.')
+      ? (postType.split('.').length === 2 ? composeSideEventName(postType, subType) : postType)
+      : composeSideEventName('system', metaType, subType);
     const system = buildSystem(raw, {
-      $id: `system:${toMillis(raw.time)}_${metaType}_${subType ?? ''}`,
-      $adapter: input.adapter as never,
-      $endpoint: input.endpointKey,
-      $type: 'system',
-      $scene_id: String(raw.self_id ?? input.endpointKey),
-      $scene_type: sceneType,
-      $sub_type: subType ?? metaType,
-      $timestamp: toMillis(raw.time),
+      id: `system:${toMillis(raw.time)}_${metaType}_${subType ?? ''}`,
+      clientAdapter: input.adapter,
+      endpointId: input.endpointKey,
+      type: 'system',
+      name,
+      timestamp: toMillis(raw.time),
     });
     await emit('system.receive', system);
     return 'system';
   }
 
   return null;
+}
+
+function oneBotConversation(sceneType: string, raw: OneBotLikeRawEvent) {
+  const id = sceneType === 'group' ? raw.group_id
+    : sceneType === 'channel' ? raw.channel_id
+      : sceneType === 'private' || sceneType === 'friend' ? raw.user_id
+        : undefined;
+  return sideEventConversation(sceneType, id == null ? '' : String(id));
 }
 
 function toMillis(time: unknown): number {

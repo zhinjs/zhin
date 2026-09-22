@@ -1,4 +1,4 @@
-import { buildNotice, senderFromId } from '@zhin.js/core';
+import { composeSideEventName, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 
@@ -17,15 +17,14 @@ export function receiveDiscordGuildMemberSideEvent(
 ): void {
   if (!emit) return;
   void emit('notice.receive', buildNotice(event, {
-    $id: `discord:guild_member:${kind}:${event.guildId}:${event.userId}:${Date.now()}`,
-    $adapter: 'discord' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: event.guildId,
-    $scene_type: 'group',
-    $sub_type: kind,
-    $actor: senderFromId(event.userId, event.userName),
-    $timestamp: Date.now(),
+    id: `discord:guild_member:${kind}:${event.guildId}:${event.userId}:${Date.now()}`,
+    clientAdapter: 'discord',
+    endpointId: configId,
+    type: 'notice',
+    // Guild membership does not identify a replyable channel.
+    name: composeSideEventName('notice', 'group', kind),
+    target: senderFromId(event.userId, event.userName),
+    timestamp: Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'discord_side_event_failed',

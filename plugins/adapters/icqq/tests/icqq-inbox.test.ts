@@ -173,6 +173,28 @@ describe('icqq inbox row builders', () => {
 });
 
 describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
+  it('emits login and online as independent system events', async () => {
+    const sideEvents = createSideEvents();
+    const endpoint = await startEndpoint({ sideEvents });
+    try {
+      endpoint.client.emit('system.login.qrcode', { image: Buffer.from('test-qr') });
+      endpoint.client.emit('system.online', {});
+      await flush();
+      expect(sideEvents.systems).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: 'system', name: 'system.login.qrcode', endpointId: '10001' }),
+        expect.objectContaining({ type: 'system', name: 'system.online' }),
+      ]));
+      for (const system of sideEvents.systems) {
+        expect(system).not.toHaveProperty('conversation');
+        expect(system).not.toHaveProperty('actor');
+      }
+      expect(sideEvents.notices).toHaveLength(0);
+      expect(sideEvents.requests).toHaveLength(0);
+    } finally {
+      await endpoint.stop();
+    }
+  });
+
   it('dispatches request events to SideEventGateway', async () => {
     const sideEvents = createSideEvents();
     const endpoint = await startEndpoint({ sideEvents });
@@ -189,9 +211,9 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
       await flush();
       expect(sideEvents.requests).toHaveLength(1);
       expect(sideEvents.requests[0]).toMatchObject({
-        $type: 'request',
-        $id: 'flag-1',
-        $endpoint: '10001',
+        type: 'request',
+        id: 'flag-1',
+        endpointId: '10001',
       });
 
       endpoint.client.emit('request.friend.add', {
@@ -223,8 +245,10 @@ describe('icqq endpoint side-event wiring (no inbox dual-write)', () => {
     await flush();
     expect(sideEvents.notices).toHaveLength(1);
     expect(sideEvents.notices[0]).toMatchObject({
-      $type: 'notice',
-      $endpoint: '10001',
+      type: 'notice',
+      name: 'notice.group.member_increase',
+      target: { id: '20002' },
+      endpointId: '10001',
     });
     await endpoint.stop();
   });

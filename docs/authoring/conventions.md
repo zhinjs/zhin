@@ -105,14 +105,23 @@ export default defineMiddleware<Message, GroupSuiteConfig>({
 依赖 `zhin.js` / `@zhin.js/core` 的 Root 会经由 `platformFeatures` 挂载 `@zhin.js/handler`，无需再单独声明或安装。`ImRuntime` 会分发：
 
 - `message.receive`（消息入站，命令/中间件之前）
-- `notice.receive` / `request.receive` / `system.receive`（适配器经 `sideEventGatewayToken` 上报）
+- `notice.receive`（通知）、`request.receive`（可审批申请）
+- `system.receive`（独立系统事件：登录、上下线等）
+
+适配器统一经 `Endpoint.emit(...)` 上报，Runtime 在当前 generation 构造对应的 canonical payload。
 
 Handler 的 `this` 为 `HandlerContext`：
 
-- `this.interaction`：用户输入、确认与选择（与命令 `UserInteraction` 同源；侧事件按场景通道合成）
+- `this.interaction`：用户输入、确认与选择（与命令 `UserInteraction` 同源；Notice / Request 仅在有真实 `conversation` 时提供；SystemEvent 不提供）
 
-Notice / Request / SystemEvent payload 上的 `$endpoint` 是不可变 identity。Handler 不暴露可保存的 live Endpoint；发送、
-审批与交互必须走 generation-bound port，避免热切换后继续操作已退役资源。
+`Message`、`Notice`、`Request`、`SystemEvent` 从 `zhin.js`、`@zhin.js/core`、`@zhin.js/core/runtime` 导入时均与 Handler 收到的 payload 一致。Notice / Request / SystemEvent 的普通数据字段使用 camelCase：
+
+- `id`、`type`、`name`、`timestamp`、`metadata`：标准事件身份、完整语义名、毫秒时间戳与原始平台字段。
+- `endpoint`、`generation`：Runtime 绑定的不可变 Endpoint 身份与代次；`endpointId` 是适配器提供的账号标识，`clientAdapter` 是平台标识。
+- Notice / Request 的 `conversation?`、`actor?`、`target?`：仅表达实际存在的会话与参与者；Request 的 `actor` 必填。
+- SystemEvent 独立于聊天事件，不含 `conversation`、`actor`、`target`。
+
+`$client` 以及 Request 的 `$approve()` / `$reject()` 是当前 operation 的能力入口，处理结束后失效。平台原始字段从 `metadata` 读取；如需 SDK 原生强类型事件，使用带 `adapter` 的原生事件 Handler。
 
 与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
 
@@ -139,7 +148,7 @@ export default defineHandler({
   event: 'notice.receive',
   handle(event) {
     const notice = event.payload;
-    console.log(notice.$scene_type, notice.$sub_type);
+    console.log(notice.name, notice.conversation, notice.target);
   },
 });
 ```
@@ -163,10 +172,10 @@ import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
   event: 'system.receive',
-  async handle(event) {
+  handle(event) {
     const ev = event.payload;
-    if (ev.$sub_type !== 'qrcode') return;
-    await this.interaction?.ask({ type: 'text', title: '扫码完成后回复 done' });
+    if (ev.name !== 'system.login.qrcode') return;
+    console.log('请在登录面板扫码', ev.endpointId);
   },
 });
 ```

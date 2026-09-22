@@ -67,9 +67,7 @@ describe('side-event normalize', () => {
       expect(composeSideEventName('notice', 'group', 'member_increase'))
         .toBe('notice.group.member_increase');
       expect(formatSideEventName({
-        $type: 'notice',
-        $scene_type: 'group',
-        $sub_type: 'member_increase',
+        name: 'notice.group.member_increase',
       })).toBe('notice.group.member_increase');
     });
   });

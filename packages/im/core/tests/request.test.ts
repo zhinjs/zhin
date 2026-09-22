@@ -1,54 +1,31 @@
-/**
- * Request 抽象层测试
- */
-import { Request, RequestBase } from '../src/request.js';
-import { formatSideEventName } from '../src/side-event/base.js';
+import { Request, type RequestBase } from '../src/request.js';
+import { buildRequest } from '../src/side-event/normalize.js';
+import { expectTypeOf, vi } from 'vitest';
 
-describe('Request', () => {
-  describe('Request.from()', () => {
-    it('应合并原始数据与基础结构', () => {
-      const raw = { flag: 'abc123', extra_data: 42 };
-      const base: RequestBase = {
-        $id: 'req_001',
-        $adapter: 'onebot11' as any,
-        $endpoint: 'bot1',
-        $type: 'request',
-        $scene_id: '100',
-        $scene_type: 'friend',
-        $sub_type: 'add',
-        $actor: { id: '200', name: '请求者' },
-        $comment: '请加我好友',
-        $timestamp: 1000,
-        $approve: async () => {},
-        $reject: async () => {},
-      };
-      const request = Request.from(raw, base);
+const context = { endpoint: { adapter: 'root/qq', id: 'capability-1' }, generation: 7, client: () => ({ live: true }) };
 
-      expect(formatSideEventName(request)).toBe('request.friend.add');
-      expect(request.$actor).toEqual({ id: '200', name: '请求者' });
-      expect(request.flag).toBe('abc123');
+describe('canonical Request', () => {
+  it('preserves metadata, requester and asynchronous approval ports', async () => {
+    const approve = vi.fn();
+    const reject = vi.fn();
+    const raw = { flag: 'f1', comment: 'native-comment' };
+    const input = buildRequest(raw, {
+      id: 'r1', type: 'request', name: 'request.friend.add',
+      conversation: { kind: 'private', id: 'u1' }, timestamp: 1000,
+      actor: { id: 'u1', name: 'User' }, comment: 'hello',
+      $approve: approve, $reject: reject,
     });
-  });
-
-  describe('$approve() 和 $reject()', () => {
-    it('调用 $approve 应执行同意逻辑', async () => {
-      let approved = false;
-      const request = Request.from({}, {
-        $id: 'req_approve',
-        $adapter: 'onebot11' as any,
-        $endpoint: 'bot1',
-        $type: 'request',
-        $scene_id: '100',
-        $scene_type: 'friend',
-        $sub_type: 'add',
-        $actor: { id: '200', name: '用户' },
-        $timestamp: 0,
-        $approve: async () => { approved = true; },
-        $reject: async () => {},
-      });
-
-      await request.$approve('备注名');
-      expect(approved).toBe(true);
-    });
+    const request = new Request(input, context);
+    expectTypeOf(request).toMatchTypeOf<RequestBase>();
+    expect(request.metadata.flag).toBe('f1');
+    expect(request).not.toHaveProperty('flag');
+    expect(request.comment).toBe('hello');
+    expect(request.actor).toEqual({ id: 'u1', name: 'User' });
+    expect(request.conversation?.endpoint).toEqual(context.endpoint);
+    await expect(request.$approve('remark')).resolves.toBeUndefined();
+    await expect(request.$reject('reason')).resolves.toBeUndefined();
+    expect(approve).toHaveBeenCalledWith('remark');
+    expect(reject).toHaveBeenCalledWith('reason');
+    expect(Object.isFrozen(request)).toBe(true);
   });
 });

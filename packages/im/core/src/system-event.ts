@@ -1,19 +1,29 @@
-import type { SideEventBase } from './side-event/base.js';
+import type { ComposedSystemName } from './side-event/types.js';
+import { RuntimeEndpointEvent, type IncomingEndpointEvent, type EndpointEventBase, type EndpointEventContext } from './side-event/base.js';
 
-/**
- * 系统/登录侧事件（扫码、滑块、掉线等）。
- * `$scene_type`：`login` / `offline` / `online` 等；
- * `$sub_type`：`qrcode` / `slider` / `device` / `kickoff` / `network` 等。
- */
-export interface SystemEventBase extends SideEventBase {
-  $adapter: string;
-  $type: 'system';
+export type { ComposedSystemName, SystemKind } from './side-event/types.js';
+export type { IncomingEndpointEvent, EndpointEventBase } from './side-event/base.js';
+
+export interface IncomingSystemEvent extends IncomingEndpointEvent {
+  readonly type: 'system';
+  readonly name: ComposedSystemName;
+}
+
+export interface SystemEventBase extends EndpointEventBase {
+  readonly type: 'system';
+  readonly name: ComposedSystemName;
 }
 
 export type SystemEvent<T extends object = {}> = SystemEventBase & T;
 
-export namespace SystemEvent {
-  export function from<T extends object>(input: T, format: SystemEventBase): SystemEvent<T> {
-    return Object.assign(input, format);
+/** @internal Endpoint lifecycle signals do not imply a conversation. */
+export class RuntimeSystemEvent extends RuntimeEndpointEvent implements SystemEventBase {
+  declare readonly type: 'system';
+  declare readonly name: ComposedSystemName;
+  constructor(input: IncomingSystemEvent, context: EndpointEventContext) {
+    super(input, context);
+    Object.freeze(this);
   }
 }
+
+export const SystemEvent = RuntimeSystemEvent;

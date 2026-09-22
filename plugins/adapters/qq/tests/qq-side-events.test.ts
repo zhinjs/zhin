@@ -45,13 +45,12 @@ describe('QQ side events', () => {
 
     await vi.waitFor(() => expect(received).toHaveLength(1));
     expect(received[0]).toMatchObject({
-      $endpoint: 'qq-main',
-      $scene_id: 'group-1',
-      $scene_type: 'group',
-      $sub_type: subType,
-      $actor: { id: 'admin-1' },
-      $target: { id: 'member-1' },
-      $timestamp: 1_700_000_000_000,
+      endpointId: 'qq-main',
+      conversation: { kind: 'group', id: 'group-1' },
+      name: `notice.group.${subType}`,
+      actor: { id: 'admin-1' },
+      target: { id: 'member-1' },
+      timestamp: 1_700_000_000_000,
     });
   });
 
