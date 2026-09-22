@@ -1,7 +1,13 @@
 import { access } from 'node:fs/promises';
 import { register } from 'node:module';
-import { sep } from 'node:path';
+import { isAbsolute, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+interface ResolveResult {
+  readonly url: string;
+  readonly shortCircuit?: boolean;
+  readonly format?: string;
+}
 
 /**
  * ESM resolve hook: when a relative/absolute `.js` specifier fails and a
@@ -17,16 +23,18 @@ export async function resolve(
   nextResolve: (
     specifier: string,
     context: { parentURL?: string },
-  ) => Promise<{ url: string; shortCircuit?: boolean; format?: string }>,
-): Promise<{ url: string; shortCircuit?: boolean; format?: string }> {
+  ) => Promise<ResolveResult>,
+): Promise<ResolveResult> {
+  let resolved: ResolveResult;
   try {
-    return await nextResolve(specifier, context);
+    resolved = await nextResolve(specifier, context);
   } catch (error) {
     if (!shouldTryTypeScript(specifier, error)) throw error;
     const candidate = await firstExistingTypeScript(specifier, context.parentURL);
     if (!candidate) throw error;
-    return nextResolve(candidate, context);
+    resolved = await nextResolve(candidate, context);
   }
+  return inheritGenerationRevision(specifier, context.parentURL, resolved);
 }
 
 let registered = false;
@@ -44,6 +52,33 @@ function shouldTryTypeScript(specifier: string, error: unknown): boolean {
   }
   if (specifier.startsWith('node:') || specifier.startsWith('data:')) return false;
   return /\.[cm]?js$/u.test(specifier) || specifier.endsWith('.jsx');
+}
+
+function inheritGenerationRevision(
+  specifier: string,
+  parentURL: string | undefined,
+  resolved: ResolveResult,
+): ResolveResult {
+  if (!parentURL || !isLocalSpecifier(specifier) || !resolved.url.startsWith('file:')) {
+    return resolved;
+  }
+  let revision: string | null;
+  try {
+    revision = new URL(parentURL).searchParams.get('zhin-generation');
+  } catch {
+    return resolved;
+  }
+  if (revision === null) return resolved;
+  const url = new URL(resolved.url);
+  url.searchParams.set('zhin-generation', revision);
+  return { ...resolved, url: url.href };
+}
+
+function isLocalSpecifier(specifier: string): boolean {
+  return specifier.startsWith('.')
+    || specifier.startsWith('#')
+    || specifier.startsWith('file:')
+    || isAbsolute(specifier);
 }
 
 async function firstExistingTypeScript(
