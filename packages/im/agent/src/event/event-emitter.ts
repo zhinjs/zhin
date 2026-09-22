@@ -21,7 +21,7 @@ export class ZhinAgentEventEmitter {
       sessionId,
       source,
       mode,
-      userId: commMessage.sender?.id ?? 'unknown',
+      userId: commMessage.sender?.id,
       platform: String(commMessage.clientAdapter ?? commMessage.conversation.endpoint.adapter),
       endpointKey: commMessage.endpointId ?? commMessage.conversation.endpoint.id,
       sceneId: commMessage.conversation.id,

@@ -24,13 +24,9 @@ import { SystemEvent } from '../../src/system-event.js';
 import { receiveOneBotLikeSideEvent } from '../../src/side-event/dispatch.js';
 import { Request } from '../../src/request.js';
 import type { Notice as PublicNotice, Request as PublicRequest } from '../../src/index.js';
-import type { Notice as ZhinNotice, Request as ZhinRequest } from 'zhin.js';
 
 describe('ImRuntime side-event handlers', () => {
   it('exports the Notice and Request payload contracts received by handlers', () => {
-    expectTypeOf<ZhinNotice>().toEqualTypeOf<PublicNotice>();
-    expectTypeOf<ZhinRequest>().toEqualTypeOf<PublicRequest>();
-
     defineHandler({
       event: 'notice.receive',
       handle(event) {

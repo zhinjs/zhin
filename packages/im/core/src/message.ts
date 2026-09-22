@@ -1,6 +1,5 @@
-import type {MessageElement, MessageSender, SendContent} from "./types.js";
+import type {MessageElement, SendContent} from "./types.js";
 import { Component } from "./component.js";
-import { isActionMessage as isActionMessageImpl } from "./built/interactive-segments/action.js";
 /**
  * 消息组件类型：用于自定义消息结构
  */
@@ -28,46 +27,3 @@ export interface MessageChannel{
  * 消息类型枚举
  */
 export type MessageType = 'group' | 'private' | 'channel'
-/**
- * 消息基础结构
- */
-export interface LegacyMessageBase {
-    $id: string;
-    $adapter:string
-    $endpoint:string
-    $content: MessageElement[];
-    $sender: MessageSender;
-    $reply?(content:SendContent,quote?:boolean|string):Promise<string>
-    $recall?():Promise<void>
-    $channel: MessageChannel;
-    $timestamp: number;
-    $raw: string;
-}
-/**
- * 完整消息类型，支持扩展
- */
-/** @deprecated Classic adapter message shape. Runtime middleware receives `Message`. */
-export type LegacyMessage<T extends object={}> = LegacyMessageBase&T;
-/** @internal Legacy static helpers; not part of Runtime resource authoring. */
-export namespace LegacyMessage{
-    /**
-     * 工具方法：合并自定义字段与基础消息结构
-     */
-    export function from<T extends object>(input:T,format:LegacyMessageBase):LegacyMessage<T>{
-        return Object.assign({},input,format)
-    }
-
-    export function actionPayload(message: LegacyMessage<any>): string | undefined {
-        for (const item of message.$content ?? []) {
-            if (typeof item === 'string') continue;
-            if (item.type === 'action' && item.data?.payload) {
-                return String(item.data.payload);
-            }
-        }
-        return undefined;
-    }
-
-    export function isAction(message: LegacyMessage<any>): boolean {
-        return isActionMessageImpl(message);
-    }
-}

@@ -116,7 +116,8 @@ function normalizeAtIds(endpointAtIds?: string[]): string[] {
 }
 
 function messageElements(message: Message): MessageElement[] {
-  return [...(message.segments ?? [])] as MessageElement[];
+  if (message.segments?.length) return [...message.segments] as MessageElement[];
+  return message.content ? [{ type: 'text', data: { text: message.content } }] : [];
 }
 
 function segmentAtUserId(seg: MessageElement): string {

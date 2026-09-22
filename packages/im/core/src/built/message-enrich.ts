@@ -9,6 +9,7 @@ import type {
   SendContent,
 } from '../plugin-runtime/im/contracts.js';
 import type { SenderRole } from './roles.js';
+import { segmentsToPlainText } from './segment-contract/text.js';
 
 /** Agent turns may attach host-owned metadata to the canonical runtime message. */
 export type AgentTurnMessage = Message<{ extra?: Record<string, unknown> }>;
@@ -37,16 +38,22 @@ export interface SyntheticMessageInput {
 export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnMessage {
   const messageId = input.messageId ?? `synthetic:${Date.now()}`;
   const unsupportedReply = async (): Promise<DeliveryReceipt> => Object.freeze({
-    status: 'sent',
-    message: Object.freeze({ conversation: input.conversation, id: messageId }),
+    status: 'unsupported',
+    failure: Object.freeze({
+      code: 'synthetic_reply_unavailable',
+      message: 'Synthetic Message has no outbound delivery port',
+      retryable: false,
+    }),
   });
   const reply = input.reply ?? unsupportedReply;
+  const segments = input.segments ? Object.freeze([...input.segments]) : undefined;
+  const content = segments ? segmentsToPlainText(segments) : (input.content ?? '');
   return Object.freeze({
     conversation: input.conversation,
-    content: input.content ?? '',
+    content,
     generation: input.generation ?? 0,
     metadata: Object.freeze({}),
-    segments: input.segments,
+    segments,
     sender: input.sender,
     message: Object.freeze({ conversation: input.conversation, id: messageId }),
     endpointId: input.endpointId,
@@ -57,11 +64,11 @@ export function createSyntheticMessage(input: SyntheticMessageInput): AgentTurnM
       throw new Error('Synthetic Message has no Endpoint Client context');
     },
     $reply: reply,
-    $replyFrom: (_requester, content) => reply(content),
-    $sendTo: (_conversation, content) => reply(content),
-    $replyToPrivate: (content) => reply(content),
-    $replyToGroup: (_groupId, content) => reply(content),
-    $replyToChannel: (_channelId, _guildId, content) => reply(content),
+    $replyFrom: () => unsupportedReply(),
+    $sendTo: () => unsupportedReply(),
+    $replyToPrivate: () => unsupportedReply(),
+    $replyToGroup: () => unsupportedReply(),
+    $replyToChannel: () => unsupportedReply(),
   });
 }
 

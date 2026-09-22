@@ -50,7 +50,7 @@ import { MemoryConversationEventStore } from '@zhin.js/im-contract';
 import {
   ImRuntime,
   ingressRouteToken,
-  RuntimeMessage as Message,
+  Message,
   MessageDispatcher,
   component,
   raw,

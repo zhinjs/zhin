@@ -57,15 +57,24 @@ export function toPermissionSubject(source: unknown): PermissionSubject {
   if (obj.sender && typeof obj.sender === 'object' && !result.sender) {
     const s = obj.sender as Record<string, unknown>;
     const metadata = obj.metadata as Record<string, unknown> | undefined;
-    const roles = new Set(
-      Array.isArray(s.roles) ? s.roles.map(String) : [],
-    );
+    const roles = new Set(Array.isArray(s.roles) ? s.roles.map(String) : []);
     if (typeof metadata?.senderRole === 'string') roles.add(metadata.senderRole);
+    if (typeof metadata?.role === 'string') roles.add(metadata.role);
+    if (Array.isArray(metadata?.roles)) {
+      for (const role of metadata.roles) roles.add(String(role));
+    }
+    const permissions = new Set(Array.isArray(s.permissions) ? s.permissions.map(String) : []);
+    if (Array.isArray(metadata?.senderPermissions)) {
+      for (const permission of metadata.senderPermissions) permissions.add(String(permission));
+    }
+    if (Array.isArray(metadata?.permissions)) {
+      for (const permission of metadata.permissions) permissions.add(String(permission));
+    }
     result.sender = {
       id: String(s.id ?? ''),
       ...(s.name ? { name: String(s.name) } : {}),
       role: [...roles],
-      ...(Array.isArray(s.permissions) ? { permissions: s.permissions.map(String) } : {}),
+      ...(permissions.size > 0 ? { permissions: [...permissions] } : {}),
     };
   }
 

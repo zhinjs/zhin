@@ -20,8 +20,8 @@ function mockMsg(sender: { role?: string; permissions?: string[] }) {
     clientAdapter: 'dingtalk',
     endpointId: 'bot1',
     conversation: { endpoint: { adapter: 'dingtalk', id: 'bot1' }, kind: 'group', id: 'c1' },
-    sender: { id: 'u1', roles: [], permissions: sender.permissions },
-    metadata: sender.role ? { senderRole: sender.role } : {},
+    sender: { id: 'u1', roles: sender.role ? [sender.role] : [] },
+    metadata: { role: sender.role, permissions: sender.permissions },
   } as any;
 }
 

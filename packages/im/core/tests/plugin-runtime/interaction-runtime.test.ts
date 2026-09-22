@@ -22,7 +22,7 @@ import { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command'
 import { HandlerIndex, defineHandler, handlerFeatureId } from '@zhin.js/handler';
 import {
   ImRuntime,
-  RuntimeMessage as Message,
+  Message,
   type MessageDispatchResult,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';

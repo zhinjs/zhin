@@ -105,8 +105,8 @@ export class OwnerApprovalRuntime {
 }
 
 export function ownerApprovalAddressFromMessage(message: Message): OwnerApprovalAddress | undefined {
-  const platform = String(message.clientAdapter ?? '').trim();
-  const endpoint = String(message.endpointId ?? '').trim();
+  const platform = String(message.clientAdapter ?? message.conversation.endpoint.adapter).trim();
+  const endpoint = String(message.endpointId ?? message.conversation.endpoint.id).trim();
   const ownerId = String(
     (message as { extra?: { endpointMaster?: unknown } }).extra?.endpointMaster ?? '',
   ).trim();
@@ -119,7 +119,7 @@ export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
   const roles = senderRolesFromMessage(message);
   if (hasSenderRole(roles, 'master')) return 'master';
   if (hasSenderRole(roles, 'trusted')) return 'trusted';
-  if (!message.clientAdapter || !message.endpointId || !message.sender?.id) return 'unknown';
+  if (!message.sender?.id) return 'unknown';
   const address = ownerApprovalAddressFromMessage(message);
   return address && String(message.sender.id) === address.ownerId ? 'master' : 'other';
 }

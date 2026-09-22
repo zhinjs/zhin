@@ -101,4 +101,13 @@ describe('resolveRoutedAgentName', () => {
     });
     expect(name).toBe('reviewer');
   });
+
+  it('快捷字段缺失时使用 canonical conversation endpoint', () => {
+    const message = makeMessage({ clientAdapter: undefined, endpointId: undefined });
+    expect(matchRouteRule({ adapter: 'sandbox', endpoint: 'b1' }, {
+      message,
+      contentText: 'review',
+      discoveredAgentNames: new Set(),
+    })).toBe(true);
+  });
 });

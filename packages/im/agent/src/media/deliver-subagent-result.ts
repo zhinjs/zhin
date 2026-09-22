@@ -29,7 +29,9 @@ export async function deliverSubagentResult(params: DeliverSubagentResultParams)
   const base: Omit<SendOptions, 'content'> = {
     context: String(message.clientAdapter ?? message.conversation.endpoint.adapter),
     endpoint: message.endpointId ?? message.conversation.endpoint.id,
-    id: message.conversation.id,
+    id: message.conversation.kind === 'private'
+      ? (message.sender?.id ?? message.conversation.id)
+      : message.conversation.id,
     type: (message.conversation.kind ?? 'private') as MessageType,
   };
 

@@ -25,12 +25,24 @@ function resolveSenderRoleLabels(commMessage: Message): string[] {
     .split(',')
     .map((r) => r.trim())
     .filter((r) => r && r !== 'user');
-  const platform = mapPlatformRoleForLabel(
-    typeof commMessage.metadata.senderRole === 'string'
-      ? commMessage.metadata.senderRole
-      : undefined,
-  );
-  if (platform && !labels.includes(platform)) labels.push(platform);
+  const frameworkRoles = new Set(['master', 'trusted', 'user']);
+  const platformRoles = new Set<string>();
+  for (const role of commMessage.sender?.roles ?? []) {
+    if (!frameworkRoles.has(role)) platformRoles.add(role);
+  }
+  if (typeof commMessage.metadata.senderRole === 'string') {
+    platformRoles.add(commMessage.metadata.senderRole);
+  }
+  if (typeof commMessage.metadata.role === 'string') {
+    platformRoles.add(commMessage.metadata.role);
+  }
+  if (Array.isArray(commMessage.metadata.roles)) {
+    for (const role of commMessage.metadata.roles) platformRoles.add(String(role));
+  }
+  for (const role of platformRoles) {
+    const platform = mapPlatformRoleForLabel(role);
+    if (platform && !labels.includes(platform)) labels.push(platform);
+  }
   return labels.length > 0 ? labels : ['user'];
 }
 

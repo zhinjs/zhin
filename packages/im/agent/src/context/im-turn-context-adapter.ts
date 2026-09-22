@@ -13,8 +13,8 @@ export function turnContextViewFromMessage(message: Message): TurnContextView {
   if (scope !== 'private' && scope !== 'group' && scope !== 'channel') {
     throw new TypeError('IM Turn context requires a private, group, or channel scope');
   }
-  const platform = String(message.clientAdapter ?? '').trim();
-  const endpoint = String(message.endpointId ?? '').trim();
+  const platform = String(message.clientAdapter ?? message.conversation.endpoint.adapter).trim();
+  const endpoint = String(message.endpointId ?? message.conversation.endpoint.id).trim();
   const sceneId = String(message.conversation.id ?? '').trim();
   const subjectId = String(message.sender?.id ?? '').trim();
   if (!platform || !endpoint || !sceneId || !subjectId) {

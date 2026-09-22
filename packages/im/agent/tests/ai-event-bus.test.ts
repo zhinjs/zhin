@@ -47,4 +47,18 @@ describe('ai-event-bus helpers', () => {
     })).toBe(true);
   });
 
+  it('uses canonical endpoint identity when shortcut fields are absent', () => {
+    const commMessage = {
+      ...mockCommMessage({ adapter: 'mock', endpoint: 'bot1' }),
+      clientAdapter: undefined,
+      endpointId: undefined,
+    };
+    const payload = createAIHookBusPayload(
+      createAIHookEvent('tool', 'call', 'session-1', { commMessage }),
+      'ai-hook',
+    );
+    expect(payload.platform).toBe('mock');
+    expect(payload.endpointKey).toBe('bot1');
+  });
+
 });

@@ -1,15 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
-
-vi.mock('@zhin.js/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@zhin.js/core')>();
-  return {
-    ...actual,
-    resolveSubjectRoles: vi.fn((_plugin: unknown, message: { _roles?: string[]; $sender?: { isMaster?: boolean; isTrusted?: boolean } }) => ({
-      scope: 'group',
-      roles: message?._roles ?? (message?.$sender?.isMaster ? ['master'] : message?.$sender?.isTrusted ? ['trusted'] : ['user']),
-    })),
-  };
-});
+import { describe, it, expect } from 'vitest';
 import {
   prepareUserContentForSession,
   resolveTurnUserMessage,
@@ -42,6 +31,18 @@ describe('resolveTurnUserMessage', () => {
     expect(prepared.actor.subjectId).toBe('12345');
     expect(prepared.actor.displayName).toBe('Alice');
     expect(prepared.actor.roles).toContain('scene_admin');
+  });
+
+  it('从真实 sender.roles 与 metadata.role 读取平台角色', () => {
+    const commMessage = ({
+      ...mockCommMessage({ adapter: 'discord', endpoint: 'b1', senderId: '12345', scope: 'group', sceneId: 'g1' }),
+      sender: { id: '12345', name: 'Alice', roles: ['user', 'owner'] },
+      metadata: { role: 'admin' },
+    } as AgentTurnMessage);
+    expect(prepareUserContentForSession(commMessage, 'hello').actor.roles).toEqual([
+      'scene_owner',
+      'scene_admin',
+    ]);
   });
 
   it('actor 保留稳定身份原值，展示转义只发生在 LLM 边界', () => {

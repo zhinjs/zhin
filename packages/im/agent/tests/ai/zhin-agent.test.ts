@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
 import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
+import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
 
 // Mock LLM（ai-sdk 原生面）
@@ -28,22 +29,14 @@ function makeCommMessage(overrides: {
   message?: import('@zhin.js/core').Message<any>;
 } = {}): import('@zhin.js/core').Message<any> {
   if (overrides.message) return overrides.message;
-  const adapter = overrides.adapter ?? 'test';
-  const endpoint = overrides.endpoint ?? 'bot1';
-  const senderId = overrides.senderId ?? 'user1';
-  const scope = overrides.scope ?? 'private';
-  const sceneId = overrides.sceneId ?? 'scene1';
-  return {
-    clientAdapter: adapter,
-    endpointId: endpoint,
-    conversation: { endpoint: { adapter, id: endpoint }, kind: scope, id: sceneId },
-    content: '', generation: 1, metadata: {}, sender: { id: senderId, roles: ['user'] },
+  return mockCommMessage({
+    adapter: overrides.adapter ?? 'test',
+    endpoint: overrides.endpoint ?? 'bot1',
+    senderId: overrides.senderId ?? 'user1',
+    scope: overrides.scope ?? 'private',
+    sceneId: overrides.sceneId ?? 'scene1',
     extra: overrides.extra,
-    get $client() { return undefined; },
-    $reply: async () => ({ status: 'sent' }), $replyFrom: async () => ({ status: 'sent' }),
-    $sendTo: async () => ({ status: 'sent' }), $replyToPrivate: async () => ({ status: 'sent' }),
-    $replyToGroup: async () => ({ status: 'sent' }), $replyToChannel: async () => ({ status: 'sent' }),
-  } as import('@zhin.js/core').Message<any>;
+  });
 }
 
 function makeTool(name: string, desc: string = '', opts: Partial<Tool> = {}): Tool {

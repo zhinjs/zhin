@@ -170,6 +170,15 @@ describe('AI Trigger 工具函数', () => {
   });
 
   describe('shouldTriggerAI - @机器人触发', () => {
+    it('segments 缺失时仍从纯文本识别 @endpoint', () => {
+      const message = {
+        ...createMockMessage({ content: '@bot123 你好', channelType: 'group' }),
+        segments: undefined,
+      };
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result).toEqual({ triggered: true, content: '你好' });
+    });
+
     it('应该检测 @机器人', () => {
       const message = createMockMessage({
         content: [

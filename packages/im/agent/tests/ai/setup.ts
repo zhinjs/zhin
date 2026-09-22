@@ -4,7 +4,7 @@
  * 通用 AI mocks 从 @zhin.js/ai 测试 setup 导入
  */
 import { vi } from 'vitest';
-import { type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
+import { segmentsToPlainText, type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
 
 // Import and re-export generic AI mocks from ai package tests
 import {
@@ -58,17 +58,20 @@ export const createMockMessage = (options: MockMessageOptions = {}): Partial<Mes
   } = options;
   const segments: MessageElement[] = elements || [{ type: 'text', data: { text: content } }];
   return {
-    content,
+    content: segmentsToPlainText(segments),
     segments,
     endpointId: endpointKey,
     clientAdapter: platform,
     conversation: {
-      endpoint: { adapter: platform, id: endpointKey },
+      endpoint: { adapter: platform, id: `root/${platform}\0zhin.adapter\0${platform}~${endpointKey}` },
       kind: channelType === 'guild' ? 'channel' : channelType,
       id: channelId,
     },
-    sender: { id: senderId, name: 'Test User', roles: senderPermissions },
-    metadata: senderRole ? { senderRole } : {},
+    sender: { id: senderId, name: 'Test User', roles: senderRole ? [senderRole] : [] },
+    metadata: {
+      ...(senderRole ? { senderRole } : {}),
+      ...(senderPermissions.length ? { senderPermissions } : {}),
+    },
     $reply: vi.fn().mockResolvedValue({ status: 'sent' }),
   };
 };

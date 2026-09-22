@@ -32,7 +32,7 @@ describe('github-channel-context', () => {
 
   it('parseMessageChannel from message', () => {
     const msg = {
-      conversation: { endpoint: { adapter: 'github', id: 'test' }, kind: 'group', id: 'o/r/pull/9' },
+      conversation: { endpoint: { adapter: 'github', id: 'test' }, kind: 'channel', id: 'o/r/pull/9' },
     } as Parameters<typeof parseMessageChannel>[0];
     const ctx = parseMessageChannel(msg);
     expect(ctx?.type).toBe('pr');

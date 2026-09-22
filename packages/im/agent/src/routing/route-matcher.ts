@@ -16,7 +16,7 @@ function endpointMatchesRule(matchEndpoint: string | undefined, input: RouteMatc
   if (!matchEndpoint) return true;
   const want = String(matchEndpoint);
   const candidates = new Set<string>([
-    String(input.message.endpointId ?? ''),
+    String(input.message.endpointId ?? input.message.conversation.endpoint.id),
     ...(input.endpointKeys ?? []),
   ]);
   for (const id of candidates) {
@@ -27,7 +27,8 @@ function endpointMatchesRule(matchEndpoint: string | undefined, input: RouteMatc
 
 export function matchRouteRule(match: RouteMatchConfig, input: RouteMatchInput): boolean {
   const { message, contentText } = input;
-  if (match.adapter && message.clientAdapter !== match.adapter) return false;
+  const adapter = message.clientAdapter ?? message.conversation.endpoint.adapter;
+  if (match.adapter && adapter !== match.adapter) return false;
   if (match.endpoint && !endpointMatchesRule(match.endpoint, input)) return false;
   if (match.scene) {
     const scene = message.conversation.kind || 'private';

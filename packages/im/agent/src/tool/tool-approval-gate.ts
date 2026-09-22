@@ -83,7 +83,7 @@ export async function runToolApprovalGate(
       requestId,
       sessionKey: options.sessionId,
       conversationScope: options.commMessage.conversation.kind,
-      requesterId: options.commMessage.sender?.id ?? 'unknown',
+      requesterId: options.commMessage.sender?.id,
       toolName: options.toolName,
       scopeKey: `${options.toolName}:${stableApprovalValue(options.args)}`,
       question,

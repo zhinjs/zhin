@@ -34,6 +34,31 @@ describe('toPermissionSubject', () => {
     expect(result.sender).toEqual({ id: 'u2', name: 'Alice', role: ['trusted', 'admin'], permissions: ['manage'] });
   });
 
+  it('falls back to the canonical conversation endpoint and platform metadata', () => {
+    const result = toPermissionSubject({
+      conversation: {
+        endpoint: { adapter: 'telegram', id: 'runtime-endpoint' },
+        id: 'group-1',
+        kind: 'group',
+      },
+      sender: { id: 'u2', roles: ['administrator'] },
+      metadata: {
+        role: 'owner',
+        roles: ['moderator'],
+        senderPermissions: ['pin_messages'],
+        permissions: ['manage_channels'],
+      },
+    });
+    expect(result).toMatchObject({
+      adapter: 'telegram',
+      endpoint: 'runtime-endpoint',
+      sender: {
+        role: ['administrator', 'owner', 'moderator'],
+        permissions: ['pin_messages', 'manage_channels'],
+      },
+    });
+  });
+
   it('CommandSession-style takes precedence over canonical fallback fields', () => {
     const result = toPermissionSubject({
       adapter: 'qq',
