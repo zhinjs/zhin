@@ -16,7 +16,7 @@ export function receiveSlackSideEvent(
   const record = event as Record<string, unknown>;
   const parts = mapNoticeParts('slack', eventType);
   const item = asRecord(record.item);
-  const channel = stringField(record.channel) ?? stringField(item.channel);
+  const channel = stringField(record.channel) ?? stringField(asRecord(record.channel).id) ?? stringField(item.channel);
   const user = stringField(record.user) ?? stringField(asRecord(record.user).id);
   const conversation = channel ? slackInboundConversation(endpointKey, {
     channelId: channel,

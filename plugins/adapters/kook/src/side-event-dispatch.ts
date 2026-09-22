@@ -28,6 +28,8 @@ export function receiveKookSideEvent(
   const body = event.extra?.body;
   const guildId = event.extra?.guild_id
     ?? (event.channel_type === 'GROUP' && event.type === 255 ? event.target_id : undefined);
+  // author_id is the system sender (top-level) or original message author (body),
+  // not proof of who deleted a message. Keep an unknown deletion actor absent.
   const userId = body?.user_id;
   const memberEvent = noticeType === 'joined_guild' || noticeType === 'exited_guild';
   // Guild ids and private chat_code values are not outbound channel/user ids.
@@ -42,7 +44,7 @@ export function receiveKookSideEvent(
   const sceneId = channelId ?? guildId ?? '';
   const reactionEvent = noticeType.includes('reaction');
   void emit('notice.receive', buildNotice(event, {
-    id: `kook:${noticeType}:${event.msg_timestamp ?? Date.now()}:${sceneId}:${String(userId ?? '')}`,
+    id: event.msg_id || `kook:${noticeType}:${event.msg_timestamp ?? Date.now()}:${sceneId}:${body?.msg_id ?? ''}:${String(userId ?? '')}`,
     clientAdapter: 'kook',
     endpointId: configId,
     type: 'notice',

@@ -19,6 +19,20 @@ describe('KOOK notice conversation projection', () => {
       actor: { id: 'user' }, messageId: 'message', reaction: 'emoji', operation: 'removed' });
   });
 
+  it('preserves deletion event ids without claiming the message author performed the deletion', () => {
+    const raw: KookWebhookEventData = { type: 255, channel_type: 'GROUP', target_id: 'guild', author_id: '1',
+      msg_timestamp: 1700000000000, extra: { type: 'deleted_message', body: { channel_id: 'channel', msg_id: 'message', author_id: 'original-author' } } };
+    const first = receive({ ...raw, msg_id: 'event-1' });
+    const second = receive({ ...raw, msg_id: 'event-2' });
+    expect(first.id).toBe('event-1');
+    expect(second.id).toBe('event-2');
+    expect(first.actor).toBeUndefined();
+    expect(first.metadata).toMatchObject({ extra: { body: { author_id: 'original-author' } } });
+    const fallback1 = receive(raw);
+    const fallback2 = receive({ ...raw, extra: { ...raw.extra, body: { ...raw.extra?.body, msg_id: 'another-message' } } });
+    expect(fallback1.id).not.toBe(fallback2.id);
+  });
+
   it.each(['joined_guild', 'exited_guild'])('keeps %s as membership data without a send target', (type) => {
     const notice = receive({ type: 255, channel_type: 'GROUP', target_id: 'guild', author_id: '1',
       extra: { type, body: { user_id: 'member' } } });

@@ -31,6 +31,12 @@ describe('Slack notice conversation projection', () => {
     expect(receive(event).conversation).toBeUndefined();
   });
 
+  it.each(['channel_created', 'channel_rename'])('uses channel.id for %s', (type) => {
+    const notice = receive({ type, channel: { id: 'Cchannel', name: 'channel' } } as unknown as SlackEvent);
+    expect(notice.conversation).toMatchObject({ kind: 'group', id: 'Cchannel' });
+    expect(notice.name).toBe(`notice.slack.${type}`);
+  });
+
   it('keeps workspace participants without inventing a DM', () => {
     const notice = receive({ type: 'team_join', user: { id: 'Unew' } } as unknown as SlackEvent);
     expect(notice.target).toEqual({ id: 'Unew', name: 'Unew' });
