@@ -3,10 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
-import { httpHostToken } from '@zhin.js/host-http';
 import {
   createConsoleHostModules,
-  installConsoleHttp,
+  registerConsoleHttp,
 } from '../../../src/plugin-runtime/console/host.js';
 
 describe('Console topology Host endpoint', () => {
@@ -63,15 +62,12 @@ describe('Console topology Host endpoint', () => {
       runView: async (_access: unknown, operation: (catalog: { topology: () => typeof topology }) => unknown) =>
         operation({ topology: () => topology }),
     } as unknown as ConsoleRuntime;
-    installConsoleHttp({ console: consoleRuntime, clientOutDir: '/tmp/client', projectRoot: '/tmp/project' })({
-      resources: {
-        provide: vi.fn(),
-        use: (token: unknown) => {
-          expect(token).toBe(httpHostToken);
-          return { route };
-        },
-      },
-    } as never);
+    registerConsoleHttp({
+      http: { route } as never,
+      console: consoleRuntime,
+      clientOutDir: '/tmp/client',
+      projectRoot: '/tmp/project',
+    });
 
     const handler = route.mock.calls.find((call) => call[1] === '/console/api/topology')?.[2] as (
       request: unknown,

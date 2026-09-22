@@ -8,6 +8,11 @@ Console 是 Zhin 的运行事实面：它回答当前 generation 发布了什么
 
 `zhin runtime start` 会装配 HTTP Host 与 Console API。你可以用 <https://console.zhin.dev> 连接 Host，也可以打开 Host 提供的本地 `/console` 与 Sandbox 页面。
 
+HTTP Host、Console RPC 与 SSE 属于进程控制面，会在首个 Runtime generation 激活前开始监听。
+因此 ICQQ 等 Adapter 即使正等待扫码、滑块或设备确认，浏览器仍可通过 `login.list`、
+`login.submit` 与 `endpoint.login.pending` 完成登录。此时依赖已发布 generation 的页面和运行时
+投影可能暂时为空或返回未就绪；Adapter 全部完成启动后，Runtime 才发布首个 generation。
+
 ```mermaid
 flowchart LR
     B[浏览器] -->|Remote UI| RC[console.zhin.dev]

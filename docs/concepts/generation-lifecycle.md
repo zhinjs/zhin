@@ -83,6 +83,8 @@ post-commit `openNext` 阶段。已配置 Endpoint 全部是 required prerequisi
 open 任一失败都拒绝候选代，不会发布 inert/unconfigured record，也不会后台 late-open。
 共享 HTTP listener 归 Process Host；候选 generation 只能向 `HttpHost` routing port 注册带
 gate 的 HTTP/WS route，不能 listen/close，也不会在 commit 前遮住旧代同路径 route。
+Console RPC、SSE 与登录辅助订阅同样由 Process Host 持有，并在首代 Adapter 激活前可用；
+它们访问 generation 能力时仍通过当前 snapshot lease，不把候选能力提前暴露给外部。
 
 ## 快照租约：在途消息不被打断
 

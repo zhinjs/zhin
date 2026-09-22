@@ -57,7 +57,10 @@ export function registerConsoleEventRoutes(options: RegisterConsoleEventRoutesOp
   });
 
   http.route('GET', `${base}/events`, async (request, response, url) => {
-    const pages = await listPages(consoleRuntime);
+    // The process control plane is available before the first generation.
+    // Page discovery becomes ready after commit, while login events must flow
+    // during Adapter activation.
+    const pages = await listPages(consoleRuntime).catch(() => Object.freeze([]));
     const headerLastEventId = Array.isArray(request.headers['last-event-id'])
       ? request.headers['last-event-id'][0]
       : request.headers['last-event-id'];

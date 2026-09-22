@@ -33,8 +33,10 @@ import {
 import {
   createConsoleHostModules,
   ConsoleConfigurationStore,
-  installConsoleApi,
-  installConsoleHttp,
+  installConsoleApiResources,
+  installConsoleRuntime,
+  registerConsoleHttp,
+  startConsoleControlPlane,
   SystemLogStore,
   resolveSystemLogConfig,
 } from './console/module.js';
@@ -219,30 +221,8 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           },
         },
       })(context);
-      installConsoleHttp({
-        console: consoleHost.console,
-        clientOutDir: consoleHost.clientOutDir,
-        projectRoot: options.root,
-      })(context);
-      installConsoleApi({
-        console: consoleHost.console,
-        projectRoot: options.root,
-        apiBase: httpConfig.apiBase,
-        im,
-        databaseHost,
-        scheduleHost,
-        eventHub: consoleEventHub,
-        pluginLifecycleFile,
-        pluginLifecycleStore,
-        configuration: consoleConfigurationStore,
-        snapshot: () => host.runtime.snapshot,
-        snapshots: host.runtime.snapshots,
-        onRestart: () => {
-          // The native TypeScript supervisor treats this code as an intentional
-          // process-generation restart in both foreground Desktop and daemon mode.
-          process.exit(processRestartExitCode);
-        },
-      })(context);
+      installConsoleRuntime(consoleHost.console)(context);
+      installConsoleApiResources(consoleEventHub)(context);
     },
     async onRestartRequired(plan) {
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
@@ -271,6 +251,32 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   im.attach(host.runtime.snapshots);
   agentHost?.attach(host.runtime.snapshots);
   consoleHost.console.attach(host.runtime.snapshots);
+  registerConsoleHttp({
+    http: httpHost,
+    console: consoleHost.console,
+    clientOutDir: consoleHost.clientOutDir,
+    projectRoot: options.root,
+  });
+  const disposeConsoleControlPlane = startConsoleControlPlane({
+    http: httpHost,
+    console: consoleHost.console,
+    projectRoot: options.root,
+    apiBase: httpConfig.apiBase,
+    im,
+    databaseHost,
+    scheduleHost,
+    eventHub: consoleEventHub,
+    pluginLifecycleFile,
+    pluginLifecycleStore,
+    configuration: consoleConfigurationStore,
+    snapshot: () => host.runtime.snapshot,
+    snapshots: host.runtime.snapshots,
+    onRestart: () => {
+      // The native TypeScript supervisor treats this code as an intentional
+      // process-generation restart in both foreground Desktop and daemon mode.
+      process.exit(processRestartExitCode);
+    },
+  });
   const disposeReadiness = registerReadinessRoutes(httpHost, {
     snapshots: host.runtime.snapshots,
     agentBindings: agentHost?.bindings,
@@ -278,6 +284,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   control.stop = async () => {
     try {
       disposeReadiness();
+      disposeConsoleControlPlane();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().
@@ -305,10 +312,22 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   };
 
   let snapshot: Awaited<ReturnType<typeof host.start>>;
+  let httpOrigin = `http://${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
   try {
-    await httpHost.listen();
+    const address = await httpHost.listen();
+    httpOrigin = address.origin;
+    if (process.stdout.isTTY && !parsed.once) {
+      const startup = getLogger('setup');
+      startup.success(`zhin control plane listening at ${httpOrigin}`);
+      printFirstRunGuidance(httpOrigin, Boolean(httpConfig.token));
+      if (parsed.open || process.env.ZHIN_OPEN === '1') {
+        openBrowser(createRemoteConsoleUrl(httpOrigin));
+      }
+    }
     snapshot = await host.start();
   } catch (error) {
+    disposeReadiness();
+    disposeConsoleControlPlane();
     await httpHost.close().catch(() => undefined);
     systemLogStore.dispose();
     // Annotate schema validation failures with the source config file name.
@@ -322,12 +341,11 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     const endpoints = im.endpoints.list();
     const online = endpoints.filter((ep) => ep.status === 'online').map((ep) => ep.name);
     const offline = endpoints.filter((ep) => ep.status !== 'online').map((ep) => ep.name);
-    const httpAddress = `${primaryHttpListener.host ?? '127.0.0.1'}:${primaryHttpListener.port ?? 8086}`;
     const startup = getLogger('setup');
     startup.success('zhin runtime started');
     startup.info(formatCompact({
       plugins: snapshot.plugins,
-      http: `http://${httpAddress}`,
+      http: httpOrigin,
     }));
     if (online.length > 0) {
       startup.info(`online: ${online.join(', ')}`);
@@ -335,8 +353,6 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
     if (offline.length > 0) {
       startup.info(`offline: ${offline.join(', ')}`);
     }
-    printFirstRunGuidance(httpAddress, Boolean(httpConfig.token));
-    if (parsed.open || process.env.ZHIN_OPEN === '1') openBrowser(REMOTE_CONSOLE_URL);
   } else {
     options.writeOutput(`${JSON.stringify({ started: true, ...snapshot }, null, 2)}\n`);
   }
@@ -470,9 +486,13 @@ function isConfigDocumentPort(value: unknown): value is ConfigDocumentPort {
     && typeof (value as Partial<ConfigDocumentPort>).read === 'function');
 }
 
-function printFirstRunGuidance(httpAddress: string, tokenConfigured: boolean): void {
+function createRemoteConsoleUrl(httpOrigin: string): string {
+  return `${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(httpOrigin)}`;
+}
+
+function printFirstRunGuidance(httpOrigin: string, tokenConfigured: boolean): void {
   const startup = getLogger('setup');
-  const consoleUrl = `${REMOTE_CONSOLE_URL}?host=${encodeURIComponent(`http://${httpAddress}`)}`;
+  const consoleUrl = createRemoteConsoleUrl(httpOrigin);
   startup.info(`Remote Console: ${consoleUrl}${tokenConfigured ? chalk.dim(' (token required)') : ''}`);
 }
 
