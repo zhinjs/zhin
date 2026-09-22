@@ -1,4 +1,4 @@
-import { buildNotice, senderFromId } from '@zhin.js/core';
+import { composeSideEventName, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import {
@@ -34,15 +34,14 @@ export function receiveLineSideEvent(
   const conversation = lineInboundConversation(endpointKey, event.source);
   const userId = event.source.userId || conversation.id;
   void emit('notice.receive', buildNotice(event, {
-    $id: `line:${event.type}:${event.timestamp}:${userId}`,
-    $adapter: 'line' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: conversation.id,
-    $scene_type: parts.scene_type,
-    $sub_type: parts.sub_type,
-    $actor: senderFromId(userId),
-    $timestamp: event.timestamp,
+    id: `line:${event.type}:${event.timestamp}:${userId}`,
+    clientAdapter: 'line',
+    endpointId: configId,
+    type: 'notice',
+    conversation,
+    name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
+    actor: senderFromId(userId),
+    timestamp: event.timestamp,
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'line_side_event_failed',

@@ -1,4 +1,4 @@
-import { buildNotice, mapNoticeParts, senderFromId, KOOK_NOTICE_PARTS_MAP } from '@zhin.js/core';
+import { composeSideEventName, sideEventConversation, buildNotice, mapNoticeParts, senderFromId, KOOK_NOTICE_PARTS_MAP } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { KookWebhookEventData } from './protocol.js';
@@ -33,15 +33,14 @@ export function receiveKookSideEvent(
       ? String(userId)
       : configId;
   void emit('notice.receive', buildNotice(event, {
-    $id: `kook:${noticeType}:${event.msg_timestamp ?? Date.now()}:${sceneId}:${String(userId ?? '')}`,
-    $adapter: 'kook' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: sceneId,
-    $scene_type: parts.scene_type,
-    $sub_type: parts.sub_type,
-    $actor: senderFromId(userId, event.extra?.author?.username),
-    $timestamp: event.msg_timestamp ?? Date.now(),
+    id: `kook:${noticeType}:${event.msg_timestamp ?? Date.now()}:${sceneId}:${String(userId ?? '')}`,
+    clientAdapter: 'kook',
+    endpointId: configId,
+    type: 'notice',
+    conversation: sideEventConversation(parts.scene_type, sceneId),
+    name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
+    actor: senderFromId(userId, event.extra?.author?.username),
+    timestamp: event.msg_timestamp ?? Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'kook_side_event_failed',

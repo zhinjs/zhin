@@ -124,35 +124,26 @@ export class ConversationRuntime {
 }
 
 function conversationEventFromNotice(notice: Notice): ConversationEvent | undefined {
-  const sceneType = notice.$scene_type;
-  const kind = sceneType === 'group' ? 'group' as const
-    : sceneType === 'channel' ? 'channel' as const
-      : sceneType === 'friend' || sceneType === 'private' ? 'private' as const
-        : undefined;
-  if (!kind || !notice.$scene_id || !notice.$id) return undefined;
-  const conversation = Object.freeze({
-    endpoint: Object.freeze({ adapter: String(notice.$adapter), id: String(notice.$endpoint) }),
-    kind,
-    id: String(notice.$scene_id),
-  });
-  const actor = notice.$actor?.id
+  const conversation = notice.conversation;
+  if (!conversation || !notice.id) return undefined;
+  const actor = notice.actor?.id
     ? Object.freeze({
-      id: String(notice.$actor.id),
-      ...(notice.$actor.name ? { displayName: notice.$actor.name } : {}),
+      id: String(notice.actor.id),
+      ...(notice.actor.name ? { displayName: notice.actor.name } : {}),
     })
     : undefined;
-  const target = notice.$target?.id
+  const target = notice.target?.id
     ? Object.freeze({
-      id: String(notice.$target.id),
-      ...(notice.$target.name ? { displayName: notice.$target.name } : {}),
+      id: String(notice.target.id),
+      ...(notice.target.name ? { displayName: notice.target.name } : {}),
     })
     : undefined;
   const base = Object.freeze({
-    eventId: `notice:${conversationRefKey(conversation)}:${String(notice.$id)}`,
+    eventId: `notice:${conversationRefKey(conversation)}:${String(notice.id)}`,
     conversation,
-    timestamp: notice.$timestamp,
+    timestamp: notice.timestamp,
   });
-  switch (notice.$sub_type) {
+  switch (notice.name.split('.').slice(2).join('.')) {
     case 'member_increase':
     case 'increase':
       return target
@@ -170,7 +161,7 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
         : undefined;
     case 'ban':
       if (!target) return undefined;
-      return notice.$duration_seconds === 0
+      return notice.durationSeconds === 0
         ? Object.freeze({
           ...base,
           type: 'member.unmuted',
@@ -182,37 +173,37 @@ function conversationEventFromNotice(notice: Notice): ConversationEvent | undefi
           type: 'member.muted',
           member: target,
           ...(actor ? { actor } : {}),
-          durationSeconds: notice.$duration_seconds ?? 0,
+          durationSeconds: notice.durationSeconds ?? 0,
         });
     case 'admin_change':
-      return target && notice.$role && typeof notice.$enabled === 'boolean'
+      return target && notice.role && typeof notice.enabled === 'boolean'
         ? Object.freeze({
           ...base,
           type: 'member.role_changed',
           member: target,
           ...(actor ? { actor } : {}),
-          role: notice.$role,
-          enabled: notice.$enabled,
+          role: notice.role,
+          enabled: notice.enabled,
         })
         : undefined;
     case 'recall':
-      return notice.$message_id
+      return notice.messageId
         ? Object.freeze({
           ...base,
           type: 'message.recalled',
-          message: Object.freeze({ conversation, id: notice.$message_id }),
+          message: Object.freeze({ conversation, id: notice.messageId }),
           ...(actor ? { actor } : {}),
         })
         : undefined;
     case 'emoji_reaction':
-      return notice.$message_id && notice.$reaction && notice.$operation
+      return notice.messageId && notice.reaction && notice.operation
         ? Object.freeze({
           ...base,
           type: 'message.reaction_changed',
-          message: Object.freeze({ conversation, id: notice.$message_id }),
+          message: Object.freeze({ conversation, id: notice.messageId }),
           ...(actor ? { actor } : {}),
-          reaction: notice.$reaction,
-          operation: notice.$operation,
+          reaction: notice.reaction,
+          operation: notice.operation,
         })
         : undefined;
     case 'poke':

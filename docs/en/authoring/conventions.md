@@ -105,14 +105,23 @@ Register listeners by **Runtime event name** (no `next()` chain). `handlers/<nam
 Plugins that depend on `zhin.js` / `@zhin.js/core` get `@zhin.js/handler` via `platformFeatures` — no extra declaration or install needed. `ImRuntime` dispatches:
 
 - `message.receive` (before command/middleware)
-- `notice.receive` / `request.receive` / `system.receive` (via `sideEventGatewayToken`)
+- `notice.receive` (notifications) and `request.receive` (approval requests)
+- `system.receive` (independent login and endpoint lifecycle signals)
+
+Adapters emit these through `Endpoint.emit(...)`; Runtime constructs each canonical payload in the held generation.
 
 Handler `this` is `HandlerContext`:
 
-- `this.interaction` — user input, confirmation, and selection (same `UserInteraction` machinery as commands)
+- `this.interaction` — user input, confirmation, and selection (available for Notice / Request only when a real `conversation` exists; unavailable for SystemEvent)
 
-The `$endpoint` on a Notice, Request, or SystemEvent payload is immutable identity. Handlers never receive an escapable live
-Endpoint; delivery, approval, and interaction use generation-bound ports.
+`Message`, `Notice`, `Request`, and `SystemEvent` have the same contracts from `zhin.js`, `@zhin.js/core`, and `@zhin.js/core/runtime`. Notice / Request / SystemEvent use ordinary camelCase data fields:
+
+- `id`, `type`, `name`, `timestamp`, `metadata`: canonical identity, category, full semantic name, milliseconds, and native platform data.
+- `endpoint`, `generation`: runtime-owned identity and generation; `endpointId` identifies the platform account, and `clientAdapter` identifies the platform.
+- Notice / Request may include `conversation`, `actor`, and `target`; Request requires `actor`.
+- SystemEvent has no chat conversation or participants. For example, `system.login.qrcode` is a `system.receive` payload, not a notice.
+
+`$client` and Request's `$approve()` / `$reject()` are operation-scoped capabilities and expire after dispatch. Read native data from `metadata`, or use an adapter-specific native-event Handler for SDK event types.
 
 vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
 
@@ -138,7 +147,7 @@ export default defineHandler({
   event: 'notice.receive',
   handle(event) {
     const notice = event.payload;
-    console.log(notice.$scene_type, notice.$sub_type);
+    console.log(notice.name, notice.conversation, notice.target);
   },
 });
 ```

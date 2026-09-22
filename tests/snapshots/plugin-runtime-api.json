@@ -172,6 +172,9 @@
     "export * from './topology.js';"
   ],
   "core/runtime": [
+    "export * from '../../notice.js';",
+    "export * from '../../request.js';",
+    "export * from '../../system-event.js';",
     "export * from './contracts.js';",
     "export * from './im-runtime.js';",
     "export * from './ingress-route.js';",

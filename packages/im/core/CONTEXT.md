@@ -72,13 +72,14 @@ _避免使用_：消息段类、全局 registry/loader、Endpoint 层重复做 s
 由配置服务标记的主应用配置，运行时通过默认约定和用户差异 deep merge 得到。
 _避免使用_：zhin.config.yml、raw config file
 
-**Side Event**:
-非聊天入站的 IM 事件，分 **Notice**（只读通知）、**Request**（可 `$approve`/`$reject`）与 **System Event**（Endpoint 生命周期/登录等系统信号）。统一字段 `$foo_bar`；`$type` 仅存命名空间（`notice`/`request`/`system`），`$scene_id` + `$scene_type` + `$sub_type` 组合完整名。
-_避免使用_：side event、notification event（泛指）
+**Notice / Request**:
+独立的通知与申请契约，分别经 `notice.receive` / `request.receive` 分发。数据字段使用 camelCase；原始平台字段保留在 `metadata`，真实会话使用 `conversation`，完整语义名使用 `name`。Request 的 `$approve` / `$reject` 只在当前 operation 内有效。
 
-**Side Event Type**:
-完整类型名由 `formatSideEventName(event)` 生成，格式 `${$type}.${$scene_type}.${$sub_type}`（如 `notice.group.member_increase`、`request.friend.add`）。消费者用 `matchesSideEventName(event, 'notice.group.recall')` 匹配。
-_避免使用_：notice_type 字符串混用、在 `$type` 内嵌完整三段名
+**System Event**:
+独立的 Endpoint 系统信号，经 `system.receive` 分发；登录二维码、滑块、上下线使用 `system.login.qrcode`、`system.login.slider`、`system.online` 等 `name`。只共享 Endpoint 身份和 generation 生命周期，不携带聊天 `conversation` / `actor` / `target`，不创建聊天交互。
+
+**Event Name**:
+`type` 表示独立事件类别，`name` 表示完整语义名（如 `notice.group.member_increase`、`request.friend.add`）。`formatSideEventName(event)` 返回 `name`；消费者也可直接比较 `event.name`。`Message`、`Notice`、`Request`、`SystemEvent` 在 `zhin.js`、`@zhin.js/core` 与 Core runtime 入口使用同一契约。
 
 ## 关系
 

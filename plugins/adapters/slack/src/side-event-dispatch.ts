@@ -1,4 +1,4 @@
-import { buildNotice, mapNoticeParts, senderFromId, SLACK_NOTICE_PARTS_MAP } from '@zhin.js/core';
+import { composeSideEventName, sideEventConversation, buildNotice, mapNoticeParts, senderFromId, SLACK_NOTICE_PARTS_MAP } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 import type { SlackEvent } from './protocol.js';
@@ -25,18 +25,17 @@ export function receiveSlackSideEvent(
     String(record.ts ?? record.event_ts ?? ''),
   ].join(':');
   void emit('notice.receive', buildNotice(record, {
-    $id: `slack:${dedupeKey}`,
-    $adapter: 'slack' as never,
-    $endpoint: configId,
-    $type: 'notice',
-    $scene_id: sceneId,
-    $scene_type: parts.scene_type,
-    $sub_type: parts.sub_type,
-    $actor: senderFromId(user),
-    $target: senderFromId(
+    id: `slack:${dedupeKey}`,
+    clientAdapter: 'slack',
+    endpointId: configId,
+    type: 'notice',
+    conversation: sideEventConversation(parts.scene_type, sceneId),
+    name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
+    actor: senderFromId(user),
+    target: senderFromId(
       typeof record.item_user === 'string' ? record.item_user : undefined,
     ),
-    $timestamp: toMillis(record.event_ts ?? record.ts),
+    timestamp: toMillis(record.event_ts ?? record.ts),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'slack_side_event_failed',
