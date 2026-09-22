@@ -145,7 +145,7 @@ export async function receiveOneBotLikeSideEvent(
     );
     const subType = raw.sub_type != null ? String(raw.sub_type) : undefined;
     const name = postType.startsWith('system.')
-      ? postType
+      ? (postType.split('.').length === 2 ? composeSideEventName(postType, subType) : postType)
       : composeSideEventName('system', metaType, subType);
     const system = buildSystem(raw, {
       id: `system:${toMillis(raw.time)}_${metaType}_${subType ?? ''}`,

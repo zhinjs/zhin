@@ -28,10 +28,10 @@ export function receiveWeChatMpSideEvent(
     clientAdapter: 'wechat-mp',
     endpointId: configId,
     type: 'notice',
-    conversation: sideEventConversation(parts.scene_type, msg.FromUserName),
+    conversation: sideEventConversation('private', msg.FromUserName),
     name: composeSideEventName('notice', parts.scene_type, parts.sub_type),
     actor: senderFromId(msg.FromUserName),
-    timestamp: msg.CreateTime ?? Date.now(),
+    timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'wechat_mp_side_event_failed',

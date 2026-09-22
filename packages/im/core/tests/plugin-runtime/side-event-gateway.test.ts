@@ -140,6 +140,8 @@ describe('ImRuntime side-event handlers', () => {
   it.each([
     [{ post_type: 'system.login.qrcode' }, 'system.login.qrcode'],
     [{ post_type: 'system.online' }, 'system.online'],
+    [{ post_type: 'system.login', sub_type: 'qrcode' }, 'system.login.qrcode'],
+    [{ post_type: 'system.login.qrcode', sub_type: 'qrcode' }, 'system.login.qrcode'],
     [{ post_type: 'meta_event', meta_event_type: 'lifecycle', sub_type: 'connect' }, 'system.lifecycle.connect'],
   ])('preserves independent system names for %j', async (raw, name) => {
     const emit = vi.fn(async (_name: string, _payload: unknown) => undefined);
@@ -306,6 +308,18 @@ describe('ImRuntime side-event handlers', () => {
     await close();
   });
 
+  it('rejects an unregistered endpoint instead of inventing a canonical owner', async () => {
+    const { im, systems, close } = await createFixture();
+    await expect(im.endpointEvents.receive({
+      name: 'system.receive',
+      endpoint: { id: 'unregistered' as never, adapter: 'memory' },
+      payload: buildSystem({}, { id: 's', type: 'system', name: 'system.online', timestamp: 0 }),
+      client: {},
+    })).rejects.toThrow('Unknown Adapter Endpoint');
+    expect(systems).toHaveLength(0);
+    await close();
+  });
+
   it('receiveSystem dispatches system.receive handlers', async () => {
     const { receive, systems, systemInteractions, noticed, close } = await createFixture();
     const event = buildSystem({}, {
@@ -316,6 +330,7 @@ describe('ImRuntime side-event handlers', () => {
       name: composeSideEventName('system', 'login', 'qrcode'),
       timestamp: Date.now(),
     });
+    await expect(receive('notice.receive', event)).rejects.toThrow('payload type does not match');
     await receive('system.receive', event);
     expect(systems).toHaveLength(1);
     expect((systems[0] as { payload: SystemEvent }).payload.name).toBe('system.login.qrcode');

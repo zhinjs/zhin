@@ -1,5 +1,4 @@
-import { expectTypeOf } from 'vitest';
-import { SystemEvent, type SystemEventBase } from '../src/system-event.js';
+import { SystemEvent } from '../src/system-event.js';
 import { buildSystem } from '../src/side-event/normalize.js';
 
 const context = { endpoint: { adapter: 'root/icqq', id: 'capability-1' }, generation: 7, client: () => ({ live: true }) };
@@ -10,8 +9,6 @@ describe('independent SystemEvent', () => {
     const event = new SystemEvent(buildSystem(raw, {
       id: 'login-1', type: 'system', name: 'system.login.slider', timestamp: 1000,
     }), context);
-    expectTypeOf(event).toMatchTypeOf<SystemEventBase>();
-    expectTypeOf<Extract<keyof SystemEventBase, 'conversation' | 'actor' | 'target' | '$approve'>>().toBeNever();
     expect(event).toMatchObject({ id: 'login-1', type: 'system', name: 'system.login.slider', generation: 7, endpoint: context.endpoint });
     expect(event.metadata).toEqual(raw);
     expect(event).not.toHaveProperty('conversation');

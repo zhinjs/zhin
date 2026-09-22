@@ -1,4 +1,4 @@
-import { composeSideEventName, sideEventConversation, buildNotice, senderFromId } from '@zhin.js/core';
+import { composeSideEventName, buildNotice, senderFromId } from '@zhin.js/core';
 import type { EndpointEventEmitter } from 'zhin.js/adapter';
 import { formatCompact, type getAdapterLogger } from '@zhin.js/logger';
 
@@ -21,7 +21,7 @@ export function receiveDiscordGuildMemberSideEvent(
     clientAdapter: 'discord',
     endpointId: configId,
     type: 'notice',
-    conversation: sideEventConversation('group', event.guildId),
+    // Guild membership does not identify a replyable channel.
     name: composeSideEventName('notice', 'group', kind),
     target: senderFromId(event.userId, event.userName),
     timestamp: Date.now(),

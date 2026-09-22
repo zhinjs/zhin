@@ -32,7 +32,7 @@ export function receiveWecomSideEvent(
       endpointId: configId,
       type: 'system',
       name: composeSideEventName('system', 'wecom', 'enter_agent'),
-      timestamp: msg.CreateTime ?? Date.now(),
+      timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
     })).catch((err) => {
       logger.warn(formatCompact({
         op: 'wecom_system_side_event_failed',
@@ -54,7 +54,7 @@ export function receiveWecomSideEvent(
     conversation: sideEventConversation(parts.scene_type === 'friend' ? parts.scene_type : sceneType, msg.FromUserName),
     name: composeSideEventName('notice', parts.scene_type === 'friend' ? parts.scene_type : sceneType, parts.sub_type),
     actor: senderFromId(msg.FromUserName),
-    timestamp: msg.CreateTime ?? Date.now(),
+    timestamp: Number.isFinite(msg.CreateTime) && msg.CreateTime > 0 ? msg.CreateTime * 1000 : Date.now(),
   })).catch((err) => {
     logger.warn(formatCompact({
       op: 'wecom_side_event_failed',

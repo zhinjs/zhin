@@ -1,6 +1,6 @@
 import { expectTypeOf } from 'vitest';
 import type { Notice, Request, SystemEvent } from 'zhin.js';
-import type { Notice as CoreNotice, Request as CoreRequest, SystemEvent as CoreSystem } from '@zhin.js/core';
+import type { Notice as CoreNotice, Request as CoreRequest, SystemEvent as CoreSystem, RuntimeSystemEvent, SystemEventBase } from '@zhin.js/core';
 import type { Notice as RuntimeNotice, Request as RuntimeRequest, SystemEvent as RuntimeSystem } from '@zhin.js/core/runtime';
 import type { Notice as FacadeNotice, Request as FacadeRequest, SystemEvent as FacadeSystem } from 'zhin.js/core/runtime';
 import { defineHandler } from 'zhin.js/handler';
@@ -12,6 +12,7 @@ expectTypeOf<Notice>().toEqualTypeOf<FacadeNotice>();
 expectTypeOf<Request>().toEqualTypeOf<CoreRequest>();
 expectTypeOf<Request>().toEqualTypeOf<RuntimeRequest>();
 expectTypeOf<Request>().toEqualTypeOf<FacadeRequest>();
+expectTypeOf<RuntimeSystemEvent>().toMatchTypeOf<SystemEventBase>();
 expectTypeOf<SystemEvent>().toEqualTypeOf<CoreSystem>();
 expectTypeOf<SystemEvent>().toEqualTypeOf<RuntimeSystem>();
 expectTypeOf<SystemEvent>().toEqualTypeOf<FacadeSystem>();
