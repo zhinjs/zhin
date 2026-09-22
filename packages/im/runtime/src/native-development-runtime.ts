@@ -7,7 +7,9 @@ import {
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
+import { ModuleDependencyIndex } from './module-dependency-index.js';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
+import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
 
 export interface NativeDevelopmentModuleRuntimeOptions {
   readonly projectRoot: string;
@@ -25,27 +27,29 @@ const ignoredDirectories = new Set([
   '.git', '.zhin', 'coverage', 'data', 'dist', 'lib', 'node_modules',
 ]);
 const watchedExtensions = new Set([
-  '.cjs', '.js', '.json', '.md', '.mjs', '.ts', '.tsx', '.yaml', '.yml',
+  '.cjs', '.cts', '.js', '.json', '.jsx', '.md', '.mjs', '.mts',
+  '.ts', '.tsx', '.yaml', '.yml',
 ]);
 const capabilityRoots = new Set([
   'adapters', 'agents', 'commands', 'components', 'handlers', 'hooks', 'mcps', 'middlewares', 'pages', 'prompt-sections', 'schedules', 'skills', 'tools',
 ]);
 
 /**
- * Uses Node's native ESM/TypeScript loader and adds only cache busting and watch.
- * It deliberately requests a process restart for support modules whose cached
- * relative import closure cannot be invalidated without a custom loader.
+ * Uses Node's native ESM/TypeScript loader with dependency-aware cache busting
+ * and portable filesystem watch support.
  */
 export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #projectRoot: string;
   readonly #watchEnabled: boolean;
   readonly #tsxLoader: TsxModuleLoader | undefined;
-  readonly #revisions = new Map<string, number>();
+  readonly #dependencies = new ModuleDependencyIndex();
   readonly #watchers = new Set<PortableSourceWatcher>();
   #watchRoots: readonly string[];
+  #revision = 0;
   #closed = false;
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
+    ensureTypeScriptSpecifierRemap();
     this.#projectRoot = resolve(options.projectRoot);
     this.#watchEnabled = options.watch ?? true;
     this.#tsxLoader = options.tsxLoader;
@@ -56,21 +60,31 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#assertOpen();
     const normalized = resolve(source);
     if (normalized.endsWith('.ts')) assertNativeTypeScriptSupport();
+    const dependencies = await this.#dependencies.analyze(normalized);
     const url = pathToFileURL(normalized);
-    url.searchParams.set('zhin-generation', String(this.#revisions.get(normalized) ?? 0));
+    url.searchParams.set('zhin-generation', String(this.#revision));
+    let loaded: T;
     try {
-      return await import(url.href) as T;
+      loaded = await import(url.href) as T;
     } catch (error) {
       if (!normalized.endsWith('.tsx') || !isUnsupportedTsxError(error) || !this.#tsxLoader) {
         throw error;
       }
-      return this.#tsxLoader.load<T>(url.href, pathToFileURL(`${this.#projectRoot}${sep}`).href);
+      loaded = await this.#tsxLoader.load<T>(
+        url.href,
+        pathToFileURL(`${this.#projectRoot}${sep}`).href,
+      );
     }
+    this.#dependencies.commit(normalized, dependencies);
+    return loaded;
   }
 
-  invalidate(source: string): void {
-    const normalized = resolve(source);
-    this.#revisions.set(normalized, (this.#revisions.get(normalized) ?? 0) + 1);
+  invalidate(_source: string): void {
+    this.#revision += 1;
+  }
+
+  affectedSources(source: string): readonly string[] {
+    return this.#dependencies.affectedSources(source);
   }
 
   requiresProcessRestart(source: string): boolean {
@@ -80,6 +94,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
     if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
+    // A helper with one or more loaded entry importers is safe: the planner
+    // invalidates those owned entries and the generation query refreshes their
+    // complete project-local import closure.
+    if (this.affectedSources(normalized).length > 1) return false;
     const parts = relative(packageRoot, normalized).split(sep);
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);
