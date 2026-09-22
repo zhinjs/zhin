@@ -16,6 +16,10 @@ import {
 const temporary: string[] = [];
 const execFileAsync = promisify(execFile);
 const tsxLoaderUrl = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
+const nativeTypeScriptIt = supportsNativeTypeScript() ? it : it.skip;
+const inheritedStripTypeArguments = process.execArgv.includes('--experimental-strip-types')
+  ? ['--experimental-strip-types']
+  : [];
 
 afterEach(async () => {
   await Promise.all(temporary.splice(0).map((path) => rm(path, { force: true, recursive: true })));
@@ -35,7 +39,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
-  it('maps a transitive helper outside an entry directory back to that entry', async () => {
+  nativeTypeScriptIt('maps a transitive helper outside an entry directory back to that entry', async () => {
     const root = await fixture();
     const source = join(root, 'commands/status/index.ts');
     const helper = join(root, 'src/status-message.ts');
@@ -59,7 +63,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
-  it('maps package-local import aliases back to their loaded entry', async () => {
+  nativeTypeScriptIt('maps package-local import aliases back to their loaded entry', async () => {
     const root = await fixture();
     const source = join(root, 'commands/status/index.ts');
     const helper = join(root, 'src/status-message.ts');
@@ -81,7 +85,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     await runtime.close();
   });
 
-  it('reloads the complete relative import closure in a real Node process', async () => {
+  nativeTypeScriptIt('reloads the complete relative import closure in a real Node process', async () => {
     const root = await fixture();
     const runtimeEntry = new URL('../src/index.ts', import.meta.url).href;
     const scenario = join(root, 'hmr-scenario.mjs');
@@ -109,10 +113,103 @@ process.stdout.write(JSON.stringify({ first, second }));
 
     const { stdout } = await execFileAsync(
       process.execPath,
-      ['--import', tsxLoaderUrl, scenario],
+      [...inheritedStripTypeArguments, '--import', tsxLoaderUrl, scenario],
       { cwd: process.cwd() },
     );
     expect(JSON.parse(stdout)).toEqual({ first: 'v1', second: 'v2' });
+  });
+
+  nativeTypeScriptIt('loads native .mts and .cts capability entries consistently', async () => {
+    const root = await fixture();
+    const mts = join(root, 'commands/status/index.mts');
+    const cts = join(root, 'commands/status/index.cts');
+    const cjsHelper = join(root, 'commands/status/helper.cjs');
+    await writeFile(mts, 'export default 1;\n');
+    await writeFile(cts, "module.exports = require('./helper.cjs');\n");
+    await writeFile(cjsHelper, 'module.exports = 2;\n');
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+
+    expect((await runtime.load<{ default: number }>(mts)).default).toBe(1);
+    expect((await runtime.load<{ default: number }>(cts)).default).toBe(2);
+    expect(runtime.affectedSources(cjsHelper)).toEqual([cjsHelper, cts]);
+    expect(runtime.requiresProcessRestart(mts)).toBe(false);
+    expect(runtime.requiresProcessRestart(cts)).toBe(true);
+    expect(runtime.requiresProcessRestart(cjsHelper)).toBe(true);
+    await runtime.close();
+  });
+
+  it('keeps the committed dependency mapping when a replacement module fails to load', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.js');
+    const helper = join(root, 'src/status-message.js');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(helper, "export const statusMessage = 'ready';\n");
+    await writeFile(
+      source,
+      "import { statusMessage } from '../../src/status-message.js';\nexport default statusMessage;\n",
+    );
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    await runtime.load(source);
+
+    await writeFile(source, 'export default {;\n');
+    runtime.invalidate(helper);
+    await expect(runtime.load(source)).rejects.toThrow();
+
+    expect(runtime.affectedSources(helper)).toEqual([helper, source]);
+    await runtime.close();
+  });
+
+  it('stages dependency changes until the generation transaction commits', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.js');
+    const firstHelper = join(root, 'src/first-message.js');
+    const secondHelper = join(root, 'src/second-message.js');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(firstHelper, "export const statusMessage = 'first';\n");
+    await writeFile(secondHelper, "export const statusMessage = 'second';\n");
+    await writeFile(
+      source,
+      "import { statusMessage } from '../../src/first-message.js';\nexport default statusMessage;\n",
+    );
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    await runtime.load(source);
+
+    runtime.beginGeneration();
+    runtime.invalidate(source);
+    await writeFile(
+      source,
+      "import { statusMessage } from '../../src/second-message.js';\nexport default statusMessage;\n",
+    );
+    await runtime.load(source);
+    runtime.rollbackGeneration();
+    expect(runtime.affectedSources(firstHelper)).toEqual([firstHelper, source]);
+    expect(runtime.affectedSources(secondHelper)).toEqual([secondHelper]);
+
+    runtime.beginGeneration();
+    await runtime.load(source);
+    runtime.commitGeneration([source]);
+    expect(runtime.affectedSources(firstHelper)).toEqual([firstHelper]);
+    expect(runtime.affectedSources(secondHelper)).toEqual([secondHelper, source]);
+    await runtime.close();
+  });
+
+  it('drops dependency mappings only when committed ownership removes an entry', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.js');
+    const helper = join(root, 'src/status-message.js');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(helper, "export const statusMessage = 'ready';\n");
+    await writeFile(
+      source,
+      "import { statusMessage } from '../../src/status-message.js';\nexport default statusMessage;\n",
+    );
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+
+    await runtime.load(source);
+    expect(runtime.affectedSources(helper)).toEqual([helper, source]);
+    runtime.commitGeneration([]);
+    expect(runtime.affectedSources(helper)).toEqual([helper]);
+    await runtime.close();
   });
 
   it('loads a published JavaScript entry from node_modules without TypeScript stripping', async () => {
@@ -173,11 +270,15 @@ process.stdout.write(JSON.stringify({ first, second }));
 
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.tsx'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.mts'))).toBe(false);
+    expect(runtime.requiresProcessRestart(join(root, 'commands/gh/status/index.cts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'components/card/index.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'components/card/index.tsx'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'tools/weather/index.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'tools/shared/client.ts'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, 'src/helper.ts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'src/helper.mts'))).toBe(true);
+    expect(runtime.requiresProcessRestart(join(root, 'src/helper.cts'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, 'schema.json'))).toBe(false);
     expect(runtime.requiresProcessRestart(join(root, '.env'))).toBe(true);
     expect(runtime.requiresProcessRestart(join(root, '.env.production'))).toBe(true);

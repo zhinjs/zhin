@@ -45,7 +45,7 @@ export class HmrCoordinator {
     if (!this.options.modules.watch) {
       throw new Error('ModuleRuntime does not provide a file watcher');
     }
-    this.#syncWatchRoots();
+    this.#syncModuleState();
     this.#unwatch = this.options.modules.watch((source) => {
       void this.enqueue(source).catch(() => undefined);
     });
@@ -131,21 +131,24 @@ export class HmrCoordinator {
         if (plan.kind === 'none') continue;
 
         const startedAt = performance.now();
-        for (const source of plan.changed) {
-          await this.options.modules.invalidate?.(source);
-        }
-        const restart = await this.options.runtime.reload(plan);
-        if (restart) {
-          this.#restartRequired = true;
-          this.#pending.clear();
-          this.#notifyRestart(restart);
-          break;
-        }
-        else {
+        try {
+          this.options.modules.beginGeneration?.();
+          for (const source of plan.changed) {
+            await this.options.modules.invalidate?.(source);
+          }
+          const restart = await this.options.runtime.reload(plan);
+          if (restart) {
+            this.options.modules.rollbackGeneration?.();
+            this.#restartRequired = true;
+            this.#pending.clear();
+            this.#notifyRestart(restart);
+            break;
+          }
+
           // reload resolves only after RootController has committed the new
-          // generation. Read ownership now so failed transactions never make
-          // newly discovered workspace packages observable to the watcher.
-          this.#syncWatchRoots();
+          // generation. Commit module metadata and ownership together so a
+          // failed transaction keeps the previous dependency graph intact.
+          this.#syncModuleState();
           const durationMs = Number((performance.now() - startedAt).toFixed(1));
           try {
             await this.options.onReload?.(plan, durationMs);
@@ -157,6 +160,9 @@ export class HmrCoordinator {
               // Diagnostic reporting is deliberately outside the outcome.
             }
           }
+        } catch (error) {
+          this.options.modules.rollbackGeneration?.();
+          throw error;
         }
       }
       this.#resolveWaiters();
@@ -185,8 +191,10 @@ export class HmrCoordinator {
     for (const waiter of this.#waiters.splice(0)) waiter.reject(error);
   }
 
-  #syncWatchRoots(): void {
-    this.options.modules.updateWatchRoots?.(this.options.ownership().watchRoots());
+  #syncModuleState(): void {
+    const ownership = this.options.ownership();
+    this.options.modules.updateWatchRoots?.(ownership.watchRoots());
+    this.options.modules.commitGeneration?.(ownership.moduleSources());
   }
 
   #notifyRestart(plan: ProcessInvalidationPlan): void {

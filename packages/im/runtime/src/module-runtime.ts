@@ -15,6 +15,12 @@ export interface ModuleRuntime {
   affectedSources?(source: string): readonly string[];
   /** True when this adapter cannot invalidate the complete importer closure safely. */
   requiresProcessRestart?(source: string): boolean;
+  /** Starts staging module metadata for a generation transaction. */
+  beginGeneration?(): void;
+  /** Commits staged metadata and the active module set after the generation commits. */
+  commitGeneration?(sources: readonly string[]): void;
+  /** Discards metadata staged by a failed generation transaction. */
+  rollbackGeneration?(): void;
   /** Replaces the local package roots after a generation commits. */
   updateWatchRoots?(roots: readonly ModuleWatchRoot[]): void;
   watch?(listener: (source: string) => void): Dispose;
