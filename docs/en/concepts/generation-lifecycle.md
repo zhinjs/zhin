@@ -87,6 +87,9 @@ candidate generation. No inert/unconfigured record or background late-open is pu
 The shared HTTP listener belongs to the Process Host. Candidate generations receive only an
 `HttpHost` routing port; gated HTTP/WS registrations cannot shadow an old route before commit, and
 generation code has no listener `listen`/`close` authority.
+Console RPC, SSE, and login-assistance subscriptions are also owned by the Process Host and remain
+available before first-generation Adapter activation. Operations that need generation capabilities
+still acquire the current snapshot lease, so candidate capabilities are never exposed early.
 
 ## Snapshot Leases: In-Flight Messages Are Not Interrupted
 

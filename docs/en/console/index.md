@@ -8,6 +8,12 @@ Console is Zhin's runtime fact surface. It answers what the current generation p
 
 `zhin runtime start` assembles the HTTP Host and Console API. Connect through <https://console.zhin.dev>, or open the local `/console` and Sandbox pages served by the Host.
 
+The HTTP Host, Console RPC, and SSE are process control-plane services and begin listening before
+the first Runtime generation activates. A browser can therefore complete QR, slider, or device
+confirmation through `login.list`, `login.submit`, and `endpoint.login.pending` while an Adapter is
+still starting. Pages and runtime projections that require a published generation may remain empty
+or report not ready until every required Adapter finishes startup and the first generation commits.
+
 ```mermaid
 flowchart LR
     B[Browser] -->|Remote UI| RC[console.zhin.dev]
