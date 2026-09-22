@@ -7,7 +7,10 @@ import {
 import { basename, extname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Dispose } from '@zhin.js/plugin-runtime';
-import { ModuleDependencyIndex } from './module-dependency-index.js';
+import {
+  ModuleDependencyIndex,
+  type ModuleDependencyAnalysis,
+} from './module-dependency-index.js';
 import type { ModuleRuntime, ModuleWatchRoot } from './module-runtime.js';
 import { ensureTypeScriptSpecifierRemap } from './typescript-specifier-remap.js';
 
@@ -44,6 +47,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   readonly #tsxLoader: TsxModuleLoader | undefined;
   readonly #dependencies = new ModuleDependencyIndex();
   readonly #watchers = new Set<PortableSourceWatcher>();
+  #pendingDependencies?: Map<string, ModuleDependencyAnalysis>;
   #watchRoots: readonly string[];
   #revision = 0;
   #closed = false;
@@ -59,8 +63,9 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   async load<T = unknown>(source: string): Promise<T> {
     this.#assertOpen();
     const normalized = resolve(source);
-    if (normalized.endsWith('.ts')) assertNativeTypeScriptSupport();
-    const dependencies = await this.#dependencies.analyze(normalized);
+    if (isNativeTypeScriptSource(normalized)) assertNativeTypeScriptSupport();
+    const analysis = this.#pendingDependencies?.get(normalized)
+      ?? await this.#dependencies.analyze(normalized);
     const url = pathToFileURL(normalized);
     url.searchParams.set('zhin-generation', String(this.#revision));
     let loaded: T;
@@ -75,11 +80,13 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
         pathToFileURL(`${this.#projectRoot}${sep}`).href,
       );
     }
-    this.#dependencies.commit(normalized, dependencies);
+    if (this.#pendingDependencies) this.#pendingDependencies.set(normalized, analysis);
+    else this.#dependencies.commit(normalized, analysis);
     return loaded;
   }
 
-  invalidate(_source: string): void {
+  invalidate(source: string): void {
+    this.#dependencies.invalidate(source);
     this.#revision += 1;
   }
 
@@ -94,6 +101,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // The HMR coordinator turns this into a visible process restart reason.
     if (!packageRoot || isNodeModulesSource(packageRoot, normalized)) return true;
     if (packageRoot === this.#projectRoot && basename(normalized).startsWith('.env')) return true;
+    // Native ESM query revisions do not invalidate CommonJS require.cache.
+    // Keep .cjs/.cts entries and their statically discovered closure on the
+    // process boundary until the module runtime owns a CJS cache transaction.
+    if (this.#dependencies.hasCommonJsImpact(normalized)) return true;
     // A helper with one or more loaded entry importers is safe: the planner
     // invalidates those owned entries and the generation query refreshes their
     // complete project-local import closure.
@@ -125,7 +136,29 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // Support files inside capability directories (e.g. commands/_utils.ts)
     // are not discovery entries: reloading the entry URL only bumps that
     // entry's zhin-generation, so the importer closure keeps the old code.
-    return ['.js', '.json', '.ts', '.tsx'].includes(extname(normalized));
+    return ['.cjs', '.cts', '.js', '.json', '.mjs', '.mts', '.ts', '.tsx']
+      .includes(extname(normalized));
+  }
+
+  beginGeneration(): void {
+    this.#assertOpen();
+    if (this.#pendingDependencies) {
+      throw new Error('A module generation transaction is already active');
+    }
+    this.#pendingDependencies = new Map();
+  }
+
+  commitGeneration(sources: readonly string[]): void {
+    this.#assertOpen();
+    for (const [entry, analysis] of this.#pendingDependencies ?? []) {
+      this.#dependencies.commit(entry, analysis);
+    }
+    this.#pendingDependencies = undefined;
+    this.#dependencies.retain(sources);
+  }
+
+  rollbackGeneration(): void {
+    this.#pendingDependencies = undefined;
   }
 
   updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
@@ -155,6 +188,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#closed = true;
     for (const watcher of this.#watchers) watcher.close();
     this.#watchers.clear();
+    this.#pendingDependencies = undefined;
+    this.#dependencies.clear();
     await this.#tsxLoader?.close?.();
   }
 
@@ -178,7 +213,7 @@ function isNamedCapabilityDirectory(value: string, allowSnake: boolean): boolean
 function isDirectoryCapabilityEntry(parts: readonly string[]): boolean {
   return parts.length === 2
     && parts[1] === `index${extname(parts[1] ?? '')}`
-    && ['.cjs', '.js', '.mjs', '.ts', '.tsx'].includes(extname(parts[1] ?? ''));
+    && ['.cjs', '.cts', '.js', '.mjs', '.mts', '.ts', '.tsx'].includes(extname(parts[1] ?? ''));
 }
 
 function isNestedDirectoryEntry(parts: readonly string[]): boolean {
@@ -323,7 +358,11 @@ function isIgnoredSource(root: string, source: string): boolean {
 }
 
 function isExecutableSource(source: string): boolean {
-  return ['.cjs', '.js', '.mjs', '.ts', '.tsx'].includes(extname(source));
+  return ['.cjs', '.cts', '.js', '.mjs', '.mts', '.ts', '.tsx'].includes(extname(source));
+}
+
+function isNativeTypeScriptSource(source: string): boolean {
+  return ['.cts', '.mts', '.ts'].includes(extname(source));
 }
 
 function isWithin(root: string, source: string): boolean {

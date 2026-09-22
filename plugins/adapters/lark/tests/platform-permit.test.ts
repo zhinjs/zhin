@@ -17,9 +17,11 @@ function mockSubject(sender: { role?: string; permissions?: string[] }) {
 
 function mockMsg(sender: { role?: string; permissions?: string[] }) {
   return {
-    $adapter: 'lark',
-    $sender: { id: 'u1', ...sender },
-    $channel: { type: 'group', id: 'oc1' },
+    clientAdapter: 'lark',
+    endpointId: 'bot1',
+    conversation: { endpoint: { adapter: 'lark', id: 'bot1' }, kind: 'group', id: 'oc1' },
+    sender: { id: 'u1', roles: [], permissions: sender.permissions },
+    metadata: sender.role ? { senderRole: sender.role } : {},
   } as any;
 }
 

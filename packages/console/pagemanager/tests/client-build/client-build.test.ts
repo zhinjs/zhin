@@ -102,18 +102,25 @@ describe('Client build adapter', () => {
     expect(serverLoads).toBe(1);
   });
 
-  it('preserves server dependency and watch-root invalidation ports', async () => {
+  it('preserves server dependency and generation invalidation ports', async () => {
+    const generations: unknown[] = [];
     const roots: unknown[] = [];
+    let began = 0;
+    let rolledBack = 0;
     const server: ModuleRuntime = {
       async load<T>(): Promise<T> { return {} as T; },
       affectedSources: (source) => [source, '/project/commands/status/index.ts'],
       requiresProcessRestart: () => true,
+      beginGeneration: () => { began += 1; },
+      commitGeneration: (next) => { generations.push(next); },
+      rollbackGeneration: () => { rolledBack += 1; },
       updateWatchRoots: (next) => { roots.push(next); },
       async close() {},
     };
     const modules = new ClientBuildModuleRuntime(server, {
       async load<T>(): Promise<T> { return {} as T; },
     });
+    const sources = ['/project/commands/status/index.ts'];
     const watchRoots = [{ root: '/project', source: 'workspace' as const }];
 
     expect(modules.affectedSources('/project/src/helper.ts')).toEqual([
@@ -121,7 +128,13 @@ describe('Client build adapter', () => {
       '/project/commands/status/index.ts',
     ]);
     expect(modules.requiresProcessRestart('/project/src/helper.ts')).toBe(true);
+    modules.beginGeneration();
+    modules.commitGeneration(sources);
+    modules.rollbackGeneration();
     modules.updateWatchRoots(watchRoots);
+    expect(began).toBe(1);
+    expect(generations).toEqual([sources]);
+    expect(rolledBack).toBe(1);
     expect(roots).toEqual([watchRoots]);
   });
 

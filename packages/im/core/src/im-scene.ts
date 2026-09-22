@@ -1,4 +1,5 @@
-import type { Message, MessageType } from './message.js';
+import type { MessageType } from './message.js';
+import type { Message } from './plugin-runtime/im/contracts.js';
 import type { SendContent, SendOptions } from './types.js';
 import {
   resolveIMSceneSessionId as resolveIMSceneSessionIdKernel,
@@ -42,26 +43,26 @@ export function normalizeIMSceneParentKind(value: unknown): IMSceneParentKind | 
   return undefined;
 }
 
-export function sceneRefFromMessage(message: Partial<Message<any>>): IMSceneRef | undefined {
-  const platform = nonEmptyString(message.$adapter);
-  const endpointKey = nonEmptyString(message.$endpoint);
-  const kind = message.$channel?.type;
+export function sceneRefFromMessage(message: Partial<Message>): IMSceneRef | undefined {
+  const platform = nonEmptyString(message.clientAdapter ?? message.conversation?.endpoint.adapter);
+  const endpointKey = nonEmptyString(message.endpointId ?? message.conversation?.endpoint.id);
+  const kind = message.conversation?.kind;
   if (!platform || !endpointKey || !kind) return undefined;
 
-  const senderId = nonEmptyString(message.$sender?.id);
-  const channelId = nonEmptyString(message.$channel?.id);
+  const senderId = nonEmptyString(message.sender?.id);
+  const channelId = nonEmptyString(message.conversation?.id);
   const sceneId = kind === 'private'
     ? senderId ?? channelId
     : channelId ?? senderId;
   if (!sceneId) return undefined;
 
-  const parentKind = message.$channel?.parent
-    ? normalizeIMSceneParentKind(message.$channel.parent.type)
+  const parentKind = message.conversation?.parent
+    ? normalizeIMSceneParentKind(message.conversation.parent.kind)
     : undefined;
-  const parent = parentKind && message.$channel?.parent
+  const parent = parentKind && message.conversation?.parent
     ? {
         kind: parentKind,
-        sceneId: String(message.$channel.parent.id),
+        sceneId: String(message.conversation.parent.id),
       }
     : undefined;
 
@@ -103,7 +104,7 @@ export function resolveIMSceneSessionId(scene: IMSceneRef): string {
   });
 }
 
-export function messageToIMDeliveryTarget(message: Partial<Message<any>>): IMDeliveryTarget | undefined {
+export function messageToIMDeliveryTarget(message: Partial<Message>): IMDeliveryTarget | undefined {
   const scene = sceneRefFromMessage(message);
   if (!scene) return undefined;
   return {

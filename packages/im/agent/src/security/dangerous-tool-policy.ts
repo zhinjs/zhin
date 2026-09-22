@@ -45,7 +45,7 @@ function resolveExecAllowlistFromMessage(commMessage?: Message): string[] {
 }
 
 function hasMessageIdentity(commMessage?: Message): boolean {
-  return Boolean(commMessage?.$adapter && commMessage?.$endpoint && commMessage?.$sender?.id);
+  return Boolean(commMessage?.clientAdapter && commMessage?.endpointId && commMessage?.sender?.id);
 }
 
 function resolveRoleFromMessage(commMessage?: Message): {
@@ -63,15 +63,12 @@ function resolveRoleFromMessage(commMessage?: Message): {
   };
 }
 
-/** host root 不可用时，从 Message.$sender 快照或重算角色（测试/降级路径） */
+/** host root 不可用时，从 Message.sender 快照或重算角色（测试/降级路径） */
 function resolveRoleFromMessageFallback(commMessage: Message): ToolRequesterRole {
   const snapshot = senderRolesFromMessage(commMessage);
-  if (commMessage.$sender.isMaster !== undefined || commMessage.$sender.isTrusted !== undefined) {
-    if (hasSenderRole(snapshot, 'master')) return 'master';
-    if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
-    return 'other';
-  }
-  return 'unknown';
+  if (hasSenderRole(snapshot, 'master')) return 'master';
+  if (hasSenderRole(snapshot, 'trusted')) return 'trusted';
+  return 'other';
 }
 
 function denyUnidentifiedTool(toolName: string): DangerousToolDecision {

@@ -21,15 +21,15 @@ export function platformPermission(adapter: string, permission: string): string 
 
 export function createSceneRolePlatformChecker(): PlatformPermitChecker {
   return (perm: string, subject: PermissionSubject): boolean => {
-    const role = subject.sender?.role?.[0];
+    const roles = subject.sender?.role ?? [];
     const permissions = subject.sender?.permissions;
     if (perm === 'scene_admin') {
-      return role === 'admin' || role === 'owner'
+      return roles.includes('admin') || roles.includes('owner')
         || (permissions?.includes('admin') ?? false)
         || (permissions?.includes('owner') ?? false);
     }
     if (perm === 'scene_owner') {
-      return role === 'owner' || (permissions?.includes('owner') ?? false);
+      return roles.includes('owner') || (permissions?.includes('owner') ?? false);
     }
     return false;
   };

@@ -72,7 +72,7 @@ export class InboundTurnQueue {
     if (options.signal?.aborted) {
       return Promise.reject(inboundAbortReason(sessionKey, options.signal.reason));
     }
-    const senderId = String(commMessage.$sender?.id ?? 'unknown');
+    const senderId = String(commMessage.sender?.id ?? 'unknown');
     const now = Date.now();
     const queue = this.queues.get(sessionKey) ?? [];
     this.queues.set(sessionKey, queue);

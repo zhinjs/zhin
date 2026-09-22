@@ -428,7 +428,7 @@ export interface CheckExecPolicyOptions {
 
 function resolveRequesterRole(): ToolRequesterRole {
   const commMessage = getCurrentCommMessage();
-  if (!commMessage?.$adapter || !commMessage?.$endpoint || !commMessage?.$sender?.id) return 'unknown';
+  if (!commMessage?.clientAdapter || !commMessage?.endpointId || !commMessage?.sender?.id) return 'unknown';
 
   try {
     return resolveToolRequesterRole(commMessage);
@@ -453,7 +453,7 @@ export function resolveExecAllowlist(config: Required<ZhinAgentConfig>): string[
 
 function tryExecBypassForSensitiveIcqq(normalizedSubCommand: string): boolean {
   const commMessage = getCurrentCommMessage();
-  if (!commMessage?.$adapter || !commMessage?.$endpoint) return false;
+  if (!commMessage?.clientAdapter || !commMessage?.endpointId) return false;
   try {
     const runtime = getCurrentOwnerApprovalRuntime();
     const address = ownerApprovalAddressFromMessage(commMessage);

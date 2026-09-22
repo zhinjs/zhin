@@ -25,10 +25,10 @@ describe('InboundTurnQueue', () => {
       starts: [],
       clears: [],
       emitQueuedStart(commMessage, sessionKey) {
-        this.starts.push({ sessionKey, messageId: commMessage.$id });
+        this.starts.push({ sessionKey, messageId: commMessage.id });
       },
       emitQueuedClear(commMessage, sessionKey) {
-        this.clears.push({ sessionKey, messageId: commMessage.$id });
+        this.clears.push({ sessionKey, messageId: commMessage.id });
       },
     };
   });
@@ -72,7 +72,7 @@ describe('InboundTurnQueue', () => {
 
   function messageWithId(overrides: Parameters<typeof mockCommMessage>[0] & { messageId?: string }) {
     const { messageId = 'msg-1', ...rest } = overrides;
-    return { ...mockCommMessage(rest), $id: messageId } as ReturnType<typeof mockCommMessage> & { $id: string };
+    return { ...mockCommMessage(rest), id: messageId } as ReturnType<typeof mockCommMessage> & { id: string };
   }
 
   it('runs same-session turns in FIFO order', async () => {

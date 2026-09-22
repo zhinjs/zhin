@@ -13,7 +13,7 @@ export interface RouteMatchConfig {
   endpoint?: string;
   /** IM scene kind: private | group | channel */
   scene?: string;
-  /** 群/频道 scene id（与 message.$channel.id 比对） */
+  /** 群/频道 scene id（与 message.conversation.id 比对） */
   sceneId?: string;
   /** image | audio | video | text（纯文本无媒体 segment） */
   hasMedia?: string[];

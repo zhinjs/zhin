@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import {
   SnapshotStore,
   createCapabilitySlot,
@@ -23,8 +23,27 @@ import { Notice } from '../../src/notice.js';
 import { SystemEvent } from '../../src/system-event.js';
 import { receiveOneBotLikeSideEvent } from '../../src/side-event/dispatch.js';
 import { Request } from '../../src/request.js';
+import type { Notice as PublicNotice, Request as PublicRequest } from '../../src/index.js';
 
 describe('ImRuntime side-event handlers', () => {
+  it('exports the Notice and Request payload contracts received by handlers', () => {
+    defineHandler({
+      event: 'notice.receive',
+      handle(event) {
+        expectTypeOf(event.payload).toEqualTypeOf<PublicNotice>();
+        expectTypeOf(event.client).toBeUnknown();
+      },
+    });
+    defineHandler({
+      event: 'request.receive',
+      handle(event) {
+        expectTypeOf(event.payload).toEqualTypeOf<PublicRequest>();
+        expectTypeOf(event.payload.$approve).toBeFunction();
+        expectTypeOf(event.client).toBeUnknown();
+      },
+    });
+  });
+
   it('expires request action ports when gateway dispatch settles', async () => {
     let captured: Request | undefined;
     const approve = vi.fn(async () => undefined);

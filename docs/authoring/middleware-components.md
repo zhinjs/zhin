@@ -13,7 +13,7 @@ description: defineMiddleware 的 inbound/outbound 执行序，defineComponent �
 
 ```ts
 import { defineMiddleware } from 'zhin.js/middleware';
-import type { Message } from '@zhin.js/core/runtime';
+import type { Message } from 'zhin.js';
 
 export default defineMiddleware<Message>({
   target: 'inbound',

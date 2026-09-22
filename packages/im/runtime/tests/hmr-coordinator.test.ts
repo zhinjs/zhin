@@ -124,8 +124,9 @@ describe('HmrCoordinator', () => {
     const restarts: ProcessInvalidationPlan[] = [];
     const errors: unknown[] = [];
     const reloadEvents: GenerationInvalidationPlan[] = [];
+    const modules = new FakeModules();
     const coordinator = new HmrCoordinator({
-      modules: new FakeModules(),
+      modules,
       ownership: () => ownership,
       runtime: {
         async reload() {
@@ -146,9 +147,12 @@ describe('HmrCoordinator', () => {
     expect(restarts).toHaveLength(1);
     expect(errors).toEqual([]);
     expect(reloadEvents).toEqual([]);
+    expect(modules.generationBegins).toBe(1);
+    expect(modules.generationCommits).toEqual([]);
+    expect(modules.generationRollbacks).toBe(1);
   });
 
-  it('updates module watch roots only after a generation reload commits', async () => {
+  it('updates module sources and watch roots only after a generation reload commits', async () => {
     const source = '/project/commands/status/index.ts';
     const initial = ownershipFor(source, '/project');
     const committed = ownershipFor(source, '/workspace/plugins/sibling');
@@ -168,9 +172,50 @@ describe('HmrCoordinator', () => {
 
     await coordinator.enqueue(source);
 
+    expect(modules.generationBegins).toBe(1);
+    expect(modules.generationCommits).toEqual([[source]]);
+    expect(modules.generationRollbacks).toBe(0);
     expect(modules.watchRootUpdates).toEqual([
       [{ root: '/workspace/plugins/sibling', source: 'workspace' }],
     ]);
+  });
+
+  it('rolls back when opening the module generation transaction fails', async () => {
+    const source = '/project/commands/status/index.ts';
+    const failure = new Error('stale module transaction');
+    const modules = new FakeModules();
+    modules.beginFailure = failure;
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/project'),
+      runtime: { reload: async () => { throw new Error('must not reload'); } },
+      onRestartRequired() {},
+      onError() {},
+    });
+
+    await expect(coordinator.enqueue(source)).rejects.toBe(failure);
+    expect(modules.generationBegins).toBe(1);
+    expect(modules.generationRollbacks).toBe(1);
+    expect(modules.generationCommits).toEqual([]);
+  });
+
+  it('does not commit module metadata when watch-root replacement fails', async () => {
+    const source = '/project/commands/status/index.ts';
+    const failure = new Error('watch root replacement failed');
+    const modules = new FakeModules();
+    modules.watchRootFailure = failure;
+    const coordinator = new HmrCoordinator({
+      modules,
+      ownership: () => ownershipFor(source, '/workspace/plugins/sibling'),
+      runtime: { reload: async () => undefined },
+      onRestartRequired() {},
+      onError() {},
+    });
+
+    await expect(coordinator.enqueue(source)).rejects.toBe(failure);
+    expect(modules.generationBegins).toBe(1);
+    expect(modules.generationCommits).toEqual([]);
+    expect(modules.generationRollbacks).toBe(1);
   });
 
   it('reports a failed reload and rejects every waiter in its batch', async () => {
@@ -184,8 +229,9 @@ describe('HmrCoordinator', () => {
     });
     const reported: unknown[] = [];
     const failure = new Error('prepare failed');
+    const modules = new FakeModules();
     const coordinator = new HmrCoordinator({
-      modules: new FakeModules(),
+      modules,
       ownership: () => ownership,
       runtime: { reload: async () => { throw failure; } },
       onRestartRequired() {},
@@ -198,6 +244,9 @@ describe('HmrCoordinator', () => {
     await expect(first).rejects.toBe(failure);
     await expect(second).rejects.toBe(failure);
     expect(reported).toEqual([failure]);
+    expect(modules.generationBegins).toBe(1);
+    expect(modules.generationCommits).toEqual([]);
+    expect(modules.generationRollbacks).toBe(1);
   });
 
   it('waits for an in-flight reload before stop settles and rejects later work', async () => {
@@ -315,7 +364,12 @@ describe('HmrCoordinator', () => {
 class FakeModules implements ModuleRuntime {
   readonly invalidated: string[] = [];
   readonly processSources = new Set<string>();
+  readonly generationCommits: unknown[] = [];
   readonly watchRootUpdates: unknown[] = [];
+  generationBegins = 0;
+  generationRollbacks = 0;
+  beginFailure?: Error;
+  watchRootFailure?: Error;
 
   async load<T>(): Promise<T> {
     throw new Error('not used');
@@ -329,7 +383,21 @@ class FakeModules implements ModuleRuntime {
     return this.processSources.has(source);
   }
 
+  beginGeneration(): void {
+    this.generationBegins += 1;
+    if (this.beginFailure) throw this.beginFailure;
+  }
+
+  commitGeneration(sources: readonly string[]): void {
+    this.generationCommits.push(sources);
+  }
+
+  rollbackGeneration(): void {
+    this.generationRollbacks += 1;
+  }
+
   updateWatchRoots(roots: readonly { readonly root: string; readonly source: string }[]): void {
+    if (this.watchRootFailure) throw this.watchRootFailure;
     this.watchRootUpdates.push(roots);
   }
 

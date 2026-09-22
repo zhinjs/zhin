@@ -4,7 +4,7 @@
  * 通用 AI mocks 从 @zhin.js/ai 测试 setup 导入
  */
 import { vi } from 'vitest';
-import { type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
+import { segmentsToPlainText, type Message, type MessageElement, type Tool, type AIConfig } from '@zhin.js/core';
 
 // Import and re-export generic AI mocks from ai package tests
 import {
@@ -52,38 +52,27 @@ export interface MockMessageOptions {
 
 export const createMockMessage = (options: MockMessageOptions = {}): Partial<Message> => {
   const {
-    content = '测试消息',
-    elements,
-    platform = 'test',
-    channelType = 'group',
-    channelId = 'channel-1',
-    senderId = 'user-1',
-    senderPermissions = [],
-    senderRole,
-    endpointKey = 'bot-1',
+    content = '测试消息', elements, platform = 'test', channelType = 'group',
+    channelId = 'channel-1', senderId = 'user-1', senderPermissions = [],
+    senderRole, endpointKey = 'bot-1',
   } = options;
-
-  const $content: MessageElement[] = elements || [
-    { type: 'text', data: { text: content } },
-  ];
-
+  const segments: MessageElement[] = elements || [{ type: 'text', data: { text: content } }];
   return {
-    $content,
-    $endpoint: endpointKey,
-    $adapter: platform,
-    $channel: {
-      type: channelType,
+    content: segmentsToPlainText(segments),
+    segments,
+    endpointId: endpointKey,
+    clientAdapter: platform,
+    conversation: {
+      endpoint: { adapter: platform, id: `root/${platform}\0zhin.adapter\0${platform}~${endpointKey}` },
+      kind: channelType === 'guild' ? 'channel' : channelType,
       id: channelId,
-      name: 'Test Channel',
     },
-    $sender: {
-      id: senderId,
-      name: 'Test User',
-      permissions: senderPermissions,
-      role: senderRole,
+    sender: { id: senderId, name: 'Test User', roles: senderRole ? [senderRole] : [] },
+    metadata: {
+      ...(senderRole ? { senderRole } : {}),
+      ...(senderPermissions.length ? { senderPermissions } : {}),
     },
-    $reply: vi.fn().mockResolvedValue(undefined),
-    $quote: vi.fn().mockResolvedValue(undefined),
+    $reply: vi.fn().mockResolvedValue({ status: 'sent' }),
   };
 };
 

@@ -4,14 +4,14 @@ import {
   resolveAIAccessConfig,
   DEFAULT_AI_ACCESS_DENY_MESSAGE,
 } from '../src/built/ai-access.js';
-import type { Message } from '../src/message.js';
+import type { Message } from '../src/plugin-runtime/im/contracts.js';
 
 function msg(overrides: Partial<Message<any>> = {}): Message<any> {
   return {
-    $sender: { id: 'u1', name: 'User' },
-    $channel: { id: 'g1', type: 'group' },
-    $adapter: 'qq',
-    $endpoint: 'bot1',
+    sender: { id: 'u1', name: 'User' },
+    conversation: { endpoint: { adapter: 'qq', id: 'bot1' }, id: 'g1', kind: 'group' },
+    clientAdapter: 'qq',
+    endpointId: 'bot1',
     ...overrides,
   } as Message<any>;
 }
@@ -68,7 +68,7 @@ describe('checkAIAccess', () => {
 
   it('closed denies private with message', () => {
     const result = checkAIAccess(
-      msg({ $channel: { id: 'p1', type: 'private' } }),
+      msg({ conversation: { endpoint: { adapter: 'qq', id: 'bot1' }, id: 'p1', kind: 'private' } }),
       { mode: 'closed', denyMessage: 'no ai' },
     );
     expect(result.allowed).toBe(false);
@@ -76,7 +76,7 @@ describe('checkAIAccess', () => {
   });
 
   it('whitelist allows by user id', () => {
-    const result = checkAIAccess(msg({ $sender: { id: 'vip', name: 'V' } }), {
+    const result = checkAIAccess(msg({ sender: { id: 'vip', name: 'V' } }), {
       mode: 'whitelist',
       users: ['vip'],
     });
@@ -84,7 +84,7 @@ describe('checkAIAccess', () => {
   });
 
   it('whitelist allows by group id', () => {
-    const result = checkAIAccess(msg({ $channel: { id: 'allowed-g', type: 'group' } }), {
+    const result = checkAIAccess(msg({ conversation: { endpoint: { adapter: 'qq', id: 'bot1' }, id: 'allowed-g', kind: 'group' } }), {
       mode: 'whitelist',
       groups: ['allowed-g'],
     });
@@ -103,7 +103,7 @@ describe('checkAIAccess', () => {
 
   it('whitelist OR: user in list passes even if group not listed', () => {
     const result = checkAIAccess(
-      msg({ $sender: { id: 'u-ok', name: 'U' }, $channel: { id: 'g-unknown', type: 'group' } }),
+      msg({ sender: { id: 'u-ok', name: 'U' }, conversation: { endpoint: { adapter: 'qq', id: 'bot1' }, id: 'g-unknown', kind: 'group' } }),
       { mode: 'whitelist', users: ['u-ok'], groups: [] },
     );
     expect(result.allowed).toBe(true);
@@ -111,7 +111,7 @@ describe('checkAIAccess', () => {
 
   it('endpoint aiAccess overrides global open', () => {
     const result = checkAIAccess(
-      msg({ $adapter: 'qq', $endpoint: 'bot-a' }),
+      msg({ clientAdapter: 'qq', endpointId: 'bot-a' }),
       { mode: 'open' },
       { mode: 'closed' },
     );
@@ -121,7 +121,7 @@ describe('checkAIAccess', () => {
 
   it('endpoint whitelist overrides global open', () => {
     const result = checkAIAccess(
-      msg({ $sender: { id: 'guest', name: 'G' } }),
+      msg({ sender: { id: 'guest', name: 'G' } }),
       { mode: 'open' },
       { mode: 'whitelist', users: ['vip'] },
     );
