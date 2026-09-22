@@ -148,6 +148,8 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 `.changeset/version-policy.json` 的 `approvedNonPatchReleases` 必须保持为空。
 `pnpm check:release-plan` 会同时检查原始声明和 Changesets 推导出的完整发布计划；
 只要出现 `minor` 或 `major`（包括依赖传播推导出的升级）就会让 CI 失败，不提供豁免入口。
+发布覆盖检查只忽略测试文件和 Changesets 生成的 `CHANGELOG.md`。包内构建、类型检查和
+工具配置仍可能改变最终产物或声明文件，因此这些配置变更也必须由 patch changeset 覆盖。
 
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。

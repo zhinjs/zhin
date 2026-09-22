@@ -140,6 +140,9 @@ complete Changesets plan and fails on any unapproved minor or major, including b
 through dependency propagation. A non-patch release requires the version owner to record the
 changeset filename, package scope, release type, approver, and reason in
 `.changeset/version-policy.json`. `.github/CODEOWNERS` assigns owner review for that policy file.
+Release coverage deliberately ignores only tests and Changesets-generated `CHANGELOG.md` files.
+Package-local build, type-check, and tooling configuration can change emitted code or declarations,
+so those configuration changes also require a patch changeset.
 
 Internal peer dependencies use `workspace:^` so compatible internal releases publish as caret
 ranges instead of exact versions. Private examples do not participate in Changesets versioning or tags.
