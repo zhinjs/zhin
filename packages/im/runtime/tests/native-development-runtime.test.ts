@@ -1,14 +1,21 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import { register } from 'tsx/esm/api';
 import {
   NativeDevelopmentModuleRuntime,
   supportsNativeTypeScript,
+  type ModuleRuntime,
 } from '../src/index.js';
 
 const temporary: string[] = [];
+const execFileAsync = promisify(execFile);
+const tsxLoaderUrl = pathToFileURL(createRequire(import.meta.url).resolve('tsx')).href;
 
 afterEach(async () => {
   await Promise.all(temporary.splice(0).map((path) => rm(path, { force: true, recursive: true })));
@@ -26,6 +33,86 @@ describe('NativeDevelopmentModuleRuntime', () => {
     runtime.invalidate(source);
     expect((await runtime.load<{ default: number }>(source)).default).toBe(2);
     await runtime.close();
+  });
+
+  it('maps a transitive helper outside an entry directory back to that entry', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.ts');
+    const helper = join(root, 'src/status-message.ts');
+    const bridge = join(root, 'src/status-command.ts');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(helper, "export const statusMessage = 'v1';\n");
+    await writeFile(
+      bridge,
+      "export { statusMessage } from './status-message.js';\n",
+    );
+    await writeFile(
+      source,
+      "import { statusMessage } from '../../src/status-command.js';\nexport default statusMessage;\n",
+    );
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+    const modules: ModuleRuntime = runtime;
+
+    expect((await runtime.load<{ default: string }>(source)).default).toBe('v1');
+    expect(modules.affectedSources?.(helper)).toEqual([helper, source]);
+    expect(runtime.requiresProcessRestart(helper)).toBe(false);
+    await runtime.close();
+  });
+
+  it('maps package-local import aliases back to their loaded entry', async () => {
+    const root = await fixture();
+    const source = join(root, 'commands/status/index.ts');
+    const helper = join(root, 'src/status-message.ts');
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'package.json'), JSON.stringify({
+      type: 'module',
+      imports: { '#status-message': './src/status-message.ts' },
+    }));
+    await writeFile(helper, "export const statusMessage = 'ready';\n");
+    await writeFile(
+      source,
+      "import { statusMessage } from '#status-message';\nexport default statusMessage;\n",
+    );
+    const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+
+    expect((await runtime.load<{ default: string }>(source)).default).toBe('ready');
+    expect(runtime.affectedSources(helper)).toEqual([helper, source]);
+    expect(runtime.requiresProcessRestart(helper)).toBe(false);
+    await runtime.close();
+  });
+
+  it('reloads the complete relative import closure in a real Node process', async () => {
+    const root = await fixture();
+    const runtimeEntry = new URL('../src/index.ts', import.meta.url).href;
+    const scenario = join(root, 'hmr-scenario.mjs');
+    await writeFile(scenario, `
+import { mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { ensureTypeScriptSpecifierRemap, NativeDevelopmentModuleRuntime } from ${JSON.stringify(runtimeEntry)};
+const root = ${JSON.stringify(root)};
+const entry = join(root, 'commands/status/index.ts');
+const helper = join(root, 'src/status-message.ts');
+const bridge = join(root, 'src/status-command.ts');
+await mkdir(join(root, 'src'), { recursive: true });
+await writeFile(helper, "export const statusMessage = 'v1';\\n");
+await writeFile(bridge, "export { statusMessage } from './status-message.js';\\n");
+await writeFile(entry, "import { statusMessage } from '../../src/status-command.js';\\nexport default statusMessage;\\n");
+ensureTypeScriptSpecifierRemap();
+const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
+const first = (await runtime.load(entry)).default;
+await writeFile(helper, "export const statusMessage = 'v2';\\n");
+runtime.invalidate(helper);
+const second = (await runtime.load(entry)).default;
+await runtime.close();
+process.stdout.write(JSON.stringify({ first, second }));
+`);
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      ['--import', tsxLoaderUrl, scenario],
+      { cwd: process.cwd() },
+    );
+    expect(JSON.parse(stdout)).toEqual({ first: 'v1', second: 'v2' });
   });
 
   it('loads a published JavaScript entry from node_modules without TypeScript stripping', async () => {
@@ -80,7 +167,7 @@ describe('NativeDevelopmentModuleRuntime', () => {
     }
   });
 
-  it('keeps direct capabilities local and escalates cached support modules', async () => {
+  it('keeps direct capabilities local and escalates support modules before they are indexed', async () => {
     const root = await fixture();
     const runtime = new NativeDevelopmentModuleRuntime({ projectRoot: root, watch: false });
 

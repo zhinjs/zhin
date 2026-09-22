@@ -1,6 +1,6 @@
 import type { Dispose } from '@zhin.js/plugin-runtime';
 import type { ClientModuleRequest } from '@zhin.js/feature-kit';
-import type { ModuleRuntime } from '@zhin.js/runtime';
+import type { ModuleRuntime, ModuleWatchRoot } from '@zhin.js/runtime';
 import type { ClientModuleLoader } from './types.js';
 
 /** Adds client artifact loading while preserving the server ModuleRuntime authority. */
@@ -24,6 +24,14 @@ export class ClientBuildModuleRuntime implements ModuleRuntime {
 
   affectedSources(source: string): readonly string[] {
     return this.server.affectedSources?.(source) ?? [source];
+  }
+
+  requiresProcessRestart(source: string): boolean {
+    return this.server.requiresProcessRestart?.(source) ?? false;
+  }
+
+  updateWatchRoots(roots: readonly ModuleWatchRoot[]): void {
+    this.server.updateWatchRoots?.(roots);
   }
 
   watch(listener: (source: string) => void): Dispose {
