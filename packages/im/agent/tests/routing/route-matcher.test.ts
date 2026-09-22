@@ -4,11 +4,12 @@ import { DEFAULT_ZHIN_AGENT_NAME } from '../../src/config/types.js';
 
 function makeMessage(overrides: Record<string, unknown> = {}) {
   return {
-    $adapter: 'sandbox',
-    $endpoint: 'b1',
-    $sender: { id: 'u1' },
-    $channel: { id: 'c1', type: 'private' },
-    $content: [{ type: 'text', data: { text: 'hi' } }],
+    clientAdapter: 'sandbox',
+    endpointId: 'b1',
+    sender: { id: 'u1' },
+    conversation: { endpoint: { adapter: 'sandbox', id: 'b1' }, id: 'c1', kind: 'private' },
+    content: 'hi',
+    segments: [{ type: 'text', data: { text: 'hi' } }],
     ...overrides,
   } as any;
 }
@@ -35,7 +36,7 @@ describe('resolveRoutedAgentName', () => {
       scene: 'group',
     }]);
 
-    const privateMsg = makeMessage({ $endpoint: '717505091' });
+    const privateMsg = makeMessage({ endpointId: '717505091' });
     expect(matchRouteRule(rules[0]!, {
       message: privateMsg,
       contentText: '你好',
@@ -60,8 +61,8 @@ describe('resolveRoutedAgentName', () => {
 
   it('ADR 0031 数组 match 可命中指定群', () => {
     const groupMsg = makeMessage({
-      $endpoint: '717505091',
-      $channel: { id: '129043431', type: 'group' },
+      endpointId: '717505091',
+      conversation: { endpoint: { adapter: 'sandbox', id: '717505091' }, id: '129043431', kind: 'group' },
     });
     const name = resolveRoutedAgentName({
       zhin: { provider: 'p', model: 'm' },
@@ -81,8 +82,8 @@ describe('resolveRoutedAgentName', () => {
 
   it('endpoint 可通过 endpointKeys 别名命中', () => {
     const groupMsg = makeMessage({
-      $endpoint: 'internal-key',
-      $channel: { id: '129043431', type: 'group' },
+      endpointId: 'internal-key',
+      conversation: { endpoint: { adapter: 'sandbox', id: 'internal-key' }, id: '129043431', kind: 'group' },
     });
     const name = resolveRoutedAgentName({
       zhin: { provider: 'p', model: 'm' },
@@ -99,5 +100,14 @@ describe('resolveRoutedAgentName', () => {
       endpointKeys: ['717505091', 'internal-key'],
     });
     expect(name).toBe('reviewer');
+  });
+
+  it('快捷字段缺失时使用 canonical conversation endpoint', () => {
+    const message = makeMessage({ clientAdapter: undefined, endpointId: undefined });
+    expect(matchRouteRule({ adapter: 'sandbox', endpoint: 'b1' }, {
+      message,
+      contentText: 'review',
+      discoveredAgentNames: new Set(),
+    })).toBe(true);
   });
 });

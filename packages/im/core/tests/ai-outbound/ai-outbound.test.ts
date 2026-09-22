@@ -9,9 +9,9 @@ import {
   isStructuredOutboundRequired,
   resolveAiOutboundToMessageElements,
 } from '../../src/built/ai-outbound/index.js';
-import type { Message } from '../../src/message.js';
+import type { Message } from '../../src/plugin-runtime/im/contracts.js';
 
-const stubMessage = { $adapter: 'sandbox', $endpoint: 'ep1' } as Message;
+const stubMessage = { clientAdapter: 'sandbox', endpointId: 'ep1' } as Message;
 
 describe('parseOutboundSegment', () => {
   it('parses canonical segment', () => {

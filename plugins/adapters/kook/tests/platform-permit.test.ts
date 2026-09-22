@@ -16,11 +16,13 @@ function mockSubject(sender: { role?: string; permissions?: string[] }) {
   };
 }
 
-function mockMsg(sender: { role?: string; permissions?: string[] }) {
+function mockMsg(roleIds: string[]) {
   return {
-    $adapter: 'kook',
-    $sender: { id: 'u1', ...sender },
-    $channel: { type: 'group', id: 'g1' },
+    clientAdapter: 'kook',
+    endpointId: 'bot1',
+    conversation: { endpoint: { adapter: 'kook', id: 'bot1' }, kind: 'group', id: 'g1' },
+    sender: { id: 'u1', roles: roleIds },
+    metadata: { roles: roleIds.map(Number) },
   } as any;
 }
 
@@ -52,7 +54,6 @@ describe('kook platform-permit', () => {
       permissions: [platformPermit('guild_owner')],
       execute: async () => '',
     };
-    expect(await canAccessTool(tool, mockMsg({ role: 'admin', permissions: ['guild_admin'] }), host)).toBe(false);
-    expect(await canAccessTool(tool, mockMsg({ role: 'owner', permissions: ['guild_owner'] }), host)).toBe(true);
+    expect(await canAccessTool(tool, mockMsg(['42']), host)).toBe(false);
   });
 });

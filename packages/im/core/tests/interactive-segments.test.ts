@@ -9,7 +9,6 @@ import {
   stripInteractiveCommandText,
   resolvePayloadFromText,
 } from '../src/built/interactive-segments/index.js';
-import { Message } from '../src/message.js';
 
 describe('resolveKeyboardSegments', () => {
   const board = [
@@ -39,35 +38,13 @@ describe('resolveKeyboardSegments', () => {
 
 describe('action segments', () => {
   it('reads action payloads', () => {
-    const msg = Message.from(
-      {},
-      {
-        $id: '1',
-        $adapter: 'sandbox',
-        $endpoint: 'b',
-        $sender: { id: 'u1' },
-        $channel: { id: 'c', type: 'group' },
-        $content: [actionSegment({ id: 'a', payload: 'ttt:s1:4' })],
-        $timestamp: Date.now(),
-      },
-    );
+    const msg = { segments: [actionSegment({ id: 'a', payload: 'ttt:s1:4' })] } as any;
     expect(getActionFromMessage(msg)?.payload).toBe('ttt:s1:4');
     expect(isActionMessage(msg)).toBe(true);
   });
 
   it('isActionMessage is false for text messages', () => {
-    const msg = Message.from(
-      {},
-      {
-        $id: '2',
-        $adapter: 'sandbox',
-        $endpoint: 'b',
-        $sender: { id: 'u1' },
-        $channel: { id: 'c', type: 'group' },
-        $content: [{ type: 'text', data: { text: 'hello' } }],
-        $timestamp: Date.now(),
-      },
-    );
+    const msg = { segments: [{ type: 'text', data: { text: 'hello' } }] } as any;
     expect(isActionMessage(msg)).toBe(false);
   });
 });

@@ -111,7 +111,7 @@ Handler `this` is `HandlerContext`:
 
 - `this.interaction` — user input, confirmation, and selection (same `UserInteraction` machinery as commands)
 
-The event `$endpoint` field is immutable identity. Handlers never receive an escapable live
+The `$endpoint` on a Notice, Request, or SystemEvent payload is immutable identity. Handlers never receive an escapable live
 Endpoint; delivery, approval, and interaction use generation-bound ports.
 
 vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
@@ -122,8 +122,23 @@ import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
   event: 'message.receive',
-  async handle(message) {
+  async handle(event) {
+    const message = event.payload;
+    if (!message.content) return;
     await this.interaction?.ask({ type: 'text', title: 'Continue?' });
+  },
+});
+```
+
+```ts
+// handlers/notice/receive/index.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  event: 'notice.receive',
+  handle(event) {
+    const notice = event.payload;
+    console.log(notice.$scene_type, notice.$sub_type);
   },
 });
 ```
@@ -134,7 +149,8 @@ import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
   event: 'request.receive',
-  async handle(req) {
+  async handle(event) {
+    const req = event.payload;
     if (await this.interaction?.ask({ type: 'confirm', title: 'Approve?' })) await req.$approve();
   },
 });

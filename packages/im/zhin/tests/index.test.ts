@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, expectTypeOf } from 'vitest'
+import type { Message as CoreMessage, Notice as CoreNotice, Request as CoreRequest } from '@zhin.js/core'
+import type { Message, Notice, Request } from '../src/index.js'
 
 describe('Zhin Package Exports', () => {
   it('should export core modules', async () => {
@@ -12,6 +14,12 @@ describe('Zhin Package Exports', () => {
   it('should export Message', async () => {
     const { Message } = await import('../src/index')
     expect(Message).toBeDefined()
+  })
+
+  it('should preserve the canonical inbound event types', () => {
+    expectTypeOf<Message>().toEqualTypeOf<CoreMessage>()
+    expectTypeOf<Notice>().toEqualTypeOf<CoreNotice>()
+    expectTypeOf<Request>().toEqualTypeOf<CoreRequest>()
   })
 
   it('should export logger', async () => {

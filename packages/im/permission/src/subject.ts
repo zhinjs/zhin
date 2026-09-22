@@ -25,7 +25,7 @@ export interface PermissionSubject {
 
 /**
  * 从 message-like 对象投影为 PermissionSubject（鸭式）。
- * 接受 `Message` / `CommandSession` / 任意含同名字段的对象。
+ * 接受 canonical Runtime `Message` / `CommandSession` / 任意含同名字段的对象。
  */
 export function toPermissionSubject(source: unknown): PermissionSubject {
   if (!source || typeof source !== 'object') return {};
@@ -40,30 +40,41 @@ export function toPermissionSubject(source: unknown): PermissionSubject {
     result.sender = obj.sender;
   }
 
-  // Message 风格（$adapter / $endpoint / $channel / $sender）
-  if (typeof obj.$adapter === 'string' && !result.adapter) result.adapter = obj.$adapter;
-  if (typeof obj.$endpoint === 'string' && !result.endpoint) result.endpoint = obj.$endpoint;
-  if (obj.$channel && typeof obj.$channel === 'object' && !result.scene) {
-    const ch = obj.$channel as Record<string, unknown>;
+  // canonical Runtime Message
+  if (typeof obj.clientAdapter === 'string' && !result.adapter) result.adapter = obj.clientAdapter;
+  if (typeof obj.endpointId === 'string' && !result.endpoint) result.endpoint = obj.endpointId;
+  if (obj.conversation && typeof obj.conversation === 'object' && !result.scene) {
+    const ch = obj.conversation as Record<string, unknown>;
+    const endpoint = ch.endpoint as Record<string, unknown> | undefined;
+    if (!result.adapter && typeof endpoint?.adapter === 'string') result.adapter = endpoint.adapter;
+    if (!result.endpoint && typeof endpoint?.id === 'string') result.endpoint = endpoint.id;
     result.scene = {
       id: String(ch.id ?? ''),
-      type: String(ch.type ?? ''),
+      type: String(ch.kind ?? ''),
       ...(ch.name ? { name: String(ch.name) } : {}),
     };
   }
-  if (obj.$sender && typeof obj.$sender === 'object' && !result.sender) {
-    const s = obj.$sender as Record<string, unknown>;
-    const roles = new Set(
-      Array.isArray(s.role) ? s.role.map(String) : (typeof s.role === 'string' ? [s.role] : []),
-    );
-    // 生产合成消息带 isMaster/isTrusted 标志而非 role 数组，须投影为角色
-    if (s.isMaster === true) roles.add('master');
-    if (s.isTrusted === true) roles.add('trusted');
+  if (obj.sender && typeof obj.sender === 'object' && !result.sender) {
+    const s = obj.sender as Record<string, unknown>;
+    const metadata = obj.metadata as Record<string, unknown> | undefined;
+    const roles = new Set(Array.isArray(s.roles) ? s.roles.map(String) : []);
+    if (typeof metadata?.senderRole === 'string') roles.add(metadata.senderRole);
+    if (typeof metadata?.role === 'string') roles.add(metadata.role);
+    if (Array.isArray(metadata?.roles)) {
+      for (const role of metadata.roles) roles.add(String(role));
+    }
+    const permissions = new Set(Array.isArray(s.permissions) ? s.permissions.map(String) : []);
+    if (Array.isArray(metadata?.senderPermissions)) {
+      for (const permission of metadata.senderPermissions) permissions.add(String(permission));
+    }
+    if (Array.isArray(metadata?.permissions)) {
+      for (const permission of metadata.permissions) permissions.add(String(permission));
+    }
     result.sender = {
       id: String(s.id ?? ''),
       ...(s.name ? { name: String(s.name) } : {}),
       role: [...roles],
-      ...(Array.isArray(s.permissions) ? { permissions: s.permissions.map(String) } : {}),
+      ...(permissions.size > 0 ? { permissions: [...permissions] } : {}),
     };
   }
 

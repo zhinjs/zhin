@@ -111,7 +111,7 @@ Handler 的 `this` 为 `HandlerContext`：
 
 - `this.interaction`：用户输入、确认与选择（与命令 `UserInteraction` 同源；侧事件按场景通道合成）
 
-事件上的 `$endpoint` 是不可变 identity。Handler 不暴露可保存的 live Endpoint；发送、
+Notice / Request / SystemEvent payload 上的 `$endpoint` 是不可变 identity。Handler 不暴露可保存的 live Endpoint；发送、
 审批与交互必须走 generation-bound port，避免热切换后继续操作已退役资源。
 
 与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
@@ -123,8 +123,23 @@ import { defineHandler } from 'zhin.js/handler';
 export default defineHandler({
   // 可省略：文件路径已推导出 message.receive
   event: 'message.receive',
-  async handle(message) {
+  async handle(event) {
+    const message = event.payload;
+    if (!message.content) return;
     await this.interaction?.ask({ type: 'text', title: '继续？' });
+  },
+});
+```
+
+```ts
+// handlers/notice/receive/index.ts
+import { defineHandler } from 'zhin.js/handler';
+
+export default defineHandler({
+  event: 'notice.receive',
+  handle(event) {
+    const notice = event.payload;
+    console.log(notice.$scene_type, notice.$sub_type);
   },
 });
 ```
@@ -135,7 +150,8 @@ import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
   event: 'request.receive',
-  async handle(req) {
+  async handle(event) {
+    const req = event.payload;
     if (await this.interaction?.ask({ type: 'confirm', title: '同意该请求？' })) await req.$approve();
   },
 });
@@ -147,7 +163,8 @@ import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
   event: 'system.receive',
-  async handle(ev) {
+  async handle(event) {
+    const ev = event.payload;
     if (ev.$sub_type !== 'qrcode') return;
     await this.interaction?.ask({ type: 'text', title: '扫码完成后回复 done' });
   },

@@ -51,14 +51,15 @@ describe('tool-selection permissions', () => {
       permissions: ['platform(qq,scene_admin)'],
     });
     const msg = {
-      $adapter: 'qq',
-      $endpoint: 'b1',
-      $sender: { id: 'u1', role: ['admin'] },
-      $channel: { type: 'group', id: 'g1' },
+      ...mockCommMessage({ adapter: 'qq', endpoint: 'b1', senderId: 'u1', scope: 'group', sceneId: 'g1' }),
+      metadata: { senderRole: 'admin' },
     } as any;
 
     expect(await canAccessTool(tool, msg, host)).toBe(true);
-    expect(await canAccessTool(tool, { ...msg, $channel: { type: 'private', id: 'u1' } }, host)).toBe(false);
+    expect(await canAccessTool(tool, {
+      ...msg,
+      conversation: { ...msg.conversation, kind: 'private', id: 'u1' },
+    }, host)).toBe(false);
     expect(await canAccessTool(tool, mockCommMessage({ adapter: 'qq', scope: 'group', senderId: undefined }), host)).toBe(false);
   });
 });
@@ -109,7 +110,7 @@ describe('normalizeTool', () => {
 
   it('passes context to tools even when no contextKey parameters are declared', async () => {
     const tool = makeTool({
-      execute: async (_args, commMessage) => commMessage?.$sender?.id,
+      execute: async (_args, commMessage) => commMessage?.sender?.id,
     });
     const agentTool = normalizeTool(tool, mockCommMessage({ senderId: 'u1' }));
 

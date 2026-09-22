@@ -11,6 +11,18 @@ import { mockCommMessage } from '../helpers/mock-comm-message.js';
 import { turnContextViewFromMessage } from '../../src/context/im-turn-context-adapter.js';
 
 describe('ContextSystem', () => {
+  it('projects canonical endpoint identity when shortcut fields are absent', () => {
+    const message = {
+      ...mockCommMessage({ adapter: 'qq', endpoint: 'bot1', senderId: 'u1' }),
+      clientAdapter: undefined,
+      endpointId: undefined,
+    };
+    expect(turnContextViewFromMessage(message).origin).toMatchObject({
+      platform: 'qq',
+      endpoint: 'bot1',
+    });
+  });
+
   it('buildTextTurnContext merges registered builder messages and injectors', async () => {
     const host = {
       config: { persona: 'p', toneAwareness: false },

@@ -9,7 +9,7 @@
  * 4. 关键词触发 - 非群/频道场景下匹配关键词时触发
  */
 
-import { Message } from "../message.js";
+import type { Message } from "../plugin-runtime/im/contracts.js";
 import type { 
   MessageElement,
   ToolScope,
@@ -115,6 +115,11 @@ function normalizeAtIds(endpointAtIds?: string[]): string[] {
   return [...new Set(ids.map((id) => String(id)).filter(Boolean))];
 }
 
+function messageElements(message: Message): MessageElement[] {
+  if (message.segments?.length) return [...message.segments] as MessageElement[];
+  return message.content ? [{ type: 'text', data: { text: message.content } }] : [];
+}
+
 function segmentAtUserId(seg: MessageElement): string {
   return readMentionSegmentTarget(seg);
 }
@@ -149,7 +154,9 @@ export function collectEndpointAtIds<T extends object>(
   message: Message<T>,
   extraIds?: string[],
 ): string[] {
-  const ids = new Set<string>([String(message.$endpoint)]);
+  const ids = new Set<string>([
+    String(message.endpointId ?? message.conversation.endpoint.id),
+  ]);
   for (const id of extraIds ?? []) {
     if (id) ids.add(String(id));
   }
@@ -166,10 +173,10 @@ export function isAtEndpoint<T extends object>(
   const endpointKeys = normalizeAtIds(
     endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
-  if (message.$content.some((seg) => isAtSegmentForEndpoint(seg, endpointKeys))) {
+  if (messageElements(message).some((seg) => isAtSegmentForEndpoint(seg, endpointKeys))) {
     return true;
   }
-  for (const seg of message.$content) {
+  for (const seg of messageElements(message)) {
     if (seg.type === 'text' && seg.data?.text && textMentionsEndpoint(seg.data.text, endpointKeys)) {
       return true;
     }
@@ -182,7 +189,7 @@ export function isAtEndpoint<T extends object>(
  * 使用 segment.toString 将 MessageElement 转为 XML 格式
  */
 export function extractTextContent<T extends object>(message: Message<T>): string {
-  return segment.toString(message.$content);
+  return message.segments?.length ? segment.toString(messageElements(message)) : message.content;
 }
 
 /**
@@ -214,7 +221,7 @@ export function removeAtEndpoint<T extends object>(
   const endpointKeys = normalizeAtIds(
     endpointAtIds?.length ? endpointAtIds : collectEndpointAtIds(message),
   );
-  return message.$content
+  return messageElements(message)
     .filter((seg) => !isAtSegmentForEndpoint(seg, endpointKeys))
     .map((seg) => {
       if (seg.type !== 'text' || !seg.data?.text) return seg;
@@ -252,17 +259,17 @@ export function resolveSenderRoles<T extends object>(
   config: AITriggerConfig,
   endpointConfig?: EndpointConfigRoles | Record<string, unknown> | null,
 ): SenderRolesResult {
-  const scope: ToolScope = (message.$channel?.type as ToolScope) || 'private';
+  const scope = message.conversation.kind as ToolScope;
 
   // process 适配器（stdin/本机 CLI）：操作者即宿主用户，恒为 master
-  if (message.$adapter === 'process') {
+  if ((message.clientAdapter ?? message.conversation.endpoint.adapter) === 'process') {
     return {
       scope,
       roles: normalizeSenderRoles(['master']),
     };
   }
 
-  const senderId = String(message.$sender.id);
+  const senderId = String(message.sender?.id ?? '');
   const roles: SenderRole[] = [];
 
   const masters = config.masters || [];
@@ -299,7 +306,7 @@ export function shouldTriggerAI<T extends object>(
   }
   
   const text = extractTextContent(message);
-  const scope = (message.$channel?.type as ToolScope) || 'private';
+  const scope = message.conversation.kind as ToolScope;
   const isSharedSession = scope === 'group' || scope === 'channel';
 
   // 检查忽略前缀
@@ -329,7 +336,7 @@ export function shouldTriggerAI<T extends object>(
   }
   
   // 3. 检查私聊触发
-  if (fullConfig.respondToPrivate && message.$channel?.type === 'private') {
+  if (fullConfig.respondToPrivate && message.conversation.kind === 'private') {
     if (text.trim()) {
       return { triggered: true, content: text.trim() };
     }

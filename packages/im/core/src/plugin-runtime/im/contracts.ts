@@ -150,7 +150,29 @@ export interface MessageDispatchResult {
   readonly value?: unknown;
 }
 
-export class Message {
+/** Canonical message value delivered to inbound middleware and handlers. */
+export interface MessageBase extends IncomingMessage {
+  readonly generation: number;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly id?: string;
+  readonly clientAdapter?: string;
+  readonly $client: unknown;
+  readonly $reply: (content: SendContent) => Promise<DeliveryReceipt>;
+  readonly $replyFrom: (requester: PluginId, content: SendContent) => Promise<DeliveryReceipt>;
+  readonly $sendTo: (conversation: ConversationAddress, content: SendContent) => Promise<DeliveryReceipt>;
+  readonly $replyToPrivate: (
+    content: SendContent,
+    from?: boolean | { readonly kind: 'group' | 'channel'; readonly id: string },
+  ) => Promise<DeliveryReceipt>;
+  readonly $replyToGroup: (groupId: string, content: SendContent) => Promise<DeliveryReceipt>;
+  readonly $replyToChannel: (channelId: string, guildId: string, content: SendContent, threadId?: string) => Promise<DeliveryReceipt>;
+}
+
+/** Canonical runtime message with optional plugin-owned extensions. */
+export type Message<T extends object = {}> = MessageBase & T;
+
+/** @internal Generation-scoped implementation of the public Message contract. */
+export class RuntimeMessage implements MessageBase {
   readonly #resolveClient: () => unknown;
 
   /** @internal Constructed only by the generation-owned IM Runtime. */
@@ -270,6 +292,9 @@ export class Message {
    */
   readonly $replyToChannel: (channelId: string, guildId: string, content: SendContent, threadId?: string) => Promise<DeliveryReceipt>;
 }
+
+/** Constructor for canonical runtime Message values. */
+export const Message = RuntimeMessage;
 
 export function createOutboundEnvelope(
   request: Omit<OutboundEnvelope, 'payload' | '$client' | 'replace'>,

@@ -105,8 +105,8 @@ export class OwnerApprovalRuntime {
 }
 
 export function ownerApprovalAddressFromMessage(message: Message): OwnerApprovalAddress | undefined {
-  const platform = String(message.$adapter ?? '').trim();
-  const endpoint = String(message.$endpoint ?? '').trim();
+  const platform = String(message.clientAdapter ?? message.conversation.endpoint.adapter).trim();
+  const endpoint = String(message.endpointId ?? message.conversation.endpoint.id).trim();
   const ownerId = String(
     (message as { extra?: { endpointMaster?: unknown } }).extra?.endpointMaster ?? '',
   ).trim();
@@ -117,14 +117,11 @@ export function ownerApprovalAddressFromMessage(message: Message): OwnerApproval
 
 export function resolveToolRequesterRole(message: Message): ToolRequesterRole {
   const roles = senderRolesFromMessage(message);
-  if (message.$sender.isMaster !== undefined || message.$sender.isTrusted !== undefined) {
-    if (hasSenderRole(roles, 'master')) return 'master';
-    if (hasSenderRole(roles, 'trusted')) return 'trusted';
-    return 'other';
-  }
-  if (!message.$adapter || !message.$endpoint || !message.$sender?.id) return 'unknown';
+  if (hasSenderRole(roles, 'master')) return 'master';
+  if (hasSenderRole(roles, 'trusted')) return 'trusted';
+  if (!message.sender?.id) return 'unknown';
   const address = ownerApprovalAddressFromMessage(message);
-  return address && String(message.$sender.id) === address.ownerId ? 'master' : 'other';
+  return address && String(message.sender.id) === address.ownerId ? 'master' : 'other';
 }
 
 export const ICQQ_SENSITIVE_SUBCOMMAND_REGEXES: readonly RegExp[] = [

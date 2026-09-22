@@ -26,24 +26,27 @@ function createMockMessage(options: {
   content: string | any[];
   endpoint?: string;
   channelType?: 'private' | 'group' | 'channel';
+  channelId?: string;
   senderId?: string;
   senderPermissions?: string[];
   senderRole?: string;
 }) {
-  const content = typeof options.content === 'string' 
+  const segments = typeof options.content === 'string'
     ? [{ type: 'text', data: { text: options.content } }]
     : options.content;
-  
+  const endpointId = options.endpoint || 'bot123';
   return {
-    $content: content,
-    $endpoint: options.endpoint || 'bot123',
-    $channel: options.channelType ? { type: options.channelType, id: 'channel1' } : null,
-    $sender: { 
-      id: options.senderId || 'user1', 
-      permissions: options.senderPermissions || [],
-      role: options.senderRole,
+    content: segments.filter((item: any) => item.type === 'text').map((item: any) => item.data.text).join(''),
+    segments,
+    endpointId,
+    clientAdapter: 'test',
+    conversation: {
+      endpoint: { adapter: 'test', id: endpointId },
+      kind: options.channelType || 'private',
+      id: options.channelId || 'channel1',
     },
-    $adapter: 'test',
+    sender: { id: options.senderId || 'user1', roles: options.senderPermissions || [] },
+    metadata: options.senderRole ? { senderRole: options.senderRole } : {},
     $reply: vi.fn(),
   };
 }
@@ -52,7 +55,7 @@ describe('AI Trigger 工具函数', () => {
   describe('shouldTriggerAI - 前缀触发', () => {
     it('应该检测 # 前缀', () => {
       const message = createMockMessage({ content: '# 你好' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'] });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
       
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('你好');
@@ -76,7 +79,7 @@ describe('AI Trigger 工具函数', () => {
 
     it('没有匹配前缀时不应触发', () => {
       const message = createMockMessage({ content: '普通消息' });
-      const result = shouldTriggerAI(message as any, { prefixes: ['#'] });
+      const result = shouldTriggerAI(message as any, { prefixes: ['#'], respondToPrivate: false });
       
       expect(result.triggered).toBe(false);
     });
@@ -167,6 +170,15 @@ describe('AI Trigger 工具函数', () => {
   });
 
   describe('shouldTriggerAI - @机器人触发', () => {
+    it('segments 缺失时仍从纯文本识别 @endpoint', () => {
+      const message = {
+        ...createMockMessage({ content: '@bot123 你好', channelType: 'group' }),
+        segments: undefined,
+      };
+      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      expect(result).toEqual({ triggered: true, content: '你好' });
+    });
+
     it('应该检测 @机器人', () => {
       const message = createMockMessage({
         content: [
@@ -189,7 +201,7 @@ describe('AI Trigger 工具函数', () => {
         ],
         endpoint: 'bot123',
       });
-      const result = shouldTriggerAI(message as any, { respondToAt: false });
+      const result = shouldTriggerAI(message as any, { respondToAt: false, respondToPrivate: false });
       
       expect(result.triggered).toBe(false);
     });
@@ -202,7 +214,7 @@ describe('AI Trigger 工具函数', () => {
         ],
         endpoint: 'bot123',
       });
-      const result = shouldTriggerAI(message as any, { respondToAt: true });
+      const result = shouldTriggerAI(message as any, { respondToAt: true, respondToPrivate: false });
       
       expect(result.triggered).toBe(false);
     });
@@ -328,7 +340,7 @@ describe('AI Trigger 工具函数', () => {
 
     it('没有关键词配置时不应触发', () => {
       const message = createMockMessage({ content: '天气真好' });
-      const result = shouldTriggerAI(message as any, { keywords: [] });
+      const result = shouldTriggerAI(message as any, { keywords: [], respondToPrivate: false });
       
       expect(result.triggered).toBe(false);
     });
@@ -490,7 +502,7 @@ describe('AI Trigger 工具函数', () => {
 
     it('process 适配器发送者应恒为 master', () => {
       const message = createMockMessage({ content: 'hi', senderId: 'cli-user' });
-      (message as { $adapter: string }).$adapter = 'process';
+      message.clientAdapter = 'process';
       const result = resolveSenderRoles(message as any, {});
       expect(result.roles).toEqual(['master']);
     });
@@ -513,7 +525,7 @@ describe('AI Trigger 工具函数', () => {
   describe('resolveSceneFieldsFromMessage', () => {
     it('私聊：sender 优先于 channel id', () => {
       const msg = createMockMessage({ content: 'hi', channelType: 'private', senderId: 'userA' });
-      (msg as any).$channel.id = 'channelFallback';
+      (msg as any).conversation.id = 'channelFallback';
       const fields = resolveSceneFieldsFromMessage(msg as any);
       expect(fields.sceneId).toBe('userA');
       expect(fields.sceneType).toBe('private');
@@ -560,7 +572,7 @@ describe('AI Trigger 工具函数', () => {
         channelType: 'group',
         senderId: 'alice',
       });
-      (message.$sender as any).name = '小红';
+      (message.sender as any).name = '小红';
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('你好');
@@ -576,7 +588,7 @@ describe('AI Trigger 工具函数', () => {
         channelType: 'channel',
         senderId: 'bob',
       });
-      (message.$sender as any).name = '阿博';
+      (message.sender as any).name = '阿博';
       const result = shouldTriggerAI(message as any, { respondToAt: true });
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('问好');
@@ -602,7 +614,7 @@ describe('AI Trigger 工具函数', () => {
         channelType: 'private',
         senderId: 'u1',
       });
-      (message.$sender as any).name = '小明';
+      (message.sender as any).name = '小明';
       const result = shouldTriggerAI(message as any, { respondToPrivate: true });
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('你好');
@@ -619,7 +631,7 @@ describe('AI Trigger 工具函数', () => {
         channelType: 'group',
         senderId: 'admin1',
       });
-      (message.$sender as any).name = '管理员';
+      (message.sender as any).name = '管理员';
       const result = shouldTriggerAI(message as any, { respondToAt: true, masters: ['admin1'] });
       expect(result.triggered).toBe(true);
       expect(result.content).toBe('命令');

@@ -45,11 +45,13 @@ export function createAIHookBusPayload(
     hookContext: event.context,
     messages: event.messages,
     agentId,
-    platform: commMessage?.$adapter != null ? String(commMessage.$adapter) : undefined,
-    endpointKey: commMessage?.$endpoint,
-    userId: commMessage?.$sender?.id,
-    sceneId: commMessage?.$channel?.id,
-    messageId: typeof event.context.messageId === 'string' ? event.context.messageId : commMessage?.$id,
+    platform: commMessage
+      ? String(commMessage.clientAdapter ?? commMessage.conversation.endpoint.adapter)
+      : undefined,
+    endpointKey: commMessage?.endpointId ?? commMessage?.conversation.endpoint.id,
+    userId: commMessage?.sender?.id,
+    sceneId: commMessage?.conversation.id,
+    messageId: typeof event.context.messageId === 'string' ? event.context.messageId : commMessage?.id,
     content: typeof event.context.content === 'string' ? event.context.content : undefined,
     toolName: typeof event.context.toolName === 'string' ? event.context.toolName : undefined,
     args: typeof event.context.args === 'object' && event.context.args !== null

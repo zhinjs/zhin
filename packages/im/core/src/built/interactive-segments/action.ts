@@ -1,4 +1,4 @@
-import type { Message } from '../../message.js';
+import type { Message } from '../../plugin-runtime/im/contracts.js';
 import type { MessageElement } from '../../types.js';
 import { segment } from '../../utils.js';
 import {
@@ -11,8 +11,8 @@ export function actionSegment(data: ActionSegmentData): MessageElement {
   return { type: ACTION_SEGMENT_TYPE, data };
 }
 
-export function getActionFromMessage(message: Message<any>): ActionSegmentData | undefined {
-  for (const item of message.$content ?? []) {
+export function getActionFromMessage(message: Message): ActionSegmentData | undefined {
+  for (const item of message.segments ?? []) {
     if (typeof item === 'string') continue;
     if (isActionSegment(item)) return item.data;
   }
@@ -20,7 +20,7 @@ export function getActionFromMessage(message: Message<any>): ActionSegmentData |
 }
 
 /** 入站互动 action（按钮点击等），不应计入用户发言/消息统计 */
-export function isActionMessage(message: Message<any>): boolean {
+export function isActionMessage(message: Message): boolean {
   return getActionFromMessage(message) != null;
 }
 

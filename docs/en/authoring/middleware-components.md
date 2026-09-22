@@ -13,7 +13,7 @@ The `middlewares/` directory under the plugin package root is a convention direc
 
 ```ts
 import { defineMiddleware } from 'zhin.js/middleware';
-import type { Message } from '@zhin.js/core/runtime';
+import type { Message } from 'zhin.js';
 
 export default defineMiddleware<Message>({
   target: 'inbound',

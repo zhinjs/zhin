@@ -24,10 +24,9 @@ describe('OwnerApprovalRuntime commands', () => {
 
   function ownerMessage() {
     return createSyntheticMessage({
-      adapter: 'icqq',
-      endpoint: '8596238',
-      sender: { id: '1659488338', name: 'owner', isMaster: true },
-      channel: { type: 'private', id: '1659488338' },
+      conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'private', id: '1659488338' },
+      endpointId: '8596238', clientAdapter: 'icqq',
+      sender: { id: '1659488338', name: 'owner', roles: ['master'] },
       extra: { endpointMaster: '1659488338' },
     });
   }
@@ -44,6 +43,19 @@ describe('OwnerApprovalRuntime commands', () => {
 
   it('returns null for non-approve text', () => {
     expect(runtime.handleCommand(ownerContext(), 'hello')).toBeNull();
+  });
+
+  it('resolves owner approval identity from the canonical conversation endpoint', () => {
+    const message = createSyntheticMessage({
+      conversation: { endpoint: { adapter: 'icqq', id: '8596238' }, kind: 'private', id: '1659488338' },
+      sender: { id: '1659488338', name: 'owner', roles: ['master'] },
+      extra: { endpointMaster: '1659488338' },
+    });
+    expect(ownerApprovalAddressFromMessage(message)).toEqual({
+      platform: 'icqq',
+      endpoint: '8596238',
+      ownerId: '1659488338',
+    });
   });
 
   it('rejects non-owner private chat', () => {
