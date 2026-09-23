@@ -161,7 +161,7 @@ flowchart LR
 
 1.1 稳定线兼容说明：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
 
-MCP 有两种不同用途：`ai.mcpServers` 让可选 Agent 连接外部 Server（[Client 配置](./docs/ai/index.md#ai-mcpservers)）；顶层 `mcp:` 将当前 Bot 暴露为 Server，需要安装 `@zhin.js/mcp` 和 Agent Runtime（[Server 配置](./packages/host/mcp/README.md)）。仅安装 IM 库不会开启任一用途。
+MCP 有两种不同用途：`ai.mcpServers` 让可选 Agent 连接外部 Server（[Client 配置](./docs/ai/index.md#aimcpservers)）；顶层 `mcp:` 将当前 Bot 暴露为 Server，需要安装 `@zhin.js/mcp` 和 Agent Runtime（[Server 配置](./packages/host/mcp/README.md)）。仅安装 IM 库不会开启任一用途。
 
 > **Windows**：见 [Windows 初始化指南](./docs/getting-started/index.md)。
 

@@ -161,7 +161,7 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 
 Compatibility note for the 1.1 stable line: `import from 'zhin.js'` no longer includes `ZhinAgent` / `AIService`. Use `zhin.js/agent` or `zhin.js/ai`. See [ADR 0019](https://zhin.js.org/adr/0019-install-size-layering).
 
-MCP has two separate roles: `ai.mcpServers` connects the optional Agent to external servers ([client setup](./docs/en/ai/index.md#ai-mcpservers)); a top-level `mcp:` block exposes this bot as a server and requires `@zhin.js/mcp` plus the Agent runtime ([server setup](./packages/host/mcp/README.md)). Neither is enabled by the IM library alone.
+MCP has two separate roles: `ai.mcpServers` connects the optional Agent to external servers ([client setup](./docs/en/ai/index.md#aimcpservers)); a top-level `mcp:` block exposes this bot as a server and requires `@zhin.js/mcp` plus the Agent runtime ([server setup](./packages/host/mcp/README.md)). Neither is enabled by the IM library alone.
 
 > **Windows**: [Getting started](./docs/getting-started/index.md).
 

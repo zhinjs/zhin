@@ -108,7 +108,7 @@ ai:
 
 This configures the Agent's **MCP client**: it connects to external MCP servers and makes their tools available to Agent turns. Candidate generation activation connects every configured server before publication; ready tools enter the owner-scoped capability index. This requires the peer dependency `@modelcontextprotocol/sdk`.
 
-To let external AI clients connect to this Zhin bot, install `@zhin.js/mcp` and configure the top-level `mcp:` block. That is the **MCP server** assembled by the CLI; `ai.mcpServers` does not enable it. See [MCP server setup](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md).
+To let external AI clients connect to this Zhin bot, configure the top-level `mcp:` block and run `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`. The MCP Host uses the Agent runtime to project Tools from the current generation. This **MCP server** is assembled by the CLI; `ai.mcpServers` does not enable it. See [MCP server setup](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md).
 
 ```yaml
 ai:

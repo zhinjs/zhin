@@ -2,7 +2,7 @@
 
 `@zhin.js/mcp` exposes the current Zhin Bot's **Tools** to external MCP clients over stateless Streamable HTTP. `@zhin.js/cli` mounts the Host when the project has a top-level `mcp:` configuration. Importing this package by itself does not start a server or register a plugin.
 
-This is the MCP **server**. To let a Zhin Agent consume tools from another server, configure the separate [`ai.mcpServers`](../../../docs/ai/index.md#ai-mcpservers) client connection.
+This is the MCP **server**. To let a Zhin Agent consume tools from another server, configure the separate [`ai.mcpServers`](https://zhin.js.org/ai/#ai-mcpservers) client connection.
 
 ## Install and enable
 
@@ -48,6 +48,6 @@ The endpoint accepts **POST** requests; GET and DELETE return 405. Each request 
 
 `tools/list` returns Tools currently visible through the active generation's governed capability snapshot. `tools/call` executes them through the same permission, safety, approval, and cancellation authority used by Agent turns. MCP calls are unattended: a Tool that needs interactive approval cannot obtain it from this endpoint and must fail rather than silently run.
 
-The current Runtime Host registers **Tools only**. It does not register the legacy `create_plugin` / `create_command` generators, documentation Resources, or workflow Prompts described in older versions of this README. Use [`zhin new`](../../../docs/cli/index.md) for project scaffolding.
+The current Runtime Host registers **Tools only**. It does not register the legacy `create_plugin` / `create_command` generators, documentation Resources, or workflow Prompts described in older versions of this README. Use [`zhin new`](https://zhin.js.org/cli/) for project scaffolding.
 
-Source of truth: [`src/runtime.ts`](./src/runtime.ts) for transport and Tool projection, [`src/mesh-auth.ts`](./src/mesh-auth.ts) for authentication, and [`protocol-host-installer.ts`](../../../basic/cli/src/plugin-runtime/protocol-host-installer.ts) for CLI assembly.
+Source of truth: [`src/runtime.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts) for transport and Tool projection, [`src/mesh-auth.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/mesh-auth.ts) for authentication, and [`protocol-host-installer.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/protocol-host-installer.ts) for CLI assembly.
