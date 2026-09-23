@@ -153,6 +153,35 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     expect(result.output).toContain('2 versioned packages awaiting tags');
   });
 
+  it('traces propagation through a workspace package outside the usual roots', () => {
+    const repo = fixture();
+    repo.write('package.json', JSON.stringify({
+      name: 'fixture', private: true, workspaces: ['packages/*', 'modules/*'],
+    }));
+    repo.write('pnpm-workspace.yaml', 'packages:\n  - packages/*\n  - modules/*\n');
+    repo.write('modules/bridge/package.json', JSON.stringify({
+      name: '@test/bridge', version: '1.1.0', dependencies: { '@test/demo': 'workspace:^' },
+    }));
+    repo.write('modules/bridge/CHANGELOG.md', '# Bridge\n\n## 1.1.0\n');
+    repo.write('packages/dependent/package.json', JSON.stringify({
+      name: '@test/dependent', version: '1.1.0', dependencies: { '@test/bridge': 'workspace:^' },
+    }));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.0\n');
+    repo.commit();
+    repo.write('modules/bridge/package.json', JSON.stringify({
+      name: '@test/bridge', version: '1.1.1', dependencies: { '@test/demo': 'workspace:^' },
+    }));
+    repo.write('modules/bridge/CHANGELOG.md', '# Bridge\n\n## 1.1.1\n\n## 1.1.0\n');
+    repo.write('packages/dependent/package.json', JSON.stringify({
+      name: '@test/dependent', version: '1.1.1', dependencies: { '@test/bridge': 'workspace:^' },
+    }));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.1\n\n## 1.1.0\n');
+    repo.bump();
+    const result = repo.check();
+    expect(result.status).toBe(0);
+    expect(result.output).toContain('3 versioned packages awaiting tags');
+  });
+
   it.each([true, false])('reads dependency propagation at the version commit (linked then: %s)', (linkedThen) => {
     const repo = fixture();
     const dependent = (linked: boolean, version: string) => JSON.stringify({

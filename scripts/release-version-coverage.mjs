@@ -52,9 +52,10 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, e
       if (declaredPackages) {
         // Use the dependency graph from the version commit being validated.
         // Later manifest edits cannot change the provenance of that release.
-        const files = git('ls-tree', '-r', '--name-only', commit, '--', 'basic', 'packages', 'plugins')
-          .trim().split('\n').filter((file) => /^(basic|packages|plugins)\/.+\/package\.json$/.test(file));
-        const workspacePackages = files.map((file) => JSON.parse(readAt(commit, file)));
+        const files = git('ls-tree', '-r', '--name-only', commit)
+          .trim().split('\n').filter((file) => file === 'package.json' || file.endsWith('/package.json'));
+        const workspacePackages = files.map((file) => JSON.parse(readAt(commit, file)))
+          .filter((pkg) => !pkg.private && pkg.name);
         related = new Set(declaredPackages);
         let expanded = true;
         while (expanded) {
