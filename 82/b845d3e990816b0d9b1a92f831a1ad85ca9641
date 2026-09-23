@@ -1,0 +1,21 @@
+docs/wiki/cubic/config.md
+  s_079f1dc5e6308d::t_bb09d1c7a8a260 65
+scripts/check-cubic-wiki-translations.mjs
+  s_079f1dc5e6308d::t_bb09d1c7a8a260 68-70
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "82b845d3e990816b0d9b1a92f831a1ad85ca9641",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
