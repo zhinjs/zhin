@@ -1,6 +1,6 @@
 ---
 title: "入站与出站消息链路"
-translation_source_body_sha256: 986af78b734a18af44a55bd575dd8a8aba5076f9f4f423b21ed7a6d5ba1d5729
+translation_normalized_body_sha256: 986af78b734a18af44a55bd575dd8a8aba5076f9f4f423b21ed7a6d5ba1d5729
 ---
 
 [英文原文](/en/wiki/cubic/message-flow)
@@ -75,7 +75,7 @@ flowchart TD
 1.  **标准化**：平台适配器将原始事件转换为标准格式。
 2.  **入站**：`MessageDispatcher` 接收标准化的数据流。
 3.  **中间件处理**：消息依次通过一系列中间件进行验证、日志记录或修改。
-4.  D 目标解析：系统判断该消息是否匹配已注册的命令，或应路由至 Agent Turn。
+4. **目标解析**：系统判断该消息是否匹配已注册的命令，或应路由至 Agent Turn。
 
 来源：[README.md:52-57](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L52-L57), [CLAUDE.md:80-92](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L80-L92), [AGENTS.md:120-130](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L120-L130)
 

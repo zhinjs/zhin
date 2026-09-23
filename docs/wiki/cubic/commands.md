@@ -1,6 +1,6 @@
 ---
 title: "命令、Handler 与中间件"
-translation_source_body_sha256: 6eb6bec52e07af16f80d89569a1ef1b6a1e3a80e5f9dda6591fc4d1c6d2c9f87
+translation_normalized_body_sha256: 6eb6bec52e07af16f80d89569a1ef1b6a1e3a80e5f9dda6591fc4d1c6d2c9f87
 ---
 
 [英文原文](/en/wiki/cubic/commands)

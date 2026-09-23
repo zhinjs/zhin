@@ -1,6 +1,6 @@
 ---
 title: "插件 Runtime 与约定"
-translation_source_body_sha256: 9ca29a5e43fd0dda6da2c2b67314dea052ad36dc1e38c83963734e9228d43dab
+translation_normalized_body_sha256: 9ca29a5e43fd0dda6da2c2b67314dea052ad36dc1e38c83963734e9228d43dab
 ---
 
 [英文原文](/en/wiki/cubic/plugin-runtime)
@@ -121,7 +121,7 @@ export default definePlugin({
 来源：[CLAUDE.md:46-56](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L46-L56), [AGENTS.md:78-83](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L78-L83)
 
 ### 外发发送链路
-插件不得绕过标准发送链路。所有消息必须通过 `Message.$reply` 或 `Adapter.sendMessage` 传递。禁止直接调用平台机器人或 `bot.$sendMessage`，此类操作将被Harness检查机制识别并拦截。
+插件不得绕过标准发送链路。所有消息必须通过 `Message.$reply` 或 `Adapter.sendMessage` 传递。禁止直接调用平台机器人或 `bot.$sendMessage`，此类操作将被 Harness 检查机制识别并拦截。
 
 ```mermaid
 sequenceDiagram

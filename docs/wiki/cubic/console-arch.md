@@ -1,6 +1,6 @@
 ---
 title: "远程 Console 架构"
-translation_source_body_sha256: 396cc09234aa40e52ac8af16615bb07a4ccc2a776e111db58ef54fd401ee9e56
+translation_normalized_body_sha256: 396cc09234aa40e52ac8af16615bb07a4ccc2a776e111db58ef54fd401ee9e56
 ---
 
 [英文原文](/en/wiki/cubic/console-arch)
@@ -41,7 +41,7 @@ translation_source_body_sha256: 396cc09234aa40e52ac8af16615bb07a4ccc2a776e111db5
 - 使用 `extractPageMetadata` 提取静态元数据（标题、图标、排序）。
 - 内联注入 `@zhin.js/console-contract` 的占位符，以便浏览器能够解析这些占位符。
 - 将组件包装在 `register(api)` 函数中，以满足远程控制台挂载的合约要求。
-- 将对像 `React` 这样的库的直接导入重写为指向主机服务的 ESM 端点。
+- 将 `React` 等库的裸导入重写为指向主机服务的 ESM 端点。
 
 来源：[packages/console/pagemanager/src/client-build/typescript-builder.ts:50-80](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/console/pagemanager/src/client-build/typescript-builder.ts#L50-L80), [packages/console/pagemanager/src/client-build/typescript-builder.ts:150-180](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/console/pagemanager/src/client-build/typescript-builder.ts#L150-L180)
 

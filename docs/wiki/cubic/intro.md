@@ -1,6 +1,6 @@
 ---
 title: "Zhin.js 简介"
-translation_source_body_sha256: caa99d02511aa16a5fa2dcc2e0e01311b018cbc16e86aafc237ab4acff48a668
+translation_normalized_body_sha256: caa99d02511aa16a5fa2dcc2e0e01311b018cbc16e86aafc237ab4acff48a668
 ---
 
 [英文原文](/en/wiki/cubic/intro)
@@ -111,7 +111,7 @@ Zhin.js 采用基于约定的插件运行时。开发者使用 `definePlugin()` 
 来源：[CLAUDE.md:83-110](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L83-L110), [packages/toolkit/create-zhin/src/workspace.ts:316-335](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts#L316-L335)
 
 ### 生成生命周期
-Zhin.js 将热重载实现为一个“生成”事务。当代码发生变更时，运行时会准备并验证一个离线的插件树。只有在验证成功后，才会发布新的生成版本；否则，当前的生成版本将继续处理请求。
+Zhin.js 将热重载实现为一个“生成”事务。当代码发生变更时，运行时会准备并验证一个不参与当前服务路径的插件树。只有在验证成功后，才会发布新的生成版本；否则，当前的生成版本将继续处理请求。
 
 来源：[README.md:92-95](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L92-L95), [AGENTS.md:123-125](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L123-L125)
 

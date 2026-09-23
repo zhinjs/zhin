@@ -9,7 +9,7 @@ title: "Adapter Core & Endpoint Lifecycle"
 :::
 
 ::: danger Known correction
-The lifecycle diagram below conflates a scaffolded Endpoint example with `createEndpointLifecycle`. The latter uses `idle / connecting / open / reconnecting / closed / stopped` and does not expose the diagram's `open()` / `close()` transitions. The example is a partial skeleton, not a copy-ready inbound adapter. See [Endpoint Lifecycle](/en/authoring/endpoint-lifecycle).
+The lifecycle diagram below conflates a scaffolded Endpoint example with `createEndpointLifecycle`. The latter uses `idle / connecting / open / reconnecting / closed / stopped` and does not expose the diagram's `open()` / `close()` transitions. The example does not compile: `Endpoint` takes no constructor arguments and its abstract `open()` / `close()` methods are not implemented. It is only a partial skeleton, not a copy-ready inbound adapter. See [Endpoint Lifecycle](/en/authoring/endpoint-lifecycle).
 :::
 
 ::: details Relevant source files

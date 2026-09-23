@@ -1,6 +1,6 @@
 ---
 title: "开发 Console 页面"
-translation_source_body_sha256: 4a3e9d647d40225eac398151c0f13a67e8133149662adbeef1975bb84ed2f670
+translation_normalized_body_sha256: 4a3e9d647d40225eac398151c0f13a67e8133149662adbeef1975bb84ed2f670
 ---
 
 [英文原文](/en/wiki/cubic/console-pages)
@@ -111,7 +111,7 @@ sequenceDiagram
     HMR->>Snapshot: Replace Page Projection
     Note over Snapshot: Atomic Update
 ```
-序列图展示了开发过程中页面artifacts的原子级替换。来源：[packages/im/runtime/tests/console-feature-hmr.test.ts:55-75](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/runtime/tests/console-feature-hmr.test.ts#L55-L75)
+序列图展示了开发过程中页面构件的原子级替换。来源：[packages/im/runtime/tests/console-feature-hmr.test.ts:55-75](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/runtime/tests/console-feature-hmr.test.ts#L55-L75)
 
 如果构建失败（例如由于动态元数据或语法错误），运行时将保留上一个成功的快照以确保稳定性。
 来源：[packages/im/runtime/tests/console-feature-hmr.test.ts:76-80](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/runtime/tests/console-feature-hmr.test.ts#L76-L80)

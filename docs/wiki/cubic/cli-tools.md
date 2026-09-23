@@ -1,6 +1,6 @@
 ---
 title: "CLI 命令与工具"
-translation_source_body_sha256: 851154691dbaca943463d541fdaffb86ed537dc0a245c5cf74f4f5474115f420
+translation_normalized_body_sha256: 851154691dbaca943463d541fdaffb86ed537dc0a245c5cf74f4f5474115f420
 ---
 
 [英文原文](/en/wiki/cubic/cli-tools)

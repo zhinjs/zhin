@@ -13,7 +13,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
+import shutil
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.request import Request, urlopen
@@ -97,7 +100,9 @@ CORRECTIONS = {
         "The lifecycle diagram below conflates a scaffolded Endpoint example with "
         "`createEndpointLifecycle`. The latter uses `idle / connecting / open / reconnecting / "
         "closed / stopped` and does not expose the diagram's `open()` / `close()` transitions. "
-        "The example is a partial skeleton, not a copy-ready inbound adapter. "
+        "The example does not compile: `Endpoint` takes no constructor arguments and its "
+        "abstract `open()` / `close()` methods are not implemented. It is only a partial "
+        "skeleton, not a copy-ready inbound adapter. "
         "See [Endpoint Lifecycle](/en/authoring/endpoint-lifecycle)."
     ),
     "satori": (
@@ -152,6 +157,9 @@ BODY_REPLACEMENTS: dict[str, tuple[tuple[str, str], ...]] = {
          "```typescript\nimport { raw } from 'zhin.js/core/runtime';\n\nexport default defineComponent<StatusCardProps>"),
         ("| `from(template)` | `string` | `Segment[]` |", "| `segment.from(content)` | `SendContent` | `SendContent` |"),
         ("| `raw(content)` | `Segment[]` | `string` |", "| `segment.raw(content)` | `SendContent` | `string` |"),
+        ("| `text(content)` |", "| `segment.text(content)` |"),
+        ("| `face(id, alt?)` |", "| `segment.face(id, text?)` |"),
+        ("| `escape(text)` |", "| `segment.escape(text)` |"),
     ),
     "docker-prod": (
         ("| `pnpm daemon` |", "| `pnpm daemon` (migrated legacy projects only) |"),
@@ -275,12 +283,13 @@ def main() -> None:
             html = response.read().decode("utf-8")
 
     commit, pages = extract_pages(html)
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     expected_files = {f"{slug}.md" for slug in EXPECTED_SLUGS}
-    unexpected_files = {path.name for path in OUTPUT_DIR.glob("*.md")} - expected_files
+    existing_files = {path.name for path in OUTPUT_DIR.iterdir()} if OUTPUT_DIR.exists() else set()
+    unexpected_files = existing_files - expected_files
     if unexpected_files:
         raise ValueError(f"Unexpected existing Wiki articles: {sorted(unexpected_files)}")
     captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    rendered: dict[str, str] = {}
     manifest = {
         "source": SOURCE_URL,
         "source_commit": commit,
@@ -314,7 +323,7 @@ def main() -> None:
             + body
         )
         filename = f"{slug}.md"
-        (OUTPUT_DIR / filename).write_text(markdown, encoding="utf-8")
+        rendered[filename] = markdown
         manifest["pages"].append(
             {
                 "id": page["id"],
@@ -325,10 +334,36 @@ def main() -> None:
             }
         )
 
+    # Validate every article before touching the published snapshot. Stage all
+    # files first; if replacing the manifest fails, restore the previous set.
+    if set(rendered) != expected_files:
+        raise ValueError("Rendered Wiki article set does not match the expected page set")
+    OUTPUT_DIR.parent.mkdir(parents=True, exist_ok=True)
     MANIFEST_FILE.parent.mkdir(parents=True, exist_ok=True)
-    MANIFEST_FILE.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-    )
+    with tempfile.TemporaryDirectory(prefix=".cubic-wiki-", dir=OUTPUT_DIR.parent) as temp:
+        temporary = Path(temp)
+        staged_pages = temporary / "pages"
+        staged_pages.mkdir()
+        for filename, markdown in rendered.items():
+            (staged_pages / filename).write_text(markdown, encoding="utf-8")
+        staged_manifest = temporary / "source.json"
+        staged_manifest.write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+        )
+
+        previous_pages = temporary / "previous-pages"
+        had_previous = OUTPUT_DIR.exists()
+        if had_previous:
+            OUTPUT_DIR.rename(previous_pages)
+        try:
+            staged_pages.rename(OUTPUT_DIR)
+            os.replace(staged_manifest, MANIFEST_FILE)
+        except Exception:
+            if OUTPUT_DIR.exists():
+                shutil.rmtree(OUTPUT_DIR)
+            if had_previous:
+                previous_pages.rename(OUTPUT_DIR)
+            raise
     print(f"Imported {len(pages)} Cubic Wiki pages from {commit} into {OUTPUT_DIR}")
 
 

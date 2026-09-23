@@ -136,9 +136,9 @@ Sources: [packages/toolkit/create-zhin/src/workspace.ts:575-595](https://github.
 
 | Method | Parameters | Returns | Description |
 | :--- | :--- | :--- | :--- |
-| `text(content)` | `string` | `Segment` | Creates a text segment. |
-| `face(id, alt?)` | `string, string?` | `Segment` | Creates a face/emoji segment. |
-| `escape(text)` | `string` | `string` | Escapes special characters like `<` and `&`. |
+| `segment.text(content)` | `string` | `Segment` | Creates a text segment. |
+| `segment.face(id, text?)` | `string, string?` | `Segment` | Creates a face/emoji segment. |
+| `segment.escape(text)` | `string` | `string` | Escapes special characters like `<` and `&`. |
 | `segment.from(content)` | `SendContent` | `SendContent` | Parses tags into segment structures. |
 | `segment.raw(content)` | `SendContent` | `string` | Serializes segments for storage or logs. |
 

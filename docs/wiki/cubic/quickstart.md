@@ -1,6 +1,6 @@
 ---
 title: "快速开始与安装"
-translation_source_body_sha256: fe3f1c124730b6b4dd2949d022de15fdf766883015d271a035c19496d3f73b42
+translation_normalized_body_sha256: fe3f1c124730b6b4dd2949d022de15fdf766883015d271a035c19496d3f73b42
 ---
 
 [英文原文](/en/wiki/cubic/quickstart)
@@ -105,7 +105,7 @@ Zhin.js 将功能划分为不同层级，以保持较小的生产环境占用。
 
 来源：[basic/cli/src/commands/setup.ts:180-200](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts#L180-L200), [basic/cli/src/commands/new.ts:40-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/new.ts#L40-L50), [README.md:200-210](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L200-L210)
 
-### 递增设置序列
+### 增量设置流程
 
 ```mermaid
 sequenceDiagram

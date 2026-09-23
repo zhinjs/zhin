@@ -1,6 +1,6 @@
 ---
 title: "适配器核心与端点生命周期"
-translation_source_body_sha256: d8638e739637060ffd504b3f4d55270e5860b11fac6b97a5b7b837b86795d35e
+translation_normalized_body_sha256: d8638e739637060ffd504b3f4d55270e5860b11fac6b97a5b7b837b86795d35e
 ---
 
 [英文原文](/en/wiki/cubic/adapters-core)
@@ -10,7 +10,7 @@ translation_source_body_sha256: d8638e739637060ffd504b3f4d55270e5860b11fac6b97a5
 :::
 
 ::: danger 已确认勘误
-下文生命周期图将脚手架 Endpoint 示例与 `createEndpointLifecycle` 混为一谈。后者使用 `idle / connecting / open / reconnecting / closed / stopped` 状态，不暴露图中的 `open()` / `close()` 转换。示例只是部分骨架，不能直接作为完整入站适配器使用。参见[端点生命周期](/authoring/endpoint-lifecycle)。
+下文生命周期图将脚手架 Endpoint 示例与 `createEndpointLifecycle` 混为一谈。后者使用 `idle / connecting / open / reconnecting / closed / stopped` 状态，不暴露图中的 `open()` / `close()` 转换。下文实现示例本身无法编译：`Endpoint` 不接收构造参数，且示例未实现抽象方法 `open()` 和 `close()`。它只是部分骨架，不能直接作为完整入站适配器使用。参见[端点生命周期](/authoring/endpoint-lifecycle)。
 :::
 
 ::: details 相关源文件

@@ -1,7 +1,7 @@
 {
   "source": "https://www.cubic.dev/wikis/zhinjs/zhin",
   "source_commit": "368db14caa4aa91311fb090f07bd792fe4b22fe7",
-  "captured_at": "2026-09-23T04:19:26+00:00",
+  "captured_at": "2026-09-23T04:39:39+00:00",
   "body_hash_scope": "Complete normalized Cubic Markdown from the source-files details block onward, excluding frontmatter and warning/correction banners",
   "pages": [
     {
@@ -57,7 +57,7 @@
       "id": "page-messaging",
       "title": "Universal Segments & Components",
       "file": "messaging.md",
-      "body_sha256": "61b2820ab18ae2256567263b5c8ddb220d308e390138f0d91f67288f1936b864",
+      "body_sha256": "ed94406bf691f13b28a7fd27b8e73fe275f791c39f4e39335b4299859b7ad783",
       "source_body_sha256": "98e7fa45ba201147bd728199c96c95ad85cea30409aaa9746f744bf41326f188"
     },
     {

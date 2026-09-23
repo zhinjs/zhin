@@ -1,6 +1,6 @@
 ---
 title: "Generation 与热重载"
-translation_source_body_sha256: df76a5a7b94ed77f466c24d37f73b9e530d6b85317dd569251806b573f576a12
+translation_normalized_body_sha256: df76a5a7b94ed77f466c24d37f73b9e530d6b85317dd569251806b573f576a12
 ---
 
 [英文原文](/en/wiki/cubic/hmr-generation)
@@ -109,7 +109,7 @@ sequenceDiagram
 HMR 和生成系统受到特定架构规则的保护，以确保一致性：
 
 *   **禁止全局单例**：开发人员不得使用模块级别的可变单例。所有状态必须存在于快照资源中。
-*   **禁止命令行注册**：不建议使用命令行方式注册能力（例如 `plugin.addCommand`），应优先采用基于约定的目录发现机制，该机制与生成模型更好地集成。
+*   **禁止命令式注册**：不建议使用命令式注册能力（例如 `plugin.addCommand`），应优先采用基于约定的目录发现机制，该机制与生成模型更好地集成。
 *   **不可变快照**：`RootRuntime` 通过 `CapabilityIngress` 将根服务注入，确保外部提供者遵循基于生成的治理规则。
 *   **失效端口**：`ModuleRuntime` 提供用于生成失效和追踪受影响源的端口，以便确定 HMR 事件的范围。
 

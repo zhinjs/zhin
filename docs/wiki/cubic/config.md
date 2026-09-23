@@ -1,6 +1,6 @@
 ---
 title: "配置管理"
-translation_source_body_sha256: 78a88486cba079bb8b7c4a88adf477c5d46fb041d29d8f6e36a7f5a20056ccc6
+translation_normalized_body_sha256: 78a88486cba079bb8b7c4a88adf477c5d46fb041d29d8f6e36a7f5a20056ccc6
 ---
 
 [英文原文](/en/wiki/cubic/config)
@@ -62,7 +62,7 @@ flowchart TD
 ### 配置组件
 *   **数据库配置器**：处理方言（如 SQLite、MySQL、PostgreSQL 等）的选择，并生成连接字符串。
 *   **适配器配置器**：管理 Telegram、Discord 等 IM 协议的平台特定设置。
-*   **AI 配置器**：配置 LLM 提供商、API 密钥以及代理安全策略。
+*   **AI 配置器**：配置 LLM 提供商、API 密钥以及Agent 安全策略。
 *   **环境管理器**：对环境变量进行转义，并将其合并到 `.env` 文件中，使用 `mergeEnvText`。
 
 来源：[packages/toolkit/scaffold-wizard/README.md:15-35](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/scaffold-wizard/README.md#L15-L35), [basic/cli/src/commands/setup.ts:205-250](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts#L205-L250)
@@ -94,13 +94,13 @@ flowchart TD
 
 ## 配置迁移
 
-`zhin migrate` 命令可自动将旧版 Zhin 项目升级至当前标准。它会修改 `package.json` 配置，并更新启动的 Markdown 文件，以确保与插件运行时的兼容性。
+`zhin migrate` 命令可自动将旧版 Zhin 项目升级至当前标准。它会修改 `package.json` 配置，并更新引导 Markdown 文件，以确保与插件运行时的兼容性。
 
 ### 关键迁移操作
 *   **脚本对齐**：将旧版命令（如 `zhin start`）替换为 `zhin runtime start`。
 *   **依赖项更新**：将 `@zhin.js/*` 包版本升级至 `latest`。
 *   **结构重构**：不会重写旧版的 `bots:` 配置文件；需手动将其更新为 `endpoints:` 格式。
-*   **启动文件升级**：将 `SOUL.md`、`TOOLS.md` 和 `AGENTS.md` 中的旧版中文模板替换为更新后的英文版本，同时尝试保留用户数据部分（如“用户偏好”）内容。
+*   **引导文件升级**：将 `SOUL.md`、`TOOLS.md` 和 `AGENTS.md` 中的旧版中文模板替换为更新后的英文版本，同时尝试保留用户数据部分（如“用户偏好”）内容。
 
 ```mermaid
 sequenceDiagram
@@ -125,7 +125,7 @@ sequenceDiagram
 Zhin 通过外部化敏感数据来优先保障安全性。配置存储会在初始化时自动提取提供的密钥，并将其保存到 `.env` 文件中。
 
 ### 密钥映射
-在 `zhin.config.yml` 文件中，敏感字段使用 `${VARIABLE_NAME}` 的语法格式。运行时会在启动时从环境变量中解析这些值。例如，名为 `demo` 的适配器，ID 为 `my-bot` 的机器人令牌通常会映射到 `DEMO_MY_BOT_TOKEN` 字段中 `.env` 文件。
+在 `zhin.config.yml` 文件中，敏感字段使用 `${VARIABLE_NAME}` 的语法格式。运行时会在启动时从环境变量中解析这些值。例如，名为 `demo` 的适配器，ID 为 `my-bot` 的机器人令牌通常会映射到 `.env` 文件中的 `DEMO_MY_BOT_TOKEN` 字段。
 
 来源：[basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts:44-55](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts#L44-L55), [packages/toolkit/scaffold-wizard/README.md:38-42](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/scaffold-wizard/README.md#L38-L42)
 

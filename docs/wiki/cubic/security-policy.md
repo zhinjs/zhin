@@ -1,6 +1,6 @@
 ---
 title: "安全策略与最佳实践"
-translation_source_body_sha256: 71abb0ff27b6483e3626069fa39848f011f9c8d6f15f9951bfba55fba273afe1
+translation_normalized_body_sha256: 71abb0ff27b6483e3626069fa39848f011f9c8d6f15f9951bfba55fba273afe1
 ---
 
 [英文原文](/en/wiki/cubic/security-policy)
@@ -54,7 +54,7 @@ Zhin.js 团队优先处理安全问题。建议您通过私密方式披露漏洞
 ### 凭证保护
 *   **环境变量**：将敏感密钥存储在 `.env` 文件中，并通过 `${VAR_NAME}` 语法在 `zhin.config.yml` 中引用。
 *   **版本控制**：请勿将 `.env` 文件提交到 git；该项目默认包含 `.env`（在 `.gitignore` 中）。
-*   **HTTP令牌**：为Web控制台使用一个强`HTTP_TOKEN`。 scaffolding向导默认生成一个随机的32位十六进制字符串。
+*   **HTTP 令牌**：为 Web 控制台设置高强度的 `HTTP_TOKEN`。脚手架向导默认生成一个包含 32 个十六进制字符的随机令牌。
 
 ### 访问控制
 *   **主机 API**：使用防火墙规则或 Nginx 等反向代理，限制主机 API（默认 `:8086`）仅允许可信来源访问。

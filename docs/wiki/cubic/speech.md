@@ -1,6 +1,6 @@
 ---
 title: "语音链路（STT 与 TTS）"
-translation_source_body_sha256: d12faabefc25d56b6c2f1eec187ef7b451c77e1b396c1409fc36072d436e9b10
+translation_normalized_body_sha256: d12faabefc25d56b6c2f1eec187ef7b451c77e1b396c1409fc36072d436e9b10
 ---
 
 [英文原文](/en/wiki/cubic/speech)

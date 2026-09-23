@@ -1,6 +1,6 @@
 ---
 title: "日志与遥测"
-translation_source_body_sha256: 43a151224dc394ca18958fa1230bea58bbc3e33edd907ce028fa8274564dff5b
+translation_normalized_body_sha256: 43a151224dc394ca18958fa1230bea58bbc3e33edd907ce028fa8274564dff5b
 ---
 
 [英文原文](/en/wiki/cubic/logging)
@@ -86,9 +86,9 @@ flowchart TD
 
 来源：[basic/logger/tests/logger.test.ts:160-185](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/logger/tests/logger.test.ts#L160-L185), [basic/logger/README.md:40-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/logger/README.md#L40-L50)
 
-##  telemetry 与性能监控
+## 遥测与性能监控
 
-`Logger` 类提供了内置方法用于测量执行时间。该 telemetry 有助于识别命令执行或插件初始化过程中的性能瓶颈。
+`Logger` 类提供了内置方法用于测量执行时间。这些遥测数据有助于识别命令执行或插件初始化过程中的性能瓶颈。
 
 - **`logger.time(label)`**：启动与提供的标签关联的高精度计时器。
 - **`logger.timeEnd(label)`**：结束计时器，并以毫秒为单位记录持续时间。

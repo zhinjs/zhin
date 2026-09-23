@@ -1,6 +1,6 @@
 ---
 title: "模型上下文协议（MCP）"
-translation_source_body_sha256: 2b3161230960008c8ba41a8b82e40fc17149abeece46c0f7ae30194b5e83252e
+translation_normalized_body_sha256: 2b3161230960008c8ba41a8b82e40fc17149abeece46c0f7ae30194b5e83252e
 ---
 
 [英文原文](/en/wiki/cubic/mcp)
@@ -10,7 +10,7 @@ translation_source_body_sha256: 2b3161230960008c8ba41a8b82e40fc17149abeece46c0f7
 :::
 
 ::: danger 已确认勘误
-当前可选 Runtime Host **只注册 Tool**，且仅在显式配置顶层 `mcp:` 时挂载。`ai.mcpServers` 配置的是独立的 Agent MCP 客户端。下文关于生成器、Resource、Prompt 和默认启用服务端的描述已经过时。参见 [Host 实现](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts)及 [MCP 文档修正](https://github.com/zhinjs/zhin/pull/684)。
+当前 Runtime Host **只注册 Tool**，且仅在显式配置顶层 `mcp:` 时挂载。`ai.mcpServers` 配置的是独立的 Agent MCP 客户端。下文关于生成器、Resource、Prompt 和默认启用服务端的描述已经过时。参见 [Host 实现](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts)及 [MCP 文档修正](https://github.com/zhinjs/zhin/pull/684)。
 :::
 
 ::: details 相关源文件

@@ -1,6 +1,6 @@
 ---
 title: "调度引擎与 Cron"
-translation_source_body_sha256: 142bdde0da635f98a113bb9b60d5fd0738c8c6c15c5b8cb2e6d7bdc9957f09d7
+translation_normalized_body_sha256: 142bdde0da635f98a113bb9b60d5fd0738c8c6c15c5b8cb2e6d7bdc9957f09d7
 ---
 
 [英文原文](/en/wiki/cubic/scheduling)
@@ -83,7 +83,7 @@ flowchart TD
 
 *   **本地 JSON 存储**：通过 `createLocalJsonStore` 创建，适用于小型独立运行的机器人。
 *   **SQLite 存储**：通过 `createSqliteStore` 创建，提供关系型持久化功能。
-*   **Redis 存储**：通过 `createRedisStore` 创建，支持多个工作实例之间的作业声明。
+*   **Redis 存储**：通过 `createRedisStore` 创建，支持多个工作实例之间的作业认领。
 
 来源：[basic/schedule/README.md:66-72](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/schedule/README.md#L66-L72)
 

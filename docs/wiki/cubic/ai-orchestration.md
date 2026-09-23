@@ -1,6 +1,6 @@
 ---
 title: "Agent 编排与 ZhinAgent"
-translation_source_body_sha256: ef074b382900ac23e5f4d750e6292adcf757caf28623c4358cad96214d661e0a
+translation_normalized_body_sha256: ef074b382900ac23e5f4d750e6292adcf757caf28623c4358cad96214d661e0a
 ---
 
 [英文原文](/en/wiki/cubic/ai-orchestration)
@@ -34,7 +34,7 @@ ZhinAgent 是 Zhin.js 框架中的核心编排组件，负责 AI 会话管理、
 
 ## 架构定位
 
-Agent 层在项目Monorepo的依赖层级中占据一个特定位置。它位于 AI 引擎和 IM 核心之上，位于最终入口点之下。这种结构确保了底层消息传递和内核逻辑不会受到特定 AI 实现的影响。
+Agent 层在项目 Monorepo 的依赖层级中占据一个特定位置。它位于 AI 引擎和 IM 核心之上，位于最终入口点之下。这种结构确保了底层消息传递和内核逻辑不会受到特定 AI 实现的影响。
 
 ```mermaid
 flowchart TD
@@ -80,7 +80,7 @@ sequenceDiagram
 
 ## 核心组件
 
-Agent编排模块由多个专用的子包和工具组成，并通过`@zhin.js/agent`包导出。
+Agent 编排模块由多个专用的子包和工具组成，并通过`@zhin.js/agent` 包导出。
 
 | 组件 | 职责 | 源码路径 |
 |:---|:---|:---|
@@ -117,7 +117,7 @@ ZhinAgent 采用约定优于配置的方式自动发现工具、技能和子代�
 
 ## 配置与初始化
 
-通过 `zhin.config.yml` 配置代理。`create-zhin` 工具包提供交互式初始化功能，用于设置 AI 提供商和Agent 的默认参数。
+通过 `zhin.config.yml` 配置 Agent。`create-zhin` 工具包提供交互式初始化功能，用于设置 AI 提供商和 Agent 的默认参数。
 
 ```yaml
 # Example zhin.config.yml for ZhinAgent

@@ -20,7 +20,7 @@ title: Wiki 知识库
 | [安全与沙箱](./cubic/security-sandbox) | `execApprovalMode` 为 `ask | auto | bypass`；Tool 的 `requiresApproval` 是另一组选项：`never | on-risk | once | always`。 | [Agent 配置](/ai/)、[工具开发](/authoring/agent-tools) |
 | [配置管理](./cubic/config) | `zhin migrate` 不会自动把 `bots:` 改成 `endpoints:`。 | [配置文档](/configuration/) |
 | [Agent 编排](./cubic/ai-orchestration)、[安全策略](./cubic/security-policy) | Tool 与 Hook 使用具名目录；`execSecurity` 与 `execApprovalMode` 是独立配置。内置默认值分别是 `deny` 与 `auto`，项目配置可以覆盖。 | [约定目录](/authoring/conventions)、[Agent 配置](/ai/) |
-| [适配器核心](./cubic/adapters-core) | 快照将脚手架中的 Endpoint 示例与 `createEndpointLifecycle` 混为一谈，并展示了不完整的入站适配器。 | [端点生命周期](/authoring/endpoint-lifecycle) |
+| [适配器核心](./cubic/adapters-core) | 快照将脚手架中的 Endpoint 示例与 `createEndpointLifecycle` 混为一谈；入站适配器示例不完整，且不能编译。 | [端点生命周期](/authoring/endpoint-lifecycle) |
 | [消息段](./cubic/messaging)、[Satori](./cubic/satori) | Runtime 的 `raw` 与 `segment.raw` 不同；`wrapCardHtml` 需要背景色参数。 | [中间件与组件](/authoring/middleware-components) |
 | [安全策略](./cubic/security-policy)、[生产部署](./cubic/docker-prod) | 复制 `8086` 示例前应核对实际 `http.port`；新项目使用 `8068`。`pnpm daemon` 和 `pnpm stop` 是旧项目迁移脚本。 | [生产部署](/operations/production) |
 

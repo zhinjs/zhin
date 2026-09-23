@@ -1,6 +1,6 @@
 ---
 title: "系统架构与分层"
-translation_source_body_sha256: 18e33ceb353961723b0b5aa9bc601f4ca35d5b013daac916d08f0a399ce86296
+translation_normalized_body_sha256: 18e33ceb353961723b0b5aa9bc601f4ca35d5b013daac916d08f0a399ce86296
 ---
 
 [英文原文](/en/wiki/cubic/arch-core)
@@ -140,7 +140,7 @@ export default definePlugin({
 
 ## 架构安全机制
 
-该框架采用“控制工程”来确保架构完整性：
+该框架采用“Harness 工程”来确保架构完整性：
 1. **架构检查**：`pnpm check:architecture` 验证依赖关系的方向是否被正确遵守。
 2. **发送链强制执行**：`pnpm check:harness-paths` 检测插件是否尝试绕过标准的 `Adapter.sendMessage` 路径。
 3. **API 限制**：`check:no-removed-plugin-api` 阻止使用已废弃或删除的 API，如 `zhin.js/node`。

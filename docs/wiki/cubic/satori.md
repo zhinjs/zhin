@@ -1,6 +1,6 @@
 ---
 title: "Satori 富媒体"
-translation_source_body_sha256: 658c035b347701924fbba1b6c057a7eb31ec51b3c6fbe514bffd788c84a27d18
+translation_normalized_body_sha256: 658c035b347701924fbba1b6c057a7eb31ec51b3c6fbe514bffd788c84a27d18
 ---
 
 [英文原文](/en/wiki/cubic/satori)
@@ -50,6 +50,9 @@ flowchart TD
     E --> G[SVG Output]
     G --> H[Image/PNG Segment]
 ```
+
+该图展示了由代码定义的 UI 组件如何转换为聊天平台可发送的图片消息段。
+
 ## 字体管理
 
 `@zhin.js/satori` 包含一组预打包的字体，以确保在不同环境中渲染一致。这些字体覆盖拉丁文和中日韩（CJK）字符集。来源：[packages/toolkit/satori/fonts/FONTS.md:3-5](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/satori/fonts/FONTS.md#L3-L5)
@@ -67,7 +70,7 @@ flowchart TD
 
 ### 字体工具函数
 该模块提供了若干获取函数，用于获取 Satori 配置中的字体缓冲区和元数据：
-*   `getDefaultFonts()`：返回 Poppins 正常粗体版本。
+*   `getDefaultFonts()`：返回 Poppins 常规（Regular）与粗体（Bold）两种字重的字体。
 *   `getExtendedFonts()`：返回支持简体中文的 Poppins 字体。
 *   `getCJKFonts()`：返回完整支持中文、日文和韩文的字体。
 *   `getCompleteFonts()`：返回所有拉丁文和中日韩（CJK）字体。

@@ -1,6 +1,6 @@
 ---
 title: "生产部署"
-translation_source_body_sha256: cc887c0801044788ce30b994a3c004bdac4f75d50eddcb5cd2934a8a78fbc7b3
+translation_normalized_body_sha256: cc887c0801044788ce30b994a3c004bdac4f75d50eddcb5cd2934a8a78fbc7b3
 ---
 
 [英文原文](/en/wiki/cubic/docker-prod)
@@ -63,7 +63,7 @@ CLI 提供了针对不同部署需求的标准脚本。
 | 命令 | 操作 | 参数 |
 | :--- | :--- | :--- |
 | `pnpm start` | 生产环境启动 | `zhin runtime start --mode production --no-watch` |
-| `pnpm daemon`（仅限迁移后的旧项目） | 背景执行 | `zhin runtime start --daemon` |
+| `pnpm daemon`（仅限迁移后的旧项目） | 后台执行 | `zhin runtime start --daemon` |
 | `pnpm build` | 类型检查/预处理 | `tsc --noEmit` |
 | `pnpm stop`（仅限迁移后的旧项目） | 平滑关闭 | N/A |
 
@@ -130,7 +130,7 @@ sequenceDiagram
 1. **CI验证**：所有工作流必须通过（类型检查、代码规范检查、测试）。
 2. **版本递增**：使用`pnpm bump`和Changesets管理版本递增。
 3. **回滚策略**：始终保留快速回滚的路径。
-4. **镜像验证**：在最终部署前，验证`npm publish`或Docker镜像。
+4. **产物验证**：在最终部署前，验证`npm publish`或Docker镜像。
 来源：[agents/ops/system.md:20-35](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/ops/system.md#L20-L35), [CLAUDE.md:120-125](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L120-L125)
 
 ### 依赖管理

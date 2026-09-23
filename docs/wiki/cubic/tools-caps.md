@@ -1,6 +1,6 @@
 ---
 title: "Agent 工具与能力"
-translation_source_body_sha256: 144857d6d2262dedbc9828595c9c4f0ad2ec68a4218247282765d87e2eb9688c
+translation_normalized_body_sha256: 144857d6d2262dedbc9828595c9c4f0ad2ec68a4218247282765d87e2eb9688c
 ---
 
 [英文原文](/en/wiki/cubic/tools-caps)

@@ -1,6 +1,6 @@
 ---
 title: "Skill 与渐进披露"
-translation_source_body_sha256: fc208c1ce00766743c6f08cbad45a62a0946028850c878eb44b07a558e38b0d0
+translation_normalized_body_sha256: fc208c1ce00766743c6f08cbad45a62a0946028850c878eb44b07a558e38b0d0
 ---
 
 [英文原文](/en/wiki/cubic/skills)
@@ -136,7 +136,7 @@ Zhin 会处理 `SKILL.md` 中的 Markdown 内容，以确保 Agent 能接收到�
 2. **前端元数据**：需包含覆盖常见用户语句的触发词。
 3. **编号工作流**：详细说明每一步的输入、操作和输出。
 4. **失败处理**：提供“失败与降级”表，明确工具失败时应采取的措施。
-5. D. **检查点**：包含敏感信息检查，以防止泄露令牌或内部URL。
+5. **检查点**：包含敏感信息检查，以防止泄露令牌或内部URL。
 
 来源：[packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md:15-88](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md#L15-L88), [packages/toolkit/create-zhin/template/skills/summarize/SKILL.md:28-110](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/summarize/SKILL.md#L28-L110)
 

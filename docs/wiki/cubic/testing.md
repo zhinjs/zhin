@@ -1,6 +1,6 @@
 ---
 title: "测试与 CI 门禁"
-translation_source_body_sha256: 00f2358e82cde566f0596724928fc5f335b29d9f680341d25179558f514a6e46
+translation_normalized_body_sha256: 00f2358e82cde566f0596724928fc5f335b29d9f680341d25179558f514a6e46
 ---
 
 [英文原文](/en/wiki/cubic/testing)
@@ -25,7 +25,7 @@ translation_source_body_sha256: 00f2358e82cde566f0596724928fc5f335b29d9f680341d2
 
 # 测试与 CI 门禁
 
-Zhin.js 实现了一种分层的测试和持续集成（CI）框架，用于维护框架的稳定性、强制执行架构边界，并确保插件质量。该框架结合了 Vitest 用于单元/集成测试，以及 Turborepo 用于有序构建和自定义自动化检查，这些检查被称为“框架工程”。
+Zhin.js 实现了一种分层的测试和持续集成（CI）框架，用于维护框架的稳定性、强制执行架构边界，并确保插件质量。该框架结合了 Vitest 用于单元/集成测试，以及 Turborepo 用于有序构建和自定义自动化检查，这些检查构成项目的 Harness 工程。
 
 来源：[CLAUDE.md:120-130](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L120-L130), [AGENTS.md:60-75](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L60-L75)
 
@@ -90,7 +90,7 @@ flowchart TD
 ```
 示意图表示了强制性的依赖方向，即较低层不得从较高层导入。来源：[CLAUDE.md:65-75](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L65-L75)，[AGENTS.md:70-80](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L70-L80)
 
-### 自定义运行时检查
+### 自定义 Harness 门禁
 `pnpm check:all` 命令执行各种专用脚本以验证仓库约束：
 - `check:architecture`：验证没有包违反依赖层级。
 - `check:harness-paths`：检测绕过 `Adapter.sendMessage` 直接调用内部机器人方法的插件。
@@ -136,14 +136,14 @@ Zhin CLI 通过 `zhin new` 命令提供自动化测试套件生成功能。当�
 
 ## 质量控制与发布角色
 
-该工具链包含专门的AI Agent角色用于监控和维护质量：
+Harness 体系包含专门的 AI Agent 角色用于监控和维护质量：
 
 1. **测试代理（Tester Agent）**：对拉取请求（PR）进行功能验证，为边缘情况设计测试用例，并在验证失败时提供结构化的缺陷报告。来源：[agents/tester/system.md:5-15](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/tester/system.md#L5-L15)
 2. **运维代理（Ops Agent）**：监控工作流状态，管理版本标签（v{major}.{minor}.{patch}），并确保环境变量和密钥不会泄露到CI日志中。来源：[agents/ops/system.md:5-15](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/ops/system.md#L5-L15)
 
 ### 发布准备检查清单
 
-在发布插件之前，该工具链要求满足以下条件：
+在发布插件之前，Harness 门禁要求满足以下条件：
 - `pnpm build`（tsc）编译通过，且无错误。
 - 所有测试均通过，且覆盖率充足（≥60%）。
 - `npm pack --dry-run` 确认存在 `lib/`、`src/` 和 `skills/` 目录。

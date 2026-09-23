@@ -1,6 +1,6 @@
 ---
 title: "安全策略与沙箱"
-translation_source_body_sha256: 753f3ac4dbe13e7e7c5e473b8ef107205ffe26e5df34a9ef789ce1e6d51df677
+translation_normalized_body_sha256: 753f3ac4dbe13e7e7c5e473b8ef107205ffe26e5df34a9ef789ce1e6d51df677
 ---
 
 [英文原文](/en/wiki/cubic/security-sandbox)
@@ -111,7 +111,7 @@ sequenceDiagram
 该序列展示了用户界面与沙箱环境中代理之间的交互。
 来源：[plugins/adapters/sandbox/tests/sandbox-console.test.ts:32-60](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/plugins/adapters/sandbox/tests/sandbox-console.test.ts#L32-L60), [CLAUDE.md:196-198](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L196-L198)
 
-## 证书保护与访问控制
+## 凭据保护与访问控制
 
 Zhin.js 通过配置管理与网络限制，防止敏感信息的意外泄露。
 

@@ -1,6 +1,6 @@
 ---
 title: "通用消息段与组件"
-translation_source_body_sha256: 61b2820ab18ae2256567263b5c8ddb220d308e390138f0d91f67288f1936b864
+translation_normalized_body_sha256: ed94406bf691f13b28a7fd27b8e73fe275f791c39f4e39335b4299859b7ad783
 ---
 
 [英文原文](/en/wiki/cubic/messaging)
@@ -37,9 +37,9 @@ translation_source_body_sha256: 61b2820ab18ae2256567263b5c8ddb220d308e390138f0d9
 
 ### 消息段类型与工具
 框架提供了若干核心方法来管理消息段：
-*   **escape/unescape**：将 HTML 实体转换为防止聊天客户端渲染错误。
+*   **escape/unescape**：转换 HTML 实体，以避免聊天客户端渲染出错。
 *   **text**：创建一个简单的文本消息段。
-*   **face**：使用 ID 创建表情或平台特定的平台表情消息段。
+*   **face**：使用 ID 创建表情或平台特定的表情消息段。
 *   **from**：将模板字符串（如 `<image url="..." />`）解析为消息段数组。
 *   **raw**：将消息段对象转换回序列化的字符串格式（如 `Hello{face}(😊)`）。
 *   **toString**：将消息段序列化为兼容模板的字符串。
@@ -135,9 +135,9 @@ sequenceDiagram
 
 | 方法 | 参数 | 返回值 | 描述 |
 | :--- | :--- | :--- | :--- |
-| `text(content)` | `string` | `Segment` | 创建一个文本分段。 |
-| `face(id, alt?)` | `string, string?` | `Segment` | 创建一个表情/emoji 分段。 |
-| `escape(text)` | `string` | `string` | 转义特殊字符，如 `<` 和 `&`。 |
+| `segment.text(content)` | `string` | `Segment` | 创建一个文本分段。 |
+| `segment.face(id, text?)` | `string, string?` | `Segment` | 创建一个表情/emoji 分段。 |
+| `segment.escape(text)` | `string` | `string` | 转义特殊字符，如 `<` 和 `&`。 |
 | `segment.from(content)` | `SendContent` | `SendContent` | 将标签解析为分段结构。 |
 | `segment.raw(content)` | `SendContent` | `string` | 将分段序列化为存储或日志格式。 |
 

@@ -1,6 +1,6 @@
 ---
 title: "数据库抽象与持久化"
-translation_source_body_sha256: 8081dbf41539bb1bd5ec03fbd65de511abf8b29de8521ef5bf50889c42dc861e
+translation_normalized_body_sha256: 8081dbf41539bb1bd5ec03fbd65de511abf8b29de8521ef5bf50889c42dc861e
 ---
 
 [英文原文](/en/wiki/cubic/database)

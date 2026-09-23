@@ -1,6 +1,6 @@
 ---
 title: "LLM Provider 与 SDK 桥接"
-translation_source_body_sha256: 21bc2b14f79946b28ef04bee354170d8c7eb533a9d0709c146bf1d34afe24c62
+translation_normalized_body_sha256: 21bc2b14f79946b28ef04bee354170d8c7eb533a9d0709c146bf1d34afe24c62
 ---
 
 [英文原文](/en/wiki/cubic/ai-providers)

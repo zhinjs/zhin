@@ -1,6 +1,6 @@
 ---
 title: "平台接入"
-translation_source_body_sha256: 55a5cfe9814163628e89a8bb3fd811e9794ba0f3fae8b2fdbbdbc0431d9fb9b4
+translation_normalized_body_sha256: 55a5cfe9814163628e89a8bb3fd811e9794ba0f3fae8b2fdbbdbc0431d9fb9b4
 ---
 
 [英文原文](/en/wiki/cubic/adapters-platforms)
