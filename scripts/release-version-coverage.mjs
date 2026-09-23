@@ -4,7 +4,7 @@ const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.
 
 // Tags are created only after publishing. Until then, use verified Changesets
 // output as the baseline, and still check for package changes after that commit.
-export function findVersionedReleaseBaseline({ root, directory, name, version, workspacePackages, evidenceCache = new Map() }) {
+export function findVersionedReleaseBaseline({ root, directory, name, version, evidenceCache = new Map() }) {
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
     if (result.status !== 0) throw new Error(result.stderr || 'Failed to read release history');
@@ -34,8 +34,8 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, w
     const hasHeading = (text) => (text ?? '').split(/\r?\n/).some((line) => line.trim() === `## ${version}`);
     if (!hasHeading(readAt(commit, changelogFile)) || hasHeading(readAt(`${commit}^`, changelogFile))) return undefined;
 
-    let declaredPackages = evidenceCache.get(commit);
-    if (declaredPackages === undefined) {
+    let related = evidenceCache.get(commit);
+    if (related === undefined) {
       const deleted = git('diff', '--name-only', '--diff-filter=D', `${commit}^`, commit, '--', '.changeset')
         .trim().split('\n').filter((file) => /^\.changeset\/[^/]+\.md$/.test(file) && file !== '.changeset/README.md');
       const declarations = deleted.flatMap((file) => {
@@ -46,30 +46,34 @@ export function findVersionedReleaseBaseline({ root, directory, name, version, w
           return match ? [{ name: match[1] ?? match[2] ?? match[3], type: match[4] }] : [];
         });
       });
-      declaredPackages = declarations.length > 0 && declarations.every(({ type }) => type === 'patch')
+      const declaredPackages = declarations.length > 0 && declarations.every(({ type }) => type === 'patch')
         ? new Set(declarations.map(({ name: packageName }) => packageName))
         : null;
-      evidenceCache.set(commit, declaredPackages);
-    }
-    if (!declaredPackages) return undefined;
-
-    // Changesets also bumps workspace packages that depend on named packages.
-    // Require a dependency path back to a consumed declaration, rather than
-    // accepting any manual bump that happens to share the same commit.
-    const related = new Set(declaredPackages);
-    let expanded = true;
-    while (expanded) {
-      expanded = false;
-      for (const pkg of workspacePackages) {
-        if (related.has(pkg.name)) continue;
-        const dependencies = { ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
-        if (Object.keys(dependencies).some((dependency) => related.has(dependency))) {
-          related.add(pkg.name);
-          expanded = true;
+      if (declaredPackages) {
+        // Use the dependency graph from the version commit being validated.
+        // Later manifest edits cannot change the provenance of that release.
+        const files = git('ls-tree', '-r', '--name-only', commit, '--', 'basic', 'packages', 'plugins')
+          .trim().split('\n').filter((file) => /^(basic|packages|plugins)\/.+\/package\.json$/.test(file));
+        const workspacePackages = files.map((file) => JSON.parse(readAt(commit, file)));
+        related = new Set(declaredPackages);
+        let expanded = true;
+        while (expanded) {
+          expanded = false;
+          for (const pkg of workspacePackages) {
+            if (related.has(pkg.name)) continue;
+            const dependencies = { ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
+            if (Object.keys(dependencies).some((dependency) => related.has(dependency))) {
+              related.add(pkg.name);
+              expanded = true;
+            }
+          }
         }
+      } else {
+        related = null;
       }
+      evidenceCache.set(commit, related);
     }
-    if (!related.has(name)) return undefined;
+    if (!related?.has(name)) return undefined;
     return commit;
   }
   return undefined;

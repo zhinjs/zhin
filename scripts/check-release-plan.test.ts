@@ -2,6 +2,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { cpSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { findVersionedReleaseBaseline } from './release-version-coverage.mjs';
 
 const roots: string[] = [];
 afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
@@ -117,7 +118,9 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     repo.write('.changeset/fix.md', '---\n# @test/demo: patch\n---\n');
     repo.commit();
     repo.bump();
-    expect(repo.check().output).toContain('missing current version tags');
+    const result = repo.check();
+    expect(result.status).toBe(1);
+    expect(result.output).toContain('missing current version tags');
   });
 
   it('rejects an unrelated package bumped in the same version commit', () => {
@@ -148,6 +151,26 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     const result = repo.check();
     expect(result.status).toBe(0);
     expect(result.output).toContain('2 versioned packages awaiting tags');
+  });
+
+  it.each([true, false])('reads dependency propagation at the version commit (linked then: %s)', (linkedThen) => {
+    const repo = fixture();
+    const dependent = (linked: boolean, version: string) => JSON.stringify({
+      name: '@test/dependent', version,
+      dependencies: linked ? { '@test/demo': 'workspace:^' } : {},
+    });
+    repo.write('packages/dependent/package.json', dependent(linkedThen, '1.1.0'));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.0\n');
+    repo.commit();
+    repo.write('packages/dependent/package.json', dependent(linkedThen, '1.1.1'));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.1\n\n## 1.1.0\n');
+    repo.bump();
+    const versionCommit = repo.git('rev-parse', 'HEAD');
+    repo.write('packages/dependent/package.json', dependent(!linkedThen, '1.1.1'));
+    repo.commit();
+    expect(findVersionedReleaseBaseline({
+      root: repo.root, directory: 'packages/dependent', name: '@test/dependent', version: '1.1.1',
+    })).toBe(linkedThen ? versionCommit : undefined);
   });
 
   it('does not accept a changelog heading that existed before versioning', () => {

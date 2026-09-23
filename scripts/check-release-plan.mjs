@@ -62,9 +62,6 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
     process.exit(tags.status ?? 1);
   }
   const existingTags = new Set(tags.stdout.trim().split('\n').filter(Boolean));
-  const workspacePackages = packages.map((pkg) => JSON.parse(
-    fs.readFileSync(path.join(pkg.path, 'package.json'), 'utf8'),
-  ));
   const evidenceCache = new Map();
   const versionedBaselines = new Map();
   for (const pkg of packages) {
@@ -74,7 +71,6 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
       directory: path.relative(root, pkg.path).replaceAll('\\', '/'),
       name: pkg.name,
       version: pkg.version,
-      workspacePackages,
       evidenceCache,
     });
     if (baseline) versionedBaselines.set(pkg.name, baseline);
