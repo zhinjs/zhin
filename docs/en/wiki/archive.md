@@ -84,4 +84,6 @@ It updates the 29 English articles and [source manifest](/wiki/cubic/source.json
 
 It stops if the page format or expected article IDs change, if a stale article is present, or if new raw HTML requires review. Run `python3 scripts/import-cubic-wiki.py --verify` to check the English snapshot.
 
-Then update the Chinese translations and run `pnpm check:cubic-wiki-translations` before publishing a refresh. The importer does not overwrite translated pages.
+Then update the Chinese translations and the capture date and source commit on both archive entry pages from the [manifest](/wiki/cubic/source.json).
+
+Run `pnpm check:cubic-wiki-translations` before publishing. The importer does not overwrite translated pages.

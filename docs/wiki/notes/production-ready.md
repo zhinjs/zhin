@@ -17,7 +17,7 @@ curl --fail http://127.0.0.1:8068/pub/ready
 
 `/pub/health` 只说明 HTTP 进程可响应。`/pub/ready` 在首个 generation 尚未提交时返回 503；就绪时返回 200。需要把指定 Endpoint 或 Agent binding 纳入就绪要求，应在 `http.readiness` 明确配置。
 
-拿到受保护的详细报告，可以用 `zhin doctor --live <API Base> --json`，或请求 `/api/system/readiness`。Doctor 未就绪、鉴权失败或请求失败都会返回非零退出码；先按报告中的具体原因处理。
+先将 full-scope Host token 设置为环境变量 `ZHIN_HTTP_TOKEN`，再运行 `zhin doctor --live <API Base> --json`，或携带该 token 请求 `/api/system/readiness`。Doctor 未就绪、鉴权失败或请求失败都会返回非零退出码；先按报告中的具体原因处理。
 
 ## 最后走一次平台链路
 

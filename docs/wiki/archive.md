@@ -74,4 +74,8 @@ title: Cubic Wiki 资料存档
 
 ## 更新快照
 
-在仓库根目录运行 `python3 scripts/import-cubic-wiki.py` 可重新抓取英文原文，再运行 `python3 scripts/import-cubic-wiki.py --verify` 核对文章与清单。更新后须审阅英文差异、勘误及对应中文译文，并运行 `pnpm check:cubic-wiki-translations`；导入脚本不会覆盖中文翻译。当页面结构、预期文章 ID 或外部 HTML 变化时，脚本会停止，避免发布不完整的内容。
+在仓库根目录运行 `python3 scripts/import-cubic-wiki.py` 可重新抓取英文原文，再运行 `python3 scripts/import-cubic-wiki.py --verify` 核对文章与清单。
+
+更新后须审阅英文差异、勘误及对应中文译文，并将本页和英文存档页的抓取日期、源码提交改为[清单](/wiki/cubic/source.json)中的新值。运行 `pnpm check:cubic-wiki-translations`；导入脚本不会覆盖中文译文。
+
+当页面结构、预期文章 ID 或外部 HTML 变化时，脚本会停止，避免发布不完整的内容。

@@ -19,7 +19,7 @@ curl --fail http://127.0.0.1:8068/pub/ready
 
 `/pub/health` only proves the HTTP process responds. `/pub/ready` returns 503 before the first generation commits and 200 when ready. To require particular Endpoints or Agent bindings, declare them under `http.readiness`.
 
-For a protected detailed report, run `zhin doctor --live <API Base> --json` or request `/api/system/readiness`. Doctor exits nonzero for non-readiness, authentication failure, or request failure.
+Set the full-scope Host token in `ZHIN_HTTP_TOKEN`, then run `zhin doctor --live <API Base> --json`, or request `/api/system/readiness` with that token. Doctor exits nonzero for non-readiness, authentication failure, or request failure.
 
 Use the reported reason to choose the next check.
 
