@@ -65,6 +65,9 @@ for (const [name, directory] of [['English', enDir], ['Chinese', zhDir]]) {
 
 for (const page of manifest.pages) {
   const slug = page.file.slice(0, -3);
+  if (page.id !== `page-${slug}`) {
+    throw new Error(`${page.file}: manifest page ID does not match its file slug`);
+  }
   const english = fs.readFileSync(path.join(enDir, page.file), 'utf8');
   const chinese = fs.readFileSync(path.join(zhDir, page.file), 'utf8');
   const bodyMarker = '\n::: details Relevant source files\n';

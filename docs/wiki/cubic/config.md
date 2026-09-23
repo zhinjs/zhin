@@ -62,7 +62,7 @@ flowchart TD
 ### 配置组件
 *   **数据库配置器**：处理方言（如 SQLite、MySQL、PostgreSQL 等）的选择，并生成连接字符串。
 *   **适配器配置器**：管理 Telegram、Discord 等 IM 协议的平台特定设置。
-*   **AI 配置器**：配置 LLM 提供商、API 密钥以及Agent 安全策略。
+*   **AI 配置器**：配置 LLM 提供商、API 密钥以及 Agent 安全策略。
 *   **环境管理器**：对环境变量进行转义，并将其合并到 `.env` 文件中，使用 `mergeEnvText`。
 
 来源：[packages/toolkit/scaffold-wizard/README.md:15-35](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/scaffold-wizard/README.md#L15-L35), [basic/cli/src/commands/setup.ts:205-250](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts#L205-L250)
