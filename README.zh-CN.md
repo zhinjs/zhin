@@ -67,7 +67,7 @@ cd my-bot
 pnpm dev
 ```
 
-打开 [Remote Console](https://console.zhin.dev) → Host 填 `http://127.0.0.1:8086` → Sandbox 发 `/hello`。完事。
+打开 [Remote Console](https://console.zhin.dev) → 填入启动日志显示的 API Base（新项目目前默认 `http://127.0.0.1:8068`）→ 在 Sandbox 发送 `/hello`。
 
 `-y` 走 IM 黄金路径：Sandbox + Host + Console，**不需要任何模型 Key**。
 
@@ -81,6 +81,8 @@ pnpm dev
 更多：[安装与启动](./docs/getting-started/index.md) · [示例速览](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
 
 **要求**：脚手架生成的 TypeScript 项目需要 Node.js **≥22.12.0**、pnpm 9+。编译后的 IM 库支持 Node.js `^20.19.0` 或 `>=22.12.0`。
+
+**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 Satori 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
 
 ## 从一条消息到长期任务
 
@@ -158,6 +160,8 @@ flowchart LR
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
 1.1 稳定线兼容说明：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
+
+MCP 有两种不同用途：`ai.mcpServers` 让可选 Agent 连接外部 Server（[Client 配置](./docs/ai/index.md#aimcpservers)）；顶层 `mcp:` 将当前 Bot 暴露为 Server，需要安装 `@zhin.js/mcp` 和 Agent Runtime（[Server 配置](./packages/host/mcp/README.md)）。仅安装 IM 库不会开启任一用途。
 
 > **Windows**：见 [Windows 初始化指南](./docs/getting-started/index.md)。
 

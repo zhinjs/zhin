@@ -71,7 +71,7 @@ pnpm add @ai-sdk/openai   # 示例：按 provider 替换
 <!-- #endregion doctor -->
 
 <!-- #region scaffold-note -->
-`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。Plugin Runtime 骨架默认只直列 `zhin.js` + 适配器；Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [插件模型](/concepts/plugin-model)）。
+`npm create zhin-app` / `zhin setup` 在启用 AI 时会自动写入 `package.json` 依赖。上表的 **<10MB 是 IM 库安装体积**，不代表脚手架生成项目的完整依赖体积。新项目还会加入 CLI、Sandbox 适配器、Page/Layout/Skill Feature 与 Satori 卡片示例；AI 仍按选择安装。IM 的 Stable Features 由 `@zhin.js/core` 的 `package.json#zhin.features` 继承（经 `zhin.js` 间接依赖亦可，见 [插件模型](/concepts/plugin-model)）。浏览器 UI 在独立的 Remote Console，CLI 负责装配 HTTP Host。
 
 仓库示例：[minimal-bot](https://github.com/zhinjs/zhin/tree/main/examples/minimal-bot) 默认 **仅 IM**（`ai.enabled: false`）；[full-bot](https://github.com/zhinjs/zhin/tree/main/examples/full-bot) 含完整 AI 栈。
 <!-- #endregion scaffold-note -->

@@ -1,312 +1,53 @@
 # @zhin.js/mcp
 
-> Zhin MCP Server - 让 AI 助手能够理解和生成 Zhin 插件
+`@zhin.js/mcp` exposes the current Zhin Bot's **Tools** to external MCP clients over stateless Streamable HTTP. `@zhin.js/cli` mounts the Host when the project has a top-level `mcp:` configuration. Importing this package by itself does not start a server or register a plugin.
 
-这是一个基于 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) 的服务插件，为 AI 助手（如 Claude、ChatGPT 等）提供 Zhin 框架的深度集成能力，让开发者能够通过 AI 对话更高效地开发 Zhin 插件。
+This is the MCP **server**. To let a Zhin Agent consume tools from another server, configure the separate [`ai.mcpServers`](https://zhin.js.org/ai/#ai-mcpservers) client connection.
 
-## ✨ 特性
+## Install and enable
 
-- 🤖 **完整的 MCP 支持**: 实现 Tools、Resources、Prompts 三大核心能力
-- 🌐 **HTTP Stream 传输**: 基于 StreamableHTTPServerTransport 的现代化传输方式
-- 🛠️ **丰富的开发工具**: 插件生成、命令生成、组件生成、适配器生成等
-- 📚 **内置文档资源**: 提供 Zhin 架构、最佳实践、开发指南等文档
-- 💡 **智能提示词**: 预设开发工作流、调试指南等提示词
-- 🔍 **实时查询**: 查询当前应用的插件、命令、组件信息
-- 🎯 **代码生成**: 自动生成符合 Zhin 规范的代码
-
-## 📦 安装
+In a project that already uses `zhin runtime start`:
 
 ```bash
-pnpm add @zhin.js/mcp
+pnpm add @zhin.js/mcp @zhin.js/agent zod ai
 ```
 
-## 🚀 快速开始
-
-### 1. 启用插件
-
-MCP Server 由 `@zhin.js/cli` 作为 composition root 经 `@zhin.js/mcp/runtime` 自动装配，无需在 `plugins` 列表中启用 Host 插件；只需在 `zhin.config.yml` 中配置：
+The CLI's MCP Host uses the optional Agent runtime to obtain a generation-bound Tool snapshot. Add the following to `zhin.config.yml`:
 
 ```yaml
+http:
+  port: 8068
+  token: ${HTTP_TOKEN}
+
 mcp:
   enabled: true
   path: /mcp
+  token: ${HTTP_TOKEN}                  # optional; falls back to http.token
+  allowUnauthenticatedLocalhost: false  # require Bearer even in development
 ```
 
-### 2. 配置 AI 助手
+Start the project with `pnpm dev` or `zhin runtime start`. Use the HTTP address printed at startup: new scaffolded projects currently use port **8068**, while the Runtime fallback without an `http:` configuration is **8086**. The MCP endpoint uses `mcp.path` (default `/mcp`). Omitting `mcp:` does not enable it.
 
-本插件以 **无状态 Streamable HTTP** 运行：每个请求独立处理，**仅接受 `POST`**（`GET`/`DELETE` 返回 405）。客户端应配置 **HTTP URL**，不要用 `curl -N`（那是 GET 长连接，与本端点不兼容）。
+## Connect a client
 
-#### Claude Desktop / Cursor / VS Code
+Configure an MCP client for Streamable HTTP at the Host's URL, for example `http://127.0.0.1:8068/mcp`. Send `Authorization: Bearer <HTTP_TOKEN>` when using the configuration above. Keep the token in the client's secret store rather than committing it to a config file.
 
-在 MCP 配置中使用 Streamable HTTP URL（路径与 `mcp.path` 一致，默认 `/mcp`）：
-
-```json
-{
-  "mcpServers": {
-    "zhin": {
-      "url": "http://127.0.0.1:8086/mcp"
-    }
-  }
-}
-```
-
-Claude Desktop 配置文件路径因平台而异（macOS 常见 `~/Library/Application Support/Claude/claude_desktop_config.json`）。Cursor 使用项目或全局 `.cursor/mcp.json` 同类字段。
-
-确保 Zhin 应用已启动，且 MCP Server 已启用（HTTP Host 由 CLI 自动装配，`http.port` 默认 8086）。
-
-#### 手动 smoke test（POST）
+For a direct protocol smoke test:
 
 ```bash
-curl -sS -X POST http://127.0.0.1:8086/mcp \
+curl -sS -X POST http://127.0.0.1:8068/mcp \
   -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H "Authorization: Bearer $HTTP_TOKEN" \
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}'
 ```
 
-### 3. 开始使用
+The endpoint accepts **POST** requests; GET and DELETE return 405. Each request has its own transport and execution context. A configured token is checked using Bearer authentication. Production requests always require authentication; development requests from localhost can omit it only when `allowUnauthenticatedLocalhost` is not `false`.
 
-重启 AI 助手，然后就可以通过对话开发 Zhin 插件了！
+## What the server exposes
 
-```
-你: 帮我创建一个名为 welcome 的插件，当用户发送 hello 时回复欢迎消息
+`tools/list` returns Tools currently visible through the active generation's governed capability snapshot. `tools/call` executes them through the same permission, safety, approval, and cancellation authority used by Agent turns. MCP calls are unattended: a Tool that needs interactive approval cannot obtain it from this endpoint and must fail rather than silently run.
 
-AI: 好的！我会使用 create_plugin 工具为你创建插件...
-```
+The current Runtime Host registers **Tools only**. It does not register the legacy `create_plugin` / `create_command` generators, documentation Resources, or workflow Prompts described in older versions of this README. Use [`zhin new`](https://zhin.js.org/cli/) for project scaffolding.
 
-## 🛠️ 可用工具 (Tools)
-
-### 1. create_plugin
-创建一个新的 Zhin 插件文件。
-
-**参数:**
-- `name` (必需): 插件名称
-- `description` (必需): 插件描述
-- `features`: 功能列表 `['command', 'middleware', 'component', 'context', 'database']`
-- `directory`: 保存目录，默认 `src/plugins`
-
-**示例:**
-```
-创建一个名为 greeting 的插件，包含命令和中间件功能
-```
-
-### 2. create_command
-生成命令代码片段。
-
-**参数:**
-- `pattern` (必需): 命令模式，如 `hello [name]`（Next.js 风格动态段，类型在 `params` 中声明）
-- `description` (必需): 命令描述
-- `hasPermission`: 是否需要权限检查
-
-**示例:**
-```
-生成一个 greet [name] 命令的代码，name 为 text 类型
-```
-
-### 3. create_component
-生成消息组件代码。
-
-**参数:**
-- `name` (必需): 组件名称
-- `props` (必需): 组件属性定义
-- `usesJsx`: 是否使用 JSX
-
-**示例:**
-```
-创建一个名为 UserCard 的组件，包含 name 和 avatar 属性
-```
-
-### 4. create_adapter
-生成平台适配器代码。
-
-**参数:**
-- `name` (必需): 适配器名称
-- `description` (必需): 适配器描述
-- `hasWebhook`: 是否需要 Webhook 支持
-
-**示例:**
-```
-创建一个 Telegram 适配器，需要 Webhook 支持
-```
-
-### 5. create_model
-生成数据库模型定义。
-
-**参数:**
-- `name` (必需): 模型名称
-- `fields` (必需): 字段定义
-
-**示例:**
-```
-创建一个 users 模型，包含 name, email, created_at 字段
-```
-
-### 6. query_plugin
-查询现有插件的详细信息。
-
-**参数:**
-- `pluginName` (必需): 插件名称
-
-**示例:**
-```
-查询 sandbox 适配器插件的信息
-```
-
-### 7. list_plugins
-列出所有已加载的插件。
-
-**示例:**
-```
-列出所有插件
-```
-
-## 📚 可用资源 (Resources)
-
-MCP Server 提供以下文档资源：
-
-- `zhin://docs/architecture` - Zhin 架构设计文档
-- `zhin://docs/plugin-development` - 插件开发指南
-- `zhin://docs/best-practices` - 开发最佳实践
-- `zhin://docs/command-system` - 命令系统文档
-- `zhin://docs/component-system` - 组件系统文档
-- `zhin://docs/context-system` - Context 系统文档
-- `zhin://examples/basic-plugin` - 基础插件示例
-- `zhin://examples/command-plugin` - 命令插件示例
-- `zhin://examples/adapter` - 适配器示例
-
-AI 助手可以随时访问这些资源来了解 Zhin 的开发规范。
-
-## 💡 可用提示词 (Prompts)
-
-### create-plugin-workflow
-创建插件的完整工作流程指导。
-
-**参数:**
-- `feature_type`: 插件功能类型 (command/middleware/component/adapter)
-
-### debug-plugin
-调试插件的步骤和技巧。
-
-**参数:**
-- `error_message`: 错误消息（可选）
-
-### best-practices
-Zhin 开发的最佳实践建议。
-
-## 🎯 使用场景
-
-### 场景 1: 快速创建插件
-
-```
-你: 我需要一个插件来记录用户签到，使用 /签到 命令
-
-AI: 好的！我会创建一个签到插件，包含以下功能：
-1. 命令：/签到
-2. 数据库模型：存储签到记录
-3. 返回签到成功信息
-
-[使用 create_plugin 工具创建...]
-```
-
-### 场景 2: 学习最佳实践
-
-```
-你: Zhin 开发中如何正确管理资源清理？
-
-AI: [读取 zhin://docs/best-practices 资源]
-根据 Zhin 最佳实践，资源清理应该...
-```
-
-### 场景 3: 调试现有插件
-
-```
-你: 我的插件报错 "Context not found"
-
-AI: [使用 query_plugin 查询插件信息]
-让我检查一下你的插件配置...
-这个错误通常是因为...
-```
-
-### 场景 4: 生成适配器
-
-```
-你: 帮我创建一个 WhatsApp 适配器
-
-AI: [使用 create_adapter 工具]
-我已经为你生成了 WhatsApp 适配器的基础代码...
-```
-
-## ⚙️ 配置选项
-
-```typescript
-interface MCPConfig {
-  // 是否启用 MCP Server
-  enabled: boolean; // 默认: true
-  
-  // HTTP Stream 端点路径
-  path: string; // 默认: '/mcp'
-}
-```
-
-### 配置示例
-
-#### 基础配置
-
-```typescript
-export default defineConfig({
-  mcp: {
-    enabled: true,
-    path: '/mcp',  // 自定义端点路径
-  }
-})
-```
-
-#### 完整配置
-
-```typescript
-export default defineConfig({
-  http: {
-    port: 8086,  // HTTP 服务器端口
-  },
-  mcp: {
-    enabled: true,
-    path: '/api/mcp',  // MCP 端点路径
-  }
-})
-```
-
-访问 `http://localhost:8086/api/mcp` 即可连接 MCP Server。
-
-## 🔧 开发
-
-### 构建
-
-```bash
-pnpm build
-```
-
-### 测试
-
-```bash
-# 测试 MCP Server
-node lib/index.js
-```
-
-## 📖 相关文档
-
-- [Model Context Protocol](https://modelcontextprotocol.io)
-- [Zhin 框架文档](https://zhin.js.org)
-- [插件开发指南](https://zhin.js.org/essentials/plugins)
-
-## 🤝 贡献
-
-欢迎提交 Issue 和 Pull Request！
-
-## 📄 许可证
-
-MIT License
-
----
-
-**提示**: 如果你在使用过程中遇到问题，可以：
-1. 查看 [MCP 官方文档](https://modelcontextprotocol.io)
-2. 在 AI 助手中询问："如何配置 Zhin MCP Server？"
-3. 提交 [GitHub Issue](https://github.com/zhinjs/zhin/issues)
+Source of truth: [`src/runtime.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts) for transport and Tool projection, [`src/mesh-auth.ts`](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/mesh-auth.ts) for authentication, and [`protocol-host-installer.ts`](https://github.com/zhinjs/zhin/blob/main/basic/cli/src/plugin-runtime/protocol-host-installer.ts) for CLI assembly.

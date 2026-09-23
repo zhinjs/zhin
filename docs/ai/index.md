@@ -105,7 +105,9 @@ ai:
 
 ## ai.mcpServers
 
-注册 MCP（Model Context Protocol）server。声明进入候选 generation，激活时连接；未 ready 会阻止候选代发布，旧代继续服务。连接成功的工具以 owner-qualified 名称进入工具池。需安装 peer `@modelcontextprotocol/sdk`。
+这里配置的是 **Agent 的 MCP Client**：连接外部 MCP Server，把对方的工具带入 Agent 回合。声明进入候选 generation，激活时连接；未 ready 会阻止候选代发布，旧代继续服务。连接成功的工具以 owner-qualified 名称进入工具池。需安装 peer `@modelcontextprotocol/sdk`。
+
+如果要让外部 AI 客户端连接当前 Zhin Bot，使用顶层 `mcp:` 配置并运行 `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`；MCP Host 需要 Agent Runtime 投影当前代的 Tool。这是由 CLI 装配的 **MCP Server**，不会因设置 `ai.mcpServers` 而自动开启。参见 [MCP Server 配置](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md)。
 
 ```yaml
 ai:

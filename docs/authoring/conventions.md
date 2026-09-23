@@ -126,11 +126,11 @@ Handler 的 `this` 为 `HandlerContext`：
 与 `middlewares/` 的分工：需要 `await next()` 的有序入/出站链用 middleware；只需在某事件上 fire-and-forget 处理用 handler。
 
 ```ts
-// handlers/message/receive/index.ts
+// handlers/message-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
-  // 可省略：文件路径已推导出 message.receive
+  // 一级目录名是 message-receive；带点事件名必须显式声明。
   event: 'message.receive',
   async handle(event) {
     const message = event.payload;
@@ -141,7 +141,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/notice/receive/index.ts
+// handlers/notice-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -154,7 +154,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/request/receive/index.ts
+// handlers/request-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -167,7 +167,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/system/receive/index.ts — 登录扫码等
+// handlers/system-receive/index.ts — 登录扫码等
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
