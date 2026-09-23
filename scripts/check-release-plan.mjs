@@ -6,6 +6,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
   findMissingVersionTags,
+  findVersionedReleaseBaseline,
   findUncoveredPackageChanges,
 } from './release-version-coverage.mjs';
 
@@ -61,21 +62,38 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
     process.exit(tags.status ?? 1);
   }
   const existingTags = new Set(tags.stdout.trim().split('\n').filter(Boolean));
-  const missingTags = findMissingVersionTags({ packages, plannedPackages, existingTags });
+  const evidenceCache = new Map();
+  const versionedBaselines = new Map();
+  for (const pkg of packages) {
+    if (plannedPackages.has(pkg.name) || existingTags.has(`${pkg.name}@${pkg.version}`)) continue;
+    const baseline = findVersionedReleaseBaseline({
+      root,
+      directory: path.relative(root, pkg.path).replaceAll('\\', '/'),
+      name: pkg.name,
+      version: pkg.version,
+      evidenceCache,
+    });
+    if (baseline) versionedBaselines.set(pkg.name, baseline);
+  }
+  const missingTags = findMissingVersionTags({
+    packages: packages.filter((pkg) => !versionedBaselines.has(pkg.name)),
+    plannedPackages,
+    existingTags,
+  });
   if (missingTags.length > 0) {
     console.error('Unplanned publishable packages are missing current version tags:');
     for (const tag of missingTags) console.error(`- ${tag}`);
     process.exit(1);
   }
 
-  return packages
+  const coveragePackages = packages
     .filter((pkg) => !plannedPackages.has(pkg.name))
     .map((pkg) => {
-      const tag = `${pkg.name}@${pkg.version}`;
+      const baseline = versionedBaselines.get(pkg.name) ?? `${pkg.name}@${pkg.version}`;
       const directory = path.relative(root, pkg.path).replaceAll('\\', '/');
       const diff = spawnSync(
         'git',
-        ['diff', '--name-only', `${tag}..HEAD`, '--', directory],
+        ['diff', '--name-only', `${baseline}..HEAD`, '--', directory],
         { cwd: root, encoding: 'utf8' },
       );
       if (diff.status !== 0) {
@@ -91,6 +109,7 @@ function readWorkspacePackagesWithVersionTags(plannedPackages) {
         changedFiles: diff.stdout.trim().split('\n').filter(Boolean),
       };
     });
+  return { packages: coveragePackages, versionedCount: versionedBaselines.size };
 }
 
 const versionPolicy = JSON.parse(fs.readFileSync(versionPolicyPath, 'utf8'));
@@ -115,72 +134,27 @@ if (nonPatchDeclarations.length > 0) {
   process.exit(1);
 }
 
-const isChangesetsVersionPr =
-  process.env.GITHUB_HEAD_REF === 'changeset-release/main' &&
-  process.env.GITHUB_BASE_REF === 'main';
-
-if (declarations.length === 0 && isChangesetsVersionPr) {
-  const diff = spawnSync(
-    'git',
-    ['diff', '--name-only', 'origin/main...HEAD'],
-    { cwd: root, encoding: 'utf8' },
-  );
-  if (diff.status !== 0) {
-    process.stderr.write(diff.stderr);
-    process.exit(diff.status ?? 1);
-  }
-
-  const changedManifests = diff.stdout
-    .trim()
-    .split('\n')
-    .filter((file) =>
-      /^(basic|packages|plugins)\/.+\/package\.json$/.test(file),
-    );
-  const failures = [];
-
-  for (const manifestFile of changedManifests) {
-    const manifest = JSON.parse(fs.readFileSync(path.join(root, manifestFile), 'utf8'));
-    if (manifest.private) continue;
-    const changelogFile = path.join(path.dirname(manifestFile), 'CHANGELOG.md');
-    const changelogPath = path.join(root, changelogFile);
-    if (
-      typeof manifest.version !== 'string' ||
-      !fs.existsSync(changelogPath) ||
-      !fs.readFileSync(changelogPath, 'utf8').includes(`## ${manifest.version}`)
-    ) {
-      failures.push(`${manifest.name}: missing CHANGELOG entry for ${manifest.version}`);
-    }
-  }
-
-  if (changedManifests.length === 0 || failures.length > 0) {
-    console.error('Changesets version PR output is incomplete:');
-    for (const failure of failures) console.error(`- ${failure}`);
-    process.exit(1);
-  }
-
-  console.log(
-    `Release plan check passed (${changedManifests.length} versioned package manifests with changelogs).`,
-  );
-  process.exit(0);
-}
-
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'zhin-release-plan-'));
 const outputPath = path.join(tempDir, 'release-plan.json');
 
 try {
-  const result = spawnSync(
-    'pnpm',
-    ['changeset', 'status', '--output', outputPath],
-    { cwd: root, encoding: 'utf8' },
-  );
-
-  if (result.status !== 0) {
-    process.stderr.write(result.stdout);
-    process.stderr.write(result.stderr);
-    process.exit(result.status ?? 1);
+  // With no declarations, versioning has already consumed the plan (or there
+  // are no releases). Changesets status would reject version PR diffs against
+  // main before our history-based coverage check can validate them.
+  let plan = { releases: [] };
+  if (declarations.length > 0) {
+    const result = spawnSync(
+      'pnpm',
+      ['changeset', 'status', '--output', outputPath],
+      { cwd: root, encoding: 'utf8' },
+    );
+    if (result.status !== 0) {
+      process.stderr.write(result.stdout);
+      process.stderr.write(result.stderr);
+      process.exit(result.status ?? 1);
+    }
+    plan = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   }
-
-  const plan = JSON.parse(fs.readFileSync(outputPath, 'utf8'));
   const nonPatchReleases = plan.releases
     .filter((release) => release.type === 'minor' || release.type === 'major')
     .map((release) => `${release.name} (${release.oldVersion} -> ${release.newVersion})`);
@@ -193,8 +167,9 @@ try {
 
   const plannedReleases = plan.releases.filter((release) => release.type !== 'none');
   const plannedPackages = new Set(plannedReleases.map((release) => release.name));
+  const coverage = readWorkspacePackagesWithVersionTags(plannedPackages);
   const uncovered = findUncoveredPackageChanges({
-    packages: readWorkspacePackagesWithVersionTags(plannedPackages),
+    packages: coverage.packages,
     plannedPackages,
   });
   if (uncovered.length > 0) {
@@ -207,7 +182,7 @@ try {
   }
 
   console.log(
-    `Release plan check passed (${plannedReleases.length} patch releases).`,
+    `Release plan check passed (${plannedReleases.length} pending patch releases, ${coverage.versionedCount} versioned packages awaiting tags).`,
   );
 } finally {
   fs.rmSync(tempDir, { recursive: true, force: true });
