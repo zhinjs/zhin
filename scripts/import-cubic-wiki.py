@@ -317,7 +317,7 @@ def main() -> None:
             f"[source commit](https://github.com/zhinjs/zhin/commit/{commit}). "
             "This AI-generated page has not been verified against the current code. "
             "Use the [Zhin documentation](/en/getting-started/) for current behavior and "
-            "[see known corrections](/en/wiki/).\n"
+            "[see known corrections](/en/wiki/archive).\n"
             ":::\n\n"
             + correction
             + body

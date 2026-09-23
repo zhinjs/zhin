@@ -1,75 +1,36 @@
 ---
-title: Wiki 知识库
+title: Zhin 知识索引
 ---
 
-# Wiki 知识库
+# 从问题开始
 
-这里归档了 [Cubic 为 zhinjs/zhin 生成的 Wiki](https://www.cubic.dev/wikis/zhinjs/zhin)：**29 篇文章，均提供中文译文和[英文原文](/en/wiki/)**。英文原文抓取于 **2026-09-23**，对应源码提交 [`368db14`](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7)。每篇保留源码引用，并提供中英文切换链接；[归档清单](/wiki/cubic/source.json)记录原文来源与校验哈希。
+这里记的是使用 Zhin 时反复遇到的问题，以及当前可以核对的答案。第一次接触项目，先从“Bot 跑通”开始；已经有项目，就直接找正在卡住的环节。
 
-::: warning 使用前请核对
-这是一份第三方 AI 生成内容的参考快照，中文页经机器辅助翻译，尚未逐页与当前代码核验。代码示例、源码行号和运维建议可能有误或过时。实际开发请以[维护中的中文文档](/getting-started/)和当前源码为准。已确认的错误会在对应文章顶部标注；导入脚本也对少量明确错误做了修正。
-:::
+## 开始使用
 
-## 已确认勘误
+- [怎样确认第一个 Bot 真的跑通了？](./notes/first-run) 从创建项目走到 Sandbox 收到 `/hello` 回复。
+- 配置项放在哪里，见[配置指南](/configuration/)；拿不准该走哪条路线，见[解决方案](/solutions/)。
 
-| 快照主题 | 当前行为 | 维护中的文档 |
-| --- | --- | --- |
-| [快速开始](./cubic/quickstart) | 新项目要求 Node.js `>=22.12.0`，目前配置的 HTTP 端口为 `8068`；`8086` 是未配置时的 Runtime 回退端口。 | [入门指南](/getting-started/) |
-| [插件 Runtime](./cubic/plugin-runtime)、[命令](./cubic/commands) | 命令入口为 `commands/**/index.ts`；Handler 使用 `handlers/<name>/index.ts`。 | [约定目录](/authoring/conventions) |
-| [MCP](./cubic/mcp) | 可选 Runtime Host 只有在顶层配置 `mcp:` 时才注册 Tool；`ai.mcpServers` 配置的是 Agent 客户端。 | [Runtime 源码](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts)、[文档修正](https://github.com/zhinjs/zhin/pull/684) |
-| [安全与沙箱](./cubic/security-sandbox) | `execApprovalMode` 为 `ask | auto | bypass`；Tool 的 `requiresApproval` 是另一组选项：`never | on-risk | once | always`。 | [Agent 配置](/ai/)、[工具开发](/authoring/agent-tools) |
-| [配置管理](./cubic/config) | `zhin migrate` 不会自动把 `bots:` 改成 `endpoints:`。 | [配置文档](/configuration/) |
-| [Agent 编排](./cubic/ai-orchestration)、[安全策略](./cubic/security-policy) | Tool 与 Hook 使用具名目录；`execSecurity` 与 `execApprovalMode` 是独立配置。内置默认值分别是 `deny` 与 `auto`，项目配置可以覆盖。 | [约定目录](/authoring/conventions)、[Agent 配置](/ai/) |
-| [适配器核心](./cubic/adapters-core) | 快照将脚手架中的 Endpoint 示例与 `createEndpointLifecycle` 混为一谈；入站适配器示例不完整，且不能编译。 | [端点生命周期](/authoring/endpoint-lifecycle) |
-| [消息段](./cubic/messaging)、[Satori](./cubic/satori) | Runtime 的 `raw` 与 `segment.raw` 不同；`wrapCardHtml` 需要背景色参数。 | [中间件与组件](/authoring/middleware-components) |
-| [安全策略](./cubic/security-policy)、[生产部署](./cubic/docker-prod) | 复制 `8086` 示例前应核对实际 `http.port`；新项目使用 `8068`。`pnpm daemon` 和 `pnpm stop` 是旧项目迁移脚本。 | [生产部署](/operations/production) |
+## 开发插件
 
-## 浏览中文译文
+- [一个能力该写进约定目录，还是 `plugin.ts`？](./notes/plugin-entry) 按是否需要共享资源和生命周期来选。
+- 具体文件名与目录结构，见[约定目录](/authoring/conventions)。
 
-### 入门与架构
+## 消息与适配器
 
-- [Zhin.js 简介](./cubic/intro)
-- [快速开始与安装](./cubic/quickstart)
-- [系统架构与分层](./cubic/arch-core)
-- [插件 Runtime 与约定](./cubic/plugin-runtime)
-- [入站与出站消息链路](./cubic/message-flow)
-- [Generation 与热重载](./cubic/hmr-generation)
+- [消息从哪里进入，又从哪里发出？](./notes/message-path) 找到中间件、命令、回复各自所在的位置。
+- 接入真实平台时，从[适配器索引](/adapters/)找到对应平台的配置与限制。
 
-### IM、扩展与基础服务
+## AI 与工具
 
-- [命令、Handler 与中间件](./cubic/commands)
-- [通用消息段与组件](./cubic/messaging)
-- [数据库抽象与持久化](./cubic/database)
-- [调度引擎与 Cron](./cubic/scheduling)
-- [日志与遥测](./cubic/logging)
+- [工具为什么看不到，或者一直在等审批？](./notes/tool-access) 分清安装、准入、发现与执行审批。
+- 还没启用 AI 的项目，先看[AI 模块安装](/ai/)；IM Bot 本身不需要模型 Key。
 
-### Agent 与 AI
+## 运维
 
-- [Agent 编排与 ZhinAgent](./cubic/ai-orchestration)
-- [LLM Provider 与 SDK 桥接](./cubic/ai-providers)
-- [Agent 工具与能力](./cubic/tools-caps)
-- [Skill 与渐进披露](./cubic/skills)
-- [记忆、上下文与压缩](./cubic/memory)
-- [安全策略与沙箱](./cubic/security-sandbox)
-- [模型上下文协议（MCP）](./cubic/mcp)
+- [进程已经启动，怎样确认 Bot 真正可用？](./notes/production-ready) 分别检查存活、运行时就绪和平台收发。
+- 具体部署与故障处理，见[生产部署](/operations/production)和[故障排查](/troubleshooting/)。
 
-### 平台与媒体
+## 资料存档
 
-- [适配器核心与端点生命周期](./cubic/adapters-core)
-- [平台接入](./cubic/adapters-platforms)
-- [Satori 富媒体](./cubic/satori)
-- [语音链路（STT 与 TTS）](./cubic/speech)
-
-### Console、配置与运维
-
-- [远程 Console 架构](./cubic/console-arch)
-- [开发 Console 页面](./cubic/console-pages)
-- [配置管理](./cubic/config)
-- [生产部署](./cubic/docker-prod)
-- [安全策略与最佳实践](./cubic/security-policy)
-- [CLI 命令与工具](./cubic/cli-tools)
-- [测试与 CI 门禁](./cubic/testing)
-
-## 更新快照
-
-在仓库根目录运行 `python3 scripts/import-cubic-wiki.py` 可重新抓取英文原文，再运行 `python3 scripts/import-cubic-wiki.py --verify` 核对文章与清单。更新后须审阅英文差异、勘误及对应中文译文，并运行 `pnpm check:cubic-wiki-translations`；导入脚本不会覆盖中文翻译。当页面结构、预期文章 ID 或外部 HTML 变化时，脚本会停止，避免发布不完整的内容。
+[Cubic Wiki 的 29 篇原始文章、中文译文和已确认勘误](./archive)保留在原 URL。这批内容适合查找线索；运行时行为以当前文档和源码为准。
