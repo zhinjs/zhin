@@ -126,7 +126,7 @@ Handler `this` is `HandlerContext`:
 vs `middlewares/`: use middleware for ordered inbound/outbound chains with `await next()`; use handlers for fire-and-forget work on a named event.
 
 ```ts
-// handlers/message/receive/index.ts
+// handlers/message-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -140,7 +140,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/notice/receive/index.ts
+// handlers/notice-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({
@@ -153,7 +153,7 @@ export default defineHandler({
 ```
 
 ```ts
-// handlers/request/receive/index.ts
+// handlers/request-receive/index.ts
 import { defineHandler } from 'zhin.js/handler';
 
 export default defineHandler({

@@ -67,7 +67,7 @@ cd my-bot
 pnpm dev
 ```
 
-Open [Remote Console](https://console.zhin.dev) → Host `http://127.0.0.1:8086` → send `/hello` in Sandbox. Done.
+Open [Remote Console](https://console.zhin.dev) → enter the API Base printed at startup (new projects currently use `http://127.0.0.1:8068`) → send `/hello` in Sandbox. Done.
 
 `-y` takes the IM golden path: Sandbox + Host + Console. **No model key required.**
 
@@ -81,6 +81,8 @@ Open [Remote Console](https://console.zhin.dev) → Host `http://127.0.0.1:8086`
 More: [Getting started](./docs/getting-started/index.md) · [Examples](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
 
 **Requirements**: scaffolded TypeScript projects require Node.js **≥22.12.0**, pnpm 9+. The compiled IM library supports Node.js `^20.19.0` or `>=22.12.0`.
+
+The &lt;10MB figure applies to the **IM library install**. The generated project also installs the CLI, Sandbox adapter, page/layout contracts, and a Satori card example. The browser UI lives at [console.zhin.dev](https://console.zhin.dev); the CLI assembles its HTTP Host and Console API. Neither the browser UI nor an MCP server is bundled into `zhin.js`.
 
 ## From a message to durable work
 
@@ -158,6 +160,8 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 | **Speech** | `+ @zhin.js/speech` | + a few MB | inbound STT, outbound TTS, `segment.tts` (warn + degrade if missing) |
 
 Compatibility note for the 1.1 stable line: `import from 'zhin.js'` no longer includes `ZhinAgent` / `AIService`. Use `zhin.js/agent` or `zhin.js/ai`. See [ADR 0019](https://zhin.js.org/adr/0019-install-size-layering).
+
+MCP has two separate roles: `ai.mcpServers` connects the optional Agent to external servers ([client setup](./docs/en/ai/index.md#ai-mcpservers)); a top-level `mcp:` block exposes this bot as a server and requires `@zhin.js/mcp` plus the Agent runtime ([server setup](./packages/host/mcp/README.md)). Neither is enabled by the IM library alone.
 
 > **Windows**: [Getting started](./docs/getting-started/index.md).
 
