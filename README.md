@@ -28,6 +28,8 @@
 
 <p align="center">
   <a href="https://zhin.js.org">Documentation</a> ·
+  <a href="https://github.com/zhinjs/zhin/wiki">Wiki</a> ·
+  <a href="https://github.com/orgs/zhinjs/projects/3">Roadmap</a> ·
   <a href="https://demo.zhin.dev">Live Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
   <a href="./docs/contributing/development.md">Contributing</a>

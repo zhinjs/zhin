@@ -6,6 +6,10 @@ title: Development Workflow
 
 From finishing code to merging into main, there are several checkpoints: local build and test, the complete harness suite, changeset, and CI publishing. This page walks through the day-to-day workflow in that order.
 
+## Collaboration
+
+Describe the problem and acceptance criteria in an [issue](https://github.com/zhinjs/zhin/issues), then link the implementation PR. The [delivery board](https://github.com/orgs/zhinjs/projects/3) tracks active issues and PRs through Todo → In Progress → Done. New or updated open items are added automatically; historical merged PRs do not need backfilling. The [GitHub Wiki](https://github.com/zhinjs/zhin/wiki) is a documentation entry point; the maintained technical content lives in this repository's `docs/` directory.
+
 ## Environment Setup
 
 - Node.js `^20.19.0` or `>=22.12.0`
