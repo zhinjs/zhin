@@ -226,7 +226,7 @@ Layers and dependency direction: [architecture](./docs/concepts/architecture.md)
 | **Basics** | [Architecture](./docs/concepts/architecture.md) · [Config](./docs/configuration/index.md) · [Commands](./docs/authoring/commands.md) · [Plugins](./docs/concepts/plugin-model.md) |
 | **Advanced** | [AI](./docs/en/ai/index.md) · [Prompt Sections, Tools & Skills](./docs/en/authoring/agent-tools.md) · [Agent runtime](./packages/im/agent/README.md) · [Message flow](./docs/en/concepts/message-flow.md) |
 | **Develop** | [Plugin authoring](./docs/authoring/define-plugin.md) · [Contributing](./docs/contributing/development.md) · [Architecture](./docs/concepts/architecture.md) |
-| **Reference Wiki** | [29-page English snapshot](./docs/en/wiki/index.md) · [Chinese translation](./docs/wiki/index.md) (third-party AI-generated content; check the corrections) |
+| **Knowledge index** | [Practical answers](./docs/en/wiki/index.md) · [Source archive and corrections](./docs/en/wiki/archive.md) |
 
 Site: [zhin.js.org](https://zhin.js.org) · Chinese docs: [zhin.js.org](https://zhin.js.org) (switch language in the docs nav)
 

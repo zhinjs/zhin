@@ -32,6 +32,14 @@ const ALLOWLIST = new Set([
   '/snippets/platform-tiers/',
 ]);
 
+// The imported Cubic pages are reached from the two Wiki archive indexes.
+// Keep only manifest-listed snapshots out of the primary sidebar.
+const wikiManifest = JSON.parse(fs.readFileSync(path.join(docsRoot, 'public/wiki/cubic/source.json'), 'utf8'));
+const ARCHIVE_ROUTES = new Set(wikiManifest.pages.flatMap(({ file }) => {
+  const slug = file.replace(/\.md$/, '');
+  return [`/wiki/cubic/${slug}/`, `/en/wiki/cubic/${slug}/`];
+}));
+
 /**
  * @param {string} filePath
  */
@@ -79,6 +87,7 @@ for (const abs of collectMd(docsRoot)) {
   const rel = path.relative(docsRoot, abs);
   const route = toRoute(rel);
   if (ALLOWLIST.has(route)) continue;
+  if (ARCHIVE_ROUTES.has(route)) continue;
   if (hasSidebarFalse(abs)) continue;
   if (linked.has(route)) continue;
   orphans.push({ file: rel, route });

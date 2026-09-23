@@ -100,4 +100,45 @@ for (const page of manifest.pages) {
   }
 }
 
-console.log(`Verified ${manifest.pages.length} Chinese Wiki translations against the English snapshot`);
+const curatedPages = [
+  'index.md',
+  'notes/first-run.md',
+  'notes/plugin-entry.md',
+  'notes/message-path.md',
+  'notes/tool-access.md',
+  'notes/production-ready.md',
+];
+const notes = curatedPages.filter(page => page.startsWith('notes/')).map(page => path.basename(page)).sort();
+for (const [language, directory] of [['English', path.join(root, 'docs/en/wiki/notes')], ['Chinese', path.join(root, 'docs/wiki/notes')]]) {
+  const actual = fs.readdirSync(directory).filter(file => file.endsWith('.md')).sort();
+  if (JSON.stringify(actual) !== JSON.stringify(notes)) {
+    throw new Error(`${language} curated Wiki notes differ from the expected set`);
+  }
+}
+
+for (const page of curatedPages) {
+  const english = fs.readFileSync(path.join(root, 'docs/en/wiki', page), 'utf8');
+  const chinese = fs.readFileSync(path.join(root, 'docs/wiki', page), 'utf8');
+  const source = signature(article(english));
+  const translation = signature(article(chinese));
+  for (const key of ['codeBlocks', 'linkTargets', 'headingLevels']) {
+    if (JSON.stringify(source[key]) !== JSON.stringify(translation[key])) {
+      throw new Error(`${page}: ${key} differs between English and Chinese curated pages`);
+    }
+  }
+}
+
+for (const language of ['en/', '']) {
+  const archive = fs.readFileSync(path.join(root, 'docs', language, 'wiki/archive.md'), 'utf8');
+  if (!archive.includes(manifest.source_commit) || !archive.includes(manifest.captured_at.slice(0, 10))) {
+    throw new Error(`${language || 'zh/'}wiki/archive.md: provenance differs from the manifest`);
+  }
+  for (const page of manifest.pages) {
+    const slug = page.file.slice(0, -3);
+    if (!archive.includes(`](./cubic/${slug})`)) {
+      throw new Error(`${language || 'zh/'}wiki/archive.md: missing ${slug} from the archive index`);
+    }
+  }
+}
+
+console.log(`Verified ${manifest.pages.length} Chinese Wiki translations and ${curatedPages.length} bilingual curated pages`);

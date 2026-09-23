@@ -6,7 +6,7 @@ translation_normalized_body_sha256: 396cc09234aa40e52ac8af16615bb07a4ccc2a776e11
 [英文原文](/en/wiki/cubic/console-arch)
 
 ::: warning 第三方生成的参考快照
-[Cubic 原页面](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-console-arch) · 抓取于 2026-09-23 · [源码提交](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7)。本页由英文快照机器辅助翻译，尚未逐页与当前代码核验；实际开发请以[维护中的 Zhin 文档](/getting-started/)和[知识库勘误](/wiki/)为准。
+[Cubic 原页面](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-console-arch) · 抓取于 2026-09-23 · [源码提交](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7)。本页由英文快照机器辅助翻译，尚未逐页与当前代码核验；实际开发请以[维护中的 Zhin 文档](/getting-started/)和[资料存档勘误](/wiki/archive)为准。
 :::
 
 ::: details 相关源文件

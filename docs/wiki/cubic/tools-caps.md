@@ -6,7 +6,7 @@ translation_normalized_body_sha256: 144857d6d2262dedbc9828595c9c4f0ad2ec68a42182
 [英文原文](/en/wiki/cubic/tools-caps)
 
 ::: warning 第三方生成的参考快照
-[Cubic 原页面](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-tools-caps) · 抓取于 2026-09-23 · [源码提交](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7)。本页由英文快照机器辅助翻译，尚未逐页与当前代码核验；实际开发请以[维护中的 Zhin 文档](/getting-started/)和[知识库勘误](/wiki/)为准。
+[Cubic 原页面](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-tools-caps) · 抓取于 2026-09-23 · [源码提交](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7)。本页由英文快照机器辅助翻译，尚未逐页与当前代码核验；实际开发请以[维护中的 Zhin 文档](/getting-started/)和[资料存档勘误](/wiki/archive)为准。
 :::
 
 ::: details 相关源文件

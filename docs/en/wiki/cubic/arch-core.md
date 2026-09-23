@@ -5,7 +5,7 @@ title: "System Architecture & Layering"
 [中文版](/wiki/cubic/arch-core)
 
 ::: warning Generated reference snapshot
-[Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-arch-core) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
+[Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-arch-core) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/archive).
 :::
 
 ::: details Relevant source files

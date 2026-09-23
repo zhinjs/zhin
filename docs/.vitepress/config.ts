@@ -264,89 +264,23 @@ const enDevDocsSidebar: DefaultTheme.SidebarItem[] = [
 ]
 
 const zhWikiSidebar: DefaultTheme.SidebarItem[] = [
-  { text: '知识库说明与勘误', link: '/wiki/' },
-  sidebarGroup('入门与架构', [
-    { text: 'Zhin.js 简介', link: '/wiki/cubic/intro' },
-    { text: '快速开始', link: '/wiki/cubic/quickstart' },
-    { text: '系统架构', link: '/wiki/cubic/arch-core' },
-    { text: '插件 Runtime', link: '/wiki/cubic/plugin-runtime' },
-    { text: '消息链路', link: '/wiki/cubic/message-flow' },
-    { text: 'Generation 与热重载', link: '/wiki/cubic/hmr-generation' },
-  ]),
-  sidebarGroup('IM 与基础服务', [
-    { text: '命令、Handler 与中间件', link: '/wiki/cubic/commands' },
-    { text: '消息段与组件', link: '/wiki/cubic/messaging' },
-    { text: '数据库', link: '/wiki/cubic/database' },
-    { text: '定时调度', link: '/wiki/cubic/scheduling' },
-    { text: '日志', link: '/wiki/cubic/logging' },
-  ]),
-  sidebarGroup('Agent 与 AI', [
-    { text: 'Agent 编排', link: '/wiki/cubic/ai-orchestration' },
-    { text: '模型 Provider', link: '/wiki/cubic/ai-providers' },
-    { text: 'Agent 工具', link: '/wiki/cubic/tools-caps' },
-    { text: '技能', link: '/wiki/cubic/skills' },
-    { text: '记忆与上下文', link: '/wiki/cubic/memory' },
-    { text: '安全与沙箱', link: '/wiki/cubic/security-sandbox' },
-    { text: 'MCP', link: '/wiki/cubic/mcp' },
-  ]),
-  sidebarGroup('平台与媒体', [
-    { text: '适配器核心', link: '/wiki/cubic/adapters-core' },
-    { text: '平台接入', link: '/wiki/cubic/adapters-platforms' },
-    { text: 'Satori 图文', link: '/wiki/cubic/satori' },
-    { text: '语音', link: '/wiki/cubic/speech' },
-  ]),
-  sidebarGroup('Console 与运维', [
-    { text: 'Console 架构', link: '/wiki/cubic/console-arch' },
-    { text: 'Console 页面', link: '/wiki/cubic/console-pages' },
-    { text: '配置管理', link: '/wiki/cubic/config' },
-    { text: '生产部署', link: '/wiki/cubic/docker-prod' },
-    { text: '安全策略', link: '/wiki/cubic/security-policy' },
-    { text: 'CLI 命令', link: '/wiki/cubic/cli-tools' },
-    { text: '测试与 CI', link: '/wiki/cubic/testing' },
-  ]),
+  { text: '从问题开始', link: '/wiki/' },
+  { text: '怎样确认 Bot 跑通？', link: '/wiki/notes/first-run' },
+  { text: '能力该写在哪里？', link: '/wiki/notes/plugin-entry' },
+  { text: '消息从哪里来、往哪里去？', link: '/wiki/notes/message-path' },
+  { text: '工具为什么不可用？', link: '/wiki/notes/tool-access' },
+  { text: '启动后怎样确认可用？', link: '/wiki/notes/production-ready' },
+  { text: '资料存档与勘误', link: '/wiki/archive' },
 ]
 
 const enWikiSidebar: DefaultTheme.SidebarItem[] = [
-  { text: 'Wiki overview and corrections', link: '/en/wiki/' },
-  sidebarGroup('Start and architecture', [
-    { text: 'Introduction', link: '/en/wiki/cubic/intro' },
-    { text: 'Quick Start', link: '/en/wiki/cubic/quickstart' },
-    { text: 'Architecture', link: '/en/wiki/cubic/arch-core' },
-    { text: 'Plugin Runtime', link: '/en/wiki/cubic/plugin-runtime' },
-    { text: 'Message Flow', link: '/en/wiki/cubic/message-flow' },
-    { text: 'Generations and HMR', link: '/en/wiki/cubic/hmr-generation' },
-  ]),
-  sidebarGroup('IM and services', [
-    { text: 'Commands and Handlers', link: '/en/wiki/cubic/commands' },
-    { text: 'Segments and Components', link: '/en/wiki/cubic/messaging' },
-    { text: 'Database', link: '/en/wiki/cubic/database' },
-    { text: 'Scheduling', link: '/en/wiki/cubic/scheduling' },
-    { text: 'Logging', link: '/en/wiki/cubic/logging' },
-  ]),
-  sidebarGroup('Agent and AI', [
-    { text: 'Orchestration', link: '/en/wiki/cubic/ai-orchestration' },
-    { text: 'Providers', link: '/en/wiki/cubic/ai-providers' },
-    { text: 'Tools', link: '/en/wiki/cubic/tools-caps' },
-    { text: 'Skills', link: '/en/wiki/cubic/skills' },
-    { text: 'Memory', link: '/en/wiki/cubic/memory' },
-    { text: 'Security and Sandbox', link: '/en/wiki/cubic/security-sandbox' },
-    { text: 'MCP', link: '/en/wiki/cubic/mcp' },
-  ]),
-  sidebarGroup('Platforms and media', [
-    { text: 'Adapter Core', link: '/en/wiki/cubic/adapters-core' },
-    { text: 'Platform Integrations', link: '/en/wiki/cubic/adapters-platforms' },
-    { text: 'Satori', link: '/en/wiki/cubic/satori' },
-    { text: 'Speech', link: '/en/wiki/cubic/speech' },
-  ]),
-  sidebarGroup('Console and operations', [
-    { text: 'Console Architecture', link: '/en/wiki/cubic/console-arch' },
-    { text: 'Console Pages', link: '/en/wiki/cubic/console-pages' },
-    { text: 'Configuration', link: '/en/wiki/cubic/config' },
-    { text: 'Deployment', link: '/en/wiki/cubic/docker-prod' },
-    { text: 'Security Policy', link: '/en/wiki/cubic/security-policy' },
-    { text: 'CLI', link: '/en/wiki/cubic/cli-tools' },
-    { text: 'Testing', link: '/en/wiki/cubic/testing' },
-  ]),
+  { text: 'Start with a question', link: '/en/wiki/' },
+  { text: 'Did the first Bot work?', link: '/en/wiki/notes/first-run' },
+  { text: 'Where does a capability go?', link: '/en/wiki/notes/plugin-entry' },
+  { text: 'Where do messages flow?', link: '/en/wiki/notes/message-path' },
+  { text: 'Why is a Tool unavailable?', link: '/en/wiki/notes/tool-access' },
+  { text: 'Is the running Bot ready?', link: '/en/wiki/notes/production-ready' },
+  { text: 'Source archive and corrections', link: '/en/wiki/archive' },
 ]
 
 function mapSidebar(
@@ -425,7 +359,7 @@ export default withMermaid(defineConfig({
               { text: '语音', link: '/ai/speech' },
             ],
           },
-          { text: 'Wiki 知识库', link: '/wiki/', activeMatch: '^/wiki/' },
+          { text: '知识索引', link: '/wiki/', activeMatch: '^/wiki/' },
           { text: '贡献指南', link: '/contributing/repo-structure', activeMatch: '^/contributing/' },
         ],
         sidebar: {
