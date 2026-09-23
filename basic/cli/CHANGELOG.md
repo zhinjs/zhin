@@ -1,5 +1,20 @@
 # @zhin.js/cli
 
+## 1.1.6
+
+### Patch Changes
+
+- c93181c: Start the Console control plane before Adapter activation so QR codes, sliders, and other login challenges can be completed from the web Console while the first Runtime generation is still starting.
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+- Updated dependencies [f12e39a]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/runtime@1.1.3
+  - @zhin.js/pagemanager@1.1.3
+  - @zhin.js/command@1.1.3
+  - @zhin.js/config-file@1.1.2
+  - @zhin.js/adapter@1.1.15
+
 ## 1.1.5
 
 ### Patch Changes

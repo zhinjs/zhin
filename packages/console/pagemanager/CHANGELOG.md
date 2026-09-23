@@ -1,5 +1,15 @@
 # @zhin.js/pagemanager
 
+## 1.1.3
+
+### Patch Changes
+
+- f12e39a: Track each loaded Feature entry's transitive local imports so edits to imported helper files reload only the affected capabilities, including helpers outside the entry directory, while refreshing the complete ESM import closure. Cache clean dependency graphs, resolve package imports with ESM conditions, handle `.mts` and `.cts` entries consistently, keep CommonJS require closures on the process-restart boundary, and discard removed-entry mappings only after a generation commits.
+- Updated dependencies [fa542a2]
+  - @zhin.js/console-contract@1.1.1
+  - @zhin.js/layout@1.1.3
+  - @zhin.js/page@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes

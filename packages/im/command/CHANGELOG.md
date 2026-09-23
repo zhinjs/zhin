@@ -1,5 +1,12 @@
 # @zhin.js/command
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [0de4836]
+  - @zhin.js/permission@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes

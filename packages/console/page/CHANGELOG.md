@@ -1,5 +1,12 @@
 # @zhin.js/page
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [fa542a2]
+  - @zhin.js/console-contract@1.1.1
+
 ## 1.1.2
 
 ### Patch Changes

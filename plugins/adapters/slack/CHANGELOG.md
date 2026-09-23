@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.1.4
+
+### Patch Changes
+
+- 43eda99: Unify Notice and Request payloads with their public types and runtime exports. Use camelCase fields, preserve native data under metadata, and bind canonical endpoint identity and request actions to the held generation. Remove legacy data aliases and from factories.
+
+  Keep login and lifecycle signals as independent SystemEvent payloads on system.receive, without chat conversation fields or user interaction. Update built-in adapter projections and authoring guidance.
+
+- Updated dependencies [43eda99]
+- Updated dependencies [0de4836]
+  - @zhin.js/core@1.1.39
+  - @zhin.js/adapter@1.1.15
+
 ## 1.1.3
 
 ### Patch Changes
