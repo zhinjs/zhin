@@ -1,0 +1,43 @@
+docs/wiki/cubic/adapters-platforms.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 140
+docs/wiki/cubic/memory.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 70,73
+docs/wiki/cubic/intro.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 27,33,67,156
+docs/wiki/cubic/quickstart.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 31,136,152
+docs/wiki/cubic/arch-core.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 27
+docs/wiki/cubic/mcp.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 32
+docs/wiki/cubic/messaging.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 30,32,34,36,38-39,41-45,49,146
+docs/wiki/cubic/scheduling.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 118
+docs/wiki/cubic/ai-providers.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 63,146
+docs/wiki/cubic/ai-orchestration.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 37,109,120,142
+docs/wiki/cubic/security-sandbox.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 62,92
+docs/wiki/cubic/security-policy.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 134
+docs/wiki/cubic/adapters-core.md
+  s_079f1dc5e6308d::t_7eb811eef3e4be 138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "693e3362e53ff589cd83c5af35297921d4b89f2d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
