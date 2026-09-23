@@ -1,0 +1,115 @@
+docs/wiki/cubic/mcp.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 13
+docs/wiki/cubic/speech.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/adapters-core.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 13
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/ai-providers.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/quickstart.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 108
+docs/wiki/cubic/logging.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 89,91
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/public/wiki/cubic/source.json
+  s_079f1dc5e6308d::t_a9c28633147552 4,60
+docs/wiki/cubic/config.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 65,97,103,128
+docs/wiki/cubic/skills.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 139
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/cli-tools.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/ai-orchestration.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 37,83,120
+docs/wiki/cubic/scheduling.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 86
+docs/wiki/cubic/console-arch.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 44
+docs/en/wiki/cubic/messaging.md
+  s_079f1dc5e6308d::t_a9c28633147552 139-141
+scripts/import-cubic-wiki.py
+  s_079f1dc5e6308d::t_46258b3b60f936 161
+  s_079f1dc5e6308d::t_34e2ed750fb4cf 287-288
+  s_079f1dc5e6308d::t_361a50b53713a7 292,326,337-341,343-366
+  s_079f1dc5e6308d::t_b027913239a7f1 16,18-19,103-105,160,162
+scripts/check-cubic-wiki-translations.mjs
+  s_079f1dc5e6308d::t_e7d1994ab1bd81 5,12-18,53-63,70-79
+  s_079f1dc5e6308d::t_f23f65538f0382 31
+docs/wiki/cubic/message-flow.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 78
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/messaging.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3,138-140
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 40,42
+docs/wiki/cubic/arch-core.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 143
+docs/wiki/cubic/hmr-generation.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 112
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/tools-caps.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/en/wiki/index.md
+  s_079f1dc5e6308d::t_60ac158e174d05 23
+docs/wiki/cubic/commands.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/testing.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 28,93,139,146
+docs/wiki/index.md
+  s_079f1dc5e6308d::t_60ac158e174d05 23
+docs/wiki/cubic/memory.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 89
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/console-pages.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 114
+docs/wiki/cubic/plugin-runtime.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 124
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/en/wiki/cubic/adapters-core.md
+  s_079f1dc5e6308d::t_a9c28633147552 12
+docs/wiki/cubic/satori.md
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 53-55,73
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/security-sandbox.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 114
+docs/wiki/cubic/database.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+docs/wiki/cubic/intro.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 114
+docs/wiki/cubic/security-policy.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 57
+docs/wiki/cubic/docker-prod.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+  s_079f1dc5e6308d::t_e2f48f88aab3b8 66,133
+docs/wiki/cubic/adapters-platforms.md
+  s_079f1dc5e6308d::t_915a4fe40609c7 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c8152fa6bf77fe8053a094fbe71e5093dffd100e",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
