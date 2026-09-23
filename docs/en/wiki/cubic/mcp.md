@@ -2,6 +2,8 @@
 title: "Model Context Protocol (MCP)"
 ---
 
+[中文版](/wiki/cubic/mcp)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-mcp) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
@@ -10,8 +12,7 @@ title: "Model Context Protocol (MCP)"
 The current Runtime Host registers **Tools only** and is mounted only with an explicit top-level `mcp:` configuration. `ai.mcpServers` configures the separate Agent MCP client. The generator, Resource, Prompt, and default-enabled server descriptions below are stale. See [the Host implementation](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts) and [the MCP documentation correction](https://github.com/zhinjs/zhin/pull/684).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -21,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [AGENTS.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md)
 - [README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md)
 - [packages/host/mcp/tests/index.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/tests/index.test.ts)
-</details>
+:::
 
 # Model Context Protocol (MCP)
 

@@ -2,12 +2,17 @@
 title: "Configuration Management"
 ---
 
+[中文版](/wiki/cubic/config)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-config) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+`zhin migrate` updates package metadata, directories, bootstrap files, and dependencies; it does **not** rewrite `bots:` into `endpoints:` in `zhin.config.yml`. Migrate that configuration manually. See [Configuration](/en/configuration/).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -18,7 +23,7 @@ The following files were used as context for generating this wiki page:
 - [basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/tests/plugin-runtime/endpoint-configuration-store.test.ts)
 - [packages/im/config-file/src/index.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/config-file/src/index.ts)
 - [packages/im/config-file/src/yaml-config-document.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/config-file/src/yaml-config-document.ts)
-</details>
+:::
 
 # Configuration Management
 
@@ -93,7 +98,7 @@ The `zhin migrate` command automates the process of upgrading legacy Zhin projec
 ### Key Migration Actions
 *   **Script Alignment**: Replaces legacy commands like `zhin start` with `zhin runtime start`.
 *   **Dependency Updates**: Bumps `@zhin.js/*` packages to `latest`.
-*   **Structural Refactoring**: Migrates the legacy `bots:` configuration block to the modern `endpoints:` structure.
+*   **Structural Refactoring**: Does not rewrite legacy `bots:` configuration; update it manually to `endpoints:`.
 *   **Bootstrap File Upgrading**: Replaces old Chinese templates in `SOUL.md`, `TOOLS.md`, and `AGENTS.md` with updated English versions while attempting to preserve user data sections like "User Preferences".
 
 ```mermaid

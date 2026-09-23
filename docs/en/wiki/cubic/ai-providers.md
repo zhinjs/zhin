@@ -2,12 +2,13 @@
 title: "LLM Providers & SDK Bridging"
 ---
 
+[中文版](/wiki/cubic/ai-providers)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-ai-providers) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -20,7 +21,7 @@ The following files were used as context for generating this wiki page:
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
 - [packages/toolkit/scaffold-wizard/README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/scaffold-wizard/README.md)
 - [packages/toolkit/create-zhin/src/workspace.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts)
-</details>
+:::
 
 # LLM Providers & SDK Bridging
 

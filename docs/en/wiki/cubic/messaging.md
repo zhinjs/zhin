@@ -2,12 +2,17 @@
 title: "Universal Segments & Components"
 ---
 
+[中文版](/wiki/cubic/messaging)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-messaging) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+The example below uses `raw` from `zhin.js/core/runtime`, which wraps outbound content. The distinct `segment.raw` utility formats a preview string. The utility table in the Cubic original used incorrect parameter types; this copy corrects them. See [Middleware and Components](/en/authoring/middleware-components).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -17,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [packages/im/core/tests/utils.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/core/tests/utils.test.ts)
 - [packages/toolkit/create-zhin/src/workspace.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts)
 - [CLAUDE.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md)
-</details>
+:::
 
 # Universal Segments & Components
 
@@ -63,6 +68,8 @@ Components in Zhin.js allow developers to wrap logic and rendering into reusable
 Developers define components using the `defineComponent` function. Each component receives a `props` object and returns a rendered segment or a combination of segments.
 
 ```typescript
+import { raw } from 'zhin.js/core/runtime';
+
 export default defineComponent<StatusCardProps>({
   render({ title, lines }) {
     // Component logic here
@@ -132,8 +139,8 @@ Sources: [packages/toolkit/create-zhin/src/workspace.ts:575-595](https://github.
 | `text(content)` | `string` | `Segment` | Creates a text segment. |
 | `face(id, alt?)` | `string, string?` | `Segment` | Creates a face/emoji segment. |
 | `escape(text)` | `string` | `string` | Escapes special characters like `<` and `&`. |
-| `from(template)` | `string` | `Segment[]` | Parses tags into segment structures. |
-| `raw(content)` | `Segment[]` | `string` | Serializes segments for storage or logs. |
+| `segment.from(content)` | `SendContent` | `SendContent` | Parses tags into segment structures. |
+| `segment.raw(content)` | `SendContent` | `string` | Serializes segments for storage or logs. |
 
 Sources: [packages/im/core/tests/utils.test.ts:58-123](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/core/tests/utils.test.ts#L58-L123)
 

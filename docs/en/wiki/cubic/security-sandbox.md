@@ -2,6 +2,8 @@
 title: "Security Policies & Sandbox"
 ---
 
+[中文版](/wiki/cubic/security-sandbox)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-security-sandbox) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
@@ -10,8 +12,7 @@ title: "Security Policies & Sandbox"
 `execApprovalMode` is `ask | auto | bypass`. A Tool's separate `requiresApproval` is `never | on-risk | once | always`; these are not interchangeable. The approval-mode table below is stale. See [Agent configuration](/en/ai/) and [Tool authoring](/en/authoring/agent-tools).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -21,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
 - [plugins/adapters/sandbox/tests/sandbox-console.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/plugins/adapters/sandbox/tests/sandbox-console.test.ts)
 - [agents/ops/system.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/ops/system.md)
-</details>
+:::
 
 # Security Policies & Sandbox
 

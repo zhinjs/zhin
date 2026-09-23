@@ -2,6 +2,8 @@
 title: "Commands, Handlers & Middlewares"
 ---
 
+[中文版](/wiki/cubic/commands)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-commands) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
@@ -10,8 +12,7 @@ title: "Commands, Handlers & Middlewares"
 Commands use route directories ending in `index.ts`; Handlers use one named directory, such as `handlers/message-receive/index.ts` with an explicit `event: 'message.receive'`. The nested Handler file example below is unsupported. See [Convention Directories](/en/authoring/conventions).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -23,7 +24,7 @@ The following files were used as context for generating this wiki page:
 - [packages/toolkit/create-zhin/template/skills/plugin-develop/SKILL.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/plugin-develop/SKILL.md)
 - [packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md)
 - [basic/cli/src/commands/new.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/new.ts)
-</details>
+:::
 
 # Commands, Handlers & Middlewares
 

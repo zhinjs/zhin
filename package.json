@@ -59,6 +59,7 @@
     "check:speech-runtime-boundaries": "node scripts/check-speech-runtime-boundaries.mjs",
     "check:legacy-ai-exports": "node scripts/check-legacy-ai-exports.mjs",
     "check:doc-links": "node scripts/check-doc-links.mjs",
+    "check:cubic-wiki-translations": "node scripts/check-cubic-wiki-translations.mjs",
     "check:install-tiers-ssot": "node scripts/check-install-tiers-ssot.mjs",
     "check:dependency-policy": "node scripts/check-dependency-policy.mjs",
     "check:release-plan": "node scripts/check-release-plan.mjs",

@@ -2,12 +2,17 @@
 title: "Agent Orchestration & ZhinAgent"
 ---
 
+[中文版](/wiki/cubic/ai-orchestration)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-ai-orchestration) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+Tools and Hooks use `tools/<name>/index.ts` and `hooks/<name>/index.ts`. `execSecurity` (`deny | allowlist | full`) and `execApprovalMode` (`ask | auto | bypass`) are separate settings. See [Convention Directories](/en/authoring/conventions) and [Agent configuration](/en/ai/).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -18,7 +23,7 @@ The following files were used as context for generating this wiki page:
 - [packages/im/agent-feature/package.json](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/agent-feature/package.json)
 - [packages/toolkit/create-zhin/src/workspace.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts)
 - [packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md)
-</details>
+:::
 
 # Agent Orchestration & ZhinAgent
 
@@ -91,10 +96,10 @@ Sources: [packages/im/agent/package.json:8-60](https://github.com/zhinjs/zhin/bl
 ZhinAgent uses a convention-over-configuration approach to discover tools, skills, and sub-agents. The `Plugin Runtime` scans specific directories within a plugin or the root project to register capabilities automatically.
 
 ### Directory Conventions
-*   `tools/*.ts`: Global AI tools defined using `defineAgentTool`.
+*   `tools/<name>/index.ts`: Global AI tools defined using `defineAgentTool`.
 *   `skills/<name>/SKILL.md`: Reusable agent workflows and documentation.
 *   `agents/<name>/agent.json`: Sub-agent definitions including private tools and system prompts.
-*   `hooks/*.ts`: Lifecycle hooks for intercepting agent turns.
+*   `hooks/<name>/index.ts`: Lifecycle hooks for intercepting agent turns.
 
 Sources: [CLAUDE.md:128-142](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L128-L142), [AGENTS.md:135-145](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L135-L145), [packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md:42-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/skill-creator/SKILL.md#L42-L50)
 
@@ -102,7 +107,7 @@ Sources: [CLAUDE.md:128-142](https://github.com/zhinjs/zhin/blob/368db14caa4aa91
 
 The framework employs "Harness Engineering" to ensure Agent safety. Execution is governed by multi-layered policies that prevent unauthorized tool usage or data leakage.
 
-*   **Execution Policies**: Supports `allowlist` and `ask` modes (ExecApprovalMode).
+*   **Execution Policies**: Separates `execSecurity` (`deny | allowlist | full`) from `execApprovalMode` (`ask | auto | bypass`).
 *   **Sandbox**: Tools execute within a restricted environment to isolate the host system.
 *   **File Policy**: Restricts agent access to specific file system paths.
 *   **Capability Ingress**: External providers must project through a governed ingress rather than direct execution.

@@ -265,7 +265,45 @@ const enDevDocsSidebar: DefaultTheme.SidebarItem[] = [
 
 const zhWikiSidebar: DefaultTheme.SidebarItem[] = [
   { text: '知识库说明与勘误', link: '/wiki/' },
-  { text: '英文 Wiki 全目录', link: '/en/wiki/' },
+  sidebarGroup('入门与架构', [
+    { text: 'Zhin.js 简介', link: '/wiki/cubic/intro' },
+    { text: '快速开始', link: '/wiki/cubic/quickstart' },
+    { text: '系统架构', link: '/wiki/cubic/arch-core' },
+    { text: '插件 Runtime', link: '/wiki/cubic/plugin-runtime' },
+    { text: '消息链路', link: '/wiki/cubic/message-flow' },
+    { text: 'Generation 与热重载', link: '/wiki/cubic/hmr-generation' },
+  ]),
+  sidebarGroup('IM 与基础服务', [
+    { text: '命令、Handler 与中间件', link: '/wiki/cubic/commands' },
+    { text: '消息段与组件', link: '/wiki/cubic/messaging' },
+    { text: '数据库', link: '/wiki/cubic/database' },
+    { text: '定时调度', link: '/wiki/cubic/scheduling' },
+    { text: '日志', link: '/wiki/cubic/logging' },
+  ]),
+  sidebarGroup('Agent 与 AI', [
+    { text: 'Agent 编排', link: '/wiki/cubic/ai-orchestration' },
+    { text: '模型 Provider', link: '/wiki/cubic/ai-providers' },
+    { text: 'Agent 工具', link: '/wiki/cubic/tools-caps' },
+    { text: '技能', link: '/wiki/cubic/skills' },
+    { text: '记忆与上下文', link: '/wiki/cubic/memory' },
+    { text: '安全与沙箱', link: '/wiki/cubic/security-sandbox' },
+    { text: 'MCP', link: '/wiki/cubic/mcp' },
+  ]),
+  sidebarGroup('平台与媒体', [
+    { text: '适配器核心', link: '/wiki/cubic/adapters-core' },
+    { text: '平台接入', link: '/wiki/cubic/adapters-platforms' },
+    { text: 'Satori 图文', link: '/wiki/cubic/satori' },
+    { text: '语音', link: '/wiki/cubic/speech' },
+  ]),
+  sidebarGroup('Console 与运维', [
+    { text: 'Console 架构', link: '/wiki/cubic/console-arch' },
+    { text: 'Console 页面', link: '/wiki/cubic/console-pages' },
+    { text: '配置管理', link: '/wiki/cubic/config' },
+    { text: '生产部署', link: '/wiki/cubic/docker-prod' },
+    { text: '安全策略', link: '/wiki/cubic/security-policy' },
+    { text: 'CLI 命令', link: '/wiki/cubic/cli-tools' },
+    { text: '测试与 CI', link: '/wiki/cubic/testing' },
+  ]),
 ]
 
 const enWikiSidebar: DefaultTheme.SidebarItem[] = [

@@ -2,6 +2,8 @@
 title: "Quick Start & Setup"
 ---
 
+[中文版](/wiki/cubic/quickstart)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-quickstart) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
@@ -10,8 +12,7 @@ title: "Quick Start & Setup"
 New projects created with `create-zhin-app` require Node.js `>=22.12.0` and currently configure HTTP port `8068`. The broader `zhin.js` library engine range does not describe the generated TypeScript project's requirement. See [Getting Started](/en/getting-started/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -22,7 +23,7 @@ The following files were used as context for generating this wiki page:
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
 - [basic/cli/src/commands/new.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/new.ts)
 - [AGENTS.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md)
-</details>
+:::
 
 # Quick Start & Setup
 
@@ -141,7 +142,7 @@ Sources: [packages/toolkit/create-zhin/README.md:150-180](https://github.com/zhi
 
 Proper setup requires specific environmental conditions.
 
-*   **Node.js**: Versions `^20.19.0` or `>=22.12.0` (required for TypeScript projects).
+*   **Node.js**: `>=22.12.0` for projects generated with `create-zhin-app`.
 *   **Package Manager**: `pnpm 9+` is strongly recommended for workspace management.
 *   **Operating System**: Windows 10+, macOS 10.15+, or modern Linux distributions.
 

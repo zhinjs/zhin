@@ -2,12 +2,17 @@
 title: "Speech Pipeline (STT & TTS)"
 ---
 
+[中文版](/wiki/cubic/speech)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-speech) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+Some source citation line anchors in the Cubic original point to unrelated lines at the pinned commit. Check the linked file rather than relying on its line range. See [Speech](/en/ai/speech).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -17,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [AGENTS.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md)
 - [CLAUDE.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md)
 - [packages/toolkit/scaffold-wizard/README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/scaffold-wizard/README.md)
-</details>
+:::
 
 # Speech Pipeline (STT & TTS)
 

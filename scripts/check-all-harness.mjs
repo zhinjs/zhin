@@ -223,6 +223,11 @@ const checks = [
     description: '检查文档相对链接是否断裂',
   },
   {
+    name: 'Cubic Wiki Translations',
+    command: 'pnpm check:cubic-wiki-translations',
+    description: '校验中英文 Wiki 页面的源码哈希与 Markdown 结构一致',
+  },
+  {
     name: 'Install Tiers SSOT',
     command: 'pnpm check:install-tiers-ssot',
     description: 'README Install tiers 表与 docs/snippets/install-tiers.md 一致',

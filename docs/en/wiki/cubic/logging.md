@@ -2,12 +2,13 @@
 title: "Logging & Telemetry"
 ---
 
+[中文版](/wiki/cubic/logging)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-logging) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -20,7 +21,7 @@ The following files were used as context for generating this wiki page:
 - [basic/cli/src/commands/migrate.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/migrate.ts)
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
 
-</details>
+:::
 
 # Logging & Telemetry
 
@@ -128,12 +129,12 @@ Sources: [basic/logger/README.md:20-35](https://github.com/zhinjs/zhin/blob/368d
 Global settings apply to the default logger and are inherited by all new instances.
 
 ```typescript
-import { setLevel, LogLevel, addGlobalTransport, FileTransport } from '@zhin.js/logger';
+import { setLevel, LogLevel, addTransport, FileTransport } from '@zhin.js/logger';
 import fs from 'node:fs';
 
 setLevel(LogLevel.INFO);
 const stream = fs.createWriteStream('./bot.log');
-addGlobalTransport(new FileTransport(stream));
+addTransport(new FileTransport(stream));
 ```
 Sources: [basic/logger/README.md:265-285](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/logger/README.md#L265-L285)
 

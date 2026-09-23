@@ -2,16 +2,17 @@
 title: "Security Policy & Best Practices"
 ---
 
+[中文版](/wiki/cubic/security-policy)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-security-policy) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
 ::: danger Known correction
-New scaffolded projects currently configure HTTP port `8068`; `8086` is the fallback when the runtime has no configured port. Check the startup output or `http.port`. See [Getting Started](/en/getting-started/).
+New scaffolded projects currently configure HTTP port `8068`; `8086` is the fallback when the runtime has no configured port. Built-in Agent defaults are `execSecurity: deny` and `execApprovalMode: auto`; explicit project configuration may override them. Check the startup output or `http.port`. See [Getting Started](/en/getting-started/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -21,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [agents/dev/system.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/dev/system.md)
 - [packages/toolkit/create-zhin/README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/README.md)
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
-</details>
+:::
 
 # Security Policy & Best Practices
 
@@ -53,7 +54,7 @@ Users managing Zhin.js instances must maintain environment hygiene and restrict 
 ### Credential Protection
 *   **Environment Variables**: Store sensitive keys in a `.env` file and reference them in `zhin.config.yml` using the `${VAR_NAME}` syntax.
 *   **Version Control**: Never commit `.env` files to git; the project includes `.env` in the default `.gitignore`.
-*   **HTTP Tokens**: Use a strong `HTTP_TOKEN` for the Web Console. The scaffold-wizard generates a random 32-bit hex string by default.
+*   **HTTP Tokens**: Use a strong `HTTP_TOKEN` for the Web Console. The scaffold-wizard generates a random 32-character hex string by default.
 
 ### Access Control
 *   **Host API**: Restrict the Host API (default `:8086`) to trusted sources using firewall rules or reverse proxies like Nginx.
@@ -112,8 +113,8 @@ Agent security is enforced through two primary policy layers:
 
 ### Tool Security Configuration
 Built-in tools default to strict security settings:
-*   `execSecurity`: Set to `allowlist`.
-*   `execApprovalMode`: Set to `ask`.
+*   `execSecurity`: Defaults to `deny`.
+*   `execApprovalMode`: Defaults to `auto`.
 
 ```mermaid
 sequenceDiagram

@@ -2,12 +2,17 @@
 title: "Rich Media with Satori"
 ---
 
+[中文版](/wiki/cubic/satori)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-satori) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+The `wrapCardHtml` example below requires a background color argument; the normalized copy supplies `DEFAULT_CARD_THEME.canvas`. See [the maintained card example](/en/authoring/middleware-components).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -17,7 +22,7 @@ The following files were used as context for generating this wiki page:
 - [packages/toolkit/create-zhin/src/workspace.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts)
 - [README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md)
 - [packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/plugin-init/SKILL.md)
-</details>
+:::
 
 # Rich Media with Satori
 
@@ -80,7 +85,7 @@ To use JSX for rendering, developers must set the `jsxImportSource` to `@zhin.js
 Components utilize pre-defined UI primitives to build cards and layouts.
 ```typescript
 import { defineComponent } from 'zhin.js/component';
-import { Card, CardHeader, Row, StatChip, h, wrapCardHtml } from '@zhin.js/satori';
+import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';
 
 export default defineComponent({
   render({ title, value }) {
@@ -92,7 +97,7 @@ export default defineComponent({
     });
     return {
       type: 'html',
-      data: { html: wrapCardHtml(body), width: 540 }
+      data: { html: wrapCardHtml(body, DEFAULT_CARD_THEME.canvas), width: 540 }
     };
   },
 });

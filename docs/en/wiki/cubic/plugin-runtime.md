@@ -2,6 +2,8 @@
 title: "Plugin Runtime & Conventions"
 ---
 
+[中文版](/wiki/cubic/plugin-runtime)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-plugin-runtime) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
@@ -10,8 +12,7 @@ title: "Plugin Runtime & Conventions"
 Code capabilities use named directories with fixed `index.ts` entries: `commands/**/index.ts` and one-level `handlers/<name>/index.ts`. The file-style examples in the snapshot are not discovered. See [Convention Directories](/en/authoring/conventions).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -23,7 +24,7 @@ The following files were used as context for generating this wiki page:
 - [packages/toolkit/create-zhin/template/skills/plugin-quality/SKILL.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/template/skills/plugin-quality/SKILL.md)
 - [README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md)
 - [packages/im/runtime/tests/console-feature-hmr.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/runtime/tests/console-feature-hmr.test.ts)
-</details>
+:::
 
 # Plugin Runtime & Conventions
 

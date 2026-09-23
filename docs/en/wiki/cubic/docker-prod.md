@@ -2,16 +2,17 @@
 title: "Production Deployment"
 ---
 
+[中文版](/wiki/cubic/docker-prod)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-docker-prod) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
 ::: danger Known correction
-The `8086` proxy example below applies only when that port is configured or the runtime uses its unconfigured fallback. New scaffolded projects use `8068`. See [Production Deployment](/en/operations/production).
+The `8086` proxy example below applies only when that port is configured or the runtime uses its unconfigured fallback. New scaffolded projects use `8068`; `pnpm daemon` and `pnpm stop` are legacy migration scripts, not new-scaffold defaults. Some Cubic source line anchors in this article point to unrelated content. See [Production Deployment](/en/operations/production).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -23,7 +24,7 @@ The following files were used as context for generating this wiki page:
 - [CLAUDE.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md)
 - [README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md)
 
-</details>
+:::
 
 # Production Deployment
 
@@ -62,9 +63,9 @@ The CLI provides standardized scripts for different deployment needs.
 | Command | Action | Flag |
 | :--- | :--- | :--- |
 | `pnpm start` | Production Startup | `zhin runtime start --mode production --no-watch` |
-| `pnpm daemon` | Background Execution | `zhin runtime start --daemon` |
+| `pnpm daemon` (migrated legacy projects only) | Background Execution | `zhin runtime start --daemon` |
 | `pnpm build` | Type-Check/Prep | `tsc --noEmit` |
-| `pnpm stop` | Graceful Shutdown | N/A |
+| `pnpm stop` (migrated legacy projects only) | Graceful Shutdown | N/A |
 
 Sources: [basic/cli/src/commands/migrate.ts:25-30](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/migrate.ts#L25-L30), [packages/toolkit/create-zhin/src/workspace.ts:101-105](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts#L101-L105)
 

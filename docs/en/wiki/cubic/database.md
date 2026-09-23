@@ -2,12 +2,13 @@
 title: "Database Abstraction & Persistence"
 ---
 
+[中文版](/wiki/cubic/database)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-database) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -17,13 +18,13 @@ The following files were used as context for generating this wiki page:
 - [packages/toolkit/create-zhin/tests/config.test.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/tests/config.test.ts)
 - [basic/cli/src/commands/setup.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts)
 - [AGENTS.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md)
-</details>
+:::
 
 # Database Abstraction & Persistence
 
 Zhin.js implements a database abstraction layer within its `basic/` services to provide uniform persistence across various storage engines. This system allows developers to interact with relational, document, and key-value stores using a consistent Model API, shielding the core framework from dialect-specific syntax.
 
-The database layer serves as a foundation for higher-level features such as the Unified Inbox, Agent memory, and persistent message logs. By providing a shared configuration向导 (wizard), Zhin ensures that database setup remains consistent whether performed during initial project creation or later through CLI management tools.
+The database layer serves as a foundation for higher-level features such as the Unified Inbox, Agent memory, and persistent message logs. By providing a shared configuration wizard, Zhin ensures that database setup remains consistent whether performed during initial project creation or later through CLI management tools.
 Sources: [AGENTS.md:35-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L35-L50), [packages/toolkit/create-zhin/README.md:120-135](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/README.md#L120-L135)
 
 ## Supported Dialects

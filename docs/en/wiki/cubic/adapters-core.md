@@ -2,12 +2,17 @@
 title: "Adapter Core & Endpoint Lifecycle"
 ---
 
+[中文版](/wiki/cubic/adapters-core)
+
 ::: warning Generated reference snapshot
 [Original Cubic page](https://www.cubic.dev/wikis/zhinjs/zhin?page=page-adapters-core) · captured 2026-09-23 · [source commit](https://github.com/zhinjs/zhin/commit/368db14caa4aa91311fb090f07bd792fe4b22fe7). This AI-generated page has not been verified against the current code. Use the [Zhin documentation](/en/getting-started/) for current behavior and [see known corrections](/en/wiki/).
 :::
 
-<details>
-<summary>Relevant source files</summary>
+::: danger Known correction
+The lifecycle diagram below conflates a scaffolded Endpoint example with `createEndpointLifecycle`. The latter uses `idle / connecting / open / reconnecting / closed / stopped` and does not expose the diagram's `open()` / `close()` transitions. The example is a partial skeleton, not a copy-ready inbound adapter. See [Endpoint Lifecycle](/en/authoring/endpoint-lifecycle).
+:::
+
+::: details Relevant source files
 
 The following files were used as context for generating this wiki page:
 
@@ -16,7 +21,7 @@ The following files were used as context for generating this wiki page:
 - [AGENTS.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md)
 - [basic/cli/src/commands/new.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/new.ts)
 - [plugins/adapters/README.md](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/plugins/adapters/README.md)
-</details>
+:::
 
 # Adapter Core & Endpoint Lifecycle
 
