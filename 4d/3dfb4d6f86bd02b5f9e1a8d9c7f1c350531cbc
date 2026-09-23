@@ -1,0 +1,21 @@
+scripts/check-release-plan.test.ts
+  s_079f1dc5e6308d::t_772716e25498ab 156-184
+scripts/release-version-coverage.mjs
+  s_079f1dc5e6308d::t_b7f8cb8cf10e7e 55-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d3dfb4d6f86bd02b5f9e1a8d9c7f1c350531cbc",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
