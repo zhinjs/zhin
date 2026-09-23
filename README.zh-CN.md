@@ -224,6 +224,7 @@ ai:
 | **基础** | [核心概念](./docs/concepts/architecture.md) · [配置](./docs/configuration/index.md) · [命令](./docs/authoring/commands.md) · [插件](./docs/concepts/plugin-model.md) |
 | **进阶** | [AI](./docs/ai/index.md) · [Prompt Section、工具与技能](./docs/authoring/agent-tools.md) · [Agent Runtime](./packages/im/agent/README.md) · [消息流](./docs/concepts/message-flow.md) |
 | **开发** | [插件开发](./docs/authoring/define-plugin.md) · [贡献](./docs/contributing/development.md) · [架构](./docs/concepts/architecture.md) |
+| **参考 Wiki** | [29 篇中文译文](./docs/wiki/index.md) · [英文原文](./docs/en/wiki/index.md)（第三方 AI 生成快照，使用前请查看勘误） |
 
 站点：[zhin.js.org](https://zhin.js.org)
 
