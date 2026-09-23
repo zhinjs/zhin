@@ -4,7 +4,7 @@ const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.
 
 // Tags are created only after publishing. Until then, use verified Changesets
 // output as the baseline, and still check for package changes after that commit.
-export function findVersionedReleaseBaseline({ root, directory, name, version }) {
+export function findVersionedReleaseBaseline({ root, directory, name, version, workspacePackages, evidenceCache = new Map() }) {
   const git = (...args) => {
     const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
     if (result.status !== 0) throw new Error(result.stderr || 'Failed to read release history');
@@ -34,15 +34,42 @@ export function findVersionedReleaseBaseline({ root, directory, name, version })
     const hasHeading = (text) => (text ?? '').split(/\r?\n/).some((line) => line.trim() === `## ${version}`);
     if (!hasHeading(readAt(commit, changelogFile)) || hasHeading(readAt(`${commit}^`, changelogFile))) return undefined;
 
-    const deleted = git('diff', '--name-only', '--diff-filter=D', `${commit}^`, commit, '--', '.changeset')
-      .trim().split('\n').filter((file) => /^\.changeset\/[^/]+\.md$/.test(file) && file !== '.changeset/README.md');
-    const declarations = deleted.flatMap((file) => {
-      const frontmatter = readAt(`${commit}^`, file)?.split(/^---\s*$/m)[1] ?? '';
-      return [...frontmatter.matchAll(/^\s*['"]?[^'"\n]+['"]?\s*:\s*(major|minor|patch)\s*$/gm)]
-        .map((match) => match[1]);
-    });
-    // Dependency-propagated releases need not be named directly in a changeset.
-    if (declarations.length === 0 || declarations.some((type) => type !== 'patch')) return undefined;
+    let declaredPackages = evidenceCache.get(commit);
+    if (declaredPackages === undefined) {
+      const deleted = git('diff', '--name-only', '--diff-filter=D', `${commit}^`, commit, '--', '.changeset')
+        .trim().split('\n').filter((file) => /^\.changeset\/[^/]+\.md$/.test(file) && file !== '.changeset/README.md');
+      const declarations = deleted.flatMap((file) => {
+        const frontmatter = readAt(`${commit}^`, file)?.split(/^---\s*$/m)[1] ?? '';
+        return frontmatter.split(/\r?\n/).flatMap((line) => {
+          if (line.trimStart().startsWith('#')) return [];
+          const match = line.match(/^[ \t]*(?:"([^"]+)"|'([^']+)'|([^:#\s][^:]*?))[ \t]*:[ \t]*(major|minor|patch)[ \t]*$/);
+          return match ? [{ name: match[1] ?? match[2] ?? match[3], type: match[4] }] : [];
+        });
+      });
+      declaredPackages = declarations.length > 0 && declarations.every(({ type }) => type === 'patch')
+        ? new Set(declarations.map(({ name: packageName }) => packageName))
+        : null;
+      evidenceCache.set(commit, declaredPackages);
+    }
+    if (!declaredPackages) return undefined;
+
+    // Changesets also bumps workspace packages that depend on named packages.
+    // Require a dependency path back to a consumed declaration, rather than
+    // accepting any manual bump that happens to share the same commit.
+    const related = new Set(declaredPackages);
+    let expanded = true;
+    while (expanded) {
+      expanded = false;
+      for (const pkg of workspacePackages) {
+        if (related.has(pkg.name)) continue;
+        const dependencies = { ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
+        if (Object.keys(dependencies).some((dependency) => related.has(dependency))) {
+          related.add(pkg.name);
+          expanded = true;
+        }
+      }
+    }
+    if (!related.has(name)) return undefined;
     return commit;
   }
   return undefined;

@@ -78,9 +78,15 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     expect(result.output).toContain('Publishable package changes are missing patch changesets');
   });
 
-  it.each(['1.2.0', '2.0.0', '1.1.0'])('rejects non-patch version output %s', (version) => {
+  it.each(['1.2.0', '2.0.0'])('rejects non-patch version output %s', (version) => {
     const repo = fixture();
     repo.bump({ version });
+    expect(repo.check().status).toBe(1);
+  });
+
+  it('rejects an unchanged version output', () => {
+    const repo = fixture();
+    repo.bump({ version: '1.1.0' });
     expect(repo.check().status).toBe(1);
   });
 
@@ -104,6 +110,44 @@ describe.skipIf(process.platform === 'win32')('release plan gate across versioni
     repo.commit();
     repo.bump();
     expect(repo.check().status).toBe(1);
+  });
+
+  it('does not count YAML comments as patch declarations', () => {
+    const repo = fixture();
+    repo.write('.changeset/fix.md', '---\n# @test/demo: patch\n---\n');
+    repo.commit();
+    repo.bump();
+    expect(repo.check().output).toContain('missing current version tags');
+  });
+
+  it('rejects an unrelated package bumped in the same version commit', () => {
+    const repo = fixture();
+    repo.write('packages/other/package.json', JSON.stringify({ name: '@test/other', version: '1.1.0' }));
+    repo.write('packages/other/CHANGELOG.md', '# Other\n\n## 1.1.0\n');
+    repo.commit();
+    repo.write('packages/other/package.json', JSON.stringify({ name: '@test/other', version: '1.1.1' }));
+    repo.write('packages/other/CHANGELOG.md', '# Other\n\n## 1.1.1\n\n## 1.1.0\n');
+    repo.bump();
+    const result = repo.check();
+    expect(result.status).toBe(1);
+    expect(result.output).toContain('@test/other@1.1.1');
+  });
+
+  it('accepts a dependent package bumped by Changesets propagation', () => {
+    const repo = fixture();
+    repo.write('packages/dependent/package.json', JSON.stringify({
+      name: '@test/dependent', version: '1.1.0', dependencies: { '@test/demo': 'workspace:^' },
+    }));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.0\n');
+    repo.commit();
+    repo.write('packages/dependent/package.json', JSON.stringify({
+      name: '@test/dependent', version: '1.1.1', dependencies: { '@test/demo': 'workspace:^' },
+    }));
+    repo.write('packages/dependent/CHANGELOG.md', '# Dependent\n\n## 1.1.1\n\n## 1.1.0\n');
+    repo.bump();
+    const result = repo.check();
+    expect(result.status).toBe(0);
+    expect(result.output).toContain('2 versioned packages awaiting tags');
   });
 
   it('does not accept a changelog heading that existed before versioning', () => {
