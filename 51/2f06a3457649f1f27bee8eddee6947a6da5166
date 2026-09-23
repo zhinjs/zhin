@@ -1,0 +1,229 @@
+docs/wiki/cubic/console-pages.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_97cf654b6f396d 123-124
+  s_079f1dc5e6308d::t_877cdca01488dd 1-2,10-122,125-139
+docs/en/wiki/cubic/security-policy.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 12,15,25,57,116-117
+docs/wiki/cubic/security-policy.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 94
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_da31a43822494e 1-2,10-93,95-157
+docs/en/wiki/cubic/testing.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,23
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/docker-prod.md
+  s_079f1dc5e6308d::t_004e4398ec290d 12,15,27,66,68
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/cubic/console-arch.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_49e1e99a9c760b 1-2,10-138
+docs/en/wiki/cubic/skills.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,23
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/satori.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,25,88,100
+docs/wiki/cubic/skills.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 135-138
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_f50b86a7422c8b 1-2,10-134,139-144
+docs/public/wiki/cubic/source.json
+  s_079f1dc5e6308d::t_7645c45a4e72cc 4
+  s_079f1dc5e6308d::t_004e4398ec290d 5,11,18,25,32,39,46,53,60,67,74,81,88,95,102,109,116,123,130,137,144,151,158,165,172,179,186,193,200,207
+docs/wiki/cubic/ai-providers.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 63-65
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_3fa62c17c60593 1-2,10-62,66-148
+docs/wiki/cubic/mcp.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_a36080aa5eaf37 1-2,10-147
+docs/wiki/cubic/intro.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3,9
+  s_079f1dc5e6308d::t_a5dd6347c620be 6,26-28,30,37-38,57,59,68-69,71,75,88,90,93,95,98,110,112,114-115,117,124,129,131,135,151,153,157
+  s_079f1dc5e6308d::t_ef2b04533ce015 1-2,4-5,7-8,10-25,29,31-36,39-56,58,60-67,70,72-74,76-87,89,91-92,94,96-97,99-109,111,113,116,118-123,125-128,130,132-134,136-150,152,154-156,158
+package.json
+  s_079f1dc5e6308d::t_efa00b78b7b591 62
+docs/wiki/cubic/cli-tools.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 112-132
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_055bb2577ec7f5 1-2,10-111,133-150
+docs/wiki/cubic/security-sandbox.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_aacbc265c57572 1-2,10-165
+README.md
+  s_079f1dc5e6308d::t_b715e23b6ec0f3 223
+docs/en/wiki/cubic/message-flow.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,22
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/adapters-platforms.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,20,118
+docs/en/wiki/cubic/scheduling.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,27
+docs/en/wiki/cubic/commands.md
+  s_079f1dc5e6308d::t_004e4398ec290d 15,27
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/logging.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,24,132,137
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/cubic/arch-core.md
+  s_079f1dc5e6308d::t_e18621296d0082 1-2,4-8,10-150
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3,9
+docs/en/wiki/cubic/ai-orchestration.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,26,99,102,110
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/cubic/satori.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_18a5eb0297c8e0 1-2,10-136
+scripts/import-cubic-wiki.py
+  s_079f1dc5e6308d::t_0106570aff2f62 5,25-31,34,73-75,80-82,85-104,106-166
+  s_079f1dc5e6308d::t_13fad45e556c8c 178-179,185,203-208,212-259,263,266-269,279-282,288,294-295,297
+  s_079f1dc5e6308d::t_4e90c4d197e5fd 105
+  s_079f1dc5e6308d::t_28181b20a8cf12 305
+docs/.vitepress/config.ts
+  s_079f1dc5e6308d::t_709690672b7edf 268-306
+docs/wiki/cubic/ai-orchestration.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_95c6040071096a 1-2,10-157
+README.zh-CN.md
+  s_079f1dc5e6308d::t_b715e23b6ec0f3 223
+docs/wiki/cubic/database.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_3c49895d2baed2 1-2,10-129
+docs/en/wiki/cubic/mcp.md
+  s_079f1dc5e6308d::t_004e4398ec290d 15,25
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/security-sandbox.md
+  s_079f1dc5e6308d::t_004e4398ec290d 15,25
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/cubic/tools-caps.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_5b77bb8ac1cfd8 1-2,10-137
+scripts/check-cubic-wiki-translations.mjs
+  s_079f1dc5e6308d::t_defc54137aaef9 40-45,64-66
+  s_079f1dc5e6308d::t_efa00b78b7b591 1-39,46-63,67-77
+docs/wiki/cubic/memory.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_4014ef285a9baf 1-2,10-148
+docs/en/wiki/cubic/cli-tools.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,22
+docs/en/wiki/cubic/tools-caps.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,21
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+scripts/check-all-harness.mjs
+  s_079f1dc5e6308d::t_538393c2530bfb 226-229
+  s_079f1dc5e6308d::t_df8d4ce0c3ce39 225
+docs/wiki/cubic/docker-prod.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 140
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_03c46f86ab70ed 1-2,10-139,141-142
+docs/wiki/cubic/logging.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_8165cf448a6a1e 1-2,10-142
+docs/en/wiki/cubic/console-arch.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,21
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/index.md
+  s_079f1dc5e6308d::t_bb2af73c2ab776 7,13,15-25,27-74
+  s_079f1dc5e6308d::t_b9f47a954b075d 10,75
+docs/en/wiki/cubic/ai-providers.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,24
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/wiki/cubic/speech.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 58
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_b3fbc89d860506 1-2,10-57,59-125
+docs/wiki/cubic/message-flow.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_6f4d2d9b406ee5 1-2,10-143
+docs/wiki/cubic/adapters-platforms.md
+  s_079f1dc5e6308d::t_97cf654b6f396d 86-88
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 1-85,89-140
+docs/wiki/cubic/scheduling.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3,9
+  s_079f1dc5e6308d::t_54b7cc86865c84 1-2,4-8,10-153
+docs/wiki/cubic/plugin-runtime.md
+  s_079f1dc5e6308d::t_2766ff1aefae61 13,32,38,54,58-59,63,90,96-98,100,117-118,120,123-124,142-143
+  s_079f1dc5e6308d::t_a604c4b2020a4e 1-2,4-8,10-12,14-31,33-37,39-53,55-57,60-62,64-89,91-95,99,101-116,121-122,125-141,144-146
+  s_079f1dc5e6308d::t_97cf654b6f396d 119
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3,9
+docs/en/wiki/cubic/console-pages.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,19,22
+docs/en/wiki/cubic/intro.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,22
+docs/en/wiki/index.md
+  s_079f1dc5e6308d::t_5feb9e1c83273d 7,75
+  s_079f1dc5e6308d::t_416e391f26721c 10,21-25
+docs/wiki/cubic/adapters-core.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_c78587fa162820 1-2,10-139
+docs/wiki/cubic/commands.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_9e713346404b7b 1-2,10-132
+docs/wiki/cubic/config.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_0f836e47f5a05f 1-2,10-134
+docs/wiki/cubic/hmr-generation.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_400d97782c730c 1-2,10-120
+docs/wiki/cubic/quickstart.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_c1b617408a48f5 1-2,10-154
+docs/en/wiki/cubic/arch-core.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,22
+docs/en/wiki/cubic/plugin-runtime.md
+  s_079f1dc5e6308d::t_004e4398ec290d 15,27
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/quickstart.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 15,26,145
+docs/wiki/cubic/testing.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_c701b7e76c1ffa 1-2,10-156
+docs/en/wiki/cubic/messaging.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,25,71-72,142-143
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/hmr-generation.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,22
+docs/en/wiki/cubic/database.md
+  s_079f1dc5e6308d::t_004e4398ec290d 11,21,27
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+docs/en/wiki/cubic/speech.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,25
+docs/en/wiki/cubic/config.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,26,101
+docs/wiki/cubic/messaging.md
+  s_079f1dc5e6308d::t_2ca3b9f38ba7f2 3-9
+  s_079f1dc5e6308d::t_b3cfd86adae313 1-2,10-146
+docs/en/wiki/cubic/memory.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11,21
+docs/en/wiki/cubic/adapters-core.md
+  s_079f1dc5e6308d::t_7645c45a4e72cc 5-6
+  s_079f1dc5e6308d::t_004e4398ec290d 11-15,24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "512f06a3457649f1f27bee8eddee6947a6da5166",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
