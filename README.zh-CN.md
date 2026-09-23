@@ -28,6 +28,8 @@
 
 <p align="center">
   <a href="https://zhin.js.org">文档</a> ·
+  <a href="https://github.com/zhinjs/zhin/wiki">Wiki 知识入口</a> ·
+  <a href="https://github.com/orgs/zhinjs/projects/3">交付看板</a> ·
   <a href="https://demo.zhin.dev">在线 Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
   <a href="./docs/contributing/development.md">贡献指南</a>

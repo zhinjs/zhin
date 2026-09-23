@@ -6,6 +6,10 @@ title: 开发流程
 
 改完代码到合进 main，中间有几道关卡：本地构建与测试、完整 harness 门禁、changeset、CI 发版。本页按这个顺序讲一遍日常闭环。
 
+## 协作入口
+
+在 [Issue](https://github.com/zhinjs/zhin/issues) 记录问题和验收标准，通过关联的 PR 提交实现。[交付看板](https://github.com/orgs/zhinjs/projects/3) 跟踪当前开放 Issue 和 PR，按 Todo → In Progress → Done 推进；新建或更新且仍开放的条目会自动进入看板。历史已合并 PR 不需要补录。文档入口见 [GitHub Wiki](https://github.com/zhinjs/zhin/wiki)，技术内容仍在本仓库 `docs/` 中维护。
+
 ## 环境准备
 
 - Node.js `^20.19.0` 或 `>=22.12.0`
