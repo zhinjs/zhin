@@ -151,6 +151,11 @@ pnpm pub       # = pnpm changeset publish，发布到 npm
 发布覆盖检查只忽略测试文件和 Changesets 生成的 `CHANGELOG.md`。包内构建、类型检查和
 工具配置仍可能改变最终产物或声明文件，因此这些配置变更也必须由 patch changeset 覆盖。
 
+版本 PR 与合并后的发布任务使用同一套覆盖检查。当前版本 tag 尚未创建时，门禁检查
+Git 历史中是否存在消费 patch changeset、提升 patch 版本并新增对应 CHANGELOG 条目的
+升版提交，以该提交作为待发布包的校验基线。升版提交之后新增的包内改动仍需 changeset；
+既没有 tag、也没有有效升版记录的包会被拦截。tag 由实际发布流程创建，无需提前补造。
+
 内部 `peerDependencies` 使用 `workspace:^`，避免兼容的内部 minor 升级被发布成精确版本，
 进而把无关的上游包推成 major。私有示例包不参与 Changesets version/tag。
 

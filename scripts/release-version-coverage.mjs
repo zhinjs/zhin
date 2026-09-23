@@ -1,4 +1,52 @@
+import { spawnSync } from 'node:child_process';
+
 const NON_RELEASE_PATH = /(?:^|\/)(?:tests?|__tests__)(?:\/|$)|\.(?:test|spec)\.[cm]?[jt]sx?$|(?:^|\/)CHANGELOG\.md$/;
+
+// Tags are created only after publishing. Until then, use verified Changesets
+// output as the baseline, and still check for package changes after that commit.
+export function findVersionedReleaseBaseline({ root, directory, name, version }) {
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    if (result.status !== 0) throw new Error(result.stderr || 'Failed to read release history');
+    return result.stdout;
+  };
+  const readAt = (ref, file) => {
+    const result = spawnSync('git', ['show', `${ref}:${file}`], { cwd: root, encoding: 'utf8' });
+    return result.status === 0 ? result.stdout : undefined;
+  };
+  const manifestFile = `${directory}/package.json`;
+  const commits = git('log', '--format=%H', 'HEAD', '--', manifestFile).trim().split('\n').filter(Boolean);
+  for (const commit of commits) {
+    const currentText = readAt(commit, manifestFile);
+    const previousText = readAt(`${commit}^`, manifestFile);
+    if (!currentText || !previousText) return undefined;
+    const current = JSON.parse(currentText);
+    const previous = JSON.parse(previousText);
+    if (current.name !== name || current.version !== version || previous.name !== name) return undefined;
+    if (previous.version === version) continue;
+
+    const before = /^(\d+)\.(\d+)\.(\d+)$/.exec(previous.version);
+    const after = /^(\d+)\.(\d+)\.(\d+)$/.exec(version);
+    if (!before || !after || before[1] !== after[1] || before[2] !== after[2]
+      || Number(after[3]) <= Number(before[3])) return undefined;
+
+    const changelogFile = `${directory}/CHANGELOG.md`;
+    const hasHeading = (text) => (text ?? '').split(/\r?\n/).some((line) => line.trim() === `## ${version}`);
+    if (!hasHeading(readAt(commit, changelogFile)) || hasHeading(readAt(`${commit}^`, changelogFile))) return undefined;
+
+    const deleted = git('diff', '--name-only', '--diff-filter=D', `${commit}^`, commit, '--', '.changeset')
+      .trim().split('\n').filter((file) => /^\.changeset\/[^/]+\.md$/.test(file) && file !== '.changeset/README.md');
+    const declarations = deleted.flatMap((file) => {
+      const frontmatter = readAt(`${commit}^`, file)?.split(/^---\s*$/m)[1] ?? '';
+      return [...frontmatter.matchAll(/^\s*['"]?[^'"\n]+['"]?\s*:\s*(major|minor|patch)\s*$/gm)]
+        .map((match) => match[1]);
+    });
+    // Dependency-propagated releases need not be named directly in a changeset.
+    if (declarations.length === 0 || declarations.some((type) => type !== 'patch')) return undefined;
+    return commit;
+  }
+  return undefined;
+}
 
 export function isReleaseRelevantPath(file) {
   return !NON_RELEASE_PATH.test(file.replaceAll('\\', '/'));
