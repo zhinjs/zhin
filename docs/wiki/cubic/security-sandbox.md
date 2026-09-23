@@ -59,7 +59,7 @@ flowchart TD
     NP --> Tool
     OP --> Tool
 ```
-该示意图展示了从外部请求开始，经过核心运行时，最终进入控制AI代理工具执行的细粒度策略中的安全验证流程。
+该示意图展示了从外部请求开始，经过核心运行时，最终进入控制AI Agent工具执行的细粒度策略中的安全验证流程。
 来源：[AGENTS.md:162-170](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L162-L170), [SECURITY.md:214-230](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/SECURITY.md#L214-L230), [CLAUDE.md:188-195](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L188-L195)
 
 ## Agent安全策略
@@ -89,7 +89,7 @@ Agent架构通过工程化手段为AI驱动的操作提供了防御边界。该�
 沙箱环境提供了一个隔离的测试平台，用于在不影响实时聊天平台的情况下开发和测试代理。它包含一个专用的适配器以及远程控制台中的专用网页界面。
 
 ### 沙箱功能
-*   **代理测试台**：一个名为“代理试验台”（Agent Playground）的专用控制台页面，可实时监控代理的运行轨迹和工具执行日志。
+*   **Agent 测试台**：一个名为“代理试验台”（Agent Playground）的专用控制台页面，可实时监控Agent 的运行轨迹和工具执行日志。
 *   **隔离消息传递**：`@zhin.js/adapter-sandbox` 会将消息通过内部 WebSockets 通道传递，而非调用外部 API。
 *   **元数据提取**：系统使用 `extractPageMetadata` 在基于约定的插件加载过程中发现沙箱页面。
 

@@ -137,4 +137,4 @@ sequenceDiagram
 来源：[basic/cli/src/commands/new.ts:344-348](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/new.ts#L344-L348), [CLAUDE.md:75-76](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L75-L76)
 
 ## 概述
-Zhin.js中的平台集成采用标准化的`Endpoint`和`Adapter`模式，以抽象平台特定的协议。通过使用统一的发送链路和标准化事件触发机制，开发者可以基于单一代码库，实现与20多个渠道无缝交互的助手。生命周期管理与交互式骨架构建进一步简化了在多个账户和服务提供商间扩展机器人功能的过程。
+Zhin.js 的平台集成采用标准化的 `Endpoint` 和 `Adapter` 模式，以抽象平台特定的协议。通过使用统一的发送链路和标准化事件触发机制，开发者可以基于单一代码库，实现与 20 多个平台无缝交互的助手。生命周期管理与交互式脚手架进一步简化了在多个账户和服务提供商间扩展机器人功能的过程。

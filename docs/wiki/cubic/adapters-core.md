@@ -135,5 +135,5 @@ export default defineAdapter({
 
 ## 概述
 
-适配器核心和终端生命周期系统为聊天平台的通信提供了强大的抽象层。通过强制执行单一发送链路和标准化的生命周期转换，Zhin.js 确保插件在保持平台无关性的同时，支持热重载以及跨多种通信渠道的AI代理编排等高级功能。
+适配器核心和终端生命周期系统为聊天平台的通信提供了强大的抽象层。通过强制执行单一发送链路和标准化的生命周期转换，Zhin.js 确保插件在保持平台无关性的同时，支持热重载以及跨多种通信渠道的AI Agent编排等高级功能。
 来源：[README.md:43-58](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L43-L58), [AGENTS.md:177-185](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L177-L185)

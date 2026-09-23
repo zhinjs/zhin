@@ -131,7 +131,7 @@ sequenceDiagram
     System-->>Policy: Result
     Policy-->>Agent: Sanitized Data
 ```
-此图展示了在AI代理执行系统工具之前所进行的安全检查顺序。
+此图展示了在AI Agent执行系统工具之前所进行的安全检查顺序。
 
 来源：[CLAUDE.md:144-150](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L144-L150), [AGENTS.md:105-108](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L105-L108), [agents/dev/system.md:46-52](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/agents/dev/system.md#L46-L52)
 

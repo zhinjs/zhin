@@ -28,7 +28,7 @@ translation_source_body_sha256: fe3f1c124730b6b4dd2949d022de15fdf766883015d271a0
 
 # 快速开始与安装
 
-Zhin.js 为构建多渠道聊天平台机器人提供了简洁的初始化流程。该框架采用分层安装模型，初始阶段提供一个小于10MB的轻量级消息处理核心。开发者可通过交互式配置向导扩展功能，该向导负责管理数据库、平台适配器以及AI代理。
+Zhin.js 为构建多通道聊天平台机器人提供了简洁的初始化流程。该框架采用分层安装模型，初始阶段提供一个小于10MB的轻量级消息处理核心。开发者可通过交互式配置向导扩展功能，该向导负责管理数据库、平台适配器以及AI Agent。
 
 来源：[README.md:20-30](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L20-L30), [README.md:120-130](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L120-L130)
 
@@ -133,7 +133,7 @@ sequenceDiagram
 *   **`plugin.ts`**：根入口文件，使用 `definePlugin` 进行定义。
 *   **`zhin.config.yml`**：HTTP、数据库和AI功能的主要配置文件。
 *   **`commands/`**：用于定义消息命令的目录。
-*    **`skills/`**：以 Markdown 格式存储的 `SKILL.md` 文件，用于定义AI代理的工作流。
+*    **`skills/`**：以 Markdown 格式存储的 `SKILL.md` 文件，用于定义AI Agent的工作流。
 *   **`plugins/`**：本地工作区，用于开发自定义插件包。
 *   **`.env`**：安全存储 `HTTP_TOKEN` 及数据库凭证的文件。
 
@@ -149,6 +149,6 @@ sequenceDiagram
 
 来源：[README.md:65-70](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L65-L70), [packages/toolkit/create-zhin/README.md:310-315](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/README.md#L310-L315)
 
-Zhin.js 强调一种“以行动为导向”的配置方式，当启用 AI 功能时，框架会自动生成如 `SOUL.md` 和 `TOOLS.md` 等功能启动文件。这些文件在项目创建之初便定义了代理的个性特征及工具使用规范。
+Zhin.js 强调一种“以行动为导向”的配置方式，当启用 AI 功能时，框架会自动生成如 `SOUL.md` 和 `TOOLS.md` 等功能启动文件。这些文件在项目创建之初便定义了Agent 的个性特征及工具使用规范。
 
 来源：[basic/cli/src/commands/setup.ts:35-80](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/basic/cli/src/commands/setup.ts#L35-L80), [packages/toolkit/create-zhin/src/workspace.ts:115-125](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/toolkit/create-zhin/src/workspace.ts#L115-L125)

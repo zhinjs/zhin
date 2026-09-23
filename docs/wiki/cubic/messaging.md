@@ -27,26 +27,26 @@ translation_source_body_sha256: 61b2820ab18ae2256567263b5c8ddb220d308e390138f0d9
 
 # 通用消息段与组件
 
-通用段落与组件提供了一种统一的抽象机制，用于在不同聊天平台中处理丰富媒体和交互元素。Zhin.js 框架将消息内容规范化为基于段落的结构，确保同一代码库能够在 QQ、Discord、Telegram 等多个平台适配器上，一致地渲染文本、图片以及复杂的 UI 组件。
+通用消息段与组件提供了一种统一的抽象机制，用于在不同聊天平台中处理丰富媒体和交互元素。Zhin.js 框架将消息内容规范化为基于消息段的结构，确保同一代码库能够在 QQ、Discord、Telegram 等多个平台适配器上，一致地渲染文本、图片以及复杂的 UI 组件。
 
-该系统依赖于自定义的 JSX 实现和声明式组件 API。开发者通过 `defineComponent` 构建可复用的 UI 模块，框架在消息发送流程中将这些组件转换为平台特定的段落或原始文本。
+该系统依赖于自定义的 JSX 实现和声明式组件 API。开发者通过 `defineComponent` 构建可复用的 UI 模块，框架在消息发送流程中将这些组件转换为平台特定的消息段或原始文本。
 
-## 消息段落
+## 消息段
 
-段落是 Zhin.js 消息中的基本构建单元。每个段落代表一种特定类型的内容，例如纯文本、表情符号（脸）或媒体文件。`segment` 工具负责管理这些对象的全生命周期，包括转义、解析和序列化。
+消息段是 Zhin.js 消息中的基本构建单元。每个消息段代表一种特定类型的内容，例如纯文本、表情符号（脸）或媒体文件。`segment` 工具负责管理这些对象的全生命周期，包括转义、解析和序列化。
 
-### 段落类型与工具
-框架提供了若干核心方法来管理段落：
+### 消息段类型与工具
+框架提供了若干核心方法来管理消息段：
 *   **escape/unescape**：将 HTML 实体转换为防止聊天客户端渲染错误。
-*   **text**：创建一个简单的文本段落。
-*   **face**：使用 ID 创建表情或平台特定的脸部表情段落。
-*   **from**：将模板字符串（如 `<image url="..." />`）解析为段落数组。
-*   **raw**：将段落对象转换回序列化的字符串格式（如 `Hello{face}(😊)`）。
-*   **toString**：将段落序列化为兼容模板的字符串。
+*   **text**：创建一个简单的文本消息段。
+*   **face**：使用 ID 创建表情或平台特定的平台表情消息段。
+*   **from**：将模板字符串（如 `<image url="..." />`）解析为消息段数组。
+*   **raw**：将消息段对象转换回序列化的字符串格式（如 `Hello{face}(😊)`）。
+*   **toString**：将消息段序列化为兼容模板的字符串。
 
 来源：[packages/im/core/tests/utils.test.ts:58-123](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/core/tests/utils.test.ts#L58-L123), [packages/im/core/src/built/segment-contract/index.ts](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/core/src/built/segment-contract/index.ts)
 
-### 段落处理流程
+### 消息段处理流程
 
 ```mermaid
 flowchart TD
@@ -143,4 +143,4 @@ sequenceDiagram
 
 来源：[packages/im/core/tests/utils.test.ts:58-123](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/core/tests/utils.test.ts#L58-L123)
 
-通用段落与组件确保开发者能够专注于内容逻辑，而无需关心平台特定的格式化问题。通过将消息层抽象为段落，并提供与 JSX 兼容的组件系统，Zhin.js 在多样化的聊天环境中保持了高度的互操作性，同时支持丰富、媒体密集的交互体验。
+通用消息段与组件确保开发者能够专注于内容逻辑，而无需关心平台特定的格式化问题。通过将消息层抽象为消息段，并提供与 JSX 兼容的组件系统，Zhin.js 在多样化的聊天环境中保持了高度的互操作性，同时支持丰富、媒体密集的交互体验。

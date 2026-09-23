@@ -34,7 +34,7 @@ ZhinAgent 是 Zhin.js 框架中的核心编排组件，负责 AI 会话管理、
 
 ## 架构定位
 
-Agent 层在项目单体仓库的依赖层级中占据一个特定位置。它位于 AI 引擎和 IM 核心之上，位于最终入口点之下。这种结构确保了底层消息传递和内核逻辑不会受到特定 AI 实现的影响。
+Agent 层在项目Monorepo的依赖层级中占据一个特定位置。它位于 AI 引擎和 IM 核心之上，位于最终入口点之下。这种结构确保了底层消息传递和内核逻辑不会受到特定 AI 实现的影响。
 
 ```mermaid
 flowchart TD
@@ -106,7 +106,7 @@ ZhinAgent 采用约定优于配置的方式自动发现工具、技能和子代�
 
 ## 安全与治理（Harness Engineering）
 
-该框架采用“Harness Engineering”机制来确保代理的安全性。执行过程由多层策略进行管控，以防止未经授权的工具使用或数据泄露。
+该框架采用“Harness Engineering”机制来确保Agent 的安全性。执行过程由多层策略进行管控，以防止未经授权的工具使用或数据泄露。
 
 *   **执行策略**：将 `execSecurity`（`deny | allowlist | full`）与 `execApprovalMode`（`ask | auto | bypass`）进行隔离。
 *   **沙箱**：工具在受限环境中执行，以与主机系统隔离。
@@ -117,7 +117,7 @@ ZhinAgent 采用约定优于配置的方式自动发现工具、技能和子代�
 
 ## 配置与初始化
 
-通过 `zhin.config.yml` 配置代理。`create-zhin` 工具包提供交互式初始化功能，用于设置 AI 提供商和代理的默认参数。
+通过 `zhin.config.yml` 配置代理。`create-zhin` 工具包提供交互式初始化功能，用于设置 AI 提供商和Agent 的默认参数。
 
 ```yaml
 # Example zhin.config.yml for ZhinAgent
@@ -139,7 +139,7 @@ ai:
 
 ### 安装层级
 
-代理系统需要特定的依赖包才能正常运行。
+Agent 系统需要特定的依赖包才能正常运行。
 
 | 层级 | 包名 | 用途 |
 |:---|:---|:---|

@@ -24,7 +24,7 @@ translation_source_body_sha256: 18e33ceb353961723b0b5aa9bc601f4ca35d5b013daac916
 
 # 系统架构与分层
 
-Zhin.js 将其功能组织为一个多平台、基于人工智能的聊天机器人框架，使用 TypeScript 开发。该系统采用由 **pnpm workspaces** 和 **Turborepo** 管理的单体仓库结构，以在各个功能层之间强制实施严格的依赖边界。
+Zhin.js 将其功能组织为一个多平台、基于人工智能的聊天机器人框架，使用 TypeScript 开发。该系统采用由 **pnpm workspaces** 和 **Turborepo** 管理的Monorepo结构，以在各个功能层之间强制实施严格的依赖边界。
 
 来源：[CLAUDE.md:16-24](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L16-L24), [README.md:13-20](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L13-L20)
 

@@ -60,7 +60,7 @@ flowchart TD
     SEC --> MCP
 ```
 ### 关键AI组件
-1. **AI引擎（`@zhin.js/ai`）**：负责提供者抽象、代理循环、模型注册表以及对话记忆管理。
+1. **AI引擎（`@zhin.js/ai`）**：负责提供者抽象、Agent 循环、模型注册表以及对话记忆管理。
 2. **代理编排器（`@zhin.js/agent`）**：管理`ZhinAgent`实例，执行文件/网络/执行权限的安全策略，并提供MCP客户端支持。
 3. **SDK注册中心**：作为中央枢纽，统一管理多个大语言模型SDK及模型提供者。
 4. **工具桥接器**：将Zhin原生工具定义映射到大语言模型函数调用 schema。
@@ -143,6 +143,6 @@ sequenceDiagram
 
 ## 结论
 
-LLM 服务提供商与 SDK 适配层是连接 Zhin 插件系统与现代 AI 能力的关键枢纽。通过将 SDK 特有的逻辑封装到注册中心，并通过安全策略面桥接工具，Zhin.js 为 AI 助手提供了安全可控的环境，使其能够安全地与多渠道聊天平台进行交互。
+LLM 服务提供商与 SDK 适配层是连接 Zhin 插件系统与现代 AI 能力的关键枢纽。通过将 SDK 特有的逻辑封装到注册中心，并通过安全策略面桥接工具，Zhin.js 为 AI 助手提供了安全可控的环境，使其能够安全地与多通道聊天平台进行交互。
 
 来源：[README.md:107-115](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L107-L115), [AGENTS.md:230-245](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L230-L245)

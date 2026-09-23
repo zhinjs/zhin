@@ -29,7 +29,7 @@ translation_source_body_sha256: 2b3161230960008c8ba41a8b82e40fc17149abeece46c0f7
 
 模型上下文协议（MCP）为AI助手提供了与Zhin框架交互的服务。它使大语言模型（LLMs）能够理解、查询并生成Zhin特定的实体，例如插件、命令和适配器。来源：[packages/host/mcp/README.md:1-7](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/README.md#L1-L7)，[README.md:110-120](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L110-L120)
 
-该实现主要位于`@zhin.js/mcp`包中。它利用官方的`@modelcontextprotocol/sdk`来向Claude Desktop、Cursor或自定义AI代理等客户端暴露工具（Tools）、资源（Resources）和提示（Prompts）。来源：[packages/host/mcp/package.json:44-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/package.json#L44-L50)，[packages/host/mcp/README.md:9-15](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/README.md#L9-L15)
+该实现主要位于`@zhin.js/mcp`包中。它利用官方的`@modelcontextprotocol/sdk`来向Claude Desktop、Cursor或自定义AI Agent等客户端暴露工具（Tools）、资源（Resources）和提示（Prompts）。来源：[packages/host/mcp/package.json:44-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/package.json#L44-L50)，[packages/host/mcp/README.md:9-15](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/host/mcp/README.md#L9-L15)
 
 ## 架构与传输
 

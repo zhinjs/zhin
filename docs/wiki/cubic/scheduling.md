@@ -115,7 +115,7 @@ sequenceDiagram
 ### 作业配置
 代理作业包含用于正确执行上下文的元数据：
 *   **createdBy**：标识发起该作业的用户（userId，角色）。
-*   **executionPlan**：包含代理的提示、所需工具和技能。
+*   **executionPlan**：包含Agent 的提示、所需工具和技能。
 *   **notify**：成功或失败反馈的配置（例如，`silent` 或特定的IM通道）。
 
 来源：[packages/im/agent/tests/assistant/job-engine.test.ts:52-105](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/packages/im/agent/tests/assistant/job-engine.test.ts#L52-L105)

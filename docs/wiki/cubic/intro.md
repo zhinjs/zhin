@@ -24,13 +24,13 @@ translation_source_body_sha256: caa99d02511aa16a5fa2dcc2e0e01311b018cbc16e86aafc
 
 # Zhin.js 简介
 
-Zhin.js 是一个基于 TypeScript 构建的多渠道聊天机器人框架，专为开发者在聊天平台上线高质量助手而设计。它提供了一个统一的代码基础，可支持在 20 多个平台（包括 QQ、微信、Discord、Slack 和 Telegram）上运行账户。该框架内置可选的 AI Agent 系统，支持通过浏览器控制台进行远程管理，并采用“约定优于配置”的插件模型。
+Zhin.js 是一个基于 TypeScript 构建的多通道聊天机器人框架，专为开发者在聊天平台上线高质量助手而设计。它提供了一个统一的代码基础，可支持在 20 多个平台（包括 QQ、微信、Discord、Slack 和 Telegram）上运行账户。该框架内置可选的 AI Agent 系统，支持通过浏览器控制台进行远程管理，并采用“约定优于配置”的插件模型。
 
 来源：[README.md:25-35](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L25-L35), [AGENTS.md:7-12](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L7-L12)
 
 ## 核心架构
 
-Zhin.js 采用分层的单体仓库架构，使用 pnpm 和 Turborepo 进行管理。每一层都保持严格的单向依赖关系，以确保模块化和稳定性。
+Zhin.js 采用分层的Monorepo架构，使用 pnpm 和 Turborepo 进行管理。每一层都保持严格的单向依赖关系，以确保模块化和稳定性。
 
 ### 依赖层级
 
@@ -64,7 +64,7 @@ graph TD
 | `zhin.js` | IM 入口 | IM 核心的主入口点（1.1.x 稳定版本系列）。 |
 | `@zhin.js/core` | 分发器 | 管理插件运行时、适配器和消息分发。 |
 | `@zhin.js/ai` | AI 引擎 | 处理 LLM 提供商抽象、记忆管理及压缩，不包含 IM 逻辑。 |
-| `@zhin.js/agent` | 协调器 | 管理代理循环、安全策略和 MCP 客户端。 |
+| `@zhin.js/agent` | 协调器 | 管理Agent 循环、安全策略和 MCP 客户端。 |
 | `@zhin.js/cli` | 命令行 / 模板生成工具 | 提供初始化、配置和运行时管理的命令。 |
 
 来源：[README.md:129-136](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L129-L136), [CLAUDE.md:60-70](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/CLAUDE.md#L60-L70)
@@ -153,6 +153,6 @@ sequenceDiagram
 
 ## 结论
 
-Zhin.js 提供了一种强大且分层的架构，用于构建基于聊天的应用程序。通过结合简洁的即时通讯（IM）核心、灵活的AI代理能力以及基于约定的插件模型，开发者可以将应用从简单的命令响应机器人扩展到能够调用工具的复杂自主助手，并支持多个消息平台。
+Zhin.js 提供了一种强大且分层的架构，用于构建基于聊天的应用程序。通过结合简洁的即时通讯（IM）核心、灵活的AI Agent能力以及基于约定的插件模型，开发者可以将应用从简单的命令响应机器人扩展到能够调用工具的复杂自主助手，并支持多个消息平台。
 
 来源：[README.md:40-50](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/README.md#L40-L50), [AGENTS.md:7-15](https://github.com/zhinjs/zhin/blob/368db14caa4aa91311fb090f07bd792fe4b22fe7/AGENTS.md#L7-L15)
