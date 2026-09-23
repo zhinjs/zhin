@@ -1,0 +1,43 @@
+docs/ai/index.md
+  s_079f1dc5e6308d::t_f28beb95838745 110
+  s_079f1dc5e6308d::t_a48edff2e17023 108-109
+README.zh-CN.md
+  s_079f1dc5e6308d::t_bff1d394567d2a 70,85
+  s_079f1dc5e6308d::t_a48edff2e17023 165
+  s_079f1dc5e6308d::t_687d04de5d2aa7 164
+  s_079f1dc5e6308d::t_8a3935dc9073d8 86
+README.md
+  s_079f1dc5e6308d::t_bff1d394567d2a 70,85-86
+  s_079f1dc5e6308d::t_687d04de5d2aa7 164
+  s_079f1dc5e6308d::t_532177b769bc3b 165
+docs/snippets/install-tiers.md
+  s_079f1dc5e6308d::t_a48edff2e17023 74
+packages/host/mcp/README.md
+  s_079f1dc5e6308d::t_687d04de5d2aa7 5
+  s_079f1dc5e6308d::t_02bb4a29521c09 3,7,9,12,15,18-21,25-26,29,31,33,35,38,40-41,45,47,49,51,53
+docs/authoring/conventions.md
+  s_079f1dc5e6308d::t_a48edff2e17023 129,133,144,157,170
+docs/en/authoring/conventions.md
+  s_079f1dc5e6308d::t_a48edff2e17023 129,143,156
+.changeset/mcp-host-documentation.md
+  s_079f1dc5e6308d::t_be42165c0d0e85 1-5
+docs/en/ai/index.md
+  s_079f1dc5e6308d::t_f28beb95838745 111
+  s_079f1dc5e6308d::t_a48edff2e17023 109-110
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "533145d08640b190fe5583939efe3c05baf7e91d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
