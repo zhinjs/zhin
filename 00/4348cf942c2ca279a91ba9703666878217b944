@@ -1,0 +1,29 @@
+docs/wiki/notes/production-ready.md
+  s_079f1dc5e6308d::t_ed95a2cd3606d7 20
+docs/wiki/archive.md
+  s_079f1dc5e6308d::t_ed95a2cd3606d7 77-81
+docs/en/wiki/archive.md
+  s_079f1dc5e6308d::t_ed95a2cd3606d7 87-89
+docs/en/wiki/notes/production-ready.md
+  s_079f1dc5e6308d::t_ed95a2cd3606d7 22
+scripts/check-doc-orphans.mjs
+  s_079f1dc5e6308d::t_ed95a2cd3606d7 35-42,90
+scripts/check-cubic-wiki-translations.mjs
+  s_079f1dc5e6308d::t_198d3683702f30 103-144
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "004348cf942c2ca279a91ba9703666878217b944",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
