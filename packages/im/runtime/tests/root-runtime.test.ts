@@ -26,6 +26,8 @@ describe('RootRuntime tracer bullet', () => {
     const commandSource = join(project, 'commands/gh/issue/list/index.ts');
     let setupCalls = 0;
     let resourceDisposals = 0;
+    let readCandidate: (() => RuntimeSnapshot) | undefined;
+    let handoffCandidate: RuntimeSnapshot | undefined;
     modules.set(pluginSource, {
       default: definePlugin({
         name: 'root',
@@ -48,7 +50,10 @@ describe('RootRuntime tracer bullet', () => {
       projectRoot: project,
       modules,
       environment: { name: 'test', mode: 'test', platform: 'node' },
-      installResources({ resources }) {
+      installResources({ resources, readCandidateSnapshot, handoff }) {
+        readCandidate = readCandidateSnapshot;
+        expect(() => readCandidate!()).toThrow('not projected yet');
+        handoff.add({ activateNext() { handoffCandidate = readCandidate!(); } });
         resources.provide(greeting, 'hello', () => {
           resourceDisposals += 1;
         });
@@ -61,6 +66,8 @@ describe('RootRuntime tracer bullet', () => {
       committedWorlds.push(current.snapshot.generation);
     });
     const first = await runtime.start();
+    expect(handoffCandidate).toEqual(first);
+    expect(readCandidate!()).toBe(handoffCandidate);
     expect('controller' in runtime).toBe(false);
     expect('commit' in runtime.snapshots).toBe(false);
     const oldLease = runtime.snapshots.acquire();

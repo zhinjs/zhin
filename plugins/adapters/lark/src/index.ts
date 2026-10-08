@@ -49,3 +49,10 @@ export {
   handleLarkWebhookRequest,
   type LarkWebhookHandler,
 } from './webhook.js';
+
+export {
+  createLarkLongConnection,
+  type LarkLongConnection,
+  type LarkLongConnectionFactory,
+  type LarkLongConnectionOptions,
+} from './long-connection.js';

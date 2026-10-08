@@ -224,6 +224,24 @@ describe('Tool Feature', () => {
     expect(index.visible(child).map((tool) => tool.qualifiedName)).toEqual(['child__lookup']);
   });
 
+  it('resolves a reused Tool against the operation owner graph without changing the retained snapshot', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const slot = createCapabilitySlot({
+      owner: root, feature: toolFeatureId, localName: 'inherited', source: '/tools/inherited/index.ts',
+      definition: defineAgentTool({ description: 'Inherited tool', requiresApproval: 'never', execute: (_input, context) => context.generation }),
+    });
+    const previous = createSnapshot([slot], createToken('unused').id);
+    const index = new ToolIndex([slot], previous);
+    const current: RuntimeSnapshot = {
+      ...previous, generation: 2,
+      tree: new Map([...previous.tree].map(([id, node]) => [id, id === child ? { ...node, parent: undefined } : node])),
+    };
+    await expect(index.execute(child, 'inherited', {}, invocation(), current)).rejects.toThrow('Unknown Agent Tool');
+    await expect(index.execute(root, 'inherited', {}, invocation(), current)).resolves.toBe(2);
+    await expect(index.execute(child, 'inherited', {}, invocation())).resolves.toBe(1);
+  });
+
   it('passes immutable invocation policy into the Tool execution context', async () => {
     const root = rootPluginId();
     const slot = createCapabilitySlot({

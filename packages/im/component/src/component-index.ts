@@ -6,6 +6,7 @@ export interface ComponentDescriptor {
   readonly owner: PluginId;
   readonly name: string;
   readonly source: string;
+  readonly previewProps?: unknown;
 }
 
 interface ComponentRecord extends ComponentDescriptor {
@@ -31,6 +32,7 @@ export class ComponentIndex {
         owner: slot.owner,
         name: slot.localName,
         source: slot.source,
+        ...(slot.definition.previewProps === undefined ? {} : { previewProps: slot.definition.previewProps }),
         slot,
       });
       this.#components.set(key, record);
@@ -39,7 +41,7 @@ export class ComponentIndex {
     this.#descriptors = Object.freeze(descriptors
       .sort((left, right) => componentKey(left.owner, left.name)
         .localeCompare(componentKey(right.owner, right.name)))
-      .map(({ owner, name, source }) => Object.freeze({ owner, name, source })));
+      .map(({ owner, name, source, previewProps }) => Object.freeze({ owner, name, source, ...(previewProps === undefined ? {} : { previewProps }) })));
   }
 
   list(): readonly ComponentDescriptor[] {
@@ -54,15 +56,16 @@ export class ComponentIndex {
     requesterId: PluginId,
     name: string,
     props: TProps,
-    options: Readonly<{ signal?: AbortSignal }> = {},
+    options: Readonly<{ signal?: AbortSignal; snapshot?: RuntimeSnapshot }> = {},
   ): Promise<TResult> {
     options.signal?.throwIfAborted();
-    const requester = this.snapshot.tree.get(requesterId);
+    const snapshot = options.snapshot ?? this.snapshot;
+    const requester = snapshot.tree.get(requesterId);
     if (!requester) throw new Error(`Unknown Component requester: ${requesterId}`);
-    const record = this.#resolve(requesterId, name);
+    const record = this.#resolve(requesterId, name, snapshot);
     if (!record) throw new Error(`Unknown Component ${name} for ${requesterId}`);
     const context: ComponentContext = Object.freeze({
-      ...createCapabilityContext(this.snapshot, record.owner),
+      ...createCapabilityContext(snapshot, record.owner),
       requester,
       ...(options.signal ? { signal: options.signal } : {}),
     });
@@ -71,12 +74,12 @@ export class ComponentIndex {
     return result;
   }
 
-  #resolve(requester: PluginId, name: string): ComponentRecord | undefined {
+  #resolve(requester: PluginId, name: string, snapshot: RuntimeSnapshot = this.snapshot): ComponentRecord | undefined {
     let owner: PluginId | undefined = requester;
     while (owner) {
       const component = this.#components.get(componentKey(owner, name));
       if (component) return component;
-      owner = this.snapshot.tree.get(owner)?.parent;
+      owner = snapshot.tree.get(owner)?.parent;
     }
     return undefined;
   }

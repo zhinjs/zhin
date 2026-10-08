@@ -1,6 +1,6 @@
 import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 import type { ConsoleRpcExtendedCtx, ExtendedRpcResult } from './contracts.js';
-import { addCron, listSchedule, mutateCron } from './schedule-rpc.js';
+import { addCron, listSchedule, mutateCron, validateCron } from './schedule-rpc.js';
 import {
   actOnRequest, listInbox, listInboxMessages, listPendingRequests, listRecentInboxMessages,
   mapNoticeRow, mapRequestRow, markInboxConsumed, TABLE_NOTICE, TABLE_REQUEST,
@@ -27,6 +27,9 @@ export async function dispatchExtendedConsoleRpc(
     case 'schedule:list':
     case 'cron:list':
       return listSchedule(ctx);
+
+    case 'cron:validate':
+      return validateCron(d);
 
     case 'cron:add':
       return addCron(d, ctx);

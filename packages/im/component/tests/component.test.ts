@@ -20,10 +20,33 @@ import componentFeature, {
 } from '../src/index.js';
 
 describe('Component Feature', () => {
+  it('keeps author supplied preview parameters without using them as render defaults', () => {
+    const definition = defineComponent<{ text: string }, string>({
+      previewProps: { text: 'example' }, render: ({ text }) => text,
+    });
+    expect(parseComponentDefinition(definition).previewProps).toEqual({ text: 'example' });
+    expect(definition.render({ text: 'actual' }, {} as never)).toBe('actual');
+  });
+
   it('brands pure render definitions without a module registry', () => {
     const component = defineComponent({ render: (props: { text: string }) => props.text });
     expect(parseComponentDefinition(component)).toBe(component);
     expect(() => parseComponentDefinition({ render() {} })).toThrow('defineComponent');
+  });
+
+  it('publishes only author opted-in preview parameters in component descriptors', () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const greeting = createToken<string>('test.preview');
+    const slot = createCapabilitySlot({
+      owner: root, feature: componentFeatureId, localName: 'example', source: '/components/example/index.ts',
+      definition: defineComponent({ previewProps: { text: 'sample' }, render: ({ text }: { text: string }) => text }),
+    });
+    const plain = componentSlot(root, 'plain', () => 'ok');
+    const slots = [slot, plain];
+    const index = new ComponentIndex(slots, snapshot(root, child, slots, greeting.id));
+    expect(index.list().find(item => item.name === 'example')?.previewProps).toEqual({ text: 'sample' });
+    expect(index.list().find(item => item.name === 'plain')).not.toHaveProperty('previewProps');
   });
 
   it('discovers named TS and TSX component modules', async () => {
@@ -70,6 +93,30 @@ describe('Component Feature', () => {
     expect(index.has(child, 'shared/text')).toBe(true);
     await expect(index.render(child, 'missing', {})).rejects.toThrow('Unknown Component');
   });
+  it('keeps cancellation local to its render and rejects late results', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    let calls = 0;
+    const controller = new AbortController();
+    const slot = componentSlot(root, 'pending', async ({ signal }) => {
+      calls++;
+      if (signal === controller.signal) await gate;
+      return 'rendered';
+    });
+    const index = new ComponentIndex([slot], snapshot(root, child, [slot], createToken<string>('cancel-test').id));
+    const pending = index.render(child, 'pending', {}, { signal: controller.signal });
+    const reason = new Error('operation cancelled');
+    controller.abort(reason);
+    await expect(index.render(child, 'pending', {})).resolves.toBe('rendered');
+    const rejected = expect(pending).rejects.toBe(reason);
+    release();
+    await rejected;
+    await expect(index.render(child, 'pending', {}, { signal: controller.signal })).rejects.toBe(reason);
+    expect(calls).toBe(2);
+  });
+
 });
 
 function componentSlot(

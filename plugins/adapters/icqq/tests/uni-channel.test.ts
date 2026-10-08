@@ -317,7 +317,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
     await endpoint.start(new AbortController().signal);
     endpoint.open();
 
-    const messageId = await endpoint.send({
+    const sending = endpoint.send({
       conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
         kind: 'group',
@@ -331,7 +331,7 @@ describe('UNI-Channel 出站：canonical segments → ICQQ Sendable', () => {
 
     expect(sendFile).toHaveBeenCalledWith('/tmp/report.pdf', '/', 'report.pdf');
     expect(endpoint.client.sendGroupMsg).not.toHaveBeenCalled();
-    expect(messageId).toBe('group-file-1');
+    await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     await endpoint.stop();
   });
 

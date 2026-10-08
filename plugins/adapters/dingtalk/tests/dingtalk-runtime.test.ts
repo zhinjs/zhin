@@ -147,29 +147,35 @@ describe('dingtalk protocol helpers', () => {
     });
   });
 
-  it('sends canonical url media images as picture messages', () => {
+  it('renders canonical URL images using the documented markdown image syntax', () => {
     expect(formatOutboundBody([
       { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } },
     ])).toEqual({
-      msgtype: 'picture',
-      picture: { picURL: 'https://example.com/a.png' },
+      msgtype: 'markdown',
+      markdown: { title: '消息', text: '\n![](https://example.com/a.png)\n' },
     });
+    expect(formatOutboundBody([
+      { type: 'text', data: { text: 'before' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/one.png' } } },
+      { type: 'text', data: { text: 'after' } },
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/two.png' } } },
+    ])).toMatchObject({ msgtype: 'markdown', markdown: { text: 'before\n![](https://example.com/one.png)\nafter\n![](https://example.com/two.png)\n' } });
   });
 
-  it('drops non-url media refs and legacy-shaped images with a warn', () => {
+  it('rejects unsupported media before it can silently degrade to text', () => {
     // base64/path/file kinds have no DingTalk robot delivery surface
-    expect(formatOutboundBody([
+    expect(() => formatOutboundBody([
       { type: 'text', data: { text: 'hi' } },
       { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
-    ])).toEqual({ msgtype: 'text', text: { content: 'hi' } });
+    ])).toThrow('upload is not implemented');
     // legacy data.url is no longer read
-    expect(formatOutboundBody([
+    expect(() => formatOutboundBody([
       { type: 'image', data: { url: 'https://example.com/legacy.png' } },
-    ])).toEqual({ msgtype: 'text', text: { content: '' } });
+    ])).toThrow('upload is not implemented');
     // audio/video/file segments are dropped entirely
-    expect(formatOutboundBody([
+    expect(() => formatOutboundBody([
       { type: 'video', data: { media: { kind: 'url', value: 'https://example.com/a.mp4' } } },
-    ])).toEqual({ msgtype: 'text', text: { content: '' } });
+    ])).toThrow('delivery is not implemented');
   });
 });
 
@@ -388,6 +394,26 @@ describe('dingtalk plugin runtime adapter', () => {
       expect.objectContaining({ method: 'POST' }),
     );
     await endpoint.stop();
+  });
+
+  it.each([
+    { status: 403, data: { errcode: 0, msgId: 'misleading' }, disposition: 'rejected' },
+    { status: 503, data: {}, disposition: 'unknown' },
+    { status: 200, data: { errcode: 40001, errmsg: 'secret fixture' }, disposition: 'rejected' },
+    { status: 200, data: { errcode: 0 }, disposition: 'unknown' },
+  ])('classifies session webhook response $status/$disposition without retrying', async ({ status, data, disposition }) => {
+    const fetchMock = mockFetchOk();
+    const sendFetch = vi.fn(async () => ({ ok: status === 200, status, json: async () => data }));
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
+    const gateway = { receive: vi.fn(async () => Object.freeze({ matched: true, value: 'ok' })), send: vi.fn(async () => 'sent') };
+    const endpoint = bindTestEndpoint(new DingTalkEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'dingtalk'), gateway, http, config: baseConfig,
+      fetch: ((url: string, init: unknown) => url === 'https://session.example/hook' ? sendFetch() : fetchMock(url, init)) as any }), gateway, undefined);
+    try {
+      await endpoint.start(); endpoint.open(); await endpoint.admit(textMessage({ sessionWebhook: 'https://session.example/hook' }));
+      await expect(endpoint.send({ conversation: { endpoint: { id: 'test', adapter: 'dingtalk' }, kind: 'group', id: 'cid-1' }, payload: 'reply' }))
+        .rejects.toMatchObject({ disposition });
+      expect(sendFetch).toHaveBeenCalledTimes(1);
+    } finally { await endpoint.stop(); }
   });
 
   it('prefers sessionWebhook when cached from inbound', async () => {

@@ -106,3 +106,11 @@ LINE 要求 Webhook URL 以 HTTPS 开头。常见方案：
 | 发送 401 | 确认 Channel Access Token 未过期 |
 | 发送 400 | 检查消息格式是否符合 LINE API 规范 |
 | 事件未到达 | Console 中 Webhook 是否已启用、是否关闭 Auto-reply |
+
+### Webhook 重放边界
+
+实例内按官方 `webhookEventId` 去重：并发重复请求共享同一次 admission；成功后保留 24 小时，失败释放后可重试。缓存最多 10,000 项，满载时拒绝新 admission，由 HTTP 返回 503；不会驱逐正在处理的事件。重复事件不会重新缓存已消费的 replyToken。未提供事件 ID 的旧事件保持原行为。
+
+缓存随端点停止清空，不提供跨重启或跨实例去重；业务处理可能在失败前已有副作用，因此重试仍需业务幂等。Core 的会话事件存储幂等不等同于命令处理幂等。持久去重需要 Host 提供带租约、完成状态及未知状态处理的 inbox，再按端点身份与事件 ID 认领，不能只写一条数据库记录后宣称 exactly-once。
+
+协议依据：[LINE webhook redelivery](https://developers.line.biz/en/docs/messaging-api/receiving-messages/#webhook-redelivery)。

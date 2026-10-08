@@ -5,9 +5,17 @@ import nodemailer, { type SendMailOptions } from 'nodemailer';
 import Imap from 'imap';
 import type { ResolvedEmailConfig } from './protocol.js';
 
+export interface EmailSmtpResult {
+  readonly messageId?: string;
+  readonly accepted?: readonly (string | { readonly address: string })[];
+  readonly rejected?: readonly (string | { readonly address: string })[];
+  readonly pending?: readonly unknown[];
+  readonly envelope?: { readonly to?: readonly string[] };
+}
+
 export interface EmailSmtpTransport {
   verify(): Promise<void>;
-  sendMail(options: unknown): Promise<{ messageId?: string }>;
+  sendMail(options: unknown): Promise<EmailSmtpResult>;
   close(): void;
 }
 
@@ -45,6 +53,7 @@ export function defaultCreateSmtp(config: ResolvedEmailConfig['smtp']): EmailSmt
     host: config.host,
     port: config.port,
     secure: config.secure,
+    ...(config.serverName ? { tls: { servername: config.serverName } } : {}),
     auth: { user: config.auth.user, pass: config.auth.pass },
   });
   return {
@@ -61,5 +70,6 @@ export function defaultCreateImap(config: ResolvedEmailConfig['imap']): EmailIma
     host: config.host,
     port: config.port,
     tls: config.tls,
+    ...(config.serverName ? { tlsOptions: { servername: config.serverName } } : {}),
   }) as unknown as EmailImapTransport;
 }

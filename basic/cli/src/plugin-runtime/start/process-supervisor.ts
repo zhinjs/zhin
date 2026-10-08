@@ -3,7 +3,6 @@ import { closeSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:f
 import { mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { supportsNativeTypeScript } from '@zhin.js/runtime';
 import { DEFAULT_SHUTDOWN_BUDGET_MS } from '../process-lifecycle.js';
 import type { StartOptions } from './options.js';
 
@@ -92,7 +91,8 @@ export class NativeTypeScriptSupervisor {
 
   async runIfRequired(): Promise<boolean> {
     if (process.env.ZHIN_RUNTIME_CHILD) return false;
-    if (supportsNativeTypeScript() && !this.#options.daemon) return false;
+    // Console restart exits with 75 even when Node can load TypeScript itself.
+    // Foreground processes therefore need the same intentional-restart owner.
     this.#assertSupportedNodeVersion();
     const entry = process.argv[1];
     if (!entry) throw new Error('Cannot determine the zhin runtime executable path');

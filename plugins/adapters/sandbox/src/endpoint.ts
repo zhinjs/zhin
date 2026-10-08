@@ -155,6 +155,11 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
     return this.#options.defaults.id;
   }
 
+  /** The Sandbox transport is the mounted local listener, not a remote account. */
+  get transportState(): 'open' | 'idle' {
+    return this.#started && this.#wsHandleRelease ? 'open' : 'idle';
+  }
+
   start(): void {
     if (this.#started) return;
     this.#started = true;

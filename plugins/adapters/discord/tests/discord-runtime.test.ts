@@ -29,6 +29,7 @@ import {
   type DiscordInboundMessage,
 } from '../src/protocol.js';
 import { discordClient } from '../src/client.js';
+import { toMessageCreateOptions } from '../src/gateway.js';
 
 const adapterFeature = featureId('zhin.adapter');
 
@@ -373,6 +374,27 @@ describe('discord protocol helpers', () => {
     ])).toEqual({ content: 'hi' });
   });
 
+  it('gives unnamed MIME images a previewable filename while preserving explicit names', () => {
+    expect(formatOutboundBody([
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+      { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png', file_name: 'custom.png' } } },
+    ])).toEqual({ files: [
+      { name: 'image.png', base64: 'aGk=' },
+      { name: 'custom.png', base64: 'aGk=' },
+    ] });
+  });
+
+  it('carries canonical reply references through to Discord SDK send options', async () => {
+    const body = formatOutboundBody([
+      { type: 'reply', data: { message_id: '123456789' } },
+      { type: 'text', data: { text: 'quoted reply' } },
+    ]);
+    expect(await toMessageCreateOptions(body)).toEqual({
+      content: 'quoted reply',
+      reply: { messageReference: '123456789', failIfNotExists: true },
+    });
+  });
+
   it('formats keyboard outbound as components', () => {
     const body = formatOutboundBody([
       { type: 'text', data: { text: 'pick' } },
@@ -430,6 +452,8 @@ describe('discord plugin runtime adapter', () => {
     const gateway: OutboundMessageService = { receive, send: vi.fn(async () => 'sent') };
     const mock = createMockClient();
     const createClient: CreateDiscordClient = () => mock;
+    let ready = true;
+    Object.assign(mock, { isReady: () => ready });
     const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({
       id: capabilityId(rootPluginId(), adapterFeature, 'discord'),
       gateway,
@@ -439,6 +463,11 @@ describe('discord plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
+    expect(endpoint.transportState).toBe('open');
+    ready = false;
+    expect(endpoint.transportState).toBe('reconnecting');
+    ready = true;
+    expect(endpoint.transportState).toBe('open');
     endpoint.admit(textMessage());
 
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
@@ -450,6 +479,7 @@ describe('discord plugin runtime adapter', () => {
     }));
 
     await endpoint.stop();
+    expect(endpoint.transportState).toBe('stopped');
     expect(mock.login).toHaveBeenCalledWith('test-token');
     expect(mock.destroy).toHaveBeenCalled();
   });
@@ -653,7 +683,7 @@ describe('discord plugin runtime adapter', () => {
     await endpoint.start();
     const { port } = await http.listen();
 
-    const body = JSON.stringify({ type: 1 });
+    let body = JSON.stringify({ type: 1 });
     const post = (timestamp: string) => fetch(`http://127.0.0.1:${port}/discord/interactions`, {
       method: 'POST',
       headers: {
@@ -672,7 +702,13 @@ describe('discord plugin runtime adapter', () => {
     const stale = String(Math.floor(Date.now() / 1000) - 600);
     const staleRes = await post(stale);
     expect(staleRes.status).toBe(401);
-
+    const emit = vi.spyOn(endpoint, 'emit');
+    body = JSON.stringify({ type: 3, id: 'click', channel_id: 'channel', guild_id: 'guild', member: { user: { id: 'user', username: 'Tester' } }, message: { id: 'source' }, data: { component_type: 2, custom_id: 'canonical-callback' } });
+    expect((await post(fresh)).status).toBe(503);
+    endpoint.open();
+    const clicked = await post(fresh);
+    expect(await clicked.json()).toEqual({ type: 6 });
+    expect(emit).toHaveBeenCalledWith('message.receive', expect.objectContaining({ conversation: expect.objectContaining({ parent: { kind: 'channel', id: 'guild' } }), segments: [{ type: 'action', data: { id: 'click', payload: 'canonical-callback', sourceMessageId: 'source' } }] }));
     await endpoint.stop();
     await http.close();
   });
@@ -785,4 +821,48 @@ describe('discord endpoint management', () => {
     const endpoint = createManagementEndpoint(managementMock());
     await expect(endpoint.management.listGroups?.()).rejects.toThrow('not connected');
   });
+});
+
+it('maps canonical share to a Discord embed alongside markdown', () => {
+  expect(formatOutboundBody([{ type: 'markdown', data: { content: '**bold**' } }, { type: 'share', data: { title: 'Link', url: 'https://example.com', description: 'Details', image: 'https://example.com/image.png' } }])).toEqual({ content: '**bold**', embeds: [{ title: 'Link', url: 'https://example.com', description: 'Details', image: { url: 'https://example.com/image.png' } }] });
+});
+
+
+it('shared lifecycle stops during pending login and a late old login cannot damage its replacement', async () => {
+  const first = createMockClient(); const second = createMockClient();
+  let finishLogin!: (value: string) => void;
+  first.login = vi.fn(() => new Promise<string>(resolve => { finishLogin = resolve; }));
+  const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
+  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
+  const starting = endpoint.start(); await vi.waitFor(() => expect(first.login).toHaveBeenCalled());
+  expect(endpoint.transportState).toBe('connecting');
+  await endpoint.start(); expect(factory).toHaveBeenCalledTimes(1);
+  await endpoint.stop(); await starting; expect(endpoint.transportState).toBe('stopped');
+  await endpoint.start(); expect(endpoint.transportState).toBe('open');
+  finishLogin('old'); await vi.waitFor(() => expect(first.destroy).toHaveBeenCalledTimes(2));
+  expect(second.destroy).not.toHaveBeenCalled(); expect(endpoint.client).toBe(second); expect(endpoint.transportState).toBe('open');
+  await endpoint.stop(); expect(second.destroy).toHaveBeenCalledTimes(1);
+});
+
+it('shared lifecycle recovers a failed startup with a fresh client', async () => {
+  const first = createMockClient(); first.login = vi.fn(async () => { throw new Error('fixture refusal'); });
+  const second = createMockClient(); const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
+  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
+  await expect(endpoint.start()).rejects.toThrow('Discord'); expect(first.destroy).toHaveBeenCalledTimes(1);
+  await endpoint.start(); expect(endpoint.transportState).toBe('open'); expect(endpoint.client).toBe(second);
+  await endpoint.stop();
+});
+
+it('waits for old SDK destruction before a concurrent restart and keeps replacement cleanup', async () => {
+  const first = createMockClient(); const second = createMockClient(); let finishDestroy!: () => void;
+  first.destroy = vi.fn(() => new Promise<void>(resolve => { finishDestroy = resolve; }));
+  const factory = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
+  const gateway = { receive: vi.fn(async () => ({})), send: vi.fn(async () => 'sent') } as unknown as OutboundMessageService;
+  const endpoint = bindTestEndpoint(new DiscordGatewayEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'discord'), gateway, config: baseConfig, createClient: factory }), gateway, undefined);
+  await endpoint.start(); const stopping = endpoint.stop(); const restarting = endpoint.start();
+  await vi.waitFor(() => expect(first.destroy).toHaveBeenCalled()); expect(factory).toHaveBeenCalledTimes(1);
+  finishDestroy(); await stopping; await restarting; expect(endpoint.client).toBe(second);
+  await endpoint.stop(); expect(second.destroy).toHaveBeenCalledTimes(1);
 });

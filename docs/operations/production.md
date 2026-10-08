@@ -58,7 +58,7 @@ zhin doctor --live http://127.0.0.1:8068 --json
 zhin doctor --live http://127.0.0.1:8068/control --json
 ```
 
-就绪时退出码为 0，未就绪、认证失败或请求失败时为 1。探针不执行外部网络请求：Database 的 `initialized` 不等于实时 SQL 查询成功，Endpoint 的 `admission_open` 不等于平台传输在线，Agent 的 `binding_configured` 不等于模型凭据有效。平台实机收发仍需单独验收，不能仅凭此探针宣称平台可用。
+就绪时退出码为 0，未就绪、认证失败或请求失败时为 1。探针不执行外部网络请求：Database 的 `initialized` 不等于实时 SQL 查询成功；Endpoint 只有准入开放且本地 `transportState` 为 `open` 才就绪，断开/重连/状态未提供分别返回对应原因；Agent 的 `binding_configured` 不等于模型凭据有效。本地传输状态也不能证明真实收发，平台实机仍需单独验收。
 
 生产环境设置 full token。演示与只读观察使用独立 demo token；平台 Webhook 继续使用各自的签名密钥，不能拿 Console token 代替。
 

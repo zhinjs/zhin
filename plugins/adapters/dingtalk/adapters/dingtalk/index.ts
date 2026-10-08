@@ -16,10 +16,10 @@ export type { DingTalkEndpointOptions, DingTalkFetch } from '../../src/endpoint.
 export default defineAdapter<DingTalkEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   // 钉钉机器人媒体消息仅消费远程 URL；Markdown 走原生 msgtype；
-  // 无按钮交互面，交互段降级纯文本。
+  // 原生按钮需配置固定互动卡片模板，由 Stream 接收回调。
   segments: {
     outboundMedia: ['url'],
-    interactive: 'text',
+    interactive: 'native',
     markdown: 'native',
   },
   create(context) {
@@ -27,11 +27,11 @@ export default defineAdapter<DingTalkEndpointConfig>({
     // 注册到插件运行时状态（dingtalk endpoint list 的"运行中"数据源）
     context.use(dingtalkRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
-      mode: 'webhook',
+      mode: config.mode ?? 'webhook',
     });
     return new DingTalkEndpoint({
       id: context.id,
-      http: context.use(httpHostToken),
+      http: config.mode === 'stream' ? undefined : context.use(httpHostToken),
       config,
     });
   },

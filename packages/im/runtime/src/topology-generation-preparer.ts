@@ -171,6 +171,7 @@ export class TopologyGenerationPreparer {
       }
 
       const snapshot = createSnapshotView(current.generation + 1, projected.state);
+      plugins.bindCandidateSnapshot(snapshot);
       const ownership = SourceOwnershipIndex.fromGeneration(
         this.graph,
         snapshot,

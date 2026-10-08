@@ -1,4 +1,5 @@
 import { DisposeStack } from '@zhin.js/plugin-runtime';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Endpoint, isEndpoint } from './endpoint.js';
 import type { EndpointContentPort } from './endpoint-content.js';
 import type { EndpointControl } from './endpoint-control.js';
@@ -12,6 +13,7 @@ import type {
   EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointTransportState,
 } from './endpoint-contract.js';
 
 interface ManagedEndpointContext {
@@ -47,6 +49,11 @@ class ManagedEndpoint<TClient> extends Endpoint<TClient> {
 
   get name(): string {
     return this.#implementation.name ?? this.#endpointId;
+  }
+
+  get transportState(): EndpointTransportState | undefined {
+    if (this.#stopped) return 'stopped';
+    return this.#implementation.transportState;
   }
 
   async start(signal: AbortSignal): Promise<void> {
@@ -145,7 +152,7 @@ class ManagedEndpoint<TClient> extends Endpoint<TClient> {
 
   send(request: EndpointSendRequest): string | Promise<string> {
     if (!this.#implementation.send) {
-      throw new Error(`Endpoint ${this.#endpointId} does not support outbound messages`);
+      throw new EndpointDeliveryError('outbound_unsupported', `Endpoint ${this.#endpointId} does not support outbound messages`, 'not_sent');
     }
     return this.#implementation.send(request);
   }

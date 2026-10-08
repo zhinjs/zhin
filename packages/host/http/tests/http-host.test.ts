@@ -1,5 +1,6 @@
 import { describe, expect, it, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
+import { createServer, createConnection } from 'node:net';
 import { request as httpsRequest } from 'node:https';
 import WebSocket from 'ws';
 import {
@@ -21,6 +22,45 @@ afterEach(async () => {
 });
 
 describe('HttpHost', () => {
+  it('treats close before listen as terminal and never binds a new listener', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const closing = host.close();
+    await closing;
+    await expect(host.listen()).rejects.toThrow('HTTP Host is closed');
+    expect(host.close()).toBe(closing);
+    expect(host.address).toBeUndefined();
+  });
+
+  it('shares concurrent listen calls and releases the actual TCP port on terminal close', async () => {
+    const host = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(host);
+    const first = host.listen();
+    expect(host.listen()).toBe(first);
+    const address = await first;
+    expect((await fetch(`${address.origin}/pub/health`)).status).toBe(200);
+    await host.close();
+    await expect(host.listen()).rejects.toThrow('HTTP Host is closed');
+    await expect(tcpConnect(address.port)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
+  });
+
+  it('waits for pending listen to settle during close and cannot leave a late listener behind', async () => {
+    const reservation = createServer();
+    await new Promise<void>(resolve => reservation.listen(0, '127.0.0.1', resolve));
+    const port = (reservation.address() as { port: number }).port;
+    await new Promise<void>((resolve, reject) => reservation.close(error => error ? reject(error) : resolve()));
+    const host = createHttpHost({ host: '127.0.0.1', port });
+    hosts.push(host);
+    const listening = host.listen();
+    const rejection = expect(listening).rejects.toThrow('HTTP Host closed before listen completed');
+    const closing = host.close();
+    expect(host.close()).toBe(closing);
+    await rejection;
+    await closing;
+    expect(host.address).toBeUndefined();
+    await expect(tcpConnect(port)).rejects.toMatchObject({ code: 'ECONNREFUSED' });
+  });
+
   it('serves authenticated HTTPS health and WSS routes with explicit secure address metadata', async () => {
     const key = readFileSync(new URL('./fixtures/localhost-key.pem', import.meta.url));
     const cert = readFileSync(new URL('./fixtures/localhost-cert.pem', import.meta.url));
@@ -484,7 +524,12 @@ describe('HttpHost', () => {
     const denied = await fetch(`http://127.0.0.1:${port}/api/secret`, {
       headers: { Authorization: 'Bearer demo-token' },
     });
-    expect(denied.status).toBe(401);
+    expect(denied.status).toBe(403);
+    expect(await denied.json()).toEqual({ success: false, error: 'Token scope does not allow this route' });
+    const invalid = await fetch(`http://127.0.0.1:${port}/api/secret`, {
+      headers: { Authorization: 'Bearer invalid-token' },
+    });
+    expect(invalid.status).toBe(401);
   });
 
   it('injects the token-bound principal into handlers without accepting it from the body', async () => {
@@ -548,6 +593,14 @@ async function connectWebSocket(port: number, path: string): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const socket = new WebSocket(`ws://127.0.0.1:${port}${path}`);
     socket.once('close', () => resolve());
+    socket.once('error', reject);
+  });
+}
+
+async function tcpConnect(port: number): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const socket = createConnection({ host: '127.0.0.1', port });
+    socket.once('connect', () => { socket.destroy(); resolve(); });
     socket.once('error', reject);
   });
 }

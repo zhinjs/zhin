@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
 import { createConfigDocument, type ConfigFileDocument } from '@zhin.js/config-file';
-import { endpointConfigurationStoreToken } from '@zhin.js/adapter';
+import { adapterFeatureId, isAdapterIndex, endpointConfigurationStoreToken } from '@zhin.js/adapter';
 import { ImRuntime, type Message } from '@zhin.js/core/runtime';
 import {
   CONVERSATION_CURSOR_MODEL,
@@ -21,6 +21,7 @@ import {
   selectRootConfigFile,
   type ConfigDocumentPort,
   type RuntimeConfigDocument,
+  type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js/logger';
 import {
@@ -200,7 +201,11 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
           projectRoot: options.root,
           resolveEndpointOwner: endpointRoles.resolveOwner,
           resolveEndpointTrusted: endpointRoles.resolveTrusted,
-          resolveConfiguredEndpointKeys: () => readConfiguredEndpointKeys(config),
+          resolveConfiguredEndpointKeys: () => {
+            const candidate = context.readCandidateSnapshot?.();
+            if (candidate && candidate.generation !== context.generation) throw new Error('Endpoint validation targets another candidate generation');
+            return readConfiguredEndpointKeys(config, candidate);
+          },
           extraTools: speechHandle?.tools,
           audioTranscriber: speechHandle,
           transcribeUrl: speechHandle
@@ -574,9 +579,24 @@ export async function createEndpointRoleResolver(
 /** Reads Bot Endpoint identities from the candidate config, not the old live ImRuntime. */
 export async function readConfiguredEndpointKeys(
   config: RuntimeConfigDocument | ConfigDocumentPort,
+  candidate?: RuntimeSnapshot,
 ): Promise<ReadonlySet<string>> {
-  const document = await readConfigDocumentValue(config);
   const keys = new Set<string>();
+  const adapters = candidate?.projections.get(adapterFeatureId);
+  if (candidate && isAdapterIndex(adapters)) {
+    const aliasCounts = new Map<string, number>();
+    for (const row of adapters.describe()) {
+      const packageName = candidate.tree.get(row.owner)?.packageName;
+      const alias = packageName?.replace(/^@[^/]+\/adapter-/, '') ?? row.name;
+      const key = `${alias}:${row.name}`;
+      aliasCounts.set(key, (aliasCounts.get(key) ?? 0) + 1);
+      keys.add(`${row.owner}:${row.name}`);
+    }
+    for (const [key, count] of aliasCounts) if (count === 1) keys.add(key);
+    return keys;
+  }
+  if (candidate) return keys;
+  const document = await readConfigDocumentValue(config);
   if (!document || typeof document !== 'object') return keys;
   const plugins = readPluginConfigurationMap(document as Record<string, unknown>);
   const expanded = expandEnvironmentValue(plugins, (key) => process.env[key]) as Record<string, unknown>;

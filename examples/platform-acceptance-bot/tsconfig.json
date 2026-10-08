@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "noEmit": true,
+    "erasableSyntaxOnly": true,
+    "rootDir": "."
+  },
+  "include": [
+    "plugin.ts",
+    "commands/**/*.ts"
+  ],
+  "exclude": [
+    ".acceptance",
+    "node_modules"
+  ]
+}

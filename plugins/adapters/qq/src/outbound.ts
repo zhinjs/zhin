@@ -10,10 +10,11 @@
  * - keyboard：data.rows 按钮矩阵展开为 button 段（SDK processButtons 组装
  *   keyboard 载荷）；按钮消息必须带 markdown，故同行文本合并为 markdown 段。
  *   data.id 模板键盘原样透传。
- * 不可映射的段一律降级为文本并 warn（保持既有 fallback 行为）。
+ * canonical share 当前明确 not_sent/unsupported，避免静默丢标题/描述/URL。
+ * 其他未识别段保持既有 data.text fallback；正常发送另受声明的 supported 白名单约束。
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { isMediaRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef } from '@zhin.js/im-contract';
 import type { QqWireSegment } from './protocol.js';
 
 const logger = getLogger('qq');
@@ -30,6 +31,7 @@ interface QqOutboundButtonSpec {
   readonly id?: string;
   readonly label?: string;
   readonly payload?: string;
+  readonly url?: string;
   readonly disabled?: boolean;
   readonly style?: 'primary' | 'danger' | 'secondary';
   readonly mode?: string;
@@ -104,9 +106,9 @@ function normalizeMarkdownSegment(seg: QqWireSegment): QqOutboundElem | null {
 function coreButtonToQq(btn: QqOutboundButtonSpec): Record<string, unknown> {
   const isCommand = btn.mode === 'command';
   const action: Record<string, unknown> = {
-    type: isCommand ? 2 : 0,
+    type: isCommand ? 2 : btn.url ? 0 : 1,
     permission: { type: 2 },
-    data: btn.payload ?? '',
+    data: btn.url ?? btn.payload ?? '',
     click_limit: btn.disabled ? 0 : 10,
     unsupport_tips: btn.disabled ? '该按钮不可用' : '',
   };
@@ -199,6 +201,8 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
     }
     const data = item.data ?? {};
     switch (item.type) {
+      case 'share':
+        throw new EndpointDeliveryError('unsupported_operation', 'QQ canonical share cards are not implemented', 'not_sent');
       case 'text':
         textBuf += String(data.text ?? data.content ?? '');
         break;
@@ -230,7 +234,7 @@ export function formatOutbound(payload: unknown): QqOutboundMessage {
         break;
       }
       case 'reply': {
-        const id = data.id ?? data.event_id;
+        const id = data.message_id ?? data.id ?? data.event_id;
         if (id == null || id === '') break;
         flushText();
         parts.push({

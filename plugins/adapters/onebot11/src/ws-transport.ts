@@ -1,3 +1,4 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { clearTimeout, setTimeout } from 'node:timers';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -59,17 +60,23 @@ export function callOneBot11WsAction(
   params: Record<string, unknown>,
 ): Promise<OneBot11ActionResponse> {
   if (!ws || ws.readyState !== WS_OPEN) {
-    return Promise.reject(new Error('WebSocket 未连接'));
+    return Promise.reject(new EndpointDeliveryError('endpoint_disconnected', 'WebSocket 未连接', 'not_sent'));
   }
   const echo = `ob11_${++requestId.value}`;
   const req: OneBot11ActionRequest = { action, params, echo };
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(echo);
-      reject(new Error(`OneBot11 动作超时: ${action}`));
+      reject(new EndpointDeliveryError('endpoint_timeout', `OneBot11 动作超时: ${action}`, 'unknown'));
     }, 30_000);
     pending.set(echo, { resolve, reject, timeout });
-    ws.send(JSON.stringify(req));
+    try {
+      ws.send(JSON.stringify(req));
+    } catch (error) {
+      pending.delete(echo);
+      clearTimeout(timeout);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
@@ -79,7 +86,7 @@ export function rejectAllPending(
 ): void {
   for (const [, entry] of pending) {
     clearTimeout(entry.timeout);
-    entry.reject(new Error(message));
+    entry.reject(new EndpointDeliveryError('endpoint_disconnected', message, 'unknown'));
   }
   pending.clear();
 }

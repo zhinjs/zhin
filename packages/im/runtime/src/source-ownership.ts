@@ -1,3 +1,4 @@
+import { normalizeSourcePath } from './source-path.js';
 import { isAbsolute, relative, resolve } from 'node:path';
 import type { CapabilityId, FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ModuleWatchRoot } from './module-runtime.js';
@@ -132,7 +133,7 @@ export class SourceOwnershipIndex {
   }
 
   addWatchRoot(root: ModuleWatchRoot): void {
-    const normalized = resolve(root.root);
+    const normalized = normalizeSourcePath(root.root);
     this.#watchRoots.set(normalized, Object.freeze({ ...root, root: normalized }));
   }
 }
@@ -143,7 +144,7 @@ function visitPlugin(node: PluginGraphNode, visit: (node: PluginGraphNode) => vo
 }
 
 function normalizeSource(source: string): string {
-  return resolve(source);
+  return normalizeSourcePath(source);
 }
 
 function contains(packageRoot: string, source: string): boolean {

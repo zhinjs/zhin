@@ -43,6 +43,17 @@ describe('Runtime MCP Host', () => {
     }));
   });
 
+  it('keeps the advertised tool protocol available for an empty generation', async () => {
+    const { baseUrl } = await start([]);
+    expect((await mcpRequest(baseUrl, 'tools/list')).status).toBe(401);
+    const listed = await mcpText(baseUrl, 'tools/list', {});
+    expect(listed).toContain('"tools":[]');
+    expect(listed).not.toContain('Method not found');
+    const called = await mcpText(baseUrl, 'tools/call', { name: 'absent', arguments: {} });
+    expect(called).toContain('"code":-32602');
+    expect(called).toContain('Unknown tool');
+  });
+
   it('surfaces denial from the canonical tool execution authority', async () => {
     const execute = vi.fn(async () => {
       throw new Error('approval required but ApprovalPort unavailable');

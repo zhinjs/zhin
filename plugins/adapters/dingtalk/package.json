@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
   "version": "1.1.4",
-  "description": "Zhin.js DingTalk (钉钉) adapter for Plugin Runtime (HTTP webhook)",
+  "description": "Zhin.js DingTalk (\u9489\u9489) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -18,7 +18,7 @@
     "bot",
     "adapter",
     "dingtalk",
-    "钉钉",
+    "\u9489\u9489",
     "chatbot"
   ],
   "author": {
@@ -49,7 +49,8 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/skill": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "ws": "^8.18.3"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",
@@ -76,7 +77,8 @@
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@types/ws": "^8.18.1"
   },
   "files": [
     "adapters",

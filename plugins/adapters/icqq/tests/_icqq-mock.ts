@@ -73,7 +73,12 @@ export class Client {
     return this;
   }
 
+  #online = false;
+  isOnline(): boolean { return this.#online; }
+
   emit(event: string, ...args: unknown[]): boolean {
+    if (event === 'system.online') this.#online = true;
+    if (event.startsWith('system.offline')) this.#online = false;
     for (const [matcher, listeners] of this._listeners) {
       if (typeof matcher !== 'function' || !matcher(event, ...args)) continue;
       for (const fn of listeners) fn(...args);
@@ -105,6 +110,7 @@ export class Client {
     Client.activeClients.delete(this.uin);
   });
   terminate = vi.fn(() => {
+    this.#online = false;
     const clients = Client.activeClients.get(this.uin);
     clients?.delete(this);
     if (clients?.size === 0) Client.activeClients.delete(this.uin);

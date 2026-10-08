@@ -1,3 +1,4 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * OneBot11 reverse WSS endpoint — accepts inbound WebSocket from OneBot implementation.
  */
@@ -9,6 +10,7 @@ import {
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -62,6 +64,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
   #started = false;
+  #stopped = false;
 
   constructor(options: OneBot11WssEndpointOptions) {
     super();
@@ -70,6 +73,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     this.#connectionLifecycle = createEndpointLifecycle({
       name: `${options.config.id}:inbound`,
       reconnect: false,
+      heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
     });
     this.client = createOnebot11EndpointClient(options.config, (action, params) => this.#callApi(action, params));
     const callApi = (action: string, params?: Record<string, unknown>) => callOnebot11Client(this.client, action, params);
@@ -84,8 +88,17 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     );
   }
 
+  get transportState(): EndpointTransportState {
+    if (this.#stopped) return 'stopped';
+    if (!this.#started) return 'idle';
+    if (this.#connectionLifecycle.state === 'closed') return 'closed';
+    if (this.#ws?.readyState === 1) return 'open';
+    return this.#connectionLifecycle.state === 'connecting' ? 'connecting' : 'idle';
+  }
+
   async start(): Promise<void> {
     if (this.#started) return;
+    this.#stopped = false;
     if (!this.#options.config.access_token) {
       // wss 模式未配 access_token 时任何连接都会被放行（verifyOneBotAccessToken 直接 return true）
       this.#logger.warn(formatCompact({
@@ -117,6 +130,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.close();
     this.#wsRelease?.();
     this.#wsRelease = undefined;
@@ -131,7 +145,11 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
     const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
-    return data?.message_id != null ? String(data.message_id) : '';
+    const rawId = data?.message_id;
+    if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
+    }
+    return String(rawId);
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -143,7 +161,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     action: string,
     params: Record<string, unknown> = {},
   ): ReturnType<typeof callOneBot11WsAction> {
-    return callOneBot11WsAction(this.#ws, this.#pending, this.#requestId, action, params);
+    return callOneBot11WsAction(this.#connectionLifecycle.state === 'closed' ? undefined : this.#ws, this.#pending, this.#requestId, action, params);
   }
 
   #admitRaw(ev: OneBot11Event): void {
@@ -189,6 +207,10 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
+    if (!this.#started || this.#stopped) {
+      connection.socket.close();
+      return;
+    }
     if (!verifyOneBotAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
@@ -199,6 +221,9 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
       lifecycleHandle.onForceClose(() => {
+        if (this.#ws === socket) {
+          rejectAllPending(this.#pending);
+        }
         try {
           socket.close();
         } catch {
@@ -213,8 +238,11 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
           /* ignore */
         }
       }, this.#options.config.heartbeat_interval);
+      socket.on('pong', () => {
+        if (this.#ws === socket) this.#connectionLifecycle.notifyHeartbeatAck();
+      });
       socket.on('message', (data) => {
-        if (this.#ws !== socket) return;
+        if (this.#ws !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
         handleOneBot11WsMessage(data, {
           endpointId: this.#options.config.id,
@@ -222,7 +250,12 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
           ingest: (ev) => this.client.ingest(ev as Parameters<Onebot11Client['ingest']>[0]),
         });
       });
+      socket.on('error', (error) => {
+        if (this.#ws !== socket) return;
+        this.#logger.warn(formatCompact({ op: 'ws_error', error: String(error) }));
+      });
       socket.on('close', () => {
+        if (this.#ws !== socket) return;
         if (this.#ws === socket) {
           this.#ws = undefined;
           rejectAllPending(this.#pending);

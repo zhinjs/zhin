@@ -178,7 +178,21 @@ function validateValue(
         : type === 'list' ? Array.isArray(value)
           : type === 'object' ? typeof value === 'object' && !Array.isArray(value)
             : true;
-  if (!validType) errors.push({ path, message: `类型应为 ${type}` });
+  if (!validType) {
+    errors.push({ path, message: `类型应为 ${type}` });
+    return;
+  }
+  if (typeof value === 'number') {
+    if (definition.integer === true && !Number.isInteger(value)) {
+      errors.push({ path, message: '须为整数' });
+    }
+    if (typeof definition.min === 'number' && value < definition.min) {
+      errors.push({ path, message: `不能小于 ${definition.min}` });
+    }
+    if (typeof definition.max === 'number' && value > definition.max) {
+      errors.push({ path, message: `不能大于 ${definition.max}` });
+    }
+  }
   if (Array.isArray(definition.options) && !definition.options.some((option) => (
     option && typeof option === 'object' && 'value' in option
       ? (option as { value?: unknown }).value === value

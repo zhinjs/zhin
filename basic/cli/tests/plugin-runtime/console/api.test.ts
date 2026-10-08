@@ -435,6 +435,74 @@ describe('console REST routes', () => {
     projectRoot = tempRoots[tempRoots.length - 1];
   });
 
+  it('returns forbidden for authenticated demo env RPC without exposing or changing the file', async () => {
+    const original = 'FIXTURE_TOKEN=fake-private-value\n';
+    await writeFile(join(projectRoot, '.env'), original);
+    const { port } = await startHost({ projectRoot, withTokens: true });
+    const request = (token: string, type: string) => fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST', headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ type, filename: '.env', content: 'FIXTURE_TOKEN=forbidden-write\n', requestId: 77 }),
+    });
+    for (const type of ['env:list', 'env:get', 'env:save']) {
+      const response = await request('demo-token', type);
+      expect(response.status).toBe(403);
+      expect(await response.text()).not.toContain('fake-private-value');
+    }
+    expect((await request('invalid-token', 'env:get')).status).toBe(401);
+    expect((await request('full-token', 'env:get')).status).toBe(200);
+    expect(await readFile(join(projectRoot, '.env'), 'utf8')).toBe(original);
+  });
+
+  it('diagnoses the exact instance using its declared package installation', async () => {
+    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
+      name: 'proj', dependencies: { '@zhin.js/adapter-icqq': '1.2.3' },
+      zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'custom-icqq' }] },
+    }));
+    await writeFile(join(projectRoot, 'zhin.config.yml'), 'plugin:\n  custom-icqq: {}\n');
+    const { port } = await startHost({ projectRoot });
+    const response = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'plugin:diagnose', pluginName: 'custom-icqq', requestId: 1 }),
+    });
+    const body = await response.json();
+    expect(body.data).toMatchObject({
+      pluginName: 'custom-icqq', packageName: '@zhin.js/adapter-icqq', planScope: 'package',
+      plan: { packageName: '@zhin.js/adapter-icqq', alreadyInstalled: true, alreadyDeclared: true },
+    });
+  });
+
+  it('never advertises plugin management to a demo principal for loaded or disabled declarations', async () => {
+    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
+      name: 'proj', zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'icqq' }] },
+    }));
+    for (const snapshot of [stubSnapshot(packageRoot), undefined]) {
+      const { port } = await startHost({ projectRoot, withTokens: true, snapshot });
+      for (const [token, manageable] of [['demo-token', false], ['full-token', true]] as const) {
+        const headers = { authorization: `Bearer ${token}` };
+        const list = await (await fetch(`http://127.0.0.1:${port}/api/plugins`, { headers })).json();
+        const detail = await (await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`, { headers })).json();
+        expect(list.data.find((item: { instanceKey: string }) => item.instanceKey === 'icqq').manageable).toBe(manageable);
+        expect(detail.data.manageable).toBe(manageable);
+        expect(detail.data.readOnly).toBe(!manageable);
+      }
+    }
+  });
+
+  it('keeps loaded detail management eligibility aligned with the declared plugin list', async () => {
+    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
+      name: 'proj', zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'icqq' }] },
+    }));
+    const { port } = await startHost({ projectRoot, snapshot: stubSnapshot(packageRoot) });
+    const list = await (await fetch(`http://127.0.0.1:${port}/api/plugins`)).json();
+    const detail = await (await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`)).json();
+    expect(list.data.find((item: { instanceKey: string }) => item.instanceKey === 'icqq').manageable).toBe(true);
+    expect(detail.data.manageable).toBe(true);
+    expect(detail.data.features).toEqual(list.data[0].features);
+    await writeFile(join(projectRoot, 'package.json'), JSON.stringify({ name: 'proj' }));
+    const unmanaged = await (await fetch(`http://127.0.0.1:${port}/api/plugins/icqq`)).json();
+    expect(unmanaged.data.manageable).toBe(false);
+  });
+
   it('serves the bounded generation-owned Agent Trace projection', async () => {
     await import('@zhin.js/agent/runtime');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -472,7 +540,7 @@ describe('console REST routes', () => {
       `http://127.0.0.1:${port}/api/agent/traces?sessionKey=discord%3Abot%3Agroup%3Aroom`,
       { headers: { authorization: 'Bearer demo-token' } },
     );
-    expect(demoResponse.status).toBe(401);
+    expect(demoResponse.status).toBe(403);
   });
 
   it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {
@@ -710,7 +778,7 @@ describe('console REST routes', () => {
         operationId: 'console:pack:22', pack: { id: 'pack:engineering' },
       }),
     });
-    expect(demo.status).toBe(400);
+    expect(demo.status).toBe(403);
     expect(publishPack).toHaveBeenCalledTimes(1);
 
     const status = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
@@ -843,7 +911,7 @@ describe('console REST routes', () => {
       `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
       { headers: { authorization: 'Bearer demo-token' } },
     );
-    expect(demoRead.status).toBe(401);
+    expect(demoRead.status).toBe(403);
 
     const unboundRead = await fetch(
       `http://127.0.0.1:${port}/api/agent/workroom/portfolio?portfolioId=portfolio-main`,
@@ -972,7 +1040,7 @@ describe('console REST routes', () => {
     const demo = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
       headers: { authorization: 'Bearer demo-token' },
     });
-    expect(demo.status).toBe(401);
+    expect(demo.status).toBe(403);
     const unbound = await fetch(`http://127.0.0.1:${port}/api/agent/workroom/data-lifecycle?projectId=alpha&objectId=object-1`, {
       headers: { authorization: 'Bearer full-token' },
     });
@@ -1186,7 +1254,7 @@ describe('console REST routes', () => {
 
     // 只读放行之外的路径仍拒绝 demo。
     const jobs = await fetch(`http://127.0.0.1:${port}/api/assistant/jobs`, { headers: demo });
-    expect(jobs.status).toBe(401);
+    expect(jobs.status).toBe(403);
 
     // 无 token 访问受保护路径 401；/entries 公开。
     const denied = await fetch(`http://127.0.0.1:${port}/api/system/status`);

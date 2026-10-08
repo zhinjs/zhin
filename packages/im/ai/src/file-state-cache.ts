@@ -97,17 +97,17 @@ export class FileStateCache {
   set(filePath: string, state: FileState): void {
     const key = this.normalizePath(filePath);
 
-    // 如果已存在，先减去旧的字节数
+    const newBytes = this.contentBytes(state.content);
+
+    // An oversized replacement must invalidate the stale view as well.
+    if (newBytes > this.maxSizeBytes / 4) {
+      this.delete(key);
+      return;
+    }
+
     const existing = this.cache.get(key);
     if (existing) {
       this.totalBytes -= this.contentBytes(existing.content);
-    }
-
-    const newBytes = this.contentBytes(state.content);
-
-    // 单文件内容超过 maxSizeBytes 的 1/4，不缓存
-    if (newBytes > this.maxSizeBytes / 4) {
-      return;
     }
 
     this.cache.set(key, state);

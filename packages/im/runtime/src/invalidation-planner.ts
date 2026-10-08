@@ -1,4 +1,5 @@
-import { basename, resolve } from 'node:path';
+import { normalizeSourcePath } from './source-path.js';
+import { basename } from 'node:path';
 import { rootPluginId, type CapabilityId, type PluginId } from '@zhin.js/plugin-runtime';
 import type { SourceOwnershipIndex, SourceOwnershipRecord } from './source-ownership.js';
 
@@ -54,7 +55,7 @@ export class InvalidationPlanner {
   ) {}
 
   plan(sources: readonly string[]): InvalidationPlan {
-    const changed = unique(sources.map((source) => resolve(source)));
+    const changed = unique(sources.map((source) => normalizeSourcePath(source)));
     if (changed.some((source) => processFiles.has(basename(source)))) {
       return Object.freeze({
         kind: 'process',
@@ -76,7 +77,7 @@ export class InvalidationPlanner {
       }
       const affected = unique(
         [source, ...(this.dependencies?.affectedSources(source) ?? [])].map((item) =>
-          resolve(item),
+          normalizeSourcePath(item),
         ),
       );
       let matched = false;
@@ -150,7 +151,7 @@ function addManifestSource(
   reasons: Set<string>,
   source: string,
 ): void {
-  const manifest = resolve(source);
+  const manifest = normalizeSourcePath(source);
   manifestSources.add(manifest);
   reasons.add(`Manifest source changed: ${manifest}`);
 }

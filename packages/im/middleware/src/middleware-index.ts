@@ -55,6 +55,7 @@ export class MiddlewareIndex {
     input: TInput,
     terminal: MiddlewareNext = async () => undefined,
     target: MiddlewareTarget = 'inbound',
+    operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<void> {
     const clientAdapter = operationClientAdapter(input);
     const records = this.#records.filter((record) =>
@@ -66,7 +67,7 @@ export class MiddlewareIndex {
       const record = records[index];
       if (!record) return terminal();
       const context = {
-        ...createCapabilityContext(this.snapshot, record.owner),
+        ...createCapabilityContext(operationSnapshot, record.owner),
         input,
       } as MiddlewareContext<TInput>;
       Object.defineProperty(context, '$client', {

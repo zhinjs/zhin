@@ -12,6 +12,7 @@ export interface AgentDescriptor extends AgentDefinition {
 }
 
 export class AgentIndex {
+  readonly $projection = 'zhin.agent-index/1' as const;
   readonly #index: OwnerCapabilityIndex<AgentDefinition>;
 
   constructor(
@@ -42,4 +43,10 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentDefinition>): AgentDescri
     qualifiedName: entry.qualifiedName,
     source: entry.source,
   });
+}
+
+/** Recognize the versioned projection across generation module identities. */
+export function isAgentIndex(value: unknown): value is AgentIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.agent-index/1';
 }

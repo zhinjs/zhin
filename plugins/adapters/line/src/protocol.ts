@@ -80,13 +80,18 @@ export interface LinePostbackEvent {
   };
 }
 
-export type LineEvent =
+export interface LineEventDelivery {
+  readonly webhookEventId?: string;
+  readonly deliveryContext?: { readonly isRedelivery?: boolean };
+}
+
+export type LineEvent = LineEventDelivery & (
   | LineMessageEvent
   | LineFollowEvent
   | LineUnfollowEvent
   | LineJoinEvent
   | LineLeaveEvent
-  | LinePostbackEvent;
+  | LinePostbackEvent);
 
 export interface LineSource {
   readonly type: 'user' | 'group' | 'room';

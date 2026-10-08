@@ -2,23 +2,27 @@ import type { FeatureId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runti
 import { permissionHostToken, type PermissionHost } from '@zhin.js/permission';
 import { turnPermissionSubject, type TurnAccessContext } from '../turn/turn-ingress.js';
 import {
-  AgentIndex,
+  type AgentIndex,
+  isAgentIndex,
   agentFeatureId,
   type AgentDescriptor,
 } from '@zhin.js/agent-feature';
 import {
-  McpIndex,
+  type McpIndex,
+  isMcpIndex,
   mcpFeatureId,
   type McpDescriptor,
   type McpToolDescriptor,
 } from '@zhin.js/mcp-feature';
 import {
-  SkillIndex,
+  type SkillIndex,
+  isSkillIndex,
   skillFeatureId,
   type SkillDescriptor,
 } from '@zhin.js/skill';
 import {
-  ToolIndex,
+  type ToolIndex,
+  isToolIndex,
   toolFeatureId,
   type ToolDescriptor,
   type ToolInvocationContext,
@@ -63,8 +67,8 @@ export class CapabilityIngress {
     selectedAgent?: string,
   ): Promise<AgentCapabilities> {
     if (!snapshot.tree.has(owner)) throw new Error(`Unknown Agent capability owner: ${owner}`);
-    const tools = projection(snapshot, toolFeatureId, ToolIndex);
-    const mcp = projection(snapshot, mcpFeatureId, McpIndex);
+    const tools = projection(snapshot, toolFeatureId, isToolIndex);
+    const mcp = projection(snapshot, mcpFeatureId, isMcpIndex);
     const promptProjection = snapshot.projections.get(promptSectionFeatureId);
     const promptSections = isPromptSectionIndex(promptProjection) ? promptProjection : undefined;
     const promptProfile: PromptProfile = turn?.origin.kind === 'schedule' ? 'schedule' : 'interactive';
@@ -75,9 +79,10 @@ export class CapabilityIngress {
       turn,
       resolvePermissionHost(snapshot),
       selectedAgent,
+      snapshot,
     );
     const featureSkills = await bindSkills(
-      projection(snapshot, skillFeatureId, SkillIndex),
+      projection(snapshot, skillFeatureId, isSkillIndex),
       turn,
       resolvePermissionHost(snapshot),
       selectedAgent,
@@ -95,7 +100,7 @@ export class CapabilityIngress {
       [...featureSkills, ...seamSkills].map((skill) => ({ name: skill.qualifiedName })),
     );
     const featureAgents = await bindAgents(
-      projection(snapshot, agentFeatureId, AgentIndex),
+      projection(snapshot, agentFeatureId, isAgentIndex),
       owner,
       turn,
       resolvePermissionHost(snapshot),
@@ -240,6 +245,7 @@ async function bindTools(
   turn?: TurnAccessContext,
   host?: PermissionHost,
   selectedAgent?: string,
+  operationSnapshot?: RuntimeSnapshot,
 ): Promise<readonly ToolCapability[]> {
   if (!index) return Object.freeze([]);
   const descriptors = index.list();
@@ -259,7 +265,7 @@ async function bindTools(
       name: r.descriptor.qualifiedName,
       execute: <TInput, TResult>(input: TInput, invocation: ToolInvocationContext) => {
         assertActive(isActive);
-        return index.execute<TInput, TResult>(r.descriptor.owner, r.descriptor.name, input, invocation);
+        return index.execute<TInput, TResult>(r.descriptor.owner, r.descriptor.name, input, invocation, operationSnapshot);
       },
     })));
 }
@@ -331,12 +337,8 @@ function assertActive(isActive: () => boolean): void {
 function projection<T>(
   snapshot: RuntimeSnapshot,
   id: FeatureId,
-  constructor: { readonly prototype: T },
+  guard: (value: unknown) => value is T,
 ): T | undefined {
   const value = snapshot.projections.get(id);
-  return value
-    && typeof value === 'object'
-    && Object.prototype.isPrototypeOf.call(constructor.prototype, value)
-    ? value as T
-    : undefined;
+  return guard(value) ? value : undefined;
 }

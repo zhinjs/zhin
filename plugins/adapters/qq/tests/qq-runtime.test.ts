@@ -25,6 +25,33 @@ import type { Bot } from 'qq-official-bot';
 
 const adapterFeature = featureId('zhin.adapter');
 
+it('keeps the canonical quote and image probe intact in QQ outbound wire segments', () => {
+  expect(formatOutbound([
+    { type: 'reply', data: { message_id: 'source-message' } },
+    { type: 'text', data: { text: 'probe' } },
+    { type: 'image', data: { media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' } } },
+  ])).toEqual([{ type: 'reply', data: { id: 'source-message' } }, 'probe', { type: 'image', data: { file: 'base64://aGk=' } }]);
+});
+
+it.each(['websocket', 'middleware'])('does not falsely confirm an unavailable QQ recall in %s mode', async mode => {
+  const bot = { ...createMockBot(), middleware: vi.fn(async () => undefined) };
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+  const id = capabilityId(rootPluginId(), adapterFeature, 'qq');
+  const endpoint = mode === 'websocket'
+    ? new QqWebsocketEndpoint({ id, config: baseConfig, createBot: () => bot })
+    : new QqHttpEndpoint({ id, http, createBot: () => bot, config: { ...baseConfig, mode: 'middleware', webhookPath: '/qq/webhook' } });
+  try {
+    await endpoint.start();
+    await expect(endpoint.recallMessage('group-group-1:sent-1')).rejects.toMatchObject({ code: 'recall_unsupported', disposition: 'not_sent' });
+    const recall = vi.fn(async () => undefined);
+    Object.assign(bot, { recallGroupMessage: recall });
+    await endpoint.recallMessage('group-group-1:sent-1');
+    expect(recall).toHaveBeenCalledWith('group-1', 'sent-1');
+    expect(recall.mock.contexts[0]).toBe(bot);
+    await expect(endpoint.recallMessage('group-group-1:')).rejects.toMatchObject({ code: 'invalid_message_id' });
+  } finally { await endpoint.stop(); await http.close(); }
+});
+
 const baseConfig = resolveQqConfig({
   id: 'test-qq-bot',
   appid: 'app-1',
@@ -208,6 +235,7 @@ describe('qq protocol helpers', () => {
     if (resolved.mode === 'websocket') {
       expect(resolved.intents).toEqual([
         'GROUP_AND_C2C_EVENT',
+        'INTERACTION',
         'GROUP_MEMBER',
         'GUILDS',
         'GUILD_MEMBERS',
@@ -230,11 +258,12 @@ describe('qq protocol helpers', () => {
     expect(formatOutboundText('pong')).toBe('pong');
     expect(formatOutboundText([{ type: 'text', data: { text: 'hi' } }])).toBe('hi');
     expect(resolveOutboundMessageId({ id: 'msg-1' })).toBe('msg-1');
-    expect(resolveOutboundMessageId({
+    expect(() => resolveOutboundMessageId({
       data: { message_audit: { audit_id: 'audit-1' } },
-    })).toBe('audit-1');
+    })).toThrow('响应缺少消息 ID');
+    expect(resolveOutboundMessageId({ data: { id: 'real-message' } })).toBe('real-message');
     expect(() => resolveOutboundMessageId({ code: 40001, message: 'bad' }))
-      .toThrow('QQ 发送消息失败（40001）: bad');
+      .toThrow('QQ platform rejected the outbound request (40001)');
   });
 });
 
@@ -550,7 +579,7 @@ describe('qq plugin runtime adapter', () => {
             }),
             expect.objectContaining({
               id: 'b2',
-              action: expect.objectContaining({ type: 0, data: 'cancel' }),
+              action: expect.objectContaining({ type: 1, data: 'cancel' }),
             }),
           ],
         },
@@ -590,7 +619,7 @@ describe('qq plugin runtime adapter', () => {
         kind: 'group',
         id: 'group-1',
       }, payload: 'pong' }))
-      .rejects.toThrow('QQ API 500');
+      .rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     await endpoint.stop();
   });
 
@@ -609,7 +638,7 @@ describe('qq plugin runtime adapter', () => {
         kind: 'group',
         id: 'group-1',
       }, payload: 'pong' }))
-      .rejects.toThrow('QQ 发送消息失败（304023）: audit rejected');
+      .rejects.toMatchObject({ code: 'platform_rejected', disposition: 'rejected', message: 'QQ platform rejected the outbound request (304023)' });
     await endpoint.stop();
   });
 
@@ -666,4 +695,51 @@ describe('qq plugin runtime adapter', () => {
     await vi.waitFor(() => expect(receive).toHaveBeenCalled());
     await endpoint.stop();
   });
+});
+
+it('projects live QQ SDK transport status through disconnect and reconnect', async () => {
+  const bot = createMockBot();
+  let status: 'open' | 'reconnecting' = 'open';
+  Object.defineProperty(bot, 'transportState', { get: () => status });
+  const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
+  expect(endpoint.transportState).toBe('idle'); await endpoint.start();
+  expect(endpoint.transportState).toBe('open');
+  status = 'reconnecting'; expect(endpoint.transportState).toBe('reconnecting');
+  status = 'open'; expect(endpoint.transportState).toBe('open');
+  await endpoint.stop(); expect(endpoint.transportState).toBe('stopped');
+});
+
+it('keeps successful QQ responses without a real message id unknown', () => {
+  expect(() => resolveOutboundMessageId({ code: 0 })).toThrowError(expect.objectContaining({ code: 'delivery_unconfirmed', disposition: 'unknown' }));
+  expect(() => resolveOutboundMessageId({ code: 40001, id: 'misleading', message: 'private response content' })).toThrowError(expect.objectContaining({ code: 'platform_rejected', disposition: 'rejected', message: 'QQ platform rejected the outbound request (40001)' }));
+  expect(() => resolveOutboundMessageId({ code: 0, message_audit: { audit_id: 'pending' } })).toThrowError(expect.objectContaining({ code: 'delivery_unconfirmed', disposition: 'unknown' }));
+});
+
+it('bounds stalled QQ startup and cleans resources created by late readiness', async () => {
+  vi.useFakeTimers();
+  try {
+    const bot = createMockBot(); let resolve!: () => void;
+    vi.mocked(bot.start).mockImplementation(() => new Promise<void>(done => { resolve = done; }));
+    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
+    const starting = endpoint.start();
+    const rejected = expect(starting).rejects.toThrow('startup timed out');
+    await vi.advanceTimersByTimeAsync(30_000); await rejected;
+    expect(bot.stop).toHaveBeenCalledTimes(1);
+    expect(endpoint.transportState).toBe('idle');
+    resolve(); await vi.advanceTimersByTimeAsync(0);
+    expect(bot.stop).toHaveBeenCalledTimes(2);
+    await endpoint.stop(); expect(vi.getTimerCount()).toBe(0);
+  } finally { vi.useRealTimers(); }
+});
+
+it('cancels QQ startup deadline immediately when endpoint stops', async () => {
+  vi.useFakeTimers();
+  try {
+    const bot = createMockBot(); vi.mocked(bot.start).mockImplementation(() => new Promise<void>(() => {}));
+    const endpoint = new QqWebsocketEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'qq'), config: baseConfig, createBot: () => bot });
+    const starting = endpoint.start(); await vi.advanceTimersByTimeAsync(0);
+    await endpoint.stop(); await starting;
+    expect(vi.getTimerCount()).toBe(0);
+    expect(endpoint.transportState).toBe('stopped');
+  } finally { vi.useRealTimers(); }
 });

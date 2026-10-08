@@ -18,6 +18,8 @@ export interface ComponentDefinition<
 > {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof componentBrand;
+  /** Optional, public example parameters for interactive previews. Do not include secrets. */
+  readonly previewProps?: TProps;
   render(props: TProps, context: ComponentContext<TConfig>): TResult | Promise<TResult>;
 }
 

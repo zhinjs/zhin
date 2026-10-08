@@ -8,6 +8,7 @@ import {
   interactionToInboundMessage,
   verifyDiscordInteractionSignature,
   type DiscordInboundMessage,
+  type DiscordButtonInbound,
   type ResolvedDiscordInteractionsConfig,
 } from './protocol.js';
 
@@ -24,6 +25,7 @@ export interface DiscordInteractionsHandler {
   readonly config: ResolvedDiscordInteractionsConfig;
   readonly isOpen: boolean;
   admit(msg: DiscordInboundMessage): void;
+  admitButton(interaction: DiscordButtonInbound): void;
   admitPlatform(event: Record<string, unknown>): void;
 }
 
@@ -68,6 +70,16 @@ export async function handleDiscordInteractionRequest(
     if (interaction.type === INTERACTION_TYPE_PING) {
       writeJson(response, 200, { type: INTERACTION_RESPONSE_PONG });
       return;
+    }
+    if (interaction.type === 3) {
+      const data = interaction.data as { component_type?: number; custom_id?: string } | undefined;
+      if (data?.component_type === 2 && typeof data.custom_id === 'string') {
+        if (!handler.isOpen) { response.writeHead(503); response.end('Unavailable'); return; }
+        const message = interactionToInboundMessage(interaction);
+        handler.admitButton({ id: message.id, customId: data.custom_id, channelId: message.channelId, channelKind: message.channelKind, userId: message.authorId, userName: message.authorName, ...(message.guildId ? { guildId: message.guildId } : {}), sourceMessageId: (interaction.message as { id?: string } | undefined)?.id });
+        writeJson(response, 200, { type: 6 });
+        return;
+      }
     }
     if (interaction.type === INTERACTION_TYPE_APPLICATION_COMMAND) {
       if (handler.isOpen) {

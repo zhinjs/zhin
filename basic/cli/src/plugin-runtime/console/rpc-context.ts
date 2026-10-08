@@ -18,6 +18,7 @@ import type {
 } from './rpc-composition.js';
 import { createWorkroomCatalogRpcContext } from './workroom-catalog-rpc.js';
 import { readDeclaredPlugins } from '../plugin-lifecycle-store.js';
+import { resolveDiagnosticPlugin } from './plugin-diagnostics.js';
 
 /** Owns the generation lease and capability context for one Console RPC request. */
 export class ConsoleRpcRequestScope {
@@ -90,10 +91,11 @@ function createRpcContext(
     validatePluginConfig: (pluginName: string, data: unknown) =>
       configuration.validatePluginConfig(pluginName, data),
     diagnosePlugin: async (pluginName: string) => {
-      const plan = await pluginManagement?.planInstall(pluginName);
+      const target = resolveDiagnosticPlugin(pluginName, await readDeclaredPlugins(projectRoot));
+      const plan = await pluginManagement?.planInstall(target.packageName);
       const config = await configuration.readDocument();
-      const validation = await configuration.validatePluginConfig(pluginName, config[pluginName]);
-      return { pluginName, plan: plan ?? null, validation };
+      const validation = await configuration.validatePluginConfig(target.instanceKey, config[target.instanceKey]);
+      return { pluginName: target.instanceKey, packageName: target.packageName, planScope: 'package', plan: plan ?? null, validation };
     },
     listEndpoints: im ? async () => im.endpoints.list() : undefined,
     getEndpoint: im

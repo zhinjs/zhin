@@ -237,8 +237,32 @@ describe('dispatchExtendedConsoleRpc', () => {
             { id: 'job-2', cron: '0 */5 * * * *', expression: '0 */5 * * * *', running: true },
           ],
           persistent: [],
+          capabilities: { persistent: false },
         },
       });
+    });
+
+    it('advertises persistent writes only for a mounted engine and full scope, and reports read failures', async () => {
+      const engine = { listJobs: vi.fn().mockResolvedValue([]), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      const ctx = makeCtx({ scheduleHost: { list: () => [] }, resolveScheduleEngine: () => engine });
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, ctx)).toMatchObject({ data: { capabilities: { persistent: true } } });
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, { ...ctx, fullScope: false })).toMatchObject({ data: { capabilities: { persistent: false } } });
+      engine.listJobs.mockRejectedValueOnce(new Error('storage unavailable'));
+      expect(await dispatchExtendedConsoleRpc('schedule:list', {}, ctx)).toEqual({ error: '读取持久化任务失败: storage unavailable' });
+      expect(engine.addJob).not.toHaveBeenCalled();
+    });
+
+    it('rejects invalid create requests before writing to the persistent engine', async () => {
+      const engine = { listJobs: vi.fn(), addJob: vi.fn(), removeJob: vi.fn(), pauseJob: vi.fn(), resumeJob: vi.fn() };
+      expect(await dispatchExtendedConsoleRpc('cron:add', { cronExpression: '99 99 * * * *', prompt: 'fixture' }, makeCtx({ resolveScheduleEngine: () => engine }))).toMatchObject({ error: expect.stringContaining('Cron 表达式无效') });
+      expect(engine.addJob).not.toHaveBeenCalled();
+    });
+
+    it('validates the actual six-field scheduler grammar without creating tasks', async () => {
+      const ctx = makeCtx({ fullScope: false });
+      expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '0 0 9 * * *' }, ctx)).toEqual({ data: { valid: true } });
+      expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '0 9 * * *' }, ctx)).toMatchObject({ data: { valid: false } });
+      expect(await dispatchExtendedConsoleRpc('cron:validate', { cronExpression: '99 99 * * * *' }, ctx)).toMatchObject({ data: { valid: false } });
     });
 
     it('cron write ops report 未接线 on full scope and are forbidden on demo scope', async () => {

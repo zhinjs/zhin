@@ -45,12 +45,36 @@ describe('PluginSchemaCatalog', () => {
 
   it('reads a batch against one project catalog and omits missing plugin schemas', async () => {
     const catalog = new PluginSchemaCatalog(await createProject());
-    await expect(catalog.readAll(['qq-main', 'sandbox', 'http'])).resolves.toEqual({
+    await expect(catalog.readAll(['qq-main', 'sandbox'])).resolves.toEqual({
       'qq-main': {
         type: 'object',
         object: { account: { type: 'string', key: 'account', required: true } },
       },
-      http: { type: 'object', object: {} },
     });
   });
+  it('projects actual Host fields and Chinese descriptions instead of an empty placeholder', async () => {
+    const catalog = new PluginSchemaCatalog(await createProject());
+    await expect(catalog.read('http')).resolves.toMatchObject({
+      type: 'object',
+      object: { readiness: { type: 'object', object: {
+        database: { type: 'boolean', default: true, description: '要求 Database Host 已初始化（不执行实时数据库查询）。' },
+        endpoints: { type: 'list', inner: { type: 'object', object: {
+          owner: { type: 'string', required: true }, name: { type: 'string', required: true },
+        } } },
+      } } },
+    });
+  });
+
+  it('uses the project root schema for plugin and reports a missing schema honestly', async () => {
+    const root = await createProject();
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('plugin')).resolves.toBeNull();
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', properties: { threshold: { type: 'integer', minimum: 1 } },
+    }));
+    await expect(catalog.read('plugin')).resolves.toMatchObject({
+      object: { threshold: { type: 'number', min: 1 } },
+    });
+  });
+
 });

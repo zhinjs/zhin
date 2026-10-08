@@ -7,11 +7,18 @@ export function jsonSchemaToConsoleSchema(
   const schema = input as Record<string, unknown>;
 
   if (isConsoleSchemaJson(schema)) {
-    return key && schema.key == null ? { ...schema, key } : { ...schema };
+    return {
+      ...schema,
+      ...(key && schema.key == null ? { key } : {}),
+      ...(typeof schema['x-descriptionZh'] === 'string'
+        ? { description: schema['x-descriptionZh'] } : {}),
+    };
   }
 
   const typeField = schema.type;
-  const description = typeof schema.description === 'string' ? schema.description : undefined;
+  const description = typeof schema['x-descriptionZh'] === 'string'
+    ? schema['x-descriptionZh']
+    : typeof schema.description === 'string' ? schema.description : undefined;
   const defaultValue = schema.default;
   const requiredFlag = schema.required === true ? true : undefined;
 
@@ -55,6 +62,7 @@ export function jsonSchemaToConsoleSchema(
     : undefined;
   return compactMeta({
     type: type === 'integer' ? 'number' : (type ?? 'any'),
+    ...(type === 'integer' ? { integer: true } : {}),
     key,
     description,
     default: defaultValue,

@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { Registry } from '@zhin.js/database';
 import {
@@ -41,6 +44,27 @@ describe('DatabaseContextRepository (sqlite)', () => {
 
   afterEach(async () => {
     await db.stop();
+  });
+
+  it('retains all branch destinations when switching back to root', async () => {
+    const store = new AgentSessionStore(db.models.get('agent_sessions')!);
+    const repo = new DatabaseContextRepository(db.models.get('agent_messages')!, db.models.get('agent_summaries')!, store);
+    await repo.appendMessages(sessionId, [createUserMessage('root')]);
+    const root = (await repo.listBranchPoints(sessionId))[0]!.messageId;
+    await repo.appendMessages(sessionId, [createUserMessage('old branch')]);
+    const old = (await repo.listBranchPoints(sessionId))[1]!.messageId;
+    await repo.setActiveLeaf(sessionId, root);
+    await repo.appendMessages(sessionId, [createUserMessage('new branch')]);
+    const newest = (await store.getBySessionId(sessionId))!.active_leaf_message_id!;
+    await repo.setActiveLeaf(sessionId, root);
+    expect((await repo.listBranchPoints(sessionId)).map(p => p.messageId)).toEqual([root, old, newest]);
+    expect((await repo.listBranchPoints(sessionId)).map(p => [p.parentMessageId, p.activePath])).toEqual([[null, true], [root, false], [root, false]]);
+    expect(await repo.jumpToBranchIndex(sessionId, 2)).toMatchObject({ ok: true });
+    expect((await store.getBySessionId(sessionId))!.active_leaf_message_id).toBe(old);
+    expect((await repo.loadContext(sessionId)).messages).toHaveLength(2);
+    expect(await repo.setActiveLeaf(sessionId, newest)).toBe(true);
+    expect((await repo.loadMessageRows(sessionId)).map(r => r.parent_id)).toEqual([null, root, root]);
+    expect((await repo.listBranchPoints(sessionId)).map(p => p.messageId)).toEqual([root, old, newest]);
   });
 
   it('appendMessages chains parent_id via insert lastID', async () => {
@@ -147,5 +171,45 @@ describe.skipIf(!live)('DatabaseContextRepository (postgresql)', () => {
       'SELECT COUNT(*)::int AS count FROM "agent_messages" WHERE "session_id" = $1',
       [session.session_id],
     )).resolves.toEqual([{ count: 1 }]);
+  });
+});
+
+
+describe('persistent sqlite branch navigation', () => {
+  it('reopens all branches and the active leaf without changing ancestry', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'zhin-session-tree-test-'));
+    const filename = join(directory, 'sessions.sqlite');
+    const open = async () => {
+      const db = Registry.create<AgentDbSchema, 'sqlite'>('sqlite', { filename });
+      db.define('agent_sessions', AGENT_SESSION_MODEL);
+      db.define('agent_messages', AGENT_MESSAGE_MODEL);
+      db.define('agent_summaries', AGENT_SUMMARY_MODEL);
+      await db.start();
+      const store = new AgentSessionStore(db.models.get('agent_sessions')!);
+      return { db, store, repo: new DatabaseContextRepository(db.models.get('agent_messages')!, db.models.get('agent_summaries')!, store) };
+    };
+    let current = await open();
+    try {
+      const session = await current.store.getOrCreateActive({ session_key: 'fixture:private:branches' });
+      const id = session.session_id;
+      await current.repo.appendMessages(id, [createUserMessage('root'), createUserMessage('old')]);
+      const root = (await current.repo.listBranchPoints(id))[0]!.messageId;
+      await current.repo.setActiveLeaf(id, root);
+      await current.repo.appendMessages(id, [createUserMessage('new')]);
+      await current.repo.setActiveLeaf(id, root);
+      const before = await current.repo.listBranchPoints(id);
+      await current.db.stop();
+      current = await open();
+      expect(await current.repo.listBranchPoints(id)).toEqual(before);
+      expect((await current.store.getBySessionId(id))?.active_leaf_message_id).toBe(root);
+      for (const point of before.slice(1)) {
+        expect(await current.repo.setActiveLeaf(id, point.messageId)).toBe(true);
+        expect((await current.repo.loadContext(id)).messages).toHaveLength(2);
+      }
+      expect((await current.repo.loadMessageRows(id)).map(row => row.parent_id)).toEqual([null, root, root]);
+    } finally {
+      await current.db.stop();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

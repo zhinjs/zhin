@@ -17,7 +17,7 @@ const logger = getLogger('dingtalk');
 export interface DingTalkWebhookHandler {
   readonly config: ResolvedDingTalkConfig;
   readonly isOpen: boolean;
-  admit(event: DingTalkEvent): void;
+  admit(event: DingTalkEvent): void | Promise<void>;
 }
 
 export function registerDingTalkWebhookRoutes(
@@ -62,7 +62,7 @@ export async function handleDingTalkWebhookRequest(
     }
 
     if (event.msgtype && handler.isOpen) {
-      handler.admit(event);
+      await handler.admit(event);
     }
 
     response.writeHead(200, { 'Content-Type': 'application/json' });

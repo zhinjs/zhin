@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/napcat/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=f64dafa1fdaa3bab -->
+<!-- sync-adapter-docs:sha256=51b64ad0b620c397 -->
 
 # @zhin.js/adapter-napcat
 
@@ -109,3 +109,7 @@ endpoint 配置，不会从环境变量推断 endpoint id。
 ## 许可证
 
 MIT License
+
+### 高阶消息支持边界
+
+NapCat 官方消息兼容表标明 share 仅接收，不支持发送；Markdown 仅可在双层合并转发内发送，不支持直接消息。Canonical `markdown`、`share`、`keyboard` 直接出站明确返回 `unsupported_operation / not_sent`，不会将占位段或原始协议猜测报告成功。当前未实现合并转发 Markdown，亦无原生按钮回调闭环。参考：[官方兼容表](https://napneko.github.io/develop/msg)。

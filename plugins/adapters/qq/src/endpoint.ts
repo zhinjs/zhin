@@ -1,3 +1,8 @@
+import { installQqUploadDiagnostics } from './upload-diagnostics.js';
+import { qqDeliveryFailure } from './delivery-error.js';
+import { normalizeQqInteraction } from './interaction.js';
+import { awaitQqStartup } from './start-deadline.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * QQ endpoints — lifecycle, outbound, admit, agent tool surface.
  */
@@ -8,6 +13,7 @@ import {
   type EndpointChannel,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
@@ -59,6 +65,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   readonly #createBot: CreateQqBot;
   #bot: QqBotTransport | null = null;
   #open = false;
+  readonly #seenInteractions = new Map<string, number>();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
@@ -67,7 +74,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   constructor(options: QqEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('qq', options.config.id);
-    this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id });
     this.#options = options;
     this.#createBot = options.createBot ?? defaultCreateBot;
   }
@@ -81,11 +88,18 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     return this.#options.config.id;
   }
 
+  get transportState(): EndpointTransportState {
+    if (this.#lifecycle.state !== 'open') return this.#lifecycle.state;
+    return this.#bot?.transportState ?? this.#lifecycle.state;
+  }
+
   async start(): Promise<void> {
     await this.#lifecycle.start(async (handle) => {
       const bot = this.#createBot(this.#options.config);
       this.#bot = bot;
+      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot.api, metadata => this.#logger.debug(formatCompact(metadata)));
       let cancelled = false;
+      const startupAbort = new AbortController();
       let stopping: Promise<void> | undefined;
       const stopBot = async () => {
         try { bot.removeAllListeners(); } catch { /* continue SDK cleanup */ }
@@ -93,28 +107,32 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
       };
       const cleanup = () => {
         cancelled = true;
+        releaseUploadDiagnostics();
+        startupAbort.abort();
         if (this.#bot === bot) this.#bot = null;
         return stopping ??= stopBot();
       };
       this.#cleanup = cleanup;
       handle.onForceClose(() => { void cleanup(); });
       try {
+        bot.on('transport.close', () => { if (cancelled || this.#bot !== bot) return; void cleanup(); handle.notifyClosed(); });
         this.#bindBot(bot);
-        await bot.start();
+        await awaitQqStartup(bot.start().then(async () => {
+          if (cancelled) await stopBot();
+        }, async (error) => {
+          if (cancelled) await stopBot();
+          throw error;
+        }), startupAbort.signal);
         if (cancelled) {
           // SDK startup may create resources after stop; close this exact old client again.
           await stopping;
-          await stopBot();
           return;
         }
         this.#logger.info(`connected (websocket) | appid: ${this.#options.config.appid}`);
       } catch (error) {
         const wasCancelled = cancelled;
         await cleanup();
-        if (wasCancelled) {
-          await stopBot();
-          return;
-        }
+        if (wasCancelled) return;
         const raw = error instanceof Error ? error.message : String(error);
         throw new Error(
           `QQ WebSocket 连接失败：请检查 appid/secret 是否配对、网关地址（gatewayUrl/accessTokenUrl）是否可达（原始错误：${raw}）`,
@@ -146,20 +164,26 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
-    switch (kind) {
-      case 'private':
-        result = await bot.sendPrivateMessage(conversation.id, body);
-        break;
-      case 'group':
-        result = await bot.sendGroupMessage(conversation.id, body);
-        break;
-      case 'channel':
-        result = await bot.sendGuildMessage(conversation.id, body);
-        break;
-      case 'direct':
-        if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-        result = await bot.sendDirectMessage(conversation.id, body);
-        break;
+    try {
+      switch (kind) {
+        case 'private':
+          result = await bot.sendPrivateMessage(conversation.id, body);
+          break;
+        case 'group':
+          result = await bot.sendGroupMessage(conversation.id, body);
+          break;
+        case 'channel':
+          result = await bot.sendGuildMessage(conversation.id, body);
+          break;
+        case 'direct':
+          if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
+          result = await bot.sendDirectMessage(conversation.id, body);
+          break;
+      }
+    } catch (error) {
+      const { failure, diagnostic } = qqDeliveryFailure(error);
+      this.#logger.warn(formatCompact(diagnostic));
+      throw failure;
     }
     const messageId = `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
     this.#logger.info(
@@ -173,20 +197,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   async recallMessage(messageId: string): Promise<void> {
     const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
     const bot = this.#requireBot();
-    switch (kind) {
-      case 'private':
-        await bot.recallPrivateMessage?.(channelId, qqMsgId);
-        break;
-      case 'group':
-        await bot.recallGroupMessage?.(channelId, qqMsgId);
-        break;
-      case 'channel':
-        await bot.recallGuildMessage?.(channelId, qqMsgId);
-        break;
-      case 'direct':
-        await bot.recallDirectMessage?.(channelId, qqMsgId);
-        break;
-    }
+    await recallQqMessage(bot, kind, channelId, qqMsgId);
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.id,
@@ -233,6 +244,29 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     });
   }
 
+  /** Native click only; C2C/group have no platform source message ID. */
+  admitInteraction(raw: unknown): boolean {
+    if (!this.#open) return false;
+    const action = normalizeQqInteraction(raw);
+    if (!action) return false;
+    const now = Date.now();
+    for (const [id, time] of this.#seenInteractions) if (now - time > 300_000) this.#seenInteractions.delete(id);
+    if (this.#seenInteractions.has(action.message.id)) return true;
+    this.#seenInteractions.set(action.message.id, now);
+    if (this.#seenInteractions.size > 10_000) this.#seenInteractions.delete(this.#seenInteractions.keys().next().value!);
+    // ACK owns only platform loading state, never implies business acceptance.
+    void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
+    const conversation = qqInboundConversation(String(this.#options.id), action.message);
+    void this.emit('message.receive', {
+      conversation, message: { conversation, id: action.message.id }, content: '',
+      segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
+      metadata: Object.freeze({ eventType: 'INTERACTION_CREATE', sourceMessageIdAvailable: action.sourceMessageId !== undefined,
+        ...(action.sourceMessageId ? { sourceMessageId: action.sourceMessageId } : {}),
+        callbackAssociation: action.sourceMessageId ? 'source-message' : 'payload-conversation-actor' }),
+    }).catch(() => this.#logger.warn('qq_interaction_receive_failed'));
+    return true;
+  }
+
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
       if (this.#bot !== bot) return;
@@ -243,6 +277,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
     bindQqBotSideEvents(bot, (eventName, raw) => {
       if (this.#bot !== bot) return;
       this.#emitPlatformEvent(eventName, raw);
+      if (this.admitInteraction(raw)) return;
       receiveQqSideEvent(
         (name, payload) => this.emit(name, payload),
         this.#options.config.id,
@@ -265,7 +300,7 @@ export class QqWebsocketEndpoint extends Endpoint<QqBotTransport> {
   }
 
   #requireBot(): QqBotTransport {
-    if (!this.#bot) throw new Error('QQ bot not connected');
+    if (!this.#bot) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
     return this.#bot;
   }
 }
@@ -285,6 +320,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   readonly #createBot: CreateQqHttpBot;
   #bot: QqHttpBotTransport | null = null;
   #open = false;
+  readonly #seenInteractions = new Map<string, number>();
   readonly #lifecycle: EndpointLifecycle;
   #cleanup?: () => Promise<void>;
   readonly management: EndpointManagement = createQqEndpointManagement(() => this.#requireBot());
@@ -307,11 +343,17 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     return this.#options.config.id;
   }
 
+  get transportState(): EndpointTransportState {
+    return this.#lifecycle.state;
+  }
+
   async start(): Promise<void> {
     await this.#lifecycle.start(async (handle) => {
       const bot = this.#createBot(this.#options.config);
       this.#bot = bot;
+      const releaseUploadDiagnostics = installQqUploadDiagnostics(bot.api, metadata => this.#logger.debug(formatCompact(metadata)));
       let cancelled = false;
+      const startupAbort = new AbortController();
       let stopping: Promise<void> | undefined;
       const routes: Array<() => void> = [];
       const stopBot = async () => {
@@ -320,6 +362,8 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
       };
       const cleanup = () => {
         cancelled = true;
+        releaseUploadDiagnostics();
+        startupAbort.abort();
         if (this.#bot === bot) this.#bot = null;
         for (const release of routes.splice(0)) release();
         return stopping ??= stopBot();
@@ -332,21 +376,22 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
           config: this.#options.config,
           getBot: () => cancelled ? null : bot,
         }));
-        await bot.start();
+        await awaitQqStartup(bot.start().then(async () => {
+          if (cancelled) await stopBot();
+        }, async (error) => {
+          if (cancelled) await stopBot();
+          throw error;
+        }), startupAbort.signal);
         if (cancelled) {
           // SDK startup may create resources after stop; close this exact old client again.
           await stopping;
-          await stopBot();
           return;
         }
         this.#logger.info(`connected (${this.#options.config.mode}) | path: ${this.#options.config.webhookPath}`);
       } catch (error) {
         const wasCancelled = cancelled;
         await cleanup();
-        if (wasCancelled) {
-          await stopBot();
-          return;
-        }
+        if (wasCancelled) return;
         throw error;
       }
     });
@@ -374,20 +419,26 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     const kind = qqOutboundKind(conversation);
     const bot = this.#requireBot();
     let result: unknown;
-    switch (kind) {
-      case 'private':
-        result = await bot.sendPrivateMessage(conversation.id, body);
-        break;
-      case 'group':
-        result = await bot.sendGroupMessage(conversation.id, body);
-        break;
-      case 'channel':
-        result = await bot.sendGuildMessage(conversation.id, body);
-        break;
-      case 'direct':
-        if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
-        result = await bot.sendDirectMessage(conversation.id, body);
-        break;
+    try {
+      switch (kind) {
+        case 'private':
+          result = await bot.sendPrivateMessage(conversation.id, body);
+          break;
+        case 'group':
+          result = await bot.sendGroupMessage(conversation.id, body);
+          break;
+        case 'channel':
+          result = await bot.sendGuildMessage(conversation.id, body);
+          break;
+        case 'direct':
+          if (!bot.sendDirectMessage) throw new Error('QQ direct message not supported by transport');
+          result = await bot.sendDirectMessage(conversation.id, body);
+          break;
+      }
+    } catch (error) {
+      const { failure, diagnostic } = qqDeliveryFailure(error);
+      this.#logger.warn(formatCompact(diagnostic));
+      throw failure;
     }
     const messageId = `${kind}-${conversation.id}:${resolveOutboundMessageId(result)}`;
     this.#logger.info(
@@ -401,20 +452,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   async recallMessage(messageId: string): Promise<void> {
     const { kind, channelId, qqMsgId } = parseCompoundMessageId(messageId);
     const bot = this.#requireBot();
-    switch (kind) {
-      case 'private':
-        await bot.recallPrivateMessage?.(channelId, qqMsgId);
-        break;
-      case 'group':
-        await bot.recallGroupMessage?.(channelId, qqMsgId);
-        break;
-      case 'channel':
-        await bot.recallGuildMessage?.(channelId, qqMsgId);
-        break;
-      case 'direct':
-        await bot.recallDirectMessage?.(channelId, qqMsgId);
-        break;
-    }
+    await recallQqMessage(bot, kind, channelId, qqMsgId);
     this.#logger.debug(formatCompact({
       op: 'qq_recall',
       endpoint: this.#options.config.id,
@@ -460,6 +498,29 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     });
   }
 
+  /** Native click only; C2C/group have no platform source message ID. */
+  admitInteraction(raw: unknown): boolean {
+    if (!this.#open) return false;
+    const action = normalizeQqInteraction(raw);
+    if (!action) return false;
+    const now = Date.now();
+    for (const [id, time] of this.#seenInteractions) if (now - time > 300_000) this.#seenInteractions.delete(id);
+    if (this.#seenInteractions.has(action.message.id)) return true;
+    this.#seenInteractions.set(action.message.id, now);
+    if (this.#seenInteractions.size > 10_000) this.#seenInteractions.delete(this.#seenInteractions.keys().next().value!);
+    // ACK owns only platform loading state, never implies business acceptance.
+    void action.ack().then(ok => { if (ok === false) this.#logger.warn('qq_interaction_ack_failed'); }, () => this.#logger.warn('qq_interaction_ack_failed'));
+    const conversation = qqInboundConversation(String(this.#options.id), action.message);
+    void this.emit('message.receive', {
+      conversation, message: { conversation, id: action.message.id }, content: '',
+      segments: action.message.segments, sender: { id: action.message.authorId }, endpointId: this.#options.config.id,
+      metadata: Object.freeze({ eventType: 'INTERACTION_CREATE', sourceMessageIdAvailable: action.sourceMessageId !== undefined,
+        ...(action.sourceMessageId ? { sourceMessageId: action.sourceMessageId } : {}),
+        callbackAssociation: action.sourceMessageId ? 'source-message' : 'payload-conversation-actor' }),
+    }).catch(() => this.#logger.warn('qq_interaction_receive_failed'));
+    return true;
+  }
+
   #bindBot(bot: QqBotTransport): void {
     bindQqBotInboundEvents(bot, (raw) => {
       if (this.#bot !== bot) return;
@@ -470,6 +531,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
     bindQqBotSideEvents(bot, (eventName, raw) => {
       if (this.#bot !== bot) return;
       this.#emitPlatformEvent(eventName, raw);
+      if (this.admitInteraction(raw)) return;
       receiveQqSideEvent(
         (name, payload) => this.emit(name, payload),
         this.#options.config.id,
@@ -492,7 +554,7 @@ export class QqHttpEndpoint extends Endpoint<QqHttpBotTransport> {
   }
 
   #requireBot(): QqHttpBotTransport {
-    if (!this.#bot) throw new Error('QQ bot not connected');
+    if (!this.#bot) throw new EndpointDeliveryError('endpoint_disconnected', 'QQ bot not connected', 'not_sent');
     return this.#bot;
   }
 }
@@ -531,4 +593,12 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value !== null && typeof value === 'object'
     ? value as Record<string, unknown>
     : {};
+}
+
+async function recallQqMessage(bot: QqBotTransport, kind: ReturnType<typeof qqOutboundKind>, channelId: string, messageId: string): Promise<void> {
+  const recall = { private: bot.recallPrivateMessage, group: bot.recallGroupMessage,
+    channel: bot.recallGuildMessage, direct: bot.recallDirectMessage }[kind];
+  if (!recall) throw new EndpointDeliveryError('recall_unsupported', 'QQ transport does not support recall for this conversation', 'not_sent');
+  if (!messageId) throw new EndpointDeliveryError('invalid_message_id', 'QQ recall requires a nonempty message ID', 'not_sent');
+  await recall.call(bot, channelId, messageId);
 }

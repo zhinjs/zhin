@@ -143,3 +143,31 @@ MIT
 成功发送返回平台 `ts` 组成的消息引用，不以本地时间替代缺失回执。
 文件上传失败会让本次发送失败；分段消息中某段缺少有效回执时，停止后续分段。
 前面已成功的文件或分段不会自动回滚；发送失败可能表示部分已送达，请先核对目标会话再重试。
+# Socket Mode 可控断线验收
+
+`streamProxy: { port: 18443, serverName: "实际网关域名" }` 使用 SDK 合法 `clientOptions.agent`。配置网关的 WSS 仅改 TCP 路由为 `127.0.0.1:18443`，保留真实 URL、Host、TLS SNI、证书链和域名校验。SDK 的 discovery API 仍用标准 HTTPS Agent 直连 `slack.com`；其他网关及 WebSocket Upgrade 到 API 域名均明确拒绝，不绕代理。日志仅包含安全 hostname，不打印完整 URL/query/token。
+
+验收项目通过 `SLACK_STREAM_PROXY_PORT` / `SLACK_STREAM_PROXY_SERVER_NAME` 进程变量临时覆盖，需同时填写，留空直连。未知域名可先设占位值，从拒绝日志获取真实 hostname，再启动 `scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host 实际网关域名 --upstream-port 443 --port 18443 --control-port 18444`；将 serverName 同步为此域名。不要覆盖已有 `.env`。平台更换动态网关时停止验收并更新固定上游，不能直连继续取恢复证据。
+
+Socket SDK 的自动重连已关闭；start/stop/reconnect 由统一 Endpoint lifecycle 管理，SDK 保留协议心跳。断线销毁当前 Agent/Socket，重连新建实例；旧实例回调不进入消息链，stop 取消待重连。可观察 Endpoint `transportState` 的 open/重连/stopped。
+
+先验证正常消息，再 POST 代理 `/cut`，观察 Socket 关闭和生命周期退出 open；POST `/recover`，观察新连接 open，再发送唯一新 probe 验证真实入站及可见回复。切断只覆盖 Socket 入站，普通 Web API 出站仍直连，不代表所有网络恢复或离线消息无损。完成后停止代理、移除临时覆盖。实际 SDK 的本地 TLS/hello 握手、断线恢复与防绕过回归通过，真实平台结果另记。
+
+### 出站失败与重试边界
+
+默认 WebClient 禁用 SDK 网络/5xx 自动重试，并以 `rejectRateLimitedCalls: true` 返回 429，不在后台排队重发。平台明确返回拒绝记为 rejected；连接中断、408、5xx、缺少真实时间戳记为 unknown，调用者不得把 unknown 当成“未发送”盲目重试。实机 WSS 故障代理只控制入站长连接，不能作为 Web API 故障证据。本地真实 SDK HTTP fixture 已验证每种故障只出现一个 POST；不代表真实租户已通过。
+
+SDK 官方选项依据：[Slack Web API 文档](https://docs.slack.dev/tools/node-slack-sdk/web-api/)。若需 API 专用故障入口，应在专用测试实例 WebClient 的正式 `agent` 选项注入固定 loopback TCP 路由，保留真实 slack.com URL、SNI 和证书校验；验收项目现提供独立 `webApiProxy` / `SLACK_WEB_API_PROXY_PORT`，不能用 WSS proxy 冒充 API proxy。
+
+### 专用 Web API 故障入口
+
+可选 endpoint `webApiProxy: { port: 18560 }` 仅作用于该实例的 JSON Web API 客户端。目的地固定 `slack.com:443`，真实 HTTPS URL/SNI/证书校验保留，TCP 只路由到 `127.0.0.1:18560`；错误域名拒绝、不回退直连。默认关闭，与 Socket `streamProxy` 独立；SocketModeClient 的连接发现和 WSS 不走此代理。停止 endpoint 会销毁专用 agent。上传使用其他域名，此专用代理明确拒绝，故只用于 JSON消息/引用/按钮/链接探针，不据此验收文件上传。
+
+使用现有透明TCP故障代理：
+
+```bash
+node scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host slack.com --upstream-port 443 --port 18560 --control-port 18561
+SLACK_WEB_API_PROXY_PORT=18560 pnpm --filter platform-acceptance-bot dev:slack
+```
+
+启动代理 forwarding 后先发新的 `/acceptance probe:slack-api-baseline`，确认真实回执；control `POST /cut` 只切 API TCP，WSS保持连接，再发独立新样本并确认报告 unknown且无后台重发。`POST /recover` 后先确认旧样本没有补发，再发新样本验证恢复。每个未知样本都保留并检查平台可见消息；禁止因为 unknown 重发同一业务。TCP cut 发生在请求前不能证明“平台已接收但回执丢失”，这一情况已有本地 TLS fixture 在服务收到 POST 后切断覆盖，实机未单独证明。

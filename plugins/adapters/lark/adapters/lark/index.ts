@@ -22,7 +22,7 @@ export default defineAdapter<LarkEndpointConfig>({
   // 卡片交互未接入出站通道，交互段降级纯文本。
   segments: {
     outboundMedia: ['url', 'upload'],
-    interactive: 'text',
+    interactive: 'native',
     markdown: 'native',
   },
   create(context) {
@@ -30,11 +30,11 @@ export default defineAdapter<LarkEndpointConfig>({
     // 注册到插件运行时状态（lark endpoint list 的"运行中"数据源）
     context.use(larkRuntimeStateToken).endpoints.set(config.id, {
       id: config.id,
-      mode: 'webhook',
+      mode: config.mode,
     });
     return new LarkEndpoint({
       id: context.id,
-      http: context.use(httpHostToken),
+      ...(config.mode === 'webhook' ? { http: context.use(httpHostToken) } : {}),
       config,
     });
   },

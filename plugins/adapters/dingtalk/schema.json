@@ -76,6 +76,47 @@
           "id": {
             "type": "string",
             "description": "Dingtalk bot name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "webhook",
+              "stream"
+            ],
+            "default": "webhook"
+          },
+          "cardTemplateId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Stream interactive card template ID"
+          },
+          "cardButtonCount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 5,
+            "default": 2,
+            "description": "Fixed button count in the card template"
+          },
+          "streamProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\s/:@?#]+$"
+              }
+            },
+            "required": [
+              "port",
+              "serverName"
+            ],
+            "description": "故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份"
           }
         },
         "required": [
@@ -89,6 +130,26 @@
       "type": "string",
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "webhook",
+        "stream"
+      ],
+      "default": "webhook"
+    },
+    "cardTemplateId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stream interactive card template ID"
+    },
+    "cardButtonCount": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "default": 2,
+      "description": "Fixed button count in the card template"
     }
   },
   "required": [

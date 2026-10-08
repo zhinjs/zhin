@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/icqq/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/icqq/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b5676ce1f5d592fe -->
+<!-- sync-adapter-docs:sha256=3304dc742a852301 -->
 
 # @zhin.js/adapter-icqq
 
@@ -187,3 +187,9 @@ IM turn 的场景，才使用 `icqqClient.get(context, endpointId)` 显式选择
 ## License
 
 MIT
+
+### 发送回执与未知结果
+
+发送成功回执只接受平台真实消息 ID。网络超时、断线、缺少消息 ID 的响应会报告 `deliveryUnknown`，框架不会自动重发；手动重发可能重复发送。
+
+ICQQ 原生分享和文件 API 可能已经成功，但只返回空值或文件 ID；这类结果不能当作可引用、可撤回的消息 ID，因此报告投递结果未知。平台操作仍只执行一次。文件撤回应使用平台专用文件 API。

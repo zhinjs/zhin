@@ -32,6 +32,7 @@ interface McpRecord {
 }
 
 export class McpIndex {
+  readonly $projection = 'zhin.mcp-index/1' as const;
   readonly #index: OwnerCapabilityIndex<McpDefinition>;
   readonly #records = new Map<string, McpRecord>();
   readonly #order: readonly McpRecord[];
@@ -162,4 +163,10 @@ async function stopRecords(records: readonly McpRecord[], primary?: unknown): Pr
     }
     throw stopError;
   }
+}
+
+/** Recognize the versioned projection across generation module identities. */
+export function isMcpIndex(value: unknown): value is McpIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.mcp-index/1';
 }

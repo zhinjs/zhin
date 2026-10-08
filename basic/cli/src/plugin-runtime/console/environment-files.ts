@@ -8,8 +8,9 @@ export async function readEnvFile(projectRoot: string, filename: string): Promis
   const file = join(projectRoot, filename);
   try {
     return await readFile(file, 'utf8');
-  } catch {
-    return '';
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return '';
+    throw error;
   }
 }
 

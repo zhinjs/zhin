@@ -58,6 +58,7 @@ export class OutboundRenderer {
         requester,
         content.name,
         content.props,
+        { snapshot },
       );
       return this.#render(rendered, requester, snapshot, host, ctx, depth + 1);
     }

@@ -18,6 +18,21 @@ export interface DeliveryFailure {
   readonly code: string;
   readonly message: string;
   readonly retryable?: boolean;
+  /** The platform may have accepted the message; resending can duplicate delivery. */
+  readonly deliveryUnknown?: true;
+}
+
+/** Stable transport evidence; a generic thrown error must never imply safe retry. */
+export class EndpointDeliveryError extends Error {
+  constructor(
+    readonly code: string,
+    message: string,
+    readonly disposition: 'not_sent' | 'rejected' | 'unknown',
+    options?: ErrorOptions,
+  ) {
+    super(message, options);
+    this.name = 'EndpointDeliveryError';
+  }
 }
 
 /** A serializable result for every attempted outbound delivery. */

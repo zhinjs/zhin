@@ -12,6 +12,10 @@ only the `HttpHost` routing port: they may register HTTP/WS routes but cannot li
 shared server. Registrations are bound to generation admission, so candidate routes stay invisible
 until snapshot commit and retired routes stop matching immediately while their leases drain.
 
+`ProcessHttpHost.close()` is terminal and idempotent. It waits for a pending
+`listen()` operation to settle and releases its TCP listener. Concurrent `listen()`
+calls share one operation; calling `listen()` after close rejects.
+
 ## Capabilities (this slice)
 
 - Path-scoped WebSocket upgrades (`ws(path)`)
@@ -59,3 +63,10 @@ Extended Console RPC uses `src/console-rpc-extended/index.ts` as its module boun
 only maps protocol method names to schedule, inbox, login, Endpoint-management, and Workroom control
 handlers. Shared request parsing and generation-leased Endpoint execution live behind internal helper
 ports, so adding one RPC domain does not enlarge the central dispatcher or couple unrelated domains.
+
+Console project-file operations resolve the project root and existing filesystem targets before
+access. Internal symlinks remain usable only when their resolved target is inside an allowed project
+path; links outside the root, blocked path segments, and dangling links are denied. New files are
+checked through their nearest existing parent and checked again after parent creation. File-tree
+and environment-file inventory use the same boundary. This covers existing symlink layouts; it does
+not provide an OS sandbox against a local process concurrently replacing directories during access.

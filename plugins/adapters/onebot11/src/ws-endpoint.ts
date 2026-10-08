@@ -1,3 +1,4 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * OneBot11 WS client endpoint — outbound connect to OneBot implementation.
  */
@@ -11,6 +12,7 @@ import {
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -89,8 +91,12 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
         maxIntervalMs: config.reconnect_interval,
         jitterMs: 0,
       },
-      heartbeat: { intervalMs: config.heartbeat_interval },
+      heartbeat: { intervalMs: config.heartbeat_interval, watchdogMisses: 2 },
     });
+  }
+
+  get transportState(): EndpointTransportState {
+    return this.#lifecycle.state;
   }
 
   async start(): Promise<void> {
@@ -123,7 +129,11 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(conversation, message);
     const data = await callOnebot11Client<{ message_id?: number | string }>(this.client, action, params);
-    const messageId = data?.message_id != null ? String(data.message_id) : '';
+    const rawId = data?.message_id;
+    if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
+    }
+    const messageId = String(rawId);
     this.#logger.debug(formatCompact({
       op: 'onebot11_send',
       endpoint: this.#options.config.id,
@@ -142,7 +152,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
     action: string,
     params: Record<string, unknown> = {},
   ): ReturnType<typeof callOneBot11WsAction> {
-    return callOneBot11WsAction(this.#ws, this.#pending, this.#requestId, action, params);
+    return callOneBot11WsAction(this.#lifecycle.state === 'open' ? this.#ws : undefined, this.#pending, this.#requestId, action, params);
   }
 
   #admitRaw(ev: OneBot11Event): void {
@@ -199,6 +209,9 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
       const ws = create(url, { headers });
       this.#ws = ws;
       handle.onForceClose(() => {
+        if (this.#ws === ws) {
+          rejectAllPending(this.#pending);
+        }
         try {
           ws.close();
         } catch {
@@ -207,7 +220,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
       });
 
       ws.on('open', () => {
-        if (settled) return;
+        if (settled || this.#ws !== ws || !this.#lifecycle.started) return;
         settled = true;
         if (!this.#options.config.access_token) {
           this.#logger.warn(formatCompact({
@@ -225,7 +238,12 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
         resolve();
       });
 
+      ws.on('pong', () => {
+        if (this.#ws === ws) this.#lifecycle.notifyHeartbeatAck();
+      });
       ws.on('message', (data) => {
+        if (this.#ws !== ws || ws.readyState !== 1 || !this.#lifecycle.started) return;
+        this.#lifecycle.notifyHeartbeatAck();
         handleOneBot11WsMessage(data, {
           endpointId: this.#options.config.id,
           pending: this.#pending,
@@ -234,6 +252,9 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
       });
 
       ws.on('close', (code, reason) => {
+        if (this.#ws !== ws) return;
+        this.#ws = undefined;
+        rejectAllPending(this.#pending);
         const reasonStr = typeof reason === 'string'
           ? reason
           : Buffer.isBuffer(reason)
@@ -255,6 +276,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
       });
 
       ws.on('error', (err) => {
+        if (this.#ws !== ws) return;
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',

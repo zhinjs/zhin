@@ -182,3 +182,30 @@ payload 的回跳映射。图片、音频、视频和文件仍沿 canonical `Med
 ## 许可证
 
 MIT License
+
+### 发送回执与未知结果
+
+发送成功回执只接受平台真实消息 ID。网络超时、断线、缺少消息 ID 的响应会报告 `deliveryUnknown`，框架不会自动重发；手动重发可能重复发送。
+
+QQ 返回 `message_audit.audit_id` 仅表示审核任务，不能用作消息 ID，不能据此声明消息已投递。
+
+QQ SDK 启动须在 30 秒内完成，否则端点启动失败并清理该客户端；迟到就绪会再次清理旧客户端。超时不表示凭据错误，应结合网关、认证网络与权限检查。
+
+仓库通过 `patches/qq-official-bot@1.3.0.patch` 修复 SDK Session.start 的 async Promise executor：认证/接收器启动异常由启动 Promise 正确拒绝，ready 监听先于启动注册，启动结束清理临时监听。已实际验证本机 dummy 403 认证失败经完整 CLI 退出 1，无未处理 rejection；不等价于真实 QQ 账号联网验收。
+
+原生按钮按腾讯协议编码：type=0 URL 跳转、type=1 回调、type=2 指令。默认订阅包含 INTERACTION（1<<26）；用户显式 intents 保留原值，需自行加入 INTERACTION 才能收到回调。SDK notice.*.action 映射为 canonical action，并独立 PUT ACK解除loading；ACK不代表业务处理成功。私聊/群聊平台不提供源消息ID，metadata 明确 sourceMessageIdAvailable=false，以唯一payload、完整端点/会话与操作者关联；频道提供源ID时严格保留。参考：[腾讯官方消息按钮协议](https://github.com/tencent-connect/bot-docs/blob/main/docs/develop/api-v2/server-inter/message/trans/msg-btn.md)。
+
+QQ 当前未实现 canonical `share` 的标题/描述/URL 消息卡片。适配器显式 supported 不含 share，探针及正常统一发送均整体返回 unsupported；不会仅发送旁边的样本文字并记分享成功。直接 endpoint 编码也明确 not_sent，避免绕过能力检查后静默丢失。
+
+分片上传兼容平台返回的完整连续 0-based 或 1-based 序号。字节偏移使用
+`(index - base) * block_size`，分片完成通知保留平台原序号；重复、缺片、异常大小或空
+分片集合会在 PUT 前拒绝。官方文档示例为 0-based，实机曾返回单片 `index: 1`。
+当前官方预上传合同未说明 `parts: []` 是合法秒传响应，因此未将空集合视为已上传；
+若后续取得该合同证据，应补独立回归后支持。debug 诊断仅记录数值和匹配状态，SDK
+原始 debug 继续关闭，避免输出凭据及上传地址。
+
+### WebSocket 受控故障入口
+
+可选 `streamProxy: { port: 18443, serverName: "实际网关 hostname" }` 将 WSS 的 TCP 连接导向 `127.0.0.1:port`。需代理固定转发到相同官方网关的 443 端口；SDK 每次仍动态调用 `getWsUrl()`，hostname/443 不匹配会拒绝连接并只记录 hostname，不能自动绕过代理。原始 URL、HTTP Host、TLS SNI 保留，证书验证始终开启。不要填带 query 的 URL。
+
+仅 WSS 入站、心跳和会话认证经过此代理；AppSecret 换 token、网关发现 HTTP、消息 API 和媒体上传仍直连。故障恢复由 `createEndpointLifecycle` 负责，SDK 内置重连关闭，避免双重重连。此入口用于受控网络验收，不提供全局代理或 TLS 验证绕过。

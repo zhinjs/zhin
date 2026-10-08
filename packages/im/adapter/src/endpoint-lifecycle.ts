@@ -11,7 +11,8 @@
  * - handle.notifyClosed()：对端断开（ws close / SSE 流结束）时由适配器调用；
  *   仅在连接曾 open 时才按指数退避 + jitter 武装重连，初始连接失败不武装。
  * - startHeartbeat(fn, interval)：心跳 + 看门狗——连续 N 轮无回包（notifyHeartbeatAck
- *   未复位计数）时主动调用 onForceClose 注册的强关函数，由底层 close 事件驱动重连。
+ *   未复位计数）时主动调用 onForceClose 注册的强关函数并标记 closed；
+ *   底层 close 事件确认旧连接结束后才驱动重连，缺失 close 回调时不叠建连接。
  * - 定时器集中管理：重连 timer 与心跳 timer 均在 close / stop / 看门狗触发时清理。
  *
  * 防叠套：重连循环单例（#reconnectRunning），且每次 connect 尝试递增 generation，
@@ -161,6 +162,8 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
   #heartbeatTimer?: NodeJS.Timeout;
   #heartbeatMisses = 0;
   #forceClose?: () => void;
+  #closedDuringConnect?: { readonly reason?: unknown };
+  #awaitingWatchdogClose = false;
   /** stop() 时唤醒的竞态等待（start / 重连中的 connect 尝试）。 */
   #stopWaiters: Array<() => void> = [];
 
@@ -193,6 +196,9 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
   }
 
   async start(connect: EndpointConnectFn): Promise<void> {
+    if (this.#awaitingWatchdogClose) {
+      throw new Error('Endpoint transport close has not been confirmed; stop before restarting');
+    }
     if (this.started) return;
     this.#connect = connect;
     this.#state = 'connecting';
@@ -209,11 +215,15 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
     }
     if (generation !== this.#generation || this.#currentState() === 'stopped') return;
     this.#state = 'open';
+    if (this.#closedDuringConnect) {
+      this.#notifyClosed(generation, this.#closedDuringConnect.reason);
+    }
   }
 
   async stop(): Promise<void> {
     const wasActive = this.#state !== 'stopped';
     this.#state = 'stopped';
+    this.#awaitingWatchdogClose = false;
     this.#attempt = 0;
     this.stopHeartbeat();
     if (this.#reconnectTimer) {
@@ -246,19 +256,27 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
       if (watchdogMisses > 0) {
         this.#heartbeatMisses += 1;
         if (this.#heartbeatMisses > watchdogMisses) {
+          const misses = this.#heartbeatMisses;
           this.stopHeartbeat();
           logger.warn(formatCompact({
             op: 'heartbeat_watchdog',
             endpoint: this.#name,
             ok: false,
-            misses: this.#heartbeatMisses,
+            misses,
           }));
           const close = this.#forceClose;
+          // Retire logical connectivity even if the transport never emits close.
+          // Reconnect only after its close event confirms the old connection ended.
+          this.#state = 'closed';
+          this.#awaitingWatchdogClose = true;
           if (close) {
             try {
               close();
-            } catch {
-              /* ignore */
+            } catch (err) {
+              logger.warn(formatCompact({
+                op: 'heartbeat_force_close', endpoint: this.#name, ok: false,
+                error: err instanceof Error ? err.message : String(err),
+              }));
             }
           }
           return;
@@ -291,27 +309,9 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
 
   #createHandle(generation: number): EndpointConnectHandle {
     return {
-      notifyClosed: (reason) => {
-        if (generation !== this.#generation) return; // 陈旧连接的迟到事件
-        this.#forceClose = undefined;
-        this.stopHeartbeat(); // close 清心跳
-        // 仅曾 open 的连接才武装重连；初始连接失败由 start() 的 catch 复位
-        if (this.#state !== 'open') return;
-        logger.warn(formatCompact({
-          op: 'disconnect',
-          endpoint: this.#name,
-          ok: false,
-          error: reason instanceof Error ? reason.message : reason != null ? String(reason) : 'closed',
-        }));
-        if (!this.#reconnect) {
-          this.#state = 'closed';
-          return;
-        }
-        this.#state = 'reconnecting';
-        this.#scheduleReconnect();
-      },
+      notifyClosed: (reason) => this.#notifyClosed(generation, reason),
       onForceClose: (close) => {
-        if (generation !== this.#generation) return;
+        if (generation !== this.#generation) return; // 陈旧连接的迟到事件
         if (this.#state === 'stopped') {
           try {
             close();
@@ -325,10 +325,37 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
     };
   }
 
+  #notifyClosed(generation: number, reason?: unknown): void {
+    if (generation !== this.#generation) return;
+    this.#forceClose = undefined;
+    this.stopHeartbeat(); // close 清心跳
+    if (this.#state === 'connecting' || this.#state === 'reconnecting') {
+      this.#closedDuringConnect = { reason };
+      return;
+    }
+    // 仅曾 open 的连接才武装重连；初始连接失败由 start() 的 catch 复位
+    if (this.#state !== 'open' && !this.#awaitingWatchdogClose) return;
+    this.#awaitingWatchdogClose = false;
+    logger.warn(formatCompact({
+      op: 'disconnect',
+      endpoint: this.#name,
+      ok: false,
+      error: reason instanceof Error ? reason.message : reason != null ? String(reason) : 'closed',
+    }));
+    if (!this.#reconnect) {
+      this.#state = 'closed';
+      return;
+    }
+    this.#state = 'reconnecting';
+    this.#scheduleReconnect();
+  }
+
   /** 跑一次 connect 尝试；与 stop 信号竞态，stop 先到则静默返回。 */
   async #runConnect(connect: EndpointConnectFn): Promise<void> {
     const generation = ++this.#generation;
     this.#forceClose = undefined;
+    this.#closedDuringConnect = undefined;
+    this.#awaitingWatchdogClose = false;
     const handle = this.#createHandle(generation);
     // Promise.resolve().then 兜底同步抛错；额外 catch 防止 stop 竞态后迟到拒绝变 unhandled
     const connecting = Promise.resolve().then(() => {
@@ -404,6 +431,18 @@ class EndpointLifecycleImpl implements EndpointLifecycle {
         continue;
       }
       if (generation !== this.#generation || this.#currentState() === 'stopped') return;
+      if (this.#closedDuringConnect) {
+        // A resolved factory is not a successful reconnect if its transport
+        // already closed (SDK cleanup can intentionally swallow startup abort).
+        // Preserve the failed-attempt budget and exponential backoff.
+        this.#attempt += 1;
+        const reason = this.#closedDuringConnect.reason;
+        logger.debug(formatCompact({
+          op: 'reconnect', endpoint: this.#name, ok: false, attempt: this.#attempt,
+          error: reason instanceof Error ? reason.message : reason != null ? String(reason) : 'closed during reconnect',
+        }));
+        continue;
+      }
       this.#state = 'open';
       this.#attempt = 0;
       logger.info(formatCompact({ op: 'reconnect', endpoint: this.#name, ok: true }));

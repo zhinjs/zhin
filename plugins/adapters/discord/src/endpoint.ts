@@ -1,16 +1,18 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { createDiscordRestApiAgent } from './rest-api-proxy.js';
 /**
  * DiscordEndpoint — lifecycle, outbound, admit, gateway / interactions modes, agent tool surface.
  */
 import { ChannelType } from 'discord.js';
-import type {
-  EndpointChannel,
-  EndpointContentPort,
-  EndpointContentResolveContext,
-  EndpointControl,
-  EndpointGroup,
-  EndpointManagement,
-  EndpointSendRequest,
+import {
+  Endpoint, createEndpointLifecycle,
+  type EndpointChannel,
+  type EndpointContentPort,
+  type EndpointContentResolveContext,
+  type EndpointControl,
+  type EndpointGroup,
+  type EndpointManagement,
+  type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
@@ -69,7 +71,9 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
   readonly #fetch: typeof globalThis.fetch;
   #client: DiscordClientTransport | null = null;
   #open = false;
-  #started = false;
+  readonly #lifecycle = createEndpointLifecycle({ name: 'discord', reconnect: false });
+  #cleanup?: () => Promise<void>;
+  #retiring?: Promise<void>;
   readonly management: EndpointManagement = createDiscordEndpointManagement(
     () => this.#requireClient(),
   );
@@ -104,21 +108,44 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
     return this.#requireClient();
   }
 
+  get transportState(): EndpointTransportState | undefined {
+    if (this.#lifecycle.state !== 'open') return this.#lifecycle.state;
+    if (!this.#client) return 'closed';
+    if (!this.#client.isReady) return this.#lifecycle.state;
+    return this.#client.isReady() ? 'open' : 'reconnecting';
+  }
+
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
+    await this.#retiring;
+    await this.#lifecycle.start(async handle => {
+    let cleanup: (() => Promise<void>) | undefined; let cancelled = false;
     try {
       const intents = this.#options.config.intents?.length
         ? [...this.#options.config.intents]
         : DEFAULT_INTENTS;
-      this.#client = this.#createClient(intents);
-      await connectDiscordGatewayClient(this.#client, this.#options.config, {
+      const restAgent = this.#options.config.restApiProxy ? createDiscordRestApiAgent(this.#options.config.restApiProxy) : undefined;
+      let client: DiscordClientTransport;
+      try { client = this.#createClient(intents, this.#options.config.gatewayFaultProxyUrl, restAgent ? { agent: restAgent } : undefined); }
+      catch (error) { await restAgent?.destroyProxy(); throw error; }
+      this.#client = client;
+      const abort = new AbortController(); let stopping: Promise<void> | undefined;
+      cleanup = () => {
+        cancelled = true;
+        abort.abort();
+        if (this.#client === client) this.#client = null;
+        return stopping ??= (async () => { client.removeAllListeners(); try { await client.destroy(); } finally { await restAgent?.destroyProxy(); } })();
+      };
+      this.#cleanup = cleanup;
+      handle.onForceClose(() => { void cleanup?.().catch(() => {}); });
+      await connectDiscordGatewayClient(client, this.#options.config, {
         onPlatformEvent: (name, event) => {
+          if (this.#client !== client) return;
           void this.#emitPlatformEvent(name, event);
         },
-        onMessage: (msg) => this.admit(msg),
-        onButton: (interaction) => this.admitButton(interaction),
+        onMessage: (msg) => { if (this.#client === client) return this.admit(msg); },
+        onButton: (interaction) => { if (this.#client === client) return this.admitButton(interaction); },
         onGuildMemberAdd: (member) => {
+          if (this.#client !== client) return;
           receiveDiscordGuildMemberSideEvent(
             (name, payload) => this.emit(name, payload),
             this.#options.config.id,
@@ -128,6 +155,7 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
           );
         },
         onGuildMemberRemove: (member) => {
+          if (this.#client !== client) return;
           receiveDiscordGuildMemberSideEvent(
             (name, payload) => this.emit(name, payload),
             this.#options.config.id,
@@ -136,7 +164,8 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
             this.#logger,
           );
         },
-      });
+      }, abort.signal);
+      if (abort.signal.aborted || this.#client !== client) return;
       this.#logger.info(formatCompact({
         op: 'connect',
         endpoint: this.#options.config.id,
@@ -144,10 +173,13 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
         user: this.#client.user?.tag,
       }));
     } catch (error) {
-      await this.stop();
+      const stopped = cancelled;
+      try { await cleanup?.(); } catch { /* original connect failure wins */ }
+      if (stopped) return;
       this.#logger.error('Failed to connect Discord gateway:', error);
       throw error;
     }
+    });
   }
 
   open(): void {
@@ -160,16 +192,13 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
 
   async stop(): Promise<void> {
     this.#open = false;
-    if (this.#client) {
-      try {
-        this.#client.removeAllListeners();
-        await this.#client.destroy();
-      } catch {
-        /* ignore */
-      }
-      this.#client = null;
-    }
-    this.#started = false;
+    const cleanup = this.#cleanup;
+    this.#cleanup = undefined;
+    this.#lifecycle.stop();
+    const retiring = this.#retiring ?? Promise.resolve().then(async () => { try { await cleanup?.(); } catch { /* best-effort SDK shutdown */ } });
+    this.#retiring = retiring;
+    await retiring;
+    if (this.#retiring === retiring) this.#retiring = undefined;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
@@ -271,13 +300,25 @@ export class DiscordGatewayEndpoint extends Endpoint<DiscordClientTransport> {
   }
 
   async #sendBody(channelId: string, body: DiscordOutboundBody): Promise<string> {
-    const channel = await this.#requireClient().channels.fetch(channelId);
-    if (!channel || !channel.isTextBased() || !channel.send) {
-      throw new Error(`Channel ${channelId} is not a text channel`);
+    let stage = 'fetch_channel';
+    try {
+      const channel = await this.#requireClient().channels.fetch(channelId);
+      if (!channel || !channel.isTextBased() || !channel.send) {
+        throw new Error(`Channel ${channelId} is not a text channel`);
+      }
+      stage = 'render';
+      const options = await toMessageCreateOptions(body);
+      stage = 'send';
+      const result = await channel.send(options);
+      return result.id;
+    } catch (error) {
+      const details = error as { code?: unknown; status?: unknown };
+      this.#logger.warn(formatCompact({ op: 'discord_send_failed', stage,
+        code: typeof details?.code === 'number' ? details.code : 'unknown',
+        status: typeof details?.status === 'number' ? details.status : undefined,
+      }));
+      throw error;
     }
-    const options = await toMessageCreateOptions(body);
-    const result = await channel.send(options);
-    return result.id;
   }
 
   #requireClient(): DiscordClientTransport {
@@ -420,6 +461,31 @@ export class DiscordInteractionsEndpoint extends Endpoint<DiscordRestClient> {
         userId: msg.authorId,
         guildId: msg.guildId,
         eventType: 'application_command',
+      }),
+    }).catch((err) => {
+      this.#logger.warn(formatCompact({
+        op: 'discord_gateway_receive_failed',
+        target: `${conversation.kind}:${conversation.id}`,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  /** Test / internal: admit a button interaction when open. */
+  admitButton(interaction: DiscordButtonInbound): void {
+    if (!this.#open) return;
+    const conversation = discordInboundConversation(String(this.#options.id), interaction);
+    void this.emit('message.receive', {
+      conversation,
+      message: { conversation, id: interaction.id },
+      content: formatButtonContent(interaction),
+      segments: formatButtonSegments(interaction),
+      sender: { id: interaction.userId, name: interaction.userName },
+      endpointId: this.#options.config.id,
+      metadata: Object.freeze({
+        eventType: 'button',
+        payload: interaction.customId,
+        sourceMessageId: interaction.sourceMessageId,
       }),
     }).catch((err) => {
       this.#logger.warn(formatCompact({

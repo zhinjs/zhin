@@ -20,3 +20,14 @@ Node 运行时不执行 TSX；客户端构建 adapter 负责静态产物。Compo
 验证：`pnpm --filter @zhin.js/component test && pnpm --filter @zhin.js/component build`。
 
 出站契约见 [目标架构](../../docs/target-architecture.md)。
+
+### Interactive preview examples
+
+Components may opt in with `previewProps`, typed as their render parameters. Console uses these public example parameters for a one-click preview through the real render path. This is an example, not a parameter schema or runtime default; normal rendering still uses the caller’s parameters. Omit secrets and personal data. Without an example, Console submits `{}` and reports any render error.
+
+```ts
+export default defineComponent<{ name: string }, string>({
+  previewProps: { name: "World" },
+  render: ({ name }) => `Hello ${name}`,
+});
+```

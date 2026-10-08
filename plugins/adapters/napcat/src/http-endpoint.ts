@@ -1,13 +1,15 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * NapCat HTTP endpoint — POST inbound events + HTTP API outbound.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import {
+  Endpoint,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -59,6 +61,7 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
   #routeReleases: HttpRouteRegistration[] = [];
   #open = false;
   #started = false;
+  #stopped = false;
 
   constructor(options: NapCatHttpEndpointOptions) {
     super();
@@ -67,8 +70,13 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
     this.#callHttpAction = options.callHttpAction ?? callNapCatHttpAction;
   }
 
+  get transportState(): EndpointTransportState {
+    return this.#stopped ? 'stopped' : this.#started ? 'open' : 'idle';
+  }
+
   async start(): Promise<void> {
     if (this.#started) return;
+    this.#stopped = false;
     this.#started = true;
     this.#setupRoutes();
     this.#logger.info(formatCompact({
@@ -88,6 +96,7 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.#open = false;
     for (const release of this.#routeReleases.splice(0)) release();
     this.#inboundDeduper.clear();
@@ -107,7 +116,11 @@ export class NapCatHttpEndpoint extends Endpoint<NapcatClient> {
       params,
     );
     const data = resp.data as { message_id?: number | string } | undefined;
-    const messageId = data?.message_id != null ? String(data.message_id) : '';
+    const rawId = data?.message_id;
+    if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
+    }
+    const messageId = String(rawId);
     this.#logger.debug(formatCompact({
       op: 'napcat_send',
       endpoint: this.#options.config.id,

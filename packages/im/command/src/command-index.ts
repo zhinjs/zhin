@@ -210,7 +210,7 @@ export class CommandIndex {
     }
   }
 
-  async execute(name: string, args: readonly string[] = []): Promise<unknown> {
+  async execute(name: string, args: readonly string[] = [], operationSnapshot: RuntimeSnapshot = this.snapshot): Promise<unknown> {
     const match = this.#match(name, true);
     if (!match) {
       this.#diagnoseParameter(name);
@@ -219,7 +219,7 @@ export class CommandIndex {
     // Host / 无 session：跳过 permit；无 source 时函数默认值得到空 session。
     return match.command.slot.definition.execute(
       createCommandContext(
-        this.snapshot,
+        operationSnapshot,
         match.command.slot.owner,
         args,
         resolveDynamicParams(match.params, undefined),
@@ -236,6 +236,7 @@ export class CommandIndex {
     source: unknown = undefined,
     interactionFactory?: UserInteractionFactory,
     commandPrefix = '',
+    operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<CommandDispatchResult> {
     if (this.#menu) {
       const menuValue = this.#dispatchMenu(input, commandPrefix);
@@ -243,7 +244,7 @@ export class CommandIndex {
         return Object.freeze({
           matched: true,
           command: this.#menu.keyword,
-          owner: this.snapshot.root,
+          owner: operationSnapshot.root,
           value: menuValue,
         });
       }
@@ -254,12 +255,12 @@ export class CommandIndex {
       if (!commandAdapterMatches(shortcut.record, source)) {
         return Object.freeze({ matched: false });
       }
-      if (!(await this.#permitAllows(shortcut.record, source))) {
+      if (!(await this.#permitAllows(shortcut.record, source, operationSnapshot))) {
         return Object.freeze({ matched: false });
       }
       const value = await shortcut.record.slot.definition.execute(
         createCommandContext(
-          this.snapshot,
+          operationSnapshot,
           shortcut.record.slot.owner,
           Object.freeze([]),
           resolveDynamicParams(shortcut.params, source),
@@ -282,13 +283,13 @@ export class CommandIndex {
     if (!commandAdapterMatches(match.command, source)) {
       return Object.freeze({ matched: false });
     }
-    if (!(await this.#permitAllows(match.command, source))) {
+    if (!(await this.#permitAllows(match.command, source, operationSnapshot))) {
       return Object.freeze({ matched: false });
     }
     const args = textArgs(match.remaining);
     const value = await match.command.slot.definition.execute(
       createCommandContext(
-        this.snapshot,
+        operationSnapshot,
         match.command.slot.owner,
         args,
         resolveDynamicParams(match.params, source),
@@ -306,19 +307,19 @@ export class CommandIndex {
     });
   }
 
-  async #permitAllows(record: CommandRecord, source: unknown): Promise<boolean> {
+  async #permitAllows(record: CommandRecord, source: unknown, operationSnapshot: RuntimeSnapshot): Promise<boolean> {
     const permits = record.permit;
     if (!permits || permits.length === 0) return true;
     if (!hasImSession(source)) return true;
-    const host = this.#resolveHost();
+    const host = this.#resolveHost(operationSnapshot);
     if (!host) return false;
     const subject = toPermissionSubject(resolveCommandSession(source));
     return host.checkAll(permits, subject);
   }
 
-  #resolveHost(): PermissionHost | undefined {
+  #resolveHost(operationSnapshot: RuntimeSnapshot): PermissionHost | undefined {
     try {
-      const resources = this.snapshot.resources.get(this.snapshot.root);
+      const resources = operationSnapshot.resources.get(operationSnapshot.root);
       if (!resources) return undefined;
       const host = resources.get(permissionHostToken.id);
       return host && typeof (host as PermissionHost).check === 'function'

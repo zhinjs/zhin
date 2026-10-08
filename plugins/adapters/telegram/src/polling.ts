@@ -19,7 +19,8 @@ export interface TelegramPollingHost {
   ): Promise<T>;
   getUpdateOffset(): number;
   setUpdateOffset(offset: number): void;
-  handleUpdate(update: TelegramUpdate): void;
+  handleUpdate(update: TelegramUpdate): void | Promise<void>;
+  setPollingHealthy?(healthy: boolean): void;
 }
 
 export async function runTelegramPollLoop(
@@ -34,15 +35,19 @@ export async function runTelegramPollLoop(
         timeout: DEFAULT_POLL_TIMEOUT_SEC,
         allowed_updates: host.allowedUpdates,
       }, abortSignal);
-      consecutiveFailures = 0;
+      host.setPollingHealthy?.(true);
       for (const update of updates) {
         // A transport may resolve after cancellation; never admit that late batch.
         if (abortSignal.aborted) return;
+        if (update.update_id < host.getUpdateOffset()) continue;
+        await host.handleUpdate(update);
+        // Acknowledgement follows successful framework admission, never receipt.
         host.setUpdateOffset(update.update_id + 1);
-        host.handleUpdate(update);
       }
+      consecutiveFailures = 0;
     } catch (err) {
       if (abortSignal.aborted) return;
+      host.setPollingHealthy?.(false);
       consecutiveFailures += 1;
       logger.error(formatCompact({
         op: 'poll',

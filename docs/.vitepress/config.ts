@@ -136,6 +136,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '仓库结构', link: '/contributing/repo-structure' },
   { text: '开发流程与门禁', link: '/contributing/development' },
   { text: '平台稳定认证', link: '/contributing/platform-acceptance' },
+  { text: '平台验收执行器', link: '/contributing/platform-acceptance-runner' },
   { text: '代码约定', link: '/contributing/conventions' },
   { text: 'Public API 面', link: '/contributing/public-api-surface' },
   { text: 'Legacy 概念迁移', link: '/contributing/legacy-concepts' },

@@ -1,7 +1,7 @@
 import {
   Endpoint, createEndpointLifecycle,
   type EndpointLifecycle, type EndpointContentPort, type EndpointContentResolveContext,
-  type EndpointControl, type EndpointSendRequest,
+  type EndpointControl, type EndpointSendRequest, type EndpointTransportState,
 } from 'zhin.js/adapter';
 /**
  * TelegramEndpoint — lifecycle, outbound, admit, Bot API helpers for agent tools.
@@ -9,6 +9,7 @@ import {
 import { readFile } from 'node:fs/promises';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import {
+  EndpointDeliveryError,
   type ConversationRef,
   type ConversationReference,
   type ConversationResolution,
@@ -17,6 +18,8 @@ import {
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { runTelegramPollLoop } from './polling.js';
+import { TelegramApiError } from './api-error.js';
+export { TelegramApiError } from './api-error.js';
 import { normalizeTelegramChatMember } from './platform-permit.js';
 import {
   botApiUrl,
@@ -40,6 +43,9 @@ import { registerTelegramWebhookRoutes } from './webhook.js';
 
 const CHAT_MEMBER_CACHE_TTL_MS = 60_000;
 const CHAT_MEMBER_CACHE_MAX = 2_000;
+const ADMITTED_UPDATE_LIMIT = 2_048;
+const INFLIGHT_UPDATE_LIMIT = 256;
+const DEFAULT_API_TIMEOUT_MS = 30_000;
 
 interface ChatMemberPermit {
   readonly at: number;
@@ -69,11 +75,13 @@ export interface TelegramEndpointOptions {
   readonly config: ResolvedTelegramConfig;
   readonly http?: HttpHost;
   readonly fetch?: TelegramFetch;
+  /** Internal transport deadline override; long polling always allows its server timeout. */
+  readonly requestTimeoutMs?: number;
 }
 
 export interface TelegramClientApi {
-  callApi<T = unknown>(method: string, params?: Record<string, unknown>): Promise<T>;
-  callApiForm<T = unknown>(method: string, form: FormData): Promise<T>;
+  callApi<T = unknown>(method: string, params?: Record<string, unknown>, signal?: AbortSignal): Promise<T>;
+  callApiForm<T = unknown>(method: string, form: FormData, signal?: AbortSignal): Promise<T>;
   pinMessage(chatId: number, messageId: number): Promise<boolean>;
   unpinMessage(chatId: number, messageId?: number): Promise<boolean>;
   setChatDescription(chatId: number, description: string): Promise<boolean>;
@@ -95,10 +103,10 @@ export interface TelegramClientApi {
 /** Telegram Bot API client carried by message, update and lifecycle events. */
 export class TelegramClient implements TelegramClientApi {
   constructor(readonly api: TelegramClientApi) {}
-  callApi = <T = unknown>(method: string, params: Record<string, unknown> = {}) =>
-    this.api.callApi<T>(method, params);
-  callApiForm = <T = unknown>(method: string, form: FormData) =>
-    this.api.callApiForm<T>(method, form);
+  callApi = <T = unknown>(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal) =>
+    this.api.callApi<T>(method, params, signal);
+  callApiForm = <T = unknown>(method: string, form: FormData, signal?: AbortSignal) =>
+    this.api.callApiForm<T>(method, form, signal);
   pinMessage = (chatId: number, messageId: number) => this.api.pinMessage(chatId, messageId);
   unpinMessage = (chatId: number, messageId?: number) => this.api.unpinMessage(chatId, messageId);
   setChatDescription = (chatId: number, description: string) =>
@@ -130,6 +138,7 @@ interface TelegramApiErr {
   readonly ok: false;
   readonly description?: string;
   readonly error_code?: number;
+  readonly parameters?: { readonly retry_after?: number };
 }
 
 /**
@@ -139,8 +148,8 @@ interface TelegramApiErr {
  */
 export class TelegramEndpoint extends Endpoint<TelegramClient> {
   readonly client = new TelegramClient({
-    callApi: (method, params) => this.callApi(method, params),
-    callApiForm: (method, form) => this.callApiForm(method, form),
+    callApi: (method, params, signal) => this.callApi(method, params, signal),
+    callApiForm: (method, form, signal) => this.callApiForm(method, form, signal),
     pinMessage: (chatId, messageId) => this.pinMessage(chatId, messageId),
     unpinMessage: (chatId, messageId) => this.unpinMessage(chatId, messageId),
     setChatDescription: (chatId, description) => this.setChatDescription(chatId, description),
@@ -159,12 +168,16 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
 
   readonly #options: TelegramEndpointOptions;
   readonly #fetch: TelegramFetch;
+  #apiAbort = new AbortController();
   #pollAbort?: AbortController;
   #pollPromise?: Promise<void>;
   readonly #lifecycle: EndpointLifecycle;
   #open = false;
   #admission?: AbortController;
   #updateOffset = 0;
+  #pollingHealthy = true;
+  readonly #admittedUpdates = new Set<number>();
+  readonly #inflightUpdates = new Map<number, Promise<void>>();
   #botUserId?: number;
   #botUsername?: string;
   readonly #chatMemberCache = new Map<string, ChatMemberPermit>();
@@ -177,6 +190,9 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
 
   constructor(options: TelegramEndpointOptions) {
     super();
+    if (options.requestTimeoutMs !== undefined && (!Number.isFinite(options.requestTimeoutMs) || options.requestTimeoutMs <= 0)) {
+      throw new TypeError('Telegram requestTimeoutMs must be a positive finite number');
+    }
     this.#logger = getAdapterLogger('telegram', options.config.id);
     this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: false });
     this.#options = options;
@@ -186,6 +202,16 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   /** Used by webhook handler. */
   get isOpen(): boolean {
     return this.#open;
+  }
+
+  override get transportState(): EndpointTransportState {
+    const state = this.#lifecycle.state;
+    return state === 'open' && this.#options.config.mode === 'polling' && !this.#pollingHealthy
+      ? 'reconnecting' : state;
+  }
+
+  setPollingHealthy(healthy: boolean): void {
+    this.#pollingHealthy = healthy;
   }
 
   get config(): ResolvedTelegramConfig {
@@ -205,6 +231,7 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   }
 
   async start(): Promise<void> {
+    if (this.#apiAbort.signal.aborted) this.#apiAbort = new AbortController();
     await this.#lifecycle.start(async (handle) => {
       const abort = new AbortController();
       const routes: HttpRouteRegistration[] = [];
@@ -289,6 +316,7 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
 
   async stop(): Promise<void> {
     this.close();
+    this.#apiAbort.abort();
     const polling = this.#pollPromise;
     this.#pollPromise = undefined;
     await this.#lifecycle.stop();
@@ -301,20 +329,33 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const plan = formatOutboundPlan(conversation.id, payload);
     let lastId = '';
-    for (const action of plan.actions) {
-      const form = await this.#buildUploadForm(action.params, plan.uploads);
-      const result = form
-        ? await this.callApiForm<{ message_id?: number }>(action.method, form)
-        : await this.callApi<{ message_id?: number }>(action.method, action.params);
-      if (!result || !Number.isSafeInteger(result.message_id) || result.message_id! <= 0) {
-        throw new Error(`Telegram API ${action.method} returned no valid message_id; delivery is unconfirmed`);
+    let completedActions = 0;
+    try {
+      const plan = formatOutboundPlan(conversation.id, payload);
+      for (const action of plan.actions) {
+        const form = await this.#buildUploadForm(action.params, plan.uploads);
+        const result = form
+          ? await this.callApiForm<{ message_id?: number }>(action.method, form)
+          : await this.callApi<{ message_id?: number }>(action.method, action.params);
+        if (!result || !Number.isSafeInteger(result.message_id) || result.message_id! <= 0) {
+          throw new EndpointDeliveryError('delivery_unconfirmed',
+            `Telegram API ${action.method} returned no valid message_id; delivery is unconfirmed`, 'unknown');
+        }
+        lastId = String(result.message_id);
+        completedActions += 1;
       }
-      lastId = String(result.message_id);
+      if (!lastId) throw new EndpointDeliveryError('empty_message', 'Telegram message contains no sendable actions', 'not_sent');
+      return lastId;
+    } catch (error) {
+      if (completedActions > 0) {
+        throw new EndpointDeliveryError('partial_delivery',
+          `Telegram message failed after ${completedActions} confirmed action(s); complete delivery is unconfirmed`,
+          'unknown', { cause: error });
+      }
+      if (error instanceof EndpointDeliveryError) throw error;
+      throw new EndpointDeliveryError('invalid_payload', 'Telegram message could not be prepared', 'not_sent', { cause: error });
     }
-    if (!lastId) throw new Error('Telegram message contains no sendable actions');
-    return lastId;
   }
 
   async recallMessage(message: MessageRef): Promise<void> {
@@ -339,33 +380,35 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
       signal.throwIfAborted();
       const file = await this.callApi<{ file_path?: string; file_size?: number }>('getFile', {
         file_id: reference.media.value,
-      });
+      }, signal);
       if (!file.file_path) return Object.freeze({ status: 'not_found', code: 'telegram_file_not_found' });
       if ((file.file_size ?? 0) > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
-      const response = await this.#fetch(
-        `${this.#options.config.apiBaseUrl}/file/bot${this.#options.config.token}/${file.file_path}`,
-        { signal },
-      );
-      if (!response.ok) return Object.freeze({ status: 'failed', code: 'telegram_file_download_failed' });
-      if (!response.arrayBuffer) return Object.freeze({ status: 'failed', code: 'telegram_binary_transport_unavailable' });
-      const bytes = Buffer.from(await response.arrayBuffer());
-      if (bytes.byteLength > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
-      return Object.freeze({
-        status: 'resolved',
-        reference,
-        value: Object.freeze({
-          kind: 'base64',
-          value: bytes.toString('base64'),
-          ...(response.headers?.get('content-type')?.split(';')[0] || reference.media.mime_type
-            ? { mime_type: response.headers?.get('content-type')?.split(';')[0] ?? reference.media.mime_type }
-            : {}),
-          ...(reference.media.file_name ? { file_name: reference.media.file_name } : {}),
-          size: bytes.byteLength,
-        }),
-      });
-    } catch (error) {
+      return await this.#withRequestDeadline<ConversationResolution>('downloadFile', async (downloadSignal) => {
+        const response = await this.#fetch(
+          `${this.#options.config.apiBaseUrl}/file/bot${this.#options.config.token}/${file.file_path}`,
+          { signal: downloadSignal },
+        );
+        if (!response.ok) return Object.freeze({ status: 'failed', code: 'telegram_file_download_failed' });
+        if (!response.arrayBuffer) return Object.freeze({ status: 'failed', code: 'telegram_binary_transport_unavailable' });
+        const bytes = Buffer.from(await response.arrayBuffer());
+        if (bytes.byteLength > 26_214_400) return Object.freeze({ status: 'forbidden', code: 'media_size_limit' });
+        return Object.freeze({
+          status: 'resolved',
+          reference,
+          value: Object.freeze({
+            kind: 'base64',
+            value: bytes.toString('base64'),
+            ...(response.headers?.get('content-type')?.split(';')[0] || reference.media.mime_type
+              ? { mime_type: response.headers?.get('content-type')?.split(';')[0] ?? reference.media.mime_type }
+              : {}),
+            ...(reference.media.file_name ? { file_name: reference.media.file_name } : {}),
+            size: bytes.byteLength,
+          }),
+        });
+      }, signal);
+    } catch {
       if (signal.aborted) return Object.freeze({ status: 'expired', code: 'turn_aborted' });
-      return Object.freeze({ status: 'failed', code: 'telegram_file_resolution_failed', message: error instanceof Error ? error.message : String(error) });
+      return Object.freeze({ status: 'failed', code: 'telegram_file_resolution_failed', message: 'Telegram file resolution failed' });
     }
   }
 
@@ -416,10 +459,10 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
 
   async #admitWithSenderRole(msg: TelegramMessage, conversation: ConversationRef, signal: AbortSignal): Promise<void> {
     const permit = await this.#resolveGroupSenderPermit(msg, signal);
-    if (signal.aborted) return;
+    signal.throwIfAborted();
     // 新 Runtime Message.content 为纯文本：@ 本机只能经 metadata 传递
     const mentioned = this.#isBotMentioned(msg);
-    await this.emit('message.receive', {
+    await this.emitAccepted('message.receive', {
       conversation,
       message: { conversation, id: String(msg.message_id) },
       content: formatInboundContent(msg),
@@ -501,13 +544,22 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
   /** Test / internal: admit a callback query when open. */
   admitCallback(query: TelegramCallbackQuery): void {
     if (!this.#open) return;
+    void this.#admitCallback(query).catch((err) => {
+      this.#logger.warn(formatCompact({
+        op: 'telegram_gateway_receive_failed',
+        error: err instanceof Error ? err.message : String(err),
+      }));
+    });
+  }
+
+  async #admitCallback(query: TelegramCallbackQuery): Promise<void> {
     const endpointKey = String(this.#options.id);
     const msg = query.message;
     // 无挂载消息的 callback（如 inline 模式）退化为 sender 私聊会话
     const conversation = msg
       ? telegramInboundConversation(endpointKey, msg.chat)
       : telegramInboundConversation(endpointKey, { id: query.from.id, type: 'private' });
-    void this.emit('message.receive', {
+    await this.emitAccepted('message.receive', {
       conversation,
       message: { conversation, id: query.id },
       content: formatCallbackContent(query),
@@ -519,31 +571,55 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
         payload: query.data,
         sourceMessageId: msg ? String(msg.message_id) : undefined,
       }),
-    }).catch((err) => {
-      this.#logger.warn(formatCompact({
-        op: 'telegram_gateway_receive_failed',
-        target: `${conversation.kind}:${conversation.id}`,
-        error: err instanceof Error ? err.message : String(err),
-      }));
     });
   }
 
   /** Used by webhook / polling handlers. */
-  handleUpdate(update: TelegramUpdate): void {
+  async handleUpdate(update: TelegramUpdate): Promise<void> {
+    if (!this.#open || !this.#admission) throw new Error('Telegram endpoint is not accepting updates');
+    if (!Number.isSafeInteger(update.update_id) || update.update_id < 0) {
+      throw new TypeError('Telegram update_id must be a non-negative safe integer');
+    }
+    if (this.#admittedUpdates.has(update.update_id)) return;
+    const pending = this.#inflightUpdates.get(update.update_id);
+    if (pending) return pending;
+    if (this.#inflightUpdates.size >= INFLIGHT_UPDATE_LIMIT) {
+      throw new Error('Telegram update admission capacity exhausted');
+    }
+    const admission = this.#admission;
+    const receiving = (async () => {
+      // Once canonical dispatch enters Core, its generation lease drains the work.
+      // Closing the transport cannot turn successful business processing into a retry.
+      await this.#receiveUpdate(update, admission.signal);
+      this.#admittedUpdates.add(update.update_id);
+      if (this.#admittedUpdates.size > ADMITTED_UPDATE_LIMIT) {
+        this.#admittedUpdates.delete(this.#admittedUpdates.values().next().value!);
+      }
+    })();
+    this.#inflightUpdates.set(update.update_id, receiving);
+    try {
+      await receiving;
+    } finally {
+      this.#inflightUpdates.delete(update.update_id);
+    }
+  }
+
+  async #receiveUpdate(update: TelegramUpdate, signal: AbortSignal): Promise<void> {
     const eventName = update.message
       ? 'message'
       : update.callback_query
         ? 'callback_query'
         : 'update';
-    void this.emitPlatform(eventName, update).catch((error) => {
-      this.#logger.warn(formatCompact({
-        op: 'telegram_platform_event_failed',
-        event: eventName,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-    });
+    if (update.message || update.callback_query) {
+      await this.emitPlatform(eventName, update);
+    } else {
+      await this.emitAccepted('platform.receive', Object.freeze({ name: eventName, event: update }));
+      return;
+    }
+    signal.throwIfAborted();
     if (update.message) {
-      this.admit(update.message);
+      const conversation = telegramInboundConversation(String(this.#options.id), update.message.chat);
+      await this.#admitWithSenderRole(update.message, conversation, signal);
       return;
     }
     if (update.callback_query) {
@@ -553,7 +629,7 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
           /* already answered */
         });
       }
-      this.admitCallback(query);
+      await this.#admitCallback(query);
     }
   }
 
@@ -562,14 +638,13 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
     params: Record<string, unknown> = {},
     signal?: AbortSignal,
   ): Promise<T> {
-    const url = botApiUrl(this.#options.config, method);
-    const response = await this.#fetch(url, {
+    return this.#requestApi<T>(method, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
-      signal,
-    });
-    return this.#parseApiResponse<T>(method, response);
+    }, signal, method === 'getUpdates'
+      ? Math.max(this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS, (Number(params.timeout) || 0) * 1_000 + 15_000)
+      : undefined);
   }
 
   /** multipart/form-data 变体（attach:// 媒体上传；Content-Type 边界由 FormData 自带）。 */
@@ -578,13 +653,67 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
     form: FormData,
     signal?: AbortSignal,
   ): Promise<T> {
-    const url = botApiUrl(this.#options.config, method);
-    const response = await this.#fetch(url, {
+    return this.#requestApi<T>(method, {
       method: 'POST',
       body: form,
-      signal,
-    });
-    return this.#parseApiResponse<T>(method, response);
+    }, signal);
+  }
+
+  async #requestApi<T>(
+    method: string,
+    init: NonNullable<Parameters<TelegramFetch>[1]>,
+    signal?: AbortSignal,
+    timeoutMs = this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS,
+  ): Promise<T> {
+    return this.#withRequestDeadline(method, async (requestSignal) => {
+      const response = await this.#fetch(botApiUrl(this.#options.config, method), { ...init, signal: requestSignal });
+      return this.#parseApiResponse<T>(method, response);
+    }, signal, timeoutMs);
+  }
+
+  async #withRequestDeadline<T>(
+    method: string,
+    requestOperation: (signal: AbortSignal) => Promise<T>,
+    signal?: AbortSignal,
+    timeoutMs = this.#options.requestTimeoutMs ?? DEFAULT_API_TIMEOUT_MS,
+  ): Promise<T> {
+    const abort = new AbortController();
+    let issued = false;
+    const sources = [...new Set([signal, this.#pollAbort?.signal, this.#apiAbort.signal].filter((item): item is AbortSignal => !!item))];
+    let rejectAbort!: (error: unknown) => void;
+    const cancelled = new Promise<never>((_resolve, reject) => { rejectAbort = reject; });
+    const onCancel = () => {
+      const error = new TelegramApiError('cancelled', `Telegram API ${method} cancelled`, {
+        disposition: issued ? 'unknown' : 'not_sent',
+      });
+      abort.abort(error);
+      rejectAbort(error);
+    };
+    const timer = setTimeout(() => {
+      const error = new TelegramApiError('timeout', `Telegram API ${method} timed out`);
+      abort.abort(error);
+      rejectAbort(error);
+    }, timeoutMs);
+    for (const source of sources) source.addEventListener('abort', onCancel, { once: true });
+    try {
+      if (sources.some((source) => source.aborted)) onCancel();
+      const request = Promise.resolve().then(async () => {
+        abort.signal.throwIfAborted();
+        issued = true;
+        return requestOperation(abort.signal);
+      });
+      return await Promise.race([request, cancelled]);
+    } catch (error) {
+      if (abort.signal.aborted) throw abort.signal.reason;
+      if (error instanceof TelegramApiError) throw error;
+      // Network exceptions can contain credential-bearing URLs. Keep those out of errors/logs.
+      const detail = error instanceof Error
+        ? error.message.replaceAll(this.#options.config.token, '[redacted]') : 'transport failure';
+      throw new TelegramApiError('network', `Telegram API ${method} network request failed: ${detail}`);
+    } finally {
+      clearTimeout(timer);
+      for (const source of sources) source.removeEventListener('abort', onCancel);
+    }
   }
 
   async #parseApiResponse<T>(
@@ -596,13 +725,23 @@ export class TelegramEndpoint extends Endpoint<TelegramClient> {
     try {
       body = JSON.parse(text) as TelegramApiOk<T> | TelegramApiErr;
     } catch {
-      throw new Error(`Telegram API ${method} invalid JSON (${response.status}): ${text.slice(0, 200)}`);
+      throw new TelegramApiError('invalid_response', `Telegram API ${method} invalid JSON (${response.status})`, { status: response.status });
     }
-    if (!body.ok) {
-      throw new Error(
-        `Telegram API ${method} failed (${body.error_code ?? response.status}): ${body.description ?? text}`,
+    if (!body || typeof body !== 'object' || typeof body.ok !== 'boolean') {
+      throw new TelegramApiError('invalid_response', `Telegram API ${method} invalid response envelope`, { status: response.status });
+    }
+    if (!body.ok || response.status < 200 || response.status >= 300) {
+      const status = !body.ok ? body.error_code ?? response.status : response.status;
+      const kind = status === 401 || status === 403 ? 'authentication'
+        : status === 429 ? 'rate_limit' : response.status >= 400 ? 'http' : 'api';
+      const description = !body.ok ? body.description?.replaceAll(this.#options.config.token, '[redacted]') : undefined;
+      throw new TelegramApiError(kind,
+        `Telegram API ${method} failed (${status}): ${description ?? 'request rejected'}`,
+        { status, disposition: !body.ok ? 'rejected' : 'unknown', ...(!body.ok && body.parameters?.retry_after != null
+          ? { retryAfterSeconds: body.parameters.retry_after } : {}) },
       );
     }
+    if (!('result' in body)) throw new TelegramApiError('invalid_response', `Telegram API ${method} missing result`);
     return body.result;
   }
 

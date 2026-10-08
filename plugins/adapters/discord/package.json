@@ -50,7 +50,10 @@
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "discord.js": "^14.27.0"
+    "discord.js": "^14.27.0",
+    "@discordjs/ws": "1.2.3",
+    "@discordjs/collection": "2.1.1",
+    "undici": "6.28.0"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",

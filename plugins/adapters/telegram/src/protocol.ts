@@ -4,7 +4,7 @@
  */
 
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import type { Segment } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { escapeTelegramHtml, markdownToTelegramHtml } from './markdown-to-html.js';
@@ -495,7 +495,7 @@ function buildOutboundActions(
     : payload && typeof payload === 'object' && 'type' in (payload as object)
       ? [payload as TelegramWireSegment]
       : [];
-  const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
+  const hasMarkdown = items.some((item) => typeof item !== 'string' && ['markdown', 'share'].includes(item.type));
   const appendPlain = (value: unknown): string => hasMarkdown
     ? escapeTelegramHtml(String(value ?? ''))
     : String(value ?? '');
@@ -576,6 +576,15 @@ function buildOutboundActions(
       case 'markdown':
         textContent += markdownToTelegramHtml(String(data.content ?? data.text ?? ''));
         break;
+      case 'share': {
+        let url: URL;
+        try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'Telegram share requires an HTTP(S) URL', 'not_sent'); }
+        if (!['http:', 'https:'].includes(url.protocol) || typeof data.title !== 'string' || !data.title.trim()) throw new EndpointDeliveryError('invalid_payload', 'Telegram share requires an HTTP(S) URL and title', 'not_sent');
+        if (['image', 'audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Telegram share media and app metadata are not implemented', 'not_sent');
+        textContent += `<a href="${escapeTelegramHtml(url.href)}">${escapeTelegramHtml(data.title)}</a>`;
+        for (const value of [data.description, data.content]) if (typeof value === 'string' && value) textContent += `\n${escapeTelegramHtml(value)}`;
+        break;
+      }
       case 'at':
         if (data.id) textContent += `@${appendPlain(data.name || data.id)}`;
         break;
@@ -586,15 +595,20 @@ function buildOutboundActions(
       }
       case 'keyboard': {
         const rows = Array.isArray(data.rows) ? data.rows : [];
+        if (!rows.length || rows.some(row => !Array.isArray(row) || !row.length)) throw new EndpointDeliveryError('invalid_payload', 'Telegram keyboard requires nonempty rows', 'not_sent');
         keyboard = rows.map((row) => {
           const buttons = Array.isArray(row) ? row : [];
           return buttons.map((btn) => {
             const record = btn && typeof btn === 'object'
-              ? btn as { label?: string; text?: string; payload?: string; callback_data?: string }
+              ? btn as { label?: string; text?: string; payload?: string; callback_data?: string; disabled?: boolean; mode?: string }
               : {};
+            const text = String(record.label ?? record.text ?? '');
+            const callback = String(record.payload ?? record.callback_data ?? '');
+            if (record.disabled || record.mode === 'command') throw new EndpointDeliveryError('unsupported_operation', 'Telegram disabled/command buttons are not implemented', 'not_sent');
+            if (!text.trim() || Buffer.byteLength(callback, 'utf8') < 1 || Buffer.byteLength(callback, 'utf8') > 64) throw new EndpointDeliveryError('invalid_payload', 'Telegram callback payload must be 1-64 UTF-8 bytes and label nonempty', 'not_sent');
             return {
-              text: String(record.label ?? record.text ?? ''),
-              callback_data: String(record.payload ?? record.callback_data ?? '').slice(0, 64),
+              text,
+              callback_data: callback,
             };
           });
         });

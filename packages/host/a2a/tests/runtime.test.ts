@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createHttpHost } from '@zhin.js/host-http';
 import type { AgentHostPort } from '@zhin.js/agent/runtime';
 import { installRuntimeA2a } from '../src/runtime.js';
@@ -49,6 +49,43 @@ describe('Runtime A2A Host', () => {
     const card = await response.json() as { name: string; supportedInterfaces: Array<{ url: string }> };
     expect(card.name).toBe('zhin');
     expect(card.supportedInterfaces[0]?.url).toBe('https://bot.example.test/mesh/zhin/jsonrpc');
+  });
+
+  it('preserves v1 REST message content, canonical task JSON and SDK-relative route paths', async () => {
+    const http = createHttpHost({ host: '127.0.0.1', port: 0 });
+    hosts.push(http);
+    const base = testAgentHost();
+    const execute = vi.fn(async (_name, request) => ({
+      status: 'completed' as const,
+      output: [{ type: 'text' as const, content: `echo:${request.input.text}` }],
+      usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+    }));
+    installRuntimeA2a({ http, agentHost: { ...base, protocol: { ...base.protocol, execute } },
+      config: { token: 'mesh-token' }, fallbackPublicUrl: 'http://localhost' });
+    const { port } = await http.listen();
+    const origin = `http://127.0.0.1:${port}/a2a/zhin`;
+    const headers = { authorization: 'Bearer mesh-token', 'content-type': 'application/json', 'a2a-version': '1.0' };
+    for (const path of ['message:send', 'v1/message:send']) {
+      const response = await fetch(`${origin}/rest/${path}`, { method: 'POST', headers,
+        body: JSON.stringify({ message: { messageId: path, role: 'ROLE_USER', parts: [{ text: 'preserved' }] } }) });
+      const body = await response.json();
+      expect(response.status).toBe(200);
+      expect(body.task.status.state).toBe('TASK_STATE_COMPLETED');
+      expect(body.task.artifacts[0].parts[0].text).toBe('echo:preserved');
+      expect(JSON.stringify(body)).not.toContain('$case');
+      const task = await (await fetch(`${origin}/rest/tasks/${body.task.id}`, { headers })).json();
+      expect(task.status.state).toBe('TASK_STATE_COMPLETED');
+    }
+    expect(execute).toHaveBeenCalledWith('zhin', expect.objectContaining({ input: { text: 'preserved' } }));
+    const card = await (await fetch(`${origin}/.well-known/agent-card.json`, { headers })).json();
+    expect(card.securitySchemes.bearer.httpAuthSecurityScheme.scheme).toBe('Bearer');
+    expect(JSON.stringify(card)).not.toContain('$case');
+    const stream = await fetch(`${origin}/rest/message:stream`, { method: 'POST', headers,
+      body: JSON.stringify({ message: { messageId: 'stream', role: 'ROLE_USER', parts: [{ text: 'streamed' }] } }) });
+    const events = await stream.text();
+    expect(events).toContain('echo:streamed');
+    expect(events).toContain('TASK_STATE_COMPLETED');
+    expect(events).not.toContain('$case');
   });
 
   it('uses the Host JSON parser limit and maps REST failures to HTTP semantics', async () => {

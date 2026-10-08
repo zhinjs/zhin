@@ -1,3 +1,4 @@
+import { normalizeSourcePath } from './source-path.js';
 import { access, readFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -29,7 +30,7 @@ export class ModuleDependencyIndex {
   readonly #dirtyEntries = new Set<string>();
 
   async analyze(entry: string): Promise<ModuleDependencyAnalysis> {
-    const normalized = resolve(entry);
+    const normalized = normalizeSourcePath(entry);
     const cached = this.#dependenciesByEntry.get(normalized);
     if (cached && !this.#dirtyEntries.has(normalized)) {
       return analysis(cached, this.#commonJsSourcesByEntry.get(normalized) ?? new Set());
@@ -44,7 +45,7 @@ export class ModuleDependencyIndex {
   }
 
   commit(entry: string, result: ModuleDependencyAnalysis): void {
-    const normalized = resolve(entry);
+    const normalized = normalizeSourcePath(entry);
     this.#remove(normalized);
     const dependencies = new Set(result.dependencies);
     const commonJsSources = new Set(result.commonJsSources);
@@ -61,7 +62,7 @@ export class ModuleDependencyIndex {
 
   /** Marks the changed entry and every entry importing it for lazy re-analysis. */
   invalidate(source: string): void {
-    const normalized = resolve(source);
+    const normalized = normalizeSourcePath(source);
     if (basename(normalized) === 'package.json') {
       this.#commonJsByDirectory.clear();
       const packageRoot = dirname(normalized);
@@ -82,7 +83,7 @@ export class ModuleDependencyIndex {
 
   /** Drops entries that no longer belong to the successfully committed generation. */
   retain(entries: readonly string[]): void {
-    const active = new Set(entries.map((entry) => resolve(entry)));
+    const active = new Set(entries.map((entry) => normalizeSourcePath(entry)));
     for (const entry of this.#dependenciesByEntry.keys()) {
       if (!active.has(entry)) this.#remove(entry);
     }
@@ -98,7 +99,7 @@ export class ModuleDependencyIndex {
   }
 
   hasCommonJsImpact(source: string): boolean {
-    const normalized = resolve(source);
+    const normalized = normalizeSourcePath(source);
     if (isExplicitCommonJsSource(normalized)) return true;
     if (this.#entriesByCommonJsSource.has(normalized)) return true;
     return [...(this.#entriesByDependency.get(normalized) ?? [])].some((entry) =>
@@ -107,7 +108,7 @@ export class ModuleDependencyIndex {
   }
 
   affectedSources(source: string): readonly string[] {
-    const normalized = resolve(source);
+    const normalized = normalizeSourcePath(source);
     const entries = [...(this.#entriesByDependency.get(normalized) ?? [])].sort();
     return Object.freeze([normalized, ...entries.filter((entry) => entry !== normalized)]);
   }
@@ -376,7 +377,7 @@ async function resolveLocalImport(importer: string, specifier: string): Promise<
     return undefined;
   }
   for (const candidate of importCandidates(requested)) {
-    if (await exists(candidate)) return resolve(candidate);
+    if (await exists(candidate)) return normalizeSourcePath(candidate);
   }
   return undefined;
 }

@@ -1,3 +1,4 @@
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { clearInterval, clearTimeout, setInterval, setTimeout } from 'node:timers';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
@@ -39,8 +40,8 @@ export function handleNapCatWsMessage(
         clearTimeout(pending.timeout);
         if (resp.status === 'ok') pending.resolve(resp.data);
         else {
-          pending.reject(new Error(
-            `API error [${resp.retcode}]: ${resp.message || resp.wording || 'unknown'}`,
+          pending.reject(new EndpointDeliveryError(
+            'platform_rejected', `API error [${resp.retcode}]: ${resp.message || resp.wording || 'unknown'}`, 'rejected',
           ));
         }
       }
@@ -64,17 +65,23 @@ export function callNapCatWsAction(
   params: Record<string, unknown>,
 ): Promise<unknown> {
   if (!ws || ws.readyState !== WS_OPEN) {
-    return Promise.reject(new Error('WebSocket is not connected'));
+    return Promise.reject(new EndpointDeliveryError('endpoint_disconnected', 'WebSocket is not connected', 'not_sent'));
   }
   const echo = `req_${++requestId.value}`;
   const req: NapCatActionRequest = { action, params, echo };
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       pending.delete(echo);
-      reject(new Error(`API call timeout: ${action}`));
+      reject(new EndpointDeliveryError('endpoint_timeout', `API call timeout: ${action}`, 'unknown'));
     }, 30_000);
     pending.set(echo, { resolve, reject, timeout });
-    ws.send(JSON.stringify(req));
+    try {
+      ws.send(JSON.stringify(req));
+    } catch (error) {
+      pending.delete(echo);
+      clearTimeout(timeout);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
   });
 }
 
@@ -99,7 +106,7 @@ export function rejectAllPending(
 ): void {
   for (const [, entry] of pending) {
     clearTimeout(entry.timeout);
-    entry.reject(new Error(message));
+    entry.reject(new EndpointDeliveryError('endpoint_disconnected', message, 'unknown'));
   }
   pending.clear();
 }

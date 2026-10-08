@@ -14,7 +14,7 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
-const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
+export const HOST_CONFIG_SCHEMA = deepFreeze(hostConfigSchema);
 
 /** Host configuration keys consumed by Runtime composition and Host installers. */
 export const HOST_CONFIG_KEYS = Object.freeze(Object.keys(HOST_CONFIG_SCHEMA.properties));

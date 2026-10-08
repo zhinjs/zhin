@@ -1,3 +1,4 @@
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
 import {
   commandFeatureId,
   isCommandIndex,
@@ -6,7 +7,7 @@ import {
 } from '@zhin.js/command';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
 
 const logger = getLogger('command');
@@ -17,8 +18,15 @@ const logger = getLogger('command');
  */
 export type CommandPrefixResolver = (message: Message, snapshot: RuntimeSnapshot) => string;
 
-function ownerOfMessage(message: Message): PluginId {
-  return message.conversation.endpoint.adapter as PluginId;
+function ownerOfMessage(message: Message, snapshot: RuntimeSnapshot): PluginId | undefined {
+  // adapter is a platform literal (e.g. terminal), not the Plugin owner.
+  const slot = snapshot.capabilities.get(message.conversation.endpoint.id as CapabilityId);
+  if (slot) return slot.owner;
+  // Expanded endpoint records have identities distinct from their source slot.
+  // Resolve their ownership through the generation's canonical AdapterIndex.
+  const adapters = snapshot.projections.get(adapterFeatureId);
+  if (!isAdapterIndex(adapters)) return undefined;
+  try { return adapters.owner(message.conversation.endpoint.id as CapabilityId); } catch { return undefined; }
 }
 
 /**
@@ -26,7 +34,8 @@ function ownerOfMessage(message: Message): PluginId {
  * 实例声明 `endpoints` 数组时，按消息 endpoint 名找 entry，`entry.commandPrefix` 覆盖顶层。
  */
 export const defaultCommandPrefixResolver: CommandPrefixResolver = (message, snapshot) => {
-  const config = snapshot.config.get(ownerOfMessage(message)) as
+  const owner = ownerOfMessage(message, snapshot);
+  const config = (owner ? snapshot.config.get(owner) : undefined) as
     | { commandPrefix?: unknown; endpoints?: unknown }
     | undefined;
   if (!config) return '';
@@ -63,7 +72,7 @@ export class MessageDispatcher {
       ? stripCommandPrefix(message.segments, prefix)
       : undefined;
     const matchInput = structuredInput ?? input;
-    const result = await commands.dispatch(matchInput, message, interactionFactory, prefix);
+    const result = await commands.dispatch(matchInput, message, interactionFactory, prefix, snapshot);
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({
@@ -92,6 +101,7 @@ function stripCommandPrefix(
 ): CommandMatchInput | undefined {
   let pendingPrefix = prefix;
   let atStart = true;
+  let trimLeading = true;
   const result: CommandSegment[] = [];
 
   for (const segment of segments) {
@@ -107,6 +117,12 @@ function stripCommandPrefix(
     }
 
     let text = segment.data.text;
+    // Match the leading whitespace normalization of message.content without
+    // discarding structured arguments when the prefix follows whitespace.
+    if (trimLeading) {
+      text = text.trimStart();
+      if (text) trimLeading = false;
+    }
     if (pendingPrefix) {
       if (text.startsWith(pendingPrefix)) {
         text = text.slice(pendingPrefix.length);

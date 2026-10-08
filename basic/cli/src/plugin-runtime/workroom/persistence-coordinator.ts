@@ -111,6 +111,13 @@ export class WorkroomPersistenceCoordinator {
       throw new Error('ai.memory.semantic.enabled requires the Database Root Host');
     }
     await this.#activateFilePersistence();
+    this.options.handoff.add({ activateNext: async signal => {
+      signal.throwIfAborted();
+      await assertWorkroomCatalogMatchesGeneration(
+        this.options.catalog, this.options.listAgentNames(),
+        await this.options.resolveConfiguredEndpointKeys?.(),
+      );
+    } });
     this.options.agent.markMemoryPersistenceReady();
   }
 
@@ -247,7 +254,7 @@ export class WorkroomPersistenceCoordinator {
     await assertWorkroomCatalogMatchesGeneration(
       this.options.catalog,
       this.options.listAgentNames(),
-      await this.options.resolveConfiguredEndpointKeys?.(),
+      undefined,
     );
     this.assignmentAuthorityGrants.activate(new FileAssignmentAuthorityGrantRepository(
       join(this.stateRoot, 'workroom-assignment-authority-grants'),

@@ -7,6 +7,7 @@ import type { TurnEvent } from '../../src/event/turn-event.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
+import * as policyFacade from '../../src/security/policy-facade.js';
 import { NetworkAccessDeniedError } from '../../src/security/network-policy.js';
 
 describe('TurnToolRuntime', () => {
@@ -23,6 +24,32 @@ describe('TurnToolRuntime', () => {
     });
     expect(execute).not.toHaveBeenCalled();
     expect(events.map((event) => event.type)).toEqual(['tool_call', 'tool_cancelled']);
+  });
+
+  it('does not start a tool cancelled while asynchronous policy checks are pending', async () => {
+    const controller = new AbortController();
+    const execute = vi.fn(async () => 'side effect');
+    const { turn, events } = fixture({ signal: controller.signal });
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    const original = policyFacade.runTurnToolPolicies;
+    const check = vi.spyOn(policyFacade, 'runTurnToolPolicies').mockImplementation(async input => {
+      entered();
+      await gate;
+      return original(input);
+    });
+    try {
+      const runtime = new TurnToolRuntime(turn, [tool(execute, 'never')]);
+      const pending = runtime.execute('danger', {}, 'during-policy');
+      await started;
+      controller.abort('cancelled during authorization');
+      release();
+      await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
+      expect(execute).not.toHaveBeenCalled();
+      expect(events.map(event => event.type)).toEqual(['tool_call', 'tool_cancelled']);
+    } finally { release(); check.mockRestore(); }
   });
 
   it('fails closed before execute when approval is required but unavailable', async () => {

@@ -1,3 +1,4 @@
+import { validateDiscordGatewayFaultProxy } from './gateway-fault-proxy.js';
 /** Discord Gateway protocol helpers. Canonicalization is owned by Core. */
 
 import { createPublicKey, verify as cryptoVerify } from 'node:crypto';
@@ -19,6 +20,9 @@ export interface DiscordEndpointConfig {
   readonly token: string;
   /** Default `gateway`. `interactions` uses httpHostToken POST + Ed25519 verify. */
   readonly connection?: 'gateway' | 'interactions';
+  /** Test instance only: ws://127.0.0.1:PORT/ fault proxy. */
+  readonly restApiProxy?: import('./rest-api-proxy.js').DiscordRestApiProxy;
+  readonly gatewayFaultProxyUrl?: string;
   readonly intents?: readonly number[];
   readonly enableSlashCommands?: boolean;
   readonly globalCommands?: boolean;
@@ -35,6 +39,9 @@ export interface ResolvedDiscordGatewayConfig {
   readonly connection: 'gateway';
   readonly id: string;
   readonly token: string;
+  /** Test instance only: ws://127.0.0.1:PORT/ fault proxy. */
+  readonly restApiProxy?: import('./rest-api-proxy.js').DiscordRestApiProxy;
+  readonly gatewayFaultProxyUrl?: string;
   readonly intents?: readonly number[];
   readonly enableSlashCommands: boolean;
   readonly globalCommands: boolean;
@@ -85,6 +92,7 @@ export interface DiscordInboundMessage {
 }
 
 export interface DiscordButtonInbound {
+  readonly guildId?: string;
   readonly id: string;
   readonly customId: string;
   readonly channelId: string;
@@ -113,6 +121,7 @@ export interface DiscordOutboundActionRow {
 }
 
 export interface DiscordOutboundBody {
+  readonly reply?: { readonly messageReference: string; readonly failIfNotExists: boolean };
   readonly content?: string;
   readonly embeds?: ReadonlyArray<Record<string, unknown>>;
   readonly files?: ReadonlyArray<{
@@ -125,6 +134,8 @@ export interface DiscordOutboundBody {
 }
 
 export function resolveDiscordConfig(config: DiscordEndpointConfig): ResolvedDiscordConfig {
+  if (config.restApiProxy && (!Number.isInteger(config.restApiProxy.port) || config.restApiProxy.port < 1 || config.restApiProxy.port > 65535)) throw new TypeError('Invalid Discord restApiProxy port');
+  if (config.restApiProxy && config.connection === 'interactions') throw new TypeError('Discord restApiProxy requires gateway mode');
   const id = requiredEndpointField(config.id, 'id');
   const token = requiredEndpointField(config.token, 'token');
   const connection = config.connection ?? 'gateway';
@@ -148,6 +159,8 @@ export function resolveDiscordConfig(config: DiscordEndpointConfig): ResolvedDis
     connection: 'gateway',
     id,
     token,
+    ...(config.restApiProxy ? { restApiProxy: config.restApiProxy } : {}),
+    gatewayFaultProxyUrl: config.gatewayFaultProxyUrl ? validateDiscordGatewayFaultProxy(config.gatewayFaultProxyUrl) : undefined,
     intents: config.intents,
     enableSlashCommands: config.enableSlashCommands === true,
     globalCommands: config.globalCommands === true,
@@ -306,6 +319,7 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
   const embeds: Record<string, unknown>[] = [];
   const files: Array<{ name: string; url?: string; file?: string; base64?: string }> = [];
   let components: DiscordOutboundBody['components'];
+  let reply: DiscordOutboundBody['reply'];
 
   for (const item of segments) {
     if (typeof item === 'string') {
@@ -348,8 +362,13 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
           }));
           break;
         }
+        const extension = ({
+          'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif',
+          'image/webp': 'webp', 'audio/mpeg': 'mp3', 'audio/ogg': 'ogg',
+          'audio/wav': 'wav', 'video/mp4': 'mp4', 'video/webm': 'webm',
+        } as Record<string, string>)[media.mime_type?.split(';')[0].trim().toLowerCase() ?? ''];
         const name = media.file_name
-          ?? (typeof data.name === 'string' && data.name ? data.name : item.type);
+          ?? (typeof data.name === 'string' && data.name ? data.name : `${item.type}${extension ? `.${extension}` : ''}`);
         if (media.kind === 'url') {
           files.push({ name, url: media.value });
         } else if (media.kind === 'base64') {
@@ -367,6 +386,14 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
         }
         break;
       }
+      case 'reply':
+        if (typeof data.message_id === 'string' && data.message_id) {
+          reply = { messageReference: data.message_id, failIfNotExists: true };
+        }
+        break;
+      case 'share':
+        embeds.push({ title: String(data.title ?? ''), url: String(data.url ?? ''), description: String(data.description ?? data.content ?? ''), ...(data.image ? { image: { url: String(data.image) } } : {}) });
+        break;
       case 'embed':
         embeds.push({ ...data });
         break;
@@ -400,6 +427,7 @@ export function formatOutboundBody(payload: unknown): DiscordOutboundBody {
     ...(embeds.length > 0 ? { embeds: embeds.slice(0, 10) } : {}),
     ...(files.length > 0 ? { files } : {}),
     ...(components ? { components } : {}),
+    ...(reply ? { reply } : {}),
   };
 }
 

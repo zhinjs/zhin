@@ -22,6 +22,7 @@ export default defineAdapter<SlackEndpointConfig>({
   segments: {
     outboundMedia: ['url', 'upload', 'path'],
     interactive: 'native',
+    markdown: 'native',
   },
   create(context) {
     const config = resolveSlackConfig(context.config);

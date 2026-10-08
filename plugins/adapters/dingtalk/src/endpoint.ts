@@ -1,8 +1,10 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { DingTalkCards, type DingTalkCardCallback } from './cards.js';
+import { DingTalkStream, type DingTalkStreamSocketFactory } from './stream.js';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * DingTalkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
-import { type EndpointSendRequest } from 'zhin.js/adapter';
+import { Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -30,6 +32,7 @@ export type DingTalkFetch = (
     readonly method?: string;
     readonly headers?: Record<string, string>;
     readonly body?: string;
+    readonly signal?: AbortSignal;
   },
 ) => Promise<{
   readonly ok: boolean;
@@ -40,7 +43,8 @@ export type DingTalkFetch = (
 
 export interface DingTalkEndpointOptions {
   readonly id: CapabilityId;
-  readonly http: HttpHost;
+  readonly http?: HttpHost;
+  readonly createStreamSocket?: DingTalkStreamSocketFactory;
   readonly config: ResolvedDingTalkConfig;
   readonly fetch?: DingTalkFetch;
 }
@@ -100,7 +104,9 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
   #routeReleases: HttpRouteRegistration[] = [];
   #accessToken: AccessToken = { token: '', expires_in: 0, timestamp: 0 };
   #refreshPromise: Promise<string> | null = null;
-  #sessionWebhooks = new Map<string, string>();
+  #sessionWebhooks = new Map<string, { url: string; expiresAt: number }>();
+  #stream?: DingTalkStream;
+  readonly #cards = new DingTalkCards();
   #open = false;
   #started = false;
 
@@ -110,6 +116,8 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
     this.#options = options;
     this.#fetch = options.fetch ?? globalThis.fetch;
   }
+
+  get transportState() { return this.#stream?.lifecycle.state ?? (this.#started ? 'open' : 'stopped'); }
 
   /** Used by webhook handler. */
   get isOpen(): boolean {
@@ -124,8 +132,13 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
     if (this.#started) return;
     this.#started = true;
     try {
+      if (this.#options.config.mode === 'stream') {
+        this.#stream = new DingTalkStream(this.config, this.#fetch, (event) => this.admit(event), () => this.#open, this.#options.createStreamSocket, (event, id) => this.admitCard(event, id));
+        await this.#stream.start();
+        return;
+      }
       await this.#refreshAccessToken();
-      this.#routeReleases.push(...registerDingTalkWebhookRoutes(this.#options.http, this));
+      this.#routeReleases.push(...registerDingTalkWebhookRoutes(this.#options.http!, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
         op: 'webhook',
@@ -148,62 +161,124 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
 
   async stop(): Promise<void> {
     this.#open = false;
+    await this.#stream?.stop();
     this.#sessionWebhooks.clear();
+    this.#cards.clear();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const content = formatOutboundBody(payload);
-    const sessionWebhook = this.#sessionWebhooks.get(conversation.id);
-    if (sessionWebhook) {
-      const response = await this.#fetch(sessionWebhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        body: JSON.stringify(content),
-      });
-      const data = await response.json() as DingTalkApiResponse;
-      if (data.errcode !== 0) {
-        throw new Error(`Failed to send message via session webhook: ${data.errmsg}`);
+    try {
+      const card = this.#cards.prepare(this.config, conversation, payload);
+      if (card) {
+        let stage = 'token';
+        let httpStatus: number | undefined;
+        let platformCode: string | number | undefined;
+        try {
+          try { await this.#ensureAccessToken(); } catch (cause) { throw new EndpointDeliveryError('token_unavailable', 'DingTalk card token unavailable', 'not_sent', { cause }); }
+          stage = 'request';
+          const response = await this.#fetch('https://api.dingtalk.com/v1.0/card/instances/createAndDeliver', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-acs-dingtalk-access-token': this.#accessToken.token }, body: JSON.stringify(card.body), signal: AbortSignal.timeout(30_000) });
+          httpStatus = response.status;
+          stage = 'response';
+          let data: unknown;
+          try { data = await response.json(); } catch {
+            if (response.ok) throw new EndpointDeliveryError('invalid_response', 'DingTalk card response could not be parsed', 'unknown');
+          }
+          if (data && typeof data === 'object') {
+            const code = (data as { code?: unknown; errcode?: unknown }).code ?? (data as { errcode?: unknown }).errcode;
+            // Only bounded protocol codes; never log URLs, messages, response bodies or credentials.
+            if (typeof code === 'number' && Number.isFinite(code)) platformCode = code;
+            else if (typeof code === 'string' && /^[a-zA-Z][a-zA-Z0-9_.-]{0,95}$/.test(code)
+              && ![this.#accessToken.token, this.config.appSecret, this.config.appKey].some(secret => secret && code.includes(secret))) platformCode = code;
+          }
+          if (!response.ok) throw new EndpointDeliveryError('http_error', `DingTalk card HTTP ${response.status}`, response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown');
+          stage = 'delivery';
+          return this.#cards.confirm(card, data);
+        } catch (error) {
+          this.#logger.warn(formatCompact({ op: 'dingtalk_card_delivery_failed', stage, httpStatus, platformCode,
+            code: error instanceof EndpointDeliveryError ? error.code : 'delivery_unconfirmed' }));
+          throw error;
+        }
       }
-      this.#logger.debug(formatCompact({
-        op: 'send',
-        endpoint: this.#options.config.id,
-        via: 'sessionWebhook',
-        to: conversation.id,
-      }));
-      return (data.msgId as string) || `${Date.now()}`;
-    }
+      const content = formatOutboundBody(payload);
+      const session = this.#sessionWebhooks.get(conversation.id);
+      const sessionWebhook = session && session.expiresAt > Date.now() ? session.url : undefined;
+      if (session && !sessionWebhook) this.#sessionWebhooks.delete(conversation.id);
+      if (!sessionWebhook && this.config.mode === 'stream') {
+        throw new EndpointDeliveryError('session_unavailable', 'DingTalk Stream send requires a current inbound session webhook', 'not_sent');
+      }
+      if (sessionWebhook) {
+        const response = await this.#fetch(sessionWebhook, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json; charset=utf-8' },
+          body: JSON.stringify(content),
+          signal: AbortSignal.timeout(30_000),
+        });
+        if (!response.ok) throw new EndpointDeliveryError('http_error', `DingTalk HTTP ${response.status}`, response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown');
+        const data = await response.json() as DingTalkApiResponse;
+        if (typeof data.errcode === 'number' && data.errcode !== 0) {
+          throw new EndpointDeliveryError('platform_rejected', `DingTalk session webhook rejected the outbound request (${data.errcode})`, 'rejected');
+        }
+        this.#logger.debug(formatCompact({
+          op: 'send',
+          endpoint: this.#options.config.id,
+          via: 'sessionWebhook',
+          to: conversation.id,
+        }));
+        if (data.errcode !== 0) throw new EndpointDeliveryError('delivery_unconfirmed', 'Malformed platform response', 'unknown');
+        return requireMessageId(data.msgId);
+      }
 
-    const body: DingTalkSendBody = {
-      ...content,
-      ...(this.#options.config.robotCode
-        ? { robotCode: this.#options.config.robotCode }
-        : {}),
-    };
-    const data = await this.#request('/robot/send', {
-      method: 'POST',
-      body: body as unknown as Record<string, unknown>,
-    });
-    if (data.errcode !== 0) {
-      throw new Error(`Failed to send message: ${data.errmsg}`);
+      const body: DingTalkSendBody = {
+        ...content,
+        ...(this.#options.config.robotCode
+          ? { robotCode: this.#options.config.robotCode }
+          : {}),
+      };
+      const data = await this.#request('/robot/send', {
+        method: 'POST',
+        body: body as unknown as Record<string, unknown>,
+      });
+      if (typeof data.errcode === 'number' && data.errcode !== 0) {
+        throw new EndpointDeliveryError('platform_rejected', `DingTalk rejected the outbound request (${data.errcode})`, 'rejected');
+      }
+      this.#logger.debug(formatCompact({ op: 'send', to: conversation.id }));
+      if (data.errcode !== 0) throw new EndpointDeliveryError('delivery_unconfirmed', 'Malformed platform response', 'unknown');
+      return requireMessageId(data.msgId);
+    } catch (error) {
+      if (error instanceof EndpointDeliveryError) throw error;
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Outbound request outcome is unknown', 'unknown', { cause: error });
     }
-    this.#logger.debug(formatCompact({ op: 'send', to: conversation.id }));
-    return (data.msgId as string) || `${Date.now()}`;
+  }
+
+  async admitCard(event: DingTalkCardCallback, id: string): Promise<void> {
+    if (!this.#open) throw new Error('DingTalk endpoint is closed');
+    const action = this.#cards.resolve(event);
+    await this.emitAccepted('message.receive', {
+      conversation: action.conversation, message: { conversation: action.conversation, id },
+      content: `[action: ${action.payload}]`, segments: [{ type: 'action', data: { id, payload: action.payload, sourceMessageId: action.sourceMessageId } }],
+      sender: { id: action.senderId }, endpointId: this.config.id,
+      metadata: Object.freeze({ eventType: 'card_callback', sourceMessageId: action.sourceMessageId }),
+    });
   }
 
   /** Test / internal: admit a parsed event when open (non-webhook path). */
-  admit(event: DingTalkEvent | DingTalkMessage): void {
+  async admit(event: DingTalkEvent | DingTalkMessage): Promise<void> {
     if (!this.#open) return;
     this.#emitPlatformEvent(event.msgtype || 'event', event);
     if (event.sessionWebhook && event.conversationId) {
-      this.#sessionWebhooks.set(event.conversationId, event.sessionWebhook);
+      const expiresAt = Number.isFinite(event.sessionWebhookExpiredTime) ? event.sessionWebhookExpiredTime! : Date.now() + 300_000;
+      this.#sessionWebhooks.delete(event.conversationId);
+      if (expiresAt > Date.now()) this.#sessionWebhooks.set(event.conversationId, { url: event.sessionWebhook, expiresAt });
+      while (this.#sessionWebhooks.size > 1024) this.#sessionWebhooks.delete(this.#sessionWebhooks.keys().next().value!);
     }
     const conversation = dingtalkInboundConversation(String(this.#options.id), event);
+    this.#cards.remember(conversation, event);
     const chatType = resolveChatType(event.conversationType);
     const permit = normalizeDingtalkSenderForPermit({ isAdmin: event.isAdmin === true });
-    void this.emit('message.receive', {
+    await this.emitAccepted('message.receive', {
       conversation,
       message: { conversation, id: generateMessageId(event) },
       content: formatInboundContent(event),
@@ -223,6 +298,7 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
         conversationType: event.conversationType,
       }),
     }).catch((err) => {
+      if (this.config.mode === 'stream') throw err;
       this.#logger.warn(formatCompact({
         op: 'dingtalk_gateway_receive_failed',
         conversationId: conversation.id,
@@ -393,10 +469,10 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
       method,
       headers: { 'Content-Type': 'application/json; charset=utf-8' },
       body: body && method === 'POST' ? JSON.stringify(body) : undefined,
+      signal: AbortSignal.timeout(30_000),
     });
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`DingTalk API error ${response.status}: ${text}`);
+      throw new EndpointDeliveryError('http_error', `DingTalk HTTP ${response.status}`, response.status >= 400 && response.status < 500 ? 'rejected' : 'unknown');
     }
     return await response.json() as DingTalkApiResponse;
   }
@@ -436,4 +512,9 @@ export class DingTalkEndpoint extends Endpoint<DingTalkClient> {
     }
     throw new Error(`Failed to get access token: ${data.errmsg} (${data.errcode})`);
   }
+}
+
+function requireMessageId(value: unknown): string {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  throw new EndpointDeliveryError('delivery_unconfirmed', 'Platform did not return a real message ID', 'unknown');
 }

@@ -75,6 +75,33 @@ describe('InboundTurnQueue', () => {
     return { ...mockCommMessage(rest), id: messageId } as ReturnType<typeof mockCommMessage> & { id: string };
   }
 
+  it('isolates a blocked failing session and resumes its FIFO tail after failure', async () => {
+    const queue = new InboundTurnQueue(fifoConfig, emitter);
+    let release!: () => void;
+    let markStarted!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const started = new Promise<void>(resolve => { markStarted = resolve; });
+    const failure = new Error('provider offline');
+    const seen: string[] = [];
+    const schedule = (sessionKey: string, content: string, run: (merged: string) => Promise<string>) => queue.schedule({
+      sessionKey, content, coalesce: false,
+      commMessage: messageWithId({ scope: 'group', sceneId: sessionKey, senderId: 'u1', messageId: content }), run,
+    });
+    const first = schedule('session-A', 'A-first', async merged => {
+      seen.push(merged); markStarted(); await gate; throw failure;
+    });
+    const rejection = expect(first).rejects.toBe(failure);
+    await started;
+    const tail = schedule('session-A', 'A-tail', async merged => { seen.push(merged); return merged; });
+    await expect(schedule('session-B', 'B-only', async merged => { seen.push(merged); return merged; })).resolves.toBe('B-only');
+    expect(seen).toEqual(['A-first', 'B-only']);
+    release();
+    await rejection;
+    await expect(tail).resolves.toBe('A-tail');
+    expect(seen).toEqual(['A-first', 'B-only', 'A-tail']);
+    queue.dispose();
+  });
+
   it('runs same-session turns in FIFO order', async () => {
     const queue = new InboundTurnQueue(fifoConfig, emitter);
     const sessionKey = 'sandbox:b1:group:g1';

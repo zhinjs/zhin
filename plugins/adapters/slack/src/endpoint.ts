@@ -1,15 +1,19 @@
-import { Endpoint } from 'zhin.js/adapter';
 /**
  * SlackEndpoint — lifecycle, outbound, admit, Socket Mode, agent tool surface.
  */
 import { SocketModeClient } from '@slack/socket-mode';
-import { WebClient } from '@slack/web-api';
-import type {
-  EndpointFriend,
-  EndpointGroup,
-  EndpointControl,
-  EndpointManagement,
-  EndpointSendRequest,
+import { createSlackWebApiAgent } from './web-api-proxy.js';
+import { createSlackStreamAgent } from './stream-proxy.js';
+import { slackSocketConnectionError } from './socket-error.js';
+import { createSlackWebClient, slackDeliveryError } from './web-client.js';
+import {
+  Endpoint,
+  createEndpointLifecycle,
+  type EndpointFriend,
+  type EndpointGroup,
+  type EndpointControl,
+  type EndpointManagement,
+  type EndpointSendRequest,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -96,6 +100,7 @@ export interface SlackEndpointOptions {
   readonly createSocket?: (opts: {
     readonly appToken: string;
     readonly clientPingTimeout: number;
+    readonly autoReconnectEnabled: false;
   }) => SlackSocketLike;
 }
 
@@ -106,7 +111,9 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
   readonly #inboundFilter = createSlackInboundFilterState();
   readonly #messageChannelMap = new Map<string, string>();
   #client?: SlackWebClientLike;
+  #webApiAgent?: ReturnType<typeof createSlackWebApiAgent>;
   #socket?: SlackSocketLike;
+  readonly #lifecycle: ReturnType<typeof createEndpointLifecycle>;
   #routeReleases: HttpRouteRegistration[] = [];
   #botUserId?: string;
   #open = false;
@@ -142,6 +149,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     super();
     this.#logger = getAdapterLogger('slack', options.config.id);
     this.#options = options;
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id });
   }
 
   /** Console 展示 / AdapterIndex live name（多 endpoint 时与 entry name 一致）。 */
@@ -153,6 +161,8 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     if (!this.#client) throw new Error('Slack client not connected');
     return this.#client;
   }
+
+  get transportState() { return this.config.mode === 'socket' ? this.#lifecycle.state : this.#started ? 'open' : 'stopped'; }
 
   get platformUserId(): string | undefined {
     return this.#botUserId;
@@ -167,8 +177,9 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     this.#started = true;
     try {
       const { config } = this.#options;
+      if (config.webApiProxy && !this.#options.createClient) this.#webApiAgent = createSlackWebApiAgent(config.webApiProxy);
       this.#client = this.#options.createClient?.(config.token)
-        ?? (new WebClient(config.token) as unknown as SlackWebClientLike);
+        ?? (createSlackWebClient(config.token, this.#webApiAgent ? { agent: this.#webApiAgent } : {}) as unknown as SlackWebClientLike);
 
       if (config.mode === 'socket') {
         await this.#startSocket();
@@ -209,6 +220,9 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#webApiAgent?.destroy();
+    this.#webApiAgent = undefined;
+    await this.#lifecycle.stop();
     if (this.#socket) {
       try {
         await this.#socket.disconnect();
@@ -227,6 +241,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     if (!this.#client) throw new Error('Slack client not connected');
     const channel = conversation.id;
     const threadTs = conversation.threadId;
+    try {
     const result = await sendSlackContent(
       this.#client,
       payload,
@@ -235,6 +250,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     );
     this.trackMessageChannel(result.ts, channel);
     return formatSlackMessageRef(channel, result.ts);
+    } catch (error) { throw slackDeliveryError(error); }
   }
 
   /** Test / internal: admit a message event when open. */
@@ -295,6 +311,7 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
       conversation,
       message: { conversation, id: actionTs },
       content: formatInteractionContent(payload),
+      segments: [{ type: 'action', data: { id: actionTs, payload: payload.actions[0].value ?? payload.actions[0].action_id, ...(messageTs ? { sourceMessageId: messageTs } : {}) } }],
       sender: { id: userId },
       endpointId: this.#options.config.id,
       metadata: Object.freeze({
@@ -430,28 +447,23 @@ export class SlackEndpoint extends Endpoint<SlackWebClientLike> implements Slack
     if (!config.appToken.startsWith('xapp-')) {
       throw new Error(`Slack appToken 格式不正确：Socket Mode 需要 xapp- 前缀的 App-Level Token（当前看起来是 ${config.appToken.slice(0, 5)}…，xoxb- 是 bot token，请填到 token 字段）`);
     }
-    this.#socket = this.#options.createSocket?.({
-      appToken: config.appToken,
-      clientPingTimeout: config.clientPingTimeout,
-    }) ?? new SocketModeClient({
-      appToken: config.appToken,
-      clientPingTimeout: config.clientPingTimeout,
-    }) as unknown as SlackSocketLike;
-
-    this.#socket.on('slack_event', async ({ ack, body }) => {
-      await ack();
-      this.handleEnvelope(body);
+    await this.#lifecycle.start(async handle => {
+      let active = true;
+      let connectionError: Error | undefined;
+      const agent = config.streamProxy ? createSlackStreamAgent(config.streamProxy) : undefined;
+      const socket = this.#options.createSocket?.({ appToken: config.appToken!, clientPingTimeout: config.clientPingTimeout, autoReconnectEnabled: false })
+        ?? new SocketModeClient({ appToken: config.appToken!, clientPingTimeout: config.clientPingTimeout,
+          autoReconnectEnabled: false, ...(agent ? { clientOptions: { agent } } : {}) }) as unknown as SlackSocketLike;
+      this.#socket = socket;
+      const release = () => { if (!active) return; active = false; if (this.#socket === socket) this.#socket = undefined; agent?.destroy(); void socket.disconnect().catch(() => {}); };
+      handle.onForceClose(release);
+      socket.on('disconnected', () => { if (!active) return; release(); handle.notifyClosed('Slack socket disconnected'); });
+      socket.on('error', error => { connectionError = slackSocketConnectionError(error); if (!active) return; release(); handle.notifyClosed('Slack socket error'); });
+      socket.on('slack_event', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.handleEnvelope(body); });
+      socket.on('interactive', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.admitInteraction(body as SlackInteractionPayload); });
+      socket.on('slash_commands', async ({ ack, body }) => { if (!active || this.#socket !== socket) return; await ack(); if (active) this.admitSlashCommand(body as SlackSlashCommand); });
+      try { await socket.start(); } catch (error) { release(); throw connectionError ?? slackSocketConnectionError(error); }
     });
-    this.#socket.on('interactive', async ({ ack, body }) => {
-      await ack();
-      this.admitInteraction(body as SlackInteractionPayload);
-    });
-    this.#socket.on('slash_commands', async ({ ack, body }) => {
-      await ack();
-      this.admitSlashCommand(body as SlackSlashCommand);
-    });
-
-    await this.#socket.start();
   }
 }
 

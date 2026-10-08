@@ -724,7 +724,7 @@ describe('icqq plugin runtime adapter', () => {
     const endpoint = createEndpoint();
     await endpoint.start(new AbortController().signal);
     endpoint.open();
-    const id = await endpoint.send({
+    const sending = endpoint.send({
       conversation: {
         endpoint: { id: 'test-endpoint', adapter: 'test' },
         kind: 'group',
@@ -747,7 +747,7 @@ describe('icqq plugin runtime adapter', () => {
       },
     });
 
-    expect(id).toMatch(/^sent_/);
+    await expect(sending).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
     expect(endpoint.client.pickGroup).toHaveBeenCalledWith(100);
     expect(endpoint.client.share).toHaveBeenCalledWith({
       type: 'share',
@@ -901,4 +901,22 @@ describe('icqq plugin runtime adapter', () => {
     }, '104')).resolves.toBeNull();
     expect(endpoint.client.pickGroup).not.toHaveBeenCalled();
   });
+});
+
+it('projects ICQQ online state independently from message admission', async () => {
+  const endpoint = createEndpoint({ config: resolveIcqqConfig({ id: '10001', autoReconnect: true }) });
+  expect(endpoint.transportState).toBe('idle');
+  await endpoint.start(new AbortController().signal);
+  expect(endpoint.transportState).toBe('open');
+  endpoint.client.emit('system.offline.network', {} as never);
+  expect(endpoint.transportState).toBe('reconnecting');
+  endpoint.client.emit('system.online', {} as never);
+  expect(endpoint.transportState).toBe('open');
+  await endpoint.stop(); expect(endpoint.transportState).toBe('stopped');
+});
+it('rejects absent ICQQ receipts without inventing an id or resending', async () => {
+  const endpoint = createEndpoint(); await endpoint.start(new AbortController().signal);
+  const send = vi.spyOn(endpoint.client, 'sendGroupMsg').mockResolvedValue({} as never);
+  await expect(endpoint.send({ conversation: { endpoint: { adapter: 'icqq', id: '10001' }, kind: 'group', id: '100' }, payload: 'hello' })).rejects.toMatchObject({ code: 'delivery_unconfirmed', disposition: 'unknown' });
+  expect(send).toHaveBeenCalledOnce(); await endpoint.stop();
 });

@@ -1,3 +1,4 @@
+import { validateLarkWebApiProxy } from './web-api-proxy.js';
 /**
  * Lark/Feishu protocol helpers — no legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
@@ -5,14 +6,19 @@
 
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+
+import { formatLarkCard } from './cards.js';
 
 const logger = getLogger('lark');
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface LarkEndpointConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
   readonly id: string;
+  readonly mode?: 'webhook' | 'websocket';
   readonly appId: string;
   readonly appSecret: string;
   readonly encryptKey?: string;
@@ -23,8 +29,11 @@ export interface LarkEndpointConfig {
 }
 
 export interface ResolvedLarkConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').LarkWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').LarkStreamProxy;
   readonly context: 'lark';
   readonly id: string;
+  readonly mode: 'webhook' | 'websocket';
   readonly appId: string;
   readonly appSecret: string;
   readonly encryptKey?: string;
@@ -100,14 +109,20 @@ export interface LarkWireSegment {
 }
 
 export interface LarkSendBody {
+  readonly replyTo?: string;
   readonly msg_type: string;
   readonly content: string;
 }
 
 export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfig {
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid Lark streamProxy port/serverName');
+  if (config.webApiProxy) validateLarkWebApiProxy(config.webApiProxy);
   const id = requiredEndpointField(config.id, 'id');
   const appId = requiredEndpointField(config.appId, 'appId');
   const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
+  const mode = config.mode ?? 'webhook';
+  if (mode !== 'webhook' && mode !== 'websocket') throw new TypeError('Lark mode must be webhook or websocket');
   const isFeishu = config.isFeishu ?? true;
   const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/lark/webhook');
   const defaultBase = isFeishu
@@ -116,10 +131,14 @@ export function resolveLarkConfig(config: LarkEndpointConfig): ResolvedLarkConfi
   const apiBaseUrl = (
     config.apiBaseUrl ?? defaultBase
   ).replace(/\/$/, '');
+  if (config.webApiProxy && (!isFeishu || apiBaseUrl !== 'https://open.feishu.cn/open-apis')) throw new TypeError('Lark webApiProxy requires the official Feishu API origin');
   const encryptKey = config.encryptKey;
   const verificationToken = config.verificationToken;
   return {
+    ...(config.webApiProxy ? { webApiProxy: config.webApiProxy } : {}),
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     context: 'lark',
+    mode,
     id,
     appId,
     appSecret,
@@ -266,6 +285,7 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     : payload && typeof payload === 'object' && 'type' in (payload as object)
       ? [payload as LarkWireSegment]
       : [];
+  if (items.some(item => typeof item !== 'string' && ['markdown', 'share', 'keyboard'].includes(item.type))) return formatLarkCard(items);
   const hasMarkdown = items.some((item) => typeof item !== 'string' && item.type === 'markdown');
 
   if (items.length === 0) {
@@ -282,6 +302,7 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
 
   const textParts: string[] = [];
   let media: LarkSendBody | null = null;
+  let replyTo: string | undefined;
 
   for (const item of items) {
     if (typeof item === 'string') {
@@ -290,6 +311,12 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     }
     const data = item.data ?? {};
     switch (item.type) {
+      case 'share':
+      case 'keyboard':
+        throw new EndpointDeliveryError('unsupported_operation', 'Lark canonical share cards and native keyboards are not implemented', 'not_sent');
+      case 'reply':
+        if (typeof data.message_id === 'string' && data.message_id.trim()) replyTo = data.message_id;
+        break;
       case 'text':
         textParts.push(String(data.content ?? data.text ?? ''));
         break;
@@ -349,9 +376,35 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     }
   }
 
-  if (media) return media;
+  const imageCount = items.filter((item) => typeof item !== 'string' && item.type === 'image').length;
+  if (imageCount > 0 && (textParts.some((text) => text.length > 0) || imageCount > 1)
+    && !items.some((item) => typeof item !== 'string' && (item.type === 'file' || item.type === 'card'))) {
+    const rows: Record<string, string>[][] = [];
+    for (const item of items) {
+      if (typeof item === 'string') { if (item) rows.push([{ tag: 'text', text: item }]); continue; }
+      const data = item.data ?? {};
+      if (item.type === 'reply') continue;
+      if (item.type === 'image') {
+        const ref = data.media;
+        if (isMediaRef(ref) && ref.kind === 'file') rows.push([{ tag: 'img', image_key: ref.value }]);
+      } else if (item.type === 'at' || item.type === 'mention') {
+        rows.push([{ tag: 'at', user_id: String(data.target ?? data.id ?? ''), user_name: String(data.name ?? data.target ?? data.id ?? '') }]);
+      } else {
+        const text = item.type === 'text' || item.type === 'markdown'
+          ? String(data.content ?? data.text ?? '') : `[${item.type}]`;
+        if (text) rows.push([{ tag: 'text', text }]);
+      }
+    }
+    return {
+      ...(replyTo ? { replyTo } : {}),
+      msg_type: 'post',
+      content: JSON.stringify({ zh_cn: { title: '', content: rows } }),
+    };
+  }
+  if (media) return { ...media, ...(replyTo ? { replyTo } : {}) };
   if (hasMarkdown) {
     return {
+      ...(replyTo ? { replyTo } : {}),
       msg_type: 'interactive',
       content: JSON.stringify({
         elements: [{
@@ -362,6 +415,7 @@ export function formatOutboundBody(payload: unknown): LarkSendBody {
     };
   }
   return {
+    ...(replyTo ? { replyTo } : {}),
     msg_type: 'text',
     content: JSON.stringify({ text: textParts.join('') }),
   };

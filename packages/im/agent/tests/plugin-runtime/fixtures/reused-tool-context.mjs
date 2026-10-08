@@ -1,0 +1,26 @@
+import { resolve } from 'node:path';
+import { NativeDevelopmentModuleRuntime } from '../../../../runtime/src/native-development-runtime.ts';
+import { CapabilityIngress } from '../../../src/plugin-runtime/capability-ingress.ts';
+import { defineAgentTool, toolFeatureId } from '../../../../tool/src/index.ts';
+import { createCapabilitySlot, rootPluginId, createToken, featureId } from '../../../../plugin-runtime/src/index.ts';
+const root=rootPluginId(), resource=createToken('test.operation-resource'), feature=featureId('test.operation-projection');
+const snapshot={generation:7,root,tree:new Map([[root,{id:root,instanceKey:'root',packageName:'@test/root',packageRoot:'/test',children:[]}]]),config:new Map([[root,{label:'old-config'}]]),resources:new Map([[root,new Map([[resource.id,'old-resource']])]]),capabilities:new Map(),projections:new Map([[feature,'old-projection']])};
+let resume; const blocked=new Promise(resolve=>{resume=resolve});
+const slot=createCapabilitySlot({owner:root,feature:toolFeatureId,localName:'context',source:'/tools/context/index.ts',definition:defineAgentTool({description:'Read operation snapshot',requiresApproval:'never',async execute(input,context){if(input.wait)await blocked;return{generation:context.generation,config:context.config.label,resource:context.use(resource),projection:context.project(feature)};}})});
+snapshot.capabilities.set(slot.id,slot);
+const runtime=new NativeDevelopmentModuleRuntime({projectRoot:process.cwd(),watch:false});
+const {default:provider}=await runtime.load(resolve('packages/im/tool/src/provider.ts'));
+const projected=await provider.runtime.project([slot],{snapshot,signal:new AbortController().signal});
+snapshot.projections.set(toolFeatureId,projected.value);
+const next={...snapshot,generation:8,config:new Map([[root,{label:'new-config'}]]),resources:new Map([[root,new Map([[resource.id,'new-resource']])]]),projections:new Map([[feature,'new-projection'],[toolFeatureId,projected.value]])};
+const invocation={signal:new AbortController().signal,traceId:'trace',turnId:'turn',sessionKey:'session',origin:{kind:'internal',source:'test'},principal:{subjectId:'test',roles:[]},policy:{permissions:[],unattended:true,network:{enabled:false,httpsOnly:true,allowedDomains:[]}}};
+let oldActive=true,newActive=true;
+const ingress=new CapabilityIngress();
+const old=await ingress.read(snapshot,root,()=>oldActive);
+const pending=old.tools[0].execute({wait:true},invocation);
+const current=await ingress.read(next,root,()=>newActive);
+const currentValue=await current.tools[0].execute({},invocation);
+resume();const oldValue=await pending;
+newActive=false;let retired=false;try{await current.tools[0].execute({},invocation);}catch(error){retired=error.message.includes('scope has ended');}
+console.log(JSON.stringify({reusedProjection:next.projections.get(toolFeatureId)===snapshot.projections.get(toolFeatureId),oldValue,currentValue,retired}));
+oldActive=false;await runtime.close();

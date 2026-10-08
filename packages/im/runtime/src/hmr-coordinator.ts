@@ -1,3 +1,4 @@
+import { normalizeSourcePath } from './source-path.js';
 import type { Dispose } from '@zhin.js/plugin-runtime';
 import {
   InvalidationPlanner,
@@ -55,11 +56,16 @@ export class HmrCoordinator {
   stop(): Promise<void> {
     if (this.#stopResult) return this.#stopResult;
     this.#closing = true;
-    this.#unwatch?.();
+    const unwatch = this.#unwatch;
     this.#unwatch = undefined;
-    this.#stopResult = (async () => {
-      await this.#draining;
-    })();
+    this.#stopResult = Promise.resolve().then(async () => {
+      const errors: unknown[] = [];
+      try { await unwatch?.(); } catch (error) { errors.push(error); }
+      // Watcher disposal failure must not bypass already admitted reloads.
+      try { await this.#draining; } catch (error) { errors.push(error); }
+      if (errors.length === 1) throw errors[0];
+      if (errors.length > 1) throw new AggregateError(errors, 'HMR stop failed');
+    });
     return this.#stopResult;
   }
 
@@ -70,7 +76,7 @@ export class HmrCoordinator {
     if (this.#restartRequired) {
       return Promise.reject(new Error('HMR coordinator requires a process restart'));
     }
-    this.#pending.add(source);
+    this.#pending.add(normalizeSourcePath(source));
     const completed = new Promise<void>((resolve, reject) => {
       this.#waiters.push({ resolve, reject });
     });

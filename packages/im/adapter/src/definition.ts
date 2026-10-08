@@ -77,9 +77,10 @@ export type HtmlOutboundMode = 'direct' | 'image' | 'text';
  */
 export interface AdapterSegmentPolicy {
   /**
-   * 端点原生可消费的 wire 段类型（如 `['text', 'image', 'at']`）。
-   * 声明后，未列出的段由核心按 `formatSegmentPreview` 降级为 text 段；
-   * 不声明则不过滤（全部透传）。
+   * 端点可消费的 canonical 段类型（如 `['text', 'image', 'mention']`）。
+   * 声明后，核心完成既有 Markdown/HTML/媒体/交互策略后校验最终段；
+   * 未列出的段使整条消息返回 unsupported，避免丢段后误报完整发送成功。
+   * 不声明则不过滤（全部透传，由端点明确拒绝无法实现的段）。
    */
   readonly supported?: readonly string[];
   /** html 段处理策略，缺省 `image`。 */

@@ -35,7 +35,9 @@ export const DEFAULT_SYSTEM_LOG_CONFIG: SystemLogStoreConfig = Object.freeze({
 
 const ANSI_ESCAPE = String.fromCharCode(27);
 const ANSI_REGEX = new RegExp(`${ANSI_ESCAPE}\\[[0-9;]*[mGKHF]`, 'g');
-/** DefaultFormatter 输出：`[MM-dd HH:mm:ss] [INF] [name]: message`（毫秒可带可不带）。 */
+/** Current DefaultFormatter: `[HH:mm:ss.SSS][LEVEL] [name] message`. */
+const CURRENT_LOG_LINE_REGEX = /^\[\d{2}:\d{2}:\d{2}\.\d{3}\]\[(\w+)\](?: \[([^\]]+)\])? ([\s\S]*)$/;
+/** Accept persisted/older formatters without changing their existing contract. */
 const LOG_LINE_REGEX = /\[[\d-]+ [\d:.]+\] \[(\w+)\] \[([^\]]+)\]: ([\s\S]+)/;
 
 const LEVEL_ALIASES: Readonly<Record<string, 'debug' | 'info' | 'warn' | 'error'>> = {
@@ -64,7 +66,8 @@ export class SystemLogDatabaseTransport implements LogTransport {
   write(formatted: string): void {
     // host 未启动（或正在重启 generation）时模型不可用，静默丢弃。
     if (!this.host.started) return;
-    const match = formatted.replace(ANSI_REGEX, '').match(LOG_LINE_REGEX);
+    const plain = formatted.replace(ANSI_REGEX, '');
+    const match = plain.match(CURRENT_LOG_LINE_REGEX) ?? plain.match(LOG_LINE_REGEX);
     if (!match) return;
     const level = mapFormattedLevel(match[1] ?? '');
     if (!level) return; // OFF / 未识别级别不落库

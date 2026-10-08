@@ -9,7 +9,7 @@ export async function runRuntimeMiddleware<TInput>(
   target: 'inbound' | 'outbound',
 ): Promise<void> {
   const index = middleware(snapshot);
-  if (index) await index.run(input, terminal, target);
+  if (index) await index.run(input, terminal, target, snapshot);
   else await terminal();
 }
 

@@ -29,7 +29,6 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { conversationRefKey } from '@zhin.js/im-contract';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
-import { adapterLiveEndpointId, capabilityLocalName } from '../agent/turn/request.js';
 import { stringMetadata } from '../agent/turn/content.js';
 import type { WorkroomExecutionCoordinator } from './execution-coordinator.js';
 import {
@@ -278,8 +277,9 @@ export class WorkroomHumanIngressCoordinator {
       },
       principalOwner: String(rootPluginId()),
       resolveCatalogSpace: async message => {
-        const adapter = capabilityLocalName(String(message.conversation.endpoint.id));
-        const endpoint = adapterLiveEndpointId(message);
+        const ingressEndpoint = resolveCatalogIngressEndpoint(message, options.im.endpoints.list());
+        if (!ingressEndpoint) return null;
+        const { adapter, endpoint } = ingressEndpoint;
         const repository = adapter === 'github'
           ? stringMetadata(message.metadata, 'repo')
           : undefined;
@@ -413,4 +413,15 @@ export class WorkroomHumanIngressCoordinator {
 
 function digestInstallerValue(value: unknown): string {
   return `sha256:${createHash('sha256').update(JSON.stringify(value)).digest('hex')}`;
+}
+
+/** Public Catalog addresses are resolved from canonical capability identity, not a slot-local alias. */
+export function resolveCatalogIngressEndpoint(
+  message: Pick<Message, 'conversation'>,
+  endpoints: readonly Readonly<{ id: string; adapter: string; name: string }>[],
+): Readonly<{ adapter: string; endpoint: string }> | undefined {
+  const matches = endpoints.filter(endpoint => endpoint.id === String(message.conversation.endpoint.id));
+  return matches.length === 1
+    ? Object.freeze({ adapter: matches[0]!.adapter, endpoint: matches[0]!.name })
+    : undefined;
 }

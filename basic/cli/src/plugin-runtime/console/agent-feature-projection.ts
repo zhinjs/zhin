@@ -60,6 +60,7 @@ export function listGenerationComponents(
     name: component.name,
     owner: String(component.owner),
     source: displayConsolePath(component.source, projectRoot),
+    ...(component.previewProps === undefined ? {} : { previewProps: component.previewProps }),
   }));
 }
 

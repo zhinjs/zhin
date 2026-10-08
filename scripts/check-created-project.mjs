@@ -7,6 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parse, stringify } from 'yaml';
+import { WebSocketServer } from 'ws';
+import { createServer } from 'node:http';
 import { readWorkspaceGraph } from './lib/workspace-graph.mjs';
 import { resolveWorkspacePackClosure, withWorkspaceTarballOverrides } from './workspace-pack-closure.mjs';
 
@@ -26,6 +28,61 @@ for (const entry of workspace) entry.manifest = JSON.parse(await readFile(path.j
 let child;
 let output = '';
 let passed = false;
+const selectedPlatforms = ['onebot11', 'napcat', 'telegram', 'qq'].filter(name => process.argv.includes(`--${name}`));
+if (selectedPlatforms.length > 1 || process.argv.slice(2).some(arg => !['--onebot11', '--napcat', '--telegram', '--qq'].includes(arg))) throw new Error('Choose one platform flag: --onebot11, --napcat, --telegram or --qq (default Sandbox)');
+const platform = selectedPlatforms[0] ?? 'sandbox';
+let gateway;
+let gatewaySocket;
+let replyWaiter;
+let api;
+let pendingUpdate;
+let updateId = 1;
+let gatewayReady = false;
+if (platform === 'telegram' || platform === 'qq') {
+  api = createServer(async (req, res) => {
+    let raw = ''; for await (const chunk of req) raw += chunk;
+    const body = raw ? JSON.parse(raw) : {};
+    const method = req.url.split('/').at(-1);
+    let result = {};
+    if (method === 'getUpdates') {
+      await new Promise(resolve => setTimeout(resolve, 200));
+      result = pendingUpdate ? [pendingUpdate] : []; pendingUpdate = undefined;
+    } else if (method === 'getMe') result = { id: 10001, is_bot: true, first_name: 'fixture', username: 'fixture_bot' };
+    else if (method === 'getChatMember') result = { status: 'member', user: { id: body.user_id, is_bot: false, first_name: 'fixture' } };
+    else if (method === 'getAppAccessToken') result = { access_token: 'fixture-token', expires_in: 7200 };
+    else if (method === 'gateway') result = { url: `ws://127.0.0.1:${gateway.address().port}`, shards: 1, session_start_limit: { total: 1000, remaining: 1000, reset_after: 86400000, max_concurrency: 1 } };
+    else if (method === 'sendMessage' || req.url.endsWith('/messages')) {
+      result = { message_id: 1001, id: '1001', timestamp: new Date().toISOString(), chat: { id: 20001, type: 'private' }, date: Math.floor(Date.now() / 1000), text: body.text ?? body.content };
+      replyWaiter?.({ user_id: body.chat_id ?? '20001', message: body.text ?? body.content });
+    }
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify(platform === 'telegram' ? { ok: true, result } : result));
+  });
+  await new Promise((resolve, reject) => { api.once('error', reject); api.listen(0, '127.0.0.1', resolve); });
+  if (platform === 'qq') {
+    env.ZHIN_FAKE_QQ_ORIGIN = `http://127.0.0.1:${api.address().port}`;
+    env.NODE_OPTIONS = `--import=${path.join(repo, 'scripts/platform-acceptance/qq-network-fixture.mjs')}`;
+  }
+}
+if (['onebot11', 'napcat', 'qq'].includes(platform)) {
+  gateway = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+  await new Promise((resolve, reject) => { gateway.once('listening', resolve); gateway.once('error', reject); });
+  gateway.on('connection', socket => {
+    gatewaySocket = socket; gatewayReady = platform !== 'qq';
+    if (platform === 'qq') socket.send(JSON.stringify({ op: 10, d: { heartbeat_interval: 30000 } }));
+    socket.on('message', bytes => {
+      const request = JSON.parse(bytes.toString());
+      if (platform === 'qq') {
+        if (request.op === 2 || request.op === 6) { gatewayReady = true; socket.send(JSON.stringify({ op: 0, t: 'READY', s: 1, d: { version: 1, session_id: 'fixture-session', user: { id: '10001', username: 'fixture', bot: true }, shard: [0, 1] } })); }
+        if (request.op === 1) socket.send(JSON.stringify({ op: 11 }));
+        return;
+      }
+      const data = request.action.startsWith('send_') ? { message_id: 1001 } : {};
+      socket.send(JSON.stringify({ status: 'ok', retcode: 0, data, echo: request.echo }));
+      if (request.action === 'send_private_msg') replyWaiter?.(request.params);
+    });
+  });
+}
 
 async function run(command, args, cwd, extraEnv = {}) {
   try {
@@ -107,7 +164,24 @@ async function startBot(mode) {
   }, `${mode} readiness`);
 }
 
-async function requestHello(origin, token, expected) {
+async function requestHello(origin, token, expected, probeText = '/hello') {
+  if (platform !== 'sandbox') {
+    if (platform !== 'telegram') await waitFor(() => gatewaySocket?.readyState === 1 && gatewayReady, 'fake OneBot gateway connection');
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => { replyWaiter = undefined; reject(new Error(`${platform} reply timed out:\n${output}`)); }, 10000);
+      replyWaiter = params => {
+        const text = typeof params.message === 'string' ? params.message : params.message.map(s => s.data?.text ?? '').join('');
+        if (String(params.user_id) !== '20001' || !text.includes(expected)) return;
+        clearTimeout(timer); replyWaiter = undefined; resolve();
+      };
+      if (platform === 'telegram') {
+        pendingUpdate = { update_id: updateId++, message: { message_id: Date.now(), date: Math.floor(Date.now() / 1000), chat: { id: 20001, type: 'private' }, from: { id: 20001, is_bot: false, first_name: 'fixture' }, text: probeText } };
+      } else if (platform === 'qq') {
+        gatewaySocket.send(JSON.stringify({ op: 0, t: 'C2C_MESSAGE_CREATE', s: updateId++, d: { id: String(Date.now()), author: { user_openid: '20001' }, content: probeText, timestamp: new Date().toISOString() } }));
+      } else gatewaySocket.send(JSON.stringify({ time: Math.floor(Date.now() / 1000), self_id: 10001, post_type: 'message', message_type: 'private', sub_type: 'friend', message_id: Date.now(), user_id: 20001, message: [{ type: 'text', data: { text: probeText } }], raw_message: probeText, sender: { user_id: 20001, nickname: 'fixture' } }));
+    });
+    return;
+  }
   const { stdout } = await run(process.execPath, ['--input-type=module', '-e', `
     import { WebSocket } from 'ws';
     const socket = new WebSocket(process.env.ACCEPTANCE_WS_URL, {
@@ -146,6 +220,11 @@ try {
   await run(process.execPath, [path.join(creator, 'node_modules/create-zhin-app/lib/index.js'), 'acceptance-bot', '-y', '--skip-install'], creator);
   const manifestFile = path.join(project, 'package.json');
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
+  if (platform !== 'sandbox') {
+    manifest.dependencies[`@zhin.js/adapter-${platform}`] = '*';
+    manifest.zhin.plugins = manifest.zhin.plugins.filter(entry => (typeof entry === 'string' ? entry : entry.package) !== '@zhin.js/adapter-sandbox');
+    manifest.zhin.plugins.push({ package: `@zhin.js/adapter-${platform}`, instanceKey: platform });
+  }
   const names = [...Object.keys(manifest.dependencies ?? {}), ...Object.keys(manifest.devDependencies ?? {})];
   await packRoots(names.filter((name) => workspace.some((entry) => entry.name === name)));
   // ws is only a test client dependency; the generated application itself is unchanged.
@@ -157,9 +236,25 @@ try {
   const configFile = path.join(project, 'zhin.config.yml');
   const config = parse(await readFile(configFile, 'utf8'));
   const token = 'local-acceptance-token';
+  if (platform !== 'sandbox') {
+    delete config.plugins.sandbox;
+    config.plugins[platform] = platform === 'telegram'
+      ? { polling: true, apiBaseUrl: `http://127.0.0.1:${api.address().port}`, endpoints: [{ id: 'fixture-bot', token: 'fixture-token' }] }
+      : platform === 'qq'
+      ? { mode: 'websocket', endpoints: [{ id: 'fixture-bot', appid: '10001', secret: 'fixture-secret', accessTokenUrl: `${env.ZHIN_FAKE_QQ_ORIGIN}/getAppAccessToken`, gatewayUrl: `${env.ZHIN_FAKE_QQ_ORIGIN}/gateway` }] }
+      : { connection: 'ws', endpoints: [{ id: 'fixture-bot', url: `ws://127.0.0.1:${gateway.address().port}`, access_token: 'fixture-token' }] };
+  }
+  if (platform !== 'sandbox') config.plugins[platform].commandPrefix = '/';
   config.http = { ...config.http, host: '127.0.0.1', port: 0, token,
-    readiness: { endpoints: [{ owner: 'root/sandbox', name: 'sandbox~sandbox-bot' }] } };
+    readiness: { endpoints: [{ owner: `root/${platform}`, name: platform === 'sandbox' ? 'sandbox~sandbox-bot' : `${platform}~fixture-bot` }] } };
   await writeFile(configFile, stringify(config));
+  if (platform !== 'sandbox') {
+    const probeDirectory = path.join(project, 'commands/acceptance');
+    await mkdir(probeDirectory, { recursive: true });
+    await writeFile(path.join(probeDirectory, 'index.ts'), await readFile(path.join(repo, 'scripts/platform-acceptance/probe-command.ts'), 'utf8'));
+    env.ZHIN_ACCEPTANCE_POLICY = path.join(temp, 'policy.json');
+    await writeFile(env.ZHIN_ACCEPTANCE_POLICY, JSON.stringify({ version: 1, platform, mode: platform === 'telegram' ? 'polling' : 'websocket', targets: [{ alias: 'fixture-private', adapter: `root/${platform}`, endpoint: 'fixture-bot', kind: 'private', id: '20001' }], actions: ['reply-text'], minIntervalMs: 1000, maxSends: 10, eventsPath: path.join(temp, 'probe-events.jsonl') }));
+  }
   console.log('Checking development startup, /hello and command HMR…');
   const origin = await startBot('development');
   await requestHello(origin, token, '你好！欢迎使用 Zhin.js！');
@@ -180,10 +275,18 @@ try {
   await requestHello(production, token, 'candidate HMR accepted');
   await run(process.execPath, [path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js'),
     'doctor', '--live', production, '--json'], project, { ZHIN_HTTP_TOKEN: token });
+  if (platform !== 'sandbox') {
+    await requestHello(production, token, 'acceptance:fixture-private:sample0001', '/acceptance probe:sample0001');
+    await waitFor(async () => {
+      try { const probeEvents = (await readFile(path.join(temp, 'probe-events.jsonl'), 'utf8')).trim().split('\n').map(line => JSON.parse(line)); return probeEvents.at(-1)?.result === 'confirmed'; } catch { return false; }
+    }, 'installed acceptance probe confirmed delivery');
+  }
   passed = true;
-  console.log('PASS: packed creator -> clean install -> readiness -> /hello -> HMR -> production restart.');
+  console.log(`PASS [${platform}]: packed creator -> clean install -> readiness -> /hello -> HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
 } finally {
   await stopBot();
+  if (gateway) { for (const socket of gateway.clients) socket.terminate(); await new Promise(resolve => gateway.close(resolve)); }
+  if (api) await new Promise(resolve => api.close(resolve));
   if (passed || process.env.ZHIN_KEEP_ACCEPTANCE_TEMP !== '1') await rm(temp, { recursive: true, force: true });
   else console.error(`Acceptance fixture retained: ${temp}`);
 }

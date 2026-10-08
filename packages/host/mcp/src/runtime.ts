@@ -1,4 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { ListToolsRequestSchema, CallToolRequestSchema, McpError, ErrorCode } from '@modelcontextprotocol/sdk/types.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import {
@@ -122,6 +123,14 @@ function createRuntimeMcpServer(
     { name: 'zhin-plugin-runtime', version: '1.0.0' },
     { capabilities: { tools: {} } },
   );
+  // McpServer lazily installs these handlers on the first registered tool.
+  // An empty generation still advertises tools and must answer the protocol.
+  if (tools.length === 0) {
+    server.server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: [] }));
+    server.server.setRequestHandler(CallToolRequestSchema, async () => {
+      throw new McpError(ErrorCode.InvalidParams, 'Unknown tool');
+    });
+  }
   const names = new Set<string>();
   for (const tool of tools) {
     if (names.has(tool.name)) continue;

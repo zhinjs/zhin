@@ -160,7 +160,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
 
 ## Adapter 1:N endpoints 与 per-endpoint config
 
-一个 Adapter 包声明一次（`adapters/napcat/index.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。展开规则在 `packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`：插件实例配置含非空 `endpoints: [{ name, ...覆盖项 }]` 时，按数组逐项创建 endpoint，基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`name` 强制写入；`endpoints` 为空或缺省时按实例配置创建单个 endpoint。`name` 必须是非空字符串且不含 `~` / `\0`，重名项保留首个并告警。展开后的 endpoint id 为 `<capabilityId>~<name>`。
+一个 Adapter 包声明一次（`adapters/napcat/index.ts` → `defineAdapter`），但可以在配置里展开为**多个 endpoint 实例**。展开规则在 `packages/im/adapter/src/adapter-index.ts` 的 `expandEndpointConfigs`：插件实例配置含非空 `endpoints: [{ id, ...覆盖项 }]` 时，按数组逐项创建 endpoint，基础配置 = 实例配置去掉 `endpoints` 键，逐项浅合并，`id` 强制写入；`endpoints` 为空或缺省时按实例配置创建单个 endpoint。`id` 必须是非空字符串且不含 `~` / `\0`，重复或非法 id 会使候选配置失败。展开后的 endpoint id 为 `<capabilityId>~<id>`。
 
 ```yaml
 # examples/full-bot/zhin.config.yml（节选）
@@ -168,12 +168,12 @@ plugins:
   napcat:
     connection: ws                 # 基础配置：所有 endpoint 共享
     endpoints:
-      - name: full-bot-napcat      # 每个 endpoint 的独立配置
+      - id: full-bot-napcat      # 每个 endpoint 的独立配置
         url: ${ONEBOT11_WS_URL}
         access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
-`create(context)` 拿到的 `context.config` 就是**合并后的单 endpoint 配置**，`context.name` 是该 endpoint 名——适配器代码不需要感知 1:N 展开，一个 endpoint 实例只服务一条连接。
+`create(context)` 拿到的 `context.config` 就是**合并后的单 endpoint 配置**，`context.endpointId` 是该 endpoint id（`context.name` 是 adapter slot 名）——适配器代码不需要感知 1:N 展开，一个 endpoint 实例只服务一条连接。
 
 Endpoint 实例自身的生命周期钩子由 Adapter Index 驱动，与代际事务对齐：
 

@@ -296,8 +296,7 @@ export class DatabaseContextRepository implements ContextRepository {
   async listBranchPoints(sessionId: string): Promise<SessionBranchPoint[]> {
     const allRows = await this.loadAllMessageRows(sessionId);
     const session = await this.sessionStore.getBySessionId(sessionId);
-    const pathRows = buildActivePathRows(allRows, session?.active_leaf_message_id);
-    return listUserBranchPoints(pathRows);
+    return listUserBranchPoints(sortRowsChronologically(allRows), session?.active_leaf_message_id);
   }
 
   async setActiveLeaf(sessionId: string, messageId: number): Promise<boolean> {
@@ -528,8 +527,7 @@ export class MemoryContextRepository implements ContextRepository {
     const allRows = [...(this.messages.get(sessionId) ?? [])];
     allRows.sort((a, b) => a.timestamp - b.timestamp || (a.id ?? 0) - (b.id ?? 0));
     const session = await this.sessionStore.getBySessionId(sessionId);
-    const pathRows = buildActivePathRows(allRows, session?.active_leaf_message_id);
-    return listUserBranchPoints(pathRows);
+    return listUserBranchPoints(sortRowsChronologically(allRows), session?.active_leaf_message_id);
   }
 
   async setActiveLeaf(sessionId: string, messageId: number): Promise<boolean> {

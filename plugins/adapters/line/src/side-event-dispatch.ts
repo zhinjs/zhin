@@ -28,12 +28,12 @@ export function receiveLineSideEvent(
   configId: string,
   event: LineEvent,
   logger: ReturnType<typeof getAdapterLogger>,
-): void {
-  if (!isLineLifecycleEvent(event)) return;
+): Promise<unknown> {
+  if (!isLineLifecycleEvent(event)) return Promise.resolve();
   const parts = mapLineLifecycleParts(event.type);
   const conversation = lineInboundConversation(endpointKey, event.source);
   const userId = event.source.userId || conversation.id;
-  void emit('notice.receive', buildNotice(event, {
+  return emit('notice.receive', buildNotice(event, {
     id: `line:${event.type}:${event.timestamp}:${userId}`,
     clientAdapter: 'line',
     endpointId: configId,
@@ -49,5 +49,6 @@ export function receiveLineSideEvent(
       event: event.type,
       error: err instanceof Error ? err.message : String(err),
     }));
+    throw err;
   });
 }

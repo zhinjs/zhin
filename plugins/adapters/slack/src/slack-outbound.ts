@@ -31,12 +31,13 @@ export async function sendSlackContent(
   logger: Logger,
 ): Promise<SlackOutboundResult> {
   const wire = formatOutboundWire(content);
+  const threadTs = opts.threadTs ?? wire.replyTo;
   const blocks = [...wire.blocks];
   const textDelivery = applyTextMrkdwnBlocks(wire.text, blocks);
 
   for (const pf of wire.files) {
     try {
-      await uploadFile(client, opts.channel, pf, opts.threadTs);
+      await uploadFile(client, opts.channel, pf, threadTs);
     } catch (e) {
       logger.error('Failed to upload file:', e);
       throw e;
@@ -45,7 +46,7 @@ export async function sendSlackContent(
 
   return postSlackMessage(client, {
     channel: opts.channel,
-    threadTs: opts.threadTs,
+    threadTs,
     blocks,
     attachments: wire.attachments,
     fallbackText: textDelivery.fallbackText,
