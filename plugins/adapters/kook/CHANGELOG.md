@@ -1,5 +1,39 @@
 # @zhin.js/adapter-kook
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: Add an opt-in fixed-loopback JSON API fault proxy through the actual SDK Axios HTTPS agent. Preserve the canonical www.kookapp.cn identity and TLS validation, refuse other destinations and redirects, and keep media fetch uploads outside this proxy scope.
+- b9b3953: canonical reply 映射原生 quote。图片经原生二进制 multipart 上传，图文混排用卡片保持顺序，修复仅显示 [image] 或丢失文本；上传失败不发文字替代，缺真实消息 ID 不确认成功，日志错误不携带原始平台响应。
+
+  撤回使用完整会话路由调用真实频道/私聊删除接口，修复不存在 recallMsg 方法被 optional no-op 当作成功的问题；false 回执和缺失方法明确失败。
+
+- b9b3953: Expose the actual KOOK SDK WebSocket receiver state to adapter health, including open, reconnecting and closed transitions, rather than leaving connected bots unobserved.
+- b9b3953: 兼容 API 错误规范化后的黑名单预加载权限拒绝。仅在启动预加载的黑名单接口明确返回 403 时跳过该可选资源；其他鉴权、网络失败和运行期调用继续报错。
+- b9b3953: Preserve inbound message identity and routing when kook-client user or channel cache enrichment getters throw. Missing cached display names and roles no longer discard incoming messages.
+
+  Allow message transport startup when optional blacklist cache preloading is explicitly denied with HTTP 403. Explicit blacklist management requests and other startup failures still propagate.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

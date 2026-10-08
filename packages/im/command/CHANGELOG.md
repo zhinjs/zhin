@@ -1,5 +1,11 @@
 # @zhin.js/command
 
+## 1.1.4
+
+### Patch Changes
+
+- b9b3953: Resolve command permissions and command/component contexts from the current operation snapshot when unchanged projections are reused after hot reload. Preserve old snapshots for draining operations.
+
 ## 1.1.3
 
 ### Patch Changes

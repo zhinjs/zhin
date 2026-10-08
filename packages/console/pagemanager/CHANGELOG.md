@@ -1,5 +1,12 @@
 # @zhin.js/pagemanager
 
+## 1.1.4
+
+### Patch Changes
+
+- b9b3953: Load the optional TypeScript compiler only when Page/Layout source metadata is parsed. Allow pure JavaScript CLI projects without client pages to start without TypeScript, and report an explicit optional-peer installation error when compilation is requested.
+  - @zhin.js/contract@1.1.3
+
 ## 1.1.3
 
 ### Patch Changes

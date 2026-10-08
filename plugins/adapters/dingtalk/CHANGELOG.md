@@ -1,5 +1,34 @@
 # @zhin.js/adapter-dingtalk
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: 新增钉钉 Stream 长连接接收模式，保留默认 HTTP webhook。官方网关注册确认、共享生命周期重连与心跳、停止取消、回调 ACK 和有界去重；失败不会假报连接成功。
+- b9b3953: Stop synthesizing message IDs after outbound API calls. Missing real platform IDs now report an unknown delivery outcome and must not be retried automatically. DingTalk webhook success responses without a message ID therefore remain unconfirmed under the current receipt contract.
+
+  LINE reply and push use their actual sentMessages IDs. Reply HTTP 400 errors no longer trigger automatic push fallback: rejected or partially successful replies could otherwise duplicate a message. Locally expired cached reply tokens still select push before a reply request is made.
+
+- b9b3953: Reject QQ outbound responses carrying a nonzero platform error even when they contain a message ID. Classify DingTalk HTTP client rejection separately from uncertain server/network outcomes and avoid exposing raw platform response text in delivery errors.
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

@@ -1,5 +1,33 @@
 # @zhin.js/adapter-line
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: Stop synthesizing message IDs after outbound API calls. Missing real platform IDs now report an unknown delivery outcome and must not be retried automatically. DingTalk webhook success responses without a message ID therefore remain unconfirmed under the current receipt contract.
+
+  LINE reply and push use their actual sentMessages IDs. Reply HTTP 400 errors no longer trigger automatic push fallback: rejected or partially successful replies could otherwise duplicate a message. Locally expired cached reply tokens still select push before a reply request is made.
+
+- b9b3953: Deduplicate concurrent and completed LINE webhook event IDs within the endpoint instance, retaining successful admission for 24 hours with a bounded cache. Failed admission remains retryable; stop clears the cache. Document that this does not provide persistent or exactly-once business processing.
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

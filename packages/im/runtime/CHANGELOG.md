@@ -1,5 +1,17 @@
 # @zhin.js/runtime
 
+## 1.1.4
+
+### Patch Changes
+
+- b9b3953: Expose the immutable Host configuration schema to Console and use the project's root schema for its plugin configuration form. Prefer available Chinese field descriptions and enforce numeric bounds and integer constraints during Console validation.
+- b9b3953: Validate persisted Workroom Endpoint bindings against the exact projected candidate generation, including adapters authored by the project root. Defer file-backed Endpoint validation until candidate activation. Resolve Console Endpoint package aliases consistently with discovery and reject ambiguous aliases instead of selecting an account.
+
+  Resolve Workroom human ingress from the canonical Endpoint capability identity and the operation Endpoint projection so root-local adapters use the same Catalog address as Console discovery. Unknown or duplicate canonical identities cannot select another account.
+
+- b9b3953: 修复框架生命周期与消息处理的竞态：HMR 停止等待异步 watcher 清理，并在清理失败时仍等待在途 reload；命令前缀通过端点能力所属插件读取配置，前导空白不再丢失结构化参数；工具在异步策略检查后再次检查取消信号；文件缓存遇到超限替换时删除旧内容并保持字节计数一致。
+- b9b3953: Normalize source ownership, module dependencies and reload notifications to physical paths so projects opened through symlinks reload correctly. Preserve matching after files or capability directories are removed by resolving the nearest existing parent.
+
 ## 1.1.3
 
 ### Patch Changes
