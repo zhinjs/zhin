@@ -6,7 +6,6 @@ import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
   isKookWebhookChallenge,
-  normalizeKookWebhookEvent,
   parseKookWebhookBody,
   readRequestBody,
   verifyKookWebhookToken,
@@ -15,7 +14,6 @@ import {
   type KookWebhookFrame,
   type ResolvedKookWebhookConfig,
 } from './protocol.js';
-import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 const logger = getLogger('kook');
 
@@ -24,8 +22,9 @@ export interface KookWebhookHandler {
   readonly isOpen: boolean;
   readonly selfId?: string;
   admit(msg: KookInboundMessage): void;
-  admitEvent(event: KookWebhookEventData): void;
+  admitEvent(event: KookWebhookEventData): Promise<void> | void;
   checkAndRememberSn(sn: number): boolean;
+  forgetSn?(sn: number): void;
 }
 
 export function registerKookWebhookRoutes(
@@ -85,6 +84,11 @@ export async function handleKookWebhookRequest(
       return;
     }
 
+    if (!handler.isOpen) {
+      response.writeHead(503, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'Endpoint unavailable' }));
+      return;
+    }
     if (frame.sn != null) {
       if (!handler.checkAndRememberSn(frame.sn)) {
         response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -93,8 +97,13 @@ export async function handleKookWebhookRequest(
       }
     }
 
-    if (handler.isOpen) {
-      handleKookWebhookEvent(event, handler);
+    try {
+      await handler.admitEvent(event);
+    } catch {
+      if (frame.sn != null) handler.forgetSn?.(frame.sn);
+      response.writeHead(503, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'Admission unavailable' }));
+      return;
     }
 
     response.writeHead(200, { 'Content-Type': 'application/json' });
@@ -104,11 +113,4 @@ export async function handleKookWebhookRequest(
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ message: 'OK' }));
   }
-}
-
-function handleKookWebhookEvent(
-  event: KookWebhookEventData,
-  handler: KookWebhookHandler,
-): void {
-  handler.admitEvent(event);
 }

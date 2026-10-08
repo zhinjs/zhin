@@ -4,7 +4,7 @@ import {
   type HtmlRendererHost,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import type { ConversationRef, DeliveryReceipt } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { createOutboundEnvelope, type OutboundEnvelope, type SendRequest } from './contracts.js';
 import { OutboundRenderer } from './outbound-renderer.js';
@@ -15,6 +15,7 @@ import {
   resolveOutboundInteractivePolicy,
   resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
+  resolveOutboundSupportedSegments,
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
 import { adapterTypeName, requireAdapters } from './endpoint-runtime.js';
@@ -56,7 +57,8 @@ export class OutboundDeliveryRuntime {
         request.incoming,
       );
       initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
-    } catch {
+    } catch (error) {
+      if (error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent') return receiptFromEndpointError(error, false);
       return rejectedDeliveryReceipt('outbound_payload_rejected');
     }
 
@@ -64,7 +66,7 @@ export class OutboundDeliveryRuntime {
     try {
       adapters = requireAdapters(snapshot);
     } catch (error) {
-      return receiptFromEndpointError(error);
+      return receiptFromEndpointError(error, false);
     }
     const envelope = createOutboundEnvelope({
       conversation: request.conversation,
@@ -93,8 +95,9 @@ export class OutboundDeliveryRuntime {
                 map,
               ),
             );
-          } catch {
-            receipt = rejectedDeliveryReceipt('outbound_payload_rejected');
+          } catch (error) {
+            receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
+              ? receiptFromEndpointError(error, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
             return;
           }
 
@@ -181,6 +184,12 @@ async function prepareOutboundPayload(
     );
   }
   if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);
+  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
+  const supportedPayload = rememberInteractiveFallback ? payload : applyOutboundInteractivePolicy(payload, resolveOutboundInteractivePolicy(adapter, snapshot));
+  if (supported && Array.isArray(supportedPayload)) {
+    const unsupported = supportedPayload.find(segment => segment && typeof segment === 'object' && typeof segment.type === 'string' && !supported.includes(segment.type));
+    if (unsupported) throw new EndpointDeliveryError('unsupported_operation', `Adapter does not support canonical segment ${unsupported.type}`, 'not_sent');
+  }
   return payload;
 }
 
@@ -201,19 +210,50 @@ function receiptFromEndpointResult(
   messageId: string,
   conversation: ConversationRef,
 ): DeliveryReceipt {
+  if (typeof messageId !== 'string' || messageId.trim() === '') {
+    return unknownDeliveryReceipt('delivery_unconfirmed');
+  }
   return Object.freeze({
     status: 'sent' as const,
     message: Object.freeze({ conversation, id: messageId }),
   });
 }
 
-function receiptFromEndpointError(error: unknown): DeliveryReceipt {
-  const message = error instanceof Error ? error.message : String(error);
-  if (/Unknown Adapter Endpoint|does not support outbound/u.test(message)) {
-    return unsupportedDeliveryReceipt('outbound_unsupported');
+function receiptFromEndpointError(error: unknown, attempted = true): DeliveryReceipt {
+  if (error instanceof EndpointDeliveryError) {
+    if (error.code === 'outbound_unsupported' || error.code === 'endpoint_not_found') {
+      return unsupportedDeliveryReceipt('outbound_unsupported');
+    }
+    if (error.code === 'unsupported_operation' && error.disposition === 'not_sent') {
+      return unsupportedDeliveryReceipt(error.code);
+    }
+    if (error.disposition === 'unknown') return unknownDeliveryReceipt(error.code);
+    return failedDeliveryReceipt(error.code);
   }
-  if (/not active/u.test(message)) return failedDeliveryReceipt('endpoint_inactive', true);
-  return failedDeliveryReceipt('endpoint_send_failed', true);
+  // imhelper ProtocolError exposes stable protocol facts without a Core SDK dependency.
+  if (error && typeof error === 'object' && 'protocol' in error && 'kind' in error && 'response' in error
+    && error.protocol === 'onebot-v11' && error.kind === 'protocol') {
+    const response = error.response;
+    if (response && typeof response === 'object' && 'status' in response && response.status === 'failed') {
+      return failedDeliveryReceipt('platform_rejected');
+    }
+  }
+  // Before the endpoint send boundary no message can have entered a transport.
+  if (!attempted) return failedDeliveryReceipt('endpoint_send_failed');
+  // Unknown SDK/network failures provide no evidence that replay is safe.
+  return unknownDeliveryReceipt('endpoint_send_failed');
+}
+
+function unknownDeliveryReceipt(code: string): DeliveryReceipt {
+  return Object.freeze({
+    status: 'failed' as const,
+    failure: Object.freeze({
+      code,
+      message: 'Message delivery is unconfirmed; resending may duplicate delivery.',
+      retryable: false,
+      deliveryUnknown: true as const,
+    }),
+  });
 }
 
 function suppressedDeliveryReceipt(): DeliveryReceipt {

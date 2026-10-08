@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/discord/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/discord/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=2138f8318d27bc06 -->
+<!-- sync-adapter-docs:sha256=19998697236531ee -->
 
 # @zhin.js/adapter-discord
 
@@ -109,3 +109,30 @@ plugins:
 ## 许可证
 
 MIT License
+
+
+受控 Gateway 故障验收可为单个测试 endpoint 设置 `gatewayFaultProxyUrl: ws://127.0.0.1:18090/`。
+只接受此格式的 loopback origin；REST API 仍走 SDK 默认路径。入口通过正式 `ws.buildStrategy`
+使用已验证的 `@discordjs/ws` 1.2.3，SDK 继续负责心跳、Identify 和 Resume，初连及平台返回的
+区域 `resume_gateway_url` 均转到本地代理。Endpoint 的启动、停止和失败复位统一使用
+`createEndpointLifecycle`，SDK 断线恢复状态由 `isReady()` 投影为 `reconnecting`。
+
+代理启动、切断与恢复见仓库 `scripts/platform-acceptance/FAULT-PROXY.md`。
+本地 SDK 测试不能替代真实 Discord 消息及断线恢复验收。
+
+### 出站失败与重试边界
+
+Gateway 客户端的 REST 设置 `retries: 0` 并以 `rejectOnRateLimit` 拒绝后台 429 排队，二者分别覆盖网络/5xx 重试与限流重发。真实 SDK HTTP fixture 验证连接丢失、500、429、403 各只有一个 POST。已有 Gateway 代理不控制 Discord REST，不能据此宣称出站 API 故障验收通过。API 专用入口需通过正式 REST agent/dispatcher 保留 discord.com HTTPS 身份和证书校验，仅把测试实例 TCP 路由固定到 loopback。验收项目已提供独立 `restApiProxy` / `DISCORD_REST_API_PROXY_PORT`。SDK合同见 [RESTOptions](https://discord.js.org/docs/packages/rest/main/RESTOptions:Interface)。
+
+### REST 专用 TLS 故障验收
+
+Gateway 实例可选 `restApiProxy: { port: 18570 }`，默认关闭。正式 RESTOptions.agent 使用 Undici Dispatcher，只允许真实 `https://discord.com:443`，保留原API URL、SNI和证书链/域名校验，TCP固定到 `127.0.0.1:18570`。错误目的地拒绝且不回退直连。与 `gatewayFaultProxyUrl` 分开；不要同时cut两条链路。SDK REST 的 Gateway discovery 等 API 也经过此代理，启动时必须先forwarding。正式 WebSocket连接不经过此REST Dispatcher；Gateway正常运行中API断开不能被记为入站WSS已重连。
+
+```bash
+node scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host discord.com --upstream-port 443 --port 18570 --control-port 18571
+DISCORD_REST_API_PROXY_PORT=18570 pnpm --filter platform-acceptance-bot dev:discord
+```
+
+forwarding 下以新sample确认真实消息基线；control `POST /cut` 后另发新sample，出站结果须失败/unknown且无自动POST重发；`POST /recover` 后先确认旧sample未补发，再新sample确认恢复。检查平台可见消息与报告回执，不重发未知sample。此模式仅Gateway REST、JSON消息能力；Interactions Endpoint 与其他CDN目的地不适用，配置Interactions会明确拒绝。本地真实SDK TLS fixture覆盖服务收到POST后切断、可信CA但SAN不匹配拒绝、默认直连与手动恢复，不能当成实机结果。停止/连接失败会销毁专用Dispatcher，并取消尚未完成TLS握手。
+
+公开扩展点参考：[Discord RESTOptions.agent](https://discord.js.org/docs/packages/rest/main/RESTOptions:Interface)、[Undici 6.28 Agent](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。

@@ -197,10 +197,9 @@ describe('lark protocol helpers', () => {
     ])).toEqual({
       msg_type: 'interactive',
       content: JSON.stringify({
-        elements: [{
-          tag: 'div',
-          text: { tag: 'lark_md', content: '# 标题\n\n**重点**\n1. 确认\n2. 取消' },
-        }],
+        schema: '2.0',
+        body: { elements: [{ tag: 'markdown', content: '# 标题\n\n**重点**' },
+          { tag: 'markdown', content: '\n1\\. 确认\n2\\. 取消' }] },
       }),
     });
     // 无 canonical MediaRef 的媒体段 warn + 丢弃（legacy 字段不再读取）
@@ -562,7 +561,7 @@ describe('lark plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('图片上传失败降级为文本，不阻断发送', async () => {
+  it('图片上传失败保留拒绝，不发送丢图的文字替代品', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       if (String(url).includes('/auth/v3/tenant_access_token/internal')) {
         return {
@@ -604,7 +603,7 @@ describe('lark plugin runtime adapter', () => {
       }, undefined);
     await endpoint.start();
     await http.listen();
-    const id = await endpoint.send({
+    await expect(endpoint.send({
       conversation: groupConversation,
       payload: [
         {
@@ -615,14 +614,8 @@ describe('lark plugin runtime adapter', () => {
           },
         },
       ],
-    });
-    expect(id).toBe('om_out2');
-    const sendCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/im/v1/messages'));
-    const sendBody = JSON.parse(String(sendCall![1]!.body)) as Record<string, unknown>;
-    expect(sendBody).toMatchObject({
-      msg_type: 'text',
-      content: JSON.stringify({ text: '架构图' }),
-    });
+    })).rejects.toMatchObject({ disposition: 'rejected', platformCode: 230001 });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/im/v1/messages'))).toBe(false);
     await endpoint.stop();
   });
 

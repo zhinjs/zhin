@@ -2,12 +2,14 @@
  * QQ WebSocket transport: bot factory and inbound message normalization.
  */
 import path from 'node:path';
+import { createQqStreamAgent } from './stream-proxy.js';
 import {
   Bot,
   ReceiverMode,
   type ApproveJoinRequestOptions,
   type Sendable,
 } from 'qq-official-bot';
+import type { EndpointTransportState } from 'zhin.js/adapter';
 import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { QqOutboundMessage } from './outbound.js';
 import type { QqChannelKind, QqInboundMessage, ResolvedQqWebsocketConfig } from './protocol.js';
@@ -36,6 +38,7 @@ export type QqOfficialApi = Pick<Bot,
 
 /** Minimal bot surface used by the endpoint (real qq-official-bot or test mock). */
 export interface QqBotTransport {
+  readonly transportState?: EndpointTransportState;
   /** Full qq-official-bot business API; lifecycle remains owned by the Endpoint. */
   readonly api: QqOfficialApi;
   start(): Promise<void>;
@@ -278,6 +281,7 @@ function extractTextContent(message: unknown): string {
 
 export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransport {
   const bot = new Bot({
+    ...({ handleProcessErrors: false } as Record<string, unknown>),
     appid: config.appid,
     secret: config.secret,
     mode: ReceiverMode.WEBSOCKET,
@@ -290,14 +294,35 @@ export function defaultCreateBot(config: ResolvedQqWebsocketConfig): QqBotTransp
     ...(config.gatewayUrl ? { gatewayUrl: config.gatewayUrl } : {}),
   });
 
+  const receiver = bot.receiver as unknown as { config: { autoReconnect: boolean; agent?: import('node:https').Agent }; on(event: string, listener: (...args: unknown[]) => void): void; removeListener(event: string, listener: (...args: unknown[]) => void): void };
+  receiver.config.autoReconnect = false;
+  const agent = config.streamProxy ? createQqStreamAgent(config.streamProxy) : undefined;
+  receiver.config.agent = agent;
+  const receiverListeners: Array<{ event: string; listener: (...args: unknown[]) => void }> = [];
+  // Keep receiver error ownership after Session.start removes its temporary listener.
+  const receiverError = () => {};
+  receiver.on('error', receiverError);
   return {
+    get transportState(): EndpointTransportState {
+      const receiver = bot.receiver as unknown as { isReady?: boolean; isStarted?: boolean; isClosed?: boolean; handler?: { ws?: { readyState: number } } };
+      const state = receiver.handler?.ws?.readyState;
+      if (state === 1 && receiver.isReady && receiver.isClosed === false) return 'open';
+      if (state === 0) return 'connecting';
+      if (receiver.isStarted) return 'reconnecting';
+      return 'closed';
+    },
     api: bot,
     start: () => bot.start().then(() => undefined),
-    stop: () => stopQqOfficialBot(bot as unknown as QqOfficialBotLifecycle),
+    stop: async () => {
+      try { await stopQqOfficialBot(bot as unknown as QqOfficialBotLifecycle); }
+      finally { agent?.destroy(); }
+    },
     on: (event, listener) => {
-      bot.on(event as never, listener as never);
+      if (event === 'transport.close') { receiver.on('close', listener); receiverListeners.push({ event: 'close', listener }); }
+      else bot.on(event as never, listener as never);
     },
     removeAllListeners: () => {
+      for (const entry of receiverListeners.splice(0)) receiver.removeListener(entry.event, entry.listener);
       bot.removeAllListeners(undefined as never);
     },
     sendPrivateMessage: (userId, message) => bot.sendPrivateMessage(userId, message as Sendable),

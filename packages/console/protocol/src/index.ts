@@ -283,6 +283,8 @@ export type ConsoleEndpointPhase =
   | 'pending'
   | 'starting'
   | 'online'
+  | 'offline'
+  | 'reconnecting'
   | 'failed'
   | 'unconfigured';
 
@@ -294,6 +296,9 @@ export interface ConsoleEndpointSummary {
   readonly adapter: string;
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
+  readonly admitted?: boolean;
+  readonly transportState?: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped' | 'unknown';
+  readonly eventDiagnostics?: Readonly<{ buffered: number; dropped: number; dispatchFailures: number }>;
   readonly owner?: string;
   readonly phase?: ConsoleEndpointPhase;
   readonly pendingLogin?: boolean;
@@ -389,9 +394,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'ping',
   'entries:get',
   'pages:list',
-  CONFIG_RPC.GET,
-  CONFIG_RPC.GET_ALL,
-  CONFIG_RPC.GET_SOURCE,
+  // Raw persisted configuration may contain secrets; demo is not a general read-only authority.
   PLUGIN_RPC.PLAN_INSTALL,
   PLUGIN_RPC.PLAN_UNINSTALL,
   PLUGIN_RPC.PLAN_UPDATE,
@@ -402,6 +405,7 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'workrooms:get',
   'schedule:list',
   'cron:list',
+  'cron:validate',
   ENDPOINT_RPC.LIST,
   ENDPOINT_RPC.INFO,
   ENDPOINT_RPC.TEST,

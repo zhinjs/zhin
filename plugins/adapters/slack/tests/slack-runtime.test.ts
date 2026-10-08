@@ -478,3 +478,19 @@ describe('slack messageChannelMap LRU', () => {
     });
   });
 });
+
+it('preserves canonical markdown/share and button payload for Slack', () => {
+  const wire = formatOutboundWire([{ type: 'markdown', data: { content: '**bold**' } }, { type: 'share', data: { title: 'Link', url: 'https://example.com', description: 'Details', image: 'https://example.com/image.png' } }, { type: 'keyboard', data: { rows: [[{ label: 'Yes', payload: 'canonical-callback' }]] } }]);
+  expect(wire.text).toBe('**bold**');
+  expect(wire.attachments[0]).toMatchObject({ title: 'Link', title_link: 'https://example.com', text: 'Details', image_url: 'https://example.com/image.png' });
+  expect(wire.blocks[0]).toMatchObject({ elements: [{ value: 'canonical-callback' }] });
+});
+it('admits Slack button values as canonical action segments', async () => {
+  const receive = vi.fn(async () => Object.freeze({ matched: true }));
+  const http = createHttpHost({ host: '127.0.0.1', port: 0 }); hosts.push(http);
+  const endpoint = bindTestEndpoint(new SlackEndpoint({ id: capabilityId(rootPluginId(), adapterFeature, 'slack'), gateway: { receive, send: vi.fn(async () => 'sent') }, http, config: httpConfig, createClient: () => mockClient() }), { receive, send: vi.fn(async () => 'sent') }, undefined);
+  await endpoint.start(); endpoint.open();
+  endpoint.admitInteraction({ type: 'block_actions', user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'source' }, actions: [{ type: 'button', action_id: 'generated-id', block_id: 'row', value: 'canonical-callback', action_ts: 'action' }] });
+  await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({ segments: [{ type: 'action', data: { id: 'action', payload: 'canonical-callback', sourceMessageId: 'source' } }] })));
+  await endpoint.stop();
+});

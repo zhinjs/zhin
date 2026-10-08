@@ -46,7 +46,7 @@ The endpoint accepts **POST** requests; GET and DELETE return 405. Each request 
 
 ## What the server exposes
 
-`tools/list` returns Tools currently visible through the active generation's governed capability snapshot. `tools/call` executes them through the same permission, safety, approval, and cancellation authority used by Agent turns. MCP calls are unattended: a Tool that needs interactive approval cannot obtain it from this endpoint and must fail rather than silently run.
+`tools/list` returns Tools currently visible through the active generation's governed capability snapshot. When no Tools are visible, it returns `{ tools: [] }`; calling an unknown Tool returns JSON-RPC Invalid Params (`-32602`), rather than an unavailable method. `tools/call` executes them through the same permission, safety, approval, and cancellation authority used by Agent turns. MCP calls are unattended: a Tool that needs interactive approval cannot obtain it from this endpoint and must fail rather than silently run.
 
 The current Runtime Host registers **Tools only**. It does not register the legacy `create_plugin` / `create_command` generators, documentation Resources, or workflow Prompts described in older versions of this README. Use [`zhin new`](https://zhin.js.org/cli/) for project scaffolding.
 

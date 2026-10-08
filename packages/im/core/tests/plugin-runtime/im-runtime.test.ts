@@ -1,3 +1,4 @@
+import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
@@ -47,7 +48,7 @@ import {
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
-import { MemoryConversationEventStore } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, MemoryConversationEventStore } from '@zhin.js/im-contract';
 import {
   ImRuntime,
   ingressRouteToken,
@@ -70,7 +71,7 @@ class TestEndpoint extends Endpoint<object> {
   constructor(surface: object) {
     super();
     this.client = surface;
-    Object.assign(this, surface);
+    Object.defineProperties(this, Object.getOwnPropertyDescriptors(surface));
   }
 }
 
@@ -696,7 +697,7 @@ describe('IM Runtime', () => {
       ]),
       config: new Map([[root, { commandPrefix: '/' }], [child, {}]]),
       resources: new Map([[root, new Map()], [child, new Map()]]),
-      capabilities: new Map([[command.id, command]]),
+      capabilities: new Map([[command.id, command], memoryEndpointSlot(root)]),
       projections: new Map(),
     };
     const base = createSnapshotView(1, state);
@@ -726,6 +727,47 @@ describe('IM Runtime', () => {
     expect(requester).toBe(child);
   });
 
+  it('resolves prefixes for expanded Slack endpoint identities through the generation AdapterIndex', async () => {
+    const root = rootPluginId();
+    const owner = childPluginId(root, 'slack');
+    const adapter = createCapabilitySlot({
+      owner, feature: adapterFeatureId, localName: 'slack', source: '/slack/adapters/slack/index.ts',
+      definition: defineAdapterContract({ capabilities: ['inbound', 'outbound'], create: () => ({ client: {}, connect() {}, send: () => 'receipt' }) }),
+    });
+    const command = createCapabilitySlot({ owner: root, feature: commandFeatureId, localName: 'acceptance', source: '/commands/acceptance/index.ts', definition: defineCommand({ execute: () => 'accepted' }) });
+    const state: SnapshotState = {
+      root,
+      tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/project', children: [owner] }], [owner, { id: owner, instanceKey: 'slack', packageName: 'slack', packageRoot: '/slack', parent: root, children: [] }]]),
+      config: new Map([[root, {}], [owner, { commandPrefix: '!', endpoints: [{ id: 'test-bot' }, { id: 'test-bot-b', commandPrefix: '#' }] }]]),
+      resources: new Map([[root, new Map([[endpointEventGatewayToken.id, ignoredEndpointEvents]])], [owner, new Map([[endpointEventGatewayToken.id, ignoredEndpointEvents]])]]),
+      capabilities: new Map([[adapter.id, adapter], [command.id, command]]), projections: new Map(),
+    };
+    const base = createSnapshotView(1, state);
+    const index = await AdapterIndex.create([adapter], base, new AbortController().signal);
+    const snapshot = createSnapshotView(1, { ...state, projections: new Map([[adapterFeatureId, index], [commandFeatureId, new CommandIndex([command], base)]]) });
+    try {
+      for (const [endpoint, prefix] of [['test-bot', '!'], ['test-bot-b', '#']]) {
+        const id = index.resolve(String(owner), endpoint)!;
+        expect(snapshot.capabilities.has(id)).toBe(false);
+        const message = new Message({ endpoint: { id: String(id), adapter: String(owner) }, kind: 'channel', id: 'channel' }, `${prefix}acceptance probe:local0001`, 1, async () => ({ status: 'sent' }), undefined, undefined, undefined, undefined, endpoint);
+        expect(defaultCommandPrefixResolver(message, snapshot)).toBe(prefix);
+        await expect(new MessageDispatcher().dispatch(message, snapshot)).resolves.toMatchObject({ matched: true, command: 'acceptance', value: 'accepted' });
+      }
+    } finally { await index.stop(); }
+  });
+
+  it('resolves prefix from the real endpoint capability owner instead of platform literal', async () => {
+    const owner = childPluginId(rootPluginId(), 'terminal-bot');
+    const endpoint = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'terminal', source: '/terminal/index.ts', definition: {} });
+    const snapshot = createSnapshotView(1, {
+      root: rootPluginId(), tree: new Map(), resources: new Map(), projections: new Map(),
+      capabilities: new Map([[endpoint.id, endpoint]]),
+      config: new Map([[owner, { commandPrefix: '/', endpoints: [{ id: 'bot-a', commandPrefix: '!' }] }]]),
+    });
+    const message = new Message({ endpoint: { id: String(endpoint.id), adapter: 'terminal' }, kind: 'private', id: 'room' }, '/hello', 1, async () => ({ status: 'sent' as const }));
+    expect(defaultCommandPrefixResolver(message, snapshot)).toBe('/');
+  });
+
   it('resolves commandPrefix from the adapter instance config (default empty, endpoints override)', async () => {
     const root = rootPluginId();
     const command = createCapabilitySlot({
@@ -747,7 +789,7 @@ describe('IM Runtime', () => {
         }]]),
         config: new Map([[root, config]]),
         resources: new Map([[root, new Map()]]),
-        capabilities: new Map([[command.id, command]]),
+        capabilities: new Map([[command.id, command], memoryEndpointSlot(root)]),
         projections: new Map(),
       };
       const base = createSnapshotView(1, state);
@@ -826,7 +868,7 @@ describe('IM Runtime', () => {
         endpointEventGatewayToken.id,
         ignoredEndpointEvents,
       ]])]]),
-      capabilities: new Map([[echo.id, echo]]),
+      capabilities: new Map([[echo.id, echo], memoryEndpointSlot(root)]),
       projections: new Map(),
     };
     const base = createSnapshotView(1, state);
@@ -859,7 +901,7 @@ describe('IM Runtime', () => {
     expect(hashed.value).not.toContain('\n  echo\n');
   });
 
-  it('matches structured Command parameters after stripping commandPrefix', async () => {
+  it.each(['/upload ', '  /upload ', '\t/upload '])('matches structured Command parameters after stripping commandPrefix: %j', async (text) => {
     const root = rootPluginId();
     const media = Object.freeze({
       kind: 'url' as const,
@@ -889,7 +931,7 @@ describe('IM Runtime', () => {
       }]]),
       config: new Map([[root, { commandPrefix: '/' }]]),
       resources: new Map([[root, new Map()]]),
-      capabilities: new Map([[command.id, command]]),
+      capabilities: new Map([[command.id, command], memoryEndpointSlot(root)]),
       projections: new Map(),
     };
     const base = createSnapshotView(1, state);
@@ -906,13 +948,13 @@ describe('IM Runtime', () => {
         kind: 'private',
         id: 'room',
       },
-      '/upload',
+      text.trim(),
       1,
       async () => ({ status: 'sent' as const }),
       undefined,
       undefined,
       Object.freeze([
-        { type: 'text', data: { text: '/upload ' } },
+        { type: 'text', data: { text } },
         { type: 'image', data: { media } },
       ]),
     );
@@ -1267,6 +1309,7 @@ describe('IM Runtime', () => {
         operations: ['recall'],
         create: () => ({
           name: '111111',
+          transportState: 'open' as const,
           control: { recall: async () => undefined },
           management: {
             async listFriends() { return []; },
@@ -1286,7 +1329,7 @@ describe('IM Runtime', () => {
       tree: new Map([[root, {
         id: root,
         instanceKey: 'root',
-      packageName: '@zhin.js/adapter-icqq',
+      packageName: 'minimal-bot',
         packageRoot: '/project',
         children: [],
       }]]),
@@ -1310,9 +1353,12 @@ describe('IM Runtime', () => {
     adapters.open();
 
     const listed = im.endpoints.list();
+    expect(im.endpoints.get('minimal-bot', '111111')).toMatchObject({ name: '111111' });
+    await expect(im.endpoints.withManagement('minimal-bot', '111111', async management => management.listFriends?.())).resolves.toEqual([]);
+    expect(im.endpoints.get('unknown-package', '111111')).toBeNull();
     expect(listed).toEqual([expect.objectContaining({
       name: '111111',
-      adapter: 'icqq',
+      adapter: 'minimal-bot',
       connected: true,
       status: 'online',
       operations: ['recall'],
@@ -1327,7 +1373,7 @@ describe('IM Runtime', () => {
     // 用 slot localName 解析（inbox-installer 路径）
     expect(im.endpoints.get('icqq', 'icqq')).toEqual(expect.objectContaining({
       name: '111111',
-      adapter: 'icqq',
+      adapter: 'minimal-bot',
       connected: true,
       status: 'online',
       operations: ['recall'],
@@ -1336,7 +1382,7 @@ describe('IM Runtime', () => {
     // 用 live name 解析（console endpoint.info 路径）
     expect(im.endpoints.get('icqq', '111111')).toEqual(expect.objectContaining({
       name: '111111',
-      adapter: 'icqq',
+      adapter: 'minimal-bot',
     }));
     await expect(im.endpoints.withManagement('icqq', '111111', (management) => {
       expect(management).toEqual(expect.objectContaining({
@@ -1520,6 +1566,75 @@ describe('IM Runtime', () => {
 
     await fixture.adapters.stop();
     await fixture.store.close();
+  });
+
+  it.each([
+    { result: '', code: 'delivery_unconfirmed', unknown: true },
+    { result: '   ', code: 'delivery_unconfirmed', unknown: true },
+    { error: new Error('transport reset'), code: 'endpoint_send_failed', unknown: true },
+    { error: new EndpointDeliveryError('endpoint_timeout', 'timed out', 'unknown'), code: 'endpoint_timeout', unknown: true },
+    { error: new EndpointDeliveryError('platform_rejected', 'rate limited', 'rejected'), code: 'platform_rejected', unknown: false },
+    { error: new EndpointDeliveryError('endpoint_disconnected', 'not connected', 'not_sent'), code: 'endpoint_disconnected', unknown: false },
+  ])('preserves evidence for unconfirmed/rejected outbound result $code', async ({ result, error, code, unknown }) => {
+    let calls = 0;
+    const fixture = await createFixture([], [], undefined, undefined, undefined, {
+      endpointSend: () => { calls++; if (error) throw error; return result!; },
+    });
+    const events: RuntimeMessageEvent[] = [];
+    fixture.im.messageEvents.subscribe((event) => events.push(event));
+    const receipt = await fixture.im.send({
+      conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private', id: 'room-1' },
+      requester: rootPluginId(), content: 'hello',
+    });
+    expect(receipt.status).toBe('failed');
+    expect(receipt.failure?.code).toBe(code);
+    expect(receipt.failure?.deliveryUnknown === true).toBe(unknown);
+    expect(receipt.failure?.retryable).not.toBe(true);
+    expect(calls).toBe(1);
+    expect(events.filter((event) => event.direction === 'outbound')).toEqual([]);
+    await fixture.adapters.stop(); await fixture.store.close();
+  });
+
+  it('reports an explicitly unsupported operation without misclassifying uncertain delivery', async () => {
+    for (const disposition of ['not_sent', 'unknown'] as const) {
+      const fixture = await createFixture([], [], undefined, undefined, undefined, {
+        endpointSend: () => { throw new EndpointDeliveryError('unsupported_operation', 'unsupported', disposition); },
+      });
+      const events: RuntimeMessageEvent[] = [];
+      fixture.im.messageEvents.subscribe(event => events.push(event));
+      const receipt = await fixture.im.send({
+        conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private', id: 'room-1' },
+        requester: rootPluginId(), content: 'hello',
+      });
+      expect(receipt).toMatchObject({ status: disposition === 'not_sent' ? 'unsupported' : 'failed', failure: { code: 'unsupported_operation' } });
+      expect(receipt.failure?.deliveryUnknown === true).toBe(disposition === 'unknown');
+      expect(events.filter(event => event.direction === 'outbound')).toEqual([]);
+      await fixture.adapters.stop(); await fixture.store.close();
+    }
+  });
+
+  it('rejects mixed unsupported canonical segments before endpoint delivery instead of confirming text alone', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { adapterSegments: { supported: ['text'] } });
+    const receipt = await fixture.im.send({
+      conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private', id: 'room-1' },
+      requester: rootPluginId(), content: [{ type: 'text', data: { text: 'probe' } }, { type: 'share', data: { title: 'Zhin', url: 'https://zhin.dev', description: 'description' } }],
+    });
+    expect(receipt).toMatchObject({ status: 'unsupported', failure: { code: 'unsupported_operation' } });
+    expect(sent).toEqual([]);
+    await fixture.adapters.stop(); await fixture.store.close();
+  });
+
+  it('validates declared support after interactive fallback preserves text delivery', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { adapterSegments: { supported: ['text'], interactive: 'text' } });
+    const receipt = await fixture.im.send({
+      conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private', id: 'room-1' }, requester: rootPluginId(),
+      content: [{ type: 'text', data: { text: 'choose' } }, { type: 'keyboard', data: { rows: [[{ id: 'yes', label: 'Yes', payload: 'yes' }]] } }],
+    });
+    expect(receipt.status).toBe('sent');
+    expect(sent).toHaveLength(1);
+    await fixture.adapters.stop(); await fixture.store.close();
   });
 
   it('returns failed and unsupported receipts without publishing outbound events', async () => {
@@ -1957,7 +2072,7 @@ async function createFixture(
   commandStarted?: () => void,
   options?: {
     middleware?: boolean;
-    adapterSegments?: { interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
+    adapterSegments?: { supported?: readonly string[]; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
     adapterOperations?: readonly AdapterOperation[];
     endpointSend?: (request: unknown) => string;
@@ -2316,3 +2431,8 @@ describe('Message.$replyToChannel', () => {
     });
   });
 });
+
+function memoryEndpointSlot(owner: ReturnType<typeof rootPluginId>): [CapabilitySlot['id'], CapabilitySlot] {
+  const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts', definition: {} });
+  return [slot.id, slot];
+}

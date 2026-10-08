@@ -6,29 +6,34 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage } from 'node:http';
 
-import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
-import { formatCompact, getLogger } from '@zhin.js/logger';
-
-const logger = getLogger('dingtalk');
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface DingTalkEndpointConfig {
+  readonly streamProxy?: import('./stream-proxy.js').DingTalkStreamProxy;
   readonly id: string;
   readonly appKey: string;
   readonly appSecret: string;
+  readonly mode?: 'webhook' | 'stream';
   readonly webhookPath?: string;
   readonly robotCode?: string;
   readonly apiBaseUrl?: string;
+  readonly cardTemplateId?: string;
+  readonly cardButtonCount?: number;
 }
 
 export interface ResolvedDingTalkConfig {
+  readonly streamProxy?: import('./stream-proxy.js').DingTalkStreamProxy;
   readonly context: 'dingtalk';
+  readonly mode?: 'webhook' | 'stream';
   readonly id: string;
   readonly appKey: string;
   readonly appSecret: string;
   readonly webhookPath: string;
   readonly robotCode?: string;
   readonly apiBaseUrl: string;
+  readonly cardTemplateId?: string;
+  readonly cardButtonCount?: number;
 }
 
 export interface DingTalkMessage {
@@ -42,6 +47,7 @@ export interface DingTalkMessage {
   readonly senderNick?: string;
   readonly senderCorpId?: string;
   readonly sessionWebhook?: string;
+  readonly sessionWebhookExpiredTime?: number;
   readonly chatbotCorpId?: string;
   readonly chatbotUserId?: string;
   readonly isAdmin?: boolean;
@@ -111,20 +117,28 @@ export interface DingTalkSendBody {
 }
 
 export function resolveDingTalkConfig(config: DingTalkEndpointConfig): ResolvedDingTalkConfig {
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid DingTalk streamProxy port/serverName');
+  if (config.mode !== undefined && !['webhook', 'stream'].includes(config.mode)) throw new TypeError('Invalid DingTalk mode');
   const id = requiredEndpointField(config.id, 'id');
   const appKey = requiredEndpointField(config.appKey, 'appKey');
   const appSecret = requiredEndpointField(config.appSecret, 'appSecret');
   const webhookPath = normalizeWebhookPath(config.webhookPath ?? '/dingtalk/webhook');
   const apiBaseUrl = (config.apiBaseUrl ?? 'https://oapi.dingtalk.com').replace(/\/$/, '');
   const robotCode = config.robotCode;
+  if (config.cardButtonCount !== undefined && (!Number.isInteger(config.cardButtonCount) || config.cardButtonCount < 1 || config.cardButtonCount > 5)) throw new TypeError('cardButtonCount must be 1..5');
   return {
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     context: 'dingtalk',
+    mode: config.mode ?? 'webhook',
     id,
     appKey,
     appSecret,
     webhookPath,
     ...(robotCode ? { robotCode } : {}),
     apiBaseUrl,
+    ...(config.cardTemplateId ? { cardTemplateId: config.cardTemplateId } : {}),
+    cardButtonCount: config.cardButtonCount ?? 2,
   };
 }
 
@@ -233,9 +247,8 @@ export function verifySignature(
  * Segment canonicalization is intentionally not done here: media segments carry
  * the canonical `data.media` MediaRef and nothing else is consulted.
  *
- * 钉钉机器人媒体消息仅支持远程 URL（picture.picURL）：
- * - image 段 kind=url → 直发 picture；
- * - 其余 kind / audio / video / file 段无投递面，warn + 丢弃。
+ * 钉钉机器人图片使用官方 Markdown HTTP(S) 图片链接，保留同载荷文本和图片顺序。
+ * 本地媒体上传、原生引用、音频/视频/文件未接线，在请求前明确拒绝。
  */
 export function formatOutboundBody(payload: unknown): DingTalkSendBody {
   if (typeof payload === 'string') {
@@ -280,33 +293,37 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
         }
         break;
       }
+      case 'reply':
+        throw new EndpointDeliveryError('unsupported_operation', 'DingTalk native quoted replies are not implemented', 'not_sent');
+      case 'share': {
+        if (['audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) {
+          throw new EndpointDeliveryError('unsupported_operation', 'dingtalk rich share metadata is not implemented', 'not_sent');
+        }
+        let url: URL;
+        try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'DingTalk share requires an HTTP(S) URL', 'not_sent'); }
+        if (!['https:', 'http:'].includes(url.protocol)) throw new EndpointDeliveryError('invalid_payload', 'DingTalk share requires an HTTP(S) URL', 'not_sent');
+        if (media) throw new EndpointDeliveryError('invalid_payload', 'DingTalk accepts one link card per message', 'not_sent');
+        media = { msgtype: 'link', link: { title: String(data.title ?? '链接'), text: String(data.description ?? data.content ?? ''), messageUrl: url.toString(), ...(typeof data.image === 'string' ? { picUrl: data.image } : {}) } };
+        break;
+      }
+      case 'keyboard':
+        throw new EndpointDeliveryError('unsupported_operation', 'DingTalk native keyboard callback requires an interactive card template and is not implemented', 'not_sent');
       case 'image': {
-        if (media) break;
         const ref = data.media;
         if (isMediaRef(ref) && ref.kind === 'url') {
-          media = {
-            msgtype: 'picture',
-            picture: { picURL: ref.value },
-          };
+          let url: URL;
+          try { url = new URL(ref.value); } catch { throw new EndpointDeliveryError('invalid_payload', 'DingTalk image requires an HTTP(S) URL', 'not_sent'); }
+          if (!['https:', 'http:'].includes(url.protocol)) throw new EndpointDeliveryError('invalid_payload', 'DingTalk image requires an HTTP(S) URL', 'not_sent');
+          markdownTitle ??= '消息';
+          textParts.push(`\n![](${ref.value.replace(/[()\s]/g, character => encodeURIComponent(character))})\n`);
           break;
         }
-        logger.warn(formatCompact({
-          op: 'dingtalk_outbound_media_dropped',
-          type: item.type,
-          reason: isMediaRef(ref) ? `unsupported_kind:${ref.kind}` : 'missing_media_ref',
-        }));
-        break;
+        throw new EndpointDeliveryError('unsupported_operation', 'DingTalk image upload is not implemented; use a canonical HTTP(S) URL', 'not_sent');
       }
       case 'audio':
       case 'video':
       case 'file':
-        // 钉钉机器人无音频/视频/文件投递面，warn + 丢弃
-        logger.warn(formatCompact({
-          op: 'dingtalk_outbound_media_dropped',
-          type: item.type,
-          reason: 'undeliverable_msgtype',
-        }));
-        break;
+        throw new EndpointDeliveryError('unsupported_operation', 'DingTalk audio/video/file delivery is not implemented', 'not_sent');
       case 'markdown':
         markdownTitle ??= String(data.title || '消息');
         textParts.push(String(data.content ?? data.text ?? ''));
@@ -329,7 +346,7 @@ export function formatOutboundBody(payload: unknown): DingTalkSendBody {
     }
   }
 
-  if (media) return media;
+  if (media) return media.link && textParts.length ? { ...media, link: { ...media.link, text: [...textParts, media.link.text].filter(Boolean).join('\n') } } : media;
   if (markdownTitle !== undefined) {
     return {
       msgtype: 'markdown',

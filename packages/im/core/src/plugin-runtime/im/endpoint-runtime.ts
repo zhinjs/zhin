@@ -6,6 +6,8 @@ import {
   type AdapterEndpointPhase,
   type AdapterOperation,
   type EndpointControl,
+  type Endpoint,
+  type EndpointTransportState,
   type EndpointManagement,
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
@@ -28,6 +30,9 @@ export interface EndpointRuntimeSummary {
   readonly adapter: string;
   readonly owner: string;
   readonly connected: boolean;
+  readonly admitted: boolean;
+  readonly transportState: EndpointTransportState | 'unknown';
+  readonly eventDiagnostics: Endpoint['eventDiagnostics'];
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
   readonly operations: readonly AdapterOperation[];
@@ -95,6 +100,9 @@ export class EndpointRuntime {
           adapter: adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
           owner: row.owner,
           connected: row.connected,
+          admitted: row.admitted,
+          transportState: row.transportState,
+          eventDiagnostics: row.eventDiagnostics,
           status: row.status,
           phase: row.phase,
           operations: row.operations,
@@ -108,7 +116,7 @@ export class EndpointRuntime {
   }): EndpointCapabilities | undefined {
     return this.#withLease((snapshot) => {
       const index = requireAdapters(snapshot);
-      const id = index.resolve(input.adapter, input.endpointKey);
+      const id = resolveEndpointIdentity(snapshot, index, input.adapter, input.endpointKey);
       return id ? index.capabilities(id) : undefined;
     }, undefined);
   }
@@ -116,7 +124,7 @@ export class EndpointRuntime {
   get(adapter: string, endpointKey: string): EndpointRuntimeDetail | null {
     return this.#withLease((snapshot) => {
       const index = requireAdapters(snapshot);
-      const id = index.resolve(adapter, endpointKey);
+      const id = resolveEndpointIdentity(snapshot, index, adapter, endpointKey);
       if (!id) return null;
       const row = index.describe().find((item) => item.id === id);
       if (!row) return null;
@@ -124,6 +132,9 @@ export class EndpointRuntime {
         name: row.name,
         adapter: adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
         connected: row.connected,
+          admitted: row.admitted,
+          transportState: row.transportState,
+          eventDiagnostics: row.eventDiagnostics,
         status: row.status,
         phase: row.phase,
         operations: row.operations,
@@ -136,7 +147,7 @@ export class EndpointRuntime {
     const lease = this.context.acquire();
     try {
       const index = requireAdapters(lease.value);
-      const resolved = index.resolve(input.adapter, input.endpointKey);
+      const resolved = resolveEndpointIdentity(lease.value, index, input.adapter, input.endpointKey);
       if (!resolved) throw new Error('endpoint not found');
       const requester = index.owner(resolved);
       const conversation: ConversationRef = {
@@ -194,7 +205,9 @@ export class EndpointRuntime {
       return null;
     }
     try {
-      const endpoint = requireAdapters(lease.value).connection(adapter, endpointKey);
+      const index = requireAdapters(lease.value);
+      const id = resolveEndpointIdentity(lease.value, index, adapter, endpointKey);
+      const endpoint = id ? index.connection(String(id), String(id)) : undefined;
       if (!endpoint) return null;
       return await run(resolveEndpointManagement(endpoint) ?? Object.freeze({}));
     } finally {
@@ -217,7 +230,7 @@ export class EndpointRuntime {
     }
     try {
       const index = requireAdapters(lease.value);
-      const id = index.resolve(adapter, endpointKey);
+      const id = resolveEndpointIdentity(lease.value, index, adapter, endpointKey);
       const control = id ? index.control(id, operation) : undefined;
       return control ? await run(control) : fallback;
     } finally {
@@ -248,6 +261,21 @@ export function requireAdapters(snapshot: RuntimeSnapshot): AdapterIndex {
     throw new Error('Adapter Feature projection is not installed');
   }
   return projection;
+}
+
+/** Resolves public list identities against the exact operation snapshot; ambiguous aliases never pick an account. */
+export function resolveEndpointIdentity(snapshot: RuntimeSnapshot, index: AdapterIndex, adapter: string, endpointKey: string) {
+  const live = new Map(index.describe().map(row => [row.id, row.name]));
+  const matches = index.list().filter(record => {
+    const localName = record.id.split('\0').pop() ?? record.id;
+    const alias = adapterTypeName(snapshot.tree.get(record.owner)?.packageName);
+    const adapterMatches = alias === adapter || record.name === adapter || String(record.id) === adapter
+      || localName === adapter || String(record.owner) === adapter || record.owner.endsWith(`/${adapter}`);
+    const endpointMatches = record.name === endpointKey || String(record.id) === endpointKey
+      || record.id.endsWith(`/${endpointKey}`) || live.get(record.id) === endpointKey;
+    return adapterMatches && endpointMatches;
+  });
+  return matches.length === 1 ? matches[0]!.id : undefined;
 }
 
 export function adapterTypeName(packageName: string | undefined): string | undefined {

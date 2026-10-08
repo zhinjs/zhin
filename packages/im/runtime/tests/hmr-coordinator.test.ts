@@ -283,6 +283,39 @@ describe('HmrCoordinator', () => {
     expect(stopped).toBe(true);
   });
 
+  it('awaits asynchronous watcher disposal and replays the same stop outcome', async () => {
+    const modules = new FakeModules();
+    let dispose!: () => void;
+    const disposed = new Promise<void>(resolve => { dispose = resolve; });
+    let calls = 0;
+    modules.watch = () => () => { calls++; return disposed; };
+    const coordinator = new HmrCoordinator({ modules, ownership: () => ownershipFor('/project/commands/status/index.ts', '/project'), runtime: { async reload() {} }, onRestartRequired() {}, onError() {} });
+    coordinator.start();
+    const stopping = coordinator.stop();
+    expect(coordinator.stop()).toBe(stopping);
+    let settled = false; void stopping.then(() => { settled = true; });
+    await Promise.resolve(); await Promise.resolve();
+    expect(settled).toBe(false); expect(calls).toBe(1);
+    dispose(); await stopping; expect(settled).toBe(true);
+  });
+
+  it('drains admitted reloads even when watcher disposal throws', async () => {
+    const source = '/project/commands/status/index.ts';
+    const failure = new Error('watcher cleanup failed');
+    const modules = new FakeModules();
+    let calls = 0; modules.watch = () => () => { calls++; throw failure; };
+    let release!: () => void; const blocked = new Promise<void>(resolve => { release = resolve; });
+    let announce!: () => void; const started = new Promise<void>(resolve => { announce = resolve; });
+    const coordinator = new HmrCoordinator({ modules, ownership: () => ownershipFor(source, '/project'), runtime: { async reload() { announce(); await blocked; } }, onRestartRequired() {}, onError() {} });
+    coordinator.start(); const reload = coordinator.enqueue(source); await started;
+    const stopping = coordinator.stop(); const rejected = expect(stopping).rejects.toBe(failure);
+    let settled = false; void stopping.catch(() => { settled = true; });
+    await Promise.resolve(); await Promise.resolve(); expect(settled).toBe(false);
+    await expect(coordinator.enqueue(source)).rejects.toThrow('stopping');
+    release(); await Promise.all([reload, rejected]);
+    expect(coordinator.stop()).toBe(stopping); expect(calls).toBe(1);
+  });
+
   it('reports post-commit observer failure without rejecting the reload', async () => {
     const source = '/project/commands/status/index.ts';
     const reported: unknown[] = [];

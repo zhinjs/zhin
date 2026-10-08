@@ -1,7 +1,9 @@
+import { DiscordFaultProxyStrategy } from './gateway-fault-proxy.js';
 import { createReadStream, promises as fs } from 'node:fs';
 import path from 'node:path';
 import {
   Client,
+  Partials,
   GatewayIntentBits,
   EmbedBuilder,
   AttachmentBuilder,
@@ -9,6 +11,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
   REST,
+  type RESTOptions,
   Routes,
   PermissionFlagsBits,
   type MessageCreateOptions,
@@ -37,6 +40,7 @@ export const DEFAULT_INTENTS = [
 
 /** Minimal client surface used by the endpoint (real discord.js or test mock). */
 export interface DiscordClientTransport {
+  isReady?(): boolean;
   login(token: string): Promise<string>;
   destroy(): Promise<void>;
   on(event: string, listener: (...args: unknown[]) => void): void;
@@ -109,10 +113,10 @@ export interface DiscordClientTransport {
   };
 }
 
-export type CreateDiscordClient = (intents: readonly number[]) => DiscordClientTransport;
+export type CreateDiscordClient = (intents: readonly number[], gatewayFaultProxyUrl?: string, restOptions?: Partial<RESTOptions>) => DiscordClientTransport;
 
-export function defaultCreateClient(intents: readonly number[]): DiscordClientTransport {
-  return new Client({ intents: [...intents] }) as unknown as DiscordClientTransport;
+export function defaultCreateClient(intents: readonly number[], gatewayFaultProxyUrl?: string, restOptions: Partial<RESTOptions> = {}): DiscordClientTransport {
+  return new Client({ rest: { ...restOptions, retries: 0, rejectOnRateLimit: () => true }, intents: [...intents], partials: [Partials.Channel], ...(gatewayFaultProxyUrl ? { ws: { buildStrategy: manager => new DiscordFaultProxyStrategy(manager, gatewayFaultProxyUrl) } } : {}) }) as unknown as DiscordClientTransport;
 }
 
 export function resolveSenderRole(msg: DiscordInboundMessage): string | undefined {
@@ -176,6 +180,7 @@ export function normalizeDiscordMessage(raw: unknown): DiscordInboundMessage | n
 
 export async function toMessageCreateOptions(body: DiscordOutboundBody): Promise<MessageCreateOptions> {
   const options: MessageCreateOptions = {};
+  if (body.reply) options.reply = { ...body.reply };
   if (body.content) options.content = body.content;
   if (body.embeds?.length) {
     options.embeds = body.embeds.map((data) => {
@@ -296,9 +301,14 @@ export async function connectDiscordGatewayClient(
   client: DiscordClientTransport,
   config: ResolvedDiscordGatewayConfig,
   handlers: DiscordGatewayConnectHandlers,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false;
+    const onAbort = () => { if (!settled) { settled = true; reject(new Error('Discord startup stopped')); } };
+    if (signal?.aborted) { onAbort(); return; }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    const releaseAbort = () => signal?.removeEventListener('abort', onAbort);
 
     client.on('messageCreate', (raw) => {
       handlers.onPlatformEvent('messageCreate', raw);
@@ -319,17 +329,31 @@ export async function connectDiscordGatewayClient(
         id: string;
         customId: string;
         channel?: { id: string; type: number } | null;
+        channelId?: string;
+        guildId?: string | null;
         user: { id: string; username?: string; displayName?: string };
         message?: { id: string };
       };
-      if (!interaction.isButton?.()) return;
-      void interaction.deferUpdate?.().catch(() => { /* already ack */ });
-      if (!interaction.channel) return;
+      const isButton = interaction.isButton?.() === true;
+      logger.info(formatCompact({ op: 'discord_gateway_interaction_received', button: isButton, cachedChannel: !!interaction.channel, hasChannelId: !!interaction.channelId }));
+      if (!isButton) return;
+      void interaction.deferUpdate?.().then(() => {
+        logger.info(formatCompact({ op: 'discord_gateway_button_ack', status: 'confirmed' }));
+      }).catch(() => {
+        // SDK errors may contain token-bearing callback URLs; log no raw error.
+        logger.warn(formatCompact({ op: 'discord_gateway_button_ack', status: 'failed' }));
+      });
+      const channelId = interaction.channelId ?? interaction.channel?.id;
+      if (!channelId) {
+        logger.warn(formatCompact({ op: 'discord_gateway_button_dropped', reason: 'missing_channel_id' }));
+        return;
+      }
       handlers.onButton({
         id: interaction.id,
         customId: interaction.customId,
-        channelId: interaction.channel.id,
-        channelKind: resolveChannelKind(interaction.channel.type),
+        channelId,
+        channelKind: interaction.channel ? resolveChannelKind(interaction.channel.type) : interaction.guildId ? 'channel' : 'private',
+        ...(interaction.guildId ? { guildId: interaction.guildId } : {}),
         userId: interaction.user.id,
         userName: interaction.user.username || interaction.user.displayName || interaction.user.id,
         sourceMessageId: interaction.message?.id,
@@ -369,6 +393,7 @@ export async function connectDiscordGatewayClient(
     });
 
     client.once('clientReady', () => {
+      if (signal?.aborted) return;
       handlers.onPlatformEvent('clientReady', client.user);
       void (async () => {
         try {
@@ -384,11 +409,13 @@ export async function connectDiscordGatewayClient(
           }
           if (!settled) {
             settled = true;
+            releaseAbort();
             resolve();
           }
         } catch (error) {
           if (!settled) {
             settled = true;
+            releaseAbort();
             reject(error);
           }
         }
@@ -399,6 +426,7 @@ export async function connectDiscordGatewayClient(
       logger.error('Discord client error:', error);
       if (!settled) {
         settled = true;
+        releaseAbort();
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     });
@@ -407,9 +435,12 @@ export async function connectDiscordGatewayClient(
       logger.warn('Discord client warning:', info);
     });
 
-    client.login(config.token).catch((error) => {
+    client.login(config.token).then(() => {
+      if (signal?.aborted) void Promise.resolve(client.destroy()).catch(() => {});
+    }).catch((error) => {
       if (!settled) {
         settled = true;
+        releaseAbort();
         const raw = error instanceof Error ? error.message : String(error);
         const tokenShapeHint = config.token.split('.').length === 3
           ? ''

@@ -20,6 +20,8 @@ const MAX_TIMESTAMP_DRIFT_SECONDS = 300;
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface SlackEndpointConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').SlackWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').SlackStreamProxy;
   readonly id: string;
   readonly token: string;
   readonly signingSecret?: string;
@@ -31,6 +33,8 @@ export interface SlackEndpointConfig {
 }
 
 export interface ResolvedSlackConfig {
+  readonly webApiProxy?: import('./web-api-proxy.js').SlackWebApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').SlackStreamProxy;
   readonly context: 'slack';
   readonly id: string;
   readonly token: string;
@@ -118,6 +122,9 @@ export interface SlackWireSegment {
 }
 
 export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackConfig {
+  if (config.webApiProxy && (!Number.isInteger(config.webApiProxy.port) || config.webApiProxy.port < 1 || config.webApiProxy.port > 65535)) throw new TypeError('Invalid Slack webApiProxy port');
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName) || config.streamProxy.serverName === 'slack.com')) throw new TypeError('Invalid Slack streamProxy port/serverName');
   const id = requiredEndpointField(config.id, 'id');
   const token = requiredEndpointField(config.token, 'token');
   const socketMode = config.socketMode;
@@ -132,6 +139,8 @@ export function resolveSlackConfig(config: SlackEndpointConfig): ResolvedSlackCo
     : config.appToken?.trim();
 
   return {
+    ...(config.webApiProxy ? { webApiProxy: config.webApiProxy } : {}),
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     context: 'slack',
     id,
     token,
@@ -214,6 +223,7 @@ export function formatSlashContent(cmd: SlackSlashCommand): string {
  * Segment canonicalization is intentionally not done here.
  */
 export function formatOutboundWire(payload: unknown): {
+  replyTo?: string;
   text: string;
   blocks: Record<string, unknown>[];
   attachments: Record<string, unknown>[];
@@ -242,6 +252,7 @@ export function formatOutboundWire(payload: unknown): {
   const blocks: Record<string, unknown>[] = [];
   const attachments: Record<string, unknown>[] = [];
   const files: Array<{ buffer?: Buffer; url?: string; path?: string; name?: string }> = [];
+  let replyTo: string | undefined;
 
   for (const item of items) {
     if (typeof item === 'string') {
@@ -250,6 +261,10 @@ export function formatOutboundWire(payload: unknown): {
     }
     const data = item.data ?? {};
     switch (item.type) {
+      case 'reply':
+        if (typeof data.message_id === 'string' && data.message_id) replyTo = data.message_id;
+        break;
+      case 'markdown':
       case 'text':
         text += String(data.text ?? data.content ?? '');
         break;
@@ -281,7 +296,7 @@ export function formatOutboundWire(payload: unknown): {
           });
           break;
         }
-        const imageFile = resolveMediaToFile(media, String(data.alt ?? media.file_name ?? 'image'));
+        const imageFile = resolveMediaToFile(media, String(media.file_name ?? mediaDefaultFilename('image', media)));
         if (imageFile) files.push(imageFile);
         else dropOutboundMedia(item.type, 'unsupported_media_kind');
         break;
@@ -294,11 +309,14 @@ export function formatOutboundWire(payload: unknown): {
           dropOutboundMedia(item.type, 'missing_media_ref');
           break;
         }
-        const mediaFile = resolveMediaToFile(media, String(data.name ?? media.file_name ?? item.type));
+        const mediaFile = resolveMediaToFile(media, String(media.file_name ?? data.name ?? mediaDefaultFilename(item.type, media)));
         if (mediaFile) files.push(mediaFile);
         else dropOutboundMedia(item.type, 'unsupported_media_kind');
         break;
       }
+      case 'share':
+        attachments.push({ title: String(data.title ?? ''), title_link: String(data.url ?? ''), text: String(data.description ?? data.content ?? ''), ...(data.image ? { image_url: String(data.image) } : {}) });
+        break;
       case 'keyboard':
         blocks.push(...keyboardToBlockKitBlocks(data));
         break;
@@ -307,7 +325,7 @@ export function formatOutboundWire(payload: unknown): {
     }
   }
 
-  return { text, blocks, attachments, files };
+  return { text, blocks, attachments, files, ...(replyTo ? { replyTo } : {}) };
 }
 
 export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<string, unknown>[] {
@@ -320,7 +338,7 @@ export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<
       type: 'button',
       text: { type: 'plain_text', text: String(btn.label ?? btn.text ?? 'button').slice(0, 75) },
       action_id: String(btn.id ?? btn.action_id ?? `btn_${blocks.length}_${index}`),
-      ...(btn.value != null ? { value: String(btn.value) } : {}),
+      ...(btn.payload != null || btn.value != null ? { value: String(btn.payload ?? btn.value) } : {}),
       ...(btn.style === 'primary' ? { style: 'primary' } : {}),
       ...(btn.style === 'danger' ? { style: 'danger' } : {}),
     }));
@@ -338,6 +356,15 @@ export function keyboardToBlockKitBlocks(data: Record<string, unknown>): Record<
  * - kind=path → 记录本地路径，上传前读盘；
  * - kind=file → Slack 无平台不透明文件引用可直发，返回 undefined 由调用方丢弃留痕。
  */
+function mediaDefaultFilename(kind: string, media: MediaRef): string {
+  const extension = ({
+    'image/png': 'png', 'image/jpeg': 'jpg', 'image/gif': 'gif', 'image/webp': 'webp',
+    'audio/mpeg': 'mp3', 'audio/ogg': 'ogg', 'audio/wav': 'wav',
+    'video/mp4': 'mp4', 'video/webm': 'webm', 'application/pdf': 'pdf',
+  } as Record<string, string>)[media.mime_type?.split(';')[0].trim().toLowerCase() ?? ''];
+  return `${kind}${extension ? `.${extension}` : ''}`;
+}
+
 function resolveMediaToFile(
   media: MediaRef,
   name: string,

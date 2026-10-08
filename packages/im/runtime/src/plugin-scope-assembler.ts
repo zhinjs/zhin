@@ -21,6 +21,7 @@ import {
   type GenerationHandoff,
   type GenerationAdmissionGate,
   type GenerationHandoffRegistry,
+  type RuntimeSnapshot,
   type PluginDefinition,
   type PluginId,
   type PluginInstanceView,
@@ -51,6 +52,8 @@ export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
 export interface RootResourceContext {
   /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
   readonly generation: number;
+  /** Exact projected candidate, available during handoff activation, never the committed previous generation. */
+  readonly readCandidateSnapshot?: () => RuntimeSnapshot;
   readonly signal: AbortSignal;
   readonly resources: Scope;
   readonly lifecycle: DisposeStack;
@@ -92,6 +95,7 @@ export class PluginScopeAssembler {
   readonly #handoffs = new GenerationHandoffStack();
   readonly #admission = createGenerationAdmissionGate();
   readonly #envStores: EnvStoreFactory;
+  #candidateSnapshot?: RuntimeSnapshot;
   #setupFeatureAliases: ReadonlyMap<string, FeatureId> = new Map();
 
   constructor(
@@ -152,6 +156,10 @@ export class PluginScopeAssembler {
       scope.provide(primaryConfigToken, config);
       await this.installResources?.({
         generation: this.generation,
+        readCandidateSnapshot: () => {
+          if (!this.#candidateSnapshot) throw new Error('Candidate snapshot is not projected yet');
+          return this.#candidateSnapshot;
+        },
         signal,
         resources: scope,
         lifecycle: scope.disposers,
@@ -294,6 +302,13 @@ export class PluginScopeAssembler {
       if (!scope) throw new Error(`Missing created Scope: ${owner}`);
       return [owner, () => scope.disposers.dispose()] as const;
     });
+  }
+
+  bindCandidateSnapshot(snapshot: RuntimeSnapshot): void {
+    if (snapshot.generation !== this.generation || this.#candidateSnapshot) {
+      throw new Error('Candidate snapshot does not match this Plugin assembly');
+    }
+    this.#candidateSnapshot = snapshot;
   }
 
   generationHandoff(): GenerationHandoff | undefined {

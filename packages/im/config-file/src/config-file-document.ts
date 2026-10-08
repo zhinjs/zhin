@@ -55,7 +55,16 @@ export class ConfigDocumentConflictError extends ConfigFileDocumentError {
 }
 
 /** Owns the format-independent transaction and optimistic concurrency lifecycle. */
+type MutationExecutor = <T>(operation: () => Promise<T>) => Promise<T>;
+
 export abstract class ConfigFileDocument implements ConfigDocumentPort {
+  #mutationTail: Promise<void> = Promise.resolve();
+
+  #mutate<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.#mutationTail.then(operation);
+    this.#mutationTail = result.then(() => undefined, () => undefined);
+    return result;
+  }
   readonly file: string;
   readonly sources: readonly string[];
   abstract readonly format: ConfigFileFormat;
@@ -92,6 +101,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
       current.revision,
       candidate.source,
       candidate.document,
+      operation => this.#mutate(operation),
     );
   }
 
@@ -107,6 +117,7 @@ export abstract class ConfigFileDocument implements ConfigDocumentPort {
       expectedRevision,
       source,
       this.parseSource(source),
+      operation => this.#mutate(operation),
     );
   }
 
@@ -133,6 +144,7 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     previousRevision: string,
     candidateSource: string,
     document: RuntimeConfigDocument,
+    private readonly mutate: MutationExecutor,
   ) {
     this.#file = file;
     this.#previous = previous;
@@ -142,7 +154,11 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     this.#candidateRevision = revision({ exists: true, source: candidateSource });
   }
 
-  async commit(): Promise<ConfigDocumentSnapshot> {
+  commit(): Promise<ConfigDocumentSnapshot> {
+    return this.mutate(() => this.#commit());
+  }
+
+  async #commit(): Promise<ConfigDocumentSnapshot> {
     if (this.#state === 'committed') return requireSnapshot(this.#committedSnapshot);
     if (this.#state === 'rolled-back') {
       throw new ConfigFileDocumentError('A rolled-back config transaction cannot commit');
@@ -159,7 +175,11 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
     return committed;
   }
 
-  async rollback(): Promise<void> {
+  rollback(): Promise<void> {
+    return this.mutate(() => this.#rollback());
+  }
+
+  async #rollback(): Promise<void> {
     if (this.#state !== 'committed') {
       if (this.#state === 'prepared') this.#state = 'rolled-back';
       return;

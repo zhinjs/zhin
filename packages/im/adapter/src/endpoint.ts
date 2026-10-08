@@ -3,10 +3,12 @@ import {
   type GenerationAdmissionGate,
   type Token,
 } from '@zhin.js/plugin-runtime';
+import { getLogger } from '@zhin.js/logger';
 import type {
   EndpointEvent,
   EndpointIdentity,
   EndpointSendRequest,
+  EndpointTransportState,
 } from './endpoint-contract.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
@@ -23,6 +25,7 @@ export type {
   EndpointImplementation,
   EndpointIncomingMessage,
   EndpointSendRequest,
+  EndpointTransportState,
   PlatformEvent,
 } from './endpoint-contract.js';
 
@@ -41,7 +44,9 @@ export const endpointEventGatewayToken = createToken<EndpointEventGateway>(
 
 const endpointBrand = Symbol.for('zhin.adapter.endpoint/1');
 const endpointBind = Symbol.for('zhin.adapter.endpoint-bind/1');
+const endpointRetire = Symbol.for('zhin.adapter.endpoint-retire/1');
 const PRE_ADMISSION_EVENT_LIMIT = 256;
+const endpointLogger = getLogger('adapter.endpoint');
 
 /** Minimal Runtime capability needed to bind an Endpoint to one generation. */
 interface EndpointBindingContext {
@@ -66,6 +71,9 @@ export abstract class Endpoint<TClient = unknown> {
    */
   abstract readonly client: TClient;
 
+  /** Optional local transport health. Absence means unobserved, not online. */
+  get transportState(): EndpointTransportState | undefined { return undefined; }
+
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;
   readonly content?: EndpointContentPort;
@@ -73,13 +81,22 @@ export abstract class Endpoint<TClient = unknown> {
   #identity?: EndpointIdentity;
   #events?: EndpointEventGateway;
   #admissionState: 'unbound' | 'pending' | 'active' | 'retired' = 'unbound';
-  #pendingEvents: EndpointEvent[] = [];
+  #pendingEvents: Array<{ event: EndpointEvent; resolve?: (value: unknown) => void; reject?: (error: Error) => void }> = [];
+  #droppedEvents = 0;
+  #dispatchFailures = 0;
+
+  /** Payload-free counters for bounded candidate buffering and delivery errors. */
+  get eventDiagnostics(): Readonly<{ buffered: number; dropped: number; dispatchFailures: number }> {
+    return Object.freeze({ buffered: this.#pendingEvents.length, dropped: this.#droppedEvents,
+      dispatchFailures: this.#dispatchFailures });
+  }
 
   /** @internal Bound exactly once by the generation-owned AdapterIndex. */
   [endpointBind](context: EndpointBindingContext, admission?: GenerationAdmissionGate): void {
     if (this.#events) throw new Error(`Endpoint ${context.id} is already bound`);
     this.#identity = Object.freeze({ id: context.id, adapter: context.name });
-    this.#events = context.use(endpointEventGatewayToken);
+    const events = context.use(endpointEventGatewayToken);
+    this.#events = events;
     if (!admission) {
       this.#admissionState = 'active';
       return;
@@ -88,15 +105,38 @@ export abstract class Endpoint<TClient = unknown> {
     admission.onActivate(() => {
       if (this.#admissionState !== 'pending') return;
       this.#admissionState = 'active';
-      admission.onDeactivate(() => {
-        this.#admissionState = 'retired';
-        this.#pendingEvents.length = 0;
-      });
+      admission.onDeactivate(() => this[endpointRetire]());
       const pending = this.#pendingEvents.splice(0);
-      for (const event of pending) {
-        void this.#events?.receive(event).catch(() => undefined);
+      for (const entry of pending) {
+        if (this.#admissionState !== 'active') {
+          entry.reject?.(new Error('Endpoint generation retired before event admission'));
+          continue;
+        }
+        const fail = () => {
+          entry.reject?.(new Error('Endpoint buffered event dispatch failed'));
+          this.#dispatchFailures += 1;
+          if (this.#dispatchFailures === 1) {
+            endpointLogger.warn('Candidate event dispatch failed', { endpoint: this.#identity?.id });
+          }
+        };
+        try {
+          // Enter the gateway synchronously: its generation lease must be acquired
+          // before retirement can make an unadmitted event look successful.
+          const dispatched = events.receive(entry.event);
+          void Promise.resolve(dispatched).then(entry.resolve).catch(fail);
+        } catch {
+          fail();
+        }
       }
     });
+  }
+
+  /** @internal Reject uncommitted reliable events on candidate rollback/retirement. */
+  [endpointRetire](): void {
+    this.#admissionState = 'retired';
+    for (const entry of this.#pendingEvents.splice(0)) {
+      entry.reject?.(new Error('Endpoint generation retired before event admission'));
+    }
   }
 
   /** The identity is available after AdapterDefinition.create returns. */
@@ -110,6 +150,15 @@ export abstract class Endpoint<TClient = unknown> {
     name: TName,
     payload: TPayload,
   ): Promise<unknown> {
+    return this.#publish(name, payload, false);
+  }
+
+  /** Await actual generation admission and dispatch before acknowledging a platform update. */
+  protected emitAccepted<TPayload, TName extends string>(name: TName, payload: TPayload): Promise<unknown> {
+    return this.#publish(name, payload, true);
+  }
+
+  #publish<TPayload, TName extends string>(name: TName, payload: TPayload, accepted: boolean): Promise<unknown> {
     if (!this.#events || !this.#identity) {
       throw new Error('Endpoint emitted before it was bound to a runtime generation');
     }
@@ -121,12 +170,21 @@ export abstract class Endpoint<TClient = unknown> {
     });
     if (this.#admissionState === 'pending') {
       if (this.#pendingEvents.length >= PRE_ADMISSION_EVENT_LIMIT) {
-        this.#pendingEvents.shift();
+        const dropped = this.#pendingEvents.shift();
+        dropped?.reject?.(new Error('Endpoint candidate event buffer overflow'));
+        this.#droppedEvents += 1;
+        if (this.#droppedEvents === 1) {
+          endpointLogger.warn('Candidate event buffer overflow', { endpoint: this.#identity.id, limit: PRE_ADMISSION_EVENT_LIMIT });
+        }
       }
-      this.#pendingEvents.push(event);
+      if (accepted) return new Promise((resolve, reject) => {
+        this.#pendingEvents.push({ event, resolve, reject });
+      });
+      this.#pendingEvents.push({ event });
       return Promise.resolve(undefined);
     }
-    if (this.#admissionState === 'retired') return Promise.resolve(undefined);
+    if (this.#admissionState === 'retired') return accepted
+      ? Promise.reject(new Error('Endpoint generation is retired')) : Promise.resolve(undefined);
     return this.#events.receive(event);
   }
 
@@ -156,6 +214,9 @@ export function bindEndpoint(
 ): void {
   endpoint[endpointBind](context, admission);
 }
+
+/** @internal Called before releasing transport resources on rollback/stop. */
+export function retireEndpoint(endpoint: Endpoint): void { endpoint[endpointRetire](); }
 
 /** @internal Cross-generation Endpoint check that survives ESM module re-evaluation. */
 export function isEndpoint(value: unknown): value is Endpoint {

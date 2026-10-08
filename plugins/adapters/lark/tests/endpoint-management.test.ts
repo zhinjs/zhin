@@ -118,6 +118,6 @@ describe('lark endpoint management', () => {
     const endpoint = createEndpoint(
       mockLarkApi(() => ({ code: 99991663, msg: 'token invalid' })) as unknown as LarkFetch,
     );
-    await expect(endpoint.management.listGroups!()).rejects.toThrow(/token invalid/);
+    await expect(endpoint.management.listGroups!()).rejects.toMatchObject({ disposition: 'rejected', platformCode: 99991663 });
   });
 });

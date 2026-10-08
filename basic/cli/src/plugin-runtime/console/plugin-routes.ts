@@ -23,7 +23,7 @@ export interface RegisterConsolePluginRoutesOptions {
 
 export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutesOptions): void {
   const { http, base, projectRoot, pluginLifecycleFile, im, snapshot } = options;
-  http.route('GET', `${base}/plugins`, async (_request, response) => {
+  http.route('GET', `${base}/plugins`, async (_request, response, _url, authScope) => {
     try {
       const snap = readRuntimeSnapshot(snapshot);
       const plugins = await buildManagedPluginList(
@@ -32,7 +32,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         snap,
         im?.endpoints.list() ?? [],
       );
-      writeJson(response, 200, { success: true, data: plugins, total: plugins.length });
+      writeJson(response, 200, { success: true, data: plugins.map(plugin => ({ ...plugin, manageable: authScope !== 'demo' && plugin.manageable })), total: plugins.length });
     } catch (error) {
       writeJson(response, 500, {
         success: false,
@@ -44,7 +44,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
     tags: ['plugins'],
   });
 
-  http.route('GET', `${base}/plugins/*`, async (_request, response, url) => {
+  http.route('GET', `${base}/plugins/*`, async (_request, response, url, authScope) => {
     const prefix = `${base}/plugins/`;
     const raw = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : '';
     if (!raw || raw.includes('/')) {
@@ -60,15 +60,13 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
     }
     try {
       const snap = readRuntimeSnapshot(snapshot);
+      const managedPlugins = await buildManagedPluginList(
+        projectRoot, pluginLifecycleFile, snap, im?.endpoints.list() ?? [],
+      );
       const node = listSnapshotPlugins(snap)
         .find(item => item.instanceKey === name || item.packageName === name);
       if (!node) {
-        const managed = (await buildManagedPluginList(
-          projectRoot,
-          pluginLifecycleFile,
-          snap,
-          im?.endpoints.list() ?? [],
-        )).find(item => item.instanceKey === name || item.packageName === name);
+        const managed = managedPlugins.find(item => item.instanceKey === name || item.packageName === name);
         if (!managed) {
           writeJson(response, 404, { success: false, error: '插件不存在' });
           return;
@@ -79,6 +77,8 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           success: true,
           data: {
             ...managed,
+            manageable: authScope !== 'demo' && managed.manageable,
+            readOnly: authScope === 'demo',
             packageRoot: displayConsolePath(packageDir, projectRoot),
             ...(version ? { version } : {}),
           },
@@ -87,13 +87,15 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       }
       writeJson(response, 200, {
         success: true,
-        data: buildPluginDetail(
+        data: { ...buildPluginDetail(
           node,
           await readPackageVersion(node.packageRoot),
           snap,
           im?.endpoints.list(),
           projectRoot,
-        ),
+        ), manageable: authScope !== 'demo' && managedPlugins.some(item =>
+          item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable,
+        ), readOnly: authScope === 'demo' },
       });
     } catch (error) {
       writeJson(response, 500, {

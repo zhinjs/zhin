@@ -3,7 +3,7 @@
  * No legacy Adapter/Endpoint / segment-mapper.
  * Canonicalization is owned by gateway/core before endpoint.send.
  */
-import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('napcat');
@@ -318,6 +318,11 @@ function oneBotMediaSegment(
 function canonicalToOneBotSegment(segment: NapCatWireSegment): MessageSegment | null {
   const data = segment.data ?? {};
   switch (segment.type) {
+    case 'markdown':
+    case 'share':
+    case 'keyboard':
+      throw new EndpointDeliveryError('unsupported_operation', `NapCat direct ${segment.type} sending is not supported`, 'not_sent');
+
     case 'mention': {
       const target = data.target ?? data.qq ?? data.id;
       if (target == null) return { type: segment.type, data };
@@ -443,13 +448,14 @@ export async function callNapCatHttpAction(
     headers.Authorization = `Bearer ${options.access_token}`;
   }
   const res = await fetch(url, {
+    signal: AbortSignal.timeout(30_000),
     method: 'POST',
     headers,
     body: JSON.stringify(params),
   });
   const text = await res.text();
-  if (res.status === 401) throw new Error(`NapCat HTTP auth failed: ${text}`);
-  if (res.status !== 200) throw new Error(`NapCat HTTP ${res.status}: ${text}`);
+  if (res.status === 401) throw new EndpointDeliveryError('platform_rejected', `NapCat HTTP auth failed: ${text}`, 'rejected');
+  if (res.status !== 200) throw new EndpointDeliveryError(res.status === 429 || res.status === 403 ? 'platform_rejected' : 'delivery_unconfirmed', `NapCat HTTP ${res.status}: ${text}`, res.status === 429 || res.status === 403 ? 'rejected' : 'unknown');
   let data: NapCatActionResponse;
   try {
     data = JSON.parse(text) as NapCatActionResponse;
@@ -457,8 +463,8 @@ export async function callNapCatHttpAction(
     throw new Error(`NapCat HTTP invalid response: ${text.slice(0, 200)}`);
   }
   if (data.status !== 'ok' && data.retcode !== 0) {
-    throw new Error(
-      `NapCat HTTP action failed [${data.retcode}]: ${data.message || data.wording || 'unknown'}`,
+    throw new EndpointDeliveryError(
+      'platform_rejected', `NapCat HTTP action failed [${data.retcode}]: ${data.message || data.wording || 'unknown'}`, 'rejected',
     );
   }
   return data;

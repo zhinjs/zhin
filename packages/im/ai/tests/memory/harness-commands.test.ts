@@ -55,6 +55,21 @@ describe('IM Harness — /tree 核心路径', () => {
     sessionId = session.session_id
   })
 
+  it('非活跃分支仍可跳转且只加载活跃上下文', async () => {
+    await repo.appendMessages(sessionId, [createUserMessage('root'), assistantMsg('reply'), createUserMessage('old')])
+    const root = (await repo.listBranchPoints(sessionId))[0]!.messageId
+    await repo.setActiveLeaf(sessionId, root)
+    await repo.appendMessages(sessionId, [createUserMessage('new')])
+    await repo.setActiveLeaf(sessionId, root)
+    const points = await repo.listBranchPoints(sessionId)
+    expect(points.map(p => [p.parentMessageId, p.activePath])).toEqual([[null, true], [root, false], [root, false]])
+    expect(await repo.jumpToBranchIndex(sessionId, 2)).toMatchObject({ ok: true })
+    expect((await repo.loadContext(sessionId)).messages).toHaveLength(3)
+    expect(await repo.setActiveLeaf(sessionId, points[2]!.messageId)).toBe(true)
+    expect((await repo.loadContext(sessionId)).messages).toHaveLength(2)
+    expect(await repo.listBranchPoints(sessionId)).toHaveLength(3)
+  })
+
   it('空会话无分支点', async () => {
     const points = await repo.listBranchPoints(sessionId)
     expect(points).toHaveLength(0)

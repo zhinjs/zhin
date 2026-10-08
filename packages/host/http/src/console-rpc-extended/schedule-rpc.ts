@@ -1,3 +1,4 @@
+import { parseCron } from '@zhin.js/schedule';
 import type { ConsoleRpcExtendedCtx, ConsoleScheduleEngine, ExtendedRpcResult, ScheduleJobRow } from './contracts.js';
 import { errorMessage, strField } from './rpc-values.js';
 
@@ -28,7 +29,7 @@ export function listSchedule(ctx: ConsoleScheduleListCtx): Promise<ExtendedRpcRe
         ...((job as { nextExecution?: number }).nextExecution
           ? { nextExecution: (job as { nextExecution?: number }).nextExecution } : {}),
       }));
-    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent } }));
+    return listPersistentJobs(ctx).then((persistent) => ({ data: { memory, persistent, capabilities: { persistent: !!ctx.resolveScheduleEngine?.() && ctx.fullScope } } })).catch((error) => ({ error: errorMessage(error) }));
   } catch (error) {
     return { error: errorMessage(error) };
   }
@@ -56,8 +57,8 @@ async function listPersistentJobs(ctx: ConsoleRpcExtendedCtx): Promise<Record<st
       lastExecutedAt: (job.state as { lastExecutedAt?: number } | undefined)?.lastExecutedAt,
       lastStatus: (job.state as { lastStatus?: string } | undefined)?.lastStatus,
     }));
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(`读取持久化任务失败: ${errorMessage(error)}`);
   }
 }
 
@@ -71,6 +72,11 @@ export async function addCron(
   const prompt = String(d.prompt ?? '').trim();
   if (!cronExpression) return { error: 'cronExpression is required' };
   if (!prompt) return { error: 'prompt is required' };
+  try {
+    parseCron(cronExpression);
+  } catch (error) {
+    return { error: `Cron 表达式无效: ${errorMessage(error)}` };
+  }
   const label = typeof d.label === 'string' && d.label.trim() ? d.label.trim() : undefined;
   const context = (d.context ?? {}) as Record<string, unknown>;
   const target = context.target ?? context.channel;
@@ -115,3 +121,13 @@ export async function mutateCron(
 }
 
 // ---------------------------------------------------------------- inbox
+
+/** Uses the same parser as the persistent schedule engine; never creates a job. */
+export function validateCron(d: Record<string, unknown>): ExtendedRpcResult {
+  try {
+    parseCron(String(d.cronExpression ?? '').trim());
+    return { data: { valid: true } };
+  } catch (error) {
+    return { data: { valid: false, error: errorMessage(error) } };
+  }
+}

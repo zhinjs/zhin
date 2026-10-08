@@ -42,7 +42,7 @@ const baseConfig = resolveEmailConfig({
 function createMockSmtp(): EmailSmtpTransport & { sendMail: ReturnType<typeof vi.fn> } {
   return {
     verify: vi.fn(async () => undefined),
-    sendMail: vi.fn(async () => ({ messageId: '<sent@mock.com>' })),
+    sendMail: vi.fn(async () => ({ messageId: '<sent@mock.com>', accepted: ['user@example.com'], rejected: [] })),
     close: vi.fn(),
   };
 }
@@ -182,7 +182,7 @@ describe('email protocol helpers', () => {
       { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png', file_name: 'a.png' } } },
     ], { from: 'bot@mock.com', to: 'user@example.com' });
     expect(mail.text).toBe('see image');
-    expect(mail.attachments).toEqual([{ filename: 'a.png', path: '/tmp/a.png' }]);
+    expect(mail.attachments).toMatchObject([{ filename: 'a.png', path: '/tmp/a.png' }]);
   });
 
   it('maps canonical media (url/path) to nodemailer attachments', () => {
@@ -191,7 +191,7 @@ describe('email protocol helpers', () => {
       { type: 'image', data: { media: { kind: 'path', value: '/tmp/a.png' }, name: 'a.png' } },
       { type: 'file', data: { media: { kind: 'url', value: 'https://x/b.pdf' }, name: 'b.pdf' } },
     ], { from: 'bot@mock.com', to: 'user@example.com' });
-    expect(mail.attachments).toEqual([
+    expect(mail.attachments).toMatchObject([
       { filename: 'a.png', path: '/tmp/a.png' },
       { filename: 'b.pdf', path: 'https://x/b.pdf' },
     ]);
@@ -202,20 +202,16 @@ describe('email protocol helpers', () => {
       { type: 'image', data: { media: { kind: 'base64', value: 'aGVsbG8=', file_name: 'c.png' } } },
       { type: 'image', data: { media: { kind: 'base64', value: 'data:image/png;base64,d29ybGQ=' }, alt: 'd.png' } },
     ], { from: 'bot@mock.com', to: 'user@example.com' });
-    expect(mail.attachments).toEqual([
+    expect(mail.attachments).toMatchObject([
       { filename: 'c.png', content: 'aGVsbG8=', encoding: 'base64' },
       { filename: 'd.png', content: 'd29ybGQ=', encoding: 'base64' },
     ]);
   });
 
-  it('drops media segments without a deliverable MediaRef', () => {
-    const mail = formatOutboundMail([
-      { type: 'text', data: { text: 'body' } },
-      { type: 'image', data: { url: '/tmp/a.png' } },
-      { type: 'file', data: { media: { kind: 'file', value: 'opaque-id' } } },
-    ], { from: 'bot@mock.com', to: 'user@example.com' });
-    expect(mail.text).toBe('body');
-    expect(mail.attachments).toBeUndefined();
+  it('rejects media without a deliverable canonical reference before SMTP', () => {
+    for (const data of [{ url: '/tmp/a.png' }, { media: { kind: 'file', value: 'opaque-id' } }]) {
+      expect(() => formatOutboundMail([{ type: 'text', data: { text: 'body' } }, { type: 'image', data }], { from: 'bot@mock.com', to: 'user@example.com' })).toThrow();
+    }
   });
 
   it('maps saved inbound attachments to canonical segments (MediaRef kind=path)', () => {
@@ -277,6 +273,7 @@ describe('email plugin runtime adapter', () => {
 
     await endpoint.start();
     endpoint.open();
+    expect(endpoint.transportState).toBe('open');
     endpoint.admit({
       messageId: '<msg001@mock.com>',
       from: 'sender@example.com',
@@ -300,6 +297,7 @@ describe('email plugin runtime adapter', () => {
     }));
 
     await endpoint.stop();
+    expect(endpoint.transportState).toBe('stopped');
     expect(smtp.close).toHaveBeenCalled();
     expect(imap.end).toHaveBeenCalled();
   });
@@ -594,7 +592,9 @@ describe('email plugin runtime adapter', () => {
     }), { receive: vi.fn(async () => Object.freeze({ matched: false })), send: vi.fn(async () => 'sent') }, undefined);
 
     await endpoint.start();
-    // start 触发的首次 check 卡在 search 上；mail 事件触发的第二次必须被在飞锁跳过
+    expect(imap.search).not.toHaveBeenCalled();
+    endpoint.open();
+    // open 触发的首次 check 卡在 search 上；mail 事件触发的第二次必须被在飞锁跳过
     await vi.waitFor(() => expect(imap.search).toHaveBeenCalledTimes(1));
     imap.emit('mail');
     expect(imap.search).toHaveBeenCalledTimes(1);

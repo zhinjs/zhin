@@ -55,4 +55,9 @@ program.addCommand(needsAgentCommand
   : new Command('agent').description('Agent diagnostics and Workroom operations'));
 program.addCommand(runtimeCommand);
 
-program.parse();
+try {
+  await program.parseAsync();
+} catch (error) {
+  console.error(`zhin: ${error instanceof Error ? error.message : String(error)}`);
+  process.exitCode = 1;
+}

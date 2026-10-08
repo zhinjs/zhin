@@ -117,6 +117,19 @@ describe('FileStateCache', () => {
     expect(cache.bytes).toBe(0);
   });
 
+  it('invalidates an older view when replacement exceeds the cache limit', () => {
+    const cache = new FileStateCache(100, 400);
+    cache.set('/changed', makeState('old'));
+    cache.set('/other', makeState('keep'));
+    cache.set('/changed', makeState('x'.repeat(101)));
+    expect(cache.get('/changed')).toBeUndefined();
+    expect(cache.get('/other')?.content).toBe('keep');
+    expect(cache.size).toBe(1);
+    expect(cache.bytes).toBe(4);
+    cache.delete('/other');
+    expect(cache.bytes).toBe(0);
+  });
+
   it('should update existing entries', () => {
     const cache = new FileStateCache();
     cache.set('/a', makeState('old'));

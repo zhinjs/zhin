@@ -27,11 +27,11 @@ export type { CreateKookClient, KookClientTransport } from '../../src/ws.js';
 export default defineAdapter<KookEndpointConfig>({
   capabilities: ['inbound', 'outbound'],
   operations: ['recall'],
-  // KOOK 图片消息消费远程 URL；KMarkdown 由 endpoint codec 原生消费；
-  // 无按钮交互面，交互段降级纯文本。
+  // KOOK 图片上传后以原生卡片保留图文混排；KMarkdown 原生消费；
+  // 原生卡片按钮经 return-val 事件进入 canonical action 链路。
   segments: {
-    outboundMedia: ['url'],
-    interactive: 'text',
+    outboundMedia: ['url', 'upload'],
+    interactive: 'native',
     markdown: 'native',
   },
   create(context) {

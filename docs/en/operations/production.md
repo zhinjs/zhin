@@ -58,7 +58,7 @@ zhin doctor --live http://127.0.0.1:8068 --json
 zhin doctor --live http://127.0.0.1:8068/control --json
 ```
 
-Exit status is 0 when ready and 1 for non-readiness, authentication or request failures. These checks make no external network calls: database `initialized` is not a live SQL test, endpoint `admission_open` is not transport connectivity, and agent `binding_configured` is not provider credential validation. Real platform delivery still requires separate acceptance evidence. Upgrade the CLI to a version exposing `/pub/ready` before using the updated Kubernetes readiness probe.
+Exit status is 0 when ready and 1 for non-readiness, authentication or request failures. These checks make no external network calls: database `initialized` is not a live SQL test, endpoint readiness requires admission and a locally observed `transportState` of `open`; disconnecting, reconnecting and unobserved transports are not ready, and agent `binding_configured` is not provider credential validation. Real platform delivery still requires separate acceptance evidence. Upgrade the CLI to a version exposing `/pub/ready` before using the updated Kubernetes readiness probe.
 
 Set a full token in production. Use a separate demo token for read-only observation. Platform Webhooks keep their own signing secrets; a Console token cannot replace them.
 

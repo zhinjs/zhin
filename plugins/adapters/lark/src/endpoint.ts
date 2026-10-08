@@ -1,10 +1,16 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { createLarkWebApiTransport } from './web-api-proxy.js';
+import type { LarkCardAction } from './cards.js';
+import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 /**
  * LarkEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import { readFile } from 'node:fs/promises';
 import { basename } from 'node:path';
 import {
+  Endpoint,
+  createEndpointLifecycle,
+  type EndpointLifecycle,
+  type EndpointTransportState,
   createRecallEndpointControl,
   type EndpointControl,
   type EndpointGroup,
@@ -32,6 +38,7 @@ import {
   type ResolvedLarkConfig,
 } from './protocol.js';
 import { registerLarkWebhookRoutes } from './webhook.js';
+import { createLarkLongConnection, type LarkLongConnectionFactory } from './long-connection.js';
 
 /** 出站 HTTP 调用统一 30s 超时。 */
 const OUTBOUND_TIMEOUT_MS = 30_000;
@@ -53,7 +60,8 @@ export type LarkFetch = (
 
 export interface LarkEndpointOptions {
   readonly id: CapabilityId;
-  readonly http: HttpHost;
+  readonly http?: HttpHost;
+  readonly longConnectionFactory?: LarkLongConnectionFactory;
   readonly config: ResolvedLarkConfig;
   readonly fetch?: LarkFetch;
 }
@@ -110,6 +118,7 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
 
   readonly #options: LarkEndpointOptions;
   readonly #fetch: LarkFetch;
+  readonly #webApiTransport?: ReturnType<typeof createLarkWebApiTransport>;
   /**
    * Console 社交面语义端口。Lark OpenAPI 仅接读取类列表能力：
    * - listGroups：GET /im/v1/chats（bot 所在群列表，分页归一为 {group_id: chat_id, name}）
@@ -142,12 +151,20 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
   #refreshPromise: Promise<string> | null = null;
   #open = false;
   #started = false;
+  readonly #lifecycle: EndpointLifecycle;
+  readonly #cardSources = new Map<string, { conversation: ConversationRef; time: number }>();
+  readonly #seen = new Map<string, number>();
+  #startupGeneration = 0;
+  readonly #pendingInbound: LarkMessage[] = [];
 
   constructor(options: LarkEndpointOptions) {
     super();
     this.#logger = getAdapterLogger('lark', options.config.id);
     this.#options = options;
-    this.#fetch = options.fetch ?? globalThis.fetch;
+    if (options.config.webApiProxy && options.fetch) throw new TypeError('Lark webApiProxy cannot be combined with an injected fetch');
+    this.#webApiTransport = options.config.webApiProxy ? createLarkWebApiTransport(options.config.webApiProxy) : undefined;
+    this.#fetch = this.#webApiTransport?.fetch ?? options.fetch ?? globalThis.fetch;
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id });
   }
 
   /** Used by webhook handler. */
@@ -159,10 +176,35 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
     return this.#options.config;
   }
 
+  get transportState(): EndpointTransportState | undefined {
+    return this.config.mode === 'websocket' ? this.#lifecycle.state : undefined;
+  }
+
   async start(): Promise<void> {
     if (this.#started) return;
+    this.#webApiTransport?.reopen();
     this.#started = true;
+    const generation = ++this.#startupGeneration;
     try {
+      if (this.config.mode === 'websocket') {
+        await this.#lifecycle.start(async (handle) => {
+          let active = true;
+          const transport = (this.#options.longConnectionFactory ?? createLarkLongConnection)({
+            config: this.config,
+            receive: (message) => {
+              if (!active || !this.#started || generation !== this.#startupGeneration) return;
+              if (this.#open) this.admit(message);
+              else if (this.#pendingInbound.length < 100) this.#pendingInbound.push(message);
+              else this.#logger.warn('lark_inbound_startup_buffer_full');
+            },
+            cardAction: (event) => { if (active && this.#open && generation === this.#startupGeneration) this.admitCardAction(event); },
+            disconnected: () => { if (!active) return; active = false; transport.close(); handle.notifyClosed(); },
+          });
+          handle.onForceClose(() => { active = false; transport.close(); });
+          await transport.connect();
+        });
+        return;
+      }
       if (!this.#options.config.encryptKey && !this.#options.config.verificationToken) {
         // encryptKey / verificationToken 都未配置时 webhook 完全无鉴权，任何人可伪造事件
         this.#logger.warn(formatCompact({
@@ -173,6 +215,8 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
         }));
       }
       await this.#refreshAccessToken();
+      if (!this.#started || generation !== this.#startupGeneration) return;
+      if (!this.#options.http) throw new Error('Lark webhook mode requires HttpHost');
       this.#routeReleases.push(...registerLarkWebhookRoutes(this.#options.http, this));
       this.#logger.debug(formatCompact({
         endpoint: this.#options.config.id,
@@ -188,6 +232,7 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
 
   open(): void {
     this.#open = true;
+    for (const message of this.#pendingInbound.splice(0)) this.admit(message);
   }
 
   close(): void {
@@ -196,42 +241,68 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#pendingInbound.length = 0;
+    this.#cardSources.clear();
+    this.#started = false;
+    ++this.#startupGeneration;
+    await this.#lifecycle.stop();
+    await this.#webApiTransport?.close();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#started = false;
     this.#logger.debug(formatCompact({ op: 'disconnect' }));
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const materialized = await this.#materializeOutboundMedia(payload);
-    const content = formatOutboundBody(materialized);
-    const data = await this.#request('/im/v1/messages', {
-      method: 'POST',
-      params: { receive_id_type: 'chat_id' },
-      body: {
-        receive_id: conversation.id,
-        msg_type: content.msg_type,
-        content: content.content,
-      },
-    });
-    if (data.code !== 0) {
-      throw new Error(`Failed to send message: ${data.msg}`);
+    try {
+      const materialized = await this.#materializeOutboundMedia(payload);
+      const content = formatOutboundBody(materialized);
+      const data = await this.#request(content.replyTo
+        ? `/im/v1/messages/${encodeURIComponent(content.replyTo)}/reply`
+        : '/im/v1/messages', {
+        method: 'POST',
+        ...(content.replyTo ? {} : { params: { receive_id_type: 'chat_id' } }),
+        body: {
+          ...(content.replyTo ? {} : { receive_id: conversation.id }),
+          msg_type: content.msg_type,
+          content: content.content,
+        },
+      });
+      if (typeof data.code === 'number' && data.code !== 0) {
+        throw new EndpointDeliveryError('platform_rejected', `Lark rejected message (code=${data.code})`, 'rejected');
+      }
+      if (data.code !== 0) throw new EndpointDeliveryError('delivery_unconfirmed', 'Malformed platform response', 'unknown');
+      const messageId = requireMessageId(data.data?.message_id);
+      if (content.msg_type === 'interactive') {
+        const now = Date.now();
+        for (const [id, source] of this.#cardSources) if (now - source.time > 300_000) this.#cardSources.delete(id);
+        this.#cardSources.set(messageId, { conversation, time: now });
+        if (this.#cardSources.size > 10_000) this.#cardSources.delete(this.#cardSources.keys().next().value!);
+      }
+      this.#logger.debug(formatCompact({ op: 'send', to: conversation.id,
+        id: messageId,
+      }));
+      return messageId;
+    } catch (error) {
+      this.#logger.warn(formatCompact({
+        op: 'lark_send_failed',
+        status: error instanceof LarkRequestError ? error.status : undefined,
+        platform_code: error instanceof LarkRequestError ? error.platformCode : undefined,
+        outcome: error instanceof EndpointDeliveryError ? error.disposition : 'unknown',
+      }));
+      if (error instanceof EndpointDeliveryError) throw error;
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Outbound request outcome is unknown', 'unknown', { cause: error });
     }
-    const messageId = (data.data?.message_id as string) || `${Date.now()}`;
-    this.#logger.debug(formatCompact({ op: 'send', to: conversation.id,
-      id: messageId,
-    }));
-    return messageId;
   }
 
   async recallMessage(messageId: string): Promise<void> {
     if (!messageId || messageId.startsWith('outbound:')) return;
-    await this.#request(`/im/v1/messages/${messageId}`, { method: 'DELETE' });
+    await this.#request(`/im/v1/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
   }
 
   /**
    * im/v1 消息 image 段只接受 image_key：canonical MediaRef（base64/本地路径/URL）
    * 先经 /im/v1/images 物化，产物回写为 MediaRef kind=file（平台不透明引用）；
-   * 上传失败降级为文本（alt 优先），不阻断发送。
+   * 上传失败阻止消息发送并保留拒绝或未知分类。
    */
   async #materializeOutboundMedia(payload: unknown): Promise<unknown> {
     if (!Array.isArray(payload)) return payload;
@@ -243,10 +314,7 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
       const media = readOutboundImageMedia(data);
       if (!media) return item;
       const imageKey = await this.uploadImage(media);
-      if (!imageKey) {
-        const alt = typeof data.alt === 'string' && data.alt ? data.alt : '[image]';
-        return { type: 'text', data: { text: alt } };
-      }
+      if (!imageKey) throw new EndpointDeliveryError('delivery_unconfirmed', 'Lark image upload returned no image key', 'unknown');
       return {
         type: 'image',
         data: { media: { kind: 'file', value: imageKey } },
@@ -254,33 +322,36 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
     }));
   }
 
-  /** POST /im/v1/images（image_type=message），返回 image_key；失败返回 null。 */
-  async uploadImage(media: Parameters<typeof resolveMediaBinary>[0]): Promise<string | null> {
-    try {
-      await this.#ensureAccessToken();
-      const binary = await resolveMediaBinary(media);
-      const form = buildImageUploadForm(binary);
-      const url = `${this.#options.config.apiBaseUrl}/im/v1/images`;
-      const response = await this.#fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${this.#accessToken.token}` },
-        body: form,
-        signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
-      });
-      const data = await response.json() as LarkApiResponse;
-      if (data.code === 0) {
-        return (data.data?.image_key as string) || null;
-      }
-      throw new Error(`Image upload failed: ${data.msg}`);
-    } catch (error) {
-      this.#logger.error('Failed to upload image:', error);
-      return null;
-    }
+  /** Upload must succeed before issuing a message; dropped media is never confirmed. */
+  async uploadImage(media: Parameters<typeof resolveMediaBinary>[0]): Promise<string> {
+    await this.#ensureAccessToken();
+    const binary = await resolveMediaBinary(media);
+    const form = buildImageUploadForm(binary);
+    const response = await this.#fetch(`${this.#options.config.apiBaseUrl}/im/v1/images`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${this.#accessToken.token}` },
+      body: form,
+      signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
+    });
+    const data = await response.json().catch(() => undefined) as LarkApiResponse | undefined;
+    const code = typeof data?.code === 'number' && Number.isFinite(data.code) ? data.code : undefined;
+    if (!response.ok) throw new LarkRequestError(response.status, code, response.status >= 400 && response.status < 500 && response.status !== 408);
+    if (code !== 0) throw new LarkRequestError(response.status, code, code !== undefined);
+    const key = data?.data?.image_key;
+    if (typeof key !== 'string' || !key.trim()) throw new LarkRequestError(response.status, code, false);
+    return key;
   }
 
   /** Test / internal: admit a parsed message when open (non-webhook path). */
   admit(msg: LarkMessage): void {
     if (!this.#open) return;
+    if (msg.message_id) {
+      const now = Date.now();
+      for (const [id, time] of this.#seen) if (now - time > 300_000) this.#seen.delete(id);
+      if (this.#seen.has(msg.message_id)) return;
+      this.#seen.set(msg.message_id, now);
+      if (this.#seen.size > 10_000) this.#seen.delete(this.#seen.keys().next().value!);
+    }
     const conversation = larkInboundConversation(String(this.#options.id), msg);
     void this.emit('message.receive', {
       conversation,
@@ -299,6 +370,28 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  /** Only correlate callbacks to a card actually sent by this endpoint. */
+  admitCardAction(event: LarkCardAction): void {
+    if (!this.#open) return;
+    const sourceId = event.context?.open_message_id ?? event.open_message_id;
+    const chatId = event.context?.open_chat_id ?? event.open_chat_id;
+    const sender = event.operator?.open_id ?? event.operator?.user_id;
+    const payload = event.action?.value?.zhin_payload;
+    if (!sourceId || !chatId || !sender || typeof payload !== 'string' || event.action?.tag !== 'button') return;
+    const source = this.#cardSources.get(sourceId);
+    if (!source || source.conversation.id !== chatId || Date.now() - source.time > 300_000) return;
+    const dedup = `card:${event.token ?? `${sourceId}:${sender}:${payload}`}`;
+    if (this.#seen.has(dedup)) return;
+    this.#seen.set(dedup, Date.now());
+    if (this.#seen.size > 10_000) this.#seen.delete(this.#seen.keys().next().value!);
+    const conversation = source.conversation;
+    void this.emit('message.receive', {
+      conversation, message: { conversation, id: dedup }, content: '',
+      segments: [{ type: 'action', data: { payload } }], sender: { id: sender }, endpointId: this.config.id,
+      metadata: Object.freeze({ eventType: 'card.action.trigger', sourceMessageId: sourceId }),
+    }).catch(() => this.#logger.warn('lark_card_action_receive_failed'));
   }
 
   admitPlatform(name: string, event: unknown): void {
@@ -542,11 +635,15 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
       body: body && method !== 'GET' ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(OUTBOUND_TIMEOUT_MS),
     });
+    const data = await response.json().catch(() => undefined) as LarkApiResponse | undefined;
+    const platformCode = typeof data?.code === 'number' && Number.isFinite(data.code) ? data.code : undefined;
     if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`Lark API error ${response.status}: ${text}`);
+      const rejected = response.status >= 400 && response.status < 500 && response.status !== 408;
+      throw new LarkRequestError(response.status, platformCode, rejected);
     }
-    return await response.json() as LarkApiResponse;
+    if (platformCode === undefined) throw new LarkRequestError(response.status, undefined, false);
+    if (platformCode !== 0) throw new LarkRequestError(response.status, platformCode, true);
+    return data!;
   }
 
   async #ensureAccessToken(): Promise<void> {
@@ -585,6 +682,24 @@ export class LarkEndpoint extends Endpoint<LarkClient> {
       this.#logger.debug('Access token refreshed successfully');
       return;
     }
-    throw new Error(`Failed to get access token: ${data.msg} (${data.code})`);
+    throw new LarkRequestError(response.status, typeof data.code === 'number' ? data.code : undefined, response.ok && typeof data.code === 'number' && data.code !== 0 || response.status >= 400 && response.status < 500 && response.status !== 408);
+  }
+}
+
+function requireMessageId(value: unknown): string {
+  if (typeof value === 'string' && value.trim().length > 0) return value;
+  throw new EndpointDeliveryError('delivery_unconfirmed', 'Platform did not return a real message ID', 'unknown');
+}
+
+/** Carries only safe numerical diagnostics, never response bodies or credentials. */
+class LarkRequestError extends EndpointDeliveryError {
+  readonly status: number;
+  readonly platformCode: number | undefined;
+  constructor(status: number, platformCode: number | undefined, rejected: boolean) {
+    super(rejected ? 'platform_rejected' : 'delivery_unconfirmed',
+      `Lark request failed (status=${status}${platformCode === undefined ? '' : `, code=${platformCode}`})`,
+      rejected ? 'rejected' : 'unknown');
+    this.status = status;
+    this.platformCode = platformCode;
   }
 }

@@ -4,7 +4,7 @@ export interface OneBot11WsSocket {
   send(data: string): void;
   close(code?: number, reason?: string): void;
   ping?(): void;
-  on(event: 'open' | 'message' | 'close' | 'error', listener: (...args: unknown[]) => void): void;
+  on(event: 'open' | 'message' | 'close' | 'error' | 'pong', listener: (...args: unknown[]) => void): void;
 }
 
 export interface OneBot11WsCreateOptions {

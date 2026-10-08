@@ -10,6 +10,7 @@ import { resolveQqConfig } from '../src/protocol.js';
 
 const SHARED = [
   'GROUP_AND_C2C_EVENT',
+  'INTERACTION',
   'GROUP_MEMBER',
   'GUILDS',
   'GUILD_MEMBERS',

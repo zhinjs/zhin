@@ -1,6 +1,7 @@
 import {
   defineAdapter,
   type EndpointImplementation,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import { createInterface, type Interface as ReadlineInterface } from 'node:readline';
 import type { Readable, Writable } from 'node:stream';
@@ -53,6 +54,7 @@ export function createTerminalEndpoint(
   let readline: ReadlineInterface | undefined;
   let promptTimer: ReturnType<typeof setTimeout> | undefined;
   let messageSequence = 0;
+  let transportState: EndpointTransportState = 'idle';
   const client = new TerminalClient(
     options.input,
     options.output,
@@ -76,8 +78,12 @@ export function createTerminalEndpoint(
 
   return {
     client,
+    get transportState() {
+      return transportState;
+    },
     activate({ events }) {
-      if (!options.interactive) return;
+      transportState = 'open';
+      if (!options.interactive) return () => { transportState = 'stopped'; };
       readline = createInterface({
         input: options.input,
         output: options.output,
@@ -85,6 +91,10 @@ export function createTerminalEndpoint(
         terminal: isTerminal(options.input) && isTerminal(options.output),
       });
       readline.setPrompt(options.prompt);
+      readline.on('close', () => {
+        clearPrompt();
+        if (transportState === 'open') transportState = 'closed';
+      });
       // In raw TTY mode Ctrl+C is a readline event, not an OS process signal.
       readline.on('SIGINT', () => process.emit('SIGINT'));
       readline.on('line', (line) => {
@@ -106,6 +116,7 @@ export function createTerminalEndpoint(
       });
       schedulePrompt();
       return () => {
+        transportState = 'stopped';
         clearPrompt();
         readline?.close();
         readline = undefined;

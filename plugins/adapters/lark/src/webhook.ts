@@ -1,6 +1,7 @@
 /**
  * Lark/Feishu webhook HTTP: verification → signature → challenge/event → admit.
  */
+import type { LarkCardAction } from './cards.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -21,6 +22,7 @@ export interface LarkWebhookHandler {
   readonly isOpen: boolean;
   admitPlatform(name: string, event: unknown): void;
   admit(msg: LarkMessage): void;
+  admitCardAction?(event: LarkCardAction): void;
 }
 
 export function registerLarkWebhookRoutes(
@@ -43,8 +45,18 @@ export async function handleLarkWebhookRequest(
   try {
     const rawBody = await readTextBody(request);
 
+    let event: LarkEventBody;
+    try {
+      event = JSON.parse(rawBody) as LarkEventBody;
+    } catch {
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ code: 0, msg: 'success' }));
+      return;
+    }
+
     if (handler.config.verificationToken) {
-      const token = headerValue(request.headers, 'x-lark-request-token');
+      const bodyToken = (event as LarkEventBody & { header?: { token?: unknown } }).header?.token ?? event.token;
+      const token = typeof bodyToken === 'string' ? bodyToken : headerValue(request.headers, 'x-lark-request-token');
       if (!verifyToken(token, handler.config.verificationToken)) {
         logger.warn(formatCompact({ op: 'webhook', ok: false, error: 'invalid verification token' }));
         response.writeHead(403, { 'Content-Type': 'text/plain' });
@@ -70,14 +82,6 @@ export async function handleLarkWebhookRequest(
       }
     }
 
-    let event: LarkEventBody;
-    try {
-      event = JSON.parse(rawBody) as LarkEventBody;
-    } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ code: 0, msg: 'success' }));
-      return;
-    }
 
     if (handler.isOpen) {
       const eventName = event.type === 'event_callback'
@@ -91,6 +95,8 @@ export async function handleLarkWebhookRequest(
       response.end(JSON.stringify({ challenge: event.challenge }));
       return;
     }
+
+    if ((event as LarkEventBody & { header?: { event_type?: string } }).header?.event_type === 'card.action.trigger' && handler.isOpen) handler.admitCardAction?.(event.event as LarkCardAction);
 
     if (event.type === 'event_callback' && event.event?.message && handler.isOpen) {
       const message: LarkMessage = {

@@ -28,13 +28,13 @@ import defineWecomAdapter from '../../plugins/adapters/wecom/adapters/wecom/inde
 import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapters/weixin-ilink/index.js';
 
 const EXPECTED: Record<string, AdapterDefinition['segments']> = {
-  dingtalk: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
+  dingtalk: { outboundMedia: ['url'], interactive: 'native', markdown: 'native' },
   discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
-  email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text' },
+  email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native' },
   github: { outboundMedia: ['url'], interactive: 'text' },
   icqq: { outboundMedia: ['base64', 'url', 'path'], interactive: 'text' },
-  kook: { outboundMedia: ['url'], interactive: 'text', markdown: 'native' },
-  lark: { outboundMedia: ['url', 'upload'], interactive: 'text', markdown: 'native' },
+  kook: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
+  lark: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   line: { outboundMedia: ['url'], interactive: 'text' },
   milky: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   napcat: { outboundMedia: ['url', 'base64', 'path'], interactive: 'text' },
@@ -48,7 +48,7 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   },
   sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
-  slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native' },
+  slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native', markdown: 'native' },
   telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
   'wechat-mp': { outboundMedia: ['upload'], interactive: 'text' },
   wecom: { outboundMedia: ['upload'], interactive: 'text' },

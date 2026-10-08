@@ -1,3 +1,4 @@
+import { DefaultFormatter, LogLevel } from '@zhin.js/logger';
 import { describe, expect, it } from 'vitest';
 import { SYSTEM_LOG_TABLE, type DatabaseHost, type DatabaseHostModel } from '@zhin.js/plugin-runtime';
 import {
@@ -73,6 +74,19 @@ describe('mapFormattedLevel', () => {
 });
 
 describe('SystemLogDatabaseTransport', () => {
+  it('stores actual current DefaultFormatter output across levels and sources', async () => {
+    const { host, rows } = fakeDatabaseHost();
+    const transport = new SystemLogDatabaseTransport(host);
+    const formatter = new DefaultFormatter();
+    for (const [level, name] of [[LogLevel.DEBUG, 'fixture:one'], [LogLevel.INFO, 'fixture:two'], [LogLevel.WARN, 'fixture:three'], [LogLevel.ERROR, 'fixture:four']] as const) {
+      transport.write(formatter.format({ level, name, message: 'actual formatter\nsecond line', timestamp: new Date(), args: [] }));
+    }
+    await flush();
+    expect(rows).toHaveLength(4);
+    expect(rows.map(row => row.level)).toEqual(['debug', 'info', 'warn', 'error']);
+    expect(rows.every(row => row.source === 'fixture' && row.message === 'actual formatter\nsecond line')).toBe(true);
+  });
+
   it('host 未 started 时静默丢弃', async () => {
     const { host, rows } = fakeDatabaseHost(false);
     const transport = new SystemLogDatabaseTransport(host);

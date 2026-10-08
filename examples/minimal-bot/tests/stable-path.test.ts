@@ -67,6 +67,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       expect(emit).toHaveBeenCalledWith('SIGINT');
     } finally {
       await endpoint.stop();
+      expect(endpoint.transportState).toBe('stopped');
     }
     expect(input.setRawMode).toHaveBeenLastCalledWith(false);
     expect(input.isPaused()).toBe(true);
@@ -129,6 +130,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       expect(isAdapterIndex(adapters)).toBe(true);
       const terminal = (adapters as AdapterIndex).list()[0];
       expect(terminal?.name).toBe('terminal');
+      expect((adapters as AdapterIndex).describe()[0]).toMatchObject({ admitted: true, transportState: 'open', connected: true, status: 'online' });
 
       const conversationOf = (id: string) => ({
         endpoint: { id: String(terminal!.id), adapter: String(terminal!.id).split('\0')[0]! },
@@ -169,8 +171,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       prompt: 'zhin> ',
     }, receive);
 
+    expect(endpoint.transportState).toBe('idle');
     await endpoint.start(new AbortController().signal);
     endpoint.open();
+    expect(endpoint.transportState).toBe('open');
     await vi.waitFor(() => expect(writes.join('')).toContain('zhin> '));
     input.write('/hello\n');
     await vi.waitFor(() => expect(receive).toHaveBeenCalledWith(expect.objectContaining({
@@ -183,7 +187,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     await vi.waitFor(() => {
       expect(writes.join('').match(/zhin> /gu)).toHaveLength(2);
     });
+    endpoint.client.readline?.close();
+    expect(endpoint.transportState).toBe('closed');
     await endpoint.stop();
+    expect(endpoint.transportState).toBe('stopped');
   });
 
   it('hands the current process stream to the next Adapter generation', async () => {

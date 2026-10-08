@@ -1,3 +1,4 @@
+import { normalizeSourcePath } from './source-path.js';
 import {
   readdirSync,
   statSync,
@@ -54,7 +55,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
     ensureTypeScriptSpecifierRemap();
-    this.#projectRoot = resolve(options.projectRoot);
+    this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#watchEnabled = options.watch ?? true;
     this.#tsxLoader = options.tsxLoader;
     this.#watchRoots = normalizeWatchRoots([this.#projectRoot]);
@@ -62,7 +63,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
 
   async load<T = unknown>(source: string): Promise<T> {
     this.#assertOpen();
-    const normalized = resolve(source);
+    const normalized = normalizeSourcePath(source);
     if (isNativeTypeScriptSource(normalized)) assertNativeTypeScriptSupport();
     const analysis = this.#pendingDependencies?.get(normalized)
       ?? await this.#dependencies.analyze(normalized);
@@ -95,7 +96,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   }
 
   requiresProcessRestart(source: string): boolean {
-    const normalized = resolve(source);
+    const normalized = normalizeSourcePath(source);
     const packageRoot = nearestWatchRoot(this.#watchRoots, normalized);
     // Installed packages and external paths are intentionally not watched.
     // The HMR coordinator turns this into a visible process restart reason.
@@ -379,7 +380,7 @@ function isNodeModulesSource(root: string, source: string): boolean {
 }
 
 function normalizeWatchRoots(roots: readonly string[]): readonly string[] {
-  const sorted = [...new Set(roots.map((root) => resolve(root)))].sort(
+  const sorted = [...new Set(roots.map((root) => normalizeSourcePath(root)))].sort(
     (left, right) => left.length - right.length,
   );
   return Object.freeze(sorted.filter((root, index) =>

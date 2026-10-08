@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "platform": "napcat",
+  "mode": "ws",
+  "targets": [
+    {
+      "alias": "private-a",
+      "adapter": "root/napcat",
+      "endpoint": "test-bot-a",
+      "kind": "private",
+      "id": "REPLACE_LOCAL_TEST_CHAT_ID_A"
+    },
+    {
+      "alias": "private-b",
+      "adapter": "root/napcat",
+      "endpoint": "test-bot-b",
+      "kind": "private",
+      "id": "REPLACE_LOCAL_TEST_CHAT_ID_B"
+    }
+  ],
+  "actions": [
+    "reply-text",
+    "reply-image",
+    "reply-quote",
+    "reply-recall",
+    "reply-interaction",
+    "account-marker",
+    "reply-markdown",
+    "reply-button",
+    "reply-share"
+  ],
+  "minIntervalMs": 5000,
+  "maxSends": 120,
+  "eventsPath": "/absolute/local/private-evidence.jsonl",
+  "soak": {
+    "minConfirmed": 96,
+    "maxGapMs": 900000,
+    "maxRssGrowthBytes": 33554432
+  },
+  "bridge": {
+    "name": "NapCat",
+    "version": "REPLACE_WITH_ACTUAL_BRIDGE_VERSION"
+  }
+}

@@ -37,6 +37,7 @@ export interface ToolDescriptor {
 }
 
 export class ToolIndex {
+  readonly $projection = 'zhin.tool-index/1' as const;
   readonly #index: OwnerCapabilityIndex<AgentToolDefinition>;
 
   constructor(
@@ -63,8 +64,15 @@ export class ToolIndex {
     name: string,
     input: TInput,
     invocation: ToolInvocationContext,
+    operationSnapshot: RuntimeSnapshot = this.snapshot,
   ): Promise<TResult> {
-    const entry = this.#index.resolve(requester, name);
+    // An unchanged projection may be reused; each operation owns its snapshot.
+    const index = operationSnapshot === this.snapshot
+      ? this.#index
+      : new OwnerCapabilityIndex(
+        this.#index.entries().map((entry) => entry.slot), operationSnapshot,
+      );
+    const entry = index.resolve(requester, name);
     if (!entry) throw new Error(`Unknown Agent Tool ${name} for ${requester}`);
     const parsed = parseToolInputSchema(entry.slot.definition.inputSchema, input);
     if (!parsed.ok) {
@@ -74,7 +82,7 @@ export class ToolIndex {
     if (expectedAdapter && invocation.client?.adapter !== expectedAdapter) {
       throw new Error(`Agent Tool ${entry.qualifiedName} requires adapter ${expectedAdapter}`);
     }
-    const capability = createCapabilityContext(this.snapshot, entry.owner);
+    const capability = createCapabilityContext(operationSnapshot, entry.owner);
     const context = {
       ...capability,
       signal: invocation.signal,
@@ -132,4 +140,10 @@ function toDescriptor(entry: OwnerCapabilityEntry<AgentToolDefinition>): ToolDes
     placement: definition.placement,
     source: entry.source,
   });
+}
+
+/** Recognize the versioned projection across generation module identities. */
+export function isToolIndex(value: unknown): value is ToolIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.tool-index/1';
 }

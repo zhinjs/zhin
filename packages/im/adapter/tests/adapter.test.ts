@@ -19,6 +19,7 @@ import {
 import adapterFeature, {
   AdapterIndex,
   Endpoint,
+  retireEndpoint,
   adapterFeatureId,
   defineAdapter as defineAdapterContract,
   endpointEventGatewayToken,
@@ -42,6 +43,7 @@ type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature
 
 class TestEndpoint extends Endpoint<object> {
   readonly client: object;
+  get transportState(): NonNullable<Endpoint['transportState']> { return 'open'; }
 
   constructor(surface: object) {
     super();
@@ -536,6 +538,50 @@ describe('Adapter Feature', () => {
     ]));
   });
 
+  it('handles both promises when a synchronous Endpoint start aborts and throws', async () => {
+    const controller = new AbortController();
+    const cleanup = vi.fn();
+    const originalError = new Error('synchronous startup failure');
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-abort', source: '/adapters/sync-abort/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({
+        start: () => {
+          controller.abort(new Error('startup cancelled'));
+          throw originalError;
+        },
+        stop: cleanup,
+      }) }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      await expect(index.activate(controller.signal)).rejects.toBe(originalError);
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(unhandled).not.toHaveBeenCalled();
+      expect(cleanup).toHaveBeenCalledOnce();
+    } finally {
+      process.off('unhandledRejection', unhandled);
+      await index.stop();
+    }
+  });
+
+  it('does not invoke deferred Endpoint start after cancellation already stopped its record', async () => {
+    const controller = new AbortController();
+    const start = vi.fn();
+    const cleanup = vi.fn();
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'cancel-before-start', source: '/adapters/cancel-before-start/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({ start, stop: cleanup }) }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const starting = index.start(controller.signal);
+    controller.abort(new Error('cancelled before adapter invocation'));
+    await expect(starting).rejects.toThrow('cancelled before adapter invocation');
+    expect(start).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it('fails Endpoint creation closed and disposes already-created candidates', async () => {
     const events: string[] = [];
     const root = rootPluginId();
@@ -566,6 +612,30 @@ describe('Adapter Feature', () => {
     await expect(createAdapterIndex([broken, good], snapshot([good, broken])))
       .rejects.toThrow('create failed');
     expect(events).toEqual(['stop-good']);
+  });
+
+  it('releases an endpoint returned after prepare cancellation', async () => {
+    const controller = new AbortController();
+    const stop = vi.fn();
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'late', source: '/adapters/late/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: async () => {
+        controller.abort(new Error('cancel prepare'));
+        return { stop };
+      } }),
+    });
+    await expect(AdapterIndex.create([slot], snapshot([slot]), controller.signal)).rejects.toThrow('cancel prepare');
+    expect(stop).toHaveBeenCalledOnce();
+  });
+
+  it('releases the current factory result when outbound validation fails', async () => {
+    const stop = vi.fn();
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'invalid', source: '/adapters/invalid/index.ts',
+      definition: defineAdapter({ capabilities: ['outbound'], create: () => ({ stop }) }),
+    });
+    await expect(createAdapterIndex([slot], snapshot([slot]))).rejects.toThrow('send() is missing');
+    expect(stop).toHaveBeenCalledOnce();
   });
 
   it('waits for every required Endpoint to become ready before activation completes', async () => {
@@ -847,6 +917,130 @@ describe('Adapter Feature', () => {
     await store.close();
   });
 
+  it('bounds candidate events and exposes overflow and replay failures without payloads', async () => {
+    class PublishingEndpoint extends TestEndpoint {
+      publish() { return this.emit('message.receive', { content: 'private payload' }); }
+    }
+    const endpoint = new PublishingEndpoint({});
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'buffer', source: '/adapters/buffer/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+    });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      receive: async () => { throw new Error('private error'); },
+    }]]));
+    const index = await createAdapterIndex([slot], candidate);
+    for (let i = 0; i < 257; i += 1) await endpoint.publish();
+    expect(endpoint.eventDiagnostics).toEqual({ buffered: 256, dropped: 1, dispatchFailures: 0 });
+    const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
+    await vi.waitFor(() => expect(endpoint.eventDiagnostics.dispatchFailures).toBe(256));
+    expect(index.describe()[0]?.eventDiagnostics).toEqual({ buffered: 0, dropped: 1, dispatchFailures: 256 });
+    await store.close();
+  });
+
+  it('settles every reliable buffered event when a gateway throws synchronously', async () => {
+    class ReliableEndpoint extends TestEndpoint {
+      publish() { return this.emitAccepted('message.receive', {}); }
+    }
+    const endpoint = new ReliableEndpoint({});
+    let count = 0;
+    const receive = vi.fn(() => { if (++count === 1) throw new Error('sync receive failure'); return Promise.resolve('accepted'); });
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-buffer', source: '/adapters/sync-buffer/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }) });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+    const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
+    const first = endpoint.publish(); const failed = expect(first).rejects.toThrow('dispatch failed');
+    const second = endpoint.publish();
+    const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
+    await failed; await expect(second).resolves.toBe('accepted');
+    expect(receive).toHaveBeenCalledTimes(2);
+    expect(endpoint.eventDiagnostics.dispatchFailures).toBe(1);
+    await store.close();
+  });
+
+  it('does not confirm queued events if retirement occurs inside the first dispatch', async () => {
+    class ReliableEndpoint extends TestEndpoint {
+      publish() { return this.emitAccepted('message.receive', {}); }
+    }
+    const endpoint = new ReliableEndpoint({});
+    const receive = vi.fn(() => { retireEndpoint(endpoint); return Promise.resolve('entered before retirement'); });
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'retiring-buffer', source: '/adapters/retiring-buffer/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }) });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, { receive }]]));
+    const index = await createAdapterIndex([slot], candidate); await index.start(); index.open();
+    const first = endpoint.publish(), second = endpoint.publish();
+    const rejected = expect(second).rejects.toThrow('retired before event admission');
+    const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
+    await expect(first).resolves.toBe('entered before retirement'); await rejected;
+    expect(receive).toHaveBeenCalledOnce(); await store.close();
+  });
+
+  it('reports unobserved compact endpoint health as unknown after connect resolves', async () => {
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'unobserved', source: '/adapters/unobserved/index.ts',
+      definition: defineAdapterContract({ capabilities: ['inbound'], create: () => ({ client: {}, connect() {} }) }) });
+    const index = await createAdapterIndex([slot], snapshot([slot])); await index.start(); index.open();
+    expect(index.describe()[0]).toMatchObject({ admitted: true, connected: false, status: 'offline', transportState: 'unknown' });
+    await index.stop(); expect(index.describe()[0]).toMatchObject({ connected: false, transportState: 'stopped' });
+  });
+
+  it('settles start cancellation when endpoint stop throws synchronously', async () => {
+    const controller = new AbortController();
+    const stop = vi.fn(() => { throw new Error('sync stop failure'); });
+    let entered = false;
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'sync-stop', source: '/adapters/sync-stop/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => ({ start() { entered = true; return new Promise(() => {}); }, stop }) }) });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const starting = index.start(controller.signal);
+    const rejected = expect(starting).rejects.toThrow('cleanup');
+    await vi.waitFor(() => expect(entered).toBe(true)); controller.abort(new Error('cancelled'));
+    await rejected; expect(stop).toHaveBeenCalled();
+  });
+
+  it('does not acknowledge reliable candidate events until actual dispatch completes', async () => {
+    class ReliableEndpoint extends TestEndpoint {
+      publish() { return this.emitAccepted('message.receive', {}); }
+    }
+    const endpoint = new ReliableEndpoint({});
+    let finish!: () => void;
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'reliable', source: '/adapters/reliable/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+    });
+    const candidate = snapshot([slot], undefined, new Map([[endpointEventGatewayToken.id, {
+      receive: () => new Promise<void>((resolve) => { finish = resolve; }),
+    }]]));
+    const index = await createAdapterIndex([slot], candidate);
+    await index.start(); index.open();
+    const acknowledged = vi.fn();
+    const publishing = endpoint.publish().then(acknowledged);
+    await Promise.resolve();
+    expect(acknowledged).not.toHaveBeenCalled();
+    const store = new SnapshotStore({ ...snapshotState(candidate), projections: new Map([[adapterFeatureId, index]]) });
+    expect(acknowledged).not.toHaveBeenCalled();
+    finish(); await publishing;
+    expect(acknowledged).toHaveBeenCalledOnce();
+    await store.close();
+  });
+
+  it('rejects reliable candidate events on overflow and rollback', async () => {
+    class ReliableEndpoint extends TestEndpoint {
+      publish() { return this.emitAccepted('message.receive', {}); }
+    }
+    const endpoint = new ReliableEndpoint({});
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'reliable', source: '/adapters/reliable/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => endpoint }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    const first = endpoint.publish();
+    const firstResult = first.catch((error: Error) => error.message);
+    const buffered = Array.from({ length: 256 }, () => endpoint.publish().catch((error: Error) => error.message));
+    expect(await firstResult).toContain('overflow');
+    await index.stop();
+    expect(await Promise.all(buffered)).toEqual(Array(256).fill('Endpoint generation retired before event admission'));
+    await expect(endpoint.publish()).rejects.toThrow('retired');
+  });
+
   it('replays pre-commit endpoint events after admission opens', async () => {
     const root = rootPluginId();
     const received: EndpointEvent[] = [];
@@ -936,6 +1130,30 @@ describe('Adapter Feature', () => {
     expect(index.describe()[0]).toMatchObject({ connected: true, status: 'online' });
     expect(index.resolve('sandbox', 'sandbox')).toBe(slot.id);
     expect(index.resolve('missing', 'sandbox')).toBeUndefined();
+  });
+
+  it('separates generation admission from live transport health', async () => {
+    let transport: 'open' | 'reconnecting' | 'closed' = 'open';
+    class LiveEndpoint extends TestEndpoint {
+      override get transportState() { return transport; }
+    }
+    const slot = createCapabilitySlot({
+      owner: rootPluginId(), feature: adapterFeatureId, localName: 'live',
+      source: '/adapters/live/index.ts',
+      definition: defineAdapter({ capabilities: ['inbound'], create: () => new LiveEndpoint({}) }),
+    });
+    const index = await createAdapterIndex([slot], snapshot([slot]));
+    await index.start();
+    index.open();
+    expect(index.describe()[0]).toMatchObject({ admitted: true, connected: true, transportState: 'open' });
+    transport = 'reconnecting';
+    expect(index.describe()[0]).toMatchObject({ admitted: true, connected: false, phase: 'reconnecting' });
+    transport = 'closed';
+    expect(index.describe()[0]).toMatchObject({ admitted: true, connected: false, status: 'offline' });
+    transport = 'open';
+    expect(index.describe()[0]?.connected).toBe(true);
+    await index.stop();
+    expect(index.describe()[0]).toMatchObject({ admitted: false, connected: false, transportState: 'stopped' });
   });
 
   it('resolves Console pairs by the live Endpoint identity (bot uin)', async () => {

@@ -1,11 +1,10 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { Endpoint, createEndpointLifecycle, type EndpointLifecycle, type EndpointSendRequest, type EndpointTransportState } from 'zhin.js/adapter';
 /**
  * EmailEndpoint — lifecycle, SMTP outbound, IMAP inbound polling.
  */
 import { mkdir, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { simpleParser } from 'mailparser';
-import { type EndpointSendRequest } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import {
@@ -27,6 +26,7 @@ import {
   type EmailSmtpTransport,
 } from './transport.js';
 import { EmailClient } from './client.js';
+import { requireSmtpAcceptance, smtpDeliveryError } from './delivery.js';
 
 export interface EmailEndpointOptions {
   readonly id: CapabilityId;
@@ -46,10 +46,14 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
   readonly #options: EmailEndpointOptions;
   #smtp: EmailSmtpTransport | null = null;
   #imap: EmailImapTransport | null = null;
+  #imapOwner?: object;
   #checkTimer: NodeJS.Timeout | null = null;
-  #reconnectTimer: NodeJS.Timeout | null = null;
-  #reconnectAttempts = 0;
-  #checking = false;
+  readonly #lifecycle: EndpointLifecycle;
+  readonly #seenMail = new Map<string, number>();
+  #checkOwner?: object;
+  #mailboxValidity?: string;
+  readonly #pendingMail = new Map<string, Promise<void>>();
+  get transportState(): EndpointTransportState { return this.#lifecycle.state; }
   #open = false;
   #started = false;
 
@@ -57,40 +61,60 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
     super();
     this.#logger = getAdapterLogger('email', options.config.id);
     this.#options = options;
+    this.#lifecycle = createEndpointLifecycle({ name: options.config.id, reconnect: { initialIntervalMs: options.config.imap.reconnectInterval, maxIntervalMs: 300_000, jitterMs: 0 } });
     this.client = new EmailClient(() => this.#smtp, () => this.#imap);
   }
 
   async start(): Promise<void> {
-    if (this.#started) return;
-    this.#started = true;
-    const { smtp, imap, id } = this.#options.config;
-    try {
-      this.#smtp = await (this.#options.createSmtp?.(smtp) ?? defaultCreateSmtp(smtp));
-      await this.#smtp.verify();
-      this.#logger.debug(formatCompact({ mode: 'smtp' }));
-
-      this.#imap = this.#options.createImap?.(imap) ?? defaultCreateImap(imap);
-      this.#setupImapListeners(this.#imap);
-      await new Promise<void>((resolve, reject) => {
-        this.#imap!.once('ready', () => {
-          void this.#emitPlatformEvent('imap.ready', Object.freeze({}));
-          resolve();
+    await this.#lifecycle.start(async handle => {
+      this.#started = true;
+      let cancelled = false;
+      const connectionOwner = {};
+      let imap: EmailImapTransport | undefined;
+      let smtp: EmailSmtpTransport | undefined;
+      let rejectConnection: ((error: Error) => void) | undefined;
+      const cleanup = () => {
+        if (cancelled) return;
+        cancelled = true;
+        rejectConnection?.(new Error('Email connection stopped'));
+        if (this.#imapOwner === connectionOwner) { this.#imap = null; this.#imapOwner = undefined; this.#checkOwner = undefined; }
+        if (this.#smtp === smtp) this.#smtp = null;
+        try { imap?.end(); } catch { /* best effort */ }
+        try { smtp?.close(); } catch { /* best effort */ }
+      };
+      handle.onForceClose(cleanup);
+      try {
+        smtp = await (this.#options.createSmtp?.(this.#options.config.smtp) ?? defaultCreateSmtp(this.#options.config.smtp));
+        if (cancelled) { smtp.close(); return; }
+        this.#smtp = smtp;
+        await smtp.verify();
+        if (cancelled) { smtp.close(); return; }
+        imap = this.#options.createImap?.(this.#options.config.imap) ?? defaultCreateImap(this.#options.config.imap);
+        this.#imap = imap; this.#imapOwner = connectionOwner;
+        const ownedImap = imap;
+        let ready = false;
+        await new Promise<void>((resolve, reject) => {
+          rejectConnection = reject;
+          ownedImap.on('ready', () => { if (cancelled || this.#imapOwner !== connectionOwner) return; ready = true; void this.#emitPlatformEvent('imap.ready', Object.freeze({})); resolve(); });
+          ownedImap.on('mail', () => { if (!cancelled && this.#imapOwner === connectionOwner) { void this.#emitPlatformEvent('imap.mail', Object.freeze({})); void this.#checkForNewEmails(); } });
+          const disconnected = (error?: unknown) => {
+            if (cancelled || this.#imapOwner !== connectionOwner) return;
+            if (!ready) reject(error instanceof Error ? error : new Error('IMAP closed before ready'));
+            cleanup(); handle.notifyClosed();
+          };
+          ownedImap.on('error', error => { if (!cancelled) void this.#emitPlatformEvent('imap.error', error); disconnected(error); });
+          ownedImap.on('end', () => { if (!cancelled) void this.#emitPlatformEvent('imap.end', Object.freeze({})); disconnected(); });
+          ownedImap.on('close', disconnected);
+          ownedImap.connect();
         });
-        this.#imap!.once('error', (error) => reject(error));
-        this.#imap!.connect();
-      });
-      this.#logger.debug(formatCompact({ mode: 'imap' }));
-      this.#reconnectAttempts = 0;
-      this.#startEmailCheck();
-    } catch (error) {
-      await this.stop();
-      this.#logger.error('Failed to connect email services:', error);
-      throw error;
-    }
+        if (!cancelled) { this.#startEmailCheck(); this.#logger.info(formatCompact({ op: 'connect', endpoint: this.#options.config.id, mode: 'smtp-imap' })); }
+      } catch (error) { cleanup(); if (!cancelled || this.#lifecycle.started) throw error; }
+    });
   }
 
   open(): void {
     this.#open = true;
+    void this.#checkForNewEmails();
   }
 
   close(): void {
@@ -101,14 +125,12 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
     this.#open = false;
     // 先复位 #started，避免 imap.end() 触发的 'end' 事件又武装重连定时器
     this.#started = false;
-    if (this.#checkTimer) {
-      clearInterval(this.#checkTimer);
-      this.#checkTimer = null;
-    }
-    if (this.#reconnectTimer) {
-      clearTimeout(this.#reconnectTimer);
-      this.#reconnectTimer = null;
-    }
+    await this.#lifecycle.stop();
+    this.#checkOwner = undefined;
+    this.#seenMail.clear();
+    this.#pendingMail.clear();
+    this.#mailboxValidity = undefined;
+    if (this.#checkTimer) { clearInterval(this.#checkTimer); this.#checkTimer = null; }
     if (this.#imap) {
       try {
         this.#imap.end();
@@ -134,9 +156,16 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
       from: this.#options.config.smtp.auth.user,
       to: target,
     });
-    const info = await this.client.sendMail(mailOptions);
-    this.#logger.debug(formatCompact({ op: 'email_send', target, messageId: info.messageId }));
-    return info.messageId || '';
+    try {
+      const info = await this.client.sendMail(mailOptions);
+      const messageId = requireSmtpAcceptance(info, target);
+      this.#logger.debug(formatCompact({ op: 'email_send', messageId }));
+      return messageId;
+    } catch (error) {
+      const failure = smtpDeliveryError(error);
+      this.#logger.warn(formatCompact({ op: 'smtp_delivery_failed', code: failure.code, disposition: failure.disposition }));
+      throw failure;
+    }
   }
 
   /** Test / internal: admit a parsed mail when the endpoint is open. */
@@ -152,8 +181,9 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
     });
   }
 
-  async #admitWithAttachments(email: EmailMessage): Promise<void> {
+  async #admitWithAttachments(email: EmailMessage, current: () => boolean = () => this.#open): Promise<void> {
     const savedAttachments = await this.#downloadAttachments(email);
+    if (!current()) return;
     const content = formatInboundContent(email);
     const sender = email.from;
     const conversation = emailInboundConversation(String(this.#options.id), email);
@@ -218,27 +248,6 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
     return saved;
   }
 
-  #setupImapListeners(imap: EmailImapTransport): void {
-    imap.on('mail', () => {
-      void this.#emitPlatformEvent('imap.mail', Object.freeze({}));
-      void this.#checkForNewEmails();
-    });
-    imap.on('error', (error) => {
-      void this.#emitPlatformEvent('imap.error', error);
-      this.#logger.error('IMAP error:', error);
-      // imap 通常在 error 后紧跟 end；两处都调度，靠已有定时器去重
-      this.#scheduleImapReconnect(imap);
-    });
-    imap.on('end', () => {
-      void this.#emitPlatformEvent('imap.end', Object.freeze({}));
-      this.#logger.debug(formatCompact({
-          op: 'disconnect',
-        mode: 'imap',
-      }));
-      this.#scheduleImapReconnect(imap);
-    });
-  }
-
   async #emitPlatformEvent(name: string, event: unknown): Promise<void> {
     await this.emitPlatform(name, event).catch((error) => {
       this.#logger.warn(formatCompact({
@@ -247,61 +256,6 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
         error: error instanceof Error ? error.message : String(error),
       }));
     });
-  }
-
-  /** IMAP 断线后按指数退避重建连接并恢复监听（基数 reconnectInterval，封顶 5 分钟）。 */
-  #scheduleImapReconnect(source?: EmailImapTransport): void {
-    // A replaced transport may emit a late `end` after its earlier `error`
-    // already caused a successful reconnect. Only the currently owned IMAP
-    // connection may arm the next generation's reconnect timer.
-    if (!this.#started || this.#reconnectTimer || (source && this.#imap !== source)) return;
-    const base = this.#options.config.imap.reconnectInterval;
-    const delay = Math.min(base * 2 ** this.#reconnectAttempts, 300_000);
-    this.#reconnectAttempts += 1;
-    this.#logger.warn(formatCompact({
-      op: 'imap_reconnect_scheduled',
-      endpoint: this.#options.config.id,
-      reconnect_ms: delay,
-    }));
-    this.#reconnectTimer = setTimeout(() => {
-      this.#reconnectTimer = null;
-      void this.#reconnectImap();
-    }, delay);
-  }
-
-  async #reconnectImap(): Promise<void> {
-    if (!this.#started) return;
-    let imap: EmailImapTransport | undefined;
-    try {
-      const nextImap = this.#options.createImap?.(this.#options.config.imap)
-        ?? defaultCreateImap(this.#options.config.imap);
-      imap = nextImap;
-      this.#imap = nextImap;
-      this.#setupImapListeners(nextImap);
-      await new Promise<void>((resolve, reject) => {
-        nextImap.once('ready', () => {
-          void this.#emitPlatformEvent('imap.ready', Object.freeze({ reconnect: true }));
-          resolve();
-        });
-        nextImap.once('error', (error) => reject(error));
-        nextImap.connect();
-      });
-      this.#reconnectAttempts = 0;
-      this.#logger.info(formatCompact({
-        op: 'imap_reconnect',
-        endpoint: this.#options.config.id,
-        ok: true,
-      }));
-      void this.#checkForNewEmails();
-    } catch (error) {
-      this.#logger.warn(formatCompact({
-        op: 'imap_reconnect',
-        endpoint: this.#options.config.id,
-        ok: false,
-        error: error instanceof Error ? error.message : String(error),
-      }));
-      this.#scheduleImapReconnect(imap);
-    }
   }
 
   #startEmailCheck(): void {
@@ -313,51 +267,58 @@ export class EmailEndpoint extends Endpoint<EmailClient> {
   }
 
   async #checkForNewEmails(): Promise<void> {
-    if (!this.#imap || !this.#started || this.#checking) return;
-    // 在飞锁：定时器与 mail 事件可能并发触发，串行化避免重复 admit
-    this.#checking = true;
+    const imap = this.#imap; const connectionOwner = this.#imapOwner;
+    if (!imap || !this.#started || !this.#open || this.#checkOwner) return;
+    const owner = {}; this.#checkOwner = owner;
+    const current = () => this.#imapOwner === connectionOwner && this.#imap === imap && this.#started && this.#open;
+    const pending: Promise<void>[] = [];
     try {
       await new Promise<void>((resolve, reject) => {
-        this.#imap!.openBox(this.#options.config.imap.mailbox, false, (error) => {
+        imap.openBox(this.#options.config.imap.mailbox, false, (error, box) => {
           if (error) return reject(error);
-          this.#imap!.search(['UNSEEN'], (searchError, results) => {
+          if (!current()) return resolve();
+          const validity = (box as { uidvalidity?: unknown } | undefined)?.uidvalidity;
+          if (typeof validity === 'number' || typeof validity === 'string') {
+            const identity = String(validity);
+            if (this.#mailboxValidity !== identity) { this.#seenMail.clear(); this.#pendingMail.clear(); this.#mailboxValidity = identity; }
+          }
+          imap.search(['UNSEEN'], (searchError, results) => {
             if (searchError) return reject(searchError);
-            if (!results.length) return resolve();
-            const fetch = this.#imap!.fetch(results, {
-              bodies: '',
-              markSeen: this.#options.config.imap.markSeen,
-            });
-            fetch.on('message', (msg, seqno) => {
-              this.#handleImapMessage(msg, seqno);
-            });
-            fetch.once('error', (fetchError) => reject(fetchError));
-            fetch.once('end', () => resolve());
+            if (!current() || !results.length) return resolve();
+            const fetch = imap.fetch(results, { bodies: '', markSeen: this.#options.config.imap.markSeen });
+            fetch.on('message', (msg) => { pending.push(this.#handleImapMessage(msg, current, validity).catch(error => { this.#logger.warn(formatCompact({ op: 'email_admission_failed', error: error instanceof Error ? error.message : String(error) })); })); });
+            fetch.once('error', reject); fetch.once('end', () => resolve());
           });
         });
       });
-    } catch (error) {
-      this.#logger.error('Error checking for new emails:', error);
-    } finally {
-      this.#checking = false;
-    }
+      await Promise.all(pending);
+    } catch (error) { this.#logger.warn(formatCompact({ op: 'email_check_failed', error: error instanceof Error ? error.message : String(error) })); }
+    finally { if (this.#checkOwner === owner) this.#checkOwner = undefined; }
   }
 
-  #handleImapMessage(msg: EmailImapFetchMessage, _seqno: number): void {
-    let body = '';
-    let uid = 0;
-    msg.on('body', (stream) => {
-      stream.on('data', (chunk: Buffer | string) => {
-        body += typeof chunk === 'string' ? chunk : chunk.toString('utf8');
-      });
-    });
-    msg.once('attributes', (attrs) => {
-      uid = attrs.uid ?? 0;
-    });
-    msg.once('end', () => {
-      void simpleParser(body).then((parsed) => {
-        this.admit(parseEmailMessage(parsed, uid));
-      }).catch((error) => {
-        this.#logger.error('Error parsing email:', error);
+  #handleImapMessage(msg: EmailImapFetchMessage, current: () => boolean, validity: unknown): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      let body = ''; let uid = 0;
+      msg.on('body', stream => { stream.on('data', (chunk: Buffer | string) => { body += chunk.toString(); }); });
+      msg.once('attributes', attrs => { uid = attrs.uid ?? 0; });
+      msg.once('end', () => {
+        void simpleParser(body).then(async parsed => {
+          if (!current()) return;
+          const key = (typeof validity === 'number' || typeof validity === 'string') && uid > 0
+            ? JSON.stringify([this.#options.config.imap.mailbox, String(validity), uid]) : undefined;
+          const now = Date.now();
+          for (const [id, time] of this.#seenMail) if (now - time > 24 * 60 * 60 * 1000) this.#seenMail.delete(id);
+          if (key && this.#seenMail.has(key)) return;
+          const email = parseEmailMessage(parsed, uid);
+          const existing = key ? this.#pendingMail.get(key) : undefined;
+          if (existing) return existing;
+          if (key && this.#seenMail.size + this.#pendingMail.size >= 10_000) throw new Error('Email admission dedup capacity exhausted');
+          void this.#emitPlatformEvent('mail', email);
+          const admission = this.#admitWithAttachments(email, current);
+          if (key) this.#pendingMail.set(key, admission);
+          try { await admission; if (key && current()) this.#seenMail.set(key, Date.now()); }
+          finally { if (key && this.#pendingMail.get(key) === admission) this.#pendingMail.delete(key); }
+        }).then(resolve, reject);
       });
     });
   }

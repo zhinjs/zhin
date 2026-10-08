@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS, HOST_CONFIG_SCHEMA } from '@zhin.js/runtime';
 import { jsonSchemaToConsoleSchema } from './console-schema.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 
@@ -35,7 +35,18 @@ export class PluginSchemaCatalog {
     packageMap: ReadonlyMap<string, string>,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
-      return jsonSchemaToConsoleSchema({ type: 'object', additionalProperties: true });
+      if (pluginName === 'plugin') {
+        try {
+          return jsonSchemaToConsoleSchema(JSON.parse(await readFile(
+            join(this.#projectRoot, 'schema.json'), 'utf8',
+          )));
+        } catch {
+          return null;
+        }
+      }
+      return jsonSchemaToConsoleSchema(
+        HOST_CONFIG_SCHEMA.properties[pluginName as keyof typeof HOST_CONFIG_SCHEMA.properties],
+      );
     }
     const raw = await this.#loadRawSchema(pluginName, packageMap);
     return raw == null ? null : jsonSchemaToConsoleSchema(raw);

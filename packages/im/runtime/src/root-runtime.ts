@@ -1,3 +1,4 @@
+import { normalizeSourcePath } from './source-path.js';
 import { resolve } from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
 import {
@@ -159,7 +160,7 @@ export class RootRuntime {
   readonly #disabledPluginInstanceKeys: readonly string[];
 
   constructor(options: RootRuntimeOptions) {
-    this.#projectRoot = resolve(options.projectRoot);
+    this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#modules = options.modules;
     this.#environment = defineRuntimeEnvironment(options.environment);
     this.#environmentLayers = defineEnvironmentLayers(options.environmentVariables);
@@ -170,7 +171,7 @@ export class RootRuntime {
     this.#runtimeInputSources = new Set([
       ...(this.#configPort?.sources ?? []),
       ...(this.#environmentSource?.sources ?? []),
-    ].map((source) => resolve(source)));
+    ].map((source) => normalizeSourcePath(source)));
     this.#installResources = options.installResources;
     this.#isolation = options.isolation;
     this.#disabledPluginInstanceKeys = Object.freeze([...(options.disabledPluginInstanceKeys ?? [])]);
@@ -235,7 +236,7 @@ export class RootRuntime {
       modules: this.#modules,
       ownership: () => this.sourceOwnership,
       runtime: {
-        handlesSource: (source) => this.#runtimeInputSources.has(resolve(source)),
+        handlesSource: (source) => this.#runtimeInputSources.has(normalizeSourcePath(source)),
         reload: async (plan) => {
           const result = await this.#reloadPlan(plan);
           return isProcessPlan(result) ? result : undefined;
@@ -272,7 +273,7 @@ export class RootRuntime {
           ...plan,
           subtrees: collapseInvalidationSubtrees([...plan.subtrees, ...inputs.roots]),
           fallbacks: Object.freeze(plan.fallbacks.filter(
-            (fallback) => !inputs.inputSources.has(resolve(fallback.source)),
+            (fallback) => !inputs.inputSources.has(normalizeSourcePath(fallback.source)),
           )),
         })
       : plan;
@@ -354,14 +355,14 @@ export class RootRuntime {
     changed: readonly string[],
   ): Promise<RuntimeInputCandidate | ProcessInvalidationPlan | undefined> {
     const inputSources = new Set(
-      changed.map((source) => resolve(source)).filter((source) => this.#runtimeInputSources.has(source)),
+      changed.map((source) => normalizeSourcePath(source)).filter((source) => this.#runtimeInputSources.has(source)),
     );
     if (inputSources.size === 0 || !this.#model) return undefined;
     const configChanged = this.#configPort?.sources?.some(
-      (source) => inputSources.has(resolve(source)),
+      (source) => inputSources.has(normalizeSourcePath(source)),
     ) ?? false;
     const environmentChanged = this.#environmentSource?.sources.some(
-      (source) => inputSources.has(resolve(source)),
+      (source) => inputSources.has(normalizeSourcePath(source)),
     ) ?? false;
     const configSnapshot = configChanged ? await this.#configPort?.read() : undefined;
     const document = configSnapshot?.document ?? requireConfigDocument(this.#configDocument);
@@ -381,7 +382,7 @@ export class RootRuntime {
     if (inputPlan.hostKeys.length > 0) {
       return Object.freeze({
         kind: 'process',
-        changed: Object.freeze([...changed].map((source) => resolve(source))),
+        changed: Object.freeze([...changed].map((source) => normalizeSourcePath(source))),
         reasons: Object.freeze(inputPlan.hostKeys.map(
           (key) => `Host configuration changed: ${key}`,
         )),
@@ -449,7 +450,7 @@ export class RootRuntime {
   #canPrepareSubtrees(plan: GenerationInvalidationPlan): boolean {
     if (plan.subtrees.length === 0 || plan.subtrees.includes(rootPluginId())) return false;
     return plan.changed.every((source) => {
-      if (this.#runtimeInputSources.has(resolve(source))) return true;
+      if (this.#runtimeInputSources.has(normalizeSourcePath(source))) return true;
       const records = this.sourceOwnership.recordsFor(source);
       return records.length > 0 && records.every(
         (record) => record.role === 'plugin' || record.role === 'schema',
@@ -770,6 +771,7 @@ class GenerationAssembler {
       }
       const state = projected.state;
       const snapshot = createSnapshotView(this.generation, state);
+      this.#plugins.bindCandidateSnapshot(snapshot);
       const ownership = SourceOwnershipIndex.fromGeneration(
         this.graph,
         snapshot,

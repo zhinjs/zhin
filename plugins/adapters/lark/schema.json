@@ -89,6 +89,50 @@
           "id": {
             "type": "string",
             "description": "Lark bot name"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "webhook",
+              "websocket"
+            ],
+            "default": "webhook"
+          },
+          "streamProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\s/:@?#]+$"
+              }
+            },
+            "required": [
+              "port",
+              "serverName"
+            ],
+            "description": "WSS故障验收：仅TCP固定loopback，保留TLS身份"
+          },
+          "webApiProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "port"
+            ],
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "description": "默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立"
           }
         },
         "required": [
@@ -102,6 +146,29 @@
       "type": "string",
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "webhook",
+        "websocket"
+      ],
+      "default": "webhook"
+    },
+    "webApiProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "port"
+      ],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      },
+      "description": "默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立"
     }
   },
   "required": [

@@ -340,7 +340,7 @@ describe('line plugin runtime adapter', () => {
     await endpoint.stop();
   });
 
-  it('falls back to Push API when Reply API returns 400 (invalid/expired token)', async () => {
+  it('does not automatically push after Reply API rejects a token', async () => {
     const http = createHttpHost({ host: '127.0.0.1', port: 0 });
     hosts.push(http);
     const fetchFn = vi.fn(async (url: string) => {
@@ -371,11 +371,10 @@ describe('line plugin runtime adapter', () => {
     await http.listen();
     endpoint.open();
     endpoint.admit(textEvent());
-    const messageId = await endpoint.send({ conversation: userConversation, payload: 'pong' });
-    expect(messageId).toBe('push-id');
+    await expect(endpoint.send({ conversation: userConversation, payload: 'pong' })).rejects.toMatchObject({ disposition: 'rejected' });
     const calledUrls = fetchFn.mock.calls.map((call) => String(call[0]));
     expect(calledUrls.some((url) => url.includes('/message/reply'))).toBe(true);
-    expect(calledUrls.some((url) => url.includes('/message/push'))).toBe(true);
+    expect(calledUrls.some((url) => url.includes('/message/push'))).toBe(false);
     await endpoint.stop();
   });
 

@@ -53,7 +53,9 @@ pnpm add @zhin.js/pagemanager
 `pages.manifest.json`，生产 loader 不记录构建机绝对路径。
 
 TypeScript 是 optional peer，不进入默认 PageManager 或 Plugin Runtime 的生产闭包。
-选择该子路径的构建 workspace 需要显式安装兼容版本的 `typescript`。
+导入该子路径或构造 builder 不会加载编译器；没有客户端 Page/Layout 的纯 JavaScript
+CLI 项目无需安装 TypeScript。实际解析 Page/Layout 元数据的构建 workspace 才需要
+显式安装兼容版本的 `typescript`，缺失时会返回明确的 optional peer 安装错误。
 
 ## 插件注册 Entry
 

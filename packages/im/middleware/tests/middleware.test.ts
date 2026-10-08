@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   childPluginId,
+  featureId,
   createCapabilitySlot,
   rootPluginId,
   type RuntimeSnapshot,
@@ -32,6 +33,34 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Middleware Feature', () => {
+  it('binds a reused projection to each operation snapshot while an old chain drains', async () => {
+    const root = rootPluginId();
+    const probe = featureId('test.operation-projection');
+    const observations: unknown[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slot = createCapabilitySlot({
+      owner: root, feature: middlewareFeatureId, localName: 'probe',
+      source: '/middlewares/probe/index.ts',
+      definition: defineMiddleware<{ delayed: boolean }>({
+        async handle(context, next) {
+          if (context.input.delayed) await gate;
+          observations.push([context.generation, context.project(probe)]);
+          await next();
+        },
+      }),
+    });
+    const old = { ...snapshot(root, undefined, [slot]), projections: new Map([[probe, 'old']]) };
+    const current = { ...old, generation: 2, projections: new Map([[probe, 'current']]) };
+    const index = new MiddlewareIndex([slot], old);
+    const draining = index.run({ delayed: true }, undefined, 'inbound', old);
+    await index.run({ delayed: false }, undefined, 'inbound', current);
+    expect(observations).toEqual([[2, 'current']]);
+    release();
+    await draining;
+    expect(observations).toEqual([[2, 'current'], [1, 'old']]);
+  });
+
   it('brands definitions and validates normalized phase/order metadata', () => {
     const middleware = defineMiddleware({ handle: (_context, next) => next() });
     expect(middleware.phase).toBe('before-dispatch');
@@ -127,6 +156,30 @@ describe('Middleware Feature', () => {
     const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
 
     await expect(index.run({})).rejects.toThrow('next() called more than once');
+  });
+
+  it('isolates concurrent chains and preserves an async terminal failure through unwind', async () => {
+    const root = rootPluginId();
+    const events: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const failure = new Error('terminal failed');
+    const slot = createCapabilitySlot({
+      owner: root, feature: middlewareFeatureId, localName: 'async', source: '/middlewares/async/index.ts',
+      definition: defineMiddleware<{ id: string }>({
+        async handle({ input }, next) {
+          try { await next(); } finally { events.push(`unwind:${input.id}`); }
+        },
+      }),
+    });
+    const index = new MiddlewareIndex([slot], snapshot(root, undefined, [slot]));
+    const failed = index.run({ id: 'failed' }, async () => { await gate; throw failure; });
+    const rejection = expect(failed).rejects.toBe(failure);
+    await index.run({ id: 'healthy' }, async () => { events.push('healthy'); });
+    expect(events).toEqual(['healthy', 'unwind:healthy']);
+    release();
+    await rejection;
+    expect(events).toEqual(['healthy', 'unwind:healthy', 'unwind:failed']);
   });
 
   it('filters by adapter before lazily resolving $client', async () => {

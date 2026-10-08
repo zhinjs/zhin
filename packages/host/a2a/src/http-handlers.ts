@@ -4,6 +4,12 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createHash } from 'node:crypto';
 import {
+  AgentCard,
+  Message,
+  Task,
+  SendMessageRequest,
+  StreamResponse,
+  ListTasksResponse,
   A2A_CONTENT_TYPE,
   A2A_VERSION_HEADER,
   Extensions,
@@ -73,7 +79,7 @@ export async function handleAgentCard(
   }
   try {
     const agentCard = await requestHandler.getAgentCard();
-    const body = JSON.stringify(agentCard);
+    const body = JSON.stringify(AgentCard.toJSON(agentCard));
     const etag = computeETag(body);
     res.setHeader('ETag', etag);
     res.setHeader('Cache-Control', 'public, max-age=3600');
@@ -82,7 +88,7 @@ export async function handleAgentCard(
       res.end();
       return;
     }
-    sendJson(res, 200, agentCard);
+    sendJson(res, 200, AgentCard.toJSON(agentCard));
   } catch (err) {
     sendJson(res, 500, { error: err instanceof Error ? err.message : String(err) });
   }
@@ -164,38 +170,41 @@ export async function handleRest(
   const transport = new RestTransportHandler(requestHandler);
   const context = buildServerContext(req);
   const method = req.method ?? 'GET';
-  const path = subPath.replace(/^\//, '');
+  // v1.0 uses unprefixed relative paths; retain the existing /v1 aliases.
+  const path = subPath.replace(/^\//, '').replace(/^v1\//, '');
 
   try {
     const agentCard = await requestHandler.getAgentCard();
     validateVersion(context.requestedVersion, agentCard, 'HTTP+JSON');
 
-    if (method === 'GET' && (path === '' || path === 'v1/card')) {
-      sendJson(res, 200, await transport.getAgentCard(), { 'Content-Type': A2A_CONTENT_TYPE });
+    if (method === 'GET' && (path === '' || path === 'card')) {
+      sendJson(res, 200, AgentCard.toJSON(await transport.getAgentCard()), { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
-    if (method === 'POST' && path === 'v1/message:send') {
+    if (method === 'POST' && path === 'message:send') {
       const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
-      const result = await transport.sendMessage(params as never, context);
-      sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
+      const result = await transport.sendMessage(SendMessageRequest.fromJSON(params), context);
+      sendJson(res, 200, 'messageId' in result
+        ? { message: Message.toJSON(result) }
+        : { task: Task.toJSON(result) }, { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
-    if (method === 'POST' && path === 'v1/message:stream') {
+    if (method === 'POST' && path === 'message:stream') {
       const params = preParsedBody !== undefined ? preParsedBody : await readA2aJsonBody(req);
-      const stream = await transport.sendMessageStream(params as never, context);
+      const stream = await transport.sendMessageStream(SendMessageRequest.fromJSON(params), context);
       for (const [key, value] of Object.entries(SSE_HEADERS)) {
         res.setHeader(key, value);
       }
       for await (const event of stream) {
-        res.write(formatSSEEvent(event));
+        res.write(formatSSEEvent(StreamResponse.toJSON(event)));
       }
       if (!res.writableEnded) res.end();
       return;
     }
 
-    const taskGet = path.match(/^v1\/tasks\/([^/]+)$/);
+    const taskGet = path.match(/^tasks\/([^/]+)$/);
     if (method === 'GET' && taskGet) {
       const taskId = taskGet[1];
       if (!taskId) {
@@ -206,11 +215,11 @@ export async function handleRest(
         ? new URL(req.url, 'http://localhost').searchParams.get('historyLength') ?? undefined
         : undefined;
       const result = await transport.getTask(taskId, context, historyLength ?? undefined);
-      sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
+      sendJson(res, 200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
-    const taskCancel = path.match(/^v1\/tasks\/([^/]+):cancel$/);
+    const taskCancel = path.match(/^tasks\/([^/]+):cancel$/);
     if (method === 'POST' && taskCancel) {
       const taskId = taskCancel[1];
       if (!taskId) {
@@ -218,16 +227,16 @@ export async function handleRest(
         return;
       }
       const result = await transport.cancelTask(taskId, context);
-      sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
+      sendJson(res, 200, Task.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 
-    if (method === 'GET' && path === 'v1/tasks') {
+    if (method === 'GET' && path === 'tasks') {
       const url = new URL(req.url ?? '/', 'http://localhost');
       const query: Record<string, string | undefined> = {};
       url.searchParams.forEach((v, k) => { query[k] = v; });
       const result = await transport.listTasks(query, context);
-      sendJson(res, 200, result, { 'Content-Type': A2A_CONTENT_TYPE });
+      sendJson(res, 200, ListTasksResponse.toJSON(result), { 'Content-Type': A2A_CONTENT_TYPE });
       return;
     }
 

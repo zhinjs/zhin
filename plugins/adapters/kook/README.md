@@ -95,7 +95,11 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 
 ## 迁移后出站能力变化
 
-迁移到 Plugin Runtime 后，出站统一经 `outboundMessageToken` 渲染并由 endpoint 编码为 KMarkdown（`sendChannelMsg` / `sendPrivateMsg`）。canonical `markdown` 保留格式；图片、视频、音频和文件仅有远程 URL 时可表示为 KMarkdown 链接。卡片消息与附件上传仍未接入统一出站通道。
+出站统一经 `outboundMessageToken` 渲染。canonical `markdown` 保留 KMarkdown；图片上传后以原生卡片保留图文混排；canonical `reply` 通过 SDK quote 参数传递。视频、音频和文件 URL 表示为链接，本地这些文件的上传尚未接线。
+
+canonical `keyboard` 映射为原生 Card `action-group`，每行 1–4 个按钮，`click: return-val` 将 payload 原样返回。WebSocket 和 Webhook 的 `message_btn_click` 事件进入可靠的 canonical `action` 消息段，携带实际点击人、会话和 `sourceMessageId`。按钮显示成功不能算交互通过，必须实际点击并核对回调。disabled 和 command 模式按钮当前明确 `unsupported_operation`。官方合同：[卡片按钮](https://developer.kookapp.cn/doc/cardmessage)、[按钮点击事件](https://developer.kookapp.cn/doc/event/user)。
+
+canonical `share` 映射为含标题、描述/正文与“打开链接”按钮的 Card；只支持 HTTP(S) URL，不代表平台原生应用/音乐名片。share 的 image/audio/app metadata 尚未接线，明确拒绝。实机分享验收需核对标题、描述与点击后的目标 URL。
 
 ## 故障排查
 
@@ -109,3 +113,28 @@ platform permit checker 由 `plugin.ts` 的 generation 生命周期注册；Capa
 ## 许可证
 
 MIT License
+
+### 图片与引用
+
+canonical reply 使用原生 `quote`，关联原消息 ID。canonical 图片（URL、本地路径、base64）先上传到 KOOK asset 接口，再用原生卡片发送；图片与文本混排按原顺序保留。上传失败不会用文字代替并确认成功，缺失真实消息 ID 为 unknown。文件/音视频暂仅支持既有 URL 链接，二进制上传会明确拒绝。
+
+撤回通过 canonical control 的完整 MessageRef 区分频道与私聊，并调用对应正式删除接口。transport 未实现删除或平台返回 false 时明确失败，不允许静默成功；直接调用 `recallMessage` 须同时传入 ConversationRef。
+# WSS 可控故障验收
+
+仓库通过局部 `kook-client@1.0.4` pnpm 补丁提供可选 `socketFactory` 与 `autoReconnect`；SDK 默认行为不变；补丁另提供 `handleProcessErrors`，Zhin 显式设 false，让框架管理进程错误，不扫描或删除其他全局监听。Zhin 关闭内部重连/DNS监视，由统一 Endpoint lifecycle 负责 start/stop/reconnect，SDK保留协议心跳和事件转换。停止会取消 pending hello，迟到 discovery 不会再建连接。此补丁需随 lockfile 安装，不是全局修改 `ws`。
+
+可选 `streamProxy: { port: 18443, serverName: "实际网关域名" }` 仅改 TCP 路由到 `127.0.0.1`，真实 WSS URL、Host、SNI 和证书链/域名校验保留；网关变化拒绝并只记录安全 hostname，不输出私有 URL/query 或回退直连。验收项目支持 `KOOK_STREAM_PROXY_PORT` / `KOOK_STREAM_PROXY_SERVER_NAME` 临时进程覆盖，需同时提供，留空正常直连。先以占位域名获取安全日志中的实际 gateway hostname，随后启动固定上游 `tcp-fault-proxy.mjs --upstream-host 实际网关域名 --upstream-port 443 --port 18443 --control-port 18444` 并同步 serverName，不覆盖已有 `.env`。
+
+正常入站后 POST `/cut`，观察 SDK断线和 lifecycle离开 open；POST `/recover` 后等待新连接 open，再发送唯一新 probe确认真实入站及可见回包。切断仅 WSS；HTTP discovery/出站仍直连，不能据此证明所有网络恢复、离线事件无损或发送重试。停止代理并移除临时覆盖后恢复常规运行。本地实际SDK/TLS回归与平台实机证据分开记录。
+
+受控重连使用原会话 URL、已处理 SN 与 session_id 恢复。收到 Resume ACK 前缓存离线事件；确认后依 SN 连续顺序派发，重复事件不再次进入业务链。服务器要求新会话时清除旧 SN 和未派发数据，重新发现网关并初始化缓存。已初始化会话恢复成功时复用路由缓存，避免重复加载成员；停止会取消 Hello/Resume 等待和后续重连。上述本地 TLS 回归不替代真实平台 cut/recover 验收。
+
+### 出站 HTTP 结果
+
+HTTP 408 与所有 5xx 保持 unknown，即使正文包含拒绝码也不认定明确未发送；其他 4xx 和成功 HTTP 响应中的非零平台 code 为 rejected。Runtime 在 Axios 正式 transformResponse 阶段保留 HTTP 状态语义，避免 SDK 错误转换丢掉状态。真实已安装 SDK + loopback HTTP fixture 验证单次 POST、不自动重发。Stream 故障代理不影响出站 API；API 专用测试需另行配置 Axios httpsAgent 固定 loopback 转发，并保持实际域名/SNI/证书校验，当前验收配置尚未暴露。
+
+### JSON API 故障验收代理
+
+可选 `apiProxy: { port: 18580 }` 使用 SDK Axios 实例正式 `httpsAgent` 扩展，仅将 `www.kookapp.cn:443` 的 TCP 路由到 `127.0.0.1`；原 Host、SNI、证书链及域名验证保留，拒绝其他目标和重定向，无自动直连回退。默认关闭。它与 `streamProxy` 独立，覆盖 SDK JSON API（含网关查询、初始化、消息发送/撤回），不覆盖适配器的 fetch 图片上传及外部媒体下载。Axios 正式 agent 配置见 https://axios-http.com/docs/req_config 。
+
+启动固定上游代理：`node scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host www.kookapp.cn --upstream-port 443 --port 18580 --control-port 18581`。验收项目可用 `KOOK_API_PROXY_PORT=18580 pnpm --filter platform-acceptance-bot dev:kook` 临时覆盖；不改 `.env`。POST 已提交后断线只能记 unknown，不自动重发；恢复后使用新探针样本。

@@ -3,7 +3,7 @@
 import { createDecipheriv, timingSafeEqual } from 'node:crypto';
 import { inflateSync } from 'node:zlib';
 import type { IncomingMessage } from 'node:http';
-import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('kook');
@@ -27,6 +27,8 @@ export enum KookPermission {
 
 /** One endpoint config after AdapterIndex expands `plugins.<instanceKey>.endpoints`. */
 export interface KookEndpointConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').KookStreamProxy;
   readonly id: string;
   readonly token: string;
   /** Default `websocket`. `webhook` requires httpHostToken + verify_token. */
@@ -42,6 +44,8 @@ export interface KookEndpointConfig {
 }
 
 export interface ResolvedKookWebsocketConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
+  readonly streamProxy?: import('./stream-proxy.js').KookStreamProxy;
   readonly context: 'kook';
   readonly connection: 'websocket';
   readonly id: string;
@@ -54,6 +58,7 @@ export interface ResolvedKookWebsocketConfig {
 }
 
 export interface ResolvedKookWebhookConfig {
+  readonly apiProxy?: import('./api-proxy.js').KookApiProxy;
   readonly context: 'kook';
   readonly connection: 'webhook';
   readonly id: string;
@@ -84,6 +89,7 @@ export interface KookWebhookEventData {
       readonly author_id?: string;
       readonly target_id?: string;
       readonly chat_code?: string;
+      readonly value?: string;
       readonly emoji?: { readonly id?: string; readonly name?: string };
     };
     readonly guild_id?: string;
@@ -125,6 +131,9 @@ export interface KookWireSegment {
 }
 
 export function resolveKookConfig(config: KookEndpointConfig): ResolvedKookConfig {
+  if (config.apiProxy && (!Number.isInteger(config.apiProxy.port) || config.apiProxy.port < 1 || config.apiProxy.port > 65535)) throw new TypeError('Invalid KOOK apiProxy port');
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid KOOK streamProxy port/serverName');
   const id = requiredEndpointField(config.id, 'id');
   const token = requiredEndpointField(config.token, 'token');
   const connection = config.connection ?? 'websocket';
@@ -135,6 +144,7 @@ export function resolveKookConfig(config: KookEndpointConfig): ResolvedKookConfi
     return {
       context: 'kook',
       connection: 'webhook',
+      ...(config.apiProxy ? { apiProxy: config.apiProxy } : {}),
       id,
       token,
       webhookPath: normalizeWebhookPath(
@@ -150,6 +160,8 @@ export function resolveKookConfig(config: KookEndpointConfig): ResolvedKookConfi
   return {
     context: 'kook',
     connection: 'websocket',
+    ...(config.apiProxy ? { apiProxy: config.apiProxy } : {}),
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
     id,
     token,
     data_dir: config.data_dir,
@@ -262,6 +274,9 @@ export function formatOutboundKmarkdown(payload: unknown): string {
           return String(data.text ?? data.content ?? '');
         case 'markdown':
           return String(data.content ?? data.text ?? '');
+        case 'share':
+        case 'keyboard':
+          throw new EndpointDeliveryError('unsupported_operation', 'KOOK share cards and native keyboards are not implemented', 'not_sent');
         case 'at': {
           const id = String(data.user_id ?? data.qq ?? data.id ?? '');
           return id === 'all' ? '(met)all(met)' : `(met)${id}(met)`;
@@ -440,4 +455,21 @@ export function normalizeKookWebhookEvent(
     timestamp: event.msg_timestamp ?? Date.now(),
     guildId: event.extra?.guild_id,
   };
+}
+
+/** Native Card return-val events; routing and actor must come from the click event. */
+export function normalizeKookButtonEvent(raw: unknown): { id: string; sourceMessageId: string; payload: string; userId: string; channelKind: 'private' | 'channel'; channelId: string; timestamp: number } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const event = raw as KookWebhookEventData;
+  if (event.extra?.type !== 'message_btn_click') return null;
+  const body = event.extra.body;
+  if (!body || typeof body.value !== 'string' || !body.value || !body.user_id || !body.msg_id) return null;
+  // Button system notifications can use PERSON even for a channel card.
+  // body.target_id identifies the original channel; envelope target_id is the recipient.
+  const bodyTarget = body.channel_id || body.target_id;
+  const channelKind = (bodyTarget && String(bodyTarget) !== String(body.user_id)) || event.channel_type === 'GROUP' ? 'channel' : 'private';
+  const channelId = channelKind === 'private' ? String(body.user_id) : String(bodyTarget || event.target_id || '');
+  if (!channelId) return null;
+  const timestamp = event.msg_timestamp ?? Date.now();
+  return { id: String(event.msg_id || `button:${body.msg_id}:${timestamp}`), sourceMessageId: String(body.msg_id), payload: body.value, userId: String(body.user_id), channelKind, channelId, timestamp };
 }

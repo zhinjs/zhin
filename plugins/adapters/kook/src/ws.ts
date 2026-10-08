@@ -2,7 +2,12 @@
  * KOOK WebSocket transport: kook-client wrapper and inbound message normalization.
  */
 import path from 'node:path';
-import { Client } from 'kook-client';
+import { createKookApiAgent, type KookApiProxy } from './api-proxy.js';
+import { readFile } from 'node:fs/promises';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
+import { Client, WebsocketReceiver } from 'kook-client';
+import { createKookStreamSocket } from './stream-proxy.js';
+import { createEndpointLifecycle, type EndpointTransportState } from 'zhin.js/adapter';
 import {
   type KookInboundMessage,
   type ResolvedKookConfig,
@@ -12,19 +17,24 @@ import {
 
 /** Minimal client surface used by the endpoint (real kook-client or test mock). */
 export interface KookClientTransport {
+  getTransportState?(): EndpointTransportState | undefined;
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   on(event: string, listener: (...args: unknown[]) => void): void;
   removeAllListeners(): void;
   sendChannelMsg(
     channelId: string,
-    message: string,
+    message: unknown,
+    quote?: { message_id: string },
   ): Promise<{ msg_id?: string | number }>;
   sendPrivateMsg(
     userId: string,
-    message: string,
+    message: unknown,
+    quote?: { message_id: string },
   ): Promise<{ msg_id?: string | number }>;
-  recallMsg?(messageId: string): Promise<boolean>;
+  uploadMedia?(data: Buffer): Promise<string>;
+  recallChannelMsg?(channelId: string, messageId: string): Promise<boolean>;
+  recallPrivateMsg?(userId: string, messageId: string): Promise<boolean>;
   pickGuild(guildId: string): {
     kick(userId: string): Promise<boolean>;
     getRoleList(): Promise<Array<{
@@ -88,6 +98,12 @@ export function normalizeKookMessage(raw: unknown): KookInboundMessage | null {
     }
   }
   const content = textParts.join('') || msg.raw_message || '';
+  // kook-client resolves these getters through optional local caches and throws
+  // for uncached users/channels. Identity and routing come from the event itself.
+  let author: typeof msg.author;
+  let channel: typeof msg.channel;
+  try { author = msg.author; } catch { /* optional cache enrichment unavailable */ }
+  try { channel = msg.channel; } catch { /* optional cache enrichment unavailable */ }
 
   return {
     id: String(msg.message_id),
@@ -95,31 +111,149 @@ export function normalizeKookMessage(raw: unknown): KookInboundMessage | null {
     channelKind,
     channelId,
     authorId: String(msg.author_id),
-    authorName: msg.author?.info?.nickname
-      || msg.author?.info?.username
+    authorName: author?.info?.nickname
+      || author?.info?.username
       || String(msg.author_id),
-    authorBot: msg.author?.bot === true || msg.author?.info?.bot === true,
-    authorRoles: msg.author?.info?.roles ?? msg.author?.roles,
+    authorBot: author?.bot === true || author?.info?.bot === true,
+    authorRoles: author?.info?.roles ?? author?.roles,
     timestamp: msg.timestamp ?? Date.now(),
-    guildId: msg.channel?.info?.guild_id,
+    guildId: channel?.info?.guild_id,
     rawMessage: msg.raw_message,
   };
 }
 
+export class RuntimeKookClient extends Client {
+  readonly #lifecycle: ReturnType<typeof createEndpointLifecycle>;
+  #initialized = false;
+  #connectionAttempt = 0;
+  constructor(config: ConstructorParameters<typeof Client>[0], lifecycleOptions: Parameters<typeof createEndpointLifecycle>[0] = { name: 'kook' }, apiProxy?: KookApiProxy) {
+    super({ ...config, autoReconnect: false, handleProcessErrors: false } as ConstructorParameters<typeof Client>[0]);
+    this.#lifecycle = createEndpointLifecycle(lifecycleOptions);
+    if (apiProxy) {
+      this.request.defaults.httpsAgent = createKookApiAgent(apiProxy);
+      this.request.defaults.proxy = false;
+      this.request.defaults.maxRedirects = 0;
+      this.request.interceptors.request.use(request => {
+        const target = new URL(request.url ?? '', request.baseURL);
+        if (target.protocol !== 'https:' || target.hostname !== 'www.kookapp.cn' || (target.port && target.port !== '443')) {
+          throw new EndpointDeliveryError('invalid_destination', 'KOOK API proxy rejected destination identity', 'not_sent');
+        }
+        return request;
+      });
+    }
+    const transforms = this.request.defaults.transformResponse;
+    this.request.defaults.transformResponse = [
+      ...(Array.isArray(transforms) ? transforms : transforms ? [transforms] : []),
+      (data: unknown, _headers: unknown, status?: number) => {
+        // Classify HTTP status before the SDK discards it in its error interceptor.
+        if (status !== undefined && status >= 400) {
+          const rejected = status < 500 && status !== 408;
+          throw new EndpointDeliveryError(rejected ? 'platform_rejected' : 'delivery_unconfirmed',
+            `KOOK HTTP request failed (status=${status})`, rejected ? 'rejected' : 'unknown');
+        }
+        return data;
+      },
+    ];
+    this.request.interceptors.response.use(response => {
+      // kook-client unwraps HTTP JSON but does not reject nonzero platform codes.
+      const body = response as unknown as { code?: unknown };
+      if (typeof body.code === 'number' && body.code !== 0) {
+        throw new EndpointDeliveryError('platform_rejected', `KOOK rejected API request (code=${body.code})`, 'rejected');
+      }
+      return response;
+    });
+  }
+  async connect(): Promise<void> {
+    await this.#lifecycle.start(async handle => {
+      const attempt = ++this.#connectionAttempt;
+      const receiver = this.receiver;
+      let active = true;
+      const disconnected = () => { if (!active) return; active = false; receiver.off('disconnected', disconnected); handle.notifyClosed('KOOK receiver disconnected'); };
+      receiver.on('disconnected', disconnected);
+      handle.onForceClose(() => { active = false; receiver.off('disconnected', disconnected); if (attempt === this.#connectionAttempt) void receiver.disconnect(); });
+      try {
+        const resume = receiver instanceof WebsocketReceiver && (receiver as unknown as { canResume(): boolean }).canResume();
+        await (receiver as WebsocketReceiver).connect(resume);
+        if (!active || attempt !== this.#connectionAttempt) throw new Error('KOOK connection closed before admission');
+        if (!resume || !this.#initialized) { await this.init(); this.#initialized = true; }
+      }
+      catch (error) { active = false; receiver.off('disconnected', disconnected); if (attempt === this.#connectionAttempt) await receiver.disconnect(); throw error; }
+    });
+  }
+  async disconnect(): Promise<void> { await this.#lifecycle.stop(); }
+  /** Native FormData avoids kook-client's Buffer-to-text multipart conversion. */
+  async uploadMedia(data: Buffer | string): Promise<string> {
+    let bytes: Buffer;
+    if (Buffer.isBuffer(data)) bytes = data;
+    else if (/^https?:\/\//.test(data)) {
+      const downloaded = await fetch(data, { signal: AbortSignal.timeout(30_000) });
+      if (!downloaded.ok) throw new EndpointDeliveryError('media_download_failed', 'KOOK source download failed', 'rejected');
+      bytes = Buffer.from(await downloaded.arrayBuffer());
+    } else if (/^data:[^,]*;base64,/.test(data) || data.startsWith('base64://')) {
+      bytes = Buffer.from(data.replace(/^data:[^,]*,|^base64:\/\//, ''), 'base64');
+    } else bytes = await readFile(data.replace(/^file:\/\//, ''));
+    const form = new FormData();
+    form.append('file', new Blob([Uint8Array.from(bytes)]), 'image.png');
+    const response = await fetch('https://www.kookapp.cn/api/v3/asset/create', {
+      method: 'POST', headers: { Authorization: `Bot ${this.config.token}` }, body: form,
+      signal: AbortSignal.timeout(30_000),
+    });
+    const body = await response.json() as { code?: number; data?: { url?: string } };
+    if (!response.ok || body.code !== 0) {
+      const rejected = response.status >= 400 && response.status < 500 && response.status !== 408 || response.ok && typeof body.code === 'number' && body.code !== 0;
+      throw new EndpointDeliveryError(rejected ? 'platform_rejected' : 'delivery_unconfirmed',
+        `KOOK upload failed (status=${response.status}, code=${typeof body.code === 'number' ? body.code : 'missing'})`, rejected ? 'rejected' : 'unknown');
+    }
+    if (typeof body.data?.url !== 'string') throw new EndpointDeliveryError('delivery_unconfirmed', 'KOOK upload returned no URL', 'unknown');
+    return body.data.url;
+  }
+
+  #preloading = false;
+
+  getTransportState(): EndpointTransportState | undefined {
+    if (!(this.receiver instanceof WebsocketReceiver)) return undefined;
+    return this.#lifecycle.state;
+
+  }
+
+  async init() {
+    this.#preloading = true;
+    try { return await super.init(); }
+    finally { this.#preloading = false; }
+  }
+
+  async getBlacklist(guildId: string) {
+    try { return await super.getBlacklist(guildId); }
+    catch (error) {
+      // kook-client 1.0.4 discards structured HTTP metadata in its interceptor.
+      // Match only its exact blacklist permission-denial prefix during preload.
+      if (this.#preloading && error instanceof Error
+        && (error.message.startsWith('request "/v3/blacklist/list" error with code(403):')
+          || error instanceof EndpointDeliveryError && error.code === 'platform_rejected'
+          && error.disposition === 'rejected' && error.message === 'KOOK HTTP request failed (status=403)')) {
+        this.logger.warn('启动预加载跳过黑名单：缺少管理权限；消息收发继续。');
+        return [];
+      }
+      throw error;
+    }
+  }
+}
+
 export function defaultCreateClient(config: ResolvedKookWebsocketConfig): KookClientTransport {
-  return new Client({
+  return new RuntimeKookClient({
     token: config.token,
     mode: 'websocket',
+    socketFactory: (url: string) => createKookStreamSocket(url, config.streamProxy),
     data_dir: config.data_dir || path.join(process.cwd(), 'data', 'kook'),
     timeout: config.timeout,
     max_retry: config.max_retry,
     ignore: config.ignore,
     logLevel: config.logLevel,
-  }) as unknown as KookClientTransport;
+  } as ConstructorParameters<typeof RuntimeKookClient>[0], undefined, config.apiProxy) as unknown as KookClientTransport;
 }
 
 export function defaultCreateWebhookClient(config: ResolvedKookWebhookConfig): KookClientTransport {
-  return new Client({
+  return new RuntimeKookClient({
     token: config.token,
     mode: 'webhook',
     data_dir: path.join(process.cwd(), 'data', 'kook'),
@@ -127,5 +261,5 @@ export function defaultCreateWebhookClient(config: ResolvedKookWebhookConfig): K
     max_retry: 3,
     ignore: config.ignore,
     logLevel: config.logLevel,
-  }) as unknown as KookClientTransport;
+  } as ConstructorParameters<typeof RuntimeKookClient>[0], undefined, config.apiProxy) as unknown as KookClientTransport;
 }

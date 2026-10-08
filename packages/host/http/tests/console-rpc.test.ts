@@ -6,6 +6,21 @@ import {
 } from '../src/console-rpc.js';
 
 describe('runtime console RPC', () => {
+  it('denies raw configuration to demo before reading secret-bearing storage', async () => {
+    for (const type of ['config:get', 'config:get-all', 'config:get-source']) {
+      let reads = 0;
+      const read = async () => { reads++; return { apiKey: 'fixture-secret-must-not-leak' }; };
+      const replies = await dispatchRuntimeConsoleRpc({ type, requestId: 100 }, {
+        authScope: 'demo', listPages: async () => [], readConfigDocument: read,
+        readConfigSource: async () => { reads++; return { source: 'apiKey: fixture-secret-must-not-leak', format: 'yaml', revision: 'fixture', configKeys: [] }; },
+      });
+      expect(pickRpcReply({ type, requestId: 100 }, replies)?.error).toMatch(/Demo scope/);
+      expect(reads).toBe(0);
+      expect(JSON.stringify(replies)).not.toContain('fixture-secret-must-not-leak');
+    }
+    expect(isDemoHttpAllowed('GET', '/api/config', '/api')).toBe(false);
+  });
+
   it('answers ping and maps pages for entries:get', async () => {
     const pages = Object.freeze([
       Object.freeze({
@@ -44,7 +59,7 @@ describe('runtime console RPC', () => {
     const source = await dispatchRuntimeConsoleRpc(
       { type: 'config:get-source', requestId: 4 },
       {
-        authScope: 'demo',
+        authScope: 'full',
         listPages: async () => pages,
         readConfigSource: async () => ({
           source: 'plugins: {}\n',

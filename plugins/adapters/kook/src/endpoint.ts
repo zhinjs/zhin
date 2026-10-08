@@ -1,25 +1,27 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { EndpointDeliveryError, type ConversationRef } from '@zhin.js/im-contract';
 /**
  * KookEndpoint — lifecycle, outbound, admit, OpenAPI helpers for agent tools.
  */
 import { Client } from 'kook-client';
 import {
-  createRecallEndpointControl,
+  Endpoint,
   type EndpointControl,
   type EndpointChannel,
   type EndpointGroup,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, HttpRouteRegistration } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import {
   formatInboundContent,
-  formatOutboundKmarkdown,
+
   isKookBotMentioned,
   kookInboundConversation,
   normalizeKookWebhookEvent,
+  normalizeKookButtonEvent,
   senderDisplayName,
   type KookInboundMessage,
   type KookWebhookEventData,
@@ -34,6 +36,7 @@ import {
   type CreateKookClient,
   type KookClientTransport,
 } from './ws.js';
+import { recallKookMessage, sendKookOutbound } from './outbound.js';
 import { receiveKookSideEvent } from './side-event-dispatch.js';
 
 export interface KookEndpointOptions {
@@ -43,6 +46,7 @@ export interface KookEndpointOptions {
 }
 
 export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
+  #sentConversations = new Map<string, ConversationRef>();
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookEndpointOptions;
@@ -51,7 +55,9 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
   #open = false;
   #started = false;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: (message) => recallKookMessage(this.#requireClient(), message),
+  });
 
   constructor(options: KookEndpointOptions) {
     super();
@@ -62,6 +68,11 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
 
   get client(): KookClientTransport {
     return this.#requireClient();
+  }
+
+  get transportState(): EndpointTransportState | undefined {
+    if (!this.#started) return 'stopped';
+    return this.#client?.getTransportState?.();
   }
 
   async start(): Promise<void> {
@@ -94,6 +105,7 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#sentConversations.clear();
     if (this.#client) {
       try {
         this.#client.removeAllListeners();
@@ -108,12 +120,8 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const body = formatOutboundKmarkdown(payload);
-    const client = this.#requireClient();
-    const result = conversation.kind === 'private'
-      ? await client.sendPrivateMsg(conversation.id, body)
-      : await client.sendChannelMsg(conversation.id, body);
-    const messageId = result?.msg_id != null ? String(result.msg_id) : '';
+    const messageId = await sendKookOutbound(this.#requireClient(), { conversation, payload });
+    rememberKookConversation(this.#sentConversations, messageId, conversation);
     this.#logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.id,
@@ -155,9 +163,9 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
     });
   }
 
-  async recallMessage(messageId: string): Promise<void> {
-    if (!messageId) return;
-    await this.#requireClient().recallMsg?.(messageId);
+  async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
+    if (!conversation) throw new EndpointDeliveryError('unsupported_operation', 'KOOK recall requires conversation routing', 'rejected');
+    await recallKookMessage(this.#requireClient(), { id: messageId, conversation });
   }
 
   #bindClient(client: KookClientTransport): void {
@@ -168,9 +176,21 @@ export class KookWebsocketEndpoint extends Endpoint<KookClientTransport> {
     });
     const receiver = (client as { receiver?: { on(event: string, listener: (...args: unknown[]) => void): void } }).receiver;
     receiver?.on('event', (raw) => {
+      if (this.#client !== client || !this.#open) return;
       this.#emitPlatformEvent('event', raw);
+      if (normalizeKookButtonEvent(raw)) {
+        void this.admitButton(raw).catch(error => this.#logger.warn(formatCompact({ op: 'kook_button_failed', error: error instanceof Error ? error.message : 'dispatch failed' })));
+        return;
+      }
       receiveKookSideEvent((name, payload) => this.emit(name, payload), this.#options.config.id, raw, this.#logger);
     });
+  }
+
+  async admitButton(raw: unknown): Promise<void> {
+    if (!this.#open) throw new Error('KOOK endpoint is closed');
+    const event = normalizeKookButtonEvent(raw);
+    if (!event) throw new Error('Invalid KOOK button event');
+    await this.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, event, this.#sentConversations.get(event.sourceMessageId)));
   }
 
   #emitPlatformEvent(name: string, event: unknown): void {
@@ -197,6 +217,7 @@ export interface KookWebhookEndpointOptions {
 }
 
 export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
+  #sentConversations = new Map<string, ConversationRef>();
   readonly #logger!: ReturnType<typeof getAdapterLogger>;
 
   readonly #options: KookWebhookEndpointOptions;
@@ -207,7 +228,9 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   #open = false;
   #started = false;
   readonly management: EndpointManagement = createKookEndpointManagement(() => this.#requireClient());
-  readonly control: EndpointControl = createRecallEndpointControl((id) => this.recallMessage(id));
+  readonly control: EndpointControl = Object.freeze<EndpointControl>({
+    recall: (message) => recallKookMessage(this.#requireClient(), message),
+  });
 
   constructor(options: KookWebhookEndpointOptions) {
     super();
@@ -264,6 +287,7 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
 
   async stop(): Promise<void> {
     this.#open = false;
+    this.#sentConversations.clear();
     for (const release of this.#routeReleases.splice(0)) release();
     this.#processedSn.clear();
     if (this.#client) {
@@ -280,12 +304,8 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    const body = formatOutboundKmarkdown(payload);
-    const client = this.#requireClient();
-    const result = conversation.kind === 'private'
-      ? await client.sendPrivateMsg(conversation.id, body)
-      : await client.sendChannelMsg(conversation.id, body);
-    const messageId = result?.msg_id != null ? String(result.msg_id) : '';
+    const messageId = await sendKookOutbound(this.#requireClient(), { conversation, payload });
+    rememberKookConversation(this.#sentConversations, messageId, conversation);
     this.#logger.debug(formatCompact({
       op: 'kook_send',
       endpoint: this.#options.config.id,
@@ -295,7 +315,13 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     return messageId;
   }
 
-  admitEvent(event: KookWebhookEventData): void {
+  async admitEvent(event: KookWebhookEventData): Promise<void> {
+    if (normalizeKookButtonEvent(event)) {
+      if (!this.#open) throw new Error('KOOK endpoint is closed');
+      const button = normalizeKookButtonEvent(event)!;
+      await this.emitAccepted('message.receive', kookButtonIngress(String(this.#options.id), this.#options.config.id, button, this.#sentConversations.get(button.sourceMessageId)));
+      return;
+    }
     void this.emitPlatform(String(event.type ?? 'event'), event).catch((error) => {
       this.#logger.warn(formatCompact({
         op: 'kook_platform_event_failed',
@@ -348,9 +374,9 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     });
   }
 
-  async recallMessage(messageId: string): Promise<void> {
-    if (!messageId) return;
-    await this.#requireClient().recallMsg?.(messageId);
+  async recallMessage(messageId: string, conversation?: ConversationRef): Promise<void> {
+    if (!conversation) throw new EndpointDeliveryError('unsupported_operation', 'KOOK recall requires conversation routing', 'rejected');
+    await recallKookMessage(this.#requireClient(), { id: messageId, conversation });
   }
 
   checkAndRememberSn(sn: number): boolean {
@@ -362,6 +388,8 @@ export class KookWebhookEndpoint extends Endpoint<KookClientTransport> {
     }
     return true;
   }
+
+  forgetSn(sn: number): void { this.#processedSn.delete(sn); }
 
   #requireClient(): KookClientTransport {
     if (!this.#client) throw new Error('KOOK client not initialized');
@@ -380,6 +408,21 @@ function toGroupId(id: string): number {
 }
 
 /** KOOK 文字频道标记：HTTP API type=1（2=语音），kook-client 消息侧用 'GROUP'。 */
+function rememberKookConversation(cache: Map<string, ConversationRef>, messageId: string, conversation: ConversationRef): void {
+  cache.set(messageId, conversation);
+  while (cache.size > 2048) cache.delete(cache.keys().next().value!);
+}
+
+function kookButtonIngress(endpointKey: string, endpointId: string, event: NonNullable<ReturnType<typeof normalizeKookButtonEvent>>, sentConversation?: ConversationRef) {
+  const conversation: ConversationRef = { endpoint: { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey },
+    kind: sentConversation?.kind ?? event.channelKind, id: sentConversation?.id ?? event.channelId,
+    ...(sentConversation?.parent ? { parent: sentConversation.parent } : {}) };
+  return { conversation, message: { conversation, id: event.id }, content: `[action: ${event.payload}]`,
+    segments: [{ type: 'action', data: { id: event.id, payload: event.payload, sourceMessageId: event.sourceMessageId } }],
+    sender: { id: event.userId }, endpointId,
+    metadata: Object.freeze({ eventType: 'message_btn_click', payload: event.payload, sourceMessageId: event.sourceMessageId, timestamp: event.timestamp }) };
+}
+
 function isKookTextChannelType(type: string | number | undefined): boolean {
   return type === 1 || type === '1' || type === 'GROUP';
 }

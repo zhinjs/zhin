@@ -108,6 +108,7 @@ type LogSelectionLike = PromiseLike<LogRow[]> & {
   where(where: Record<string, unknown>): LogSelectionLike;
   orderBy(field: string, direction: 'ASC' | 'DESC'): LogSelectionLike;
   limit(count: number): Promise<LogRow[]>;
+  offset?(count: number): LogSelectionLike;
 };
 
 type LogRow = {
@@ -187,35 +188,57 @@ function registerLogsRoutes(
   const unavailableNote = 'SystemLog 模型不可用（Database 未启动或未注册 DatabaseLogTransport）';
 
   route('GET', `${base}/logs`, async (_request, response, url) => {
-    const limit = Math.min(
-      Math.max(parseInt(url.searchParams.get('limit') ?? '100', 10) || 100, 1),
-      1000,
-    );
-    const level = url.searchParams.get('level') ?? undefined;
+    const pageSize = clampPositiveInt(parsePositiveInt(url.searchParams.get('pageSize') ?? url.searchParams.get('limit'), 100), 100, 1000);
+    const requestedPage = clampPositiveInt(parsePositiveInt(url.searchParams.get('page'), 1), 1, Number.MAX_SAFE_INTEGER);
+    const level = url.searchParams.get('level');
+    const source = url.searchParams.get('source')?.trim();
+    const query = url.searchParams.get('q')?.trim();
+    const baseWhere: Record<string, unknown> = {
+      ...(level && level !== 'all' ? { level } : {}),
+    };
+    const where = { ...baseWhere, ...(source ? { source } : {}) };
     const LogModel = getModel();
     if (!LogModel) {
-      writeJson(response, 200, { success: true, data: [], total: 0, note: unavailableNote });
+      writeJson(response, 200, { success: true, data: [], total: 0, page: 1, pageSize, totalPages: 1, sources: [], note: unavailableNote });
       return;
     }
-
-    let selection = LogModel.select();
-    if (level && level !== 'all') {
-      selection = selection.where({ level });
+    // Database $like has no portable ESCAPE contract. Keep q literal (including
+    // %/_ and Unicode) and filter actual retained rows on the Host, not wildcard SQL.
+    const matchesQuery = (row: LogRow): boolean => !query || ['message', 'name', 'source']
+      .some(field => String(row[field as keyof LogRow] ?? '').toLowerCase().includes(query.toLowerCase()));
+    const selection = LogModel.select().where(where).orderBy('timestamp', 'DESC').orderBy('id', 'DESC');
+    const queriedRows = query ? (await selection).filter(matchesQuery) : undefined;
+    const total = queriedRows?.length ?? (typeof LogModel.count === 'function'
+      ? await LogModel.count(where)
+      : (await LogModel.select('id').where(where)).length);
+    const totalPages = Math.max(1, Math.ceil(total / pageSize));
+    const page = Math.min(requestedPage, totalPages);
+    const offset = (page - 1) * pageSize;
+    const logs = queriedRows
+      ? queriedRows.slice(offset, offset + pageSize)
+      : selection.offset
+        ? await selection.offset(offset).limit(pageSize)
+        : (await selection).slice(offset, offset + pageSize);
+    // Source counts match level/q, but exclude the selected source and page window.
+    const sourceRows = await LogModel.select('source', 'name', 'message').where(baseWhere);
+    const counts = new Map<string, number>();
+    for (const row of sourceRows) {
+      const name = row.source;
+      if (!name || !matchesQuery(row)) continue;
+      counts.set(name, (counts.get(name) ?? 0) + 1);
     }
-
-    const logs = await selection.orderBy('timestamp', 'DESC').limit(limit);
-
     writeJson(response, 200, {
       success: true,
       data: logs.map((log) => ({
+        id: log.id,
         level: log.level,
         name: log.name,
         message: log.message,
         source: log.source,
-        timestamp:
-          log.timestamp instanceof Date ? log.timestamp.toISOString() : log.timestamp,
+        timestamp: log.timestamp instanceof Date ? log.timestamp.toISOString() : log.timestamp,
       })),
-      total: logs.length,
+      total, page, pageSize, totalPages,
+      sources: [...counts].sort(([a], [b]) => a.localeCompare(b)).map(([source, count]) => ({ source, count })),
     });
   }, { summary: 'List system logs', tags: ['console', 'logs'] });
 
@@ -363,8 +386,8 @@ function registerMarketplaceRoutes(
         version: p.version || '',
         description: p.description || '',
         author: p.author || '',
-        isOfficial: !!p.isOfficial,
-        official: !!p.isOfficial,
+        isOfficial: typeof p.name === 'string' && /^@zhin\.js\/[a-z0-9][a-z0-9._-]*$/.test(p.name),
+        official: typeof p.name === 'string' && /^@zhin\.js\/[a-z0-9][a-z0-9._-]*$/.test(p.name),
         category: p.category || 'util',
         keywords: (p.tags as string[]) || [],
         npm: p.npm || `https://www.npmjs.com/package/${p.name}`,

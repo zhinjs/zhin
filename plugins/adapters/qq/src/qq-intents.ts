@@ -29,6 +29,7 @@ export const DEFAULT_QQ_BOT_KIND: QqBotKind = 'public';
 /** 公/私域共用：群/C2C、群成员变更、频道基础事件、频道私信。 */
 const QQ_SHARED_INTENTS = Object.freeze([
   'GROUP_AND_C2C_EVENT',
+  'INTERACTION',
   'GROUP_MEMBER',
   'GUILDS',
   'GUILD_MEMBERS',

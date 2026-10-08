@@ -19,7 +19,7 @@ import {
   type AdapterSegmentPolicy,
   type EndpointSendRequest,
 } from './definition.js';
-import { bindEndpoint, type Endpoint } from './endpoint.js';
+import { bindEndpoint, retireEndpoint, type Endpoint, type EndpointTransportState } from './endpoint.js';
 import { materializeEndpoint } from './managed-endpoint.js';
 import {
   listEndpointManagementCapabilities,
@@ -31,10 +31,11 @@ import {
   type EndpointControl,
 } from './endpoint-control.js';
 import { endpointContentOf, type EndpointContentResolveContext } from './endpoint-content.js';
-import type {
-  ConversationReference,
-  ConversationResolution,
-  EndpointCapabilities,
+import {
+  EndpointDeliveryError,
+  type ConversationReference,
+  type ConversationResolution,
+  type EndpointCapabilities,
 } from '@zhin.js/im-contract';
 
 export interface AdapterDescriptor {
@@ -46,8 +47,11 @@ export interface AdapterDescriptor {
   readonly operations: readonly AdapterOperation[];
 }
 
-/** Console / Host-facing endpoint row (connected = admission open). */
+/** Console / Host-facing endpoint row, with admission separate from transport. */
 export interface AdapterEndpointSummary extends AdapterDescriptor {
+  readonly admitted: boolean;
+  readonly transportState: EndpointTransportState | 'unknown';
+  readonly eventDiagnostics: Endpoint['eventDiagnostics'];
   readonly connected: boolean;
   readonly status: 'online' | 'offline';
   readonly phase: AdapterEndpointPhase;
@@ -55,7 +59,7 @@ export interface AdapterEndpointSummary extends AdapterDescriptor {
 }
 
 export type AdapterEndpointPhase =
-  'pending' | 'starting' | 'online';
+  'pending' | 'starting' | 'online' | 'reconnecting' | 'offline';
 
 interface AdapterRecord extends AdapterDescriptor {
   readonly endpoint: Endpoint;
@@ -94,7 +98,6 @@ export class AdapterIndex {
         signal.throwIfAborted();
         for (const expansion of expandEndpointConfigs(slot, snapshot)) {
           const created = await createEndpoint(slot, snapshot, admission, signal, expansion);
-          signal.throwIfAborted();
           records.push({
             id: expansion.id,
             owner: slot.owner,
@@ -111,6 +114,7 @@ export class AdapterIndex {
             startAttempted: false,
             stopped: false,
           });
+          signal.throwIfAborted();
         }
       }
       return new AdapterIndex(records, admission);
@@ -137,8 +141,11 @@ export class AdapterIndex {
       source: record.source,
       capabilities: record.capabilities,
       operations: record.operations,
-      connected: record.open && !record.stopped,
-      status: record.open && !record.stopped ? 'online' as const : 'offline' as const,
+      admitted: record.open && !record.stopped,
+      transportState: record.stopped ? 'stopped' : record.endpoint.transportState ?? 'unknown',
+      eventDiagnostics: record.endpoint.eventDiagnostics,
+      connected: endpointConnected(record),
+      status: endpointConnected(record) ? 'online' as const : 'offline' as const,
       phase: endpointPhase(record),
       managementCapabilities: listEndpointManagementCapabilities(record.endpoint),
     })));
@@ -179,7 +186,7 @@ export class AdapterIndex {
   /** Resolve the Client directly from a generation-stable CapabilityId. */
   clientById<TClient>(id: CapabilityId): TClient {
     const record = this.#records.get(id);
-    if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
+    if (!record) throw new EndpointDeliveryError('endpoint_not_found', `Unknown Adapter Endpoint: ${id}`, 'not_sent');
     if (!record.started || record.stopped) {
       throw new Error(`Adapter Endpoint ${id} is not active`);
     }
@@ -255,7 +262,12 @@ export class AdapterIndex {
         signal.addEventListener('abort', stopOnAbort, { once: true });
         try {
           await Promise.race([
-            Promise.resolve(record.endpoint.start?.(signal)),
+            // Attach both race handlers before invoking adapter code. A sync
+            // abort + throw must not orphan the cancellation promise.
+            Promise.resolve().then(() => {
+              signal.throwIfAborted();
+              return record.endpoint.start?.(signal);
+            }),
             aborted,
           ]);
         } finally {
@@ -326,14 +338,14 @@ export class AdapterIndex {
     const record = this.#records.get(id);
     if (!record) throw new Error(`Unknown Adapter Endpoint: ${id}`);
     if (!record.capabilities.includes('outbound') || !record.endpoint.send) {
-      throw new Error(`Adapter Endpoint does not support outbound: ${id}`);
+      throw new EndpointDeliveryError('outbound_unsupported', `Adapter Endpoint does not support outbound: ${id}`, 'not_sent');
     }
     if (!record.started || record.stopped) {
-      throw new Error(`Adapter Endpoint is not active: ${id}`);
+      throw new EndpointDeliveryError('endpoint_inactive', `Adapter Endpoint is not active: ${id}`, 'not_sent');
     }
     const messageId = await record.endpoint.send(request);
     if (typeof messageId !== 'string' || !messageId.trim()) {
-      throw new TypeError(`Adapter Endpoint send() must return a non-empty platform message id: ${id}`);
+      throw new EndpointDeliveryError('delivery_unconfirmed', `Adapter Endpoint send() must return a non-empty platform message id: ${id}`, 'unknown');
     }
     return messageId;
   }
@@ -392,9 +404,17 @@ function endpointLiveName(endpoint: Endpoint): string | undefined {
 }
 
 function endpointPhase(record: AdapterRecord): AdapterEndpointPhase {
-  if (record.open && !record.stopped) return 'online';
+  if (record.stopped) return 'offline';
+  if (record.open) {
+    if (record.endpoint.transportState === 'reconnecting') return 'reconnecting';
+    return endpointConnected(record) ? 'online' : 'offline';
+  }
   if (record.startAttempted && !record.started) return 'starting';
   return 'pending';
+}
+
+function endpointConnected(record: AdapterRecord): boolean {
+  return record.open && !record.stopped && record.endpoint.transportState === 'open';
 }
 
 /** 单个实例配置展开的 endpoint 描述（多账号适配器经 `endpoints` 数组声明）。 */
@@ -470,21 +490,32 @@ async function createEndpoint(
   const operations = resolveAdapterOperations(slot.definition, context);
   const implementation = await slot.definition.create(context);
   const endpoint = materializeEndpoint(implementation, context);
-  if (
-    slot.definition.capabilities.includes('outbound')
-    && typeof implementation.send !== 'function'
-  ) {
-    throw new TypeError(
-      `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,
+  try {
+    if (
+      slot.definition.capabilities.includes('outbound')
+      && typeof implementation.send !== 'function'
+    ) {
+      throw new TypeError(
+        `Adapter Endpoint ${String(expansion?.id ?? slot.id)} declares outbound but send() is missing`,
+      );
+    }
+    bindEndpoint(endpoint, context, admission);
+    assertDeclaredEndpointOperations(
+      endpoint,
+      operations,
+      String(expansion?.id ?? slot.id),
     );
+    return Object.freeze({ endpoint, operations });
+  } catch (error) {
+    try {
+      retireEndpoint(endpoint);
+      await endpoint.stop();
+    } catch (cleanupError) {
+      throw new GenerationCompensationError([error, cleanupError],
+        'Adapter prepare and Endpoint cleanup both failed', { cause: cleanupError });
+    }
+    throw error;
   }
-  bindEndpoint(endpoint, context, admission);
-  assertDeclaredEndpointOperations(
-    endpoint,
-    operations,
-    String(expansion?.id ?? slot.id),
-  );
-  return Object.freeze({ endpoint, operations });
 }
 
 async function stopRecords(
@@ -513,7 +544,8 @@ async function stopRecords(
 function stopRecord(record: AdapterRecord): Promise<void> {
   if (record.stopped) return Promise.resolve();
   if (record.stopping) return record.stopping;
-  const stopping = Promise.resolve(record.endpoint.stop?.()).then(() => {
+  retireEndpoint(record.endpoint);
+  const stopping = Promise.resolve().then(() => record.endpoint.stop?.()).then(() => {
     record.stopped = true;
     record.open = false;
   });

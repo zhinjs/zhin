@@ -3,7 +3,7 @@
  * Canonicalization is owned by gateway/core before endpoint.send.
  * Spec: https://github.com/botuniverse/onebot-11
  */
-import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 
 const logger = getLogger('onebot11');
@@ -340,6 +340,21 @@ function oneBotMediaSegment(
 function canonicalToOneBotSegment(segment: OneBot11WireSegment): OneBot11Segment | null {
   const data = segment.data ?? {};
   switch (segment.type) {
+    case 'markdown':
+    case 'keyboard':
+      throw new EndpointDeliveryError('unsupported_operation', `OneBot11 standard has no ${segment.type} message segment`, 'not_sent');
+    case 'share': {
+      if (['audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) {
+        throw new EndpointDeliveryError('unsupported_operation', 'onebot11 rich share metadata is not implemented', 'not_sent');
+      }
+      if (typeof data.url !== 'string' || !/^https?:\/\//.test(data.url) || typeof data.title !== 'string' || !data.title) {
+        throw new EndpointDeliveryError('unsupported_operation', 'Invalid OneBot11 share URL or title', 'not_sent');
+      }
+      return { type: 'share', data: { url: data.url, title: data.title,
+        ...(typeof (data.description ?? data.content) === 'string' ? { content: data.description ?? data.content } : {}),
+        ...(typeof data.image === 'string' ? { image: data.image } : {}) } };
+    }
+
     case 'mention': {
       const target = data.target ?? data.qq ?? data.id;
       if (target == null) return { type: segment.type, data };

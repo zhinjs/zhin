@@ -48,6 +48,8 @@ Root 先用组合后的 JSON Schema 校验候选文档，再执行受影响 Plug
 
 环境变量表达式作为普通字符串保留。环境 overlay 和 secret 解析属于 Root Resource，不由文件适配器展开。
 
+同一个 Document 实例的 commit 与 rollback 串行执行；从相同 revision 准备的并发事务只有第一个可提交，后续事务报告冲突。此保护不提供跨 Document 实例或跨进程的原子比较交换；外部写入仍由 revision 检查发现。
+
 ## 开发验证
 
 ```bash

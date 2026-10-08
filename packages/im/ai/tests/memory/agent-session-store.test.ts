@@ -8,6 +8,64 @@ import {
 } from '../../src/index.js';
 
 describe('AgentSessionRepository identity', () => {
+  it('shares one active epoch when the same session is first opened concurrently', async () => {
+    const store = new MemoryAgentSessionStore();
+    const records = await Promise.all([
+      store.getOrCreateActive({ session_key: 'concurrent' }),
+      store.getOrCreateActive({ session_key: 'concurrent' }),
+    ]);
+    expect(records[0]?.session_id).toBe(records[1]?.session_id);
+    expect((await store.findActive('concurrent'))?.session_id).toBe(records[0]?.session_id);
+  });
+
+  it('serializes first creation in the persistent sqlite store', async () => {
+    const db = Registry.create('sqlite', { filename: ':memory:' });
+    db.define('agent_sessions', AGENT_SESSION_MODEL);
+    await db.start();
+    try {
+      const store = new AgentSessionStore(db.model('agent_sessions'));
+      const records = await Promise.all([
+        store.getOrCreateActive({ session_key: 'sqlite:concurrent' }),
+        store.getOrCreateActive({ session_key: 'sqlite:concurrent' }),
+      ]);
+      expect(records[0]?.session_id).toBe(records[1]?.session_id);
+      const rows = await db.model('agent_sessions').select().where({ session_key: 'sqlite:concurrent', status: 'active' });
+      expect(rows).toHaveLength(1);
+    } finally { await db.stop(); }
+  });
+
+  it('keeps other keys independent and releases a failed creation before the same-key retry', async () => {
+    const rows: Record<string, unknown>[] = [];
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    let attemptsA = 0;
+    const store = new AgentSessionStore({
+      select: () => ({ where: async (condition) => rows.filter((row) => Object.entries(condition).every(([key, value]) => row[key] === value)) as never }),
+      create: async (record) => {
+        if (record.session_key === 'A' && ++attemptsA === 1) {
+          entered(); await gate; throw new Error('temporary write failure');
+        }
+        rows.push(record);
+      },
+      update: () => ({ where: async () => undefined }),
+    });
+    const first = store.getOrCreateActive({ session_key: 'A' });
+    const rejected = expect(first).rejects.toMatchObject({ name: 'PersistenceUnavailableError', operation: 'agent_session.create' });
+    await started;
+    const retry = store.getOrCreateActive({ session_key: 'A' });
+    expect((await store.getOrCreateActive({ session_key: 'B' })).session_key).toBe('B');
+    expect(rows.map((row) => row.session_key)).toEqual(['B']);
+    release();
+    await rejected;
+    const recovered = await retry;
+    expect(recovered.session_key).toBe('A');
+    expect(attemptsA).toBe(2);
+    expect((await store.getOrCreateActive({ session_key: 'A' })).session_id).toBe(recovered.session_id);
+    expect(rows.filter((row) => row.session_key === 'A')).toHaveLength(1);
+  });
+
   it('creates collision-resistant epoch ids without shared counters', async () => {
     const firstStore = new MemoryAgentSessionStore();
     const secondStore = new MemoryAgentSessionStore();

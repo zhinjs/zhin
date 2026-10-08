@@ -12,6 +12,7 @@ export interface SkillDescriptor extends SkillDefinition {
 }
 
 export class SkillIndex {
+  readonly $projection = 'zhin.skill-index/1' as const;
   readonly #index: OwnerCapabilityIndex<SkillDefinition>;
 
   constructor(
@@ -42,4 +43,10 @@ function toDescriptor(entry: OwnerCapabilityEntry<SkillDefinition>): SkillDescri
     qualifiedName: entry.qualifiedName,
     source: entry.source,
   });
+}
+
+/** Recognize the versioned projection across generation module identities. */
+export function isSkillIndex(value: unknown): value is SkillIndex {
+  return !!value && typeof value === 'object'
+    && (value as { readonly $projection?: unknown }).$projection === 'zhin.skill-index/1';
 }

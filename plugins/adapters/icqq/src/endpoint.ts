@@ -16,10 +16,11 @@ import {
   type EndpointManagement,
   type EndpointPendingRequest,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { EndpointContentPort } from '@zhin.js/adapter';
 import { receiveOneBotLikeSideEvent, buildSystem, toCanonicalSegments, type LoginAssist } from '@zhin.js/core';
-import type { MessageRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type MessageRef } from '@zhin.js/im-contract';
 import { formatCompact, getAdapterLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
 import { runIcqqLoginAssistStep } from './icqq-login-assist.js';
@@ -103,6 +104,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
   #open = false;
   #retiring = false;
   #started = false;
+  #stopped = false;
+  #everOnline = false;
   #retirementEpoch = 0;
   #retirementArmed = false;
   #disposeNativeEvents?: () => void;
@@ -207,9 +210,18 @@ export class IcqqEndpoint extends Endpoint<Client> {
     });
   }
 
+  get transportState(): EndpointTransportState {
+    if (this.#stopped || this.#retiring) return 'stopped';
+    if (!this.#started) return 'idle';
+    if (this.client.isOnline()) return 'open';
+    if (!this.#everOnline) return 'connecting';
+    return this.#options.config.autoReconnect ? 'reconnecting' : 'closed';
+  }
+
   async start(signal: AbortSignal): Promise<void> {
     if (this.#started) return;
     signal.throwIfAborted();
+    this.#stopped = false;
     // Invalidate a guard left by a prior lifecycle epoch before admitting a
     // new login attempt on this endpoint instance.
     this.#retirementEpoch += 1;
@@ -268,6 +280,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.#assertExternalLifecycle('stop');
     this.#armRetirementFence();
     await Promise.allSettled([...this.#inflightInbound]);
@@ -319,7 +332,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
-    if (!this.#started) throw new Error('icqq endpoint 未连接');
+    if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
     const prepared = isIcqqSegmentPayload(payload)
       ? prepareIcqqOutboundMedia(payload, mediaMode)
@@ -340,7 +353,11 @@ export class IcqqEndpoint extends Endpoint<Client> {
         }));
         throw error;
       }
-      const messageId = String(result?.message_id ?? `sent_${Date.now()}`);
+      const rawId = result?.message_id;
+      if ((typeof rawId !== 'string' && typeof rawId !== 'number') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+        throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: ICQQ returned no message_id', 'unknown');
+      }
+      const messageId = String(rawId);
       this.#logger.info(
         `send ${conversation.kind}:${conversation.id} | id: ${messageId} | ${truncatePreview(preview, 80)}`,
       );
@@ -378,12 +395,12 @@ export class IcqqEndpoint extends Endpoint<Client> {
     if (isIcqqFileElement(message)) {
       switch (target.kind) {
         case 'private': {
-          const id = await this.client.pickFriend(target.userId).sendFile(message.file, message.name);
-          return { message_id: id };
+          await this.client.pickFriend(target.userId).sendFile(message.file, message.name);
+          return {};
         }
         case 'group': {
-          const stat = await this.client.pickGroup(target.groupId).sendFile(message.file, '/', message.name);
-          return { message_id: stat.fid };
+          await this.client.pickGroup(target.groupId).sendFile(message.file, '/', message.name);
+          return {};
         }
         case 'temp':
         case 'channel':
@@ -560,6 +577,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
   #bindSystemOnlineEvent(): void {
     this.client.on('system.online', (event) => {
       if (this.#retiring) return;
+      this.#everOnline = true;
       try {
         this.#resolveStartOnline?.();
         this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');

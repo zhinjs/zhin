@@ -57,28 +57,32 @@ function fakeLogModel(initial: FakeLogRow[]) {
   let rows = [...initial];
   const matchWhere = (row: FakeLogRow, where: Record<string, unknown>): boolean =>
     Object.entries(where).every(([key, cond]) => {
+      if (key === '$or' && Array.isArray(cond)) return cond.some(part => matchWhere(row, part));
       const value = (row as unknown as Record<string, unknown>)[key];
       if (cond && typeof cond === 'object') {
         const ops = cond as Record<string, unknown>;
+        if ('$like' in ops) return String(value).toLowerCase().includes(String(ops.$like).replace(/^%|%$/g, '').toLowerCase());
         if ('$lt' in ops) return new Date(value as string | Date) < new Date(ops.$lt as string | Date);
         if ('$in' in ops) return (ops.$in as unknown[]).includes(value);
       }
       return value === cond;
     });
-  const chain = (list: FakeLogRow[]) => {
-    const selection = {
-      where: (where: Record<string, unknown>) => chain(list.filter((row) => matchWhere(row, where))),
-      orderBy: (field: keyof FakeLogRow, direction: 'ASC' | 'DESC') =>
-        chain([...list].sort((a, b) => {
-          const left = a[field] as unknown as string;
-          const right = b[field] as unknown as string;
-          const cmp = left < right ? -1 : left > right ? 1 : 0;
-          return direction === 'ASC' ? cmp : -cmp;
-        })),
-      limit: (count: number) => Promise.resolve(list.slice(0, count)),
-      then: Promise.prototype.then.bind(Promise.resolve(list)),
+  const chain = (list: FakeLogRow[], orders: Array<[keyof FakeLogRow, 'ASC' | 'DESC']> = []) => {
+    const evaluate = () => [...list].sort((a, b) => {
+      for (const [field, direction] of orders) {
+        const left = a[field]; const right = b[field];
+        const cmp = left < right ? -1 : left > right ? 1 : 0;
+        if (cmp) return direction === 'ASC' ? cmp : -cmp;
+      }
+      return 0;
+    });
+    return {
+      where: (where: Record<string, unknown>) => chain(list.filter(row => matchWhere(row, where)), orders),
+      orderBy: (field: keyof FakeLogRow, direction: 'ASC' | 'DESC') => chain(list, [...orders, [field, direction]]),
+      offset: (count: number) => chain(evaluate().slice(count)),
+      limit: (count: number) => Promise.resolve(evaluate().slice(0, count)),
+      then: (resolve: (rows: FakeLogRow[]) => unknown, reject?: (error: unknown) => unknown) => Promise.resolve(evaluate()).then(resolve, reject),
     };
-    return selection;
   };
   return {
     select: (..._fields: string[]) => chain(rows),
@@ -106,13 +110,64 @@ const sampleLogs: FakeLogRow[] = [
 ];
 
 describe('console-rest-pages logs', () => {
+  it('paginates stable history with combined filters and source counts outside the selected page/source', async () => {
+    const rows = Array.from({ length: 31 }, (_, index) => ({
+      id: index + 1, level: index % 2 ? 'error' : 'info', name: 'fixture',
+      message: index % 3 ? 'normal record' : 'needle record',
+      source: index % 4 ? 'alpha' : 'beta', timestamp: new Date('2026-01-01T00:00:00Z'),
+    }));
+    rows[0]!.timestamp = new Date('2026-01-02T00:00:00Z');
+    const base = await startHost(baseCtx({ databaseHost: fakeDatabaseHost(fakeLogModel(rows)) }));
+    const one = await json(await fetch(`${base}/api/logs?page=1&pageSize=10`));
+    const two = await json(await fetch(`${base}/api/logs?page=2&pageSize=10`));
+    expect(one).toMatchObject({ total: 31, page: 1, pageSize: 10, totalPages: 4 });
+    const ids = (body: Record<string, unknown>) => (body.data as Array<{ id: number }>).map(row => row.id);
+    expect(ids(one)).toEqual([1, 31, 30, 29, 28, 27, 26, 25, 24, 23]);
+    expect(ids(two)).toEqual([22, 21, 20, 19, 18, 17, 16, 15, 14, 13]);
+    const filtered = await json(await fetch(`${base}/api/logs?level=error&source=alpha&q=needle&pageSize=2`));
+    expect(filtered.total).toBe(5);
+    expect(filtered.sources).toEqual([{ source: 'alpha', count: 5 }]);
+    expect(ids(filtered)).toEqual([28, 22]);
+    const sourceIndependent = await json(await fetch(`${base}/api/logs?source=alpha&pageSize=1`));
+    expect(sourceIndependent.sources).toEqual([{ source: 'alpha', count: 23 }, { source: 'beta', count: 8 }]);
+    const absent = await json(await fetch(`${base}/api/logs?q=absent&page=9&pageSize=10`));
+    expect(absent).toMatchObject({ data: [], total: 0, page: 1, totalPages: 1, sources: [] });
+    const beyond = await json(await fetch(`${base}/api/logs?page=100&pageSize=10`));
+    expect(beyond).toMatchObject({ total: 31, page: 4, totalPages: 4 });
+    expect(ids(beyond)).toEqual([2]);
+    const legacy = await json(await fetch(`${base}/api/logs?limit=2`));
+    expect(legacy.total).toBe(31);
+    expect(ids(legacy)).toEqual([1, 31]);
+  });
+
+  it('treats percent and underscore as literal search characters, not database wildcards', async () => {
+    const model = fakeLogModel([
+      { ...sampleLogs[0]!, id: 1, message: 'progress 50%_done' },
+      { ...sampleLogs[0]!, id: 2, message: 'progress 50XAdone' },
+      { ...sampleLogs[0]!, id: 3, message: 'unrelated' },
+      { ...sampleLogs[0]!, id: 4, source: 'Other', message: String.raw`path C:\Fixture\Leaf` },
+    ]);
+    const base = await startHost(baseCtx({ databaseHost: fakeDatabaseHost(model) }));
+    const result = await json(await fetch(`${base}/api/logs?q=${encodeURIComponent('%_')}`));
+    expect(result.total).toBe(1);
+    expect(result.data).toMatchObject([{ id: 1, message: 'progress 50%_done' }]);
+    expect(result.sources).toEqual([{ source: 'App', count: 1 }]);
+    const pathQuery = encodeURIComponent(String.raw`c:\fixture`);
+    const path = await json(await fetch(`${base}/api/logs?q=${pathQuery}&source=Other`));
+    expect(path.total).toBe(1);
+    expect(path.data).toMatchObject([{ id: 4 }]);
+    const wrongSource = await json(await fetch(`${base}/api/logs?q=${pathQuery}&source=App`));
+    expect(wrongSource.total).toBe(0);
+    expect(wrongSource.sources).toEqual([{ source: 'Other', count: 1 }]);
+  });
+
   it('GET /api/logs 返回 legacy 形状并支持 level 过滤', async () => {
     const base = await startHost(baseCtx({ databaseHost: fakeDatabaseHost(fakeLogModel(sampleLogs)) }));
     const all = await json(await fetch(`${base}/api/logs`));
     expect(all.success).toBe(true);
     expect(all.total).toBe(3);
     const data = all.data as Array<Record<string, unknown>>;
-    // 按 timestamp DESC；legacy 形状不含 id 字段
+    // timestamp DESC；data数组保持兼容并增加稳定id。
     expect(data.map((row) => row.timestamp)).toEqual([
       '2026-01-03T00:00:00.000Z',
       '2026-01-02T00:00:00.000Z',
@@ -253,7 +308,8 @@ const registryFixture = {
       version: '2.0.0',
       description: 'bar plugin',
       author: 'community',
-      isOfficial: false,
+      // Untrusted discovery metadata cannot confer namespace membership.
+      isOfficial: true,
       category: 'game',
       tags: ['bar'],
     },
@@ -337,6 +393,7 @@ describe('console-rest-pages marketplace', () => {
 
     const filtered = await json(await fetch(`${base}/pub/marketplace/search?q=bar`));
     expect(filtered.total).toBe(1);
+    expect(filtered.data[0]).toMatchObject({ official: false, isOfficial: false });
     expect((filtered.data as unknown[])[0]).toMatchObject({ name: 'plugin-bar' });
 
     const officials = await json(await fetch(

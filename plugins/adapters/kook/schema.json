@@ -151,6 +151,42 @@
           "id": {
             "type": "string",
             "description": "KOOK bot name"
+          },
+          "streamProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\s/:@?#]+$"
+              }
+            },
+            "required": [
+              "port",
+              "serverName"
+            ],
+            "description": "WSS故障验收固定loopback，保持真实TLS身份"
+          },
+          "apiProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "port"
+            ],
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "description": "Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled."
           }
         },
         "required": [

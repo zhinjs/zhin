@@ -62,13 +62,14 @@ describe('runtime readiness', () => {
       $projection: 'zhin.adapter-index/1',
       describe: () => [
         { owner: 'root/other', id: 'root/other\0zhin.adapter\0sandbox~bot', connected: true },
-        { owner: required.owner, id: 'root/primary\0zhin.adapter\0sandbox~bot', name: 'mutable nickname', connected },
+        { owner: required.owner, id: 'root/primary\0zhin.adapter\0sandbox~bot', name: 'mutable nickname',
+          connected, admitted: true, transportState: connected ? 'open' : 'reconnecting' },
       ],
     };
     commit(snapshots, { ...next, projections: new Map([[adapterFeatureId, projection]]) });
     expect(readReadiness({ snapshots }).ready).toBe(true);
     connected = false;
-    expect(readReadiness({ snapshots }).checks.at(-1)?.reason).toBe('admission_closed');
+    expect(readReadiness({ snapshots }).checks.at(-1)?.reason).toBe('transport_reconnecting');
     commit(snapshots, next);
     expect(readReadiness({ snapshots }).checks.at(-1)?.reason).toBe('endpoint_missing');
   });
@@ -110,7 +111,7 @@ describe('runtime readiness', () => {
     expect((await fetch(`${origin}/control/system/readiness`)).status).toBe(401);
     expect((await fetch(`${origin}/control/system/readiness`, {
       headers: { Authorization: 'Bearer demo-secret' },
-    })).status).toBe(401);
+    })).status).toBe(403);
     await expect(fetchReadiness(`${origin}/control`, 'full-secret')).resolves.toMatchObject({ ready: false });
     commit(snapshots, state());
     const ready = await fetch(`${origin}/pub/ready`);

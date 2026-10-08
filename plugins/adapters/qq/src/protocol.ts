@@ -1,6 +1,6 @@
 /** QQ Official Bot protocol helpers. Canonicalization is owned by Core. */
 
-import type { ConversationKind, ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationKind, type ConversationRef } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { resolveQqIntents } from './qq-intents.js';
 
@@ -20,6 +20,7 @@ export interface QqEndpointConfig {
   readonly botKind?: string;
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
+  readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
   readonly webhookPath?: string;
 }
 
@@ -33,6 +34,7 @@ export interface ResolvedQqWebsocketConfig {
   readonly intents?: readonly string[];
   readonly accessTokenUrl?: string;
   readonly gatewayUrl?: string;
+  readonly streamProxy?: import('./stream-proxy.js').QqStreamProxy;
 }
 
 export interface ResolvedQqHttpConfig {
@@ -96,6 +98,8 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
     };
   }
 
+  if (config.streamProxy && (!Number.isInteger(config.streamProxy.port) || config.streamProxy.port < 1 || config.streamProxy.port > 65535
+    || typeof config.streamProxy.serverName !== 'string' || !config.streamProxy.serverName || /[\s/:@?#]/.test(config.streamProxy.serverName))) throw new TypeError('Invalid QQ streamProxy port/serverName');
   return {
     context: 'qq',
     mode: 'websocket',
@@ -109,6 +113,7 @@ export function resolveQqConfig(config: QqEndpointConfig): ResolvedQqConfig {
     }),
     accessTokenUrl: config.accessTokenUrl,
     gatewayUrl: config.gatewayUrl,
+    ...(config.streamProxy ? { streamProxy: config.streamProxy } : {}),
   };
 }
 
@@ -228,21 +233,25 @@ export function parseCompoundMessageId(messageId: string): {
 /** 从 QQ API SendResult / 审核回包中解析出站消息 ID */
 export function resolveOutboundMessageId(result: unknown): string {
   if (!result || typeof result !== 'object') {
-    throw new Error('QQ 发送消息失败：响应为空');
+    throw new EndpointDeliveryError('delivery_unconfirmed', 'QQ 发送消息失败：响应为空', 'unknown');
   }
   const row = result as Record<string, unknown>;
+  if (typeof row.code === 'number' && Number.isFinite(row.code) && row.code !== 0) {
+    throw new EndpointDeliveryError('platform_rejected', `QQ platform rejected the outbound request (${row.code})`, 'rejected');
+  }
   const nested = row.data && typeof row.data === 'object'
     ? row.data as Record<string, unknown>
     : undefined;
-  const audit = (row.message_audit ?? nested?.message_audit) as Record<string, unknown> | undefined;
-  const id = row.id ?? row.message_id ?? audit?.audit_id;
-  if (id == null || id === '') {
+  const id = row.id ?? row.message_id ?? nested?.id ?? nested?.message_id;
+  if ((typeof id !== 'string' && typeof id !== 'number') || String(id).trim() === '' || (typeof id === 'number' && !Number.isFinite(id))) {
     const code = row.code;
-    const msg = row.message;
-    throw new Error(
+    const rejected = typeof code === 'number' && Number.isFinite(code) && code !== 0;
+    throw new EndpointDeliveryError(
+      rejected ? 'platform_rejected' : 'delivery_unconfirmed',
       code != null
-        ? `QQ 发送消息失败（${String(code)}）${msg ? `: ${String(msg)}` : ''}`
+        ? 'QQ outbound response is unconfirmed'
         : 'QQ 发送消息失败：响应缺少消息 ID',
+      rejected ? 'rejected' : 'unknown',
     );
   }
   return String(id);

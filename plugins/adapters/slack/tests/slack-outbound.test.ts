@@ -16,6 +16,23 @@ function mockLogger() {
 }
 
 describe('sendSlackContent', () => {
+  it('uploads MIME images with a previewable filename rather than alt text', async () => {
+    const client = mockWebClient();
+    await sendSlackContent(client, [{ type: 'image', data: {
+      alt: 'test image', media: { kind: 'base64', value: 'aGk=', mime_type: 'image/png' },
+    } }], { channel: 'C001' }, mockLogger());
+    expect(client.filesUploadV2).toHaveBeenCalledWith(expect.objectContaining({ filename: 'image.png' }));
+  });
+  it('sends canonical reply segments in the referenced message thread', async () => {
+    const client = mockWebClient();
+    await sendSlackContent(client, [
+      { type: 'reply', data: { message_id: '1700000001.000001' } },
+      { type: 'text', data: { text: 'reply text' } },
+    ], { channel: 'C001' }, mockLogger());
+    expect(client.chat.postMessage).toHaveBeenCalledWith(expect.objectContaining({
+      thread_ts: '1700000001.000001', text: 'reply text',
+    }));
+  });
   it.each([{}, null, { ts: '' }, { ts: ' ' }, { ts: 123 }])('rejects an unconfirmed receipt %j without retry', async (response) => {
     const client = mockWebClient();
     client.chat.postMessage.mockResolvedValue(response);

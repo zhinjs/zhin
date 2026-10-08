@@ -459,12 +459,24 @@ export class CalendarScheduler {
       return;
     }
 
-    const claimed = await this.tryClaim(job);
-    if (!claimed) {
+    // Reserve locally before awaiting a remote claim: timer and reconciliation
+    // may otherwise both admit the same job while the claim is in flight.
+    this.executing.add(job.id);
+    let claimed: boolean;
+    try { claimed = await this.tryClaim(job); }
+    catch (error) {
+      this.executing.delete(job.id);
+      this.onError?.(error instanceof Error ? error : new Error(String(error)), toJobInfo(job, () => this.cancel(job.id)));
+      return;
+    }
+    if (!claimed) { this.executing.delete(job.id); return; }
+    // Admission may have changed while an external store claim was pending.
+    if (job.cancelled || job.paused || !this.running || this.jobs.get(job.id) !== job) {
+      this.executing.delete(job.id);
+      await this.releaseClaim(job);
       return;
     }
 
-    this.executing.add(job.id);
     this.timer.remove(job.id);
 
     try {

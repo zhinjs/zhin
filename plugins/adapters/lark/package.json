@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-lark",
   "version": "1.1.4",
-  "description": "Zhin.js Lark/Feishu (飞书) adapter for Plugin Runtime (HTTP webhook)",
+  "description": "Zhin.js Lark/Feishu adapter (HTTP webhook and WebSocket long connection)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -42,6 +42,7 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
+    "undici": "6.28.0",
     "@zhin.js/adapter": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/core": "workspace:*",
@@ -50,7 +51,8 @@
     "@zhin.js/im-contract": "workspace:*",
     "@zhin.js/logger": "workspace:*",
     "@zhin.js/skill": "workspace:*",
-    "@zhin.js/tool": "workspace:*"
+    "@zhin.js/tool": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.67.0"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",

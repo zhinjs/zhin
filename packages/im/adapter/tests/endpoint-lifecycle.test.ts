@@ -26,6 +26,166 @@ async function flush(times = 10): Promise<void> {
 }
 
 describe('createEndpointLifecycle', () => {
+  it('does not publish open when the transport closes just after connect resolves', async () => {
+    const lifecycle = createEndpointLifecycle({ name: 'immediate-close', reconnect: false });
+    await lifecycle.start((handle) => new Promise<void>((resolve) => {
+      resolve();
+      queueMicrotask(() => handle.notifyClosed('closed immediately after open'));
+    }));
+    expect(lifecycle.state).toBe('closed');
+    expect(lifecycle.started).toBe(false);
+    await lifecycle.stop();
+  });
+
+  it('retries an immediately closed reconnect exactly once per backoff interval', async () => {
+    let handle!: EndpointConnectHandle;
+    let attempt = 0;
+    const lifecycle = createEndpointLifecycle({
+      name: 'immediate-reconnect-close',
+      reconnect: { initialIntervalMs: 10, jitterMs: 0 },
+    });
+    const connect = vi.fn((next: EndpointConnectHandle) => new Promise<void>((resolve) => {
+      handle = next;
+      attempt += 1;
+      resolve();
+      if (attempt === 2) queueMicrotask(() => next.notifyClosed('closed after reconnect open'));
+    }));
+    await lifecycle.start(connect);
+    handle.notifyClosed();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lifecycle.state).toBe('reconnecting');
+    expect(connect).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(19);
+    expect(connect).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(lifecycle.state).toBe('open');
+    expect(connect).toHaveBeenCalledTimes(3);
+    await lifecycle.stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('counts closed-but-resolved reconnects toward exponential backoff and the finite attempt budget', async () => {
+    let handle!: EndpointConnectHandle; let calls = 0;
+    const lifecycle = createEndpointLifecycle({ name: 'sdk-close-abort', reconnect: { initialIntervalMs: 10, multiplier: 2, maxIntervalMs: 100, jitterMs: 0, maxAttempts: 3 } });
+    const connect = vi.fn(async (next: EndpointConnectHandle) => { handle = next; if (++calls > 1) next.notifyClosed('SDK close then swallowed abort'); });
+    await lifecycle.start(connect); handle.notifyClosed('network cut');
+    await vi.advanceTimersByTimeAsync(10); expect(connect).toHaveBeenCalledTimes(2); expect(lifecycle.state).toBe('reconnecting');
+    await vi.advanceTimersByTimeAsync(19); expect(connect).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1); expect(connect).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(39); expect(connect).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1); expect(connect).toHaveBeenCalledTimes(4); expect(lifecycle.state).toBe('closed');
+    await vi.advanceTimersByTimeAsync(1000); expect(connect).toHaveBeenCalledTimes(4); expect(vi.getTimerCount()).toBe(0);
+    await lifecycle.stop();
+  });
+
+  it('resets backoff only after a reconnect stays open', async () => {
+    let handle!: EndpointConnectHandle; let calls = 0;
+    const lifecycle = createEndpointLifecycle({ name: 'sdk-close-recovered', reconnect: { initialIntervalMs: 10, multiplier: 2, jitterMs: 0 } });
+    const connect = vi.fn(async (next: EndpointConnectHandle) => { handle = next; if (++calls === 2) next.notifyClosed('still cut'); });
+    await lifecycle.start(connect); handle.notifyClosed();
+    await vi.advanceTimersByTimeAsync(10); expect(lifecycle.state).toBe('reconnecting');
+    await vi.advanceTimersByTimeAsync(20); expect(lifecycle.state).toBe('open');
+    handle.notifyClosed('new independent outage');
+    await vi.advanceTimersByTimeAsync(9); expect(connect).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(1); expect(connect).toHaveBeenCalledTimes(4); expect(lifecycle.state).toBe('open');
+    await lifecycle.stop(); expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each(['missing', 'silent', 'throwing'] as const)(
+    'retires a watchdog connection with a %s force-close callback until close is confirmed',
+    async (kind) => {
+      let handle!: EndpointConnectHandle;
+      const lifecycle = createEndpointLifecycle({
+        name: 'watchdog-close-confirmation',
+        reconnect: { initialIntervalMs: 10, jitterMs: 0 },
+        heartbeat: { watchdogMisses: 1 },
+      });
+      const connect = vi.fn(async (next: EndpointConnectHandle) => {
+        handle = next;
+        if (kind !== 'missing') next.onForceClose(() => {
+          if (kind === 'throwing') throw new Error('force close failed');
+        });
+      });
+      await lifecycle.start(connect);
+      lifecycle.startHeartbeat(() => {}, 10);
+      await vi.advanceTimersByTimeAsync(20);
+      expect(lifecycle.state).toBe('closed');
+      expect(lifecycle.started).toBe(false);
+      expect(vi.getTimerCount()).toBe(0);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(connect).toHaveBeenCalledOnce();
+      // An actual late close confirms cleanup and can safely arm reconnection.
+      handle.notifyClosed();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(connect).toHaveBeenCalledTimes(2);
+      expect(lifecycle.state).toBe('open');
+      await lifecycle.stop();
+      expect(vi.getTimerCount()).toBe(0);
+    },
+  );
+
+  it('a delayed watchdog close after stop cannot arm reconnection', async () => {
+    let handle!: EndpointConnectHandle;
+    const lifecycle = createEndpointLifecycle({
+      name: 'watchdog-stop', heartbeat: { watchdogMisses: 1 },
+    });
+    const connect = vi.fn(async (next: EndpointConnectHandle) => { handle = next; });
+    await lifecycle.start(connect);
+    lifecycle.startHeartbeat(() => {}, 10);
+    await vi.advanceTimersByTimeAsync(20);
+    await lifecycle.stop();
+    handle.notifyClosed();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(connect).toHaveBeenCalledOnce();
+    expect(lifecycle.state).toBe('stopped');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('rejects manual start while watchdog closure is unconfirmed and reconnects after actual close', async () => {
+    let handle!: EndpointConnectHandle;
+    const lifecycle = createEndpointLifecycle({
+      name: 'watchdog-manual-restart',
+      reconnect: { initialIntervalMs: 10, jitterMs: 0 },
+      heartbeat: { watchdogMisses: 1 },
+    });
+    const connect = vi.fn(async (next: EndpointConnectHandle) => {
+      handle = next;
+      next.onForceClose(() => {});
+    });
+    await lifecycle.start(connect);
+    lifecycle.startHeartbeat(() => {}, 10);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(lifecycle.state).toBe('closed');
+    const replacement = vi.fn(async () => {});
+    await expect(lifecycle.start(replacement)).rejects.toThrow('close has not been confirmed');
+    expect(replacement).not.toHaveBeenCalled();
+    expect(connect).toHaveBeenCalledOnce();
+    handle.notifyClosed();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(connect).toHaveBeenCalledTimes(2);
+    expect(lifecycle.state).toBe('open');
+    await lifecycle.stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('allows manual restart after confirmed watchdog close with reconnect disabled', async () => {
+    let handle!: EndpointConnectHandle;
+    const lifecycle = createEndpointLifecycle({
+      name: 'watchdog-confirmed-restart', reconnect: false, heartbeat: { watchdogMisses: 1 },
+    });
+    const connect = vi.fn(async (next: EndpointConnectHandle) => { handle = next; });
+    await lifecycle.start(connect);
+    lifecycle.startHeartbeat(() => {}, 10);
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(lifecycle.start(connect)).rejects.toThrow('close has not been confirmed');
+    handle.notifyClosed();
+    await lifecycle.start(connect);
+    expect(lifecycle.state).toBe('open');
+    expect(connect).toHaveBeenCalledTimes(2);
+    await lifecycle.stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('an obsolete reconnect cannot mark a replacement startup open', async () => {
     const lifecycle = createEndpointLifecycle({
       name: 'restart-during-reconnect', reconnect: { initialIntervalMs: 10, jitterMs: 0 },

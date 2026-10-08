@@ -129,6 +129,14 @@ export function resolveOutboundInteractivePolicy(
     ?? DEFAULT_INTERACTIVE_POLICY;
 }
 
+/** Read declared support from this operation's snapshot without requiring live admission. */
+export function resolveOutboundSupportedSegments(adapter: CapabilityId, snapshot: RuntimeSnapshot): readonly string[] | undefined {
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  if (!slot?.definition || typeof slot.definition !== 'object') return undefined;
+  const segments = (slot.definition as { segments?: { supported?: unknown } }).segments;
+  return Array.isArray(segments?.supported) && segments.supported.every(type => typeof type === 'string') ? segments.supported : undefined;
+}
+
 /** Preserve semantic Markdown only when the endpoint explicitly declares native consumption. */
 export function resolveOutboundMarkdownPolicy(
   adapter: CapabilityId,

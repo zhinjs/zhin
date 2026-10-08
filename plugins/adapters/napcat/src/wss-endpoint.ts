@@ -1,14 +1,16 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * NapCat reverse WSS endpoint — accepts inbound WebSocket from NapCat.
  */
 import {
+  Endpoint,
   createEndpointLifecycle,
   createRecallEndpointControl,
   type EndpointLifecycle,
   type EndpointControl,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
@@ -70,6 +72,7 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
   #pending = new Map<string, NapCatPendingAction>();
   #open = false;
   #started = false;
+  #stopped = false;
 
   constructor(options: NapCatWssEndpointOptions) {
     super();
@@ -78,11 +81,21 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     this.#connectionLifecycle = createEndpointLifecycle({
       name: `${options.config.id}:inbound`,
       reconnect: false,
+      heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
     });
+  }
+
+  get transportState(): EndpointTransportState {
+    if (this.#stopped) return 'stopped';
+    if (!this.#started) return 'idle';
+    if (this.#connectionLifecycle.state === 'closed') return 'closed';
+    if (this.#ws?.readyState === 1) return 'open';
+    return this.#connectionLifecycle.state === 'connecting' ? 'connecting' : 'idle';
   }
 
   async start(): Promise<void> {
     if (this.#started) return;
+    this.#stopped = false;
     this.#started = true;
     const handle = this.#options.http.ws(this.#options.config.path);
     this.#wsRelease = handle.onConnection((connection) => {
@@ -113,6 +126,7 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.#open = false;
     this.#wsRelease?.();
     this.#wsRelease = undefined;
@@ -128,7 +142,11 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
     const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
-    return data?.message_id != null ? String(data.message_id) : '';
+    const rawId = data?.message_id;
+    if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
+    }
+    return String(rawId);
   }
 
   async recallMessage(messageId: string): Promise<void> {
@@ -137,7 +155,7 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
   }
 
   #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    return callNapCatWsAction(this.#ws, this.#pending, this.#requestId, action, params);
+    return callNapCatWsAction(this.#connectionLifecycle.state === 'closed' ? undefined : this.#ws, this.#pending, this.#requestId, action, params);
   }
 
   admit(ev: NapCatEvent): void {
@@ -197,15 +215,23 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
   }
 
   async #acceptConnection(connection: WsConnection): Promise<void> {
+    if (!this.#started || this.#stopped) {
+      connection.socket.close();
+      return;
+    }
     if (!verifyNapCatAccessToken(this.#options.config.access_token, connection.request)) {
       connection.socket.close(4003, 'Unauthorized');
       return;
     }
     const socket = connection.socket as unknown as NapCatWsSocket;
     await this.#connectionLifecycle.stop();
+    rejectAllPending(this.#pending, 'Connection replaced');
     await this.#connectionLifecycle.start(async (lifecycleHandle) => {
       this.#ws = socket;
       lifecycleHandle.onForceClose(() => {
+        if (this.#ws === socket) {
+          rejectAllPending(this.#pending);
+        }
         try {
           socket.close();
         } catch {
@@ -219,7 +245,11 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
           /* ignore */
         }
       }, this.#options.config.heartbeat_interval);
+      socket.on('pong', () => {
+        if (this.#ws === socket) this.#connectionLifecycle.notifyHeartbeatAck();
+      });
       socket.on('message', (data) => {
+        if (this.#ws !== socket || this.#connectionLifecycle.state === 'closed') return;
         this.#connectionLifecycle.notifyHeartbeatAck();
         handleNapCatWsMessage(data, {
           endpointId: this.#options.config.id,
@@ -227,8 +257,14 @@ export class NapCatWssEndpoint extends Endpoint<NapcatClient> {
           admit: (event) => this.admit(event),
         });
       });
+      socket.on('error', (error) => {
+        if (this.#ws !== socket) return;
+        this.#logger.warn(formatCompact({ op: 'ws_error', error: String(error) }));
+      });
       socket.on('close', () => {
-        if (this.#ws === socket) this.#ws = undefined;
+        if (this.#ws !== socket) return;
+        this.#ws = undefined;
+        rejectAllPending(this.#pending);
         lifecycleHandle.notifyClosed(new Error('NapCat reverse WebSocket closed'));
       });
     });

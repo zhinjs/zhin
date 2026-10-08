@@ -5,14 +5,16 @@
 
 import type { Attachment } from 'mailparser';
 import { htmlToPlainTextWithBlockBreaks } from '@zhin.js/core';
-import { isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, isMediaRef, type MediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import { randomUUID } from 'node:crypto';
+import { escapeMailHtml, renderMailMarkdown } from './rich-mail.js';
 import type { Segment } from '@zhin.js/core/runtime';
-import { formatCompact, getLogger } from '@zhin.js/logger';
 
-const logger = getLogger('email');
 
 export interface SmtpConfig {
   readonly host: string;
+  /** TLS SNI 与证书校验域名，独立于 TCP 连接 host。 */
+  readonly serverName?: string;
   readonly port: number;
   readonly secure: boolean;
   readonly auth: {
@@ -23,6 +25,8 @@ export interface SmtpConfig {
 
 export interface ImapConfig {
   readonly host: string;
+  /** TLS SNI 与证书校验域名，独立于 TCP 连接 host。 */
+  readonly serverName?: string;
   readonly port: number;
   readonly tls: boolean;
   readonly user: string;
@@ -90,6 +94,11 @@ export function resolveEmailConfig(config: EmailEndpointConfig): ResolvedEmailCo
       'Email endpoint requires complete smtp and imap configuration',
     );
   }
+  for (const [name, value] of [['smtp.serverName', smtp.serverName], ['imap.serverName', imap.serverName]] as const) {
+    if (value !== undefined && (typeof value !== 'string' || !value.trim() || /[\s/:@?#]/.test(value))) {
+      throw new TypeError(`Email ${name} requires a non-empty TLS hostname`);
+    }
+  }
   const attachmentsSource = config.attachments;
   const attachments = attachmentsSource?.enabled
     ? {
@@ -155,9 +164,12 @@ export function parseEmailMessage(
   },
   uid: number,
 ): EmailMessage {
+  const sender = parsed.from as { value?: Array<{ address?: string }> } | undefined;
+  const senderText = parsed.from ? addressListText(parsed.from)[0] || '' : '';
+  const senderAddress = sender?.value?.[0]?.address || senderText.match(/<([^<>]+)>/)?.[1] || senderText;
   return {
     messageId: parsed.messageId || '',
-    from: parsed.from ? addressListText(parsed.from)[0] || '' : '',
+    from: senderAddress.trim(),
     to: addressListText(parsed.to),
     cc: addressListText(parsed.cc),
     bcc: addressListText(parsed.bcc),
@@ -248,39 +260,24 @@ export function senderDisplayName(from: string): string {
  * nodemailer 附件的最小形状：url/path 走 `path`（URL 由 nodemailer 拉流、
  * 本地路径读盘），base64 走 `content` + `encoding: 'base64'` 直发。
  */
-export type EmailOutboundAttachment =
+export type EmailOutboundAttachment = (
   | { filename: string; path: string }
-  | { filename: string; content: string; encoding: 'base64' };
+  | { filename: string; content: string; encoding: 'base64' }) & { cid?: string; contentDisposition?: 'inline' };
 
 /**
  * image/audio/video/file 段 → nodemailer 附件（canonical MediaRef 唯一来源）：
  * - kind=url / path → attachment.path；
  * - kind=base64 → attachment.content（data: URL 前缀剥离）；
- * - kind=file（平台不透明引用）邮件无对应概念，丢弃留痕；
- * - 缺 media 同样 warn + 丢弃。
+ * - kind=file（平台不透明引用）邮件无对应概念，投递前拒绝；
+ * - 缺 media 同样投递前拒绝。
  */
 function mediaSegmentToAttachment(
   type: string,
   data: Record<string, unknown>,
 ): EmailOutboundAttachment | null {
   const media = data.media;
-  if (!isMediaRef(media)) {
-    logger.warn(formatCompact({
-      op: 'email_outbound_media_dropped',
-      type,
-      reason: 'missing_media_ref',
-    }));
-    return null;
-  }
-  if (media.kind === 'file') {
-    logger.warn(formatCompact({
-      op: 'email_outbound_media_dropped',
-      type,
-      reason: 'unsupported_kind',
-      kind: media.kind,
-    }));
-    return null;
-  }
+  if (!isMediaRef(media)) throw new EndpointDeliveryError('invalid_payload', `Email ${type} requires canonical media`, 'not_sent');
+  if (media.kind === 'file') throw new EndpointDeliveryError('unsupported_operation', 'Email cannot resolve opaque platform media IDs', 'not_sent');
   const filename = attachmentFileName(type, data, media);
   if (media.kind === 'base64') {
     const value = media.value.startsWith('data:')
@@ -349,7 +346,7 @@ export function formatOutboundMail(
   for (const item of segments) {
     if (typeof item === 'string') {
       textParts.push(item);
-      htmlParts.push(item.replace(/\n/g, '<br>'));
+      htmlParts.push(escapeMailHtml(item).replace(/\n/g, '<br>'));
       continue;
     }
     const data = item.data ?? {};
@@ -357,27 +354,61 @@ export function formatOutboundMail(
       case 'text': {
         const textContent = String(data.text ?? data.content ?? '');
         textParts.push(textContent);
-        htmlParts.push(textContent.replace(/\n/g, '<br>'));
+        htmlParts.push(escapeMailHtml(textContent).replace(/\n/g, '<br>'));
         break;
       }
+      case 'markdown': {
+        const html = renderMailMarkdown(String(data.content ?? data.text ?? ''));
+        htmlParts.push(html);
+        textParts.push(htmlToPlainTextWithBlockBreaks(html));
+        break;
+      }
+      case 'html': {
+        const html = String(data.html ?? data.content ?? '');
+        htmlParts.push(html);
+        textParts.push(htmlToPlainTextWithBlockBreaks(html));
+        break;
+      }
+      case 'share': {
+        let url: URL;
+        try { url = new URL(String(data.url ?? '')); } catch { throw new EndpointDeliveryError('invalid_payload', 'Email share requires an HTTP(S) URL', 'not_sent'); }
+        if (!['http:', 'https:'].includes(url.protocol) || typeof data.title !== 'string' || !data.title.trim()) throw new EndpointDeliveryError('invalid_payload', 'Email share requires URL and title', 'not_sent');
+        if (['image', 'audio', 'artist', 'duration', 'config'].some(key => data[key] !== undefined)) throw new EndpointDeliveryError('unsupported_operation', 'Email share media/app metadata is not implemented', 'not_sent');
+        const description = String(data.description ?? data.content ?? '');
+        textParts.push(`${data.title}\n${url.href}${description ? `\n${description}` : ''}`);
+        htmlParts.push(`<a href="${escapeMailHtml(url.href)}">${escapeMailHtml(data.title)}</a>${description ? `<p>${escapeMailHtml(description).replace(/\n/g, '<br>')}</p>` : ''}`);
+        break;
+      }
+      case 'reply':
+        throw new EndpointDeliveryError('unsupported_operation', 'Email canonical reply is not mapped to mail threading headers', 'not_sent');
+      case 'keyboard':
+      case 'action':
+        throw new EndpointDeliveryError('unsupported_operation', 'Email has no Bot button callback transport', 'not_sent');
       case 'image':
       case 'audio':
       case 'video':
       case 'file': {
         const attachment = mediaSegmentToAttachment(item.type, data);
-        if (attachment) attachments.push(attachment);
+        if (!attachment) throw new EndpointDeliveryError('invalid_payload', 'Email media segment has no usable attachment', 'not_sent');
+        if (attachment) {
+          if (item.type === 'image') {
+            attachment.cid = `${randomUUID()}@zhin-mail`;
+            attachment.contentDisposition = 'inline';
+            htmlParts.push(`<img src="cid:${attachment.cid}" alt="${escapeMailHtml(String(data.alt ?? attachment.filename))}">`);
+          }
+          attachments.push(attachment);
+        }
         break;
       }
       default:
-        break;
+        throw new EndpointDeliveryError('unsupported_operation', 'Email outbound segment is not supported', 'not_sent');
     }
   }
 
   return {
     ...mail,
-    ...(textParts.length > 0
-      ? { text: textParts.join('\n'), html: htmlParts.join('<br>') }
-      : {}),
+    ...(textParts.length > 0 ? { text: textParts.join('\n') } : {}),
+    ...(htmlParts.length > 0 ? { html: htmlParts.join('<br>') } : {}),
     ...(attachments.length > 0 ? { attachments } : {}),
   };
 }

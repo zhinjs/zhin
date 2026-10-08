@@ -167,15 +167,21 @@ stop 主动断开不重连、心跳 PONG 看门狗、定时器集中清理、陈
 - `plugins.<adapter>` 配置该 adapter 所有 endpoint 的**通用配置**（如凭据共享字段、
   `master`、`intents`）。
 - `plugins.<adapter> endpoints[index]` 配置单个 endpoint 的**特殊配置**，逐项覆盖通用
-  配置，`name` 必填。
+  配置，`id` 必填。
 - 不写 `endpoints` 时退化为单 endpoint（历史行为），实例 config 原样传给 `create()`。
 
 展开由 `expandEndpointConfigs`（`src/adapter-index.ts`）完成：endpoint record id 为
-`<slotId>~<name>`，合并顺序 `{...通用, ...项}`（项优先），`endpoints` 键不下传给适配器。
-record name 即 entry.name——Console 展示、endpoint identity 解析、inbox 落库都按它命中
-唯一 endpoint（适配器实例的 live name 如 icqq uin 优先于它展示）。entry.name 不得含
-`~`/`\0`（会破坏 id 结构），重名/缺名的 entry 会被丢弃并 warn。
+`<slotId>~<id>`，合并顺序 `{...通用, ...项}`（项优先），`endpoints` 键不下传给适配器。
+record name 即 entry.id——Console 展示、endpoint identity 解析、inbox 落库都按它命中
+唯一 endpoint（适配器实例的 live name 如 icqq uin 优先于它展示）。entry.id 不得含
+`~`/`\0`（会破坏 id 结构），重复、缺失或非法 id 会使候选配置失败。
 多账号示例见 `plugins/adapters/icqq` / `plugins/adapters/qq` 的 README 与 schema。
+
+Endpoint 可通过 `transportState` getter 报告本地传输状态：`idle / connecting / open / reconnecting / closed / stopped`。
+`AdapterIndex.describe()` 分开报告 `admitted` 与 `transportState`，只有准入开放且传输为 `open` 才是 `connected`。
+class 与 compact Endpoint 均需提供健康 getter，否则报告 `unknown`，不会假报在线。
+`connect()` 完成仅表示启动调用完成；HTTP/反向连接需区分 listener 挂载与实际连接等待。
+候选代事件缓冲有界（256）；`eventDiagnostics` 提供 buffered/dropped/dispatchFailures，无事件正文。
 
 ## 命令前缀（commandPrefix）
 

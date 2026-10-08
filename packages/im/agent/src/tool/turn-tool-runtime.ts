@@ -41,6 +41,9 @@ export class TurnToolRuntime {
     await this.#append({ type: 'tool_call', toolName: name, args: { ...input }, toolUseId }, causedBy);
     if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     const decision = await runTurnToolPolicies({ turn: this.turn, tool, input });
+    // File/cwd authorization is asynchronous: cancellation can arrive after
+    // the ingress check but before an allowed decision reaches execution.
+    if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
     if (decision.status === 'denied') {
       return this.#deny(name, toolUseId, decision.policy, decision.reason, causedBy);
     }

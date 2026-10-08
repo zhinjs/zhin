@@ -61,7 +61,10 @@ export function readReadiness(source: ReadinessSource): ReadinessReport {
         && String(row.id).split('\0').at(-1) === required.name);
       const ready = endpoint?.connected === true;
       checks.push({ component: `endpoint:${required.owner}:${required.name}`, ready,
-        reason: ready ? 'admission_open' : endpoint ? 'admission_closed' : 'endpoint_missing',
+        reason: ready ? 'transport_open' : endpoint
+          ? !endpoint.admitted ? 'admission_closed'
+            : endpoint.transportState === 'unknown' ? 'transport_unobserved' : `transport_${endpoint.transportState}`
+          : 'endpoint_missing',
         ...(!ready ? { remediation: 'Check the plugin instance, endpoint slot and activation logs.' } : {}),
       });
     }

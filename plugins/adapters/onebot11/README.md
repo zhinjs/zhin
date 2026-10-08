@@ -103,3 +103,7 @@ plugins:
 ## 许可证
 
 MIT License
+
+### 高阶消息支持边界
+
+OneBot11 标准支持链接分享：canonical share 的 url/title/description/image 分别映射标准 url/title/content/image，保留标题与描述。具体桥是否实现需实机确认；NapCat 的 share 发送限制不能以标准支持推断通过。标准没有 Markdown 与 keyboard 段，直接出站明确 `unsupported_operation / not_sent`；文字交互降级不能算原生按钮支持。参考：[OneBot11 消息段规范](https://github.com/botuniverse/onebot-11/blob/master/message/segment.md)。

@@ -170,6 +170,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
   let address: HttpHostAddress | undefined;
   let closed = false;
   let closeResult: Promise<void> | undefined;
+  let listenResult: Promise<HttpHostAddress> | undefined;
 
   const secure = options.tls !== undefined;
   const handleRequest = (request: IncomingMessage, response: ServerResponse): void => {
@@ -345,7 +346,10 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     const auth = authenticateHttp(request, url, pathname);
     if (!auth.ok) {
       if (corsOk && origin) applyCors(response, origin, corsOrigins);
-      writeJson(response, 401, { success: false, error: 'Invalid or missing token' });
+      writeJson(response, auth.forbidden ? 403 : 401, {
+        success: false,
+        error: auth.forbidden ? 'Token scope does not allow this route' : 'Invalid or missing token',
+      });
       return;
     }
 
@@ -407,7 +411,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     request: IncomingMessage,
     url: URL,
     pathname: string,
-  ): { ok: true; scope: AuthScope; principal?: AuthenticatedTokenPrincipal } | { ok: false } {
+  ): { ok: true; scope: AuthScope; principal?: AuthenticatedTokenPrincipal } | { ok: false; forbidden?: boolean } {
     if (!requiresHttpAuth(pathname, apiBase, authExempt)) {
       return { ok: true, scope: 'full' };
     }
@@ -422,7 +426,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     if (!scope) return { ok: false };
     if (scope === 'demo') {
       const method = (request.method ?? 'GET').toUpperCase();
-      if (!isDemoHttpAllowed(method, pathname, apiBase)) return { ok: false };
+      if (!isDemoHttpAllowed(method, pathname, apiBase)) return { ok: false, forbidden: true };
     }
     const principal = tokenRegistry.resolvePrincipal(token);
     return { ok: true, scope, ...(principal ? { principal } : {}) };
@@ -534,11 +538,21 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
     },
 
     listen(): Promise<HttpHostAddress> {
+      if (closed) return Promise.reject(new Error('HTTP Host is closed'));
+      if (listenResult) return listenResult;
       if (address) return Promise.resolve(address);
-      return new Promise((resolve, reject) => {
-        server.once('error', reject);
+      listenResult = new Promise((resolve, reject) => {
+        const onError = (error: Error): void => {
+          listenResult = undefined;
+          reject(error);
+        };
+        server.once('error', onError);
         server.listen({ host, port }, () => {
-          server.off('error', reject);
+          server.off('error', onError);
+          if (closed) {
+            reject(new Error('HTTP Host closed before listen completed'));
+            return;
+          }
           const bound = server.address();
           const listenPort = typeof bound === 'object' && bound ? bound.port : port;
           const publicHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
@@ -562,6 +576,7 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
           resolve(address);
         });
       });
+      return listenResult;
     },
 
     close(): Promise<void> {
@@ -569,35 +584,38 @@ export function createHttpHost(options: HttpHostOptions = {}): ProcessHttpHost {
       closed = true;
       wsRoutes.clear();
       httpRoutes.length = 0;
-      // Rollback paths dispose a host whose generation never reached listen().
-      if (!server.listening) {
-        address = undefined;
-        closeResult = Promise.resolve();
-        return closeResult;
-      }
-      closeResult = new Promise((resolve, reject) => {
-        // Long-lived connections (SSE, keep-alive, WS) never end on their own:
-        // destroy tracked sockets and terminate WS clients before close(),
-        // otherwise the close callbacks would never fire.
-        for (const socket of sockets) socket.destroy();
-        sockets.clear();
-        for (const client of wss.clients) client.terminate();
-        wss.close((wssError) => {
-          if (wssError) {
-            reject(wssError);
-            return;
-          }
-          server.close((serverError) => {
-            if (serverError) {
-              reject(serverError);
+      closeResult = (async () => {
+        // A pending listen must settle before deciding whether there is a
+        // listener to close. Otherwise it can bind after close has resolved.
+        await listenResult?.catch(() => undefined);
+        if (!server.listening) {
+          address = undefined;
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          // Long-lived connections (SSE, keep-alive, WS) never end on their own:
+          // destroy tracked sockets and terminate WS clients before close(),
+          // otherwise the close callbacks would never fire.
+          for (const socket of sockets) socket.destroy();
+          sockets.clear();
+          for (const client of wss.clients) client.terminate();
+          wss.close((wssError) => {
+            if (wssError) {
+              reject(wssError);
               return;
             }
-            logger.debug(formatCompact({ op: 'http_host_closed' }));
-            address = undefined;
-            resolve();
+            server.close((serverError) => {
+              if (serverError) {
+                reject(serverError);
+                return;
+              }
+              logger.debug(formatCompact({ op: 'http_host_closed' }));
+              address = undefined;
+              resolve();
+            });
           });
         });
-      });
+      })();
       return closeResult;
     },
   };

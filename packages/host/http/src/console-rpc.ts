@@ -812,6 +812,8 @@ export async function dispatchRuntimeConsoleRpc(
           reachable: endpoint.connected && endpoint.status === 'online',
           connected: endpoint.connected,
           status: endpoint.status,
+          admitted: endpoint.admitted,
+          transportState: endpoint.transportState,
           phase: endpoint.phase ?? (endpoint.connected ? 'online' : 'pending'),
           pendingLogin: endpoint.pendingLogin ?? false,
           latencyMs: Date.now() - startedAt,

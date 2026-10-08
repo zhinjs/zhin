@@ -18,6 +18,7 @@ export interface LineWebhookHandler {
   readonly config: ResolvedLineConfig;
   readonly isOpen: boolean;
   admit(event: LineEvent): void;
+  admitAccepted(event: LineEvent): Promise<void>;
 }
 
 export function registerLineWebhookRoutes(
@@ -58,22 +59,30 @@ export async function handleLineWebhookRequest(
     try {
       body = JSON.parse(rawBody) as LineWebhookBody;
     } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ message: 'OK' }));
+      response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'Invalid JSON' }));
       return;
     }
 
-    if (handler.isOpen && Array.isArray(body.events)) {
-      for (const event of body.events) {
-        handler.admit(event);
-      }
+    if (!body || !Array.isArray(body.events) || body.events.some(event => !event || typeof event.type !== 'string' || !event.source || !['user', 'group', 'room'].includes(event.source.type) || (event.type === 'message' && !('message' in event && event.message && typeof event.message.id === 'string')))) {
+      response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'Invalid events' }));
+      return;
+    }
+    if (body.events.length && !handler.isOpen) {
+      response.writeHead(503, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ message: 'Endpoint unavailable' }));
+      return;
+    }
+    for (const event of body.events) {
+      await handler.admitAccepted(event);
     }
 
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ message: 'OK' }));
   } catch (error) {
     logger.error('LINE webhook error:', error);
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ message: 'OK' }));
+    response.writeHead(503, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ message: 'Admission unavailable' }));
   }
 }

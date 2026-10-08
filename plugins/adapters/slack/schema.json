@@ -88,6 +88,42 @@
           "id": {
             "type": "string",
             "description": "Slack bot name"
+          },
+          "streamProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\s/:@?#]+$"
+              }
+            },
+            "required": [
+              "port",
+              "serverName"
+            ],
+            "description": "Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连"
+          },
+          "webApiProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              }
+            },
+            "required": [
+              "port"
+            ],
+            "description": "出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用"
           }
         },
         "required": [

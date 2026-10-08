@@ -10,6 +10,7 @@ import {
   ConsoleRpcRequestScope,
 } from './rpc-context.js';
 import type { ConsoleRpcComposition } from './rpc-composition.js';
+import { assertDemoConsoleRpcAllowed } from '@zhin.js/console-protocol';
 
 export interface RegisterConsoleRpcRouteOptions extends ConsoleRpcComposition {
   readonly http: HttpHost;
@@ -24,6 +25,13 @@ export function registerConsoleRpcRoute(options: RegisterConsoleRpcRouteOptions)
   ) => {
     try {
       const message = (await readJsonBody<Record<string, unknown>>(request)) ?? {};
+      if (authScope === 'demo') {
+        const denied = assertDemoConsoleRpcAllowed(String(message.type ?? ''));
+        if (denied) {
+          writeJson(response, 403, { success: false, error: denied, requestId: message.requestId });
+          return;
+        }
+      }
       const requestScope = new ConsoleRpcRequestScope(options, {
         authScope,
         authenticatedPrincipal,

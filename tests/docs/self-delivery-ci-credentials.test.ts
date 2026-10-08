@@ -7,13 +7,13 @@ const read = (name: string) => {
 };
 
 describe('untrusted candidate CI credential isolation', () => {
-  it.each([['ci', 'test'], ['plugin-runtime-size', 'production-install']])('%s exposes the dedicated package secret only during script-free install', (file, jobName) => {
+  it.each([['ci', 'test'], ['ci', 'platform-installed'], ['plugin-runtime-size', 'production-install']])('%s exposes the dedicated package secret only during script-free install', (file, jobName) => {
     const { config, source } = read(file);
     const job = config.jobs[jobName];
     expect(config.permissions).toEqual({ contents: 'read' });
     expect(job.permissions).toEqual({ contents: 'read', packages: 'read' });
     expect(source).not.toMatch(/secrets\.(?!PERSONAL_TOKEN\b)|secrets\[['"]|CODECOV_TOKEN/);
-    expect(source.match(/secrets\.PERSONAL_TOKEN/g)).toHaveLength(1);
+    expect(source.match(/secrets\.PERSONAL_TOKEN/g)).toHaveLength(file === 'ci' ? 2 : 1);
     expect(config.env?.NPM_TOKEN ?? job.env?.NPM_TOKEN).toBe('');
     const install = job.steps.find((step: { name: string }) => step.name === 'install dependencies');
     expect(install.run).toBe('pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile');
@@ -28,7 +28,9 @@ describe('untrusted candidate CI credential isolation', () => {
   });
   it('preserves the protected matrix identities and isolated live-database gate', () => {
     const { config } = read('ci');
-    expect(Object.keys(config.jobs)).toEqual(['database-live', 'test']);
+    expect(Object.keys(config.jobs)).toEqual(['platform-installed', 'database-live', 'test']);
+    expect(config.jobs['platform-installed'].strategy.matrix.platform).toEqual(['onebot11', 'napcat', 'telegram', 'qq']);
+    expect(config.jobs['platform-installed'].strategy['fail-fast']).toBe(false);
     expect(config.jobs['database-live'].permissions).toEqual({ contents: 'read' });
     expect(JSON.stringify(config.jobs['database-live'])).not.toMatch(/secrets\.|github\.token/);
     expect(config.jobs['database-live'].services).toMatchObject({

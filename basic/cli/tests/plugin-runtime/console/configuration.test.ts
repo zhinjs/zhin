@@ -178,6 +178,29 @@ describe('config document flatten / write namespace', () => {
   });
 });
 
+describe('Console schema validation', () => {
+  it('enforces root project integer bounds and rejects container type errors without throwing', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-schema-validation-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', properties: {
+        threshold: { type: 'integer', minimum: 1, maximum: 5 },
+        items: { type: 'array', items: { type: 'string' } },
+        nested: { type: 'object', properties: { active: { type: 'boolean' } } },
+      },
+    }));
+    const store = createStore(root, 'zhin.config.yml');
+    for (const threshold of [0, 6, 1.5]) {
+      expect(await store.validatePluginConfig('plugin', { threshold })).toMatchObject({ valid: false });
+    }
+    expect(await store.validatePluginConfig('plugin', { threshold: 3 })).toMatchObject({ valid: true });
+    expect(await store.validatePluginConfig('plugin', { items: 1, nested: 'bad' })).toMatchObject({
+      valid: false, errors: [{path: '$.items', message: '类型应为 list'}, {path: '$.nested', message: '类型应为 object'}],
+    });
+  });
+});
+
 function createStore(root: string, fileName: string): ConsoleConfigurationStore {
   return new ConsoleConfigurationStore({
     projectRoot: root,

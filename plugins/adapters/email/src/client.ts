@@ -1,4 +1,4 @@
-import type { EmailImapTransport, EmailSmtpTransport } from './transport.js';
+import type { EmailImapTransport, EmailSmtpTransport, EmailSmtpResult } from './transport.js';
 import { defineEndpointClient } from 'zhin.js/adapter';
 
 /** Live SMTP + IMAP client pair exposed to event handlers and plugins. */
@@ -24,7 +24,7 @@ export class EmailClient {
     return this.smtp.verify();
   }
 
-  sendMail(options: unknown): Promise<{ messageId?: string }> {
+  sendMail(options: unknown): Promise<EmailSmtpResult> {
     return this.smtp.sendMail(options);
   }
 }

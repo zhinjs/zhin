@@ -137,6 +137,26 @@
           "id": {
             "type": "string",
             "description": "QQ bot name"
+          },
+          "streamProxy": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "port",
+              "serverName"
+            ],
+            "properties": {
+              "port": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 65535
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "description": "Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName."
           }
         },
         "required": [
@@ -150,6 +170,26 @@
       "type": "string",
       "default": "",
       "description": "命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖"
+    },
+    "streamProxy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "port",
+        "serverName"
+      ],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "serverName": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "description": "Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName."
     }
   },
   "required": [

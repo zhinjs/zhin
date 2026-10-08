@@ -75,6 +75,9 @@ export interface EndpointEventSink {
 
 export type EndpointCleanup = () => void | Promise<void>;
 
+/** Local transport facts; generation admission is tracked separately. */
+export type EndpointTransportState = 'idle' | 'connecting' | 'open' | 'reconnecting' | 'closed' | 'stopped';
+
 /** Event and identity context for an object-style Endpoint lifecycle hook. */
 export interface EndpointActivationContext {
   readonly signal: AbortSignal;
@@ -96,6 +99,7 @@ export interface EndpointConnectionContext extends EndpointActivationContext {
  */
 export interface EndpointImplementation<TClient = unknown> {
   readonly client: TClient;
+  readonly transportState?: EndpointTransportState;
   readonly name?: string;
   readonly management?: EndpointManagement;
   readonly control?: EndpointControl;

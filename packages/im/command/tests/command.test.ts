@@ -703,6 +703,58 @@ describe('Command Feature', () => {
     await expect(index.execute('secret')).resolves.toBe('ok');
   });
 
+  it.each(['guarded', 'shortcut'])('uses operation permission resources for reused %s while an old check drains', async (input) => {
+    const owner = rootPluginId();
+    let executions = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const slot = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'guarded', source: '/commands/guarded/index.ts',
+      definition: defineCommand({ permit: ['role(admin)'], shortcut: { shortcut: {} }, execute: ({ generation }) => { executions++; return generation; } }),
+    });
+    const old = snapshotFor(owner, [slot]);
+    const oldHost = new PermissionHost();
+    oldHost.checkAll = async () => { await gate; return true; };
+    old.resources.get(owner)!.set(permissionHostToken.id, oldHost);
+    const newHost = new PermissionHost();
+    let newChecks = 0;
+    newHost.checkAll = async () => { newChecks++; return false; };
+    const current = { ...old, generation: 2, resources: new Map([[owner, new Map([[permissionHostToken.id, newHost]])]]) };
+    const index = new CommandIndex([slot], old);
+    const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'room' }, sender: { id: 'actor' } };
+    const draining = index.dispatch(input, source, undefined, '', old);
+    await expect(index.dispatch(input, source, undefined, '', current)).resolves.toEqual({ matched: false });
+    expect(newChecks).toBe(1);
+    expect(executions).toBe(0);
+    release();
+    await expect(draining).resolves.toMatchObject({ matched: true, value: 1 });
+    expect(executions).toBe(1);
+  });
+
+  it('fails closed on asynchronous permit errors without executing the command', async () => {
+    const owner = rootPluginId();
+    let executions = 0;
+    const slot = createCapabilitySlot({
+      owner, feature: commandFeatureId, localName: 'guarded', source: '/commands/guarded/index.ts',
+      definition: defineCommand({ permit: ['role(admin)'], execute: () => { executions++; return 'ok'; } }),
+    });
+    const snapshot = snapshotFor(owner, [slot]);
+    const host = new PermissionHost();
+    const failure = new Error('permission backend unavailable');
+    host.checkAll = async () => { await Promise.resolve(); throw failure; };
+    snapshot.resources.get(owner)!.set(permissionHostToken.id, host);
+    const index = new CommandIndex([slot], snapshot);
+    const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'room' }, sender: { id: 'actor' } };
+    await expect(index.dispatch('guarded', source)).rejects.toBe(failure);
+    expect(executions).toBe(0);
+    host.checkAll = async () => false;
+    await expect(index.dispatch('guarded', source)).resolves.toEqual({ matched: false });
+    expect(executions).toBe(0);
+    host.checkAll = async () => true;
+    await expect(index.dispatch('guarded', source)).resolves.toMatchObject({ matched: true, value: 'ok' });
+    expect(executions).toBe(1);
+  });
+
   it('rejects conflicting routes and invalid permit/shortcut at build time', () => {
     const owner = rootPluginId();
     expect(() => defineCommand({

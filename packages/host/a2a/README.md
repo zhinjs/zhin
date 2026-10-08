@@ -10,6 +10,12 @@ A2A v1.0 Runtime Host for Zhin.js — exposes one [Agent Card](https://a2a-proto
 | POST | `/a2a/{agentName}/jsonrpc` |
 | * | `/a2a/{agentName}/rest/*` |
 
+REST paths are relative to the advertised `/rest` interface: `POST /message:send`,
+`POST /message:stream`, `GET /tasks/{id}`, `GET /tasks`, and
+`POST /tasks/{id}:cancel`. Existing `/v1/` path aliases remain accepted. Agent Cards,
+REST responses and SSE events use A2A v1.0 JSON field names and enum strings;
+message Parts use `{ "text": "..." }`, rather than SDK internal oneof objects.
+
 ## Setup
 
 ```yaml

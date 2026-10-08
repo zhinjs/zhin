@@ -19,7 +19,7 @@ export function safeTokenEqual(a: string, b: string): boolean {
 export interface TelegramWebhookHandler {
   readonly config: ResolvedTelegramConfig;
   readonly isOpen: boolean;
-  handleUpdate(update: TelegramUpdate): void;
+  handleUpdate(update: TelegramUpdate): void | Promise<void>;
 }
 
 export function registerTelegramWebhookRoutes(
@@ -56,20 +56,23 @@ export async function handleTelegramWebhookRequest(
     try {
       update = JSON.parse(rawBody) as TelegramUpdate;
     } catch {
-      response.writeHead(200, { 'Content-Type': 'application/json' });
-      response.end(JSON.stringify({ ok: true }));
+      response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ ok: false, description: 'Invalid JSON' }));
       return;
     }
-
-    if (handler.isOpen) {
-      handler.handleUpdate(update);
+    if (!update || !Number.isSafeInteger(update.update_id) || update.update_id < 0) {
+      response.writeHead(400, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ ok: false, description: 'Invalid update_id' }));
+      return;
     }
+    if (!handler.isOpen) throw new Error('Telegram endpoint is not accepting updates');
+    await handler.handleUpdate(update);
 
     response.writeHead(200, { 'Content-Type': 'application/json' });
     response.end(JSON.stringify({ ok: true }));
   } catch (error) {
     logger.error('Telegram webhook error:', error);
-    response.writeHead(200, { 'Content-Type': 'application/json' });
-    response.end(JSON.stringify({ ok: true }));
+    response.writeHead(503, { 'Content-Type': 'application/json' });
+    response.end(JSON.stringify({ ok: false, description: 'Update was not admitted' }));
   }
 }

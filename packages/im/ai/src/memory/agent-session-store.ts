@@ -7,6 +7,7 @@ import type {
   AgentSessionRecord,
   CreateAgentSessionInput,
 } from './agent-db-models.js';
+import { SessionWriteLock } from './session-write-lock.js';
 import { persistenceFailure } from './persistence-error.js';
 
 export interface AgentSessionStoreConfig {
@@ -39,6 +40,7 @@ function createSessionEpochId(sessionKey: string): string {
 }
 
 export class AgentSessionStore implements AgentSessionRepository {
+  private readonly creationLock = new SessionWriteLock();
   private readonly model: DbModel;
   private readonly config: Required<Pick<AgentSessionStoreConfig, 'sessionIdleArchiveMs'>>;
 
@@ -62,27 +64,29 @@ export class AgentSessionStore implements AgentSessionRepository {
   }
 
   async getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord> {
-    const existing = await this.findActive(input.session_key);
-    if (existing) {
-      await this.touch(existing.session_id);
-      return existing;
-    }
-    await this.archiveIdleForKey(input.session_key);
-    const now = Date.now();
-    const record: AgentSessionRecord = {
-      session_id: createSessionEpochId(input.session_key),
-      session_key: input.session_key,
-      model: input.model ?? '',
-      status: 'active',
-      created_at: now,
-      updated_at: now,
-    };
-    try {
-      await this.model.create(record as unknown as Record<string, unknown>);
-    } catch (err) {
-      throw persistenceFailure('agent_session.create', err);
-    }
-    return record;
+    return this.creationLock.run(input.session_key, async () => {
+      const existing = await this.findActive(input.session_key);
+      if (existing) {
+        await this.touch(existing.session_id);
+        return existing;
+      }
+      await this.archiveIdleForKey(input.session_key);
+      const now = Date.now();
+      const record: AgentSessionRecord = {
+        session_id: createSessionEpochId(input.session_key),
+        session_key: input.session_key,
+        model: input.model ?? '',
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      };
+      try {
+        await this.model.create(record as unknown as Record<string, unknown>);
+      } catch (err) {
+        throw persistenceFailure('agent_session.create', err);
+      }
+      return record;
+    });
   }
 
   async touch(sessionId: string): Promise<void> {
@@ -151,6 +155,7 @@ export class AgentSessionStore implements AgentSessionRepository {
 }
 
 export class MemoryAgentSessionStore implements AgentSessionRepository {
+  private readonly creationLock = new SessionWriteLock();
   private sessions = new Map<string, AgentSessionRecord>();
   private static readonly MAX_SESSIONS = 2000;
   private static readonly IDLE_ARCHIVE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -174,23 +179,25 @@ export class MemoryAgentSessionStore implements AgentSessionRepository {
   }
 
   async getOrCreateActive(input: CreateAgentSessionInput): Promise<AgentSessionRecord> {
-    const existing = await this.findActive(input.session_key);
-    if (existing) {
-      existing.updated_at = Date.now();
-      return existing;
-    }
-    const now = Date.now();
-    const record: AgentSessionRecord = {
-      session_id: createSessionEpochId(input.session_key),
-      session_key: input.session_key,
-      model: input.model ?? '',
-      status: 'active',
-      created_at: now,
-      updated_at: now,
-    };
-    this.sessions.set(record.session_id, record);
-    this.evictIfNeeded();
-    return record;
+    return this.creationLock.run(input.session_key, async () => {
+      const existing = await this.findActive(input.session_key);
+      if (existing) {
+        existing.updated_at = Date.now();
+        return existing;
+      }
+      const now = Date.now();
+      const record: AgentSessionRecord = {
+        session_id: createSessionEpochId(input.session_key),
+        session_key: input.session_key,
+        model: input.model ?? '',
+        status: 'active',
+        created_at: now,
+        updated_at: now,
+      };
+      this.sessions.set(record.session_id, record);
+      this.evictIfNeeded();
+      return record;
+    });
   }
 
   async touch(sessionId: string): Promise<void> {

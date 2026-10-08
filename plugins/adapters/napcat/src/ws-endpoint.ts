@@ -1,9 +1,10 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 /**
  * NapCat WS client endpoint — outbound connect to NapCat.
  */
 import WebSocket from 'ws';
 import {
+  Endpoint,
   createRecallEndpointControl,
   createEndpointLifecycle,
   type EndpointConnectHandle,
@@ -11,6 +12,7 @@ import {
   type EndpointLifecycle,
   type EndpointManagement,
   type EndpointSendRequest,
+  type EndpointTransportState,
 } from 'zhin.js/adapter';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -78,6 +80,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     this.#options = options;
     this.#lifecycle = createEndpointLifecycle({
       name: options.config.id,
+      heartbeat: { intervalMs: options.config.heartbeat_interval, watchdogMisses: 2 },
       // reconnect_interval 旧语义为固定间隔：multiplier 1 + 无 jitter + 不封顶
       reconnect: {
         initialIntervalMs: options.config.reconnect_interval,
@@ -86,6 +89,10 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
         jitterMs: 0,
       },
     });
+  }
+
+  get transportState(): EndpointTransportState {
+    return this.#lifecycle.state;
   }
 
   async start(): Promise<void> {
@@ -120,7 +127,11 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
     const message = formatOutboundSegments(payload);
     const { action, params } = buildSendAction(napcatOutboundTarget(conversation), message);
     const data = await this.client.callApi(action, params) as { message_id?: number | string } | undefined;
-    const messageId = data?.message_id != null ? String(data.message_id) : '';
+    const rawId = data?.message_id;
+    if ((typeof rawId !== 'number' && typeof rawId !== 'string') || String(rawId).trim() === '' || (typeof rawId === 'number' && !Number.isFinite(rawId))) {
+      throw new EndpointDeliveryError('delivery_unconfirmed', 'Message delivery is unconfirmed: platform returned no message_id', 'unknown');
+    }
+    const messageId = String(rawId);
     this.#logger.debug(formatCompact({
       op: 'napcat_send',
       endpoint: this.#options.config.id,
@@ -136,7 +147,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
   }
 
   #callApi(action: string, params: Record<string, unknown> = {}): Promise<unknown> {
-    return callNapCatWsAction(this.#ws, this.#pending, this.#requestId, action, params);
+    return callNapCatWsAction(this.#lifecycle.state === 'open' ? this.#ws : undefined, this.#pending, this.#requestId, action, params);
   }
 
   /** Test / internal: admit a parsed event when the endpoint is open. */
@@ -208,6 +219,9 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       const ws = create(url, { headers });
       this.#ws = ws;
       handle.onForceClose(() => {
+        if (this.#ws === ws) {
+          rejectAllPending(this.#pending);
+        }
         try {
           ws.close();
         } catch {
@@ -216,7 +230,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('open', () => {
-        if (settled) return;
+        if (settled || this.#ws !== ws || !this.#lifecycle.started) return;
         settled = true;
         if (!this.#options.config.access_token) {
           this.#logger.warn(formatCompact({
@@ -243,7 +257,12 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
         resolve();
       });
 
+      ws.on('pong', () => {
+        if (this.#ws === ws) this.#lifecycle.notifyHeartbeatAck();
+      });
       ws.on('message', (data) => {
+        if (this.#ws !== ws || ws.readyState !== 1 || !this.#lifecycle.started) return;
+        this.#lifecycle.notifyHeartbeatAck();
         handleNapCatWsMessage(data, {
           endpointId: this.#options.config.id,
           pending: this.#pending,
@@ -252,6 +271,9 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('close', (code, reason) => {
+        if (this.#ws !== ws) return;
+        this.#ws = undefined;
+        rejectAllPending(this.#pending);
         const reasonStr = typeof reason === 'string'
           ? reason
           : Buffer.isBuffer(reason)
@@ -278,6 +300,7 @@ export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
       });
 
       ws.on('error', (err) => {
+        if (this.#ws !== ws) return;
         const error = err instanceof Error ? err : new Error(String(err));
         this.#logger.warn(formatCompact({
           op: 'ws_error',

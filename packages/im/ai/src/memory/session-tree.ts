@@ -5,6 +5,9 @@ export interface SessionBranchPoint {
   index: number;
   messageId: number;
   preview: string;
+  /** Nearest retained user ancestor; null for a root. */
+  parentMessageId?: number | null;
+  activePath?: boolean;
 }
 
 export function rowById(rows: AgentMessageRow[]): Map<number, AgentMessageRow> {
@@ -65,17 +68,27 @@ function userPreview(message: AgentMessage): string {
   return display.slice(0, 80);
 }
 
-/** List user messages on active path for /tree navigation. */
-export function listUserBranchPoints(pathRows: AgentMessageRow[]): SessionBranchPoint[] {
+/** List all retained user messages for stable, reversible /tree navigation. */
+export function listUserBranchPoints(pathRows: AgentMessageRow[], activeLeafId?: number | null): SessionBranchPoint[] {
   const points: SessionBranchPoint[] = [];
+  const byId = rowById(pathRows);
+  const activeIds = new Set(buildActivePathRows(pathRows, activeLeafId).map(row => row.id));
   let index = 0;
   for (const row of pathRows) {
     const parsed = parseAgentMessageRow(row);
     if (!parsed || parsed.role !== 'user' || row.id == null) continue;
     index += 1;
+    let parent = row.parent_id == null ? undefined : byId.get(row.parent_id);
+    const visited = new Set<number>();
+    while (parent && parent.role !== 'user' && parent.id != null && !visited.has(parent.id)) {
+      visited.add(parent.id);
+      parent = parent.parent_id == null ? undefined : byId.get(parent.parent_id);
+    }
     points.push({
       index,
       messageId: row.id,
+      parentMessageId: parent?.role === 'user' ? parent.id ?? null : null,
+      activePath: activeIds.has(row.id),
       preview: userPreview(parsed) || `(user #${index})`,
     });
   }

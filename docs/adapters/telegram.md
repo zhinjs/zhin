@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/telegram/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/telegram/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=ec72824c9641e88c -->
+<!-- sync-adapter-docs:sha256=7e17a7d2087d2681 -->
 
 # @zhin.js/adapter-telegram
 
@@ -22,6 +22,18 @@ Zhin.js Telegram Bot API 适配器（Plugin Runtime），默认通过 **长轮�
 - 出站 `send({ conversation, payload })` → Bot API（Markdown→安全 HTML / media / keyboard）
 - 约定式 `defineAdapter` / `definePlugin`（无需 `usePlugin`）
 - Webhook 模式通过 `httpHostToken` 注册回调路由，支持 secretToken 校验
+
+### 更新确认与重投
+
+- Polling 在 `handleUpdate()` 的框架接纳 Promise 成功后推进本地 offset；同批次接纳失败会停止处理后续 update，保留失败 update 供下一次重投。Telegram 在下一次携带更高 offset 的 `getUpdates` 请求时才确认旧 update。
+- Webhook 等待框架接纳后返回 200；请求到达时端点已关闭、尚未进入 Core 的处理被取消或接纳失败返回 503，非法 JSON/update_id 返回 400，secret 不匹配返回 403。仅 native `platform.receive` 成功不等于消息接纳成功，还需等待 canonical `message.receive`。已经进入 Core 的业务由 generation lease 完成，随后成功仍返回 200，即使端点期间关闭，避免把完成的副作用错误地触发重投。
+- 每个 Endpoint 最多保存 2,048 个已接纳 update_id，并合并相同 ID 的并发请求；最多允许 256 个不同 ID 的并发接纳，超过容量返回失败供重投。失败不计入已接纳集合。
+- 去重状态和 polling offset 属于当前 Endpoint generation，**不是耐久 checkpoint**。HMR/进程重启会清空；已接纳但尚未由下一轮 offset 请求确认的尾部 update，或 webhook 200 尚未到达 Telegram 的 update，可能再次投递。当前提供至少一次重投路径，不保证跨重启恰好一次；有外部副作用的插件应使用 update/message ID 做持久幂等。
+- JSON API 和 multipart/form-data 默认 30 秒 deadline；长轮询允许服务端 timeout 外加 15 秒。客户端 `callApi` / `callApiForm` 第三个参数可传 AbortSignal，端点停止也会取消当前 API 请求。`TelegramApiError.kind` 区分 timeout、cancelled、network、http、authentication、rate_limit、api、invalid_response；429 可读取 `retryAfterSeconds`。发送失败不会自动重试，超时/网络中断的送达结果可能未知。
+- `TelegramApiError` 同时遵循 `EndpointDeliveryError` 合同：明确 Bot API 拒绝为 rejected，网络/超时或异常响应为 unknown，发出请求前取消为 not_sent。一个 payload 拆成多个发送动作时，已有动作成功而后续失败会报告 `partial_delivery` / unknown，并在 cause 保留后续错误；不能把整条消息视为全部拒绝或安全重发。
+- Polling 请求失败时 transport 状态为 reconnecting，成功拉取后恢复 open；Webhook 的 open 代表本地路由与注册成功，不能证明公网代理实时可达。
+
+确认与重试规则依据 [Telegram Bot API getUpdates / setWebhook](https://core.telegram.org/bots/api#getupdates)。
 
 ## 安装
 
