@@ -8,7 +8,7 @@ tier: Advanced
 本页由 [`plugins/adapters/lark/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/lark/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=0df58a770e7f6c23 -->
+<!-- sync-adapter-docs:sha256=bdb486248e32a3fc -->
 
 # @zhin.js/adapter-lark
 
@@ -166,4 +166,4 @@ node scripts/platform-acceptance/tcp-fault-proxy.mjs --upstream-host open.feishu
 LARK_WEB_API_PROXY_PORT=18094 pnpm --filter platform-acceptance-bot start:lark
 ```
 
-控制端使用工具指南的 cut/recover。恢复后发送新 probe；断线发生在 POST 接收后时结果保持 unknown，不自动重投旧样本。此入口适用于专用测试实例，不能用本地 TLS fixture 冒充真实飞书恢复。默认未配置时仍使用原有 global fetch 直连。底层采用 [Node fetch 的公开 dispatcher 合同](https://nodejs.org/docs/latest-v24.x/api/globals.html#custom-dispatcher)及 [undici 6.x Agent connect 合同](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。
+控制端使用工具指南的 cut/recover。恢复后发送新 probe；断线发生在 POST 接收后时结果保持 unknown，不自动重投旧样本。此入口适用于专用测试实例，不能用本地 TLS fixture 冒充真实飞书恢复。默认未配置时仍使用原有 global fetch 直连。代理使用同一依赖版本的 [undici fetch](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Fetch.md) 与 dispatcher，避免 Node 内置版本的 handler 合同差异；采用 [undici 6.x Agent connect 合同](https://github.com/nodejs/undici/blob/v6.28.0/docs/docs/api/Agent.md)。

@@ -1,5 +1,5 @@
 ---
-"@zhin.js/adapter-lark": minor
+"@zhin.js/adapter-lark": patch
 ---
 
 新增飞书 WebSocket 长连接模式，保留默认 HTTP webhook。使用官方 SDK 处理协议帧与 ACK，共享端点生命周期管理重连和停止；等待实际握手、观测 SDK 连接状态，增加消息重推去重及启动缓冲。

@@ -2,6 +2,7 @@ import { join, relative, resolve } from 'node:path';
 import { Command } from 'commander';
 import { FilePublishJournalStore } from '../plugin-runtime/publish-journal.js';
 import { NodeProcessRunner, ProjectCommands } from '../plugin-runtime/project-commands.js';
+import { NativeTypeScriptSupervisor, parseStartOptions } from '../plugin-runtime/start/module.js';
 import { ProjectScaffolder } from '../plugin-runtime/scaffolder.js';
 
 export const runtimeCommand = new Command('runtime')
@@ -32,9 +33,13 @@ runtimeCommand.command('start')
   .allowUnknownOption(true)
   .allowExcessArguments(true)
   .action(async (_options, command) => {
+    // Process supervision belongs to the executable, not the reusable startup API.
+    const root = resolve(process.cwd());
+    const parsed = parseStartOptions(command.args);
+    if (await new NativeTypeScriptSupervisor(root, parsed).runIfRequired()) return;
     const { runStartCommand } = await import('../plugin-runtime/start-command.js');
     await runStartCommand({
-      root: resolve(process.cwd()),
+      root,
       args: command.args,
       writeOutput: (value) => process.stdout.write(value),
       writeError: (value) => process.stderr.write(value),

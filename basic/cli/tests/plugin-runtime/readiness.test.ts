@@ -111,7 +111,7 @@ describe('runtime readiness', () => {
     expect((await fetch(`${origin}/control/system/readiness`)).status).toBe(401);
     expect((await fetch(`${origin}/control/system/readiness`, {
       headers: { Authorization: 'Bearer demo-secret' },
-    })).status).toBe(401);
+    })).status).toBe(403);
     await expect(fetchReadiness(`${origin}/control`, 'full-secret')).resolves.toMatchObject({ ready: false });
     commit(snapshots, state());
     const ready = await fetch(`${origin}/pub/ready`);

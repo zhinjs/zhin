@@ -40,7 +40,7 @@ it('stop cancels a real pending TLS handshake and closes the peer socket', async
   }
 });
 
-it('Node global fetch uses public undici dispatcher with verified official identity, one POST on cut and manual recovery', async () => {
+it('version-paired Undici fetch uses its dispatcher with verified official identity, one POST on cut and manual recovery', async () => {
   const cert = certificate('open.feishu.cn');
   let posts = 0; let cutting = true; const identities: string[] = [];
   const server = https.createServer(cert, (request, response) => {

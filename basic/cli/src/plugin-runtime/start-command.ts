@@ -59,7 +59,6 @@ import {
 } from './plugin-lifecycle-store.js';
 import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
 import {
-  NativeTypeScriptSupervisor,
   ProjectEnvironmentFileSource,
   parseStartOptions,
   processRestartExitCode,
@@ -94,9 +93,7 @@ function readableCapabilityId(value: string): string {
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
-  // Parse before any relaunch so invalid options fail fast instead of looping.
   const parsed = parseStartOptions(options.args);
-  if (await new NativeTypeScriptSupervisor(options.root, parsed).runIfRequired()) return;
   ensureTypeScriptSpecifierRemap();
   const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
   const environmentVariables = await environmentSource.read();

@@ -1,4 +1,4 @@
-import { Agent } from 'undici';
+import { Agent, fetch as dispatcherFetch } from 'undici';
 import tls from 'node:tls';
 import type { LarkFetch } from './endpoint.js';
 
@@ -39,7 +39,9 @@ export function createLarkWebApiTransport(proxy: LarkWebApiProxy) {
       socket.once('error', failed);
       socket.once('secureConnect', () => { socket.setTimeout(0); socket.removeListener('error', failed); callback(null, socket); });
     } });
-    return globalThis.fetch(url, { ...init, redirect: 'error', dispatcher } as RequestInit & { dispatcher: Agent });
+    // Pair fetch and its dispatcher from the same Undici version; Node's bundled
+    // handler protocol may differ (notably Node 26 versus Undici 6).
+    return dispatcherFetch(url, { ...init, redirect: 'error', dispatcher } as Parameters<typeof dispatcherFetch>[1]);
   };
   return {
     fetch,
