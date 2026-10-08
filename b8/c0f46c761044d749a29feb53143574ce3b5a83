@@ -1,0 +1,40 @@
+.changeset/lark-long-connection.md
+  s_a5dc81d701255f::t_0401f3c8eabb59 2
+.changeset/cli-supervision-lark-proxy-compat.md
+  s_a5dc81d701255f::t_0401f3c8eabb59 1-6
+basic/cli/src/commands/runtime.ts
+  s_a5dc81d701255f::t_4d3fa914f82ab7 5,36-39,42
+plugins/adapters/lark/src/web-api-proxy.ts
+  s_a5dc81d701255f::t_4d3fa914f82ab7 1,42-44
+docs/adapters/lark.md
+  s_a5dc81d701255f::t_4d3fa914f82ab7 11,169
+basic/cli/tests/plugin-runtime/readiness.test.ts
+  s_a5dc81d701255f::t_4d3fa914f82ab7 114
+tests/contracts/segment-policy.test.ts
+  s_a5dc81d701255f::t_0401f3c8eabb59 36
+  s_a5dc81d701255f::t_4d3fa914f82ab7 31,33,37,51
+plugins/adapters/lark/tests/web-api-proxy-tls.test.ts
+  s_a5dc81d701255f::t_4d3fa914f82ab7 43
+plugins/adapters/lark/README.md
+  s_a5dc81d701255f::t_4d3fa914f82ab7 157
+package.json
+  s_a5dc81d701255f::t_b77cf897b7f3af 168
+pnpm-lock.yaml
+  s_a5dc81d701255f::t_ed4d137d8e874b 100-102
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8c0f46c761044d749a29feb53143574ce3b5a83",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
