@@ -1,0 +1,1755 @@
+scripts/platform-acceptance/tcp-fault-proxy.mjs
+  s_a5dc81d701255f::t_fd89ab1f10c6bc 1-4,6-86
+  s_a5dc81d701255f::t_a9cde4ec07ad6f 5
+plugins/adapters/napcat/src/http-endpoint.ts
+  s_a5dc81d701255f::t_06f279cb24d3f1 120
+  s_a5dc81d701255f::t_b46f4de8daf118 12,64,73-76,79,99
+  s_a5dc81d701255f::t_86934e9dd44546 1,121
+  s_a5dc81d701255f::t_9afba572e9a930 119,122-123
+  s_a5dc81d701255f::t_07ef7e4cd91bef 7
+scripts/adapter-meta.mjs
+  s_a5dc81d701255f::t_59157905e9491d 36-37
+plugins/adapters/lark/tests/share-keyboard.test.ts
+  s_a5dc81d701255f::t_eb56893bbd31a7 41
+  s_a5dc81d701255f::t_2730491eed3c61 50
+  s_a5dc81d701255f::t_657361b84e8749 5,7,13,65-70
+  s_a5dc81d701255f::t_1a1c7e888e9abf 1-4,6,8-12,14-40
+  s_a5dc81d701255f::t_16a2d52ea88e6e 42-49,51-64
+plugins/adapters/qq/src/protocol.ts
+  s_a5dc81d701255f::t_05f30eae47e3e4 248-250,254
+  s_a5dc81d701255f::t_4c4b80b7a42d62 23,37,101-102,116
+  s_a5dc81d701255f::t_06f279cb24d3f1 246
+  s_a5dc81d701255f::t_b34360d024e086 239-241,252
+  s_a5dc81d701255f::t_53e929af51ff50 3,236,245
+packages/im/ai/src/memory/agent-session-store.ts
+  s_a5dc81d701255f::t_2d482a17e641d4 10,43,67-89,158,182-200
+basic/cli/src/plugin-runtime/console/environment-files.ts
+  s_a5dc81d701255f::t_72b614b3c97cc2 11-13
+plugins/adapters/onebot11/tests/high-order.test.ts
+  s_a5dc81d701255f::t_b698c78a2f4442 8-11
+  s_a5dc81d701255f::t_0976ce3fd1e629 1-7
+plugins/adapters/kook/src/outbound.ts
+  s_a5dc81d701255f::t_710d1977f93fd1 61,65-68
+  s_a5dc81d701255f::t_35c54c53a90cf2 84-106
+  s_a5dc81d701255f::t_ac219b46f7aebb 14-40,43-44,73
+  s_a5dc81d701255f::t_e48a678daaa969 41-42
+  s_a5dc81d701255f::t_1188c18ea50fd9 1-13,45-60,62-64,69-72,74-83,107-109
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_a5dc81d701255f::t_b46f4de8daf118 15,98-101,155
+  s_a5dc81d701255f::t_06f279cb24d3f1 133
+  s_a5dc81d701255f::t_dedf0b192adeb7 245
+  s_a5dc81d701255f::t_86934e9dd44546 1,134
+  s_a5dc81d701255f::t_9afba572e9a930 94,132,135-136,212-214,223,241-243,246,255-257,279
+basic/cli/tests/async-command-failure.test.ts
+  s_a5dc81d701255f::t_979679dc2e8570 1-24,28,32,34,36,41,44,47
+  s_a5dc81d701255f::t_bf9b3327f7d7b5 25-27,29-31,33,35,37-40,42-43,45-46
+plugins/adapters/qq/src/stream-proxy.ts
+  s_a5dc81d701255f::t_4c4b80b7a42d62 1-20
+packages/host/a2a/tests/runtime.test.ts
+  s_a5dc81d701255f::t_8fc67e1437433f 1,54-88
+  s_a5dc81d701255f::t_71190ed79e8605 89-90
+.changeset/runtime-symlink-hmr.md
+  s_a5dc81d701255f::t_82c935e7b3cf8f 1-5
+package.json
+  s_a5dc81d701255f::t_868e28834c81e2 178,181
+  s_a5dc81d701255f::t_fe4bb751fa9d3d 179-180
+  s_a5dc81d701255f::t_931cdc7752782b 79-83
+packages/im/agent-feature/src/agent-index.ts
+  s_a5dc81d701255f::t_cf8119a52b61b3 15,47-51
+  s_a5dc81d701255f::t_9a6380b056d34a 52
+plugins/adapters/discord/src/protocol.ts
+  s_a5dc81d701255f::t_541186f04791e2 24,43,137-138,162
+  s_a5dc81d701255f::t_8368a0be1b0ac9 124,322,389-393,396,430
+  s_a5dc81d701255f::t_f988886aaf965a 1,23,25,42,44,163
+  s_a5dc81d701255f::t_134232aa36b957 365-369,371
+  s_a5dc81d701255f::t_ca0cb73456980f 95,394-395
+plugins/adapters/qq/README.md
+  s_a5dc81d701255f::t_a4977fd41a29e5 191-192
+  s_a5dc81d701255f::t_d05739e7a9495a 195-196
+  s_a5dc81d701255f::t_889c8b1a782c25 199-205
+  s_a5dc81d701255f::t_238c6bba9a28b1 193-194
+  s_a5dc81d701255f::t_98234afe1ab8c4 206-211
+  s_a5dc81d701255f::t_fa342f328b27d6 197-198
+  s_a5dc81d701255f::t_b72488f141e1fc 185-190
+plugins/adapters/email/src/transport.ts
+  s_a5dc81d701255f::t_5a946745ff184f 56,73
+  s_a5dc81d701255f::t_4bdf27d82e87b1 8-15,18
+basic/cli/src/plugin-runtime/console/plugin-routes.ts
+  s_a5dc81d701255f::t_53439dcb15e589 63-65,69,90,97
+  s_a5dc81d701255f::t_90ab80f9ac5aa9 26,35,47,80,96
+  s_a5dc81d701255f::t_0ffb0516686a7d 81,98
+plugins/adapters/slack/tests/socket-lifecycle.test.ts
+  s_a5dc81d701255f::t_606d9744903246 6,40-63
+  s_a5dc81d701255f::t_8b34f874dbdccc 1-5,7-39,64
+plugins/adapters/kook/src/api-proxy.ts
+  s_a5dc81d701255f::t_92464e0dffdb6a 1-21
+examples/minimal-bot/tests/stable-path.test.ts
+  s_a5dc81d701255f::t_9eabe2d56f2e45 70,133,174,177,190-191
+  s_a5dc81d701255f::t_7acd73a3873d4c 193
+plugins/adapters/email/tests/email-runtime.test.ts
+  s_a5dc81d701255f::t_f516a20f9b6816 595-597
+  s_a5dc81d701255f::t_e085d0601a0be1 185,194,205
+  s_a5dc81d701255f::t_8518ae162549b0 211-214
+  s_a5dc81d701255f::t_dc69d82d0edcd6 276,300
+  s_a5dc81d701255f::t_4bdf27d82e87b1 45
+.changeset/dingtalk-stream-mode.md
+  s_a5dc81d701255f::t_899b8e428b46bf 1-5
+scripts/platform-acceptance/bridge-policy.example.json
+  s_a5dc81d701255f::t_62524d189e19da 1-26,31-44
+  s_a5dc81d701255f::t_31319e46744e10 27-30
+plugins/adapters/napcat/tests/high-order.test.ts
+  s_a5dc81d701255f::t_0976ce3fd1e629 1-4
+plugins/adapters/onebot11/src/ws-transport.ts
+  s_a5dc81d701255f::t_9afba572e9a930 73-79
+  s_a5dc81d701255f::t_86934e9dd44546 1,63,70,89
+plugins/adapters/napcat/tests/transport-faults.test.ts
+  s_a5dc81d701255f::t_90fe13d5594840 27-90
+  s_a5dc81d701255f::t_0976ce3fd1e629 96,134,137-138,145,160,168-179
+  s_a5dc81d701255f::t_cea50cb71e88ad 3,95,97-119
+  s_a5dc81d701255f::t_5da88bec5852ad 1-2,4-26,91-94,120-133,135-136,139-144,146-159,161-167
+examples/platform-acceptance-bot/plugin.ts
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-3
+plugins/adapters/onebot11/README.md
+  s_a5dc81d701255f::t_0976ce3fd1e629 106-109
+docs/authoring/endpoint-lifecycle.md
+  s_a5dc81d701255f::t_11be11e753d9be 163,171,176
+plugins/adapters/telegram/README.md
+  s_a5dc81d701255f::t_e9c1ba9eb4648d 14-16,18-20,22-25
+  s_a5dc81d701255f::t_3b832a8e99f236 17
+  s_a5dc81d701255f::t_e3a046fcc7196a 21
+plugins/adapters/slack/tests/stream-proxy-routing.test.ts
+  s_a5dc81d701255f::t_4eec56a3daa85b 1-27
+plugins/adapters/discord/tests/proxy-config-schema.test.ts
+  s_a5dc81d701255f::t_71383aa340602d 12-21
+  s_a5dc81d701255f::t_eb24b10a5c4ff1 1-11,22-24
+packages/console/pagemanager/README.md
+  s_a5dc81d701255f::t_720c4f22f3c93c 56-58
+examples/platform-acceptance-bot/WEBHOOK-ACCOUNT-PREPARATION.md
+  s_a5dc81d701255f::t_0c677e9a747edf 4
+  s_a5dc81d701255f::t_a8156b10965323 1,3,7-11,13,16-21,23,25,27,29
+  s_a5dc81d701255f::t_6778a9f64bbcb3 2,5-6,12,14-15,22,24,26,28
+basic/cli/tests/plugin-runtime/start/foreground-supervisor.test.ts
+  s_a5dc81d701255f::t_d39feb7762ffac 1-32
+basic/schedule/tests/late-claim.test.ts
+  s_a5dc81d701255f::t_52e63c469a825d 2-28
+  s_a5dc81d701255f::t_d57d68e1ee86ff 49-59
+  s_a5dc81d701255f::t_62afc61817863a 35,40
+  s_a5dc81d701255f::t_dc95311d88f12c 1,29-34,36-39,41,43-48
+  s_a5dc81d701255f::t_aadec74b485573 42
+.changeset/console-demo-secret-boundary.md
+  s_a5dc81d701255f::t_bb736a4ed0be17 1-6
+docs/adapters/email.md
+  s_a5dc81d701255f::t_55418aae51e5a4 112-134
+  s_a5dc81d701255f::t_52faf13dec1b8a 11,135-138
+examples/platform-acceptance-bot/CURRENT-ACCEPTANCE.md
+  s_a5dc81d701255f::t_accc23077efb4c 236-241
+  s_a5dc81d701255f::t_3c44ffb49c54c3 200-203
+  s_a5dc81d701255f::t_8ede0ed55d6425 9,174-178
+  s_a5dc81d701255f::t_bfe92f217b4184 40-46
+  s_a5dc81d701255f::t_d69056401f3c88 204-207
+  s_a5dc81d701255f::t_623debbfdcd8a2 212-216
+  s_a5dc81d701255f::t_07435c8f093a7f 231-235
+  s_a5dc81d701255f::t_7969be8cfd3609 47-52
+  s_a5dc81d701255f::t_6a814cac1c95a5 108-112
+  s_a5dc81d701255f::t_0670b5c1e88da3 3,11
+  s_a5dc81d701255f::t_338c4139bea583 70-75
+  s_a5dc81d701255f::t_cf1a657894e9ef 76-82
+  s_a5dc81d701255f::t_b6d1ae133223e9 245
+  s_a5dc81d701255f::t_cf193ad4b0ece6 15,27,242-244
+  s_a5dc81d701255f::t_4faae85ab7aa1d 39
+  s_a5dc81d701255f::t_aa5d3231841d51 196-199
+  s_a5dc81d701255f::t_fe2bd85a9286f6 14,227-230
+  s_a5dc81d701255f::t_15697733854cf2 36
+  s_a5dc81d701255f::t_f4a987f38fd257 59-64
+  s_a5dc81d701255f::t_a967419830cb28 28-30,32-34,38
+  s_a5dc81d701255f::t_f451e83d4d5b43 16,98-101
+  s_a5dc81d701255f::t_272e3f055898fb 65-69
+  s_a5dc81d701255f::t_5aebfc930fc9a2 141-145
+  s_a5dc81d701255f::t_0775cb4c6e7c3f 158-163
+  s_a5dc81d701255f::t_38599726b48f63 169-173
+  s_a5dc81d701255f::t_d8d8ace31e4a81 217-221
+  s_a5dc81d701255f::t_ddbc2a7280d555 179-188
+  s_a5dc81d701255f::t_ce65bcbf19b2df 102-107
+  s_a5dc81d701255f::t_0ab81cda6c642d 246-247
+  s_a5dc81d701255f::t_bb425a77540154 24
+  s_a5dc81d701255f::t_67c601b341e48e 35
+  s_a5dc81d701255f::t_4099fd636713a7 222-226
+  s_a5dc81d701255f::t_7e9779119062fc 12
+  s_a5dc81d701255f::t_57b7729309e4c7 1-2,4-7,17-23
+  s_a5dc81d701255f::t_a989ed237b79f3 8,189-195
+  s_a5dc81d701255f::t_84927203e31aad 25
+  s_a5dc81d701255f::t_59009788896c0a 53-58
+  s_a5dc81d701255f::t_b5ef7731f239e4 119-124
+  s_a5dc81d701255f::t_e6c4470c79ee56 131-135
+  s_a5dc81d701255f::t_e9355de2774249 136-140
+  s_a5dc81d701255f::t_8ceaea801752ed 31
+  s_a5dc81d701255f::t_2971be237a6fa8 13,26
+  s_a5dc81d701255f::t_a71169aa0094e2 83-86
+  s_a5dc81d701255f::t_eaffe969e1c2d7 87-91
+  s_a5dc81d701255f::t_bf288316db73c8 152-157
+  s_a5dc81d701255f::t_d50d119d35437c 92-97
+  s_a5dc81d701255f::t_d9fabba02507d7 113-118
+  s_a5dc81d701255f::t_465d03eb8ad7ab 146-151
+  s_a5dc81d701255f::t_bc327e5261354d 164-168
+  s_a5dc81d701255f::t_5a2601a6a2a668 208-211
+  s_a5dc81d701255f::t_885c66d946980a 125-130
+  s_a5dc81d701255f::t_ce9f844072067d 10,37
+.changeset/foreground-console-restart.md
+  s_a5dc81d701255f::t_1a0ebec2f84f63 1-5
+.changeset/console-component-preview-samples.md
+  s_a5dc81d701255f::t_8770a2d472aa95 1-6
+.changeset/console-host-schema-forms.md
+  s_a5dc81d701255f::t_e7631d0a52a167 1-6
+packages/im/ai/tests/memory/context-repository-database.test.ts
+  s_a5dc81d701255f::t_224b33be2268ea 1-3,176-213
+  s_a5dc81d701255f::t_e5f935835a017a 49-60,62-69,214
+  s_a5dc81d701255f::t_fb13417c555524 61,215
+packages/im/adapter/tests/adapter.test.ts
+  s_a5dc81d701255f::t_3f6135a9fe07de 920-938,997-998
+  s_a5dc81d701255f::t_7e8174a4522fb1 999-1043,1157
+  s_a5dc81d701255f::t_c64193a2bfe6b2 46
+  s_a5dc81d701255f::t_3bc8674d0add82 1135-1156
+  s_a5dc81d701255f::t_5afcfab3bca307 22,939-996
+  s_a5dc81d701255f::t_739aee9dff2314 617-640
+  s_a5dc81d701255f::t_6c0a41b0f10d5b 541-584
+  s_a5dc81d701255f::t_d4886a2ff65125 1158
+plugins/adapters/kook/adapters/kook/index.ts
+  s_a5dc81d701255f::t_ac219b46f7aebb 34
+  s_a5dc81d701255f::t_710d1977f93fd1 30
+  s_a5dc81d701255f::t_fd2fb9ce8c49e1 31
+  s_a5dc81d701255f::t_cc54428d2d70e5 33
+plugins/adapters/dingtalk/README.md
+  s_a5dc81d701255f::t_18165851286eea 70,76-82
+  s_a5dc81d701255f::t_979679dc2e8570 127
+  s_a5dc81d701255f::t_899b8e428b46bf 107-119,121-122
+  s_a5dc81d701255f::t_485511d3c8d839 128-134
+  s_a5dc81d701255f::t_3c05101ac7ffde 123-126
+  s_a5dc81d701255f::t_1f870053d6b37a 120
+  s_a5dc81d701255f::t_a1e39c07e8266b 83
+plugins/adapters/kook/tests/sdk-patch-fixture.ts
+  s_a5dc81d701255f::t_3d063b4f2c5b62 4,18-20
+  s_a5dc81d701255f::t_5bc43fff46e6d8 17,21
+  s_a5dc81d701255f::t_7213204f72fb5b 1-3,5-16,22-23,27
+  s_a5dc81d701255f::t_9534dc182e71a6 24-26
+plugins/adapters/kook/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_7213204f72fb5b 1-29,31-43,45-50
+  s_a5dc81d701255f::t_5bc43fff46e6d8 30
+  s_a5dc81d701255f::t_72c7474d858e0b 44
+.changeset/honest-webhook-receipts.md
+  s_a5dc81d701255f::t_f3ba8b75710cd2 1-9
+packages/im/core/tests/plugin-runtime/endpoint-identity.test.ts
+  s_a5dc81d701255f::t_c15063338ebf9c 18-33
+  s_a5dc81d701255f::t_a91d4eecc23c69 1-17
+packages/host/mcp/README.md
+  s_a5dc81d701255f::t_f72d81e80b9a84 49
+plugins/adapters/napcat/src/ws-types.ts
+  s_a5dc81d701255f::t_9afba572e9a930 7
+examples/platform-acceptance-bot/additional.env.example
+  s_a5dc81d701255f::t_77e217b433f9bf 14-15,21-22
+  s_a5dc81d701255f::t_a4f8cc54bbdcf2 1-13,16-20,23-28
+plugins/adapters/dingtalk/package.json
+  s_a5dc81d701255f::t_ec88ee33829eab 4,21,52-53,80-81
+plugins/adapters/line/tests/outbound-receipt.test.ts
+  s_a5dc81d701255f::t_f3ba8b75710cd2 1-9,11-52
+  s_a5dc81d701255f::t_13bc05090f322d 10
+  s_a5dc81d701255f::t_f83b587b9d3988 53-58
+plugins/adapters/email/src/endpoint.ts
+  s_a5dc81d701255f::t_c5b93414c59714 315
+  s_a5dc81d701255f::t_41f358226123dc 51-53,56,64,69-71,73-79,81-92,94-97,100,102-104,107-108,110-112,128-130,133,271-272,274,277,279-280,285,287-288,294-296,299-312,321
+  s_a5dc81d701255f::t_266ef0bc1e38f0 117
+  s_a5dc81d701255f::t_433cd216c56744 290
+  s_a5dc81d701255f::t_8df84e88da7347 54,132,184,186,281-282,284
+  s_a5dc81d701255f::t_4bdf27d82e87b1 29,159-168
+  s_a5dc81d701255f::t_31ba96d2b1546d 1,55,105-106,131,283,289,313-314,316-320
+  s_a5dc81d701255f::t_beba0bba1f78fb 49,72,80,93,98-99,101,270,273
+plugins/adapters/discord/src/gateway.ts
+  s_a5dc81d701255f::t_3dd9b635cd3955 14,118-119
+  s_a5dc81d701255f::t_f1c5fb32dc6c64 304,308-311,396,412,418,429,438-440,443
+  s_a5dc81d701255f::t_a32f4a9959c134 43
+  s_a5dc81d701255f::t_8368a0be1b0ac9 183
+  s_a5dc81d701255f::t_12bcabad32a8cb 332-333,337-350,354-355
+  s_a5dc81d701255f::t_541186f04791e2 116
+  s_a5dc81d701255f::t_f988886aaf965a 1
+  s_a5dc81d701255f::t_9e29bcd87f2b90 6
+  s_a5dc81d701255f::t_d7a111c446904c 356
+plugins/adapters/telegram/src/endpoint.ts
+  s_a5dc81d701255f::t_dc6921a0445d0f 4,46-48,78-79,178-180,207-216,462,547-555,578-589,594-597,602-607,619,621-622,632
+  s_a5dc81d701255f::t_d7c85585fe2e82 386-409,411,665-676,703
+  s_a5dc81d701255f::t_51b266c1e737e9 590,598-601
+  s_a5dc81d701255f::t_e615932d00bbc9 12
+  s_a5dc81d701255f::t_4821a89e3da3bc 171,234,319,682
+  s_a5dc81d701255f::t_d9a284af54da3f 21-22,141,641,645-647,656,659-664,677-680,683-685,689-701,704-709,713-716,728-731,733-739,741,744
+  s_a5dc81d701255f::t_049897a3f5dd9a 83-84,106-109,151-152,383,710-712
+  s_a5dc81d701255f::t_e9c1ba9eb4648d 193-195
+  s_a5dc81d701255f::t_8c14dbdf0c4a0d 333-346,348-357,681,686-688,702,740
+  s_a5dc81d701255f::t_720a882defdd81 465,562,613-616,618
+  s_a5dc81d701255f::t_5c92e3f66dafeb 591-593,617
+.changeset/discord-observed-health.md
+  s_a5dc81d701255f::t_40512f18ecf689 1-5
+  s_a5dc81d701255f::t_5ad05c441cbba4 6-7
+plugins/adapters/dingtalk/tests/share-keyboard.test.ts
+  s_a5dc81d701255f::t_b698c78a2f4442 18-21
+  s_a5dc81d701255f::t_eb56893bbd31a7 1,13
+  s_a5dc81d701255f::t_3c05101ac7ffde 2-12
+  s_a5dc81d701255f::t_642c1adff5efd0 14-17
+docs/operations/production.md
+  s_a5dc81d701255f::t_639fc779cb7b8a 61
+plugins/adapters/email/src/rich-mail.ts
+  s_a5dc81d701255f::t_4860333d1c0bf0 1-7,9-12,14-43
+  s_a5dc81d701255f::t_26529d686ccf11 8,13
+packages/im/adapter/src/endpoint-lifecycle.ts
+  s_a5dc81d701255f::t_e3a046fcc7196a 199-201
+  s_a5dc81d701255f::t_7b52ae124a500e 435-443
+  s_a5dc81d701255f::t_68e9f4deea0627 14-15
+  s_a5dc81d701255f::t_dfbe77e5f68539 329-350
+  s_a5dc81d701255f::t_dbcf8bdb3e4bab 165-166,218-220,226,259,265,268-271,275-279,312,314,328,357-358,434,444-445
+  s_a5dc81d701255f::t_5611b1a695ca8f 351-352
+plugins/adapters/slack/README.md
+  s_a5dc81d701255f::t_10d4b5ee498d33 146-154
+  s_a5dc81d701255f::t_81cc956e319c93 155-159
+  s_a5dc81d701255f::t_139ffd993a593e 160-173
+packages/host/http/tests/console-rest-pages.test.ts
+  s_a5dc81d701255f::t_f9db56fa31dfd8 148,155-161
+  s_a5dc81d701255f::t_ef8ed592aa2b77 141,143-147,149-154,162-163
+  s_a5dc81d701255f::t_4d66e4bd037cdb 60,64,70-84,113-140,142,170,311-312,396
+basic/cli/src/plugin-runtime/console/agent-feature-projection.ts
+  s_a5dc81d701255f::t_b6d65d7dba06f4 63
+packages/im/component/src/definition.ts
+  s_a5dc81d701255f::t_b6d65d7dba06f4 21-22
+.changeset/kook-native-quote-media.md
+  s_a5dc81d701255f::t_710d1977f93fd1 1-5
+  s_a5dc81d701255f::t_6e9752e450e604 6-7
+basic/cli/src/plugin-runtime/console/console-schema.ts
+  s_a5dc81d701255f::t_7d47eb9b7452e9 10-15
+  s_a5dc81d701255f::t_d4281c8de4fef5 65
+  s_a5dc81d701255f::t_22067cc6c12ad4 19-21
+plugins/adapters/slack/src/socket-error.ts
+  s_a5dc81d701255f::t_f8394052a9413a 1-12
+packages/im/ai/tests/memory/harness-commands.test.ts
+  s_a5dc81d701255f::t_a7b13690d6d4c8 58-72
+scripts/platform-acceptance/record.mjs
+  s_a5dc81d701255f::t_996203b25e740e 7-9,13
+  s_a5dc81d701255f::t_d6ebe359756930 3,12
+  s_a5dc81d701255f::t_b6e6c2d5e14373 1-2,4-6,10-11,14
+.changeset/console-current-log-format-storage.md
+  s_a5dc81d701255f::t_0cc6f17d7fb7ef 1-5
+plugins/adapters/slack/tests/outbound-http.test.ts
+  s_a5dc81d701255f::t_35c54c53a90cf2 1-24
+packages/host/http/tests/console-rpc.test.ts
+  s_a5dc81d701255f::t_e65d2889de42e5 9-13,16-23,62
+  s_a5dc81d701255f::t_d53df7c2eeadda 14-15
+plugins/adapters/kook/src/stream-proxy.ts
+  s_a5dc81d701255f::t_c709c4de1439ae 1-20
+scripts/platform-acceptance/probe-command.ts
+  s_a5dc81d701255f::t_996203b25e740e 32-33
+  s_a5dc81d701255f::t_2cc6b0afcfe1d3 2,13-14,20,25-26,30-31
+  s_a5dc81d701255f::t_b5725b1814c589 41,85-90
+  s_a5dc81d701255f::t_6659d282d56cb7 42-43,125
+  s_a5dc81d701255f::t_e9034090a0e896 82,96-98
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 107-110
+  s_a5dc81d701255f::t_2437a1526b5ca2 22
+  s_a5dc81d701255f::t_3ee8b420462892 8-10,27-29,34,44-58
+  s_a5dc81d701255f::t_4202742f001287 1,4-7,11-12,15-17,19,21,23-24,35-39,126-128
+  s_a5dc81d701255f::t_95d754bb2ff312 3,18,40,59-81,83-84,91-95,99-106,111-124
+plugins/adapters/dingtalk/tests/dingtalk-runtime.test.ts
+  s_a5dc81d701255f::t_9298586754d17a 157-162
+  s_a5dc81d701255f::t_932722121afca0 399-418
+  s_a5dc81d701255f::t_9dbc6389e9f8c6 150,154-155,165,167,170,172,174,176,178
+plugins/adapters/lark/README.md
+  s_a5dc81d701255f::t_49a1c70067201a 145-157
+  s_a5dc81d701255f::t_81cc956e319c93 141-144
+  s_a5dc81d701255f::t_d2e28dbc7e1fb9 122-123
+  s_a5dc81d701255f::t_5bedafedee4d7c 102-119
+  s_a5dc81d701255f::t_657361b84e8749 11,73,127,132-133
+  s_a5dc81d701255f::t_f5abb3b9df2cb6 134-140
+  s_a5dc81d701255f::t_867b50ba96b364 124-126,128-131
+  s_a5dc81d701255f::t_9913f022672643 120-121
+.changeset/email-observed-health.md
+  s_a5dc81d701255f::t_f516a20f9b6816 6-7
+  s_a5dc81d701255f::t_dc69d82d0edcd6 1-5
+plugins/adapters/napcat/src/wss-endpoint.ts
+  s_a5dc81d701255f::t_b46f4de8daf118 13,75,88-95,98,129,158,252
+  s_a5dc81d701255f::t_86934e9dd44546 1,147
+  s_a5dc81d701255f::t_06f279cb24d3f1 146
+  s_a5dc81d701255f::t_9afba572e9a930 84,145,148-149,228,232-234,248-250,260-263,265-267
+  s_a5dc81d701255f::t_dedf0b192adeb7 218-221
+  s_a5dc81d701255f::t_03630159cefb1a 6
+plugins/adapters/lark/src/index.ts
+  s_a5dc81d701255f::t_dd45beb7a6b614 52-58
+.changeset/kook-observed-socket-health.md
+  s_a5dc81d701255f::t_2f5a24a8609122 1-5
+scripts/platform-acceptance/README.md
+  s_a5dc81d701255f::t_2584532f9c251c 55
+  s_a5dc81d701255f::t_77e217b433f9bf 225
+  s_a5dc81d701255f::t_d3d4903ea61a7a 1-5,13-54,58-69,71-85,91-99,140,165
+  s_a5dc81d701255f::t_3f5c3100167817 8-12
+  s_a5dc81d701255f::t_4acab4c493b53f 150-151
+  s_a5dc81d701255f::t_2ea8c78eda8e03 130,134,142,167,189,191,214-224,226-227
+  s_a5dc81d701255f::t_e89c25f4afdd4d 6-7
+  s_a5dc81d701255f::t_d83e953cc2af8f 235-241
+  s_a5dc81d701255f::t_b0c7e1edd4cfea 228-234
+  s_a5dc81d701255f::t_3591e38f630b3a 56-57,70,86-90,100-129,131-133,135-139,141,143-149,152-164,166,168-188,190,192-213
+plugins/adapters/lark/src/protocol.ts
+  s_a5dc81d701255f::t_47ac3f7678abd0 21,36,124-125,141
+  s_a5dc81d701255f::t_860183d1b1e241 379-403
+  s_a5dc81d701255f::t_3694bbe5153d20 9,314-316
+  s_a5dc81d701255f::t_28e5e25a70131a 112,305,317-319,404,407,418
+  s_a5dc81d701255f::t_faeff673bff938 12-13,288
+  s_a5dc81d701255f::t_88d925cc79e3c2 19,33,118-119,139
+  s_a5dc81d701255f::t_6a345b05e68b4e 1,18,32,120,134,138
+plugins/adapters/dingtalk/adapters/dingtalk/index.ts
+  s_a5dc81d701255f::t_e29f25827ba6cc 22
+  s_a5dc81d701255f::t_ec88ee33829eab 30,34
+  s_a5dc81d701255f::t_979679dc2e8570 19
+examples/platform-acceptance-bot/tsconfig.json
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-19
+plugins/adapters/email/tests/admission-lifecycle.test.ts
+  s_a5dc81d701255f::t_4bdf27d82e87b1 84
+  s_a5dc81d701255f::t_9627c557e7a4ff 39,48-49,53,57-58,66,72,77-78,82,86-87,91,98-109
+  s_a5dc81d701255f::t_fe893aaf9f9180 1-38,40-47,50-52,54-56,59-65,67-71,73-76,79-81,83,85,88-90,92-97
+docs/adapters/lark.md
+  s_a5dc81d701255f::t_ad056b2b4bcc9b 11,157-169
+  s_a5dc81d701255f::t_55418aae51e5a4 23,85,114-152
+  s_a5dc81d701255f::t_81cc956e319c93 153-156
+docs/adapters/telegram.md
+  s_a5dc81d701255f::t_2b9fc57c01c698 11,33
+  s_a5dc81d701255f::t_236c60856dbde8 26-32,34-36
+  s_a5dc81d701255f::t_16d9a3375a0061 37
+docs/adapters/kook.md
+  s_a5dc81d701255f::t_81cc956e319c93 143-146
+  s_a5dc81d701255f::t_55418aae51e5a4 110-114,128-142
+  s_a5dc81d701255f::t_6e4cc68204a1c5 11,147-152
+packages/console/protocol/src/index.ts
+  s_a5dc81d701255f::t_e65d2889de42e5 397
+  s_a5dc81d701255f::t_639fc779cb7b8a 286-287,299-301
+  s_a5dc81d701255f::t_5daefde751aeb0 408
+packages/host/http/src/console-rpc-extended/schedule-rpc.ts
+  s_a5dc81d701255f::t_a7acc98c33b718 32,60-61,77,130
+  s_a5dc81d701255f::t_5ad442b27edea0 1,75-76,78-79,124-129,131-133
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_a5dc81d701255f::t_f3078fac96d0ae 445,456-473
+  s_a5dc81d701255f::t_2260db7f4c0685 450,474-485,487-490
+  s_a5dc81d701255f::t_df6bc7281d7c02 543,781,914,1043,1257
+  s_a5dc81d701255f::t_0ffb0516686a7d 486
+  s_a5dc81d701255f::t_53439dcb15e589 454,491-492,494-505
+  s_a5dc81d701255f::t_2c53316d850f4b 438-444,446-449,451-453,455,493
+plugins/adapters/kook/tests/session-recovery.test.ts
+  s_a5dc81d701255f::t_7b56ab1f3f47e2 1-51
+plugins/adapters/kook/tests/runtime-session-tls.test.ts
+  s_a5dc81d701255f::t_fd740a10272c86 8
+  s_a5dc81d701255f::t_c6c59f544317d9 43,47,50,53
+  s_a5dc81d701255f::t_40d4de2e730e4c 1-7,9-42,44-46,48-49,51-52,54-65
+.changeset/config-schedule-admission.md
+  s_a5dc81d701255f::t_29acb67fbc89ac 1-6
+basic/cli/tests/plugin-runtime/workroom-candidate-endpoints.test.ts
+  s_a5dc81d701255f::t_c5e91497485e6c 22,34-40
+  s_a5dc81d701255f::t_46e1826964b647 1-21,23-33
+plugins/adapters/dingtalk/src/cards.ts
+  s_a5dc81d701255f::t_fa499a20481909 1-8,10-15,17-22,26-41,43-47,49-62
+  s_a5dc81d701255f::t_979679dc2e8570 9,16,42,48
+  s_a5dc81d701255f::t_d4b32df6d903aa 23-25
+plugins/adapters/slack/tests/web-api-proxy-tls.test.ts
+  s_a5dc81d701255f::t_a82b1ac3e26b55 1-60
+  s_a5dc81d701255f::t_bc5b6c49e69c3b 61-83
+packages/im/runtime/src/module-dependency-index.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1,33,48,65,86,102,111,380
+packages/im/runtime/src/source-path.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1-23
+plugins/adapters/napcat/src/ws-transport.ts
+  s_a5dc81d701255f::t_dedf0b192adeb7 43-44
+  s_a5dc81d701255f::t_86934e9dd44546 1,68,75,109
+  s_a5dc81d701255f::t_9afba572e9a930 78-84
+.changeset/kook-uncached-inbound.md
+  s_a5dc81d701255f::t_0d1093556d15b4 1-5
+  s_a5dc81d701255f::t_b590f30c1aafec 6-7
+plugins/adapters/dingtalk/CARD-TEMPLATE.md
+  s_a5dc81d701255f::t_87d8a2e0177890 1-4,6-9,11-14,17-36
+  s_a5dc81d701255f::t_c4cbd186f25eaa 5,10,15-16,37
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_a5dc81d701255f::t_22067cc6c12ad4 3,38-49
+examples/platform-acceptance-bot/run.mjs
+  s_a5dc81d701255f::t_ed5de4185377c3 63-65
+  s_a5dc81d701255f::t_2568153f214518 95,195-196
+  s_a5dc81d701255f::t_5867b7ee270810 193-194,197
+  s_a5dc81d701255f::t_57f5b2f0740399 38,40-49,52,59-62,73,83-93,128
+  s_a5dc81d701255f::t_a14de32ce64ed2 6,11,31,34-35,39,55-57,172
+  s_a5dc81d701255f::t_7624d923ec10e0 1-5,7-10,12,18-29,32-33,36,53-54,58,66-72,81-82,94,125-127,130-148,151-171,173-175,177,188-191,198-217
+  s_a5dc81d701255f::t_29af873093491e 14-17,37,124,178
+  s_a5dc81d701255f::t_7d9569655861af 74-80
+  s_a5dc81d701255f::t_b0b7a4e0e0f287 50-51
+  s_a5dc81d701255f::t_d51ebc7d4ebbeb 30,96-107,111-123,129,150
+  s_a5dc81d701255f::t_dbbba4e4826218 149,192
+  s_a5dc81d701255f::t_1dd659018869d2 179-187
+  s_a5dc81d701255f::t_fc01edcd44be27 13,108-110,176
+plugins/adapters/discord/src/gateway-fault-proxy.ts
+  s_a5dc81d701255f::t_f988886aaf965a 2-19,22-39,41-45,51-54,68,71-73,75-82
+  s_a5dc81d701255f::t_85eba414e2ef70 70
+  s_a5dc81d701255f::t_007d13776944da 21
+  s_a5dc81d701255f::t_222103de5228a8 1,20,40,46-50,55-67,69,74
+plugins/adapters/qq/src/qq-intents.ts
+  s_a5dc81d701255f::t_d05739e7a9495a 32
+examples/platform-acceptance-bot/README.md
+  s_a5dc81d701255f::t_29af873093491e 118
+  s_a5dc81d701255f::t_bbb158b28f630f 26-27,29-30,32-37
+  s_a5dc81d701255f::t_1dd659018869d2 1-2,10-25,38-48,50-100,109,137
+  s_a5dc81d701255f::t_6e4cc68204a1c5 196-199
+  s_a5dc81d701255f::t_dbda004a55997d 145
+  s_a5dc81d701255f::t_759a87693f7c16 141,156,180-189
+  s_a5dc81d701255f::t_cbf3173a08619d 8-9
+  s_a5dc81d701255f::t_5867b7ee270810 28,31
+  s_a5dc81d701255f::t_1f5cc338d662c8 5-6
+  s_a5dc81d701255f::t_3a9459e91c7963 126-129
+  s_a5dc81d701255f::t_e8010b619a2c2e 3-4,119-125
+  s_a5dc81d701255f::t_fb765648187cf8 130-131
+  s_a5dc81d701255f::t_915ca923517e12 159-168
+  s_a5dc81d701255f::t_c8868428f00a24 169-179
+  s_a5dc81d701255f::t_3d13897286edf0 7
+  s_a5dc81d701255f::t_4e5f8b8ebd3d61 49,101-108,110-117,132-136,138-140,142-144,146-155,157-158,190-195
+plugins/adapters/qq/tests/qq-intents.test.ts
+  s_a5dc81d701255f::t_d05739e7a9495a 13
+plugins/adapters/kook/src/protocol.ts
+  s_a5dc81d701255f::t_92464e0dffdb6a 30,47,61,134,147,163
+  s_a5dc81d701255f::t_c709c4de1439ae 31,48,135-136,164
+  s_a5dc81d701255f::t_ac219b46f7aebb 92,459-466,472-474
+  s_a5dc81d701255f::t_0311e795a970c6 6,277-279
+  s_a5dc81d701255f::t_f7bc5bebc22bde 467-469,471
+  s_a5dc81d701255f::t_a2901d3e2abe52 470
+  s_a5dc81d701255f::t_4b565ba5f1a743 475
+plugins/adapters/qq/src/delivery-error.ts
+  s_a5dc81d701255f::t_d8679380adf031 7-15
+  s_a5dc81d701255f::t_aff39f3b1109e7 17
+  s_a5dc81d701255f::t_b89f30aeeef4e3 1-6,16,18-20
+plugins/adapters/slack/src/web-api-proxy.ts
+  s_a5dc81d701255f::t_ff95e53e96482b 1-21
+packages/im/tool/src/tool-index.ts
+  s_a5dc81d701255f::t_bb406a2131daef 67,69-75,85
+  s_a5dc81d701255f::t_cf8119a52b61b3 40,144-148
+  s_a5dc81d701255f::t_e09cf8ea22ec69 149
+.changeset/console-rpc-demo-forbidden.md
+  s_a5dc81d701255f::t_a72d9ad15b4251 1-5
+plugins/adapters/kook/src/webhook.ts
+  s_a5dc81d701255f::t_57db18821342bb 25,27,87-91,100-106
+docs/contributing/platform-acceptance.md
+  s_a5dc81d701255f::t_59157905e9491d 5,7-8
+  s_a5dc81d701255f::t_9288d474c5ea97 18,28-35
+  s_a5dc81d701255f::t_9f3230e1fcf1e1 46-47
+  s_a5dc81d701255f::t_8da8500e1de55c 21-27,36-45
+  s_2104cc474f1ce5::t_17c476934ee3d7 14-15
+packages/im/ai/src/file-state-cache.ts
+  s_a5dc81d701255f::t_b0a29e40a7df92 102,104,108-110
+  s_a5dc81d701255f::t_f5ec5489018d12 111-112
+scripts/check-created-project.mjs
+  s_a5dc81d701255f::t_25de2cb43f7986 11,37-67,69,71-72,75-79,168-169,177,179,223-224,226,239,241-245,249,251,278,289
+  s_a5dc81d701255f::t_41cebc04c551d5 10,34-36,68,70,73-74,80-85,170,172-176,182-184,225,227,240,246,257,283,288
+  s_a5dc81d701255f::t_18212b3c3a20f0 31-33,285
+  s_a5dc81d701255f::t_1e7dae677fd511 280-282
+  s_a5dc81d701255f::t_411bf8b257ce4a 167,171,178,180-181,247,252-256,279
+tests/docs/self-delivery-ci-credentials.test.ts
+  s_a5dc81d701255f::t_f207624ab2099d 10,16,31-33
+plugins/adapters/dingtalk/tests/outbound-receipt.test.ts
+  s_a5dc81d701255f::t_f3ba8b75710cd2 1-5,7,9-10,12-18,20-25,42-63
+  s_a5dc81d701255f::t_9298586754d17a 6,8,19,26-41
+  s_a5dc81d701255f::t_13bc05090f322d 11
+plugins/adapters/kook/README.md
+  s_a5dc81d701255f::t_710d1977f93fd1 116-119
+  s_a5dc81d701255f::t_2bb5cbd514a41d 124
+  s_a5dc81d701255f::t_08d5a32e300b4a 129-130
+  s_a5dc81d701255f::t_81cc956e319c93 131-134
+  s_a5dc81d701255f::t_fd2fb9ce8c49e1 98-102,120-121
+  s_a5dc81d701255f::t_573478e63e163e 122-123,125-128
+  s_a5dc81d701255f::t_27e7e37dd6ad78 135-140
+docs/.vitepress/config.ts
+  s_a5dc81d701255f::t_2c1ffe7770c528 139
+plugins/adapters/discord/src/endpoint.ts
+  s_a5dc81d701255f::t_d2f99016137842 132,139,142,145-146,148,158,177
+  s_a5dc81d701255f::t_a32f4a9959c134 115
+  s_a5dc81d701255f::t_541186f04791e2 1,126-128
+  s_a5dc81d701255f::t_f1c5fb32dc6c64 74-75,112-114,120,130-131,134-135,137-138,140,167-168,182,196,496
+  s_a5dc81d701255f::t_40512f18ecf689 111
+  s_a5dc81d701255f::t_f951af4d576a33 303-320,495
+  s_a5dc81d701255f::t_aa7816c657ce75 129,136
+  s_a5dc81d701255f::t_30fd6df39939d0 6-15,76,116-117,119,121,133,176,178,195,197-201,474-494,497-498
+plugins/adapters/onebot11/tests/transport-faults.test.ts
+  s_a5dc81d701255f::t_cea50cb71e88ad 3,95,97-119
+  s_a5dc81d701255f::t_90fe13d5594840 27-90
+  s_a5dc81d701255f::t_bd6036abcb64d5 1-2,4-26,91-94,96,120-168
+basic/cli/src/cli.ts
+  s_a5dc81d701255f::t_979679dc2e8570 58-63
+examples/platform-acceptance-bot/tests/setup.test.ts
+  s_a5dc81d701255f::t_5867b7ee270810 41-43
+  s_a5dc81d701255f::t_ed3aa27c8cd02b 68,74,80,90-91,95-106,108-112,123
+  s_a5dc81d701255f::t_2568153f214518 107
+  s_a5dc81d701255f::t_22aed37d609396 1-40,44-46,69,76,125-156,159,162-164,171,173-177,179-182,184,188,201,207-210
+  s_a5dc81d701255f::t_b0b7a4e0e0f287 82-89
+  s_a5dc81d701255f::t_1f3cdcbaf2a39f 47-56,115
+  s_a5dc81d701255f::t_8fa1f4c1908939 57-67,70-73,75,77-79,81,92-94,113-114,116-122,124,157-158,160-161,165-170,172,178,183,185-187,189-200,202-206
+plugins/adapters/telegram/tests/share-keyboard.test.ts
+  s_a5dc81d701255f::t_eb56893bbd31a7 1-16
+plugins/adapters/qq/src/upload-diagnostics.ts
+  s_a5dc81d701255f::t_612476786ddfac 10,17-28,50-51,60,66
+  s_a5dc81d701255f::t_908ace45070723 1-4,6-9,12-16,29,31-36,38-49,52-58,61-62,64-65,67-70
+  s_a5dc81d701255f::t_62459c4ea4b567 5,30,37,59,63
+  s_a5dc81d701255f::t_ce2576a241ebec 11
+packages/im/skill/src/skill-index.ts
+  s_a5dc81d701255f::t_cf8119a52b61b3 15,47-51
+  s_a5dc81d701255f::t_ae707be47004e1 52
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_a5dc81d701255f::t_9e77f22cf35fba 280-282,417-426
+  s_a5dc81d701255f::t_591500ec530af3 427
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_a5dc81d701255f::t_c15063338ebf9c 78
+  s_a5dc81d701255f::t_45cdfb776b5e9c 6,56-77,79-86
+  s_a5dc81d701255f::t_3b25b43a12606e 87-88
+plugins/adapters/onebot11/src/ws-types.ts
+  s_a5dc81d701255f::t_9afba572e9a930 7
+plugins/adapters/lark/tests/long-connection.test.ts
+  s_a5dc81d701255f::t_18519439c6545a 1-63,66-75
+  s_a5dc81d701255f::t_ed2e632e338372 64-65
+basic/cli/src/plugin-runtime/console/rpc-route.ts
+  s_a5dc81d701255f::t_8918285f35556d 13,28-34
+plugins/adapters/dingtalk/src/stream-proxy.ts
+  s_a5dc81d701255f::t_95fe3b4655423f 17
+  s_a5dc81d701255f::t_2ebf08f36ee80b 1-16,18-20
+.changeset/line-webhook-replay-admission.md
+  s_a5dc81d701255f::t_3d2dd0bf248bd7 1-5
+plugins/adapters/lark/schema.json
+  s_a5dc81d701255f::t_b5ef7731f239e4 100-121,123-125,127-134
+  s_a5dc81d701255f::t_47ac3f7678abd0 92-99,149-157,163
+  s_a5dc81d701255f::t_43d2d4f8ec96cb 122,126,135,158-162,164-171
+plugins/adapters/qq/tests/media-delivery.test.ts
+  s_a5dc81d701255f::t_aff39f3b1109e7 28
+  s_a5dc81d701255f::t_1da2c2afda12cd 32-41
+  s_a5dc81d701255f::t_049f4bde8334b0 20,26,31,79-113
+  s_a5dc81d701255f::t_d8679380adf031 42-78
+  s_a5dc81d701255f::t_9453183e407ded 1-19,21-25,27,29-30
+plugins/adapters/dingtalk/src/stream.ts
+  s_a5dc81d701255f::t_388a1b21d3e649 2-5,7-27,30-36,39-41,43-51,55,57-58,63-64,66-72,74-79,81-87,89,92,94-104
+  s_a5dc81d701255f::t_e29f25827ba6cc 6,29,42,90
+  s_a5dc81d701255f::t_2ebf08f36ee80b 1,28
+  s_a5dc81d701255f::t_a34362346aa5cf 37-38,52-54
+  s_a5dc81d701255f::t_1f870053d6b37a 56,59-62,65,73
+  s_a5dc81d701255f::t_f5d8cd9fb12a5f 80,88,91,93
+plugins/adapters/lark/src/long-connection.ts
+  s_a5dc81d701255f::t_faeff673bff938 1,14,20
+  s_a5dc81d701255f::t_88d925cc79e3c2 3,31,35,75,84
+  s_a5dc81d701255f::t_c3a219d8ee2d76 2,4-13,15-19,21-30,32-34,36-39,41-50,52-64,66-73,76-82,85-87
+  s_a5dc81d701255f::t_9fd59e1ded868c 40,65,74,83
+  s_a5dc81d701255f::t_1a1c7e888e9abf 51
+plugins/adapters/email/tests/sender-identity.test.ts
+  s_a5dc81d701255f::t_266ef0bc1e38f0 1-10
+plugins/adapters/dingtalk/src/endpoint.ts
+  s_a5dc81d701255f::t_db59765e5fb1fc 3,35,173,205,212-218,220-221,223-229,232,234-240,242,244,247,249-252,516-519
+  s_a5dc81d701255f::t_f83b587b9d3988 7
+  s_a5dc81d701255f::t_b34360d024e086 219,222,245
+  s_a5dc81d701255f::t_c072d9684f373d 475
+  s_a5dc81d701255f::t_388a1b21d3e649 2,46-47,108,120-121,135,137-139,141,164,268,301
+  s_a5dc81d701255f::t_4e49bbdab8e9f3 107,206-211,272-275
+  s_a5dc81d701255f::t_f3ba8b75710cd2 231
+  s_a5dc81d701255f::t_651d0eda907f47 176-203
+  s_a5dc81d701255f::t_18165851286eea 281
+  s_a5dc81d701255f::t_557e112748604e 230,233,248,472
+  s_a5dc81d701255f::t_e29f25827ba6cc 1,109,136,166,174-175,204,254,256-263,278
+  s_a5dc81d701255f::t_3d35b6319afac8 520
+plugins/adapters/line/src/side-event-dispatch.ts
+  s_a5dc81d701255f::t_838135cd96b835 31-32,36,52
+plugins/adapters/email/README.md
+  s_a5dc81d701255f::t_c90dc20a26c01b 102-103
+  s_a5dc81d701255f::t_31ba96d2b1546d 113-120
+  s_a5dc81d701255f::t_97bf961d60847d 100-101,104-112
+  s_a5dc81d701255f::t_f2dfd7fad1a56b 121-126
+docs/adapters/line.md
+  s_a5dc81d701255f::t_55418aae51e5a4 11,121-128
+packages/im/component/tests/component.test.ts
+  s_a5dc81d701255f::t_d04e136c2c7be8 102-105
+  s_a5dc81d701255f::t_429e3d6b8f10e3 37-51,97-98,107,118
+  s_a5dc81d701255f::t_23b481452dba18 23-30
+  s_a5dc81d701255f::t_e670bcad99438a 96,99-101,106,108-117,119
+plugins/adapters/kook/tests/native-buttons.test.ts
+  s_a5dc81d701255f::t_fbdf7d27f6331f 1-4,6-28,31-36,38-41,43,46,48-59,63,65-67,69
+  s_a5dc81d701255f::t_ecc01e419d85fe 60
+  s_a5dc81d701255f::t_e48a678daaa969 5,29-30,42,61-62,68
+  s_a5dc81d701255f::t_c8d02301f1866c 37,44-45,47,64
+scripts/platform-acceptance/FRAMEWORK-ACCEPTANCE.zh-CN.md
+  s_a5dc81d701255f::t_7542f16bda69b2 80-82
+  s_a5dc81d701255f::t_c85a0a6826ee08 256,284
+  s_a5dc81d701255f::t_7246d538edb0fa 207-210
+  s_a5dc81d701255f::t_c97cdccf9589e8 250-252
+  s_a5dc81d701255f::t_c21b49bd13614e 265-267
+  s_a5dc81d701255f::t_d12a91673933b4 48-53
+  s_a5dc81d701255f::t_6111e077529207 42
+  s_a5dc81d701255f::t_24eb4c9bdde3b7 153-154
+  s_a5dc81d701255f::t_9113fd5d50eeea 270-271
+  s_a5dc81d701255f::t_2f497d66b055b7 62-65
+  s_a5dc81d701255f::t_79d3f4f3bb860b 192-194
+  s_a5dc81d701255f::t_c734fb4b5b7dce 1-10,17-19,31-33,114-120,122
+  s_a5dc81d701255f::t_bf9bb59f4f6bbf 69-72
+  s_a5dc81d701255f::t_f41351fc8a5dea 106-110
+  s_a5dc81d701255f::t_b03478f1b652e3 23,302-303
+  s_a5dc81d701255f::t_8e8f0278267636 121
+  s_a5dc81d701255f::t_26c242f78e9dd2 11,285-288
+  s_a5dc81d701255f::t_a92da03efa138e 128
+  s_a5dc81d701255f::t_8b7ca7ee4fdcd7 148-149
+  s_a5dc81d701255f::t_19de01f7935f9c 76-79
+  s_a5dc81d701255f::t_deead97be8d42a 54-58
+  s_a5dc81d701255f::t_563d369a35a4d1 179
+  s_a5dc81d701255f::t_9eb536378292ea 199-203
+  s_a5dc81d701255f::t_19fb2564a7d39c 101-105
+  s_a5dc81d701255f::t_cf193ad4b0ece6 294-296
+  s_a5dc81d701255f::t_b6d1ae133223e9 297
+  s_a5dc81d701255f::t_1ca15989a457e8 300-301
+  s_a5dc81d701255f::t_6be73fee80961b 25,291-293
+  s_a5dc81d701255f::t_72c06151a8f225 246-249
+  s_a5dc81d701255f::t_7f8f48e385f4c0 13,214-219
+  s_a5dc81d701255f::t_afae180f610d47 34-36
+  s_a5dc81d701255f::t_cd0f421cedfd3c 233
+  s_a5dc81d701255f::t_08595bea7f1d8b 12,240-245
+  s_a5dc81d701255f::t_73758040a4a9de 225-228
+  s_a5dc81d701255f::t_f672d8efb5e1b8 211-213
+  s_a5dc81d701255f::t_f8d959c1ecb924 40-41,43
+  s_a5dc81d701255f::t_233dee5a9f9ae8 277-278
+  s_a5dc81d701255f::t_9f8f377fff075d 232,234-235
+  s_a5dc81d701255f::t_0ab81cda6c642d 306-307
+  s_a5dc81d701255f::t_c6a1359793fd34 268-269
+  s_a5dc81d701255f::t_899bfea84f081d 83-86
+  s_a5dc81d701255f::t_2a24a6922963c9 170-173
+  s_a5dc81d701255f::t_7640f3c0bbb426 130-133
+  s_a5dc81d701255f::t_a46b124933a911 189-191
+  s_a5dc81d701255f::t_aa3d28fb7c9e74 279-280
+  s_a5dc81d701255f::t_d7e7dfcfb4d050 37-39
+  s_a5dc81d701255f::t_e23cf7a3f3aadb 167-169
+  s_a5dc81d701255f::t_52bc5added1fa5 223-224
+  s_a5dc81d701255f::t_ccd1a0f332c7fc 236-239
+  s_a5dc81d701255f::t_17d0af66fffa80 15
+  s_a5dc81d701255f::t_ebc163e306e153 66-68
+  s_a5dc81d701255f::t_0b29533079c2ba 73-75
+  s_a5dc81d701255f::t_1cf00702db7b64 98-100
+  s_a5dc81d701255f::t_6244c39066736c 111-113
+  s_a5dc81d701255f::t_1894ad85d34021 134-137,139-142
+  s_a5dc81d701255f::t_131ab65c29edb2 87-89
+  s_a5dc81d701255f::t_86a0e2fb31623c 195-198
+  s_a5dc81d701255f::t_e48d686ab15929 150
+  s_a5dc81d701255f::t_88b35f58c1199a 183-188
+  s_a5dc81d701255f::t_77de4395b1dff3 155-158
+  s_a5dc81d701255f::t_00dabb78a335fe 59-61
+  s_a5dc81d701255f::t_7cfe7e71e7ba0d 164-166
+  s_a5dc81d701255f::t_38eaf50250683a 95-97
+  s_a5dc81d701255f::t_cf29be359a856e 151-152
+  s_a5dc81d701255f::t_acab7701db185f 14
+  s_a5dc81d701255f::t_58ca647656cc51 180-182
+  s_a5dc81d701255f::t_dbab43c5e420ce 24
+  s_a5dc81d701255f::t_d5058adc49221d 220-222
+  s_a5dc81d701255f::t_f586bef1debc9e 298-299
+  s_a5dc81d701255f::t_4c3435a13d2531 229-231
+  s_a5dc81d701255f::t_e0188698c17a2a 257-260
+  s_a5dc81d701255f::t_555932aacde5fc 123-127,129
+  s_a5dc81d701255f::t_076722869eb448 272-273
+  s_a5dc81d701255f::t_97d15ee3a4b492 289-290
+  s_a5dc81d701255f::t_f5b55ad486b15c 143-145
+  s_a5dc81d701255f::t_d054c8b5e54da9 26
+  s_a5dc81d701255f::t_376b63f3056aa0 261-264
+  s_a5dc81d701255f::t_acaeaa1ea0906e 138
+  s_a5dc81d701255f::t_5a4c3db3c21687 44-47
+  s_a5dc81d701255f::t_bb425a77540154 16,20-22,27-30
+  s_a5dc81d701255f::t_6b76400efb1e2b 253-255
+  s_a5dc81d701255f::t_a6ee7acebf4842 174-178
+  s_a5dc81d701255f::t_222cf7eb9f0f34 204-206
+  s_a5dc81d701255f::t_0670b5c1e88da3 281-283
+  s_a5dc81d701255f::t_d2cc668fa7ebd2 146-147
+  s_a5dc81d701255f::t_2971be237a6fa8 274-276
+  s_a5dc81d701255f::t_91072d3315b1ca 90-94
+  s_a5dc81d701255f::t_86c3461a4d3693 159-163
+  s_a5dc81d701255f::t_7de941ac92615a 304-305
+plugins/adapters/lark/tests/web-api-proxy-tls.test.ts
+  s_a5dc81d701255f::t_e681bc5330d472 3,20-41
+  s_a5dc81d701255f::t_4e957da1b54113 1-2,4-19,42-98,107-108,112
+  s_a5dc81d701255f::t_c7c16accdd5884 99-101,104-106
+  s_a5dc81d701255f::t_80b84844b3514e 109-111
+  s_f2cc00d78426cf::t_776b6d4982decd 102-103
+.changeset/kook-preload-typed-permission.md
+  s_a5dc81d701255f::t_c6a1359793fd34 1-5
+.changeset/pagemanager-lazy-typescript.md
+  s_a5dc81d701255f::t_720c4f22f3c93c 1-5
+plugins/adapters/email/src/delivery.ts
+  s_a5dc81d701255f::t_4bdf27d82e87b1 1-15,18-28
+  s_a5dc81d701255f::t_789c4a9e5ddfb4 16-17
+plugins/adapters/telegram/src/polling.ts
+  s_a5dc81d701255f::t_4d079cafbdbf85 22-23,38,42-44,50
+  s_a5dc81d701255f::t_4821a89e3da3bc 47
+plugins/adapters/qq/tests/qq-runtime.test.ts
+  s_a5dc81d701255f::t_d05739e7a9495a 582
+  s_a5dc81d701255f::t_05f30eae47e3e4 711-713,715-716
+  s_a5dc81d701255f::t_8793ac2dc9916b 28-54
+  s_a5dc81d701255f::t_60e5ea2d2f22eb 622
+  s_a5dc81d701255f::t_38621422d09e0d 238
+  s_a5dc81d701255f::t_e4403aece207ba 266
+  s_a5dc81d701255f::t_a4977fd41a29e5 717-733
+  s_a5dc81d701255f::t_443483932eaf1b 710,734-745
+  s_a5dc81d701255f::t_c072d9684f373d 714
+  s_a5dc81d701255f::t_b342bffd5aa7b4 641
+  s_a5dc81d701255f::t_bc5852f82780cd 261,263-264,699-709
+plugins/adapters/email/tests/tls-server-name.test.ts
+  s_a5dc81d701255f::t_a27e5d2571b826 1-40
+plugins/adapters/lark/tests/lark-runtime.test.ts
+  s_a5dc81d701255f::t_28e5e25a70131a 564,606,617-618
+  s_a5dc81d701255f::t_657361b84e8749 200-202
+.changeset/qq-cli-startup-errors.md
+  s_a5dc81d701255f::t_fa342f328b27d6 4-5,11-12
+  s_a5dc81d701255f::t_238c6bba9a28b1 1-3,6-8
+  s_a5dc81d701255f::t_b2196341f68874 9-10
+plugins/adapters/qq/schema.json
+  s_a5dc81d701255f::t_98234afe1ab8c4 140-159,173-192
+plugins/adapters/napcat/README.md
+  s_a5dc81d701255f::t_0976ce3fd1e629 100-103
+plugins/adapters/dingtalk/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_03f8eb2d19c0d5 1-43
+examples/platform-acceptance-bot/additional-profiles.mjs
+  s_a5dc81d701255f::t_c6b9b4aa07efef 3
+  s_a5dc81d701255f::t_3794ecae54faef 76-79
+  s_a5dc81d701255f::t_dbc81aeb48f2fe 48
+  s_a5dc81d701255f::t_ed878c90a6e301 4-28,31,33,60,64,68-72,80,82-84,92-99,101-104,106-112,114-115
+  s_a5dc81d701255f::t_88d925cc79e3c2 36-39
+  s_a5dc81d701255f::t_422b092b272426 34,42-43,45-46,53-54,59,113
+  s_a5dc81d701255f::t_ff95e53e96482b 73-75
+  s_a5dc81d701255f::t_1d1bd9c572bce3 1,40-41,44,51-52,55
+  s_a5dc81d701255f::t_c709c4de1439ae 88-91
+  s_a5dc81d701255f::t_dcd6f705505725 47,49-50
+  s_a5dc81d701255f::t_7665f38e9294b5 81
+  s_a5dc81d701255f::t_eb2459e03ac0e9 85-87
+  s_a5dc81d701255f::t_541186f04791e2 61-63
+  s_a5dc81d701255f::t_5a946745ff184f 100,105
+  s_a5dc81d701255f::t_62850247333814 65-67
+  s_a5dc81d701255f::t_e687c431c3c8f6 2,29-30,32,35,56-58
+plugins/adapters/line/src/webhook.ts
+  s_a5dc81d701255f::t_76eaa9a2068413 21,78,85-86
+  s_a5dc81d701255f::t_838135cd96b835 62-63,67-77
+plugins/adapters/telegram/src/webhook.ts
+  s_a5dc81d701255f::t_53790df56089b7 75-76
+  s_a5dc81d701255f::t_4d079cafbdbf85 22,59-60,63-66,68-69
+plugins/adapters/discord/schema.json
+  s_a5dc81d701255f::t_541186f04791e2 193-207
+  s_a5dc81d701255f::t_f988886aaf965a 188-190,192,220-222,224
+  s_a5dc81d701255f::t_c8a4c431d12290 191,223
+scripts/platform-acceptance/fault-proxy.mjs
+  s_a5dc81d701255f::t_45c7a3f147afd6 15-16,57-70,172,178-179
+  s_a5dc81d701255f::t_478ca2867a288a 1-14,17-36,39-56,71-85,88-107,110-152,159-171,173-177,180-192
+  s_a5dc81d701255f::t_a9e5c9b158315d 37-38,153-158
+  s_a5dc81d701255f::t_9147f74904698d 86-87,108-109
+.changeset/console-local-endpoint-candidate.md
+  s_a5dc81d701255f::t_3637df6c7e9189 8-9
+  s_a5dc81d701255f::t_c15063338ebf9c 1-7
+plugins/adapters/qq/src/interaction.ts
+  s_a5dc81d701255f::t_d05739e7a9495a 1-15
+packages/im/adapter/README.md
+  s_a5dc81d701255f::t_639fc779cb7b8a 170,174-177,180-181,184
+  s_a5dc81d701255f::t_22a0b05233e323 182-183
+  s_a5dc81d701255f::t_89305063c01588 185
+plugins/adapters/kook/tests/uncached-message.test.ts
+  s_a5dc81d701255f::t_0d1093556d15b4 1-17
+packages/im/adapter/src/definition.ts
+  s_a5dc81d701255f::t_fa342f328b27d6 80-83
+plugins/adapters/dingtalk/src/webhook.ts
+  s_a5dc81d701255f::t_899b8e428b46bf 20,65
+packages/im/im-contract/src/endpoint.ts
+  s_a5dc81d701255f::t_86934e9dd44546 21-35
+plugins/adapters/line/src/protocol.ts
+  s_a5dc81d701255f::t_997426fac82fbf 83-88,94
+plugins/adapters/slack/src/web-client.ts
+  s_a5dc81d701255f::t_9ce99f1261a2fe 1-17
+plugins/adapters/telegram/src/api-error.ts
+  s_a5dc81d701255f::t_8c14dbdf0c4a0d 8,16-20,22-27
+  s_a5dc81d701255f::t_4d42004c661465 1-2
+  s_a5dc81d701255f::t_d9a284af54da3f 3-7,9-15,21,28-33
+packages/im/agent/tests/plugin-runtime/fixtures/reused-tool-context.mjs
+  s_a5dc81d701255f::t_6907a888f13b8d 1-26
+plugins/adapters/lark/src/cards.ts
+  s_a5dc81d701255f::t_657361b84e8749 44-57
+  s_a5dc81d701255f::t_faeff673bff938 1-43,58-69
+packages/im/runtime/src/hmr-coordinator.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1,59,61-68,79
+basic/cli/src/plugin-runtime/readiness.ts
+  s_a5dc81d701255f::t_f4e4c4dad91a41 64-67
+plugins/adapters/email/tests/smtp-uncertain-fixture.test.ts
+  s_a5dc81d701255f::t_fea1b0065fd470 2
+  s_a5dc81d701255f::t_c4b57e541399be 1,3-50
+docs/plans/adapter-stability-parallel-plan.md
+  s_a5dc81d701255f::t_6778a9f64bbcb3 174-175
+  s_a5dc81d701255f::t_2c1ffe7770c528 1-4
+  s_a5dc81d701255f::t_bc17dd0d45f98d 228-229
+  s_a5dc81d701255f::t_2b5e198832dcf5 238-239
+  s_a5dc81d701255f::t_7fcd60ad721943 220-221
+  s_a5dc81d701255f::t_bc3af73749d0f4 215-216
+  s_a5dc81d701255f::t_ef4f3c500125fd 114-116
+  s_a5dc81d701255f::t_9567860ac0717e 230-231
+  s_a5dc81d701255f::t_f3813e7af27280 224-225
+  s_a5dc81d701255f::t_72bbc7e6324050 5-6,11-69,71-103
+  s_a5dc81d701255f::t_5c371277d45606 70
+  s_a5dc81d701255f::t_8da8500e1de55c 7-10
+  s_a5dc81d701255f::t_ca59a002d43ccb 234-235
+  s_a5dc81d701255f::t_b54e61fc1333e1 170-173
+  s_a5dc81d701255f::t_e2f03ca53d1483 153
+  s_a5dc81d701255f::t_8ceaea801752ed 252-253
+  s_a5dc81d701255f::t_edd59188b957c1 213-214
+  s_a5dc81d701255f::t_702b5b322a42d8 232-233
+  s_a5dc81d701255f::t_2d191eade94a1b 166-167
+  s_a5dc81d701255f::t_42f23a886c4f1d 176-179
+  s_a5dc81d701255f::t_5a247b45cf5abf 180-181
+  s_a5dc81d701255f::t_dd45beb7a6b614 184-187,189
+  s_a5dc81d701255f::t_7ee6f4608ab6dd 217-219
+  s_a5dc81d701255f::t_8455675c95946e 188,191-192
+  s_a5dc81d701255f::t_0b9324a003c846 104-113,117-124
+  s_a5dc81d701255f::t_0f3b86ab0772c6 198-206
+  s_a5dc81d701255f::t_b4c36c47cdcf17 190
+  s_a5dc81d701255f::t_f2f5d35e2e697d 150-152
+  s_a5dc81d701255f::t_ed5722d3e1a7c4 207-212
+  s_a5dc81d701255f::t_1102208a25cbc5 226-227
+  s_a5dc81d701255f::t_67c601b341e48e 240-245
+  s_a5dc81d701255f::t_ce9f844072067d 246-247
+  s_a5dc81d701255f::t_3a9459e91c7963 222-223
+  s_a5dc81d701255f::t_d53d9da3015f05 141-149,154-155
+  s_a5dc81d701255f::t_15697733854cf2 250-251
+  s_a5dc81d701255f::t_7f109ae5b12b99 156-159
+  s_a5dc81d701255f::t_69cc7389c4df2b 182-183
+  s_a5dc81d701255f::t_e11911ecefb06e 160-165
+  s_a5dc81d701255f::t_7d40b7ab761922 168-169
+  s_a5dc81d701255f::t_9288d474c5ea97 125-140
+  s_a5dc81d701255f::t_c6febe2cbfd1db 236-237
+  s_a5dc81d701255f::t_05649822d9070c 248-249
+  s_a5dc81d701255f::t_234df38a9b99b3 254-261
+  s_a5dc81d701255f::t_b666a49c7e8c18 193-197
+plugins/adapters/discord/package.json
+  s_a5dc81d701255f::t_541186f04791e2 55-56
+  s_a5dc81d701255f::t_f988886aaf965a 53
+  s_a5dc81d701255f::t_65bb4c4467dc9b 54
+packages/im/core/tests/plugin-runtime/reused-operation-projections.test.ts
+  s_a5dc81d701255f::t_e0391fe3f463d3 5,24,26-28
+  s_a5dc81d701255f::t_f9aad35bb9367e 1-4,6-23,25,29-34
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_a5dc81d701255f::t_d4281c8de4fef5 181-195
+.changeset/lark-long-connection.md
+  s_a5dc81d701255f::t_e8dd709cbddafb 6-7
+  s_a5dc81d701255f::t_5bedafedee4d7c 1-5
+  s_a5dc81d701255f::t_d2e28dbc7e1fb9 10-11
+  s_a5dc81d701255f::t_313233ef6ef509 8-9
+plugins/adapters/dingtalk/schema.json
+  s_a5dc81d701255f::t_fa499a20481909 87-98,141-152
+  s_a5dc81d701255f::t_2abf0e268a57ab 99-119
+  s_a5dc81d701255f::t_ec88ee33829eab 79-86,133-140
+plugins/adapters/lark/adapters/lark/index.ts
+  s_a5dc81d701255f::t_faeff673bff938 25
+  s_a5dc81d701255f::t_47ac3f7678abd0 33,37
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_a5dc81d701255f::t_a74e5cf423d63f 48,55-79
+packages/im/runtime/src/config-composer.ts
+  s_a5dc81d701255f::t_22067cc6c12ad4 17
+plugins/adapters/telegram/src/protocol.ts
+  s_a5dc81d701255f::t_0311e795a970c6 7,498,579-587,598,603,605-608,610-611
+packages/im/adapter/src/endpoint-contract.ts
+  s_a5dc81d701255f::t_5018bfda594260 78-80,102
+packages/im/adapter/src/endpoint.ts
+  s_a5dc81d701255f::t_81563a1ed6f2fd 98-99,125
+  s_a5dc81d701255f::t_5afcfab3bca307 111-115,121-124,126-129
+  s_a5dc81d701255f::t_6e580ae4c91228 118-120
+  s_a5dc81d701255f::t_dbcf83fe85abe1 6,49,85-92,117,175-178
+  s_a5dc81d701255f::t_5018bfda594260 11,28,74
+  s_a5dc81d701255f::t_246b4e88fed0c2 47,84,110,116,134-141,153-161,173-174,180-183,186-187,218-219
+  s_a5dc81d701255f::t_c6fb5dc1a265c5 108
+  s_a5dc81d701255f::t_f4e4c4dad91a41 75
+  s_a5dc81d701255f::t_e1c2c057587d28 76,220
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_a5dc81d701255f::t_567bcc70593865 10,22-23
+  s_a5dc81d701255f::t_d57d68e1ee86ff 21,37-38
+  s_a5dc81d701255f::t_c05ee9a6f66bd6 104,120-125
+  s_a5dc81d701255f::t_da967f3824a1d6 1,24-29,75
+basic/cli/tests/plugin-runtime/console/environment-files.test.ts
+  s_a5dc81d701255f::t_72b614b3c97cc2 1-17
+.changeset/console-plugin-readonly-projection.md
+  s_a5dc81d701255f::t_3a540a3fd752ca 1-5
+plugins/adapters/kook/schema.json
+  s_a5dc81d701255f::t_92464e0dffdb6a 175-189
+  s_a5dc81d701255f::t_c709c4de1439ae 154-174
+examples/platform-acceptance-bot/webhook.env.example
+  s_a5dc81d701255f::t_0c677e9a747edf 1-2,4-10,12-17
+  s_a5dc81d701255f::t_1d1bd9c572bce3 3,11
+  s_a5dc81d701255f::t_d753dd2bf4c35d 18-24
+packages/im/runtime/src/native-development-runtime.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1,58,66,99,383
+packages/host/http/src/http-host.ts
+  s_a5dc81d701255f::t_ec1a5a56209fa7 349-352,414,429
+  s_a5dc81d701255f::t_26c242f78e9dd2 596-604,607-615
+  s_a5dc81d701255f::t_7d4c5aee64d411 173,541-542,544-549,551-555,579,587-595,618
+packages/im/agent/src/plugin-runtime/capability-ingress.ts
+  s_a5dc81d701255f::t_31a21eb867b795 85,103
+  s_a5dc81d701255f::t_cf8119a52b61b3 5-6,11-12,18-19,24-25,70-71,340,343
+  s_a5dc81d701255f::t_5bb4e23fb95732 82,248,268
+packages/im/adapter/src/managed-endpoint.ts
+  s_a5dc81d701255f::t_5018bfda594260 16
+  s_a5dc81d701255f::t_5de11f24be7a9d 2,155
+  s_a5dc81d701255f::t_5afcfab3bca307 54-56
+  s_a5dc81d701255f::t_ef635468b9ded4 57-58
+plugins/adapters/slack/tests/slack-outbound.test.ts
+  s_a5dc81d701255f::t_18d729129b104f 19-25
+  s_a5dc81d701255f::t_751cf29da4f28c 26-35
+examples/platform-acceptance-bot/commands/acceptance/index.ts
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-7,11-26,30-33,35-39,126-128
+  s_a5dc81d701255f::t_3ee8b420462892 8-10,27-29,34,44-58
+  s_a5dc81d701255f::t_b5725b1814c589 41,85-90
+  s_a5dc81d701255f::t_6659d282d56cb7 42-43,125
+  s_a5dc81d701255f::t_e9034090a0e896 82,96-98
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 107-110
+  s_a5dc81d701255f::t_7609bb3e8a49d9 40,59-81,83-84,91-95,99-106,111-124
+scripts/platform-acceptance/FAULT-PROXY.md
+  s_a5dc81d701255f::t_cf193ad4b0ece6 152-154
+  s_a5dc81d701255f::t_d1a6330286c58f 97-100
+  s_a5dc81d701255f::t_b6d1ae133223e9 155
+  s_a5dc81d701255f::t_3f5c3100167817 1-82
+  s_a5dc81d701255f::t_978fcdb867fc02 89,91,109-149,151
+  s_a5dc81d701255f::t_0670b5c1e88da3 150
+  s_a5dc81d701255f::t_141621f10b1e52 83-88,90,92-96,101-108
+plugins/adapters/slack/adapters/slack/index.ts
+  s_a5dc81d701255f::t_edf039bcd25ab1 25
+plugins/adapters/email/adapters/email/index.ts
+  s_a5dc81d701255f::t_e085d0601a0be1 24
+  s_a5dc81d701255f::t_4860333d1c0bf0 27
+  s_a5dc81d701255f::t_8518ae162549b0 23
+tests/docs/platform-acceptance-runner.test.ts
+  s_a5dc81d701255f::t_8d5abe3f08fc2e 62-77
+  s_a5dc81d701255f::t_d6ebe359756930 59-61,78-92
+  s_a5dc81d701255f::t_cf5ffe1b329405 1
+  s_a5dc81d701255f::t_996203b25e740e 115
+  s_a5dc81d701255f::t_4acab4c493b53f 116
+  s_a5dc81d701255f::t_9b3d64cea50b4f 17,20-21,93-105,140,145,149,155,161-162,165,172,177-178,190,196,210-211,222,233,239
+  s_a5dc81d701255f::t_dd45beb7a6b614 28
+  s_a5dc81d701255f::t_cb33b48160dfad 2,40-58
+  s_a5dc81d701255f::t_e6b27e00786d54 3-10
+  s_a5dc81d701255f::t_15d7bb7f62e17f 22-26,29-39
+  s_a5dc81d701255f::t_3d13897286edf0 27
+  s_a5dc81d701255f::t_28b616a6396bf9 11-16,18-19,106-114,117-139,141-144,146-148,150-154,156-160,163-164,166-171,173-176,179-189,191-195,197-209,212-221,223-232,234-238
+examples/platform-acceptance-bot/NEXT-TESTS.md
+  s_a5dc81d701255f::t_cf5ffe1b329405 62
+  s_a5dc81d701255f::t_a1c716a16825e4 1-2,19-37,39-61,63-68
+  s_a5dc81d701255f::t_f2f5d35e2e697d 3-18
+  s_a5dc81d701255f::t_56de069cfd011a 38
+tests/platform-acceptance/fault-proxy.test.ts
+  s_a5dc81d701255f::t_5ee5c2d55d9ea4 1-20,22-26,31-40,42-79,83-123
+  s_a5dc81d701255f::t_857b4ac5f206eb 124-133
+  s_a5dc81d701255f::t_9147f74904698d 21,27-30,41,80-82
+tests/platform-acceptance/high-order-probe.test.ts
+  s_a5dc81d701255f::t_6659d282d56cb7 45-48,65
+  s_a5dc81d701255f::t_b5725b1814c589 9-19,38,42-43,66-74
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 25,29,33,75-81,84,86
+  s_a5dc81d701255f::t_31319e46744e10 8,51-64
+  s_a5dc81d701255f::t_391ae3efc8133f 1-7,20-24,26-28,30-32,34-37,39-41,44,49-50,82-83,85,87
+packages/host/http/README.md
+  s_a5dc81d701255f::t_24feeb66b5135a 66-72
+  s_a5dc81d701255f::t_4befd1c721446d 15-18
+plugins/adapters/kook/tests/ws-lifecycle.test.ts
+  s_a5dc81d701255f::t_573478e63e163e 1-6,8-9,14-15,17,19-32,34-35
+  s_a5dc81d701255f::t_de738b3f3cc963 7,10-13
+  s_a5dc81d701255f::t_9534dc182e71a6 16,18,33
+plugins/adapters/discord/README.md
+  s_a5dc81d701255f::t_6e4cc68204a1c5 113-126
+  s_a5dc81d701255f::t_81cc956e319c93 110-112
+  s_a5dc81d701255f::t_8b03b8468def36 100-109
+packages/host/http/tests/http-host.test.ts
+  s_a5dc81d701255f::t_26c242f78e9dd2 3,25-63,599-603,605
+  s_a5dc81d701255f::t_ec1a5a56209fa7 527-532
+  s_a5dc81d701255f::t_eb06c9e0fc91e1 604,606
+.changeset/framework-lifecycle-command-cancellation.md
+  s_a5dc81d701255f::t_f56f3cfe082283 1-8
+docs/adapters/qq.md
+  s_a5dc81d701255f::t_236c60856dbde8 197-202
+  s_a5dc81d701255f::t_55418aae51e5a4 11,203-223
+packages/im/adapter/tests/endpoint-lifecycle.test.ts
+  s_a5dc81d701255f::t_7b52ae124a500e 58-60,65-91
+  s_a5dc81d701255f::t_493347c7388e1a 29-57,61-64,92-143
+  s_a5dc81d701255f::t_e3a046fcc7196a 144-188
+plugins/adapters/line/src/endpoint.ts
+  s_a5dc81d701255f::t_f83b587b9d3988 5
+  s_a5dc81d701255f::t_838135cd96b835 148-154,176,185-186,198
+  s_a5dc81d701255f::t_557e112748604e 124,138
+  s_a5dc81d701255f::t_997426fac82fbf 60,110,155-175
+  s_a5dc81d701255f::t_db59765e5fb1fc 1,117-123,125-128,133-137,139-141,228,231,249,252,268-282
+plugins/adapters/kook/tests/outbound-media.test.ts
+  s_a5dc81d701255f::t_4e20044436513f 60-62
+  s_a5dc81d701255f::t_b0b2a5c3305148 1-27,29-31,37-59,63-65
+  s_a5dc81d701255f::t_6aafb861112138 28,32-36
+plugins/adapters/dingtalk/tests/stream-proxy.test.ts
+  s_a5dc81d701255f::t_f69cd6438afb91 18-19
+  s_a5dc81d701255f::t_a6477ea810d6fd 5,30-38
+  s_a5dc81d701255f::t_fbaa19f218240f 1-4,6-17,20-29,39
+plugins/adapters/qq/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_3f346cbdd0a512 21-22,51,89-102
+  s_a5dc81d701255f::t_3e0858661016a6 1-20,23-50,52-88,103
+packages/im/runtime/tests/root-runtime.test.ts
+  s_a5dc81d701255f::t_bf1901c49ed29b 69-70
+  s_a5dc81d701255f::t_889718d5e1f27d 29-30,53-56
+plugins/adapters/lark/package.json
+  s_a5dc81d701255f::t_e326b7d43edeeb 4,45,54-55
+packages/im/command/tests/command.test.ts
+  s_a5dc81d701255f::t_c5540e5463430f 706-733,735-738,740,747,749,752,755-756
+  s_a5dc81d701255f::t_276e560f2e92f2 734,739,741-746,748,750-751,753-754,757
+.changeset/discord-media-filename.md
+  s_a5dc81d701255f::t_e2e7bee85941c6 1-5
+  s_a5dc81d701255f::t_b34c658e25ad34 6-7
+examples/platform-acceptance-bot/LINE-ACCOUNT-PREPARATION.md
+  s_a5dc81d701255f::t_3d13897286edf0 1-11
+.changeset/kook-api-fault-proxy.md
+  s_a5dc81d701255f::t_0561574c9b0984 1-5
+scripts/check-ai-install-artifacts.mjs
+  s_a5dc81d701255f::t_12aa3e70410905 1-4,6-13,17-20,24-28,32-33,36-37,39-40,45-49
+  s_a5dc81d701255f::t_97c129804e4815 14-16,29-31,34,41-44
+  s_a5dc81d701255f::t_b3d2bd3b955676 5,21-23,35,38
+packages/host/http/src/console-rest-pages.ts
+  s_a5dc81d701255f::t_aae460d0164861 111,193-199,202,212,214-216,222,224-225,228,233,238,240-241
+  s_a5dc81d701255f::t_905683d5664d7f 191-192
+  s_a5dc81d701255f::t_ef8ed592aa2b77 205-211,213,217-221,223,226-227
+  s_a5dc81d701255f::t_65e58653195439 389-390
+scripts/platform-acceptance/qq-network-fixture.mjs
+  s_a5dc81d701255f::t_25de2cb43f7986 1-17
+packages/im/runtime/src/invalidation-planner.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1-2,58,80,154
+plugins/adapters/dingtalk/tests/stream.test.ts
+  s_a5dc81d701255f::t_1f870053d6b37a 9,11
+  s_a5dc81d701255f::t_722faee7b4e816 32-46
+  s_a5dc81d701255f::t_87d8a2e0177890 47-59
+  s_a5dc81d701255f::t_26e39c3215bf21 1-8,10,12-31
+examples/platform-acceptance-bot/tests/additional-profiles.test.ts
+  s_a5dc81d701255f::t_6e4cc68204a1c5 83,90-97
+  s_a5dc81d701255f::t_422b092b272426 6-7,13-14
+  s_a5dc81d701255f::t_a8156b10965323 55-69,79
+  s_a5dc81d701255f::t_7665f38e9294b5 1-5,8-11,15-26,28-54
+  s_a5dc81d701255f::t_200ee9b515805c 12,27,70-78,80-82,84-89
+scripts/fixtures/ai-install-artifacts-probe.mjs
+  s_a5dc81d701255f::t_12aa3e70410905 1-14
+plugins/adapters/lark/tests/sdk-long-connection.test.ts
+  s_a5dc81d701255f::t_1a1c7e888e9abf 16-33
+  s_a5dc81d701255f::t_dd45beb7a6b614 8,12,14,38-53,55,57-58,61-63
+  s_a5dc81d701255f::t_1b00b78c277334 1-7,9-11,13,15,34-37,54,56,59-60,64
+docs/adapters/napcat.md
+  s_a5dc81d701255f::t_55418aae51e5a4 11,112-115
+plugins/adapters/qq/tests/sdk-outbound-failure.test.ts
+  s_a5dc81d701255f::t_6d9c5a93121754 22
+  s_a5dc81d701255f::t_ba7578c8dbaa71 1-21,23-30
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_a5dc81d701255f::t_655db5b5acf2c8 181-203
+plugins/adapters/slack/src/stream-proxy.ts
+  s_a5dc81d701255f::t_c6a970ed7e7400 1-16,18-22
+  s_a5dc81d701255f::t_8c40a577927b3b 17
+plugins/adapters/qq/tests/upload-diagnostics.test.ts
+  s_a5dc81d701255f::t_174090de4075f3 17,24
+  s_a5dc81d701255f::t_025e36d6818129 8
+  s_a5dc81d701255f::t_0be1aee6c263e2 9
+  s_a5dc81d701255f::t_62459c4ea4b567 1-7,10-16,18-23,25,27
+  s_a5dc81d701255f::t_e3902d3ad53ad1 26
+plugins/adapters/kook/tests/api-proxy-tls.test.ts
+  s_a5dc81d701255f::t_6266eede6d8b2b 8,32,34-35
+  s_a5dc81d701255f::t_0561574c9b0984 9,42
+  s_a5dc81d701255f::t_d69b9eb3bc81df 1-7,10-27,29-31,33,36-41,43-52
+  s_a5dc81d701255f::t_450ab690f009b4 28
+scripts/database-acceptance/sqlite-child.mjs
+  s_a5dc81d701255f::t_238beaa201baf2 1-36
+packages/im/runtime/src/source-ownership.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1,136,147
+plugins/adapters/line/tests/line-runtime.test.ts
+  s_a5dc81d701255f::t_557e112748604e 343,374,377
+.github/workflows/ci.yml
+  s_a5dc81d701255f::t_931cdc7752782b 24,28-47,49-56
+  s_a5dc81d701255f::t_f207624ab2099d 25-27,48
+plugins/adapters/slack/src/slack-outbound.ts
+  s_a5dc81d701255f::t_751cf29da4f28c 34,40,49
+plugins/adapters/qq/src/start-deadline.ts
+  s_a5dc81d701255f::t_a4977fd41a29e5 1,3,10,12-13,18
+  s_a5dc81d701255f::t_443483932eaf1b 2,4-9,11,14-17
+plugins/adapters/kook/tests/outbound-http.test.ts
+  s_a5dc81d701255f::t_fa37fccb1c6e73 6,11,13
+  s_a5dc81d701255f::t_87c61bdef70287 17
+  s_a5dc81d701255f::t_d6b34ce1621480 1-5,7-10,12,14-16,18-23
+plugins/adapters/dingtalk/src/protocol.ts
+  s_a5dc81d701255f::t_642c1adff5efd0 349
+  s_a5dc81d701255f::t_3c05101ac7ffde 298,302-308,310
+  s_a5dc81d701255f::t_18165851286eea 250-251
+  s_a5dc81d701255f::t_ec88ee33829eab 17,28,122,133
+  s_a5dc81d701255f::t_4e49bbdab8e9f3 9,50,296,314-318
+  s_a5dc81d701255f::t_2ebf08f36ee80b 13,26,120-121,131
+  s_a5dc81d701255f::t_9dbc6389e9f8c6 297,321,326
+  s_a5dc81d701255f::t_b698c78a2f4442 299-301
+  s_a5dc81d701255f::t_fa499a20481909 21-22,35-36,129,140-141
+  s_a5dc81d701255f::t_0311e795a970c6 309
+packages/im/component/README.md
+  s_a5dc81d701255f::t_b6d65d7dba06f4 23-33
+packages/im/runtime/src/root-runtime.ts
+  s_a5dc81d701255f::t_aaeaeeefe73936 1,163,174,239,276,358,362,365,385,453
+  s_a5dc81d701255f::t_3556c7464a4bd1 774
+plugins/adapters/discord/tests/outbound-http.test.ts
+  s_a5dc81d701255f::t_3dd9b635cd3955 1-23
+plugins/adapters/kook/tests/startup-permissions.test.ts
+  s_a5dc81d701255f::t_70a9e1889c1e60 1,17,19,22-33
+  s_a5dc81d701255f::t_2f5a24a8609122 2,4,6,8-10,12,14,16
+  s_a5dc81d701255f::t_8ccfb614defa80 3,18,20-21
+  s_a5dc81d701255f::t_43e25e13b5bd76 5,11,13,15
+  s_a5dc81d701255f::t_40052e8518a18f 34-40
+  s_a5dc81d701255f::t_a2a621d12b926b 7
+plugins/adapters/discord/tests/discord-runtime.test.ts
+  s_a5dc81d701255f::t_cd16561df6ffac 711
+  s_a5dc81d701255f::t_a00a484134a718 377-384,396-397
+  s_a5dc81d701255f::t_b34c658e25ad34 32,385-395
+  s_a5dc81d701255f::t_a32f4a9959c134 455-456,466-470,482
+  s_a5dc81d701255f::t_dc574689ac055d 686,705-710,825-868
+plugins/adapters/kook/tests/share-keyboard.test.ts
+  s_a5dc81d701255f::t_eb56893bbd31a7 1-4
+packages/im/config-file/tests/concurrent-transaction.test.ts
+  s_a5dc81d701255f::t_aadec74b485573 1-18
+  s_a5dc81d701255f::t_d57d68e1ee86ff 19-30
+plugins/adapters/line/tests/webhook-admission.test.ts
+  s_a5dc81d701255f::t_e10933b99f5349 1-42
+plugins/adapters/lark/src/stream-proxy.ts
+  s_a5dc81d701255f::t_88d925cc79e3c2 1-20
+scripts/platform-acceptance/report.mjs
+  s_a5dc81d701255f::t_29c0427299b201 58
+  s_a5dc81d701255f::t_8d5abe3f08fc2e 80-89
+  s_a5dc81d701255f::t_d6ebe359756930 25,62,65-67,71,73,131-132,142-144
+  s_a5dc81d701255f::t_cb33b48160dfad 38,51,54,56
+  s_a5dc81d701255f::t_996203b25e740e 69-70,72,74-78,91,93-95,97-114,117-119,123-130,134-141
+  s_a5dc81d701255f::t_1e7dae677fd511 96
+  s_a5dc81d701255f::t_baf0f74958d6b0 3-7,10-11,14,44
+  s_a5dc81d701255f::t_2cc6b0afcfe1d3 43
+  s_a5dc81d701255f::t_4202742f001287 1,13,15,17-23,26-36,40-42,52-53,57,59,61,63-64,145,154
+  s_a5dc81d701255f::t_1d1bd9c572bce3 9
+  s_a5dc81d701255f::t_2584532f9c251c 47,133
+  s_a5dc81d701255f::t_336733ecc58231 2,8,12,16,24,37,39,45-46,48-50,55,60,68,79,90,92,115-116,120-122,146-153
+packages/host/http/src/console-rpc.ts
+  s_a5dc81d701255f::t_639fc779cb7b8a 815-816
+docs/adapters/icqq.md
+  s_a5dc81d701255f::t_236c60856dbde8 11,190-195
+packages/console/pagemanager/tests/client-build/optional-typescript.test.ts
+  s_a5dc81d701255f::t_31a3734bf7411a 1-30
+packages/im/ai/src/memory/session-tree.ts
+  s_a5dc81d701255f::t_e5f935835a017a 71
+  s_a5dc81d701255f::t_de828319c1c345 8-10,72,74-75,81-86,90-91
+plugins/adapters/qq/src/outbound.ts
+  s_a5dc81d701255f::t_a59fd3394a19d0 237
+  s_a5dc81d701255f::t_30f569db29e503 13-14
+  s_a5dc81d701255f::t_d05739e7a9495a 34,109,111
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 17,204-205
+scripts/database-acceptance/sqlite-real.mjs
+  s_a5dc81d701255f::t_238beaa201baf2 1-28
+plugins/adapters/kook/src/ws.ts
+  s_a5dc81d701255f::t_46ae533d8737ae 20,213-214
+  s_a5dc81d701255f::t_ac94a252999efd 126-127,131,178
+  s_a5dc81d701255f::t_d6b34ce1621480 157-164
+  s_a5dc81d701255f::t_5bc43fff46e6d8 130
+  s_a5dc81d701255f::t_0561574c9b0984 136-142
+  s_a5dc81d701255f::t_abd4872a08f832 6,186-194
+  s_a5dc81d701255f::t_2514d3b82c76c9 8,212,217
+  s_a5dc81d701255f::t_f12a5333577e72 231-233
+  s_a5dc81d701255f::t_dc167e3e90d6ba 175
+  s_a5dc81d701255f::t_d75921268b4ef7 216
+  s_a5dc81d701255f::t_92464e0dffdb6a 5,129,132-135,143,252,256,264
+  s_a5dc81d701255f::t_8e308da7b390bd 10,165-167,169-170,172,174,179,181-183,200,215
+  s_a5dc81d701255f::t_fa37fccb1c6e73 144-156
+  s_a5dc81d701255f::t_95aa642f050eb1 196
+  s_a5dc81d701255f::t_c709c4de1439ae 9,246
+  s_a5dc81d701255f::t_0d1093556d15b4 101-106,114-115,117-118,120
+  s_a5dc81d701255f::t_70a9e1889c1e60 125,206,209,211,218-230,234-241,243
+  s_a5dc81d701255f::t_2169ebf0db8dcd 7
+  s_a5dc81d701255f::t_8a7e04902af4b6 128
+  s_a5dc81d701255f::t_98abe17aa8ecba 168
+  s_a5dc81d701255f::t_38c7de138e99ae 171
+  s_a5dc81d701255f::t_cbc0061dd753fc 173
+  s_a5dc81d701255f::t_56f1ad84ad57e6 176-177
+  s_a5dc81d701255f::t_e5eb35a04dc918 180
+  s_a5dc81d701255f::t_7e4b6f60c0d8f1 184-185
+  s_a5dc81d701255f::t_837004c34c246b 195
+  s_a5dc81d701255f::t_ac0ba62c0337e3 197-199
+  s_a5dc81d701255f::t_38a6b017309630 201-205
+  s_a5dc81d701255f::t_b7144b6ae6e2bb 207-208
+  s_a5dc81d701255f::t_f75432b24d9421 210
+  s_2881e8846c162b::t_2d7e24ccc71545 27-28,32-33,35-37
+scripts/platform-acceptance/run.mjs
+  s_a5dc81d701255f::t_996203b25e740e 16,21,69
+  s_a5dc81d701255f::t_d3d4903ea61a7a 43-45
+  s_a5dc81d701255f::t_29c0427299b201 81
+  s_a5dc81d701255f::t_baf0f74958d6b0 12,27,54-56
+  s_a5dc81d701255f::t_4202742f001287 1-2,4,6-11,14-15,17,30-42,46-53,57-65,74-78,95-97
+  s_a5dc81d701255f::t_4acab4c493b53f 3,18-20,23-26,28-29
+  s_a5dc81d701255f::t_d6ebe359756930 5,73,82-87
+  s_2104cc474f1ce5::t_2be0455a897010 13,22,66-68,70-72,79-80,88-94
+plugins/adapters/qq/tests/interaction.test.ts
+  s_a5dc81d701255f::t_954b523d2d9231 1-10,12-30,33-41
+  s_a5dc81d701255f::t_7fa7aea8541148 11
+  s_a5dc81d701255f::t_38621422d09e0d 31-32
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 42-45
+plugins/adapters/icqq/src/endpoint.ts
+  s_a5dc81d701255f::t_06f279cb24d3f1 357
+  s_a5dc81d701255f::t_b4226d63741d68 19,23,107-108,213-220,224,283,335,356,358-360,398-399,402-403,580
+plugins/adapters/qq/src/endpoint.ts
+  s_a5dc81d701255f::t_4c4b80b7a42d62 77,118
+  s_a5dc81d701255f::t_d8679380adf031 169-182,424-437
+  s_a5dc81d701255f::t_908ace45070723 1,100,110,354,365
+  s_a5dc81d701255f::t_1da2c2afda12cd 168,423
+  s_a5dc81d701255f::t_de4d96b9ab93c0 200,455
+  s_a5dc81d701255f::t_443483932eaf1b 102,111,125,356,366,384
+  s_a5dc81d701255f::t_d05739e7a9495a 3,68,94,247-269,280,303,323,348,501-523,534
+  s_a5dc81d701255f::t_a4977fd41a29e5 4,120-121,379,382
+  s_a5dc81d701255f::t_8793ac2dc9916b 597-604
+  s_a5dc81d701255f::t_4079ca8fe60d54 135,394
+  s_a5dc81d701255f::t_99974f6675d1d1 122-124,380-381,383
+  s_a5dc81d701255f::t_46cac4783ee5e6 2,5,16,91-93,95,167,183-186,346-347,349,422,438-441,557
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_a5dc81d701255f::t_5224397166a01c 1609
+  s_a5dc81d701255f::t_02ce64e9809e2c 1598-1608,1610-1615
+  s_a5dc81d701255f::t_30f569db29e503 736,757,1582,1585,1588,1595-1596,1628-1639
+  s_a5dc81d701255f::t_d3b36607ffb9c5 742
+  s_a5dc81d701255f::t_889718d5e1f27d 1332,1356-1358,1361,1376,1385
+  s_a5dc81d701255f::t_567bcc70593865 759-770
+  s_a5dc81d701255f::t_7d8dd336eae5da 1,700,792,871,934,2434-2438
+  s_a5dc81d701255f::t_5b63b87969db39 904,951,957
+  s_a5dc81d701255f::t_ca52a0acdf84a9 51
+  s_a5dc81d701255f::t_f1726a1cb55503 735
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 1586,1616-1627,2075
+  s_a5dc81d701255f::t_470b8139f2284b 74,730-734,737-741,743-756,758,1312,1571-1581,1583-1584,1587,1589-1594,1597
+basic/cli/tests/plugin-runtime/console/system-log.test.ts
+  s_a5dc81d701255f::t_3cc0d6afe05006 1,77-89
+.changeset/slack-reply-thread.md
+  s_a5dc81d701255f::t_18d729129b104f 6-7
+  s_a5dc81d701255f::t_751cf29da4f28c 1-5
+.changeset/adapter-reliable-delivery.md
+  s_a5dc81d701255f::t_81dd933d7ce3a9 18
+  s_a5dc81d701255f::t_487009a3b00217 1-17
+examples/platform-acceptance-bot/package.json
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-23,53-58,67-69,72-84
+  s_a5dc81d701255f::t_c8832d4a821f19 24-39,59-62
+  s_a5dc81d701255f::t_63560342124e36 40-47,63-64
+  s_a5dc81d701255f::t_d786c135b0fe57 48-52,65-66,70-71
+plugins/adapters/lark/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_666fc69f4f8e54 59-73
+  s_a5dc81d701255f::t_962f0a60642ceb 34
+  s_a5dc81d701255f::t_b5ef7731f239e4 1-33,35-52,54-58
+  s_a5dc81d701255f::t_4d0310b43c76c2 53
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_a5dc81d701255f::t_b46f4de8daf118 13,67,91-98,101,133,164,245
+  s_a5dc81d701255f::t_9afba572e9a930 76,148,151-152,224-226,241-243,253-256,258
+  s_a5dc81d701255f::t_86934e9dd44546 1,150
+  s_a5dc81d701255f::t_06f279cb24d3f1 149
+  s_a5dc81d701255f::t_dedf0b192adeb7 210-213
+plugins/adapters/email/src/protocol.ts
+  s_a5dc81d701255f::t_5a946745ff184f 16-17,28-29,97-100
+  s_a5dc81d701255f::t_8518ae162549b0 271-272,279-280
+  s_a5dc81d701255f::t_266ef0bc1e38f0 167-169,172
+  s_a5dc81d701255f::t_10b70265a41f04 8-10,263,265,349,357,360-386,392-400,404,410-411
+  s_a5dc81d701255f::t_f32492b112caf0 101
+plugins/adapters/lark/src/webhook.ts
+  s_a5dc81d701255f::t_2730491eed3c61 48-56,58-59
+  s_a5dc81d701255f::t_faeff673bff938 4,25,99
+  s_a5dc81d701255f::t_aa979c28c62bb9 100
+examples/platform-acceptance-bot/.gitignore
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-2
+plugins/adapters/onebot11/src/protocol.ts
+  s_a5dc81d701255f::t_0976ce3fd1e629 6,343-346,350-357
+  s_a5dc81d701255f::t_b698c78a2f4442 347-349
+docs/adapters/onebot11.md
+  s_a5dc81d701255f::t_55418aae51e5a4 11,118-121
+plugins/adapters/slack/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_0deb35549f2495 1-58
+plugins/adapters/napcat/src/protocol.ts
+  s_a5dc81d701255f::t_b46f4de8daf118 451
+  s_a5dc81d701255f::t_0976ce3fd1e629 321-325
+  s_a5dc81d701255f::t_dedf0b192adeb7 457,466-467
+  s_a5dc81d701255f::t_d5b1d81fbbc2b1 6,458
+packages/host/a2a/src/http-handlers.ts
+  s_a5dc81d701255f::t_0672853c2208e4 91
+  s_a5dc81d701255f::t_9af307c610536e 7-12,82,173-174,180-181,185,187-190,194,196,201,207,218,222,230,234,239
+docs/adapters/discord.md
+  s_a5dc81d701255f::t_81cc956e319c93 122-124
+  s_a5dc81d701255f::t_6e4cc68204a1c5 11,125-138
+  s_a5dc81d701255f::t_55418aae51e5a4 112-121
+plugins/adapters/discord/src/rest-api-proxy.ts
+  s_a5dc81d701255f::t_aa7816c657ce75 7-11,21,26-27,31-35
+  s_a5dc81d701255f::t_541186f04791e2 1-6,12-20,22-25,28-30,36-37
+packages/im/ai/tests/memory/agent-session-store.test.ts
+  s_a5dc81d701255f::t_0d6f951b289dcc 11-20
+  s_a5dc81d701255f::t_af089c4072a35c 21-68
+plugins/adapters/napcat/src/ws-endpoint.ts
+  s_a5dc81d701255f::t_b46f4de8daf118 15,94-97,150
+  s_a5dc81d701255f::t_86934e9dd44546 1,132
+  s_a5dc81d701255f::t_9afba572e9a930 83,130,133-134,222-224,233,260-262,265,274-276,303
+  s_a5dc81d701255f::t_06f279cb24d3f1 131
+  s_a5dc81d701255f::t_dedf0b192adeb7 264
+  s_a5dc81d701255f::t_96b82713504d89 7
+examples/platform-acceptance-bot/ADDITIONAL-PLATFORMS.md
+  s_a5dc81d701255f::t_a4f8cc54bbdcf2 5-6
+  s_a5dc81d701255f::t_72d47a56727d4e 50
+  s_a5dc81d701255f::t_01c633b03292a5 1-4,7-32,34-49,51-55
+  s_a5dc81d701255f::t_5ddb6b3894cd78 33
+  s_a5dc81d701255f::t_fb16566eb66aca 56
+plugins/adapters/dingtalk/tests/cards.test.ts
+  s_a5dc81d701255f::t_979679dc2e8570 34-39
+  s_a5dc81d701255f::t_651d0eda907f47 19,22,27,33,41-44,51,61-81
+  s_a5dc81d701255f::t_23217734edf4ba 1-18,20-21,23-26,28-32,40,45-50,52-60
+scripts/platform-acceptance/policy.example.json
+  s_a5dc81d701255f::t_9b3d64cea50b4f 1-26,31-40
+  s_a5dc81d701255f::t_31319e46744e10 27-30
+plugins/adapters/lark/src/endpoint.ts
+  s_a5dc81d701255f::t_557e112748604e 273
+  s_a5dc81d701255f::t_faeff673bff938 2,155,200,245,275-280,375-394
+  s_a5dc81d701255f::t_9dc8bbc816ae44 271,286-291,638-639,641-642,644-646,685,692-703
+  s_a5dc81d701255f::t_867b50ba96b364 3
+  s_a5dc81d701255f::t_f266736e78d80a 10
+  s_a5dc81d701255f::t_9fd59e1ded868c 158,194-199,235,244
+  s_a5dc81d701255f::t_28e5e25a70131a 259-261,263,265,299,305,317,325-342
+  s_a5dc81d701255f::t_c3a219d8ee2d76 11-13,41,63-64,121,154,156-157,167,179-182,185,187,189-190,192-193,202,204-207,218-219,246-248,348-354,395,686
+  s_a5dc81d701255f::t_ed2e632e338372 191,201,203
+  s_a5dc81d701255f::t_db59765e5fb1fc 256-258,262,264,266-270,272,274,281-285,292-293,687-691
+  s_a5dc81d701255f::t_71678f22ab5c2a 1,164-166,249,396
+plugins/adapters/kook/src/endpoint.ts
+  s_a5dc81d701255f::t_f7bc5bebc22bde 49,108,123-124,193-195,220,231-233,290,307-308,321-322,411-420
+  s_a5dc81d701255f::t_57db18821342bb 421-425
+  s_a5dc81d701255f::t_2514d3b82c76c9 13,74
+  s_a5dc81d701255f::t_ae5a6cfc75d5bb 24,179,181-184,189-192,318-320,323-324,377-379,392
+  s_a5dc81d701255f::t_46ae533d8737ae 73,75
+  s_a5dc81d701255f::t_bda55fcbc7dd0b 76-77
+  s_a5dc81d701255f::t_f5907a388d7bd4 393
+  s_69000a002278f4::t_1a3658497d452c 1,7,20,39,58-60,166-168
+packages/im/component/src/component-index.ts
+  s_a5dc81d701255f::t_b6d65d7dba06f4 9,35,44
+  s_a5dc81d701255f::t_5a66c0fe27dd12 59,62-63,65,68,77,82
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_a5dc81d701255f::t_4f42c5e74d6c3b 60-61,98-100,191-192
+  s_a5dc81d701255f::t_dedf0b192adeb7 233-239
+  s_a5dc81d701255f::t_86934e9dd44546 7,69,213-215,222-226,230-232,241-256
+  s_a5dc81d701255f::t_02ce64e9809e2c 227-229
+  s_a5dc81d701255f::t_7ea2b26c683b97 18,187-190
+plugins/adapters/email/tests/rich-mail.test.ts
+  s_a5dc81d701255f::t_f49435da1ad5f2 1-53
+plugins/adapters/qq/tests/sdk-retirement-patch.test.ts
+  s_a5dc81d701255f::t_43e25e13b5bd76 14,17
+  s_a5dc81d701255f::t_954b523d2d9231 57-73
+  s_a5dc81d701255f::t_babefde223efe7 1-13,15-16,18-56
+packages/im/config-file/README.md
+  s_a5dc81d701255f::t_426e3791907991 51-52
+.changeset/fix-generation-capability-projections.md
+  s_a5dc81d701255f::t_d6512c63993501 1-10
+  s_a5dc81d701255f::t_3eadb60aadcc28 11-12
+.changeset/qq-wss-fault-proxy.md
+  s_a5dc81d701255f::t_43e25e13b5bd76 1-5
+plugins/adapters/lark/tests/outbound-receipt.test.ts
+  s_a5dc81d701255f::t_f6e7d2a00070b1 5,58-70
+  s_a5dc81d701255f::t_9dc8bbc816ae44 46-57,71-72
+  s_a5dc81d701255f::t_13bc05090f322d 10
+  s_a5dc81d701255f::t_f3ba8b75710cd2 1-4,6-9,11-45,91
+  s_a5dc81d701255f::t_860183d1b1e241 73-90
+basic/cli/tests/plugin-runtime/workroom/human-ingress-coordinator.test.ts
+  s_a5dc81d701255f::t_9e77f22cf35fba 3,25-31
+  s_a5dc81d701255f::t_682059b38cb71d 32
+plugins/adapters/kook/tests/sdk-patch.test.ts
+  s_a5dc81d701255f::t_7213204f72fb5b 1-2,20,22-28
+  s_a5dc81d701255f::t_8fb8cd852fa635 3-10,12-19,29-30
+  s_a5dc81d701255f::t_5bc43fff46e6d8 11,21
+  s_a5dc81d701255f::t_8a18c65cefcdd2 31-45
+basic/cli/tests/plugin-runtime/readiness.test.ts
+  s_a5dc81d701255f::t_39f657151c7433 65-66,72
+docs/adapters/slack.md
+  s_a5dc81d701255f::t_81cc956e319c93 167-171
+  s_a5dc81d701255f::t_55418aae51e5a4 158-166
+  s_a5dc81d701255f::t_1cc934f59cec1b 11,172-185
+docs/en/authoring/endpoint-lifecycle.md
+  s_a5dc81d701255f::t_806c4ea955e394 163,171
+  s_a5dc81d701255f::t_16038ba5dd18c0 176
+docs/contributing/platform-acceptance-runner.md
+  s_a5dc81d701255f::t_8d5abe3f08fc2e 133-138
+  s_a5dc81d701255f::t_e3ac2a01360f5e 1-3,7-132,139-218
+  s_a5dc81d701255f::t_80c31c730da3cf 5-6
+  s_a5dc81d701255f::t_9cbdd4aaebbb46 4
+plugins/adapters/sandbox/src/endpoint.ts
+  s_a5dc81d701255f::t_3bc8674d0add82 158-162
+plugins/adapters/slack/src/endpoint.ts
+  s_a5dc81d701255f::t_b2fd096d919958 223-224
+  s_a5dc81d701255f::t_3794ecae54faef 103,454
+  s_a5dc81d701255f::t_ff95e53e96482b 5,114,180,182
+  s_a5dc81d701255f::t_9ce99f1261a2fe 8,244,253
+  s_a5dc81d701255f::t_8483ad8b0d97af 9-16,458
+  s_a5dc81d701255f::t_f8394052a9413a 7,452,461,465
+  s_a5dc81d701255f::t_7919ac0a4b5de4 6,116,152,165-166,225,450-451,453,455-457,459-460,462-464
+  s_a5dc81d701255f::t_8dd088235b3e25 314
+plugins/adapters/telegram/tests/telegram-media-safety.test.ts
+  s_a5dc81d701255f::t_4aaa36a6ae8a00 1-80
+packages/im/mcp-feature/src/mcp-index.ts
+  s_a5dc81d701255f::t_cf8119a52b61b3 35,167-171
+  s_a5dc81d701255f::t_90fd9aaa2b8467 172
+basic/schedule/src/scheduler.ts
+  s_a5dc81d701255f::t_d57d68e1ee86ff 462-472,474-475
+  s_a5dc81d701255f::t_aadec74b485573 473,476
+docs/adapters/dingtalk.md
+  s_a5dc81d701255f::t_55418aae51e5a4 11,82,88-95,119-146
+plugins/adapters/slack/src/protocol.ts
+  s_a5dc81d701255f::t_751cf29da4f28c 226,255,264-266,319,328
+  s_a5dc81d701255f::t_18d729129b104f 299,312,359-367
+  s_a5dc81d701255f::t_c6a970ed7e7400 24,37,126-127,143
+  s_a5dc81d701255f::t_ff95e53e96482b 23,36,125,142
+  s_a5dc81d701255f::t_9abecbe8a28ed6 267,317-318,341
+scripts/fixtures/native-runtime-acceptance.mjs
+  s_a5dc81d701255f::t_7dc1798e8d5915 85-90,93-100
+  s_a5dc81d701255f::t_3ea5b7264f1fc1 2,17-25,34-35,44,53-57,62,69-70,76,81-82,110
+  s_a5dc81d701255f::t_694f17a6987476 1,3-11,26-33,36-43,45-52,61,63-68,71-75,77-80,83-84,91-92,101-109,111-117,119
+  s_a5dc81d701255f::t_2e55fcd153f94a 12-16,58-60,118
+.changeset/email-imap-admission-lifecycle.md
+  s_a5dc81d701255f::t_31ba96d2b1546d 1-5
+  s_a5dc81d701255f::t_247180ec22323b 6-7
+plugins/adapters/lark/src/web-api-proxy.ts
+  s_a5dc81d701255f::t_4e957da1b54113 1-16,19-32,34,38-39,41-46,48-49
+  s_a5dc81d701255f::t_49a1c70067201a 17-18,33,35-37,40,47
+plugins/adapters/discord/tests/uncached-dm.test.ts
+  s_a5dc81d701255f::t_9e29bcd87f2b90 1-11,13-22
+  s_a5dc81d701255f::t_379a3ac8d9aee9 12
+plugins/adapters/telegram/tests/telegram-delivery.test.ts
+  s_a5dc81d701255f::t_e9c1ba9eb4648d 147
+  s_a5dc81d701255f::t_aa0f8b4d11fbb2 178-181,183-195,285-290,292-300,302-306
+  s_a5dc81d701255f::t_4a2cfb1ab3b04f 5
+  s_a5dc81d701255f::t_348febf85c7307 1-4,9-46,70,95-146,148-155,157-163,165-167,236-284,307-316,318-330,332-349,351-359,362,440-442
+  s_a5dc81d701255f::t_5c92e3f66dafeb 156,164,168-177,182
+  s_a5dc81d701255f::t_f19f95e8507dfb 6-7,47-54,56-69,72-73,78,82-83,87,90
+  s_a5dc81d701255f::t_6d696ee55c3ddd 55
+  s_a5dc81d701255f::t_4d42004c661465 8,291,301,317,331,350,360-361,363-439
+  s_a5dc81d701255f::t_9317d1ef2be2ae 196-235
+  s_a5dc81d701255f::t_bfbe92dea441fb 71,74-77,79-81,84-86,88-89,91-94
+tests/platform-acceptance/tcp-fault-proxy.test.ts
+  s_a5dc81d701255f::t_0b36c17b90e9ce 1-55,66
+  s_a5dc81d701255f::t_12fe7cb688916d 56-65
+.changeset/ai-session-creation-serialization.md
+  s_a5dc81d701255f::t_af089c4072a35c 1-5
+basic/cli/src/plugin-runtime/start-command.ts
+  s_a5dc81d701255f::t_c5e91497485e6c 598
+  s_a5dc81d701255f::t_889718d5e1f27d 587-596,599
+  s_a5dc81d701255f::t_95479ce9304029 6,24,204-208,582,585-586,597
+.changeset/qq-dingtalk-delivery-evidence.md
+  s_a5dc81d701255f::t_0abcc96109d89b 1-6
+packages/im/ai/tests/file-state-cache.test.ts
+  s_a5dc81d701255f::t_119456c367ca51 120-132
+.changeset/console-log-history-query.md
+  s_a5dc81d701255f::t_461887eea72a75 1-5
+plugins/adapters/discord/tests/rest-api-proxy-tls.test.ts
+  s_a5dc81d701255f::t_0973358cabbe44 1-35,38-41,43-45,47,49-53,55-61,63-82,85,88-91
+  s_a5dc81d701255f::t_20e0249664e25e 36-37,42,46,54,62,83-84,86
+  s_a5dc81d701255f::t_5f04be294f87f2 92-96,98-102,104,106-108
+  s_a5dc81d701255f::t_a9ec87e2ff9b84 48,87
+  s_a5dc81d701255f::t_57311f906c4a34 97,103,105
+plugins/adapters/slack/schema.json
+  s_a5dc81d701255f::t_3794ecae54faef 91-111
+  s_a5dc81d701255f::t_ff95e53e96482b 112-126
+plugins/adapters/qq/tests/sdk-start-patch.test.ts
+  s_a5dc81d701255f::t_d778100a80b6cd 2-14,17-32,37-39
+  s_a5dc81d701255f::t_50445e11a44528 33-36
+  s_a5dc81d701255f::t_7e50eecf57a982 1,15-16
+plugins/adapters/qq/src/ws.ts
+  s_a5dc81d701255f::t_4c4b80b7a42d62 5,297-304,321-322,325
+  s_a5dc81d701255f::t_3f346cbdd0a512 284,313,316-319
+  s_a5dc81d701255f::t_cbef4dc0226268 12,41,306-312
+plugins/adapters/discord/tests/gateway-fault-proxy.test.ts
+  s_a5dc81d701255f::t_85eba414e2ef70 32,39,47
+  s_a5dc81d701255f::t_857b4ac5f206eb 1-3,5-20,22-31,33-34,40-46,48,55,58-59,63,68
+  s_a5dc81d701255f::t_c2361682711172 4,21,35-38,49-54,56-57,60-62,64-67
+packages/host/http/tests/project-files.test.ts
+  s_a5dc81d701255f::t_fc8ac975126374 1-48,51-52,54-55,71-72
+  s_a5dc81d701255f::t_d518007bfc1ef7 49-50,53,56-70
+packages/im/adapter/src/adapter-index.ts
+  s_a5dc81d701255f::t_5afcfab3bca307 548
+  s_a5dc81d701255f::t_5018bfda594260 50,52-53,62,117,144-145,147-148,407-411,416-419,493-506,508-510,512-517
+  s_a5dc81d701255f::t_7a1ff296e0165e 34-38
+  s_a5dc81d701255f::t_5de11f24be7a9d 189,341,344,348
+  s_a5dc81d701255f::t_6c0a41b0f10d5b 265-270
+  s_a5dc81d701255f::t_246b4e88fed0c2 22,511,547
+  s_a5dc81d701255f::t_dbcf83fe85abe1 54,146
+examples/platform-acceptance-bot/.env.example
+  s_a5dc81d701255f::t_ff95e53e96482b 74-75
+  s_a5dc81d701255f::t_dbc81aeb48f2fe 64-67
+  s_a5dc81d701255f::t_c709c4de1439ae 81-84
+  s_a5dc81d701255f::t_3794ecae54faef 72-73,76-77
+  s_a5dc81d701255f::t_62850247333814 78-80
+  s_a5dc81d701255f::t_b5ef7731f239e4 68-71
+  s_a5dc81d701255f::t_541186f04791e2 90-92
+  s_a5dc81d701255f::t_98234afe1ab8c4 85-89
+  s_a5dc81d701255f::t_b9b9ef4b7b51d0 1-37
+  s_a5dc81d701255f::t_18d08788939c5e 38-63
+plugins/adapters/email/src/client.ts
+  s_a5dc81d701255f::t_4bdf27d82e87b1 1,27
+.changeset/command-component-operation-snapshot.md
+  s_a5dc81d701255f::t_0fdd2291ad4a33 1-7
+.changeset/fix-host-terminal-and-a2a-wire.md
+  s_a5dc81d701255f::t_a869eeeb7b7ff2 1-6
+.changeset/host-project-files-realpath.md
+  s_a5dc81d701255f::t_b0df574e51ff19 1-5
+.changeset/middleware-operation-snapshot.md
+  s_a5dc81d701255f::t_c981999aed712f 1-6
+basic/cli/src/plugin-runtime/console/plugin-diagnostics.ts
+  s_a5dc81d701255f::t_2acf23d6cfee02 1-14
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_a5dc81d701255f::t_8557768a696354 21,94-95,97-98
+basic/cli/src/plugin-runtime/console/system-log.ts
+  s_a5dc81d701255f::t_5e4c6687e11187 38-40,69-70
+basic/cli/src/plugin-runtime/start/process-supervisor.ts
+  s_a5dc81d701255f::t_bb040a947f1c6f 94-95
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_a5dc81d701255f::t_135f597d65edbf 114-120,257
+basic/cli/tests/plugin-runtime/console/plugin-diagnostics.test.ts
+  s_a5dc81d701255f::t_96e7c56b741981 1-16
+docs/en/operations/production.md
+  s_a5dc81d701255f::t_b9d04cd9640569 61
+examples/minimal-bot/adapters/terminal/index.ts
+  s_a5dc81d701255f::t_1b077a26d6a45e 4,57,81-83,85-86,94-97,119
+packages/console/pagemanager/src/client-build/static-metadata.ts
+  s_a5dc81d701255f::t_864d0a2b11373c 1-13,16,21,23,35-36,39,51,56-57,66-72,75,77,83,86,99,105-108,114,118
+packages/host/a2a/README.md
+  s_a5dc81d701255f::t_90055c57fc6eaa 13-18
+packages/host/http/package.json
+  s_a5dc81d701255f::t_0dfe668887730d 28
+packages/host/http/src/console-rpc-extended/dispatcher.ts
+  s_a5dc81d701255f::t_033282680d3f5b 3,31-33
+packages/host/http/src/project-files.ts
+  s_a5dc81d701255f::t_391ecb5e402173 1,51,61-62,84,101,104-106,113-116,120-121,123-148,157-158,166-169,176
+packages/host/http/tests/console-rpc-extended.test.ts
+  s_a5dc81d701255f::t_7c429de221b743 240,245-267
+packages/host/mcp/src/runtime.ts
+  s_a5dc81d701255f::t_c38cad8de02893 2,126-133
+packages/host/mcp/tests/runtime.test.ts
+  s_a5dc81d701255f::t_c6071c11dd4c00 46-56
+packages/im/agent/src/tool/turn-tool-runtime.ts
+  s_a5dc81d701255f::t_1f3c48d1edd077 44-46
+packages/im/agent/tests/plugin-runtime/fixtures/isolated-capability-projection.mjs
+  s_a5dc81d701255f::t_4a876b57e5d301 1-27
+packages/im/agent/tests/plugin-runtime/isolated-capability-projection.test.ts
+  s_a5dc81d701255f::t_7d44ad9a6f8f92 1-27
+packages/im/agent/tests/tool/turn-tool-runtime.test.ts
+  s_a5dc81d701255f::t_2781b00dab657a 10,29-54
+packages/im/agent/tests/zhin-agent/inbound-turn-queue.test.ts
+  s_a5dc81d701255f::t_e764c94ec29127 78-104
+packages/im/ai/src/memory/context-repository.ts
+  s_a5dc81d701255f::t_c5caccac0d54ce 299,530
+packages/im/command/src/command-index.ts
+  s_a5dc81d701255f::t_50a1e1a2f7a4a4 213,222,239,247,258,263,286,292,310,314,320,322
+packages/im/config-file/src/config-file-document.ts
+  s_a5dc81d701255f::t_782b26597eedc2 58-59,61-67,104,120,147,157-161,178-182
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_a5dc81d701255f::t_05e01bde38836c 9-10,33-35,103-105,119,127,135-137,150,208-210,233,266-280
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_a5dc81d701255f::t_644a98362b74f6 61
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_a5dc81d701255f::t_416a0adc61ed64 132-139
+packages/im/core/src/plugin-runtime/im/runtime-middleware.ts
+  s_a5dc81d701255f::t_b7470456cf9ba3 12
+packages/im/middleware/src/middleware-index.ts
+  s_a5dc81d701255f::t_f2b02f2ae7cee3 58,70
+packages/im/middleware/tests/middleware.test.ts
+  s_a5dc81d701255f::t_cec0b9a16b014a 4,36-63,161-184
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_a5dc81d701255f::t_1568481219bd0a 24,55-56,98,159-162,307-313
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_a5dc81d701255f::t_9045a30bfbe2c9 128
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_a5dc81d701255f::t_ebf6d518dc247f 174
+packages/im/runtime/tests/hmr-coordinator.test.ts
+  s_a5dc81d701255f::t_b6ba4231ed62eb 286-318
+packages/im/runtime/tests/source-path.test.ts
+  s_a5dc81d701255f::t_357bc60730c82b 1-39
+packages/im/tool/tests/tool.test.ts
+  s_a5dc81d701255f::t_723d24f9033b33 227-244
+plugins/adapters/discord/src/webhook.ts
+  s_a5dc81d701255f::t_7593cb0e855888 11,28,74-83
+plugins/adapters/discord/tests/gateway-button.test.ts
+  s_a5dc81d701255f::t_314f85567214f1 1-27
+plugins/adapters/email/schema.json
+  s_a5dc81d701255f::t_81e76e1afb3db9 78-83,127-132
+plugins/adapters/email/tests/delivery-receipt.test.ts
+  s_a5dc81d701255f::t_395b6ccbb17468 1-53
+plugins/adapters/email/tests/runtime-delivery.ts
+  s_a5dc81d701255f::t_8c1c82b2f896cb 1-23
+plugins/adapters/icqq/README.md
+  s_a5dc81d701255f::t_014994e1e49ddc 178-183
+plugins/adapters/icqq/tests/_icqq-mock.ts
+  s_a5dc81d701255f::t_99d3a6b6f0d75a 76-78,80-81,113
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  s_a5dc81d701255f::t_91dfafbe8036c7 727,750,905-922
+plugins/adapters/icqq/tests/uni-channel.test.ts
+  s_a5dc81d701255f::t_b75a717518c4fc 320,334
+plugins/adapters/kook/tests/recall.test.ts
+  s_a5dc81d701255f::t_4ccb8c4f8b4c25 1-27
+plugins/adapters/lark/tests/endpoint-management.test.ts
+  s_a5dc81d701255f::t_b73f3fee5cf026 121
+plugins/adapters/lark/tests/outbound-http.test.ts
+  s_a5dc81d701255f::t_70eb15d2239c54 1-24
+plugins/adapters/lark/tests/web-api-proxy-config.test.ts
+  s_a5dc81d701255f::t_c1bebe868895c1 1-17
+plugins/adapters/line/README.md
+  s_a5dc81d701255f::t_ac19472ccd275a 109-116
+plugins/adapters/line/tests/event-dedup.test.ts
+  s_a5dc81d701255f::t_67cb237acddac5 1-47
+plugins/adapters/napcat/tests/http-faults.test.ts
+  s_a5dc81d701255f::t_b11a962a728db4 1-20
+plugins/adapters/qq/tests/sdk-upload-patch.test.ts
+  s_a5dc81d701255f::t_c7a651a666286b 1-51
+plugins/adapters/slack/tests/slack-runtime.test.ts
+  s_a5dc81d701255f::t_1e5b4ce9ccc30d 481-496
+pnpm-lock.yaml
+  s_a5dc81d701255f::t_3ff82a2e9e7bb5 37-44,529-577,1159-1161,1954-1956,1961-1963,1979-1984,2021-2023,2240,2260-2262,2296-2298,2637,4548-4550,7583-7585,7589-7591,9548,9838,9855,9863,9871,9879,10038-10052,11153,13057,13243,13251,13305-13306,13309-13310,13896
+scripts/platform-acceptance/CAPABILITIES.zh-CN.md
+  s_a5dc81d701255f::t_727a2867cf004a 1-32
+tests/platform-acceptance/probe-command.test.ts
+  s_a5dc81d701255f::t_d69df8d738b6cc 1-83
+scripts/fixtures/ai-installed-runtime.mjs
+  s_05847a06477625::t_a49789406028b9 1-16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b9b3953e6d26b64b08ce8fe79fe52485a4f5b54c",
+  "prompts": {},
+  "sessions": {
+    "s_05847a06477625": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f59b-f0d4-79a0-b591-4f6653def5a5",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2881e8846c162b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f1ed-3649-77a1-a78c-8bd614caa2f7",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_69000a002278f4": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f146-40bc-7bc2-9034-9817d99649d3",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_f2cc00d78426cf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f556-9171-7b42-86c7-d3e1653c79b6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
