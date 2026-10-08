@@ -1,5 +1,41 @@
 # @zhin.js/adapter-lark
 
+## 1.1.5
+
+### Patch Changes
+
+- b8c0f46: Keep native TypeScript process supervision at the CLI entry point so programmatic runtime startup does not respawn its caller. Pair the Lark proxy dispatcher with its Undici fetch implementation to support newer Node versions while retaining TLS verification and delivery uncertainty handling.
+- b9b3953: Stop synthesizing message IDs after outbound API calls. Missing real platform IDs now report an unknown delivery outcome and must not be retried automatically. DingTalk webhook success responses without a message ID therefore remain unconfirmed under the current receipt contract.
+
+  LINE reply and push use their actual sentMessages IDs. Reply HTTP 400 errors no longer trigger automatic push fallback: rejected or partially successful replies could otherwise duplicate a message. Locally expired cached reply tokens still select push before a reply request is made.
+
+- b9b3953: 新增飞书 WebSocket 长连接模式，保留默认 HTTP webhook。使用官方 SDK 处理协议帧与 ACK，共享端点生命周期管理重连和停止；等待实际握手、观测 SDK 连接状态，增加消息重推去重及启动缓冲。
+
+  发送失败仅记录数值 HTTP status 和平台 code；明确 4xx/业务拒绝保留 rejected，网络与服务端不确定响应保留 unknown，不再把权限拒绝统一包装成未知，也不输出原始响应体。
+
+  将 canonical reply 映射到原消息回复接口，修复字面量 [reply]。图片上传拒绝不再静默降级并确认丢失媒体的消息；保留实际错误分类及安全诊断。
+
+  图文复合消息及多图片使用原生 post 保留文本和图片顺序，修复只发送首图导致文本丢失的问题。
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

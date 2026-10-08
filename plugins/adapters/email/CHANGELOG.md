@@ -1,5 +1,29 @@
 # @zhin.js/adapter-email
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: Use the shared endpoint lifecycle for IMAP recovery, settle startup on stop, and isolate retired transport/fetch callbacks. Keep polling admission in flight through MIME parsing and dispatch; deduplicate completed mailbox/UIDVALIDITY/UID admissions within a bounded instance cache and permit failed admission retry. Document markSeen, restart and uncertain SMTP delivery boundaries.
+
+  Require SMTP recipient acceptance evidence instead of confirming a locally generated Message-ID alone. Map explicit SMTP rejection safely and preserve partial/network outcomes as delivery-unconfirmed without retry. Reject unmapped canonical reply/unknown segments before SMTP instead of silently dropping them.
+
+- b9b3953: Report observed IMAP readiness and connection loss in endpoint health, and log successful SMTP verification plus IMAP startup at info level.
+
+  Normalize incoming sender identities to mailbox addresses so display names do not prevent conversation allowlist matching. Start unread-mail polling only after the endpoint opens, avoiding startup consumption before admission is available.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/skill@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

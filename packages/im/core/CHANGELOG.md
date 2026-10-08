@@ -1,5 +1,38 @@
 # @zhin.js/core
 
+## 1.1.40
+
+### Patch Changes
+
+- b9b3953: Fix adapter connection races, transport health reporting, candidate rollback and delivery acknowledgement boundaries. Separate generation admission from locally observed connectivity, reject unconfirmed message receipts, and mark uncertain delivery results without recommending automatic replay.
+
+  Class and compact endpoints should expose a `transportState` getter to report physical connection or local listener health. Unobserved endpoints now report an unknown transport and remain offline in diagnostics. Platform stability tiers remain unchanged until real account acceptance evidence is available.
+
+- b9b3953: Resolve command permissions and command/component contexts from the current operation snapshot when unchanged projections are reused after hot reload. Preserve old snapshots for draining operations.
+- b9b3953: Validate persisted Workroom Endpoint bindings against the exact projected candidate generation, including adapters authored by the project root. Defer file-backed Endpoint validation until candidate activation. Resolve Console Endpoint package aliases consistently with discovery and reject ambiguous aliases instead of selecting an account.
+
+  Resolve Workroom human ingress from the canonical Endpoint capability identity and the operation Endpoint projection so root-local adapters use the same Catalog address as Console discovery. Unknown or duplicate canonical identities cannot select another account.
+
+- b9b3953: 修复框架生命周期与消息处理的竞态：HMR 停止等待异步 watcher 清理，并在清理失败时仍等待在途 reload；命令前缀通过端点能力所属插件读取配置，前导空白不再丢失结构化参数；工具在异步策略检查后再次检查取消信号；文件缓存遇到超限替换时删除旧内容并保持字节计数一致。
+- b9b3953: Bind reused middleware projections to the current operation snapshot after capability hot reload, while retaining the old snapshot for draining operations.
+- b9b3953: Bound QQ startup to 30 seconds with cancellation and late-client cleanup, own asynchronous CLI startup failures, and patch qq-official-bot session startup so authentication/receiver failures reject the returned promise without orphan rejection or lost synchronous readiness.
+
+  Encode native QQ callback buttons with official action type 1, subscribe to interaction events by default, and map SDK action notices into canonical clicks with platform ACK and honest source-message association metadata.
+
+  Reject outbound messages containing segments excluded by an explicit adapter supported policy, and reject unimplemented QQ share cards instead of silently dropping title/description/URL while confirming neighboring text.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/command@1.1.4
+  - @zhin.js/component@1.1.3
+  - @zhin.js/middleware@1.1.3
+  - @zhin.js/kernel@1.1.2
+
 ## 1.1.39
 
 ### Patch Changes

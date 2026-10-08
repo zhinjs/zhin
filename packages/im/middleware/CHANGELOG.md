@@ -1,5 +1,11 @@
 # @zhin.js/middleware
 
+## 1.1.3
+
+### Patch Changes
+
+- b9b3953: Bind reused middleware projections to the current operation snapshot after capability hot reload, while retaining the old snapshot for draining operations.
+
 ## 1.1.2
 
 ### Patch Changes

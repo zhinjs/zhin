@@ -1,5 +1,13 @@
 # @zhin.js/plugin-60s
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [b9b3953]
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+
 ## 1.1.2
 
 ### Patch Changes

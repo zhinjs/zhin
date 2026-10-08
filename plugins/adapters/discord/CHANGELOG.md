@@ -1,5 +1,36 @@
 # @zhin.js/adapter-discord
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: Use the canonical media MIME type to assign a filename extension when an outbound attachment has no explicit name, allowing Discord to display image previews instead of unknown file attachments.
+
+  Preserve canonical reply message references in Gateway sends so quote replies reference the original message rather than silently sending plain text.
+
+- b9b3953: Project Discord Gateway readiness from the connected client's live readiness state so runtime health no longer reports an observed ready connection as offline. Loss of readiness and stop remain offline.
+
+  Enable partial DM channels so the SDK admits messages from private channels that have not yet been cached.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

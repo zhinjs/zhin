@@ -1,5 +1,23 @@
 # @zhin.js/host-http
 
+## 1.1.3
+
+### Patch Changes
+
+- b9b3953: Fix adapter connection races, transport health reporting, candidate rollback and delivery acknowledgement boundaries. Separate generation admission from locally observed connectivity, reject unconfirmed message receipts, and mark uncertain delivery results without recommending automatic replay.
+
+  Class and compact endpoints should expose a `transportState` getter to report physical connection or local listener health. Unobserved endpoints now report an unknown transport and remain offline in diagnostics. Platform stability tiers remain unchanged until real account acceptance evidence is available.
+
+- b9b3953: Return HTTP 403 for a valid demo token that lacks route authority, reserving 401 for invalid authentication so Console does not discard a valid credential on a permission denial. Keep the restricted demo REST surface unchanged. Raw config:get, config:get-all and config:get-source now require full scope because persisted configuration may contain secrets; demo is a limited inspection scope, not a general read-only editor account.
+- b9b3953: Add page/pageSize history retrieval, stable timestamp/id ordering, literal case-insensitive query and exact-source filters to Console logs. Existing limit calls retain their array response, with real filtered totals and stable row IDs. Source counts cover the full level/query result independently of the selected source or page. Literal queries match actual retained rows on the Host because the database LIKE operator does not provide a portable escape contract.
+- b9b3953: Make HTTP Host close terminal, share concurrent listen operations, and wait for a pending bind before closing to prevent late orphan listeners. Preserve canonical A2A v1 JSON message content, task/card/SSE serialization and standard REST-relative paths while retaining the existing /v1 aliases.
+- b9b3953: Resolve Console project file paths through their real filesystem targets. Deny symlink escapes, blocked targets and dangling links for reading, writing, tree discovery and environment file inventory, while retaining allowed internal links.
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/console-protocol@1.1.7
+  - @zhin.js/schedule@1.1.2
+
 ## 1.1.2
 
 ### Patch Changes

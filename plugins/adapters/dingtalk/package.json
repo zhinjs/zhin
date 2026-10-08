@@ -1,7 +1,7 @@
 {
   "name": "@zhin.js/adapter-dingtalk",
-  "version": "1.1.4",
-  "description": "Zhin.js DingTalk (\u9489\u9489) adapter for Plugin Runtime (HTTP webhook)",
+  "version": "1.1.5",
+  "description": "Zhin.js DingTalk (钉钉) adapter for Plugin Runtime (HTTP webhook)",
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
@@ -18,7 +18,7 @@
     "bot",
     "adapter",
     "dingtalk",
-    "\u9489\u9489",
+    "钉钉",
     "chatbot"
   ],
   "author": {

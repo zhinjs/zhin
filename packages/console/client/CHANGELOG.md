@@ -1,5 +1,14 @@
 # @zhin.js/client
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/console-protocol@1.1.7
+  - @zhin.js/contract@1.1.3
+
 ## 1.1.7
 
 ### Patch Changes

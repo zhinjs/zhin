@@ -1,5 +1,40 @@
 # @zhin.js/adapter-qq
 
+## 1.1.5
+
+### Patch Changes
+
+- b9b3953: Fix adapter connection races, transport health reporting, candidate rollback and delivery acknowledgement boundaries. Separate generation admission from locally observed connectivity, reject unconfirmed message receipts, and mark uncertain delivery results without recommending automatic replay.
+
+  Class and compact endpoints should expose a `transportState` getter to report physical connection or local listener health. Unobserved endpoints now report an unknown transport and remain offline in diagnostics. Platform stability tiers remain unchanged until real account acceptance evidence is available.
+
+- b9b3953: Bound QQ startup to 30 seconds with cancellation and late-client cleanup, own asynchronous CLI startup failures, and patch qq-official-bot session startup so authentication/receiver failures reject the returned promise without orphan rejection or lost synchronous readiness.
+
+  Encode native QQ callback buttons with official action type 1, subscribe to interaction events by default, and map SDK action notices into canonical clicks with platform ACK and honest source-message association metadata.
+
+  Reject outbound messages containing segments excluded by an explicit adapter supported policy, and reject unimplemented QQ share cards instead of silently dropping title/description/URL while confirming neighboring text.
+
+- b9b3953: Reject QQ outbound responses carrying a nonzero platform error even when they contain a message ID. Classify DingTalk HTTP client rejection separately from uncertain server/network outcomes and avoid exposing raw platform response text in delivery errors.
+- b9b3953: Add an optional fixed loopback WSS fault proxy that preserves gateway Host/SNI and TLS peer verification. Move reconnect ownership to EndpointLifecycle and keep QQ authentication, discovery, message APIs and uploads direct. Extend the pinned SDK patch with instance-scoped WebSocket agent/factory and reconnect controls, and opt adapters out of SDK process-level error handlers to prevent listener accumulation.
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/tool@1.1.3
+  - @zhin.js/skill@1.1.3
+  - @zhin.js/agent-feature@1.1.3
+
 ## 1.1.4
 
 ### Patch Changes

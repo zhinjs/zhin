@@ -1,5 +1,60 @@
 # @zhin.js/cli
 
+## 1.1.7
+
+### Patch Changes
+
+- b9b3953: Fix adapter connection races, transport health reporting, candidate rollback and delivery acknowledgement boundaries. Separate generation admission from locally observed connectivity, reject unconfirmed message receipts, and mark uncertain delivery results without recommending automatic replay.
+
+  Class and compact endpoints should expose a `transportState` getter to report physical connection or local listener health. Unobserved endpoints now report an unknown transport and remain offline in diagnostics. Platform stability tiers remain unchanged until real account acceptance evidence is available.
+
+- b8c0f46: Keep native TypeScript process supervision at the CLI entry point so programmatic runtime startup does not respawn its caller. Pair the Lark proxy dispatcher with its Undici fetch implementation to support newer Node versions while retaining TLS verification and delivery uncertainty handling.
+- b9b3953: Expose optional author-provided component previewProps in Console component descriptors, allowing the existing renderer to preview components with explicit sample parameters.
+- b9b3953: Store the current DefaultFormatter output in Console's SystemLog transport instead of silently dropping it. Preserve the previous formatter syntax and ANSI stripping while accepting current level/category lines and multiline messages.
+- b9b3953: Expose the immutable Host configuration schema to Console and use the project's root schema for its plugin configuration form. Prefer available Chinese field descriptions and enforce numeric bounds and integer constraints during Console validation.
+- b9b3953: Validate persisted Workroom Endpoint bindings against the exact projected candidate generation, including adapters authored by the project root. Defer file-backed Endpoint validation until candidate activation. Resolve Console Endpoint package aliases consistently with discovery and reject ambiguous aliases instead of selecting an account.
+
+  Resolve Workroom human ingress from the canonical Endpoint capability identity and the operation Endpoint projection so root-local adapters use the same Catalog address as Console discovery. Unknown or duplicate canonical identities cannot select another account.
+
+- b9b3953: Return permission-aware plugin management metadata for Demo connections and expose a readOnly flag on plugin details, so Console can hide configuration and management actions that the current connection cannot use.
+- b9b3953: Return HTTP 403 for Console RPC operations rejected by an authenticated Demo token, preserving 401 for invalid credentials and preventing denied operations from acquiring runtime resources.
+- b9b3953: Keep foreground runtime starts under the process supervisor even when Node supports native TypeScript, so an authorized Console restart restores the Host instead of leaving it stopped with exit code 75. Ordinary foreground failures and once-mode exits keep their existing behavior.
+- b9b3953: Bound QQ startup to 30 seconds with cancellation and late-client cleanup, own asynchronous CLI startup failures, and patch qq-official-bot session startup so authentication/receiver failures reject the returned promise without orphan rejection or lost synchronous readiness.
+
+  Encode native QQ callback buttons with official action type 1, subscribe to interaction events by default, and map SDK action notices into canonical clicks with platform ACK and honest source-message association metadata.
+
+  Reject outbound messages containing segments excluded by an explicit adapter supported policy, and reject unimplemented QQ share cards instead of silently dropping title/description/URL while confirming neighboring text.
+
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+- Updated dependencies [b9b3953]
+  - @zhin.js/adapter@1.1.16
+  - @zhin.js/im-contract@1.1.3
+  - @zhin.js/core@1.1.40
+  - @zhin.js/console-protocol@1.1.7
+  - @zhin.js/host-http@1.1.3
+  - @zhin.js/ai@1.1.36
+  - @zhin.js/command@1.1.4
+  - @zhin.js/component@1.1.3
+  - @zhin.js/config-file@1.1.3
+  - @zhin.js/schedule@1.1.2
+  - @zhin.js/runtime@1.1.4
+  - @zhin.js/middleware@1.1.3
+  - @zhin.js/pagemanager@1.1.4
+
 ## 1.1.6
 
 ### Patch Changes
