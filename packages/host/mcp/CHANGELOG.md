@@ -1,5 +1,11 @@
 # @zhin.js/mcp
 
+## 1.1.5
+
+### Patch Changes
+
+- 533145d: Document the current Runtime MCP Host Tool surface, explicit server configuration, authentication, and scaffold port.
+
 ## 1.1.4
 
 ### Patch Changes
