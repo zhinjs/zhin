@@ -1,0 +1,256 @@
+--- a/lib/core/receivers/websocket.js
++++ b/lib/core/receivers/websocket.js
+@@ -7,6 +7,13 @@
+         super(client);
+         this.config = config;
+         this.ws = null;
++        this.connectionEpoch = 0;
++        this.cancelHello = null;
++        this.cancelResume = null;
++        this.awaitingResume = false;
++        this.resumeStartSn = 0;
++        this.resumeEvents = [];
++        this.orderedEvents = new Map();
+         this.url = null;
+         this.session_id = null;
+         this.timers = new Map();
+@@ -23,7 +30,7 @@
+         this.heartbeatTimeout = null;
+         this._state = WebsocketReceiver.State.Initial;
+         this.compress = config.compress ?? false;
+-        this.setupNetworkMonitoring();
++        if (config.autoReconnect !== false) this.setupNetworkMonitoring();
+     }
+     get state() {
+         return this._state;
+@@ -47,16 +54,34 @@
+     }
+     async waitForHello() {
+         return new Promise((resolve, reject) => {
+-            const timer = setTimeout(() => {
+-                this.off('hello', helloHandler);
+-                reject(new Error('WebSocket receive hello code timeout'));
+-            }, this.helloTimeout);
+-            const helloHandler = (data) => {
+-                clearTimeout(timer);
+-                this.session_id = data.session_id;
+-                resolve(data.code);
+-            };
++            const finish = () => { clearTimeout(timer); this.off('hello', helloHandler); this.cancelHello = null; };
++            const helloHandler = data => { finish(); this.session_id = data.session_id; resolve(data.code); };
++            const timer = setTimeout(() => { finish(); reject(new Error('WebSocket receive hello code timeout')); }, this.helloTimeout);
++            this.cancelHello = () => { finish(); reject(new Error('KOOK WebSocket hello wait cancelled')); };
+             this.once('hello', helloHandler);
++        });
++    }
++    reset() { super.reset(); this.orderedEvents?.clear(); }
++    dispatchEvent(data) {
++        if (this.config.autoReconnect !== false) { this.emit('event', data.d); return; }
++        const sn = Number(data.sn);
++        if (!Number.isSafeInteger(sn) || sn <= this.sn) return;
++        this.orderedEvents.set(sn, data.d);
++        while (this.orderedEvents.has(this.sn + 1)) {
++            this.sn += 1;
++            const event = this.orderedEvents.get(this.sn);
++            this.orderedEvents.delete(this.sn);
++            this.emit('event', event);
++        }
++    }
++    canResume() { return !!this.session_id && !!this.url; }
++    async waitForResume() {
++        return new Promise((resolve, reject) => {
++            const finish = () => { clearTimeout(timer); this.off('resume', handler); this.cancelResume = null; };
++            const handler = data => { finish(); this.session_id = data.session_id; resolve(); };
++            const timer = setTimeout(() => { finish(); reject(new Error('KOOK resume acknowledgement timeout')); }, 6000);
++            this.cancelResume = () => { finish(); reject(new Error('KOOK resume wait cancelled')); };
++            this.once('resume', handler);
+         });
+     }
+     sendPing() {
+@@ -86,20 +111,29 @@
+         this.ws.on('message', (event) => {
+             try {
+                 const data = JSON.parse(this.decryptData(event.toString(), this.config.encrypt_key ?? ''));
+-                if (data.sn)
++                if (data.sn && this.config.autoReconnect !== false)
+                     this.sn = Number(data.sn); // 确保为数字
+                 switch (data.s) {
+                     case OpCode.Hello:
+                         this.emit('hello', data.d);
+                         break;
+                     case OpCode.Event:
+-                        this.emit('event', data.d);
++                        if (this.awaitingResume) { this.resumeEvents.push(data); break; }
++                        this.dispatchEvent(data);
+                         break;
+                     case OpCode.Reconnect:
+-                        this.logger.debug('Received reconnect command from server', data.d);
++                        this.logger.debug('Received reconnect command from server', { code: data.d?.code });
++                        this.awaitingResume = false; this.resumeEvents = [];
++                        this.reset();
++                        this.session_id = null;
++                        this.url = null;
+                         this.scheduleReconnect();
+                         break;
+                     case OpCode.ResumeAck:
++                        this.awaitingResume = false;
++                        for (const queued of this.resumeEvents.splice(0)) {
++                            this.dispatchEvent(queued);
++                        }
+                         this.emit('resume', data.d);
+                         break;
+                     case OpCode.Pong:
+@@ -119,7 +153,7 @@
+             this.cleanup();
+             this.state = WebsocketReceiver.State.Closed;
+             // 自动重连（非正常关闭时）
+-            if (code !== 1000) { // 1000是正常关闭
++            if (code !== 1000 || this.config.autoReconnect === false) { // 1000是正常关闭
+                 this.scheduleReconnect();
+             }
+         });
+@@ -134,6 +168,11 @@
+         });
+     }
+     cleanup() {
++        if (this.awaitingResume) this.sn = this.resumeStartSn;
++        this.awaitingResume = false; this.resumeEvents = [];
++        this.orderedEvents.clear();
++        this.cancelHello?.();
++        this.cancelResume?.();
+         // Clear all timers
+         this.timers.forEach((timer, key) => {
+             clearInterval(timer);
+@@ -152,7 +191,10 @@
+         // Clean up WebSocket
+         if (this.ws) {
+             this.ws.removeAllListeners();
+-            if (this.ws.readyState === WebSocket.OPEN) {
++            if (this.config.autoReconnect === false) {
++                this.ws.on('error', () => {});
++                this.ws.terminate();
++            } else if (this.ws.readyState === WebSocket.OPEN) {
+                 this.ws.close();
+             }
+             this.ws = null;
+@@ -168,6 +210,12 @@
+         return params;
+     }
+     scheduleReconnect() {
++        if (this.config.autoReconnect === false) {
++            this.cleanup();
++            this.state = WebsocketReceiver.State.Closed;
++            this.emit('disconnected');
++            return;
++        }
+         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+             this.logger.error('Max reconnection attempts reached');
+             return;
+@@ -208,24 +256,35 @@
+         }
+     }
+     async connect(isReconnect = false) {
++        const epoch = ++this.connectionEpoch;
+         try {
+             this.state = WebsocketReceiver.State.PullingGateway;
+-            const gatewayUrl = await this.getGatewayUrl(this.config.compress ? 1 : 0);
++            if (!isReconnect) { this.reset(); this.session_id = null; }
++            const gatewayUrl = isReconnect && this.url ? this.url.toString() : await this.getGatewayUrl(this.config.compress ? 1 : 0);
++            if (epoch !== this.connectionEpoch) throw new Error('KOOK WebSocket connection cancelled');
+             const url = new URL(gatewayUrl);
+             if (isReconnect) {
+                 this.getResumeQueryParams().forEach((value, key) => {
+-                    url.searchParams.append(key, value);
++                    url.searchParams.set(key, value);
+                 });
+             }
+             this.url = url;
++            this.resumeStartSn = this.sn;
++            this.awaitingResume = isReconnect && this.config.autoReconnect === false;
++            this.resumeEvents = [];
+             this.state = WebsocketReceiver.State.Connecting;
+-            this.ws = new WebSocket(this.url);
++            this.ws = this.config.socketFactory ? this.config.socketFactory(this.url.toString()) : new WebSocket(this.url);
+             this.setupEventListeners();
++            const resumed = isReconnect ? this.waitForResume() : null;
++            resumed?.catch(() => {});
+             const receiveCode = await this.waitForHello();
+             if (receiveCode !== 0) {
++                this.reset(); this.session_id = null; this.url = null;
+                 this.logger.error(`WebSocket connect failed, receive code: ${receiveCode}`);
++                if (this.config.autoReconnect === false) throw new Error(`KOOK hello rejected (code=${receiveCode})`);
+                 return this.connect(isReconnect);
+             }
++            if (resumed) await resumed;
+             this.state = WebsocketReceiver.State.Open;
+             this.reconnectAttempts = 0; // 重置重连计数器
+             this.sendPing();
+@@ -235,6 +294,7 @@
+             this.logger.info(`WebSocket connected successfully to ${this.url.host}`);
+         }
+         catch (error) {
++            if (epoch !== this.connectionEpoch) throw new Error('KOOK WebSocket connection cancelled');
+             this.logger.error('WebSocket connection error', error);
+             this.cleanup();
+             // 连接失败时也触发重连
+@@ -245,6 +305,7 @@
+         }
+     }
+     async disconnect() {
++        this.connectionEpoch += 1;
+         this.logger.info('Disconnecting WebSocket...');
+         this.cleanup();
+         this.state = WebsocketReceiver.State.Closed;
+--- a/lib/index.d.ts
++++ b/lib/index.d.ts
+@@ -143,6 +143,7 @@
+     private lastPongTime;
+     private heartbeatTimeout;
+     constructor(client: BaseClient, config: WebsocketReceiver.Config);
++    canResume(): boolean;
+     get state(): WebsocketReceiver.State;
+     private set state(value);
+     get logger(): import("log4js").Logger;
+@@ -162,6 +163,8 @@
+     interface Config {
+         token: string;
+         compress?: boolean;
++        autoReconnect?: boolean;
++        socketFactory?: (url: string) => import('ws').WebSocket;
+         encrypt_key?: string;
+     }
+     enum State {
+@@ -819,6 +822,7 @@
+ export namespace BaseClient {
+     const defaultConfig: Partial<Config>;
+     interface Config {
++        handleProcessErrors?: boolean;
+         token: string;
+         mode: Receiver.Mode;
+         /**
+@@ -833,6 +837,8 @@
+          * 下发数据是否压缩
+          */
+         compress?: boolean;
++        autoReconnect?: boolean;
++        socketFactory?: (url: string) => import('ws').WebSocket;
+         language?: string;
+         timeout?: number;
+         max_retry?: number;
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -29,9 +29,11 @@
+         if (nodeVersion < 16) {
+             this.logger.warn(`你的node版本(${process.version}) <16，可能会出现不可预测的错误，请升级node版本，为确保服务正常运行，请升级node版本`);
+         }
+-        process.on("uncaughtException", e => {
+-            this.logger.debug(e.stack);
+-        });
++        if (this.config.handleProcessErrors !== false) {
++            process.on("uncaughtException", e => {
++                this.logger.debug(e.stack);
++            });
++        }
+     }
+     get black_user_nums() {
+         return [...this.blacklist.values()].reduce((a, b) => a + b.size, 0);
