@@ -114,7 +114,16 @@ outline: [2, 3]
 | `plugins.dingtalk.endpoints[].apiBaseUrl` | string | 否 | — | — |
 | `plugins.dingtalk.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.dingtalk.endpoints[].id` | string | 是 | — | Dingtalk bot name |
+| `plugins.dingtalk.endpoints[].mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
+| `plugins.dingtalk.endpoints[].cardTemplateId` | string | 否 | — | Stream interactive card template ID |
+| `plugins.dingtalk.endpoints[].cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
+| `plugins.dingtalk.endpoints[].streamProxy` | object | 否 | — | 故障验收专用：TCP固定127.0.0.1，保留真实WSS TLS身份 |
+| `plugins.dingtalk.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `plugins.dingtalk.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `plugins.dingtalk.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `plugins.dingtalk.mode` | string: `"webhook"`, `"stream"` | 否 | `"webhook"` | — |
+| `plugins.dingtalk.cardTemplateId` | string | 否 | — | Stream interactive card template ID |
+| `plugins.dingtalk.cardButtonCount` | integer | 否 | `2` | Fixed button count in the card template |
 
 ### discord
 
@@ -154,7 +163,11 @@ outline: [2, 3]
 | `plugins.discord.endpoints[].interactionsPath` | string | 否 | — | — |
 | `plugins.discord.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.discord.endpoints[].id` | string | 是 | — | Discord bot name |
+| `plugins.discord.endpoints[].gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
+| `plugins.discord.endpoints[].restApiProxy` | object | 否 | — | Gateway测试实例REST专用故障代理：discord.com:443固定loopback TCP，保留SNI/证书校验，独立于Gateway代理 |
+| `plugins.discord.endpoints[].restApiProxy.port` | integer | 是 | — | — |
 | `plugins.discord.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `plugins.discord.gatewayFaultProxyUrl` | string | 否 | — | Isolated acceptance only: loopback Gateway fault proxy; REST unchanged. |
 
 ### email
 
@@ -174,6 +187,7 @@ outline: [2, 3]
 | `plugins.email.endpoints[].smtp.auth` | object | 是 | — | — |
 | `plugins.email.endpoints[].smtp.auth.user` | string | 是 | — | — |
 | `plugins.email.endpoints[].smtp.auth.pass` | string | 是 | — | — |
+| `plugins.email.endpoints[].smtp.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
 | `plugins.email.endpoints[].imap` | object | 是 | — | — |
 | `plugins.email.endpoints[].imap.host` | string | 是 | — | — |
 | `plugins.email.endpoints[].imap.port` | number | 是 | — | — |
@@ -184,6 +198,7 @@ outline: [2, 3]
 | `plugins.email.endpoints[].imap.reconnectInterval` | number | 否 | `5000` | — |
 | `plugins.email.endpoints[].imap.mailbox` | string | 否 | `"INBOX"` | — |
 | `plugins.email.endpoints[].imap.markSeen` | boolean | 否 | `true` | — |
+| `plugins.email.endpoints[].imap.serverName` | string | 否 | — | TLS SNI 与证书主机名校验，代理场景保留原服务域名；不改变证书校验策略 |
 | `plugins.email.endpoints[].attachments` | object | 否 | — | — |
 | `plugins.email.endpoints[].attachments.enabled` | boolean | 否 | `false` | — |
 | `plugins.email.endpoints[].attachments.downloadPath` | string | 否 | — | — |
@@ -292,6 +307,11 @@ outline: [2, 3]
 | `plugins.kook.endpoints[].logLevel` | string: `"trace"`, `"debug"`, `"info"`, `"warn"`, `"error"`, `"fatal"`, `"mark"`, `"off"` | 否 | — | — |
 | `plugins.kook.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.kook.endpoints[].id` | string | 是 | — | KOOK bot name |
+| `plugins.kook.endpoints[].streamProxy` | object | 否 | — | WSS故障验收固定loopback，保持真实TLS身份 |
+| `plugins.kook.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `plugins.kook.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `plugins.kook.endpoints[].apiProxy` | object | 否 | — | Optional fixed loopback TCP route for www.kookapp.cn JSON API only; verified TLS remains enabled. |
+| `plugins.kook.endpoints[].apiProxy.port` | integer | 是 | — | — |
 | `plugins.kook.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### lark
@@ -317,7 +337,16 @@ outline: [2, 3]
 | `plugins.lark.endpoints[].isFeishu` | boolean | 否 | — | — |
 | `plugins.lark.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.lark.endpoints[].id` | string | 是 | — | Lark bot name |
+| `plugins.lark.endpoints[].mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
+| `plugins.lark.endpoints[].streamProxy` | object | 否 | — | WSS故障验收：仅TCP固定loopback，保留TLS身份 |
+| `plugins.lark.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `plugins.lark.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `plugins.lark.endpoints[].webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `plugins.lark.endpoints[].webApiProxy.port` | integer | 是 | — | — |
 | `plugins.lark.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `plugins.lark.mode` | string: `"webhook"`, `"websocket"` | 否 | `"webhook"` | — |
+| `plugins.lark.webApiProxy` | object | 否 | — | 默认关闭；仅飞书出站API的loopback TLS故障代理，保留官方Host/SNI和证书校验，与streamProxy独立 |
+| `plugins.lark.webApiProxy.port` | integer | 是 | — | — |
 
 ### line
 
@@ -470,7 +499,13 @@ outline: [2, 3]
 | `plugins.qq.endpoints[].webhookPath` | string | 否 | — | — |
 | `plugins.qq.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.qq.endpoints[].id` | string | 是 | — | QQ bot name |
+| `plugins.qq.endpoints[].streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `plugins.qq.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `plugins.qq.endpoints[].streamProxy.serverName` | string | 是 | — | — |
 | `plugins.qq.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
+| `plugins.qq.streamProxy` | object | 否 | — | Optional fixed loopback TCP fault proxy for WSS only; original gateway TLS identity must match serverName. |
+| `plugins.qq.streamProxy.port` | integer | 是 | — | — |
+| `plugins.qq.streamProxy.serverName` | string | 是 | — | — |
 
 ### sandbox
 
@@ -532,6 +567,11 @@ outline: [2, 3]
 | `plugins.slack.endpoints[].clientPingTimeout` | number | 否 | — | — |
 | `plugins.slack.endpoints[].commandPrefix` | string | 否 | — | — |
 | `plugins.slack.endpoints[].id` | string | 是 | — | Slack bot name |
+| `plugins.slack.endpoints[].streamProxy` | object | 否 | — | Socket故障验收：WSS固定loopback TCP，API仍标准TLS直连 |
+| `plugins.slack.endpoints[].streamProxy.port` | integer | 是 | — | — |
+| `plugins.slack.endpoints[].streamProxy.serverName` | string | 是 | — | — |
+| `plugins.slack.endpoints[].webApiProxy` | object | 否 | — | 出站JSON Web API专用故障代理：仅slack.com:443，固定loopbackTCP，保留SNI和证书校验，与Socket代理独立；上传域名不适用 |
+| `plugins.slack.endpoints[].webApiProxy.port` | integer | 是 | — | — |
 | `plugins.slack.commandPrefix` | string | 否 | `""` | 命令前缀（默认 '' 无前缀，任意文本按命令匹配；如 '/' 要求 / 开头）。endpoints[i] 可逐项覆盖 |
 
 ### telegram

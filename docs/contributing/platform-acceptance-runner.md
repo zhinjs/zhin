@@ -2,7 +2,7 @@
 
 本指南分为两部分：无需账号的安装产物验收，以及使用真实账号的收发与长跑验收。模拟平台通过只证明本地安装和运行链路；任何命令都不会自动提升平台的公开稳定档位。
 
-本仓库已提供[预配置的实机验收 example](../../examples/platform-acceptance-bot/README.md)。在 `examples/platform-acceptance-bot/.env` 填写要测试的平台变量，然后用 `pnpm --filter platform-acceptance-bot dev:napcat`（或 `dev:onebot11`、`dev:qq`、`dev:telegram`）启动。该例会自动生成本指南中的项目配置、探针与本地策略，无需手工编辑 JSON。
+本仓库已提供[预配置的实机验收 example](https://github.com/zhinjs/zhin/blob/main/examples/platform-acceptance-bot/README.md)。在 `examples/platform-acceptance-bot/.env` 填写要测试的平台变量，然后用 `pnpm --filter platform-acceptance-bot dev:napcat`（或 `dev:onebot11`、`dev:qq`、`dev:telegram`）启动。该例会自动生成本指南中的项目配置、探针与本地策略，无需手工编辑 JSON。
 
 ## 一、无需账号：检查安装产物
 

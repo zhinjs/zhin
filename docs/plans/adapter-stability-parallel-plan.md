@@ -152,7 +152,7 @@ Telegram 跨代与重启采用至少一次语义；本轮没有实现耐久 inbo
 - Email SMTP/IMAP 文本往返已通过，接收端截图显示 `acceptance:email-a:email0001`。发件人归一化为纯邮箱地址后，用户将白名单与实际发件人对齐并收到回复。日志另观察到一次 IMAP 超时及自动重连成功，但尚未完成受控断线后再次收发验收。
 - 飞书、钉钉、LINE 已移除合成消息 ID；缺失真实回执及请求结果不明保留 unknown。LINE 不再收到任意 HTTP 400 后自动 push，避免重复发送。三适配器 107 项回归通过，新增回执合同测试最终 26 项通过；各包构建与相关 lint 通过。
 
-操作入口：[新增平台准备与启动](../../examples/platform-acceptance-bot/ADDITIONAL-PLATFORMS.md)、[第二轮操作单](../../examples/platform-acceptance-bot/NEXT-TESTS.md)。
+操作入口：[新增平台准备与启动](https://github.com/zhinjs/zhin/blob/main/examples/platform-acceptance-bot/ADDITIONAL-PLATFORMS.md)、[第二轮操作单](https://github.com/zhinjs/zhin/blob/main/examples/platform-acceptance-bot/NEXT-TESTS.md)。
 
 ### Telegram 双账号浏览器复核（2026-09-30）
 
@@ -256,6 +256,6 @@ Discord 官方后台已确认旧 HTTP Interactions URL 与 Gateway 互斥；经�
 
 QQ实际平台预上传首片index1，SDK按index0公式上传空片。补丁依据完整连续分片集合兼容0/1起点，保留平台ACK序号并拒绝异常集合。安装后QQ136项本地回归通过；真实RGB与原RGBA上传/发送成功，客户端AX呈现图片节点。原失败记录保留。
 
-钉钉、飞书均已通过专用透明TCP代理进行实际Stream cut/recover，同一实例重连后真实入站和回复恢复。仅覆盖Stream入站，平台HTTP出站未切断；钉钉sessionWebhook回执仍unknown。详见[当前实机验收与剩余项](../../examples/platform-acceptance-bot/CURRENT-ACCEPTANCE.md)。
+钉钉、飞书均已通过专用透明TCP代理进行实际Stream cut/recover，同一实例重连后真实入站和回复恢复。仅覆盖Stream入站，平台HTTP出站未切断；钉钉sessionWebhook回执仍unknown。详见[当前实机验收与剩余项](https://github.com/zhinjs/zhin/blob/main/examples/platform-acceptance-bot/CURRENT-ACCEPTANCE.md)。
 
 Slack/Discord受控故障入口继续并行调查，LINE重放/重复稳定性另行审查。NapCat本地桥无监听、账号B和Email/LINE实际入口仍未齐全，不能标全目标完成。真实.env未修改。
