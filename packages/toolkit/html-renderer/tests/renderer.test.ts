@@ -38,7 +38,6 @@ vi.mock('@shotkit/shotium', () => ({
 
 import {
   createHtmlRenderer,
-  serializeJsxToHtml,
   type FontConfig,
 } from '../src/index.js';
 import { isFullDocument, wrapDocument } from '../src/html.js';
@@ -105,27 +104,7 @@ describe('@zhin.js/html-renderer', () => {
     );
   });
 
-  it('preserves renderJsx support', async () => {
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const result = await renderer.renderJsx({
-      type: 'div',
-      props: { children: 'hello jsx' },
-    });
-    expect(result.format).toBe('png');
-    expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-  });
 
-  it('preserves renderComponent support', async () => {
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const result = await renderer.renderComponent(
-      ({ name }: { name: string }) => ({ type: 'div', props: { children: `hello ${name}` } }),
-      { name: 'component' },
-    );
-    expect(result.format).toBe('png');
-    expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('HTML document wrapping', () => {
@@ -150,43 +129,6 @@ describe('HTML document wrapping', () => {
   it('handles long attributes without regex backtracking', () => {
     const html = `<html><body data-value="${'x'.repeat(100_000)}">x</body></html>`;
     expect(wrapDocument(html, options)).toContain('<style>@font-face{font-family:test}</style>x');
-  });
-});
-
-describe('serializeJsxToHtml（renderJsx 注入防护）', () => {
-  it('文本节点一律转义', () => {
-    expect(serializeJsxToHtml('<img src=x onerror=alert(1)>')).toBe(
-      '&lt;img src=x onerror=alert(1)&gt;',
-    );
-    expect(
-      serializeJsxToHtml({ type: 'div', props: { children: '<script>alert(1)</script>' } }),
-    ).toBe('<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>');
-  });
-
-  it('属性值转义，null/false 属性被丢弃', () => {
-    const html = serializeJsxToHtml({
-      type: 'img',
-      props: { src: 'x" onerror="alert(1)', title: null, hidden: false },
-    });
-    expect(html).toContain('src="x&quot; onerror=&quot;alert(1)"');
-    expect(html).not.toContain('title=');
-    expect(html).not.toContain('hidden=');
-  });
-
-  it('boolean children 渲染为空串', () => {
-    expect(serializeJsxToHtml(true)).toBe('');
-    expect(
-      serializeJsxToHtml({ type: 'div', props: { children: [true, 'a', false] } }),
-    ).toBe('<div>a</div>');
-  });
-
-  it('Raw HTML 只走显式通道 dangerouslySetInnerHTML', () => {
-    expect(
-      serializeJsxToHtml({
-        type: 'div',
-        props: { dangerouslySetInnerHTML: { __html: '<b>raw</b>' } },
-      }),
-    ).toBe('<div><b>raw</b></div>');
   });
 });
 

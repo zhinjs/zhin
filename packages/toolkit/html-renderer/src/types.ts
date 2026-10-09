@@ -1,7 +1,6 @@
 export type OutputFormat = 'svg' | 'png';
 export type RasterFormat = 'png' | 'jpeg' | 'webp';
 export type WaitUntil = 'load' | 'networkidle';
-export type HtmlComponent<P> = (props: P) => unknown;
 
 export interface FontConfig {
   name: string;
@@ -77,12 +76,6 @@ export interface HtmlRendererConfig {
 
 export interface HtmlRendererService {
   render(html: string, options?: RenderOptions): Promise<RenderResult>;
-  renderJsx(element: unknown, options?: RenderOptions): Promise<RenderResult>;
-  renderComponent<P>(
-    component: HtmlComponent<P>,
-    props: P,
-    options?: RenderOptions,
-  ): Promise<RenderResult>;
   registerFont(font: FontConfig): void;
   getFonts(): FontConfig[];
   clearFonts(): void;

@@ -6,3 +6,5 @@
 - **渲染行为、布局、CSS 子集**：请查阅 [satori 文档与 Issues](https://github.com/vercel/satori)。
 
 本地开发：`pnpm install` → `pnpm build`（在仓库根目录或 `packages/toolkit/satori` 下）。
+
+公共接口只处理 HTML→SVG 与字体；JSX 和样式组件分别维护于 `packages/im/jsx`、`packages/toolkit/components`，不在本包新增其他 serializer。

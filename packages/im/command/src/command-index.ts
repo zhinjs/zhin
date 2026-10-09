@@ -9,7 +9,7 @@ import type {
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import type { UserInteractionFactory } from '@zhin.js/interaction';
-import { operationClientAdapter } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationClientAdapter } from '@zhin.js/feature-kit';
 import {
   permissionHostToken,
   toPermissionSubject,
@@ -249,7 +249,6 @@ export class CommandIndex {
         });
       }
     }
-    const interaction = interactionFactory?.(source);
     const shortcut = this.#matchShortcut(input);
     if (shortcut) {
       if (!commandAdapterMatches(shortcut.record, source)) {
@@ -258,15 +257,16 @@ export class CommandIndex {
       if (!(await this.#permitAllows(shortcut.record, source, operationSnapshot))) {
         return Object.freeze({ matched: false });
       }
+      const authorSource = bindOperationInput(source, shortcut.record.slot.owner, operationSnapshot);
       const value = await shortcut.record.slot.definition.execute(
         createCommandContext(
           operationSnapshot,
           shortcut.record.slot.owner,
           Object.freeze([]),
-          resolveDynamicParams(shortcut.params, source),
-          source,
+          resolveDynamicParams(shortcut.params, authorSource),
+          authorSource,
           Object.freeze([]),
-          interaction,
+          interactionFactory?.(authorSource),
           shortcut.record.slot.definition.adapter,
         ),
       );
@@ -287,15 +287,16 @@ export class CommandIndex {
       return Object.freeze({ matched: false });
     }
     const args = textArgs(match.remaining);
+    const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
     const value = await match.command.slot.definition.execute(
       createCommandContext(
         operationSnapshot,
         match.command.slot.owner,
         args,
-        resolveDynamicParams(match.params, source),
-        source,
+        resolveDynamicParams(match.params, authorSource),
+        authorSource,
         match.remaining,
-        interaction,
+        interactionFactory?.(authorSource),
         match.command.slot.definition.adapter,
       ),
     );

@@ -41,7 +41,7 @@ minimal-bot/
 ├── adapters/terminal/index.ts      # defineAdapter(), stdin + stdout Endpoint
 ├── commands/hello/index.ts         # /hello
 ├── commands/card/index.ts          # /card -> component("status-card")
-├── components/status-card/index.ts # defineComponent(), compiler-free Satori h()
+├── components/status-card/index.tsx # defineComponent(), shared JSX rendering
 └── tools/echo/index.ts       # optional defineAgentTool() example
 ```
 
@@ -73,3 +73,5 @@ Adapter -> outboundMessageToken -> ImRuntime -> Command -> Component
 
 Platform adapters and the Remote Console remain separate installable plugins. The complete AI
 reference is [full-bot](../full-bot/); the maintainer kitchen sink is [test-bot](../test-bot/).
+
+`/jsx` 演示命令直接返回 JSX，`jsx?` 演示入站中间件直接返回 JSX；`/card` 调用注册组件。展示位可传入其他 JSX。

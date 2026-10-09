@@ -1,126 +1,121 @@
 ---
 title: 中间件与组件
-description: defineMiddleware 的 inbound/outbound 执行序，defineComponent 渲染为图片，游戏插件的双模式降级
+description: 入站结果传递、出站信封改写与统一 JSX/HTML 渲染
 ---
 
 # 中间件与组件
 
-消息流上有两类相邻的扩展点：`defineMiddleware`（从 `zhin.js/middleware` 导入）拦截消息流，`defineComponent`（从 `zhin.js/component` 导入）把结构化 props 渲染成可发送的内容（通常是图片）。游戏插件把它们配在一起用——中间件归一输入，组件统一输出。依赖 `zhin.js` 时勿再单独安装 `@zhin.js/middleware` / `@zhin.js/component`。
+指令 `execute`、入站中间件 `handle` 和组件 `render` 可以直接返回 JSX。`zhin.js/jsx` 提供同一套 JSX 类型、编译运行时与 `renderToHtml`；`zhin.js/component` 提供注册组件能力。可选样式组件安装 `@zhin.js/components`，它不依赖 React 或截图引擎。
 
-## defineMiddleware
+## JSX 创作
 
-插件包根目录下的 `middlewares/` 是约定目录，每个 `.ts` 文件默认导出 `defineMiddleware(...)`：
+项目 `tsconfig.json` 设置 `"jsx": "react-jsx"`、`"jsxImportSource": "zhin.js"`，代码保存为 `.tsx`。服务端约定入口支持 `commands/**/index.tsx`、`middlewares/<name>/index.tsx`、`components/<name>/index.tsx`；CLI 开发 loader 转译 JSX，生产模式使用编译产物。
 
-```ts
+```tsx
+import { defineCommand } from 'zhin.js/command';
+import { Card, CardHeader, Badge } from '@zhin.js/components';
+
+export default defineCommand({
+  execute: () => (
+    <Card>
+      <CardHeader title={<strong>服务状态</strong>} badge={<Badge>在线</Badge>} />
+      <p>运行正常</p>
+    </Card>
+  ),
+});
+```
+
+展示位采用 `JSXRenderable`：支持文本、数字、其他 JSX、数组、异步节点和空值。标题、标签、值等都可组合；颜色、尺寸、百分比等样式或计算参数有各自类型。纯 JSX 函数组件无需注册，异步函数也可以作为标签。文本默认转义；普通字符串 `'<b>内容</b>'` 始终是文本。`rawHtml()` 或 `<Raw html={...} />` 仅用于明确插入可信 HTML。
+
+样式组件通过 `ThemeProvider` 共享配色、字体、背景、圆角、边框、阴影与文案；局部使用 `custom.style`、`custom.text` 覆盖。默认间距为 4/8/12/16/24px，上下、左右分别对称：组件外距用 margin，容器内距用 padding，Divider 也带外距。普通 block 的相邻纵向 margin 可以折叠；Flex/Grid 下会相加。完整配置见 [组件库说明](../../packages/toolkit/components/README.md)。
+
+## 入站中间件
+
+```tsx
 import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from 'zhin.js';
 
 export default defineMiddleware<Message>({
-  target: 'inbound',
-  order: 10,
-  async handle(context, next) {
-    const text = context.input.content?.trim() ?? '';
-    if (!text) {
-      await next();
-      return;
-    }
-    // …处理；调用 next() 放行，直接 return 则拦截
+  handle({ input }, next) {
+    if (input.content === '状态') return <p>在线</p>;
+    return next();
+  },
+});
+```
+
+| 写法 | 行为 |
+| --- | --- |
+| `return <Card />` | 短路下游，形成自动回复结果 |
+| `return next()` | 透传下游结果与作者 |
+| `await next()`，无返回值 | 仍透传下游结果 |
+| `await next(); return <Card />` | 替换下游尚未发送的自动回复 |
+| 不调用 next，也无返回值 | 消费输入，不自动回复 |
+
+链结束后自动回复一次。显式 `$reply()` 可以发送多次；上游返回值不能撤销已发送的显式回复。命令匹配但返回 void，仍视为已处理，不因没有返回内容而触发 AI。`next()` 返回值是用于透传的 continuation，不是可修改的消息对象；每层最多调用一次。
+
+同一 target 内按 **phase → order → 插件拓扑序 → slot id** 排序。`phase` 默认 `before-dispatch`，另一值为 `after-dispatch`；它是链中的排序分组，自动发送发生在整个链回卷结束后。`order` 默认为 0。上下文包含 `input`、`config`、`use(token)`、`owner`、`generation`；声明 adapter 后 `$client` 获得该平台类型。
+
+## 出站中间件
+
+```tsx
+import { defineMiddleware } from 'zhin.js/middleware';
+import type { OutboundEnvelope } from 'zhin.js/core/runtime';
+
+export default defineMiddleware<OutboundEnvelope>({
+  target: 'outbound',
+  async handle({ input }, next) {
+    input.replace(<p>经过审核的内容</p>);
     await next();
   },
 });
 ```
 
-### 声明项
+出站 `handle` 不返回消息，通过 `replace()` 改写；不调用 `next()` 即停止投递。替换内容也走统一渲染和平台校验。`payload` 是当前候选平台内容，适合审核和拦截，不能绕过 Endpoint 发送边界。
 
-| 字段 | 默认 | 取值 | 说明 |
-| --- | --- | --- | --- |
-| `phase` | `'before-dispatch'` | `before-dispatch` / `after-dispatch` | 在命令派发前还是后执行 |
-| `target` | `'inbound'` | `inbound` / `outbound` | 拦截入站消息还是出站信封 |
-| `order` | `0` | 安全整数 | 同 phase 内的排序键 |
-
-两个 `target` 看到的 `context.input` 不同。inbound 下是 Runtime `Message`，可读 `content`、`sender`、`$reply(...)`——拦截时不调 `next()`，直接 `$reply` 后 return 即可（游戏插件的文本入口就是这个模式）。outbound 下是出站信封（`OutboundEnvelope`），`payload` 是即将发给平台的 wire 段，可做审计、改写、追加。
-
-### 执行序
-
-同一 `target` 内，排序键依次为：**phase → order → 插件拓扑序（Root 先，子插件按树序）→ slot id**。链是洋葱模型：
-
-```mermaid
-sequenceDiagram
-    participant M1 as 中间件 A (before, order 0)
-    participant M2 as 中间件 B (before, order 10)
-    participant T as 终点 (命令派发 / 平台发送)
-    M1->>M2: next()
-    M2->>T: next()
-    T-->>M2: 完成
-    M2-->>M1: 完成
-```
-
-两条约束：`next()` 最多调用一次，重复调用抛 `Middleware next() called more than once`；不调 `next()` 即中断链条，终点不执行。`context` 还带有 `config` / `use(token)` / `owner` / `generation`，与其它能力上下文一致。
-
-真实示例见 `plugins/games/rps/middlewares/rps-choice/index.ts`：识别游戏 payload 文本（`rps:<session>:<choice>`）或数字 fallback（「1 石头 2 布 3 剪刀」），命中则处理并 `$reply`，否则 `next()` 放行给后续中间件与命令派发。
-
-## defineComponent
-
-`components/` 是约定目录（支持 `.tsx`），每个文件默认导出 `defineComponent(...)`：
+## 注册组件
 
 ```tsx
-// components/status-card/index.ts（提炼自 examples/minimal-bot）
+// components/status-card/index.tsx
 import { defineComponent } from 'zhin.js/component';
-import { raw } from 'zhin.js/core/runtime';
-import { Card, CardHeader, Row, StatChip, h, wrapCardHtml, DEFAULT_CARD_THEME } from '@zhin.js/satori';
+import type { JSXRenderable } from 'zhin.js/jsx';
+import { Card, CardHeader, KvTable } from '@zhin.js/components';
 
-interface StatusCardProps {
-  readonly title: string;
-  readonly lines: readonly { label: string; value: string }[];
+interface Props {
+  title: JSXRenderable;
+  rows: readonly { label: JSXRenderable; value: JSXRenderable }[];
 }
 
-export default defineComponent<StatusCardProps>({
-  render({ title, lines }) {
-    const body = h(Card, {
-      children: [
-        h(CardHeader, { title, meta: 'minimal-bot' }),
-        h(Row, {
-          gap: 10,
-          children: lines.map((line) =>
-            h(StatChip, { label: line.label, value: line.value, accent: DEFAULT_CARD_THEME.accentMem })),
-        }),
-      ],
-    });
-    return raw({
-      type: 'html',
-      data: { html: wrapCardHtml(body, DEFAULT_CARD_THEME.canvas), width: 540 },
-    });
-  },
+export default defineComponent<Props>({
+  render: ({ title, rows }) => <Card><CardHeader title={title} /><KvTable rows={rows} /></Card>,
 });
 ```
 
-### 调用与解析
-
-命令（或任何出站内容）用 `component(name, props)` 调用：
+调用使用同一组件入口：
 
 ```ts
-import { component } from 'zhin.js/core/runtime';
-
-return component('status-card', { title: 'my-bot', lines: [{ label: 'RSS', value: '42MB' }] });
+import { component } from 'zhin.js/component';
+return component('status-card', { title: 'my-bot', rows: [{ label: 'RSS', value: '42MB' }] });
 ```
 
-组件按**调用者插件沿插件树向上**解析：子插件可以先用自己的同名组件覆盖，找不到再取父插件的。渲染是递归的——组件的 `render` 可以再返回 `component(...)`，深度上限 32。`render(props, context)` 的 `context` 额外带 `requester`（调用方插件节点），以及常规的 `config` / `use` / `owner` / `generation`。
+名字沿调用者插件向祖先查找，子插件可覆盖同名组件。`render(props, context)` 的上下文包含当前 operation 的 config、use、owner、generation 和 requester；异步执行和热重载不会切到另一代资源。注册组件可返回另一组件调用，深度上限 32。
 
-### 渲染为图片（html-renderer）
+组件可提供 `previewProps` 作为 Console 的公开示例数据。Console 预览使用同一 JSX/HTML 渲染器，并保留本次请求的 generation 与取消信号，输出可展示的 HTML 消息段。
 
-`raw({ type: 'html', data: { html, width } })` 段在出站归一化时转换：
+## HTML 与平台能力
 
-```mermaid
-flowchart TD
-    A["raw html 段"] --> B{htmlRendererToken<br/>Host 已安装?}
-    B -->|是| C["@zhin.js/html-renderer<br/>render(html, width, 'png')"]
-    C -->|成功| D["image 段<br/>base64 PNG (默认 card.png)"]
-    C -->|失败| E
-    B -->|否| E["text 段降级<br/>data.text 或 html 转纯文本"]
-    F["sandbox 适配器"] -.->|直接消费 html 段<br/>跳过归一化| G[Console UI 内嵌渲染]
+统一链路为 **JSX → HTML → segment.html → Adapter policy → 出站中间件 → Endpoint**。适配器 `segments.html` 声明 `direct` 时保留 HTML（如 Sandbox、Email）；`image` 时使用可选 `@zhin.js/html-renderer` 输出 PNG；`text` 时转文本。未声明采用可渲染则图片、否则文本的策略。direct 只影响 HTML，其他媒体与交互段照常校验。
+
+需要自定义图片宽度或文本降级内容时：
+
+```ts
+import { renderToHtml } from 'zhin.js/jsx';
+import { segment } from 'zhin.js';
+return segment.html({ html: await renderToHtml(node), width: 640, text: '服务在线' });
 ```
 
-渲染 Host 是可选资源（`htmlRendererToken`，由 `@zhin.js/html-renderer` 提供），**未安装时自动降级为文本**，组件代码不用改。默认宽度 540px、格式 PNG；`data.text` 可作为自定义降级文案，`data.fileName` 自定义图片文件名。sandbox 适配器是个特例：它**直接消费 html 段**（Console UI 内嵌展示），不经过图片/文本归一化。整个降级是「尽力而为」——渲染抛错也会落到文本，不会阻塞发送。
+缺少 renderer、截图失败或平台无法投递二进制图片时，在投递前降级文本。平台上传或发送失败后不追加文本重发，以免重复。空 JSX 不发消息；JSX 求值失败报告投递错误，不把异常堆栈当聊天内容。生成的 HTML 不再执行文本模板。
+
+混合消息使用外部数组，例如 `[<Card />, segment.mention('user-id')]`；JSX 子树内部只表达 HTML，不能隐式塞入平台 Segment。
 
 ## 游戏插件的双模式降级
 

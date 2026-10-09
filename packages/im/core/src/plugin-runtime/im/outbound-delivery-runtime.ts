@@ -6,7 +6,8 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { createOutboundEnvelope, type OutboundEnvelope, type SendRequest } from './contracts.js';
+import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
+import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
 import { OutboundRenderer } from './outbound-renderer.js';
 import {
   applyOutboundInteractivePolicy,
@@ -15,10 +16,11 @@ import {
   resolveOutboundInteractivePolicy,
   resolveOutboundMarkdownPolicy,
   resolveOutboundMediaPolicy,
+  resolveOutboundHtmlPolicy,
   resolveOutboundSupportedSegments,
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
-import { adapterTypeName, requireAdapters } from './endpoint-runtime.js';
+import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
 
@@ -47,6 +49,7 @@ export class OutboundDeliveryRuntime {
 
   async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
+    const jsxCache = new WeakMap<JSXElement, Promise<string>>();
     let initialPayload: unknown;
     try {
       const rendered = await this.#renderer.render(
@@ -55,6 +58,7 @@ export class OutboundDeliveryRuntime {
         snapshot,
         request.conversation,
         request.incoming,
+        { jsxCache },
       );
       initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
     } catch (error) {
@@ -85,8 +89,13 @@ export class OutboundDeliveryRuntime {
           terminalEntered = true;
           let payload: unknown;
           try {
+            // Native payload replacements remain possible; only authoring values need evaluation.
+            const replacement = envelope.payload;
+            const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
+              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, { jsxCache })
+              : replacement;
             payload = await prepareOutboundPayload(
-              envelope.payload,
+              replaced,
               request.conversation,
               snapshot,
               (map) => this.context.rememberFallback(
@@ -98,6 +107,11 @@ export class OutboundDeliveryRuntime {
           } catch (error) {
             receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
               ? receiptFromEndpointError(error, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
+            return;
+          }
+
+          if (payload === '' || (Array.isArray(payload) && payload.length === 0)) {
+            receipt = suppressedDeliveryReceipt();
             return;
           }
 
@@ -148,6 +162,11 @@ export class OutboundDeliveryRuntime {
   }
 }
 
+function needsAuthoringRender(value: unknown): boolean {
+  return isJsxElement(value) || isComponentCall(value) || isRawContent(value)
+    || (Array.isArray(value) && value.some(needsAuthoringRender));
+}
+
 export function failedDeliveryReceipt(code: string, retryable = false): DeliveryReceipt {
   return Object.freeze({
     status: 'failed' as const,
@@ -166,15 +185,14 @@ async function prepareOutboundPayload(
   rememberInteractiveFallback?: (map: Record<string, string>) => void,
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
-  const directHtml = isDirectHtmlConsumer(snapshot, adapter);
   const markdownResolved = applyOutboundMarkdownPolicy(
-    rendered,
+    Array.isArray(rendered) ? rendered.flat(Infinity) : rendered,
     resolveOutboundMarkdownPolicy(adapter, snapshot),
   );
-  let payload = directHtml
-    ? markdownResolved
-    : await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
+  let payload = await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
       mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
+      htmlPolicy: resolveOutboundHtmlPolicy(adapter, snapshot),
+      onHtmlFallback: reason => logger.debug(formatCompact({ op: 'html_fallback', reason, generation: snapshot.generation })),
     });
   if (rememberInteractiveFallback) {
     payload = applyOutboundInteractivePolicy(
@@ -183,7 +201,7 @@ async function prepareOutboundPayload(
       rememberInteractiveFallback,
     );
   }
-  if (!directHtml && Array.isArray(payload)) assertCanonicalSegments(payload);
+  if (Array.isArray(payload)) assertCanonicalSegments(payload);
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
   const supportedPayload = rememberInteractiveFallback ? payload : applyOutboundInteractivePolicy(payload, resolveOutboundInteractivePolicy(adapter, snapshot));
   if (supported && Array.isArray(supportedPayload)) {
@@ -198,12 +216,6 @@ function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | unde
   return host && typeof (host as HtmlRendererHost).render === 'function'
     ? host as HtmlRendererHost
     : undefined;
-}
-
-function isDirectHtmlConsumer(snapshot: RuntimeSnapshot, adapter: CapabilityId): boolean {
-  const owner = snapshot.capabilities.get(adapter)?.owner;
-  const packageName = owner ? snapshot.tree.get(owner)?.packageName : undefined;
-  return adapterTypeName(packageName) === 'sandbox';
 }
 
 function receiptFromEndpointResult(

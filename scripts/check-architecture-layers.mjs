@@ -40,6 +40,8 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
+  'packages/im/jsx': { level: 0, allowedImports: [] },
+  'packages/toolkit/components': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/im/im-contract': { level: 0, allowedImports: [] },
   'packages/im/interaction': { level: 0, allowedImports: [] },
   'packages/im/plugin-runtime': { level: 1, allowedImports: ['basic'] },
@@ -60,10 +62,10 @@ const layers = {
   'packages/host/http': { level: 1, allowedImports: ['basic', 'packages/im/plugin-runtime', 'packages/console/protocol', 'packages/host/http-contract'] },
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
-  'packages/im/core': { level: 3, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
+  'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
-  'packages/im/zhin': { level: 5, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
+  'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
   // depend on the concrete HTTP Host implementation.
   'packages/host/mcp': { level: 7, allowedImports: ['basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/host/http-contract'] },
@@ -78,6 +80,8 @@ const layerPathsBySpecificity = Object.keys(layers).sort((a, b) => b.length - a.
 
 // 包名到路径的映射
 const packageNameToPath = {
+  '@zhin.js/jsx': 'packages/im/jsx',
+  '@zhin.js/components': 'packages/toolkit/components',
   '@zhin.js/logger': 'basic/logger',
   '@zhin.js/schema': 'basic/schema',
   '@zhin.js/database': 'basic/database',

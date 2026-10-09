@@ -1,4 +1,5 @@
 import type { MessageElement, SendContent } from '../types.js';
+import { isSegmentContent } from '../plugin-runtime/im/contracts.js';
 
 const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
 
@@ -45,12 +46,9 @@ export function asMessageElements(content: SendContent): MessageElement[] {
   if (typeof content === 'string') {
     return [{ type: 'text', data: { text: content } }];
   }
-  if (!Array.isArray(content)) {
-    return [content];
-  }
-  return content.map((item) =>
-    typeof item === 'string' ? { type: 'text', data: { text: item } } : item,
-  );
+  if (Array.isArray(content)) return content.flatMap(item => asMessageElements(item));
+  if (isSegmentContent(content)) return [content];
+  throw new TypeError('Message elements require rendered content; JSX and component calls must use the outbound renderer');
 }
 
 export function isMediaSegmentType(type: string): boolean {

@@ -18,14 +18,6 @@
     ".": {
       "import": "./lib/index.js",
       "types": "./lib/index.d.ts"
-    },
-    "./jsx-runtime": {
-      "import": "./lib/jsx-runtime.js",
-      "types": "./lib/jsx-runtime.d.ts"
-    },
-    "./jsx-dev-runtime": {
-      "import": "./lib/jsx-dev-runtime.js",
-      "types": "./lib/jsx-dev-runtime.d.ts"
     }
   },
   "scripts": {

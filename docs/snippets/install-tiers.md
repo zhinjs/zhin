@@ -36,7 +36,7 @@
 | **IM** | `pnpm add zhin.js` + 适配器；`@zhin.js/cli` 装配 Host | 创作面 API 经 `zhin.js/*`；Console Host 由 CLI 注入 |
 | **AI** | `+ @zhin.js/agent zod ai` | ZhinAgent、会话与工具 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 大模型调用 |
-| **Cards** | `+ @zhin.js/satori` | Satori 卡片组件（按需） |
+| **Cards** | `+ @zhin.js/components` | 纯 JSX 样式组件（按需；无 React / 图片引擎） |
 | **Rich media** | `+ @zhin.js/html-renderer` | 出站 html/markdown 转 PNG |
 | **Speech** | `+ @zhin.js/speech` | 入站 STT、出站 TTS、voice_stt/voice_tts 工具 |
 <!-- #endregion tiers-table-host -->

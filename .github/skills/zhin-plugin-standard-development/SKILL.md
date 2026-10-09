@@ -13,7 +13,7 @@ user-invocable: true
 `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛
 `does not default-export a Plugin definition`。
 
-能力**按命名目录发现**（每个能力固定 `index.ts` 入口并 default export），不要命令式注册：
+能力**按命名目录发现**（每个能力固定 `index.ts` 或 JSX 创作的 `index.tsx` 入口并 default export），不要命令式注册：
 
 | 目录 | API |
 |------|-----|
@@ -30,6 +30,13 @@ user-invocable: true
 | `agents/<name>/agent.json` | Agent 元数据；提示词和边界文件与其同目录 |
 
 DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
+
+JSX 创作与发送规则见 [中间件与组件](../../../docs/authoring/middleware-components.md)：
+`jsxImportSource: "zhin.js"`；能力与节点类型从 `zhin.js/jsx` 导入；可选展示组件从
+`@zhin.js/components` 导入，标题、标签、值等可接受 `JSXNode`。
+Command execute、入站 handle、注册组件 render 可直接返回 JSX，链结束自动回复一次。
+入站 `return next()` 或仅 `await next()` 均透传；出站通过 `input.replace(JSX)` + next 放行，返回 void。
+不得使用旧 renderJSX、字符串组件模板或 Satori JSX runtime。
 
 **禁止使用** `usePlugin()` / `getPlugin()` / `MessageCommand` / `addCron(new Cron)` /
 `declareConfig` 经典路径；`zhin.js/node` 与 `bootstrapNode` 已删除且不再导出。

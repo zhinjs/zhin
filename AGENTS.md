@@ -32,7 +32,7 @@
 - `packages/im/`：IM 核心层（adapter、agent、ai、command、component、config-file、core、feature-kit、isolate、kernel、mcp-feature、middleware、plugin-runtime、runtime、skill、tool、zhin 等子包）。
 - `packages/host/`：Host 运行时（http / mcp / a2a；legacy router / api 插件包已删除，Console Host 由 basic/cli 装配）。
 - `packages/console/`：Remote Console（Host 只提供 API，UI 在 console.zhin.dev）。
-- `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、satori、html-renderer、speech。
+- `packages/toolkit/`：create-zhin（`pnpm create zhin-app`）、scaffold-wizard（配置向导）、components（纯 JSX 样式组件）、satori、html-renderer、speech。
 - `plugins/adapters/`：平台适配器（Sandbox / QQ / ICQQ / NapCat / OneBot11·12 / Discord / Telegram / Slack / KOOK / 钉钉 / 飞书 / GitHub / Email / 企微 / LINE / Satori 等）。
 - `examples/`：参考实现，见下方「示例分层」。
 - 可选 Remote UI submodule：`zhin-console/`。
@@ -107,6 +107,7 @@ Agent 与 Console Host；其他低层包不跨层取用上层实现。
 ## 必须遵守的约束（代码约定）
 
 - TypeScript 本地导入通常必须使用 `.js` 扩展名。
+- JSX 使用 `zhin.js/jsx`（`jsxImportSource: "zhin.js"`）；`execute`、入站 `handle`、组件 `render` 可返回 JSX，统一转 HTML 段。出站使用 `envelope.replace(JSX)` + `next()`，不返回内容。组件 API 从 `zhin.js/component` 导入；可选样式从 `@zhin.js/components` 导入，展示位使用 `JSXNode` 支持嵌套排版。
 - **唯一入口：Plugin Runtime**：`plugin.ts` default-export `definePlugin()`，用 `zhin runtime start` 启动；代码能力统一使用命名目录与固定入口：`commands/**/index.ts`、`adapters|components|handlers|middlewares|pages|mcps|schedules/<name>/index.ts`、`tools|hooks/<name>/index.ts`。Skill 使用 `skills/<name>/SKILL.md`，Agent 使用 `agents/<name>/agent.json`。同一能力目录的其他文件都是 helper。Tool 的四个正式位置是根 `tools/`、`agents/<name>/tools/`、`skills/<name>/tools/`、`agents/<name>/skills/<name>/tools/`；后三者只随 Agent 选择或 Skill 激活渐进披露。主 Agent 使用插件根 `AGENTS.md`；子 Agent 必须同时包含 `system.md`、`boundaries.md`、`conventions.md`，后者只能延伸根规则。`zhin.js/node` 与 `bootstrapNode` **已删除且不再导出**。
 - **Legacy API 已移除**：`usePlugin()` / `getPlugin()` 已不再导出，也勿导入已不存在的 `zhin.js/node`；门禁 `pnpm check:no-removed-plugin-api` 防止仓库内重新引入这些调用。
 - 发送消息不能绕过统一链路：`Message.$reply` 或 `Adapter.sendMessage` → `renderSendMessage` → `before.sendMessage` → 平台 Endpoint（`pnpm check:harness-paths` 门禁）。

@@ -4,10 +4,8 @@ import { resolveHtmlRendererConfig } from './config.js';
 import { createEngine } from './engine.js';
 import { buildFontFaces, isFullDocument, withDocumentFile, wrapDocument } from './html.js';
 import { readImageSize } from './image.js';
-import { serializeJsxToHtml } from './jsx.js';
 import type {
   FontConfig,
-  HtmlComponent,
   HtmlRendererConfig,
   HtmlRendererLogger,
   HtmlRendererService,
@@ -192,18 +190,6 @@ export function createHtmlRenderer(
       }
     },
 
-    async renderJsx(element: unknown, options: RenderOptions = {}): Promise<RenderResult> {
-      return this.render(serializeJsxToHtml(element), options);
-    },
-
-    async renderComponent<P>(
-      component: HtmlComponent<P>,
-      props: P,
-      options: RenderOptions = {},
-    ): Promise<RenderResult> {
-      return this.render(serializeJsxToHtml(component(props)), options);
-    },
-
     registerFont(font: FontConfig): void {
       registeredFonts.set(fontKey(font), font);
       logger?.debug?.(`Font registered: ${font.name}`);
@@ -219,5 +205,3 @@ export function createHtmlRenderer(
     },
   };
 }
-
-export { serializeJsxToHtml } from './jsx.js';

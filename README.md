@@ -218,6 +218,9 @@ Full list: [adapter docs](./docs/adapters/index.md) · [`plugins/adapters`](./pl
 
 Layers and dependency direction: [architecture](./docs/concepts/architecture.md) · [repo structure](./docs/contributing/repo-structure.md)
 
+
+JSX authoring uses `zhin.js/jsx` with `jsxImportSource: "zhin.js"`. Commands, inbound middleware and registered components may return JSX directly; adapters choose HTML, images or text. Install optional `@zhin.js/components` for themed visual components with composable `JSXNode` display props. See [middleware and components](https://zhin.js.org/en/authoring/middleware-components).
+
 ## Documentation
 
 | | |

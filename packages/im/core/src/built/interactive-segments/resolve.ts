@@ -8,7 +8,7 @@ import {
   isKeyboardSegment,
 } from './types.js';
 
-function asKeyboardData(item: MessageElement | KeyboardSegment): KeyboardSegmentData | null {
+function asKeyboardData(item: unknown): KeyboardSegmentData | null {
   if (item instanceof KeyboardSegment) return item.data;
   if (isKeyboardSegment(item)) return item.data as KeyboardSegmentData;
   return null;
@@ -18,11 +18,11 @@ function toKeyboardElement(data: KeyboardSegmentData): MessageElement {
   return { type: KEYBOARD_SEGMENT_TYPE, data };
 }
 
-function asArray(content: SendContent): (string | MessageElement)[] {
-  return Array.isArray(content) ? content : [content];
+function asArray(content: SendContent): SendContent[] {
+  return Array.isArray(content) ? content.flatMap(item => asArray(item)) : [content];
 }
 
-function packSegments(out: (string | MessageElement)[]): SendContent {
+function packSegments(out: SendContent[]): SendContent {
   if (out.length === 0) return { type: 'text', data: { text: '' } };
   if (out.length === 1) return out[0]!;
   return out;
@@ -93,7 +93,7 @@ export function resolveKeyboardSegments(
   if (!hasKeyboardSegment(content)) return content;
 
   const items = asArray(content);
-  const out: (string | MessageElement)[] = [];
+  const out: SendContent[] = [];
 
   for (const item of items) {
     if (typeof item === 'string') {

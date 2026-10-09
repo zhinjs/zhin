@@ -53,7 +53,10 @@ Do not place a domain-specific Tool at package root merely to make discovery con
 - Import Stable Feature `define*` from `zhin.js/*` facade subpaths when the app depends on `zhin.js`.
   Import IM execution contracts from `zhin.js/core/runtime` (or `@zhin.js/core/runtime`).
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
-  constructor parameter properties or TSX in server capability directories.
+  constructor parameter properties in native `.ts` server files. Server command, middleware and
+  component entries may use `.tsx`; set `jsx: react-jsx` and `jsxImportSource: zhin.js`.
+  `zhin.js/jsx` supplies JSX/JSXNode/renderToHtml; `@zhin.js/components` supplies optional visual
+  components. Inbound handles return JSX or forward next(); outbound handles replace(JSX) and return void.
 - Browser `pages/*/index.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
 
 ## Command routes

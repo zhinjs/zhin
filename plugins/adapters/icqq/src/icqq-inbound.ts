@@ -781,7 +781,8 @@ function mergeReplyFromSource(
 
 function quoteIdFromSegments(content: readonly MessageSegment[]): string | undefined {
   const reply = content.find((item) => item.type === 'reply');
-  const value = reply?.data?.message_id ?? reply?.data?.id;
+  const data = reply?.data as Readonly<Record<string, unknown>> | undefined;
+  const value = data?.message_id ?? data?.id;
   return value == null || !String(value).trim() ? undefined : String(value).trim();
 }
 

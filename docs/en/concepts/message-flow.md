@@ -57,7 +57,7 @@ The actual code locations for each step:
    });
    ```
 
-5. **Command dispatch**. `MessageDispatcher` first resolves the command prefix (by default based on the message's adapter instance configuration: `endpoints[i].commandPrefix` overrides the top-level `commandPrefix`, defaulting to `''` with no prefix, see [Config as Data](./config-as-data.md)). If the prefix doesn't match, it's an immediate miss; if the prefix matches, it is stripped and passed to `CommandIndex.dispatch`. When a command has a return value, the dispatcher automatically replies using the command owner's identity via `$replyFrom(owner, value)`.
+5. **Command dispatch**. `MessageDispatcher` first resolves the command prefix (by default based on the message's adapter instance configuration: `endpoints[i].commandPrefix` overrides the top-level `commandPrefix`, defaulting to `''` with no prefix, see [Config as Data](./config-as-data.md)). If the prefix doesn't match, it's an immediate miss; if the prefix matches, it is stripped and passed to `CommandIndex.dispatch`. The dispatcher returns matching facts and pending content. Inbound middleware may forward or replace it; after the full chain unwinds, ImRuntime replies once with the final content owner. A matched command returning void remains handled.
 
 6. **AI fallback**. On command miss (or unmatched plain text), `ImRuntime` resolves a generation-owned `IngressRoute` from the root resources of the snapshot held by the message. The composition root provides this internal route during generation setup when `@zhin.js/agent` is installed; without it, the message is silently discarded. It is not a mutable plugin setter on `OutboundMessageService`.
 
@@ -70,7 +70,7 @@ The actual code locations for each step:
 ```mermaid
 flowchart LR
     A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component -> JSX render<br/>raw passthrough / array expand]
-    R --> N[normalizeOutboundPayload<br/>html segments -> image/text<br/>sandbox consumes html directly]
+    R --> N[normalizeOutboundPayload<br/>html segments -> image/text<br/>declared direct adapters preserve HTML]
     N --> V["createOutboundEnvelope<br/>conversation, requester, generation"]
     V --> MW["Middleware outbound<br/>can envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>validate outbound capability and online status]
@@ -143,3 +143,5 @@ When an adapter plugin instance configuration declares `endpoints: [{name, ...}]
 - The Console side addresses by `(adapter, endpointId)`. `AdapterIndex.resolve` matches in order: local name, capability ID, owner path segment, and the Endpoint's runtime name (e.g., ICQQ's uin). When multiple matches occur, the exact endpoint name takes priority.
 
 Therefore, "two QQ accounts each receiving their own messages and sending their own replies" requires no special code -- just configure two endpoint entries.
+
+Command results are pending until the inbound chain unwinds. Middleware may forward or replace them, then ImRuntime replies once with the final content owner. Matched commands returning void remain handled. Explicit replies bind to the command or middleware owner and are independent of automatic replies. JSX and outbound replacements use the same HTML segment rendering and declared adapter policy.

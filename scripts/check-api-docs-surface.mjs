@@ -67,8 +67,9 @@ const expectedSurface = new Map([
   ]],
   ['zhin.js/handler', ['HandlerDefinition', 'HandlerEventMap', 'defineHandler']],
   ['zhin.js/middleware', [
-    'MiddlewareContext', 'MiddlewareDefinition', 'MiddlewareNext', 'MiddlewarePhase',
-    'MiddlewareTarget', 'defineMiddleware',
+    'MiddlewareContext', 'MiddlewareContinuation', 'MiddlewareDefinition',
+    'MiddlewareDefinitionBase', 'MiddlewareNext', 'MiddlewarePhase',
+    'MiddlewareTarget', 'OutboundMiddlewareNext', 'defineMiddleware',
   ]],
 ]);
 

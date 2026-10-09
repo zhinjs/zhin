@@ -264,3 +264,5 @@ cd examples/minimal-bot && pnpm dev
 ## License
 
 [MIT](./LICENSE)
+
+JSX 创作使用 `zhin.js/jsx`，配置 `jsxImportSource: "zhin.js"`。命令、入站中间件和注册组件可直接返回 JSX，按适配器能力输出 HTML、图片或文本。可选 `@zhin.js/components` 提供主题化样式组件，展示位使用可组合的 `JSXNode`。参见[中间件与组件](https://zhin.js.org/authoring/middleware-components)。

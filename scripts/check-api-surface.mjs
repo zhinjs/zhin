@@ -12,6 +12,10 @@ const targets = {
   'zhin.js/agent': 'packages/im/zhin/src/agent.ts',
   '@zhin.js/agent': 'packages/im/agent/src/index.ts',
   '@zhin.js/core': 'packages/im/core/src/index.ts',
+  'zhin.js/jsx': 'packages/im/zhin/src/jsx.ts',
+  'zhin.js/component': 'packages/im/zhin/src/component.ts',
+  '@zhin.js/jsx': 'packages/im/jsx/src/index.ts',
+  '@zhin.js/components': 'packages/toolkit/components/src/index.ts',
 };
 
 function normalize(statement) {

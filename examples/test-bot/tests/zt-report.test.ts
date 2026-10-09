@@ -18,16 +18,16 @@ async function assertSatori(fragment: string) {
 const counts = { adapters: 2, plugins: 5 } as const;
 
 describe("zt-report", () => {
-  it("ztReportReply 返回 html 段", () => {
+  it("ztReportReply 返回 html 段", async () => {
     const data = collectZtFallbackData(counts);
-    const reply = ztReportReply(data);
+    const reply = await ztReportReply(data);
     expect(reply).toMatchObject({ type: "html" });
     expect(reply.data.html).toContain("系统状态");
   });
 
-  it("buildZtReportHtml 生成可渲染的 HTML 卡片", () => {
+  it("buildZtReportHtml 生成可渲染的 HTML 卡片", async () => {
     const data = collectZtFallbackData(counts);
-    const html = buildZtReportHtml(data);
+    const html = await buildZtReportHtml(data);
     expect(html).toContain("系统状态");
     expect(html).toContain(data.hostName);
     expect(html).toContain("适配器 2 · 插件 5");
@@ -36,7 +36,7 @@ describe("zt-report", () => {
 
   it("buildZtReportHtml 可通过 Satori 渲染", async () => {
     const data = collectZtFallbackData(counts);
-    await assertSatori(buildZtReportHtml(data));
+    await assertSatori(await buildZtReportHtml(data));
   });
 
   it("长挂载路径布局可通过 Satori 渲染", async () => {
@@ -48,7 +48,7 @@ describe("zt-report", () => {
     ];
     data.diskValue = "666.0 GB / 922.0 GB";
     data.diskUsage = 72.2;
-    await assertSatori(buildZtReportHtml(data));
+    await assertSatori(await buildZtReportHtml(data));
   });
 
   it("buildZtReportHtml 完整采集数据可通过 Satori 渲染", async () => {
@@ -59,7 +59,7 @@ describe("zt-report", () => {
       return;
     }
     expect(data.frameworkLine).toBe("适配器 2 · 插件 5");
-    const html = buildZtReportHtml(data);
+    const html = await buildZtReportHtml(data);
     expect(html).toContain("网络");
     if (data.networkMac) expect(html).toContain(data.networkMac);
     if (data.networkTrafficLine) expect(html).toContain("累计");

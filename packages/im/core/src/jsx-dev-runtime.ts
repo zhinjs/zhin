@@ -1,2 +1,1 @@
-export * from './jsx-runtime.js'
-export {jsx as jsxDEV} from './jsx.js'
+export * from '@zhin.js/jsx/jsx-dev-runtime';

@@ -14,6 +14,9 @@ import {
   rootPluginId,
   type CapabilitySlot,
   type SnapshotState,
+  type PluginId,
+  type PluginNodeSnapshot,
+  type FeatureId,
 } from '@zhin.js/plugin-runtime';
 import {
   AdapterIndex,
@@ -42,7 +45,9 @@ import {
   MiddlewareIndex,
   defineMiddleware,
   middlewareFeatureId,
+  type MiddlewareNext,
 } from '@zhin.js/middleware';
+import { bindOperationInput } from '@zhin.js/feature-kit';
 import {
   HandlerIndex,
   defineHandler,
@@ -60,6 +65,7 @@ import {
   type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
+import { jsx } from '../../src/jsx.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -117,6 +123,233 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it.each(['command', 'command-shortcut', 'middleware'] as const)('binds every explicit %s send to its component author', async (entry) => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'explicit-author');
+    const sent: unknown[] = [];
+    const owners: PluginId[] = [];
+    let scoped: Message | undefined;
+    const sends = async (input: Message) => {
+      scoped = input;
+      expect(input.$client).toBe(ignoredEndpointEvents);
+      const card = component('result', {});
+      await input.$reply(card);
+      await input.$sendTo({ kind: 'private', id: 'other' }, card);
+      await input.$replyToPrivate(card);
+      await input.$replyToGroup('group', card);
+      await input.$replyToChannel('channel', 'guild', card);
+      await input.$replyFrom(root, 'explicit override');
+    };
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandOwner: entry !== 'middleware' ? child : root,
+      commandShortcut: entry === 'command-shortcut',
+      inboundOwner: entry === 'middleware' ? child : root,
+      componentOwner: child,
+      componentResult: () => raw({ text: 'local component' }),
+      commandResult: entry !== 'middleware' ? sends : undefined,
+      inboundMiddleware: entry === 'middleware' ? sends : (_input, next) => next(),
+      outboundMiddleware: async (input, next) => { owners.push(input.requester); await next(); },
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, entry === 'command-shortcut' ? '/author shortcut' : '/gh issue list open'));
+      expect(owners).toEqual([child, child, child, child, child, root]);
+      expect(sent.map((item) => (item as { payload: unknown }).payload)).toEqual([
+        ...Array.from({ length: 5 }, () => ({ text: 'local component' })), 'explicit override',
+      ]);
+      expect(() => scoped?.$reply('expired')).toThrow('scope has ended');
+      expect(() => bindOperationInput(scoped, root, fixture.store.current)).toThrow('scope has ended');
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('keeps concurrent explicit authors isolated across a generation commit', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'middleware-author');
+    const sent: unknown[] = [];
+    const authors: Array<[PluginId, number]> = [];
+    let release!: () => void;
+    let entered!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    let oldMessage: Message | undefined;
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundOwner: child,
+      inboundMiddleware: async (input, next) => {
+        if (input.content === 'delayed middleware') {
+          oldMessage = input;
+          entered();
+          await gate;
+          await input.$reply('child explicit');
+        } else await next();
+      },
+      commandResult: async (input) => { await input.$reply('root explicit'); },
+      outboundMiddleware: async (input, next) => { authors.push([input.requester, input.generation]); await next(); },
+    });
+    let disposed = false;
+    const current = fixture.store.current;
+    fixture.store.commit(0, { snapshot: snapshotState(current), dispose: () => { disposed = true; } });
+    try {
+      const running = receive(fixture.im, fixtureInput(fixture, 'delayed middleware'));
+      await started;
+      fixture.store.commit(1, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
+      expect(() => bindOperationInput(oldMessage, root, fixture.store.current)).toThrow('another generation');
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(disposed).toBe(false);
+      release();
+      await running;
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(disposed).toBe(true);
+      expect(authors).toEqual([[root, 2], [child, 1]]);
+      expect(sent).toHaveLength(2);
+    } finally { release(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['command', 'middleware', 'component'] as const)('sends %s JSX through the real runtime exactly once', async (entry) => {
+    const sent: unknown[] = [];
+    const rendered = vi.fn(() => jsx('b', { children: 'ready' }));
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      adapterSegments: { html: 'direct' },
+      commandResult: entry === 'command' ? () => rendered() : undefined,
+      componentResult: entry === 'component' ? rendered : undefined,
+      inboundMiddleware: entry === 'middleware' ? () => rendered() : (_input, next) => next(),
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(rendered).toHaveBeenCalledTimes(1);
+      expect(sent).toEqual([expect.objectContaining({ payload: [{ type: 'html', data: { html: '<b>ready</b>' } }] })]);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['return-next', 'await-next', 'replace', 'short-circuit', 'same-value'] as const)(
+    'unwinds %s before one automatic reply and retains its author', async (mode) => {
+      const root = rootPluginId();
+      const child = childPluginId(root, 'author');
+      const sent: unknown[] = [];
+      const owners: PluginId[] = [];
+      const events: string[] = [];
+      const fixture = await createFixture(events, sent, undefined, undefined, undefined, {
+        commandResult: () => 'downstream',
+        inboundOwner: child,
+        inboundMiddleware: async (_input, next) => {
+          if (mode === 'short-circuit') return 'replacement';
+          if (mode === 'return-next') return next();
+          await next();
+          expect(sent).toHaveLength(0);
+          if (mode === 'replace') return 'replacement';
+          if (mode === 'same-value') return 'downstream';
+        },
+        outboundMiddleware: async (input, next) => { owners.push(input.requester); await next(); },
+      });
+      try {
+        const result = await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+        const replaced = ['replace', 'short-circuit', 'same-value'].includes(mode);
+        expect(owners).toEqual([replaced ? child : root]);
+        expect(sent).toEqual([expect.objectContaining({ payload: mode === 'replace' || mode === 'short-circuit' ? 'replacement' : 'downstream' })]);
+        expect(result).toMatchObject({ matched: true, command: mode === 'short-circuit' ? 'middleware' : 'gh issue list', owner: mode === 'short-circuit' ? child : root });
+        expect(events.filter((event) => event.startsWith('command:'))).toHaveLength(mode === 'short-circuit' ? 0 : 1);
+      } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+    },
+  );
+
+  it('keeps explicit replies and sends only the final returned content automatically', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandResult: () => 'pending',
+      inboundMiddleware: async (input, next) => {
+        await input.$reply('explicit A');
+        await next();
+        await input.$reply('explicit B');
+        return 'final';
+      },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      expect(sent.map((item) => (item as { payload: unknown }).payload)).toEqual(['explicit A', 'explicit B', 'final']);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('retains a child command author through a root middleware continuation', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'command');
+    const sent: unknown[] = [];
+    const owners: PluginId[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      commandOwner: child, commandResult: () => 'child',
+      inboundMiddleware: (_input, next) => next(),
+      outboundMiddleware: async (input, next) => { owners.push(input.requester); await next(); },
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).resolves.toMatchObject({ matched: true, owner: child });
+      expect(owners).toEqual([child]);
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('marks a middleware replacement handled even when the terminal missed', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundMiddleware: async (_input, next) => { await next(); return 'handled by middleware'; },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, 'unmatched'))).resolves.toMatchObject({ matched: true, command: 'middleware' });
+      expect(sent).toEqual([expect.objectContaining({ payload: 'handled by middleware' })]);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('does not fall back to AI when a matched command returns void', async () => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, { commandResult: () => undefined });
+    const route = vi.fn(async () => true);
+    installRoute(fixture, route);
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list open'))).resolves.toMatchObject({ matched: true, command: 'gh issue list' });
+      expect(route).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(0);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it.each(['ai', 'interactive'] as const)('does not repeat an explicit %s reply after middleware unwind', async (kind) => {
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      inboundMiddleware: (_input, next) => next(), outboundMiddleware: (_input, next) => next(),
+    });
+    const handled = async (message: Message) => { await message.$reply('already sent'); return true; };
+    if (kind === 'ai') installRoute(fixture, handled);
+    else fixture.im.registerInteractiveHandler('test:', handled);
+    try {
+      await expect(receive(fixture.im, { ...fixtureInput(fixture, 'test:go'),
+        ...(kind === 'interactive' ? { segments: [{ type: 'action', data: { payload: 'test:go' } }] } : {}),
+      })).resolves.toMatchObject({ matched: true, command: kind });
+      expect(sent).toEqual([expect.objectContaining({ payload: 'already sent' })]);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('drains a forgotten next before closing its reply lease and propagates downstream errors', async () => {
+    let release!: () => void;
+    let started!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => { started = resolve; });
+    const sent: unknown[] = [];
+    let message: Message | undefined;
+    const fixture = await createFixture([], sent, (input) => { message = input; }, gate, started, {
+      commandResult: async (input) => { await input.$reply('child explicit'); throw new Error('child failed'); },
+      inboundMiddleware: (_input, next) => { void next(); return 'must not send'; },
+      outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      const operation = receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      const rejected = expect(operation).rejects.toThrow('child failed');
+      await entered;
+      expect(sent).toHaveLength(0);
+      release();
+      await rejected;
+      expect(sent).toEqual([expect.objectContaining({ payload: 'child explicit' })]);
+      expect(() => message?.$reply('expired')).toThrow('scope has ended');
+    } finally { release(); await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('writes normalized notices once before handler projection', async () => {
     const fixture = await createFixture([], []);
     const notice = {
@@ -666,7 +899,7 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
-  it('uses the matched child Command owner as the automatic reply requester', async () => {
+  it('returns the matched child Command owner without sending before middleware unwind', async () => {
     const root = rootPluginId();
     const child = childPluginId(root, 'child');
     const command = createCapabilitySlot({
@@ -724,7 +957,7 @@ describe('IM Runtime', () => {
       matched: true,
       owner: child,
     });
-    expect(requester).toBe(child);
+    expect(requester).toBeUndefined();
   });
 
   it('resolves prefixes for expanded Slack endpoint identities through the generation AdapterIndex', async () => {
@@ -991,10 +1224,10 @@ describe('IM Runtime', () => {
       'endpoint:open',
       'inbound:enter',
       'command:open',
+      'inbound:exit',
       'outbound:enter',
       'endpoint:send',
       'outbound:exit',
-      'inbound:exit',
     ]);
 
     await fixture.adapters.stop();
@@ -2072,7 +2305,14 @@ async function createFixture(
   commandStarted?: () => void,
   options?: {
     middleware?: boolean;
-    adapterSegments?: { supported?: readonly string[]; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
+    adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
+    commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
+    componentResult?: () => SendContent | Promise<SendContent>;
+    componentOwner?: PluginId;
+    commandOwner?: PluginId;
+    commandShortcut?: boolean;
+    inboundOwner?: PluginId;
+    inboundMiddleware?: (input: Message, next: MiddlewareNext) => unknown;
     adapterCapabilities?: readonly ('inbound' | 'outbound')[];
     adapterOperations?: readonly AdapterOperation[];
     endpointSend?: (request: unknown) => string;
@@ -2108,15 +2348,18 @@ async function createFixture(
     }),
   });
   const command = createCapabilitySlot({
-    owner: root,
+    owner: options?.commandOwner ?? root,
     feature: commandFeatureId,
     localName: 'gh/issue/list',
     source: '/commands/gh/issue/list.ts',
-    definition: defineCommand<{}, SendContent, Message>({
+    definition: defineCommand<{}, SendContent | void, Message>({
+      ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
       async execute({ args, input }) {
+        if (!input) throw new Error('Fixture command requires a Message');
         events.push(`command:${args[0]}`);
         commandStarted?.();
         await commandGate;
+        if (options?.commandResult) return options.commandResult(input);
         return component('result', {
           state: args[0],
           sender: input.sender?.id,
@@ -2126,19 +2369,20 @@ async function createFixture(
     }),
   });
   const resultComponent = createCapabilitySlot({
-    owner: root,
+    owner: options?.componentOwner ?? root,
     feature: componentFeatureId,
     localName: 'result',
     source: '/components/result.ts',
     definition: defineComponent({
       render(props: { state: string; sender?: string; generation?: number }, context) {
+        if (options?.componentResult) return options.componentResult();
         const generation = props.generation ?? context.generation;
         return raw({ text: `${props.state}:${props.sender ?? 'unknown'}:g${generation}` });
       },
     }),
   });
   const inbound = createCapabilitySlot({
-    owner: root,
+    owner: options?.inboundOwner ?? root,
     feature: middlewareFeatureId,
     localName: 'inbound',
     source: '/middlewares/inbound/index.ts',
@@ -2147,6 +2391,7 @@ async function createFixture(
       async handle({ input }, next) {
         capture?.(input);
         events.push('inbound:enter');
+        if (options?.inboundMiddleware) return options.inboundMiddleware(input, next);
         await next();
         events.push('inbound:exit');
       },
@@ -2178,7 +2423,7 @@ async function createFixture(
   const base = baseState(slots);
   const view = createSnapshotView(0, base);
   const adapters = await AdapterIndex.create([adapter], view, new AbortController().signal);
-  const projections = new Map([
+  const projections = new Map<FeatureId, unknown>([
     [adapterFeatureId, adapters],
     [commandFeatureId, new CommandIndex([command], view)],
     [componentFeatureId, new ComponentIndex([resultComponent], view)],
@@ -2198,22 +2443,36 @@ async function createFixture(
   return { im, store, adapters, adapter, conversationEvents };
 }
 
+function fixtureInput(fixture: Awaited<ReturnType<typeof createFixture>>, content: string) {
+  return { conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private' as const, id: 'result-room' }, content, sender: { id: 'alice' } };
+}
+
+function installRoute(fixture: Awaited<ReturnType<typeof createFixture>>, route: (message: Message) => Promise<boolean>) {
+  const current = fixture.store.current;
+  const resources = new Map(current.resources);
+  resources.set(current.root, new Map([...resources.get(current.root)!, [ingressRouteToken.id, { route }]]));
+  fixture.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+}
+
 function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
   const root = rootPluginId();
+  const children = [...new Set(slots.map((slot) => slot.owner))].filter((owner) => owner !== root);
   return {
     root,
-    tree: new Map([[root, {
+    tree: new Map<PluginId, PluginNodeSnapshot>([[root, {
       id: root,
       instanceKey: 'root',
       packageName: '@test/root',
       packageRoot: '/project',
-      children: [],
-    }]]),
-    config: new Map([[root, { commandPrefix: '/' }]]),
+      children,
+    }], ...children.map((id) => [id, {
+      id, parent: root, instanceKey: String(id), packageName: '@test/child', packageRoot: '/project/child', children: [],
+    }] as const)]),
+    config: new Map([[root, { commandPrefix: '/' }], ...children.map((id) => [id, {}] as const)]),
     resources: new Map([[root, new Map([[
       endpointEventGatewayToken.id,
       ignoredEndpointEvents,
-    ]])]]),
+    ]])], ...children.map((id) => [id, new Map()] as const)]),
     capabilities: new Map(slots.map((slot) => [slot.id, slot])),
     projections: new Map(),
   };

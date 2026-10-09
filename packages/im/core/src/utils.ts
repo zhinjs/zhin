@@ -27,7 +27,6 @@ export {
 import {
   MessageElement,
   MessageMiddleware,
-  SendContent,
 } from "./types.js";
 import type { Message } from "./plugin-runtime/im/contracts.js";
 import { formatSegmentPreview } from "./built/segment-contract/preview.js";
@@ -172,12 +171,12 @@ export namespace segment {
     });
   }
 
-  export function from(content: SendContent): SendContent {
-    if (!Array.isArray(content)) content = [content];
+  export function from(content: string | MessageElement | readonly (string | MessageElement)[]): MessageElement[] {
+    const items: readonly (string | MessageElement)[] = Array.isArray(content) ? content : [content as string | MessageElement];
     const toString = (template: string | MessageElement) => {
       if (typeof template !== "string") return [template];
 
-      /** ReDoS 防护：仅约束 segment.from 的字符串模板解析，不是附件大小上限；MessageElement[] 出站应走 renderComponents 快路径避免往返 */
+      /** ReDoS 防护：仅约束 segment.from 的字符串模板解析，不是附件大小上限；结构化段出站直接走统一渲染链路，避免文本往返 */
       const MAX_TEMPLATE_LENGTH = 400000;
       if (template.length > MAX_TEMPLATE_LENGTH) {
         throw new Error(`Template too large: ${template.length} > ${MAX_TEMPLATE_LENGTH}`);
@@ -264,32 +263,28 @@ export namespace segment {
       }
       return result;
     };
-    return content.reduce((result, item) => {
+    return items.reduce((result, item) => {
       result.push(...toString(item));
       return result;
     }, [] as MessageElement[]);
   }
-  export function raw(content: SendContent) {
-    if (!Array.isArray(content)) content = [content];
-    return content
+  export function raw(content: string | MessageElement | readonly (string | MessageElement)[]) {
+    const items: readonly (string | MessageElement)[] = Array.isArray(content) ? content : [content as string | MessageElement];
+    return items
       .map((item) => {
         if (typeof item === "string") return item;
         const { type, data } = item;
-        if (typeof type === "function") {
-          return `{${type.name || "Component"}}`;
-        }
         return formatSegmentPreview({ type, data: data ?? {} });
       })
       .join("");
   }
-  export function toString(content: SendContent) {
-    if (!Array.isArray(content)) content = [content];
-    return content
+  export function toString(content: string | MessageElement | readonly (string | MessageElement)[]) {
+    const items: readonly (string | MessageElement)[] = Array.isArray(content) ? content : [content as string | MessageElement];
+    return items
       .map((item) => {
         if (typeof item === "string") return item;
-        let { type } = item;
-        const { data } = item;
-        if (typeof type === "function") type = type.name;
+        const { type } = item;
+        const data = item.data as Readonly<Record<string, unknown>>;
         if (type === "text") return data.text;
         const keys = Object.keys(data).filter((key) => {
           if (key === "url" && typeof data.url === "string" && data.url.startsWith("data:") && data.base64) {

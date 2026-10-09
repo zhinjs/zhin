@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { sanitizeHtml } from "../src/html-to-svg.ts";
-import { RadarChart } from "../src/html-components.ts";
 
 describe("sanitizeHtml", () => {
   it("script 连同内容删除", () => {
@@ -17,19 +16,5 @@ describe("sanitizeHtml", () => {
 
   it("事件处理属性被移除", () => {
     expect(sanitizeHtml('<div onclick="alert(1)">x</div>')).toBe("<div>x</div>");
-  });
-});
-
-describe("RadarChart", () => {
-  it("max 显式传 0 时回退自动峰值，不产生 Infinity 坐标", () => {
-    const html = RadarChart({ labels: ["a", "b", "c"], values: [1, 2, 3], max: 0 });
-    expect(html).not.toContain("Infinity");
-    expect(html).not.toContain("NaN");
-    expect(html).toContain("polygon");
-  });
-
-  it("max 正常传入时按 max 缩放", () => {
-    const html = RadarChart({ labels: ["a", "b", "c"], values: [1, 2, 3], max: 10 });
-    expect(html).not.toContain("Infinity");
   });
 });

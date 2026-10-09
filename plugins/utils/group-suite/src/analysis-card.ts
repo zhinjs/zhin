@@ -1,14 +1,14 @@
+import { jsx, renderToHtml } from "@zhin.js/jsx";
 import {
   BarChart,
   CardHeader,
-  h,
   ProfileRow,
   QuoteCard,
   Row,
   Section,
   StatChip,
   TopicItem,
-} from "@zhin.js/satori";
+} from "@zhin.js/components";
 import type { AnalysisReportData } from "./analysis.js";
 import {
   CARD_THEME,
@@ -27,65 +27,92 @@ const T = {
   accentHour: CARD_THEME.barWarn,
 } as const;
 
-export function buildAnalysisReportHtml(data: AnalysisReportData): string {
+export async function buildAnalysisReportHtml(
+  data: AnalysisReportData
+): Promise<string> {
   const { stats, channelName, days, startDate, endDate, llm } = data;
   const title = channelName ? `${channelName} · 群日常分析` : "群日常分析";
   const peakLabel = `${String(stats.mostActiveHour).padStart(2, "0")}:00`;
-  const hourlyValues = Array.from({ length: 24 }, (_, hour) => stats.hourlyDistribution[hour] || 0);
+  const hourlyValues = Array.from(
+    { length: 24 },
+    (_, hour) => stats.hourlyDistribution[hour] || 0
+  );
 
   const llmBlocks = [
     llm?.topics?.length
-      ? h(Section, {
+      ? jsx(Section, {
           title: "热门话题",
-          children: llm.topics.map((topic, i) => h(TopicItem, {
-            index: i + 1,
-            title: topic.topic,
-            summary: topic.summary,
-          })),
+          children: llm.topics.map((topic, i) =>
+            jsx(TopicItem, {
+              index: i + 1,
+              title: topic.topic,
+              summary: topic.summary,
+            })
+          ),
         })
       : "",
     llm?.quotes?.length
-      ? h(Section, {
+      ? jsx(Section, {
           title: "金句精选",
-          children: llm.quotes.map((quote, i) => h(QuoteCard, {
-            index: i + 1,
-            content: quote.content,
-            author: quote.sender,
-            reason: quote.reason,
-          })),
+          children: llm.quotes.map((quote, i) =>
+            jsx(QuoteCard, {
+              index: i + 1,
+              content: quote.content,
+              author: quote.sender,
+              reason: quote.reason,
+            })
+          ),
         })
       : "",
     llm?.userTitles?.length
-      ? h(Section, {
+      ? jsx(Section, {
           title: "用户画像",
-          children: llm.userTitles.map((user, i) => h(ProfileRow, {
-            index: i + 1,
-            name: user.name,
-            badge: user.title,
-            reason: user.reason,
-          })),
+          children: llm.userTitles.map((user, i) =>
+            jsx(ProfileRow, {
+              index: i + 1,
+              name: user.name,
+              badge: user.title,
+              reason: user.reason,
+            })
+          ),
         })
       : "",
-  ].join("");
+  ];
 
   const body = elevatedCard([
-    h(CardHeader, {
+    jsx(CardHeader, {
       title,
-      meta: `${startDate} 至 ${endDate} · 最近 ${days} 天`,
+      subtitle: `${startDate} 至 ${endDate} · 最近 ${days} 天`,
     }),
-    h(Row, {
+    jsx(Row, {
       children: [
-        h(StatChip, { label: "消息", value: formatCount(stats.messageCount), accent: T.accentMsg }),
-        h(StatChip, { label: "参与", value: formatCount(stats.participantCount), accent: T.accentPeople }),
-        h(StatChip, { label: "字数", value: formatCount(stats.totalChars), accent: T.accentChars }),
-        h(StatChip, { label: "活跃", value: peakLabel, accent: T.accentHour }),
+        jsx(StatChip, {
+          label: "消息",
+          value: formatCount(stats.messageCount),
+          accent: T.accentMsg,
+        }),
+        jsx(StatChip, {
+          label: "参与",
+          value: formatCount(stats.participantCount),
+          accent: T.accentPeople,
+        }),
+        jsx(StatChip, {
+          label: "字数",
+          value: formatCount(stats.totalChars),
+          accent: T.accentChars,
+        }),
+        jsx(StatChip, {
+          label: "活跃",
+          value: peakLabel,
+          accent: T.accentHour,
+        }),
       ],
       gap: 10,
       style: "margin-bottom:4px",
     }),
-    h(Section, {
+    jsx(Section, {
       title: "每小时消息分布",
-      children: h(BarChart, {
+      children: jsx(BarChart, {
         values: hourlyValues,
         peakIndex: stats.mostActiveHour,
         accent: T.accentMsg,
@@ -93,7 +120,7 @@ export function buildAnalysisReportHtml(data: AnalysisReportData): string {
       }),
     }),
     llmBlocks,
-  ].join(""));
+  ]);
 
-  return cardShell(body);
+  return renderToHtml(cardShell(body));
 }

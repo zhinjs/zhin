@@ -2,12 +2,13 @@
  * Convert unresolved `html` segments to portable text content.
  * Canonical outbound rendering owns when this fallback is applied.
  */
-import type { MessageElement, SendContent } from '../types.js';
+import type { MessageElement } from '../types.js';
+type SegmentContent = string | MessageElement | readonly SegmentContent[];
 import { segment } from '../utils.js';
 import { htmlToFallbackText } from './html-to-text.js';
 
-function asArray(content: SendContent): (string | MessageElement)[] {
-  return Array.isArray(content) ? content : [content];
+function asArray(content: SegmentContent): (string | MessageElement)[] {
+  return Array.isArray(content) ? content.flatMap(item => asArray(item)) : [content as string | MessageElement];
 }
 
 function resolveHtmlSegmentText(data: Record<string, unknown>): string {
@@ -16,7 +17,7 @@ function resolveHtmlSegmentText(data: Record<string, unknown>): string {
   return '';
 }
 
-export function coerceHtmlSegmentsToText(content: SendContent): SendContent {
+export function coerceHtmlSegmentsToText(content: SegmentContent): SegmentContent {
   const items = asArray(content);
   const out: (string | MessageElement)[] = [];
   for (const item of items) {

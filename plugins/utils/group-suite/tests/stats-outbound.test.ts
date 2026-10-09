@@ -4,9 +4,9 @@ import { coerceHtmlSegmentsToText } from "../../../../packages/im/core/src/built
 import { buildStatsRankReportData } from "../src/stats-data.js";
 import { buildStatsRankHtml, STATS_REPORT_CANVAS } from "../src/stats-card.js";
 
-function statsRankReply(data: ReturnType<typeof buildStatsRankReportData>) {
+async function statsRankReply(data: ReturnType<typeof buildStatsRankReportData>) {
   return segment.html({
-    html: buildStatsRankHtml(data),
+    html: await buildStatsRankHtml(data),
     width: 540,
     backgroundColor: STATS_REPORT_CANVAS,
     fileName: "message-stats-rank.png",
@@ -14,25 +14,25 @@ function statsRankReply(data: ReturnType<typeof buildStatsRankReportData>) {
 }
 
 describe("stats outbound", () => {
-  it("命令层返回 html 段", () => {
+  it("命令层返回 html 段", async () => {
     const stats = new Map([
       ["u1", { name: "Alice", count: 120 }],
       ["u2", { name: "Bob", count: 80 }],
     ]);
     const data = buildStatsRankReportData(stats, "今日本群消息统计", 10, "u2");
-    const reply = statsRankReply(data);
+    const reply = await statsRankReply(data);
     expect(reply).toMatchObject({ type: "html" });
     expect(reply.data.html).toContain("今日本群消息统计");
     expect(reply.data.html).toContain("Alice");
   });
 
-  it("无 renderer 时自动剥离文本含标题与数字", () => {
+  it("无 renderer 时自动剥离文本含标题与数字", async () => {
     const stats = new Map([
       ["u1", { name: "Alice", count: 120 }],
       ["u2", { name: "Bob", count: 80 }],
     ]);
     const data = buildStatsRankReportData(stats, "今日本群消息统计", 10);
-    const reply = statsRankReply(data);
+    const reply = await statsRankReply(data);
     const result = coerceHtmlSegmentsToText(reply);
     const item = Array.isArray(result) ? result[0] : result;
     const text = (item as { data: { text: string } }).data.text;

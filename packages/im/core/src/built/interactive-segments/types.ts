@@ -47,14 +47,14 @@ export type InteractivePolicy = 'native' | 'text';
 
 export const DEFAULT_INTERACTIVE_POLICY: InteractivePolicy = 'text';
 
-export function isKeyboardSegment(item: MessageElement): item is MessageElement & {
+export function isKeyboardSegment(item: unknown): item is MessageElement & {
   type: typeof KEYBOARD_SEGMENT_TYPE;
   data: KeyboardSegmentData;
 } {
   return item != null && typeof item === 'object' && 'type' in item && item.type === KEYBOARD_SEGMENT_TYPE;
 }
 
-export function isActionSegment(item: MessageElement): item is MessageElement & {
+export function isActionSegment(item: unknown): item is MessageElement & {
   type: typeof ACTION_SEGMENT_TYPE;
   data: ActionSegmentData;
 } {

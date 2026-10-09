@@ -10,7 +10,7 @@ HTML → 图片，供 Zhin.js 出站富媒体段（`segment.html` / `segment.mar
 pnpm add @zhin.js/html-renderer
 ```
 
-未安装时，Adapter policy 为 `html:'image'` / `markdown:'image'` 的出站会自动 **降级为 text** 并打一次 warning。
+未安装时，`html: 'image'` 的 HTML 出站段降级为文本；原生 HTML 与纯文本平台按 Adapter 的声明处理。
 
 ## 配置（zhin.config.yml）
 
@@ -38,6 +38,6 @@ const stillPng = await renderer.render('<div>Hello</div>', { format: 'svg' });
 
 - `format: 'png'`：优先走 Shotium。
 - `format: 'svg'`：为兼容旧调用方，仍可传入，但会返回 `png` 并警告一次。
-- `renderJsx()` / `renderComponent()`：继续保留，可直接把 JSX/函数组件转成图片。
+- JSX 统一使用 `zhin.js/jsx` 的 `renderToHtml()` 生成 HTML，然后交给 `render()`；本包不提供 JSX runtime 或组件入口。
 
-Core 出站链通过动态 import 自动调用，业务代码通常只需 `segment.html({ html: '...' })`。
+CLI 将可选 renderer 装配为 generation Resource，Core 的统一出站链调用，业务代码通常只需 `segment.html({ html: '...' })`。

@@ -12,6 +12,7 @@ const middlewareFeature = defineFeatureProvider({
     setupMethod: 'addMiddleware',
     conventions: [directoryModules({
       id: 'middlewares-index',
+      extensions: ['ts', 'tsx', 'js', 'mjs', 'cjs'],
       layouts: [{ segments: ['middlewares', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
     validate: parseMiddlewareDefinition,

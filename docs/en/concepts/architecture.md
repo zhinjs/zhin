@@ -117,3 +117,7 @@ The project itself is a plugin (Root Plugin), and the CLI is responsible for dis
 ## Corollaries of the layering rules
 
 When writing a Feature (a new capability type), depend only on `feature-kit` / `plugin-runtime` -- do not import `core`. `kernel` and `ai` know nothing about IM concepts like "group" or "direct message"; IM concepts only appear in `core` and above. Host packages (`packages/host/http`, `mcp`, `a2a`) sit above `core` and are assembled by the CLI; plugins do not depend on Host processes directly.
+
+## JSX and visual components
+
+`@zhin.js/jsx` owns transport-neutral JSX trees and the sole HTML serializer, with no runtime dependencies. Core converts JSX to `segment.html`; `zhin.js/jsx` is the authoring facade. Optional `@zhin.js/components` depends only on this base, accepts `JSXNode` display props and does not depend on Core, React or image engines. Render tools consume HTML; adapters declare platform policies.

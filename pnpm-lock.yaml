@@ -386,9 +386,15 @@ importers:
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/console/client
+      '@zhin.js/components':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/components
       '@zhin.js/console-contract':
         specifier: workspace:*
         version: link:../../packages/console/plugin-contract
+      '@zhin.js/jsx':
+        specifier: workspace:*
+        version: link:../../packages/im/jsx
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
@@ -398,9 +404,6 @@ importers:
       '@zhin.js/prompt-section':
         specifier: workspace:*
         version: link:../../packages/im/prompt-section
-      '@zhin.js/satori':
-        specifier: workspace:*
-        version: link:../../packages/toolkit/satori
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../packages/im/skill
@@ -475,9 +478,12 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../../packages/im/component
-      '@zhin.js/satori':
+      '@zhin.js/components':
         specifier: workspace:*
-        version: link:../../packages/toolkit/satori
+        version: link:../../packages/toolkit/components
+      '@zhin.js/middleware':
+        specifier: workspace:*
+        version: link:../../packages/im/middleware
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../packages/im/tool
@@ -782,12 +788,18 @@ importers:
       '@zhin.js/client':
         specifier: workspace:*
         version: link:../../packages/console/client
+      '@zhin.js/components':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/components
       '@zhin.js/contract':
         specifier: workspace:*
         version: link:../../packages/console/contract
       '@zhin.js/html-renderer':
         specifier: workspace:*
         version: link:../../packages/toolkit/html-renderer
+      '@zhin.js/jsx':
+        specifier: workspace:*
+        version: link:../../packages/im/jsx
       '@zhin.js/mcp':
         specifier: workspace:*
         version: link:../../packages/host/mcp
@@ -863,9 +875,6 @@ importers:
       '@zhin.js/process-monitor':
         specifier: workspace:*
         version: link:../../plugins/features/process-monitor
-      '@zhin.js/satori':
-        specifier: workspace:*
-        version: link:../../packages/toolkit/satori
       '@zhin.js/service-activity-feedback':
         specifier: workspace:*
         version: link:../../plugins/services/activity-feedback
@@ -915,6 +924,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.4
         version: 19.2.4(@types/react@19.2.18)
+      '@zhin.js/satori':
+        specifier: workspace:*
+        version: link:../../packages/toolkit/satori
       radix-ui:
         specifier: ^1.6.7
         version: 1.6.7(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -1103,9 +1115,6 @@ importers:
       '@zhin.js/plugin-runtime':
         specifier: workspace:*
         version: link:../im/plugin-runtime
-      '@zhin.js/satori':
-        specifier: workspace:*
-        version: link:../toolkit/satori
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -1444,6 +1453,9 @@ importers:
       '@zhin.js/database':
         specifier: workspace:*
         version: link:../../../basic/database
+      '@zhin.js/feature-kit':
+        specifier: workspace:*
+        version: link:../feature-kit
       '@zhin.js/handler':
         specifier: workspace:*
         version: link:../handler
@@ -1453,6 +1465,9 @@ importers:
       '@zhin.js/interaction':
         specifier: workspace:*
         version: link:../interaction
+      '@zhin.js/jsx':
+        specifier: workspace:*
+        version: link:../jsx
       '@zhin.js/kernel':
         specifier: workspace:*
         version: link:../kernel
@@ -1555,6 +1570,15 @@ importers:
       '@zhin.js/runtime':
         specifier: workspace:*
         version: link:../runtime
+    devDependencies:
+      '@types/node':
+        specifier: ^26.1.2
+        version: 26.1.2
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
+
+  packages/im/jsx:
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1809,6 +1833,16 @@ importers:
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
+
+  packages/toolkit/components:
+    dependencies:
+      '@zhin.js/jsx':
+        specifier: workspace:*
+        version: link:../../im/jsx
+    devDependencies:
+      typescript:
+        specifier: ^6.0.3
+        version: 6.0.3
 
   packages/toolkit/create-zhin:
     dependencies:
@@ -3393,15 +3427,18 @@ importers:
       '@zhin.js/command':
         specifier: workspace:^
         version: link:../../../packages/im/command
+      '@zhin.js/components':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/components
       '@zhin.js/core':
         specifier: workspace:*
         version: link:../../../packages/im/core
+      '@zhin.js/jsx':
+        specifier: workspace:*
+        version: link:../../../packages/im/jsx
       '@zhin.js/middleware':
         specifier: workspace:^
         version: link:../../../packages/im/middleware
-      '@zhin.js/satori':
-        specifier: workspace:*
-        version: link:../../../packages/toolkit/satori
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
@@ -3409,6 +3446,9 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/tool
     devDependencies:
+      '@zhin.js/satori':
+        specifier: workspace:*
+        version: link:../../../packages/toolkit/satori
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

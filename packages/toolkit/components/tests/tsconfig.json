@@ -1,0 +1,9 @@
+{
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "@zhin.js/jsx",
+    "noEmit": true
+  },
+  "include": ["display-props.tsx"]
+}

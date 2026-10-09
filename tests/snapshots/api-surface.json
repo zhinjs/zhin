@@ -222,7 +222,6 @@
     "export * from './built/segment-contract/index.js'",
     "export * from './built/tool-access.js'",
     "export * from './built/user-interaction.js'",
-    "export * from './component.js'",
     "export * from './errors.js'",
     "export * from './im-scene.js'",
     "export * from './im-session-id.js'",
@@ -238,12 +237,36 @@
     "export * from '@zhin.js/logger'",
     "export type * from '@zhin.js/interaction'",
     "export type{AgentTurnMessage,SyntheticMessageInput}from './built/message-enrich.js'",
-    "export type{MessageChannel,MessageComponent,MessageType}from './message.js'",
+    "export type{MessageChannel,MessageType}from './message.js'",
     "export type{Schedule,JobPayload,JobState,ScheduledJob,JobStore,JobCallback,AddJobOptions,IScheduler,SchedulerOptions,ScheduleFireCallback,MemoryScheduleRegistration,ScheduleEngineOptions,JobContext,ResolvedJob,ScheduleKind,}from '@zhin.js/kernel'",
     "export type{SegmentMediaRef}from './built/segment-contract/media.js'",
     "export{Message,type MessageBase}from './plugin-runtime/im/contracts.js'",
     "export{ScheduleEngine,Scheduler,}from '@zhin.js/kernel'",
     "export{Schema}from '@zhin.js/schema'",
+    "export{component,type ComponentCall,raw,type RawContent}from './plugin-runtime/im/contracts.js'",
+    "export{defineComponent,type ComponentDefinition,type ComponentContext}from '@zhin.js/component'",
     "export{markdownToPlainText}from './built/rich-segments/markdown-to-text.js'"
+  ],
+  "zhin.js/jsx": [
+    "export * from '@zhin.js/core/jsx';"
+  ],
+  "zhin.js/component": [
+    "export * from '@zhin.js/core/feature/component';"
+  ],
+  "@zhin.js/jsx": [
+    "export type{HtmlRenderOptions}from './render.js';",
+    "export type{JSX,JSXAttributes,JSXComponent,JSXElement,JSXElementType,JSXNode,JSXRenderable,JSXProps,JSXStyle}from './element.js';",
+    "export{Fragment,Raw,createElement,isJsxElement,jsx,jsxs,jsxDEV,rawHtml}from './element.js';",
+    "export{escapeHtml,renderToHtml}from './render.js';"
+  ],
+  "@zhin.js/components": [
+    "export * from \"./charts.js\";",
+    "export * from \"./display.js\";",
+    "export * from \"./layout.js\";",
+    "export function composeCard( children: JSXRenderable,canvas?: Omit<Partial<CardCanvasProps>,\"children\"> ): JSXElement{return jsx(CardCanvas,{...canvas,children: jsx(Card,{children})});}",
+    "export type * from \"./props.js\";",
+    "export type{ComponentName,ComponentTheme,ThemeOverrides,ComponentProps,ComponentCustomization,DisplayOverrides,ThemeProviderProps,}from \"./theme.js\";",
+    "export{DEFAULT_CARD_THEME,DEFAULT_THEME,ThemeProvider}from \"./theme.js\";",
+    "export{LABEL_W,LABEL_W_HALF,formatCount,barTone,tint,}from \"./utilities.js\";"
   ]
 }

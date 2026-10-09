@@ -5,6 +5,8 @@ import {
   createCapabilitySlot,
   rootPluginId,
   type RuntimeSnapshot,
+  type PluginId,
+  type PluginNodeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureDiscovery,
@@ -17,6 +19,8 @@ import middlewareFeature, {
   isMiddlewareIndex,
   middlewareFeatureId,
   parseMiddlewareDefinition,
+  type MiddlewareContinuation,
+  type MiddlewareNext,
 } from '../src/index.js';
 
 interface MiddlewareTestClient {
@@ -33,6 +37,63 @@ declare module '@zhin.js/feature-kit' {
 }
 
 describe('Middleware Feature', () => {
+  it('preserves a descendant author through three continuation frames', async () => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'child');
+    const slots = [
+      middlewareSlot(root, 'outer', 0, async (_context, next) => next()),
+      middlewareSlot(root, 'middle', 1, async (_context, next) => { await next(); }),
+      middlewareSlot(child, 'leaf', 2, () => 'same content'),
+    ];
+    const index = new MiddlewareIndex(slots, snapshot(root, child, slots));
+    await expect(index.run({})).resolves.toEqual({ owner: child, value: 'same content' });
+  });
+
+  it.each(['other-frame', 'other-operation'] as const)('rejects a continuation from %s', async (source) => {
+    const root = rootPluginId();
+    let saved: MiddlewareContinuation | undefined;
+    let reuse = false;
+    const slots = [
+      middlewareSlot(root, 'outer', 0, async (_context, next) => {
+        await next();
+        if (source === 'other-frame' || reuse) return saved;
+      }),
+      middlewareSlot(root, 'inner', 1, async (_context, next) => {
+        const result = await next();
+        if (!reuse) saved = result;
+        return result;
+      }),
+    ];
+    const index = new MiddlewareIndex(slots, snapshot(root, undefined, slots));
+    if (source === 'other-operation') { await index.run({}); reuse = true; }
+    await expect(index.run({})).rejects.toThrow('another frame or operation');
+  });
+
+  it('expires a saved next even when the input short-circuited', async () => {
+    const root = rootPluginId();
+    let saved!: MiddlewareNext;
+    const slots = [middlewareSlot(root, 'stop', 0, (_context, next) => { saved = next; return 'done'; })];
+    const index = new MiddlewareIndex(slots, snapshot(root, undefined, slots));
+    await index.run({});
+    expect(() => saved()).toThrow('scope has ended');
+  });
+
+  it('propagates a child failure even when its parent catches next and returns replacement content', async () => {
+    const root = rootPluginId();
+    const slots = [middlewareSlot(root, 'catch', 0, async (_context, next) => {
+      try { await next(); } catch { return 'must not hide failure'; }
+    })];
+    const index = new MiddlewareIndex(slots, snapshot(root, undefined, slots));
+    await expect(index.run({}, async () => { throw new Error('failed child'); })).rejects.toThrow('failed child');
+  });
+
+  it('returns inbound content from the general runner rather than dropping it', async () => {
+    const root = rootPluginId();
+    const slots = [middlewareSlot(root, 'reply', 0, () => ({ meaningful: 'result' }))];
+    const index = new MiddlewareIndex(slots, snapshot(root, undefined, slots));
+    await expect(index.run({})).resolves.toEqual({ owner: root, value: { meaningful: 'result' } });
+  });
+
   it('binds a reused projection to each operation snapshot while an old chain drains', async () => {
     const root = rootPluginId();
     const probe = featureId('test.operation-projection');
@@ -89,6 +150,23 @@ describe('Middleware Feature', () => {
     }]);
 
     expect(slots.map((slot) => slot.localName)).toEqual(['auth']);
+  });
+
+  it.each([
+    { packageRoot: '/project', files: ['index.tsx', 'helper.tsx'], expected: 'index.tsx' },
+    { packageRoot: '/project', files: ['index.tsx', 'index.js', 'helper.tsx'], expected: 'index.tsx' },
+    { packageRoot: '/node_modules/@test/plugin', files: ['index.tsx', 'index.js', 'helper.tsx'], expected: 'index.js' },
+  ])('discovers a TSX middleware and selects $expected in $packageRoot', async ({ packageRoot, files, expected }) => {
+    const definition = defineMiddleware({ handle: () => 'card result' });
+    const directory = `${packageRoot}/middlewares/card`;
+    const source = `${directory}/${expected}`;
+    const host = new MemoryDiscoveryHost({
+      [`${packageRoot}/middlewares`]: [{ name: 'card', kind: 'directory' }, { name: 'ignored.tsx', kind: 'file' }],
+      [directory]: files.map((name) => ({ name, kind: 'file' })),
+    }, new Map([[source, { default: definition }]]));
+    const slots = await new FeatureDiscovery(host).discover(middlewareFeature, [{ owner: rootPluginId(), packageRoot }]);
+    expect(slots.map((slot) => ({ name: slot.localName, source: slot.source }))).toEqual([{ name: 'card', source }]);
+    expect(slots[0]?.definition).toBe(definition);
   });
 
   it('composes deterministic phase/order/topology execution and unwinds after next', async () => {
@@ -215,12 +293,21 @@ describe('Middleware Feature', () => {
   });
 });
 
+function middlewareSlot(
+  owner: ReturnType<typeof rootPluginId>, name: string, order: number,
+  handle: (context: unknown, next: MiddlewareNext) => unknown,
+) {
+  return createCapabilitySlot({ owner, feature: middlewareFeatureId, localName: name,
+    source: `/middlewares/${name}/index.ts`, definition: defineMiddleware({ order, handle }),
+  });
+}
+
 function snapshot(
   root: ReturnType<typeof rootPluginId>,
   child: ReturnType<typeof childPluginId> | undefined,
   slots: readonly ReturnType<typeof createCapabilitySlot>[],
 ): RuntimeSnapshot {
-  const tree = new Map([[root, {
+  const tree = new Map<PluginId, PluginNodeSnapshot>([[root, {
     id: root,
     instanceKey: 'root',
     packageName: '@test/root',
