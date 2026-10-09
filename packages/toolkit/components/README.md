@@ -6,7 +6,7 @@
 pnpm add @zhin.js/components
 ```
 
-在 Zhin 项目中配置 `jsx: "react-jsx"`、`jsxImportSource: "zhin.js"`，即可在命令、中间件或注册组件中直接返回 JSX。独立使用时把 `jsxImportSource` 设为 `@zhin.js/jsx`，通过它的 `renderToHtml` 输出 HTML。
+在 Zhin 项目中配置 `jsx: "react-jsx"`、`jsxImportSource: "zhin.js"`，即可在命令、中间件或注册组件中直接返回 JSX。独立使用时安装 `@zhin.js/jsx` 和 `@zhin.js/components`，把 `jsxImportSource` 设为 `@zhin.js/jsx`，通过它的 `renderToHtml` 输出 HTML。
 
 ```tsx
 import {

@@ -82,6 +82,8 @@ import { component } from 'zhin.js/component';
 return component('status-card', { title: 'my-bot', rows: [{ label: 'RSS', value: '42MB' }] });
 ```
 
+Provide `previewProps` for public Console example data. Console previews use the same JSX/HTML renderer, preserve the request's generation and cancellation signal, and return displayable HTML message segments.
+
 Names resolve from the requesting plugin toward its ancestors, allowing local overrides. Render context contains the operation's config, use, owner, generation and requester. Async execution keeps its original snapshot across hot reload. Registered components may return other component calls, up to depth 32.
 
 ## Platform HTML policy

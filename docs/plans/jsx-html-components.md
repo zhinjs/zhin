@@ -4,7 +4,7 @@ sidebar: false
 
 # JSX、组件与 HTML 出站重整计划
 
-状态：契约已确认，进入分步实施。2026-10-09 基于 `codex/stability-console-acceptance` / `b8c0f46c7` 的审计；实现分支 `feat/jsx-html-components`。三个 Agent 分别审计公共契约、返回值链路和平台策略；中间件语义、样式包名和旧入口直接移除均已由用户确认。
+状态：P0–P5 已实现并完成本地验收，等待 PR / CI。2026-10-09 基于 `codex/stability-console-acceptance` / `b8c0f46c7` 的审计；实现分支 `feat/jsx-html-components` 已更新到最新 main。三个 Agent 分别审计公共契约、返回值链路和平台策略；中间件语义、样式包名和旧入口直接移除均已由用户确认。
 
 ## 目标与已确认行为
 
@@ -167,3 +167,12 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 直接删除旧 MessageComponent JSX、旧函数式 defineComponent/模板组件 helper、Satori JSX/string 样式组件导入、html-renderer 独立 JSX serializer。清理所有仓库消费者、测试与导出，不保留双 runtime 或迁移入口。
 
 用户已确认包名及旧入口直接移除。实施按 P1–P5 推进，测试与实际完成情况在 PR 中记录；不自动合并或发布。
+
+## 本地验收记录（2026-10-09）
+
+- 全量 Vitest：`pnpm exec vitest run --maxWorkers=2`，1003 个文件、7586 项测试通过，12 项保持跳过。默认并发下原有页面构建 100ms 性能断言会受本机负载影响；降低 worker 数后保留原阈值通过。临时 Git fixture 清理使用有限重试处理瞬时 ENOTEMPTY。
+- 完整 harness 的其他 56 项检查通过，包括类型、lint、架构、依赖、公开导出、API 文档、发布计划、Stable、L4-CI、IM 安装体积。最终单测按上面的独立全量复验记录，不将初次 `check:all` 的单测失败记成通过。
+- `pnpm check:created-project`：候选 tarball → 空项目安装 → 真实 CLI / Sandbox → Console HTTP JSX 预览 → JSX `/card` → `.tsx` 组件 HMR → 指令 HMR → production 重启，全部通过。
+- 两个新包 tarball 的独立 NodeNext TSX 消费验证通过：无 React / IM Runtime，异步展示插槽、共享主题、局部样式与 Divider 对称外距可用。厨房水槽 `test-bot` 类型检查通过。
+- 浏览器检查默认、深色、局部覆盖主题；实际测量 block 的 16/24px 相邻纵向外距为 24px，Flex 为 40px。SVG 回归验证对称间距及主题缩放仅执行一次。
+- 新包 `@zhin.js/jsx`、`@zhin.js/components` 尚未在 npm 注册；首次发布须遵循[维护者发布流程](../contributing/development.md)，后续再交给自动发布。真实 IM 平台图片发送不在上述本地证据范围内。
