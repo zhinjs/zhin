@@ -1,0 +1,432 @@
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_079f1dc5e6308d::t_b1ceb4602d3a2b 238-240
+  s_079f1dc5e6308d::t_6f5337d3291862 9,67-71,182,192,203,226-237,241-246
+  s_079f1dc5e6308d::t_54f82e517fd64b 168-170
+plugins/utils/group-suite/tests/analysis-card.test.ts
+  s_079f1dc5e6308d::t_c715aefd4b9413 11,26,34,51
+packages/im/zhin/src/jsx-dev-runtime.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+examples/minimal-bot/components/status-card/index.tsx
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 2-7
+  s_079f1dc5e6308d::t_bf2648205ba2f4 11-17
+  s_079f1dc5e6308d::t_cf4bf159e740b1 18-22
+packages/toolkit/components/src/index.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 27,29-31
+  s_079f1dc5e6308d::t_216fb6ee07488d 1-21,24-25
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 23,28
+  s_079f1dc5e6308d::t_0ff5254c7f8243 22
+  s_079f1dc5e6308d::t_46ce1a60e82322 26,32
+docs/en/contributing/repo-structure.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 17
+plugins/adapters/sandbox/adapters/sandbox/index.ts
+  s_079f1dc5e6308d::t_c1c0b54eaff812 20
+packages/im/jsx/tests/types.fixture.tsx
+  s_079f1dc5e6308d::t_3f5f899cc8b616 2,15-20,22
+  s_079f1dc5e6308d::t_83609c47fbb98a 1,3-4,7-12,23-31
+  s_079f1dc5e6308d::t_871f4635c42c70 5-6,13-14,21
+packages/toolkit/components/tests/display-props.tsx
+  s_079f1dc5e6308d::t_43b2ff1acf4f9b 14-19,26
+  s_079f1dc5e6308d::t_216fb6ee07488d 10-12,27-37
+  s_079f1dc5e6308d::t_3f5f899cc8b616 22-25
+  s_079f1dc5e6308d::t_e9d96f6648da07 7-9
+  s_079f1dc5e6308d::t_0168c2a5a06074 13
+  s_079f1dc5e6308d::t_df0ac30bac043e 20-21
+  s_079f1dc5e6308d::t_301668f1bf1322 38-40
+  s_079f1dc5e6308d::t_f1fd198a41e00d 1-6,41-60
+packages/im/zhin/src/jsx.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+tsconfig.typecheck.json
+  s_079f1dc5e6308d::t_c3d89d4bec3e3e 303-304
+  s_079f1dc5e6308d::t_9e14a076300729 253-261,300-301
+  s_079f1dc5e6308d::t_dc7adf3f07c924 285
+  s_079f1dc5e6308d::t_5a992ddbd4d866 302
+  s_079f1dc5e6308d::t_a1848a2e58049c 264-266
+packages/im/core/src/index.ts
+  s_079f1dc5e6308d::t_9e14a076300729 5-7
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_079f1dc5e6308d::t_ff04492fd024af 60,66-77,234,240,258,261-262,271,276-278,302,304,306-307
+docs/contributing/repo-structure.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 17
+packages/im/middleware/src/provider.ts
+  s_079f1dc5e6308d::t_248343caa0e6d4 15
+examples/minimal-bot/README.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 44,76-77
+docs/concepts/message-flow.md
+  s_079f1dc5e6308d::t_d0b7d8793fe39e 69,82
+packages/im/feature-kit/src/operation-input.ts
+  s_079f1dc5e6308d::t_9b01785cddb44d 1-15
+docs/en/concepts/architecture.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 120-123
+scripts/check-architecture-layers.mjs
+  s_079f1dc5e6308d::t_9e14a076300729 43-44,68,83-84
+  s_079f1dc5e6308d::t_79160c689e1e5f 65
+packages/im/core/src/types.ts
+  s_079f1dc5e6308d::t_9e14a076300729 1,21-22,30-31
+packages/im/jsx/package.json
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1-2,4-26
+  s_079f1dc5e6308d::t_158e685a97f932 3
+packages/toolkit/components/tests/spacing.test.ts
+  s_079f1dc5e6308d::t_3487eb26b04c18 1-93,95-98,101-105,108-111,113-124,126-127,129-138,140,143-145
+  s_079f1dc5e6308d::t_0e76744205c578 94,99-100,106-107,112,125,128,139,141-142
+packages/toolkit/satori/CONTRIBUTING.md
+  s_079f1dc5e6308d::t_c715aefd4b9413 9-10
+packages/im/jsx/src/element.ts
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1,5-7,10-15,17,27-36,38-82,84-91,93-104
+  s_079f1dc5e6308d::t_113bb3366c4549 8-9,18-19,23
+  s_079f1dc5e6308d::t_29ba896cdea47b 2,16,20-22,24,26,37,83
+  s_079f1dc5e6308d::t_ce85ff53371902 3-4,25
+  s_079f1dc5e6308d::t_fd578089caac6a 92
+packages/toolkit/html-renderer/README.md
+  s_079f1dc5e6308d::t_c715aefd4b9413 13,41,43
+packages/im/jsx/src/index.ts
+  s_079f1dc5e6308d::t_29ba896cdea47b 2
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1,3-4
+packages/im/core/src/jsx-dev-runtime.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+plugins/utils/group-suite/src/stats-card.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 1-9,22-24,27-29,31-74,76,79-81,83,85,87,89-98,103,105-114,118,120
+docs/en/cli/runtime.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 9
+packages/toolkit/components/src/charts.ts
+  s_079f1dc5e6308d::t_3487eb26b04c18 227
+  s_079f1dc5e6308d::t_0ff5254c7f8243 11-12,28-35,37-45,49-53,77-79,94-110,113-134,138-141,170-172,185-186,193-204,233
+  s_079f1dc5e6308d::t_216fb6ee07488d 2-10,13-23,25,27,46-48,54,73-76,80-89,91,93,135-137,142-169,173-180,182,184,187-192,205-226,228-232
+  s_079f1dc5e6308d::t_17918098613bf0 55-63,65-72
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 1,24,26,90,92,111-112,181,183
+  s_079f1dc5e6308d::t_7a2bb9c109d8bd 36,64
+packages/toolkit/components/tsconfig.json
+  s_079f1dc5e6308d::t_46ce1a60e82322 1-17
+AGENTS.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 35,110
+plugins/adapters/icqq/src/icqq-inbound.ts
+  s_079f1dc5e6308d::t_ebb5d2f507dc8c 784-785
+plugins/utils/group-suite/tests/stats-card.test.ts
+  s_079f1dc5e6308d::t_c715aefd4b9413 7,12,19,31,35
+tests/snapshots/plugin-runtime-api.json
+  s_079f1dc5e6308d::t_2f25a7cf0db1c8 196
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_d411b18b532e64 189
+  s_079f1dc5e6308d::t_3335f69ff0adbb 61,95
+  s_079f1dc5e6308d::t_dbbf0309bd33c1 10,92-94,96,165-167
+  s_079f1dc5e6308d::t_fe4335c20a245f 9
+  s_079f1dc5e6308d::t_7d1464f5de5f0b 19,23,52,98,113-114,192,194-195,204
+  s_2104cc474f1ce5::t_7a7ff3e823eac0 115-117,168-169
+packages/im/component/README.md
+  s_079f1dc5e6308d::t_d0b7d8793fe39e 14-16,23
+packages/im/jsx/src/render.ts
+  s_079f1dc5e6308d::t_ce85ff53371902 124,126
+  s_079f1dc5e6308d::t_0f56b71d477eee 2-100,102-120,130-131,133-136,138-159
+  s_079f1dc5e6308d::t_29ba896cdea47b 1,101
+  s_079f1dc5e6308d::t_c8c10ebc5c355a 121-123,125,127-129,132,137
+packages/im/core/src/built/interactive-segments/resolve.ts
+  s_079f1dc5e6308d::t_ebb5d2f507dc8c 11,21-22,25,96
+packages/im/zhin/tests/index.test.ts
+  s_079f1dc5e6308d::t_d411b18b532e64 38-42
+packages/im/core/tests/jsx-runtime.test.ts
+  s_079f1dc5e6308d::t_c1c0b54eaff812 1-12
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_079f1dc5e6308d::t_158e685a97f932 91-92
+  s_079f1dc5e6308d::t_77c3f1b71e4d69 1-5,8-89,93-276
+  s_079f1dc5e6308d::t_4899aa734648cb 6-7,90
+packages/toolkit/create-zhin/src/workspace.ts
+  s_079f1dc5e6308d::t_59a87dfb729a05 138
+  s_079f1dc5e6308d::t_bf2648205ba2f4 766,768-772
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 757-758,761-762
+  s_079f1dc5e6308d::t_bcb02a775561fe 140,737,740,754-755,773-777
+docs/plans/jsx-html-components.md
+  s_079f1dc5e6308d::t_69a000bb3dc6a4 5-6,8-12,14-18,20-23,27,29-144,149-164,166,168
+  s_079f1dc5e6308d::t_d432e53835e3e9 19,147
+  s_079f1dc5e6308d::t_d411b18b532e64 24-26,28,145
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 146
+  s_079f1dc5e6308d::t_91ca02cec291c4 148
+  s_079f1dc5e6308d::t_d5631c13c8ec64 7,13,165,167,169
+  s_2104cc474f1ce5::t_392a15204376d4 1-4
+packages/toolkit/components/package.json
+  s_079f1dc5e6308d::t_6ce1446dfbd388 3
+  s_079f1dc5e6308d::t_46ce1a60e82322 1-2,4-21,24-44
+  s_079f1dc5e6308d::t_45bf857c07ce8d 22-23
+packages/im/jsx/src/jsx-runtime.ts
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1-2
+docs/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_9d9aeeab6373fc 30-31,101-102
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 3,8,10,12,14-27,29,32-34,39-41,46-52,54,56,58,60-62,64-70,73,75,78,81,83,88-89,93,96-97,100,104,106,108-113,116-118
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 28,80,84-85
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_079f1dc5e6308d::t_fe4335c20a245f 1
+  s_079f1dc5e6308d::t_3335f69ff0adbb 21-25,33,35,38-41,52,54,58-59,69,87,89
+  s_079f1dc5e6308d::t_4609f034d333ea 3-4,51,60-68,70
+.github/instructions/zhin-plugin.instructions.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 56-59
+packages/im/core/src/jsx.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+scripts/check-api-docs-surface.mjs
+  s_079f1dc5e6308d::t_31495b311ebe3b 70-72
+packages/toolkit/components/tests/theme.test.ts
+  s_079f1dc5e6308d::t_216fb6ee07488d 1-15,17-20,22-53,56-60,62-67,69-75,78,81-84,86-101,106-120,123-147,149-155,159-174,177-222,224,238-262,264,267-277,280-283,286-299,301-303
+  s_079f1dc5e6308d::t_d10cdd50f5e53d 148
+  s_079f1dc5e6308d::t_898412c474297d 227-237
+  s_079f1dc5e6308d::t_3487eb26b04c18 279
+  s_079f1dc5e6308d::t_3f66f5813285bf 16,21,54-55,61,68,76-77,79-80,85,102-105,121-122,156-158,175-176,223,225-226,263,265-266,284-285,300,304-305
+  s_079f1dc5e6308d::t_db82755953ae55 278
+examples/test-bot/lib/zt-report.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 15-18,20
+packages/toolkit/components/src/theme.ts
+  s_079f1dc5e6308d::t_370635e084cef7 64
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 6,109-116,137-148,260,264,272,277,280,282,326
+  s_079f1dc5e6308d::t_01889683a405b3 278,313,323-325,341
+  s_079f1dc5e6308d::t_216fb6ee07488d 1-5,7-9,12-31,34-57,65-77,79-84,86-87,96-108,117,125-133,150-156,160-165,167-169,175-198,202-206,209-212,215-218,221-249,258-259,261,266-267,271,273-276,283-286,289-290,292-294,300-304,306-312,314-318,322,327-332,337-339
+  s_079f1dc5e6308d::t_17918098613bf0 88-95,170-174,279,281,336
+  s_079f1dc5e6308d::t_c6578764bcd208 10-11,32-33,58-63,78,85,118-124,134-136,149,157-159,166,199-201,207-208,213-214,219-220,250-257,262-263,265,268-270,287-288,291,295-299,305,319-321,333-335,340,342
+packages/toolkit/satori/tsup.config.ts
+  s_079f1dc5e6308d::t_46ce1a60e82322 4
+docs/cli/runtime.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 9
+plugins/utils/group-suite/tests/stats-outbound.test.ts
+  s_079f1dc5e6308d::t_c715aefd4b9413 7,9,17,23,29,35
+packages/im/core/src/built/outbound-media-utils.ts
+  s_079f1dc5e6308d::t_ebb5d2f507dc8c 2,49-51
+examples/test-bot/tests/zt-report.test.ts
+  s_079f1dc5e6308d::t_c715aefd4b9413 21,23,28,30,39,51,62
+packages/im/middleware/src/definition.ts
+  s_079f1dc5e6308d::t_ddef75a9a93b3a 17-18,42-45,47-50,66,68-74,76,78
+  s_079f1dc5e6308d::t_b1ceb4602d3a2b 83-88
+  s_079f1dc5e6308d::t_69da8d4eeebb88 10-11,46,67
+  s_079f1dc5e6308d::t_b093130042f59d 31-32
+docs/snippets/install-tiers.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 39
+packages/im/middleware/src/middleware-index.ts
+  s_079f1dc5e6308d::t_b1ceb4602d3a2b 67-69
+  s_079f1dc5e6308d::t_6f5337d3291862 15,136,143-148
+  s_079f1dc5e6308d::t_02fbad6cd06a31 13,161,164-165
+  s_079f1dc5e6308d::t_674fa2348a3ccb 17-26,72,75-81,101-104,108-123,125,127-128,130-132,134-135,137,140-142,149-160,162-163,166-169
+  s_079f1dc5e6308d::t_69da8d4eeebb88 133,138-139
+  s_079f1dc5e6308d::t_9b01785cddb44d 4,91,94,98,124,126,129
+  s_2104cc474f1ce5::t_0e38938004abac 16,170
+examples/full-bot/components/status-card/index.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 1,4,10,22,24-25,27-33,37
+  s_079f1dc5e6308d::t_bf2648205ba2f4 2,13,15-16,26
+packages/toolkit/components/src/styles.ts
+  s_079f1dc5e6308d::t_d10cdd50f5e53d 93-99,147
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 5,91,103,114,125
+  s_079f1dc5e6308d::t_c6578764bcd208 13-18,23,27-28,39-42,48-52,56-57,61-63,67-68,73-74,83-87,100,111,122-124,131-132,142,157
+  s_079f1dc5e6308d::t_216fb6ee07488d 1-4,6-12,19-22,24-26,29-38,43-47,53-55,58-60,64-66,69-72,75-82,88-90,92,101-102,104-110,112-113,115-118,120-121,126-130,133-141,143-146,148-156
+  s_079f1dc5e6308d::t_7a2bb9c109d8bd 119
+.changeset/jsx-html-components.md
+  s_079f1dc5e6308d::t_36ddf4676cbb8e 1-5,7-24
+  s_079f1dc5e6308d::t_e4b78744ba4ac9 6
+docs/en/concepts/message-flow.md
+  s_079f1dc5e6308d::t_d0b7d8793fe39e 73,146-147
+  s_079f1dc5e6308d::t_59a87dfb729a05 60
+packages/toolkit/satori/README.md
+  s_079f1dc5e6308d::t_c715aefd4b9413 3,10,12-15,18,20,23-33,36
+packages/im/core/tests/jsx-public.test-d.tsx
+  s_079f1dc5e6308d::t_59a87dfb729a05 21
+  s_079f1dc5e6308d::t_6659d9d6a3312e 1-20,22-25
+plugins/utils/group-suite/src/card-layout.ts
+  s_079f1dc5e6308d::t_3487eb26b04c18 1,8,15-16,19-20
+packages/toolkit/CONTEXT.md
+  s_079f1dc5e6308d::t_c715aefd4b9413 3,5-12,14,16
+packages/im/command/src/command-index.ts
+  s_079f1dc5e6308d::t_9b01785cddb44d 12,260,266-267,269,290,296-297,299
+README.md
+  s_079f1dc5e6308d::t_c3d89d4bec3e3e 221-223
+basic/cli/tests/plugin-runtime/console/agent-feature-projection.test.ts
+  s_079f1dc5e6308d::t_f5de223eb99dbb 1,3,5-6,9-11,14-16,25,89-157,160-161,163-205
+  s_079f1dc5e6308d::t_f6db31c016de1c 158-159,162
+  s_079f1dc5e6308d::t_dde8f4d61efc97 206
+packages/im/core/src/built/ai-trigger.ts
+  s_079f1dc5e6308d::t_ebb5d2f507dc8c 180,227
+packages/im/jsx/tsconfig.json
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1-6
+docs/en/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_9d9aeeab6373fc 24-25
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 2-3,6,8,10,12,14-21,23,26-28,32-34,39-45,47,49,51,53-62,65,67,70,73,75-76,81-82,85,87,89,91-94,97-99
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 22,72,74
+packages/im/middleware/README.md
+  s_079f1dc5e6308d::t_69da8d4eeebb88 13,20-29
+  s_079f1dc5e6308d::t_b062f2af15e388 30
+examples/test-bot/lib/zt-report-card.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 1,17,43-63,66-69,73,75,82,85,92-96,100,103,110,119,122,128,130,138,141,145,147-149,152,158-163,178-182,192,194-195,199-213,216,218,221-224,231-236
+packages/toolkit/components/src/layout.ts
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 1,26,44,73,97,99,149,173,188,207,209,240,242
+  s_079f1dc5e6308d::t_0ff5254c7f8243 16-17,21,38-40,62-64,91-93,101-109,111-114,116,137-139,163-165,182-184,201-203,234-236,283
+  s_079f1dc5e6308d::t_17918098613bf0 50-54,67-72,124,249,259
+  s_079f1dc5e6308d::t_216fb6ee07488d 2-15,18-20,22-23,25,27-37,41-43,45-49,55-61,65-66,74-90,94-96,98,100,117-119,121-123,125-131,133-136,140-148,150-162,166-172,174-181,185-186,189-200,204-206,208,210-215,217-218,223,229-233,237-239,241,243-248,251-258,260-272,278-282
+  s_079f1dc5e6308d::t_7a2bb9c109d8bd 24,110,115,120,132,187,216,219-222,224-228,250,273-277
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  s_079f1dc5e6308d::t_d411b18b532e64 67
+  s_079f1dc5e6308d::t_30c9492fa6927b 78,81,127,129,152
+packages/im/jsx/src/jsx-dev-runtime.ts
+  s_079f1dc5e6308d::t_5a288f4f8c0381 1-2
+basic/cli/src/plugin-runtime/console/agent-feature-projection.ts
+  s_079f1dc5e6308d::t_3335f69ff0adbb 6,78-86
+packages/im/middleware/src/continuation.ts
+  s_079f1dc5e6308d::t_6f5337d3291862 1-7
+packages/toolkit/components/src/utilities.ts
+  s_079f1dc5e6308d::t_0ff5254c7f8243 2-11,17-30,35-39
+  s_079f1dc5e6308d::t_216fb6ee07488d 1,12-16,31-34
+examples/test-bot/components/status-card/index.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 1,4,10,27,29-37,39-40,42
+  s_079f1dc5e6308d::t_bf2648205ba2f4 2,13,15-16,24,26,28
+scripts/check-api-surface.mjs
+  s_079f1dc5e6308d::t_325316a76789f6 15-18
+packages/im/middleware/tests/middleware.test.ts
+  s_079f1dc5e6308d::t_6e7d98b25f9bfd 22-23,40-96,296-303
+  s_079f1dc5e6308d::t_133ec8bbaa0774 8-9,310
+  s_079f1dc5e6308d::t_248343caa0e6d4 155-159,161-171
+  s_079f1dc5e6308d::t_1cd83a6252ed92 160
+  s_079f1dc5e6308d::t_68a9946e7461b6 304
+packages/im/core/src/jsx-runtime.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+README.zh-CN.md
+  s_079f1dc5e6308d::t_c3d89d4bec3e3e 267-268
+packages/toolkit/components/src/props.ts
+  s_079f1dc5e6308d::t_0ff5254c7f8243 3-4,6-11,13-15,17-22,26-28,30-37,39-48,51-53,56-60,62-69,71-73,76-82,85-86,89-92,95-99,102-111,113-116,118-133,136-139,143-146,150-152,155-158,160
+  s_079f1dc5e6308d::t_216fb6ee07488d 2
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 1,5,12,16,23-25,29,38,49-50,54-55,61,70,74-75,83-84,87-88,93-94,100-101,112,117,134-135,140-142,147-149,153-154,159
+packages/im/jsx/README.md
+  s_079f1dc5e6308d::t_83609c47fbb98a 1-19,22-24
+  s_079f1dc5e6308d::t_8c6d3047ee8544 20-21
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_f78216766f26b9 322-324,2475
+  s_079f1dc5e6308d::t_523360b2d5b2df 50,127-143,146-148,150-153,155-205,2311,2372
+  s_079f1dc5e6308d::t_133ec8bbaa0774 18-19,2358,2426,2462
+  s_079f1dc5e6308d::t_e5d6325d626d25 272-300
+  s_079f1dc5e6308d::t_daef058f3f4098 126,144-145,149,154,2313,2356
+  s_079f1dc5e6308d::t_f8058a6afd0bff 17,48,68,902,960,1227,2308-2310,2312,2314-2315,2351,2355,2362,2378,2385,2394,2459,2467-2471
+  s_079f1dc5e6308d::t_5167cab04b5192 206-271,301-321,325-352,2446-2455
+  s_079f1dc5e6308d::t_1cb1502d0d6dc5 2456
+packages/im/core/src/plugin-runtime/im/message-dispatcher.ts
+  s_079f1dc5e6308d::t_6f5337d3291862 11
+packages/toolkit/components/src/display.ts
+  s_079f1dc5e6308d::t_216fb6ee07488d 2-24,27-34,36,38-40,59-62,66-67,69-71,73-76,80-87,89,91,95-100,128-131,135-143,145,147,149-153,174-177,181-183,185-189,192-197,199-206,210-224,228-230,232,234-237,239-241,243-252,254-257,259-265,269-271,273-276,279-281,283-290,292-299,303-305,307,309-312,314-317,319-324,326-342,344-347,349-355,359-361,363-367,369-373,377-379,381-384,386-394
+  s_079f1dc5e6308d::t_0ff5254c7f8243 25-26,63-65,77-79,92-94,119,132-133,178-180,207-209,225-227,266-268,300-302,356-358,374-376,395
+  s_079f1dc5e6308d::t_17918098613bf0 190,238,242,277,313,318,325,385
+  s_079f1dc5e6308d::t_7a2bb9c109d8bd 41-58,72,101-118,120-127,154-173,191,198,253,258,278,282,291,343,348
+  s_079f1dc5e6308d::t_c0a6cbfbe30344 1,35,37,68,88,90,134,144,146,148,184,231,233,272,306,308,362,380
+  s_079f1dc5e6308d::t_898412c474297d 368
+packages/im/core/package.json
+  s_079f1dc5e6308d::t_59a87dfb729a05 69
+  s_079f1dc5e6308d::t_9e14a076300729 88
+  s_079f1dc5e6308d::t_959a383a134427 89-90
+plugins/adapters/email/adapters/email/index.ts
+  s_079f1dc5e6308d::t_c1c0b54eaff812 26
+examples/minimal-bot/tests/stable-path.test.ts
+  s_079f1dc5e6308d::t_59a87dfb729a05 276
+  s_079f1dc5e6308d::t_03807199f5febb 83,101,156-159
+packages/toolkit/components/README.md
+  s_079f1dc5e6308d::t_8c6d3047ee8544 103
+  s_079f1dc5e6308d::t_f4b8eeb46e967a 115-137
+  s_079f1dc5e6308d::t_c715aefd4b9413 1-2,4-8,10-11,20-21,36-38,40,42
+  s_079f1dc5e6308d::t_216fb6ee07488d 3,9,12-19,22-35,39,41,43-102,104-114
+scripts/check-created-project.mjs
+  s_079f1dc5e6308d::t_11af7103d58dd7 167,192,196-197,206,236-244,279,291-297,300,306
+  s_079f1dc5e6308d::t_e4b78744ba4ac9 280-290,316
+packages/im/core/src/utils.ts
+  s_079f1dc5e6308d::t_ebb5d2f507dc8c 175,266,272-273,282-283
+  s_079f1dc5e6308d::t_9e14a076300729 174,179,271,281
+  s_079f1dc5e6308d::t_230be080e77957 286-287
+packages/im/feature-kit/src/index.ts
+  s_079f1dc5e6308d::t_9b01785cddb44d 4
+plugins/utils/group-suite/src/analysis-card.ts
+  s_079f1dc5e6308d::t_ab40ada76ef21c 1,11,30-32,36-39,43,45-51,55,57-64,68,70-77,80,83,85,87,89-108,113,115,123,125
+tests/snapshots/api-surface.json
+  s_079f1dc5e6308d::t_40a3d05c570392 258,266
+  s_079f1dc5e6308d::t_8c0d0a4730087d 249-257,259-265,267-270
+  s_079f1dc5e6308d::t_2f25a7cf0db1c8 240,246-247
+packages/im/jsx/tests/tsconfig.json
+  s_079f1dc5e6308d::t_83609c47fbb98a 1-5
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_9b01785cddb44d 2-3,179-181,209-211,248-249,251-259,261
+  s_079f1dc5e6308d::t_9e14a076300729 1,28,39,47
+  s_079f1dc5e6308d::t_54f82e517fd64b 182,206,212,250,260
+  s_079f1dc5e6308d::t_2daf58457bbe03 213,216,228,235,238
+  s_079f1dc5e6308d::t_365945c46c5067 214
+  s_a953d60826be1b::t_e52154722f04a0 262-263
+packages/toolkit/components/tests/components.test.ts
+  s_079f1dc5e6308d::t_8a8d9f27a59a5e 1-43,54-87
+  s_079f1dc5e6308d::t_5d6e581a5a7260 44-45,47-53,89
+  s_079f1dc5e6308d::t_c97575e460da1e 88
+packages/im/core/src/feature/component.ts
+  s_079f1dc5e6308d::t_9e14a076300729 3
+packages/im/jsx/tests/render.test.ts
+  s_079f1dc5e6308d::t_83609c47fbb98a 1-36,46-102,104,106-141
+  s_079f1dc5e6308d::t_cf0406c01b9cd6 37-45
+  s_079f1dc5e6308d::t_fd578089caac6a 103,105
+packages/im/core/src/built/html-segment-fallback.ts
+  s_079f1dc5e6308d::t_9e14a076300729 5-6,10-11,20
+packages/im/zhin/src/jsx-runtime.ts
+  s_079f1dc5e6308d::t_84fc2aee70653b 1
+.github/skills/zhin-plugin-standard-development/assets/component-template.tsx
+  s_079f1dc5e6308d::t_d2bf7279fa2f0a 4,7
+  s_079f1dc5e6308d::t_3ec991f4eae878 1-2,12-13
+examples/test-bot/commands/zt/index.ts
+  s_079f1dc5e6308d::t_5d6e581a5a7260 1-6,12,22-24,40-41,50,52,55
+docs/concepts/architecture.md
+  s_079f1dc5e6308d::t_a0ea619ccd7f23 123-126
+tests/contracts/segment-policy.test.ts
+  s_079f1dc5e6308d::t_9f5077be77e851 33
+  s_079f1dc5e6308d::t_365945c46c5067 49
+.github/skills/zhin-plugin-standard-development/SKILL.md
+  s_079f1dc5e6308d::t_6959014fe83946 16,34-40
+examples/full-bot/package.json
+  s_079f1dc5e6308d::t_ebbdc538c61410 21,23
+examples/minimal-bot/commands/card/index.ts
+  s_079f1dc5e6308d::t_295c493bfbfc34 2
+examples/minimal-bot/commands/jsx/index.tsx
+  s_079f1dc5e6308d::t_916680f15e76a4 1-7
+examples/minimal-bot/middlewares/jsx/index.tsx
+  s_079f1dc5e6308d::t_892a47a41ce52b 1-9
+examples/minimal-bot/package.json
+  s_079f1dc5e6308d::t_fdd5f85c973045 19-21,49-52
+examples/minimal-bot/tsconfig.json
+  s_079f1dc5e6308d::t_6eebf938ac94f7 4-6,9-11,18-22,24-27
+examples/test-bot/package.json
+  s_079f1dc5e6308d::t_b90d8b80fcc764 52,55,99
+packages/game-kit/package.json
+  s_079f1dc5e6308d::t_7f33d271caf635 31,34-35
+packages/im/core/src/built/interactive-segments/types.ts
+  s_079f1dc5e6308d::t_b51086601b94f9 50,57
+packages/toolkit/components/tests/tsconfig.json
+  s_079f1dc5e6308d::t_ce15816b88849c 1-9
+packages/toolkit/scaffold-wizard/src/zhin-stack-deps.ts
+  s_079f1dc5e6308d::t_e4084ed30845a4 31
+plugins/utils/group-suite/package.json
+  s_079f1dc5e6308d::t_167ad31aaf20e2 51,53-55,58
+plugins/utils/group-suite/tests/html-components.test.ts
+  s_079f1dc5e6308d::t_8395edbca03c4d 1-2,17,29,31,37-38,42-43,46-51,56-58,64
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_cf124602ac1179 389-391,395-397,481,483-486,791-793,800-802,927-929,1456-1458,1468-1470,1581-1589,1837-1846,3430-3432,3436-3438,3449-3451
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "badcc1fbaa993a1cbcebcfdafd8a9ec830113dae",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a953d60826be1b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a031e8-3634-7bd1-ae11-2247c5a82f6d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
