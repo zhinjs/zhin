@@ -29,6 +29,30 @@ export default defineCommand({
 
 样式组件通过 `ThemeProvider` 共享配色、字体、背景、圆角、边框、阴影与文案；局部使用 `custom.style`、`custom.text` 覆盖。默认间距为 4/8/12/16/24px，上下、左右分别对称：组件外距用 margin，容器内距用 padding，Divider 也带外距。普通 block 的相邻纵向 margin 可以折叠；Flex/Grid 下会相加。完整配置见 [组件库说明](../../packages/toolkit/components/README.md)。
 
+表格可使用 `Table` 的 `headers`、`rows`，或组合 `TableRow`、`TableCell` 放入其他 JSX。`Checkbox`、`Radio`、`Switch`、`Button` 是展示组件：选中、禁用、按钮变体由 props 决定，没有点击事件或内部状态，在 HTML 与图片消息中均用于展示。
+
+```tsx
+import { Table, Checkbox, Switch, Button } from '@zhin.js/components';
+
+const report = <Table
+  headers={['任务', '完成', '通知', '操作状态']}
+  rows={[
+    [<strong>发布验收</strong>, <Checkbox checked label="通过" />,
+      <Switch checked label="开启" />, <Button disabled>等待上线</Button>],
+  ]}
+/>;
+```
+
+`List` 支持有序／无序列表及嵌套展示节点。`Markdown` 的 `source` 是待解析的字符串，标题、列表、引用和表格会变为主题化 JSX；代码围栏交给 `CodeBlock`，提供语言标签、语法高亮、可选行号与换行。`CodeBlock` 也可直接使用，`title` 接受 JSX。原始 HTML 显示为文本，Markdown 图片显示替代文案。
+
+```tsx
+import { Markdown, CodeBlock } from '@zhin.js/components';
+
+const article = <Markdown source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
+const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
+  source={'const ready = true;\nconsole.log(ready);'} />;
+```
+
 ## 入站中间件
 
 ```tsx

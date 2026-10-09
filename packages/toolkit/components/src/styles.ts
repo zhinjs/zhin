@@ -72,6 +72,10 @@ export function componentStyle(
 ): JSXStyle {
   const parsed = styleObject(style);
   for (const [key, value] of Object.entries(parsed)) {
+    if (/^(?:padding|margin|gap|rowGap|columnGap)/.test(key) && typeof value === "number") {
+      parsed[key] = value * theme.spacing.scale;
+      continue;
+    }
     if (
       /^(?:padding|margin|gap|rowGap|columnGap)/.test(key) &&
       typeof value === "string"

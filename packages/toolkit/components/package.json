@@ -14,16 +14,21 @@
   },
   "files": [
     "lib",
-    "README.md"
+    "README.md",
+    "examples"
   ],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",
     "test": "vitest run --root ../../.. packages/toolkit/components/tests",
+    "preview": "node examples/gallery.mjs",
     "test-type": "tsc --noEmit -p tests/tsconfig.json"
   },
   "dependencies": {
-    "@zhin.js/jsx": "workspace:*"
+    "@zhin.js/jsx": "workspace:*",
+    "entities": "^7.0.1",
+    "marked": "^16.4.2",
+    "shiki": "^2.5.0"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

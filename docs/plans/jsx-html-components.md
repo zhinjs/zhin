@@ -40,7 +40,7 @@ sidebar: false
 | `zhin.js/jsx` | 公开上述 JSX 创作面与 `renderToHtml` | 门面，不再另写 renderer |
 | `zhin.js/jsx-runtime` / `jsx-dev-runtime` | automatic JSX 编译技术入口，委托同一实现 | 与显式入口具有完全相同语义 |
 | `zhin.js/component` | 唯一对象式 `defineComponent({render})`、组件调用 `component(name,props)`、相关类型 | 注册组件由 ComponentIndex 解析当前 snapshot/requester/owner |
-| 新增 `@zhin.js/components`，目录 `packages/toolkit/components` | Card、布局、主题、指标与图表等纯 JSX 函数组件 | 仅依赖 JSX 基础包，可选安装 |
+| 新增 `@zhin.js/components`，目录 `packages/toolkit/components` | Card、布局、主题、指标、图表与 Markdown 等纯 JSX 函数组件 | JSX 基础包及解析／高亮依赖，可选安装；不依赖 IM |
 | Core 出站模块 | JSX → HTML → canonical HTML Segment；统一 SendContent 校验、顺序、平台协商与投递 | 不直接依赖组件库、Satori、Shotium |
 | `@zhin.js/html-renderer` | HTML → PNG/JPEG | 不拥有 JSX/组件定义或第二套 serializer |
 | `@zhin.js/satori` | HTML/CSS → SVG、字体能力 | 不拥有样式组件和第二套 JSX runtime |
@@ -147,7 +147,7 @@ P4 的统一定制面：ThemeProvider 以 JSX 树作用域传递共享背景、�
 
 间距使用统一 4px 基准刻度：组件间的外距优先 margin，容器与内容的内距用 padding；默认上下同值、左右同值，Divider 也使用对称外距，避免父 gap 与子 margin 重复。普通 block 文档流可折叠纵向相邻 margin；图片渲染所需的 Flex 布局不承诺折叠，横向与换行布局保留 gap。局部自定义 CSS 仍允许按业务需要覆盖。
 
-P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badge、KvTable、MetricBlock、UsageBar 和主题 tokens；现有图表单独形成可审查提交并迁移消费者，不借此次重整扩大新组件功能清单。
+P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badge、KvTable、MetricBlock、UsageBar 和主题 tokens；迁移现有图表消费者。展示验收补充 Table/TableRow/TableCell、List/ListItem、Markdown/CodeBlock 与 Checkbox/Radio/Switch/Button；控件仅展示状态和样式，不接入事件或平台交互。Markdown 使用解析后的 token 构造 JSX，代码块提供语言标签、语法着色、可选行号和标题，并验证长代码在 HTML / SVG 中可读。解析与高亮依赖仅属于可选组件包，不进入 IM 核心。
 
 ## 验收矩阵
 
@@ -170,9 +170,13 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 
 ## 本地验收记录（2026-10-09）
 
-- 全量 Vitest：`pnpm exec vitest run --maxWorkers=2`，1003 个文件、7586 项测试通过，12 项保持跳过。默认并发下原有页面构建 100ms 性能断言会受本机负载影响；降低 worker 数后保留原阈值通过。临时 Git fixture 清理使用有限重试处理瞬时 ENOTEMPTY。
+- 全量 Vitest：最终 `pnpm exec vitest run --maxWorkers=2`，1008 个文件、7646 项测试通过，12 项保持跳过。默认并发下原有页面构建 100ms 性能断言会受本机负载影响；降低 worker 数后保留原阈值通过。临时 Git fixture 清理使用有限重试处理瞬时 ENOTEMPTY。测试涉及本机 HTTP/TLS 监听，须在允许该能力的环境运行；受限沙箱中的失败不作为代码回归结论。
 - 完整 harness 的其他 56 项检查通过，包括类型、lint、架构、依赖、公开导出、API 文档、发布计划、Stable、L4-CI、IM 安装体积。最终单测按上面的独立全量复验记录，不将初次 `check:all` 的单测失败记成通过。
 - `pnpm check:created-project`：候选 tarball → 空项目安装 → 真实 CLI / Sandbox → Console HTTP JSX 预览 → JSX `/card` → `.tsx` 组件 HMR → 指令 HMR → production 重启，全部通过。
 - 两个新包 tarball 的独立 NodeNext TSX 消费验证通过：无 React / IM Runtime，异步展示插槽、共享主题、局部样式与 Divider 对称外距可用。厨房水槽 `test-bot` 类型检查通过。
 - 浏览器检查默认、深色、局部覆盖主题；实际测量 block 的 16/24px 相邻纵向外距为 24px，Flex 为 40px。SVG 回归验证对称间距及主题缩放仅执行一次。
+- 最终 `HARNESS_SEQUENTIAL=1 HARNESS_SKIP_TEST=1 pnpm check:all` 全部通过，单测使用上述独立全量结果。扩展后的组件包 8 个测试文件、80 项测试通过；Satori 包另有 5 项测试通过。
+- 34 个组件提供三套主题、10 个模块的真实 HTML 画廊：表格、布局、嵌套列表、Markdown、代码、控件、按钮、图表、默认间距与局部覆盖。QuoteCard → EmptyState 默认间距为 8px；1280px 浏览器视口各模块无横向溢出。
+- Markdown 和 CodeBlock 经真实 SVG 验证：100/320px 窄画布长行、空行、Tab、转义文本与完整代码内容保真。Satori 清理改为解析后处理实际元素／属性，避免误改代码里的 `onclick=`、`href=javascript:` 文字。
+- 更新后的两个新包独立安装、NodeNext TSX 编译和 Markdown／代码／嵌套 List／Table／控件输出通过；已发布文件包含可直接运行的画廊脚本。高亮和解析依赖仅属于可选组件包，IM 核心体积门禁通过。
 - 新包 `@zhin.js/jsx`、`@zhin.js/components` 尚未在 npm 注册；首次发布须遵循[维护者发布流程](../contributing/development.md)，后续再交给自动发布。真实 IM 平台图片发送不在上述本地证据范围内。

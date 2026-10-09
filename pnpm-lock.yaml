@@ -1839,6 +1839,15 @@ importers:
       '@zhin.js/jsx':
         specifier: workspace:*
         version: link:../../im/jsx
+      entities:
+        specifier: ^7.0.1
+        version: 7.0.1
+      marked:
+        specifier: ^16.4.2
+        version: 16.4.2
+      shiki:
+        specifier: ^2.5.0
+        version: 2.5.0
     devDependencies:
       typescript:
         specifier: ^6.0.3

@@ -12,6 +12,16 @@ export type * from "./props.js";
 export * from "./layout.js";
 export * from "./display.js";
 export * from "./charts.js";
+export * from "./table.js";
+export type * from "./table-props.js";
+export * from "./controls.js";
+export type * from "./controls-props.js";
+export * from "./list.js";
+export type * from "./list-props.js";
+export * from "./markdown.js";
+export type * from "./markdown-props.js";
+export * from "./code-block.js";
+export type * from "./code-block-props.js";
 export {
   LABEL_W,
   LABEL_W_HALF,

@@ -23,6 +23,30 @@ Display props use `JSXRenderable`, accepting text, numbers, nested JSX, arrays, 
 
 `ThemeProvider` shares colors, fonts, backgrounds, radii, borders, shadows and copy. Use `custom.style` and `custom.text` for local overrides. Default spacing uses 4/8/12/16/24px, with equal top/bottom and left/right values: margin separates components, padding spaces container content, and Divider has outer margins. Adjacent vertical margins may collapse in block flow; Flex/Grid margins add together. See the [component library](../../../packages/toolkit/components/README.md) for configuration.
 
+Use `Table` with `headers` and `rows`, or compose `TableRow` and `TableCell` with nested JSX. `Checkbox`, `Radio`, `Switch`, and `Button` are display components: props control checked/disabled states and button variants. They have no click handlers or internal state and provide visual output in both HTML and image messages.
+
+```tsx
+import { Table, Checkbox, Switch, Button } from '@zhin.js/components';
+
+const report = <Table
+  headers={['Task', 'Complete', 'Notify', 'Action status']}
+  rows={[
+    [<strong>Release acceptance</strong>, <Checkbox checked label="Passed" />,
+      <Switch checked label="Enabled" />, <Button disabled>Awaiting release</Button>],
+  ]}
+/>;
+```
+
+`List` supports ordered/unordered lists and nested display nodes. `Markdown` takes a string `source` and renders themed JSX headings, lists, quotes and tables. Fenced code uses `CodeBlock`, with a language label, syntax highlighting, optional line numbers and wrapping. Use `CodeBlock` directly with a JSX `title`. Raw HTML remains text; Markdown images display their alternative text.
+
+```tsx
+import { Markdown, CodeBlock } from '@zhin.js/components';
+
+const article = <Markdown source={'## Acceptance\n\n- [x] Smoke passed\n- [ ] Awaiting release'} />;
+const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
+  source={'const ready = true;\nconsole.log(ready);'} />;
+```
+
 ## Inbound results
 
 ```tsx

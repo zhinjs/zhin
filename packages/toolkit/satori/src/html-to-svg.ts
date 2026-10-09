@@ -1,7 +1,7 @@
 /**
  * HTML → SVG：html-react-parser + 官方 satori（需安装 react，与 html-react-parser 一致）。
  */
-import parse from 'html-react-parser';
+import parse, { htmlToDOM, Element, Text, type DOMNode } from 'html-react-parser';
 import { Fragment as FragmentSymbol } from 'react';
 import satori from 'satori';
 
@@ -340,83 +340,44 @@ const DANGEROUS_TAGS = [
  */
 const STRIP_TAGS = ['form', 'input'];
 
-/** 预编译：带内容的危险标签（如 <script>...</script>） */
-const DANGEROUS_TAG_PAIR_RES = DANGEROUS_TAGS.map(
-  tag => new RegExp(`<${tag}[^>]*>[\\s\\S]*?<\\/${tag}\\s*>`, 'gi'),
-);
+const VOID_TAGS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+const URI_ATTRIBUTES = new Set(['href', 'src', 'action', 'formaction', 'data', 'xlink:href']);
 
-/** 自闭合或未闭合的危险标签 */
-const DANGEROUS_TAG_RE = new RegExp(
-  `<\\/?\\s*(${DANGEROUS_TAGS.join('|')})[^>]*>`,
-  'gi',
-);
-
-/** 降级标签（form/input）：只剥标签，保留内容 */
-const STRIP_TAG_RE = new RegExp(
-  `<\\/?\\s*(${STRIP_TAGS.join('|')})[^>]*>`,
-  'gi',
-);
-
-/** 匹配 on* 事件处理属性，如 onclick="..." onLoad='...' ONERROR=xxx（gi 标志处理大小写） */
-const EVENT_HANDLER_RE = /\s+on[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi;
-
-/**
- * 匹配 href / src / action 等 URI 属性（引号值写法），用于 javascript: 检测。
- * 捕获组 1 = 属性前缀（含引号），捕获组 2 = 属性值（引号内内容）。
- */
-const URI_ATTR_QUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*["'])([^"']*)/gi;
-const JS_PROTOCOL_UNQUOTED_RE = /(\s+(?:href|src|action|formaction|data|xlink:href)\s*=\s*)(?:javascript|vbscript):/gi;
-
-/** 解码 HTML 数字实体（&#NNN; 和 &#xHH;），用于检测混淆后的 javascript: URI */
-function decodeHtmlEntities(s: string): string {
-  return s.replace(/&#x([0-9a-fA-F]+);?/g, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
-    .replace(/&#(\d+);?/g, (_, dec: string) => String.fromCharCode(parseInt(dec, 10)));
+function escapeText(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/**
- * 从 HTML 字符串中移除危险内容，防止 XSS。
- * 移除：危险标签（含内容）、on* 事件处理属性、javascript: URI。
- */
+function safeUri(value: string): string {
+  // The HTML parser has already decoded attribute entities. Check only attributes,
+  // never escaped examples or words in text nodes or another attribute's value.
+  const normalized = value.replace(/[\u0000-\u0020\u007f]/g, '').toLowerCase();
+  if (normalized.startsWith('javascript:') || normalized.startsWith('vbscript:')) return 'about:invalid';
+  if (normalized.startsWith('data:') && !normalized.startsWith('data:image/') && !normalized.startsWith('data:font/')) return 'about:invalid';
+  return value;
+}
+
+/** Remove dangerous elements and attributes while preserving literal text. */
 export function sanitizeHtml(html: string): string {
-  let result = html;
-
-  // 移除带内容的危险标签（如 <script>...</script>）
-  for (const re of DANGEROUS_TAG_PAIR_RES) {
-    re.lastIndex = 0;
-    result = result.replace(re, '');
-  }
-
-  // 移除自闭合或未闭合的危险标签
-  result = result.replace(DANGEROUS_TAG_RE, '');
-
-  // 降级标签：剥标签但保留文本内容
-  result = result.replace(STRIP_TAG_RE, '');
-
-  // 移除事件处理属性（循环直到没有更多匹配，防止嵌套如 ononclick）
-  let prev: string;
-  let maxIterations = 10;
-  do {
-    prev = result;
-    result = result.replace(EVENT_HANDLER_RE, '');
-  } while (result !== prev && --maxIterations > 0);
-
-  // 将危险 URI 协议替换为安全值（引号写法，含 HTML 实体混淆检测）
-  result = result.replace(URI_ATTR_QUOTED_RE, (match, prefix: string, value: string) => {
-    const decoded = decodeHtmlEntities(value).replace(/\s+/g, '').toLowerCase();
-    if (decoded.startsWith('javascript:') || decoded.startsWith('vbscript:')) {
-      return `${prefix}about:invalid`;
-    }
-    // Block data: URIs except safe media types (image/*, font/*)
-    if (decoded.startsWith('data:') && !decoded.startsWith('data:image/') && !decoded.startsWith('data:font/')) {
-      return `${prefix}about:invalid`;
-    }
-    return match;
-  });
-
-  // 将危险 URI 协议替换为安全值（无引号写法）
-  result = result.replace(JS_PROTOCOL_UNQUOTED_RE, '$1"about:invalid"');
-
-  return result;
+  const serialize = (nodes: readonly DOMNode[], depth = 0): string => {
+    if (depth > 100) throw new RangeError('HTML exceeds maximum sanitization depth 100');
+    return nodes.map(node => {
+      if (node instanceof Text) return escapeText(node.data);
+      if (!(node instanceof Element)) return '';
+      const name = node.name.toLowerCase();
+      if (DANGEROUS_TAGS.includes(name)) return '';
+      const children = () => serialize(node.children as DOMNode[], depth + 1);
+      if (STRIP_TAGS.includes(name)) return children();
+      const attributes = Object.entries(node.attribs).flatMap(([attribute, value]) => {
+        const key = attribute.toLowerCase();
+        if (/^on[a-z]+$/i.test(key)) return [];
+        const safeValue = URI_ATTRIBUTES.has(key) ? safeUri(value) : value;
+        return [` ${attribute}="${escapeText(safeValue).replace(/"/g, '&quot;')}"`];
+      }).join('');
+      const opening = `<${node.name}${attributes}>`;
+      return VOID_TAGS.has(name) ? opening : `${opening}${children()}</${node.name}>`;
+    }).join('');
+  };
+  return serialize(htmlToDOM(html));
 }
 
 export async function htmlToSvg(html: string, options: HtmlToSvgOptions): Promise<string> {

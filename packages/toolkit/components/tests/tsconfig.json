@@ -5,5 +5,5 @@
     "jsxImportSource": "@zhin.js/jsx",
     "noEmit": true
   },
-  "include": ["display-props.tsx"]
+  "include": ["*.tsx"]
 }

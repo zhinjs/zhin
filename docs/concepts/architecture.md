@@ -123,4 +123,4 @@ flowchart BT
 
 ## JSX 与展示组件
 
-`@zhin.js/jsx` 是零运行时依赖的 JSX tree / HTML serializer。Core 依赖它把 JSX 转 `segment.html`；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 只依赖 JSX 基础包，展示位接受 `JSXNode`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。
+`@zhin.js/jsx` 是零运行时依赖的 JSX tree / HTML serializer。Core 依赖它把 JSX 转 `segment.html`；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 使用 JSX 基础包及 Markdown／代码高亮依赖，展示位接受 `JSXRenderable`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。

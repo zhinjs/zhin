@@ -236,6 +236,7 @@ export function TopicItem(props: TopicItemProps): JSXElement {
   return customizeRoot(
     jsx(Row, {
       gap: theme.spacing.md,
+      style: `margin:${theme.spacing.xs}px 0`,
       align: "flex-start",
       children: [
         div(
@@ -275,7 +276,7 @@ export function QuoteCard(props: QuoteCardProps): JSXElement {
   return customizeRoot(
     jsx(Surface, {
       padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
-      style: `gap:${theme.spacing.xs}px`,
+      style: `gap:${theme.spacing.xs}px;margin:${theme.spacing.xs}px 0`,
       children: [
         index != null
           ? div(
@@ -311,6 +312,7 @@ export function ProfileRow(props: ProfileRowProps): JSXElement {
   return customizeRoot(
     jsx(Row, {
       gap: theme.spacing.md,
+      style: `margin:${theme.spacing.xs}px 0`,
       align: "center",
       children: [
         index != null
@@ -383,6 +385,7 @@ export function EmptyState(props: EmptyStateProps): JSXElement {
   return customizeRoot(
     jsx(Surface, {
       padding: `${theme.spacing.sm}px ${theme.spacing.md}px`,
+      style: `margin:${theme.spacing.xs}px 0`,
       children: div(
         `color:${T.textSecondary};font-size:${theme.typography.sizes.small}px;line-height:${theme.typography.lineHeight}`,
         message

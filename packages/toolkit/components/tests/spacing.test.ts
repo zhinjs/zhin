@@ -1,4 +1,4 @@
-import { jsx, renderToHtml } from "@zhin.js/jsx";
+import { jsx, renderToHtml, type JSXStyle } from "@zhin.js/jsx";
 import { htmlToSvg, getAllBuiltinFonts } from "../../satori/src/index.js";
 import {
   BarChart,
@@ -18,6 +18,9 @@ import {
   ThemeProvider,
   TopicItem,
   UsageBar,
+  EmptyState,
+  Surface,
+  type ComponentCustomization,
 } from "../src/index.js";
 
 const rows = [
@@ -141,5 +144,128 @@ describe("component spacing", () => {
     expect(html).toContain("padding: 20px 0");
     expect(html).toContain("margin: 12px 0");
     expect(html).not.toContain("gap: 12px");
+  });
+});
+
+/** Unique root fills let us measure actual visible boxes, excluding masks/text. */
+const rootStyle = (background: string): JSXStyle => ({
+  background,
+  border: 0,
+  borderRadius: 0,
+  boxShadow: false,
+});
+const svgBox = (svg: string, fill: string) => {
+  const rectangle = [...svg.matchAll(/<rect\b[^>]*>/g)].find(([tag]) =>
+    tag.includes(`fill="${fill}"`)
+  )?.[0];
+  if (!rectangle) throw new Error(`Missing rendered root ${fill}`);
+  return {
+    top: Number(rectangle.match(/\by="([\d.]+)"/)?.[1]),
+    height: Number(rectangle.match(/\bheight="([\d.]+)"/)?.[1]),
+  };
+};
+const quote = (custom: ComponentCustomization) =>
+  jsx(QuoteCard, { content: "A", author: "QA", custom });
+const empty = (custom: ComponentCustomization) =>
+  jsx(EmptyState, { message: "B", custom });
+const topic = (custom: ComponentCustomization) =>
+  jsx(TopicItem, { index: 1, title: "Topic", custom });
+const profile = (custom: ComponentCustomization) =>
+  jsx(ProfileRow, { name: "User", custom });
+
+describe("standalone semantic block spacing", () => {
+  it.each([
+    ["quote/empty", quote, empty],
+    ["quote/quote", quote, quote],
+    ["empty/empty", empty, empty],
+    ["topic/topic", topic, topic],
+    ["profile/profile", profile, profile],
+    ["topic/profile", topic, profile],
+  ] as const)(
+    "separates %s roots by 8px in actual SVG layout",
+    async (_, first, second) => {
+      const html = await renderToHtml(
+        jsx(Col, {
+          children: [
+            first({ style: rootStyle("#112233") }),
+            second({ style: rootStyle("#445566") }),
+          ],
+        })
+      );
+      const svg = await htmlToSvg(html, {
+        width: 200,
+        fonts: getAllBuiltinFonts(),
+      });
+      const a = svgBox(svg, "#112233"),
+        b = svgBox(svg, "#445566");
+      expect(b.top - (a.top + a.height)).toBe(8);
+      expect(html.match(/margin: 4px 0/g)).toHaveLength(2);
+      expect(svg).not.toContain("NaN");
+    }
+  );
+
+  it.each([
+    [{ spacing: { xs: 8 } }, undefined, 16],
+    [{ spacing: { scale: 2 } }, undefined, 16],
+    [
+      {
+        components: {
+          QuoteCard: { margin: "12px 0" },
+          EmptyState: { margin: "12px 0" },
+        },
+      },
+      undefined,
+      24,
+    ],
+    [{ spacing: { scale: 2 } }, "12px 0", 24],
+    [
+      {
+        components: {
+          QuoteCard: { margin: "12px 0" },
+          EmptyState: { margin: "12px 0" },
+        },
+      },
+      0,
+      0,
+    ],
+  ] as const)(
+    "honors theme spacing, scaling and local margin overrides (%#)",
+    async (theme, margin, expectedGap) => {
+      const customize = (fill: string): ComponentCustomization => ({
+        style: {
+          ...(rootStyle(fill) as object),
+          ...(margin === undefined ? {} : { margin }),
+        },
+      });
+      const html = await renderToHtml(
+        jsx(ThemeProvider, {
+          theme,
+          children: jsx(Col, {
+            children: [
+              quote(customize("#112233")),
+              empty(customize("#445566")),
+            ],
+          }),
+        })
+      );
+      const svg = await htmlToSvg(html, {
+        width: 200,
+        fonts: getAllBuiltinFonts(),
+      });
+      const a = svgBox(svg, "#112233"),
+        b = svgBox(svg, "#445566");
+      expect(b.top - (a.top + a.height)).toBe(expectedGap);
+    }
+  );
+
+  it("keeps primitive Surface and nested header/statistic surfaces free of outer margin", async () => {
+    const html = await renderToHtml([
+      jsx(Surface, { children: "Primitive" }),
+      jsx(CardHeader, { title: "Header", badge: "Nested surface" }),
+      jsx(StatChip, { label: "Count", value: 1 }),
+    ]);
+    expect(html.match(/margin: /g)).toHaveLength(1);
+    expect(html).toContain("margin: 8px 0"); // Only CardHeader owns this boundary.
+    expect(html).not.toContain("margin: 4px 0");
   });
 });

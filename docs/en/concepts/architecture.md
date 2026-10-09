@@ -120,4 +120,4 @@ When writing a Feature (a new capability type), depend only on `feature-kit` / `
 
 ## JSX and visual components
 
-`@zhin.js/jsx` owns transport-neutral JSX trees and the sole HTML serializer, with no runtime dependencies. Core converts JSX to `segment.html`; `zhin.js/jsx` is the authoring facade. Optional `@zhin.js/components` depends only on this base, accepts `JSXNode` display props and does not depend on Core, React or image engines. Render tools consume HTML; adapters declare platform policies.
+`@zhin.js/jsx` owns transport-neutral JSX trees and the sole HTML serializer, with no runtime dependencies. Core converts JSX to `segment.html`; `zhin.js/jsx` is the authoring facade. Optional `@zhin.js/components` uses this base plus Markdown parsing and syntax highlighting dependencies, accepts `JSXRenderable` display props and does not depend on Core, React or image engines. Render tools consume HTML; adapters declare platform policies.

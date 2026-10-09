@@ -3,6 +3,7 @@ import {
   isJsxElement,
   jsx,
   type JSXElement,
+  type JSXProps,
   type JSXRenderable,
   type JSXStyle,
 } from "@zhin.js/jsx";
@@ -16,6 +17,7 @@ export const DEFAULT_CARD_THEME = {
   text: "#111111",
   textSecondary: "#3f3f46",
   textMuted: "#a1a1aa",
+  onAccent: "#ffffff",
   barTrack: "rgba(0,0,0,0.06)",
   barWarn: "#f59e0b",
   barCrit: "#ef4444",
@@ -54,7 +56,18 @@ export type ComponentName =
   | "QuoteCard"
   | "ProfileRow"
   | "Badge"
-  | "EmptyState";
+  | "EmptyState"
+  | "Table"
+  | "TableRow"
+  | "TableCell"
+  | "Checkbox"
+  | "Radio"
+  | "Switch"
+  | "Button"
+  | "List"
+  | "ListItem"
+  | "Markdown"
+  | "CodeBlock";
 
 /** Content remains JSX; design tokens are intentionally CSS values or numbers. */
 export interface ComponentTheme {
@@ -81,6 +94,11 @@ export interface ComponentTheme {
     readonly surface: string | number;
     readonly bar: string | number;
     readonly chart: string | number;
+  };
+  readonly code: {
+    readonly theme: string;
+    readonly fontFamily: string;
+    readonly fontSize: number;
   };
   readonly border: { readonly width: string | number; readonly style: string };
   readonly spacing: {
@@ -113,6 +131,8 @@ export interface ComponentTheme {
     readonly quoteClose: JSXRenderable;
     readonly reasonSeparator: JSXRenderable;
     readonly indexPrefix: JSXRenderable;
+    readonly listMarker: JSXRenderable;
+    readonly codeTitle: JSXRenderable;
     readonly chartTicks: readonly [JSXRenderable, JSXRenderable, JSXRenderable];
   };
   /** Global root defaults; a component's own layout remains authoritative. */
@@ -134,6 +154,8 @@ export type ThemeOverrides = {
 };
 
 export interface DisplayOverrides {
+  readonly marker?: JSXRenderable;
+  readonly caption?: JSXRenderable;
   readonly title?: JSXRenderable;
   readonly subtitle?: JSXRenderable;
   readonly label?: JSXRenderable;
@@ -164,6 +186,7 @@ export const DEFAULT_THEME: ComponentTheme = {
     weights: { normal: 500, strong: 600, heading: 700 },
   },
   radii: { card: 18, surface: 12, bar: 3, chart: 2 },
+  code: { theme: "github-light", fontFamily: "monospace", fontSize: 12 },
   border: { width: 1, style: "solid" },
   spacing: {
     scale: 1,
@@ -192,6 +215,8 @@ export const DEFAULT_THEME: ComponentTheme = {
     quoteClose: "」",
     reasonSeparator: " · ",
     indexPrefix: "#",
+    listMarker: "•",
+    codeTitle: "代码",
     chartTicks: ["00:00", "12:00", "23:00"],
   },
   style: {},
@@ -203,6 +228,25 @@ const themeContext = Symbol("zhin.components.theme");
 const scopedNode = Symbol("zhin.components.scoped-node");
 interface ScopeRecord {
   readonly source: JSXElement;
+}
+
+/** Internal composition uses the original type without evaluating lazy children. */
+export function sourceElementType(node: JSXElement): JSXElement["type"] {
+  return (
+    (node.props as { [scopedNode]?: ScopeRecord })[scopedNode]?.source.type ?? node.type
+  );
+}
+
+/** Keep intentional composition edits when a nested provider resets the scope. */
+export function cloneSourceElement(node: JSXElement, updates: JSXProps): JSXElement {
+  const scope = (node.props as { [scopedNode]?: ScopeRecord })[scopedNode];
+  return jsx(node.type, {
+    ...node.props,
+    ...updates,
+    ...(scope ? { [scopedNode]: {
+      source: jsx(scope.source.type, { ...scope.source.props, ...updates }),
+    } } : {}),
+  });
 }
 
 export function themeOf(props: object): ComponentTheme {
@@ -228,6 +272,7 @@ export function mergeTheme(
       },
     },
     radii: { ...parent.radii, ...override.radii },
+    code: { ...parent.code, ...override.code },
     border: { ...parent.border, ...override.border },
     spacing: { ...parent.spacing, ...override.spacing },
     layout: { ...parent.layout, ...override.layout },
