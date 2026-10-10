@@ -1,0 +1,188 @@
+packages/toolkit/components/README.md
+  s_079f1dc5e6308d::t_d2e2429b816c24 11
+  s_079f1dc5e6308d::t_a957b56f16b515 12
+  s_079f1dc5e6308d::t_b84b2ccad1899b 104,106
+packages/im/core/tests/interactive-segments.test.ts
+  s_079f1dc5e6308d::t_9e061b51937305 11-12,41-61
+  s_079f1dc5e6308d::t_ff5bc7b59206ff 62-63
+packages/toolkit/components/src/markdown.ts
+  s_079f1dc5e6308d::t_29c20732e72241 269-271,274-276,283-284,286
+packages/im/core/tests/jsx-public.test-d.tsx
+  s_079f1dc5e6308d::t_6cb50bcd39bdcf 9-10,23-31
+docs/en/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_d2e2429b816c24 14
+  s_079f1dc5e6308d::t_a957b56f16b515 15
+basic/cli/tests/plugin-runtime/root-host.test.ts
+  s_079f1dc5e6308d::t_b8104b6d8b8d03 16
+  s_079f1dc5e6308d::t_d34ca5370a8482 11
+  s_079f1dc5e6308d::t_b4a8266e0b993a 1-10,12-15,17-58
+packages/toolkit/components/src/charts.ts
+  s_079f1dc5e6308d::t_29c20732e72241 193-196,200-202,206,226
+packages/im/core/src/built/segment-contract/assert.ts
+  s_079f1dc5e6308d::t_52f719de548db2 3,33-34
+packages/toolkit/components/tests/controls.test.ts
+  s_079f1dc5e6308d::t_cbb9e3eca7dbfe 20-25
+packages/toolkit/satori/src/html-to-svg.ts
+  s_079f1dc5e6308d::t_f9988baa9cf504 361,368-372
+  s_079f1dc5e6308d::t_e37e8c7b425777 364
+packages/toolkit/CONTEXT.md
+  s_079f1dc5e6308d::t_b84b2ccad1899b 7
+packages/toolkit/components/src/styles.ts
+  s_079f1dc5e6308d::t_29c20732e72241 23-36,38-39,44-45,53,57
+  s_079f1dc5e6308d::t_cbb9e3eca7dbfe 37
+packages/im/core/tests/plugin-runtime/outbound-renderer.test.ts
+  s_079f1dc5e6308d::t_d89903ef733f23 110,112,125-126
+  s_079f1dc5e6308d::t_867ccd3c604fec 3,7,86-91,108-109,111,113-119,121-124
+  s_079f1dc5e6308d::t_1c1e93c74b28c6 2
+  s_079f1dc5e6308d::t_3b387c9837cfec 92-107,127
+  s_079f1dc5e6308d::t_b5448b716ab932 120
+  s_079f1dc5e6308d::t_0eebee1c150f07 128
+packages/toolkit/components/src/props.ts
+  s_079f1dc5e6308d::t_29c20732e72241 61,84,88
+plugins/adapters/sandbox/README.md
+  s_079f1dc5e6308d::t_ea645286e56c8e 47-48
+packages/toolkit/components/package.json
+  s_079f1dc5e6308d::t_b84b2ccad1899b 17
+packages/toolkit/components/src/list.ts
+  s_079f1dc5e6308d::t_29c20732e72241 19,24-25,27-31,51,63,85-88
+packages/im/agent/tests/prompt/git-context.test.ts
+  s_079f1dc5e6308d::t_d2e2429b816c24 22
+.github/skills/zhin-plugin-standard-development/SKILL.md
+  s_079f1dc5e6308d::t_a957b56f16b515 41
+  s_079f1dc5e6308d::t_b84b2ccad1899b 16-18,38
+  s_079f1dc5e6308d::t_d2e2429b816c24 42
+.github/instructions/zhin-plugin.instructions.md
+  s_079f1dc5e6308d::t_d2e2429b816c24 63
+  s_079f1dc5e6308d::t_b84b2ccad1899b 58-61
+  s_079f1dc5e6308d::t_a957b56f16b515 62,64
+README.md
+  s_079f1dc5e6308d::t_b84b2ccad1899b 87
+  s_079f1dc5e6308d::t_a957b56f16b515 222
+packages/im/jsx/package.json
+  s_079f1dc5e6308d::t_e37e8c7b425777 13
+packages/toolkit/create-zhin/src/workspace.ts
+  s_079f1dc5e6308d::t_b84b2ccad1899b 489
+packages/toolkit/components/src/code-block.ts
+  s_079f1dc5e6308d::t_29c20732e72241 23
+basic/cli/src/plugin-runtime/root-host.ts
+  s_079f1dc5e6308d::t_94d504d9b912ff 19,69
+  s_079f1dc5e6308d::t_b80b966a7310d1 18
+packages/im/jsx/README.md
+  s_079f1dc5e6308d::t_a957b56f16b515 15
+  s_079f1dc5e6308d::t_e37e8c7b425777 18
+  s_079f1dc5e6308d::t_d2e2429b816c24 14
+plugins/adapters/sandbox/pages/index/SandboxChat.tsx
+  s_079f1dc5e6308d::t_b6bcc030adbc09 21,413-414
+docs/concepts/message-flow.md
+  s_079f1dc5e6308d::t_b84b2ccad1899b 19-21
+packages/toolkit/satori/README.md
+  s_079f1dc5e6308d::t_5f43bd3456a55b 20-21
+  s_079f1dc5e6308d::t_e37e8c7b425777 22-26,29
+packages/toolkit/components/tests/suggestions-props.tsx
+  s_079f1dc5e6308d::t_1e7cc84dc9d861 1-11
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_079f1dc5e6308d::t_3fa916bbd17b40 5,61,66
+  s_079f1dc5e6308d::t_3b387c9837cfec 40,54,60,62-64,95
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_079f1dc5e6308d::t_52f719de548db2 26
+packages/toolkit/components/tests/suggestions.test.ts
+  s_079f1dc5e6308d::t_8c9361d17b66ba 1-84,86-87,90-102
+  s_079f1dc5e6308d::t_cbb9e3eca7dbfe 85,88-89
+plugins/adapters/sandbox/tests/sandbox-console.test.ts
+  s_079f1dc5e6308d::t_b6bcc030adbc09 155
+docs/adapters/sandbox.md
+  s_079f1dc5e6308d::t_ea645286e56c8e 11,59
+  s_079f1dc5e6308d::t_a3c060c8857d2b 60
+packages/toolkit/components/examples/gallery.mjs
+  s_079f1dc5e6308d::t_29c20732e72241 4-5,17
+packages/im/jsx/src/render.ts
+  s_079f1dc5e6308d::t_b6c4728d0ac4fc 139
+plugins/adapters/sandbox/pages/index/HtmlMessage.tsx
+  s_079f1dc5e6308d::t_a18407adf79ff9 1-33
+plugins/adapters/email/README.md
+  s_079f1dc5e6308d::t_94d504d9b912ff 108
+packages/im/core/src/built/interactive-segments/types.ts
+  s_079f1dc5e6308d::t_52f719de548db2 54-58,65-82
+packages/im/core/src/built/outbound-content-arrays.ts
+  s_079f1dc5e6308d::t_3fa916bbd17b40 1-27
+packages/im/jsx/src/element.ts
+  s_079f1dc5e6308d::t_e37e8c7b425777 84
+AGENTS.md
+  s_079f1dc5e6308d::t_d2e2429b816c24 112
+  s_079f1dc5e6308d::t_b84b2ccad1899b 110
+packages/toolkit/satori/tests/html-to-svg.test.ts
+  s_079f1dc5e6308d::t_f9988baa9cf504 42-49
+  s_079f1dc5e6308d::t_32495ff1eb28f0 2-4,39-41,50-72
+packages/im/core/tests/outbound-media-utils.test.ts
+  s_079f1dc5e6308d::t_9e061b51937305 1-7,10-11,13-21
+  s_079f1dc5e6308d::t_1c1e93c74b28c6 8-9,12
+docs/adapters/email.md
+  s_079f1dc5e6308d::t_daf7cc88d1baf8 11,120
+examples/minimal-bot/commands/card/index.ts
+  s_079f1dc5e6308d::t_b84b2ccad1899b 5
+docs/plans/jsx-html-components.md
+  s_079f1dc5e6308d::t_5b742e042139d0 204-211
+  s_079f1dc5e6308d::t_a957b56f16b515 73-79
+  s_079f1dc5e6308d::t_b84b2ccad1899b 120,123
+  s_079f1dc5e6308d::t_ea645286e56c8e 191-203
+packages/im/core/src/built/outbound-media-utils.ts
+  s_079f1dc5e6308d::t_52f719de548db2 1,45-48,61
+packages/toolkit/components/src/controls.ts
+  s_079f1dc5e6308d::t_cbb9e3eca7dbfe 56
+  s_079f1dc5e6308d::t_e0d27841d53df9 28-30,36,52-55,57-58
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_3fa916bbd17b40 23,172-173,195
+  s_079f1dc5e6308d::t_b5448b716ab932 210-215
+  s_079f1dc5e6308d::t_52f719de548db2 114,166-168
+  s_079f1dc5e6308d::t_f358b9f6d67476 169-170
+.github/workflows/ci.yml
+  s_079f1dc5e6308d::t_b84b2ccad1899b 267-271
+  s_079f1dc5e6308d::t_466dd7c4fb897c 272
+README.zh-CN.md
+  s_079f1dc5e6308d::t_a957b56f16b515 221
+  s_079f1dc5e6308d::t_b84b2ccad1899b 87,222
+docs/en/concepts/message-flow.md
+  s_079f1dc5e6308d::t_b84b2ccad1899b 19-21
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_079f1dc5e6308d::t_3b387c9837cfec 325,327,331-334
+  s_079f1dc5e6308d::t_3096bd8f1a1338 222-223,262-268,272-287
+  s_079f1dc5e6308d::t_867ccd3c604fec 269-271,288-293,295-310
+  s_079f1dc5e6308d::t_3fa916bbd17b40 26,326,328-330
+  s_079f1dc5e6308d::t_b5448b716ab932 294
+packages/im/core/tests/outbound-content-arrays.test.ts
+  s_079f1dc5e6308d::t_d89903ef733f23 1-17
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_079f1dc5e6308d::t_3096bd8f1a1338 262-264
+  s_079f1dc5e6308d::t_3fa916bbd17b40 7,235
+packages/toolkit/components/src/theme.ts
+  s_079f1dc5e6308d::t_e0d27841d53df9 6,370-378,386-388
+  s_079f1dc5e6308d::t_8c9361d17b66ba 380-385
+docs/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_a957b56f16b515 15
+  s_079f1dc5e6308d::t_d2e2429b816c24 14
+packages/toolkit/components/src/utilities.ts
+  s_079f1dc5e6308d::t_29c20732e72241 23-27
+packages/im/jsx/tests/render.test.ts
+  s_079f1dc5e6308d::t_b6c4728d0ac4fc 117
+  s_079f1dc5e6308d::t_32495ff1eb28f0 94-116,118-125
+packages/toolkit/components/tests/code-block-font-style.test.ts
+  s_079f1dc5e6308d::t_c24ff01c7817ca 1-18
+packages/toolkit/components/tests/list.test.ts
+  s_079f1dc5e6308d::t_5cfffdda869608 90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "245243e281ff87b7ca0be87de4e3df23170bd701",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
