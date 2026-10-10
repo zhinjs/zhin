@@ -1,1 +1,11 @@
+# Core architecture, public contracts and their enforcing gates.
+/basic/ @lc-cn
+/packages/ @lc-cn
+/plugins/adapters/ @lc-cn
+/scripts/ @lc-cn
+/docs/concepts/ @lc-cn
+/docs/contributing/ @lc-cn
+/.github/workflows/ @lc-cn
+/.github/CODEOWNERS @lc-cn
+/.changeset/ @lc-cn
 /.changeset/version-policy.json @lc-cn
