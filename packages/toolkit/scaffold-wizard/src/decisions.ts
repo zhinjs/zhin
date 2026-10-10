@@ -81,7 +81,11 @@ export async function saveTypeSafeSetupDependencies(projectDir: string, setup: T
   await mergePluginManifestIntoPackageJson(projectDir, [{ package: TYPESAFE_DECISION_PACKAGE, instanceKey: setup.instanceKey }]);
   await mergeDependenciesIntoPackageJson(projectDir, { [TYPESAFE_DECISION_PACKAGE]: '^1.0.0' });
   const envPath = path.join(projectDir, '.env');
-  const previous = await fs.pathExists(envPath) ? await fs.readFile(envPath, 'utf8') : '';
+  const envExists = await fs.pathExists(envPath);
+  const previous = envExists ? await fs.readFile(envPath, 'utf8') : '';
+  // writeFile's mode applies only when creating a file. Restrict existing files
+  // before adding credentials; Windows access control is not POSIX file modes.
+  if (envExists && process.platform !== 'win32') await fs.chmod(envPath, 0o600);
   await fs.writeFile(envPath, mergeEnvText(previous, `${variable}=${formatEnvValue(setup.apiKey)}\n`), { mode: 0o600 });
 }
 
@@ -91,12 +95,14 @@ export function diagnoseDecisionConfig(config: Readonly<Record<string, unknown>>
   if (!Object.hasOwn(ai, 'decisions')) return [];
   const decisions = record(ai.decisions);
   const issues: string[] = [];
-  const provider = decisions.provider;
-  if (typeof provider !== 'string' || !/^root(?:\/[a-z0-9][a-z0-9-]*)+$/.test(provider)) return ['ai.decisions.provider 必须是精确插件 owner，例如 root/typesafe。'];
   const taskNames = ['skills', 'tools', 'memory', 'agents', 'approval'];
+  if (Object.keys(decisions).some(key => !['provider', ...taskNames].includes(key))) issues.push('ai.decisions 含有未知配置字段。');
+  const provider = decisions.provider;
+  if (typeof provider !== 'string' || !/^root(?:\/[a-z0-9][a-z0-9-]*)+$/.test(provider)) return [...issues, 'ai.decisions.provider 必须是精确插件 owner，例如 root/typesafe。'];
   for (const name of taskNames) {
     if (!Object.hasOwn(decisions, name)) continue;
     const task = record(decisions[name]);
+    if (Object.keys(task).some(key => !['mode', 'timeoutMs', 'minConfidence', 'topK', 'maxCandidates', 'maxSelections'].includes(key))) issues.push(`ai.decisions.${name} 含有未知配置字段。`);
     if (typeof task.mode !== 'string' || !['off', 'shadow', 'active'].includes(task.mode)) issues.push(`ai.decisions.${name}.mode 必须是 off、shadow 或 active。`);
     for (const field of ['timeoutMs', 'topK', 'maxCandidates', 'maxSelections']) {
       if (task[field] !== undefined && (!Number.isSafeInteger(task[field]) || Number(task[field]) <= 0 || field === 'timeoutMs' && Number(task[field]) > 2147483647)) issues.push(`ai.decisions.${name}.${field} 必须是正整数。`);

@@ -4,6 +4,7 @@ import type { ToolExecutionContext } from '@zhin.js/tool';
 import type { AgentDecisionRuntime } from '../../src/decision/types.js';
 import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
 import { createNativeKnowledgeToolFeature, type KnowledgeIndex } from '../../src/plugin-runtime/native-knowledge-tool.js';
+import { rerankDecisionMatches } from '../../src/decision/retrieval.js';
 
 function context(roles: readonly string[] = ['user'], unattended = false): ToolExecutionContext {
   return { signal: new AbortController().signal, traceId: 'trace', turnId: 'turn', sessionKey: 'session',
@@ -30,11 +31,13 @@ describe('native retrieval decision integration', () => {
   it('reranks only scope-visible semantic memory and sends no foreign sender/session facts', async () => {
     const repository = new InMemoryMemoryEntryRepository();
     await repository.upsert({ scope: 'user', scope_key: 'user', key: 'mine', content: 'tea preferred with milk' });
-    await repository.upsert({ scope: 'global', key: 'shared', content: 'tea is a drink' });
+    await repository.upsert({ scope: 'session', scope_key: 'session', key: 'shared', content: 'tea is a drink' });
     await repository.upsert({ scope: 'user', scope_key: 'other', key: 'secret', content: 'tea FOREIGN sender' });
     await repository.upsert({ scope: 'session', scope_key: 'other', key: 'secret', content: 'tea FOREIGN session' });
     const memory = new SemanticMemoryRuntime();
     memory.activate(repository);
+    const baseline = createNativeSemanticMemoryToolFeatures(memory).find(tool => tool.name === 'memory_search')!;
+    expect(await baseline.definition.execute({ query: 'tea', limit: 1 }, context())).toContain('tea is a drink');
     const decision = runtime();
     const evaluate = vi.spyOn(decision.provider, 'evaluate');
     const tool = createNativeSemanticMemoryToolFeatures(memory, () => decision).find(tool => tool.name === 'memory_search')!;
@@ -43,6 +46,25 @@ describe('native retrieval decision integration', () => {
     expect(result).not.toContain('tea is a drink');
     expect(JSON.stringify(evaluate.mock.calls)).not.toContain('FOREIGN');
     expect(evaluate).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes search-matched tags in memory decision evidence', async () => {
+    const repository = new InMemoryMemoryEntryRepository();
+    await repository.upsert({ scope: 'user', scope_key: 'user', key: 'drink', content: 'milk', tags: ['tea', 'preferred'] });
+    const memory = new SemanticMemoryRuntime();
+    memory.activate(repository);
+    const decision = runtime();
+    const evaluate = vi.spyOn(decision.provider, 'evaluate');
+    const tool = createNativeSemanticMemoryToolFeatures(memory, () => decision).find(tool => tool.name === 'memory_search')!;
+    expect(await tool.definition.execute({ query: 'tea', limit: 1 }, context())).toContain('drink=milk');
+    expect(evaluate.mock.calls[0]![0].state).toMatchObject({
+      candidates: { candidate_0: { description: 'drink: milk\nTags: tea, preferred' } },
+    });
+  });
+
+  it('preserves selected undefined values in a generic match collection', async () => {
+    expect(await rerankDecisionMatches(runtime(), 'query', [undefined, 'baseline'],
+      value => value === undefined ? 'preferred' : value, 1, new AbortController().signal)).toEqual([undefined]);
   });
 
   it('reranks existing knowledge hits, while shadow and provider failure preserve baseline results', async () => {

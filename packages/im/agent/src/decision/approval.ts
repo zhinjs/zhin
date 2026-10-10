@@ -6,6 +6,8 @@ import type {
 } from './approval-judgment.js';
 import type { DecisionObservation, DecisionTaskPolicy } from './types.js';
 
+const MAX_INTENT_LENGTH = 8_192;
+
 const BINARY_CRITERIA = Object.freeze({
   yes: 'The statement is supported by the supplied evidence.',
   no: 'The statement is contradicted by the supplied evidence.',
@@ -101,48 +103,52 @@ export class DecisionApprovalJudgment implements ApprovalJudgmentPort {
     let result: DecisionApprovalResult;
     try {
       input.signal.throwIfAborted();
-      evidence = await beforeAbort(this.#options.provider.evaluate({
-        state: {
-          intent: this.#options.intent?.slice(0, 8_192) ?? null,
-          intentTruncated: (this.#options.intent?.length ?? 0) > 8_192,
-          principal: this.#options.principal ? {
-            subjectId: this.#options.principal.subjectId,
-            roles: [...this.#options.principal.roles],
-          } : null,
-          operation: input.request.question,
-          toolName: input.request.toolName,
-          requesterId: input.request.requesterId ?? null,
-          conversationScope: input.request.conversationScope ?? null,
-          priorDecisions: input.priorDecisions.map(entry => ({
-            requesterId: entry.requesterId ?? null,
-            toolName: entry.toolName,
-            question: entry.question,
-            decision: entry.decision,
-            source: entry.source,
-          })),
-        },
-        questions: QUESTIONS,
-      }, { signal: controller.signal, timeoutMs }), controller.signal);
-      controller.signal.throwIfAborted();
-      if (!validEvidence(evidence)) {
-        reason = 'invalid_response';
-        result = { decision: 'reject', reason: 'Invalid approval decision response' };
+      if (!this.#options.intent?.trim() || this.#options.intent.length > MAX_INTENT_LENGTH) {
+        result = { decision: 'ask', reason: 'Human intent is missing or incomplete; human review is required' };
       } else {
-        const minimum = this.#options.policy.minConfidence ?? 0.9;
-        const supported = (answer: ChoiceAnswer) => answer.confidence >= minimum
-          && answer.probabilities[answer.choice] >= minimum;
-        const unsafe = (['destructive', 'disclosure', 'escalation'] as const)
-          .filter(key => evidence!.answers[key].choice === 'yes' && supported(evidence!.answers[key]));
-        if (unsafe.length) {
-          result = { decision: 'reject', reason: `Unsafe operation: ${unsafe.join(', ')}`, evidence };
-        } else if (Object.values(evidence.answers).some(answer => !supported(answer) || answer.choice === 'unknown')) {
-          reason = 'low_confidence';
-          result = { decision: 'ask', reason: 'Approval evidence is uncertain; human review is required', evidence };
-        } else if (evidence.answers.bounded.choice !== 'yes' || evidence.answers.intent.choice !== 'yes') {
-          result = { decision: 'ask', reason: 'Operation scope, intent, or authority needs human clarification', evidence };
+        evidence = await beforeAbort(this.#options.provider.evaluate({
+          state: {
+            intent: this.#options.intent,
+            intentTruncated: false,
+            principal: this.#options.principal ? {
+              subjectId: this.#options.principal.subjectId,
+              roles: [...this.#options.principal.roles],
+            } : null,
+            operation: input.request.question,
+            toolName: input.request.toolName,
+            requesterId: input.request.requesterId ?? null,
+            conversationScope: input.request.conversationScope ?? null,
+            priorDecisions: input.priorDecisions.map(entry => ({
+              requesterId: entry.requesterId ?? null,
+              toolName: entry.toolName,
+              question: entry.question,
+              decision: entry.decision,
+              source: entry.source,
+            })),
+          },
+          questions: QUESTIONS,
+        }, { signal: controller.signal, timeoutMs }), controller.signal);
+        controller.signal.throwIfAborted();
+        if (!validEvidence(evidence)) {
+          reason = 'invalid_response';
+          result = { decision: 'reject', reason: 'Invalid approval decision response' };
         } else {
-          const decision = evidence.answers.verdict.choice;
-          result = { decision, reason: `Approval decision: ${decision}`, evidence };
+          const minimum = this.#options.policy.minConfidence ?? 0.9;
+          const supported = (answer: ChoiceAnswer) => answer.confidence >= minimum
+            && answer.probabilities[answer.choice] >= minimum;
+          const unsafe = (['destructive', 'disclosure', 'escalation'] as const)
+            .filter(key => evidence!.answers[key].choice === 'yes' && supported(evidence!.answers[key]));
+          if (unsafe.length) {
+            result = { decision: 'reject', reason: `Unsafe operation: ${unsafe.join(', ')}`, evidence };
+          } else if (Object.values(evidence.answers).some(answer => !supported(answer) || answer.choice === 'unknown')) {
+            reason = 'low_confidence';
+            result = { decision: 'ask', reason: 'Approval evidence is uncertain; human review is required', evidence };
+          } else if (evidence.answers.bounded.choice !== 'yes' || evidence.answers.intent.choice !== 'yes') {
+            result = { decision: 'ask', reason: 'Operation scope, intent, or authority needs human clarification', evidence };
+          } else {
+            const decision = evidence.answers.verdict.choice;
+            result = { decision, reason: `Approval decision: ${decision}`, evidence };
+          }
         }
       }
     } catch {

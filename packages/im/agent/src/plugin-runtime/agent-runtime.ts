@@ -18,7 +18,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
 import { createConversationReferenceCapability } from '../tool/conversation-reference-tool.js';
-import { resolveAgentDecisionRuntime } from './decision-runtime.js';
+import { drainAgentTurnDecisionObservations, runWithAgentDecisionTurn } from './decision-runtime.js';
 import type { AgentDecisionRuntime } from '../decision/types.js';
 
 abstract class SnapshotAttachedRuntime {
@@ -318,14 +318,10 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       });
       const tools = new TurnToolRuntime(turn, capabilities.tools);
       const engine = resolveTurnEngine(lease.value);
-      const decisions: import('../event/turn-event.js').DecisionEvaluationEvent[] = [];
-      const decision = request.session.key.startsWith('workroom:') || request.input.metadata?.workroom || request.principal.roles.includes('workroom_assignment')
-        || request.execution?.kind === 'schedule'
-        ? undefined : resolveAgentDecisionRuntime(lease.value, (observation) => {
-          decisions.push({ type: 'decision_evaluation', ...observation });
-        });
-      return await runWithAgentTurnConfiguration(
-        { activeBinding: selection.binding, decision },
+      const disabled = Boolean(request.session.key.startsWith('workroom:') || request.input.metadata?.workroom
+        || request.principal.roles.includes('workroom_assignment') || request.execution?.kind === 'schedule');
+      return await runWithAgentDecisionTurn(lease.value, request.identity.turnId, decision => runWithAgentTurnConfiguration(
+        { activeBinding: selection.binding },
         () => executeAgentTurn(turn, async function* () {
           const stream = engine.run({
           turn,
@@ -339,15 +335,23 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
           try {
             while (true) {
               const next = await stream.next();
-              for (const event of decisions.splice(0)) yield event;
+              for (const observation of drainAgentTurnDecisionObservations()) {
+                yield { type: 'decision_evaluation', ...observation };
+              }
               if (next.done) return next.value;
               yield next.value;
             }
+          } catch (error) {
+            // A later engine failure must not erase already completed decisions.
+            for (const observation of drainAgentTurnDecisionObservations()) {
+              yield { type: 'decision_evaluation', ...observation };
+            }
+            throw error;
           } finally {
             await stream.return(undefined);
           }
         }, observe),
-      );
+      ), { disabled });
     } finally {
       active = false;
     }

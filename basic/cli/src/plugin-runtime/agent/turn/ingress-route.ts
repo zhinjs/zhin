@@ -13,7 +13,7 @@ import {
   type TurnIntentResolver,
   type AgentDecisionRuntime,
   rankDecisionCandidates,
-  resolveAgentDecisionRuntime,
+  runWithAgentDecisionTurn,
 } from '@zhin.js/agent/runtime';
 import {
   type ImRuntime,
@@ -237,24 +237,10 @@ export class AgentTurnIngressRoute implements IngressRoute {
           });
         }
 
+        const traceId = randomUUID();
+        const turnId = randomUUID();
         const outcome = await withTriggerTimeout(
-          async (signal) => {
-            const decisionRuntime = workroomAgentTurn ? undefined
-              : resolveAgentDecisionRuntime(snapshot, observation => {
-                  logger.debug(formatCompact({
-                    op: 'agent_decision_evaluation',
-                    task: observation.task,
-                    mode: observation.mode,
-                    outcome: observation.outcome,
-                    candidates: observation.candidates,
-                    selected: observation.selected,
-                    durationMs: observation.durationMs,
-                    model: observation.model,
-                    reason: observation.reason,
-                    inputTokens: observation.usage?.inputTokens,
-                    outputTokens: observation.usage?.outputTokens,
-                  }));
-                });
+          async (signal) => runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
             routed = await selectDecisionAgentRoute({
               routed,
               capabilities,
@@ -296,8 +282,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               memory: options.agent.approvalReviewer,
             });
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
-              traceId: randomUUID(),
-              turnId: randomUUID(),
+              traceId,
+              turnId,
               signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
@@ -398,7 +384,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
               },
               observeAgentTurnTrace(traceRuntime, request),
             );
-          },
+          }, {
+            disabled: workroomAgentTurn != null,
+            observe: observation => logger.debug(formatCompact({
+              op: 'agent_decision_evaluation',
+              task: observation.task,
+              mode: observation.mode,
+              outcome: observation.outcome,
+              candidates: observation.candidates,
+              selected: observation.selected,
+              durationMs: observation.durationMs,
+              model: observation.model,
+              reason: observation.reason,
+              inputTokens: observation.usage?.inputTokens,
+              outputTokens: observation.usage?.outputTokens,
+            })),
+          }),
           resolveTriggerTimeoutMs(trigger),
         );
         const elements = completedOutput(outcome);

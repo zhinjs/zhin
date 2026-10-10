@@ -30,7 +30,6 @@ export async function rerankDecisionMatches<T>(
   if (!ranking.applied) return matches.slice(0, limit);
   const byName = new Map(matches.map((match, index) => [`hit_${index}`, match]));
   return ranking.selectedNames.slice(0, limit).flatMap(name => {
-    const match = byName.get(name);
-    return match === undefined ? [] : [match];
+    return byName.has(name) ? [byName.get(name)!] : [];
   });
 }

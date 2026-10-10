@@ -1,4 +1,5 @@
-import { vi } from 'vitest';
+import { expectTypeOf, vi } from 'vitest';
+import type { DecisionRequest } from '@zhin.js/ai';
 import { TypeSafeDecisionProvider } from '../src/decision-provider.js';
 import { TypeSafeDecisionError } from '../src/response-validator.js';
 
@@ -98,11 +99,49 @@ it('redacts SDK error bodies and does not emit SDK logs', async () => {
     expect(error).toBeInstanceOf(TypeSafeDecisionError);
     expect(error).toMatchObject({ code: 'request-failed', status: 401 });
     expect(JSON.stringify(error)).not.toMatch(/secret-key|private-prompt/);
+    expect((error as Error).message).not.toMatch(/secret-key|private-prompt/);
+    expect((error as Error).stack).not.toMatch(/secret-key|private-prompt/);
     expect((error as Error).cause).toBeUndefined();
   }
   expect(logs).not.toHaveBeenCalled();
   logs.mockRestore();
   provider.dispose();
+});
+
+it.each([
+  ['missing state', { questions }],
+  ['undefined choice criterion', { state: null, questions: { route: { type: 'choice', criteria: { billing: undefined, other: null } } } }],
+  ['undefined score criterion', { state: null, questions: { relevant: { type: 'score', criteria: [undefined, null] } } }],
+  ['sparse score criteria', { state: null, questions: { relevant: { type: 'score', criteria: new Array(2) } } }],
+  ['sparse state', { state: new Array(2), questions }],
+  ['empty choice criteria', { state: null, questions: { route: { type: 'choice', criteria: {} } } }],
+])('rejects %s before JSON serialization changes required data', async (_, malformed) => {
+  const fetch = vi.fn(async () => Response.json(response()));
+  const provider = new TypeSafeDecisionProvider({ apiKey: 'test-key' }, { fetch });
+  await expect(provider.evaluate(malformed as unknown as DecisionRequest, options())).rejects.toMatchObject({ code: 'invalid-request' });
+  expect(fetch).not.toHaveBeenCalled();
+  provider.dispose();
+});
+
+it('allows a single choice criterion and omitted optional descriptions', async () => {
+  const fetch = vi.fn(async () => Response.json({
+    model: 'jev-test', usage: { input_tokens: 1, output_tokens: 1 },
+    answers: {
+      route: { type: 'choice', choice: 'only', confidence: 1, probabilities: { only: 1 } },
+      allowed: { type: 'noul', noul: 0.5 },
+    },
+  }));
+  const provider = new TypeSafeDecisionProvider({ apiKey: 'test-key' }, { fetch });
+  const result = await provider.evaluate({ state: null, questions: { route: { type: 'choice', criteria: { only: null } }, allowed: { type: 'noul', criteria: {} } } }, options());
+  expect(result.answers.route.choice).toBe('only');
+  expectTypeOf(result.answers.route.choice).toEqualTypeOf<'only'>();
+  expect(result.answers.allowed).toEqual({ type: 'noul', noul: 0.5 });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  provider.dispose();
+});
+
+it('rejects repeated unresolved environment prefixes without a backtracking search', () => {
+  expect(() => new TypeSafeDecisionProvider({ apiKey: '${{'.repeat(30_000) })).toThrow('TypeSafe decision invalid-config');
 });
 
 it('validates unsupported JSON entries and empty questions before dispatch', async () => {
@@ -114,6 +153,6 @@ it('validates unsupported JSON entries and empty questions before dispatch', asy
   provider.dispose();
 });
 
-it.each([{ apiKey: '' }, { apiKey: '${TYPESAFE_API_KEY}' }, { apiKey: 'test', timeoutMs: 0 }, { apiKey: 'test', maxRetries: -1 }, { apiKey: 'test', baseUrl: 'https://secret:password@example.com' }])('rejects invalid config safely', config => {
+it.each([{ apiKey: '' }, { apiKey: '  \t\n' }, { apiKey: '${TYPESAFE_API_KEY}' }, { apiKey: 'test', model: '  ' }, { apiKey: 'test', timeoutMs: 0 }, { apiKey: 'test', maxRetries: -1 }, ...['https://secret:password@example.com', 'https://@example.com', 'https://example.com?', 'https://example.com#', 'https://example.com/path?token=secret', 'https://example.com/path#fragment', ' https://example.com', 'https://exa mple.com'].map(baseUrl => ({ apiKey: 'test', baseUrl }))])('rejects invalid config safely', config => {
   expect(() => new TypeSafeDecisionProvider(config)).toThrow('TypeSafe decision invalid-config');
 });

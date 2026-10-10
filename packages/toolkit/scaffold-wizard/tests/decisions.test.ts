@@ -21,17 +21,19 @@ it('keeps completion settings, writes only an environment reference and starts r
 });
 
 it('requires a configured completion Agent before asking for a key', async () => {
-  const prompt = vi.spyOn(inquirer, 'prompt');
-  await expect(configureTypeSafeDecisions({})).rejects.toThrow('zhin setup --ai');
-  expect(prompt).not.toHaveBeenCalled();
-  prompt.mockRestore();
+  const prompt = vi.spyOn(inquirer, 'prompt').mockRejectedValue(new Error('Unexpected interactive prompt'));
+  try {
+    await expect(configureTypeSafeDecisions({})).rejects.toThrow('zhin setup --ai');
+    expect(prompt).not.toHaveBeenCalled();
+  } finally { prompt.mockRestore(); }
 });
 
 it('saves manifest, optional dependency and env idempotently without touching unrelated configuration', async () => {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-decisions-'));
   try {
     await fs.writeJson(path.join(directory, 'package.json'), { dependencies: { 'zhin.js': '^1.1.0' }, zhin: { plugins: [{ package: 'other', instanceKey: 'other' }] } });
-    await fs.writeFile(path.join(directory, '.env'), 'OTHER=preserved\n');
+    const envPath = path.join(directory, '.env');
+    await fs.writeFile(envPath, 'OTHER=preserved\n', { mode: 0o644 });
     await saveTypeSafeSetupDependencies(directory, setup);
     await saveTypeSafeSetupDependencies(directory, setup);
     const pkg = await fs.readJson(path.join(directory, 'package.json'));
@@ -41,6 +43,7 @@ it('saves manifest, optional dependency and env idempotently without touching un
     expect(env).toContain('OTHER=preserved');
     expect(env.match(/^TYPESAFE_API_KEY=/gm)).toHaveLength(1);
     expect(JSON.stringify(pkg)).not.toContain('private-key');
+    if (process.platform !== 'win32') expect((await fs.stat(envPath)).mode & 0o777).toBe(0o600);
   } finally { await fs.remove(directory); }
 });
 
@@ -65,7 +68,37 @@ it('diagnoses missing and disabled bindings without reflecting credentials', () 
 });
 
 it('requires an actual completion binding even when ai.enabled is true', async () => {
-  await expect(configureTypeSafeDecisions({ ai: { enabled: true } })).rejects.toThrow('zhin setup --ai');
+  const prompt = vi.spyOn(inquirer, 'prompt').mockRejectedValue(new Error('Unexpected interactive prompt'));
+  try {
+    await expect(configureTypeSafeDecisions({ ai: { enabled: true } })).rejects.toThrow('zhin setup --ai');
+    expect(prompt).not.toHaveBeenCalled();
+  } finally { prompt.mockRestore(); }
+});
+
+it.each([
+  { provider: 'root/typesafe', skill: { mode: 'active' } },
+  { provider: 'root/typesafe', skills: { mode: 'off', minConfidance: 0.95 } },
+])('diagnoses unknown configuration fields even when tasks are off', decisions => {
+  const config = aiConfig();
+  config.ai = { ...(config.ai as object), decisions };
+  expect(diagnoseDecisionConfig(config, manifest()).some(issue => issue.includes('未知配置字段'))).toBe(true);
+});
+
+it('writes credentials on Windows without relying on POSIX chmod', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-decisions-'));
+  const chmod = vi.spyOn(fs, 'chmod');
+  const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32');
+  try {
+    await fs.writeJson(path.join(directory, 'package.json'), {});
+    await fs.writeFile(path.join(directory, '.env'), 'OTHER=preserved\n');
+    await saveTypeSafeSetupDependencies(directory, setup);
+    expect(chmod).not.toHaveBeenCalled();
+    expect(await fs.readFile(path.join(directory, '.env'), 'utf8')).toContain('OTHER=preserved');
+  } finally {
+    platform.mockRestore();
+    chmod.mockRestore();
+    await fs.remove(directory);
+  }
 });
 
 it('accepts nested and numeric owner paths and all-off bindings without requiring a live resource', () => {

@@ -5,6 +5,8 @@ import type { ApprovalJudgmentPort } from '../../src/decision/approval-judgment.
 import { ApprovalReviewAgent, createAutoApprovalPort } from '../../src/session/approval-review-agent.js';
 import type { ApprovalDecisionPort, ApprovalRequestInput } from '../../src/session/approval-port.js';
 
+const INTENT = 'Carry out the specified private operation';
+
 describe('DecisionApprovalJudgment', () => {
   it('requires bounded scope, authority and every atomic safety check before approving', async () => {
     const { judgment, evaluate } = fixture();
@@ -33,16 +35,36 @@ describe('DecisionApprovalJudgment', () => {
     const bounded = new DecisionApprovalJudgment({
       provider: { evaluate }, policy: { mode: 'active' }, intent: 'x'.repeat(10_000),
     });
-    await bounded.judge(input());
-    expect(evaluate.mock.calls[1]![0].state).toMatchObject({ intent: 'x'.repeat(8_192), intentTruncated: true });
+    await expect(bounded.judge(input())).resolves.toMatchObject({ decision: 'ask' });
+    expect(evaluate).toHaveBeenCalledTimes(1);
   });
 
-  it('rejects confident destructive evidence even if the combined verdict says approve', async () => {
+  it.each([
+    ['absent', undefined], ['empty', ''], ['whitespace', ' \n\t '], ['truncated', 'x'.repeat(8_193)],
+  ])('asks a human for %s intent even when the provider would confidently approve', async (_label, intent) => {
+    const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue(evidence());
+    const judgment = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' }, intent });
+    const ask = { requestApproval: vi.fn(async () => true) };
+    const reviewer = new ApprovalReviewAgent({ judgment });
+    await expect(createAutoApprovalPort(reviewer, ask).requestApproval(input().request)).resolves.toBe(true);
+    expect(ask.requestApproval).toHaveBeenCalledTimes(1);
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
+  it('accepts complete intent at the maximum evidence length', async () => {
+    const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue(evidence());
+    const intent = 'x'.repeat(8_192);
+    const judgment = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' }, intent });
+    await expect(judgment.judge(input())).resolves.toMatchObject({ decision: 'approve' });
+    expect(evaluate.mock.calls[0]![0].state).toMatchObject({ intent, intentTruncated: false });
+  });
+
+  it.each(['destructive', 'disclosure', 'escalation'] as const)('rejects confident %s evidence even if the combined verdict says approve', async (risk) => {
     const value = evidence();
-    value.answers.destructive = answer('yes');
+    value.answers[risk] = answer('yes');
     const { judgment } = fixture(value);
     await expect(judgment.judge(input())).resolves.toMatchObject({
-      decision: 'reject', reason: 'Unsafe operation: destructive',
+      decision: 'reject', reason: `Unsafe operation: ${risk}`,
     });
   });
 
@@ -80,7 +102,7 @@ describe('DecisionApprovalJudgment', () => {
   it('denies and cancels a provider that does not settle within the total budget', async () => {
     const evaluate = vi.fn<DecisionProvider['evaluate']>().mockReturnValue(new Promise<never>(() => {}));
     const judgment = new DecisionApprovalJudgment({
-      provider: { evaluate }, policy: { mode: 'active', timeoutMs: 5 },
+      provider: { evaluate }, policy: { mode: 'active', timeoutMs: 5 }, intent: INTENT,
     });
     await expect(judgment.judge(input())).resolves.toMatchObject({ decision: 'reject' });
     expect(evaluate.mock.calls[0]![1].signal.aborted).toBe(true);
@@ -89,7 +111,7 @@ describe('DecisionApprovalJudgment', () => {
   it('preserves the parent cancellation reason and rejects late approval', async () => {
     let resolve!: (value: ReturnType<typeof evidence>) => void;
     const evaluate = vi.fn<DecisionProvider['evaluate']>().mockReturnValue(new Promise<ReturnType<typeof evidence>>(done => { resolve = done; }));
-    const judgment = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' } });
+    const judgment = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' }, intent: INTENT });
     const controller = new AbortController();
     const reviewing = judgment.judge(input(controller.signal));
     const reason = new Error('Turn ended');
@@ -106,7 +128,7 @@ describe('DecisionApprovalJudgment', () => {
     const off = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'off' }, baseline });
     await expect(off.judge(input())).resolves.toMatchObject({ decision: 'reject', reason: 'baseline' });
     expect(evaluate).not.toHaveBeenCalled();
-    const shadow = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'shadow' }, baseline, observe });
+    const shadow = new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'shadow' }, baseline, observe, intent: INTENT });
     await expect(shadow.judge(input())).resolves.toMatchObject({ decision: 'reject', reason: 'baseline' });
     expect(observe).toHaveBeenCalledWith(expect.objectContaining({ mode: 'shadow', outcome: 'shadow' }));
     expect(JSON.stringify(observe.mock.calls)).not.toContain('private operation');
@@ -140,7 +162,7 @@ describe('DecisionApprovalJudgment', () => {
     if (failure === 'transport') evaluate.mockRejectedValueOnce(new Error('transport failed'));
     else evaluate.mockReturnValueOnce(new Promise<never>(() => {}));
     const judgment = new DecisionApprovalJudgment({
-      provider: { evaluate }, policy: { mode: 'active', timeoutMs: 5 },
+      provider: { evaluate }, policy: { mode: 'active', timeoutMs: 5 }, intent: INTENT,
     });
     const reviewer = new ApprovalReviewAgent({ judgment });
     const port = createAutoApprovalPort(reviewer);
@@ -179,5 +201,5 @@ function evidence() {
 
 function fixture(value = evidence()) {
   const evaluate = vi.fn<DecisionProvider['evaluate']>().mockResolvedValue(value);
-  return { evaluate, judgment: new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' } }) };
+  return { evaluate, judgment: new DecisionApprovalJudgment({ provider: { evaluate }, policy: { mode: 'active' }, intent: INTENT }) };
 }

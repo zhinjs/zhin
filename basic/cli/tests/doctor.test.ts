@@ -1,11 +1,43 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { applyConsoleConfigFixes, diagnoseConsoleConfig } from '@zhin.js/scaffold-wizard';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findMissingEndpointFields, loadPluginSchemaJson } from '../src/utils/adapter-endpoints-check.js';
 
+vi.mock('child_process', () => ({
+  exec: (_command: string, callback: (error: null, result: { stdout: string; stderr: string }) => void) => callback(null, { stdout: '9.0.0', stderr: '' }),
+}));
+
 describe('doctor console diagnostics', () => {
+  it.each([false, true])('keeps Console and Sandbox diagnostics when package.json is malformed (decisions: %s)', async decisions => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-malformed-package-'));
+    const cwd = vi.spyOn(process, 'cwd').mockReturnValue(directory);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const exit = vi.spyOn(process, 'exit').mockImplementation(() => { throw new Error('doctor exited'); });
+    try {
+      fs.writeFileSync(path.join(directory, 'package.json'), '{ invalid json');
+      fs.writeFileSync(path.join(directory, 'zhin.config.json'), JSON.stringify({
+        plugins: { sandbox: {} },
+        http: { token: 'test-token', corsOrigins: ['https://console.zhin.dev'] },
+        ...(decisions ? { ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'off' } } } } : {}),
+      }));
+      const { doctorCommand } = await import('../src/commands/doctor.js');
+      await expect(doctorCommand.parseAsync(['node', 'zhin'])).rejects.toThrow('doctor exited');
+      const output = log.mock.calls.map(args => args.join(' ')).join('\n');
+      expect(output).toContain('Sandbox 插件已启用');
+      expect(output).toContain('CORS 已配置');
+      expect(output).toContain('package.json');
+      expect(output).not.toContain('无法读取配置以检查 Console');
+      if (decisions) expect(output).toContain('无法读取 package.json 以检查决策插件绑定');
+    } finally {
+      cwd.mockRestore();
+      log.mockRestore();
+      exit.mockRestore();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   it('detects missing Sandbox, CORS, and token config', () => {
     const diagnosis = diagnoseConsoleConfig({ plugins: { example: {} }, http: {} });
 

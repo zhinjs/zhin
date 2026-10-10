@@ -289,9 +289,9 @@
         "mode": { "type": "string", "enum": ["off", "shadow", "active"] },
         "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
         "minConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
-        "topK": { "type": "integer", "minimum": 1 },
-        "maxCandidates": { "type": "integer", "minimum": 1 },
-        "maxSelections": { "type": "integer", "minimum": 1 }
+        "topK": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "maxCandidates": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "maxSelections": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
       }
     }
   }

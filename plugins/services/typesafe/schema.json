@@ -12,6 +12,7 @@
     "apiKey": {
       "type": "string",
       "minLength": 1,
+      "pattern": "\\S",
       "writeOnly": true,
       "description": "TypeSafe API key; reference TYPESAFE_API_KEY from the environment.",
       "x-descriptionZh": "通过环境变量 TYPESAFE_API_KEY 引用密钥。"
@@ -19,6 +20,7 @@
     "model": {
       "type": "string",
       "minLength": 1,
+      "pattern": "\\S",
       "default": "jev-latest",
       "description": "Model name; pin a model version for calibrated policies.",
       "x-descriptionZh": "模型名称；校准后的策略应固定模型版本。"
@@ -28,7 +30,7 @@
       "default": "https://api.typesafe.ai",
       "description": "API root URL without query, credentials or fragment.",
       "x-descriptionZh": "API 根地址，不包含凭据、查询或片段。",
-      "pattern": "^https?://"
+      "pattern": "^https?://[^/?#@\\s]+(?:/[^?#\\s]*)?$"
     },
     "timeoutMs": {
       "type": "integer",

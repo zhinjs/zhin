@@ -53,9 +53,11 @@ ai:
       mode: shadow
 ```
 
-The instance provides `decisionProviderToken` from `@zhin.js/agent/runtime` in its own plugin scope. Agent configuration must explicitly bind the instance through the runtime decision configuration; merely installing a provider does not authorize decisions or change existing routing. Independent instances have independent clients and lifecycle cleanup.
+The instance registers its client through `provideAgentDecisionProvider` from `@zhin.js/agent/runtime` in its own plugin scope. The registration binds the resource to its owning instance, so an inherited ancestor provider cannot satisfy a different configured instance. Agent configuration must explicitly bind the instance through the runtime decision configuration; merely installing a provider does not authorize decisions or change existing routing. Independent instances have independent clients and lifecycle cleanup.
 
 `schema.json` is the configuration contract. `timeoutMs` covers the whole call, including HTTP attempts and retry delays. A caller can supply its own total budget. `enabled: false` skips client creation and does not require a key. `baseUrl` defaults to `https://api.typesafe.ai`; custom roots cannot contain credentials, query strings or fragments.
+
+Invalid configuration for an enabled instance stops plugin startup with a sanitized error instead of silently disabling the configured decision or approval provider. Resolve the environment reference or configuration error before restarting; use `enabled: false` to explicitly disable the instance.
 
 ## Use the decision interface
 

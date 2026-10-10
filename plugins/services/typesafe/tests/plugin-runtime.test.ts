@@ -21,6 +21,13 @@ it('composes the real plugin schema and host decision references', async () => {
     const disabled = await composer.compose(graph, { plugins: { typesafe: { enabled: false } } });
     expect(disabled.views.get(graph.root.children[0]!.id)).toMatchObject({ enabled: false, model: 'jev-latest', timeoutMs: 10000 });
     await expect(composer.compose(graph, { plugins: { typesafe: {} } })).rejects.toBeInstanceOf(ConfigValidationError);
+    for (const config of [
+      { apiKey: ' \t\n' },
+      { apiKey: 'test-key', model: '  ' },
+      ...['https://user:password@example.com', 'https://@example.com', 'https://example.com?token=private', 'https://example.com#fragment', 'https://example.com?', 'https://example.com#', 'https://exa mple.com'].map(baseUrl => ({ apiKey: 'test-key', baseUrl })),
+    ]) {
+      await expect(composer.compose(graph, { plugins: { typesafe: config } })).rejects.toBeInstanceOf(ConfigValidationError);
+    }
     const enabled = await composer.compose(graph, {
       plugins: { typesafe: { apiKey: 'test-key' } },
       ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'shadow' } } },
@@ -31,6 +38,13 @@ it('composes the real plugin schema and host decision references', async () => {
       ai: { decisions: { provider: 'root/typesafe', skills: { mode: 'invalid' } } },
     })).rejects.toBeInstanceOf(ConfigValidationError);
   } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+it('fails enabled setup on invalid config instead of silently removing the configured provider', async () => {
+  const { context, resources, lifecycle } = setupContext({ apiKey: '${TYPESAFE_API_KEY}' });
+  await expect(async () => plugin.setup!(context)).rejects.toMatchObject({ code: 'invalid-config', message: 'TypeSafe decision invalid-config' });
+  expect(resources.has(decisionProviderToken)).toBe(false);
+  await lifecycle.dispose();
 });
 
 function setupContext(config: TypeSafeDecisionConfig) {
@@ -59,7 +73,9 @@ it('provides only a local resource and aborts the pending call on generation cle
     await plugin.setup!(context);
     expect(parent.has(decisionProviderToken)).toBe(false);
     expect(resources.has(decisionProviderToken)).toBe(true);
-    const provider = resources.use(decisionProviderToken);
+    const registration = resources.use(decisionProviderToken);
+    expect(registration.owner).toBe(context.plugin.id);
+    const provider = registration.provider;
     const pending = provider.evaluate({ state: 'test', questions: { allowed: { type: 'noul' } } }, { signal: context.signal });
     await lifecycle.dispose();
     await expect(pending).rejects.toMatchObject({ code: 'disposed' });

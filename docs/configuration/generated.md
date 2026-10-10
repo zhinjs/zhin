@@ -25,6 +25,43 @@ outline: [2, 3]
 | `http.readiness.agents` | array&lt;string&gt; | 否 | — | 必须存在的 Agent binding；不验证模型凭据或 Provider 网络可用性。 |
 | `database` | object | 否 | — | Database Host 与方言连接参数。 |
 | `ai` | object | 否 | — | Provider、Agent、会话、记忆、工具与执行安全策略。 |
+| `ai.decisions` | object | 否 | — | 可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。 |
+| `ai.decisions.provider` | string | 是 | — | 提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。 |
+| `ai.decisions.skills` | object | 否 | — | — |
+| `ai.decisions.skills.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.skills.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.skills.minConfidence` | number | 否 | — | — |
+| `ai.decisions.skills.topK` | integer | 否 | — | — |
+| `ai.decisions.skills.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.skills.maxSelections` | integer | 否 | — | — |
+| `ai.decisions.tools` | object | 否 | — | — |
+| `ai.decisions.tools.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.tools.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.tools.minConfidence` | number | 否 | — | — |
+| `ai.decisions.tools.topK` | integer | 否 | — | — |
+| `ai.decisions.tools.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.tools.maxSelections` | integer | 否 | — | — |
+| `ai.decisions.memory` | object | 否 | — | — |
+| `ai.decisions.memory.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.memory.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.memory.minConfidence` | number | 否 | — | — |
+| `ai.decisions.memory.topK` | integer | 否 | — | — |
+| `ai.decisions.memory.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.memory.maxSelections` | integer | 否 | — | — |
+| `ai.decisions.agents` | object | 否 | — | — |
+| `ai.decisions.agents.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.agents.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.agents.minConfidence` | number | 否 | — | — |
+| `ai.decisions.agents.topK` | integer | 否 | — | — |
+| `ai.decisions.agents.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.agents.maxSelections` | integer | 否 | — | — |
+| `ai.decisions.approval` | object | 否 | — | — |
+| `ai.decisions.approval.mode` | string: `"off"`, `"shadow"`, `"active"` | 是 | — | — |
+| `ai.decisions.approval.timeoutMs` | integer | 否 | — | — |
+| `ai.decisions.approval.minConfidence` | number | 否 | — | — |
+| `ai.decisions.approval.topK` | integer | 否 | — | — |
+| `ai.decisions.approval.maxCandidates` | integer | 否 | — | — |
+| `ai.decisions.approval.maxSelections` | integer | 否 | — | — |
 | `ai.workroom` | object | 否 | — | 进程持有的 Workroom 控制面策略；Project 仍由持久化 Catalog 管理。 |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | 否 | — | 允许发布共享 Capability Pack 的 Console 认证 principalId。 |
 | `ai.workroom.disclosure` | object | 否 | — | Workroom 披露初始化使用的显式 P12 模型处理方契约。 |
@@ -1236,6 +1273,19 @@ _该 Schema 没有声明字段。_
 | `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | 否 | `true` | phase 停止后是否自动移除反馈。 |
 | `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | 否 | — | 自动移除前等待的毫秒数；负值会在运行时归一化为 0。 |
 | `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | 否 | — | 平台特定选项。 |
+
+### typesafe
+
+[`plugins/services/typesafe/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/typesafe/schema.json)
+
+| 路径 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `plugins.typesafe.enabled` | boolean | 否 | `true` | 启用该决策服务。 |
+| `plugins.typesafe.apiKey` | string | 否 | — | 通过环境变量 TYPESAFE_API_KEY 引用密钥。 |
+| `plugins.typesafe.model` | string | 否 | `"jev-latest"` | 模型名称；校准后的策略应固定模型版本。 |
+| `plugins.typesafe.baseUrl` | string | 否 | `"https://api.typesafe.ai"` | API 根地址，不包含凭据、查询或片段。 |
+| `plugins.typesafe.timeoutMs` | integer | 否 | `10000` | 包含全部请求与重试等待的总超时。 |
+| `plugins.typesafe.maxRetries` | integer | 否 | `2` | 首次请求后的最大重试次数。 |
 
 ### 60s
 

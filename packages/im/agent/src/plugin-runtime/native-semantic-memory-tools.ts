@@ -112,7 +112,7 @@ async function searchMemory(
       }, context.signal)
     : await searchVisibleMemory(runtime, query, candidateLimit, context);
   const hits = await rerankDecisionMatches(decision, query, candidates,
-    entry => `${entry.key}: ${entry.content}`, limit, context.signal);
+    entry => `${entry.key}: ${entry.content}\nTags: ${parseMemoryTags(entry.tags).join(', ')}`, limit, context.signal);
   if (hits.length === 0) return `未找到与 "${query}" 相关的记忆条目。`;
   return `找到 ${hits.length} 条记忆：\n${hits.map((entry) => {
     const tags = parseMemoryTags(entry.tags);

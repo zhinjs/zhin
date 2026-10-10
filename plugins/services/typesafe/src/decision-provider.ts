@@ -22,11 +22,12 @@ function validateJson(value: JsonValue, ancestors = new Set<object>()): void {
   const prototype = Object.getPrototypeOf(value);
   if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) throw new TypeSafeDecisionError('invalid-request');
   ancestors.add(value);
-  for (const entry of Object.values(value)) validateJson(entry, ancestors);
+  for (const entry of Array.isArray(value) ? value : Object.values(value)) validateJson(entry, ancestors);
   ancestors.delete(value);
 }
-function entry(value: JsonValue | undefined): void {
-  if (value === undefined) return;
+function entry(value: JsonValue | undefined, optional = false): void {
+  if (value === undefined && optional) return;
+  if (value === undefined) throw new TypeSafeDecisionError('invalid-request');
   validateJson(value);
   // The native API accepts text, arrays, objects and null as entries.
   if (typeof value === 'boolean' || typeof value === 'number') throw new TypeSafeDecisionError('invalid-request');
@@ -38,18 +39,18 @@ function validateRequest(request: DecisionRequest): void {
   if (!questions || typeof questions !== 'object' || Array.isArray(questions) || !Object.keys(questions).length) throw new TypeSafeDecisionError('invalid-request');
   for (const question of Object.values(questions)) {
     if (!question || typeof question !== 'object') throw new TypeSafeDecisionError('invalid-request');
-    entry(question.instructions);
+    entry(question.instructions, true);
     if (question.type === 'choice') {
-      if (!question.criteria || typeof question.criteria !== 'object' || Array.isArray(question.criteria) || Object.keys(question.criteria).length < 2) throw new TypeSafeDecisionError('invalid-request');
+      if (!question.criteria || typeof question.criteria !== 'object' || Array.isArray(question.criteria) || Object.keys(question.criteria).length < 1) throw new TypeSafeDecisionError('invalid-request');
       Object.values(question.criteria).forEach(value => entry(value));
     } else if (question.type === 'score') {
       if (!Array.isArray(question.criteria) || question.criteria.length < 2) throw new TypeSafeDecisionError('invalid-request');
-      question.criteria.forEach(value => entry(value));
+      for (const value of question.criteria) entry(value);
     } else if (question.type === 'noul') {
       if (question.criteria != null) {
         if (typeof question.criteria !== 'object' || Array.isArray(question.criteria) || Object.keys(question.criteria).some(key => key !== 'true' && key !== 'false')) throw new TypeSafeDecisionError('invalid-request');
-        entry(question.criteria.true);
-        entry(question.criteria.false);
+        entry(question.criteria.true, true);
+        entry(question.criteria.false, true);
       }
     } else throw new TypeSafeDecisionError('invalid-request');
   }
@@ -62,13 +63,14 @@ export class TypeSafeDecisionProvider implements DecisionProvider {
   readonly #disposed = new AbortController();
 
   constructor(config: TypeSafeDecisionConfig, transport: { fetch?: Fetch } = {}) {
-    if (typeof config.apiKey !== 'string' || !config.apiKey.trim() || /\$\{[^}]+\}/.test(config.apiKey)) throw new TypeSafeDecisionError('invalid-config');
+    if (typeof config.apiKey !== 'string' || !config.apiKey.trim() || config.apiKey.includes('${')) throw new TypeSafeDecisionError('invalid-config');
     this.#timeoutMs = positiveBudget(config.timeoutMs ?? 10_000);
     const maxRetries = config.maxRetries ?? 2;
     if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) throw new TypeSafeDecisionError('invalid-config');
     if (config.model !== undefined && (typeof config.model !== 'string' || !config.model.trim())) throw new TypeSafeDecisionError('invalid-config');
     if (config.baseUrl !== undefined) {
       try {
+        if (!/^https?:\/\/[^/?#@\s]+(?:\/[^?#\s]*)?$/.test(config.baseUrl)) throw new Error();
         const url = new URL(config.baseUrl);
         if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error();
       } catch { throw new TypeSafeDecisionError('invalid-config'); }
