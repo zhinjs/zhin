@@ -1,0 +1,21 @@
+tests/snapshots/plugin-runtime-api.json
+  s_6562bcb6cc0539::t_8559b1b6707305 26,41,135-136
+docs/.vitepress/config.ts
+  s_6562bcb6cc0539::t_d0471fa335c786 115,360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1df51b1f73150d01402b83b5685ed8b61c49f33",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
