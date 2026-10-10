@@ -14,11 +14,15 @@ import {
 } from '../lib/index.js';
 
 let tw;
+let tailwindUrl;
 try {
-  const { createTailwindStyle } = await import('@zhin.js/tailwind');
-  tw = await createTailwindStyle({ theme: { '--color-brand': '#2563eb' } });
+  tailwindUrl = import.meta.resolve('@zhin.js/tailwind');
 } catch (error) {
-  if (error.code !== 'ERR_MODULE_NOT_FOUND' || !error.message.includes('@zhin.js/tailwind')) throw error;
+  if (error.code !== 'ERR_MODULE_NOT_FOUND') throw error;
+}
+if (tailwindUrl) {
+  const { createTailwindStyle } = await import(tailwindUrl);
+  tw = await createTailwindStyle({ theme: { '--color-brand': '#2563eb' } });
 }
 
 const output = resolve(process.argv.slice(2).find(argument => argument !== '--')

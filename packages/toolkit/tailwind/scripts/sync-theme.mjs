@@ -4,12 +4,15 @@ import { readFile, writeFile } from "node:fs/promises";
 
 const require = createRequire(import.meta.url);
 const normalizeNewlines = (text) => text.replace(/\r\n/g, "\n");
+const { version } = JSON.parse(
+  await readFile(require.resolve("tailwindcss/package.json"), "utf8")
+);
 const css = normalizeNewlines(
   await readFile(require.resolve("tailwindcss/theme.css"), "utf8")
 );
 const output = new URL("../src/default-theme.ts", import.meta.url);
 const source =
-  "// Generated from tailwindcss@4.3.3/theme.css (MIT, Tailwind Labs).\n" +
+  `// Generated from tailwindcss@${version}/theme.css (MIT, Tailwind Labs).\n` +
   "// Run pnpm sync:theme after updating the pinned Tailwind dependency.\n" +
   "// prettier-ignore\n" +
   `export const defaultTheme = ${JSON.stringify(css)};\n`;

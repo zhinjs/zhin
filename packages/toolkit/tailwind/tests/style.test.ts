@@ -69,6 +69,17 @@ describe("official Tailwind static inline styles", () => {
     });
   });
 
+  it.each(["inherit", "unset", "revert", "revert-layer"])(
+    "rejects cascade-dependent values through the public resolver: %s",
+    async (keyword) => {
+      const tw = await createTailwindStyle();
+      expect(() => tw(`[color:${keyword}]`)).toThrow(
+        /depends on an external stylesheet/
+      );
+      expect(tw("text-red-500").color).toContain("oklch(");
+    }
+  );
+
   it("isolates themes and snapshots their values before returning the resolver", async () => {
     const tokens = {
       "--color-brand": "#123456",

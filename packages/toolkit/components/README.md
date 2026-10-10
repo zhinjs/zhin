@@ -197,6 +197,15 @@ Row、Col 默认 gap 为 0。表格与分区不再给已有外距的竖向子组
 
 ## Tailwind 静态工具类
 
-按需安装 `@zhin.js/tailwind`，通过 `createTailwindStyle()` 获得同步 `tw(classes)`。其返回的内联样式可用于原生元素 `style`、组件 `custom.style` 和 `theme.components`；组件库本身不依赖 Tailwind。工具类中的固定颜色不会自动替换成 ThemeProvider 的 palette，主题仍通过显式配置组合。完整示例与边界见 [Tailwind 包说明](../tailwind/README.md)。
+按需安装 `@zhin.js/tailwind`，先 `await createTailwindStyle()` 完成异步初始化，再用返回的同步 `tw(classes)` 生成样式：
+
+```tsx
+import { createTailwindStyle } from '@zhin.js/tailwind';
+
+const tw = await createTailwindStyle();
+const content = <div style={tw('p-4 rounded-xl bg-blue-50')}>服务状态</div>;
+```
+
+其返回的内联样式可用于原生元素 `style`、组件 `custom.style` 和 `theme.components`；组件库本身不依赖 Tailwind。工具类中的固定颜色不会自动替换成 ThemeProvider 的 palette，主题仍通过显式配置组合。完整示例与边界见 [Tailwind 包说明](../tailwind/README.md)。
 
 控件的纯文本或数字标签可直接提供可访问名称；JSX 或异步标签需显式传入 `ariaLabel` 才声明 checkbox/radio/switch 语义。没有名称时保持装饰展示，不提前执行标签组件。

@@ -128,11 +128,14 @@ describe('@zhin.js/html-renderer', () => {
   });
 
   it('releases the render slot after failed capture so later calls still complete', async () => {
-    screenshotMock.mockRejectedValueOnce(new Error('first failure'));
+    screenshotMock
+      .mockRejectedValueOnce(new Error('first failure'))
+      .mockRejectedValueOnce(new Error('second failure'));
     const renderer = createHtmlRenderer();
     await expect(renderer.render('<div>First</div>')).rejects.toThrow('first failure');
+    await expect(renderer.render('<div>Second</div>')).rejects.toThrow('second failure');
     await expect(renderer.render('<div>Next</div>')).resolves.toMatchObject({ format: 'png' });
-    expect(screenshotMock).toHaveBeenCalledTimes(2);
+    expect(screenshotMock).toHaveBeenCalledTimes(3);
   });
 
   it('shares a daemon connection, reconnects after close, and disconnects on close', async () => {

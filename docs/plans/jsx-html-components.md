@@ -42,7 +42,7 @@ sidebar: false
 | `zhin.js/component` | 唯一对象式 `defineComponent({render})`、组件调用 `component(name,props)`、相关类型 | 注册组件由 ComponentIndex 解析当前 snapshot/requester/owner |
 | 新增 `@zhin.js/components`，目录 `packages/toolkit/components` | Card、布局、主题、指标、图表与 Markdown 等纯 JSX 函数组件 | JSX 基础包及解析／高亮依赖，可选安装；不依赖 IM |
 | Core 出站模块 | JSX → HTML → canonical HTML Segment；统一 SendContent 校验、顺序、平台协商与投递 | 不直接依赖组件库、Satori、Shotium |
-| `@zhin.js/html-renderer` | HTML → PNG/JPEG | 不拥有 JSX/组件定义或第二套 serializer |
+| `@zhin.js/html-renderer` | HTML → PNG/JPEG/WebP | 不拥有 JSX/组件定义或第二套 serializer |
 | `@zhin.js/tailwind` | 官方静态工具类 → 内联样式 | 可选；不加载 CSS 文件，不拥有 JSX runtime |
 | CLI | 可选 renderer 的加载和 generation-owned Resource 装配 | 沿用唯一 composition root |
 
@@ -180,7 +180,7 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 - 34 个组件提供三套主题、10 个模块的真实 HTML 画廊：表格、布局、嵌套列表、Markdown、代码、控件、按钮、图表、默认间距与局部覆盖。QuoteCard → EmptyState 默认间距为 8px；1280px 浏览器视口各模块无横向溢出。
 - Markdown 和 CodeBlock 经真实 SVG 验证：100/320px 窄画布长行、空行、Tab、转义文本与完整代码内容保真。Satori 清理改为解析后处理实际元素／属性，避免误改代码里的 `onclick=`、`href=javascript:` 文字。
 - 更新后的两个新包独立安装、NodeNext TSX 编译和 Markdown／代码／嵌套 List／Table／控件输出通过；已发布文件包含可直接运行的画廊脚本。高亮和解析依赖仅属于可选组件包，IM 核心体积门禁通过。
-- 新包 `@zhin.js/jsx`、`@zhin.js/components` 尚未在 npm 注册；首次发布须遵循[维护者发布流程](../contributing/development.md)，后续再交给自动发布。真实 IM 平台图片发送不在上述本地证据范围内。
+- 当时新包 `@zhin.js/jsx`、`@zhin.js/components` 尚未在 npm 注册；首次发布须遵循[维护者发布流程](../contributing/development.md)，后续再交给自动发布。当前首发进展见下方记录；真实 IM 平台图片发送不在上述本地证据范围内。
 
 ## CI 故障修复（2026-10-10）
 
@@ -214,10 +214,22 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 
 ### 已知原生退出问题
 
-macOS arm64 / Node 24 本地验收中，Shotium 0.12.1 曾在子进程退出清理时发生一次 `SIGSEGV`；原生堆栈包含 `napi_async_cleanup_hook_handle__`、`napi_remove_async_cleanup_hook` 和 `shotium.node`。随后单文件与多文件各 10 轮压力复验均通过，没有在代码中增加重试或吞掉退出错误。退出清理的线程调用值得继续调查，但尚未确认根因，因此这条风险仍开放；不能以 20 轮通过视作修复，也不能据本地截图结果宣称生产稳定。本 PR 不执行 npm 发布。
+macOS arm64 / Node 24 本地验收中，Shotium 0.12.1 曾在子进程退出清理时发生一次 `SIGSEGV`；原生堆栈包含 `napi_async_cleanup_hook_handle__`、`napi_remove_async_cleanup_hook` 和 `shotium.node`。随后单文件与多文件各 10 轮压力复验均通过，没有在代码中增加重试或吞掉退出错误。退出清理的线程调用值得继续调查，但尚未确认根因，因此这条风险仍开放；不能以 20 轮通过视作修复，也不能据本地截图结果宣称生产稳定。其他 Zhin 包尚未发布。
+
+### 新包手动首发（2026-10-10）
+
+维护者授权并完成 npm 登录／验证后，`@zhin.js/jsx@1.1.0`、`@zhin.js/components@1.1.0`、`@zhin.js/tailwind@1.1.0` 已从提交 `e77861283` 的冻结 tarball 完成首发。Registry 下载内容与本地校验值一致，独立项目安装后的运行时冒烟及 NodeNext TSX 类型检查通过。
+
+发布使用 `--tag next`，但 npm 首发同时生成 `latest`；三个包的两种标签均指向 `1.1.0`。删除 JSX 包 `latest` 的请求在验证后被 Registry 以 HTTP 400 拒绝，其他清理已取消。本轮后续审查修复通过已有 changeset 进入下一次 patch 发布，不覆盖已发布的 `1.1.0`。CI Trusted Publisher 配置尚未在本次首发中设置。
 
 ### 最终本地复验
 
 Node 24 全量覆盖率运行通过 1020 个文件、7813 项测试，3 个文件与 12 项测试保持跳过；lines 72.98%、branches 62.29%。之后补充的 List 懒执行回归随该文件 12 项测试通过。56 项非单测 harness、91 个包构建、文档整站构建均通过，最后的 Core／组件／Sandbox 修复再次构建通过；适配器同步、文档链接与 diff 检查通过。当前记录是本地证据，远端 CI 需按最终提交单独核对。
 
 截图测试的清理检查还补齐了“子进程已提前异常退出”分支，避免最后一张截图成功后发生的原生崩溃被遗漏。该检查更新后，组件和 Tailwind 集成的 12 个测试文件、127 项测试通过。
+
+### 首发后的审查补充（2026-10-10）
+
+新增 9 条建议中，8 条采纳：静态 Tailwind 禁止 `unset`；主题快照记录实际依赖版本；许可证保留仓库与 Tailwind 双方归属；组件说明明确异步初始化；画廊只忽略可选包本身缺失，内部依赖与初始化失败继续抛出；截图失败回归覆盖两个并发槽位；插件目录继续排除已删除的 Satori 图片包并排除三个新展示库；模块表补齐 WebP。转义 URL 字符串当前运行时只有一个反斜杠，已有测试有效，该建议不改代码。
+
+组件、Tailwind、HTML renderer 合计 16 个测试文件、185 项测试通过，Tailwind 构建及 NodeNext 类型检查通过；改动的 TypeScript 文件 lint、MJS 语法、文档链接及 diff 检查通过。隔离 fixture 验证了可选包未安装时画廊仍可生成，而内部依赖丢失和初始化错误必须失败；插件目录 fixture 保留 Satori 协议适配器但不收录图片工具。临时移除截图槽位释放后，新回归按预期超时失败，恢复实现后通过。上述为本地证据，当前提交远端 CI 另行核验。

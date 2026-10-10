@@ -67,7 +67,7 @@ export function assertStaticProperty(
       `Unsupported Tailwind background attachment ${value} in ${candidate}.`
     );
   }
-  if (/^(?:inherit|revert|revert-layer)$/i.test(value.trim())) {
+  if (/^(?:inherit|unset|revert|revert-layer)$/i.test(value.trim())) {
     throw new Error(
       `Tailwind property ${property} in ${candidate} depends on an external stylesheet.`
     );

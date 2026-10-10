@@ -23,7 +23,7 @@ describe("bundled theme synchronization", () => {
       );
       writeFileSync(
         join(root, "node_modules/tailwindcss/package.json"),
-        JSON.stringify({ name: "tailwindcss" })
+        JSON.stringify({ name: "tailwindcss", version: "4.9.0" })
       );
       const theme = join(root, "node_modules/tailwindcss/theme.css");
       const output = join(root, "src/default-theme.ts");
@@ -35,12 +35,24 @@ describe("bundled theme synchronization", () => {
           { stdio: "pipe" }
         );
       run();
+      expect(readFileSync(output, "utf8")).toContain(
+        "Generated from tailwindcss@4.9.0/theme.css"
+      );
       writeFileSync(
         output,
         readFileSync(output, "utf8").replace(/\n/g, "\r\n")
       );
       writeFileSync(theme, readFileSync(theme, "utf8").replace(/\n/g, "\r\n"));
       expect(() => run("--check")).not.toThrow();
+      writeFileSync(
+        join(root, "node_modules/tailwindcss/package.json"),
+        JSON.stringify({ name: "tailwindcss", version: "4.9.1" })
+      );
+      expect(() => run("--check")).toThrow(/Bundled Tailwind theme is stale/);
+      run();
+      expect(readFileSync(output, "utf8")).toContain(
+        "Generated from tailwindcss@4.9.1/theme.css"
+      );
       writeFileSync(theme, "@theme { --color-test: blue; }\n");
       expect(() => run("--check")).toThrow(/Bundled Tailwind theme is stale/);
     } finally {
