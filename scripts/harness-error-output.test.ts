@@ -16,4 +16,13 @@ describe('harness error output', () => {
     expect(lines.every(line => line.length <= 2000)).toBe(true);
     expect(lines.join('')).toBe(output);
   });
+
+  it('preserves supplementary characters across separately encoded UTF-8 writes', () => {
+    const lines: string[] = [];
+    const output = `${'x'.repeat(1999)}😀${'y'.repeat(4500)}𠮷`;
+    printHarnessError(output, (line: string) => lines.push(line));
+    expect(lines.every(line => line.length <= 2000)).toBe(true);
+    expect(Buffer.concat(lines.map(line => Buffer.from(line, 'utf8'))).toString('utf8'))
+      .toBe(output);
+  });
 });
