@@ -1,0 +1,23 @@
+packages/toolkit/tailwind/scripts/sync-theme.mjs
+  s_a5dc81d701255f::t_dfbf3fb1e3a679 8
+  s_a5dc81d701255f::t_4f680629f24eee 6-7,9,17
+packages/toolkit/tailwind/tests/sync-theme.test.ts
+  s_a5dc81d701255f::t_dfbf3fb1e3a679 2-9,20-27,31-36,38-41
+  s_a5dc81d701255f::t_69b88508d11dd6 1,10-19,28-30,37,42-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6b22f0f35e5d2d0837ce27b287cc7733866b3899",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
