@@ -229,7 +229,7 @@ pnpm build
 然后到 Actions → **Build and Publish** → **Run workflow** 重新执行（或再 push `main`）。
 
 PR 门禁在 `.github/workflows/ci.yml`（Linux / Windows × Node 22/24/26 矩阵）。
-Linux Node 24 执行 `pnpm check:all`、文档构建和覆盖率检查；其他矩阵执行构建与单测。
+Linux Node 24 额外执行 `pnpm check:all`、文档构建和覆盖率检查；其他 Linux 矩阵执行构建与单测，Windows 矩阵执行构建。
 
 ## 调试
 
