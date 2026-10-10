@@ -1,4 +1,8 @@
 export * from './agent-runtime.js';
+export * from './decision-runtime.js';
+export * from '../decision/index.js';
+export { normalizeAgentDecisionConfig } from '../decision/config.js';
+export { getAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 export * from './agent-host-port.js';
 export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';

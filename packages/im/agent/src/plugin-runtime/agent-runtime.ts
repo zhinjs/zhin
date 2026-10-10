@@ -18,6 +18,8 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import { runWithAgentTurnConfiguration } from '../turn/agent-turn-context.js';
 import { TurnSupersededError } from '../turn/prompt-controller.js';
 import { createConversationReferenceCapability } from '../tool/conversation-reference-tool.js';
+import { resolveAgentDecisionRuntime } from './decision-runtime.js';
+import type { AgentDecisionRuntime } from '../decision/types.js';
 
 abstract class SnapshotAttachedRuntime {
   protected snapshots?: SnapshotReader;
@@ -117,6 +119,7 @@ async function appendExternalToolTerminal(
 
 /** Single Agent execution authority: snapshot + capabilities + terminal algebra. */
 export interface AgentTurnExecutionContext {
+  readonly decision?: AgentDecisionRuntime;
   readonly turn: import('../turn/turn-ingress.js').TurnIngress;
   readonly capabilities: Omit<AgentCapabilities, 'tools'> & {
     readonly tools: readonly ToolDescriptor[];
@@ -315,16 +318,35 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       });
       const tools = new TurnToolRuntime(turn, capabilities.tools);
       const engine = resolveTurnEngine(lease.value);
+      const decisions: import('../event/turn-event.js').DecisionEvaluationEvent[] = [];
+      const decision = request.session.key.startsWith('workroom:') || request.input.metadata?.workroom || request.principal.roles.includes('workroom_assignment')
+        || request.execution?.kind === 'schedule'
+        ? undefined : resolveAgentDecisionRuntime(lease.value, (observation) => {
+          decisions.push({ type: 'decision_evaluation', ...observation });
+        });
       return await runWithAgentTurnConfiguration(
-        { activeBinding: selection.binding },
-        () => executeAgentTurn(turn, () => engine.run({
+        { activeBinding: selection.binding, decision },
+        () => executeAgentTurn(turn, async function* () {
+          const stream = engine.run({
           turn,
           capabilities: catalog,
           tools,
           toolCapabilities: capabilities.tools,
           selection,
+          decision,
           admit,
-        }), observe),
+          });
+          try {
+            while (true) {
+              const next = await stream.next();
+              for (const event of decisions.splice(0)) yield event;
+              if (next.done) return next.value;
+              yield next.value;
+            }
+          } finally {
+            await stream.return(undefined);
+          }
+        }, observe),
       );
     } finally {
       active = false;

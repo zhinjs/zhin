@@ -14,6 +14,9 @@ import {
   configureDatabaseOptions,
   configureAdapters,
   configureAI,
+  configureTypeSafeDecisions,
+  applyTypeSafeDecisionsToConfig,
+  saveTypeSafeSetupDependencies,
   getAdapterSetupNotes,
   applyWizardOptionsToConfig,
   appendWizardEnvVars,
@@ -162,6 +165,7 @@ export const setupCommand = new Command('setup')
   .option('--database', '仅配置数据库')
   .option('--adapters', '仅配置适配器')
   .option('--ai', '仅配置 AI')
+  .option('--decisions', '配置可选 TypeSafe Jev 决策服务（需要已有 AI 配置）')
   .action(async (options) => {
     const cwd = options.global
       ? await ensureGlobalHome({ install: false })
@@ -212,25 +216,33 @@ export const setupCommand = new Command('setup')
       const wizardOptions: InitOptions = {};
       const configBefore = JSON.stringify(config);
 
-      if (options.bootstrap || (!options.database && !options.adapters && !options.ai)) {
+      if (options.bootstrap || (!options.database && !options.adapters && !options.ai && !options.decisions)) {
         await setupBootstrapFiles(cwd);
       }
 
-      if (options.database || (!options.bootstrap && !options.adapters && !options.ai)) {
+      if (options.database || (!options.bootstrap && !options.adapters && !options.ai && !options.decisions)) {
         wizardOptions.database = await configureDatabaseOptions();
       }
 
-      if (options.adapters || (!options.bootstrap && !options.database && !options.ai)) {
+      if (options.adapters || (!options.bootstrap && !options.database && !options.ai && !options.decisions)) {
         wizardOptions.adapters = await configureAdapters();
       }
 
-      if (options.ai || (!options.bootstrap && !options.database && !options.adapters)) {
+      if (options.ai || (!options.bootstrap && !options.database && !options.adapters && !options.decisions)) {
         wizardOptions.ai = await configureAI();
       }
 
       finalizeWizardOptions(wizardOptions);
       applyWizardOptionsToConfig(config, wizardOptions);
       await appendWizardEnvVars(cwd, wizardOptions.adapters, wizardOptions.ai, wizardOptions.database);
+
+      if (options.decisions) {
+        const decisions = await configureTypeSafeDecisions(config);
+        // Validate manifest collisions before applying changes to the config document.
+        await saveTypeSafeSetupDependencies(cwd, decisions);
+        applyTypeSafeDecisionsToConfig(config, decisions);
+        console.log(chalk.gray('  ✓ 已配置 TypeSafe 决策服务；运行 pnpm install 后启动。'));
+      }
 
       const deps = collectWizardDependencies(wizardOptions);
       const depsChanged = await mergeDependenciesIntoPackageJson(cwd, deps);

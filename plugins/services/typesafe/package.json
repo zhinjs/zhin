@@ -1,0 +1,30 @@
+{
+  "name": "@zhin.js/service-typesafe",
+  "version": "1.0.0",
+  "description": "Optional TypeSafe AI Jev decision provider for Zhin",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": { "types": "./lib/index.d.ts", "development": "./src/index.ts", "import": "./lib/index.js" },
+    "./package.json": "./package.json"
+  },
+  "files": ["plugin.js", "schema.json", "src", "lib", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. plugins/services/typesafe/tests",
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+  },
+  "dependencies": { "@typesafe-ai/sdk": "^0.6.0", "@zhin.js/ai": "workspace:*" },
+  "peerDependencies": { "@zhin.js/agent": "workspace:^", "zhin.js": "workspace:^" },
+  "devDependencies": { "@types/node": "^26.1.2", "@zhin.js/agent": "workspace:*", "zhin.js": "workspace:*", "typescript": "^6.0.3", "vitest": "^4.1.10" },
+  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "repository": { "type": "git", "url": "git+https://github.com/zhinjs/zhin.git", "directory": "plugins/services/typesafe" },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" },
+  "license": "MIT",
+  "author": "Zhin.js Team",
+  "zhin": { "protocol": 1, "type": "plugin", "entry": "./plugin.js", "engine": "^1.0.0", "runtime": "trusted", "features": [], "plugins": [] }
+}

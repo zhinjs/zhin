@@ -106,6 +106,7 @@ export { renderContextMessage } from './llm/index.js';
 // ── Core AI Types ──
 export type {
   AIConfig,
+  DecisionTaskConfig,
   AIProvider,
   ProviderConfig,
   ProviderCapabilities,
@@ -467,3 +468,10 @@ export type {
   InputRequestedData,
   InputCompletedData,
 } from './authorization-events.js';
+
+// Structured decisions are independent of text completion and IM orchestration.
+export type {
+  JsonValue, ChoiceQuestion, ScoreCriteria, ScoreQuestion, NoulQuestion,
+  DecisionQuestion, DecisionQuestions, ChoiceAnswer, ScoreAnswer, NoulAnswer,
+  DecisionAnswer, DecisionRequest, DecisionResult, DecisionOptions, DecisionProvider,
+} from './decision/index.js';

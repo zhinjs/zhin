@@ -13,7 +13,7 @@ import type { ContextSystem } from '../context/context-system.js';
 import type { SessionSystem } from '../session/session-system.js';
 import {
   createDeferredCapabilityPlan,
-  primeAgentSkillForIntent,
+  primeSkillsForIntent,
 } from './deferred-capability-plan.js';
 import type {
   AgentTurnEngine,
@@ -98,11 +98,13 @@ async function* runInteractiveTurn(
     ...context.capabilities,
     tools: context.toolCapabilities,
   };
-  const primed = primeAgentSkillForIntent({
+  const primed = await primeSkillsForIntent({
     capabilities: projected,
     sessionSnapshot: snapshot,
     intent: prep.turnUser.rawContent,
     config: host.config,
+    decision: context.decision,
+    signal: context.turn.signal,
   });
   if (primed.skill) {
     await host.contextRepository.setDeferredToolSnapshot(prep.sessionId, primed.snapshot);
@@ -113,6 +115,7 @@ async function* runInteractiveTurn(
     config: host.config,
     platform: context.turn.origin.kind === 'im' ? context.turn.origin.platform : undefined,
     persistSnapshot: (next) => host.contextRepository.setDeferredToolSnapshot(prep.sessionId, next),
+    decision: context.decision,
   });
   const activeSkillsContext = plan.controller.loadedSkillInstructions().join('\n\n');
   const pendingContext = context.turn.ports.conversationContext

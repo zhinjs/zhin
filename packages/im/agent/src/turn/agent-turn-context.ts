@@ -1,8 +1,11 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ResolvedAgentBinding } from '../config/types.js';
+import type { AgentDecisionRuntime } from '../decision/types.js';
 
 /** Immutable configuration attached to one Agent turn. */
 export interface AgentTurnConfiguration {
+  /** Bound by AgentRuntime to this turn's held generation; absent for governed Workroom work. */
+  readonly decision?: AgentDecisionRuntime;
   readonly activeBinding?: ResolvedAgentBinding;
   readonly bootstrapContext?: string;
 }

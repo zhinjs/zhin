@@ -71,6 +71,10 @@ function mapTurnEvent(
           reasoning: event.text,
         },
       }];
+    case 'decision_evaluation': {
+      const { type: _type, ...data } = event;
+      return [{ ...base, type: 'decision.evaluated', data }];
+    }
     case 'tool_call':
       return [{
         ...base,

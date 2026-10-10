@@ -323,6 +323,15 @@ export interface AgentBindingConfig {
 
 export interface AIConfig {
   enabled?: boolean;
+  /** Optional structured-decision service, selected by exact Plugin Runtime owner. */
+  decisions?: {
+    provider: string;
+    skills?: DecisionTaskConfig;
+    tools?: DecisionTaskConfig;
+    memory?: DecisionTaskConfig;
+    agents?: DecisionTaskConfig;
+    approval?: DecisionTaskConfig;
+  };
   /** Workroom control-plane policy. Project definitions remain in the persistent Catalog. */
   workroom?: {
     /** Authenticated Console principal ids allowed to publish shared Capability Packs. */
@@ -507,6 +516,16 @@ export interface AIConfig {
     /** 错误提示模板（默认 '❌ AI 处理失败: {error}'） */
     errorTemplate?: string;
   };
+}
+
+/** Consumer policy; the decision transport itself remains independent of Agent/IM. */
+export interface DecisionTaskConfig {
+  readonly mode: 'off' | 'shadow' | 'active';
+  readonly timeoutMs?: number;
+  readonly minConfidence?: number;
+  readonly topK?: number;
+  readonly maxCandidates?: number;
+  readonly maxSelections?: number;
 }
 
 export interface WorkroomModelProcessingConfig {

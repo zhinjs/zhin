@@ -136,3 +136,9 @@ export {
   buildRuntimeConfigDocument,
   serializeRuntimeConfig,
 } from './apply.js';
+
+export {
+  TYPESAFE_DECISION_PACKAGE, configureTypeSafeDecisions, applyTypeSafeDecisionsToConfig,
+  saveTypeSafeSetupDependencies, diagnoseDecisionConfig,
+} from './decisions.js';
+export type { TypeSafeSetupConfig } from './decisions.js';

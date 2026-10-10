@@ -9,6 +9,7 @@ import {
   type AssistantConfig,
   type AudioTranscriptionPort,
 } from '@zhin.js/agent';
+import { LlmApprovalJudgment, type ApprovalJudgmentPort } from '@zhin.js/agent/session';
 import {
   type AgentRuntime,
   MarkdownKnowledgeIndex,
@@ -56,6 +57,7 @@ interface AgentRuntimeFoundationState {
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
   readonly seedPresets: RuntimeZhinAgent['seedPresets'];
   readonly approvalReviewer: ApprovalReviewAgent;
+  readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
 }
 
@@ -73,6 +75,7 @@ export class AgentRuntimeFoundation {
   readonly assistantEnabled: boolean;
   readonly sessionTreeRuntime: ReturnType<typeof createSessionTreeRuntimeFromAgent>;
   readonly approvalReviewer: ApprovalReviewAgent;
+  readonly approvalJudgment: ApprovalJudgmentPort;
   readonly bypassApprovalPort: ApprovalPort;
   readonly #seedPresetResources: RuntimeZhinAgent['seedPresets'];
 
@@ -89,6 +92,7 @@ export class AgentRuntimeFoundation {
     this.assistantEnabled = state.schedule.assistantEnabled;
     this.sessionTreeRuntime = state.sessionTreeRuntime;
     this.approvalReviewer = state.approvalReviewer;
+    this.approvalJudgment = state.approvalJudgment;
     this.bypassApprovalPort = state.bypassApprovalPort;
     this.#seedPresetResources = state.seedPresets;
   }
@@ -109,10 +113,11 @@ export class AgentRuntimeFoundation {
     if (semanticMemory) options.lifecycle.add(() => semanticMemory.dispose());
     const traceRuntime = createAgentTraceRuntime();
     const binding = service.getBindingRegistry().requireZhinBinding();
-    const approvalReviewer = new ApprovalReviewAgent({
+    const approvalJudgment = new LlmApprovalJudgment({
       completion: service.getLlmRuntime(),
       model: service.getLlmRuntime().model(binding.providerAlias, binding.model),
     });
+    const approvalReviewer = new ApprovalReviewAgent({ judgment: approvalJudgment });
     const bypassApprovalPort = createBypassApprovalPort();
     const approvalMode = service.getAgentConfig()?.execApprovalMode ?? 'auto';
     const defaultApprovalPort = options.approvalPort
@@ -172,6 +177,7 @@ export class AgentRuntimeFoundation {
         sessionTreeRuntime: createSessionTreeRuntimeFromAgent(created.runtime.host),
         seedPresets: created.seedPresets,
         approvalReviewer,
+        approvalJudgment,
         bypassApprovalPort,
       });
     } catch (error) {

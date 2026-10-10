@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import type { AIService, McpServerEntry } from '@zhin.js/agent';
 import {
   createNativeAgentToolSuite,
+  getAgentTurnConfiguration,
   createNativeInteractionToolFeatures,
   createNativeSemanticMemoryToolFeatures,
   createNativeTodoToolFeatures,
@@ -81,6 +82,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
     resolveProvider: (alias) => options.service.getProvider(alias),
     resolveImageDefaults: (alias) => options.service.getImageGenerationDefaults(alias),
     knowledgeIndex: options.knowledgeIndex,
+    resolveDecision: () => getAgentTurnConfiguration()?.decision,
   })) {
     options.addFeature(toolFeatureId, tool.name, tool.definition);
   }
@@ -93,7 +95,7 @@ export function publishAgentToolFeatures(options: PublishAgentToolFeaturesOption
     options.addFeature(tool.feature, tool.name, tool.definition);
   }
   if (options.semanticMemory) {
-    for (const tool of createNativeSemanticMemoryToolFeatures(options.semanticMemory)) {
+    for (const tool of createNativeSemanticMemoryToolFeatures(options.semanticMemory, () => getAgentTurnConfiguration()?.decision)) {
       options.addFeature(tool.feature, tool.name, tool.definition);
     }
   }

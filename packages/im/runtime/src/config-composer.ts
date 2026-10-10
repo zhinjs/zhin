@@ -1,8 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
+import type { RuntimeConfigDocument, PluginId } from '@zhin.js/plugin-runtime';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
-import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
 
@@ -69,6 +68,7 @@ export class ConfigComposer {
     // start-command, not Plugin ConfigViews.
     const effectiveSchema: JsonSchema = Object.freeze({
       type: 'object',
+      $defs: HOST_CONFIG_SCHEMA.$defs,
       additionalProperties: false,
       properties: {
         ...HOST_CONFIG_SCHEMA.properties,
