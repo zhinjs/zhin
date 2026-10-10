@@ -6,6 +6,7 @@
 /docs/concepts/ @lc-cn
 /docs/contributing/ @lc-cn
 /.github/workflows/ @lc-cn
+/.github/actions/ @lc-cn
 /.github/CODEOWNERS @lc-cn
 /.changeset/ @lc-cn
 /.changeset/version-policy.json @lc-cn
