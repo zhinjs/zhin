@@ -1,0 +1,37 @@
+scripts/check-domain-module-boundaries.test.ts
+  s_a5dc81d701255f::t_9c470122751390 1-4,6,9,16-20,27,37,40,42,47,51,55,57,59,62-64,66-67,70
+  s_a5dc81d701255f::t_cfe711bb7fe8ac 5,7-8,10-15,21-26,28-36,45-46,48-50,52-54,56,58,60-61,72-73
+  s_a5dc81d701255f::t_aae2a59027d771 38-39,41,43-44,65,68-69,71
+docs/contributing/repo-structure.md
+  s_a5dc81d701255f::t_1c8c1f5c633be3 70-87
+scripts/check-domain-module-boundaries.mjs
+  s_a5dc81d701255f::t_930e2c1285a9e6 24,98,100,102-107,111-112,121-125,139
+  s_a5dc81d701255f::t_eb5192276cf48c 26,28-29,31-32,34,36-37,39-41,44-65,72-73,79,83-84,87-88,90-92,101,108,113-117,119-120
+  s_a5dc81d701255f::t_9c470122751390 5,25,27,33,35,38,42-43,67-70,75,82,85-86,89,95,99,109-110,118,140
+  s_a5dc81d701255f::t_190f661d6f31ed 66
+docs/contributing/development.md
+  s_a5dc81d701255f::t_a902a14f236bfc 231-232
+  s_a5dc81d701255f::t_1c8c1f5c633be3 72,141-153
+.github/CODEOWNERS
+  s_a5dc81d701255f::t_cfe711bb7fe8ac 1-10
+docs/concepts/architecture.md
+  s_a5dc81d701255f::t_aae2a59027d771 127-132
+  s_a5dc81d701255f::t_cfe711bb7fe8ac 38-41,55-57,84-85
+  s_a5dc81d701255f::t_4cfe4c1a7aafbf 86
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4e7b8c5565548022716104b1a8ed9dc231cd2e51",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
