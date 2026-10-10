@@ -53,7 +53,15 @@ Do not place a domain-specific Tool at package root merely to make discovery con
 - Import Stable Feature `define*` from `zhin.js/*` facade subpaths when the app depends on `zhin.js`.
   Import IM execution contracts from `zhin.js/core/runtime` (or `@zhin.js/core/runtime`).
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
-  constructor parameter properties or TSX in server capability directories.
+  constructor parameter properties in native `.ts` server files. Server command, middleware and
+  component entries may use `.tsx`; set `jsx: react-jsx` and `jsxImportSource: zhin.js`.
+  `zhin.js/jsx` supplies JSX/JSXRenderable/renderToHtml; `@zhin.js/components` supplies optional visual
+  components. Inbound handles return JSX or forward next(); outbound handles call
+  `input.replace(JSX)` and then `await next()` to continue delivery, returning void. Omitting
+  `next()` stops the send even after replacing its content.
+- Server TSX only transpiles JSX. Do not import `.css`, CSS Modules or CSS `?raw`;
+  Sass/SCSS, Less, Stylus, PostCSS processing are outside its scope.
+  Use inline `style`, shared themes and `custom.style`.
 - Browser `pages/*/index.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
 
 ## Command routes
@@ -110,3 +118,5 @@ them.
 Run the smallest relevant package build/test, then `zhin runtime migrate status` for migrated
 packages. Runtime code is complete only after a real Root start or domain-level execution test;
 TypeScript compilation alone is insufficient.
+
+静态工具类可按需使用 `@zhin.js/tailwind` 的 `createTailwindStyle()`，输出接入 `style` / `custom.style` / 主题样式；不会启用 `className` 扫描、CSS import 或预处理器。图片引擎统一使用 `@zhin.js/html-renderer`（`@pixel.js/shotium`），不要导入已移除的 Satori 图片包；Satori 聊天协议适配器不受影响。

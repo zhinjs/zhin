@@ -23,6 +23,7 @@ export default defineAdapter<EmailEndpointConfig>({
   // kind=base64 直发（content + encoding）；kind=file 无邮件对应概念，投递前拒绝。
   // 邮件无 Bot 点击回调；验收须按能力判为不适用，Endpoint 直接调用拒绝交互。
   segments: {
+    html: 'direct',
     outboundMedia: ['url', 'path', 'base64'],
     markdown: 'native',
     interactive: 'text',

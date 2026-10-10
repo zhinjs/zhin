@@ -2,15 +2,15 @@ import { createToken } from './token.js';
 
 export interface HtmlRenderOptions {
   readonly width?: number;
-  /** 兼容旧调用方；当前实现传 `svg` 也会降级为 png。 */
-  readonly format?: 'png' | 'svg';
+  /** Static raster output; defaults to PNG. */
+  readonly format?: 'png' | 'jpeg' | 'webp';
   readonly backgroundColor?: string;
 }
 
 export interface HtmlRenderResult {
-  /** 当前实现恒为 png：Buffer/Uint8Array。 */
+  /** Raster bytes from the optional rendering engine. */
   readonly data: unknown;
-  readonly format: 'png' | 'svg';
+  readonly format: 'png' | 'jpeg' | 'webp';
   readonly width: number;
   readonly height: number;
   readonly mimeType: string;

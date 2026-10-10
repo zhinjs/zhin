@@ -1,1 +1,1 @@
-export * from "@zhin.js/core/jsx-runtime";
+export * from '@zhin.js/core/jsx-runtime';

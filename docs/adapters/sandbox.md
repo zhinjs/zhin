@@ -8,7 +8,7 @@ tier: Stable
 本页由 [`plugins/adapters/sandbox/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/sandbox/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=b5bd894c17a69f75 -->
+<!-- sync-adapter-docs:sha256=39e9f85da546ac65 -->
 
 # @zhin.js/adapter-sandbox
 
@@ -55,6 +55,8 @@ Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 
 - `@zhin.js/client` — Remote Console 客户端 SDK（UI 在 zhin-console 仓库）
 
 出站 wire 只做 JSON 封装；旧 `segment-mapper`（canonical segments）归一化上移到 gateway/core 渲染链。
+
+Sandbox 声明 `html: direct`，聊天页在隔离 iframe 中展示 canonical `html`，因此 JSX 卡片无需截图引擎即可预览。允许内联样式和 data/blob 图片；组件脚本、事件属性、外部资源、表单提交和父页面访问均被限制。高度按内容调整，超过 1200px 可在框内滚动。
 
 ## 配置
 

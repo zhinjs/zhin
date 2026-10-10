@@ -12,7 +12,7 @@ const {
   releaseMemoryMock,
   daemonConnectMock,
 } = vi.hoisted(() => ({
-  screenshotMock: vi.fn(async () => ({
+  screenshotMock: vi.fn(async (..._args: unknown[]) => ({
     image: ONE_PIXEL_PNG,
     stats: {
       timing: { total: 1 },
@@ -27,7 +27,7 @@ const {
   daemonConnectMock: vi.fn(),
 }));
 
-vi.mock('@shotkit/shotium', () => ({
+vi.mock('@pixel.js/shotium', () => ({
   screenshot: screenshotMock,
   start: startMock,
   status: statusMock,
@@ -38,10 +38,11 @@ vi.mock('@shotkit/shotium', () => ({
 
 import {
   createHtmlRenderer,
-  serializeJsxToHtml,
   type FontConfig,
 } from '../src/index.js';
 import { isFullDocument, wrapDocument } from '../src/html.js';
+import { createEngine } from '../src/engine.js';
+import { resolveHtmlRendererConfig } from '../src/config.js';
 
 function makeFont(name: string, style?: FontConfig['style']): FontConfig {
   return { name, data: Buffer.from('font'), weight: 400, style };
@@ -59,10 +60,12 @@ describe('@zhin.js/html-renderer', () => {
         failed: 0,
       },
     });
-    startMock.mockClear();
+    startMock.mockReset();
+    startMock.mockReturnValue({ cacheActive: true, cacheDir: '/tmp/shotium-cache' });
     statusMock.mockReset();
     statusMock.mockReturnValue({ running: false });
     releaseMemoryMock.mockClear();
+    daemonConnectMock.mockReset();
   });
 
   afterEach(() => {
@@ -77,16 +80,81 @@ describe('@zhin.js/html-renderer', () => {
     expect(screenshotMock).toHaveBeenCalledTimes(1);
   });
 
-  it('downgrades svg requests to png with a warning', async () => {
-    const warn = vi.fn();
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const result = await renderer.render('<div>Hi</div>', { format: 'svg' });
-    expect(result.format).toBe('png');
-    expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-    const rendererWithLogger = createHtmlRenderer({ defaultWidth: 200 }, { warn });
-    await rendererWithLogger.render('<div>Hi</div>', { format: 'svg' });
-    expect(warn).toHaveBeenCalledTimes(1);
+  it.each(['png', 'jpeg', 'webp'] as const)('renders the requested %s encoding', async (format) => {
+    const renderer = createHtmlRenderer({ quality: 73 });
+    const result = await renderer.render('<div>Hi</div>', { format });
+    expect(result.format).toBe(format);
+    expect(result.mimeType).toBe(`image/${format}`);
+    expect(screenshotMock).toHaveBeenCalledWith(expect.objectContaining({ type: format }));
+    expect(screenshotMock.mock.calls[0]![0]).toEqual(
+      format === 'png'
+        ? expect.not.objectContaining({ quality: expect.anything() })
+        : expect.objectContaining({ quality: 73 }),
+    );
+  });
+
+  it('uses the configured raster format when no per-render format is given', async () => {
+    const result = await createHtmlRenderer({ type: 'webp' }).render('<div>Hi</div>');
+    expect(result.format).toBe('webp');
+    expect(result.mimeType).toBe('image/webp');
+    expect(screenshotMock).toHaveBeenCalledWith(expect.objectContaining({ type: 'webp' }));
+  });
+
+  it('rejects unsupported output instead of returning an unrelated encoding', async () => {
+    // JS consumers can still send values outside the public TypeScript contract.
+    const options = JSON.parse('{"format":"svg"}');
+    await expect(createHtmlRenderer().render('<div>Hi</div>', options))
+      .rejects.toThrow('Unsupported HTML image format: svg');
+    expect(startMock).not.toHaveBeenCalled();
+    expect(screenshotMock).not.toHaveBeenCalled();
+  });
+
+  it('does not swallow fixed process configuration mismatches', async () => {
+    statusMock.mockReturnValue({ running: true });
+    startMock.mockImplementationOnce(() => { throw new Error('cacheDir differs'); });
+    await expect(createHtmlRenderer({ cacheDir: '/new-cache' }).render('<div>Hi</div>'))
+      .rejects.toThrow('cacheDir differs');
+    expect(screenshotMock).not.toHaveBeenCalled();
+  });
+
+  it('reuses the initialized engine and releases only reconstructible memory', async () => {
+    const renderer = createHtmlRenderer({ cacheDir: 'off', userAgent: 'Zhin' });
+    statusMock.mockReturnValue({ running: true });
+    await renderer.render('<div>First</div>');
+    await renderer.render('<div>Second</div>');
+    expect(startMock).toHaveBeenCalledTimes(1);
+    expect(startMock).toHaveBeenCalledWith(expect.objectContaining({ cacheDir: null, userAgent: 'Zhin' }));
+    expect(releaseMemoryMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('releases the render slot after failed capture so later calls still complete', async () => {
+    screenshotMock
+      .mockRejectedValueOnce(new Error('first failure'))
+      .mockRejectedValueOnce(new Error('second failure'));
+    const renderer = createHtmlRenderer();
+    await expect(renderer.render('<div>First</div>')).rejects.toThrow('first failure');
+    await expect(renderer.render('<div>Second</div>')).rejects.toThrow('second failure');
+    await expect(renderer.render('<div>Next</div>')).resolves.toMatchObject({ format: 'png' });
+    expect(screenshotMock).toHaveBeenCalledTimes(3);
+  });
+
+  it('shares a daemon connection, reconnects after close, and disconnects on close', async () => {
+    const callbacks: Array<() => void> = [];
+    const close = vi.fn();
+    const client = {
+      screenshot: screenshotMock,
+      once: vi.fn((_event: string, callback: () => void) => callbacks.push(callback)),
+      close,
+    };
+    daemonConnectMock.mockResolvedValue(client);
+    const engine = createEngine(resolveHtmlRendererConfig({ mode: 'daemon' }).shotium);
+    await Promise.all([engine.screenshot({ file: 'a' }), engine.screenshot({ file: 'b' })]);
+    expect(daemonConnectMock).toHaveBeenCalledTimes(1);
+    callbacks[0]!();
+    await engine.screenshot({ file: 'c' });
+    expect(daemonConnectMock).toHaveBeenCalledTimes(2);
+    await engine.close();
+    expect(close).toHaveBeenCalledTimes(1);
   });
 
   it('throws when shotium rendering fails', async () => {
@@ -105,27 +173,7 @@ describe('@zhin.js/html-renderer', () => {
     );
   });
 
-  it('preserves renderJsx support', async () => {
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const result = await renderer.renderJsx({
-      type: 'div',
-      props: { children: 'hello jsx' },
-    });
-    expect(result.format).toBe('png');
-    expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-  });
 
-  it('preserves renderComponent support', async () => {
-    const renderer = createHtmlRenderer({ defaultWidth: 200 });
-    const result = await renderer.renderComponent(
-      ({ name }: { name: string }) => ({ type: 'div', props: { children: `hello ${name}` } }),
-      { name: 'component' },
-    );
-    expect(result.format).toBe('png');
-    expect(Buffer.isBuffer(result.data)).toBe(true);
-    expect(screenshotMock).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('HTML document wrapping', () => {
@@ -150,43 +198,6 @@ describe('HTML document wrapping', () => {
   it('handles long attributes without regex backtracking', () => {
     const html = `<html><body data-value="${'x'.repeat(100_000)}">x</body></html>`;
     expect(wrapDocument(html, options)).toContain('<style>@font-face{font-family:test}</style>x');
-  });
-});
-
-describe('serializeJsxToHtml（renderJsx 注入防护）', () => {
-  it('文本节点一律转义', () => {
-    expect(serializeJsxToHtml('<img src=x onerror=alert(1)>')).toBe(
-      '&lt;img src=x onerror=alert(1)&gt;',
-    );
-    expect(
-      serializeJsxToHtml({ type: 'div', props: { children: '<script>alert(1)</script>' } }),
-    ).toBe('<div>&lt;script&gt;alert(1)&lt;/script&gt;</div>');
-  });
-
-  it('属性值转义，null/false 属性被丢弃', () => {
-    const html = serializeJsxToHtml({
-      type: 'img',
-      props: { src: 'x" onerror="alert(1)', title: null, hidden: false },
-    });
-    expect(html).toContain('src="x&quot; onerror=&quot;alert(1)"');
-    expect(html).not.toContain('title=');
-    expect(html).not.toContain('hidden=');
-  });
-
-  it('boolean children 渲染为空串', () => {
-    expect(serializeJsxToHtml(true)).toBe('');
-    expect(
-      serializeJsxToHtml({ type: 'div', props: { children: [true, 'a', false] } }),
-    ).toBe('<div>a</div>');
-  });
-
-  it('Raw HTML 只走显式通道 dangerouslySetInnerHTML', () => {
-    expect(
-      serializeJsxToHtml({
-        type: 'div',
-        props: { dangerouslySetInnerHTML: { __html: '<b>raw</b>' } },
-      }),
-    ).toBe('<div><b>raw</b></div>');
   });
 });
 

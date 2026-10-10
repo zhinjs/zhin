@@ -1,52 +1,16 @@
 # Toolkit Runtime
 
-Toolkit 提供 **optional peer** 能力与脚手架，不进入 IM 核心默认安装（ADR 0019）。与 `plugins/utils/*` 中已删除的 `voice`、`html-renderer` 插件不同，能力现以 workspace 包形式由 `zhin.js` bootstrap 按配置懒注册。
+Toolkit 提供可选的展示、渲染、语音能力与项目脚手架，不进入 IM 核心默认安装。
 
-## 语言
+| 包 | 职责 | 入口 |
+| --- | --- | --- |
+| components | 无状态 JSX 样式组件与主题；依赖 JSX 基础包、entities、marked 与 Shiki | Card、Row、KvTable、图表等 |
+| html-renderer | HTML→PNG；CLI 将 renderer 安装为 generation Resource | createHtmlRenderer |
+| tailwind | 可选静态工具类 → 内联样式；官方 Tailwind 编译 | createTailwindStyle |
+| speech | STT/TTS；由 composition root 装配 Speech Host | createSpeechPipeline |
+| scaffold-wizard | create-zhin-app、zhin setup 共用的配置与依赖诊断 | apply、diagnoseOptionalPeers |
+| create-zhin | 新建项目文件树 | workspace 生成器 |
 
-**Speech Pipeline**:
-`@zhin.js/speech` 提供的 STT/TTS 引擎；composition root 创建 Speech Host，并将工具与转写端口注入 Agent。
-_避免使用_：plugin-voice、voice 配置键
+JSX 的唯一契约与 serializer 在 `packages/im/jsx`，公开作者入口是 `zhin.js/jsx`。components 返回 JSX 树；Core 将树序列化为 HTML 段，按 Adapter 声明保留 HTML、调用可选 renderer 生成图片或降级文本。html-renderer 使用 @pixel.js/shotium，不提供其他 JSX runtime，也不发送消息。
 
-**Html Renderer**:
-`@zhin.js/html-renderer` 将 HTML 字符串渲染为 PNG/SVG；composition root 将它作为 generation resource 提供给 Core 的统一出站规范化链路。
-_避免使用_：plugin-html-renderer、出站前手写转图
-
-**Scaffold Wizard**:
-`@zhin.js/scaffold-wizard` — `zhin setup`、`create-zhin-app` 共用的配置向导与依赖诊断。
-_避免使用_：CLI 内嵌重复逻辑
-
-**Optional Peer Diagnosis**:
-根据 `zhin.config` 推断是否应安装 speech / html-renderer，供 `zhin doctor` 与 L4 升级使用。
-_避免使用_：手动查 package.json
-
-**Satori HTML**:
-`@zhin.js/satori` 的 `html()` / `h()` 模板与卡片组件；产出 HTML 字符串，不直接发送。
-_避免使用_：与 zhin.js JSX 插件组件混用
-
-## 关系
-
-- **Speech Pipeline** 由 CLI composition root 创建，向 Agent Host 提供语音工具与转写端口。
-- **Html Renderer** 由 CLI composition root 创建并以 `htmlRendererToken` 安装到 generation；`registerAiTextAsImageOutput` 另挂 `before.sendMessage` 做 AI 纯文本转图。
-- **Scaffold Wizard** 的 `diagnoseOptionalPeers` 读取 `speech:`、`htmlRenderer:`、`ai.multimodal.audio.strategy` 与 adapter context 列表。
-- **Satori HTML** 输出交给 **Html Renderer** 或业务自行 `render()`；不绕过 `Adapter.sendMessage`。
-
-## 包地图
-
-| 包 | 路径 | 导出契约 |
-|----|------|----------|
-| speech | `packages/toolkit/speech/` | `createSpeechPipeline` |
-| html-renderer | `packages/toolkit/html-renderer/` | `createHtmlRenderer` |
-| scaffold-wizard | `packages/toolkit/scaffold-wizard/` | `diagnoseOptionalPeers`, `apply` |
-| create-zhin | `packages/toolkit/create-zhin/` | 新建 workspace 文件树 |
-| satori | `packages/toolkit/satori/` | `html`, `h`, 卡片组件 |
-
-## 示例对话
-
-> **开发者：** “配置了 `speech:` 还要写 `plugins: - voice` 吗？”  
-> **领域专家：** “不需要。`@zhin.js/speech` 是 optional peer；`zhin start` 在检测到包已安装时通过 setup 注册 capability，不是传统 plugins 列表项。”
-
-## 已标记歧义
-
-- `voice:` 配置键已废弃，SSOT 为 `speech:`（ADR 0020）。
-- `aiTextAsImage` 在 `before.sendMessage` 执行；HTML 消息段则由 Plugin Runtime 的统一出站规范化链路通过 generation-owned HtmlRenderer Host 渲染或降级。
+Host 仅由 CLI composition root 装配，使用当前 operation 的 snapshot Resource。用户代码通过统一消息发送链，不在组件内手写平台上传或读取模块级最新 generation。

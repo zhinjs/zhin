@@ -100,7 +100,7 @@ pnpm release / pnpm bump / pnpm pub   # changesets
 
 ## JSX
 
-IM 消息组件：`jsxImportSource: "zhin.js"`。Satori 出图卡片在文件顶加 `/** @jsxImportSource @zhin.js/satori */`。
+服务端 JSX 统一使用 `jsxImportSource: "zhin.js"` / `zhin.js/jsx`；组件能力从 `zhin.js/component` 导入，样式组件从可选 `@zhin.js/components` 导入。工具类可用 `@zhin.js/tailwind` 转内联样式，图片引擎为 `@zhin.js/html-renderer` → `@pixel.js/shotium`；不直接导入 CSS 或使用预处理器。
 
 ## 已弃用（勿在新代码使用）
 

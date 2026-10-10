@@ -164,7 +164,7 @@ async function startBot(mode) {
   }, `${mode} readiness`);
 }
 
-async function requestHello(origin, token, expected, probeText = '/hello') {
+async function requestHello(origin, token, expected, probeText = '/hello', expectedSegment) {
   if (platform !== 'sandbox') {
     if (platform !== 'telegram') await waitFor(() => gatewaySocket?.readyState === 1 && gatewayReady, 'fake OneBot gateway connection');
     await new Promise((resolve, reject) => {
@@ -189,11 +189,12 @@ async function requestHello(origin, token, expected, probeText = '/hello') {
     });
     const timer = setTimeout(() => { socket.terminate(); process.exitCode = 1; }, 10000);
     socket.on('error', () => { clearTimeout(timer); process.exitCode = 1; });
-    socket.on('open', () => socket.send(JSON.stringify({ type: 'private', id: 'sandbox-user', text: '/hello' })));
+    socket.on('open', () => socket.send(JSON.stringify({ type: 'private', id: 'sandbox-user', text: process.env.ACCEPTANCE_INPUT })));
     socket.on('message', (data) => {
       const body = JSON.parse(data.toString());
       if (!Array.isArray(body.content)) return;
-      const text = body.content.map(segment => segment.data?.text ?? '').join('');
+      if (process.env.ACCEPTANCE_SEGMENT && !body.content.some(segment => segment.type === process.env.ACCEPTANCE_SEGMENT)) return;
+      const text = body.content.map(segment => segment.data?.text ?? segment.data?.html ?? '').join('');
       if (!text.includes(process.env.ACCEPTANCE_EXPECTED)) return;
       console.log('reply accepted');
       clearTimeout(timer);
@@ -202,6 +203,7 @@ async function requestHello(origin, token, expected, probeText = '/hello') {
   `], project, {
     ACCEPTANCE_WS_URL: origin.replace('http:', 'ws:') + '/sandbox',
     ACCEPTANCE_TOKEN: token, ACCEPTANCE_EXPECTED: expected,
+    ACCEPTANCE_INPUT: probeText, ACCEPTANCE_SEGMENT: expectedSegment ?? '',
   });
   if (!stdout.includes('reply accepted')) throw new Error(`Sandbox did not reply with ${expected}`);
 }
@@ -231,6 +233,15 @@ try {
   await writeFile(manifestFile, JSON.stringify(candidateManifest({
     ...manifest, devDependencies: { ...manifest.devDependencies, ws: '^8.21.1' },
   }), null, 2));
+  // Modern generated projects keep pnpm settings in the workspace file. The
+  // candidate overrides must apply there as well, including unpublished names.
+  const workspaceFile = path.join(project, 'pnpm-workspace.yaml');
+  const workspaceConfig = parse(await readFile(workspaceFile, 'utf8'));
+  workspaceConfig.overrides = {
+    ...workspaceConfig.overrides,
+    ...candidateManifest({}).pnpm.overrides,
+  };
+  await writeFile(workspaceFile, stringify(workspaceConfig));
   console.log('Installing the generated project exclusively against candidate workspace tarballs…');
   await run('pnpm', ['install', '--no-frozen-lockfile'], project);
   const configFile = path.join(project, 'zhin.config.yml');
@@ -265,14 +276,34 @@ try {
     return (await response.json()).data;
   };
   const previous = await details();
+  if (platform === 'sandbox') {
+    const previewResponse = await fetch(`${origin}/api/introspection/components/render`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', props: { title: 'candidate Console JSX accepted', lines: [] } }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const preview = await previewResponse.json();
+    if (!previewResponse.ok || preview.data?.output?.type !== 'html'
+      || !preview.data.output.data?.html?.includes('candidate Console JSX accepted')) {
+      throw new Error(`Console JSX preview failed: ${JSON.stringify(preview)}`);
+    }
+    await requestHello(origin, token, 'acceptance-bot', '/card', 'html');
+    const componentFile = path.join(project, 'components/status-card/index.tsx');
+    await writeFile(componentFile, (await readFile(componentFile, 'utf8')).replace('<CardHeader title={title}', '<CardHeader title="candidate JSX HMR accepted"'));
+    await waitFor(async () => (await details()).generation > previous.generation, 'TSX component generation replacement');
+    await requestHello(origin, token, 'candidate JSX HMR accepted', '/card', 'html');
+  }
+  const beforeCommand = await details();
   const command = path.join(project, 'commands', 'hello', 'index.ts');
   await writeFile(command, (await readFile(command, 'utf8')).replace('你好！欢迎使用 Zhin.js！', 'candidate HMR accepted'));
-  await waitFor(async () => (await details()).generation > previous.generation, 'command generation replacement');
+  await waitFor(async () => (await details()).generation > beforeCommand.generation, 'command generation replacement');
   await requestHello(origin, token, 'candidate HMR accepted');
   await stopBot();
   console.log('Checking production restart and persisted command…');
   const production = await startBot('production');
   await requestHello(production, token, 'candidate HMR accepted');
+  if (platform === 'sandbox') await requestHello(production, token, 'candidate JSX HMR accepted', '/card', 'html');
   await run(process.execPath, [path.join(project, 'node_modules/@zhin.js/cli/bin/zhin.js'),
     'doctor', '--live', production, '--json'], project, { ZHIN_HTTP_TOKEN: token });
   if (platform !== 'sandbox') {
@@ -282,7 +313,7 @@ try {
     }, 'installed acceptance probe confirmed delivery');
   }
   passed = true;
-  console.log(`PASS [${platform}]: packed creator -> clean install -> readiness -> /hello -> HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
+  console.log(`PASS [${platform}]: packed creator -> clean install -> readiness -> /hello${platform === 'sandbox' ? ' -> Console JSX preview -> JSX /card + TSX HMR' : ''} -> command HMR -> production restart${platform !== 'sandbox' ? ' -> acceptance probe receipt' : ''}.`);
 } finally {
   await stopBot();
   if (gateway) { for (const socket of gateway.clients) socket.terminate(); await new Promise(resolve => gateway.close(resolve)); }

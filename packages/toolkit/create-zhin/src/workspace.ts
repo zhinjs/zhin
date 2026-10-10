@@ -135,9 +135,9 @@ export async function createWorkspace(projectPath: string, projectName: string, 
     aiDeps['@zhin.js/tool'] = ZHIN_STACK_VERSIONS['@zhin.js/tool'];
     aiDeps['@zhin.js/prompt-section'] = ZHIN_STACK_VERSIONS['@zhin.js/prompt-section'];
   }
-  // 脚手架默认生成 Satori 卡片组件示例
+  // 脚手架默认生成统一 JSX 卡片组件示例
   const cardDeps = {
-    '@zhin.js/satori': ZHIN_STACK_VERSIONS['@zhin.js/satori'],
+    '@zhin.js/components': ZHIN_STACK_VERSIONS['@zhin.js/components'],
   };
   // Page/Layout Features only discover client modules. Their compiler remains
   // owned by the optional Console Host, so the IM project itself adds no
@@ -486,7 +486,7 @@ ${projectName}/
 │   ├── hello/index.ts     # /hello 命令（defineCommand）
 │   └── card/index.ts      # /card -> component("status-card")
 ├── components/
-│   └── status-card/index.ts # defineComponent()，Satori 卡片
+│   └── status-card/index.tsx # defineComponent()，JSX 状态卡片
 ├── middlewares/           # 消息中间件（约定目录）
 ├── pages/
 │   ├── index/index.tsx    # Console 页面（/）
@@ -734,10 +734,10 @@ export default defineCommand({
   // commands/card/index.ts（组件渲染示例，对齐 examples/minimal-bot）
   await fs.outputFile(path.join(projectPath, 'commands', 'card', 'index.ts'),
 `import { defineCommand } from 'zhin.js/command';
-import { component } from 'zhin.js/core/runtime';
+import { component } from 'zhin.js/component';
 
 export default defineCommand({
-  description: '渲染 Satori 状态卡片',
+  description: '渲染 JSX 状态卡片',
   execute: () => {
     const memory = process.memoryUsage();
     return component('status-card', {
@@ -751,50 +751,30 @@ export default defineCommand({
 });
 `);
 
-  // components/status-card/index.ts
-  await fs.outputFile(path.join(projectPath, 'components', 'status-card', 'index.ts'),
+  // components/status-card/index.tsx
+  await fs.outputFile(path.join(projectPath, 'components', 'status-card', 'index.tsx'),
 `import { defineComponent } from 'zhin.js/component';
-import { raw } from 'zhin.js/core/runtime';
-import {
-  Card,
-  CardHeader,
-  Row,
-  StatChip,
-  h,
-  wrapCardHtml,
-  DEFAULT_CARD_THEME,
-} from '@zhin.js/satori';
+import type { JSXRenderable } from 'zhin.js/jsx';
+import { CardCanvas, Card, CardHeader, Row, StatChip } from '@zhin.js/components';
 
 interface StatusCardProps {
-  readonly title: string;
-  readonly lines: readonly {
-    readonly label: string;
-    readonly value: string;
-  }[];
+  readonly title: JSXRenderable;
+  readonly lines: readonly { readonly label: JSXRenderable; readonly value: JSXRenderable }[];
 }
 
 export default defineComponent<StatusCardProps>({
+  previewProps: { title: '服务状态', lines: [{ label: 'RSS', value: '42MB' }, { label: '任务', value: 0 }] },
   render({ title, lines }) {
-    const body = h(Card, {
-      children: [
-        h(CardHeader, { title, meta: '${projectName}' }),
-        h(Row, {
-          gap: 10,
-          children: lines.map((line) => h(StatChip, {
-            label: line.label,
-            value: line.value,
-            accent: DEFAULT_CARD_THEME.accentMem,
-          })),
-        }),
-      ],
-    });
-    return raw({
-      type: 'html',
-      data: {
-        html: wrapCardHtml(body, DEFAULT_CARD_THEME.canvas),
-        width: 540,
-      },
-    });
+    return (
+      <CardCanvas>
+        <Card>
+          <CardHeader title={title} subtitle="${projectName}" />
+          <Row gap={8}>
+            {lines.map((line) => <StatChip label={line.label} value={line.value} />)}
+          </Row>
+        </Card>
+      </CardCanvas>
+    );
   },
 });
 `);

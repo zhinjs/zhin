@@ -38,7 +38,10 @@ const CORE_PACKAGES = new Set([
   '@zhin.js/logger',
   '@zhin.js/schema',
   '@zhin.js/types',
-  '@zhin.js/satori',
+  '@zhin.js/satori', // 已删除的图片工具包，不能重新收录为插件
+  '@zhin.js/jsx',
+  '@zhin.js/components',
+  '@zhin.js/tailwind',
   '@zhin.js/html-renderer',
   '@zhin.js/speech',
   '@zhin.js/hmr',

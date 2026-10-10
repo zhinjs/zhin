@@ -37,7 +37,7 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@shotkit/shotium": "^0.3.3"
+    "@pixel.js/shotium": "^0.12.1"
   },
   "peerDependencies": {
     "@zhin.js/core": "workspace:^"

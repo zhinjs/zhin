@@ -10,17 +10,23 @@ const config = resolveEmailConfig({ id: 'fixture', smtp: { host: 'smtp.fixture',
 const raw = 'From: actor@example.com\r\nTo: bot@example.com\r\nMessage-ID: <fixture@example.com>\r\nSubject: probe\r\n\r\nhello';
 function imapFixture() {
   const emitter = new EventEmitter();
-  const state = { validity: 1, defer: false, release: () => {} };
+  const state = { validity: 1, defer: false, deferEnd: false, release: () => {}, finish: undefined as (() => void) | undefined };
   const transport = Object.assign(emitter, {
     connect: vi.fn(() => queueMicrotask(() => emitter.emit('ready'))), end: vi.fn(),
     openBox: vi.fn((_box, _rw, callback) => callback(null, { uidvalidity: state.validity })),
     search: vi.fn((_criteria, callback) => callback(null, [1])),
     fetch: vi.fn(() => {
       const fetch = new EventEmitter();
+      const deferEnd = state.deferEnd;
+      state.finish = undefined;
       const deliver = () => {
         const message = new EventEmitter(); fetch.emit('message', message, 1);
         const stream = Readable.from([raw]); message.emit('body', stream); message.emit('attributes', { uid: 1 });
-        stream.once('end', () => { message.emit('end'); fetch.emit('end'); });
+        stream.once('end', () => {
+          message.emit('end');
+          state.finish = () => fetch.emit('end');
+          if (!deferEnd) state.finish();
+        });
       };
       state.release = deliver;
       if (!state.defer) queueMicrotask(deliver);
@@ -28,6 +34,14 @@ function imapFixture() {
     }),
   });
   return { transport: transport as unknown as EmailImapTransport, emitter, state, fetch: transport.fetch, connect: transport.connect, end: transport.end };
+}
+async function pollUntilFetched(imap: ReturnType<typeof imapFixture>, count: number) {
+  // A completed receive/fetch callback does not prove that parsing and dispatch
+  // have released the poll lock. Retry the trigger until a new poll is admitted.
+  await vi.waitFor(() => {
+    if (imap.fetch.mock.calls.length < count) imap.emitter.emit('mail');
+    expect(imap.fetch).toHaveBeenCalledTimes(count);
+  });
 }
 function endpointFixture(imap: EmailImapTransport, receive = vi.fn(async () => {}), smtp: EmailSmtpTransport = { verify: vi.fn(async () => {}), sendMail: vi.fn(async () => ({ messageId: 'fixture' })), close: vi.fn() }) {
   return bindTestEndpoint(new EmailEndpoint({ id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'email'), config, createImap: () => imap, createSmtp: () => smtp }), { receive });
@@ -40,10 +54,18 @@ it('holds polling lock through dispatch and deduplicates completed UID while all
     await endpoint.start(); endpoint.open();
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
     imap.emitter.emit('mail'); expect(imap.fetch).toHaveBeenCalledTimes(1);
-    release(); await new Promise(done => setTimeout(done, 20));
-    imap.emitter.emit('mail'); await vi.waitFor(() => expect(imap.fetch).toHaveBeenCalledTimes(2));
-    await new Promise(done => setTimeout(done, 20)); expect(receive).toHaveBeenCalledTimes(1);
+    imap.state.deferEnd = true;
+    release(); await pollUntilFetched(imap, 2);
+    await vi.waitFor(() => expect(imap.state.finish).toBeTypeOf('function'));
+    expect(receive).toHaveBeenCalledTimes(1);
     imap.state.validity = 2; imap.emitter.emit('mail');
+    expect(imap.fetch).toHaveBeenCalledTimes(2);
+    imap.state.defer = true;
+    imap.state.deferEnd = false; imap.state.finish!();
+    await pollUntilFetched(imap, 3);
+    // The second poll has drained, while the third cannot deliver a body yet.
+    expect(receive).toHaveBeenCalledTimes(1);
+    imap.state.release();
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
   } finally { await endpoint.stop(); }
 });
@@ -52,7 +74,7 @@ it('failed dispatch does not permanently consume UID admission', async () => {
   const endpoint = endpointFixture(imap.transport, receive);
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
-    await new Promise(done => setTimeout(done, 20)); imap.emitter.emit('mail');
+    await pollUntilFetched(imap, 2);
     await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
   } finally { await endpoint.stop(); }
 });
@@ -90,10 +112,11 @@ it('expires instance UID dedup after 24h and permits the same still-unread mail 
   const endpoint = endpointFixture(imap.transport, receive); let clock: ReturnType<typeof vi.spyOn> | undefined;
   try {
     await endpoint.start(); endpoint.open(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(1));
-    await new Promise(done => setTimeout(done, 20));
+    imap.state.defer = true;
+    await pollUntilFetched(imap, 2);
     const future = Date.now() + 24 * 60 * 60 * 1000 + 1;
     clock = vi.spyOn(Date, 'now').mockReturnValue(future);
-    imap.emitter.emit('mail'); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
+    imap.state.release(); await vi.waitFor(() => expect(receive).toHaveBeenCalledTimes(2));
   } finally { clock?.mockRestore(); await endpoint.stop(); }
 });
 it('isolates a retired fetch even when a factory reuses the same transport object', async () => {

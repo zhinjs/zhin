@@ -30,7 +30,7 @@ import defineWeixinIlinkAdapter from '../../plugins/adapters/weixin-ilink/adapte
 const EXPECTED: Record<string, AdapterDefinition['segments']> = {
   dingtalk: { outboundMedia: ['url'], interactive: 'native', markdown: 'native' },
   discord: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
-  email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native' },
+  email: { outboundMedia: ['url', 'path', 'base64'], interactive: 'text', markdown: 'native', html: 'direct' },
   github: { outboundMedia: ['url'], interactive: 'text' },
   icqq: { outboundMedia: ['base64', 'url', 'path'], interactive: 'text' },
   kook: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },
@@ -46,7 +46,7 @@ const EXPECTED: Record<string, AdapterDefinition['segments']> = {
     markdown: 'native',
     supported: ['text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'markdown', 'keyboard'],
   },
-  sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native' },
+  sandbox: { outboundMedia: ['url', 'base64', 'path'], interactive: 'native', html: 'direct' },
   satori: { outboundMedia: ['url', 'base64'], interactive: 'text' },
   slack: { outboundMedia: ['url', 'upload', 'path'], interactive: 'native', markdown: 'native' },
   telegram: { outboundMedia: ['url', 'upload'], interactive: 'native', markdown: 'native' },

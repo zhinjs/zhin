@@ -80,6 +80,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       { package: '@zhin.js/tool', api: '^1.0.0' },
       { package: '@zhin.js/command', api: '^1.0.0' },
       { package: '@zhin.js/component', api: '^1.0.0' },
+      { package: '@zhin.js/middleware', api: '^1.0.0' },
     ]);
     expect(packageJson.zhin.plugins).toEqual([]);
     expect(packageJson.dependencies).toHaveProperty('zhin.js');
@@ -97,7 +98,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
     for (const source of ['commands/hello/index.ts', 'commands/card/index.ts']) {
       expect(fs.readFileSync(path.join(botRoot, source), 'utf8')).toContain('defineCommand');
     }
-    expect(fs.readFileSync(path.join(botRoot, 'components/status-card/index.ts'), 'utf8'))
+    expect(fs.readFileSync(path.join(botRoot, 'components/status-card/index.tsx'), 'utf8'))
       .toContain('defineComponent');
     expect(fs.readFileSync(path.join(botRoot, 'adapters/terminal/index.ts'), 'utf8'))
       .toContain('defineAdapter');
@@ -152,6 +153,10 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       expect(card).toMatchObject({ matched: true, command: 'card' });
       expect(writes.join('')).toContain('minimal-bot');
       expect(writes.join('')).toContain('RSS');
+      await receive('/jsx');
+      await receive('jsx?');
+      expect(writes.join('')).toContain('来自命令');
+      expect(writes.join('')).toContain('来自入站中间件');
     } finally {
       await runtime.stop();
     }
@@ -268,7 +273,7 @@ describe('minimal-bot Stable Plugin Runtime contract', () => {
       started: true,
       generation: 1,
       plugins: 1,
-      capabilities: 5,
+      capabilities: 7,
       // adapter + command + component + middleware + handler + schedule + tool（platformFeatures 继承）
       projections: 7,
     });

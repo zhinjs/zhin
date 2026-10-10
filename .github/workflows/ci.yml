@@ -168,6 +168,10 @@ jobs:
         os: [ubuntu-latest, windows-latest]
         node-version: [22, 24, 26]
     steps:
+      - name: install fonts for Chinese component rendering
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y fonts-noto-cjk
+
       - name: setup pnpm
         uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
         with:
@@ -263,6 +267,12 @@ jobs:
         env:
           HARNESS_SKIP_TEST: '1'
           HARNESS_SEQUENTIAL: '1'
+
+      # Build after read-only harness checks: docs:build regenerates adapter/config docs.
+      # File-system link checks cannot catch links outside VitePress's site root.
+      - name: build documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm docs:build
 
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24

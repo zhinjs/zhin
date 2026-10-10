@@ -2,8 +2,9 @@
  * Canonical IM messages, Endpoints, rendering, and plugin-facing core types.
  * @module @zhin.js/core
  */
-export * from './component.js'
-export type { MessageChannel, MessageComponent, MessageType } from './message.js'
+export { defineComponent, type ComponentDefinition, type ComponentContext } from '@zhin.js/component'
+export { component, type ComponentCall, raw, type RawContent } from './plugin-runtime/im/contracts.js'
+export type { MessageChannel, MessageType } from './message.js'
 export { Message, type MessageBase } from './plugin-runtime/im/contracts.js'
 export * from './im-scene.js'
 export * from './notice.js'

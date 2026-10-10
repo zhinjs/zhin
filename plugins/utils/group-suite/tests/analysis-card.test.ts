@@ -1,16 +1,14 @@
+import { assertCardImage } from "../../../../tests/helpers/render-card.js";
 import { describe, it, expect } from "vitest";
-import { htmlToSvg, getAllBuiltinFonts } from "../../../../packages/toolkit/satori/src/index.ts";
 import {
   buildAnalysisReportData,
   computeBasicStats,
   type InboxMessageRow,
 } from "../src/analysis.js";
 import { buildAnalysisReportHtml } from "../src/analysis-card.js";
-import { wrapCardHtml } from "@zhin.js/satori";
 
-async function assertSatori(fragment: string) {
-  const svg = await htmlToSvg(wrapCardHtml(fragment, "#d8dce3"), { width: 540, fonts: getAllBuiltinFonts() });
-  expect(svg).toContain("<svg");
+async function assertImage(fragment: string) {
+  await assertCardImage(fragment);
 }
 
 function sampleRows(): InboxMessageRow[] {
@@ -24,7 +22,7 @@ function sampleRows(): InboxMessageRow[] {
 }
 
 describe("analysis-card", () => {
-  it("buildAnalysisReportHtml 生成群分析卡片 HTML", () => {
+  it("buildAnalysisReportHtml 生成群分析卡片 HTML", async () => {
     const stats = computeBasicStats(sampleRows());
     const data = buildAnalysisReportData(stats, {
       channelName: "测试群",
@@ -32,13 +30,13 @@ describe("analysis-card", () => {
       startDate: "2026-06-08",
       endDate: "2026-06-09",
     });
-    const html = buildAnalysisReportHtml(data);
+    const html = await buildAnalysisReportHtml(data);
     expect(html).toContain("群日常分析");
     expect(html).toContain("测试群");
     expect(html).not.toContain("<script");
   });
 
-  it("含 LLM 区块的卡片可通过 Satori 渲染", async () => {
+  it("含 LLM 区块的卡片可通过 Shotium 渲染", async () => {
     const stats = computeBasicStats(sampleRows());
     const data = buildAnalysisReportData(
       stats,
@@ -49,6 +47,6 @@ describe("analysis-card", () => {
         userTitles: [{ name: "Alice", user_id: "u1", title: "话题发起者", reason: "积极发言" }],
       },
     );
-    await assertSatori(buildAnalysisReportHtml(data));
+    await assertImage(await buildAnalysisReportHtml(data));
   });
 });

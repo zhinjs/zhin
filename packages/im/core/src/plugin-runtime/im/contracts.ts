@@ -1,4 +1,6 @@
-import type { PluginId } from '@zhin.js/plugin-runtime';
+import type { JSXElement } from '@zhin.js/jsx';
+import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { operationInputBinding } from '@zhin.js/feature-kit';
 import type { ConversationRef, DeliveryReceipt, MessageRef } from '@zhin.js/im-contract';
 import type { MediaRef, Segment } from '../../built/segment-contract/types.js';
 // 入站段统一使用 canonical Segment SSOT（built/segment-contract）；
@@ -21,9 +23,9 @@ export interface RawContent<TPayload = unknown> {
 
 /**
  * 出站内容：纯文本 / canonical Segment（一等公民，媒体与富文本的统一表达）/
- * ComponentCall / RawContent，可任意嵌套数组。
+ * 惰性 JSXElement / ComponentCall / RawContent，可任意嵌套数组。
  */
-export type SendContent = string | Segment | ComponentCall | RawContent | readonly SendContent[];
+export type SendContent = string | Segment | JSXElement | ComponentCall | RawContent | readonly SendContent[];
 
 export function component<TProps>(name: string, props: TProps): ComponentCall<TProps> {
   if (!name.trim()) throw new TypeError('Component name cannot be empty');
@@ -34,7 +36,7 @@ export function raw<TPayload>(payload: TPayload): RawContent<TPayload> {
   return Object.freeze({ $content: rawContentBrand, payload });
 }
 
-export function isComponentCall(value: SendContent): value is ComponentCall {
+export function isComponentCall(value: unknown): value is ComponentCall {
   return !Array.isArray(value)
     && typeof value === 'object'
     && value !== null
@@ -42,7 +44,7 @@ export function isComponentCall(value: SendContent): value is ComponentCall {
     && value.$content === componentCallBrand;
 }
 
-export function isRawContent(value: SendContent): value is RawContent {
+export function isRawContent(value: unknown): value is RawContent {
   return !Array.isArray(value)
     && typeof value === 'object'
     && value !== null
@@ -174,6 +176,10 @@ export type Message<T extends object = {}> = MessageBase & T;
 /** @internal Generation-scoped implementation of the public Message contract. */
 export class RuntimeMessage implements MessageBase {
   readonly #resolveClient: () => unknown;
+  readonly #reply: (content: SendContent, requester?: PluginId, targetConversation?: ConversationAddress) => Promise<DeliveryReceipt>;
+  readonly #author?: PluginId;
+  readonly #snapshot?: RuntimeSnapshot;
+  readonly #assertActive?: () => void;
 
   /** @internal Constructed only by the generation-owned IM Runtime. */
   constructor(
@@ -197,11 +203,17 @@ export class RuntimeMessage implements MessageBase {
       throw new Error('Message has no Endpoint Client context');
     },
     readonly clientAdapter?: string,
+    binding: Readonly<{ requester?: PluginId; snapshot?: RuntimeSnapshot; assertActive?: () => void }> = {},
   ) {
     this.#resolveClient = client;
-    this.$reply = (content) => reply(content);
+    this.#reply = reply;
+    this.#author = binding.requester;
+    this.#snapshot = binding.snapshot;
+    this.#assertActive = binding.assertActive;
+    const requester = binding.requester;
+    this.$reply = (content) => requester === undefined ? reply(content) : reply(content, requester);
     this.$replyFrom = (requester, content) => reply(content, requester);
-    this.$sendTo = (target, content) => reply(content, undefined, target);
+    this.$sendTo = (target, content) => reply(content, requester, target);
     this.$replyToPrivate = (content, from) => {
       if (!sender) throw new Error('Cannot $replyToPrivate: message has no sender');
       let parent: ConversationAddress['parent'] | undefined;
@@ -213,17 +225,17 @@ export class RuntimeMessage implements MessageBase {
       } else if (from != null && typeof from === 'object') {
         parent = from;
       }
-      return reply(content, undefined, {
+      return reply(content, requester, {
         kind: 'private',
         id: sender.id,
         ...(parent ? { parent } : {}),
       });
     };
     this.$replyToGroup = (groupId, content) => {
-      return reply(content, undefined, { kind: 'group', id: groupId });
+      return reply(content, requester, { kind: 'group', id: groupId });
     };
     this.$replyToChannel = (channelId, guildId, content, threadId) => {
-      return reply(content, undefined, {
+      return reply(content, requester, {
         kind: 'channel',
         id: channelId,
         parent: { kind: 'channel', id: guildId },
@@ -231,6 +243,22 @@ export class RuntimeMessage implements MessageBase {
       });
     };
     Object.freeze(this);
+  }
+
+  /** @internal A frozen view whose sends retain the current author's exact operation. */
+  [operationInputBinding](owner: PluginId, snapshot: RuntimeSnapshot): RuntimeMessage {
+    this.#assertActive?.();
+    if (snapshot.generation !== this.generation || (this.#snapshot && snapshot !== this.#snapshot)) {
+      throw new Error('Message author binding belongs to another generation operation');
+    }
+    if (!snapshot.tree.has(owner)) throw new Error(`Unknown Message author: ${owner}`);
+    if (this.#author === owner && this.#snapshot === snapshot) return this;
+    return new RuntimeMessage(
+      this.conversation, this.content, this.generation, this.#reply,
+      this.sender, this.metadata, this.segments, this.message, this.endpointId,
+      this.mentioned, this.replyTo, this.#resolveClient, this.clientAdapter,
+      { requester: owner, snapshot, assertActive: this.#assertActive },
+    );
   }
 
   /** 平台原生消息 id（`message` 未提供时为 undefined）。 */

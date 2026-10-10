@@ -51,7 +51,7 @@
     "@zhin.js/permission": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
-    "kook-client": "^1.0.4"
+    "kook-client": "^1.0.5"
   },
   "peerDependencies": {
     "@zhin.js/adapter": "workspace:^",

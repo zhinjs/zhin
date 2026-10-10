@@ -1,1 +1,1 @@
-export * from "@zhin.js/core/jsx";
+export * from '@zhin.js/core/jsx';

@@ -69,7 +69,7 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | --- | --- |
 | Architecture Layers（`pnpm check:architecture`） | 分层依赖方向（basic → kernel → ai → core → agent → zhin） |
 | Dependency Policy（`pnpm check:dependency-policy`） | 脚手架依赖策略、Changesets 配置与内部 peer 范围 |
-| Release Plan（`pnpm check:release-plan`） | 默认只允许 patch；minor/major 必须有 owner 授权记录 |
+| Release Plan（`pnpm check:release-plan`） | 只允许 patch；minor/major（含依赖传播）均由门禁拒绝 |
 | No Koa Import（`pnpm check:no-koa`） | 插件不得直接 import koa |
 | Install Size（`pnpm check:install-size`） | zhin.js IM 核心 production `node_modules` ≤ 10MB |
 
@@ -137,6 +137,19 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | L4-CI（`pnpm check:l4-ci`） | L4 确定性子集（编排/记忆/full-bot 契约）；全量 `pnpm check:l4` 在 nightly 跑 |
 
 ## changeset 工作流
+
+### 变更审查与兼容性
+
+一个 PR 应围绕一个可验收目标组织。纯内部重构应保持公开导出、配置格式和运行行为，
+并用原调用方或场景测试验证；大型重构分步提交，避免把目录迁移、行为变化和新功能混在一起。
+
+涉及公开契约时，在 PR 中说明受影响的导出、配置、插件清单、Console 协议或投递语义，
+列出原调用方式是否继续有效，以及相应测试。changeset 是发布记录，不是兼容性证明。
+在当前仅允许 patch 的发布策略下，发现不兼容变更应先保留旧调用方的兼容路径；
+无法兼容时先单独讨论发布策略与迁移方案，不以 patch 名义直接发布。
+
+新增门禁必须证明既能拒绝违规样例，也能接受合法样例；说明它保护的范围，避免把
+检查通过解释为超出覆盖范围的保证。运行用户项目的验证必须保留用户配置与凭据。
 
 仓库用 [changesets](https://github.com/changesets/changesets) 管理版本与 changelog（配置见 `.changeset/config.json`：`baseBranch: main`、`access: public`）。任何影响已发布包行为的改动都要记 changeset：
 
@@ -215,7 +228,8 @@ pnpm build
 
 然后到 Actions → **Build and Publish** → **Run workflow** 重新执行（或再 push `main`）。
 
-PR 门禁在 `.github/workflows/ci.yml`（Node 22/24 矩阵），同样跑 `pnpm check:all`。
+PR 门禁在 `.github/workflows/ci.yml`（Linux / Windows × Node 22/24/26 矩阵）。
+Linux Node 24 额外执行 `pnpm check:all`、文档构建和覆盖率检查；其他 Linux 矩阵执行构建与单测，Windows 矩阵执行构建。
 
 ## 调试
 

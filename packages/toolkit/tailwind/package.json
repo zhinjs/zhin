@@ -1,0 +1,50 @@
+{
+  "name": "@zhin.js/tailwind",
+  "version": "1.1.0",
+  "description": "Optional Tailwind CSS utilities as static inline JSX styles",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node scripts/sync-theme.mjs --check && tsc",
+    "sync:theme": "node scripts/sync-theme.mjs",
+    "test": "vitest run --root ../../.. packages/toolkit/tailwind/tests",
+    "test-type": "tsc --noEmit -p tests/tsconfig.json",
+    "clean": "rimraf lib"
+  },
+  "dependencies": {
+    "tailwindcss": "4.3.3",
+    "postcss": "8.5.25",
+    "postcss-value-parser": "4.2.0"
+  },
+  "devDependencies": {
+    "@zhin.js/jsx": "workspace:*",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/toolkit/tailwind"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

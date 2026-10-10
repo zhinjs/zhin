@@ -1,6 +1,7 @@
 export * from './catalog.js';
 export * from './context.js';
 export * from './adapter-client.js';
+export * from './operation-input.js';
 export * from './owner-capability-index.js';
 export * from './discovery.js';
 export * from './directory-module-convention.js';

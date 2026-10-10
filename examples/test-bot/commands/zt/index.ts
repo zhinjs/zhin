@@ -1,12 +1,15 @@
-import { defineCommand } from 'zhin.js/command';
-import { outboundMessageToken, raw } from 'zhin.js/core/runtime';
-import { buildZtReportHtml, ZT_REPORT_CANVAS } from '../../lib/zt-report-card.js';
+import { defineCommand } from "zhin.js/command";
+import { outboundMessageToken, raw } from "zhin.js/core/runtime";
+import {
+  buildZtReportHtml,
+  ZT_REPORT_CANVAS,
+} from "../../lib/zt-report-card.js";
 import {
   buildZtReportText,
   collectZtFallbackData,
   collectZtReportData,
   type ZtFrameworkCounts,
-} from '../../lib/zt-report-data.js';
+} from "../../lib/zt-report-data.js";
 
 /** install() 提供的是 ImRuntime；用 inventory 取与 Console /api/stats 同源计数。 */
 type RuntimeInventoryHost = {
@@ -16,7 +19,9 @@ type RuntimeInventoryHost = {
   };
 };
 
-function readFrameworkCounts(use: (token: typeof outboundMessageToken) => unknown): ZtFrameworkCounts {
+function readFrameworkCounts(
+  use: (token: typeof outboundMessageToken) => unknown
+): ZtFrameworkCounts {
   try {
     const host = use(outboundMessageToken) as RuntimeInventoryHost;
     const inventory = host.inventory();
@@ -32,8 +37,8 @@ function readFrameworkCounts(use: (token: typeof outboundMessageToken) => unknow
 
 /** Runtime zt：富系统报告卡（legacy /zt 同款布局）。 */
 export default defineCommand({
-  description: '系统状态卡片（富报告）',
-  execute: (context) => {
+  description: "系统状态卡片（富报告）",
+  execute: async (context) => {
     const counts = readFrameworkCounts((token) => context.use(token));
     let data;
     try {
@@ -42,12 +47,12 @@ export default defineCommand({
       data = collectZtFallbackData(counts);
     }
     return raw({
-      type: 'html',
+      type: "html",
       data: {
-        html: buildZtReportHtml(data),
+        html: await buildZtReportHtml(data),
         width: 540,
         backgroundColor: ZT_REPORT_CANVAS,
-        fileName: 'system-status.png',
+        fileName: "system-status.png",
         text: buildZtReportText(data),
       },
     });

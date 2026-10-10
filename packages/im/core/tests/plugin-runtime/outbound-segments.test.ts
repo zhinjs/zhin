@@ -133,7 +133,7 @@ describe('normalizeOutboundPayload', () => {
   it('falls back to text when the render result is not a png buffer', async () => {
     const payload = await normalizeOutboundPayload(
       { type: 'html', data: { html: '<b>hi</b>' } },
-      mockRenderer({ data: '<svg/>', format: 'svg', mimeType: 'image/svg+xml' }),
+      mockRenderer({ data: '<svg/>', format: 'png', mimeType: 'image/png' }),
     );
     expect(payload).toEqual([{ type: 'text', data: { text: 'hi' } }]);
   });

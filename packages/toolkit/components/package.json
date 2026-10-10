@@ -1,0 +1,55 @@
+{
+  "name": "@zhin.js/components",
+  "version": "1.1.0",
+  "description": "Optional stateless JSX visual components for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    }
+  },
+  "files": [
+    "lib",
+    "src",
+    "README.md",
+    "examples"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/toolkit/components/tests",
+    "preview": "node examples/gallery.mjs",
+    "test-type": "tsc --noEmit -p tests/tsconfig.json"
+  },
+  "dependencies": {
+    "@zhin.js/jsx": "workspace:*",
+    "entities": "^7.0.1",
+    "marked": "^16.4.2",
+    "shiki": "^2.5.0"
+  },
+  "devDependencies": {
+    "html-react-parser": "^6.1.5",
+    "typescript": "^6.0.3",
+    "@zhin.js/html-renderer": "workspace:*",
+    "pngjs": "^7.0.0",
+    "@types/pngjs": "^6.0.5",
+    "@zhin.js/tailwind": "workspace:*"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/toolkit/components"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  }
+}

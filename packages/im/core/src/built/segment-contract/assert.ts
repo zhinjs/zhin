@@ -1,5 +1,6 @@
 import type { Segment } from './types.js';
 import { isStrictCanonicalSegment } from './validate.js';
+import { isActionSegment, isKeyboardSegment } from '../interactive-segments/types.js';
 
 const STRICT_CANONICAL_TYPES = new Set([
   'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
@@ -29,6 +30,8 @@ export function isCanonicalSegment(value: unknown): value is Segment {
   if (value.platform !== undefined && !isPlainObject(value.platform)) return false;
 
   if (STRICT_CANONICAL_TYPES.has(value.type)) return isStrictCanonicalSegment(value);
+  if (value.type === 'keyboard') return isKeyboardSegment(value);
+  if (value.type === 'action') return isActionSegment(value);
   return CORE_EXTENSION_TYPES.has(value.type) || extensionTypePattern.test(value.type);
 }
 

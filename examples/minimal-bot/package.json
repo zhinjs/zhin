@@ -14,10 +14,11 @@
   "dependencies": {
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
-    "@zhin.js/satori": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "zhin.js": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@zhin.js/components": "workspace:*",
+    "@zhin.js/middleware": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
@@ -44,6 +45,10 @@
       },
       {
         "package": "@zhin.js/component",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/middleware",
         "api": "^1.0.0"
       }
     ],

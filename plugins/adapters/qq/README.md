@@ -191,7 +191,7 @@ QQ 返回 `message_audit.audit_id` 仅表示审核任务，不能用作消息 ID
 
 QQ SDK 启动须在 30 秒内完成，否则端点启动失败并清理该客户端；迟到就绪会再次清理旧客户端。超时不表示凭据错误，应结合网关、认证网络与权限检查。
 
-仓库通过 `patches/qq-official-bot@1.3.0.patch` 修复 SDK Session.start 的 async Promise executor：认证/接收器启动异常由启动 Promise 正确拒绝，ready 监听先于启动注册，启动结束清理临时监听。已实际验证本机 dummy 403 认证失败经完整 CLI 退出 1，无未处理 rejection；不等价于真实 QQ 账号联网验收。
+`qq-official-bot` 1.3.1 已包含 SDK Session.start 的 async Promise executor 修复：认证/接收器启动异常由启动 Promise 正确拒绝，ready 监听先于启动注册，启动结束清理临时监听。已实际验证本机 dummy 403 认证失败经完整 CLI 退出 1，无未处理 rejection；不等价于真实 QQ 账号联网验收。
 
 原生按钮按腾讯协议编码：type=0 URL 跳转、type=1 回调、type=2 指令。默认订阅包含 INTERACTION（1<<26）；用户显式 intents 保留原值，需自行加入 INTERACTION 才能收到回调。SDK notice.*.action 映射为 canonical action，并独立 PUT ACK解除loading；ACK不代表业务处理成功。私聊/群聊平台不提供源消息ID，metadata 明确 sourceMessageIdAvailable=false，以唯一payload、完整端点/会话与操作者关联；频道提供源ID时严格保留。参考：[腾讯官方消息按钮协议](https://github.com/tencent-connect/bot-docs/blob/main/docs/develop/api-v2/server-inter/message/trans/msg-btn.md)。
 

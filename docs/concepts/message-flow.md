@@ -16,7 +16,9 @@ flowchart LR
     D -->|"前缀不匹配 / 无此命令"| U{snapshot IngressRoute?}
     U -->|"已装 Agent"| AI[AI 兜底回复]
     U -->|"未装"| N[静默丢弃]
-    D -->|"命令命中且有返回值"| R["$replyFrom(owner, value)"]
+    D -->|"命令命中：返回匹配事实与待回复内容"| W["中间件链回卷：透传或替换结果"]
+    MW -->|"return JSX"| W
+    W -->|"pending content"| R["$replyFrom(owner, value)"]
     R --> O[出站管道]
     AI --> O
 ```
@@ -66,7 +68,7 @@ flowchart LR
    });
    ```
 
-5. **命令分发**。`MessageDispatcher` 先解析命令前缀（默认按消息所属适配器实例的配置：`endpoints[i].commandPrefix` 覆盖顶层 `commandPrefix`，默认 `''` 无前缀，见 [配置即数据](./config-as-data.md)），前缀不匹配直接 miss；命中前缀则剥离后交给 `CommandIndex.dispatch`。命令有返回值时，分发器用命令 owner 身份 `$replyFrom(owner, value)` 自动回复。
+5. **命令分发**。`MessageDispatcher` 先解析命令前缀（默认按消息所属适配器实例的配置：`endpoints[i].commandPrefix` 覆盖顶层 `commandPrefix`，默认 `''` 无前缀，见 [配置即数据](./config-as-data.md)），前缀不匹配直接 miss；命中前缀则剥离后交给 `CommandIndex.dispatch`。分发器返回匹配事实与待回复内容；入站中间件可以透传或替换结果。整个链回卷结束后，ImRuntime 用最终内容作者的 `$replyFrom(owner, value)` 自动回复一次。命令返回 void 仍是 matched。
 
 6. **AI 兜底**。命令 miss（或无前缀文本）时，`ImRuntime` 从当前消息所持 snapshot 的 root resources 解析 generation-owned `IngressRoute`。装了 `@zhin.js/agent` 的 composition root 会在 generation setup 提供该内部 route；未安装则消息安静丢弃。它不是 `OutboundMessageService` 上可变的插件 setter。
 
@@ -79,7 +81,7 @@ flowchart LR
 ```mermaid
 flowchart LR
     A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component → JSX 渲染<br/>raw 透传 / 数组展开]
-    R --> N[normalizeOutboundPayload<br/>html 段 → 图片/文本<br/>sandbox 直接消费 html]
+    R --> N[normalizeOutboundPayload<br/>html 段 → 图片/文本<br/>Adapter 声明 direct 保留 HTML]
     N --> V["createOutboundEnvelope<br/>conversation·requester·generation"]
     V --> MW["中间件 outbound<br/>可 envelope.replace(payload)"]
     MW --> S[AdapterIndex.send<br/>校验 outbound 能力与在线状态]

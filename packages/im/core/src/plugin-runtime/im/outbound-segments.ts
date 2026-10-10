@@ -4,6 +4,7 @@ import type {
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { htmlToFallbackText } from '../../built/html-to-text.js';
+import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { toCanonicalSegments } from '../../built/generic-segment-mapper.js';
 import {
   effectiveKeyboardFallbackMap,
@@ -57,11 +58,24 @@ export interface OutboundSegmentsPolicy {
   readonly outboundMedia: readonly ('url' | 'path' | 'base64' | 'upload')[];
   readonly interactive?: InteractivePolicy;
   readonly markdown?: 'native' | 'text';
+  readonly html?: 'direct' | 'image' | 'text';
 }
 
 export interface NormalizeOutboundOptions {
   /** 缺省 `url-or-text`（未声明 adapter 的保守兜底：仅 URL 媒体可达）。 */
   readonly mediaPolicy?: OutboundMediaPolicy;
+  readonly htmlPolicy?: 'direct' | 'image' | 'text';
+  readonly onHtmlFallback?: (reason: 'renderer_unavailable' | 'renderer_failed' | 'media_unsupported') => void;
+}
+
+/** HTML transport is an adapter capability, independent of its package name. */
+export function resolveOutboundHtmlPolicy(
+  adapter: CapabilityId,
+  snapshot: RuntimeSnapshot,
+): 'direct' | 'image' | 'text' {
+  const slot = snapshot.capabilities.get(adapter) ?? snapshot.capabilities.get(baseSlotCapabilityId(adapter));
+  const policy = (slot?.definition as { segments?: OutboundSegmentsPolicy } | undefined)?.segments?.html;
+  return policy === 'direct' || policy === 'text' ? policy : 'image';
 }
 
 const DEFAULT_CARD_WIDTH = 540;
@@ -218,13 +232,13 @@ export async function normalizeOutboundPayload(
   const mediaPolicy = options?.mediaPolicy ?? DEFAULT_MEDIA_POLICY;
   if (Array.isArray(payload)) {
     const resolved = await Promise.all(
-      payload.map((item) => normalizeOneSegment(item, renderer, mediaPolicy)),
+      flattenOutboundArray(payload).map((item) => normalizeOneSegment(item, renderer, mediaPolicy, options)),
     );
     return applyOutboundMediaPolicy(resolved, mediaPolicy);
   }
   if (isOutboundSegment(payload)) {
     return applyOutboundMediaPolicy(
-      [await normalizeOneSegment(payload, renderer, mediaPolicy)],
+      [await normalizeOneSegment(payload, renderer, mediaPolicy, options)],
       mediaPolicy,
     );
   }
@@ -242,9 +256,14 @@ async function normalizeOneSegment(
   item: unknown,
   renderer: HtmlRendererHost | undefined,
   mediaPolicy: OutboundMediaPolicy,
+  options?: NormalizeOutboundOptions,
 ): Promise<Segment> {
   if (isOutboundSegment(item) && item.type === 'html') {
-    return renderHtmlSegment(item, renderer, mediaPolicy);
+    if (item.data?.html === '') {
+      return { type: 'text', data: { text: htmlSegmentFallbackText(item.data, '') } };
+    }
+    if (options?.htmlPolicy === 'direct') return toCanonicalSegments([item])[0]!;
+    return renderHtmlSegment(item, renderer, mediaPolicy, options);
   }
   return toCanonicalSegments([item])[0]!;
 }
@@ -253,10 +272,14 @@ async function renderHtmlSegment(
   segment: OutboundSegment,
   renderer: HtmlRendererHost | undefined,
   mediaPolicy: OutboundMediaPolicy,
+  options?: NormalizeOutboundOptions,
 ): Promise<Segment> {
   const data = segment.data ?? {};
   const html = typeof data.html === 'string' ? data.html : '';
   // url-or-text 端点无法投递 base64 图片（本层无上传通道），直接文本降级，跳过渲染。
+  if (options?.htmlPolicy === 'text') {
+    return { type: 'text', data: { text: htmlSegmentFallbackText(data, html) } };
+  }
   if (html && renderer && mediaPolicy !== 'url-or-text') {
     try {
       const result = await renderer.render(html, {
@@ -280,9 +303,12 @@ async function renderHtmlSegment(
           },
         };
       }
+      options?.onHtmlFallback?.('renderer_failed');
     } catch {
-      // 渲染失败 → 文本降级
+      options?.onHtmlFallback?.('renderer_failed');
     }
+  } else if (html) {
+    options?.onHtmlFallback?.(mediaPolicy === 'url-or-text' ? 'media_unsupported' : 'renderer_unavailable');
   }
   return { type: 'text', data: { text: htmlSegmentFallbackText(data, html) } };
 }

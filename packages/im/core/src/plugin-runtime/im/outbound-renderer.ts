@@ -1,6 +1,8 @@
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { componentHostToken, type ComponentHost, type TemplateContext } from '@zhin.js/plugin-runtime';
+import { componentHostToken, type ComponentHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
+import { isJsxElement, renderToHtml, type JSXElement } from '@zhin.js/jsx';
+import { segment } from '../../utils.js';
+import { flattenOutboundArray, MAX_OUTBOUND_ARRAY_DEPTH } from '../../built/outbound-content-arrays.js';
 import {
   ComponentIndex,
   componentFeatureId,
@@ -17,6 +19,11 @@ import {
 const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
 
+export interface OutboundRenderOptions {
+  readonly jsxCache?: WeakMap<JSXElement, Promise<string>>;
+  readonly signal?: AbortSignal;
+}
+
 export class OutboundRenderer {
   async render(
     content: SendContent,
@@ -24,10 +31,15 @@ export class OutboundRenderer {
     snapshot: RuntimeSnapshot,
     conversation?: ConversationRef,
     incoming?: IncomingContext,
+    options: OutboundRenderOptions = {},
   ): Promise<unknown> {
+    options.signal?.throwIfAborted();
     const host = resolveComponentHost(snapshot);
     const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
-    return this.#render(content, requester, snapshot, host, ctx, 0);
+    const rendered = await this.#render(content, requester, snapshot, host, ctx, 0,
+      options.jsxCache ?? new WeakMap(), options.signal, new Set());
+    options.signal?.throwIfAborted();
+    return rendered;
   }
 
   async #render(
@@ -37,11 +49,31 @@ export class OutboundRenderer {
     host: ComponentHost | undefined,
     ctx: TemplateContext | undefined,
     depth: number,
+    jsxCache: WeakMap<JSXElement, Promise<string>>,
+    signal: AbortSignal | undefined,
+    arrayAncestors: ReadonlySet<readonly SendContent[]>,
   ): Promise<unknown> {
+    signal?.throwIfAborted();
     if (depth > maxComponentDepth) throw new Error('Component render depth exceeded 32');
     if (typeof content === 'string') return compileText(content, host, ctx);
     if (Array.isArray(content)) {
-      return Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth)));
+      if (arrayAncestors.has(content)) throw new TypeError('Cyclic SendContent array');
+      if (arrayAncestors.size >= MAX_OUTBOUND_ARRAY_DEPTH) throw new RangeError('SendContent array depth exceeded 512');
+      // Each parallel branch gets its own ancestry; repeated sibling arrays are valid.
+      const ancestors = new Set(arrayAncestors).add(content);
+      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth, jsxCache, signal, ancestors)));
+      signal?.throwIfAborted();
+      return flattenOutboundArray(items);
+    }
+    if (isJsxElement(content)) {
+      let html = jsxCache.get(content);
+      if (!html) {
+        html = renderToHtml(content);
+        jsxCache.set(content, html);
+      }
+      const rendered = await html;
+      signal?.throwIfAborted();
+      return rendered ? segment.html({ html: rendered }) : [];
     }
     if (isRawContent(content)) return content.payload;
     if (isSegmentContent(content)) {
@@ -58,9 +90,9 @@ export class OutboundRenderer {
         requester,
         content.name,
         content.props,
-        { snapshot },
+        { snapshot, ...(signal ? { signal } : {}) },
       );
-      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1);
+      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal, arrayAncestors);
     }
     throw new TypeError('Unsupported SendContent');
   }

@@ -7,12 +7,15 @@ import type {
   CapabilityContext,
   RegisteredAdapterName,
 } from '@zhin.js/feature-kit';
+import type { MiddlewareContinuation } from './continuation.js';
+export type { MiddlewareContinuation } from './continuation.js';
 
 const middlewareBrand = 'zhin.middleware/1' as const;
 
 export type MiddlewarePhase = 'before-dispatch' | 'after-dispatch';
 export type MiddlewareTarget = 'inbound' | 'outbound';
-export type MiddlewareNext = () => Promise<void>;
+export type MiddlewareNext = () => Promise<MiddlewareContinuation>;
+export type OutboundMiddlewareNext = () => Promise<void>;
 
 export interface MiddlewareContext<
   TInput = unknown,
@@ -25,22 +28,25 @@ export interface MiddlewareContext<
   readonly $client: AdapterClient<TAdapter>;
 }
 
-export interface MiddlewareDefinition<
-  TInput = unknown,
-  TConfig = unknown,
+/** Shared metadata for the public inbound and outbound definition contracts. */
+export interface MiddlewareDefinitionBase<
   TAdapter extends string | undefined = string | undefined,
 > {
   /** @internal Runtime feature brand. */
   readonly $feature: typeof middlewareBrand;
   readonly phase: MiddlewarePhase;
-  readonly target: MiddlewareTarget;
   readonly order: number;
   readonly adapter?: TAdapter;
-  handle(
-    context: MiddlewareContext<TInput, TConfig, TAdapter>,
-    next: MiddlewareNext,
-  ): void | Promise<void>;
 }
+
+export type MiddlewareDefinition<
+  TInput = unknown,
+  TConfig = unknown,
+  TAdapter extends string | undefined = string | undefined,
+> = MiddlewareDefinitionBase<TAdapter> & (
+  | { readonly target: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
+  | { readonly target: 'outbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
+);
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext<TConfig = unknown> {
@@ -57,27 +63,29 @@ declare module '@zhin.js/plugin-runtime' {
  *
  * @public
  */
+type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
+  Omit<MiddlewareDefinitionBase<TAdapter>, '$feature' | 'phase' | 'order'> & {
+    readonly phase?: MiddlewarePhase;
+    readonly order?: number;
+  } & (
+    | { readonly target?: 'inbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: MiddlewareNext): unknown }
+    | { readonly target: 'outbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
+  );
+
 type MiddlewareAuthoringDefinition<TInput, TConfig> =
-  | (Omit<
-      MiddlewareDefinition<TInput, TConfig, undefined>,
-      '$feature' | 'phase' | 'target' | 'order'
-    > & {
-      readonly phase?: MiddlewarePhase;
-      readonly target?: MiddlewareTarget;
-      readonly order?: number;
-    })
+  | AuthoringForAdapter<TInput, TConfig, undefined>
   | {
-      [TAdapter in RegisteredAdapterName]: Omit<
-        MiddlewareDefinition<TInput, TConfig, TAdapter>,
-        '$feature' | 'phase' | 'target' | 'order'
-      > & {
+      [TAdapter in RegisteredAdapterName]: AuthoringForAdapter<TInput, TConfig, TAdapter> & {
         readonly adapter: TAdapter;
-        readonly phase?: MiddlewarePhase;
-        readonly target?: MiddlewareTarget;
-        readonly order?: number;
       }
     }[RegisteredAdapterName];
 
+export function defineMiddleware<TInput = unknown, TConfig = unknown>(
+  definition: Extract<MiddlewareAuthoringDefinition<TInput, TConfig>, { readonly target: 'outbound' }>,
+): Readonly<Extract<MiddlewareDefinition<TInput, TConfig>, { readonly target: 'outbound' }>>;
+export function defineMiddleware<TInput = unknown, TConfig = unknown>(
+  definition: Extract<MiddlewareAuthoringDefinition<TInput, TConfig>, { readonly target?: 'inbound' }>,
+): Readonly<Extract<MiddlewareDefinition<TInput, TConfig>, { readonly target: 'inbound' }>>;
 export function defineMiddleware<TInput = unknown, TConfig = unknown>(
   definition: MiddlewareAuthoringDefinition<TInput, TConfig>,
 ): Readonly<MiddlewareDefinition<TInput, TConfig, string | undefined>> {

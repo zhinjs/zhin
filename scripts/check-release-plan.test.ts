@@ -5,7 +5,13 @@ import path from 'node:path';
 import { findVersionedReleaseBaseline } from './release-version-coverage.mjs';
 
 const roots: string[] = [];
-afterEach(() => roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true })));
+afterEach(() => roots.splice(0).forEach((root) => rmSync(root, {
+  recursive: true,
+  force: true,
+  // Git/OS can briefly retain entries after the child exits (notably on macOS).
+  maxRetries: 3,
+  retryDelay: 50,
+})));
 
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), 'zhin-release-gate-test-'));

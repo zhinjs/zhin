@@ -13,7 +13,9 @@ user-invocable: true
 `plugin.ts` **必须** default-export `definePlugin()`，否则装配抛
 `does not default-export a Plugin definition`。
 
-能力**按命名目录发现**（每个能力固定 `index.ts` 入口并 default export），不要命令式注册：
+能力**按命名目录发现**（每个能力固定入口并 default export），不要命令式注册。
+服务端命令、中间件、组件的 provider 支持 `index.tsx`；其他服务端能力使用 `index.ts`，
+不能把 JSX 入口约定推广到所有能力。浏览器 `pages` 使用 Client Build 编译 `index.tsx`：
 
 | 目录 | API |
 |------|-----|
@@ -30,6 +32,15 @@ user-invocable: true
 | `agents/<name>/agent.json` | Agent 元数据；提示词和边界文件与其同目录 |
 
 DI：`context.resources`（Scope + Token）。清理：`context.lifecycle`。
+
+JSX 创作与发送规则见 [中间件与组件](../../../docs/authoring/middleware-components.md)：
+`jsxImportSource: "zhin.js"`；能力与节点类型从 `zhin.js/jsx` 导入；可选展示组件从
+`@zhin.js/components` 导入，标题、标签、值等可接受 `JSXRenderable`。
+Command execute、入站 handle、注册组件 render 可直接返回 JSX，链结束自动回复一次。
+入站 `return next()` 或仅 `await next()` 均透传；出站通过 `input.replace(JSX)` + next 放行，返回 void。
+服务端 TSX 仅转译 JSX，不支持直接导入 `.css`、CSS Modules、`?raw`，也不包含
+Sass/SCSS、Less、Stylus、PostCSS 等样式构建；使用内联 style、主题与 custom.style。
+不得使用旧 renderJSX、字符串组件模板或 Satori JSX runtime。
 
 **禁止使用** `usePlugin()` / `getPlugin()` / `MessageCommand` / `addCron(new Cron)` /
 `declareConfig` 经典路径；`zhin.js/node` 与 `bootstrapNode` 已删除且不再导出。
@@ -177,3 +188,5 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 3. 关键约束（Feature、lifecycle、config）
 4. 验证结果
 5. 剩余风险（仅与本次相关）
+
+静态工具类可按需使用 `@zhin.js/tailwind` 的 `createTailwindStyle()`，输出接入 `style` / `custom.style` / 主题样式；不会启用 `className` 扫描、CSS import 或预处理器。图片引擎统一使用 `@zhin.js/html-renderer`（`@pixel.js/shotium`），不要导入已移除的 Satori 图片包；Satori 聊天协议适配器不受影响。

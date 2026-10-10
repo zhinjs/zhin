@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/email/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/email/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=1291832d3c20e396 -->
+<!-- sync-adapter-docs:sha256=dfdb413c07e8f8df -->
 
 # @zhin.js/adapter-email
 
@@ -117,7 +117,7 @@ canonical `markdown` 保留到 SMTP Endpoint，生成 `text/plain` 与 `text/htm
 
 canonical `share` 呈现标题链接、说明及纯文本 URL，链接地址保真；平台专属媒体/应用分享元数据明确拒绝。`image` 使用唯一 CID 内联附件，保留文字—图片—文字顺序，纯图片邮件也生成 HTML 正文；URL/path/base64 可用，其他媒体仍作为普通附件。无法解析的媒体及平台不透明文件 ID 在 SMTP 请求前拒绝，避免只发正文却返回成功。
 
-Endpoint 编码函数支持显式 `html` 双正文，但框架统一链路仍将 canonical `html` 渲染成图片或文字；这项直接编码能力不算统一链路的原生 HTML 验收。需要富文本邮件时使用 canonical `markdown`。
+适配器声明 `html: direct`，统一链路将 canonical `html` 直接交给 Endpoint，作为邮件 HTML 正文，并生成纯文本正文供不支持 HTML 的邮件客户端使用。JSX 回复经 Core 序列化后也走这条路径；canonical `markdown` 同样支持富文本邮件。
 
 Email 没有机器人按钮点击回调传输，`keyboard`/`action` 直接调用 Endpoint 会返回 `unsupported_operation`、`not_sent`。平台能力仍声明 `interactive: text`；验收按钮应标记不适用，不以文本降级或 SMTP messageId 认定可点击交互通过。
 

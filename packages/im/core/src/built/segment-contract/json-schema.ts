@@ -57,13 +57,34 @@ function dataObject(
   return { type: 'object', properties, required: [...required], additionalProperties: false };
 }
 
+/** Interactive extension guards validate known fields while preserving platform-specific extras. */
+function interactiveDataObject(
+  properties: Record<string, JsonSchemaObject>,
+  required: readonly string[],
+): JsonSchemaObject {
+  return { type: 'object', properties, required: [...required], additionalProperties: true };
+}
+
+const buttonJsonSchema = interactiveDataObject({
+  id: { type: 'string' },
+  label: { type: 'string' },
+  payload: { type: 'string' },
+  disabled: { type: 'boolean' },
+  style: { type: 'string', enum: ['primary', 'danger', 'secondary'] },
+  mode: { type: 'string', enum: ['callback', 'command'] },
+  command: interactiveDataObject({
+    enter: { type: 'boolean' },
+    reply: { type: 'boolean' },
+  }, []),
+}, ['id', 'label', 'payload']);
+
 /** 宽松分支：未纳入严格契约的段类型，仅约束顶层形状（与 isCanonicalSegment 宽松路径一致） */
 const looseBranch: JsonSchemaObject = {
   type: 'object',
   properties: {
     type: {
       type: 'string',
-      enum: ['voice', 'record', 'link', 'markdown', 'html', 'keyboard', 'action'],
+      enum: ['voice', 'record', 'link', 'markdown', 'html'],
     },
     data: { type: 'object' },
     platform: platformJsonSchema,
@@ -80,7 +101,7 @@ export const STRICT_OUTBOUND_SEGMENT_TYPES = [
 
 /**
  * 单条 outbound 消息段的 JSON Schema。
- * 严格段镜像 validate.ts 的 data 约束；宽松段走 generic 分支。
+ * 严格段镜像 validate.ts，交互段镜像 interactive-segments/types.ts；其他扩展段走宽松分支。
  */
 export const outboundSegmentJsonSchema: JsonSchemaObject = {
   description: 'zhin 消息段 {type, data, platform?}',
@@ -144,6 +165,18 @@ export const outboundSegmentJsonSchema: JsonSchemaObject = {
         version: { type: 'string' },
       }, ['appid']),
     }, ['url', 'title'])),
+    strictBranch('keyboard', interactiveDataObject({
+      rows: { type: 'array', items: { type: 'array', items: buttonJsonSchema } },
+      fallback: interactiveDataObject({
+        hint: { type: 'string' },
+        map: { type: 'object', additionalProperties: { type: 'string' } },
+      }, ['hint', 'map']),
+    }, ['rows'])),
+    strictBranch('action', interactiveDataObject({
+      id: { type: 'string' },
+      payload: { type: 'string' },
+      sourceMessageId: { type: 'string' },
+    }, ['id', 'payload'])),
     looseBranch,
   ],
 };

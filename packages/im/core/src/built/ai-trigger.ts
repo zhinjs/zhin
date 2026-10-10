@@ -177,7 +177,7 @@ export function isAtEndpoint<T extends object>(
     return true;
   }
   for (const seg of messageElements(message)) {
-    if (seg.type === 'text' && seg.data?.text && textMentionsEndpoint(seg.data.text, endpointKeys)) {
+    if (seg.type === 'text' && typeof seg.data?.text === 'string' && textMentionsEndpoint(seg.data.text, endpointKeys)) {
       return true;
     }
   }
@@ -224,7 +224,7 @@ export function removeAtEndpoint<T extends object>(
   return messageElements(message)
     .filter((seg) => !isAtSegmentForEndpoint(seg, endpointKeys))
     .map((seg) => {
-      if (seg.type !== 'text' || !seg.data?.text) return seg;
+      if (seg.type !== 'text' || typeof seg.data?.text !== 'string') return seg;
       const stripped = stripTextAtEndpoint(seg.data.text, endpointKeys).trim();
       if (!stripped) return null;
       return { ...seg, data: { ...seg.data, text: stripped } };

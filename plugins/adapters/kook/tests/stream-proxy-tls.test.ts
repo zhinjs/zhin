@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { createKookStreamSocket } from '../src/stream-proxy.js';
-import { loadPatchedKookFixture } from './sdk-patch-fixture.js';
+import { loadPublishedKookFixture } from './sdk-patch-fixture.js';
 import { createTcpFaultProxy } from '../../../../scripts/platform-acceptance/tcp-fault-proxy.mjs';
 
-it('patched actual KOOK SDK socketFactory preserves TLS and supports controlled cut/recover', async () => {
+it('published KOOK SDK socketFactory preserves TLS and supports controlled cut/recover', async () => {
   const directory = mkdtempSync(join(tmpdir(), 'zhin-ding-wss-'));
   execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-keyout', join(directory, 'key.pem'), '-out', join(directory, 'cert.pem'), '-subj', '/CN=gateway.test', '-addext', 'subjectAltName=DNS:gateway.test'], { stdio: 'ignore' });
   const ca = readFileSync(join(directory, 'cert.pem'));
@@ -23,7 +23,7 @@ it('patched actual KOOK SDK socketFactory preserves TLS and supports controlled 
   // Trust only the test CA. The actual ws connector still decides routing/SNI/verification.
   const connector = vi.spyOn(tls, 'connect').mockImplementation(options => original({ ...options as tls.ConnectionOptions, ca }));
   const clients = [];
-  const fixture = await loadPatchedKookFixture();
+  const fixture = await loadPublishedKookFixture();
   try {
     const url = 'wss://gateway.test/callback?ticket=fixture-private';
     const create = async () => {

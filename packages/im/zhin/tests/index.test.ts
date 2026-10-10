@@ -35,9 +35,11 @@ describe('Zhin Package Exports', () => {
   })
 
   it('should export component utilities', async () => {
-    const { defineComponent, renderComponents } = await import('../src/index')
-    expect(defineComponent).toBeDefined()
-    expect(renderComponents).toBeDefined()
+    const zhin = await import('../src/index.js')
+    const components = await import('../src/component.js')
+    expect(zhin.defineComponent).toBe(components.defineComponent)
+    expect(zhin.component).toBe(components.component)
+    expect('renderComponents' in zhin).toBe(false)
   })
 
   it('should export JSX runtime', async () => {

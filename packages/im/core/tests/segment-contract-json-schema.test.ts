@@ -69,7 +69,7 @@ describe('outboundSegmentJsonSchema', () => {
     const strictBranchTypes = anyOf
       .map((branch) => (branch.properties as Record<string, { const?: string }>).type?.const)
       .filter((v): v is string => typeof v === 'string');
-    expect([...strictBranchTypes].sort()).toEqual([...STRICT_OUTBOUND_SEGMENT_TYPES].sort());
+    expect([...strictBranchTypes].sort()).toEqual([...STRICT_OUTBOUND_SEGMENT_TYPES, 'keyboard', 'action'].sort());
     expect(STRICT_OUTBOUND_SEGMENT_TYPES).toEqual([
       'text', 'mention', 'image', 'audio', 'video', 'file', 'reply', 'forward',
       'face', 'dice', 'rps', 'share',

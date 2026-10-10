@@ -1,45 +1,12 @@
-import { describe, it, expect } from 'vitest'
-import * as jsxRuntime from '../src/jsx-runtime'
-import * as jsxDevRuntime from '../src/jsx-dev-runtime'
+import * as production from '../src/jsx-runtime.js';
+import * as development from '../src/jsx-dev-runtime.js';
+import { renderToHtml, isJsxElement } from '../src/jsx.js';
 
-describe('JSX Runtime', () => {
-  it('should export jsx function', () => {
-    expect(typeof jsxRuntime.jsx).toBe('function')
-  })
-
-  it('should export jsxs function', () => {
-    expect(typeof jsxRuntime.jsxs).toBe('function')
-  })
-
-  it('should export Fragment', () => {
-    expect(jsxRuntime.Fragment).toBeDefined()
-  })
-
-  it('should export renderJSX function', () => {
-    expect(typeof jsxRuntime.renderJSX).toBe('function')
-  })
-
-  it('should have default export', () => {
-    expect(jsxRuntime.default).toBeDefined()
-    expect(typeof jsxRuntime.default.jsx).toBe('function')
-    expect(typeof jsxRuntime.default.jsxs).toBe('function')
-  })
-})
-
-describe('JSX Dev Runtime', () => {
-  it('should export jsx function', () => {
-    expect(typeof jsxDevRuntime.jsx).toBe('function')
-  })
-
-  it('should export jsxDEV function', () => {
-    expect(typeof jsxDevRuntime.jsxDEV).toBe('function')
-  })
-
-  it('should export Fragment', () => {
-    expect(jsxDevRuntime.Fragment).toBeDefined()
-  })
-
-  it('should export renderJSX function', () => {
-    expect(typeof jsxDevRuntime.renderJSX).toBe('function')
-  })
-})
+describe('unified JSX compiler entries', () => {
+  it('shares production and development HTML semantics', async () => {
+    const node = production.jsxs(production.Fragment, { children: [production.jsx('b', { children: '<ok>' }), 0, false] });
+    expect(isJsxElement(node)).toBe(true);
+    expect(await renderToHtml(node)).toBe('<b>&lt;ok&gt;</b>0');
+    expect(await renderToHtml(development.jsxDEV('b', { children: '<ok>' }))).toBe('<b>&lt;ok&gt;</b>');
+  });
+});

@@ -18,6 +18,7 @@ import {
   FileDown, ListChecks,
 } from 'lucide-react';
 import RichTextEditor, { type RichTextEditorRef } from './RichTextEditor';
+import HtmlMessage from './HtmlMessage.js';
 import {
   agentStudioPath,
   buildAgentRunReport,
@@ -409,6 +410,8 @@ export default function Sandbox() {
                 case 'markdown':
                 case 'md':
                     return <MarkdownContent key={index} text={String(d.text ?? d.content ?? '')} className={isSent ? 'zhin-markdown--inverse' : undefined} />
+                case 'html':
+                    return <HtmlMessage key={index} html={String(d.html ?? '')} />
                 case 'code':
                     return <CodeBlock key={index} code={String(d.code ?? d.text ?? d.content ?? '')} language={String(d.language ?? d.lang ?? '')} />
                 case 'mention':

@@ -48,10 +48,11 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@zhin.js/components": "workspace:*",
     "@zhin.js/core": "workspace:*",
-    "@zhin.js/satori": "workspace:*",
-    "@zhin.js/tool": "workspace:*",
-    "@zhin.js/skill": "workspace:*"
+    "@zhin.js/jsx": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^6.0.3",

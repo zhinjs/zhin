@@ -47,16 +47,37 @@ export type InteractivePolicy = 'native' | 'text';
 
 export const DEFAULT_INTERACTIVE_POLICY: InteractivePolicy = 'text';
 
-export function isKeyboardSegment(item: MessageElement): item is MessageElement & {
+export function isKeyboardSegment(item: unknown): item is MessageElement & {
   type: typeof KEYBOARD_SEGMENT_TYPE;
   data: KeyboardSegmentData;
 } {
-  return item != null && typeof item === 'object' && 'type' in item && item.type === KEYBOARD_SEGMENT_TYPE;
+  if (!isRecord(item) || item.type !== KEYBOARD_SEGMENT_TYPE || !isRecord(item.data)) return false;
+  const { rows, fallback } = item.data;
+  return Array.isArray(rows) && rows.every(row => Array.isArray(row) && row.every(isButtonData))
+    && (fallback === undefined || (isRecord(fallback) && typeof fallback.hint === 'string'
+      && isRecord(fallback.map) && Object.values(fallback.map).every(value => typeof value === 'string')));
 }
 
-export function isActionSegment(item: MessageElement): item is MessageElement & {
+export function isActionSegment(item: unknown): item is MessageElement & {
   type: typeof ACTION_SEGMENT_TYPE;
   data: ActionSegmentData;
 } {
-  return item != null && typeof item === 'object' && 'type' in item && item.type === ACTION_SEGMENT_TYPE;
+  return isRecord(item) && item.type === ACTION_SEGMENT_TYPE && isRecord(item.data)
+    && typeof item.data.id === 'string' && typeof item.data.payload === 'string'
+    && (item.data.sourceMessageId === undefined || typeof item.data.sourceMessageId === 'string');
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isButtonData(value: unknown): value is ButtonData {
+  return isRecord(value) && typeof value.id === 'string' && typeof value.label === 'string'
+    && typeof value.payload === 'string'
+    && (value.disabled === undefined || typeof value.disabled === 'boolean')
+    && (value.style === undefined || value.style === 'primary' || value.style === 'danger' || value.style === 'secondary')
+    && (value.mode === undefined || value.mode === 'callback' || value.mode === 'command')
+    && (value.command === undefined || (isRecord(value.command)
+      && (value.command.enter === undefined || typeof value.command.enter === 'boolean')
+      && (value.command.reply === undefined || typeof value.command.reply === 'boolean')));
 }

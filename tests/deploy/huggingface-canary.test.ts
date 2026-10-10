@@ -12,7 +12,7 @@ afterEach(() => { vi.restoreAllMocks(); for (const dir of dirs.splice(0)) rmSync
 function fixture() {
   const dir = mkdtempSync(join(tmpdir(), 'zhin-canary-')); dirs.push(dir);
   const candidateSha = 'a'.repeat(40);
-  const artifacts = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime', '@zhin.js/satori'].map((name, index) => ({ name, version: '1.1.23', file: `${index}.tgz`, digest: digest(name) }));
+  const artifacts = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime'].map((name, index) => ({ name, version: '1.1.23', file: `${index}.tgz`, digest: digest(name) }));
   for (const artifact of artifacts) writeFileSync(join(dir, artifact.file), artifact.name);
   const manifest = { version: 1, candidateSha, runId: '123', runAttempt: '2', artifacts };
   const bytes = JSON.stringify(manifest); writeFileSync(join(dir, 'manifest.json'), bytes);
@@ -27,7 +27,8 @@ describe('HF canary local bundle', () => {
     const docker = readFileSync(join(options.outputDirectory, 'Dockerfile'), 'utf8');
     expect(docker).toContain(options.nodeImage); expect(docker).toContain('--frozen-lockfile'); expect(docker).toContain('USER node'); expect(docker).toContain('--experimental-transform-types');
     const pkg = JSON.parse(readFileSync(join(options.outputDirectory, 'package.json'), 'utf8'));
-    expect(Object.keys(pkg.pnpm.overrides)).toHaveLength(4);
+    expect(Object.keys(pkg.pnpm.overrides)).toHaveLength(3);
+    expect(pkg.pnpm.overrides).not.toHaveProperty('@zhin.js/satori');
     expect(pkg.dependencies['zhin.js']).toBe('file:artifacts/0.tgz');
     expect(existsSync(join(options.outputDirectory, 'agents'))).toBe(false);
     expect(readFileSync(join(options.outputDirectory, 'server.mjs'), 'utf8')).toContain("sandboxRoundTrip: 'not-tested'");

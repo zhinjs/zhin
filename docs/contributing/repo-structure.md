@@ -14,7 +14,7 @@ title: 仓库结构
 | `packages/im/` | IM 核心层：`adapter`、`agent`、`ai`、`command`、`component`、`config-file`、`core`、`feature-kit`、`handler`、`isolate`、`kernel`、`mcp-feature`、`middleware`、`plugin-runtime`、`runtime`、`skill`、`tool`、`zhin` 等 |
 | `packages/console/` | Remote Console 支撑包（`client`、`contract`、`layout`、`page`、`pagemanager`、`plugin-contract`、`protocol`）。Host 只提供 API，UI 在独立仓库 [zhin-console](https://github.com/zhinjs/console)（console.zhin.dev） |
 | `packages/host/` | Host 运行时：`http`（`@zhin.js/host-http`）、`mcp`（MCP Server）、`a2a`（A2A Server） |
-| `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`satori`、`html-renderer`、`speech` |
+| `packages/toolkit/` | `create-zhin`（`pnpm create zhin-app`）、`scaffold-wizard`（配置向导）、`components`（纯 JSX 样式）、`tailwind`（静态工具类）、`html-renderer`（Shotium）、`speech` |
 | `packages/game-kit/` | 游戏开发套件（供 `plugins/games/` 使用） |
 | `plugins/adapters/` | 平台适配器：sandbox、qq、icqq、napcat、onebot11/12、discord、telegram、slack、kook、dingtalk、lark、line、wecom、email、github、satori 等 |
 | `plugins/features/` | 功能插件（如 `process-monitor`） |
@@ -66,6 +66,24 @@ flowchart BT
 
 目录存在的目的不是缩短单个文件，而是让调用方只依赖稳定入口，让状态、策略和 IO
 实现保持单向关系。`pnpm check:domain-module-boundaries` 禁止模块外深层导入和旧平面入口回归。
+
+## 核心模块的维护边界
+
+核心目录的代码审查责任登记在 `.github/CODEOWNERS`，当前由 `@lc-cn` 维护。
+CODEOWNERS 负责请求审查；是否要求审查通过由 GitHub 分支保护设置决定。
+
+| 模块 | 修改入口 | 状态与职责边界 | 主要验证 |
+| --- | --- | --- | --- |
+| Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts` | generation、snapshot、资源租约与切换；运行态由所属 Root/generation 持有 | 生命周期与热重载测试、`check:architecture` |
+| IM / Adapter | `packages/im/core/src/plugin-runtime/im/`、`packages/im/adapter/src/adapter-index.ts` | Core 组合消息链路；Endpoint 拥有平台连接；传输契约属于 `im-contract` | 消息链路与端点测试、`check:harness-paths`、`check:adapter-endpoint-boundaries` |
+| Agent / Workroom | `packages/im/agent/README.md`、`packages/im/agent/src/workroom/workroom-kernel.ts` | 领域规则与 IO 端口分开；`plugin-runtime/` 将当前 generation 能力接到端口 | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
+| HTTP / Console | `packages/host/http/src/http-host.ts`、`packages/console/protocol/` | Host 拥有监听与路由；wire 契约独立；业务资源由 CLI 注入 | Host/RPC 测试、`check:console-protocol-boundaries`、`check:console-contract` |
+| CLI / 脚手架 | `basic/cli/src/plugin-runtime/start-command.ts`、`packages/toolkit/scaffold-wizard/src/` | CLI 是装配点；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
+
+修改前先确认状态归属、公开入口和实际调用方。拆分大型文件时，以可独立变化的规则、
+状态所有权和 IO 为边界，保留对外入口；不要同时引入新的能力或配置格式。
+新增受保护领域目录时，登记门禁并补充允许入口、违规导入与失败路径测试。
+当前领域目录门禁只保护上表之前列出的三个深模块，不代表所有领域内部都已受到相同约束。
 
 插件的约定能力也遵循同一原则：`commands/<path>/index.ts`、`adapters/<name>/index.ts`、
 `agents/<name>/`、`skills/<name>/`、`tools/<name>/index.ts` 是能力所有权边界。仅供某个能力

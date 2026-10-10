@@ -64,7 +64,7 @@ describe('createWorkspace', () => {
     const pluginEntry = await fs.readFile(path.join(projectPath, 'plugin.ts'), 'utf8')
     const helloCommand = await fs.readFile(path.join(projectPath, 'commands', 'hello', 'index.ts'), 'utf8')
     const cardCommand = await fs.readFile(path.join(projectPath, 'commands', 'card', 'index.ts'), 'utf8')
-    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card', 'index.ts'), 'utf8')
+    const statusCard = await fs.readFile(path.join(projectPath, 'components', 'status-card', 'index.tsx'), 'utf8')
     const page = await fs.readFile(path.join(projectPath, 'pages', 'index', 'index.tsx'), 'utf8')
     const navigation = await fs.readFile(path.join(projectPath, 'pages', 'nav', 'index.tsx'), 'utf8')
     const footer = await fs.readFile(path.join(projectPath, 'pages', 'footer', 'index.tsx'), 'utf8')
@@ -75,10 +75,10 @@ describe('createWorkspace', () => {
     expect(pkg.scripts.dev).toBe('zhin runtime start')
     expect(pkg.scripts.start).toBe('zhin runtime start --mode production --no-watch')
 
-    // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）satori；无 legacy host
+    // 依赖：用户面只直列 zhin.js + 适配器 +（卡片示例）components；无 legacy host
     expect(pkg.dependencies['zhin.js']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/adapter-sandbox']).toBe('latest')
-    expect(pkg.dependencies['@zhin.js/satori']).toBe('latest')
+    expect(pkg.dependencies['@zhin.js/components']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/console-contract']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/page']).toBe('latest')
     expect(pkg.dependencies['@zhin.js/layout']).toBe('latest')
@@ -124,9 +124,9 @@ describe('createWorkspace', () => {
     expect(pluginEntry).toContain("from 'zhin.js'")
     expect(pluginEntry).toContain('definePlugin(')
     expect(helloCommand).toContain("from 'zhin.js/command'")
-    expect(cardCommand).toContain("from 'zhin.js/core/runtime'")
+    expect(cardCommand).toContain("from 'zhin.js/component'")
     expect(statusCard).toContain("from 'zhin.js/component'")
-    expect(statusCard).toContain("from '@zhin.js/satori'")
+    expect(statusCard).toContain("from '@zhin.js/components'")
     expect(page).toContain("from '@zhin.js/console-contract'")
     expect(page).toContain('definePage(')
     expect(navigation).toContain('NavSlotProps')
@@ -149,7 +149,7 @@ describe('createWorkspace', () => {
     const expected = [
       'schema.json',
       'commands/hello/index.ts',
-      'components/status-card/index.ts',
+      'components/status-card/index.tsx',
       'middlewares/.gitkeep',
       'tools/.gitkeep',
       'skills/skill-creator/SKILL.md',

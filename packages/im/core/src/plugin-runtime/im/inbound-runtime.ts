@@ -6,6 +6,7 @@ import type {
   SnapshotLease,
 } from '@zhin.js/plugin-runtime';
 import type { EndpointEvent } from '@zhin.js/adapter';
+import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { HandlerIndex, isHandlerIndex, handlerFeatureId } from '../../feature/handler.js';
 import type { HandlerDispatchOptions } from '@zhin.js/handler';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
@@ -36,7 +37,6 @@ import {
   type RuntimeMessageEvent,
 } from './message-events.js';
 import { resolveIngressRoute } from './ingress-route.js';
-import { runRuntimeMiddleware } from './runtime-middleware.js';
 
 const logger = getLogger('im.inbound');
 
@@ -62,6 +62,11 @@ interface InboundRuntimeContext {
   ): Promise<number | undefined>;
   recordNotice(notice: Notice): Promise<void>;
   publish(event: RuntimeMessageEvent): void;
+}
+
+interface InboundOutcome {
+  readonly dispatch: MessageDispatchResult;
+  readonly reply?: { readonly owner: PluginId; readonly content: SendContent };
 }
 
 /** Owns Endpoint ingress normalization, routing, dispatch, and side-event action scopes. */
@@ -160,6 +165,9 @@ export class InboundRuntime {
           return source.client;
         },
         source.endpoint.adapter,
+        { snapshot: lease.value, assertActive: () => {
+          if (!active) throw new Error('Message author binding scope has ended');
+        } },
       );
       const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
@@ -171,10 +179,7 @@ export class InboundRuntime {
       } else {
         const interactionFactory = (value: unknown) =>
           this.context.interactions.createFromUnknown(value);
-        await runRuntimeMiddleware(
-          lease.value,
-          message,
-          async () => {
+        const terminal = async (): Promise<InboundOutcome> => {
             const ingressRoute = resolveIngressRoute(lease.value);
             const preRouted = await ingressRoute?.preRoute?.(
               message,
@@ -184,7 +189,7 @@ export class InboundRuntime {
             ) === true;
             if (preRouted) {
               result = Object.freeze({ matched: true, command: 'pre-route', owner: requester });
-              return;
+              return { dispatch: result };
             }
             if (ingressRoute?.shouldRouteBeforeDispatch?.(message) === true) {
               const handled = await ingressRoute.route(
@@ -195,7 +200,7 @@ export class InboundRuntime {
               );
               if (handled) {
                 result = Object.freeze({ matched: true, command: 'ai', owner: requester });
-                return;
+                return { dispatch: result };
               }
             }
             await this.#runHandlers(lease.value, 'message.receive', [
@@ -218,9 +223,27 @@ export class InboundRuntime {
                 result = Object.freeze({ matched: true, command: 'ai', owner: requester });
               }
             }
-          },
-          'inbound',
-        );
+            return {
+              dispatch: result,
+              ...(result.value !== undefined && result.owner
+                ? { reply: { owner: result.owner, content: result.value as SendContent } }
+                : {}),
+            };
+        };
+        const middleware = lease.value.projections.get(middlewareFeatureId);
+        const outcome = isMiddlewareIndex(middleware)
+          ? await middleware.runInbound(message, terminal, {
+              stop: (owner): InboundOutcome => ({ dispatch: { matched: true, command: 'middleware', owner } }),
+              replace: (owner, value, downstream): InboundOutcome => ({
+                dispatch: downstream?.dispatch.matched
+                  ? downstream.dispatch
+                  : { matched: true, command: 'middleware', owner },
+                reply: { owner, content: value as SendContent },
+              }),
+            }, lease.value)
+          : await terminal();
+        result = outcome.dispatch;
+        if (outcome.reply) await message.$replyFrom(outcome.reply.owner, outcome.reply.content);
       }
       if (result.matched) {
         logger.debug(formatCompact({

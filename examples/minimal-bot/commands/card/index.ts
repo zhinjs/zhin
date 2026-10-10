@@ -1,8 +1,8 @@
 import { defineCommand } from 'zhin.js/command';
-import { component } from 'zhin.js/core/runtime';
+import { component } from 'zhin.js/component';
 
 export default defineCommand({
-  description: 'Render the Satori status component',
+  description: 'Render the status component',
   execute: () => {
     const memory = process.memoryUsage();
     return component('status-card', {

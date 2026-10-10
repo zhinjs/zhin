@@ -3,6 +3,7 @@ import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { isPromptSectionIndex, promptSectionFeatureId } from '@zhin.js/prompt-section';
 import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { component, OutboundRenderer } from '@zhin.js/core/runtime';
 import { displayConsolePath } from './display-path.js';
 
 export function listGenerationCommands(
@@ -74,8 +75,15 @@ export async function renderGenerationComponent(
   }>,
 ): Promise<unknown> {
   const index = snapshot?.projections.get(componentFeatureId);
-  if (!isComponentIndex(index)) throw new Error('Component Runtime 未就绪');
-  return index.render(input.requester as PluginId, input.name, input.props, { signal: input.signal });
+  if (!snapshot || !isComponentIndex(index)) throw new Error('Component Runtime 未就绪');
+  return new OutboundRenderer().render(
+    component(input.name, input.props),
+    input.requester as PluginId,
+    snapshot,
+    undefined,
+    undefined,
+    { signal: input.signal },
+  );
 }
 
 export function listGenerationTools(

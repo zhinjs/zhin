@@ -84,7 +84,7 @@ pnpm dev
 
 **要求**：脚手架生成的 TypeScript 项目需要 Node.js **≥22.12.0**、pnpm 9+。编译后的 IM 库支持 Node.js `^20.19.0` 或 `>=22.12.0`。
 
-**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 Satori 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
+**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 JSX 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
 
 ## 从一条消息到长期任务
 
@@ -158,7 +158,7 @@ flowchart LR
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
-| **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
+| **Rich media** | `+ @zhin.js/html-renderer` | 按平台（含原生引擎） | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
 1.1 稳定线兼容说明：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
@@ -217,6 +217,8 @@ ai:
 | [`@zhin.js/cli`](./basic/cli) · [`create-zhin-app`](./packages/toolkit/create-zhin) | CLI / 脚手架 |
 
 分层与依赖方向：[架构概览](./docs/concepts/architecture.md) · [仓库结构](./docs/contributing/repo-structure.md)
+
+JSX 创作使用 `zhin.js/jsx`，配置 `jsxImportSource: "zhin.js"`。命令、入站中间件和注册组件可直接返回 JSX，按适配器能力输出 HTML、图片或文本。可选 `@zhin.js/components` 提供主题化样式组件，展示位使用可组合的 `JSXRenderable`。服务端 TSX 仅转译 JSX，不支持直接导入 `.css` 或样式预处理；使用内联 `style`、主题和 `custom.style`。 可选 `@zhin.js/tailwind` 将静态工具类转为内联样式；图片渲染由 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成。 参见[中间件与组件](https://zhin.js.org/authoring/middleware-components)。
 
 ## Documentation
 

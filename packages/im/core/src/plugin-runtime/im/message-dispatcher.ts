@@ -8,7 +8,7 @@ import {
 import type { UserInteractionFactory } from '@zhin.js/interaction';
 import { formatCompact, getLogger, truncatePreview } from '@zhin.js/logger';
 import type { CapabilityId, PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { Message, MessageDispatchResult, SendContent } from './contracts.js';
+import type { Message, MessageDispatchResult } from './contracts.js';
 
 const logger = getLogger('command');
 
@@ -80,7 +80,6 @@ export class MessageDispatcher {
         command: result.command,
         owner: result.owner,
       }));
-      await message.$replyFrom(result.owner, result.value as SendContent);
     } else if (!result.matched) {
       logger.debug(formatCompact({
         op: 'dispatch_miss',

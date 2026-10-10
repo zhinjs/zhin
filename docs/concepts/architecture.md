@@ -35,7 +35,10 @@ flowchart BT
         agent["@zhin.js/agent"]
     end
     zhin["zhin.js（门面）"]
-    host["packages/host/*（http / mcp / a2a）"]
+    httpContract["HTTP Host 契约"]
+    http["HTTP / WebSocket Host"]
+    protocolHost["MCP / A2A Host"]
+    wire["Console wire 契约"]
     cli["@zhin.js/cli（composition root）"]
 
     pr --> fk --> ad & cmd & comp & mw & tool
@@ -49,8 +52,9 @@ flowchart BT
     core --> zhin
     agent -. peer .-> zhin
     pr & fk --> rt
-    zhin --> host
-    rt & core & host --> cli
+    pr & logger & schedule & httpContract & wire --> http
+    core & ai & k & httpContract --> protocolHost
+    rt & core & http & protocolHost --> cli
 ```
 
 依赖关系的权威来源是各包的 `package.json`。读它之前，先记住几个关键事实。
@@ -76,6 +80,9 @@ flowchart BT
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
 | 运行时 | `@zhin.js/runtime` | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR |
 | 装配 | `@zhin.js/cli` | composition root，`zhin runtime start` 把一切装起来 |
+
+图展示主要依赖，完整依赖仍以各包的 `package.json` 为准。允许的分层边界由
+`scripts/check-architecture-layers.mjs` 执行；新增依赖时同时核对文档与门禁，不能只修改其中一处。
 
 ## Composition root：`@zhin.js/cli`
 
@@ -117,6 +124,17 @@ flowchart BT
 
 ## 分层规则的推论
 
-写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。`kernel`、`ai` 不知道"群""私聊"这些 IM 概念；IM 概念只出现在 `core` 及以上。Host（`packages/host/http`、`mcp`、`a2a`）在 `core` 之上、由 CLI 装配，插件不直接依赖 Host 进程。
+写 Feature（新能力类型）时只依赖 `feature-kit` / `plugin-runtime`，不要 import `core`。
+`kernel`、`ai` 不知道群、私聊这些 IM 概念。`im-contract` 定义 IM 契约，Adapter 和 Core 消费这些契约。
+Host 均由 CLI 装配，但不属于同一依赖层：HTTP / WebSocket Host 只依赖基础服务、
+Plugin Runtime、HTTP 契约和 Console wire 契约，不依赖 Core 或 Agent；MCP / A2A Host
+可以消费 Core、AI 与 Kernel，通过 HTTP 契约接入路由，不依赖具体 HTTP Host 实现。
+插件不直接依赖 Host 进程。
 
 `@zhin.js/agent` 内部也遵循单向边界：`workroom/`、`portfolio/`、`data-governance/` 拥有领域值对象、策略和端口，`plugin-runtime/` 负责把 generation-owned 能力适配到这些端口，`config/` 只负责配置解析。领域目录不得反向导入 `plugin-runtime/` 或 `config/`；该约束由 `pnpm check:architecture` 检查。
+
+## JSX 与展示组件
+
+`@zhin.js/jsx` 是零运行时依赖的 JSX tree / HTML serializer。Core 依赖它把 JSX 转 `segment.html`；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 使用 JSX 基础包及 Markdown／代码高亮依赖，展示位接受 `JSXRenderable`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。
+
+可选 `@zhin.js/tailwind` 使用官方 Tailwind 编译器将静态工具类转换为内联样式，输出可用于 JSX、组件局部样式和共享主题。它不依赖 Core、组件库或渲染引擎；JSX 基础包也不加载它。图片渲染统一由可选 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成，不再维护 Satori 图片工具包。

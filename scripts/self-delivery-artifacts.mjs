@@ -9,7 +9,7 @@ import { verifyInstalledSmokeReceipt } from './self-delivery-smoke-receipt.mjs';
 
 const [mode, directory, output] = process.argv.slice(2);
 const trustedRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const roots = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime', '@zhin.js/satori'];
+const roots = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime'];
 const sha256 = (bytes) => 'sha256:' + createHash('sha256').update(bytes).digest('hex');
 const run = (args, cwd) => execFileSync('pnpm', args, { cwd, stdio: 'inherit', timeout: 600_000 });
 if (mode === 'validate') {

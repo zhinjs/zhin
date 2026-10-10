@@ -1,17 +1,28 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["node"],
+    "types": [
+      "node"
+    ],
     "noEmit": true,
     "erasableSyntaxOnly": true,
-    "rootDir": "."
+    "rootDir": ".",
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
   },
   "include": [
     "plugin.ts",
     "adapters/**/*.ts",
     "commands/**/*.ts",
     "components/**/*.ts",
-    "tools/**/index.ts"
+    "tools/**/index.ts",
+    "commands/**/*.tsx",
+    "components/**/*.tsx",
+    "middlewares/**/*.ts",
+    "middlewares/**/*.tsx"
   ],
-  "exclude": ["lib", "node_modules"]
+  "exclude": [
+    "lib",
+    "node_modules"
+  ]
 }

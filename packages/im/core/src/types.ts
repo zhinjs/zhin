@@ -1,4 +1,4 @@
-import type { MessageChannel, MessageComponent } from './message.js';
+import type { MessageChannel } from './message.js';
 import type { Message } from './plugin-runtime/im/contracts.js';
 import { SystemLog } from './models/system-log.js';
 import { User } from './models/user.js';
@@ -18,11 +18,8 @@ export type ObjectItem<T extends object>=T[keyof T]
 /**
  * 消息段结构，支持 text/image/at/face 等类型
  */
-export interface MessageSegment {
-  type: string;
-  data: Record<string, any>;
-}
-export type MessageElement=MessageSegment|MessageComponent<any>
+export type { Segment as MessageSegment } from './built/segment-contract/types.js';
+export type MessageElement = import('./built/segment-contract/types.js').Segment;
 /**
  * 单个或数组类型
  */
@@ -30,7 +27,8 @@ export type MaybeArray<T>=T|T[]
 /**
  * 消息发送内容类型
  */
-export type SendContent=MaybeArray<string|MessageElement>
+export type { SendContent } from './plugin-runtime/im/contracts.js';
+import type { SendContent } from './plugin-runtime/im/contracts.js';
 
 /** 可选：编辑已发送消息（交互式棋盘更新） */
 export interface EditMessageOptions {

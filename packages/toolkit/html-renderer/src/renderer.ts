@@ -1,13 +1,11 @@
-import type { CacheMode, Clip, ScreenshotOptions, CaptureStats } from '@shotkit/shotium';
+import type { CacheMode, Clip, ScreenshotOptions, CaptureStats } from '@pixel.js/shotium';
 
 import { resolveHtmlRendererConfig } from './config.js';
 import { createEngine } from './engine.js';
 import { buildFontFaces, isFullDocument, withDocumentFile, wrapDocument } from './html.js';
 import { readImageSize } from './image.js';
-import { serializeJsxToHtml } from './jsx.js';
 import type {
   FontConfig,
-  HtmlComponent,
   HtmlRendererConfig,
   HtmlRendererLogger,
   HtmlRendererService,
@@ -62,15 +60,8 @@ export function createHtmlRenderer(
   const mergedConfig = resolveHtmlRendererConfig(config);
   const engine = createEngine(mergedConfig.shotium, logger);
   const registeredFonts = new Map<string, FontConfig>();
-  const warned = new Set<string>();
   let activeRenders = 0;
   const renderQueue: Array<() => void> = [];
-
-  const warnOnce = (key: string, ...message: unknown[]): void => {
-    if (warned.has(key)) return;
-    warned.add(key);
-    logger?.warn?.(...message);
-  };
 
   const getFonts = (extraFonts: readonly FontConfig[] = []): FontConfig[] => {
     const fonts = new Map<string, FontConfig>();
@@ -158,8 +149,8 @@ export function createHtmlRenderer(
       fontFaces: buildFontFaces(fonts),
     });
     const defaults = wrapped
-      ? { type: 'png' as const, fullPage: false, selector: 'body' }
-      : { type: 'png' as const, fullPage: true };
+      ? { type: options.format ?? mergedConfig.shotium.type, fullPage: false, selector: 'body' }
+      : { type: options.format ?? mergedConfig.shotium.type, fullPage: true };
 
     const result = await withDocumentFile(document, (file) =>
       capture(file, {
@@ -171,7 +162,7 @@ export function createHtmlRenderer(
 
     return {
       data: result.data,
-      format: 'png',
+      format: defaults.type,
       width: result.width,
       height: result.height,
       mimeType: result.mimeType,
@@ -180,28 +171,17 @@ export function createHtmlRenderer(
 
   return {
     async render(html: string, options: RenderOptions = {}): Promise<RenderResult> {
+      const format = options.format ?? mergedConfig.shotium.type;
+      if (!['png', 'jpeg', 'webp'].includes(format)) {
+        throw new TypeError(`Unsupported HTML image format: ${String(format)}`);
+      }
       await acquireRenderSlot();
       try {
-        if ((options.format ?? 'png') === 'svg') {
-          warnOnce('svg', 'html-renderer: shotium does not support svg output; returning png instead');
-        }
         return await renderWithShotium(html, options);
       } finally {
         releaseRenderSlot();
         engine.release();
       }
-    },
-
-    async renderJsx(element: unknown, options: RenderOptions = {}): Promise<RenderResult> {
-      return this.render(serializeJsxToHtml(element), options);
-    },
-
-    async renderComponent<P>(
-      component: HtmlComponent<P>,
-      props: P,
-      options: RenderOptions = {},
-    ): Promise<RenderResult> {
-      return this.render(serializeJsxToHtml(component(props)), options);
     },
 
     registerFont(font: FontConfig): void {
@@ -219,5 +199,3 @@ export function createHtmlRenderer(
     },
   };
 }
-
-export { serializeJsxToHtml } from './jsx.js';

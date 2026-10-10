@@ -121,7 +121,7 @@ canonical reply 使用原生 `quote`，关联原消息 ID。canonical 图片（U
 撤回通过 canonical control 的完整 MessageRef 区分频道与私聊，并调用对应正式删除接口。transport 未实现删除或平台返回 false 时明确失败，不允许静默成功；直接调用 `recallMessage` 须同时传入 ConversationRef。
 # WSS 可控故障验收
 
-仓库通过局部 `kook-client@1.0.4` pnpm 补丁提供可选 `socketFactory` 与 `autoReconnect`；SDK 默认行为不变；补丁另提供 `handleProcessErrors`，Zhin 显式设 false，让框架管理进程错误，不扫描或删除其他全局监听。Zhin 关闭内部重连/DNS监视，由统一 Endpoint lifecycle 负责 start/stop/reconnect，SDK保留协议心跳和事件转换。停止会取消 pending hello，迟到 discovery 不会再建连接。此补丁需随 lockfile 安装，不是全局修改 `ws`。
+`kook-client@1.0.5` 已在上游提供可选 `socketFactory`、`autoReconnect` 与 `handleProcessErrors`，无需本地 pnpm 补丁。Zhin 显式设置 `handleProcessErrors: false`，让框架管理进程错误，不扫描或删除其他全局监听。Zhin 关闭 SDK 内部重连/DNS 监视，由统一 Endpoint lifecycle 负责 start/stop/reconnect，SDK 保留协议心跳和事件转换。停止会取消 pending hello，迟到 discovery 不会再建连接。
 
 可选 `streamProxy: { port: 18443, serverName: "实际网关域名" }` 仅改 TCP 路由到 `127.0.0.1`，真实 WSS URL、Host、SNI 和证书链/域名校验保留；网关变化拒绝并只记录安全 hostname，不输出私有 URL/query 或回退直连。验收项目支持 `KOOK_STREAM_PROXY_PORT` / `KOOK_STREAM_PROXY_SERVER_NAME` 临时进程覆盖，需同时提供，留空正常直连。先以占位域名获取安全日志中的实际 gateway hostname，随后启动固定上游 `tcp-fault-proxy.mjs --upstream-host 实际网关域名 --upstream-port 443 --port 18443 --control-port 18444` 并同步 serverName，不覆盖已有 `.env`。
 
