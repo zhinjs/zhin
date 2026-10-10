@@ -1,0 +1,213 @@
+packages/im/ai/tests/decision-types.test.ts
+  s_6562bcb6cc0539::t_d52113e8b5d303 1-15
+packages/im/agent/src/plugin-runtime/native-tool-suite.ts
+  s_6562bcb6cc0539::t_f02f8dc2a26c4a 8,19,32
+.changeset/typesafe-jev-provider.md
+  s_6562bcb6cc0539::t_d8a753f3163c88 1-8
+packages/im/agent/tests/session/approval-review-agent.test.ts
+  s_6562bcb6cc0539::t_f73e85dc699154 12,195,202
+packages/im/agent/tests/turn/execute-agent-turn.test.ts
+  s_6562bcb6cc0539::t_06604f01e81461 35-52
+packages/im/agent/tests/decision/deferred-retrieval.test.ts
+  s_6562bcb6cc0539::t_e88b70e9618993 1-75
+packages/im/agent/src/event/turn-to-agent-stream.ts
+  s_6562bcb6cc0539::t_b37e14e7c896b5 74-77
+examples/test-bot/.gitignore
+  s_6562bcb6cc0539::t_922f9656ad9b41 12
+packages/im/agent/src/decision/rank.ts
+  s_6562bcb6cc0539::t_71c9f101892464 2-49,51-137,139-140
+  s_6562bcb6cc0539::t_7c55fcb4b60f5d 1,50
+  s_6562bcb6cc0539::t_6440b5c1de6e92 138
+packages/im/ai/src/decision/types.ts
+  s_6562bcb6cc0539::t_c7f7340f148cf5 1-58
+packages/im/agent/src/turn/execute-agent-turn.ts
+  s_6562bcb6cc0539::t_e874814d14d142 34,36,85-90
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_6562bcb6cc0539::t_8e52d5065d1dd8 16,101,106-107,118
+packages/im/agent/src/decision/approval-judgment.ts
+  s_6562bcb6cc0539::t_b9d57fe4b1c29b 1-90
+docs/ai/structured-decisions.md
+  s_6562bcb6cc0539::t_f10aff414a0fbe 1-21,23-64,66-83,85-139
+  s_6562bcb6cc0539::t_327e073af16216 65,84
+  s_6562bcb6cc0539::t_498b87ecbb22b0 22
+plugins/services/typesafe/src/index.ts
+  s_6562bcb6cc0539::t_2388969fb55b4a 1-2
+packages/im/ai/src/types.ts
+  s_6562bcb6cc0539::t_67116fcf1e76ef 326-334,521-528
+  s_2104cc474f1ce5::t_a1f1c187ab6db8 529-530
+packages/im/agent/src/event/turn-event.ts
+  s_6562bcb6cc0539::t_a6e12d46a20975 19,47,49
+  s_6562bcb6cc0539::t_6135e17a995996 7,48
+  s_6562bcb6cc0539::t_e253744c9a1223 50-51
+.changeset/typesafe-agent-decisions.md
+  s_6562bcb6cc0539::t_b37e14e7c896b5 1-6
+plugins/services/typesafe/tsconfig.json
+  s_6562bcb6cc0539::t_205e1ddec0b9fd 1-6
+packages/im/agent/src/plugin-runtime/native-knowledge-tool.ts
+  s_6562bcb6cc0539::t_f02f8dc2a26c4a 11,116-119,132,141,144-148
+docs/cli/index.md
+  s_6562bcb6cc0539::t_611c10ade2e120 126
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_601b10cfd6d2e4 3
+  s_6562bcb6cc0539::t_ae57c908db9e0d 71
+packages/im/agent/src/session/approval-review-agent.ts
+  s_6562bcb6cc0539::t_49555a298c9a84 107-108
+  s_6562bcb6cc0539::t_f73e85dc699154 2-5,13,16,22,24,27,31-34,42-45,47,60,77,93,99,117,132,179,183-191,193,199,201-203
+  s_2104cc474f1ce5::t_576317d22de127 1
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_6562bcb6cc0539::t_9b053d2bb55ba9 5
+  s_6562bcb6cc0539::t_a6e12d46a20975 85,98
+packages/im/ai/src/decision/index.ts
+  s_6562bcb6cc0539::t_c7f7340f148cf5 1-5
+packages/im/ai/src/index.ts
+  s_6562bcb6cc0539::t_435c7cd12fe586 109
+  s_6562bcb6cc0539::t_c7f7340f148cf5 471-477
+packages/im/agent/src/plugin-runtime/decision-runtime.ts
+  s_6562bcb6cc0539::t_0e6654867d09c4 1-26
+packages/im/agent/tests/decision/rank.test.ts
+  s_6562bcb6cc0539::t_230b94d66e7b70 1-89
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_6562bcb6cc0539::t_e0210d56957778 242-257
+  s_6562bcb6cc0539::t_6e7f6edd62ae71 8,14-16,221,258-271,274-275,357,441-464
+  s_6562bcb6cc0539::t_db09299d123877 272-273
+  s_6562bcb6cc0539::t_8fb1d6f72e2443 465-466
+packages/toolkit/scaffold-wizard/src/index.ts
+  s_6562bcb6cc0539::t_9719b2f3b5b320 139-144
+packages/im/agent/src/decision/approval.ts
+  s_6562bcb6cc0539::t_09113ceec2241a 40,70,92,101
+  s_6562bcb6cc0539::t_ba097e1d751b17 15-20,22-26
+  s_6562bcb6cc0539::t_8c71fe067788bf 82-89
+  s_6562bcb6cc0539::t_28521948aef531 182
+  s_6562bcb6cc0539::t_49555a298c9a84 187
+  s_6562bcb6cc0539::t_08752e3296841d 1-14,21,27-39,41-49,54-63,65-69,71-81,90-91,93-100,102-105,112-154,156-164,166-181,183-186,188-203
+  s_6562bcb6cc0539::t_db09299d123877 50-53,64,106-111,155,165
+packages/im/agent/src/plugin-runtime/native-semantic-memory-tools.ts
+  s_6562bcb6cc0539::t_f02f8dc2a26c4a 15,58,73,99,104-106,111,113-115
+plugins/services/typesafe/src/response-validator.ts
+  s_6562bcb6cc0539::t_2388969fb55b4a 1-78
+plugins/services/typesafe/src/decision-provider.ts
+  s_6562bcb6cc0539::t_2388969fb55b4a 1-84,94-106,108-109,111-122
+  s_6562bcb6cc0539::t_f8f31c2abe8d54 85-93,107,110
+packages/im/agent/tests/decision/deferred-engine.test.ts
+  s_6562bcb6cc0539::t_ba3fd9296b4594 1-68
+packages/toolkit/scaffold-wizard/tests/decisions.test.ts
+  s_6562bcb6cc0539::t_2d2d54d74c4bce 66-75,78,82,98
+  s_6562bcb6cc0539::t_d540adcfb460e7 1-65,80,85-86,88,94,97
+  s_6562bcb6cc0539::t_397f0ecf56fbc7 76-77,79,81,83-84,87,89-93,95-96
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_6562bcb6cc0539::t_8ef129147f72ed 15-16,62,68,174,178-191,196-197,201-203,247,385,397,401-402,408,410-426,452
+  s_6562bcb6cc0539::t_6440b5c1de6e92 192-195,198-200
+  s_6562bcb6cc0539::t_8e52d5065d1dd8 513-529,536-537,542-548
+  s_2104cc474f1ce5::t_97cbf3b0101215 549
+plugins/services/typesafe/tests/decision-provider.test.ts
+  s_6562bcb6cc0539::t_d52113e8b5d303 1-119
+plugins/services/typesafe/README.md
+  s_6562bcb6cc0539::t_f8f31c2abe8d54 1-16,18,39-40,54-108
+  s_6562bcb6cc0539::t_d8a753f3163c88 17,19-24,26-38,41-53
+  s_6562bcb6cc0539::t_611c10ade2e120 25
+packages/im/agent/src/decision/config.ts
+  s_6562bcb6cc0539::t_0e6654867d09c4 1-18,20-26,30-46
+  s_6562bcb6cc0539::t_4f9d032631a7c6 19
+  s_6562bcb6cc0539::t_06604f01e81461 27-29
+plugins/services/typesafe/plugin.ts
+  s_6562bcb6cc0539::t_205e1ddec0b9fd 1-15
+packages/im/agent/tests/session/decision-approval.test.ts
+  s_6562bcb6cc0539::t_db09299d123877 21-39
+  s_6562bcb6cc0539::t_49555a298c9a84 137-151
+  s_6562bcb6cc0539::t_ee8fe5b475be21 1,3-20,40-80,82-90,92-103,105-136,152-180,182-183
+  s_6562bcb6cc0539::t_f0cd13652b98b8 2,81,91,104,181
+basic/cli/src/commands/setup.ts
+  s_6562bcb6cc0539::t_9719b2f3b5b320 17-19,168,219,223,227,231,239-245
+  s_6562bcb6cc0539::t_fc6be584f2cfac 246
+packages/im/agent/src/decision/retrieval.ts
+  s_6562bcb6cc0539::t_f02f8dc2a26c4a 1-11,13-14,16-36
+  s_6562bcb6cc0539::t_0845a8de0a8b90 12,15
+packages/im/agent/src/plugin-runtime/index.ts
+  s_6562bcb6cc0539::t_9b053d2bb55ba9 5
+  s_6562bcb6cc0539::t_0e6654867d09c4 2-4
+basic/cli/src/commands/doctor.ts
+  s_6562bcb6cc0539::t_2d2d54d74c4bce 211
+  s_6562bcb6cc0539::t_9719b2f3b5b320 25,205-210,212
+packages/im/agent/src/decision/types.ts
+  s_6562bcb6cc0539::t_e4fa99a53c57a2 1,6-7
+  s_6562bcb6cc0539::t_473f43b1359f0c 2-5,8-26
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_6562bcb6cc0539::t_0e6654867d09c4 21-22,122
+  s_6562bcb6cc0539::t_a6e12d46a20975 321,323-326,328-330,336,338,348-349
+  s_6562bcb6cc0539::t_b37e14e7c896b5 322
+  s_6562bcb6cc0539::t_e874814d14d142 339-347
+packages/im/agent/src/session/index.ts
+  s_6562bcb6cc0539::t_8c71fe067788bf 60
+  s_6562bcb6cc0539::t_6e7f6edd62ae71 53-59,61-68
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_6562bcb6cc0539::t_3a7cfc40bab42c 2-5,23-65,67-76
+packages/im/agent/src/turn/agent-turn-context.ts
+  s_6562bcb6cc0539::t_a6e12d46a20975 3,7-8
+packages/im/runtime/src/host-config-schema.json
+  s_6562bcb6cc0539::t_e29c904e95cd19 49-63,282-289,291-296
+  s_6562bcb6cc0539::t_06604f01e81461 290
+packages/im/agent/tests/decision/runtime-binding.test.ts
+  s_6562bcb6cc0539::t_99e74b5bd173de 1-32,34-100
+  s_6562bcb6cc0539::t_4f9d032631a7c6 33
+plugins/services/typesafe/schema.json
+  s_6562bcb6cc0539::t_f8f31c2abe8d54 6-29,32-65,70-72
+  s_6562bcb6cc0539::t_205e1ddec0b9fd 1-5,73
+  s_6562bcb6cc0539::t_590983ca874145 66-69
+  s_6562bcb6cc0539::t_d679e9682bb8a8 30-31
+docs/ai/index.md
+  s_6562bcb6cc0539::t_f10aff414a0fbe 190
+packages/im/agent/tests/decision/deferred-decision.test.ts
+  s_6562bcb6cc0539::t_d2f29c5f39e288 1-85
+plugins/services/typesafe/tests/plugin-runtime.test.ts
+  s_6562bcb6cc0539::t_d679e9682bb8a8 1-79
+basic/cli/src/plugin-runtime/agent/runtime-foundation.ts
+  s_6562bcb6cc0539::t_6e7f6edd62ae71 12,60,78,95,116,120,180
+packages/im/agent/src/decision/index.ts
+  s_6562bcb6cc0539::t_f02f8dc2a26c4a 7-8
+  s_6562bcb6cc0539::t_7c55fcb4b60f5d 1-6
+packages/toolkit/scaffold-wizard/src/decisions.ts
+  s_6562bcb6cc0539::t_4f9d032631a7c6 100
+  s_a5dc81d701255f::t_c9a13852fc3164 36
+  s_6562bcb6cc0539::t_2d2d54d74c4bce 17-22,29,54,95,101,103,106-108,110-111
+  s_6562bcb6cc0539::t_d679e9682bb8a8 102
+  s_6562bcb6cc0539::t_9719b2f3b5b320 1-14,16,23-28,30-31,33-35,37,41-53,55-57,59-60,62,64,70-73,75-84,86-94,96-99,104-105,109,112-126
+  s_2104cc474f1ce5::t_f36bb992902639 15,32,38-40,58,61,63,65-69,74,85
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_6562bcb6cc0539::t_0e6654867d09c4 19-21,114,118-128
+plugins/services/typesafe/package.json
+  s_6562bcb6cc0539::t_205e1ddec0b9fd 1-30
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_a749daf3c5b4d6 3363-3387,6033-6036,11444-11445
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b36452ab08a5a2cc6bc68fb26a3ae152da783575",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
