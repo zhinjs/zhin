@@ -76,7 +76,7 @@ CODEOWNERS 负责请求审查；是否要求审查通过由 GitHub 分支保护�
 | --- | --- | --- | --- |
 | Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts` | generation、snapshot、资源租约与切换；运行态由所属 Root/generation 持有 | 生命周期与热重载测试、`check:architecture` |
 | IM / Adapter | `packages/im/core/src/plugin-runtime/im/`、`packages/im/adapter/src/adapter-index.ts` | Core 组合消息链路；Endpoint 拥有平台连接；传输契约属于 `im-contract` | 消息链路与端点测试、`check:harness-paths`、`check:adapter-endpoint-boundaries` |
-| Agent / Workroom | `packages/im/agent/README.md`、`src/workroom/workroom-kernel.ts` | 领域规则与 IO 端口分开；`plugin-runtime/` 将当前 generation 能力接到端口 | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
+| Agent / Workroom | `packages/im/agent/README.md`、`packages/im/agent/src/workroom/workroom-kernel.ts` | 领域规则与 IO 端口分开；`plugin-runtime/` 将当前 generation 能力接到端口 | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
 | HTTP / Console | `packages/host/http/src/http-host.ts`、`packages/console/protocol/` | Host 拥有监听与路由；wire 契约独立；业务资源由 CLI 注入 | Host/RPC 测试、`check:console-protocol-boundaries`、`check:console-contract` |
 | CLI / 脚手架 | `basic/cli/src/plugin-runtime/start-command.ts`、`packages/toolkit/scaffold-wizard/src/` | CLI 是装配点；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
 
