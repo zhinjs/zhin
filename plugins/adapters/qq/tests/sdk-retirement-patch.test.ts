@@ -1,5 +1,4 @@
-import { mkdtemp, cp, symlink, rm, readFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
+import { mkdtemp, cp, symlink, rm } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { join, dirname, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -10,12 +9,6 @@ async function sdkFixture() {
   const directory = await mkdtemp(join(tmpdir(), 'qq-retirement-'));
   await cp(join(root, 'lib'), join(directory, 'lib'), { recursive: true });
   await symlink(resolve(root, '..'), join(directory, 'node_modules'), 'dir');
-  const patch = await readFile(resolve(import.meta.dirname, '../../../../patches/qq-official-bot@1.3.0.patch'), 'utf8');
-  const markers: Record<string, string> = { 'lib/bot.js': 'Composition roots own process errors', 'lib/core/session.js': 'Never use an async Promise executor', 'lib/core/auth.js': 'this.destroyed = false', 'lib/receivers/websocket.js': 'A late gateway lookup', 'lib/events/notice.js': 'payload.data.resolved?.user_id', 'lib/message/file-processor.js': 'Infer only a complete contiguous set' };
-  for (const section of patch.split(/(?=^--- a\/)/m).filter(Boolean)) {
-    const file = section.match(/^--- a\/(.+)/)?.[1];
-    if (file && !(await readFile(join(directory, file), 'utf8')).includes(section.includes('Optional instance-scoped transport extension') ? 'Optional instance-scoped transport extension' : markers[file])) execFileSync('patch', ['-p1'], { cwd: directory, input: section });
-  }
   return { require, directory, Bot: require(join(directory, 'lib/bot.js')).Bot, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 it('real published SDK never opens a late gateway socket after startup was stopped', async () => {

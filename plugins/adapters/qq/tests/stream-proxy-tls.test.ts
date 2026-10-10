@@ -14,12 +14,6 @@ function sdkFixture(directory: string) {
   const root = dirname(require.resolve('qq-official-bot/package.json'));
   cpSync(join(root, 'lib'), join(directory, 'lib'), { recursive: true });
   symlinkSync(resolve(root, '..'), join(directory, 'node_modules'), 'dir');
-  const patch = readFileSync(resolve(import.meta.dirname, '../../../../patches/qq-official-bot@1.3.0.patch'), 'utf8');
-  // Existing installed fixes stay intact; apply only the new scoped extension before parent install.
-  const section = patch.split(/(?=^--- a\/)/m).find(section => section.includes('Optional instance-scoped transport extension'))!;
-  if (!readFileSync(join(directory, 'lib/receivers/websocket.js'), 'utf8').includes('Optional instance-scoped transport extension')) execFileSync('patch', ['-p1'], { cwd: directory, input: section });
-  const botSection = patch.split(/(?=^--- a\/)/m).find(section => section.includes('Composition roots own process errors'))!;
-  if (!readFileSync(join(directory, 'lib/bot.js'), 'utf8').includes('Composition roots own process errors')) execFileSync('patch', ['-p1'], { cwd: directory, input: botSection });
   return { Bot: require(join(directory, 'lib/bot.js')).Bot, WebSocketServer: require('ws').WebSocketServer };
 }
 

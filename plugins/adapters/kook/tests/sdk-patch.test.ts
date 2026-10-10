@@ -1,8 +1,8 @@
 import { EventEmitter } from 'node:events';
-import { loadPatchedKookFixture } from './sdk-patch-fixture.js';
+import { loadPublishedKookFixture } from './sdk-patch-fixture.js';
 
-it('patched actual SDK cancels late discovery and pending hello without any post-stop socket or retry timers', async () => {
-  const fixture = await loadPatchedKookFixture();
+it('published SDK cancels late discovery and pending hello without any post-stop socket or retry timers', async () => {
+  const fixture = await loadPublishedKookFixture();
   const clients = [];
   try {
     let resolveDiscovery!: (value: unknown) => void;
@@ -30,7 +30,7 @@ it('patched actual SDK cancels late discovery and pending hello without any post
 });
 
 it('SDK process-error hook remains opt-in by default and false leaves existing handlers untouched', async () => {
-  const fixture = await loadPatchedKookFixture();
+  const fixture = await loadPublishedKookFixture();
   const on = vi.spyOn(process, 'on').mockReturnValue(process);
   const off = vi.spyOn(process, 'off');
   try {

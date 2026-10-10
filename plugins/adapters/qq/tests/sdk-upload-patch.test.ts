@@ -1,8 +1,7 @@
-import { cp, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { cp, mkdtemp, rm, symlink } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createHash } from 'node:crypto';
 import { inferQqUploadIndexBase } from '../src/upload-diagnostics.js';
@@ -12,13 +11,10 @@ async function fixture() {
   const directory = await mkdtemp(join(tmpdir(), 'qq-upload-patch-'));
   await cp(join(root, 'lib'), join(directory, 'lib'), { recursive: true });
   await symlink(resolve(root, '..'), join(directory, 'node_modules'), 'dir');
-  const patch = await readFile(resolve(import.meta.dirname, '../../../../patches/qq-official-bot@1.3.0.patch'), 'utf8');
-  const section = patch.split(/(?=^--- a\/)/m).find(item => item.startsWith('--- a/lib/message/file-processor.js'))!;
-  if (!(await readFile(join(directory, 'lib/message/file-processor.js'), 'utf8')).includes('Infer only a complete contiguous set')) execFileSync('patch', ['-p1'], { cwd: directory, input: section });
   return { directory, require, FileProcessor: require(join(directory, 'lib/message/file-processor.js')).FileProcessor, cleanup: () => rm(directory, { recursive: true, force: true }) };
 }
 
-it.each([[0, 3], [1, 3], [1, 1]])('real patched SDK uploads complete bytes with index base %i and %i parts while preserving platform ACK indices', async (base, count) => {
+it.each([[0, 3], [1, 3], [1, 1]])('real published SDK uploads complete bytes with index base %i and %i parts while preserving platform ACK indices', async (base, count) => {
   const sdk = await fixture(); const blockSize = count === 1 ? 257 : 100; const data = Buffer.from(Array.from({ length: count === 1 ? 257 : 237 }, (_, index) => index % 251));
   const uploads = new Map<number, Buffer>();
   const server = createServer(async (req, res) => { const chunks: Buffer[] = []; for await (const chunk of req) chunks.push(Buffer.from(chunk)); uploads.set(Number(req.url?.slice(1)), Buffer.concat(chunks)); res.end(); });

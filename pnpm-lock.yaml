@@ -34,14 +34,6 @@ overrides:
   vitest>vite: ^6.4.3
   '@vitest/mocker>vite': ^6.4.3
 
-patchedDependencies:
-  kook-client@1.0.4:
-    hash: banwxapc56f3tmrvojgw4o726e
-    path: patches/kook-client@1.0.4.patch
-  qq-official-bot@1.3.0:
-    hash: kxhug5zyyqnzpzbepmxdpl4iba
-    path: patches/qq-official-bot@1.3.0.patch
-
 importers:
 
   .:
@@ -2288,8 +2280,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/tool
       kook-client:
-        specifier: ^1.0.4
-        version: 1.0.4(patch_hash=banwxapc56f3tmrvojgw4o726e)
+        specifier: ^1.0.5
+        version: 1.0.5
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -2685,8 +2677,8 @@ importers:
         specifier: workspace:*
         version: link:../../../packages/im/tool
       qq-official-bot:
-        specifier: ^1.3.0
-        version: 1.3.0(patch_hash=kxhug5zyyqnzpzbepmxdpl4iba)
+        specifier: ^1.3.1
+        version: 1.3.1
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -7584,8 +7576,8 @@ packages:
     resolution: {integrity: sha512-e7IpWJrnanNUroVK2taAgMxoEZvHLXdQiNjeExSu/DEIWm83jaKGBgb7tLmu2rMYpA027qFB3iLR/k3AVpFRnA==}
     engines: {node: '>= 18'}
 
-  kook-client@1.0.4:
-    resolution: {integrity: sha512-iIIEysc0aWig3SWv0tJnl4svk907u8k61OhTENS294dH+RDAvuDNntkfRvjxUA1v9ZGTYDnb5f99VaFP3vMeLg==}
+  kook-client@1.0.5:
+    resolution: {integrity: sha512-CpECq973F+d3Ddyzamc8u0za5zc508PxyDvJR1syPc+wnE1Vxu7bjmkVSqCEUJXINEIAGy0peoTsA8cA9yv0Gw==}
     engines: {node: '>=16'}
 
   layout-base@1.0.2:
@@ -8251,8 +8243,8 @@ packages:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
 
-  qq-official-bot@1.3.0:
-    resolution: {integrity: sha512-Nc2SIQ8/fc5A9RNN5jfc83QKnA2+QH1XskyOvqTGzdQv9z+KqAXPXRvkvOEXixPC8LdLZYq2ZMj24R0DsJMe+A==}
+  qq-official-bot@1.3.1:
+    resolution: {integrity: sha512-ZLZt7MV0E9NrFd2b4K+Kqfsy21hO5sZgxQNPMzk9+U01ZTiIGnKgeNogikeZ1bAeCysQJoqDiJA8j61x+hZlLw==}
     engines: {node: '>=20.12'}
 
   qrcode@1.5.4:
@@ -9069,6 +9061,18 @@ packages:
 
   ws@8.21.1:
     resolution: {integrity: sha512-+0NTnW77fFN/DjQi6k/Sq/Yvk4Sgajw7urW8V+asjXnRgDs9gyGkdb7EzgfhA4goXsRIZKE28fzIXBHEzhuiWw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
+  ws@8.22.0:
+    resolution: {integrity: sha512-Ydggc987+RO0AnWtZ/7Wq9FtNvcrL1b/RO0ud9mWjUPgDrsAAwQSF51sm2hm1XofbU/4jkpGEsLFsZZxU+1DOg==}
     engines: {node: '>=10.0.0'}
     peerDependencies:
       bufferutil: ^4.0.1
@@ -13298,15 +13302,15 @@ snapshots:
       type-is: 2.1.0
       vary: 1.1.2
 
-  kook-client@1.0.4(patch_hash=banwxapc56f3tmrvojgw4o726e):
+  kook-client@1.0.5:
     dependencies:
-      axios: 1.19.0
+      axios: 1.20.0
       dotenv: 17.4.2
       formdata-node: 6.0.3
       log4js: 6.9.1
       node-persist: 4.0.4
       reconnecting-websocket: 4.4.0
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -13951,13 +13955,13 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  qq-official-bot@1.3.0(patch_hash=kxhug5zyyqnzpzbepmxdpl4iba):
+  qq-official-bot@1.3.1:
     dependencies:
       '@noble/curves': 1.9.7
       axios: 1.20.0
       formdata-node: 6.0.3
       log4js: 6.9.1
-      ws: 8.21.3
+      ws: 8.22.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -14889,6 +14893,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.21.1: {}
+
+  ws@8.22.0: {}
 
   ws@8.21.3: {}
 
