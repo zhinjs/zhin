@@ -13,7 +13,10 @@ export function flattenOutboundArray(values: readonly unknown[]): unknown[] {
       frames.pop();
       continue;
     }
-    const value = frame.values[frame.index++];
+    const index = frame.index++;
+    // Array.flat skips holes, but explicit undefined must remain for validation.
+    if (!(index in frame.values)) continue;
+    const value = frame.values[index];
     if (!Array.isArray(value)) {
       output.push(value);
       continue;

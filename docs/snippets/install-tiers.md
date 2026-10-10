@@ -15,7 +15,7 @@
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
 | **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
 | **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
-| **Rich media** | `+ @zhin.js/html-renderer` | +~数 MB | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
+| **Rich media** | `+ @zhin.js/html-renderer` | 按平台（含原生引擎） | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
 | **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 <!-- #endregion tiers-table -->
 
@@ -26,7 +26,7 @@
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent, sessions, tools, compaction |
 | **Provider** | `+ @ai-sdk/openai` etc. | per vendor | LLM calls |
 | **MCP** | `+ @modelcontextprotocol/sdk` | + a few MB | MCP client |
-| **Rich media** | `+ @zhin.js/html-renderer` | + a few MB | outbound `html` / `markdown` to PNG (falls back to text if missing) |
+| **Rich media** | `+ @zhin.js/html-renderer` | platform-dependent (includes native engine) | outbound `html` / `markdown` to PNG (falls back to text if missing) |
 | **Speech** | `+ @zhin.js/speech` | + a few MB | inbound STT, outbound TTS, `segment.tts` (warns and degrades if missing) |
 <!-- #endregion tiers-table-en -->
 

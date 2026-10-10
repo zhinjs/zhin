@@ -333,3 +333,15 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     expect(f.publish).not.toHaveBeenCalled();
   });
 });
+
+it('delivers sparse raw payloads while still rejecting explicit undefined before Endpoint', async () => {
+  const sparse = new Array<unknown>(4);
+  sparse[1] = segment.text('sparse');
+  sparse[3] = [segment.text('nested')];
+  const f = await fixture({ segments: { html: 'direct' } });
+  expect((await f.send(raw(sparse))).status).toBe('sent');
+  expect(f.sent[0]?.payload).toEqual([segment.text('sparse'), segment.text('nested')]);
+  const invalid = await fixture({ segments: { html: 'direct' } });
+  expect(await invalid.send(raw([segment.text('before'), undefined]))).toMatchObject({ status: 'rejected', failure: { code: 'outbound_payload_rejected' } });
+  expect(invalid.sent).toHaveLength(0);
+});

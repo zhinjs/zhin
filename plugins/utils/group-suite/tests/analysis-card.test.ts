@@ -1,5 +1,5 @@
+import { assertCardImage } from "../../../../tests/helpers/render-card.js";
 import { describe, it, expect } from "vitest";
-import { htmlToSvg, getAllBuiltinFonts } from "../../../../packages/toolkit/satori/src/index.ts";
 import {
   buildAnalysisReportData,
   computeBasicStats,
@@ -7,9 +7,8 @@ import {
 } from "../src/analysis.js";
 import { buildAnalysisReportHtml } from "../src/analysis-card.js";
 
-async function assertSatori(fragment: string) {
-  const svg = await htmlToSvg(fragment, { width: 540, fonts: getAllBuiltinFonts() });
-  expect(svg).toContain("<svg");
+async function assertImage(fragment: string) {
+  await assertCardImage(fragment);
 }
 
 function sampleRows(): InboxMessageRow[] {
@@ -37,7 +36,7 @@ describe("analysis-card", () => {
     expect(html).not.toContain("<script");
   });
 
-  it("含 LLM 区块的卡片可通过 Satori 渲染", async () => {
+  it("含 LLM 区块的卡片可通过 Shotium 渲染", async () => {
     const stats = computeBasicStats(sampleRows());
     const data = buildAnalysisReportData(
       stats,
@@ -48,6 +47,6 @@ describe("analysis-card", () => {
         userTitles: [{ name: "Alice", user_id: "u1", title: "话题发起者", reason: "积极发言" }],
       },
     );
-    await assertSatori(await buildAnalysisReportHtml(data));
+    await assertImage(await buildAnalysisReportHtml(data));
   });
 });

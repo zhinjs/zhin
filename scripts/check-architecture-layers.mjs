@@ -41,6 +41,7 @@ const layers = {
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
   'packages/im/jsx': { level: 0, allowedImports: [] },
+  'packages/toolkit/tailwind': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/toolkit/components': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/im/im-contract': { level: 0, allowedImports: [] },
   'packages/im/interaction': { level: 0, allowedImports: [] },
@@ -81,6 +82,7 @@ const layerPathsBySpecificity = Object.keys(layers).sort((a, b) => b.length - a.
 // 包名到路径的映射
 const packageNameToPath = {
   '@zhin.js/jsx': 'packages/im/jsx',
+  '@zhin.js/tailwind': 'packages/toolkit/tailwind',
   '@zhin.js/components': 'packages/toolkit/components',
   '@zhin.js/logger': 'basic/logger',
   '@zhin.js/schema': 'basic/schema',

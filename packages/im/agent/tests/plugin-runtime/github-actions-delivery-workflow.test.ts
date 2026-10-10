@@ -68,7 +68,7 @@ it('isolates build lifecycle hooks and protects the host uploader from symlinks'
 
 it('prunes the shared pnpm lockfile before frozen install rather than relying on filters', () => {
   const build = workflow.jobs.build.steps.find((step: any) => step.name?.startsWith('Build and pack'));
-  expect(build.run).toContain('turbo --skip-infer prune zhin.js @zhin.js/agent @zhin.js/runtime @zhin.js/satori');
+  expect(build.run).toContain('turbo --skip-infer prune zhin.js @zhin.js/agent @zhin.js/runtime');
   expect(build.run.indexOf('turbo --skip-infer prune')).toBeLessThan(build.run.indexOf('pnpm install --frozen-lockfile'));
   expect(build.run).toContain('pack /tmp/pruned /artifacts');
   expect(build.run).toContain('dst=/candidate,readonly');

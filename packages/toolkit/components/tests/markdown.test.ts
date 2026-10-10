@@ -1,6 +1,6 @@
 import { jsx, renderToHtml } from "@zhin.js/jsx";
 import { htmlToDOM, Element, Text, type DOMNode } from "html-react-parser";
-import { getAllBuiltinFonts, htmlToSvg } from "../../satori/src/index.js";
+import { renderImage, colorBox } from "./render-image.js";
 import { Markdown } from "../src/markdown.js";
 import { ThemeProvider } from "../src/theme.js";
 
@@ -17,23 +17,12 @@ function htmlTextContent(html: string): string {
   return htmlToDOM(html).map(nodeText).join("");
 }
 
-function svgTextContent(svg: string): string {
-  const collect = (node: DOMNode): string => {
-    if (!(node instanceof Element)) return "";
-    if (node.name === "text") return nodeText(node);
-    return node.children.map((child) => collect(child as DOMNode)).join("");
-  };
-  return htmlToDOM(svg, { xmlMode: true, decodeEntities: true })
-    .map(collect)
-    .join("");
-}
 
 describe("safe Markdown JSX", () => {
   it("extracts parsed text without treating escaped tags or quoted angle brackets as markup", () => {
     expect(htmlTextContent('<div title="a > b">before <b>console</b>.log &lt;tag&gt; &amp;lt;<!-- ignored --></div>'))
       .toBe("before console.log <tag> &lt;");
-    expect(svgTextContent('<svg xmlns="http://www.w3.org/2000/svg"><title>metadata</title><text title="a > b">&lt;span onclick=&quot;keep&quot;&gt;<tspan>nested &amp; text</tspan>&lt;/span&gt; &amp;lt;<!-- ignored --></text><path d="M0 0"/><text> tail</text></svg>'))
-      .toBe('<span onclick="keep">nested & text</span> &lt; tail');
+
   });
 
   it("renders inline formatting and text entities without re-escaping content", async () => {
@@ -148,35 +137,52 @@ describe("safe Markdown JSX", () => {
     );
   });
 
-  it("renders a nested document including fenced code through real Satori SVG", async () => {
+  it("renders a nested document including fenced code through real Chromium PNG", async () => {
     const source =
       '# Release\n\n**Ready** with *checks*, ~~old~~ and `const n = 0`. [Docs](https://example.com/docs)\n\n> Summary\n>\n> ```ts\n> const ready = true;\n> console.log("<safe>");\n> ```\n\n1. Verify\n   - [x] Build\n   - [ ] Publish\n\n| Check | Result |\n| --- | ---: |\n| Smoke | **Pass** |\n\n![No download](https://untrusted.example/image.png)';
     const html = await htmlOf(source);
     expect(htmlTextContent(html)).toContain("console.log");
     expect(html).toContain("&lt;safe&gt;");
     expect(html).not.toContain("<img");
-    const svg = await htmlToSvg(html, {
-      width: 540,
-      fonts: getAllBuiltinFonts(),
-    });
-    expect(svg).toContain("<svg");
-    expect(svg).not.toContain("NaN");
-    expect(svg).not.toContain("Infinity");
-    const height = Number(svg.match(/<svg[^>]*\bheight="([\d.]+)"/)?.[1]);
-    expect(height).toBeGreaterThan(200);
+    const image = await renderImage(html, 540);
+    expect(image.height).toBeGreaterThan(200);
+    expect(colorBox(image, "#D73A49").pixels).toBeGreaterThan(5);
+    expect(colorBox(image, "#3b82f6").pixels).toBeGreaterThan(5);
+
   });
 
-  it("preserves attribute-looking Markdown and code text through the actual SVG sanitizer", async () => {
+  it("preserves attribute-looking Markdown and code text through the HTML serialization and browser screenshot", async () => {
     const literal = '<span onclick="keep this">literal</span>';
     const source = `${literal}\n\nExample href=javascript:alert(1) stays literal\n\n\`\`\`text\n${literal}\n\`\`\``;
-    const svg = await htmlToSvg(await htmlOf(source), {
-      width: 900,
-      fonts: getAllBuiltinFonts(),
-      embedFont: false,
-    });
-    const text = svgTextContent(svg);
+    const html = await htmlOf(source);
+    const text = htmlTextContent(html);
     expect(text.split(literal)).toHaveLength(3);
     expect(text).toContain("Example href=javascript:alert(1) stays literal");
     expect(text).not.toContain("about:invalid");
+    const image = await renderImage(html, 900);
+    expect(image.height).toBeGreaterThan(100);
+    // Hide only the fenced code tokens while preserving their boxes and text.
+    // A differential screenshot measures painted glyphs including antialiasing,
+    // rather than requiring a font-dependent count of exact foreground RGBs.
+    const hidden = await renderImage(
+      '<style>[data-code-line-number] + div > span { visibility: hidden !important; }</style>' + html,
+      900
+    );
+    expect(hidden.height).toBe(image.height);
+    let changedPixels = 0;
+    let left = image.width, right = -1, top = image.height, bottom = -1;
+    for (let y = 0; y < image.height; y++) {
+      for (let x = 0; x < image.width; x++) {
+        const index = (y * image.width + x) * 4;
+        if (![0, 1, 2, 3].some(channel => image.data[index + channel] !== hidden.data[index + channel])) continue;
+        changedPixels++;
+        left = Math.min(left, x); right = Math.max(right, x);
+        top = Math.min(top, y); bottom = Math.max(bottom, y);
+      }
+    }
+    expect(changedPixels).toBeGreaterThan(literal.length * 4);
+    expect(right - left + 1).toBeGreaterThan(100);
+    expect(bottom - top + 1).toBeGreaterThan(5);
+
   });
 });

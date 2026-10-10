@@ -158,7 +158,7 @@ These surfaces share one Plugin Runtime instead of forming separate execution is
 | **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent, sessions, tools, compaction |
 | **Provider** | `+ @ai-sdk/openai` etc. | per vendor | LLM calls |
 | **MCP** | `+ @modelcontextprotocol/sdk` | + a few MB | MCP client |
-| **Rich media** | `+ @zhin.js/html-renderer` | + a few MB | outbound `html` / `markdown` → PNG (falls back to text if missing) |
+| **Rich media** | `+ @zhin.js/html-renderer` | platform-dependent (includes native engine) | outbound `html` / `markdown` → PNG (falls back to text if missing) |
 | **Speech** | `+ @zhin.js/speech` | + a few MB | inbound STT, outbound TTS, `segment.tts` (warn + degrade if missing) |
 
 Compatibility note for the 1.1 stable line: `import from 'zhin.js'` no longer includes `ZhinAgent` / `AIService`. Use `zhin.js/agent` or `zhin.js/ai`. See [ADR 0019](https://zhin.js.org/adr/0019-install-size-layering).
@@ -219,7 +219,7 @@ Full list: [adapter docs](./docs/adapters/index.md) · [`plugins/adapters`](./pl
 Layers and dependency direction: [architecture](./docs/concepts/architecture.md) · [repo structure](./docs/contributing/repo-structure.md)
 
 
-JSX authoring uses `zhin.js/jsx` with `jsxImportSource: "zhin.js"`. Commands, inbound middleware and registered components may return JSX directly; adapters choose HTML, images or text. Install optional `@zhin.js/components` for themed visual components with composable `JSXRenderable` display props. Server TSX does not load `.css` or preprocess styles; use inline `style`, themes and `custom.style`. See [middleware and components](https://zhin.js.org/en/authoring/middleware-components).
+JSX authoring uses `zhin.js/jsx` with `jsxImportSource: "zhin.js"`. Commands, inbound middleware and registered components may return JSX directly; adapters choose HTML, images or text. Install optional `@zhin.js/components` for themed visual components with composable `JSXRenderable` display props. Server TSX does not load `.css` or preprocess styles; use inline `style`, themes and `custom.style`.  Optional `@zhin.js/tailwind` compiles static utility classes to inline styles; image rendering uses `@pixel.js/shotium` through `@zhin.js/html-renderer`. See [middleware and components](https://zhin.js.org/en/authoring/middleware-components).
 
 ## Documentation
 

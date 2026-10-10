@@ -1,5 +1,5 @@
 import { jsx, renderToHtml, type JSXNode } from "@zhin.js/jsx";
-import { getAllBuiltinFonts, htmlToSvg } from "../../satori/src/index.js";
+import { renderImage, colorBox } from "./render-image.js";
 import { Button, Checkbox, Radio, Switch } from "../src/controls.js";
 import { ThemeProvider } from "../src/theme.js";
 
@@ -40,6 +40,38 @@ describe("display controls", () => {
       }
     }
   );
+
+  it.each(controls)("keeps unnamed %s illustrations decorative", async (Component) => {
+    for (const label of [undefined, null, false, true, "", "  ", [], [false, null], jsx("span", {})]) {
+      const html = await renderToHtml(jsx(Component, { checked: true, label }));
+      expect(html).toContain('aria-hidden="true"');
+      expect(html).not.toMatch(/role=|aria-(?:checked|disabled|readonly|label)=/);
+      expect(html).toContain("<svg");
+    }
+    const html = await renderToHtml(jsx(Component, { checked: true }));
+    const image = await renderImage(html, 120);
+    expect(colorBox(image, "#3b82f6").pixels).toBeGreaterThan(20);
+  });
+
+  it.each(controls)("names %s with primitive content or explicit rich/async labels", async (Component) => {
+    const label = vi.fn(async () => jsx("b", { children: "<Ready>" }));
+    const unnamed = await renderToHtml(jsx(Component, { label: jsx(label, {}) }));
+    expect(unnamed).not.toContain("role=");
+    expect(unnamed).toContain("<b>&lt;Ready&gt;</b>");
+    expect(label).toHaveBeenCalledTimes(1);
+    const named = await renderToHtml(jsx(Component, {
+      checked: true, ariaLabel: '  Status <Ready>  ', label: jsx(label, {}),
+    }));
+    expect(named).toContain(`role="${Component.name.toLowerCase()}"`);
+    expect(named).toContain('aria-label="Status &lt;Ready&gt;"');
+    expect(named).toContain('aria-checked="true"');
+    expect(named).toContain("<b>&lt;Ready&gt;</b>");
+    expect(label).toHaveBeenCalledTimes(2);
+    expect(await renderToHtml(jsx(Component, { label: 0 }))).toContain(`role="${Component.name.toLowerCase()}"`);
+    const emptyAsync = vi.fn(async () => null);
+    expect(await renderToHtml(jsx(Component, { label: jsx(emptyAsync, {}) }))).not.toContain("role=");
+    expect(emptyAsync).toHaveBeenCalledTimes(1);
+  });
 
   it("keeps async labels, zero and local display overrides as nodes", async () => {
     async function Label(): Promise<JSXNode> {
@@ -141,14 +173,11 @@ describe("display controls", () => {
     expect(html).toContain('fill="#fff8d0"');
     expect(html).toContain("color: #fff8d0");
     expect(html).not.toContain("color: #101820");
-    const svg = await htmlToSvg(html, {
-      width: 240,
-      fonts: getAllBuiltinFonts(),
-    });
-    expect(svg).toContain("#fff8d0");
+    const image = await renderImage(html, 240);
+    expect(colorBox(image, "#fff8d0").pixels).toBeGreaterThan(20);
   });
 
-  it("renders all control states and button variants through real Satori SVG", async () => {
+  it("renders all control states and button variants through real Chromium PNG", async () => {
     const rows = controls.flatMap((Component) =>
       [false, true].flatMap((checked) =>
         [false, true].map((disabled) =>
@@ -186,16 +215,10 @@ describe("display controls", () => {
         children: rows,
       })
     );
-    const svg = await htmlToSvg(html, {
-      width: 360,
-      fonts: getAllBuiltinFonts(),
-    });
-    expect(svg).toContain("<svg");
-    expect(svg).not.toContain("NaN");
-    expect(svg).not.toContain("Infinity");
-    const height = Number(svg.match(/<svg[^>]*\bheight="([\d.]+)"/)?.[1]);
-    expect(height).toBeGreaterThan(400);
-    expect(svg).toContain("#3b82f6");
-    expect(svg).toContain("#ef4444");
+    const image = await renderImage(html, 360);
+    expect(image.height).toBeGreaterThan(400);
+    expect(colorBox(image, "#3b82f6").pixels).toBeGreaterThan(100);
+    expect(colorBox(image, "#ef4444").pixels).toBeGreaterThan(100);
+
   });
 });

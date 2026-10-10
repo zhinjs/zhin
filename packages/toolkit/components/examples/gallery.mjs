@@ -13,6 +13,14 @@ import {
   List, ListItem, Markdown, CodeBlock,
 } from '../lib/index.js';
 
+let tw;
+try {
+  const { createTailwindStyle } = await import('@zhin.js/tailwind');
+  tw = await createTailwindStyle({ theme: { '--color-brand': '#2563eb' } });
+} catch (error) {
+  if (error.code !== 'ERR_MODULE_NOT_FOUND' || !error.message.includes('@zhin.js/tailwind')) throw error;
+}
+
 const output = resolve(process.argv.slice(2).find(argument => argument !== '--')
   ?? join(tmpdir(), 'zhin-jsx-visual', 'gallery.html'));
 const node = (component, props = {}, children) => jsx(component, {
@@ -230,6 +238,14 @@ function themeCard(name, theme, description) {
       node(QuoteCard, { content: '发布之前，先把交付物和验收依据对齐。', author: '归雨', reason: '需求讨论' }),
       node(EmptyState, {}),
     ]),
+    ...(tw ? [section('tailwind', 'Tailwind · 原生样式与组件局部覆盖', [
+      node(Surface, { custom: { style: tw('p-4 rounded-xl bg-brand text-white') } },
+        node('div', { style: tw('grid grid-cols-2 gap-4') }, [
+          node('div', { style: tw('text-xl font-bold') }, '统一内联样式'),
+          node('div', { style: tw('text-sm leading-relaxed') }, '官方工具类 · 可组合主题'),
+        ])),
+      node('div', { style: tw('p-4 rounded-xl bg-[linear-gradient(135deg,#eef2ff,#e0f2fe)] text-slate-800 shadow-md') }, '渐变、间距、圆角与阴影，无需 CSS 文件'),
+    ])] : []),
     section('local', '局部 custom 与嵌套 ThemeProvider', [
       node(ThemeProvider, { theme: { palette: {
         text: '#713f12', textSecondary: '#92400e', textMuted: '#a16207',

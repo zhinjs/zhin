@@ -7,7 +7,6 @@
     "@zhin.js/database": "^1.0.77",
     "@zhin.js/client": "^2.1.0",
     "@zhin.js/contract": "^1.0.5",
-    "@zhin.js/satori": "^1.0.16",
     "@zhin.js/speech": "^2.0.0",
     "@zhin.js/html-renderer": "^2.0.0",
     "@zhin.js/mcp": "^5.0.0",

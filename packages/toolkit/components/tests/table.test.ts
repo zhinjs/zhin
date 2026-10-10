@@ -1,5 +1,5 @@
 import { jsx, renderToHtml } from "@zhin.js/jsx";
-import { htmlToSvg, getAllBuiltinFonts } from "../../satori/src/index.js";
+import { renderImage, colorBox } from "./render-image.js";
 import {
   Badge,
   Row,
@@ -9,25 +9,8 @@ import {
   ThemeProvider,
 } from "../src/index.js";
 
-const renderSvg = async (
-  node: Parameters<typeof renderToHtml>[0],
-  width = 240
-) =>
-  htmlToSvg(await renderToHtml(node), { width, fonts: getAllBuiltinFonts() });
-const box = (svg: string, fill: string) => {
-  const rect = [...svg.matchAll(/<rect\b[^>]*>/g)].find(([tag]) =>
-    tag.includes(`fill="${fill}"`)
-  )?.[0];
-  if (!rect) throw new Error(`No cell rendered with ${fill}`);
-  const attribute = (name: string) =>
-    Number(rect.match(new RegExp(`\\b${name}="([\\d.]+)"`))?.[1]);
-  return {
-    x: attribute("x"),
-    y: attribute("y"),
-    width: attribute("width"),
-    height: attribute("height"),
-  };
-};
+const renderTable = async (node: Parameters<typeof renderToHtml>[0], width = 240) =>
+  renderImage(await renderToHtml(node), width);
 
 describe("composable tables", () => {
   it("renders optional caption/headers and node-valued data without coercion", async () => {
@@ -64,8 +47,8 @@ describe("composable tables", () => {
     expect(html).not.toContain('role="columnheader"');
     expect(html.match(/border-top: 0/g)).toHaveLength(1);
     expect(html.match(/border-top: 1px solid/g)).toHaveLength(1);
-    expect(
-      await renderSvg(
+    expect((
+      await renderTable(
         jsx(Table, {
           rows: [
             ["A", 1],
@@ -73,11 +56,11 @@ describe("composable tables", () => {
           ],
         })
       )
-    ).not.toContain("NaN");
+    ).height).toBeGreaterThan(60);
   });
 
-  it("lays out fixed and flexible cells as adjacent SVG boxes with no extra margin/gap", async () => {
-    const svg = await renderSvg(
+  it("lays out fixed and flexible cells as adjacent browser boxes with no extra margin/gap", async () => {
+    const image = await renderTable(
       jsx(Table, {
         custom: { style: { border: 0, borderRadius: 0 } },
         children: jsx(TableRow, {
@@ -97,8 +80,8 @@ describe("composable tables", () => {
         }),
       })
     );
-    const a = box(svg, "#112233"),
-      b = box(svg, "#445566");
+    const a = colorBox(image, "#112233"),
+      b = colorBox(image, "#445566");
     expect(a.width).toBe(80);
     expect(b.width).toBe(160);
     expect(b.x).toBe(a.x + a.width);
@@ -133,9 +116,9 @@ describe("composable tables", () => {
     expect(html).toContain("width: 40%");
     expect(html).toContain("text-align: center");
     expect(html).toContain("<strong>名称</strong>");
-    const svg = await renderSvg(node);
-    expect(svg).toContain("<svg");
-    expect(svg).not.toContain("NaN");
+    const image = await renderTable(node);
+    expect(image.height).toBeGreaterThan(30);
+    expect(colorBox(image, "#ec4899").pixels).toBeGreaterThan(0);
   });
 
   it("themes the whole table and preserves caption JSX overrides", async () => {
@@ -170,10 +153,10 @@ describe("composable tables", () => {
     expect(html).not.toContain("旧标题");
   });
 
-  it("scales cell padding once and gives local padding the final say in SVG", async () => {
+  it("scales cell padding once and gives local padding the final say in browser layout", async () => {
     const heights: number[] = [];
     for (const local of [false, true]) {
-      const svg = await renderSvg(
+      const image = await renderTable(
         jsx(ThemeProvider, {
           theme: { spacing: { scale: 2 } },
           children: jsx(Table, {
@@ -192,7 +175,7 @@ describe("composable tables", () => {
           }),
         })
       );
-      heights.push(box(svg, "#112233").height);
+      heights.push(colorBox(image, "#112233").height);
     }
     expect(heights).toEqual([48, 16]);
   });

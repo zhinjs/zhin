@@ -43,7 +43,7 @@ sidebar: false
 | 新增 `@zhin.js/components`，目录 `packages/toolkit/components` | Card、布局、主题、指标、图表与 Markdown 等纯 JSX 函数组件 | JSX 基础包及解析／高亮依赖，可选安装；不依赖 IM |
 | Core 出站模块 | JSX → HTML → canonical HTML Segment；统一 SendContent 校验、顺序、平台协商与投递 | 不直接依赖组件库、Satori、Shotium |
 | `@zhin.js/html-renderer` | HTML → PNG/JPEG | 不拥有 JSX/组件定义或第二套 serializer |
-| `@zhin.js/satori` | HTML/CSS → SVG、字体能力 | 不拥有样式组件和第二套 JSX runtime |
+| `@zhin.js/tailwind` | 官方静态工具类 → 内联样式 | 可选；不加载 CSS 文件，不拥有 JSX runtime |
 | CLI | 可选 renderer 的加载和 generation-owned Resource 装配 | 沿用唯一 composition root |
 
 ```mermaid
@@ -139,7 +139,7 @@ CommandDispatcher 停止立即自动回复，只返回匹配事实与待回复�
 | P1：唯一 JSX 模块 | branded tree、HTML serializer、类型 fixture、automatic runtime exports；架构门禁 | JSX Agent；先冻结交接类型 |
 | P2：真实发送链 | canonical SendContent、OutboundRenderer、数组展开、Adapter html policy、replace(JSX)；真实 Runtime 测试 | IM Agent；与 P1 接口串行联调 |
 | P3：结果传递 | middleware target 类型、continuation、command 延迟自动回复、owner/lease/AI/interaction 回归 | IM Agent；同一批核心文件不让多个 Agent 同时改 |
-| P4：样式与工具收敛 | 提取 Card/布局/主题/指标/图表；Satori 与 html-renderer 只消费 HTML；全仓库消费者切换 | Components Agent，可与 P2/P3 并行改自己的目录 |
+| P4：样式与工具收敛 | 提取 Card/布局/主题/指标/图表；html-renderer 通过 Shotium 消费 HTML，移除 Satori 图片工具；全仓库消费者切换 | Components Agent，可与 P2/P3 并行改自己的目录 |
 | P5：用户路径与收尾 | minimal-bot、脚手架、tsx loader/HMR、预览、双语文档、skill/AGENTS、changesets、包产物验证 | 主 Agent 负责集成；独立审查 Agent 复核最终 diff |
 
 实现期间最多三条主工作线：JSX 基础、IM 链路、组件与消费者。每条线明确目录所有权；核心类型冻结前不让下游猜接口。最终审查须有人专门检查越层依赖、owner、generation、重复发送和降级后误报。
@@ -204,8 +204,18 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 
 本轮修复的本地复验：1013 个测试文件、7695 项测试通过，12 项保持跳过；lines 72.83%、branches 62.07%。91 个包构建、56 项非单测 harness、文档整站构建及两个新包的独立安装/导出验证通过。默认 RootHost 的无全局 TSX loader 子进程测试、Sandbox HTML 的真实 Chrome 隔离测试通过；这些是本地证据，尚未代表新提交的 CI 或实机平台验收。
 
-## Tailwind 与图片渲染收敛（实施中）
+## Tailwind 与图片渲染收敛
 
 用户确认首版 Tailwind 采用静态工具类，明确渲染边界。作者接口为可选 `@zhin.js/tailwind` 的 `createTailwindStyle()`：初始化后返回同步 `tw(classes)`，结果直接用于原生 JSX `style`、组件 `custom.style` 或主题样式。不新增 JSX runtime、样式树包装器、全局 CSS loader 或 IM 核心依赖。工具类由官方 Tailwind 编译，按生成 CSS 的优先级合并；未知或无法转为单元素内联样式的类明确报错。CSS import、CSS Modules 和预处理器仍不属于服务端 TSX 支持范围。
 
-用户另提出统一到更名后的 `@pixel.js/shotium`，当前正在核验新版本 API、真实截图和 Satori 消费者。图片后端、字体与源码工具的删除必须以实际调用链为依据，Satori IM 协议适配器不属于此变更。
+图片后端已升级为 npm 发布的 `@pixel.js/shotium@0.12.1`，按该版本实际声明使用同步 `start()` 和 `releaseMemory()`。HTML renderer 返回格式严格对应 PNG/JPEG/WebP，不再接受 SVG。已删除 `@zhin.js/satori` 图片工具及其字体、依赖和消费者；Satori IM 协议适配器仍保留。组件、插件和示例的截图测试改为真实 Chromium PNG，检查尺寸、色块边界、间距和主题；不再由另一套布局引擎间接证明截图结果。
+
+可选 Tailwind 包独立生产安装、浏览器打包和真实截图已通过。组件局部样式覆盖保留 CSS 声明顺序，使 `p-0` 等 shorthand 能覆盖先前的单边默认值。新增审查建议同时补齐了稀疏数组发送、AI 交互段 Schema、CSS 注释间隔、展示控件的可访问名称，以及 Sandbox 普通 HTTP nonce 和高度回报脚本时序。
+
+### 已知原生退出问题
+
+macOS arm64 / Node 24 本地验收中，Shotium 0.12.1 曾在子进程退出清理时发生一次 `SIGSEGV`；原生堆栈包含 `napi_async_cleanup_hook_handle__`、`napi_remove_async_cleanup_hook` 和 `shotium.node`。随后单文件与多文件各 10 轮压力复验均通过，没有在代码中增加重试或吞掉退出错误。退出清理的线程调用值得继续调查，但尚未确认根因，因此这条风险仍开放；不能以 20 轮通过视作修复，也不能据本地截图结果宣称生产稳定。本 PR 不执行 npm 发布。
+
+### 最终本地复验
+
+Node 24 全量覆盖率运行通过 1020 个文件、7813 项测试，3 个文件与 12 项测试保持跳过；lines 72.98%、branches 62.29%。之后补充的 List 懒执行回归随该文件 12 项测试通过。56 项非单测 harness、91 个包构建、文档整站构建均通过，最后的 Core／组件／Sandbox 修复再次构建通过；适配器同步、文档链接与 diff 检查通过。当前记录是本地证据，远端 CI 需按最终提交单独核对。

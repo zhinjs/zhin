@@ -4,14 +4,11 @@ import {
   screenshot,
   start,
   status,
-} from '@shotkit/shotium';
-
-import type {
-  DaemonClient,
-  ScreenshotOptions,
-  ScreenshotResult,
-  StartOptions,
-} from '@shotkit/shotium';
+  type DaemonClient,
+  type ScreenshotOptions,
+  type ScreenshotResult,
+  type StartOptions,
+} from '@pixel.js/shotium';
 import type { ShotiumConfig } from './config.js';
 import type { HtmlRendererLogger } from './types.js';
 
@@ -34,25 +31,13 @@ function toStartOptions(config: ShotiumConfig): StartOptions {
 function createInprocessEngine(config: ShotiumConfig, logger?: HtmlRendererLogger): Engine {
   const options = toStartOptions(config);
   let started = false;
-  let mismatchWarned = false;
 
   const ensureStarted = (): void => {
     if (started && status().running) return;
-    try {
-      const result = start(options);
-      logger?.debug?.(
-        `[shotium] in-process engine ready cache=${result.cacheActive ? result.cacheDir : 'off'}`,
-      );
-    } catch (error) {
-      if (!status().running) throw error;
-      if (!mismatchWarned) {
-        mismatchWarned = true;
-        logger?.warn?.(
-          '[shotium] engine already started with different cacheDir/userAgent; reusing current process engine',
-          error,
-        );
-      }
-    }
+    const result = start(options);
+    logger?.debug?.(
+      `[shotium] in-process engine ready cache=${result.cacheActive ? result.cacheDir : 'off'}`,
+    );
     started = true;
   };
 

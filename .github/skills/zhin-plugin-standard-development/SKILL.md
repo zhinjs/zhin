@@ -188,3 +188,5 @@ Host（database / schedule / outbound / agentTools）一律可选：`has(token)`
 3. 关键约束（Feature、lifecycle、config）
 4. 验证结果
 5. 剩余风险（仅与本次相关）
+
+静态工具类可按需使用 `@zhin.js/tailwind` 的 `createTailwindStyle()`，输出接入 `style` / `custom.style` / 主题样式；不会启用 `className` 扫描、CSS import 或预处理器。图片引擎统一使用 `@zhin.js/html-renderer`（`@pixel.js/shotium`），不要导入已移除的 Satori 图片包；Satori 聊天协议适配器不受影响。

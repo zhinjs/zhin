@@ -23,7 +23,7 @@ AI / Agent 能力在 **`@zhin.js/agent`**（及 `@zhin.js/ai`），须显式安�
 | `zhin.js/agent` | `@zhin.js/agent` 的 Agent、chat subagent 与 Workroom Kernel 能力 |
 | `zhin.js/ai` | `@zhin.js/ai` 引擎 API |
 | `zhin.js/runtime` | `@zhin.js/runtime` optional-peer facade；不进入默认 IM 闭包 |
-| `zhin.js/jsx*` | Satori JSX 运行时 |
+| `zhin.js/jsx*` | 惰性 JSX / HTML 运行时 |
 
 **4.x breaking**：`import from 'zhin.js'` 不再含 `ZhinAgent`、`AIService`、`ModelRegistry`。请改用 `zhin.js/agent` 或 `zhin.js/ai`。
 

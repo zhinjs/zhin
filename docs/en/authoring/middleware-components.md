@@ -49,6 +49,33 @@ const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</stron
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
+
+### Static Tailwind utilities
+
+Install optional `@zhin.js/tailwind`; no CSS file or stylesheet build plugin is needed. Initialize once, then use the synchronous `tw()` result with JSX `style`, component `custom.style` or `theme.components`:
+
+```tsx
+import { createTailwindStyle } from '@zhin.js/tailwind';
+import { Card } from '@zhin.js/components';
+
+const tw = await createTailwindStyle({
+  theme: { '--color-brand': '#2563eb' },
+});
+
+const card = (
+  <Card custom={{ style: tw('p-6 rounded-2xl bg-white shadow-lg') }}>
+    <div style={tw('flex flex-col gap-4')}>
+      <span style={tw('text-xl font-semibold text-brand')}>Service status</span>
+      <span style={tw('text-sm text-slate-600')}>All services are healthy</span>
+    </div>
+  </Card>
+);
+```
+
+Single-element static layout, spacing, sizing, typography, colors, borders, radii and shadows use the official Tailwind compiler. Conflicts follow generated CSS order, rather than class-string order. Interaction/responsive variants (`hover:`, `md:`) and selectors across elements (`group-*`, `space-*`) cannot become single-element inline styles and throw explicit errors, as do unknown utilities. Use `gap` or child margins for spacing.
+
+Native HTML and `@zhin.js/html-renderer` (`@pixel.js/shotium`) consume the same inline styles. Images are static; fonts come from the renderer environment or explicit registration. This API does not process `className` or enable `.css` imports, CSS Modules or preprocessors. See the [Tailwind package](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/tailwind/README.md) for the support boundary.
+
 ## Inbound results
 
 ```tsx

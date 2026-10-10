@@ -55,6 +55,33 @@ const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</stron
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
+
+### Tailwind 静态工具类
+
+按需安装 `pnpm add @zhin.js/tailwind`，无需 CSS 文件或样式构建插件。初始化一次后，`tw()` 同步返回内联样式，直接接入现有 `style`、`custom.style` 或 `theme.components`：
+
+```tsx
+import { createTailwindStyle } from '@zhin.js/tailwind';
+import { Card } from '@zhin.js/components';
+
+const tw = await createTailwindStyle({
+  theme: { '--color-brand': '#2563eb' },
+});
+
+const card = (
+  <Card custom={{ style: tw('p-6 rounded-2xl bg-white shadow-lg') }}>
+    <div style={tw('flex flex-col gap-4')}>
+      <span style={tw('text-xl font-semibold text-brand')}>服务状态</span>
+      <span style={tw('text-sm text-slate-600')}>全部运行正常</span>
+    </div>
+  </Card>
+);
+```
+
+支持单元素的静态布局、间距、尺寸、字体、颜色、圆角、边框、阴影等；工具类由官方 Tailwind 编译，优先级遵循生成 CSS 的顺序，并非类名字符串的先后顺序。`hover:`、`md:`、`group-*`、`space-*` 等交互、响应式或跨元素选择器无法变成单元素内联样式，会明确报错，未知类也不会被静默忽略。采用 `gap` 或子组件外距处理元素间距。
+
+HTML 与 `@zhin.js/html-renderer`（`@pixel.js/shotium`）消费同一份内联样式；图片是静态结果，字体由渲染环境或显式注册决定。此接口不接管 `className`，也不启用 `.css` 导入、CSS Modules 或预处理器。范围与限制见 [Tailwind 包说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/tailwind/README.md)。
+
 ## 入站中间件
 
 ```tsx

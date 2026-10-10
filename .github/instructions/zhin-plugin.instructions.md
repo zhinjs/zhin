@@ -118,3 +118,5 @@ them.
 Run the smallest relevant package build/test, then `zhin runtime migrate status` for migrated
 packages. Runtime code is complete only after a real Root start or domain-level execution test;
 TypeScript compilation alone is insufficient.
+
+静态工具类可按需使用 `@zhin.js/tailwind` 的 `createTailwindStyle()`，输出接入 `style` / `custom.style` / 主题样式；不会启用 `className` 扫描、CSS import 或预处理器。图片引擎统一使用 `@zhin.js/html-renderer`（`@pixel.js/shotium`），不要导入已移除的 Satori 图片包；Satori 聊天协议适配器不受影响。

@@ -14,7 +14,7 @@ This page is auto-generated from [`plugins/adapters/satori/README.md`](https://g
 
 Zhin.js [Satori](https://satori.chat/zh-CN/introduction.html) **chat protocol** adapter (Plugin Runtime). Supports **forward WebSocket client** (`connection: ws`) and **Webhook inbound** (`connection: webhook`, POST route via `httpHostToken`).
 
-> **Do not confuse with `@zhin.js/satori`**: the latter is a [Vercel satori](https://github.com/vercel/satori) **SVG image rendering** toolkit (`packages/toolkit/satori`), used to render HTML/React as SVG. It is **not** a chat protocol. See [@zhin.js/satori README](https://github.com/zhinjs/zhin/tree/main/packages/toolkit/satori).
+> Satori is a chat protocol. Image rendering uses `@zhin.js/html-renderer` (`@pixel.js/shotium`) and is independent of this adapter.
 
 ## Features
 

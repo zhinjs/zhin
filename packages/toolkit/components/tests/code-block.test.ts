@@ -1,8 +1,14 @@
 import { jsx, renderToHtml, type JSXNode } from '@zhin.js/jsx';
-import { decodeHTML } from 'entities';
-import { getAllBuiltinFonts, htmlToSvg } from '../../satori/src/index.js';
+import { htmlToDOM, Element, Text, type DOMNode } from 'html-react-parser';
+import { renderImage, colorBox } from './render-image.js';
 import { CodeBlock } from '../src/code-block.js';
 import { ThemeProvider } from '../src/theme.js';
+
+function textContent(html: string): string {
+  const text = (node: DOMNode): string => node instanceof Text ? node.data :
+    node instanceof Element ? node.children.map(child => text(child as DOMNode)).join('') : '';
+  return htmlToDOM(html).map(text).join('');
+}
 
 describe('CodeBlock', () => {
   it('renders actual Shiki token colors and escapes code without injecting HTML', async () => {
@@ -61,9 +67,9 @@ describe('CodeBlock', () => {
     expect(html).not.toContain('#D73A49');
     expect(html).toContain('font-family: Poppins');
     expect(html).toContain('font-size: 16px');
-    const svg = await htmlToSvg(html, { width: 240, fonts: getAllBuiltinFonts(), embedFont: false });
-    expect(svg).toContain('#ffeeaa');
-    expect(svg).toContain('#112233');
+    const image = await renderImage(html, 240);
+    expect(colorBox(image, '#ffeeaa').pixels).toBeGreaterThan(20);
+    expect(colorBox(image, '#112233')).toMatchObject({ x: 1, width: 238 });
   });
 
   it('keeps theme-provided, asynchronous, zero and explicitly hidden titles distinct', async () => {
@@ -86,15 +92,16 @@ describe('CodeBlock', () => {
 
   it('fills standalone preview width and keeps its short-code title visible', async () => {
     const html = await renderToHtml(jsx(CodeBlock, { source: 'x', language: 'text' }));
-    const svg = await htmlToSvg(html, { width: 540, fonts: getAllBuiltinFonts(), embedFont: false });
-    const text = [...svg.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)]
-      .map(match => decodeHTML(match[1]!)).join('');
-    expect(text).toContain('代码');
-    expect(svg).toMatch(/<rect[^>]*width="540"/);
-    expect(svg).not.toMatch(/<clipPath[^>]*><rect[^>]*width="0"/);
+    expect(textContent(html)).toContain('代码');
+    const image = await renderImage(html, 540);
+    expect(colorBox(image, '#ffffff')).toMatchObject({ x: 1, width: 538 });
+    const title = colorBox(image, '#24292e');
+    expect(title.width).toBeGreaterThan(10);
+    expect(title.y).toBeLessThan(50);
+
   });
 
-  it('renders real Satori SVG including whitespace, long wrapped text and positive line numbers', async () => {
+  it('renders real Chromium PNG including whitespace, long wrapped text and positive line numbers', async () => {
     const source = '  const label = "Long code that stays readable on a narrow card and wraps onto multiple lines";\n\n\treturn  label;';
     const html = await renderToHtml(jsx('div', {
       style: { display: 'flex', flexDirection: 'column', padding: 16, background: '#fff' },
@@ -103,18 +110,15 @@ describe('CodeBlock', () => {
         jsx(CodeBlock, { source: '<plain> & escaped', language: 'unknown', lineNumbers: false }),
       ],
     }));
+    const text = textContent(html);
+    expect(text).toContain(source.split('\n')[0]);
+    expect(text).toContain('\treturn  label;');
+    expect(text).toContain('<plain> & escaped');
     const heights: number[] = [];
     for (const width of [100, 320]) {
-      const svg = await htmlToSvg(html, { width, fonts: getAllBuiltinFonts(), embedFont: false });
-      expect(svg).toContain('<svg');
-      expect(svg).toContain('#D73A49');
-      expect(svg).not.toMatch(/NaN|Infinity/);
-      const text = [...svg.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)]
-        .map(match => decodeHTML(match[1]!)).join('');
-      expect(text).toContain(source.split('\n')[0]);
-      expect(text).toContain('\treturn  label;');
-      expect(text).toContain('<plain> & escaped');
-      heights.push(Number(svg.match(/<svg[^>]*\bheight="([\d.]+)"/)?.[1]));
+      const image = await renderImage(html, width);
+      expect(colorBox(image, '#D73A49').pixels).toBeGreaterThan(5);
+      heights.push(image.height);
     }
     // The narrow render keeps every source character and allocates extra height
     // for wrapped lines rather than clipping or vertically stacking each token.

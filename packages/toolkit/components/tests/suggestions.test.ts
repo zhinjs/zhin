@@ -1,4 +1,4 @@
-import { jsx, renderToHtml, type JSXRenderable } from '@zhin.js/jsx';
+import { jsx, renderToHtml, type JSXNode, type JSXRenderable } from '@zhin.js/jsx';
 import { Card, DualSection } from '../src/layout.js';
 import { KvTable, Badge } from '../src/display.js';
 import { Sparkline } from '../src/charts.js';
@@ -7,7 +7,7 @@ import { Markdown } from '../src/markdown.js';
 import { ThemeProvider } from '../src/theme.js';
 import { styleObject } from '../src/styles.js';
 import { tint } from '../src/utilities.js';
-import { getAllBuiltinFonts, htmlToSvg } from '../../satori/src/index.js';
+import { renderImage, colorBox } from './render-image.js';
 
 describe('component review regressions', () => {
   it('ignores CSS comment separators without treating comment-like quoted values as comments', async () => {
@@ -34,8 +34,12 @@ describe('component review regressions', () => {
     expect(points).toHaveLength(values.length);
     for (const [x, y] of points) { expect(x).toBeGreaterThanOrEqual(2); expect(x).toBeLessThanOrEqual(118); expect(y).toBeGreaterThanOrEqual(2); expect(y).toBeLessThanOrEqual(30); }
     if (new Set(values).size === 1) expect(points.map(point => point[1])).toEqual(values.map(() => 16));
-    const svg = await htmlToSvg(html, { width: 120, fonts: getAllBuiltinFonts() });
-    expect(svg).not.toMatch(/NaN|Infinity/);
+    const image = await renderImage(html, 120);
+    const line = colorBox(image, '#3b82f6');
+    expect(line.x).toBeGreaterThanOrEqual(0);
+    expect(line.x + line.width).toBeLessThanOrEqual(120);
+    expect(line.height).toBeLessThanOrEqual(32);
+    expect(line.pixels).toBeGreaterThan(20);
   });
 
   it('rejects unsafe List starts and overflow instead of repeating an ordinal', async () => {
@@ -76,7 +80,7 @@ describe('component review regressions', () => {
 
   it('preserves awaiting promise children while applying the exact surrounding theme', async () => {
     const observed: unknown[] = [];
-    async function AwaitChild(props: { children?: JSXRenderable }): Promise<JSXRenderable> {
+    async function AwaitChild(props: { children?: JSXRenderable }): Promise<JSXNode> {
       expect(typeof (props.children as PromiseLike<unknown>).then).toBe('function');
       const child = await props.children;
       observed.push(child);

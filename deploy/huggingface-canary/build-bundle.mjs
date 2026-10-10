@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 import { readCandidateArtifacts, readRegular, sha256 } from './candidate-artifacts.mjs';
-const required = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime', '@zhin.js/satori'];
+const required = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime'];
 
 /** Pure local preparation. No registry, Docker, HF, git or service credential access. */
 export function buildCanaryBundle(options, mode = 'frozen') {

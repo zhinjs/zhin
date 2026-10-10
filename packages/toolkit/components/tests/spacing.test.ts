@@ -1,5 +1,5 @@
 import { jsx, renderToHtml, type JSXStyle } from "@zhin.js/jsx";
-import { htmlToSvg, getAllBuiltinFonts } from "../../satori/src/index.js";
+import { renderImage, colorBox } from "./render-image.js";
 import {
   BarChart,
   Card,
@@ -27,8 +27,6 @@ const rows = [
   { label: "A", value: "1" },
   { label: "B", value: "2" },
 ];
-const svgHeight = (svg: string) =>
-  Number(svg.match(/<svg[^>]*\bheight="([\d.]+)"/)?.[1]);
 
 describe("component spacing", () => {
   it("uses the shared four-pixel spacing steps in default component CSS", async () => {
@@ -102,15 +100,12 @@ describe("component spacing", () => {
     expect(html.match(/margin: 4px 0/g)).toHaveLength(2);
     expect(KvTable({ rows }).props.style).not.toHaveProperty("gap");
     expect(html).not.toContain("margin-bottom:");
-    const svg = await htmlToSvg(html, {
-      width: 200,
-      fonts: getAllBuiltinFonts(),
-    });
+    const image = await renderImage(html, 200);
     // Two 16px lines + two symmetric 4px margins per row; no vertical gap.
-    expect(svgHeight(svg)).toBe(48);
+    expect(image.height).toBe(48);
   });
 
-  it("applies a shared spacing override and scale once in real SVG layout", async () => {
+  it("applies a shared spacing override and scale once in real browser layout", async () => {
     const heights: number[] = [];
     for (const spacing of [{ xs: 8 }, { scale: 2 }]) {
       const html = await renderToHtml(
@@ -119,11 +114,8 @@ describe("component spacing", () => {
           children: jsx(KvTable, { rows }),
         })
       );
-      const svg = await htmlToSvg(html, {
-        width: 200,
-        fonts: getAllBuiltinFonts(),
-      });
-      heights.push(svgHeight(svg));
+      const image = await renderImage(html, 200);
+      heights.push(image.height);
     }
     expect(heights).toEqual([64, 64]);
   });
@@ -154,16 +146,6 @@ const rootStyle = (background: string): JSXStyle => ({
   borderRadius: 0,
   boxShadow: false,
 });
-const svgBox = (svg: string, fill: string) => {
-  const rectangle = [...svg.matchAll(/<rect\b[^>]*>/g)].find(([tag]) =>
-    tag.includes(`fill="${fill}"`)
-  )?.[0];
-  if (!rectangle) throw new Error(`Missing rendered root ${fill}`);
-  return {
-    top: Number(rectangle.match(/\by="([\d.]+)"/)?.[1]),
-    height: Number(rectangle.match(/\bheight="([\d.]+)"/)?.[1]),
-  };
-};
 const quote = (custom: ComponentCustomization) =>
   jsx(QuoteCard, { content: "A", author: "QA", custom });
 const empty = (custom: ComponentCustomization) =>
@@ -182,7 +164,7 @@ describe("standalone semantic block spacing", () => {
     ["profile/profile", profile, profile],
     ["topic/profile", topic, profile],
   ] as const)(
-    "separates %s roots by 8px in actual SVG layout",
+    "separates %s roots by 8px in actual browser layout",
     async (_, first, second) => {
       const html = await renderToHtml(
         jsx(Col, {
@@ -192,15 +174,11 @@ describe("standalone semantic block spacing", () => {
           ],
         })
       );
-      const svg = await htmlToSvg(html, {
-        width: 200,
-        fonts: getAllBuiltinFonts(),
-      });
-      const a = svgBox(svg, "#112233"),
-        b = svgBox(svg, "#445566");
+      const image = await renderImage(html, 200);
+      const a = colorBox(image, "#112233"),
+        b = colorBox(image, "#445566");
       expect(b.top - (a.top + a.height)).toBe(8);
       expect(html.match(/margin: 4px 0/g)).toHaveLength(2);
-      expect(svg).not.toContain("NaN");
     }
   );
 
@@ -248,12 +226,9 @@ describe("standalone semantic block spacing", () => {
           }),
         })
       );
-      const svg = await htmlToSvg(html, {
-        width: 200,
-        fonts: getAllBuiltinFonts(),
-      });
-      const a = svgBox(svg, "#112233"),
-        b = svgBox(svg, "#445566");
+      const image = await renderImage(html, 200);
+      const a = colorBox(image, "#112233"),
+        b = colorBox(image, "#445566");
       expect(b.top - (a.top + a.height)).toBe(expectedGap);
     }
   );

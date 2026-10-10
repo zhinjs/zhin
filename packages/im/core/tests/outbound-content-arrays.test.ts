@@ -15,3 +15,13 @@ it('rejects pathological native array depth before normalization without recursi
   expect(flattenOutboundArray(content)).toEqual(['text']);
   await expect(normalizeOutboundPayload([content])).rejects.toThrow('SendContent array depth exceeded 512');
 });
+
+it('skips sparse array holes while preserving explicit undefined', () => {
+  const inner = new Array<unknown>(3);
+  inner[1] = 'content';
+  const outer = new Array<unknown>(4);
+  outer[1] = inner;
+  outer[3] = undefined;
+  expect(flattenOutboundArray(outer)).toEqual(['content', undefined]);
+  expect(flattenOutboundArray(outer)).toEqual(outer.flat(Infinity));
+});

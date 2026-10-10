@@ -1,5 +1,5 @@
-export type OutputFormat = 'svg' | 'png';
 export type RasterFormat = 'png' | 'jpeg' | 'webp';
+export type OutputFormat = RasterFormat;
 export type WaitUntil = 'load' | 'networkidle';
 
 export interface FontConfig {
@@ -20,7 +20,7 @@ export interface RenderOptions {
 }
 
 export interface RenderResult {
-  data: Buffer | string;
+  data: Buffer;
   format: OutputFormat;
   width: number;
   height: number;
@@ -71,6 +71,7 @@ export interface HtmlRendererConfig {
   userAgent?: string;
   idleTimeoutMs?: number;
   logStats?: boolean;
+  mode?: 'inprocess' | 'daemon';
   htmlRenderer?: HtmlRendererConfig | Record<string, unknown>;
 }
 

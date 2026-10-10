@@ -3,17 +3,20 @@ import { List, ListItem } from "../src/list.js";
 import { ThemeProvider } from "../src/theme.js";
 import { Badge } from "../src/display.js";
 import { Checkbox } from "../src/controls.js";
-import { htmlToSvg, getAllBuiltinFonts } from "../../satori/src/index.js";
+import { renderImage, colorBox } from "./render-image.js";
 
-const height = (svg: string) =>
-  Number(svg.match(/<svg[^>]*height="([\d.]+)"/)?.[1]);
-const svg = async (node: JSXRenderable) =>
-  htmlToSvg(await renderToHtml(node), {
-    width: 240,
-    fonts: getAllBuiltinFonts(),
-  });
+const imageOf = async (node: JSXRenderable) => renderImage(await renderToHtml(node), 240);
 
 describe("display lists", () => {
+  it("keeps unknown children lazy until the returned list is serialized", async () => {
+    const child = vi.fn(async () => jsx("span", { children: "lazy child" }));
+    const list = List({ children: jsx(child, {}) });
+    expect(child).not.toHaveBeenCalled();
+    const html = await renderToHtml(list);
+    expect(child).toHaveBeenCalledTimes(1);
+    expect(html).toContain("lazy child");
+  });
+
   it("preserves rich/async item content, zero and escaping", async () => {
     const html = await renderToHtml(
       jsx(List, {
@@ -91,17 +94,11 @@ describe("display lists", () => {
   });
 
   it("lays out repeated items without an extra wrapper margin or vertical gap", async () => {
-    expect(height(await svg(jsx(List, { items: ["A", "B"] })))).toBe(48);
-    expect(
-      height(
-        await svg(
-          jsx(ThemeProvider, {
-            theme: { spacing: { scale: 2 } },
-            children: jsx(List, { ordered: true, start: 3, items: ["A", "B"] }),
-          })
-        )
-      )
-    ).toBe(64);
+    expect((await imageOf(jsx(List, { items: ["A", "B"] }))).height).toBe(48);
+    expect((await imageOf(jsx(ThemeProvider, {
+      theme: { spacing: { scale: 2 } },
+      children: jsx(List, { ordered: true, start: 3, items: ["A", "B"] }),
+    }))).height).toBe(64);
     const html = await renderToHtml(jsx(List, { items: ["A", "B"] }));
     expect(html).toContain("margin: 0");
     expect(html.match(/margin: 4px 0/g)).toHaveLength(2);
@@ -129,18 +126,12 @@ describe("display lists", () => {
     const html = await renderToHtml(node);
     expect(html).toContain(">1. </div>");
     expect(html).toContain(">2. </div>");
-    const rendered = await svg(node);
-    const root = [
-      ...rendered.matchAll(/<rect[^>]*fill="#112233"[^>]*>/g),
-    ][0]?.[0];
-    const nested = [
-      ...rendered.matchAll(/<rect[^>]*fill="#445566"[^>]*>/g),
-    ][0]?.[0];
-    expect(root).toBeDefined();
-    expect(nested).toBeDefined();
-    const x = (tag: string) => Number(tag.match(/\bx="([\d.]+)"/)?.[1]);
-    expect(x(nested!) - x(root!)).toBe(24); // Marker min-width 16 + inner row gap 8.
-    expect(rendered).not.toContain("NaN");
+    const image = await imageOf(node);
+    const root = colorBox(image, "#112233");
+    const nested = colorBox(image, "#445566");
+    expect(nested.x - root.x).toBe(24); // Marker min-width 16 + inner row gap 8.
+    expect(nested.width).toBe(root.width - 24);
+
   });
 
   it("themes default marker nodes and lets local marker/margin overrides win", async () => {

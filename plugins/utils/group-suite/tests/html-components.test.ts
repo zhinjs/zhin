@@ -1,5 +1,5 @@
+import { assertCardImage } from "../../../../tests/helpers/render-card.js";
 import { jsx, renderToHtml } from "@zhin.js/jsx";
-import { htmlToSvg, getAllBuiltinFonts } from "@zhin.js/satori";
 import {
   DEFAULT_CARD_THEME,
   CardCanvas,
@@ -16,7 +16,7 @@ import {
   composeCard,
 } from "@zhin.js/components";
 
-describe("satori html-components (zt-report 对齐)", () => {
+describe("HTML components (zt-report 对齐)", () => {
   it("DEFAULT_CARD_THEME 与 zt-report 一致", () => {
     expect(DEFAULT_CARD_THEME.canvas).toBe("#d8dce3");
     expect(DEFAULT_CARD_THEME.card).toBe("#ffffff");
@@ -24,15 +24,14 @@ describe("satori html-components (zt-report 对齐)", () => {
     expect(DEFAULT_CARD_THEME.accentMem).toBe("#3b82f6");
   });
 
-  it("composeCard 可通过 Satori 渲染", async () => {
+  it("composeCard 可通过 Shotium 渲染", async () => {
     const html = composeCard(
       jsx(BarChart, { values: [1, 3, 2, 5, 1], peakIndex: 3 }),
     );
-    const svg = await htmlToSvg(await renderToHtml(html), { width: 540, fonts: getAllBuiltinFonts() });
-    expect(svg).toContain("<svg");
+    await assertCardImage(await renderToHtml(html));
   });
 
-  it("zt 原语组合可通过 Satori 渲染", async () => {
+  it("zt 原语组合可通过 Shotium 渲染", async () => {
     const html = composeCard([
       jsx(CardHeader, { title: "系统状态", subtitle: "Zhin.js test-bot", badge: "host-01" }),
       jsx(Row, {
@@ -48,11 +47,10 @@ describe("satori html-components (zt-report 对齐)", () => {
       jsx(UsageBar, { percent: 75, accent: DEFAULT_CARD_THEME.accentDisk }),
       jsx(Surface, { padding: "10px 12px", children: "fallback note" }),
     ]);
-    const svg = await htmlToSvg(await renderToHtml(html), { width: 540, fonts: getAllBuiltinFonts() });
-    expect(svg).toContain("<svg");
+    await assertCardImage(await renderToHtml(html));
   });
 
-  it("RadarChart 可通过 Satori 渲染", async () => {
+  it("RadarChart 可通过 Shotium 渲染", async () => {
     const html = jsx(CardCanvas, {
       children: jsx(Card, {
         children: jsx(RadarChart, {
@@ -61,7 +59,6 @@ describe("satori html-components (zt-report 对齐)", () => {
         }),
       }),
     });
-    const svg = await htmlToSvg(await renderToHtml(html), { width: 540, fonts: getAllBuiltinFonts() });
-    expect(svg).toContain("<svg");
+    await assertCardImage(await renderToHtml(html));
   });
 });

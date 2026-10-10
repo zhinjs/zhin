@@ -10,7 +10,7 @@ import type { CodeBlockProps } from './code-block-props.js';
 function tokenStyle(token: ThemedToken, inheritedColor: boolean, wrap: boolean): JSXStyle {
   const font = token.fontStyle ?? 0;
   // A tab has intrinsic advance but no word to break. Constraining a pure
-  // whitespace token below that advance can trap Satori's text wrap loop.
+  // whitespace token below that advance would lose its intended indentation.
   const wrapsText = wrap && /\S/.test(token.content);
   return {
     whiteSpace: wrapsText ? 'pre-wrap' : 'pre',
@@ -59,7 +59,7 @@ export async function CodeBlock(input: CodeBlockProps): Promise<JSXElement> {
       children: index + 1,
     }) : null,
     // Tokens retain their intrinsic width. A long token wraps within the line,
-    // while short tokens are never shrunk into zero-width Satori text boxes.
+    // while short tokens retain readable widths.
     jsx('div', {
       style: { display: 'flex', flexWrap: wrap ? 'wrap' : 'nowrap',
         flexGrow: 1, flexShrink: 1, minWidth: 0 },

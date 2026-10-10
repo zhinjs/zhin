@@ -33,7 +33,11 @@
   },
   "devDependencies": {
     "html-react-parser": "^6.1.5",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "@zhin.js/html-renderer": "workspace:*",
+    "pngjs": "^7.0.0",
+    "@types/pngjs": "^6.0.5",
+    "@zhin.js/tailwind": "workspace:*"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

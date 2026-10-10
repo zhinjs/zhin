@@ -135,7 +135,7 @@ const card = (
 />
 ```
 
-表格通过 Flex 行列渲染，兼容 HTML 和 Satori SVG。Checkbox、Radio、Switch 展示 `checked`/`disabled` 状态；Button 支持 primary、secondary、danger 外观和 sm、md、lg 尺寸。这些控件用于消息卡片与截图里的状态表达，不绑定浏览器事件、不提交表单；平台交互动作仍由对应的交互能力处理。
+表格通过 Flex 行列渲染，可直接展示 HTML 或用 Shotium 截图。Checkbox、Radio、Switch 展示 `checked`/`disabled` 状态；Button 支持 primary、secondary、danger 外观和 sm、md、lg 尺寸。这些控件用于消息卡片与截图里的状态表达，不绑定浏览器事件、不提交表单；平台交互动作仍由对应的交互能力处理。
 
 ## 列表、Markdown 与代码
 
@@ -180,7 +180,7 @@ Surface 是基础容器，默认无外距；Header 内的徽章表面和 StatChi
 
 Row、Col 默认 gap 为 0。表格与分区不再给已有外距的竖向子组件额外叠加 gap；标题与副标题、标签与数值等组件内部的紧密排版，可以用统一刻度的 Row/Col gap，内部元素不再同时设置同一方向的外距。`sectionGap` 可覆盖分区内容的对称外距，`canvasPadding`、`cardPadding` 可覆盖对应容器的内距。调用方设置非零 gap 时，应选择不带相应外距的子元素，或通过 `custom.style` 明确覆盖外距。
 
-浏览器普通 block 文档流中，相邻的纵向 margin 可以自然折叠；Flex/Grid 的子元素 margin 不折叠，会相加。默认组件使用 Flex，保证 Satori 的 HTML→SVG 路径可用，不模拟外边距折叠，也不人为计算相邻外距。需要自然折叠的 HTML 布局，可以使用普通 block 容器：
+浏览器普通 block 文档流中，相邻的纵向 margin 可以自然折叠；Flex/Grid 的子元素 margin 不折叠，会相加。默认组件使用 Flex，不模拟外边距折叠，也不人为计算相邻外距。需要自然折叠的 HTML 布局，可以使用普通 block 容器：
 
 ```tsx
 <div style={{ display: "block" }}>
@@ -193,4 +193,10 @@ Row、Col 默认 gap 为 0。表格与分区不再给已有外距的竖向子组
 </div>
 ```
 
-这两个 block 之间的纵向间距为 16px；改为 Flex column 后为 32px。普通 block 布局适用于原生 HTML 或支持浏览器 CSS 的截图引擎；Satori 对多子节点容器要求 Flex，不能直接沿用此布局。默认规范不限制 `custom.style`：业务需要时仍可以设置非对称 margin/padding。
+这两个 block 之间的纵向间距为 16px；改为 Flex column 后为 32px。普通 block 布局可用于原生 HTML 与 Shotium 截图。默认规范不限制 `custom.style`：业务需要时仍可以设置非对称 margin/padding。
+
+## Tailwind 静态工具类
+
+按需安装 `@zhin.js/tailwind`，通过 `createTailwindStyle()` 获得同步 `tw(classes)`。其返回的内联样式可用于原生元素 `style`、组件 `custom.style` 和 `theme.components`；组件库本身不依赖 Tailwind。工具类中的固定颜色不会自动替换成 ThemeProvider 的 palette，主题仍通过显式配置组合。完整示例与边界见 [Tailwind 包说明](../tailwind/README.md)。
+
+控件的纯文本或数字标签可直接提供可访问名称；JSX 或异步标签需显式传入 `ariaLabel` 才声明 checkbox/radio/switch 语义。没有名称时保持装饰展示，不提前执行标签组件。

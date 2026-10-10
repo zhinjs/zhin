@@ -4,6 +4,8 @@ import type { ComponentProps } from "./theme.js";
 /** Display controls describe a visual state; they never bind browser events. */
 export interface ControlLabelProps extends ComponentProps {
   readonly label?: JSXRenderable;
+  /** Explicit accessible name for a checkbox/radio/switch with a rich or async label. */
+  readonly ariaLabel?: string;
   readonly children?: JSXRenderable;
   readonly disabled?: boolean;
   readonly accent?: string;

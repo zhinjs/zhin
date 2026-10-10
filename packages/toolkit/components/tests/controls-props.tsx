@@ -6,9 +6,9 @@ async function AsyncLabel(): Promise<JSXNode> {
 }
 
 export const controlsFixtures = [
-  <Checkbox checked label={AsyncLabel()} />,
-  <Radio disabled>{AsyncLabel()}</Radio>,
-  <Switch checked disabled custom={{ text: { label: AsyncLabel() } }} />,
+  <Checkbox checked ariaLabel="Ready" label={AsyncLabel()} />,
+  <Radio disabled ariaLabel="Ready">{AsyncLabel()}</Radio>,
+  <Switch checked disabled ariaLabel="Ready" custom={{ text: { label: AsyncLabel() } }} />,
   <Button variant="danger" size="sm">
     {AsyncLabel()}
   </Button>,

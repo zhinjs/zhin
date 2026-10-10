@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 export const sha256 = bytes => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
-const required = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime', '@zhin.js/satori'];
+const required = ['zhin.js', '@zhin.js/agent', '@zhin.js/runtime'];
 export function readCandidateArtifacts(options) {
   const { artifactsDirectory, candidateSha, manifestDigest, runId, runAttempt } = options;
   const manifestFile = path.join(artifactsDirectory, 'manifest.json');

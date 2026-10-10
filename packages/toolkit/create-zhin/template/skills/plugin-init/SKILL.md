@@ -175,7 +175,7 @@ export default defineCommand({
 }
 ```
 
-IM 消息组件用 `jsxImportSource: "zhin.js"`；Satori 出图卡片在文件顶加 `/** @jsxImportSource @zhin.js/satori */`。
+服务端 JSX 统一使用 `jsxImportSource: "zhin.js"` 和 `zhin.js/jsx`；可选样式组件用 `@zhin.js/components`，截图用 `@zhin.js/html-renderer`（`@pixel.js/shotium`）。不直接导入 CSS 或使用样式预处理器。
 
 ### 第 7 步：测试与 README
 

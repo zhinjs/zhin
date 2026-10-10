@@ -1,5 +1,5 @@
+import { assertCardImage } from "../../../tests/helpers/render-card.js";
 import { describe, it, expect } from "vitest";
-import { htmlToSvg, getAllBuiltinFonts } from "@zhin.js/satori";
 import {
   buildZtReportHtml,
   collectZtFallbackData,
@@ -7,12 +7,9 @@ import {
   ztReportReply,
 } from "../lib/zt-report.js";
 
-// 仅测试 HTML 片段能否过 Satori（开发调试用）
-async function assertSatori(fragment: string) {
-  const wrap = (body: string) =>
-    `<div style="display:flex;flex-direction:column;width:100%;background-color:#d8dce3;font-family:Noto Sans SC,sans-serif">${body}</div>`;
-  const svg = await htmlToSvg(wrap(fragment), { width: 540, fonts: getAllBuiltinFonts() });
-  expect(svg).toContain("<svg");
+// Verify actual PNG delivery from the shared HTML rendering engine.
+async function assertImage(fragment: string) {
+  await assertCardImage(fragment);
 }
 
 const counts = { adapters: 2, plugins: 5 } as const;
@@ -34,12 +31,12 @@ describe("zt-report", () => {
     expect(html).not.toContain("<script");
   });
 
-  it("buildZtReportHtml 可通过 Satori 渲染", async () => {
+  it("buildZtReportHtml 可通过 Shotium 渲染", async () => {
     const data = collectZtFallbackData(counts);
-    await assertSatori(await buildZtReportHtml(data));
+    await assertImage(await buildZtReportHtml(data));
   });
 
-  it("长挂载路径布局可通过 Satori 渲染", async () => {
+  it("长挂载路径布局可通过 Shotium 渲染", async () => {
     const data = collectZtFallbackData(counts);
     data.diskMounts = [
       { mount: "/", used: "332.0 GB", total: "460.0 GB", usage: 72.2 },
@@ -48,10 +45,10 @@ describe("zt-report", () => {
     ];
     data.diskValue = "666.0 GB / 922.0 GB";
     data.diskUsage = 72.2;
-    await assertSatori(await buildZtReportHtml(data));
+    await assertImage(await buildZtReportHtml(data));
   });
 
-  it("buildZtReportHtml 完整采集数据可通过 Satori 渲染", async () => {
+  it("buildZtReportHtml 完整采集数据可通过 Shotium 渲染", async () => {
     let data;
     try {
       data = collectZtReportData(counts);
@@ -63,6 +60,6 @@ describe("zt-report", () => {
     expect(html).toContain("网络");
     if (data.networkMac) expect(html).toContain(data.networkMac);
     if (data.networkTrafficLine) expect(html).toContain("累计");
-    await assertSatori(html);
+    await assertImage(html);
   });
 });

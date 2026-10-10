@@ -96,7 +96,6 @@
     "@types/bun": "latest",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@zhin.js/satori": "workspace:*",
     "radix-ui": "^1.6.7",
     "typescript": "^6.0.3"
   },

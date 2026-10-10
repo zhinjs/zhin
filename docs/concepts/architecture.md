@@ -124,3 +124,5 @@ flowchart BT
 ## JSX 与展示组件
 
 `@zhin.js/jsx` 是零运行时依赖的 JSX tree / HTML serializer。Core 依赖它把 JSX 转 `segment.html`；`zhin.js/jsx` 是作者门面。可选 `@zhin.js/components` 使用 JSX 基础包及 Markdown／代码高亮依赖，展示位接受 `JSXRenderable`，不依赖 Core、React 或图片引擎。图片工具只消费 HTML，平台差异由 Adapter 声明策略承接。
+
+可选 `@zhin.js/tailwind` 使用官方 Tailwind 编译器将静态工具类转换为内联样式，输出可用于 JSX、组件局部样式和共享主题。它不依赖 Core、组件库或渲染引擎；JSX 基础包也不加载它。图片渲染统一由可选 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成，不再维护 Satori 图片工具包。

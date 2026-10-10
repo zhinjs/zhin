@@ -63,7 +63,7 @@ packages/im/agent           # Agent orchestration (ZhinAgent, security policies,
 packages/im/zhin            # Main entry — IM core (4.x); agent via optional peer + zhin.js/agent
 
 packages/console/{contract,pagemanager,client}  # 控制台栈（平行，不经 IM 发送链）
-packages/toolkit/{create-zhin,satori}         # 脚手架与渲染库
+packages/toolkit/{create-zhin,components,tailwind,html-renderer}         # 脚手架与渲染库
 ```
 
 **禁止的导入**：kernel 不能导入 ai/core/agent/zhin；ai 不能导入 core/agent/zhin；core 不能导入 agent/zhin；插件不能直接导入 kernel（应通过 `@zhin.js/core`）。
@@ -159,7 +159,7 @@ Key config (`vitest.config.ts`):
 - Isolation: `false` locally, `true` in CI (avoids `vi.spyOn` leakage across files)
 - Timeout: 10s
 - Test pattern: `**/*.test.ts`
-- Excludes: `**/lib/**`, `**/packages/toolkit/satori/**`
+- Excludes: `**/lib/**`
 - Coverage thresholds: lines 45%, branches 35%
 - Setup file sets `process.env.NODE_ENV = 'test'` and `L4_SKIP_PLATFORM=1`
 

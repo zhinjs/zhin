@@ -16,10 +16,15 @@ type StyleObject = Record<string, string | number | null | undefined | false>;
 /** Parses declaration boundaries without breaking quoted strings or CSS functions. */
 export function styleObject(style?: JSXStyle): StyleObject {
   if (!style) return {};
-  if (typeof style !== "string")
-    return Object.fromEntries(
-      Object.entries(style).map(([key, value]) => [camelName(key), value])
-    );
+  if (typeof style !== "string") {
+    const result: StyleObject = {};
+    for (const [key, value] of Object.entries(style)) {
+      const property = camelName(key);
+      delete result[property];
+      result[property] = value;
+    }
+    return result;
+  }
   // Remove comments outside strings before locating declaration boundaries.
   // Comments may contain quotes, parentheses, colons and semicolons.
   let css = "", comment = false, stringQuote = "";
@@ -31,7 +36,12 @@ export function styleObject(style?: JSXStyle): StyleObject {
       css += c;
       if (c === "\\" && i + 1 < style.length) css += style[++i];
       else if (c === stringQuote) stringQuote = "";
-    } else if (c === "/" && style[i + 1] === "*") { comment = true; i++; }
+    } else if (c === "/" && style[i + 1] === "*") {
+      // Comments separate CSS tokens; deleting them must not join adjacent values.
+      css += " ";
+      comment = true;
+      i++;
+    }
     else {
       css += c;
       if (c === '"' || c === "'") stringQuote = c;
@@ -58,10 +68,12 @@ export function styleObject(style?: JSXStyle): StyleObject {
   const result: StyleObject = {};
   for (const declaration of declarations) {
     const colon = declaration.indexOf(":");
-    if (colon > 0)
-      result[camelName(declaration.slice(0, colon).trim())] = declaration
-        .slice(colon + 1)
-        .trim();
+    if (colon > 0) {
+      const property = camelName(declaration.slice(0, colon).trim());
+      if (!property) continue;
+      delete result[property];
+      result[property] = declaration.slice(colon + 1).trim();
+    }
   }
   return result;
 }
@@ -75,7 +87,16 @@ function camelName(name: string): string {
 export function mergeStyles(
   ...styles: readonly (JSXStyle | undefined)[]
 ): JSXStyle {
-  return Object.assign({}, ...styles.map(styleObject));
+  const result: StyleObject = {};
+  for (const style of styles) {
+    for (const [key, value] of Object.entries(styleObject(style))) {
+      // The serialized object is a declaration list. Reinsert repeated keys at
+      // their final position so later shorthands can reset earlier longhands.
+      delete result[key];
+      result[key] = value;
+    }
+  }
+  return result;
 }
 
 export function cssLength(value: number | string): string {

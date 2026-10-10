@@ -25,7 +25,6 @@ const ZHIN_PACKAGE_PATHS = {
   '@zhin.js/database': 'basic/database/package.json',
   '@zhin.js/client': 'packages/console/client/package.json',
   '@zhin.js/contract': 'packages/console/contract/package.json',
-  '@zhin.js/satori': 'packages/toolkit/satori/package.json',
   '@zhin.js/speech': 'packages/toolkit/speech/package.json',
   '@zhin.js/html-renderer': 'packages/toolkit/html-renderer/package.json',
   '@zhin.js/mcp': 'packages/host/mcp/package.json',

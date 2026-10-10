@@ -49,9 +49,18 @@ function controlRoot(
     theme,
     name
   );
+  // Content names are predictable only for primitive labels. Rich/lazy labels
+  // remain display-only unless the author supplies a name; never evaluate them
+  // early just to infer accessibility metadata.
+  const explicitName = props.ariaLabel?.trim();
+  const hasContentName =
+    (typeof label === "string" && label.trim().length > 0) ||
+    typeof label === "number";
+  if (!explicitName && !hasContentName) return root;
   return jsx(root.type, {
     ...root.props,
     role: name.toLowerCase(),
+    ...(explicitName ? { "aria-label": explicitName } : {}),
     "aria-checked": Boolean((props as CheckboxProps).checked),
     ...(name === "Radio" ? {} : { "aria-readonly": true }),
     "aria-disabled": Boolean(props.disabled),
