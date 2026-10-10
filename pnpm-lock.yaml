@@ -1849,6 +1849,9 @@ importers:
         specifier: ^2.5.0
         version: 2.5.0
     devDependencies:
+      html-react-parser:
+        specifier: ^6.1.5
+        version: 6.1.5(@types/react@19.2.18)(react@19.2.8)
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

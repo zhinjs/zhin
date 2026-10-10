@@ -31,6 +31,7 @@
     "shiki": "^2.5.0"
   },
   "devDependencies": {
+    "html-react-parser": "^6.1.5",
     "typescript": "^6.0.3"
   },
   "engines": {

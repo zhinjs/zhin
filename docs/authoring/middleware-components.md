@@ -27,7 +27,7 @@ export default defineCommand({
 
 展示位采用 `JSXRenderable`：支持文本、数字、其他 JSX、数组、异步节点和空值。标题、标签、值等都可组合；颜色、尺寸、百分比等样式或计算参数有各自类型。纯 JSX 函数组件无需注册，异步函数也可以作为标签。文本默认转义；普通字符串 `'<b>内容</b>'` 始终是文本。`rawHtml()` 或 `<Raw html={...} />` 仅用于明确插入可信 HTML。
 
-样式组件通过 `ThemeProvider` 共享配色、字体、背景、圆角、边框、阴影与文案；局部使用 `custom.style`、`custom.text` 覆盖。默认间距为 4/8/12/16/24px，上下、左右分别对称：组件外距用 margin，容器内距用 padding，Divider 也带外距。普通 block 的相邻纵向 margin 可以折叠；Flex/Grid 下会相加。完整配置见 [组件库说明](../../packages/toolkit/components/README.md)。
+样式组件通过 `ThemeProvider` 共享配色、字体、背景、圆角、边框、阴影与文案；局部使用 `custom.style`、`custom.text` 覆盖。默认间距为 4/8/12/16/24px，上下、左右分别对称：组件外距用 margin，容器内距用 padding，Divider 也带外距。普通 block 的相邻纵向 margin 可以折叠；Flex/Grid 下会相加。完整配置见 [组件库说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/components/README.md)。
 
 表格可使用 `Table` 的 `headers`、`rows`，或组合 `TableRow`、`TableCell` 放入其他 JSX。`Checkbox`、`Radio`、`Switch`、`Button` 是展示组件：选中、禁用、按钮变体由 props 决定，没有点击事件或内部状态，在 HTML 与图片消息中均用于展示。
 

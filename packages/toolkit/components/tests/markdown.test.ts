@@ -1,12 +1,41 @@
 import { jsx, renderToHtml } from "@zhin.js/jsx";
-import { decodeHTML } from "entities";
+import { htmlToDOM, Element, Text, type DOMNode } from "html-react-parser";
 import { getAllBuiltinFonts, htmlToSvg } from "../../satori/src/index.js";
 import { Markdown } from "../src/markdown.js";
 import { ThemeProvider } from "../src/theme.js";
 
 const htmlOf = (source: string) => renderToHtml(jsx(Markdown, { source }));
 
+function nodeText(node: DOMNode): string {
+  if (node instanceof Text) return node.data;
+  return node instanceof Element
+    ? node.children.map((child) => nodeText(child as DOMNode)).join("")
+    : "";
+}
+
+function htmlTextContent(html: string): string {
+  return htmlToDOM(html).map(nodeText).join("");
+}
+
+function svgTextContent(svg: string): string {
+  const collect = (node: DOMNode): string => {
+    if (!(node instanceof Element)) return "";
+    if (node.name === "text") return nodeText(node);
+    return node.children.map((child) => collect(child as DOMNode)).join("");
+  };
+  return htmlToDOM(svg, { xmlMode: true, decodeEntities: true })
+    .map(collect)
+    .join("");
+}
+
 describe("safe Markdown JSX", () => {
+  it("extracts parsed text without treating escaped tags or quoted angle brackets as markup", () => {
+    expect(htmlTextContent('<div title="a > b">before <b>console</b>.log &lt;tag&gt; &amp;lt;<!-- ignored --></div>'))
+      .toBe("before console.log <tag> &lt;");
+    expect(svgTextContent('<svg xmlns="http://www.w3.org/2000/svg"><title>metadata</title><text title="a > b">&lt;span onclick=&quot;keep&quot;&gt;<tspan>nested &amp; text</tspan>&lt;/span&gt; &amp;lt;<!-- ignored --></text><path d="M0 0"/><text> tail</text></svg>'))
+      .toBe('<span onclick="keep">nested & text</span> &lt; tail');
+  });
+
   it("renders inline formatting and text entities without re-escaping content", async () => {
     const html = await htmlOf(
       "# 标题\n\n**strong** *em* ~~old~~ `&amp; <tag>` &copy; &amp; &lt;safe&gt;\nsoft\n\nhard  \nbreak"
@@ -123,7 +152,7 @@ describe("safe Markdown JSX", () => {
     const source =
       '# Release\n\n**Ready** with *checks*, ~~old~~ and `const n = 0`. [Docs](https://example.com/docs)\n\n> Summary\n>\n> ```ts\n> const ready = true;\n> console.log("<safe>");\n> ```\n\n1. Verify\n   - [x] Build\n   - [ ] Publish\n\n| Check | Result |\n| --- | ---: |\n| Smoke | **Pass** |\n\n![No download](https://untrusted.example/image.png)';
     const html = await htmlOf(source);
-    expect(html.replace(/<[^>]*>/g, "")).toContain("console.log");
+    expect(htmlTextContent(html)).toContain("console.log");
     expect(html).toContain("&lt;safe&gt;");
     expect(html).not.toContain("<img");
     const svg = await htmlToSvg(html, {
@@ -145,9 +174,7 @@ describe("safe Markdown JSX", () => {
       fonts: getAllBuiltinFonts(),
       embedFont: false,
     });
-    const text = [...svg.matchAll(/<text\b[^>]*>([\s\S]*?)<\/text>/g)]
-      .map((match) => decodeHTML(match[1]!.replace(/<[^>]*>/g, "")))
-      .join("");
+    const text = svgTextContent(svg);
     expect(text.split(literal)).toHaveLength(3);
     expect(text).toContain("Example href=javascript:alert(1) stays literal");
     expect(text).not.toContain("about:invalid");

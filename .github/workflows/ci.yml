@@ -246,6 +246,11 @@ jobs:
         if: runner.os != 'Windows'
         run: pnpm build
 
+      # File-system link checks cannot catch links outside VitePress's site root.
+      - name: build documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm docs:build
+
       - name: verify packed Console publish contract
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm check:console-contract

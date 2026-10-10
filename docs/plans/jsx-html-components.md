@@ -28,7 +28,7 @@ sidebar: false
 | 根入口旧函数式 defineComponent 与子路径对象式 defineComponent 同名异义 | [`core/component.ts`](https://github.com/zhinjs/zhin/blob/b8c0f46c7/packages/im/core/src/component.ts)、[`component/definition.ts`](../../packages/im/component/src/definition.ts) |
 | Adapter 已声明 `html: direct/image/text`，实际仍仅按 Sandbox 包名判断 direct | [`adapter/definition.ts`](../../packages/im/adapter/src/definition.ts)、[`outbound-delivery-runtime.ts`](../../packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts) |
 | SendContent 数组允许嵌套，但后续平台归一化没有完整扁平化 | [`outbound-renderer.ts`](../../packages/im/core/src/plugin-runtime/im/outbound-renderer.ts)、[`outbound-segments.ts`](../../packages/im/core/src/plugin-runtime/im/outbound-segments.ts) |
-| 官方插件指引禁止服务端 TSX，Component README 也与实际 TSX loader 矛盾 | [插件指引](../../.github/instructions/zhin-plugin.instructions.md)、[Component README](../../packages/im/component/README.md) |
+| 官方插件指引禁止服务端 TSX，Component README 也与实际 TSX loader 矛盾 | [插件指引](https://github.com/zhinjs/zhin/blob/b8c0f46c7/.github/instructions/zhin-plugin.instructions.md)、[Component README](https://github.com/zhinjs/zhin/blob/b8c0f46c7/packages/im/component/README.md) |
 
 当前真实链路是 `RuntimeMessage reply → OutboundDeliveryRuntime → OutboundRenderer → 出站 middleware → AdapterIndex.send → Endpoint.send`。`before.sendMessage` 目前只有 MessageBus 声明，计划和验收不把它当成已经触发的运行时事件；本次采用真实出站中间件作为拦截点，清理相关失真说明。
 
@@ -180,3 +180,10 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 - Markdown 和 CodeBlock 经真实 SVG 验证：100/320px 窄画布长行、空行、Tab、转义文本与完整代码内容保真。Satori 清理改为解析后处理实际元素／属性，避免误改代码里的 `onclick=`、`href=javascript:` 文字。
 - 更新后的两个新包独立安装、NodeNext TSX 编译和 Markdown／代码／嵌套 List／Table／控件输出通过；已发布文件包含可直接运行的画廊脚本。高亮和解析依赖仅属于可选组件包，IM 核心体积门禁通过。
 - 新包 `@zhin.js/jsx`、`@zhin.js/components` 尚未在 npm 注册；首次发布须遵循[维护者发布流程](../contributing/development.md)，后续再交给自动发布。真实 IM 平台图片发送不在上述本地证据范围内。
+
+## CI 故障修复（2026-10-10）
+
+- PR #695 的包构建已通过，Ubuntu / Node 24 作业失败于 Email admission 的覆盖率测试。给第二轮 fetch 结束增加 80ms 延迟后，旧测试可稳定复现相同断言失败；固定 20ms 等待无法证明解析与分发完成。测试改为按下一轮实际获准轮询推进，并可显式控制 fetch 结束与消息 body；保留忙时拦截、UID 去重、UIDVALIDITY 与 TTL 的断言。
+- 文档整站构建复现 4 个死链：源文件存在，但位于 VitePress 站点根目录之外。改为仓库链接；`pnpm docs:build` 完整通过，且已加入 PR 的 Node 24 CI，保留严格死链检查。
+- 两个 CodeQL 告警位于 Markdown 测试的正则文本提取工具，未涉及生产 HTML 输出。改用真实 HTML/XML 解析器提取正文，补充实体、嵌套标签、引号与注释回归；解析器仅增加为测试依赖，不进入组件包生产依赖。
+- Node 24 全量覆盖率复验：1008 个文件、7647 项通过，12 项保持跳过；lines 72.79%、branches 61.99%，保留原门槛。其后补强第二轮完全 drain、第三轮 body 未释放时的去重断言，并通过 Email 与完整组件包的 88 项复验。
