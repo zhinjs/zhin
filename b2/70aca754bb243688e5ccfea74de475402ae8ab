@@ -1,0 +1,40 @@
+.changeset/jsx-html-components.md
+  s_079f1dc5e6308d::t_b3e3079f544307 28-29
+packages/toolkit/html-renderer/tests/renderer.test.ts
+  s_079f1dc5e6308d::t_0bfb8488df140b 131-133,136,138
+packages/toolkit/tailwind/tests/style.test.ts
+  s_079f1dc5e6308d::t_5d385faca40940 72-82
+packages/toolkit/tailwind/tests/sync-theme.test.ts
+  s_079f1dc5e6308d::t_a0f0c9cec50379 26,38-40,47-55
+packages/toolkit/tailwind/LICENSE
+  s_079f1dc5e6308d::t_a0f0c9cec50379 3
+packages/toolkit/components/examples/gallery.mjs
+  s_079f1dc5e6308d::t_07a2fa159c97ec 17,19,21-25
+packages/toolkit/components/README.md
+  s_079f1dc5e6308d::t_07a2fa159c97ec 200-209
+packages/toolkit/tailwind/src/profile.ts
+  s_079f1dc5e6308d::t_a0f0c9cec50379 70
+scripts/update-plugins.mjs
+  s_079f1dc5e6308d::t_0bfb8488df140b 41-44
+docs/plans/jsx-html-components.md
+  s_079f1dc5e6308d::t_b3e3079f544307 230-235
+  s_079f1dc5e6308d::t_0bfb8488df140b 45,183,217-223
+packages/toolkit/tailwind/scripts/sync-theme.mjs
+  s_079f1dc5e6308d::t_a0f0c9cec50379 7-9,15
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b270aca754bb243688e5ccfea74de475402ae8ab",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
