@@ -486,7 +486,7 @@ ${projectName}/
 │   ├── hello/index.ts     # /hello 命令（defineCommand）
 │   └── card/index.ts      # /card -> component("status-card")
 ├── components/
-│   └── status-card/index.ts # defineComponent()，Satori 卡片
+│   └── status-card/index.tsx # defineComponent()，JSX 状态卡片
 ├── middlewares/           # 消息中间件（约定目录）
 ├── pages/
 │   ├── index/index.tsx    # Console 页面（/）

@@ -266,21 +266,24 @@ class MarkdownTree {
             cells: readonly Tokens.TableCell[],
             header: boolean,
             separator: boolean
-          ) =>
-            jsx(TableRow, {
+          ) => {
+            this.check(depth + 1);
+            return jsx(TableRow, {
               header,
               separator,
-              children: cells.map((cell, index) =>
-                jsx(TableCell, {
+              children: cells.map((cell, index) => {
+                this.check(depth + 2);
+                return jsx(TableCell, {
                   header,
                   align: table.align[index] ?? "left",
                   children: this.textBlock(
                     this.inline(cell.tokens, depth + 2),
                     true
                   ),
-                })
-              ),
+                });
+              }),
             });
+          };
           return jsx(Table, {
             children: [
               row(table.header, true, false),

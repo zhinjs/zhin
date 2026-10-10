@@ -358,14 +358,18 @@ function safeUri(value: string): string {
 
 /** Remove dangerous elements and attributes while preserving literal text. */
 export function sanitizeHtml(html: string): string {
-  const serialize = (nodes: readonly DOMNode[], depth = 0): string => {
+  const serialize = (nodes: readonly DOMNode[], depth = 0, svg = false, rawText = false): string => {
     if (depth > 100) throw new RangeError('HTML exceeds maximum sanitization depth 100');
     return nodes.map(node => {
-      if (node instanceof Text) return escapeText(node.data);
+      if (node instanceof Text) return rawText ? node.data : escapeText(node.data);
       if (!(node instanceof Element)) return '';
       const name = node.name.toLowerCase();
       if (DANGEROUS_TAGS.includes(name)) return '';
-      const children = () => serialize(node.children as DOMNode[], depth + 1);
+      const inSvg = svg || name === 'svg';
+      // HTML style is raw text, while SVG style and title are entity-decoded by
+      // the parser. Keep those escaped so decoded tag-looking text stays inert.
+      const children = () => serialize(node.children as DOMNode[], depth + 1,
+        inSvg && name !== 'foreignobject', name === 'style' && !inSvg);
       if (STRIP_TAGS.includes(name)) return children();
       const attributes = Object.entries(node.attribs).flatMap(([attribute, value]) => {
         const key = attribute.toLowerCase();

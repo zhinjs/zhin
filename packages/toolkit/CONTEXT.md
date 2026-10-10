@@ -4,7 +4,7 @@ Toolkit 提供可选的展示、渲染、语音能力与项目脚手架，不进
 
 | 包 | 职责 | 入口 |
 | --- | --- | --- |
-| components | 无状态 JSX 样式组件与主题，只依赖 JSX 基础包 | Card、Row、KvTable、图表等 |
+| components | 无状态 JSX 样式组件与主题；依赖 JSX 基础包、entities、marked 与 Shiki | Card、Row、KvTable、图表等 |
 | html-renderer | HTML→PNG；CLI 将 renderer 安装为 generation Resource | createHtmlRenderer |
 | satori | HTML/CSS→SVG 与内置字体 | htmlToSvg、字体函数 |
 | speech | STT/TTS；由 composition root 装配 Speech Host | createSpeechPipeline |

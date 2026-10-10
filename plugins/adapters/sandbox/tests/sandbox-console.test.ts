@@ -152,7 +152,7 @@ async function createProject(): Promise<string> {
   // Copy full pages/ so relative imports (SandboxChat, RichTextEditor, transport) resolve.
   const pagesDir = join(dirname(fileURLToPath(import.meta.url)), '../pages');
   const pageFiles = [
-    'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx',
+    'index/index.tsx', 'index/SandboxChat.tsx', 'index/RichTextEditor.tsx', 'index/HtmlMessage.tsx',
     'index/sandboxTransport.ts', 'index/agentTrace.ts', 'index/playgroundState.ts',
   ];
   for (const name of pageFiles) {

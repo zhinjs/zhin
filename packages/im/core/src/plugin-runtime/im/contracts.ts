@@ -23,7 +23,7 @@ export interface RawContent<TPayload = unknown> {
 
 /**
  * 出站内容：纯文本 / canonical Segment（一等公民，媒体与富文本的统一表达）/
- * ComponentCall / RawContent，可任意嵌套数组。
+ * 惰性 JSXElement / ComponentCall / RawContent，可任意嵌套数组。
  */
 export type SendContent = string | Segment | JSXElement | ComponentCall | RawContent | readonly SendContent[];
 

@@ -58,7 +58,7 @@ export interface KvRowProps extends ComponentProps {
 }
 
 export interface KvTableProps extends ComponentProps {
-  rows: ReadonlyArray<{ label: JSXRenderable; value: JSXRenderable }>;
+  rows: ReadonlyArray<Pick<KvRowProps, "label" | "value" | "bold">>;
   labelWidth?: number;
 }
 
@@ -81,11 +81,11 @@ export interface MetricBlockProps extends ComponentProps {
 export interface DualSectionProps extends ComponentProps {
   left: {
     title: JSXRenderable;
-    rows: ReadonlyArray<{ label: JSXRenderable; value: JSXRenderable }>;
+    rows: ReadonlyArray<Pick<KvRowProps, "label" | "value" | "bold">>;
   };
   right: {
     title: JSXRenderable;
-    rows: ReadonlyArray<{ label: JSXRenderable; value: JSXRenderable }>;
+    rows: ReadonlyArray<Pick<KvRowProps, "label" | "value" | "bold">>;
   };
 }
 

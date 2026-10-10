@@ -8,6 +8,8 @@ pnpm add @zhin.js/components
 
 在 Zhin 项目中配置 `jsx: "react-jsx"`、`jsxImportSource: "zhin.js"`，即可在命令、中间件或注册组件中直接返回 JSX。独立使用时安装 `@zhin.js/jsx` 和 `@zhin.js/components`，把 `jsxImportSource` 设为 `@zhin.js/jsx`，通过它的 `renderToHtml` 输出 HTML。
 
+服务端 TSX 支持只负责 JSX 转译，不包含样式构建。**不支持直接 `import './card.css'`、CSS Modules 或 CSS 的 `?raw` 导入**，也不提供 Sass/SCSS、Less、Stylus、PostCSS 等预处理或生成流程。原生 JSX 标签使用内联 `style`（CSS 对象或声明字符串）；样式组件使用 `ThemeProvider` 和 `custom.style`。浏览器 Console 页面走独立构建链路，不属于此服务端 TSX 承诺。
+
 ```tsx
 import {
   Badge,
@@ -99,9 +101,9 @@ const card = (
 | `style`            | 所有组件根节点的基础 CSS                                                                              |
 | `components`       | 按组件名配置根节点样式，如 `Card`、`Badge`、`RadarChart`                                              |
 
-每个组件都支持 `custom.style` 和 `custom.text`。`custom.style` 接受 CSS 对象或 CSS 声明字符串；对象形式便于类型检查。样式优先级为 `theme.style` → 组件默认样式 → `theme.components[组件名]` → `custom.style`。复合组件也把覆盖应用到实际视觉根节点。局部样式保留原值，不受 `spacing.scale` 缩放。嵌套主题的 `style` 与同名 `components` 配置按 CSS 属性合并。
+每个组件都支持 `custom.style`；有对应展示入参的组件还支持 `custom.text`。`custom.style` 接受 CSS 对象或 CSS 声明字符串；对象形式便于类型检查。样式优先级为 `theme.style` → 组件默认样式 → `theme.components[组件名]` → `custom.style`。复合组件也把覆盖应用到实际视觉根节点。局部样式保留原值，不受 `spacing.scale` 缩放。嵌套主题的 `style` 与同名 `components` 配置按 CSS 属性合并。
 
-`custom.text` 按展示入参名称覆盖，例如 `title`、`subtitle`、`value`、`badge`、`message`。这些值和 `theme.text` 都使用 `JSXRenderable`，可以放 JSX、数组、异步节点、数字 `0` 或 `null`。标题、标签、数值、徽章与说明等普通展示入参也是 `JSXRenderable`，对应常见的 ReactNode 用法，无需 React；颜色、尺寸、百分比和图表计算值仍使用明确的字符串或数字类型。自定义组件的展示入参也建议使用 `JSXRenderable`；异步函数的返回值可以标注 `Promise<JSXNode>`，调用结果能够直接传给这些插槽。
+`Card`、`Row` 等纯容器没有可替换文案，应通过 children 设置内容。`custom.text` 按展示入参名称覆盖，例如 `title`、`subtitle`、`value`、`badge`、`message`。这些值和 `theme.text` 都使用 `JSXRenderable`，可以放 JSX、数组、异步节点、数字 `0` 或 `null`。标题、标签、数值、徽章与说明等普通展示入参也是 `JSXRenderable`，对应常见的 ReactNode 用法，无需 React；颜色、尺寸、百分比和图表计算值仍使用明确的字符串或数字类型。自定义组件的展示入参也建议使用 `JSXRenderable`；异步函数的返回值可以标注 `Promise<JSXNode>`，调用结果能够直接传给这些插槽。
 
 ## 组件
 

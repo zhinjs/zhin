@@ -84,7 +84,7 @@ More: [Getting started](./docs/getting-started/index.md) · [Examples](./docs/ex
 
 **Requirements**: scaffolded TypeScript projects require Node.js **≥22.12.0**, pnpm 9+. The compiled IM library supports Node.js `^20.19.0` or `>=22.12.0`.
 
-The &lt;10MB figure applies to the **IM library install**. The generated project also installs the CLI, Sandbox adapter, page/layout contracts, and a Satori card example. The browser UI lives at [console.zhin.dev](https://console.zhin.dev); the CLI assembles its HTTP Host and Console API. Neither the browser UI nor an MCP server is bundled into `zhin.js`.
+The &lt;10MB figure applies to the **IM library install**. The generated project also installs the CLI, Sandbox adapter, page/layout contracts, and a JSX card example. The browser UI lives at [console.zhin.dev](https://console.zhin.dev); the CLI assembles its HTTP Host and Console API. Neither the browser UI nor an MCP server is bundled into `zhin.js`.
 
 ## From a message to durable work
 
@@ -219,7 +219,7 @@ Full list: [adapter docs](./docs/adapters/index.md) · [`plugins/adapters`](./pl
 Layers and dependency direction: [architecture](./docs/concepts/architecture.md) · [repo structure](./docs/contributing/repo-structure.md)
 
 
-JSX authoring uses `zhin.js/jsx` with `jsxImportSource: "zhin.js"`. Commands, inbound middleware and registered components may return JSX directly; adapters choose HTML, images or text. Install optional `@zhin.js/components` for themed visual components with composable `JSXNode` display props. See [middleware and components](https://zhin.js.org/en/authoring/middleware-components).
+JSX authoring uses `zhin.js/jsx` with `jsxImportSource: "zhin.js"`. Commands, inbound middleware and registered components may return JSX directly; adapters choose HTML, images or text. Install optional `@zhin.js/components` for themed visual components with composable `JSXRenderable` display props. Server TSX does not load `.css` or preprocess styles; use inline `style`, themes and `custom.style`. See [middleware and components](https://zhin.js.org/en/authoring/middleware-components).
 
 ## Documentation
 

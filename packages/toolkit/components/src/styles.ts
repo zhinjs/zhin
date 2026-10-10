@@ -20,12 +20,29 @@ export function styleObject(style?: JSXStyle): StyleObject {
     return Object.fromEntries(
       Object.entries(style).map(([key, value]) => [camelName(key), value])
     );
+  // Remove comments outside strings before locating declaration boundaries.
+  // Comments may contain quotes, parentheses, colons and semicolons.
+  let css = "", comment = false, stringQuote = "";
+  for (let i = 0; i < style.length; i++) {
+    const c = style[i]!;
+    if (comment) {
+      if (c === "*" && style[i + 1] === "/") { comment = false; i++; }
+    } else if (stringQuote) {
+      css += c;
+      if (c === "\\" && i + 1 < style.length) css += style[++i];
+      else if (c === stringQuote) stringQuote = "";
+    } else if (c === "/" && style[i + 1] === "*") { comment = true; i++; }
+    else {
+      css += c;
+      if (c === '"' || c === "'") stringQuote = c;
+    }
+  }
   const declarations: string[] = [];
   let start = 0,
     depth = 0,
     quote = "";
-  for (let i = 0; i < style.length; i++) {
-    const c = style[i];
+  for (let i = 0; i < css.length; i++) {
+    const c = css[i];
     if (quote) {
       if (c === "\\") i++;
       else if (c === quote) quote = "";
@@ -33,11 +50,11 @@ export function styleObject(style?: JSXStyle): StyleObject {
     else if (c === "(") depth++;
     else if (c === ")") depth--;
     else if (c === ";" && depth === 0) {
-      declarations.push(style.slice(start, i));
+      declarations.push(css.slice(start, i));
       start = i + 1;
     }
   }
-  declarations.push(style.slice(start));
+  declarations.push(css.slice(start));
   const result: StyleObject = {};
   for (const declaration of declarations) {
     const colon = declaration.indexOf(":");

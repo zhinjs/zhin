@@ -246,11 +246,6 @@ jobs:
         if: runner.os != 'Windows'
         run: pnpm build
 
-      # File-system link checks cannot catch links outside VitePress's site root.
-      - name: build documentation
-        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
-        run: pnpm docs:build
-
       - name: verify packed Console publish contract
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm check:console-contract
@@ -268,6 +263,12 @@ jobs:
         env:
           HARNESS_SKIP_TEST: '1'
           HARNESS_SEQUENTIAL: '1'
+
+      # Build after read-only harness checks: docs:build regenerates adapter/config docs.
+      # File-system link checks cannot catch links outside VitePress's site root.
+      - name: build documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm docs:build
 
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24

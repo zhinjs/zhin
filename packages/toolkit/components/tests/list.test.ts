@@ -87,7 +87,7 @@ describe("display lists", () => {
     expect(html).toMatch(/>0<\/div>/);
     await expect(
       renderToHtml(jsx(List, { ordered: true, start: Number.NaN }))
-    ).rejects.toThrow("finite integer");
+    ).rejects.toThrow("safe finite integer");
   });
 
   it("lays out repeated items without an extra wrapper margin or vertical gap", async () => {

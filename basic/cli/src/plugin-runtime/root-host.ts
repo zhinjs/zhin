@@ -15,6 +15,8 @@ import type {
   RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 
+import { createTsxModuleLoader } from './start/module.js';
+
 export interface RootHostOptions {
   readonly projectRoot: string;
   readonly config?: RuntimeConfigDocument | ConfigDocumentPort;
@@ -64,6 +66,7 @@ export class RootHost {
     const modules = options.modules ?? new NativeDevelopmentModuleRuntime({
       projectRoot: options.projectRoot,
       watch: options.watch,
+      tsxLoader: createTsxModuleLoader(options.projectRoot),
     });
     this.#watch = options.watch ?? true;
     this.#onRestartRequired = options.onRestartRequired ?? (() => undefined);

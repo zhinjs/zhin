@@ -136,6 +136,7 @@ export async function renderToHtml(node: JSXRenderable, options: HtmlRenderOptio
       }
       if (typeof type === 'function') return await render(type(props), depth + 1, svg);
       if (typeof type !== 'string' || !/^[A-Za-z][A-Za-z0-9:._-]*$/.test(type)) throw new TypeError('Invalid JSX tag name');
+      if (type.split(':').at(-1)?.toLowerCase() === 'script') throw new TypeError('JSX script elements are unsupported; use explicit trusted raw HTML');
       const inSvg = svg || type === 'svg';
       const attributes = serializeAttributes(props, inSvg);
       const raw = props.dangerouslySetInnerHTML;

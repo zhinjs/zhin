@@ -23,7 +23,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Fragment, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
-import type { OutboundEnvelope, SendContent } from '../../src/plugin-runtime/im/contracts.js';
+import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
 
 const activeAdapters: AdapterIndex[] = [];
 afterEach(async () => {
@@ -219,8 +219,8 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     expect(f.sent[0]?.payload).toEqual([{ type: 'text', data: { text: 'Ready' } }]);
   });
 
-  it('falls back once when rasterization fails before an Endpoint attempt', async () => {
-    const renderer = { render: vi.fn(async () => { throw new Error('renderer diagnostic'); }) };
+  it.each([new Error('renderer diagnostic'), new RangeError('HTML sanitizer depth exceeded')])('falls back once when rasterization fails before an Endpoint attempt: %s', async (error) => {
+    const renderer = { render: vi.fn(async () => { throw error; }) };
     const f = await fixture({ segments: { html: 'image' }, renderer });
     expect((await f.send(segment.html({ html: '<b>Ready</b>', text: 'render fallback' }))).status).toBe('sent');
     expect(renderer.render).toHaveBeenCalledTimes(1);
@@ -259,6 +259,55 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     expect(f.publish).not.toHaveBeenCalled();
   });
 
+  it.each(['direct', 'image', 'text'] as const)('suppresses empty normalized content under %s HTML policy', async (html) => {
+    const renderer = rasterRenderer();
+    const f = await fixture({ segments: { html }, renderer });
+    for (const content of [segment.text(''), [segment.text(''), segment.text('')], segment.html({ html: '' })]) {
+      expect(await f.send(content)).toEqual({ status: 'suppressed' });
+    }
+    expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent).toEqual([]);
+    expect(f.record).not.toHaveBeenCalled();
+    expect(f.publish).not.toHaveBeenCalled();
+  });
+
+  it.each(['direct', 'image', 'text'] as const)('preserves explicit text fallback from empty HTML under %s policy', async (html) => {
+    const f = await fixture({ segments: { html } });
+    expect((await f.send(segment.html({ html: '', text: 'fallback' }))).status).toBe('sent');
+    expect(f.sent[0]?.payload).toEqual([segment.text('fallback')]);
+  });
+
+  it('keeps nonempty direct HTML while suppressing its empty text-only fallback', async () => {
+    const direct = await fixture({ segments: { html: 'direct' } });
+    const content = segment.html({ html: '<div style="width:10px;height:10px;background:red"></div>' });
+    expect((await direct.send(content)).status).toBe('sent');
+    expect(direct.sent[0]?.payload).toEqual([content]);
+    const text = await fixture({ segments: { html: 'text' } });
+    expect(await text.send(content)).toEqual({ status: 'suppressed' });
+    expect(text.sent).toEqual([]);
+  });
+
+  it('retains whitespace, nonempty text and nontext segments beside empty text', async () => {
+    const f = await fixture();
+    expect((await f.send([segment.text(''), segment.text(' '), segment.mention('alice')])).status).toBe('sent');
+    expect(f.sent).toHaveLength(1);
+    expect(f.sent[0]?.payload).toEqual([segment.text(' '), segment.mention('alice')]);
+  });
+
+  it.each(['native', 'text'] as const)('rejects malformed interactive replacements before Endpoint under %s policy', async (interactive) => {
+    for (const replace of [
+      { type: 'keyboard', data: { rows: 'broken' } },
+      { type: 'keyboard', data: { rows: [[{ id: 'a', label: 'A' }]] } },
+      { type: 'action', data: { id: 'a', payload: 42 } },
+    ]) {
+      const f = await fixture({ segments: { interactive }, replace });
+      expect((await f.send('original')).status).toBe('rejected');
+      expect(f.sent).toEqual([]);
+      expect(f.record).not.toHaveBeenCalled();
+      expect(f.publish).not.toHaveBeenCalled();
+    }
+  });
+
   it('rejects a JSX evaluation failure without sending its error or stack to chat', async () => {
     const renderer = rasterRenderer();
     const f = await fixture({ segments: { html: 'image' }, renderer });
@@ -269,6 +318,16 @@ describe('JSX outbound delivery through a real Endpoint', () => {
     expect(JSON.stringify(receipt)).not.toContain('private component diagnostic');
     expect(render).toHaveBeenCalledTimes(1);
     expect(renderer.render).not.toHaveBeenCalled();
+    expect(f.sent).toEqual([]);
+    expect(f.record).not.toHaveBeenCalled();
+    expect(f.publish).not.toHaveBeenCalled();
+  });
+
+  it.each(['content', 'replacement', 'raw-content', 'raw-replacement'] as const)('rejects cyclic %s arrays before entering the Endpoint', async (mode) => {
+    const content: SendContent[] = []; content.push(content);
+    const wrapped = mode.startsWith('raw-') ? raw(content) : content;
+    const f = await fixture(mode.includes('replacement') ? { replace: wrapped } : {});
+    expect((await f.send(mode.includes('replacement') ? 'original' : wrapped)).status).toBe('rejected');
     expect(f.sent).toEqual([]);
     expect(f.record).not.toHaveBeenCalled();
     expect(f.publish).not.toHaveBeenCalled();

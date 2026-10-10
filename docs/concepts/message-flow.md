@@ -16,7 +16,9 @@ flowchart LR
     D -->|"前缀不匹配 / 无此命令"| U{snapshot IngressRoute?}
     U -->|"已装 Agent"| AI[AI 兜底回复]
     U -->|"未装"| N[静默丢弃]
-    D -->|"命令命中且有返回值"| R["$replyFrom(owner, value)"]
+    D -->|"命令命中：返回匹配事实与待回复内容"| W["中间件链回卷：透传或替换结果"]
+    MW -->|"return JSX"| W
+    W -->|"pending content"| R["$replyFrom(owner, value)"]
     R --> O[出站管道]
     AI --> O
 ```

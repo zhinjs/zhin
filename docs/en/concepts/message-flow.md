@@ -16,7 +16,9 @@ flowchart LR
     D -->|"Prefix mismatch / no such command"| U{snapshot IngressRoute?}
     U -->|"Agent installed"| AI[AI fallback reply]
     U -->|"Not installed"| N[Silent discard]
-    D -->|"Command hit with return value"| R["$replyFrom(owner, value)"]
+    D -->|"Command hit: return match facts and pending content"| W["Middleware chain unwinds: forward or replace result"]
+    MW -->|"return JSX"| W
+    W -->|"pending content"| R["$replyFrom(owner, value)"]
     R --> O[Outbound pipeline]
     AI --> O
 ```

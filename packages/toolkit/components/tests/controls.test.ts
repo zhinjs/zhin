@@ -17,6 +17,12 @@ describe("display controls", () => {
         jsx(Component, { checked: true, disabled: true, label: "不可用" })
       );
       expect(unchecked).toContain("<svg");
+      expect(unchecked).toContain(`role="${Component.name.toLowerCase()}"`);
+      expect(unchecked).toContain('aria-checked="false"');
+      expect(checked).toContain('aria-checked="true"');
+      if (Component !== Radio) expect(checked).toContain('aria-readonly="true"');
+      expect(disabled).toContain('aria-disabled="true"');
+      expect(checked).toContain('aria-hidden="true"');
       expect(checked).toContain("#3b82f6");
       expect(disabled).toContain("opacity: 0.55");
       expect(disabled).toContain("color: #a1a1aa");

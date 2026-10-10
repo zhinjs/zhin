@@ -1,9 +1,9 @@
 import {
-  Fragment,
   isJsxElement,
   jsx,
   type JSXElement,
   type JSXProps,
+  type JSXNode,
   type JSXRenderable,
   type JSXStyle,
 } from "@zhin.js/jsx";
@@ -367,16 +367,25 @@ function scopeTree(
       if ("then" in value && typeof value.then === "function") {
         // Keep source ancestors through async resolution, without Promise assimilation.
         const ancestry = new Set(path);
-        return jsx(async (): Promise<JSXElement> => {
-          const result = await new Promise<{ node: JSXRenderable }>(
-            (resolve, reject) => {
+        // Preserve Promise-like props: a custom component may await its children.
+        // Resolve into a box first, then apply scope/cycle checks before allowing
+        // Promise machinery to assimilate another thenable.
+        const scoped: PromiseLike<JSXNode> = {
+          then<TResult1 = JSXNode, TResult2 = never>(
+            fulfilled?: ((node: JSXNode) => TResult1 | PromiseLike<TResult1>) | null,
+            rejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+          ): PromiseLike<TResult1 | TResult2> {
+            return new Promise<{ node: JSXRenderable }>((resolve, reject) => {
               value.then((node) => resolve({ node }), reject);
-            }
-          );
-          return jsx(Fragment, {
-            children: scopeTree(result.node, theme, reset, ancestry, depth + 1),
-          });
-        }, {});
+            }).then(({ node }) => ({
+              child: scopeTree(node, theme, reset, ancestry, depth + 1),
+            })).then(({ child }) =>
+              fulfilled ? fulfilled(child as JSXNode) : child as TResult1,
+              rejected
+            );
+          },
+        };
+        return scoped;
       }
       throw new TypeError("Unsupported JSX theme child");
     } finally {

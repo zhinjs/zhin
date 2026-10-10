@@ -8,6 +8,8 @@ import {
   actionSegment,
   stripInteractiveCommandText,
   resolvePayloadFromText,
+  isKeyboardSegment,
+  isActionSegment,
 } from '../src/built/interactive-segments/index.js';
 
 describe('resolveKeyboardSegments', () => {
@@ -33,6 +35,29 @@ describe('resolveKeyboardSegments', () => {
     expect(raw).toContain('轮到 X');
     expect(raw).toContain('落子 1-9');
     expect(raw).toContain('1.');
+  });
+});
+
+describe('interactive segment data guards', () => {
+  it('validates nested button, fallback and command fields before asserting keyboard data', () => {
+    const button = { id: 'a', label: 'A', payload: 'action:a', disabled: false, style: 'primary', mode: 'command', command: { enter: true, reply: false } };
+    expect(isKeyboardSegment({ type: 'keyboard', data: { rows: [[button]], fallback: { hint: 'choose', map: { '1': 'action:a' } } } })).toBe(true);
+    for (const data of [
+      undefined, null, [], {}, { rows: null }, { rows: {} }, { rows: ['row'] },
+      { rows: [[null]] }, { rows: [[{ ...button, payload: 42 }]] },
+      { rows: [[{ ...button, disabled: 'false' }]] }, { rows: [[{ ...button, style: 'unknown' }]] },
+      { rows: [[{ ...button, mode: 'unknown' }]] }, { rows: [[{ ...button, command: [] }]] },
+      { rows: [[{ ...button, command: { enter: 1 } }]] }, { rows: [[{ ...button, command: { reply: 'yes' } }]] },
+      { rows: [], fallback: { hint: 'choose', map: { '1': 42 } } },
+      { rows: [], fallback: { hint: 42, map: {} } }, { rows: [], fallback: { hint: 'choose', map: [] } },
+    ]) expect(isKeyboardSegment({ type: 'keyboard', data })).toBe(false);
+  });
+
+  it('only asserts action data with string identity, payload and optional source id', () => {
+    expect(isActionSegment(actionSegment({ id: 'a', payload: 'action:a', sourceMessageId: 'message-1' }))).toBe(true);
+    for (const data of [undefined, null, [], {}, { id: 'a' }, { id: 'a', payload: 42 }, { id: 42, payload: 'action:a' }, { id: 'a', payload: 'action:a', sourceMessageId: 42 }]) {
+      expect(isActionSegment({ type: 'action', data })).toBe(false);
+    }
   });
 });
 

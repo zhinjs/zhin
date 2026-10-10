@@ -20,8 +20,11 @@ export function barTone(
 }
 
 export function tint(hex: string, alpha: number): string {
-  const raw = hex.replace("#", "");
-  if (raw.length !== 6) return hex;
+  if (!/^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(hex)) return hex;
+  const short = hex.slice(1);
+  const raw = short.length === 3
+    ? [...short].map((digit) => digit + digit).join("")
+    : short;
   const r = parseInt(raw.slice(0, 2), 16);
   const g = parseInt(raw.slice(2, 4), 16);
   const b = parseInt(raw.slice(4, 6), 16);

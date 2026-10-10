@@ -11,6 +11,8 @@ description: 入站结果传递、出站信封改写与统一 JSX/HTML 渲染
 
 项目 `tsconfig.json` 设置 `"jsx": "react-jsx"`、`"jsxImportSource": "zhin.js"`，代码保存为 `.tsx`。服务端约定入口支持 `commands/**/index.tsx`、`middlewares/<name>/index.tsx`、`components/<name>/index.tsx`；CLI 开发 loader 转译 JSX，生产模式使用编译产物。
 
+服务端 TSX 支持只负责 JSX 转译，不包含样式构建。**不支持直接 `import './card.css'`、CSS Modules 或 CSS 的 `?raw` 导入**，也不提供 Sass/SCSS、Less、Stylus、PostCSS 等预处理或生成流程。原生 JSX 标签使用内联 `style`（CSS 对象或声明字符串）；样式组件使用 `ThemeProvider` 和 `custom.style`。浏览器 Console 页面走独立构建链路，不属于此服务端 TSX 承诺。
+
 ```tsx
 import { defineCommand } from 'zhin.js/command';
 import { Card, CardHeader, Badge } from '@zhin.js/components';

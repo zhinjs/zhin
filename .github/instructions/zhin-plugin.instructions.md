@@ -55,8 +55,13 @@ Do not place a domain-specific Tool at package root merely to make discovery con
 - Node-authored files must use erasable TypeScript syntax. Do not use enums, namespaces,
   constructor parameter properties in native `.ts` server files. Server command, middleware and
   component entries may use `.tsx`; set `jsx: react-jsx` and `jsxImportSource: zhin.js`.
-  `zhin.js/jsx` supplies JSX/JSXNode/renderToHtml; `@zhin.js/components` supplies optional visual
-  components. Inbound handles return JSX or forward next(); outbound handles replace(JSX) and return void.
+  `zhin.js/jsx` supplies JSX/JSXRenderable/renderToHtml; `@zhin.js/components` supplies optional visual
+  components. Inbound handles return JSX or forward next(); outbound handles call
+  `input.replace(JSX)` and then `await next()` to continue delivery, returning void. Omitting
+  `next()` stops the send even after replacing its content.
+- Server TSX only transpiles JSX. Do not import `.css`, CSS Modules or CSS `?raw`;
+  Sass/SCSS, Less, Stylus, PostCSS processing are outside its scope.
+  Use inline `style`, shared themes and `custom.style`.
 - Browser `pages/*/index.tsx` entries are compiled by the Client Build adapter and are not imported by Node.
 
 ## Command routes

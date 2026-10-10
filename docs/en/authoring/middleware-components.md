@@ -11,6 +11,8 @@ Command `execute`, inbound middleware `handle`, and registered component `render
 
 Set `"jsx": "react-jsx"` and `"jsxImportSource": "zhin.js"` in tsconfig.json. Use `.tsx` entries such as `commands/**/index.tsx`, `middlewares/<name>/index.tsx` and `components/<name>/index.tsx`. The development loader transpiles JSX; production runs compiled output.
 
+Server-side TSX support only transpiles JSX; it is not a stylesheet build pipeline. **Direct `import './card.css'`, CSS Modules and CSS `?raw` imports are unsupported.** Sass/SCSS, Less, Stylus, PostCSS and other style preprocessing or generation are outside its scope. Use inline `style` objects or declaration strings on JSX elements, and `ThemeProvider` / `custom.style` for visual components. Browser Console pages use a separate build pipeline and are outside this server-side TSX contract.
+
 ```tsx
 import { defineCommand } from 'zhin.js/command';
 import { Card, CardHeader, Badge } from '@zhin.js/components';

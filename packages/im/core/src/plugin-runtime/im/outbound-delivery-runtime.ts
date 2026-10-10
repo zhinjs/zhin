@@ -20,6 +20,7 @@ import {
   resolveOutboundSupportedSegments,
 } from './outbound-segments.js';
 import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
+import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
@@ -110,7 +111,7 @@ export class OutboundDeliveryRuntime {
             return;
           }
 
-          if (payload === '' || (Array.isArray(payload) && payload.length === 0)) {
+          if (isEmptyOutboundPayload(payload)) {
             receipt = suppressedDeliveryReceipt();
             return;
           }
@@ -162,9 +163,14 @@ export class OutboundDeliveryRuntime {
   }
 }
 
+function isEmptyOutboundPayload(payload: unknown): boolean {
+  if (payload === '') return true;
+  return Array.isArray(payload) && payload.every(item => item?.type === 'text' && item.data?.text === '');
+}
+
 function needsAuthoringRender(value: unknown): boolean {
-  return isJsxElement(value) || isComponentCall(value) || isRawContent(value)
-    || (Array.isArray(value) && value.some(needsAuthoringRender));
+  const isAuthoring = (item: unknown) => isJsxElement(item) || isComponentCall(item) || isRawContent(item);
+  return Array.isArray(value) ? flattenOutboundArray(value).some(isAuthoring) : isAuthoring(value);
 }
 
 export function failedDeliveryReceipt(code: string, retryable = false): DeliveryReceipt {
@@ -186,7 +192,7 @@ async function prepareOutboundPayload(
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
   const markdownResolved = applyOutboundMarkdownPolicy(
-    Array.isArray(rendered) ? rendered.flat(Infinity) : rendered,
+    Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered,
     resolveOutboundMarkdownPolicy(adapter, snapshot),
   );
   let payload = await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
@@ -201,7 +207,12 @@ async function prepareOutboundPayload(
       rememberInteractiveFallback,
     );
   }
-  if (Array.isArray(payload)) assertCanonicalSegments(payload);
+  if (Array.isArray(payload)) {
+    // Empty text carries no wire content, including HTML's empty fallback.
+    // Remove it before canonical validation (required strings reject '').
+    payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));
+    assertCanonicalSegments(payload);
+  }
   const supported = resolveOutboundSupportedSegments(adapter, snapshot);
   const supportedPayload = rememberInteractiveFallback ? payload : applyOutboundInteractivePolicy(payload, resolveOutboundInteractivePolicy(adapter, snapshot));
   if (supported && Array.isArray(supportedPayload)) {

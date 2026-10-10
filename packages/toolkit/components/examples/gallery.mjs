@@ -1,7 +1,8 @@
 // Run after building @zhin.js/jsx and @zhin.js/components:
 // node packages/toolkit/components/examples/gallery.mjs [output.html]
 import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
+import { tmpdir } from 'node:os';
 import process from 'node:process';
 import { jsx, rawHtml, renderToHtml } from '@zhin.js/jsx';
 import {
@@ -13,7 +14,7 @@ import {
 } from '../lib/index.js';
 
 const output = resolve(process.argv.slice(2).find(argument => argument !== '--')
-  ?? '/private/tmp/zhin-jsx-visual/gallery.html');
+  ?? join(tmpdir(), 'zhin-jsx-visual', 'gallery.html'));
 const node = (component, props = {}, children) => jsx(component, {
   ...props, ...(children === undefined ? {} : { children }),
 });

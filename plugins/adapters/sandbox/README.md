@@ -44,6 +44,8 @@ Root 在 `zhin runtime start` 时装载 `@zhin.js/host-http`、`ConsoleRuntime` 
 
 出站 wire 只做 JSON 封装；旧 `segment-mapper`（canonical segments）归一化上移到 gateway/core 渲染链。
 
+Sandbox 声明 `html: direct`，聊天页在隔离 iframe 中展示 canonical `html`，因此 JSX 卡片无需截图引擎即可预览。允许内联样式和 data/blob 图片；组件脚本、事件属性、外部资源、表单提交和父页面访问均被限制。高度按内容调整，超过 1200px 可在框内滚动。
+
 ## 配置
 
 **推荐（与 [minimal-bot](../../../examples/minimal-bot/) 一致）**：`plugins.sandbox.endpoints: []`，运行时提供默认 `sandbox-bot` endpoint，无需额外账号配置。

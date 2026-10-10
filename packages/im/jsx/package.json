@@ -10,7 +10,7 @@
     "./jsx-runtime": { "types": "./lib/jsx-runtime.d.ts", "development": "./src/jsx-runtime.ts", "import": "./lib/jsx-runtime.js" },
     "./jsx-dev-runtime": { "types": "./lib/jsx-dev-runtime.d.ts", "development": "./src/jsx-dev-runtime.ts", "import": "./lib/jsx-dev-runtime.js" }
   },
-  "files": ["lib", "README.md"],
+  "files": ["lib", "src", "README.md"],
   "scripts": {
     "build": "tsc",
     "clean": "rimraf lib",

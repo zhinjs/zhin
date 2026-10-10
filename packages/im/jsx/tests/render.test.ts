@@ -91,6 +91,38 @@ describe('lazy JSX HTML contract', () => {
     expect(await renderToHtml(createElement('div', { children: 'old' }, 'new', 0))).toBe('<div>new0</div>');
   });
 
+  it('preserves classic factory child shape for scalar and compound component props', async () => {
+    const child = jsx('b', { children: 'node' });
+    const results: unknown[] = [];
+    const Probe = (props: { children?: JSXNode }) => {
+      results.push(props.children);
+      return props.children;
+    };
+    const promise = Promise.resolve('async');
+    for (const value of ['text', 0, false, null, child, promise]) {
+      const node = createElement(Probe, { children: 'old' }, value);
+      expect(node.props.children).toBe(value);
+      await renderToHtml(node);
+      expect(results.at(-1)).toBe(value);
+    }
+    const multiple = createElement(Probe, null, 'a', 0, child);
+    expect(multiple.props.children).toEqual(['a', 0, child]);
+    expect(await renderToHtml(multiple)).toBe('a0<b>node</b>');
+    const none = createElement(Probe, { children: 'existing' });
+    expect(none.props.children).toBe('existing');
+  });
+
+  it('rejects script intrinsic elements in HTML and SVG without evaluating their children', async () => {
+    const child = vi.fn(() => 'alert(1)');
+    for (const tag of ['script', 'SCRIPT', 'ScRiPt', 'svg:script']) {
+      await expect(renderToHtml(jsx(tag, { children: jsx(child, {}) }))).rejects.toThrow('script elements');
+      await expect(renderToHtml(jsx('svg', { children: jsx(tag, { children: 'alert(1)' }) }))).rejects.toThrow('script elements');
+      await expect(renderToHtml(jsx(tag, { dangerouslySetInnerHTML: { __html: 'alert(1)' } }))).rejects.toThrow('script elements');
+    }
+    expect(child).not.toHaveBeenCalled();
+    expect(await renderToHtml(rawHtml('<script>trusted()</script>'))).toBe('<script>trusted()</script>');
+  });
+
   it('allows the same node in separate branches without treating it as a cycle', async () => {
     const child = jsx('b', { children: 'x' });
     expect(await renderToHtml([child, child])).toBe('<b>x</b><b>x</b>');

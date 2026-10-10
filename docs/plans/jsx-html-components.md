@@ -70,12 +70,13 @@ Feature 的 TResult 保持传输中立，IM 组装层负责校验是否可发送
 2. 普通字符串继续表示文本；`'<b>x</b>'` 不自动解释成 HTML。纯函数组件不需要 defineComponent 注册。
 3. 嵌套 JSX、函数返回的 JSX、异步子树和数组递归求值；`null/undefined/boolean` 为空，数字保留，包括 `0`；Fragment 不增加 DOM 包装。
 4. 文本和属性默认转义。className、style 对象、HTML/SVG 属性与 void 元素形成明确类型和序列化规则；不声称支持浏览器事件处理器或 React hooks。Raw HTML 只允许显式入口。
-5. JSX 子树输出一个 HTML 段；外部 SendContent 的数组则扁平化并保留 text、HTML、mention、image、keyboard 的顺序。JSX 中不隐式塞入平台 Segment；混合消息写在 SendContent 数组中。
-6. 统一根入口、runtime 与 `$reply` 的 SendContent，消除旧 MessageComponent 类型与实际 runtime 类型双轨。各入口无需 `as SendContent` 即可使用 JSX。
-7. `renderToHtml` 只序列化，不发送、不截图。直接返回 JSX 采用已有渲染默认值；需自定义宽度、文件名、明确文本 fallback 时仍使用 `segment.html({html: await renderToHtml(node), ...})`。第一版不引入特殊标签偷偷改变发布或平台策略。
-8. renderer 使用当前 operation snapshot；函数组件不读取模块级最新 generation。注册组件的资源上下文只由 ComponentIndex 提供，普通纯函数 JSX 不伪造 CapabilityContext。
-9. JSX 求值失败进入明确的投递失败与内部诊断，不将异常堆栈或错误文本伪装成正常聊天内容。空 Fragment 与 void 在结果类型上区分，最终空内容不调用 Endpoint。
-10. `${...}` 旧文本模板解析不再对生成的 HTML 或 JSX 文本二次执行。
+5. 服务端 TSX 只转译 JSX，不支持直接导入 `.css`、CSS Modules、`?raw` 或样式预处理；使用内联 style、主题与 custom.style。
+6. JSX 子树输出一个 HTML 段；外部 SendContent 的数组则扁平化并保留 text、HTML、mention、image、keyboard 的顺序。JSX 中不隐式塞入平台 Segment；混合消息写在 SendContent 数组中。
+7. 统一根入口、runtime 与 `$reply` 的 SendContent，消除旧 MessageComponent 类型与实际 runtime 类型双轨。各入口无需 `as SendContent` 即可使用 JSX。
+8. `renderToHtml` 只序列化，不发送、不截图。直接返回 JSX 采用已有渲染默认值；需自定义宽度、文件名、明确文本 fallback 时仍使用 `segment.html({html: await renderToHtml(node), ...})`。第一版不引入特殊标签偷偷改变发布或平台策略。
+9. renderer 使用当前 operation snapshot；函数组件不读取模块级最新 generation。注册组件的资源上下文只由 ComponentIndex 提供，普通纯函数 JSX 不伪造 CapabilityContext。
+10. JSX 求值失败进入明确的投递失败与内部诊断，不将异常堆栈或错误文本伪装成正常聊天内容。空 Fragment 与 void 在结果类型上区分，最终空内容不调用 Endpoint。
+11. `${...}` 旧文本模板解析不再对生成的 HTML 或 JSX 文本二次执行。
 
 默认保留 `jsxImportSource: "zhin.js"`，编译器解析现有技术子路径；作者显式导入 JSX 能力使用 `zhin.js/jsx`。若确定要把 `jsxImportSource` 也设为 `zhin.js/jsx`，须增加 `./jsx/jsx-runtime` 与 `./jsx/jsx-dev-runtime` 导出；这属于同一实现的编译入口，不能误写成一套新 runtime。
 
@@ -116,10 +117,10 @@ CommandDispatcher 停止立即自动回复，只返回匹配事实与待回复�
 
 ## 平台策略与降级
 
-| Adapter 声明 | HTML 段处理 | 验收对象 |
+| Adapter 声明 / 生效策略 | HTML 段处理 | 验收对象 |
 | --- | --- | --- |
 | `html: direct` | 保留 HTML，平台 codec 消费；其他段继续归一化与支持类型校验 | Sandbox、Email |
-| `html: image` | 可用 renderer 生成 PNG，进入 canonical image / MediaRef 与平台媒体投递 | ICQQ、OneBot、Telegram、Slack |
+| `html: image`（显式或省略后的默认策略） | 可用 renderer 生成 PNG，进入 canonical image / MediaRef 与平台媒体投递 | ICQQ、OneBot、Telegram、Slack 当前未显式声明，使用默认策略 |
 | `html: text` | 明确 fallback 优先，否则提取 HTML 文本；不调用 renderer | 纯文本端点 |
 | 未声明 | 继续保守 image-or-text 默认策略 | 自定义适配器 |
 | 只接受 URL、没有二进制投递方式 | 跳过无意义的截图，转文本 | GitHub、LINE、对应钉钉模式 |
@@ -187,3 +188,24 @@ P4 的第一批稳定组件：CardCanvas/Card、Row/Col、Section/Divider、Badg
 - 文档整站构建复现 4 个死链：源文件存在，但位于 VitePress 站点根目录之外。改为仓库链接；`pnpm docs:build` 完整通过，且已加入 PR 的 Node 24 CI，保留严格死链检查。
 - 两个 CodeQL 告警位于 Markdown 测试的正则文本提取工具，未涉及生产 HTML 输出。改用真实 HTML/XML 解析器提取正文，补充实体、嵌套标签、引号与注释回归；解析器仅增加为测试依赖，不进入组件包生产依赖。
 - Node 24 全量覆盖率复验：1008 个文件、7647 项通过，12 项保持跳过；lines 72.79%、branches 61.99%，保留原门槛。其后补强第二轮完全 drain、第三轮 body 未释放时的去重断言，并通过 Email 与完整组件包的 88 项复验。
+
+
+## PR 审查修复（2026-10-10）
+
+本轮核对 [PR #695](https://github.com/zhinjs/zhin/pull/695) 的 39 条未解决建议，修复 37 条指出的问题；其中 Satori 的 style/title 建议只采纳 HTML style 保真部分。此前两条 CodeQL 建议已解决。
+
+- JSX 禁止普通 script 标签，只有显式受信任 raw HTML 入口保留原文；classic factory 的单个 children 保持标量。JSX 与组件包发布 src，保证 development 条件指向实际文件。
+- 默认 RootHost 装配作用域内的 TSX loader。Sandbox 聊天页补 HTML 隔离展示，保留 direct 策略；真实 Chrome 验证显示、自动高度、CSP、来源校验和父页面隔离。
+- 修复组件 CSS 注释解析、负数图表、短十六进制颜色、删除线、控件可访问状态、列表编号与内层主题、空表格预算，以及可等待的 Promise 插槽。行类型开放已有 bold 能力，预览默认路径使用系统临时目录。
+- 核心校验 keyboard/action 的数据形状，消息段辅助函数限制到已渲染内容，空 HTML/文本统一抑制发送。数组使用独立结构预算和循环检测，不消耗组件递归预算；原始输入、replace、raw 和组件返回路径都有回归。
+- 修正脚手架、中英文 README、消息流图、插件指引和依赖说明；文档构建移到只读 harness 后。Email 与 Sandbox 源 README 的变更同步到适配器文档。
+
+两条建议不自动采纳：major 升级指出的破坏性 API 变更确实存在，但用户已确认直接移除旧入口，仓库当前发布策略只允许 patch，本 PR 不改变版本治理规则。超深 HTML 静默截断会丢失内容，因此保留明确 RangeError；发送链已验证渲染失败只在投递前降级一次。title 与 SVG style 保持转义，防止解析器解码的实体被重新解释为标签。
+
+本轮修复的本地复验：1013 个测试文件、7695 项测试通过，12 项保持跳过；lines 72.83%、branches 62.07%。91 个包构建、56 项非单测 harness、文档整站构建及两个新包的独立安装/导出验证通过。默认 RootHost 的无全局 TSX loader 子进程测试、Sandbox HTML 的真实 Chrome 隔离测试通过；这些是本地证据，尚未代表新提交的 CI 或实机平台验收。
+
+## Tailwind 与图片渲染收敛（实施中）
+
+用户确认首版 Tailwind 采用静态工具类，明确渲染边界。作者接口为可选 `@zhin.js/tailwind` 的 `createTailwindStyle()`：初始化后返回同步 `tw(classes)`，结果直接用于原生 JSX `style`、组件 `custom.style` 或主题样式。不新增 JSX runtime、样式树包装器、全局 CSS loader 或 IM 核心依赖。工具类由官方 Tailwind 编译，按生成 CSS 的优先级合并；未知或无法转为单元素内联样式的类明确报错。CSS import、CSS Modules 和预处理器仍不属于服务端 TSX 支持范围。
+
+用户另提出统一到更名后的 `@pixel.js/shotium`，当前正在核验新版本 API、真实截图和 Satori 消费者。图片后端、字体与源码工具的删除必须以实际调用链为依据，Satori IM 协议适配器不属于此变更。

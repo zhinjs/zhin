@@ -16,16 +16,19 @@ import {
 import type { ListProps, ListItemProps } from "./list-props.js";
 
 // A per-tree default survives ThemeProvider's lazy wrappers without DOM attributes.
-const inheritedMarker = Symbol("zhin.components.list-marker");
+const inheritedOrdinal = Symbol("zhin.components.list-ordinal");
 
 export function List(props: ListProps): JSXElement {
   const theme = themeOf(props);
   const { ordered = false, start = 1, items, children } = displayProps(props);
-  if (ordered && !Number.isInteger(start))
-    throw new RangeError("List start must be a finite integer");
+  if (ordered && !Number.isSafeInteger(start))
+    throw new RangeError("List start must be a safe finite integer");
   let position = start;
-  const marker = (): JSXRenderable =>
-    ordered ? [position++, theme.text.rankSeparator] : theme.text.listMarker;
+  const ordinal = (): number => {
+    if (!Number.isSafeInteger(position))
+      throw new RangeError("List numbering exceeds the safe integer range");
+    return position++;
+  };
   const path = new WeakSet<object>();
   const composed = (node: JSXRenderable, depth = 0): JSXRenderable => {
     if (depth > 100)
@@ -45,7 +48,7 @@ export function List(props: ListProps): JSXElement {
       const type = sourceElementType(node);
       if (type === ListItem)
         return ordered
-          ? cloneSourceElement(node, { [inheritedMarker]: marker() })
+          ? cloneSourceElement(node, { [inheritedOrdinal]: ordinal() })
           : node;
       if (type === Fragment || type === ThemeProvider)
         return cloneSourceElement(node, {
@@ -57,7 +60,7 @@ export function List(props: ListProps): JSXElement {
   const content = [
     items?.map((value) =>
       jsx(ListItem, {
-        ...(ordered ? { marker: marker() } : {}),
+        ...(ordered ? { [inheritedOrdinal]: ordinal() } : {}),
         children: value,
       })
     ),
@@ -79,11 +82,10 @@ export function List(props: ListProps): JSXElement {
 export function ListItem(props: ListItemProps): JSXElement {
   const theme = themeOf(props);
   const values = displayProps(props);
-  const marker =
-    values.marker !== undefined
-      ? values.marker
-      : (props as { [inheritedMarker]?: JSXRenderable })[inheritedMarker] ??
-        theme.text.listMarker;
+  const ordinal = (props as { [inheritedOrdinal]?: number })[inheritedOrdinal];
+  const marker = values.marker !== undefined ? values.marker
+    : ordinal !== undefined ? [ordinal, theme.text.rankSeparator]
+    : theme.text.listMarker;
   const hasMarker = marker != null && typeof marker !== "boolean";
   const item = themedDiv(
     theme,

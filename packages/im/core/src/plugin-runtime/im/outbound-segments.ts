@@ -4,6 +4,7 @@ import type {
   RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { htmlToFallbackText } from '../../built/html-to-text.js';
+import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { toCanonicalSegments } from '../../built/generic-segment-mapper.js';
 import {
   effectiveKeyboardFallbackMap,
@@ -231,7 +232,7 @@ export async function normalizeOutboundPayload(
   const mediaPolicy = options?.mediaPolicy ?? DEFAULT_MEDIA_POLICY;
   if (Array.isArray(payload)) {
     const resolved = await Promise.all(
-      payload.flat(Infinity).map((item) => normalizeOneSegment(item, renderer, mediaPolicy, options)),
+      flattenOutboundArray(payload).map((item) => normalizeOneSegment(item, renderer, mediaPolicy, options)),
     );
     return applyOutboundMediaPolicy(resolved, mediaPolicy);
   }
@@ -258,6 +259,9 @@ async function normalizeOneSegment(
   options?: NormalizeOutboundOptions,
 ): Promise<Segment> {
   if (isOutboundSegment(item) && item.type === 'html') {
+    if (item.data?.html === '') {
+      return { type: 'text', data: { text: htmlSegmentFallbackText(item.data, '') } };
+    }
     if (options?.htmlPolicy === 'direct') return toCanonicalSegments([item])[0]!;
     return renderHtmlSegment(item, renderer, mediaPolicy, options);
   }

@@ -1,4 +1,4 @@
-import type { MessageElement, SendContent } from '../types.js';
+import type { MessageElement } from '../types.js';
 import { isSegmentContent } from '../plugin-runtime/im/contracts.js';
 
 const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
@@ -42,7 +42,10 @@ export function resolveLocalMediaPath(data: Record<string, unknown>): string | u
   return undefined;
 }
 
-export function asMessageElements(content: SendContent): MessageElement[] {
+/** Already rendered content; JSX, component calls and raw wrappers need OutboundRenderer first. */
+export type RenderedMessageContent = string | MessageElement | readonly RenderedMessageContent[];
+
+export function asMessageElements(content: RenderedMessageContent): MessageElement[] {
   if (typeof content === 'string') {
     return [{ type: 'text', data: { text: content } }];
   }
@@ -55,7 +58,7 @@ export function isMediaSegmentType(type: string): boolean {
   return MEDIA_SEGMENT_TYPES.has(type);
 }
 
-export function collectOutboundMediaKinds(content: SendContent | undefined): string[] {
+export function collectOutboundMediaKinds(content: RenderedMessageContent | undefined): string[] {
   if (content == null) return [];
   const kinds = new Set<string>();
   for (const item of asMessageElements(content)) {

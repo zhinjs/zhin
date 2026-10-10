@@ -14,6 +14,7 @@
   },
   "files": [
     "lib",
+    "src",
     "README.md",
     "examples"
   ],

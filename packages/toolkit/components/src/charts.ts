@@ -190,16 +190,20 @@ export function Sparkline(props: SparklineProps): JSXElement {
       theme,
       "Sparkline"
     );
-  const max = Math.max(...values, 1),
+  if (!values.every(Number.isFinite))
+    throw new RangeError("Sparkline values must be finite");
+  const min = Math.min(...values),
+    max = Math.max(...values),
     pad = 2,
     innerW = width - 4,
     innerH = height - 4;
+  const y = (value: number): number => min === max
+    ? pad + innerH / 2
+    : pad + innerH - ((value - min) / (max - min)) * innerH;
   const pts = values
     .map(
       (v, i) =>
-        `${pad + (i / (values.length - 1)) * innerW},${
-          pad + innerH - (v / max) * innerH
-        }`
+        `${pad + (i / (values.length - 1)) * innerW},${y(v)}`
     )
     .join(" ");
   return customizeRoot(
@@ -219,7 +223,7 @@ export function Sparkline(props: SparklineProps): JSXElement {
           }),
           jsx("circle", {
             cx: pad + innerW,
-            cy: pad + innerH - ((values.at(-1) ?? 0) / max) * innerH,
+            cy: y(values.at(-1)!),
             r: 3,
             fill: accent,
           }),

@@ -20,7 +20,7 @@ function tokenStyle(token: ThemedToken, inheritedColor: boolean, wrap: boolean):
     backgroundColor: token.bgColor,
     ...(font & 1 ? { fontStyle: 'italic' } : {}),
     ...(font & 2 ? { fontWeight: 700 } : {}),
-    ...(font & 4 ? { textDecoration: 'underline' } : {}),
+    ...((font & 12) ? { textDecoration: [font & 4 ? 'underline' : '', font & 8 ? 'line-through' : ''].filter(Boolean).join(' ') } : {}),
   };
 }
 

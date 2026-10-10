@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import { componentHostToken, type ComponentHost } from '@zhin.js/plugin-runtime';
+import { componentHostToken, createCapabilitySlot, createSnapshotView, rootPluginId, type ComponentHost, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { ComponentIndex, componentFeatureId, defineComponent } from '@zhin.js/component';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { compiler } from '@zhin.js/kernel';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
-import type { IncomingContext } from '../../src/plugin-runtime/im/contracts.js';
+import { component, type IncomingContext, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
 
 const rootId = 'plugin:root';
 
@@ -81,6 +81,49 @@ describe('OutboundRenderer template compilation', () => {
       { type: 'text', data: { text: '2' } },
       { type: 'image', data: { url: 'a.png' } },
     ]);
+  });
+
+  it('does not spend component recursion depth on nested plain arrays', async () => {
+    let content: SendContent = 'value=${1+1}';
+    for (let index = 0; index < 80; index++) content = [content];
+    expect(await renderer.render(content, requester, snapshotWithHost(), conversation, incoming)).toEqual(['value=2']);
+  });
+
+  it('rejects direct and indirect array cycles without rejecting shared sibling arrays', async () => {
+    const direct: SendContent[] = []; direct.push(direct);
+    await expect(renderer.render(direct, requester, snapshotWithoutHost())).rejects.toThrow('Cyclic SendContent array');
+    const first: SendContent[] = [], second: SendContent[] = [first]; first.push(second);
+    await expect(renderer.render(first, requester, snapshotWithoutHost())).rejects.toThrow('Cyclic SendContent array');
+    const shared = ['shared'];
+    expect(await renderer.render([shared, [shared]], requester, snapshotWithoutHost())).toEqual(['shared', 'shared']);
+  });
+
+  it('limits pathological array nesting independently of component depth', async () => {
+    let content: SendContent = 'leaf';
+    for (let index = 0; index < 512; index++) content = [content];
+    expect(await renderer.render(content, requester, snapshotWithoutHost())).toEqual(['leaf']);
+    await expect(renderer.render([content], requester, snapshotWithoutHost())).rejects.toThrow('SendContent array depth exceeded 512');
+  });
+
+  it('counts component expansions even when every result is wrapped in nested arrays', async () => {
+    const owner = rootPluginId();
+    const componentCycle: SendContent[] = [];
+    const definition = defineComponent<{ remaining: number }, SendContent>({
+      render: ({ remaining }) => remaining < 0 ? componentCycle : remaining === 0 ? [['done']] : [[component('recursive', { remaining: remaining - 1 })]],
+    });
+    const slot = createCapabilitySlot({
+      owner, feature: componentFeatureId, localName: 'recursive', source: '/components/recursive/index.ts', definition,
+    });
+    const view = createSnapshotView(0, {
+      root: owner,
+      tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: '@test/components', packageRoot: '/project', children: [] }]]),
+      config: new Map([[owner, {}]]), resources: new Map([[owner, new Map()]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+    });
+    const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex([slot], view)]]) });
+    expect(await renderer.render(component('recursive', { remaining: 31 }), owner, snapshot)).toEqual(['done']);
+    await expect(renderer.render(component('recursive', { remaining: 32 }), owner, snapshot)).rejects.toThrow('Component render depth exceeded 32');
+    componentCycle.push(component('recursive', { remaining: -1 }));
+    await expect(renderer.render(componentCycle, owner, snapshot)).rejects.toThrow('Cyclic SendContent array');
   });
 
   it('blocks dangerous globalThis access via sandbox', async () => {

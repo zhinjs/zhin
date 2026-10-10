@@ -2,6 +2,7 @@ import { componentHostToken, type ComponentHost, type TemplateContext, type Plug
 import type { ConversationRef } from '@zhin.js/im-contract';
 import { isJsxElement, renderToHtml, type JSXElement } from '@zhin.js/jsx';
 import { segment } from '../../utils.js';
+import { flattenOutboundArray, MAX_OUTBOUND_ARRAY_DEPTH } from '../../built/outbound-content-arrays.js';
 import {
   ComponentIndex,
   componentFeatureId,
@@ -36,7 +37,7 @@ export class OutboundRenderer {
     const host = resolveComponentHost(snapshot);
     const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
     const rendered = await this.#render(content, requester, snapshot, host, ctx, 0,
-      options.jsxCache ?? new WeakMap(), options.signal);
+      options.jsxCache ?? new WeakMap(), options.signal, new Set());
     options.signal?.throwIfAborted();
     return rendered;
   }
@@ -50,14 +51,19 @@ export class OutboundRenderer {
     depth: number,
     jsxCache: WeakMap<JSXElement, Promise<string>>,
     signal: AbortSignal | undefined,
+    arrayAncestors: ReadonlySet<readonly SendContent[]>,
   ): Promise<unknown> {
     signal?.throwIfAborted();
     if (depth > maxComponentDepth) throw new Error('Component render depth exceeded 32');
     if (typeof content === 'string') return compileText(content, host, ctx);
     if (Array.isArray(content)) {
-      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth + 1, jsxCache, signal)));
+      if (arrayAncestors.has(content)) throw new TypeError('Cyclic SendContent array');
+      if (arrayAncestors.size >= MAX_OUTBOUND_ARRAY_DEPTH) throw new RangeError('SendContent array depth exceeded 512');
+      // Each parallel branch gets its own ancestry; repeated sibling arrays are valid.
+      const ancestors = new Set(arrayAncestors).add(content);
+      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth, jsxCache, signal, ancestors)));
       signal?.throwIfAborted();
-      return items.flat(Infinity);
+      return flattenOutboundArray(items);
     }
     if (isJsxElement(content)) {
       let html = jsxCache.get(content);
@@ -86,7 +92,7 @@ export class OutboundRenderer {
         content.props,
         { snapshot, ...(signal ? { signal } : {}) },
       );
-      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal);
+      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal, arrayAncestors);
     }
     throw new TypeError('Unsupported SendContent');
   }

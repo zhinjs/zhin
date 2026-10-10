@@ -81,7 +81,7 @@ export function jsxDEV(
 
 /** Classic JSX factory and direct element construction. */
 export function createElement(type: JSXElementType, props: JSXProps | null, ...children: JSXRenderable[]): JSXElement {
-  return jsx(type, children.length ? { ...props, children } : props);
+  return jsx(type, children.length ? { ...props, children: children.length === 1 ? children[0] : children } : props);
 }
 
 export function isJsxElement(value: unknown): value is JSXElement {

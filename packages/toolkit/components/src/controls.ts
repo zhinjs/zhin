@@ -25,13 +25,15 @@ function controlRoot(
   indicator: JSXElement
 ): JSXElement {
   const label = labelOf(props);
-  const children: JSXRenderable[] = [indicator];
+  const children: JSXRenderable[] = [jsx(indicator.type, {
+    ...indicator.props, "aria-hidden": true,
+  })];
   if (label != null && typeof label !== "boolean") {
     children.push(
       themedDiv(theme, "display:flex;align-items:center;min-width:0", label)
     );
   }
-  return customizeRoot(
+  const root = customizeRoot(
     themedDiv(
       theme,
       `display:flex;align-items:center;gap:${theme.spacing.sm}px;margin:${
@@ -47,6 +49,13 @@ function controlRoot(
     theme,
     name
   );
+  return jsx(root.type, {
+    ...root.props,
+    role: name.toLowerCase(),
+    "aria-checked": Boolean((props as CheckboxProps).checked),
+    ...(name === "Radio" ? {} : { "aria-readonly": true }),
+    "aria-disabled": Boolean(props.disabled),
+  });
 }
 
 function icon(theme: ComponentTheme, children: JSXRenderable): JSXElement {

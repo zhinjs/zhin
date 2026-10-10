@@ -84,7 +84,7 @@ pnpm dev
 
 **要求**：脚手架生成的 TypeScript 项目需要 Node.js **≥22.12.0**、pnpm 9+。编译后的 IM 库支持 Node.js `^20.19.0` 或 `>=22.12.0`。
 
-**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 Satori 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
+**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 JSX 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
 
 ## 从一条消息到长期任务
 
@@ -218,6 +218,8 @@ ai:
 
 分层与依赖方向：[架构概览](./docs/concepts/architecture.md) · [仓库结构](./docs/contributing/repo-structure.md)
 
+JSX 创作使用 `zhin.js/jsx`，配置 `jsxImportSource: "zhin.js"`。命令、入站中间件和注册组件可直接返回 JSX，按适配器能力输出 HTML、图片或文本。可选 `@zhin.js/components` 提供主题化样式组件，展示位使用可组合的 `JSXRenderable`。服务端 TSX 仅转译 JSX，不支持直接导入 `.css` 或样式预处理；使用内联 `style`、主题和 `custom.style`。 参见[中间件与组件](https://zhin.js.org/authoring/middleware-components)。
+
 ## Documentation
 
 | | |
@@ -264,5 +266,3 @@ cd examples/minimal-bot && pnpm dev
 ## License
 
 [MIT](./LICENSE)
-
-JSX 创作使用 `zhin.js/jsx`，配置 `jsxImportSource: "zhin.js"`。命令、入站中间件和注册组件可直接返回 JSX，按适配器能力输出 HTML、图片或文本。可选 `@zhin.js/components` 提供主题化样式组件，展示位使用可组合的 `JSXNode`。参见[中间件与组件](https://zhin.js.org/authoring/middleware-components)。
