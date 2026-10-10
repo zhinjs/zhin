@@ -1,0 +1,35 @@
+tests/docs/rendering-workflow-environment.test.ts
+  s_a5dc81d701255f::t_41867c824d65cb 13-14
+  s_a5dc81d701255f::t_91dab6526e8348 1-12,15-27
+scripts/harness-error-output.test.ts
+  s_a5dc81d701255f::t_91dab6526e8348 1-19
+.github/actions/setup-rendering-fonts/action.yml
+  s_a5dc81d701255f::t_91dab6526e8348 1-9
+.github/workflows/ci.yml
+  s_a5dc81d701255f::t_91dab6526e8348 182-183
+  s_a5dc81d701255f::t_4242494a9201cd 184
+.github/CODEOWNERS
+  s_a5dc81d701255f::t_91dab6526e8348 9
+scripts/check-all-harness.mjs
+  s_a5dc81d701255f::t_91dab6526e8348 14,429
+.github/workflows/publish.yml
+  s_a5dc81d701255f::t_91dab6526e8348 48-50
+scripts/harness-error-output.mjs
+  s_a5dc81d701255f::t_91dab6526e8348 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "035a70e47d69b3b13c4679a9a6be2a3587814a62",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
