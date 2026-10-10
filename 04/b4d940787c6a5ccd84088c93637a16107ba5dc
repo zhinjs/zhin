@@ -1,0 +1,21 @@
+scripts/harness-error-output.test.ts
+  s_a5dc81d701255f::t_2c470cc71277ad 19-27
+scripts/harness-error-output.mjs
+  s_a5dc81d701255f::t_2c470cc71277ad 4-10,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "04b4d940787c6a5ccd84088c93637a16107ba5dc",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
