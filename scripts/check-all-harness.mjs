@@ -11,6 +11,7 @@ import { exec } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { printHarnessError } from './harness-error-output.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -425,7 +426,7 @@ async function main() {
     for (const result of results) {
       if (result.status === 'FAILED') {
         console.error(`\n${result.name}:`);
-        console.error(result.error);
+        printHarnessError(result.error);
       }
     }
     process.exit(1);
