@@ -8,6 +8,7 @@ import {
   type ToolInputJsonObjectSchema,
   type ToolInputJsonSchema,
 } from '@zhin.js/tool';
+import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface KnowledgeMatch {
   readonly source: string;
@@ -112,7 +113,10 @@ export interface NativeKnowledgeToolFeature {
   readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, string>>;
 }
 
-export function createNativeKnowledgeToolFeature(index: KnowledgeIndex): NativeKnowledgeToolFeature {
+export function createNativeKnowledgeToolFeature(
+  index: KnowledgeIndex,
+  resolveDecision?: NativeSearchDecisionResolver,
+): NativeKnowledgeToolFeature {
   return Object.freeze({
     feature: toolFeatureId,
     name: 'knowledge_search',
@@ -125,7 +129,7 @@ export function createNativeKnowledgeToolFeature(index: KnowledgeIndex): NativeK
       requiresApproval: 'never',
       tags: Object.freeze(['knowledge', 'file']),
       keywords: Object.freeze(['knowledge', 'search', '知识', '检索', '文档', 'FAQ']),
-      execute: (input, context) => searchKnowledge(index, input, context),
+      execute: (input, context) => searchKnowledge(index, input, context, resolveDecision),
     }),
   });
 }
@@ -134,12 +138,14 @@ async function searchKnowledge(
   index: KnowledgeIndex,
   input: Record<string, unknown>,
   context: ToolExecutionContext,
+  resolveDecision?: NativeSearchDecisionResolver,
 ): Promise<string> {
   const query = requiredString(input.query, 'query');
-  return formatKnowledgeResult(
-    query,
-    await index.search(query, boundedLimit(input.limit), context.signal),
-  );
+  const limit = boundedLimit(input.limit);
+  const decision = resolveSearchDecision(resolveDecision, context);
+  const result = await index.search(query, decision ? 20 : limit, context.signal);
+  const matches = await rerankDecisionMatches(decision, query, result.matches, match => match.text, limit, context.signal);
+  return formatKnowledgeResult(query, frozenResult(result.status, result.indexedChunks, matches));
 }
 
 async function collectKnowledgeFiles(

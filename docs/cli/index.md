@@ -123,6 +123,7 @@ zhin setup                 # 完整向导
 zhin setup --database      # 仅配置数据库
 zhin setup --adapters      # 仅配置适配器（写 endpoints）
 zhin setup --ai            # 仅配置 AI
+zhin setup --decisions     # 可选 TypeSafe Jev 决策服务（需要已有 AI 配置）
 zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 ```

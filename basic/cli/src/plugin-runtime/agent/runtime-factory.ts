@@ -16,6 +16,7 @@ import {
   ZhinAgent,
   composeZhinAgentRuntime,
   createNativeAgentToolSuite,
+  getAgentTurnDecisionRuntime,
   type KnowledgeIndex,
   type AgentTraceRecorder,
 } from '@zhin.js/agent/runtime';
@@ -113,6 +114,7 @@ function buildRuntimeSubagentAgentTools(
     resolveProvider: (alias) => service.getProvider(alias),
     resolveImageDefaults: (alias) => service.getImageGenerationDefaults(alias),
     knowledgeIndex,
+    resolveDecision: getAgentTurnDecisionRuntime,
   });
   return nativeTools.map((native): AgentTool => ({
     name: native.name,

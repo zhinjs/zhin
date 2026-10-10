@@ -5,6 +5,7 @@ import { createNativeFileToolFeatures } from './native-file-tools.js';
 import { createNativeImageToolFeature } from './native-image-tool.js';
 import { createNativeKnowledgeToolFeature, type KnowledgeIndex } from './native-knowledge-tool.js';
 import { createNativeWebToolFeatures } from './native-web-tools.js';
+import type { NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface NativeAgentToolFeature {
   readonly name: string;
@@ -15,6 +16,7 @@ export interface NativeAgentToolSuiteOptions {
   readonly resolveProvider: (alias: string) => AIProvider;
   readonly resolveImageDefaults?: (alias: string) => ImageGenerationDefaults;
   readonly knowledgeIndex?: KnowledgeIndex;
+  readonly resolveDecision?: NativeSearchDecisionResolver;
 }
 
 /** One canonical native Tool suite projected into both main and subagent runtimes. */
@@ -27,7 +29,7 @@ export function createNativeAgentToolSuite(
     ...createNativeWebToolFeatures(),
     createNativeImageToolFeature(options.resolveProvider, options.resolveImageDefaults),
     ...(options.knowledgeIndex
-      ? [createNativeKnowledgeToolFeature(options.knowledgeIndex)]
+      ? [createNativeKnowledgeToolFeature(options.knowledgeIndex, options.resolveDecision)]
       : []),
   ]);
 }

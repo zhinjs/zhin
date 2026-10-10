@@ -31,8 +31,9 @@ export async function executeAgentTurn(
 ): Promise<TurnOutcome> {
   const gate = new TurnTerminalGate();
   let observedUsage = emptyUsage;
+  let stream: ReturnType<TurnEventSource> | undefined;
   try {
-    const stream = run(turn);
+    stream = run(turn);
     while (true) {
       const step = await stream.next();
       if (step.done) break;
@@ -81,6 +82,12 @@ export async function executeAgentTurn(
           recoverable: !(error instanceof TurnJournalCommitError),
         };
     return commitSyntheticTerminal(turn, gate, terminal, observedUsage);
+  } finally {
+    try {
+      await stream?.return(undefined);
+    } catch {
+      // Cleanup cannot replace an already recorded execution outcome.
+    }
   }
 
   if (gate.terminal) return outcomeFromTerminal(gate.terminal, observedUsage);

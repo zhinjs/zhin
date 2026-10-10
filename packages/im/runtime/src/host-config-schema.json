@@ -46,6 +46,21 @@
       "description": "Providers, Agents, sessions, memory, tools, and execution security.",
       "x-descriptionZh": "Provider、Agent、会话、记忆、工具与执行安全策略。",
       "properties": {
+        "decisions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider"],
+          "description": "Optional structured-decision service. Missing tasks are off; use shadow before active.",
+          "x-descriptionZh": "可选的结构化决策服务。未配置的任务关闭；建议先用 shadow 验证。",
+          "properties": {
+            "provider": { "type": "string", "pattern": "^root(/[a-z0-9][a-z0-9-]*)+$", "description": "Exact enabled DecisionProvider Plugin owner, such as root/typesafe.", "x-descriptionZh": "提供已启用 DecisionProvider 的精确插件身份，例如 root/typesafe。" },
+            "skills": { "$ref": "#/$defs/decisionTask" },
+            "tools": { "$ref": "#/$defs/decisionTask" },
+            "memory": { "$ref": "#/$defs/decisionTask" },
+            "agents": { "$ref": "#/$defs/decisionTask" },
+            "approval": { "$ref": "#/$defs/decisionTask" }
+          }
+        },
         "workroom": {
           "type": "object",
           "additionalProperties": true,
@@ -264,5 +279,20 @@
     "assistant": { "type": "object", "additionalProperties": true, "description": "Scheduled jobs, event ingress, and failure notifications.", "x-descriptionZh": "调度任务、事件入口和失败通知。" },
     "log_level": { "type": ["string", "number"], "description": "Runtime log level.", "x-descriptionZh": "Runtime 日志级别。" },
     "plugin": { "type": "object", "description": "Root Plugin configuration; replaced by its project schema during composition.", "x-descriptionZh": "Root Plugin 配置；组合时由项目 Schema 替换。" }
+  },
+  "$defs": {
+    "decisionTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string", "enum": ["off", "shadow", "active"] },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 2147483647 },
+        "minConfidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "topK": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "maxCandidates": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+        "maxSelections": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+      }
+    }
   }
 }

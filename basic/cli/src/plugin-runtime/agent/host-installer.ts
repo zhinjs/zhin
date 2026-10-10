@@ -16,6 +16,9 @@ import {
 } from '@zhin.js/agent';
 import {
   AgentRuntime,
+  agentDecisionConfigToken,
+  normalizeAgentDecisionConfig,
+  resolveAgentDecisionRuntime,
   type TurnIntentResolver,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
@@ -108,10 +111,21 @@ export interface InstallAgentHostOptions {
  * - Subagent/main-turn `bash` (sandbox + safety) + Owner `/approve` 命令面
  */
 export function installAgentHost(options: InstallAgentHostOptions): RootResourceInstaller {
-  return async ({ generation, signal, resources, lifecycle, handoff, config: primaryConfig, addFeature }) => {
+  return async ({ generation, signal, resources, lifecycle, handoff, readCandidateSnapshot, config: primaryConfig, addFeature }) => {
     const aiConfig = primaryConfig.get<AIConfig>('ai');
     const assistantConfig = primaryConfig.get<AssistantConfig>('assistant');
     if (!aiConfig || typeof aiConfig !== 'object') return;
+    const decisions = normalizeAgentDecisionConfig(aiConfig.decisions);
+    if (decisions) {
+      resources.provide(agentDecisionConfigToken, decisions);
+      handoff.add({
+        activateNext(activationSignal) {
+          activationSignal.throwIfAborted();
+          if (!readCandidateSnapshot) throw new Error('DecisionProvider validation requires the candidate generation snapshot');
+          resolveAgentDecisionRuntime(readCandidateSnapshot());
+        },
+      });
+    }
     const mcpEntries = resolveAgentHostMcpServers(aiConfig);
     const agentFoundation = await AgentRuntimeFoundation.create({
       config: aiConfig,

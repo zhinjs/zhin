@@ -4,6 +4,7 @@
  * Consumed by processMessageStream() callers; produced by the turn pipeline.
  */
 import type { OutputElement, ToolExecutionCause, Usage } from '@zhin.js/ai';
+import type { DecisionObservation } from '../decision/types.js';
 
 export interface TurnUsage {
   promptTokens: number;
@@ -15,6 +16,7 @@ export type TurnEvent =
   | TurnStartEvent
   | ChunkEvent
   | CapabilityResolutionEvent
+  | DecisionEvaluationEvent
   | MediaResolutionEvent
   | IterationStartEvent
   | ToolCallEvent
@@ -40,6 +42,11 @@ export interface TurnStartEvent {
   turnId: string;
   /** Native inbound message anchor when the turn originates from IM. */
   sourceMessageId?: string;
+}
+
+/** Operational metadata only: never contains request text, candidate content, or credentials. */
+export interface DecisionEvaluationEvent extends DecisionObservation {
+  type: 'decision_evaluation';
 }
 
 export interface ChunkEvent {

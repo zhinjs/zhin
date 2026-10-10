@@ -187,6 +187,7 @@ ai:
 
 ## 下一步
 
+- [结构化决策与 TypeSafe Jev](./structured-decisions.md)：Agent／Skill／Tool 推荐、检索排序与自动审核
 - [Agent 深入](./agent.md)：ZhinAgent 回合、deferred tools、子代理、编排、会话与 compaction
 - [语音能力](./speech.md)：STT / TTS 与 `voice_stt` / `voice_tts` 工具
 - [Console](../console/index.md)：在 Web 控制台观察 agent 会话与编排运行

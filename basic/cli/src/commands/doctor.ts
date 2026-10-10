@@ -22,6 +22,7 @@ import {
   createProjectConfigPlan,
   loadProjectConfig,
   diagnoseConsoleConfig,
+  diagnoseDecisionConfig,
   type ConsoleConfigDiagnosis,
 } from '@zhin.js/scaffold-wizard';
 import { logger } from '../utils/logger.js';
@@ -201,6 +202,20 @@ export const doctorCommand = new Command('doctor')
         loadedConfig = loaded.status === 'loaded'
           ? loaded.config
           : await readConfig(configPath) as Record<string, unknown>;
+        if (loadedConfig.ai && typeof loadedConfig.ai === 'object' && 'decisions' in loadedConfig.ai) {
+          try {
+            const decisionPackage = fs.existsSync(path.join(cwd, 'package.json'))
+              ? await fs.readJSON(path.join(cwd, 'package.json')) : {};
+            const decisionIssues = diagnoseDecisionConfig(loadedConfig, decisionPackage);
+            if (decisionIssues.length) {
+              results.push({ name: '结构化决策配置', status: 'error', message: decisionIssues.join('；'), fix: 'zhin setup --decisions' });
+            } else {
+              results.push({ name: '结构化决策配置', status: 'ok', message: '决策服务本地配置检查通过；启动时验证实际资源（未调用外部 API）' });
+            }
+          } catch {
+            results.push({ name: '结构化决策配置', status: 'warn', message: '无法读取 package.json 以检查决策插件绑定', fix: '修复 package.json 后重跑 zhin doctor' });
+          }
+        }
         let diagnosis: ConsoleConfigDiagnosis = diagnoseConsoleConfig(loadedConfig);
         const canFixConfig = loaded.status === 'loaded' && loaded.writable;
 

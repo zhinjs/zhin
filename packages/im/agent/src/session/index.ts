@@ -50,3 +50,19 @@ export {
   resolveIngressUserMessage,
 } from './turn-ingress-session.js';
 export type { ResolvedIngressUserMessage } from './turn-ingress-session.js';
+
+export { LlmApprovalJudgment } from '../decision/approval-judgment.js';
+export type {
+  ApprovalHistoryEntry,
+  ApprovalJudgment,
+  ApprovalJudgmentInput,
+  ApprovalJudgmentPort,
+  ApprovalReviewDecision,
+  LlmApprovalJudgmentOptions,
+} from '../decision/approval-judgment.js';
+export { DecisionApprovalJudgment } from '../decision/approval.js';
+export type {
+  DecisionApprovalEvidence,
+  DecisionApprovalJudgmentOptions,
+  DecisionApprovalResult,
+} from '../decision/approval.js';

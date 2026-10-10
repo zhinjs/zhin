@@ -25,6 +25,43 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `http.readiness.agents` | array&lt;string&gt; | no | — | Required configured Agent bindings; does not verify model credentials or provider reachability. |
 | `database` | object | no | — | Database Host and dialect connection options. |
 | `ai` | object | no | — | Providers, Agents, sessions, memory, tools, and execution security. |
+| `ai.decisions` | object | no | — | Optional structured-decision service. Missing tasks are off; use shadow before active. |
+| `ai.decisions.provider` | string | yes | — | Exact enabled DecisionProvider Plugin owner, such as root/typesafe. |
+| `ai.decisions.skills` | object | no | — | — |
+| `ai.decisions.skills.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.skills.timeoutMs` | integer | no | — | — |
+| `ai.decisions.skills.minConfidence` | number | no | — | — |
+| `ai.decisions.skills.topK` | integer | no | — | — |
+| `ai.decisions.skills.maxCandidates` | integer | no | — | — |
+| `ai.decisions.skills.maxSelections` | integer | no | — | — |
+| `ai.decisions.tools` | object | no | — | — |
+| `ai.decisions.tools.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.tools.timeoutMs` | integer | no | — | — |
+| `ai.decisions.tools.minConfidence` | number | no | — | — |
+| `ai.decisions.tools.topK` | integer | no | — | — |
+| `ai.decisions.tools.maxCandidates` | integer | no | — | — |
+| `ai.decisions.tools.maxSelections` | integer | no | — | — |
+| `ai.decisions.memory` | object | no | — | — |
+| `ai.decisions.memory.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.memory.timeoutMs` | integer | no | — | — |
+| `ai.decisions.memory.minConfidence` | number | no | — | — |
+| `ai.decisions.memory.topK` | integer | no | — | — |
+| `ai.decisions.memory.maxCandidates` | integer | no | — | — |
+| `ai.decisions.memory.maxSelections` | integer | no | — | — |
+| `ai.decisions.agents` | object | no | — | — |
+| `ai.decisions.agents.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.agents.timeoutMs` | integer | no | — | — |
+| `ai.decisions.agents.minConfidence` | number | no | — | — |
+| `ai.decisions.agents.topK` | integer | no | — | — |
+| `ai.decisions.agents.maxCandidates` | integer | no | — | — |
+| `ai.decisions.agents.maxSelections` | integer | no | — | — |
+| `ai.decisions.approval` | object | no | — | — |
+| `ai.decisions.approval.mode` | string: `"off"`, `"shadow"`, `"active"` | yes | — | — |
+| `ai.decisions.approval.timeoutMs` | integer | no | — | — |
+| `ai.decisions.approval.minConfidence` | number | no | — | — |
+| `ai.decisions.approval.topK` | integer | no | — | — |
+| `ai.decisions.approval.maxCandidates` | integer | no | — | — |
+| `ai.decisions.approval.maxSelections` | integer | no | — | — |
 | `ai.workroom` | object | no | — | Process-owned Workroom control-plane policy; Projects remain in the persistent Catalog. |
 | `ai.workroom.trustedPackPublishers` | array&lt;string&gt; | no | — | Authenticated Console principal ids allowed to publish shared Capability Packs. |
 | `ai.workroom.disclosure` | object | no | — | Explicit P12 model processor contracts for Workroom disclosure bootstrap. |
@@ -1236,6 +1273,19 @@ _This Schema declares no fields._
 | `plugins.activity-feedback.schedule.phases.error.channel.autoRemove` | boolean | no | `true` | Remove the feedback after the phase stops. |
 | `plugins.activity-feedback.schedule.phases.error.channel.removeDelay` | number | no | — | Delay before removal in milliseconds; negative values are normalized to zero at runtime. |
 | `plugins.activity-feedback.schedule.phases.error.channel.platformConfig` | object | no | — | Platform-specific options. |
+
+### typesafe
+
+[`plugins/services/typesafe/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/services/typesafe/schema.json)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `plugins.typesafe.enabled` | boolean | no | `true` | Enable this decision provider. |
+| `plugins.typesafe.apiKey` | string | no | — | TypeSafe API key; reference TYPESAFE_API_KEY from the environment. |
+| `plugins.typesafe.model` | string | no | `"jev-latest"` | Model name; pin a model version for calibrated policies. |
+| `plugins.typesafe.baseUrl` | string | no | `"https://api.typesafe.ai"` | API root URL without query, credentials or fragment. |
+| `plugins.typesafe.timeoutMs` | integer | no | `10000` | Total budget including all requests and retry delays. |
+| `plugins.typesafe.maxRetries` | integer | no | `2` | Maximum SDK retries after the first attempt. |
 
 ### 60s
 

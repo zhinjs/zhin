@@ -5,11 +5,15 @@ import {
   publishOutboundElements,
   type ApprovalPort,
 } from '@zhin.js/agent';
+import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
 import {
   CapabilityIngress,
   AgentRuntime,
   type AgentCapabilities,
   type TurnIntentResolver,
+  type AgentDecisionRuntime,
+  rankDecisionCandidates,
+  runWithAgentDecisionTurn,
 } from '@zhin.js/agent/runtime';
 import {
   type ImRuntime,
@@ -214,7 +218,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
           senderRoles,
           () => capabilityActive,
         ), workroomAgentTurn != null);
-        const routed = routeSpecialistAgent(
+        let routed = routeSpecialistAgent(
           inbound.text,
           capabilities,
           workroomAgentTurn?.agentDefinitionId,
@@ -233,8 +237,28 @@ export class AgentTurnIngressRoute implements IngressRoute {
           });
         }
 
+        const traceId = randomUUID();
+        const turnId = randomUUID();
         const outcome = await withTriggerTimeout(
-          async (signal) => {
+          async (signal) => runWithAgentDecisionTurn(snapshot, turnId, async decisionRuntime => {
+            routed = await selectDecisionAgentRoute({
+              routed,
+              capabilities,
+              decisionRuntime,
+              workroomTurn: workroomAgentTurn != null,
+              signal,
+            });
+            const approvalPolicy = decisionRuntime?.config.approval;
+            const approvalJudgment = decisionRuntime && approvalPolicy && approvalPolicy.mode !== 'off'
+              ? new DecisionApprovalJudgment({
+                  provider: decisionRuntime.provider,
+                  policy: approvalPolicy,
+                  baseline: options.agent.approvalJudgment,
+                  observe: decisionRuntime.observe,
+                  intent: routed.userText,
+                  principal: turnAccess.principal,
+                })
+              : undefined;
             const turnPolicy = resolveSandboxTurnPolicy({
               platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
               isMaster: senderRoles.isMaster,
@@ -258,8 +282,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
               memory: options.agent.approvalReviewer,
             });
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
-              traceId: randomUUID(),
-              turnId: randomUUID(),
+              traceId,
+              turnId,
               signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
@@ -316,6 +340,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   auto: createAutoApprovalPort(
                     options.agent.approvalReviewer,
                     escalatedApprovalPort,
+                    approvalJudgment,
                   ),
                   bypass: options.agent.bypassApprovalPort,
                   ask: askApprovalPort,
@@ -359,7 +384,22 @@ export class AgentTurnIngressRoute implements IngressRoute {
               },
               observeAgentTurnTrace(traceRuntime, request),
             );
-          },
+          }, {
+            disabled: workroomAgentTurn != null,
+            observe: observation => logger.debug(formatCompact({
+              op: 'agent_decision_evaluation',
+              task: observation.task,
+              mode: observation.mode,
+              outcome: observation.outcome,
+              candidates: observation.candidates,
+              selected: observation.selected,
+              durationMs: observation.durationMs,
+              model: observation.model,
+              reason: observation.reason,
+              inputTokens: observation.usage?.inputTokens,
+              outputTokens: observation.usage?.outputTokens,
+            })),
+          }),
           resolveTriggerTimeoutMs(trigger),
         );
         const elements = completedOutput(outcome);
@@ -397,6 +437,32 @@ export class AgentTurnIngressRoute implements IngressRoute {
         capabilityActive = false;
       }
   }
+}
+
+/** Semantic selection only fills the gap left by explicit and platform routing. */
+export async function selectDecisionAgentRoute(input: Readonly<{
+  routed: ReturnType<typeof routeSpecialistAgent>;
+  capabilities: Pick<AgentCapabilities, 'agents'>;
+  decisionRuntime?: AgentDecisionRuntime;
+  workroomTurn: boolean;
+  signal: AbortSignal;
+}>): Promise<ReturnType<typeof routeSpecialistAgent>> {
+  if (input.routed.agent || input.workroomTurn || /^@[^\s:：]+/u.test(input.routed.userText)) {
+    return input.routed;
+  }
+  const ranking = await rankDecisionCandidates(
+    input.decisionRuntime,
+    'agents',
+    input.routed.userText,
+    input.capabilities.agents.map(agent => ({
+      name: agent.qualifiedName,
+      description: agent.description,
+    })),
+    input.signal,
+  );
+  if (!ranking.applied || ranking.selectedNames.length === 0) return input.routed;
+  const agent = input.capabilities.agents.find(candidate => candidate.qualifiedName === ranking.selectedNames[0]);
+  return agent ? { ...input.routed, agent } : input.routed;
 }
 
 function resolveApprovalPort(input: Readonly<{

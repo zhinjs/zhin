@@ -198,6 +198,19 @@ describe('hierarchical Plugin config', () => {
     expect(config.views.get(graph.root.children[0]!.id)).toEqual({ retries: 3 });
   });
 
+  it('validates structured decision policy limits through the composed Host Schema', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const composer = new ConfigComposer();
+    for (const field of ['topK', 'maxCandidates', 'maxSelections']) {
+      const ai = { decisions: { provider: 'root/typesafe', memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER } } };
+      await expect(composer.compose(graph, { ai })).resolves.toMatchObject({ document: { ai } });
+      await expect(composer.compose(graph, { ai: { decisions: { provider: 'root/typesafe',
+        memory: { mode: 'active', [field]: Number.MAX_SAFE_INTEGER + 1 } } } })).rejects.toBeInstanceOf(ConfigValidationError);
+    }
+  });
+
   it('keeps the canonical Host Schema immutable across compositions', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     const resolver = await NodePackageResolver.create(root);

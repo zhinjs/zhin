@@ -9,6 +9,7 @@ import {
   ApprovalReviewAgent,
   createAutoApprovalPort,
 } from '../../src/session/approval-review-agent.js';
+import { LlmApprovalJudgment } from '../../src/decision/approval-judgment.js';
 import type { ApprovalDecisionPort } from '../../src/session/approval-port.js';
 
 const model: Model = {
@@ -191,14 +192,14 @@ function reviewer(output: string): ApprovalReviewAgent {
     complete,
     completeSimple: complete,
   } satisfies LlmCompletionPort;
-  return new ApprovalReviewAgent({ completion, model });
+  return new ApprovalReviewAgent({ judgment: new LlmApprovalJudgment({ completion, model }) });
 }
 
 function trackedReviewer(outputs: string[]) {
   const complete = vi.fn(async () => assistant(outputs.shift() ?? '{"decision":"reject","reason":"missing fixture"}'));
   const completion = { complete, completeSimple: complete } satisfies LlmCompletionPort;
   return {
-    agent: new ApprovalReviewAgent({ completion, model }),
+    agent: new ApprovalReviewAgent({ judgment: new LlmApprovalJudgment({ completion, model }) }),
     complete,
   };
 }

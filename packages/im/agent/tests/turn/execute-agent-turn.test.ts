@@ -32,6 +32,27 @@ async function* events(items: readonly TurnEvent[]): AsyncGenerator<TurnEvent, v
 }
 
 describe('executeAgentTurn', () => {
+  it('closes a suspended engine when durable event persistence fails', async () => {
+    let closed = false;
+    let resumed = false;
+    const source = createTurnIngress({
+      ...turn(),
+      ports: { journal: { append: () => { throw new Error('database unavailable'); } } },
+    });
+    const outcome = await executeAgentTurn(source, async function* () {
+      try {
+        yield { type: 'chunk', text: 'partial', accumulated: 'partial' };
+        resumed = true;
+        throw new Error('must not resume execution');
+      } finally {
+        closed = true;
+      }
+    });
+    expect(outcome).toMatchObject({ status: 'failed', error: { code: 'turn_journal_commit_failed' } });
+    expect(closed).toBe(true);
+    expect(resumed).toBe(false);
+  });
+
   it('returns one completed outcome and projects the ordered event stream', async () => {
     const source = turn();
     const observed: string[] = [];

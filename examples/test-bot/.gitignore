@@ -9,6 +9,7 @@ lib/**/*.d.ts
 # Environment variables
 .env
 .env.local
+.env.typesafe-test
 .env.development
 .env.production
 

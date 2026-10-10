@@ -12,6 +12,7 @@ import {
   type AgentToolDefinition,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface NativeSemanticMemoryToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -54,6 +55,7 @@ export class SemanticMemoryRuntime {
 
 export function createNativeSemanticMemoryToolFeatures(
   runtime: SemanticMemoryRuntime,
+  resolveDecision?: NativeSearchDecisionResolver,
 ): readonly NativeSemanticMemoryToolFeature[] {
   return Object.freeze([
     feature('memory_search', defineAgentTool({
@@ -68,7 +70,7 @@ export function createNativeSemanticMemoryToolFeatures(
         required: Object.freeze(['query']),
       }),
       requiresApproval: 'never',
-      execute: (input, context) => searchMemory(runtime, input, context),
+      execute: (input, context) => searchMemory(runtime, input, context, resolveDecision),
     })),
     feature('memory_upsert', defineAgentTool({
       description: 'Create or update one durable semantic-memory fact in an authorized scope.',
@@ -94,18 +96,23 @@ async function searchMemory(
   runtime: SemanticMemoryRuntime,
   input: Record<string, unknown>,
   context: ToolExecutionContext,
+  resolveDecision?: NativeSearchDecisionResolver,
 ): Promise<string> {
   const query = requiredString(input.query, 'query');
   const scope = optionalScope(input.scope);
   const limit = typeof input.limit === 'number' ? Math.max(1, Math.min(20, Math.floor(input.limit))) : 5;
-  const hits = scope
+  const decision = resolveSearchDecision(resolveDecision, context);
+  const candidateLimit = decision ? 20 : limit;
+  const candidates = scope
     ? await runtime.search({
         query,
         scope,
         scope_key: scopeKey(scope, context),
-        limit,
+        limit: candidateLimit,
       }, context.signal)
-    : await searchVisibleMemory(runtime, query, limit, context);
+    : await searchVisibleMemory(runtime, query, candidateLimit, context);
+  const hits = await rerankDecisionMatches(decision, query, candidates,
+    entry => `${entry.key}: ${entry.content}\nTags: ${parseMemoryTags(entry.tags).join(', ')}`, limit, context.signal);
   if (hits.length === 0) return `未找到与 "${query}" 相关的记忆条目。`;
   return `找到 ${hits.length} 条记忆：\n${hits.map((entry) => {
     const tags = parseMemoryTags(entry.tags);

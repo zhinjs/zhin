@@ -12,6 +12,8 @@ import {
   type ToolInputSchema,
 } from '@zhin.js/tool';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { rankDecisionCandidates } from '../decision/rank.js';
+import type { AgentDecisionRuntime } from '../decision/types.js';
 import { buildDeferredStats, buildToolCatalog, discoverInCatalog, resolveDeferredApiTools } from '../tool-catalog/tool-catalog.js';
 import { resolveDeferredToolsConfig } from '../tool-catalog/resolve-config.js';
 import { DEFERRED_META_TOOL_NAMES, type ToolCatalogItem } from '../tool-catalog/types.js';
@@ -57,11 +59,13 @@ export interface DeferredCapabilityPlanOptions {
   readonly config: Parameters<typeof resolveDeferredToolsConfig>[0];
   readonly platform?: string;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
+  readonly decision?: AgentDecisionRuntime;
 }
 
 export interface AgentSkillIntentPrimeResult {
   readonly snapshot: DeferredToolSessionSnapshot;
   readonly skill?: SkillDescriptor;
+  readonly skills?: readonly SkillDescriptor[];
 }
 
 export interface WorkroomDeferredCapabilityAuthority {
@@ -167,13 +171,34 @@ export function primeAgentSkillForIntent(options: Readonly<{
   if (!skill) return Object.freeze({ snapshot });
 
   const config = resolveDeferredToolsConfig(options.config);
-  const withSkill = addSkillToSnapshot(snapshot, skill.qualifiedName);
-  const withTools = touchToolsInSnapshot(
-    withSkill,
-    resolveSkillTools(skill, options.capabilities.tools),
-    config.maxLoadedPerSession,
-  );
+  const withTools = activateSkill(snapshot, skill, options.capabilities.tools, config.maxLoadedPerSession);
   return Object.freeze({ snapshot: withTools, skill });
+}
+
+/** Model recommendation never enlarges the immutable, already-authorized projection. */
+export async function primeSkillsForIntent(options: Readonly<{
+  capabilities: Pick<AgentCapabilities, 'tools' | 'skills'>;
+  sessionSnapshot: DeferredToolSessionSnapshot;
+  intent: string;
+  config: DeferredCapabilityPlanOptions['config'];
+  decision?: AgentDecisionRuntime;
+  signal: AbortSignal;
+}>): Promise<AgentSkillIntentPrimeResult> {
+  const ranking = await rankDecisionCandidates(options.decision, 'skills', options.intent,
+    options.capabilities.skills.map(skill => ({ name: skill.qualifiedName, description: skill.description })),
+    options.signal);
+  if (!ranking.applied) return primeAgentSkillForIntent(options);
+  const maxSelections = options.decision?.config.skills?.maxSelections ?? 2;
+  const skills = ranking.selectedNames.slice(0, maxSelections).flatMap(name => {
+    const skill = options.capabilities.skills.find(candidate => candidate.qualifiedName === name);
+    return skill ? [skill] : [];
+  });
+  const config = resolveDeferredToolsConfig(options.config);
+  let snapshot = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
+  for (const skill of [...skills].reverse()) {
+    snapshot = activateSkill(snapshot, skill, options.capabilities.tools, config.maxLoadedPerSession);
+  }
+  return Object.freeze({ snapshot, skill: skills[0], skills: Object.freeze(skills) });
 }
 
 /**
@@ -219,6 +244,7 @@ export function createDeferredCapabilityPlan(
     maxLoaded: config.maxLoadedPerSession,
     getSnapshot: () => snapshot,
     persist,
+    decision: options.decision,
   });
   const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
@@ -356,6 +382,7 @@ interface MetaCapabilityOptions {
   readonly maxLoaded: number;
   readonly getSnapshot: () => DeferredToolSessionSnapshot;
   readonly persist: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
+  readonly decision?: AgentDecisionRuntime;
 }
 
 function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCapability[] {
@@ -367,19 +394,36 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
         query: { type: 'string' },
         kind: { type: 'string', enum: ['tool', 'skill', 'all'] },
       },
-    }, async (raw) => {
+    }, async (raw, invocation) => {
       const input = recordOf(raw);
       const query = typeof input.query === 'string' ? input.query.trim() : '';
       const kind = input.kind === 'tool' || input.kind === 'skill' ? input.kind : 'all';
-      const tools = kind === 'skill' ? [] : discoverInCatalog({
+      const catalog = disclosedToolCatalog(options);
+      const fallbackTools = kind === 'skill' ? [] : discoverInCatalog({
         query,
         kind: 'tool',
         topK: options.topK,
         platform: options.platform,
         skillRegistry: null,
-        catalog: [...options.catalog],
+        catalog,
       });
-      const skills = kind === 'tool' ? [] : discoverSkills(options.skills, query, options.topK);
+      const fallbackSkills = kind === 'tool' ? [] : discoverSkills(options.skills, query, options.topK);
+      const [rankedTools, rankedSkills] = query ? await Promise.all([
+        kind === 'skill' ? undefined : rankDecisionCandidates(options.decision, 'tools', query,
+          catalog.map(item => ({ name: item.name, description: item.fullTool.description })), invocation.signal),
+        kind === 'tool' ? undefined : rankDecisionCandidates(options.decision, 'skills', query,
+          options.skills.map(skill => ({ name: skill.qualifiedName, description: skill.description })), invocation.signal),
+      ]) : [];
+      const tools = rankedTools?.applied
+        ? rankedTools.selectedNames.flatMap(name => {
+          const item = catalog.find(candidate => candidate.name === name);
+          return item ? [{ kind: 'tool' as const, name, brief: item.brief }] : [];
+        }) : fallbackTools;
+      const skills = rankedSkills?.applied
+        ? rankedSkills.selectedNames.flatMap(name => {
+          const skill = options.skills.find(candidate => candidate.qualifiedName === name);
+          return skill ? [{ kind: 'skill' as const, name, brief: skill.description }] : [];
+        }) : fallbackSkills;
       const rows = [...tools, ...skills];
       return rows.length > 0
         ? rows.map((item) => `- [${item.kind}] ${item.name}: ${item.brief}`).join('\n')
@@ -405,8 +449,7 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const skill = resolveSkill(options.skills, name);
       if (!skill) return `Skill '${name}' not found in the active generation.`;
       const toolNames = resolveSkillTools(skill, options.tools);
-      const withSkill = addSkillToSnapshot(options.getSnapshot(), skill.qualifiedName);
-      await options.persist(touchToolsInSnapshot(withSkill, toolNames, options.maxLoaded));
+      await options.persist(activateSkill(options.getSnapshot(), skill, options.tools, options.maxLoaded));
       const unlocked = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
       return `${skill.instructions}${unlocked}\n__zhin_tools_mutated__`;
     }),
@@ -467,15 +510,41 @@ function loadedSkillInstructions(
     .map((skill) => skill.instructions);
 }
 
+function activateSkill(
+  snapshot: DeferredToolSessionSnapshot,
+  skill: SkillDescriptor,
+  tools: readonly ToolCapability[],
+  maxLoaded: number,
+): DeferredToolSessionSnapshot {
+  return touchToolsInSnapshot(addSkillToSnapshot(snapshot, skill.qualifiedName),
+    resolveSkillTools(skill, tools), maxLoaded);
+}
+
+function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[] {
+  const loaded = new Set(getLoadedToolNamesFromSnapshot(options.getSnapshot()));
+  const privateTools = options.tools.filter(tool => tool.hidden && loaded.has(tool.name));
+  return [...options.catalog,
+    ...buildToolCatalog({ tools: privateTools.map(capabilityAsAgentTool), alwaysLoaded: new Set<string>() })];
+}
+
 function resolveSkillTools(
   skill: SkillDescriptor,
   tools: readonly ToolCapability[],
 ): string[] {
   const requested = new Set(skill.toolNames ?? []);
   if (requested.size === 0) return [];
-  return tools.filter((tool) => tool.owner === skill.owner && [...requested].some(
+  return tools.filter((tool) => tool.owner === skill.owner
+    && belongsToSkill(tool, skill) && [...requested].some(
     name => tool.name === name || tool.name.endsWith(`__${name}`),
   )).map((tool) => tool.name);
+}
+
+function belongsToSkill(tool: ToolCapability, skill: SkillDescriptor): boolean {
+  const placement = tool.placement;
+  if (!placement) return !tool.hidden;
+  if (placement.kind === 'agent') return placement.agent === skill.agentName;
+  if (placement.kind === 'skill') return !skill.agentName && placement.skill === skill.name;
+  return placement.agent === skill.agentName && placement.skill === skill.name;
 }
 
 function uniqueBestAgentSkill(
