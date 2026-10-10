@@ -1,0 +1,41 @@
+.changeset/upgrade-upstream-kook-qq-sdk.md
+  s_a5dc81d701255f::t_a5ed494e755138 1-6
+docs/adapters/qq.md
+  s_a5dc81d701255f::t_da4d1d7c10aca5 11,206
+plugins/adapters/kook/package.json
+  s_a5dc81d701255f::t_0183e3b5591dea 54
+plugins/adapters/kook/tests/sdk-patch-fixture.ts
+  s_a5dc81d701255f::t_75b13fc9a48253 4,7-8
+plugins/adapters/kook/tests/sdk-patch.test.ts
+  s_a5dc81d701255f::t_9e1a87b6ff4a3b 2,4-5,33
+plugins/adapters/kook/tests/stream-proxy-tls.test.ts
+  s_a5dc81d701255f::t_bbbe6af387e46e 10,13,26
+plugins/adapters/qq/README.md
+  s_a5dc81d701255f::t_e6749b21b87167 194
+plugins/adapters/qq/package.json
+  s_a5dc81d701255f::t_560182bfa22eca 55
+plugins/adapters/qq/tests/sdk-retirement-patch.test.ts
+  s_a5dc81d701255f::t_9b70143c087eed 1
+plugins/adapters/qq/tests/sdk-start-patch.test.ts
+  s_a5dc81d701255f::t_b651c6d45037fa 1,7,16
+plugins/adapters/qq/tests/sdk-upload-patch.test.ts
+  s_a5dc81d701255f::t_81560a6a92d0ca 1,17
+pnpm-lock.yaml
+  s_a5dc81d701255f::t_75d0d6ec5818ae 2283-2284,2680-2681,7579-7580,8246-8247,9074-9085,13305,13307,13313,13958,13964,14897-14898
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2cdb18195dc77405b1103ab6fe05f1f30fd95fc5",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
