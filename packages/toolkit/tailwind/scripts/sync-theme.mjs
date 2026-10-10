@@ -3,7 +3,10 @@ import { createRequire } from "node:module";
 import { readFile, writeFile } from "node:fs/promises";
 
 const require = createRequire(import.meta.url);
-const css = await readFile(require.resolve("tailwindcss/theme.css"), "utf8");
+const normalizeNewlines = (text) => text.replace(/\r\n/g, "\n");
+const css = normalizeNewlines(
+  await readFile(require.resolve("tailwindcss/theme.css"), "utf8")
+);
 const output = new URL("../src/default-theme.ts", import.meta.url);
 const source =
   "// Generated from tailwindcss@4.3.3/theme.css (MIT, Tailwind Labs).\n" +
@@ -11,7 +14,7 @@ const source =
   "// prettier-ignore\n" +
   `export const defaultTheme = ${JSON.stringify(css)};\n`;
 if (process.argv.includes("--check")) {
-  if ((await readFile(output, "utf8")) !== source) {
+  if (normalizeNewlines(await readFile(output, "utf8")) !== source) {
     throw new Error("Bundled Tailwind theme is stale; run pnpm sync:theme.");
   }
 } else {
