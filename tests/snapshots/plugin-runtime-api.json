@@ -23,6 +23,7 @@
   ],
   "agent/runtime": [
     "export * from '../data-governance/disclosure-authority.js';",
+    "export * from '../decision/index.js';",
     "export * from '../workroom/coding-assignment-executor.js';",
     "export * from '../workroom/coding-git-objects.js';",
     "export * from '../workroom/file-coding-execution-store.js';",
@@ -37,6 +38,7 @@
     "export * from './agent-trace-runtime.js';",
     "export * from './capability-ingress.js';",
     "export * from './database-overlay-pack-promotion-repository.js';",
+    "export * from './decision-runtime.js';",
     "export * from './deferred-capability-plan.js';",
     "export * from './full-agent-turn-engine.js';",
     "export * from './github-actions-delivery-provider.js';",
@@ -130,7 +132,8 @@
     "export{createSessionTreeRuntimeFromAgent,type SessionTreeRuntimeHandle,}from '../session-tree-runtime.js';",
     "export{defineAiDatabaseModels}from '../init/define-ai-database-models.js';",
     "export{digestCanonicalWorkroomValue}from '../workroom/canonical-value.js';",
-    "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding,}from '../resource-hub/mcp-lifecycle.js';"
+    "export{ensureMcpConnections,ensureMcpConnectionsForBinding,getMcpToolsForBinding,}from '../resource-hub/mcp-lifecycle.js';",
+    "export{normalizeAgentDecisionConfig}from '../decision/config.js';"
   ],
   "cli/runtime": [
     "export * from './migrate/index.js';",
