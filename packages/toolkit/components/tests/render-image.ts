@@ -48,7 +48,11 @@ function child(): ChildProcess {
 }
 
 afterAll(async () => {
-  if (!worker || worker.exitCode !== null || worker.signalCode !== null) return;
+  if (!worker) return;
+  if (worker.exitCode !== null || worker.signalCode !== null) {
+    if (worker.exitCode === 0) return;
+    throw new Error(`Image worker exited (${worker.signalCode ?? worker.exitCode})`);
+  }
   const active = worker;
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {
