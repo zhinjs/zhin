@@ -1,5 +1,13 @@
 # @zhin.js/mcp
 
+## 1.1.7
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/tool@1.1.4
+
 ## 1.1.6
 
 ### Patch Changes

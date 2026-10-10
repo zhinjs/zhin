@@ -1,5 +1,20 @@
 # @zhin.js/agent
 
+## 1.1.30
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/agent-feature@1.1.4
+  - @zhin.js/mcp-feature@1.1.4
+  - @zhin.js/prompt-section@1.1.3
+  - @zhin.js/skill@1.1.4
+  - @zhin.js/tool@1.1.4
+  - @zhin.js/permission@1.1.4
+
 ## 1.1.29
 
 ### Patch Changes
