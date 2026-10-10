@@ -1,0 +1,19 @@
+.github/workflows/ci.yml
+  s_a5dc81d701255f::t_24584bb349b001 171-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e77861283ace2c04a5c9863a97588520ec0a1f93",
+  "prompts": {},
+  "sessions": {
+    "s_a5dc81d701255f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f03c-6e20-75c3-9d29-86f6fd1ed79b",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
