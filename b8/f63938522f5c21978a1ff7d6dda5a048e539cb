@@ -1,0 +1,96 @@
+packages/im/agent/src/plugin-runtime/decision-runtime.ts
+  s_6562bcb6cc0539::t_fcf05712738298 38,58,64,70
+  s_6562bcb6cc0539::t_79b3a6b425744b 1-2,8-13,16-20,29-30,33-37,39-57,59-63,65-69
+plugins/services/typesafe/src/decision-provider.ts
+  s_6562bcb6cc0539::t_917976c3abeca4 25,28-30,42,44,48,52-53,66,73
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_6562bcb6cc0539::t_fcf05712738298 240-241,243,285-286
+  s_6562bcb6cc0539::t_a51fa10877745c 16,387-402
+plugins/services/typesafe/tests/decision-provider.test.ts
+  s_6562bcb6cc0539::t_a0bf6331963088 1-2,102-103,111-146,156
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_5a6ec912e63e0c 28-64,1276-1288
+plugins/services/typesafe/README.md
+  s_6562bcb6cc0539::t_a0bf6331963088 60-61
+  s_6562bcb6cc0539::t_380a3e78f79b23 56
+basic/cli/src/commands/doctor.ts
+  s_6562bcb6cc0539::t_f4940826fb74d1 205-217
+packages/im/agent/tests/session/decision-approval.test.ts
+  s_6562bcb6cc0539::t_7cb0e52578c5cd 8-9,38-59,62,64,67,105,114,131,165,204
+packages/im/agent/tests/turn/execute-agent-turn.test.ts
+  s_6562bcb6cc0539::t_7f8fda1cd5cd5f 37,45,53
+packages/im/agent/tests/decision/deferred-retrieval.test.ts
+  s_6562bcb6cc0539::t_fb127a53db8ab9 7,34,39-40,51-68
+  s_2104cc474f1ce5::t_482911f6d4a799 69
+plugins/services/typesafe/schema.json
+  s_6562bcb6cc0539::t_917976c3abeca4 15,23,33
+packages/toolkit/scaffold-wizard/tests/decisions.test.ts
+  s_6562bcb6cc0539::t_5068e8894b6a6f 24-28,35-36,46,71-101
+packages/im/runtime/src/host-config-schema.json
+  s_6562bcb6cc0539::t_7f8fda1cd5cd5f 292-294
+packages/toolkit/scaffold-wizard/src/decisions.ts
+  s_6562bcb6cc0539::t_f4940826fb74d1 84-88,99-101,105
+basic/cli/src/commands/setup.ts
+  s_6562bcb6cc0539::t_f4940826fb74d1 244-246,253-255
+basic/cli/src/plugin-runtime/agent/tool-feature-publisher.ts
+  s_6562bcb6cc0539::t_79b3a6b425744b 5,85,98
+packages/im/agent/src/plugin-runtime/native-semantic-memory-tools.ts
+  s_6562bcb6cc0539::t_79b3a6b425744b 115
+packages/im/agent/tests/decision/runtime-binding.test.ts
+  s_6562bcb6cc0539::t_99a08094bf15f8 1,4,6,23,55-57,61-87,92-97,109,112,126-131,135-136,143-144,147
+  s_6562bcb6cc0539::t_7f8fda1cd5cd5f 35-38
+  s_6562bcb6cc0539::t_88c322d67e2e55 154-155
+  s_6562bcb6cc0539::t_baa30c25e16424 145-146
+  s_6562bcb6cc0539::t_fcbb622d031fae 88-91,113-116,152,158-168
+  s_6562bcb6cc0539::t_350a728e2d3cd5 153,156
+basic/cli/tests/doctor.test.ts
+  s_6562bcb6cc0539::t_5068e8894b6a6f 1,8-11,13-40
+packages/im/ai/tests/decision-types.test.ts
+  s_6562bcb6cc0539::t_917976c3abeca4 2,13
+basic/cli/src/plugin-runtime/agent/runtime-factory.ts
+  s_6562bcb6cc0539::t_79b3a6b425744b 19,117
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_d813a5f5190f6e 201-213
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_6562bcb6cc0539::t_fcf05712738298 323
+  s_6562bcb6cc0539::t_fcbb622d031fae 344-349
+  s_6562bcb6cc0539::t_79b3a6b425744b 21,321-322,324,338-340,354
+packages/im/agent/src/decision/retrieval.ts
+  s_6562bcb6cc0539::t_79b3a6b425744b 33
+plugins/services/typesafe/tests/plugin-runtime.test.ts
+  s_6562bcb6cc0539::t_380a3e78f79b23 76-78
+  s_6562bcb6cc0539::t_a0bf6331963088 24-30,43-47
+  s_2104cc474f1ce5::t_75d3ff8fadff8f 48-49
+packages/im/agent/src/decision/approval.ts
+  s_6562bcb6cc0539::t_8acccd3c0f2118 109-134,136-151
+  s_6562bcb6cc0539::t_7f8fda1cd5cd5f 9-10,106-107
+plugins/services/typesafe/plugin.ts
+  s_6562bcb6cc0539::t_380a3e78f79b23 2,12
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_5a6ec912e63e0c 28-64,1277-1288
+  s_6562bcb6cc0539::t_60cf3aa923152b 1289
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8f63938522f5c21978a1ff7d6dda5a048e539cb",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
