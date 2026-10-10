@@ -1,5 +1,12 @@
 # @zhin.js/config-file
 
+## 1.1.4
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/plugin-runtime@1.1.12
+
 ## 1.1.3
 
 ### Patch Changes

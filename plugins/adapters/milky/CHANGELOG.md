@@ -1,5 +1,16 @@
 # @zhin.js/adapter-milky
 
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/feature-kit@1.1.3
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/skill@1.1.4
+  - @zhin.js/host-http@1.1.4
+
 ## 1.1.5
 
 ### Patch Changes
