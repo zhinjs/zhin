@@ -1,0 +1,37 @@
+docs/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_2c65e430a6a0f7 30
+.github/workflows/ci.yml
+  s_079f1dc5e6308d::t_2193f279e0fc93 249-253
+docs/en/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_2c65e430a6a0f7 24
+docs/plans/jsx-html-components.md
+  s_079f1dc5e6308d::t_2c65e430a6a0f7 31
+  s_079f1dc5e6308d::t_940342e423217c 189
+  s_079f1dc5e6308d::t_7955d84fc479c0 183-188
+plugins/adapters/email/tests/admission-lifecycle.test.ts
+  s_079f1dc5e6308d::t_49929d53fb297d 13,20-21,25-29,38-45,57-60,62,64-65,77
+  s_079f1dc5e6308d::t_62723084740efe 63,66-68
+  s_079f1dc5e6308d::t_099439b9b04e5a 115-116,119
+packages/toolkit/components/package.json
+  s_079f1dc5e6308d::t_2c65e430a6a0f7 34
+packages/toolkit/components/tests/markdown.test.ts
+  s_079f1dc5e6308d::t_462bc42959aced 2,9-30,32-38,155,177
+pnpm-lock.yaml
+  s_079f1dc5e6308d::t_74dbce605920b2 1852-1854
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f2ed06a3521c424f806849d33c521cc4f2ff3f9a",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
