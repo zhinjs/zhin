@@ -215,15 +215,23 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
 
   formatColumnDefinition(field: string, column: Column<any>): string {
     const name = this.quoteIdentifier(String(field));
-    const type = this.mapColumnType(column.type);
-    const length = column.length ? `(${column.length})` : '';
+    // TEXT cannot be indexed in full. Bounded keys retain full-value uniqueness
+    // within InnoDB's 3072-byte index limit under utf8mb4 (4 bytes per character).
+    const boundedText = column.type.toLowerCase() === 'text'
+      && (column.length !== undefined || column.primary || column.unique);
+    const type = boundedText ? 'VARCHAR' : this.mapColumnType(column.type);
+    const length = boundedText ? `(${column.length ?? 768})` : column.length ? `(${column.length})` : '';
     const nullable = column.nullable === false ? ' NOT NULL' : '';
     const primary = column.primary ? ' PRIMARY KEY' : '';
     const unique = column.unique ? ' UNIQUE' : '';
     const autoIncrement = column.autoIncrement ? ' AUTO_INCREMENT' : '';
-    const defaultVal = column.default !== undefined
-      ? ` DEFAULT ${this.formatDefaultValue(column.default)}`
-      : '';
+    let defaultVal = '';
+    if (column.default !== undefined) {
+      const value = this.formatDefaultValue(column.default);
+      // MySQL 8.0.13+ requires even literal TEXT/JSON defaults to be expressions.
+      const expression = (type === 'TEXT' || type === 'JSON') && column.default !== null;
+      defaultVal = ` DEFAULT ${expression ? `(${value})` : value}`;
+    }
 
     return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
   }

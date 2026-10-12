@@ -108,6 +108,21 @@ await db.start();
 
 ### MySQL Example
 
+框架初始化验证基线为 **MySQL 8.4 LTS**，驱动为 `mysql2` 3.x。项目配置中的
+`database.dialect: mysql` 用于选择方言，由 CLI 移除后再把连接参数传给驱动。
+不要为了消除驱动警告而删除项目配置中的 `dialect`。
+
+MySQL 方言将 `text` 的非空默认值和 `json` 默认值写成表达式，例如
+`TEXT DEFAULT ('')`；普通 `TEXT DEFAULT ''` 会被 MySQL 拒绝。
+声明了 `length` 的 `text` 使用 `VARCHAR(length)`；未声明长度的文本主键或唯一键
+使用 `VARCHAR(768)`，以完整值建立索引。其余文本仍为 `TEXT`。
+键值应在该长度内；需要更短的业务边界时显式声明 `length`。这里没有使用文本前缀唯一索引，
+避免将前缀相同的不同键误判为重复。
+
+如果启动报 `message_key can't have a default value`，请升级包含此修复的
+`@zhin.js/database` 与 `@zhin.js/cli` 后重启。该错误来自建表 SQL，无需降级
+MySQL 或 mysql2，也无需删除已有数据库。修复针对新建表，不会缩窄既有文本列。
+
 ```typescript
 const db = Registry.create('mysql', {
   host: 'localhost',

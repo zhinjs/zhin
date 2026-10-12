@@ -9,8 +9,20 @@ import {
 } from '../../src/plugin-runtime/database-host-installer.js';
 import { dispatchRuntimeConsoleRpc, pickRpcReply } from '@zhin.js/host-http';
 import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
+import { Registry } from '@zhin.js/database';
 
 describe('DatabaseHost', () => {
+  it.each(['mysql', 'pg'] as const)('passes only connection options to the %s factory', (dialect) => {
+    const factory = vi.spyOn(Registry, 'create');
+    try {
+      const connection = { host: 'localhost', port: dialect === 'mysql' ? 3306 : 5432,
+        user: 'zhin', database: 'zhin_test', pool: { max: 2 } };
+      createDatabaseHost({ dialect, ...connection });
+      expect(factory).toHaveBeenCalledWith(dialect, connection);
+    } finally {
+      factory.mockRestore();
+    }
+  });
   it('rejects an empty PostgreSQL port before the driver receives NaN', async () => {
     await expect(resolveDatabaseConfig('/tmp/project', {
       database: {
