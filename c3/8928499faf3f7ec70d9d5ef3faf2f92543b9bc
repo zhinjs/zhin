@@ -1,0 +1,29 @@
+.changeset/tidy-message-jsx.md
+  s_079f1dc5e6308d::t_7258d39743c674 11
+docs/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_d372181d0b8f71 104
+docs/en/authoring/middleware-components.md
+  s_079f1dc5e6308d::t_76ed5ecf483d6e 93
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  s_079f1dc5e6308d::t_697b96dd914f93 38,70,72
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_079f1dc5e6308d::t_b46e6a727a7894 20-21,29,32-34
+scripts/check-created-project.mjs
+  s_079f1dc5e6308d::t_8062930d194394 287-290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c38928499faf3f7ec70d9d5ef3faf2f92543b9bc",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
