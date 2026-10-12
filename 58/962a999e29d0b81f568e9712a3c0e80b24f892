@@ -1,0 +1,44 @@
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_283733076ce2c9 36,78
+.changeset/plugin-experience-foundation.md
+  s_079f1dc5e6308d::t_756c214a4482fc 17,19
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_079f1dc5e6308d::t_fa556c076ee90e 12,185,190-192,194,217
+  s_079f1dc5e6308d::t_b0741439bbb238 183-184,186-189,193,195-197
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_7035033a4affe0 1542-1544,2052-2053
+  s_079f1dc5e6308d::t_7d2bb07070fa3e 1525-1541,2047-2051,2055,2066,2070
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_079f1dc5e6308d::t_731b67df4d5872 229,254-265
+  s_079f1dc5e6308d::t_1dcff1e29cf501 220-228,230-235,237-253,282-300
+  s_079f1dc5e6308d::t_7ecd16d1d123b5 236,266-281
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_079f1dc5e6308d::t_7035033a4affe0 271
+  s_079f1dc5e6308d::t_bab955d9dcc3ac 255-257,303,306
+basic/cli/src/plugin-runtime/console/console-schema.ts
+  s_079f1dc5e6308d::t_fa556c076ee90e 120
+docs/en/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_556101e4a29220 3
+  s_079f1dc5e6308d::t_0982092c295fa1 115-116
+  s_079f1dc5e6308d::t_283733076ce2c9 185
+docs/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_556101e4a29220 3
+  s_079f1dc5e6308d::t_0982092c295fa1 115-116
+  s_079f1dc5e6308d::t_283733076ce2c9 185
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "58962a999e29d0b81f568e9712a3c0e80b24f892",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
