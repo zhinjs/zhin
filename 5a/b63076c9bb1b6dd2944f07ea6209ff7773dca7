@@ -1,0 +1,134 @@
+examples/minimal-bot/components/status-card/index.tsx
+  s_6562bcb6cc0539::t_14b7708b29084c 14,21
+packages/im/core/src/jsx/message-renderer.ts
+  s_6562bcb6cc0539::t_319a3c7bdb3779 1,5,18,51-55,64,94-96
+  s_6562bcb6cc0539::t_5b95d3a680d017 3-4,7-17,19-26,28-50,56-63,65-66,75-76,90-93,97-106
+  s_6562bcb6cc0539::t_8d35f3745c1586 77-82,84-89
+  s_6562bcb6cc0539::t_e5565a573bbaec 6,27,67-74
+  s_6562bcb6cc0539::t_27153473c581dc 2,83
+examples/test-bot/components/status-card/index.ts
+  s_6562bcb6cc0539::t_14b7708b29084c 42
+.github/instructions/zhin-plugin.instructions.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 58-63
+packages/im/jsx/package.json
+  s_6562bcb6cc0539::t_5b95d3a680d017 4,36-37
+  s_6562bcb6cc0539::t_d17e81968d247e 38
+packages/im/core/tests/jsx-runtime.test.ts
+  s_6562bcb6cc0539::t_27153473c581dc 3,6-13
+packages/im/core/src/built/segment-contract/json-schema.ts
+  s_6562bcb6cc0539::t_3fe3eb2396dbd1 87
+examples/minimal-bot/commands/jsx/index.tsx
+  s_6562bcb6cc0539::t_14b7708b29084c 5
+scripts/check-architecture-layers.mjs
+  s_6562bcb6cc0539::t_5b95d3a680d017 43
+packages/toolkit/create-zhin/src/workspace.ts
+  s_6562bcb6cc0539::t_14b7708b29084c 769,776
+packages/im/core/src/jsx/message-tags.ts
+  s_6562bcb6cc0539::t_3fe3eb2396dbd1 40,43,52-53
+  s_6562bcb6cc0539::t_5b95d3a680d017 2-4,6-8,10-11,13-39,41,44,46-51,54-65
+  s_6562bcb6cc0539::t_8d35f3745c1586 1,9,12,42,45
+  s_6562bcb6cc0539::t_319a3c7bdb3779 5,66-83
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_6562bcb6cc0539::t_e5565a573bbaec 104
+packages/im/core/src/jsx/intrinsic-elements.ts
+  s_6562bcb6cc0539::t_a1673677063fdc 44
+  s_6562bcb6cc0539::t_319a3c7bdb3779 1-43,45-46
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_6562bcb6cc0539::t_4dcff42c5e6159 23,134,166,179,189,197,217
+packages/im/core/src/plugin-runtime/im/jsx-button-registry.ts
+  s_6562bcb6cc0539::t_e5565a573bbaec 1,3,5-64,66,69-81
+  s_6562bcb6cc0539::t_319a3c7bdb3779 4,65
+  s_6562bcb6cc0539::t_3fe3eb2396dbd1 2,67-68
+packages/im/core/tests/plugin-runtime/jsx-message-layout.test.ts
+  s_6562bcb6cc0539::t_b258fd42902320 5,83-100
+  s_6562bcb6cc0539::t_a1673677063fdc 1-3,18-68,70-82
+  s_6562bcb6cc0539::t_27153473c581dc 102-111
+  s_6562bcb6cc0539::t_c68f1cda5252e1 4,6-17,101
+  s_6562bcb6cc0539::t_3fe3eb2396dbd1 69
+packages/im/jsx/src/element.ts
+  s_6562bcb6cc0539::t_5b95d3a680d017 1-3,13,37-49
+  s_6562bcb6cc0539::t_81011ea00e2793 50
+packages/im/jsx/src/render.ts
+  s_6562bcb6cc0539::t_5b95d3a680d017 1,100,132
+packages/im/jsx/src/index.ts
+  s_6562bcb6cc0539::t_5b95d3a680d017 1-2
+packages/im/core/tests/jsx-public.test-d.tsx
+  s_6562bcb6cc0539::t_14b7708b29084c 13-42
+packages/im/core/src/jsx-runtime.ts
+  s_6562bcb6cc0539::t_319a3c7bdb3779 1-2
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_6562bcb6cc0539::t_a1673677063fdc 126-191
+  s_6562bcb6cc0539::t_4dcff42c5e6159 68,274
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_6562bcb6cc0539::t_e5565a573bbaec 18-19,21,60,82-84,88-89
+  s_6562bcb6cc0539::t_3f520547566d3e 90-91
+AGENTS.md
+  s_6562bcb6cc0539::t_14b7708b29084c 110
+packages/toolkit/components/README.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 9,41
+tests/snapshots/api-surface.json
+  s_6562bcb6cc0539::t_14bcace5d4ee06 257,260
+packages/im/zhin/README.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 26
+.changeset/tidy-message-jsx.md
+  s_6562bcb6cc0539::t_27153473c581dc 1-9
+docs/concepts/architecture.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 138
+examples/minimal-bot/middlewares/jsx/index.tsx
+  s_6562bcb6cc0539::t_14b7708b29084c 6
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_6562bcb6cc0539::t_e5565a573bbaec 209,378,380
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_6562bcb6cc0539::t_e5565a573bbaec 7,27,32,55-57,66,96,101,107-110,112,135
+packages/im/jsx/README.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 3,16-26
+packages/im/core/src/built/segment-contract/assert.ts
+  s_6562bcb6cc0539::t_5b95d3a680d017 14
+examples/full-bot/components/status-card/index.ts
+  s_6562bcb6cc0539::t_14b7708b29084c 37
+docs/en/concepts/message-flow.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 149
+docs/en/authoring/middleware-components.md
+  s_6562bcb6cc0539::t_e38d6cec31584d 20,24,79-96,104,112,115,130,147,156,162,172
+docs/concepts/message-flow.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 83,91
+packages/im/core/src/jsx.ts
+  s_6562bcb6cc0539::t_319a3c7bdb3779 2,6
+  s_6562bcb6cc0539::t_3fe3eb2396dbd1 3
+  s_6562bcb6cc0539::t_5b95d3a680d017 4-5
+docs/en/concepts/architecture.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 123
+docs/authoring/middleware-components.md
+  s_6562bcb6cc0539::t_e2ed095871e322 14,22,25,30,85-123,132,140,143,159,181,194,198,210
+docs/plans/jsx-html-components.md
+  s_6562bcb6cc0539::t_0dd7a162249b71 7-9
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_6562bcb6cc0539::t_5c816f900ff23c 83-86,88
+  s_6562bcb6cc0539::t_dd4a9c9fca83a7 2
+  s_6562bcb6cc0539::t_5b95d3a680d017 4,23-24,41,53,56,73-74,91,93,95,114
+  s_6562bcb6cc0539::t_89c051dc93726e 57,67,72,75,79,87,115
+  s_6562bcb6cc0539::t_14b7708b29084c 82
+  s_6562bcb6cc0539::t_319a3c7bdb3779 3,76-78,80-81,89-90
+packages/im/core/src/jsx-dev-runtime.ts
+  s_6562bcb6cc0539::t_319a3c7bdb3779 1-2
+packages/im/jsx/tests/types.fixture.tsx
+  s_6562bcb6cc0539::t_319a3c7bdb3779 27,30
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_4cdd2cae57e44b 1571-1574
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5ab63076c9bb1b6dd2944f07ea6209ff7773dca7",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
