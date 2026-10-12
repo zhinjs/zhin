@@ -1,5 +1,12 @@
 # @zhin.js/plugin-content-moderation
 
+## 1.1.6
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+
 ## 1.1.5
 
 ### Patch Changes

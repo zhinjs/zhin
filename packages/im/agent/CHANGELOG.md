@@ -1,5 +1,23 @@
 # @zhin.js/agent
 
+## 1.1.30
+
+### Patch Changes
+
+- b36452a: Bind optional decision providers to the held runtime generation. Add explicit off, shadow and active policies for progressive capability selection, scoped search reranking and automatic approval judgments, preserving deterministic permissions and human approval memory. Validate consumer configuration and expose redacted decision diagnostics.
+- Updated dependencies [badcc1f]
+- Updated dependencies [b36452a]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/ai@1.1.37
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/agent-feature@1.1.4
+  - @zhin.js/mcp-feature@1.1.4
+  - @zhin.js/prompt-section@1.1.3
+  - @zhin.js/skill@1.1.4
+  - @zhin.js/tool@1.1.4
+  - @zhin.js/permission@1.1.4
+
 ## 1.1.29
 
 ### Patch Changes

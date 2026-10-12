@@ -1,5 +1,15 @@
 # @zhin.js/pagemanager
 
+## 1.1.5
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/layout@1.1.4
+  - @zhin.js/page@1.1.4
+  - @zhin.js/contract@1.1.4
+
 ## 1.1.4
 
 ### Patch Changes
