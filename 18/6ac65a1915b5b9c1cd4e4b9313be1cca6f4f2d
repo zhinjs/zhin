@@ -1,0 +1,130 @@
+docs/contributing/plugin-experience-plan.md
+  s_079f1dc5e6308d::t_c48eba1350c9b1 1-44
+plugins/utils/60s/README.md
+  s_079f1dc5e6308d::t_23da5ec0160e44 10,15
+plugins/utils/rss/commands/rss-check/[[url]]/index.ts
+  s_079f1dc5e6308d::t_63d15ba64edf92 2,17
+  s_079f1dc5e6308d::t_4a033e664994f1 24,30
+plugins/utils/rss/src/poll.ts
+  s_079f1dc5e6308d::t_c7eead19fe2708 55,58-61
+  s_079f1dc5e6308d::t_5613665a482d68 56-57,62,66-67
+plugins/utils/group-suite/README.md
+  s_079f1dc5e6308d::t_23da5ec0160e44 9,12
+docs/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_43e90e4b086eac 9
+  s_079f1dc5e6308d::t_a4719cf229d6f4 137-144
+  s_079f1dc5e6308d::t_128b786402fd26 5-8,19-21,37,40,92,101,169,182,189,193,211
+  s_079f1dc5e6308d::t_080b540680bb8d 180
+  s_079f1dc5e6308d::t_7fed1b506fbcff 36,62
+.github/instructions/zhin-plugin.instructions.md
+  s_079f1dc5e6308d::t_7fed1b506fbcff 15-16,18-19
+  s_079f1dc5e6308d::t_ccf487c7afba81 44-47
+plugins/utils/lottery/README.md
+  s_079f1dc5e6308d::t_23da5ec0160e44 18,43
+  s_079f1dc5e6308d::t_6270f13ccc7b91 44
+plugins/utils/rss/plugin.ts
+  s_079f1dc5e6308d::t_5613665a482d68 64
+plugins/utils/rss/commands/rss-add/[url]/index.ts
+  s_079f1dc5e6308d::t_ab18cc4fa1022e 3
+  s_079f1dc5e6308d::t_4a033e664994f1 26,31
+  s_079f1dc5e6308d::t_63d15ba64edf92 2,21
+plugins/utils/rss/commands/rss-remove/[url]/index.ts
+  s_079f1dc5e6308d::t_63d15ba64edf92 2,18
+  s_079f1dc5e6308d::t_4a033e664994f1 21,30
+plugins/utils/short-url/README.md
+  s_079f1dc5e6308d::t_7081fc3dae98dd 8,13,17,22
+.changeset/plugin-experience-foundation.md
+  s_079f1dc5e6308d::t_27a1d404da0364 1-21
+plugins/utils/rss/commands/rss-list/index.ts
+  s_079f1dc5e6308d::t_4a033e664994f1 17
+  s_079f1dc5e6308d::t_63d15ba64edf92 2,14
+tests/docs/first-plugin-runtime.test.ts
+  s_079f1dc5e6308d::t_6335a29fdacae3 1-6,8-11,20-34,36-37,45-52,55-60,67,70-82,84-89,94-126,128-130,132-133,135-137,140-148
+  s_079f1dc5e6308d::t_a4719cf229d6f4 61-64
+  s_079f1dc5e6308d::t_080b540680bb8d 139
+  s_079f1dc5e6308d::t_43e90e4b086eac 7,16-19,53,65,69,92-93,131,134
+  s_079f1dc5e6308d::t_6c89604a89567c 12-15,35,38-44,54,66,68,90-91,138
+  s_079f1dc5e6308d::t_dfa1e17ba7271d 83,127
+plugins/services/activity-feedback/tests/executor.test.ts
+  s_079f1dc5e6308d::t_23d01ded2620c2 34-49
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_079f1dc5e6308d::t_23d01ded2620c2 15,163-170
+plugins/utils/content-moderation/README.md
+  s_079f1dc5e6308d::t_7081fc3dae98dd 8,13,17,19-29,31-57,100,171
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_3bd2c98e89da0c 34-37
+  s_079f1dc5e6308d::t_23da5ec0160e44 8,13,17-21,68,91-93
+plugins/utils/rss/src/runtime.ts
+  s_079f1dc5e6308d::t_5613665a482d68 4,9
+plugins/utils/code-runner/README.md
+  s_079f1dc5e6308d::t_7081fc3dae98dd 8,13,17,22
+packages/console/pagemanager/tests/client-build/client-build.test.ts
+  s_079f1dc5e6308d::t_6f3d380c229e57 154,162,166-167,170-178,180-181
+plugins/utils/link-poster/README.md
+  s_079f1dc5e6308d::t_7081fc3dae98dd 8,13,17,22
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_079f1dc5e6308d::t_23d01ded2620c2 1393-1426
+docs/en/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_ccf487c7afba81 3,5-8,19-21,37,40,92,101,169,182,189,193,211
+  s_079f1dc5e6308d::t_43e90e4b086eac 9
+  s_079f1dc5e6308d::t_7fed1b506fbcff 36,62
+  s_079f1dc5e6308d::t_a4719cf229d6f4 137-144
+  s_079f1dc5e6308d::t_080b540680bb8d 180
+plugins/utils/rss/tests/rss-sqlite-delete.test.ts
+  s_079f1dc5e6308d::t_c7eead19fe2708 13,112,125-128
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_079f1dc5e6308d::t_6f3d380c229e57 3-11,16,26,30,33,41,44-47,49-61,63,65-109,111-211
+basic/cli/tests/plugin-runtime/outbound-host.test.ts
+  s_079f1dc5e6308d::t_440a46079b64ed 70-90
+plugins/utils/rss/src/index.ts
+  s_079f1dc5e6308d::t_76b2f7d20d7382 11
+plugins/utils/repeater/README.md
+  s_079f1dc5e6308d::t_23da5ec0160e44 8,13,17-20
+docs/authoring/host-tokens.md
+  s_079f1dc5e6308d::t_8f78bc93cae2b9 3,9-10,24,44-54,56-66,68,73-75
+plugins/utils/qrcode/README.md
+  s_079f1dc5e6308d::t_7081fc3dae98dd 8,13,17,22
+docs/contributing/development.md
+  s_079f1dc5e6308d::t_c48eba1350c9b1 13-14
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_079f1dc5e6308d::t_440a46079b64ed 87-90
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_079f1dc5e6308d::t_440a46079b64ed 56-59
+basic/cli/tests/plugin-runtime/console/agent-feature-projection.test.ts
+  s_079f1dc5e6308d::t_5e99f10ec7346c 16,129,134,141,147,172,178-179,183,195
+docs/en/authoring/host-tokens.md
+  s_079f1dc5e6308d::t_8f78bc93cae2b9 3,9-10,24,44-54,56-66,68,73-75
+plugins/utils/rss/tests/rss-channel.test.ts
+  s_079f1dc5e6308d::t_63d15ba64edf92 9,68-103
+  s_079f1dc5e6308d::t_ab18cc4fa1022e 142-144,151-152
+  s_079f1dc5e6308d::t_3035b93be99c95 1-8,10-21,23-67,104-141,145-150,153-204
+  s_079f1dc5e6308d::t_f06d3c0e2949c8 22
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_079f1dc5e6308d::t_6f3d380c229e57 13-31,35-41,45-48,50-59,61-72,75,77-78,81-180,192,199-205,208-241
+plugins/utils/rss/tests/message-fixture.ts
+  s_079f1dc5e6308d::t_c7eead19fe2708 1-27
+plugins/utils/rss/src/channel.ts
+  s_079f1dc5e6308d::t_63d15ba64edf92 13,23-32,36
+  s_079f1dc5e6308d::t_c7eead19fe2708 51
+  s_079f1dc5e6308d::t_76b2f7d20d7382 1,6,12,15-17,19-22,33-35,37-44,46-50,52-54,56-57,59-62
+plugins/utils/rss/tests/rss-runtime.test.ts
+  s_079f1dc5e6308d::t_c7eead19fe2708 13,35,78-81,150-153
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_079f1dc5e6308d::t_3d661d324e2264 459-460
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "186ac65a1915b5b9c1cd4e4b9313be1cca6f4f2d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
