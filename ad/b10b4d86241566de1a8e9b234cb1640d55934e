@@ -1,0 +1,86 @@
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_6562bcb6cc0539::t_981359be3a618f 109,124,135-136,199
+  s_6562bcb6cc0539::t_bfb8f56292a75c 7,38,55
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_6562bcb6cc0539::t_981359be3a618f 197,203-205
+packages/im/core/src/jsx/message-tags.ts
+  s_6562bcb6cc0539::t_016faad06d4905 2,27,50
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  s_6562bcb6cc0539::t_981359be3a618f 36-38,65,67,70-74,76-79,112-114,119-122
+  s_6562bcb6cc0539::t_342cda7188687a 68-69,75
+basic/database/src/dialects/mysql.ts
+  s_6562bcb6cc0539::t_981359be3a618f 222-229,244,398
+  s_6562bcb6cc0539::t_740fe65e554e53 213,385-397,399-400
+scripts/check-architecture-layers.mjs
+  s_6562bcb6cc0539::t_016faad06d4905 43
+basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
+  s_6562bcb6cc0539::t_981359be3a618f 48-59
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_6562bcb6cc0539::t_981359be3a618f 78-79
+  s_6562bcb6cc0539::t_016faad06d4905 21,93-94,97
+packages/im/core/src/jsx/intrinsic-elements.ts
+  s_6562bcb6cc0539::t_016faad06d4905 4,8-11,19-21,29
+basic/database/tests/mysql-schema.test.ts
+  s_6562bcb6cc0539::t_981359be3a618f 21-46,54-55
+  s_6562bcb6cc0539::t_8ddca204c5c92e 58
+basic/database/README.md
+  s_6562bcb6cc0539::t_981359be3a618f 118
+  s_6562bcb6cc0539::t_b2eb14aa166a2e 119
+packages/im/core/src/plugin-runtime/im/jsx-button-registry.ts
+  s_6562bcb6cc0539::t_016faad06d4905 11-15,21,45,58,62,72-75,84-88
+  s_6562bcb6cc0539::t_981359be3a618f 26-27,57,63,66
+.changeset/calm-mysql-schema.md
+  s_6562bcb6cc0539::t_96fe46502a57ad 7-8
+.changeset/tidy-message-jsx.md
+  s_6562bcb6cc0539::t_4ec8f407278dbe 10-11
+.github/instructions/zhin-plugin.instructions.md
+  s_6562bcb6cc0539::t_d25bd3f7cc5449 62
+basic/cli/tests/plugin-runtime/console/agent-feature-projection.test.ts
+  s_6562bcb6cc0539::t_c0bcdc6daf2f60 16,123-129,136,141,148,154,179,185-186,190,202
+docs/authoring/middleware-components.md
+  s_6562bcb6cc0539::t_d45e2754018d90 104
+docs/concepts/message-flow.md
+  s_6562bcb6cc0539::t_8eb84b04cbb8c9 91
+docs/en/authoring/middleware-components.md
+  s_6562bcb6cc0539::t_eefa7228b07c4d 81,93,95
+docs/en/concepts/message-flow.md
+  s_6562bcb6cc0539::t_1dbb7abd5be68c 149
+packages/im/core/src/jsx/message-renderer.ts
+  s_6562bcb6cc0539::t_feb0fc7881a3aa 1,14-18,60,80
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_6562bcb6cc0539::t_4b2f1c392b2ade 2,4,23,53,76-92
+packages/im/core/tests/jsx-public.test-d.tsx
+  s_6562bcb6cc0539::t_e85368b8c5f8d5 66-75
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_6562bcb6cc0539::t_33d2b1f402f708 167-284,2502
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_6562bcb6cc0539::t_31df082bee9723 1-33
+packages/im/core/tests/plugin-runtime/jsx-message-layout.test.ts
+  s_6562bcb6cc0539::t_2683af088dccf5 5,112-173
+packages/im/jsx/src/element.ts
+  s_6562bcb6cc0539::t_10c6d7a670a179 26-29,42
+packages/im/jsx/src/index.ts
+  s_6562bcb6cc0539::t_1a932f038785be 2
+packages/im/jsx/src/render.ts
+  s_6562bcb6cc0539::t_63ed26e85939d6 1,101
+packages/im/jsx/tests/types.fixture.tsx
+  s_6562bcb6cc0539::t_aff4342201d1c9 21,31-35
+tests/snapshots/api-surface.json
+  s_6562bcb6cc0539::t_a7311d457ab36e 257
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "adb10b4d86241566de1a8e9b234cb1640d55934e",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
