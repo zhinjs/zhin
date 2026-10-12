@@ -1,0 +1,23 @@
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_6562bcb6cc0539::t_69591df1c406e3 37-44
+packages/im/core/tests/interactive-segments.test.ts
+  s_6562bcb6cc0539::t_69591df1c406e3 92-102
+packages/im/core/src/built/interactive-segments/action.ts
+  s_6562bcb6cc0539::t_69591df1c406e3 59
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "def468032b8477d055cce1c56640e0da73a383b7",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
