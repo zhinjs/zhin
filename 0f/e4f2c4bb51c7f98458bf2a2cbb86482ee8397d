@@ -1,0 +1,58 @@
+basic/schema/README.md
+  s_6562bcb6cc0539::t_4473078a71eaac 168-169
+docs/en/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_4473078a71eaac 65-66
+basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts
+  s_6562bcb6cc0539::t_9917baead33815 41-42
+docs/authoring/commands.md
+  s_6562bcb6cc0539::t_3d430c4b485d31 80-81
+packages/im/plugin-runtime/tests/types/persistent-state.ts
+  s_6562bcb6cc0539::t_447e25967b058f 1,6-9
+packages/im/isolate/tests/isolate-runtime.test.ts
+  s_6562bcb6cc0539::t_9b7bf01689221d 213-246
+.changeset/clear-plugin-authoring.md
+  s_6562bcb6cc0539::t_9b7bf01689221d 7,18
+packages/im/command/src/definition.ts
+  s_6562bcb6cc0539::t_d265e7b30850f1 493-494,499-500
+packages/im/command/src/arguments.ts
+  s_6562bcb6cc0539::t_e781f7e5c66012 79-83,86-90,94,97,100,111,118-119,180-181,200,212,219,223-225,252
+  s_6562bcb6cc0539::t_540f72e9d2e5f2 84-85,101,104-105,115-117
+docs/en/authoring/commands.md
+  s_6562bcb6cc0539::t_3d430c4b485d31 80-81
+basic/schema/tests/config-declaration.test.ts
+  s_6562bcb6cc0539::t_4473078a71eaac 97-121
+packages/im/plugin-runtime/tests/root-private-token.test.ts
+  s_6562bcb6cc0539::t_e572da62aa097f 11-41
+docs/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_4473078a71eaac 65-66
+packages/im/command/tests/command.test.ts
+  s_6562bcb6cc0539::t_540f72e9d2e5f2 1619-1620,1622
+  s_6562bcb6cc0539::t_0bd95ea8efafde 1592-1618,1621,1623-1637
+basic/schema/src/json-schema.ts
+  s_6562bcb6cc0539::t_4473078a71eaac 45-48,92-101
+  s_6562bcb6cc0539::t_be1993b25901e7 102-103
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_6562bcb6cc0539::t_4473078a71eaac 190-192
+packages/im/plugin-runtime/src/token.ts
+  s_6562bcb6cc0539::t_b1ddf23d63f36e 35,40,42,64-65,74-75,86-87,102
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_6562bcb6cc0539::t_4473078a71eaac 7-8,53-108
+packages/im/isolate/src/bootstrap.ts
+  s_6562bcb6cc0539::t_9b7bf01689221d 79-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0fe4f2c4bb51c7f98458bf2a2cbb86482ee8397d",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
