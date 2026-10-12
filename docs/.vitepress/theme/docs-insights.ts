@@ -186,7 +186,7 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     dwellMs: performance.now() - pageStartedAt,
   });
 
-  const collectSearch = (target: HTMLInputElement, query: string) => {
+  const collectSearch = (target: HTMLInputElement, query: string, resultsChanged: boolean) => {
     if (!target.isConnected || target.value.trim() !== query) {
       stopSearchCollection();
       return;
@@ -197,6 +197,8 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     // A cold search index may take seconds to load. Empty DOM is pending, not
     // a completed search; wait for the rendered result instead of guessing.
     if (resultCount === 0 && !noResults) return;
+    // Positive results can remain from the preceding query until search runs.
+    if (resultCount > 0 && !resultsChanged) return;
     stopSearchCollection();
     const key = `${query}\u0000${resultCount}\u0000${noResults}`;
     if (key === lastSearchKey) return;
@@ -213,13 +215,21 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || !target.matches('.VPLocalSearchBox #localsearch-input')) return;
     stopSearchCollection();
+    const query = target.value.trim();
+    const results = target.closest('.VPLocalSearchBox')?.querySelector('.results');
+    if (query.length < 2 || !results || !enabled()) return;
+    let resultsChanged = false;
+    let debounceComplete = false;
+    // Observe before the debounce so a fast search is not missed, while a slow
+    // search cannot reuse the preceding query's unchanged results.
+    searchObserver = new MutationObserver(() => {
+      resultsChanged = true;
+      if (debounceComplete) collectSearch(target, query, resultsChanged);
+    });
+    searchObserver.observe(results, { childList: true, subtree: true, characterData: true });
     searchTimer = window.setTimeout(() => {
-      const query = target.value.trim();
-      const root = target.closest('.VPLocalSearchBox');
-      if (query.length < 2 || !target.isConnected || !root) return;
-      searchObserver = new MutationObserver(() => collectSearch(target, query));
-      searchObserver.observe(root, { childList: true, subtree: true, characterData: true });
-      collectSearch(target, query);
+      debounceComplete = true;
+      collectSearch(target, query, resultsChanged);
     }, 400);
   };
   const onPageHide = () => {
