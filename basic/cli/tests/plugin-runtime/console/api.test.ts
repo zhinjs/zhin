@@ -456,7 +456,8 @@ describe('console REST routes', () => {
   it('diagnoses the exact instance using its declared package installation', async () => {
     await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
       name: 'proj', dependencies: { '@zhin.js/adapter-icqq': '1.2.3' },
-      zhin: { plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'custom-icqq' }] },
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts',
+        plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'custom-icqq' }] },
     }));
     await writeFile(join(projectRoot, 'zhin.config.yml'), 'plugin:\n  custom-icqq: {}\n');
     const { port } = await startHost({ projectRoot });

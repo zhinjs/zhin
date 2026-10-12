@@ -12,9 +12,15 @@ applyTo: "plugins/**,examples/**"
   Resources, not capability registration.
 - Child packages live one level below `plugins/*`. Logical ancestry comes from `zhin.plugins`, not
   nested directories.
-- Feature providers are explicit `zhin.features` mounts. Apps that depend on `zhin.js` inherit
-  Stable Features via `platformFeatures` — do **not** separately install `@zhin.js/command` /
-  `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`.
+- Feature providers are explicit `zhin.features` mounts. Root apps that depend on `zhin.js` inherit
+  Stable Features via `platformFeatures` — they do **not** need separate `@zhin.js/command` /
+  `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`
+  unless a child peer requires a directly resolvable shared provider.
+  This inheritance is root-only: child plugins must declare each Feature they use in
+  `zhin.features`. Shared providers such as Command belong in optional `peerDependencies`,
+  supplied by the host as a direct dependency so child resolution reaches the same physical
+  package. Do not install a separate provider copy inside a mounted child; npm optional peers
+  do not make the runtime Feature optional. See the first-plugin tutorial for both mount modes.
 
 ## Convention directories
 
@@ -39,8 +45,10 @@ pages/<name>/index.tsx                definePage()
 pages/{nav,footer}/index.tsx          layout overrides
 ```
 
-Each TypeScript capability default-exports exactly one definition. Do not call `usePlugin()`,
-`getPlugin()` or `add*()` in new code. Migrate old code with
+Each TypeScript capability default-exports exactly one definition. Single-file applications may
+register commands with `setup({ addCommand })`, as shown in `examples/single-file-bot`; use
+convention directories when splitting capabilities into files. Do not call the removed
+`usePlugin()` or `getPlugin()` APIs. Migrate old code with
 `.github/skills/migrate-zhin-plugin-runtime`.
 
 Tool placement is an authority and disclosure boundary. Root Tools are plugin-wide; Agent Tools

@@ -15,7 +15,7 @@
 ## 安装
 
 ```bash
-pnpm add @zhin.js/plugin-lottery
+pnpm exec zhin install @zhin.js/plugin-lottery
 ```
 
 ## 流水线
@@ -39,6 +39,8 @@ scheduleCron (18:00)
 - **确定性报告**：主流水线不依赖 legacy Plugin 或 LLM，Agent 可通过独立 tools 读取结果
 
 ## 配置
+
+安装命令会挂载到 `package.json#zhin.plugins`，实例名为 `lottery`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
 plugins:

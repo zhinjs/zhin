@@ -1508,6 +1508,60 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('rejects host sends whose canonical delivery was suppressed or failed', async () => {
+    const scenarios = [
+      {
+        outboundMiddleware: async () => undefined,
+        expected: { code: 'outbound_suppressed', disposition: 'not_sent' },
+      },
+      {
+        endpointSend: () => { throw new Error('transport closed'); },
+        expected: { code: 'endpoint_send_failed', disposition: 'unknown' },
+      },
+      {
+        endpointSend: () => '',
+        expected: { code: 'delivery_unconfirmed', disposition: 'unknown' },
+      },
+      {
+        endpointSend: () => { throw new EndpointDeliveryError('platform_rejected', 'rate limited', 'rejected'); },
+        expected: { code: 'platform_rejected', disposition: 'rejected' },
+      },
+      {
+        endpointSend: () => { throw new EndpointDeliveryError('outbound_unsupported', 'explicit rejection', 'rejected'); },
+        expected: { code: 'outbound_unsupported', disposition: 'rejected' },
+      },
+      {
+        endpointSend: () => { throw new EndpointDeliveryError('outbound_unsupported', 'unconfirmed', 'unknown'); },
+        expected: { code: 'outbound_unsupported', disposition: 'unknown' },
+      },
+      {
+        endpointSend: () => { throw new EndpointDeliveryError('platform_rejected', 'not connected', 'not_sent'); },
+        expected: { code: 'platform_rejected', disposition: 'not_sent' },
+      },
+      {
+        endpointSend: () => { throw { protocol: 'onebot-v11', kind: 'protocol', response: { status: 'failed', retcode: 100 } }; },
+        expected: { code: 'platform_rejected', disposition: 'rejected' },
+      },
+      {
+        adapterCapabilities: ['inbound'] as Array<'inbound' | 'outbound'>,
+        expected: { code: 'outbound_unsupported', disposition: 'not_sent' },
+      },
+    ];
+    for (const scenario of scenarios) {
+      const fixture = await createFixture([], [], undefined, undefined, undefined, scenario);
+      try {
+        await expect(fixture.im.endpoints.send({
+          adapter: 'memory', endpointKey: 'memory',
+          conversation: { kind: 'private', id: 'room-1' },
+          content: 'host business send',
+        })).rejects.toMatchObject(scenario.expected);
+      } finally {
+        await fixture.adapters.stop();
+        await fixture.store.close();
+      }
+    }
+  });
+
   it('accepts MessageRef and ConversationRef at Core control methods', async () => {
     const calls: string[] = [];
     const control: EndpointControl = {
@@ -1990,9 +2044,15 @@ describe('IM Runtime', () => {
     { result: '   ', code: 'delivery_unconfirmed', unknown: true },
     { error: new Error('transport reset'), code: 'endpoint_send_failed', unknown: true },
     { error: new EndpointDeliveryError('endpoint_timeout', 'timed out', 'unknown'), code: 'endpoint_timeout', unknown: true },
-    { error: new EndpointDeliveryError('platform_rejected', 'rate limited', 'rejected'), code: 'platform_rejected', unknown: false },
+    { error: new EndpointDeliveryError('platform_rejected', 'rate limited', 'rejected'), code: 'platform_rejected', unknown: false, status: 'rejected' },
+    { error: new EndpointDeliveryError('platform_rejected', 'timed out', 'unknown'), code: 'platform_rejected', unknown: true },
+    { error: new EndpointDeliveryError('platform_rejected', 'not connected', 'not_sent'), code: 'platform_rejected', unknown: false },
+    { error: new EndpointDeliveryError('outbound_unsupported', 'explicit rejection', 'rejected'), code: 'outbound_unsupported', unknown: false, status: 'rejected' },
+    { error: new EndpointDeliveryError('outbound_unsupported', 'timed out', 'unknown'), code: 'outbound_unsupported', unknown: true },
+    { error: { protocol: 'onebot-v11', kind: 'protocol', response: { status: 'failed', retcode: 100 } }, code: 'platform_rejected', unknown: false, status: 'rejected' },
+    { error: { protocol: 'onebot-v11', kind: 'transport', response: { status: 'failed' } }, code: 'endpoint_send_failed', unknown: true },
     { error: new EndpointDeliveryError('endpoint_disconnected', 'not connected', 'not_sent'), code: 'endpoint_disconnected', unknown: false },
-  ])('preserves evidence for unconfirmed/rejected outbound result $code', async ({ result, error, code, unknown }) => {
+  ])('preserves evidence for unconfirmed/rejected outbound result $code', async ({ result, error, code, unknown, status }) => {
     let calls = 0;
     const fixture = await createFixture([], [], undefined, undefined, undefined, {
       endpointSend: () => { calls++; if (error) throw error; return result!; },
@@ -2003,10 +2063,11 @@ describe('IM Runtime', () => {
       conversation: { endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) }, kind: 'private', id: 'room-1' },
       requester: rootPluginId(), content: 'hello',
     });
-    expect(receipt.status).toBe('failed');
+    expect(receipt.status).toBe(status ?? 'failed');
     expect(receipt.failure?.code).toBe(code);
     expect(receipt.failure?.deliveryUnknown === true).toBe(unknown);
     expect(receipt.failure?.retryable).not.toBe(true);
+    expect(JSON.parse(JSON.stringify(receipt))).toEqual(receipt);
     expect(calls).toBe(1);
     expect(events.filter((event) => event.direction === 'outbound')).toEqual([]);
     await fixture.adapters.stop(); await fixture.store.close();

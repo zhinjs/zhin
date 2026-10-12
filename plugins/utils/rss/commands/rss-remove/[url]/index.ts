@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { extractChannelInfo } from '../../../src/channel.js';
+import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
 import { getRssSubs } from '../../../src/db-store.js';
 import type { RssConfig } from '../../../src/feed.js';
 import { rssRuntimeToken } from '../../../src/runtime.js';
@@ -15,11 +15,10 @@ export default defineCommand<RssConfig>({
     if (!url) return '请提供要取消的 RSS 源地址';
 
     const channel = extractChannelInfo(input);
+    if (!channel) return channelSourceError(input);
     const rows = await Subs.select().where({
       url,
-      adapter_name: channel.adapterName,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
+      ...subscriptionScope(channel),
     });
 
     if (rows.length === 0) return '未找到该订阅';
@@ -28,9 +27,7 @@ export default defineCommand<RssConfig>({
     // 表结构没有 id 列，删除必须按业务键匹配（与上面的 select 条件一致）。
     await Subs.delete().where({
       url,
-      adapter_name: channel.adapterName,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
+      ...subscriptionScope(channel),
     });
     return `已取消订阅: ${String(row.feed_title || url)}`;
   },

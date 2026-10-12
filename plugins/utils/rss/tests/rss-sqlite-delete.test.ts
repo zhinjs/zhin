@@ -10,7 +10,7 @@ import removeCommand from '../commands/rss-remove/[url]/index.ts';
 import { RSS_SEEN_TABLE, RSS_SUBS_TABLE, type RssModel } from '../src/db-store.js';
 import type { RssRow } from '../src/memory-store.js';
 import { cleanOldSeen } from '../src/poll.js';
-import { SMOKE_CHANNEL } from '../src/channel.js';
+import { rssMessage, RSS_TEST_CHANNEL } from './message-fixture.js';
 import { resolveRssConfig } from '../src/feed.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
 
@@ -109,7 +109,7 @@ function commandContext(runtime: RssRuntime) {
     use: (token: unknown) => token === rssRuntimeToken ? runtime : (() => { throw new Error('unexpected token'); })(),
     args: [],
     params: {},
-    input: undefined,
+    input: rssMessage(),
   };
 }
 
@@ -122,10 +122,10 @@ describe.skipIf(!DatabaseSync)('rss against real sqlite (no id column)', () => {
       await Subs.insert({
         url: 'https://example.com/feed.xml',
         feed_title: 'Example',
-        adapter_name: SMOKE_CHANNEL.adapterName,
-        endpoint_id: SMOKE_CHANNEL.endpointKey,
-        channel_type: SMOKE_CHANNEL.channelType,
-        channel_id: SMOKE_CHANNEL.channelId,
+        adapter_name: RSS_TEST_CHANNEL.adapterName,
+        endpoint_id: RSS_TEST_CHANNEL.endpointKey,
+        channel_type: RSS_TEST_CHANNEL.channelType,
+        channel_id: RSS_TEST_CHANNEL.channelId,
         creator_id: '',
         creator_name: '',
         created_at: new Date().toISOString(),

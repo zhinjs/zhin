@@ -14,7 +14,7 @@ async function fixture(result: EmailSmtpResult | Error) {
 }
 it.each([
   [{ messageId: 'fixture', accepted: ['actor@example.com'], rejected: [] }, 'sent', undefined, false],
-  [{ messageId: 'fixture', accepted: [], rejected: ['actor@example.com'] }, 'failed', 'platform_rejected', false],
+  [{ messageId: 'fixture', accepted: [], rejected: ['actor@example.com'] }, 'rejected', 'platform_rejected', false],
   [{ messageId: 'fixture', accepted: ['actor@example.com'], rejected: ['other@example.com'] }, 'failed', 'delivery_unconfirmed', true],
   [{ messageId: 'fixture', accepted: ['actor@example.com'], rejected: [], pending: ['other@example.com'] }, 'failed', 'delivery_unconfirmed', true],
   [{ messageId: 'fixture', accepted: ['other@example.com'], rejected: [] }, 'failed', 'delivery_unconfirmed', true],
@@ -33,13 +33,13 @@ it.each([
   } finally { await runtime.close(); }
 });
 it.each([
-  [Object.assign(new Error('private response body'), { responseCode: 550 }), 'platform_rejected', false],
-  [Object.assign(new Error('private response body'), { responseCode: 451 }), 'platform_rejected', false],
-  [new Error('connection lost after DATA'), 'delivery_unconfirmed', true],
-] as const)('classifies errors safely through Core with no retries: %s', async (error, code, unknown) => {
+  [Object.assign(new Error('private response body'), { responseCode: 550 }), 'rejected', 'platform_rejected', false],
+  [Object.assign(new Error('private response body'), { responseCode: 451 }), 'rejected', 'platform_rejected', false],
+  [new Error('connection lost after DATA'), 'failed', 'delivery_unconfirmed', true],
+] as const)('classifies errors safely through Core with no retries: %s', async (error, status, code, unknown) => {
   const runtime = await fixture(error);
   try {
-    const receipt = await runtime.send(); expect(receipt).toMatchObject({ status: 'failed', failure: { code } });
+    const receipt = await runtime.send(); expect(receipt).toMatchObject({ status, failure: { code } });
     expect(receipt.failure?.deliveryUnknown === true).toBe(unknown);
     expect(JSON.stringify(receipt)).not.toContain('private response body'); expect(runtime.sendMail).toHaveBeenCalledTimes(1);
   } finally { await runtime.close(); }

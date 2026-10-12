@@ -52,14 +52,19 @@ async function pushToSubscribers(runtime: RssRuntime, feedUrl: string, content: 
   const subscribers = await Subs.select().where({ url: feedUrl });
   let pushed = 0;
   for (const sub of subscribers) {
-    const adapterName = String(sub.adapter_name ?? '');
-    const channelId = String(sub.channel_id ?? '');
-    if (!adapterName || !channelId) continue;
+    const adapterName = sub.adapter_name;
+    const endpointKey = sub.endpoint_id;
+    const channelType = sub.channel_type;
+    const channelId = sub.channel_id;
+    if (typeof adapterName !== 'string' || !adapterName.trim()
+      || typeof channelId !== 'string' || !channelId.trim()
+      || typeof endpointKey !== 'string' || !endpointKey.trim()
+      || (channelType !== 'private' && channelType !== 'group' && channelType !== 'channel')) continue;
     try {
       await push({
         adapterName,
-        endpointKey: String(sub.endpoint_id ?? adapterName),
-        channelType: String(sub.channel_type ?? 'private'),
+        endpointKey,
+        channelType,
         channelId,
         content,
       });

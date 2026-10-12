@@ -5,24 +5,18 @@ Zhin.js plugin for short-url functionality.
 ## Installation
 
 ```bash
-pnpm add @zhin.js/plugin-short-url
+pnpm exec zhin install @zhin.js/plugin-short-url
 ```
 
 ## Usage
 
-Add the plugin to your `zhin.config.yml`:
+Run the installation command from your application directory. It installs the package and mounts the `short-url` instance in `package.json#zhin.plugins`. The corresponding `zhin.config.yml` node is:
 
 ```yaml
 plugins:
-  - @zhin.js/plugin-short-url
-```
-
-Or via CLI:
-
-```bash
-zhin install @zhin.js/plugin-short-url
+  short-url: {}
 ```
 
 ## Configuration
 
-Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.
+This plugin currently has no configuration fields. Its [`schema.json`](./schema.json) accepts an empty object; do not place package names in a `plugins` array.

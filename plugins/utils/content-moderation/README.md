@@ -5,58 +5,56 @@
 ## 安装
 
 ```bash
-npm install @zhin.js/plugin-content-moderation
+pnpm exec zhin install @zhin.js/plugin-content-moderation
 ```
 
 ## 配置
 
-在 `zhin.config.yml` 中添加：
+在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `content-moderation`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
 plugins:
-  - "@zhin.js/plugin-content-moderation"
-
-content-moderation:
-  enabled: true
-  onError: open                 # 源失败默认：open | closed
-  maskChar: "*"
-  replyTemplate: "消息含不当内容，已拦截。"
-  masters: []                   # 额外 master userId（兜底）
-  inbound:
+  content-moderation:
     enabled: true
-    bypassMasters: true
-    whitelist:
-      userIds: []
-      conversationIds: []
-  outbound:
-    enabled: true
-    bypass: false               # true 才跳过出站审查
-  actions:                      # 可整表覆盖；缺省偏严
-    pass: allow
-    low: log
-    medium: redact
-    high: drop
-    critical: [drop, recall]
-  sources:
-    - id: local
-      type: local
+    onError: open                 # 源失败默认：open | closed
+    maskChar: "*"
+    replyTemplate: "消息含不当内容，已拦截。"
+    masters: []                   # 额外 master userId（兜底）
+    inbound:
       enabled: true
-      includeBuiltin: true          # 默认 true：合并内置分级词库
-      defaultSeverity: high         # 未标注分级的自定义词默认等级（兼容旧字段 severity）
-      words:
-        - 自定义敏感词                 # → defaultSeverity
-        - word: 擦边广告
-          severity: low
-        - word: 诈骗话术
-          severity: high
-      # wordFiles: ["./data/bad-words.txt"]
-      # 词库文件行：word  /  severity:word  /  word|severity
-    # - id: http-1
-    #   type: http
-    #   url: "https://example.com/moderate"
-    #   onError: closed
-    #   timeoutMs: 5000outbound
-    #   forceUpload: false
+      bypassMasters: true
+      whitelist:
+        userIds: []
+        conversationIds: []
+    outbound:
+      enabled: true
+      bypass: false               # true 才跳过出站审查
+    actions:                      # 可整表覆盖；缺省偏严
+      pass: allow
+      low: log
+      medium: redact
+      high: drop
+      critical: [drop, recall]
+    sources:
+      - id: local
+        type: local
+        enabled: true
+        includeBuiltin: true          # 默认 true：合并内置分级词库
+        defaultSeverity: high         # 未标注分级的自定义词默认等级（兼容旧字段 severity）
+        words:
+          - 自定义敏感词                 # → defaultSeverity
+          - word: 擦边广告
+            severity: low
+          - word: 诈骗话术
+            severity: high
+        # wordFiles: ["./data/bad-words.txt"]
+        # 词库文件行：word  /  severity:word  /  word|severity
+      # - id: http-1
+      #   type: http
+      #   url: "https://example.com/moderate"
+      #   onError: closed
+      #   timeoutMs: 5000
+      #   forceUpload: false
 ```
 
 
@@ -99,7 +97,7 @@ content-moderation:
 | `critical` | `[drop, recall]` | 入站丢弃并尽量撤回；出站不发（`recall` 忽略） |
 
 
-示例：入站 medium 想「提示但仍放行」，可改成：
+示例：入站 medium 想「提示但仍放行」，在 `plugins.content-moderation.actions` 中修改：
 
 ```yaml
 actions:

@@ -1,5 +1,5 @@
 import { defineCommand } from 'zhin.js/command';
-import { extractChannelInfo } from '../../src/channel.js';
+import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../src/channel.js';
 import { getRssSubs } from '../../src/db-store.js';
 import { resolveRssConfig, type RssConfig } from '../../src/feed.js';
 import { rssRuntimeToken } from '../../src/runtime.js';
@@ -11,11 +11,10 @@ export default defineCommand<RssConfig>({
     if (!Subs) return 'RSS 数据库尚未就绪';
 
     const channel = extractChannelInfo(input);
+    if (!channel) return channelSourceError(input);
     const cfg = resolveRssConfig(config);
     const rows = await Subs.select().where({
-      adapter_name: channel.adapterName,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
+      ...subscriptionScope(channel),
     });
 
     if (rows.length === 0) {

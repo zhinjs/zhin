@@ -1,69 +1,64 @@
-/**
- * Extract subscription channel keys from Runtime Message (`input`).
- * Gaps vs legacy: no `$channel` / `$group` — use `conversation` / `metadata`.
- */
+/** A subscription destination uses public Message fields, never CapabilityId internals. */
 
 export interface ChannelInfo {
   adapterName: string;
   endpointKey: string;
-  channelType: string;
+  channelType: 'private' | 'group' | 'channel';
   channelId: string;
   senderId: string;
   senderName: string;
 }
 
-/** Smoke / agent / execute()-without-dispatch fallback. */
-export const SMOKE_CHANNEL: ChannelInfo = {
-  adapterName: 'smoke',
-  endpointKey: 'local',
-  channelType: 'private',
-  channelId: 'global',
-  senderId: '',
-  senderName: '',
-};
+export const CHANNEL_REQUIRED_MESSAGE = '请在机器人私聊、群聊或频道内执行此命令；当前调用没有有效的订阅会话';
+export const UNSUPPORTED_ADDRESS_MESSAGE = '暂不支持线程／父频道寻址的订阅，请在无需线程或父频道信息的会话内执行';
 
-export function extractChannelInfo(input: unknown): ChannelInfo {
-  if (!input || typeof input !== 'object') return { ...SMOKE_CHANNEL };
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
-  const msg = input as {
-    conversation?: {
-      endpoint?: { id?: string; adapter?: string };
-      kind?: string;
-      id?: string;
-    };
-    sender?: string;
-    metadata?: Record<string, unknown>;
-  };
-  const meta = msg.metadata ?? {};
-  const conversation = msg.conversation;
-  const channelType = String(
-    meta.channelType ?? meta.type ?? meta.channel_type ?? conversation?.kind ?? 'private',
-  );
-  const channelId = String(
-    meta.channelId ?? meta.channel_id ?? conversation?.id ?? SMOKE_CHANNEL.channelId,
-  );
-  const endpointCapabilityId = typeof conversation?.endpoint?.id === 'string'
-    ? conversation.endpoint.id
-    : undefined;
-  const adapterName = String(
-    (endpointCapabilityId?.split('\0').pop() ?? endpointCapabilityId)?.split('~')[0]
-    ?? meta.adapter
-    ?? SMOKE_CHANNEL.adapterName,
-  );
-  const endpointKey = String(
-    meta.endpoint ?? meta.endpointKey ?? meta.endpoint_id ?? adapterName,
-  );
-  const senderId = String(msg.sender ?? meta.senderId ?? '');
-  const senderName = String(meta.senderName ?? meta.name ?? '');
+function isIdentifier(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
 
-  if (!channelId) return { ...SMOKE_CHANNEL, adapterName, endpointKey, senderId, senderName };
+function hasUnsupportedAddress(input: unknown): boolean {
+  return isRecord(input) && isRecord(input.conversation)
+    && (input.conversation.parent !== undefined || input.conversation.threadId !== undefined);
+}
+
+/** Explain rejection without silently flattening a thread/container address. */
+export function channelSourceError(input: unknown): string {
+  return hasUnsupportedAddress(input) ? UNSUPPORTED_ADDRESS_MESSAGE : CHANNEL_REQUIRED_MESSAGE;
+}
+
+/** No IM source means no destination; callers must not invent a global subscription. */
+export function extractChannelInfo(input: unknown): ChannelInfo | null {
+  if (!isRecord(input) || !isRecord(input.conversation)) return null;
+  if (hasUnsupportedAddress(input)) return null;
+  const conversation = input.conversation;
+  const kind = conversation.kind;
+  if (kind !== 'private' && kind !== 'group' && kind !== 'channel') return null;
+  if (!isIdentifier(input.clientAdapter) || !isIdentifier(input.endpointId)
+    || !isIdentifier(conversation.id)) return null;
+
+  const sender = input.sender;
+  if (sender !== undefined && (!isRecord(sender) || !isIdentifier(sender.id))) return null;
 
   return {
-    adapterName,
-    endpointKey,
-    channelType,
-    channelId,
-    senderId,
-    senderName,
+    adapterName: input.clientAdapter,
+    endpointKey: input.endpointId,
+    channelType: kind,
+    channelId: conversation.id,
+    senderId: isRecord(sender) && isIdentifier(sender.id) ? sender.id : '',
+    senderName: isRecord(sender) && typeof sender.name === 'string' ? sender.name : '',
+  };
+}
+
+/** Complete subscription scope, including the bot instance for multi-endpoint adapters. */
+export function subscriptionScope(channel: ChannelInfo): Record<string, string> {
+  return {
+    adapter_name: channel.adapterName,
+    endpoint_id: channel.endpointKey,
+    channel_type: channel.channelType,
+    channel_id: channel.channelId,
   };
 }

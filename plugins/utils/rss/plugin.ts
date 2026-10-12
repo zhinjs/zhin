@@ -61,7 +61,7 @@ export default definePlugin<RssConfig>({
           adapter: input.adapterName,
           endpointKey: input.endpointKey,
           conversation: {
-            kind: input.channelType as 'private' | 'group' | 'channel',
+            kind: input.channelType,
             id: input.channelId,
           },
           content: input.content,

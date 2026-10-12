@@ -10,7 +10,7 @@ import checkCommand from '../commands/rss-check/[[url]]/index.ts';
 import { formatFeedPreview, resolveRssConfig, stripHtml } from '../src/feed.js';
 import { createInMemoryRssDb, getRssSubs } from '../src/db-store.js';
 import { rssRuntimeToken, type RssRuntime } from '../src/runtime.js';
-import { SMOKE_CHANNEL } from '../src/channel.js';
+import { rssMessage, RSS_TEST_CHANNEL } from './message-fixture.js';
 
 function createRuntime(overrides: Partial<RssRuntime> = {}): RssRuntime {
   return {
@@ -32,7 +32,7 @@ function commandContext(runtime: RssRuntime) {
     },
     args: [],
     params: {},
-    input: undefined,
+    input: rssMessage(),
   };
 }
 
@@ -75,10 +75,10 @@ describe('@zhin.js/plugin-rss runtime', () => {
     await Subs.insert({
       url: 'https://example.com/feed.xml',
       feed_title: 'Example',
-      adapter_name: SMOKE_CHANNEL.adapterName,
-      endpoint_id: SMOKE_CHANNEL.endpointKey,
-      channel_type: SMOKE_CHANNEL.channelType,
-      channel_id: SMOKE_CHANNEL.channelId,
+      adapter_name: RSS_TEST_CHANNEL.adapterName,
+      endpoint_id: RSS_TEST_CHANNEL.endpointKey,
+      channel_type: RSS_TEST_CHANNEL.channelType,
+      channel_id: RSS_TEST_CHANNEL.channelId,
       creator_id: '',
       creator_name: '',
       created_at: new Date().toISOString(),
@@ -147,10 +147,10 @@ describe('@zhin.js/plugin-rss runtime', () => {
       await Subs.insert({
         url,
         feed_title: 'Empty',
-        adapter_name: SMOKE_CHANNEL.adapterName,
-        endpoint_id: SMOKE_CHANNEL.endpointKey,
-        channel_type: SMOKE_CHANNEL.channelType,
-        channel_id: SMOKE_CHANNEL.channelId,
+        adapter_name: RSS_TEST_CHANNEL.adapterName,
+        endpoint_id: RSS_TEST_CHANNEL.endpointKey,
+        channel_type: RSS_TEST_CHANNEL.channelType,
+        channel_id: RSS_TEST_CHANNEL.channelId,
         creator_id: '',
         creator_name: '',
         created_at: new Date().toISOString(),

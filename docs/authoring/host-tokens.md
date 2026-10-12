@@ -1,13 +1,13 @@
 # Host Token 总览（运行时 API）
 
-Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/工具的 `use(token)`（运行期）按 token 取用 Host 能力。本页是全量索引；各 token 的方法面以对应包的类型定义为准（链接到源码）。
+Plugin Runtime 里，插件通过 `context.resources.use(token)`（setup 期）或命令/工具的 `use(token)`（执行期）按 token 取用 Host 能力。本页索引常用 token；各 token 的方法面以对应包的类型定义为准。
 
 ## 消息与投递
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `outboundMessageToken`（`@zhin.js/core/runtime`） | `OutboundMessageService` | `receive` / `send(request) → DeliveryReceipt` / `sendEndpointMessage` / `onMessage` / `registerInteractiveHandler` |
-| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointId, conversation, content })` —— 跨平台出站，寻址用 ConversationRef |
+| `outboundMessageToken`（`zhin.js/core/runtime` 或 `@zhin.js/core/runtime`） | `OutboundMessageService` | `send(request) → DeliveryReceipt` / `registerInteractiveHandler`；入站处理与端点内部发送不属于此公共契约 |
+| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` —— 主动出站；`conversation` 为 `{ kind, id, parent?, threadId? }` |
 | `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播 runtime 事件（inbox/Console 消息流的来源） |
 
 ## 持久化
@@ -21,7 +21,7 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 
 | Token | 注入后得到 | 关键方法 |
 | --- | --- | --- |
-| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（包括 root 在内均按 owner 隔离） | 注册/取消 cron 任务；与 `outboundMessageToken` 组合即可做定时推送 |
+| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（包括 root 在内均按 owner 隔离） | `register({ id, cron, execute })` 返回取消函数 / `list()`；cron 为六段（秒、分、时、日、月、周） |
 | `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
 
 ## Agent
@@ -41,19 +41,38 @@ Plugin Runtime 里，插件通过 `context.use(token)`（setup 期）或命令/�
 ## 用法示例
 
 ```ts
-export default definePlugin({
+import { definePlugin, outboundHostToken, scheduleHostToken } from 'zhin.js';
+
+interface ReminderConfig {
+  target: {
+    adapter: string;
+    endpointKey: string;
+    conversation: { kind: 'private' | 'group' | 'channel'; id: string };
+  };
+}
+
+export default definePlugin<ReminderConfig>({
   name: 'reminder',
-  setup({ use }) {
-    const schedule = use(scheduleHostToken);
-    const gateway = use(outboundMessageToken);
-    schedule.register('0 9 * * *', async () => {
-      await gateway.send({ conversation, requester, content: '早安' });
+  requires: [scheduleHostToken, outboundHostToken],
+  setup({ resources, config, lifecycle }) {
+    const schedule = resources.use(scheduleHostToken);
+    const outbound = resources.use(outboundHostToken);
+    const target = config.get().target;
+    const cancel = schedule.register({
+      id: 'morning',
+      cron: '0 0 9 * * *',
+      async execute() {
+        await outbound.send({ ...target, content: '早安' });
+      },
     });
+    lifecycle.add(cancel);
   },
 });
 ```
 
-规则：`use()` 在 setup 期调用；token 未安装对应 Host 时 `use()` 抛错（如未装 `@zhin.js/agent` 取 `agentHostToken`）。Scope 化 token（database/schedule）按插件 owner 自动隔离，root 进程级 token 仅在 composition root（`basic/cli`）或显式 root 场景使用。
+`target` 放在该插件的配置节点，`adapter` 是已挂载 Adapter 的实例路径，`endpointKey` 是该实例中已配置的 Endpoint 名称，不能用内部 Capability ID 替代。配置层级见[插件模型](../concepts/plugin-model.md)。取消函数加入 `lifecycle`，避免热重载后保留旧任务。
+
+规则：setup 中使用 `resources.use()`，命令/工具执行中使用其上下文的 `use()`；token 未安装对应 Host 时会抛错（如未装 `@zhin.js/agent` 取 `agentHostToken`）。必需的 Host 用 `requires` 声明，可选 Host 先用 `resources.has(token)` 检查。Scope 化 token（database/schedule）按插件 owner 自动隔离，root 进程级 token 仅在 composition root（`basic/cli`）或显式 root 场景使用。
 
 AI fallback 不是 `OutboundMessageService` 的可变插件 API。composition root 在 generation setup
 中向 root resources 提供内部 `ingressRouteToken`；`ImRuntime.receive` 只从当前消息所持

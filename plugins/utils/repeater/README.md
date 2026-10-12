@@ -5,20 +5,19 @@
 ## 安装
 
 ```bash
-npm install @zhin.js/plugin-repeater
+pnpm exec zhin install @zhin.js/plugin-repeater
 ```
 
 ## 配置
 
-在 `zhin.config.yml` 中添加：
+在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `repeater`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
 plugins:
- - "@zhin.js/plugin-repeater" 
-repeater:
-  threshold: 3       # 触发复读的最少人数（默认 3）
-  cooldown: 30000    # 同一群冷却时间，毫秒（默认 30s）
-  maxLength: 200    # 消息长度上限，超过不触发（默认 200）
+  repeater:
+    threshold: 3       # 触发复读的最少人数（默认 3）
+    cooldown: 30000    # 同一群冷却时间，毫秒（默认 30s）
+    maxLength: 200     # 消息长度上限，超过不触发（默认 200）
 ```
 
 ## 工作原理

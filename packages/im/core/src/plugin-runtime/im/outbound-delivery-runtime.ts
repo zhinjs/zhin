@@ -252,13 +252,15 @@ function receiptFromEndpointResult(
 
 function receiptFromEndpointError(error: unknown, attempted = true): DeliveryReceipt {
   if (error instanceof EndpointDeliveryError) {
+    // Disposition is transport evidence; an error code alone cannot override it.
+    if (error.disposition === 'unknown') return unknownDeliveryReceipt(error.code);
+    if (error.disposition === 'rejected') return rejectedDeliveryReceipt(error.code, 'Endpoint rejected outbound delivery.');
     if (error.code === 'outbound_unsupported' || error.code === 'endpoint_not_found') {
       return unsupportedDeliveryReceipt('outbound_unsupported');
     }
     if (error.code === 'unsupported_operation' && error.disposition === 'not_sent') {
       return unsupportedDeliveryReceipt(error.code);
     }
-    if (error.disposition === 'unknown') return unknownDeliveryReceipt(error.code);
     return failedDeliveryReceipt(error.code);
   }
   // imhelper ProtocolError exposes stable protocol facts without a Core SDK dependency.
@@ -266,7 +268,7 @@ function receiptFromEndpointError(error: unknown, attempted = true): DeliveryRec
     && error.protocol === 'onebot-v11' && error.kind === 'protocol') {
     const response = error.response;
     if (response && typeof response === 'object' && 'status' in response && response.status === 'failed') {
-      return failedDeliveryReceipt('platform_rejected');
+      return rejectedDeliveryReceipt('platform_rejected', 'Endpoint rejected outbound delivery.');
     }
   }
   // Before the endpoint send boundary no message can have entered a transport.
@@ -298,9 +300,9 @@ function unsupportedDeliveryReceipt(code: string): DeliveryReceipt {
   });
 }
 
-function rejectedDeliveryReceipt(code: string): DeliveryReceipt {
+function rejectedDeliveryReceipt(code: string, message = 'Outbound payload was rejected.'): DeliveryReceipt {
   return Object.freeze({
     status: 'rejected' as const,
-    failure: Object.freeze({ code, message: 'Outbound payload was rejected.' }),
+    failure: Object.freeze({ code, message }),
   });
 }
