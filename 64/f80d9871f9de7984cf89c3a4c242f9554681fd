@@ -1,0 +1,23 @@
+scripts/ci/build-windows.ps1
+  s_6562bcb6cc0539::t_206de070c18a0a 39-53,59
+scripts/ci/build-windows.test.ts
+  s_6562bcb6cc0539::t_206de070c18a0a 76-78
+docs/contributing/development.md
+  s_6562bcb6cc0539::t_206de070c18a0a 41
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64f80d9871f9de7984cf89c3a4c242f9554681fd",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
