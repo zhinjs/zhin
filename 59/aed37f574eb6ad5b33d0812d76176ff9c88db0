@@ -1,0 +1,27 @@
+docs/.vitepress/theme/docs-insights.ts
+  s_6562bcb6cc0539::t_8c9b4f97757988 155,158-163,189-191,194-200,215,218-221,225-228,230,238,255
+docs/contributing/development.md
+  s_6562bcb6cc0539::t_b88aa5c00d9f98 232
+.github/workflows/ci.yml
+  s_6562bcb6cc0539::t_749b39930edcb8 275-286
+docs/e2e/docs-site.spec.ts
+  s_6562bcb6cc0539::t_27bcc4597af041 37
+  s_6562bcb6cc0539::t_efa8ba7c9126eb 7,11,32,39-44
+  s_6562bcb6cc0539::t_e434fc81383023 6,8-10,12-14,33-36,38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "59aed37f574eb6ad5b33d0812d76176ff9c88db0",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
