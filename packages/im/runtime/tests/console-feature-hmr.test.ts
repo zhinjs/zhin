@@ -86,7 +86,8 @@ describe('Console Feature slot HMR', () => {
     const third = runtime.snapshot;
     expect(layoutIndex(third).resolve(third.root, 'nav')?.module).toBe('/nav-v2.js');
     expect(pageIndex(third).list()[0]?.module).toBe('/status-v2.js');
-    expect(modules.loadCount(pluginSource)).toBe(1);
+    // Schema preflight imports the declaration; no extra setup occurs.
+    expect(modules.loadCount(pluginSource)).toBe(2);
     expect(modules.loadCount(pageProvider)).toBe(1);
     expect(modules.loadCount(layoutProvider)).toBe(1);
     expect(setups).toBe(1);

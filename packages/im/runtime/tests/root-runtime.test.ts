@@ -9,6 +9,7 @@ import commandFeature, {
   defineCommand,
 } from '@zhin.js/command';
 import { RootRuntime, runtimeEnvironmentToken, type ModuleRuntime } from '../src/index.js';
+import { Schema } from '../../../../basic/schema/src/index.js';
 
 const temporary: string[] = [];
 
@@ -17,6 +18,38 @@ afterEach(async () => {
 });
 
 describe('RootRuntime tracer bullet', () => {
+  it('commits validated declaration metadata and keeps the old generation on invalid config', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const schema = Schema.object({ count: Schema.number().min(1).default(2), apiKey: Schema.string().secret() });
+    const configs: unknown[] = [];
+    const pluginSource = join(project, 'plugin.ts');
+    modules.set(pluginSource, { default: definePlugin({ name: 'root', config: schema, setup({ config }) { configs.push(config.get()); } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const configPath = join(project, 'zhin.config.json');
+    await writeJson(configPath, { plugin: { count: 3 } });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' }, config: { plugin: { count: 3 } } });
+    try {
+      const first = await runtime.start();
+      expect(configs).toEqual([{ count: 3 }]);
+      const committed = first.tree.get(first.root)!.configSchema!;
+      expect(committed.properties).toMatchObject({ count: { minimum: 1, default: 2 }, apiKey: { writeOnly: true } });
+      schema.description('new metadata');
+      expect(committed.description).toBeUndefined();
+      await writeJson(configPath, { plugin: { count: 0 } });
+      await expect(runtime.patchConfig([{ op: 'set', path: ['plugin', 'count'], value: 0 }])).rejects.toThrow('Invalid Plugin config');
+      expect(runtime.snapshot).toBe(first);
+      expect(configs).toHaveLength(1);
+      await writeJson(configPath, { plugin: { count: 4 } });
+      await runtime.patchConfig([{ op: 'set', path: ['plugin', 'count'], value: 4 }]);
+      expect(runtime.snapshot.generation).toBe(2);
+      expect(configs).toEqual([{ count: 3 }, { count: 4 }]);
+      expect(runtime.snapshot.tree.get(first.root)!.configSchema!.description).toBe('new metadata');
+    } finally { await runtime.stop(); }
+  });
+
   it('loads a static graph, executes a discovered Command, and isolates HMR leases', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();
@@ -94,7 +127,8 @@ describe('RootRuntime tracer bullet', () => {
 
     expect(second.generation).toBe(2);
     expect(modules.invalidated).toEqual([commandSource]);
-    expect(modules.loadCount(pluginSource)).toBe(1);
+    // Read the declaration before config validation, then assemble it; setup runs once.
+    expect(modules.loadCount(pluginSource)).toBe(2);
     expect(modules.loadCount(featureSource)).toBe(1);
     expect(modules.loadCount(commandSource)).toBe(2);
     expect(setupCalls).toBe(1);
@@ -166,6 +200,7 @@ describe('RootRuntime tracer bullet', () => {
     modules.set(join(project, 'plugin.ts'), {
       default: definePlugin({
         name: 'root',
+        config: Schema.object({ label: Schema.string().default('pending login') }),
         setup({ signal }) {
           entered();
           return new Promise<void>((_resolve, reject) => {
@@ -186,6 +221,8 @@ describe('RootRuntime tracer bullet', () => {
 
     const starting = runtime.start();
     await setupEntered;
+    expect(runtime.snapshot.generation).toBe(0);
+    expect(runtime.configurationSchemas.get(project)!.properties).toMatchObject({ label: { default: 'pending login' } });
     const stopping = runtime.stop();
     await expect(starting).rejects.toThrow('stopping');
     await expect(stopping).resolves.toBeUndefined();

@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import {
   HOST_CONFIG_KEYS,
@@ -16,21 +16,24 @@ const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 /** Resolves schemas using the same package roots and declarations as Runtime. */
 export class PluginSchemaCatalog {
   readonly #projectRoot: string;
+  readonly #declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>;
 
-  constructor(projectRoot: string) {
+  constructor(projectRoot: string, declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>) {
     this.#projectRoot = projectRoot;
+    this.#declarations = declarations;
   }
 
   async read(pluginName?: string): Promise<unknown> {
     if (!pluginName) return null;
-    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot));
+    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), this.#declarations?.());
   }
 
   async readAll(keys: Iterable<string>): Promise<Record<string, unknown>> {
     let resolver: Promise<NodePackageResolver> | undefined;
+    const declarations = this.#declarations?.();
     const entries = await Promise.all([...keys].map(async (key) => [
       key,
-      await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot)),
+      await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot), declarations),
     ] as const));
     return Object.fromEntries(entries.filter((entry): entry is readonly [string, unknown] =>
       entry[1] != null));
@@ -39,11 +42,13 @@ export class PluginSchemaCatalog {
   async #read(
     pluginName: string,
     resolver: () => Promise<NodePackageResolver>,
+    declarations?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
       const raw = pluginName === 'plugin'
-        ? await readOwnSchema(this.#projectRoot, 'plugin')
+        ? declarations?.get(await realpath(this.#projectRoot)) ?? await readOwnSchema(this.#projectRoot, 'plugin')
         : HOST_CONFIG_SCHEMA.properties[pluginName as keyof typeof HOST_CONFIG_SCHEMA.properties];
+      if (raw && pluginName === 'plugin') assertSchemaStructure(raw, 'config declaration for plugin');
       return jsonSchemaToConsoleSchema(raw);
     }
     if (!/^(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*$/u.test(pluginName)
@@ -58,7 +63,10 @@ export class PluginSchemaCatalog {
     } catch (error) {
       throw new Error(`Cannot resolve schema for ${pluginName}: invalid or unavailable Plugin manifest`, { cause: error });
     }
-    return target ? jsonSchemaToConsoleSchema(await readOwnSchema(target.root, pluginName)) : null;
+    if (!target) return null;
+    const schema = declarations?.get(target.root) ?? await readOwnSchema(target.root, pluginName);
+    if (schema) assertSchemaStructure(schema, `config declaration for ${pluginName}`);
+    return jsonSchemaToConsoleSchema(schema);
   }
 }
 

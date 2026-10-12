@@ -22,6 +22,8 @@ export interface PluginNodeSnapshot {
   readonly parent?: PluginId;
   readonly children: readonly PluginId[];
   readonly metadata?: PluginMetadata;
+  /** Immutable schema declaration belonging to this committed generation. */
+  readonly configSchema?: Readonly<Record<string, unknown>>;
 }
 
 export interface RuntimeSnapshot {

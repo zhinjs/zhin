@@ -1,19 +1,35 @@
 import { describe, expect, it, vi } from 'vitest';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from 'zhin.js/middleware';
 import plugin from '../plugin.ts';
 import middleware from '../middlewares/repeater/index.ts';
 import statusCommand from '../commands/repeater-status/index.ts';
 import {
+  DEFAULT_REPEATER_CONFIG,
   RepeaterEngine,
   resolveGroupId,
-  resolveRepeaterConfig,
 } from '../src/engine.js';
 import { repeaterEngineToken } from '../src/runtime.js';
 
 describe('@zhin.js/plugin-repeater', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('repeater');
+  });
+
+  it('validates and defaults the same configuration exposed to Console', () => {
+    const ajv = new Ajv2020({ useDefaults: true, strict: true });
+    ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+    const validate = ajv.compile(plugin.config!.toJsonSchema());
+    const empty = {};
+    expect(validate(empty)).toBe(true);
+    expect(empty).toEqual(DEFAULT_REPEATER_CONFIG);
+    expect(validate({ threshold: 1 })).toBe(false);
+    expect(validate({ threshold: '3' })).toBe(false);
+    expect(validate({ unknown: true })).toBe(false);
+    expect(plugin.config!.toJsonSchema()).toMatchObject({
+      properties: { threshold: { default: 3, 'x-zhin-config': { effect: 'reload' } } },
+    });
   });
 
   it('brands middleware and status command', () => {
@@ -36,7 +52,7 @@ describe('@zhin.js/plugin-repeater', () => {
 
   it('repeats after threshold distinct senders', () => {
     const engine = new RepeaterEngine();
-    const config = resolveRepeaterConfig({ threshold: 3, cooldown: 1000, maxLength: 200 });
+    const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 3, cooldown: 5000, maxLength: 200 };
     const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
 
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
@@ -51,7 +67,7 @@ describe('@zhin.js/plugin-repeater', () => {
 
   it('ignores same sender double-post', () => {
     const engine = new RepeaterEngine();
-    const config = resolveRepeaterConfig({ threshold: 2 });
+    const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2 };
     const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo', metadata: { type: 'group' as const } };
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
     expect(engine.tick({ ...base, sender: 'a' }, config).action).toBe('next');
@@ -62,7 +78,7 @@ describe('@zhin.js/plugin-repeater', () => {
   it('keeps engine state isolated between runtime owners', () => {
     const first = new RepeaterEngine();
     const second = new RepeaterEngine();
-    const config = resolveRepeaterConfig({ threshold: 2 });
+    const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2 };
     const base = { conversation: { kind: 'group' as const, id: 'g1' }, content: 'echo' };
     first.tick({ ...base, sender: 'a' }, config);
     first.tick({ ...base, sender: 'b' }, config);
@@ -94,7 +110,7 @@ describe('@zhin.js/plugin-repeater', () => {
           replies.push(content);
         },
       },
-      config: { threshold: 3, cooldown: 1_000, maxLength: 200 },
+      config: { threshold: 3, cooldown: 5_000, maxLength: 200 },
       use: (token: unknown) => {
         expect(token).toBe(repeaterEngineToken);
         return engine;
@@ -123,7 +139,7 @@ describe('@zhin.js/plugin-repeater', () => {
     try {
       const t0 = Date.now();
       const engine = new RepeaterEngine();
-      const config = resolveRepeaterConfig({ threshold: 2, cooldown: 300_000 });
+      const config = { ...DEFAULT_REPEATER_CONFIG, threshold: 2, cooldown: 300_000 };
       const base = { conversation: { kind: 'group' as const, id: 'g1' }, metadata: { type: 'group' as const } };
       expect(engine.tick({ ...base, content: 'echo', sender: 'a' }, config).action).toBe('next');
       expect(engine.tick({ ...base, content: 'echo', sender: 'b' }, config).action).toBe('repeat');

@@ -3,8 +3,10 @@ import { capture, captured, defineFeatureProvider, directoryModules } from '@zhi
 import { parseMiddlewareDefinition } from './definition.js';
 import { MiddlewareIndex } from './middleware-index.js';
 
+/** @internal Runtime Feature identity. */
 export const middlewareFeatureId = featureId('zhin.middleware');
 
+/** @internal Runtime Feature provider. */
 const middlewareFeature = defineFeatureProvider({
   protocol: 1,
   id: middlewareFeatureId,

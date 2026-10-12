@@ -5,15 +5,19 @@ const resourceSeparator = '__';
 
 /** Shared owner identity and physical-name invariant for process-wide resources. */
 export abstract class OwnerScopedResourceHost {
-  constructor(readonly owner: PluginId) {}
+  readonly #owner: PluginId;
+
+  constructor(owner: PluginId) { this.#owner = owner; }
+
+  get owner(): PluginId { return this.#owner; }
 
   protected qualify(name: string): string {
     assertLogicalName(name);
-    return qualifyOwnedResourceName(this.owner, name);
+    return qualifyOwnedResourceName(this.#owner, name);
   }
 
   protected unqualify(name: string): string | undefined {
-    const prefix = `${resourcePrefix}${pluginOwnerResourceKey(this.owner)}${resourceSeparator}`;
+    const prefix = `${resourcePrefix}${pluginOwnerResourceKey(this.#owner)}${resourceSeparator}`;
     return name.startsWith(prefix) ? name.slice(prefix.length) : undefined;
   }
 }

@@ -22,10 +22,11 @@ export class ConsoleConfigurationStore {
   constructor(options: {
     readonly projectRoot: string;
     readonly document: ConfigFileDocument;
+    readonly configDeclarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>;
   }) {
     this.#projectRoot = options.projectRoot;
     this.#document = options.document;
-    this.#schemas = new PluginSchemaCatalog(options.projectRoot);
+    this.#schemas = new PluginSchemaCatalog(options.projectRoot, options.configDeclarations);
   }
 
   readSource(): Promise<ConsoleConfigSource> {

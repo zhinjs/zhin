@@ -124,34 +124,48 @@ const formatter = Schema.resolve('number')
 
 ## 与 Zhin.js 集成
 
-Plugin Runtime 的配置契约由插件根目录 `schema.json` 声明，Runtime 在候选代装配前统一校验并填充默认值：
-
-```json
-{
-  "type": "object",
-  "properties": {
-    "port": { "type": "number", "default": 8080 },
-    "enabled": { "type": "boolean", "default": true }
-  },
-  "additionalProperties": false
-}
-```
-
-插件从 generation-owned `ConfigView` 读取已验证配置：
+Plugin Runtime 可以直接使用同一份声明推导类型、生成标准 JSON Schema、校验配置、填充默认值并向 Console 提供表单元信息：
 
 ```typescript
-import { definePlugin } from 'zhin.js'
+import { definePlugin, Schema } from 'zhin.js'
 
-export default definePlugin<{ port: number; enabled: boolean }>({
-  name: 'example',
+const configSchema = Schema.object({
+  interval: Schema.number().min(1).default(300).description('轮询间隔，秒').effect('reload'),
+  enabled: Schema.boolean().default(true),
+  apiKey: Schema.string().required().secret().component('password'),
+  label: Schema.string(),
+})
+
+type Config = Schema.Output<typeof configSchema>
+// interval、enabled、apiKey 为必有字段；label 为 string | undefined。
+
+export default definePlugin({
+  name: 'subscription',
+  config: configSchema,
   setup({ config }) {
-    const current = config.get()
-    console.log(current.port, current.enabled)
+    const current = config.get() // 自动推导 Config，不再手写泛型
+    console.log(current.interval, current.enabled)
   },
 })
 ```
 
-`@zhin.js/schema` 继续用于业务输入的运行时解析；它不承担 Plugin Runtime 配置注册。
+应用配置的密钥仍使用环境引用：
+
+```yaml
+plugins:
+  subscription:
+    apiKey: ${SUBSCRIPTION_API_KEY}
+```
+
+`secret()` 声明仅用于表单和数据处理提示，不储存密钥、也不负责读取环境变量；它会导出标准 `writeOnly: true` 与 `x-zhin-config.secret` 元信息，并拒绝密钥默认值。环境展开和配置校验由现有 Runtime 完成。`.effect('reload')` 表明插件更新后重载；系统配置的进程重启由 Root Host 决定。
+
+`schema.toJsonSchema()` 返回标准 JSON Schema 2020-12；默认值、范围、枚举、描述与 `x-zhin-config` 表单提示均从同一声明生成。Runtime 的现有校验器负责校验与默认值，不增加第二套配置引擎。对象默认不接受未知属性；字典使用 `Schema.dict()`。配置只能使用 JSON 值；业务 `date/regexp` 无法导出为配置契约。
+
+这份内联声明适用于 trusted 插件；isolated 插件保持根目录 `schema.json`，Host 不执行其入口。单个插件不能同时声明 `config` 与 `schema.json`，避免两个来源漂移。`schema.json` 仍支持只有 JSON 配置契约的插件。
+
+插件配置当前必须是声明了 `properties` 的对象根。Console 支持基础嵌套对象、列表、字典及字段元信息；`union`、`intersect`、`tuple` 可以导出标准校验契约，但组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。
+
+现有业务输入解析和 `schema.toJSON()` / `Schema.fromJSON()` 保持各自的内部序列化格式；使用标准配置契约请调用 `.toJsonSchema()`。
 
 ## 工具函数
 
@@ -195,7 +209,10 @@ export default definePlugin<{ port: number; enabled: boolean }>({
 | `.max(value)` | 设置最大值 |
 | `.step(value)` | 设置步长 |
 | `.component(name)` | 指定渲染组件 |
-| `.toJSON()` | 序列化为 JSON |
+| `.toJSON()` | 业务 Schema 的内部序列化 |
+| `.toJsonSchema()` | 导出标准配置 JSON Schema |
+| `.secret()` | 密钥表单元信息，配置继续使用环境引用 |
+| `.effect('reload')` | 配置生效方式提示 |
 
 ## License
 

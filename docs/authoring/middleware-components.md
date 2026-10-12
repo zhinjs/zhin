@@ -7,6 +7,12 @@ description: 入站结果传递、出站信封改写与统一 JSX/HTML 渲染
 
 指令 `execute`、入站中间件 `handle` 和组件 `render` 可以直接返回 JSX。`zhin.js/jsx` 提供同一套 JSX 类型、编译运行时与 `renderToHtml`；`zhin.js/component` 提供注册组件能力。可选样式组件安装 `@zhin.js/components`，它不依赖 React 或截图引擎。
 
+## IM 上下文类型
+
+`zhin.js/middleware` 的 `defineMiddleware(...)` 默认给入站 `handle` 提供 `Message`；显式 `target: 'outbound'` 时，`input` 默认是可 `replace(...)` 的 `OutboundEnvelope`。无需给常见 IM 中间件手写断言，设置 `adapter` 后 `$client` 仍按该适配器注册的原生 Client 推导。
+
+底层 `@zhin.js/middleware` 保持通用的 `unknown` 默认输入，可显式声明 `undefined`；非 IM Host 调用没有凭空生成的消息。Handler 的 `interaction` 仍可能缺失，调用前应检查它是否存在。
+
 ## JSX 创作
 
 项目 `tsconfig.json` 设置 `"jsx": "react-jsx"`、`"jsxImportSource": "zhin.js"`，代码保存为 `.tsx`。服务端约定入口支持 `commands/**/index.tsx`、`middlewares/<name>/index.tsx`、`components/<name>/index.tsx`；CLI 开发 loader 转译 JSX，生产模式使用编译产物。

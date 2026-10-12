@@ -73,6 +73,16 @@ export class MessageDispatcher {
       : undefined;
     const matchInput = structuredInput ?? input;
     const result = await commands.dispatch(matchInput, message, interactionFactory, prefix, snapshot);
+    if (result.status === 'invalid') {
+      return Object.freeze({
+        ...result,
+        value: [...(result.issues ?? []).map((issue) => issue.message), result.help]
+          .filter(Boolean).join('\n'),
+      });
+    }
+    if (result.status === 'denied') {
+      return Object.freeze({ ...result, value: '没有权限执行此指令。' });
+    }
     if (result.matched && result.value !== undefined) {
       if (!result.owner) throw new Error('Matched Command is missing its owner');
       logger.debug(formatCompact({

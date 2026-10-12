@@ -1,0 +1,64 @@
+import { defineMiddleware } from '../src/feature/middleware.js';
+import { defineMiddleware as defineFeatureMiddleware } from '@zhin.js/middleware';
+import type { Message, OutboundEnvelope } from '../src/plugin-runtime/im/contracts.js';
+import type { HandlerContext } from '@zhin.js/handler';
+
+declare module '@zhin.js/feature-kit' {
+  interface AdapterClientRegistry {
+    readonly 'typed-middleware': {
+      readonly client: { sendNative(payload: string): void };
+      readonly events: Record<string, unknown>;
+    };
+  }
+}
+
+defineMiddleware({
+  adapter: 'typed-middleware',
+  async handle({ input, $client }, next) {
+    await input.$reply('IM message with native client');
+    $client.sendNative('typed');
+    // @ts-expect-error The adapter name selects its native Client contract.
+    $client.missing();
+    await next();
+  },
+});
+
+// IM authoring defaults to the actual message, with no annotation or cast.
+defineMiddleware({
+  async handle({ input }, next) {
+    const message: Message = input;
+    await message.$reply('ack');
+    await next();
+  },
+});
+defineMiddleware({
+  target: 'outbound',
+  async handle({ input }, next) {
+    const envelope: OutboundEnvelope = input;
+    envelope.replace('replacement');
+    // @ts-expect-error An outbound envelope is not an inbound Message.
+    input.$reply('wrong');
+    await next();
+  },
+});
+// Generic Feature authoring deliberately does not invent an IM message.
+defineFeatureMiddleware({
+  handle({ input }, next) {
+    // @ts-expect-error A generic Feature may be called without a message.
+    input.$reply('wrong');
+    return next();
+  },
+});
+defineFeatureMiddleware<undefined>({
+  handle({ input }, next) {
+    const noMessage: undefined = input;
+    void noMessage;
+    return next();
+  },
+});
+function hostHandler(context: HandlerContext) {
+  // @ts-expect-error Non-IM handler calls have no guaranteed interaction.
+  context.interaction.ask({ type: 'text', title: 'Reply' });
+  if (context.interaction) context.interaction.ask({ type: 'text', title: 'Reply' });
+}
+void hostHandler;

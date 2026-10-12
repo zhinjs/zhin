@@ -1,8 +1,9 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PluginSchemaCatalog } from '../../../src/plugin-runtime/console/plugin-schema-catalog.js';
+import { Schema } from '../../../../../basic/schema/src/index.js';
 
 const roots: string[] = [];
 
@@ -47,6 +48,34 @@ function expectField(field: string): unknown {
 }
 
 describe('PluginSchemaCatalog', () => {
+  it('uses committed declarations for an entire read and refreshes on the next read', async () => {
+    const root = await realpath(await createProject());
+    const qq = join(root, 'node_modules', '@zhin.js', 'adapter-icqq');
+    const schema = Schema.object({ apiKey: Schema.string().secret().required(),
+      count: Schema.number().default(2).min(1).effect('reload') }).toJsonSchema();
+    let reads = 0;
+    let declarations = new Map([[root, schema], [qq, schema]]);
+    const catalog = new PluginSchemaCatalog(root, () => { reads++; return declarations; });
+    const result = await catalog.readAll(['plugin', 'qq-main']);
+    expect(reads).toBe(1);
+    expect(result.plugin).toEqual(result['qq-main']);
+    expect(result.plugin).toMatchObject({ object: {
+      apiKey: { type: 'string', secret: true, component: 'password', required: true },
+      count: { type: 'number', default: 2, min: 1, effect: 'reload' },
+    } });
+    declarations = new Map([[root, Schema.object({ enabled: Schema.boolean().default(true) }).toJsonSchema()]]);
+    await expect(catalog.read('plugin')).resolves.toMatchObject({ object: { enabled: { default: true } } });
+    expect(reads).toBe(2);
+  });
+
+  it('rejects unsupported committed schemas before displaying a partial form', async () => {
+    const root = await realpath(await createProject());
+    const catalog = new PluginSchemaCatalog(root, () => new Map([[root, {
+      type: 'object', properties: { value: { anyOf: [{ type: 'string' }, { type: 'number' }] } },
+    }]]));
+    await expect(catalog.read('plugin')).rejects.toThrow('not supported by Console forms');
+  });
+
   it('does not let the root alias shadow a declared root child instance', async () => {
     const root = await createProject();
     await writePackage(root, 'schema-project', [{ package: './plugins/child', instanceKey: 'root' }]);

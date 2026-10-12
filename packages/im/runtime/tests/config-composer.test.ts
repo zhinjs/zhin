@@ -2,7 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ConfigPatchPathError } from '@zhin.js/plugin-runtime';
+import { ConfigPatchPathError, definePlugin } from '@zhin.js/plugin-runtime';
+import { Schema } from '../../../../basic/schema/src/index.js';
 import {
   ConfigComposer,
   ConfigPatchPlanner,
@@ -19,6 +20,27 @@ afterEach(async () => {
 });
 
 describe('hierarchical Plugin config', () => {
+  it('uses the authoring declaration for defaults, validation and owner metadata', async () => {
+    const root = await configProject({ rootSchema: {}, childSchema: {} });
+    await rm(join(root, 'schema.json'));
+    await rm(join(root, 'plugins/child/schema.json'));
+    const resolver = await NodePackageResolver.create(root);
+    const graph = await new ProjectGraphService(resolver).inspect(root);
+    const rootSchema = Schema.object({ label: Schema.string().default('root') });
+    const childSchema = Schema.object({ count: Schema.number().min(1).default(2), token: Schema.string().secret() });
+    const modules = { async load<T>(source: string): Promise<T> {
+      return { default: definePlugin({ name: 'fixture', config: source.includes('/plugins/child/') ? childSchema : rootSchema }) } as T;
+    } };
+    const composer = new ConfigComposer([], modules);
+    const composed = await composer.compose(graph, { plugins: { child: { token: '${TOKEN}' } } });
+    expect(composed.views.get(graph.root.id)).toEqual({ label: 'root' });
+    expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ count: 2, token: '${TOKEN}' });
+    expect(composed.ownSchemas.get(graph.root.children[0]!.id)!.properties).toMatchObject({ token: { writeOnly: true } });
+    await expect(composer.compose(graph, { plugins: { child: { count: 0 } } })).rejects.toBeInstanceOf(ConfigValidationError);
+    await writeFile(join(root, 'schema.json'), '{}');
+    await expect(composer.compose(graph)).rejects.toThrow('declares both plugin config and schema.json');
+  });
+
   it('composes child schemas, applies defaults, and exposes owner-only views', async () => {
     const root = await configProject({
       rootSchema: {

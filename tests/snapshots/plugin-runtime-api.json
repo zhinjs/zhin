@@ -152,6 +152,7 @@
   "command": [
     "export * from './command-index.js';",
     "export * from './definition.js';",
+    "export type{CommandValidationIssue}from './arguments.js';",
     "export{CommandPathSyntaxError,commandFeatureId,default as commandFeature,}from './provider.js';",
     "export{assertBuiltinPermits,checkBuiltinPermit,checkBuiltinPermitList,isBuiltinPermit,isPlatformPermit,parsePermitName,type ParsedPermit,type PermitKind,}from './permit.js';",
     "export{default}from './provider.js';"
@@ -275,6 +276,7 @@
     "export * from './navigation.js';"
   ],
   "permission": [
+    "export * from './check-permissions.js';",
     "export{PermissionHost,type PermissionChecker,type PlatformPermitChecker,}from './host.js';",
     "export{createSceneRolePlatformChecker,platformPermission}from './helpers.js';",
     "export{permissionHostToken}from './token.js';",
@@ -286,6 +288,7 @@
     "export * from './capability.js';",
     "export * from './component-host.js';",
     "export * from './database-host.js';",
+    "export * from './delivery-target.js';",
     "export * from './dispose.js';",
     "export * from './handoff.js';",
     "export * from './html-renderer.js';",
@@ -293,6 +296,7 @@
     "export * from './inbox.js';",
     "export * from './outbound-host.js';",
     "export * from './outbound-sender.js';",
+    "export * from './persistent-state.js';",
     "export * from './plugin-configuration.js';",
     "export * from './plugin.js';",
     "export * from './root-config-document.js';",
@@ -326,6 +330,7 @@
     "export * from './package-contract.js';",
     "export * from './package-resolver.js';",
     "export * from './platform-features.js';",
+    "export * from './plugin-config-schema.js';",
     "export * from './primary-config.js';",
     "export * from './process-restart.js';",
     "export * from './project-graph.js';",

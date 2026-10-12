@@ -7,6 +7,12 @@ description: Inbound results, outbound replacements and shared JSX/HTML renderin
 
 Command `execute`, inbound middleware `handle`, and registered component `render` may return JSX directly. `zhin.js/jsx` provides the shared lazy tree, compiler runtime and `renderToHtml`. `zhin.js/component` provides component registration and calls. Optional visual components live in `@zhin.js/components`, without React or a screenshot engine.
 
+## IM context types
+
+`defineMiddleware(...)` from `zhin.js/middleware` defaults inbound `handle.input` to `Message`. With `target: 'outbound'`, it defaults to `OutboundEnvelope`, exposing `replace(...)`. Common IM middleware needs no input casts; an explicit `adapter` still infers the registered native Client for `$client`.
+
+The low-level `@zhin.js/middleware` keeps a generic `unknown` default and can explicitly use `undefined`. A non-IM Host call does not invent a message. Handler `interaction` remains optional and must be checked before use.
+
 ## Author JSX
 
 Set `"jsx": "react-jsx"` and `"jsxImportSource": "zhin.js"` in tsconfig.json. Use `.tsx` entries such as `commands/**/index.tsx`, `middlewares/<name>/index.tsx` and `components/<name>/index.tsx`. The development loader transpiles JSX; production runs compiled output.

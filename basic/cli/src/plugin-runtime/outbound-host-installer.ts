@@ -2,7 +2,10 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { EndpointRuntime } from '@zhin.js/core/runtime';
 import {
   outboundHostToken,
-  type OutboundHost,
+  outboundRootHostToken,
+  PluginOutboundHost,
+  rootPluginId,
+  type OutboundRootHost,
   type OutboundSendInput,
 } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
@@ -14,6 +17,7 @@ export interface OutboundRuntimePort {
     EndpointRuntime,
     | 'capabilities'
     | 'send'
+    | 'sendTarget'
     | 'addReaction'
     | 'removeReaction'
     | 'recall'
@@ -23,8 +27,12 @@ export interface OutboundRuntimePort {
   runWithSnapshotView<T>(operation: () => Promise<T>): Promise<T>;
 }
 
-export function createOutboundHost(im: OutboundRuntimePort): OutboundHost {
+export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
   return {
+    async sendTarget(target, content, requester) {
+      const result = await im.endpoints.sendTarget(target, content, requester);
+      return result.messageId || null;
+    },
     runWithView: (operation) => im.runWithSnapshotView(operation),
     capabilities(input) {
       const capabilities = im.endpoints.capabilities(input);
@@ -142,7 +150,9 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundHost {
 }
 
 export function installOutboundHost(im: OutboundRuntimePort): RootResourceInstaller {
-  return ({ resources }) => {
-    resources.provide(outboundHostToken, createOutboundHost(im));
+  return ({ resources, admission }) => {
+    const host = createOutboundHost(im);
+    resources.provide(outboundRootHostToken, host);
+    resources.provide(outboundHostToken, new PluginOutboundHost(rootPluginId(), host, admission));
   };
 }

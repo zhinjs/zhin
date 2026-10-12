@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { tsImport } from 'tsx/esm/api';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -17,12 +18,16 @@ if (!hostRuntimeSource.includes("import { HOST_CONFIG_KEYS")
   throw new Error(`${hostReferencePath} must remain the shared Runtime/Console Host configuration Schema`);
 }
 
-function listSchemaFiles(root) {
+function listPluginRoots() {
   const result = [];
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const absolute = path.join(root, entry.name);
-    if (entry.isDirectory()) result.push(...listSchemaFiles(absolute));
-    else if (entry.name === 'schema.json') result.push(absolute);
+  const root = path.join(repoRoot, 'plugins');
+  for (const category of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!category.isDirectory()) continue;
+    for (const plugin of fs.readdirSync(path.join(root, category.name), { withFileTypes: true })) {
+      if (!plugin.isDirectory()) continue;
+      const pluginRoot = path.join(root, category.name, plugin.name);
+      if (fs.existsSync(path.join(pluginRoot, 'package.json'))) result.push(pluginRoot);
+    }
   }
   return result.sort();
 }
@@ -114,15 +119,36 @@ function flattenProperties(schema, prefix, inheritedRequired = new Set(), rootSc
   return rows;
 }
 
-function pluginEntries() {
-  return listSchemaFiles(path.join(repoRoot, 'plugins')).map((absolute) => {
-    const relative = path.relative(repoRoot, absolute).split(path.sep).join('/');
-    const schema = JSON.parse(fs.readFileSync(absolute, 'utf8'));
-    const segments = relative.split('/');
-    const key = segments.at(-2);
-    return { key, relative, rows: flattenProperties(schema, `plugins.${key}`, new Set(), schema) };
-  });
+async function pluginEntries() {
+  const { readPluginConfigSchema } = await tsImport(
+    pathToFileURL(path.join(repoRoot, 'packages/im/runtime/src/plugin-config-schema.ts')).href,
+    import.meta.url,
+  );
+  const result = [];
+  for (const root of listPluginRoots()) {
+    const packageJson = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+    if (packageJson.zhin?.type !== 'plugin') continue;
+    const file = path.join(root, 'schema.json');
+    const hasFileSchema = fs.existsSync(file);
+    const entry = path.join(root, packageJson.zhin.entry);
+    const typescriptEntry = entry.endsWith('.js') ? entry.slice(0, -3) + '.ts' : entry;
+    // Documentation points at the canonical source even while prepack has
+    // temporarily generated the corresponding package-root JavaScript entry.
+    const sourceEntry = fs.existsSync(typescriptEntry) ? typescriptEntry : entry;
+    const modules = !hasFileSchema && packageJson.zhin.runtime !== 'isolated'
+      && fs.existsSync(sourceEntry)
+      ? { load: () => tsImport(pathToFileURL(sourceEntry).href, import.meta.url) }
+      : undefined;
+    const schema = await readPluginConfigSchema({ root, name: packageJson.name, packageJson }, modules);
+    if (!schema) continue;
+    const relative = path.relative(repoRoot, hasFileSchema ? file : sourceEntry).split(path.sep).join('/');
+    const key = path.basename(root);
+    result.push({ key, relative, rows: flattenProperties(schema, `plugins.${key}`, new Set(), schema) });
+  }
+  return result;
 }
+
+const plugins = await pluginEntries();
 
 function tableHeader(locale) {
   return locale === 'zh'
@@ -162,10 +188,10 @@ function render(locale) {
 
   lines.push('', `## ${zh ? '插件实例字段' : 'Plugin instance fields'}`, '');
   lines.push(zh
-    ? '以下字段直接读取仓库中每个插件发布的 `schema.json`。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。'
-    : 'These fields are read directly from each plugin `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.');
+    ? '以下字段通过 Runtime 的统一读取器从插件 `config: Schema.object(...)` 声明或 `schema.json` 生成。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。'
+    : 'These fields use the Runtime schema reader for each plugin’s `config: Schema.object(...)` declaration or `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.');
 
-  for (const plugin of pluginEntries()) {
+  for (const plugin of plugins) {
     lines.push('', `### ${plugin.key}`, '');
     lines.push(`[\`${plugin.relative}\`](https://github.com/zhinjs/zhin/blob/main/${plugin.relative})`, '');
     if (plugin.rows.length === 0) {

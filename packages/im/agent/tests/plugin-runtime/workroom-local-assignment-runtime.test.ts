@@ -145,32 +145,45 @@ describe('Workroom Local Assignment Runtime', () => {
   });
 
   it('renews the Assignment lease while a local model turn is silent', async () => {
-    const { kernel } = await harness(Date.now, 120);
-    const issued = await kernel.issueLocalAssignment(request());
-    const runtime = new WorkroomLocalAssignmentRuntime({
-      kernel,
-      heartbeatIntervalMs: 30,
-      executor: {
-        async *execute(envelope) {
-          await new Promise(resolve => setTimeout(resolve, 220));
-          yield {
-            version: 1, type: 'execution_completed', observationId: 'complete-after-silence',
-            envelopeDigest: envelope.digest,
-            completion: {
-              report: { ref: 'report:after-silence', digest: SHA_A },
-              candidate: { ref: 'candidate:after-silence', hash: SHA_B },
-            },
-          };
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(100);
+    let runtime: WorkroomLocalAssignmentRuntime | undefined;
+    try {
+      const { kernel } = await harness(Date.now, 120);
+      const issued = await kernel.issueLocalAssignment(request());
+      runtime = new WorkroomLocalAssignmentRuntime({
+        kernel,
+        heartbeatIntervalMs: 30,
+        executor: {
+          async *execute(envelope) {
+            await new Promise(resolve => setTimeout(resolve, 220));
+            yield {
+              version: 1, type: 'execution_completed', observationId: 'complete-after-silence',
+              envelopeDigest: envelope.digest,
+              completion: {
+                report: { ref: 'report:after-silence', digest: SHA_A },
+                candidate: { ref: 'candidate:after-silence', hash: SHA_B },
+              },
+            };
+          },
         },
-      },
-    });
+      });
 
-    await expect(runtime.execute(issued.envelope)).resolves.toBeUndefined();
-    const state = await kernel.read('project-1', 'run-1');
-    expect(state.assignments[issued.envelope.assignmentId]).toMatchObject({
-      status: 'execution_completed',
-    });
-    expect(state.sequence).toBeGreaterThan(6);
+      const completed = expect(runtime.execute(issued.envelope)).resolves.toBeUndefined();
+      await vi.advanceTimersByTimeAsync(220);
+      await completed;
+      const state = await kernel.read('project-1', 'run-1');
+      expect(state.assignments[issued.envelope.assignmentId]).toMatchObject({
+        status: 'execution_completed',
+      });
+      expect(state.sequence).toBeGreaterThan(6);
+    } finally {
+      try {
+        await runtime?.dispose();
+      } finally {
+        vi.useRealTimers();
+      }
+    }
   });
 
   it('rejects a persisted request whose Envelope no longer matches the claimed fence', async () => {

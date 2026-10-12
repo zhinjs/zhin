@@ -20,3 +20,14 @@ plugins:
 ## Configuration
 
 This plugin currently has no configuration fields. Its [`schema.json`](./schema.json) accepts an empty object; do not place package names in a `plugins` array.
+
+## Commands
+
+- `gen hello beautiful world`: generate a 300 × 300 QR image.
+- `gen hello --size 512` / `gen hello -s 512`: choose 64–1024 pixels.
+- `scan https://example.com/qr.png`: decode an existing QR image.
+- `gen --help`: show parameters, constraints and defaults.
+
+The Endpoint determines any command prefix. An explicit `commandNamespace` adds a plugin
+namespace; neither is hardcoded in the command. Generation declares text length (1–2048)
+and image size in `defineCommand`; invalid values are rejected before creating the image.

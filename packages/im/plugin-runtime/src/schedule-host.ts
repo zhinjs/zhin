@@ -3,7 +3,7 @@ import {
   OwnerScopedResourceHost,
   qualifyOwnedResourceName,
 } from './owner-scoped-resource-host.js';
-import { createToken } from './token.js';
+import { createToken, createRootPrivateToken } from './token.js';
 
 /**
  * Thin Host Resource for Plugin Runtime cron jobs.
@@ -36,12 +36,15 @@ export function qualifyPluginScheduleId(owner: PluginId, id: string): string {
 }
 
 export class PluginScheduleHost extends OwnerScopedResourceHost {
-  constructor(owner: PluginId, private readonly host: ScheduleHost) {
+  readonly #host: ScheduleHost;
+
+  constructor(owner: PluginId, host: ScheduleHost) {
     super(owner);
+    this.#host = host;
   }
 
   register(job: ScheduleJobRegistration): () => void {
-    return this.host.register({ ...job, id: this.qualify(job.id), owner: this.owner });
+    return this.#host.register({ ...job, id: this.qualify(job.id), owner: super.owner });
   }
 
   list(): readonly {
@@ -49,7 +52,7 @@ export class PluginScheduleHost extends OwnerScopedResourceHost {
     readonly cron: string;
     readonly description?: string;
   }[] {
-    return Object.freeze(this.host.list().flatMap((job) => {
+    return Object.freeze(this.#host.list().flatMap((job) => {
       const id = this.unqualify(job.id);
       if (id === undefined) return [];
       return [Object.freeze({
@@ -68,7 +71,7 @@ export const scheduleHostToken = createToken<PluginScheduleHost>(
 );
 
 /** Root-only process scheduler for CLI composition and Console administration. */
-export const scheduleRootHostToken = createToken<ScheduleHost>(
+export const scheduleRootHostToken = createRootPrivateToken<ScheduleHost>(
   'zhin.schedule.root-host',
   'Plugin Runtime root solar cron host',
 );

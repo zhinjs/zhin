@@ -30,6 +30,42 @@ export default definePlugin<MyConfig>({
 
 > 从零起步：最短看 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人)；约定目录教程见 [编写第一个插件](../getting-started/first-plugin.md)；概念见 [插件模型](../concepts/plugin-model.md)。
 
+## 统一配置声明
+
+trusted 插件可以在 `definePlugin` 的 `config` 中使用现有 `Schema`。同一份声明生成标准 JSON Schema、默认值、约束与 Console 表单元信息，`setup` 自动获得输出类型：
+
+```ts
+import { definePlugin, Schema } from 'zhin.js';
+
+const configuration = Schema.object({
+  interval: Schema.number().min(1).default(300).description('轮询间隔，秒').effect('reload'),
+  apiKey: Schema.string().required().secret().component('password'),
+  label: Schema.string(),
+});
+type Config = Schema.Output<typeof configuration>;
+
+export default definePlugin({
+  name: 'subscription',
+  config: configuration,
+  setup({ config }) {
+    const current = config.get();
+    const interval: number = current.interval;
+    const label: string | undefined = current.label;
+    // 使用当前 generation 的已验证配置；不要再次填默认值或容错转换。
+  },
+});
+```
+
+`.required()` 与 `.default()` 让对应字段在输出类型中必有，未设置二者的字段仍可选。`toJsonSchema()` 导出标准 JSON Schema；现有 `toJSON()` 是业务 Schema 的内部序列化，二者用途不同。
+
+密钥在应用配置中继续写为 `apiKey: ${SUBSCRIPTION_API_KEY}`。`.secret()` 导出 `writeOnly: true` 与 `x-zhin-config.secret` 提示，禁止密钥默认值；它不会读取环境变量或授予权限。描述、选项、隐藏字段、组件类型与 `.effect('reload')` 在同一 Schema 的元信息中提供，Console Host 从 Runtime 的统一读取器获取。
+
+当前插件配置必须使用声明了 `properties` 的对象根。Console 支持基础嵌套对象、列表、字典及其字段元信息；Schema 能导出 `union`、`intersect` 和 `tuple` 的标准校验契约，但这些组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。配置声明统一不代表所有 JSON Schema 都已有对应编辑器。
+
+每个插件只选择一个配置来源：内联 `config` 或根目录 `schema.json`；同时存在会拒绝启动。isolated 插件只使用 `schema.json`，配置组合不会在 Host 执行其入口。插件配置变更重载对应插件，非法候选配置保留旧代；系统配置的进程重启仍由 Root Host 决定。
+
+真实用例：[复读机](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts)集中声明有范围的默认值，[短网址](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts)明确声明无业务配置并拒绝未知字段。
+
 ## setup context
 
 `setup` 收到的 `PluginSetupContext<TConfig>` 成员全部只读：
@@ -37,7 +73,7 @@ export default definePlugin<MyConfig>({
 | 成员 | 类型 | 作用 |
 | --- | --- | --- |
 | `plugin` | `PluginInstanceView` | 实例视图：`id` / `instanceKey` / `parent` / `root` / `role`（`'root' \| 'child'`）。多实例部署时按 `instanceKey` 隔离 |
-| `config` | `ConfigView<TConfig>` | 配置视图，`config.get()` 返回只读配置。默认值来自插件包 `schema.json`，由 `zhin.config.yml` 的 `plugin:` 段（Root 自身）或 `plugins.<key>` 段覆盖 |
+| `config` | `ConfigView<TConfig>` | 配置视图，`config.get()` 返回只读配置。默认值来自内联 `config` 或插件包 `schema.json`，由 `zhin.config.yml` 的 `plugin:` 段（Root 自身）或 `plugins.<key>` 段覆盖 |
 | `resources` | `Scope` | 资源作用域：`has(token)` / `use(token)` 解析 Host token，`provide(token, value, dispose?)` 向子作用域发布资源 |
 | `lifecycle` | `DisposeStack` | 代的回收栈：`lifecycle.add(dispose)` 登记的清理函数在代结束时按逆序执行 |
 | `handoff` | `GenerationHandoffRegistry` | 代际交接注册表：`handoff.add(participant)` 参与热重载事务（见下文「代际交接」） |

@@ -17,6 +17,12 @@ export interface ConfigView<T> {
   get(): Readonly<T>;
 }
 
+/** Structural schema contract; the Runtime owns validation and defaults. */
+export interface PluginConfigSchema<TConfig> {
+  readonly output?: TConfig;
+  toJsonSchema(): Readonly<Record<string, unknown>>;
+}
+
 export interface PluginInstanceView {
   readonly id: PluginId;
   readonly instanceKey: string;
@@ -46,6 +52,7 @@ export interface PluginSetupContext<TConfig = unknown> {
 
 export interface PluginDefinition<TConfig = unknown> {
   readonly name: string;
+  readonly config?: PluginConfigSchema<TConfig>;
   readonly metadata?: PluginMetadata;
   readonly requires?: readonly Token<unknown>[];
   setup?(context: PluginSetupContext<TConfig>): void | Dispose | Promise<void | Dispose>;
@@ -77,6 +84,9 @@ export function definePlugin<TConfig = unknown>(
   if (!pluginNamePattern.test(definition.name)) {
     throw new TypeError(`Invalid plugin name: ${definition.name}`);
   }
+  if (definition.config !== undefined && typeof definition.config.toJsonSchema !== 'function') {
+    throw new TypeError('Plugin config must declare a schema with toJsonSchema()');
+  }
   return Object.freeze({
     ...definition,
     metadata: definition.metadata ? Object.freeze({ ...definition.metadata }) : undefined,
@@ -85,6 +95,9 @@ export function definePlugin<TConfig = unknown>(
 }
 
 // The application facade exposes these Host contracts beside definePlugin.
+export { createDeliveryTarget, type DeliveryTarget } from './delivery-target.js';
+export { PluginStateStore, type JsonValue, type StateScope, type StateRecord,
+  type PersistentStatePort, type StateWriteOptions } from './persistent-state.js';
 export {
   databaseHostToken,
   type DatabaseHostConsole,

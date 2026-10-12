@@ -11,7 +11,7 @@ import {
   type EndpointManagement,
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
-import type { RuntimeSnapshot, SnapshotLease } from '@zhin.js/plugin-runtime';
+import { normalizeDeliveryTarget, type DeliveryTarget, type CapabilityId, type PluginId, type RuntimeSnapshot, type SnapshotLease } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type {
   ConversationRef,
@@ -160,15 +160,34 @@ export class EndpointRuntime {
         requester,
         content: normalizeConsoleContent(input.content),
       }, lease.value);
-      if (result.status !== 'sent') {
-        throw new EndpointDeliveryError(
-          result.failure?.code ?? `outbound_${result.status}`,
-          result.failure?.message ?? 'Outbound delivery was suppressed.',
-          result.failure?.deliveryUnknown ? 'unknown'
-            : result.status === 'rejected' ? 'rejected' : 'not_sent',
-        );
+      return requireSentReceipt(result);
+    } finally {
+      this.context.release(lease);
+    }
+  }
+
+  /** Resolves a persisted identity exactly in the current operation generation. */
+  async sendTarget(target: DeliveryTarget, content: unknown, requester?: PluginId): Promise<{ messageId: string }> {
+    const conversation = normalizeDeliveryTarget(target);
+    const lease = this.context.acquire();
+    try {
+      const index = requireAdapters(lease.value);
+      let owner: string;
+      try {
+        owner = String(index.owner(conversation.endpoint.id as CapabilityId));
+      } catch {
+        throw new EndpointDeliveryError('endpoint_not_found', 'The saved delivery endpoint no longer exists.', 'not_sent');
       }
-      return { messageId: result.message?.id ?? '' };
+      if (owner !== conversation.endpoint.adapter) {
+        throw new EndpointDeliveryError('endpoint_identity_mismatch', 'The saved delivery endpoint belongs to a different plugin.', 'not_sent');
+      }
+      const result = await this.context.send({
+        conversation,
+        requester: requester ?? index.owner(conversation.endpoint.id as CapabilityId),
+        // The unified renderer validates JSX, components and native Segments.
+        content: content as SendContent,
+      }, lease.value);
+      return requireSentReceipt(result);
     } finally {
       this.context.release(lease);
     }
@@ -296,4 +315,16 @@ function normalizeConsoleContent(content: unknown): SendContent {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) return content as SendContent;
   return String(content);
+}
+
+function requireSentReceipt(result: DeliveryReceipt): { messageId: string } {
+  if (result.status !== 'sent') {
+    throw new EndpointDeliveryError(
+      result.failure?.code ?? `outbound_${result.status}`,
+      result.failure?.message ?? 'Outbound delivery was suppressed.',
+      result.failure?.deliveryUnknown ? 'unknown'
+        : result.status === 'rejected' ? 'rejected' : 'not_sent',
+    );
+  }
+  return { messageId: result.message?.id ?? '' };
 }

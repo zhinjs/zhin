@@ -26,7 +26,7 @@ title: 插件完整交付
 
 ## 3. 设计配置
 
-用 `schema.json` 声明默认值、类型与约束。Root 自身读取 `plugin:`，子插件实例读取 `plugins.<instanceKey>`；密钥使用 `${VAR}`，不要写入 Schema 默认值或示例仓库。
+trusted 插件使用 `definePlugin({ config: Schema.object(...) })` 同时声明默认值、类型、约束和 Console 表单元信息；`Schema.Output` 推导配置类型。也可使用根目录 `schema.json`，但不能同时定义两个来源；isolated 插件只使用 `schema.json`。详见[统一配置声明](./define-plugin#统一配置声明)。Root 自身读取 `plugin:`，子插件实例读取 `plugins.<instanceKey>`；密钥使用 `${VAR}`，不要写入 Schema 默认值或示例仓库。
 
 配置变化必须能回答三个问题：是否需要新 generation、失败时旧 generation 是否继续服务、Console 如何证明新值已发布。
 

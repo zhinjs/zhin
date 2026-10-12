@@ -15,6 +15,7 @@ import {
   toPermissionSubject,
   type PermissionHost,
 } from '@zhin.js/permission';
+import { commandUsage, commandHelp, parseCommandArguments, type CommandValidationIssue } from './arguments.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -36,6 +37,8 @@ export interface CommandDescriptor {
   readonly adapter?: string;
   readonly source: string;
   readonly parameters: readonly CommandParameterDescriptor[];
+  readonly usage: string;
+  readonly options: NonNullable<CommandDefinition['options']>;
   readonly alias?: readonly string[];
   readonly permit?: readonly string[];
   /** shortcut 触发键列表（不含预填 params）。 */
@@ -44,6 +47,9 @@ export interface CommandDescriptor {
 
 export interface CommandDispatchResult {
   readonly matched: boolean;
+  readonly status: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly issues?: readonly CommandValidationIssue[];
+  readonly help?: string;
   readonly command?: string;
   readonly owner?: PluginId;
   readonly value?: unknown;
@@ -59,6 +65,7 @@ interface CommandRoute {
   readonly record: CommandRecord;
   readonly segments: readonly string[];
   readonly matcher: SegmentMatcher;
+  readonly literalMatcher?: SegmentMatcher;
   readonly kind: 'primary' | 'alias';
 }
 
@@ -137,10 +144,12 @@ export class CommandIndex {
         description: slot.definition.description,
         ...(slot.definition.adapter ? { adapter: slot.definition.adapter } : {}),
         source: slot.source,
-        parameters: Object.freeze(parameter ? [{
-          ...parameter,
-          required: isRequiredParameter(parameter),
-        }] : []),
+        usage: commandUsage(name, slot.definition),
+        options: Object.freeze({ ...slot.definition.options }),
+        parameters: Object.freeze(Object.entries(slot.definition.params ?? {}).map(([key, schema]) => ({
+          name: key, ...schema, ...(parameter?.name === key ? parameter : {}), defaultValue: schema.default,
+          required: parameter?.name === key ? isRequiredParameter(parameter) : !schema.optional && schema.default === undefined,
+        }))),
         ...(alias ? { alias } : {}),
         ...(permit ? { permit } : {}),
         ...(shortcutKeys && shortcutKeys.length > 0 ? { shortcut: shortcutKeys } : {}),
@@ -150,10 +159,13 @@ export class CommandIndex {
       });
 
       claim(occupancyKey(primarySegments, parameter), slot.source);
+      const argumentShape = declaredRouteShape(primarySegments, slot.definition);
+      if (argumentShape !== occupancyKey(primarySegments, parameter)) claim(argumentShape, slot.source);
       routes.push({
         record,
         segments: primarySegments,
         matcher: new SegmentMatcher(matcherPattern(primarySegments, parameter), segmentFields),
+        literalMatcher: compileLiteralMatcher(primarySegments, parameter),
         kind: 'primary',
       });
 
@@ -165,10 +177,13 @@ export class CommandIndex {
           )];
           assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
           claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
+          const argumentShape = declaredRouteShape(aliasSegments, slot.definition);
+          if (argumentShape !== occupancyKey(aliasSegments, parameter)) claim(argumentShape, `${slot.source} alias ${JSON.stringify(entry)}`);
           routes.push({
             record,
             segments: Object.freeze(aliasSegments),
             matcher: new SegmentMatcher(matcherPattern(aliasSegments, parameter), segmentFields),
+            literalMatcher: compileLiteralMatcher(aliasSegments, parameter),
             kind: 'alias',
           });
         }
@@ -211,24 +226,18 @@ export class CommandIndex {
   }
 
   async execute(name: string, args: readonly string[] = [], operationSnapshot: RuntimeSnapshot = this.snapshot): Promise<unknown> {
-    const match = this.#match(name, true);
+    const match = this.#match(name, false);
     if (!match) {
       this.#diagnoseParameter(name);
       throw new Error(`Unknown Command: ${name}`);
     }
-    // Host / 无 session：跳过 permit；无 source 时函数默认值得到空 session。
-    return match.command.slot.definition.execute(
-      createCommandContext(
-        operationSnapshot,
-        match.command.slot.owner,
-        args,
-        resolveDynamicParams(match.params, undefined),
-        undefined,
-        Object.freeze([]),
-        undefined,
-        match.command.slot.definition.adapter,
-      ),
-    );
+    if (!(await this.#permitAllows(match.command, undefined, operationSnapshot))) throw new Error(`Permission denied for Command: ${match.command.name}`);
+    const definition = match.command.slot.definition;
+    const supplied = [...match.remaining, ...(args.length > 0 ? [{ type: 'text', data: { text: args.join(' ') } }] : [])];
+    const parsed = parseCommandArguments(definition, supplied, resolveDynamicParams(match.params, undefined), {});
+    if (parsed.issues.length > 0) throw new CommandArgumentValidationError(parsed.issues, commandHelp(match.command.name, definition));
+    return definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
+      textArgs(parsed.remaining), parsed.params, undefined, parsed.remaining, undefined, definition.adapter, parsed.options));
   }
 
   async dispatch(
@@ -243,6 +252,7 @@ export class CommandIndex {
       if (menuValue !== undefined) {
         return Object.freeze({
           matched: true,
+          status: 'executed',
           command: this.#menu.keyword,
           owner: operationSnapshot.root,
           value: menuValue,
@@ -250,71 +260,61 @@ export class CommandIndex {
       }
     }
     const shortcut = this.#matchShortcut(input);
-    if (shortcut) {
-      if (!commandAdapterMatches(shortcut.record, source)) {
-        return Object.freeze({ matched: false });
-      }
-      if (!(await this.#permitAllows(shortcut.record, source, operationSnapshot))) {
-        return Object.freeze({ matched: false });
-      }
-      const authorSource = bindOperationInput(source, shortcut.record.slot.owner, operationSnapshot);
-      const value = await shortcut.record.slot.definition.execute(
-        createCommandContext(
-          operationSnapshot,
-          shortcut.record.slot.owner,
-          Object.freeze([]),
-          resolveDynamicParams(shortcut.params, authorSource),
-          authorSource,
-          Object.freeze([]),
-          interactionFactory?.(authorSource),
-          shortcut.record.slot.definition.adapter,
-        ),
-      );
-      return Object.freeze({
-        matched: true,
-        command: shortcut.record.name,
-        owner: shortcut.record.slot.owner,
-        value,
-      });
+    const match = shortcut
+      ? { command: shortcut.record, params: shortcut.params, remaining: Object.freeze([]) }
+      : this.#match(input, false);
+    if (!match) {
+      const candidate = this.#invalidRoute(input);
+      if (!candidate) return Object.freeze({ matched: false, status: 'unmatched' });
+      if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
+      if (!(await this.#permitAllows(candidate, source, operationSnapshot))) return this.#denied(candidate);
+      const help = commandHelp(candidate.name, candidate.slot.definition, commandPrefix);
+      const text = exactMessageText(input);
+      if (text && /(?:^|\s)--help$/u.test(text)) return Object.freeze({ matched: true, status: 'executed', command: candidate.name, owner: candidate.slot.owner, value: help });
+      return Object.freeze({ matched: true, status: 'invalid', command: candidate.name, owner: candidate.slot.owner,
+        issues: Object.freeze([{ field: candidate.parameter?.name ?? 'arguments', message: 'Missing or invalid command parameter' }]), help });
     }
-
-    const match = this.#match(input, false);
-    if (!match) return Object.freeze({ matched: false });
-    if (!commandAdapterMatches(match.command, source)) {
-      return Object.freeze({ matched: false });
-    }
-    if (!(await this.#permitAllows(match.command, source, operationSnapshot))) {
-      return Object.freeze({ matched: false });
-    }
-    const args = textArgs(match.remaining);
+    if (!commandAdapterMatches(match.command, source)) return Object.freeze({ matched: false, status: 'unmatched' });
+    if (!(await this.#permitAllows(match.command, source, operationSnapshot))) return this.#denied(match.command);
+    const definition = match.command.slot.definition;
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
-    const value = await match.command.slot.definition.execute(
-      createCommandContext(
-        operationSnapshot,
-        match.command.slot.owner,
-        args,
-        resolveDynamicParams(match.params, authorSource),
-        authorSource,
-        match.remaining,
-        interactionFactory?.(authorSource),
-        match.command.slot.definition.adapter,
-      ),
-    );
-    return Object.freeze({
-      matched: true,
-      command: match.command.name,
-      owner: match.command.slot.owner,
-      value,
-    });
+    const help = commandHelp(match.command.name, definition, commandPrefix);
+    if (exactMessageText(match.remaining) === '--help') {
+      return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: help });
+    }
+    const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource));
+    if (parsed.issues.length > 0) return Object.freeze({ matched: true, status: 'invalid', command: match.command.name,
+      owner: match.command.slot.owner, issues: parsed.issues, help });
+    const value = await definition.execute(createCommandContext(operationSnapshot, match.command.slot.owner,
+      textArgs(parsed.remaining), parsed.params, authorSource, parsed.remaining, interactionFactory?.(authorSource), definition.adapter, parsed.options));
+    return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value });
+  }
+
+  #denied(record: CommandRecord): CommandDispatchResult {
+    return Object.freeze({ matched: true, status: 'denied', command: record.name, owner: record.slot.owner });
+  }
+
+  /** Diagnose only a reliable static route prefix; fully dynamic routes are ordinary chat candidates. */
+  #invalidRoute(input: CommandMatchInput): CommandRecord | undefined {
+    const segments = normalizeSegments(typeof input === 'string' ? [{ type: 'text', data: { text: input } }] : input);
+    for (const route of this.#routes) {
+      if (!route.record.parameter) continue;
+      const result = route.literalMatcher?.match(asMatcherSegments(segments));
+      if (result && hasCommandBoundary(result.remaining)) return route.record;
+    }
+    return undefined;
   }
 
   async #permitAllows(record: CommandRecord, source: unknown, operationSnapshot: RuntimeSnapshot): Promise<boolean> {
     const permits = record.permit;
     if (!permits || permits.length === 0) return true;
-    if (!hasImSession(source)) return true;
+    if (!source || typeof source !== 'object') return false;
     const host = this.#resolveHost(operationSnapshot);
     if (!host) return false;
-    const subject = toPermissionSubject(resolveCommandSession(source));
+    const projected = toPermissionSubject(source);
+    const session = resolveCommandSession(source);
+    const subject = { ...projected, ...session, ...(session.sender ? { sender: { ...projected.sender, ...session.sender } } : {}) };
+    if (!subject.sender?.id && !subject.scene?.id && !subject.adapter && !subject.endpoint) return false;
     return host.checkAll(permits, subject);
   }
 
@@ -348,11 +348,13 @@ export class CommandIndex {
     if (segments.length === 0) return undefined;
 
     for (const route of this.#routes) {
-      const result = route.matcher.match(asMatcherSegments(segments));
+      // Options may appear between the literal route and a directory-bound parameter.
+      const parseDeclaredArguments = !exact && route.record.parameter && route.record.slot.definition.options !== undefined && route.literalMatcher !== undefined;
+      const result = (parseDeclaredArguments && route.literalMatcher ? route.literalMatcher : route.matcher).match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
       const parameter = route.record.parameter;
       const params: Record<string, CommandDynamicValue> = { ...result.params };
-      if (parameter?.rest) {
+      if (parameter?.rest && !parseDeclaredArguments) {
         const raw = result.params[parameter.name];
         const coerced = coerceRestValues(parameter, Array.isArray(raw) ? raw : []);
         if (!coerced || (isRequiredParameter(parameter) && coerced.length === 0)) continue;
@@ -360,10 +362,10 @@ export class CommandIndex {
       }
       const remaining = normalizeSegments(result.remaining);
       if (exact && remaining.length > 0) continue;
-      if (parameter && !parameter.rest && parameter.optional === true
-        && parameter.defaultValue === undefined
-        && (params[parameter.name] === '' || params[parameter.name] === null)) {
-        delete params[parameter.name];
+      if (parameter && !parseDeclaredArguments && !parameter.rest && !isRequiredParameter(parameter)
+        && (params[parameter.name] === '' || params[parameter.name] === null || params[parameter.name] === undefined)) {
+        if (parameter.defaultValue !== undefined) params[parameter.name] = parameter.defaultValue;
+        else delete params[parameter.name];
       }
       return {
         command: route.record,
@@ -396,17 +398,19 @@ export class CommandIndex {
   #dispatchMenu(input: CommandMatchInput, commandPrefix = ''): string | undefined {
     const text = typeof input === 'string' ? input.trim() : exactMessageText(input);
     if (text === undefined) return undefined;
-    const keyword = this.#menu!.keyword;
-    if (text === keyword) return this.#buildMenu(undefined, commandPrefix);
+    const menu = this.#menu;
+    if (!menu) return undefined;
+    const keyword = menu.keyword;
+    if (text === keyword) return this.#buildMenu(undefined, commandPrefix, keyword);
     if (text.startsWith(keyword + ' ')) {
       const key = text.slice(keyword.length + 1).trim();
-      if (key) return this.#buildMenu(key, commandPrefix);
-      return this.#buildMenu(undefined, commandPrefix);
+      if (key) return this.#buildMenu(key, commandPrefix, keyword);
+      return this.#buildMenu(undefined, commandPrefix, keyword);
     }
     return undefined;
   }
 
-  #buildMenu(pluginKey?: string, commandPrefix = ''): string {
+  #buildMenu(pluginKey: string | undefined, commandPrefix: string, keyword: string): string {
     const root = this.snapshot.root;
     const targetId = pluginKey
       ? `${root}/${pluginKey.split('.').join('/')}` as PluginId
@@ -420,7 +424,6 @@ export class CommandIndex {
       .map((childId) => this.snapshot.tree.get(childId))
       .filter((child): child is NonNullable<typeof child> => !!child);
 
-    const keyword = this.#menu!.keyword;
     const displayKey = pluginKey ?? node.instanceKey;
     const lines: string[] = [`=== ${displayKey} 指令菜单 ===`];
 
@@ -508,6 +511,11 @@ function occupancyKey(
   return parameter ? routeShape(segments) : segments.join(' ');
 }
 
+function declaredRouteShape(segments: readonly string[], definition: CommandDefinition): string {
+  const argumentsTail = Object.keys(definition.params ?? {}).filter((name) => name !== definition.$parameter?.name).map(() => '$');
+  return [...segments.map((segment) => segment.startsWith('$') ? '$' : segment), ...argumentsTail].join(' ');
+}
+
 function normalizeAliasList(
   alias: readonly string[] | undefined,
 ): readonly string[] | undefined {
@@ -564,12 +572,6 @@ function resolveShortcutParams(
   return result;
 }
 
-function hasImSession(source: unknown): boolean {
-  if (!source || typeof source !== 'object') return false;
-  const conversation = (source as { conversation?: unknown }).conversation;
-  return !!conversation && typeof conversation === 'object';
-}
-
 function exactMessageText(input: CommandMatchInput): string | undefined {
   if (typeof input === 'string') {
     const trimmed = input.trim();
@@ -620,6 +622,12 @@ function displayName(
   }).join(' ');
 }
 
+function compileLiteralMatcher(segments: readonly string[], parameter: CommandParameterDefinition | undefined): SegmentMatcher | undefined {
+  if (!parameter) return undefined;
+  const literals = segments.filter((segment) => !segment.startsWith('$'));
+  return literals.length > 0 ? new SegmentMatcher(literals.join(' '), segmentFields) : undefined;
+}
+
 function matcherPattern(
   segments: readonly string[],
   parameter: CommandParameterDefinition | undefined,
@@ -632,9 +640,7 @@ function matcherPattern(
       return `[...${parameter.name}:${isStructuredRestType(parameter.type) ? type : 'text'}]`;
     }
     if (isRequiredParameter(parameter)) return `<${parameter.name}:${type}>`;
-    return parameter.defaultValue === undefined
-      ? `[${parameter.name}:${type}]`
-      : `[${parameter.name}:${type}=${typeof parameter.defaultValue === 'function' ? '<dynamic>' : String(parameter.defaultValue)}]`;
+    return `[${parameter.name}:${type}]`;
   }).join(' ');
 }
 
@@ -790,5 +796,12 @@ export class CommandParameterValueError extends TypeError {
   constructor(name: string, type: CommandParameterType, value: string) {
     super(`Invalid value for Command parameter ${name}:${type}: ${value}`);
     this.name = 'CommandParameterValueError';
+  }
+}
+
+export class CommandArgumentValidationError extends TypeError {
+  constructor(readonly issues: readonly CommandValidationIssue[], readonly help: string) {
+    super(issues.map((issue) => issue.message).join('\n') + '\n' + help);
+    this.name = 'CommandArgumentValidationError';
   }
 }

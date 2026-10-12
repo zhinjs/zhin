@@ -147,6 +147,9 @@ export interface OutboundMessageService {
 
 export interface MessageDispatchResult {
   readonly matched: boolean;
+  readonly status?: 'unmatched' | 'invalid' | 'denied' | 'executed';
+  readonly issues?: readonly Readonly<{ field: string; message: string }>[];
+  readonly help?: string;
   readonly command?: string;
   readonly owner?: PluginId;
   readonly value?: unknown;

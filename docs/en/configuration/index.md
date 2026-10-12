@@ -15,7 +15,7 @@ At startup, `zhin runtime start` checks these project-root candidates in order. 
 
 It is recommended to use `zhin.config.yml` consistently. All examples in this document use it.
 
-For field-by-field types, required fields, defaults, and plugin schemas, use the [generated configuration field reference](./generated). It is generated from Runtime source and plugin `schema.json` files, with drift blocked in CI.
+For field-by-field types, required fields, defaults, and plugin schemas, use the [generated configuration field reference](./generated). It is generated from Runtime source and each plugin’s single configuration declaration (`config: Schema.object(...)` or `schema.json`), with drift blocked in CI.
 
 ## How to use this reference
 

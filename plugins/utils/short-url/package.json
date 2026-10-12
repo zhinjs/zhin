@@ -15,7 +15,6 @@
   },
   "files": [
     "plugin.js",
-    "schema.json",
     "commands",
     "src",
     "lib",

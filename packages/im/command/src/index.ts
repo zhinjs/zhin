@@ -22,3 +22,5 @@ export {
   default as commandFeature,
 } from './provider.js';
 export { default } from './provider.js';
+
+export type { CommandValidationIssue } from './arguments.js';

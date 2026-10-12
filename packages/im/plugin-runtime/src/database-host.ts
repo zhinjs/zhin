@@ -3,7 +3,9 @@ import {
   OwnerScopedResourceHost,
   qualifyOwnedResourceName,
 } from './owner-scoped-resource-host.js';
-import { createToken } from './token.js';
+import { createRootPrivateToken, createToken } from './token.js';
+import { PluginStateStore, type PersistentStatePort } from './persistent-state.js';
+import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
 
 export interface DatabaseHostSelection {
   where(query: Record<string, unknown>): DatabaseHostSelection;
@@ -90,6 +92,8 @@ export interface DatabaseHostConsole {
  * `activateNext` so models are available before commands / cron run.
  */
 export interface DatabaseHost {
+  /** Small-object persistence with database-level compare-and-swap. */
+  readonly state?: PersistentStatePort;
   readonly dialect: string;
   readonly started: boolean;
   /** Register a table schema before `start` (column defs match `@zhin.js/database`). */
@@ -127,25 +131,45 @@ export function qualifyPluginResourceName(owner: PluginId, name: string): string
 export class PluginDatabaseHost extends OwnerScopedResourceHost {
   readonly models: { get(name: string): DatabaseHostModel | undefined };
 
-  constructor(owner: PluginId, private readonly host: DatabaseHost) {
+  readonly #host: DatabaseHost;
+  readonly #admission?: GenerationAdmissionGate;
+
+  constructor(owner: PluginId, host: DatabaseHost, admission?: GenerationAdmissionGate) {
     super(owner);
-    this.models = Object.freeze({ get: (name: string) => this.host.models.get(this.qualify(name)) });
+    this.#host = host;
+    this.#admission = admission;
+    this.models = Object.freeze({ get: (name: string) => this.#host.models.get(this.qualify(name)) });
+  }
+
+  get state(): PluginStateStore {
+    if (!this.#host.state) throw new Error('Persistent state requires a configured database with atomic state support');
+    return new PluginStateStore(super.owner, this.#host.state, undefined, this.#admission);
+  }
+
+  /** @internal Bound by generation publication, never a plugin authoring operation. */
+  [generationAdmissionBinder](gate: GenerationAdmissionGate): PluginDatabaseHost {
+    return new PluginDatabaseHost(super.owner, this.#host, gate);
+  }
+
+  /** @internal Admission source collected by the Runtime. */
+  get [generationAdmissionSource](): readonly GenerationAdmissionGate[] {
+    return this.#admission ? [this.#admission] : [];
   }
 
   get dialect(): string {
-    return this.host.dialect;
+    return this.#host.dialect;
   }
 
   get started(): boolean {
-    return this.host.started;
+    return this.#host.started;
   }
 
   define(name: string, definition: Record<string, unknown>): void {
-    this.host.define(this.qualify(name), definition);
+    this.#host.define(this.qualify(name), definition);
   }
 
   tables(): readonly string[] {
-    return Object.freeze(this.host.tables().flatMap((name) => {
+    return Object.freeze(this.#host.tables().flatMap((name) => {
       const logical = this.unqualify(name);
       return logical === undefined ? [] : [logical];
     }));
@@ -165,7 +189,7 @@ export const databaseHostToken = createToken<PluginDatabaseHost>(
 );
 
 /** Root-only process host for CLI composition and Console administration. */
-export const databaseRootHostToken = createToken<DatabaseHost>(
+export const databaseRootHostToken = createRootPrivateToken<DatabaseHost>(
   'zhin.database.root-host',
   'Plugin Runtime root database host',
 );

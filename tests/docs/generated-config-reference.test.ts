@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 
 describe('generated configuration reference', () => {
-  it('is reproducible from runtime source and plugin JSON Schema', () => {
+  it('is reproducible from runtime source and single-source plugin configuration declarations', () => {
     expect(() => execFileSync(
       process.execPath,
       ['scripts/generate-config-reference.mjs', '--check'],
@@ -24,6 +24,10 @@ describe('generated configuration reference', () => {
       expect(content).toContain('`plugins.sandbox.endpoints`');
       expect(content).toContain('"websocket"');
       expect(content).toContain('plugins/adapters/qq/schema.json');
+      expect(content).toContain('plugins/utils/repeater/plugin.ts');
+      expect(content).toContain('plugins/utils/short-url/plugin.ts');
+      expect(content).toContain('`plugins.repeater.threshold`');
+      expect(content).not.toContain('plugins/utils/repeater/schema.json');
       expect(content).toContain('plugins.content-moderation.actions.pass` | string:');
       expect(content).not.toContain('| unknown |');
     }

@@ -1,9 +1,9 @@
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { RuntimeConfigDocument, PluginId } from '@zhin.js/plugin-runtime';
 import Ajv2020, { type ErrorObject } from 'ajv/dist/2020.js';
 import type { PluginGraphNode, ProjectGraph } from './project-graph.js';
 import hostConfigSchema from './host-config-schema.json' with { type: 'json' };
+import { readPluginConfigSchema } from './plugin-config-schema.js';
+import type { ModuleRuntime } from './module-runtime.js';
 
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object' && !Object.isFrozen(value)) {
@@ -23,6 +23,7 @@ export interface ComposedConfig {
   readonly effectiveSchema: JsonSchema;
   readonly document: RuntimeConfigDocument;
   readonly views: ReadonlyMap<PluginId, unknown>;
+  readonly ownSchemas: ReadonlyMap<PluginId, JsonSchema>;
 }
 
 export class ConfigSchemaCollisionError extends Error {
@@ -44,7 +45,10 @@ export class ConfigValidationError extends Error {
 }
 
 export class ConfigComposer {
-  constructor(private readonly inactivePluginInstanceKeys: readonly string[] = []) {}
+  constructor(
+    private readonly inactivePluginInstanceKeys: readonly string[] = [],
+    private readonly modules?: Pick<ModuleRuntime, 'load'>,
+  ) {}
 
   async compose(
     graph: ProjectGraph,
@@ -55,12 +59,12 @@ export class ConfigComposer {
     // Effective schemas include child namespaces for whole-tree validation;
     // ownSchemas retain each package's private configuration contract.
     const ownSchemas = new Map<PluginId, JsonSchema>();
-    const rootOwn = await readOwnSchema(graph.root);
+    const rootOwn = await readOwnSchema(graph.root, this.modules);
     ownSchemas.set(graph.root.id, rootOwn);
     const childSchemas = await Promise.all(
       graph.root.children.map(async (child) => [
         child.instanceKey,
-        await composeNode(child, ownSchemas),
+        await composeNode(child, ownSchemas, this.modules),
       ] as const),
     );
     // Host-level keys (`http`, `database`, `ai`, `mcp`, `a2a`, `speech`,
@@ -99,6 +103,7 @@ export class ConfigComposer {
     });
     ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
     ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
+    ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
     const validate = ajv.compile(effectiveSchema);
     if (!validate(document)) {
       throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
@@ -116,6 +121,7 @@ export class ConfigComposer {
       effectiveSchema,
       document: Object.freeze(document),
       views,
+      ownSchemas,
     });
   }
 }
@@ -175,8 +181,9 @@ function injectFrameworkRoleSchema(properties: Record<string, JsonSchema>): void
 async function composeNode(
   node: PluginGraphNode,
   ownSchemas: Map<PluginId, JsonSchema>,
+  modules?: Pick<ModuleRuntime, 'load'>,
 ): Promise<JsonSchema> {
-  const own = await readOwnSchema(node);
+  const own = await readOwnSchema(node, modules);
   ownSchemas.set(node.id, own);
   const properties = { ...schemaProperties(own) };
 
@@ -191,23 +198,15 @@ async function composeNode(
     if (Object.hasOwn(properties, child.instanceKey)) {
       throw new ConfigSchemaCollisionError(node.id, child.instanceKey);
     }
-    properties[child.instanceKey] = withDefault(await composeNode(child, ownSchemas));
+    properties[child.instanceKey] = withDefault(await composeNode(child, ownSchemas, modules));
   }
   return Object.freeze({ ...own, properties });
 }
 
-async function readOwnSchema(node: PluginGraphNode): Promise<JsonSchema> {
-  const file = join(node.package.root, 'schema.json');
-  let value: unknown;
-  try {
-    value = JSON.parse(await readFile(file, 'utf8')) as unknown;
-  } catch (error) {
-    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
-      value = { type: 'object', additionalProperties: false, properties: {} };
-    } else {
-      throw error;
-    }
-  }
+async function readOwnSchema(node: PluginGraphNode, modules?: Pick<ModuleRuntime, 'load'>): Promise<JsonSchema> {
+  const file = `${node.package.name} config`;
+  const value: unknown = await readPluginConfigSchema(node.package, modules)
+    ?? { type: 'object', additionalProperties: false, properties: {} };
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError(`${file} must contain a JSON Schema object`);
   }
@@ -231,7 +230,7 @@ async function readOwnSchema(node: PluginGraphNode): Promise<JsonSchema> {
   if (Object.hasOwn(properties, 'commandNamespace')) {
     throw new ConfigSchemaCollisionError(node.id, 'commandNamespace');
   }
-  return Object.freeze({
+  return deepFreeze({
     $id: `urn:zhin:plugin-config:${encodeURIComponent(String(node.id))}`,
     type: 'object',
     additionalProperties: false,

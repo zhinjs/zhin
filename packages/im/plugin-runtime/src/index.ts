@@ -39,5 +39,7 @@ export * from './component-host.js';
 export * from './outbound-host.js';
 /** @public 跨通道发送辅助：`createOutboundSender` / `sendTo`（承诺 semver）。 */
 export * from './outbound-sender.js';
+export * from './delivery-target.js';
+export * from './persistent-state.js';
 export * from './inbox.js';
 export * from './system-log.js';

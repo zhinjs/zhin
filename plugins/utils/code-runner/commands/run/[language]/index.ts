@@ -1,15 +1,14 @@
 import { defineCommand } from 'zhin.js/command';
-import { formatResult, runCode } from '../../../src/run-code.js';
+import { formatResult, MAX_CODE_LENGTH, runCode, supportedLanguages } from '../../../src/run-code.js';
 
 export default defineCommand({
-  description: '在沙箱中运行代码片段（/code-runner run <语言> <代码>）',
-  params: { language: { type: 'string' } },
-  async execute({ params, args }) {
-    const language = String(params.language ?? '');
-    // code 原来是第二动态段，约定式命令只支持单动态文件参数，改从 args 取
-    const code = args.join(' ').trim();
-    if (!code) return '请提供要运行的代码，例如：/code-runner run javascript alert(1+1)';
-    const result = await runCode(language, code);
-    return formatResult(result);
+  description: '在远程沙箱中运行代码片段',
+  params: {
+    language: { type: 'string', choices: supportedLanguages, description: '执行语言' },
+    code: { type: 'text', min: 1, max: MAX_CODE_LENGTH, description: '要运行的代码' },
+  },
+  options: { timeout: { type: 'integer', alias: 't', default: 30, min: 1, max: 30, description: '请求超时（秒）' } },
+  async execute({ params, options }) {
+    return formatResult(await runCode(params.language, params.code, options.timeout));
   },
 });

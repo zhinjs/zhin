@@ -37,6 +37,53 @@ export default definePlugin({
 当命令变多时，把 definition 移到 `commands/hello/index.ts` 默认导出即可；目录模式还能把
 HMR 粒度缩小到单个命令文件。
 
+## 集中声明参数、选项、约束与帮助
+
+目录负责命令层级。推荐 `commands/remind/index.ts` 声明多个位置参数，避免为了每个业务
+参数扩展目录。`commands/foo/[id]/index.ts` 仍可绑定 `params.id`，后续参数也写在同一个声明中。
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: '创建提醒',
+  params: {
+    minutes: { type: 'integer', min: 1, max: 1440, description: '分钟数' },
+    note: { type: 'text', default: '休息一下', description: '提醒内容' },
+  },
+  options: {
+    count: { type: 'integer', alias: 'c', default: 1, min: 1, max: 10 },
+    quiet: { type: 'boolean', default: false },
+  },
+  execute({ params, options }) {
+    // minutes/count 是 number，note 是 string，quiet 是 boolean。
+    return `${params.minutes}:${params.note}:${options.count}:${options.quiet}`;
+  },
+});
+```
+
+`params` 按声明顺序消费输入，类型自动推导到 `execute`。`optional: true` 无默认值时
+是 `T | undefined`；`rest: true` 是只读数组且必须最后声明。必需参数不能放在可选参数之后。
+`text` 保留原始文本中的引号与换行，消费连续文本，应放在其他标量参数之后。
+`min` / `max` 约束数值或文本长度；`choices` 限定可选值；`pattern` 检查文本；
+`validate(value, session)` 返回 true、false 或错误文案。动态默认值与 shortcut 预填也会校验。
+非法默认值、参数顺序、重复选项别名在加载期报错。
+
+选项支持 `--count 2`、`--count=2`、`-c 2`。布尔 `--quiet` 为 true，
+`--quiet=false` 为 false。选项可在位置参数之间出现，负数不会被误认成选项；
+`--` 之后不再解析选项，未知或重复选项会报校验失败。
+
+`remind --help` 从同一声明生成帮助，自动显示当前 Endpoint 的前缀与插件显式配置的
+`commandNamespace`。帮助读取遵循相同权限，不执行业务。没有声明参数的命令仍可通过
+`args` / `segments` 自行处理自由输入。
+
+真实范例：[二维码生成](../../plugins/utils/qrcode/README.md)用文本、图片尺寸与默认值，
+[代码运行](../../plugins/utils/code-runner/README.md)保留动态语言目录，并声明代码和超时选项。
+
+动态目录的路径形态无法被 TypeScript 读取。使用无默认值的 `[[id]]` 时，声明
+`params.id.optional: true`；使用 `[...items]` 时声明 `params.items.rest: true`，
+让执行参数的可选性、数组类型与运行时一致。目录绑定的参数应放在 `params` 第一项。
+
 ## 文件路由
 
 命令名由 `commands/` 下到 `index.ts` 的目录路径决定，目录段以空格连接。插件 owner 不会隐式进入用户输入。Endpoint 先处理自己的 `commandPrefix`（默认空字符串）；插件配置只有显式设置 `commandNamespace` 时才会在本插件所有命令、别名和 shortcut 前增加命名空间。
@@ -69,7 +116,7 @@ HMR 粒度缩小到单个命令文件。
 
 动态参数可以直接作为顶层首段。无论 Root 还是子插件，`commands/[note]/index.ts` 都匹配顶层单段输入；放在静态目录 `commands/remind/[note]/index.ts` 时形成 `remind <note>`。每条命令仍只允许一个动态段，并且必须位于路径末尾。不同 owner 发布相同用户路由时，generation 构建会直接报告冲突。
 
-捕获所有的数组元素粒度由 `params.<name>.type` 决定：`text` 逐消息段收集（纯文本输入整体为一个元素）；`word` / `string` 按空白逐词切分；`number` / `integer` / `float` / `boolean` 逐词切分后逐个转换，任一词转换失败即视为命令不匹配；`mention` / `image` 等结构化类型逐消息段收集。
+捕获所有的数组元素粒度由 `params.<name>.type` 决定：`text` 逐消息段收集（纯文本输入整体为一个元素）；`word` / `string` 按空白逐词切分；`number` / `integer` / `float` / `boolean` 逐词切分后逐个转换，任一词转换失败时，有可靠静态路径的命令报告校验失败，纯动态模糊输入保持未匹配；`mention` / `image` 等结构化类型逐消息段收集。
 
 | 参数类别 | 支持的 type | 匹配结果 |
 | --- | --- | --- |
@@ -79,7 +126,7 @@ HMR 粒度缩小到单个命令文件。
 | IM 段 | `mention` / `image` / `face` / `reply` / `forward` / `dice` / `rps` | canonical segment 对应字段 |
 
 结构化 IM 参数不支持默认值。运行时由 `segment-matcher` 直接在 canonical segments
-上匹配，不会先把 image、mention 等降级成文本；类型不匹配在派发时视为「命令不匹配」。
+上匹配，不会先把 image、mention 等降级成文本；类型不匹配在可靠静态路由下报告「校验失败」，纯动态模糊输入保持「未匹配」。
 
 路由冲突有两条规则：**静态优先**——`list/index.ts` 永远赢过 `[name]/index.ts`，动态路由之间静态段多者优先；**有效路由同形拒绝**——应用显式 `commandNamespace` 后仍相同的路由会在 generation 启动时报错。用户可给冲突插件配置不同命名空间。
 
@@ -98,7 +145,8 @@ export default qqEndpointCommands.remove;
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `args` | `readonly string[]` | 命令名匹配之后剩余的词（按空白切分） |
-| `params` | `Record<string, CommandParameterValue>` | 动态参数段解析后的类型化值；结构化参数可为媒体对象 |
+| `params` | 声明推导的只读对象 | 位置参数与目录绑定参数；结构化参数保留原始值 |
+| `options` | 声明推导的只读对象 | 选项值；未设置且无默认值时为 undefined |
 | `segments` | `readonly CommandSegment[]` | 命令模式消费后剩余的结构化段；保留媒体、mention 等非文本信息 |
 | `config` | `Readonly<TConfig>` | 本插件的配置快照（来自 `zhin.config.yml`） |
 | `input` | `TInput \| undefined` | 调用来源；IM 派发时为 Runtime `Message`（满足 `CommandMessage`），Host / `execute(name)` 可能缺省 |
@@ -184,6 +232,18 @@ plugins:
 
 `master` / `trusted` 名单由 Core 的角色解析读取（`resolveSenderRoles`，`packages/im/core/src/built/ai-trigger.ts`），`role(master)`、`role(trusted)` 这类 permit 以及 [Agent 工具](./agent-tools.md)的 `permissions` 都基于同一套角色。
 
+业务中间件或事件回调需要同样的细粒度准入时，复用 `checkPermissions`：
+
+```ts
+import { checkPermissions } from 'zhin.js';
+
+// context 为当前能力执行上下文；缺少 PermissionHost 会明确报错。
+if (!(await checkPermissions(context, ['group(team)', 'role(trusted)']))) return;
+```
+
+helper 委托当前 operation 的 PermissionHost，不另做角色白名单；Host 调用可显式提供第三个
+参数作为真实 PermissionSubject。它不会替代工具审批或执行安全策略。
+
 ## alias / permit / shortcut
 
 `defineCommand` 支持声明式别名、权限与整句快捷方式（构建期校验；命中冲突抛错）：
@@ -201,7 +261,7 @@ export default defineCommand({
 | 字段 | 行为 |
 |---|---|
 | `alias` | 替换**全部本地静态段**；动态 `$param` 接在后面，owner 不参与路由 |
-| `permit` | 仅内置 DSL：`adapter\|group\|private\|channel\|user\|role(...)`；未过则**静默未命中**（`matched: false`）；`CommandIndex.execute` 无 session 时跳过 |
+| `permit` | 仅内置 DSL：`adapter\|group\|private\|channel\|user\|role(...)`；委托 PermissionHost；失败返回 `denied`，没有鉴权主体时也拒绝；无主体的 `CommandIndex.execute` 不能绕过 |
 | `shortcut` | `Record`：触发串 → 预填 `params`；trim 后全文相等才命中 |
 
 冲突键按**完整词序列**（`b` 与 `b list` 可共存）。正式路由、alias、shortcut 键互斥。
@@ -220,6 +280,18 @@ export function isEndpointOperator(config: unknown, input: unknown): boolean {
 ```
 
 这个模式的要点：用 `config`（插件配置）拿到声明的 `master` 名单，用 `input`（消息）拿到发送者 id，比对后返回拒绝文案（`仅 master 可执行 <Adapter> endpoint 管理命令`）。未配置 `master` 时放行，首个扫码绑定者即成为 owner（QQ 绑定流程会把操作者写为新 endpoint 的 `master`）。注意 `input` 不一定是消息（可能是 Host 调用），取发送者前要做类型守卫；非消息来源时 `$reply` 降级为 no-op。
+
+## 未匹配、校验失败与权限拒绝
+
+`CommandIndex.dispatch()` 返回 `status: unmatched | invalid | denied | executed`。
+`unmatched` 的 `matched` 为 false，继续中间件、普通聊天或 AI；其他状态的 `matched` 为 true。
+`invalid` 包含 `issues: { field, message }[]` 和 `help`；`denied` 表示 PermissionHost 拒绝；
+只有 `executed` 产生业务返回值。Core 通过统一回复链路显示校验与拒绝提示。
+
+只有确定的静态命令路径才提示缺参或错误类型，例如 `remind nope`；
+`reminder 3`、普通聊天和完全动态路由的模糊输入保持未匹配。权限先于参数校验，
+受限命令不会向未获准用户披露帮助。Host 可通过 `dispatch` 提供真实 `PermissionSubject`
+鉴权；缺少 Message 的上下文仍明确没有消息与交互。审批是独立执行关口。
 
 ## 适配器 endpoint 管理命令套件
 

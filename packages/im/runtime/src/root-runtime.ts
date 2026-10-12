@@ -32,7 +32,7 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer } from './config-composer.js';
+import { ConfigComposer, type JsonSchema } from './config-composer.js';
 import { ConfigPatchPlanner, type ConfigPatchPlan } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
 import {
@@ -156,6 +156,7 @@ export class RootRuntime {
   readonly #isolation?: IsolatedPluginRuntimePort;
   #configPatchTail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
+  #initialConfigSchemas: ReadonlyMap<string, JsonSchema> = new Map();
   readonly #controller: RootController<RuntimeGenerationState>;
   readonly #disabledPluginInstanceKeys: readonly string[];
 
@@ -188,6 +189,14 @@ export class RootRuntime {
 
   get snapshots(): SnapshotReader {
     return this.#controller.snapshots;
+  }
+
+  /** Committed metadata, or validated startup declarations while first login is pending. */
+  get configurationSchemas(): ReadonlyMap<string, JsonSchema> {
+    const snapshot = this.snapshot;
+    return snapshot.generation === 0 ? new Map(this.#initialConfigSchemas)
+      : new Map([...snapshot.tree.values()].flatMap(node => node.configSchema
+        ? [[node.packageRoot, node.configSchema] as const] : []));
   }
 
   onGenerationCommit(listener: GenerationCommitListener<RuntimeGenerationState>): () => void {
@@ -370,7 +379,7 @@ export class RootRuntime {
       ? defineEnvironmentLayers(await this.#environmentSource.read())
       : this.#environmentLayers;
     const inputPlan = await new RuntimeInputPlanner(
-      new ConfigComposer(this.#disabledPluginInstanceKeys),
+      new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
     ).plan({
       graph: this.#model.graph,
       environment: this.#environment,
@@ -488,11 +497,17 @@ export class RootRuntime {
         environmentLayers,
       };
     }
-    const composed = await new ConfigComposer(this.#disabledPluginInstanceKeys)
+    const composed = await new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules)
       .compose(graph, activeDocument);
+    if (this.snapshot.generation === 0) {
+      this.#initialConfigSchemas = new Map(graphNodes(graph.root).flatMap(node => {
+        const schema = composed.ownSchemas.get(node.id);
+        return schema ? [[node.package.root, schema] as const] : [];
+      }));
+    }
     return {
       graph,
-      configResolver: this.#configViewResolver(composed.views, environmentLayers),
+      configResolver: this.#configViewResolver(composed.views, environmentLayers, composed.ownSchemas),
       primaryConfigDocument: composed.document,
       environmentLayers,
     };
@@ -516,13 +531,16 @@ export class RootRuntime {
   #configViewResolver(
     views: ReadonlyMap<PluginId, unknown>,
     environmentLayers: EnvironmentLayers = this.#environmentLayers,
+    schemas?: ReadonlyMap<PluginId, Readonly<Record<string, unknown>>>,
   ): PluginConfigResolver {
-    return (node) => {
+    const resolver: PluginConfigResolver = (node) => {
       const view = views.get(node.id);
       if (view === undefined) return undefined;
       return createEnvStore(node.id, this.#environment, environmentLayers)
         .expandMissingAsEmpty(view);
     };
+    resolver.schema = (node) => schemas?.get(node.id);
+    return resolver;
   }
 
   async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
@@ -544,7 +562,7 @@ export class RootRuntime {
         disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
       }).inspect(this.#projectRoot);
       const planned = await new ConfigPatchPlanner(
-        new ConfigComposer(this.#disabledPluginInstanceKeys),
+        new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
       ).plan(graph, currentDocument, patches);
       plan = planned;
       if (!planned.documentChanged) return undefined;
@@ -568,7 +586,7 @@ export class RootRuntime {
         }
         const inspected: InspectedProject = {
           graph,
-          configResolver: this.#configViewResolver(planned.views),
+          configResolver: this.#configViewResolver(planned.views, this.#environmentLayers, planned.ownSchemas),
           primaryConfigDocument: planned.document,
           environmentLayers: this.#environmentLayers,
         };
@@ -877,6 +895,10 @@ class GenerationAssembler {
 
 interface ModuleNamespace {
   readonly default?: unknown;
+}
+
+function graphNodes(node: PluginGraphNode): readonly PluginGraphNode[] {
+  return [node, ...node.children.flatMap(graphNodes)];
 }
 
 function emptyState(): SnapshotState {

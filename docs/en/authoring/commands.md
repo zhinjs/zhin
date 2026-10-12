@@ -37,6 +37,53 @@ export default definePlugin({
 When commands grow in number, move the definition to a `commands/hello/index.ts` default export; the directory mode also narrows
 HMR granularity to individual command files.
 
+## Declaring arguments and options together
+
+Directories define static routes. `commands/remind/index.ts` can declare several positional
+parameters, while `commands/foo/[id]/index.ts` still binds `params.id` and permits additional
+parameters in the same declaration.
+
+```ts
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  description: 'Create a reminder',
+  params: {
+    minutes: { type: 'integer', min: 1, max: 1440 },
+    note: { type: 'text', default: 'Take a break' },
+  },
+  options: { count: { type: 'integer', alias: 'c', default: 1, min: 1, max: 10 } },
+  execute: ({ params, options }) => `${params.minutes}:${params.note}:${options.count}`,
+});
+```
+
+Parameters are consumed in declaration order and infer the `execute` types. Optional values
+without defaults include `undefined`; `rest: true` produces a readonly array and must be last.
+Required parameters cannot follow optional ones. Text parameters retain quotes and newlines
+and consume contiguous text, so place them after scalar parameters. Bounds apply to numbers
+or text length; `choices`, `pattern`, and synchronous `validate(value, session)` add constraints.
+Dynamic defaults and shortcut prefills go through the same validation.
+
+Options support `--count 2`, `--count=2`, and `-c 2`, including between positional parameters.
+Boolean flags mean true; `--quiet=false` means false. Negative numbers are values, and `--`
+ends option parsing. Unknown and duplicate options are invalid. `remind --help` derives help
+from the same declarations, including the current Endpoint prefix and explicit plugin
+`commandNamespace`. It respects command permissions and does not execute business code.
+
+Dispatch reports `unmatched`, `invalid`, `denied`, or `executed`. Only unmatched has
+`matched: false`; invalid includes field/message issues and help, and only executed contains
+business output. Reliable static routes report missing or invalid arguments. Ordinary chat,
+accidental token prefixes, and ambiguous fully dynamic routes remain unmatched. Restricted
+Host calls need an actual PermissionSubject; missing Message/interaction stays explicit.
+CommandIndex.execute without a subject cannot bypass permissions. Approval remains independent.
+
+Real consumers: [QR generation](../../../plugins/utils/qrcode/README.md) and
+[code execution](../../../plugins/utils/code-runner/README.md).
+
+TypeScript cannot read directory shapes. For `[[id]]` without a default, declare
+`params.id.optional: true`; for `[...items]`, declare `params.items.rest: true` so the
+inferred optional/array types agree with runtime. Declare the directory-bound parameter first.
+
 ## File Routing
 
 The command name comes from the directory path under `commands/`, with segments joined by spaces. The Endpoint first consumes its own `commandPrefix`, which defaults to an empty string. The plugin owner remains part of Capability identity and configuration scope; it enters user input only when plugin config explicitly sets `commandNamespace`.
@@ -201,7 +248,7 @@ export default defineCommand({
 | Field | Behavior |
 |---|---|
 | `alias` | Replaces **all local static segments**. Dynamic `$param` still follows; owner does not participate in routing. |
-| `permit` | Builtin DSL only: `adapter\|group\|private\|channel\|user\|role(...)`. Failure is a **silent miss** (`matched: false`). `CommandIndex.execute` skips permit when there is no session. |
+| `permit` | Builtin DSL only: `adapter\|group\|private\|channel\|user\|role(...)`. Failure is a **permission denial** (`status: denied`, `matched: true`). `CommandIndex.execute` cannot bypass permit without a subject when there is no session. |
 | `shortcut` | `Record`: trigger → prefilled `params`. Exact match after trim. |
 
 Conflict keys are the **full word sequence** (`b` and `b list` may coexist). Primary routes, aliases, and shortcut keys are mutually exclusive.
@@ -281,3 +328,16 @@ Resolution rules (`packages/im/core/src/plugin-runtime/im/message-dispatcher.ts`
 ## Troubleshooting Tips
 
 `description` appears in command listings, so it's recommended to always include one. Command name conflicts (same-name static commands or same-shape dynamic routes) throw errors at startup; running a startup after configuration changes catches them early. Commands returning `Promise` can implement multi-round interactions -- resolve the first reply, then append subsequent ones with `input.$reply`; see the QQ `qq endpoint add` scan-code binding flow for reference.
+
+
+## Shared permission checks
+
+```ts
+import { checkPermissions } from 'zhin.js';
+
+if (!(await checkPermissions(context, ['group(team)', 'role(trusted)']))) return;
+```
+
+Middleware and event callbacks reuse the current operation's PermissionHost through this
+helper. Missing hosts fail explicitly; a Host call may provide an actual PermissionSubject
+as the third argument. This does not replace tool approval or execution security policy.
