@@ -152,7 +152,14 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
   let previousPath: string | undefined;
   let pageStartedAt = performance.now();
   let searchTimer: number | undefined;
+  let searchObserver: MutationObserver | undefined;
   let lastSearchKey = '';
+
+  const stopSearchCollection = () => {
+    window.clearTimeout(searchTimer);
+    searchObserver?.disconnect();
+    searchObserver = undefined;
+  };
 
   const enabled = () => shouldCollectDocsInsights({
     endpoint,
@@ -179,15 +186,18 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     dwellMs: performance.now() - pageStartedAt,
   });
 
-  const collectSearch = (target: HTMLInputElement, query: string, attempt = 0) => {
-    if (!target.isConnected || target.value.trim() !== query) return;
-    const root = target.closest('.VPLocalSearchBox');
-    const resultCount = root?.querySelectorAll('.results .result').length ?? 0;
-    const noResults = Boolean(root?.querySelector('.results .no-results'));
-    if (resultCount === 0 && !noResults && attempt < 15) {
-      searchTimer = window.setTimeout(() => collectSearch(target, query, attempt + 1), 100);
+  const collectSearch = (target: HTMLInputElement, query: string) => {
+    if (!target.isConnected || target.value.trim() !== query) {
+      stopSearchCollection();
       return;
     }
+    const root = target.closest('.VPLocalSearchBox');
+    const resultCount = root?.querySelectorAll('.results .result').length ?? 0;
+    const noResults = root?.querySelector('.results .no-results strong')?.textContent?.trim() === query;
+    // A cold search index may take seconds to load. Empty DOM is pending, not
+    // a completed search; wait for the rendered result instead of guessing.
+    if (resultCount === 0 && !noResults) return;
+    stopSearchCollection();
     const key = `${query}\u0000${resultCount}\u0000${noResults}`;
     if (key === lastSearchKey) return;
     lastSearchKey = key;
@@ -202,15 +212,22 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
   const onInput = (event: Event) => {
     const target = event.target;
     if (!(target instanceof HTMLInputElement) || !target.matches('.VPLocalSearchBox #localsearch-input')) return;
-    window.clearTimeout(searchTimer);
+    stopSearchCollection();
     searchTimer = window.setTimeout(() => {
       const query = target.value.trim();
-      if (query.length < 2) return;
+      const root = target.closest('.VPLocalSearchBox');
+      if (query.length < 2 || !target.isConnected || !root) return;
+      searchObserver = new MutationObserver(() => collectSearch(target, query));
+      searchObserver.observe(root, { childList: true, subtree: true, characterData: true });
       collectSearch(target, query);
     }, 400);
   };
-  const onPageHide = () => emitExit();
+  const onPageHide = () => {
+    stopSearchCollection();
+    emitExit();
+  };
   const onConsent = (event: Event) => {
+    stopSearchCollection();
     if ((event as CustomEvent<DocsInsightsConsent>).detail === 'granted' && enabled()) {
       pageStartedAt = performance.now();
       emitEntry();
@@ -218,6 +235,7 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
   };
   const previousAfterRouteChange = router.onAfterRouteChange;
   const routeChangeWrapper: NonNullable<Router['onAfterRouteChange']> = async (to) => {
+    stopSearchCollection();
     await previousAfterRouteChange?.(to);
     emitExit();
     previousPath = currentPath;
@@ -234,7 +252,7 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
   emitEntry();
 
   return () => {
-    window.clearTimeout(searchTimer);
+    stopSearchCollection();
     document.removeEventListener('input', onInput);
     window.removeEventListener('pagehide', onPageHide);
     window.removeEventListener(DOCS_INSIGHTS_CONSENT_EVENT, onConsent);
