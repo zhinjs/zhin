@@ -1,0 +1,23 @@
+scripts/ci/windows-build-args.json
+  s_6562bcb6cc0539::t_2d18188a594375 5
+scripts/ci/build-windows.test.ts
+  s_6562bcb6cc0539::t_2d18188a594375 2,12-14
+  s_6562bcb6cc0539::t_3dd6bc6e339917 11,24,43,55-56,64,69-70,78-83
+  s_6562bcb6cc0539::t_ffdc84ba3163dd 84
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5c59656c57b80c2735b985828aae86061f9eb915",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
