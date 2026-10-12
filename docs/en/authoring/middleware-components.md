@@ -17,11 +17,11 @@ Server-side TSX support only transpiles JSX; it is not a stylesheet build pipeli
 import { defineCommand } from 'zhin.js/command';
 import { Card, CardHeader, Badge } from '@zhin.js/components';
 export default defineCommand({
-  execute: () => <Card><CardHeader title={<strong>Status</strong>} badge={<Badge>Online</Badge>} /></Card>,
+  execute: () => <html><Card><CardHeader title={<strong>Status</strong>} badge={<Badge>Online</Badge>} /></Card></html>,
 });
 ```
 
-Display props use `JSXRenderable`, accepting text, numbers, nested JSX, arrays, asynchronous nodes and empty values. Color, size and calculation parameters retain their specific types. Pure function components need no registration; async functions work as tags. Text is escaped, and plain HTML-looking strings remain text. Use `rawHtml()` or `<Raw html={...} />` only to insert trusted markup explicitly.
+HTML display props use `JSXRenderable`, accepting text, numbers, nested JSX, arrays, asynchronous nodes and empty values. Color, size and calculation parameters retain their specific types. Pure function components need no registration; async functions work as tags. Text inside HTML is escaped, and plain HTML-looking strings remain text. Use `rawHtml()` or `<Raw html={...} />` only to insert trusted markup explicitly.
 
 `ThemeProvider` shares colors, fonts, backgrounds, radii, borders, shadows and copy. Use `custom.style` and `custom.text` for local overrides. Default spacing uses 4/8/12/16/24px, with equal top/bottom and left/right values: margin separates components, padding spaces container content, and Divider has outer margins. Adjacent vertical margins may collapse in block flow; Flex/Grid margins add together. See the [component library](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/components/README.md) for configuration.
 
@@ -76,6 +76,24 @@ Single-element static layout, spacing, sizing, typography, colors, borders, radi
 
 Native HTML and `@zhin.js/html-renderer` (`@pixel.js/shotium`) consume the same inline styles. Images are static; fonts come from the renderer environment or explicit registration. This API does not process `className` or enable `.css` imports, CSS Modules or preprocessors. See the [Tailwind package](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/tailwind/README.md) for the support boundary.
 
+### Native message tags and callbacks
+
+Default JSX lays out message Segments. Lowercase native tags require no imports and provide prop types: `text`, `image`, `mention`, `face`, `audio`, `video`, `file`, `record`, `voice`, `reply`, `forward`, `share`, `dice`, `rps`, `card`, `keyboard`, `action`, `markdown`, `link`, `qrcode`, `tts`, plus `button` and the `html` boundary. Most tag names mirror `Segment.type` and props mirror `Segment.data`; `<button>` is a helper that produces a `keyboard` Segment. Image accepts either canonical `media` or a convenient `src` (URL, path, base64 or MediaRef).
+
+```tsx
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  execute: () => <>hello<image src="https://example.com/photo.png" />
+    <button onClick={(message) => <text>Hello {message.sender?.name}</text>}>Reply</button>
+  </>,
+});
+```
+
+`onClick(message)` runs in the clicking conversation and replies once with its returned string, Segment or JSX. Numbers, including `0`, remain visible; null, undefined and booleans send nothing. Explicit `message.$reply()` is also available. Callbacks are not serialized: the runtime binds a random payload to the original plugin author, conversation and active snapshot. Callbacks expire after one hour or on reload/restart. One runtime counter allocates unique increasing fallback labels; interleaved conversations may skip numbers, while lookup remains isolated by conversation. Applications can inspect `message.sender` to enforce their permissions. Platforms without native buttons use numeric fallback; adjacent buttons share one numbered group.
+
+`<card {...platformPayload} />` preserves the native platform payload. Native `card`, `button` and `markdown` differ from the optional HTML display components named `Card`, `Button` and `Markdown`. Registered `components/music/index.tsx` can render `<share {...props} />` and be invoked without imports as `<music title="Song" url="https://example.com/song" />`. Custom function components can return `null` to omit their position. Unqualified unknown tags must resolve to a registered component. Namespaced tags such as `<vendor:poll />` produce extension Segments and require an adapter that supports them.
+
 ## Inbound results
 
 ```tsx
@@ -83,7 +101,7 @@ import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message } from 'zhin.js';
 export default defineMiddleware<Message>({
   handle({ input }, next) {
-    if (input.content === 'status') return <p>Online</p>;
+    if (input.content === 'status') return <text>Online</text>;
     return next();
   },
 });
@@ -91,10 +109,10 @@ export default defineMiddleware<Message>({
 
 | Code | Behavior |
 | --- | --- |
-| `return <Card />` | Stop downstream and provide an automatic reply |
+| `return <text>OK</text>` | Stop downstream and provide an automatic reply |
 | `return next()` | Forward the downstream result and its owner |
 | `await next()` without return | Still forward the downstream result |
-| `await next(); return <Card />` | Replace the pending automatic reply |
+| `await next(); return <text>OK</text>` | Replace the pending automatic reply |
 | Neither next nor a result | Consume input without an automatic reply |
 
 The complete chain produces one automatic reply. Explicit `$reply()` calls may send several messages; upstream replacement cannot undo them. A matched command returning void remains handled and does not trigger AI. `next()` returns an opaque continuation for forwarding, not an editable message, and may be called once per frame.
@@ -109,7 +127,7 @@ import type { OutboundEnvelope } from 'zhin.js/core/runtime';
 export default defineMiddleware<OutboundEnvelope>({
   target: 'outbound',
   async handle({ input }, next) {
-    input.replace(<p>Reviewed content</p>);
+    input.replace(<text>Reviewed content</text>);
     await next();
   },
 });
@@ -126,7 +144,7 @@ import type { JSXRenderable } from 'zhin.js/jsx';
 import { Card, CardHeader, KvTable } from '@zhin.js/components';
 interface Props { title: JSXRenderable; rows: readonly { label: JSXRenderable; value: JSXRenderable }[]; }
 export default defineComponent<Props>({
-  render: ({ title, rows }) => <Card><CardHeader title={title} /><KvTable rows={rows} /></Card>,
+  render: ({ title, rows }) => <html><Card><CardHeader title={title} /><KvTable rows={rows} /></Card></html>,
 });
 ```
 
@@ -135,13 +153,13 @@ import { component } from 'zhin.js/component';
 return component('status-card', { title: 'my-bot', rows: [{ label: 'RSS', value: '42MB' }] });
 ```
 
-Provide `previewProps` for public Console example data. Console previews use the same JSX/HTML renderer, preserve the request's generation and cancellation signal, and return displayable HTML message segments.
+Provide `previewProps` for public Console example data. Console previews use the same message JSX renderer and preserve the request's generation and cancellation signal. Explicit HTML boundaries produce HTML segments; other content produces its corresponding Segments.
 
 Names resolve from the requesting plugin toward its ancestors, allowing local overrides. Render context contains the operation's config, use, owner, generation and requester. Async execution keeps its original snapshot across hot reload. Registered components may return other component calls, up to depth 32.
 
 ## Platform HTML policy
 
-The path is **JSX → HTML → segment.html → Adapter policy → outbound middleware → Endpoint**. Declared `segments.html: direct` preserves HTML (Sandbox and Email); image uses the optional `@zhin.js/html-renderer`; text extracts text. An undeclared policy uses an image when available and text otherwise. Other media and interaction segments are still validated in direct mode.
+The path is **JSX → ordered Segments → Adapter policy → outbound middleware → Endpoint**. Only `<html>` / `<Html>` children are serialized as HTML and become `segment.html`. Declared `segments.html: direct` preserves HTML (Sandbox and Email); image uses the optional `@zhin.js/html-renderer`; text extracts text. An undeclared policy uses an image when available and text otherwise. Other media and interaction segments are still validated in direct mode.
 
 ```ts
 import { renderToHtml } from 'zhin.js/jsx';
@@ -151,7 +169,7 @@ return segment.html({ html: await renderToHtml(node), width: 640, text: 'Service
 
 Missing renderers, rendering failures or unavailable binary delivery fall back before sending. Upload/send failures never trigger an extra text replay. Empty JSX sends nothing; evaluation errors fail delivery instead of appearing as chat messages. Generated HTML never runs text templates again.
 
-Use an outer array for mixed content, such as `[<Card />, segment.mention('user-id')]`. JSX subtrees express HTML, not platform Segments.
+Use fragments for mixed messages: `<>hello<image src="https://example.com/a.png" /><mention target="user-id" /><html><Card /></html></>`. Function components can return Segments, text, JSX, arrays, promises or `null`; absent values are omitted. HTML tags and visual components belong inside `<html>`.
 
 ## Dual-Mode Degradation in Game Plugins
 

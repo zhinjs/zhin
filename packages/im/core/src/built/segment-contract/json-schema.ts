@@ -84,7 +84,7 @@ const looseBranch: JsonSchemaObject = {
   properties: {
     type: {
       type: 'string',
-      enum: ['voice', 'record', 'link', 'markdown', 'html'],
+      enum: ['voice', 'record', 'link', 'markdown', 'html', 'card'],
     },
     data: { type: 'object' },
     platform: platformJsonSchema,

@@ -1,4 +1,6 @@
-/** Lazy, transport-neutral JSX. Functions are evaluated only during rendering. */
+import type { Segment } from '@zhin.js/im-contract';
+
+/** Lazy JSX. Functions are evaluated only during rendering. */
 export function Fragment(props: Readonly<{ children?: JSXRenderable }>): JSXRenderable {
   return props.children;
 }
@@ -8,6 +10,7 @@ export const rawHtmlType = Symbol.for('zhin.jsx.raw-html/1');
 /** A settled node excludes a top-level thenable so Awaited<JSXNode> terminates. */
 type JSXResolvedNode =
   | JSXElement
+  | Segment
   | string
   | number
   | boolean
@@ -20,6 +23,10 @@ export type JSXNode = JSXResolvedNode | PromiseLike<JSXResolvedNode>;
 /** Rendering inputs also accept explicitly annotated async component results. */
 export type JSXRenderable = JSXNode | PromiseLike<JSXNode>;
 
+/** HTML boundaries accept layout nodes, never transport Segments. */
+type HtmlResolvedNode = JSXElement | string | number | boolean | null | undefined | readonly HtmlRenderable[];
+export type HtmlRenderable = HtmlResolvedNode | PromiseLike<HtmlResolvedNode> | PromiseLike<HtmlResolvedNode | PromiseLike<HtmlResolvedNode>>;
+
 /** Explicit async annotations such as Promise<JSXNode> remain valid component returns. */
 export type JSXComponent<P = Record<string, unknown>> = (props: P) => JSXRenderable;
 export type JSXElementType = string | JSXComponent<any> | typeof rawHtmlType;
@@ -29,6 +36,20 @@ export interface JSXElement {
   readonly $jsx: 'zhin.jsx/1';
   readonly type: JSXElementType;
   readonly props: JSXProps;
+}
+
+export interface HtmlProps {
+  readonly children?: HtmlRenderable;
+  readonly width?: number;
+  readonly backgroundColor?: string;
+  readonly fileName?: string;
+  /** Text used when the platform cannot display HTML or a rendered image. */
+  readonly text?: string;
+}
+
+/** Explicit message-to-HTML boundary; its children are serialized as HTML. */
+export function Html(props: HtmlProps): JSXElement {
+  return jsx(Html, { ...props });
 }
 
 export type JSXStyle = string | Readonly<Record<string, string | number | null | undefined | false>>;

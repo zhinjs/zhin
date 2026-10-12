@@ -119,9 +119,10 @@ function wrapModel(model: RawModel, db?: RawDatabase, tableName?: string): Datab
 export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
   readonly db: { define: (name: string, definition: unknown) => void; start(): Promise<void>; stop(): Promise<void>; models: Map<string, unknown> };
 } {
+  const { dialect, ...connectionConfig } = config;
   const db = Registry.create(
-    config.dialect as keyof Registry.Config,
-    config as never,
+    dialect as keyof Registry.Config,
+    connectionConfig as never,
   ) as unknown as RawDatabase;
   let started = false;
   const wrapped = new Map<string, DatabaseHostModel>();

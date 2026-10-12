@@ -101,6 +101,7 @@ export class ImRuntime implements OutboundMessageService {
       rememberFallback: (conversation, generation, map) =>
         this.#interactions.rememberFallback(conversation, generation, map),
       publish: (event) => this.#messageEventStream.publish(event),
+      prepareButtons: (request, snapshot) => this.#interactions.prepareButtons(request, snapshot),
     }, options.renderer);
     this.#inbound = new InboundRuntime({
       interactions: this.#interactions,

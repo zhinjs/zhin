@@ -24,16 +24,18 @@ import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
+import { collectButtonPayloads, type JsxButtonBatch } from './jsx-button-registry.js';
 
 const logger = getLogger('im.outbound');
 
 interface OutboundDeliveryContext {
+  prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
   record(request: SendRequest, receipt: DeliveryReceipt): Promise<void>;
   rememberFallback(
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
-  ): void;
+  ): Record<string, string> | void;
   publish(event: RuntimeMessageEvent): void;
 }
 
@@ -50,7 +52,9 @@ export class OutboundDeliveryRuntime {
 
   async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
-    const jsxCache = new WeakMap<JSXElement, Promise<string>>();
+    const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
+    const buttons = this.context.prepareButtons?.(request, snapshot);
+    const renderOptions = { jsxCache, bindButton: buttons?.bind };
     let initialPayload: unknown;
     try {
       const rendered = await this.#renderer.render(
@@ -59,7 +63,7 @@ export class OutboundDeliveryRuntime {
         snapshot,
         request.conversation,
         request.incoming,
-        { jsxCache },
+        renderOptions,
       );
       initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
     } catch (error) {
@@ -89,22 +93,23 @@ export class OutboundDeliveryRuntime {
         async () => {
           terminalEntered = true;
           let payload: unknown;
+          const buttonPayloads = new Set<string>();
           try {
             // Native payload replacements remain possible; only authoring values need evaluation.
             const replacement = envelope.payload;
             const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
-              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, { jsxCache })
+              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, renderOptions)
               : replacement;
             payload = await prepareOutboundPayload(
               replaced,
               request.conversation,
               snapshot,
-              (map) => this.context.rememberFallback(
-                request.conversation,
-                snapshot.generation,
-                map,
-              ),
+              (map) => {
+                for (const value of Object.values(map)) buttonPayloads.add(value);
+                return this.context.rememberFallback(request.conversation, snapshot.generation, map);
+              },
             );
+            for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
             receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
               ? receiptFromEndpointError(error, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
@@ -116,6 +121,7 @@ export class OutboundDeliveryRuntime {
             return;
           }
 
+          const revokeButtons = buttons?.activate(buttonPayloads);
           try {
             const result = await requireAdapters(snapshot).send(adapter, {
               conversation: request.conversation,
@@ -125,6 +131,8 @@ export class OutboundDeliveryRuntime {
           } catch (error) {
             receipt = receiptFromEndpointError(error);
           }
+
+          if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown) revokeButtons?.();
 
           if (receipt.status === 'sent') {
             await this.context.record(request, receipt);
@@ -188,7 +196,7 @@ async function prepareOutboundPayload(
   rendered: unknown,
   conversation: ConversationRef,
   snapshot: RuntimeSnapshot,
-  rememberInteractiveFallback?: (map: Record<string, string>) => void,
+  rememberInteractiveFallback?: (map: Record<string, string>) => Record<string, string> | void,
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
   const markdownResolved = applyOutboundMarkdownPolicy(

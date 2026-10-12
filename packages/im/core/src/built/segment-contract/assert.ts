@@ -11,7 +11,7 @@ const STRICT_CANONICAL_TYPES = new Set([
 // their gradual contracts isolated here; third-party extensions must be
 // namespaced so a future canonical type cannot silently collide with them.
 const CORE_EXTENSION_TYPES = new Set([
-  'action', 'html', 'keyboard', 'link', 'markdown', 'qrcode', 'record', 'tts', 'voice',
+  'action', 'card', 'html', 'keyboard', 'link', 'markdown', 'qrcode', 'record', 'tts', 'voice',
 ]);
 
 const extensionTypePattern = /^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/u;

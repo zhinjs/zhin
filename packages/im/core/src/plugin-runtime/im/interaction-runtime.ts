@@ -15,8 +15,10 @@ import {
   type UserInteractionProgress,
   type UserInteractionView,
 } from '../../built/user-interaction.js';
-import type { Message, MessageSenderRef, SendContent } from './contracts.js';
+import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import type { Message, MessageSenderRef, SendContent, SendRequest } from './contracts.js';
 import { RuntimeInteractiveRouter } from './interactive-router.js';
+import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
 
 interface UserInteractionClaim {
   readonly resolve: (raw: string) => void;
@@ -55,6 +57,7 @@ class UserInteractionDeliveryError extends Error {
 export class RuntimeInteractionCoordinator<Admission = never> {
   readonly #router: RuntimeInteractiveRouter<Admission>;
   readonly #claims = new Map<string, UserInteractionClaim>();
+  readonly #buttons = new JsxButtonRegistry();
 
   constructor(router = new RuntimeInteractiveRouter<Admission>()) {
     this.#router = router;
@@ -72,18 +75,26 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
-  ): void {
-    this.#router.rememberFallback(conversation, generation, map);
+  ): Record<string, string> {
+    return this.#router.rememberFallback(conversation, generation, map);
   }
 
-  dispatch(message: Message, admission?: Admission): Promise<boolean> {
+  async dispatch(message: Message, admission?: Admission, snapshot?: RuntimeSnapshot): Promise<boolean> {
+    const payload = this.#router.resolvePayload(message);
+    if (payload && snapshot && await this.#buttons.dispatch(message, payload, snapshot)) return true;
     return this.#router.dispatch(message, admission);
   }
 
+  prepareButtons(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch {
+    return this.#buttons.prepare(request, snapshot);
+  }
+
   resolveClaim(message: Message): boolean {
+    const payload = this.#router.resolvePayload(message);
+    if (isJsxButtonPayload(payload)) return false;
     const claim = this.#claims.get(this.#conversationKey(message));
     if (!claim) return false;
-    claim.resolve(this.#router.resolvePayload(message) ?? message.content);
+    claim.resolve(payload ?? message.content);
     return true;
   }
 

@@ -34,6 +34,6 @@ export default defineComponent<StatusCardProps>({
         }),
       ],
     });
-    return jsx(CardCanvas, { children: body });
+    return jsx('html', { children: jsx(CardCanvas, { children: body }) });
   },
 });

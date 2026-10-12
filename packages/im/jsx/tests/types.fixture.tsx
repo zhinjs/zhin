@@ -18,14 +18,18 @@ const asyncNodes: JSXNode = [asyncResult, 0, [AsyncList()]];
 const renderable: JSXRenderable = asyncResult;
 createElement('div', {}, asyncResult);
 createElement('div', { children: asyncResult });
-void renderToHtml(Async({ children: node }));
+void renderToHtml(<Async>{node}</Async>);
 void [settled, asyncList, directAsyncChildren, asyncNodes, renderable];
 void node;
 
 // @ts-expect-error Props of function components remain type checked.
 const invalidProps = <Text text={42} />;
-// @ts-expect-error Promise-valued components are supported, plain segments are not JSX nodes.
-const invalidSegment: JSXNode = { type: 'image', data: {} };
+const segmentNode: JSXNode = { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } };
 // @ts-expect-error JSX expressions have the lazy brand, not plain string identity.
 const invalidElement: JSX.Element = '<div />';
-void [invalidProps, invalidSegment, invalidElement];
+void [invalidProps, segmentNode, invalidElement];
+
+// @ts-expect-error HTML serialization excludes transport Segments.
+void renderToHtml(segmentNode);
+// @ts-expect-error Nested transport Segments cannot enter an HTML boundary.
+void renderToHtml([segmentNode]);

@@ -1568,6 +1568,10 @@ importers:
         version: 6.0.3
 
   packages/im/jsx:
+    dependencies:
+      '@zhin.js/im-contract':
+        specifier: workspace:*
+        version: link:../im-contract
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
