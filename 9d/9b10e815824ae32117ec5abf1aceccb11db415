@@ -1,0 +1,21 @@
+docs/e2e/docs-site.spec.ts
+  s_6562bcb6cc0539::t_907bb33a53a2af 46-58
+docs/.vitepress/theme/docs-insights.ts
+  s_6562bcb6cc0539::t_3c6fc5442cdaec 157,202-204,206,259
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9d9b10e815824ae32117ec5abf1aceccb11db415",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
