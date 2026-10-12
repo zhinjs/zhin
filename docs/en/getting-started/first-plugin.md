@@ -33,11 +33,16 @@ ping-pong/
     "dev": "zhin runtime start"
   },
   "dependencies": {
-    "@zhin.js/command": "^1.1.0",
     "zhin.js": "^1.1.0"
   },
   "devDependencies": {
     "@zhin.js/cli": "^1.1.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/command": "^1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/command": { "optional": true }
   },
   "zhin": {
     "protocol": 1,
@@ -52,6 +57,8 @@ ping-pong/
   }
 }
 ```
+
+The Command provider is an optional npm peer supplied by the host. This prevents a mounted plugin from installing another provider copy. The `optional` flag applies to npm installation; the `zhin.features` requirement remains mandatory when the plugin runs.
 
 The `zhin` field is the plugin topology manifest:
 
@@ -112,7 +119,7 @@ The command's `config` and the `context.config.get()` in `setup` share the same 
 
 `schema.json` (JSON Schema 2020-12) declares the config contract and defaults:
 
-Console forms support convertible field structures; `$ref`, `anyOf`, `oneOf`, `allOf`, and `prefixItems` are currently unsupported and produce explicit errors. Runtime JSON Schema configuration validation and Console form conversion are separate capabilities.
+Console forms support convertible field structures in plugin `schema.json`; `$ref`, `anyOf`, `oneOf`, `allOf`, `prefixItems`, `patternProperties`, and array-valued `items` are currently unsupported and produce explicit errors. Built-in Host configuration keeps its existing field projection, which does not represent all JSON Schema constraints; use the config file or Console source editor for complex `ai` and `htmlRenderer` configuration. Runtime JSON Schema configuration validation and Console form conversion are separate capabilities.
 
 ```json
 {
@@ -136,9 +143,10 @@ sub-plugin instances read the `plugins.<instanceKey>` section.
 
 ### Method A: `./` local directory sub-plugin (recommended during development)
 
-Install the local package's declared dependencies first. Installing `zhin.js` in the host does not automatically install the dependencies of an uninstalled local directory:
+At the host application root, explicitly install the shared Command provider. A root depending on `zhin.js` inherits Stable Features and resolves this direct dependency before falling back to Core's copy. The child declares Command as a peer and uses the host's provider:
 
 ```bash
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
 cd plugins/ping-pong
 pnpm install
 cd ../..
@@ -148,6 +156,9 @@ Reference it as a `./` relative path in the host application's `package.json#zhi
 
 ```json
 {
+  "dependencies": {
+    "@zhin.js/command": "^1.1.0"
+  },
   "zhin": {
     "plugins": [
       { "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }
@@ -155,6 +166,8 @@ Reference it as a `./` relative path in the host application's `package.json#zhi
   }
 }
 ```
+
+Merge the dependency and mount into the existing host manifest; keep its other dependencies and settings. Projects created by `pnpm create zhin-app` include `plugins/*` in their workspace. Install the child there and do not add Command as its own dependency: Runtime requires one physical provider location per package, even when two installed versions have compatible Feature APIs.
 
 Then pass configuration for this instance in the host's `zhin.config.yml`:
 
@@ -168,7 +181,7 @@ plugins:
 
 ### Method B: Plugin as application
 
-Place `zhin.config.yml` directly in the plugin directory -- the plugin itself becomes the Root. It still needs an adapter: a command-only plugin can assemble but cannot receive chat messages without a connected endpoint:
+Place `zhin.config.yml` directly in the plugin directory -- the plugin itself becomes the Root. Add Command as a direct dependency of this application; an optional peer alone does not install a provider. It still needs an adapter: a command-only plugin can assemble but cannot receive chat messages without a connected endpoint:
 
 ```yaml
 # ping-pong/zhin.config.yml
@@ -180,7 +193,7 @@ plugins: {}
 
 ```bash
 cd plugins/ping-pong # from the host application directory
-pnpm install
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check # This package is now the host application
 pnpm exec zhin setup --adapters  # Select an adapter such as Sandbox and add an Endpoint
 pnpm install                   # Install the adapter dependencies added by setup
 pnpm dev        # zhin runtime start

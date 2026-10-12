@@ -19,6 +19,7 @@ function executableSource(source: string, sourceTypeScript: boolean): string {
 
 interface TutorialPackage {
   name: string;
+  dependencies: Record<string, string>;
   zhin: {
     entry: string;
     features: unknown[];
@@ -52,16 +53,16 @@ describe('first-plugin tutorial through the real Runtime', () => {
     const pluginPackage = JSON.parse(packageSource!) as TutorialPackage;
     // The compiled library supports Node 20; source TS follows the CLI's Node 22+ strip-types path.
     if (!sourceTypeScript) pluginPackage.zhin.entry = './plugin.js';
-    const mount = JSON.parse(mountSource!) as { zhin: { plugins: unknown[] } };
+    const mount = JSON.parse(mountSource!) as { dependencies: Record<string, string>; zhin: { plugins: unknown[] } };
     const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-first-plugin-doc-'));
     const childRoot = join(projectRoot, 'plugins/ping-pong');
     try {
       await mkdir(join(childRoot, 'commands/ping'), { recursive: true });
-      await symlink(join(repository, 'node_modules'), join(projectRoot, 'node_modules'), 'junction');
-      // Model pnpm install inside the local child package without accessing a registry.
-      await mkdir(join(childRoot, 'node_modules/@zhin.js'), { recursive: true });
+      // Model the documented host install: the child has a peer, without its own provider copy.
+      await mkdir(join(projectRoot, 'node_modules/@zhin.js'), { recursive: true });
+      await symlink(join(repository, 'node_modules/zhin.js'), join(projectRoot, 'node_modules/zhin.js'), 'junction');
       await symlink(join(repository, 'packages/im/command'),
-        join(childRoot, 'node_modules/@zhin.js/command'), 'junction');
+        join(projectRoot, 'node_modules/@zhin.js/command'), 'junction');
       await writeFile(join(childRoot, 'package.json'), JSON.stringify(pluginPackage));
       await writeFile(join(childRoot, entryName), executableSource(pluginSource!, sourceTypeScript));
       await writeFile(join(childRoot, 'schema.json'), schemaSource!);
@@ -71,6 +72,7 @@ describe('first-plugin tutorial through the real Runtime', () => {
 
       const hostPackage = structuredClone(pluginPackage);
       hostPackage.name = 'tutorial-host';
+      hostPackage.dependencies = { ...hostPackage.dependencies, ...mount.dependencies };
       // The host inherits Stable Features from zhin.js. Its child must declare its own Features.
       hostPackage.zhin.features = [];
       hostPackage.zhin.plugins = mount.zhin.plugins;
@@ -80,18 +82,19 @@ describe('first-plugin tutorial through the real Runtime', () => {
       const runner = join(projectRoot, 'verify.mjs');
       await writeFile(runner, `
 import assert from 'node:assert/strict';
-import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { RootRuntime, NativeDevelopmentModuleRuntime } from ${JSON.stringify(pathToFileURL(join(repository, 'packages/im/runtime/lib/index.js')).href)};
 const projectRoot = ${JSON.stringify(projectRoot)};
 const childRoot = ${JSON.stringify(childRoot)};
+const commandRoot = ${JSON.stringify(join(repository, 'packages/im/command'))};
 const pluginPackage = ${JSON.stringify(pluginPackage)};
 const schemaSource = ${JSON.stringify(schemaSource)};
 const pluginSource = ${JSON.stringify(executableSource(pluginSource!, sourceTypeScript))};
 const commandSource = ${JSON.stringify(executableSource(commandSource!, sourceTypeScript))};
 const entryName = ${JSON.stringify(entryName)};
 const commandName = ${JSON.stringify(commandName)};
-async function dispatch(config, expected, owner) {
+async function dispatch(config, expected, owner, expectedFailure) {
   const runtime = new RootRuntime({
     projectRoot,
     modules: new NativeDevelopmentModuleRuntime({ projectRoot, watch: false }),
@@ -99,6 +102,10 @@ async function dispatch(config, expected, owner) {
     config,
   });
   try {
+    if (expectedFailure) {
+      await assert.rejects(runtime.start(), { message: expectedFailure });
+      return;
+    }
     const snapshot = await runtime.start();
     const commands = snapshot.projections.get('zhin.command');
     assert.ok(commands, 'Root must inherit the Command Feature');
@@ -118,6 +125,29 @@ async function dispatch(config, expected, owner) {
 }
 await dispatch(${JSON.stringify(parse(childConfigSource!))}, 'pong!', 'root/ping-pong');
 await dispatch({ plugins: { 'ping-pong': {} } }, 'pong', 'root/ping-pong');
+
+// npm's optional peer flag does not make the runtime Feature optional.
+const hostCommand = join(projectRoot, 'node_modules/@zhin.js/command');
+await rm(hostCommand);
+await dispatch({}, undefined, undefined, 'Cannot resolve @zhin.js/command from ping-pong');
+await symlink(commandRoot, hostCommand, 'junction');
+
+// A second physical provider is invalid even if its version and Feature API match.
+const duplicateCommand = join(childRoot, 'node_modules/@zhin.js/command');
+await mkdir(duplicateCommand, { recursive: true });
+await cp(join(commandRoot, 'lib'), join(duplicateCommand, 'lib'), { recursive: true });
+const commandPackage = JSON.parse(await readFile(join(commandRoot, 'package.json'), 'utf8'));
+await symlink(join(commandRoot, 'node_modules'), join(duplicateCommand, 'node_modules'), 'junction');
+for (const version of [commandPackage.version, '1.1.999']) {
+  await writeFile(join(duplicateCommand, 'package.json'), JSON.stringify({ ...commandPackage, version }));
+  await dispatch({}, undefined, undefined, 'Multiple package locations for @zhin.js/command are not supported in one generation');
+}
+// Root's direct dependency selects a single provider, even when Core carries another version.
+await rm(hostCommand);
+await rename(duplicateCommand, hostCommand);
+await rm(join(childRoot, 'node_modules'), { recursive: true, force: true });
+await dispatch({ plugins: { 'ping-pong': {} } }, 'pong', 'root/ping-pong');
+
 await writeFile(join(childRoot, 'package.json'), JSON.stringify({
   ...pluginPackage, zhin: { ...pluginPackage.zhin, features: [] },
 }));
@@ -126,7 +156,8 @@ await dispatch(${JSON.stringify(parse(childConfigSource!))}, undefined);
 // The same tutorial command can also be used by a root application with no explicit Feature mount.
 await rm(childRoot, { recursive: true, force: true });
 await writeFile(join(projectRoot, 'package.json'), JSON.stringify({
-  ...pluginPackage, zhin: { ...pluginPackage.zhin, features: [], plugins: [] },
+  ...pluginPackage, dependencies: { ...pluginPackage.dependencies, ...${JSON.stringify(mount.dependencies)} },
+  zhin: { ...pluginPackage.zhin, features: [], plugins: [] },
 }));
 await writeFile(join(projectRoot, entryName), pluginSource);
 await writeFile(join(projectRoot, 'schema.json'), schemaSource);

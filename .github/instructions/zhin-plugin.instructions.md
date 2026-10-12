@@ -14,9 +14,13 @@ applyTo: "plugins/**,examples/**"
   nested directories.
 - Feature providers are explicit `zhin.features` mounts. Root apps that depend on `zhin.js` inherit
   Stable Features via `platformFeatures` — they do **not** need separate `@zhin.js/command` /
-  `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`.
-  This inheritance is root-only: child plugins must declare each Feature they use in both
-  dependencies and `zhin.features`, as the official plugin packages do.
+  `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`
+  unless a child peer requires a directly resolvable shared provider.
+  This inheritance is root-only: child plugins must declare each Feature they use in
+  `zhin.features`. Shared providers such as Command belong in optional `peerDependencies`,
+  supplied by the host as a direct dependency so child resolution reaches the same physical
+  package. Do not install a separate provider copy inside a mounted child; npm optional peers
+  do not make the runtime Feature optional. See the first-plugin tutorial for both mount modes.
 
 ## Convention directories
 

@@ -77,6 +77,9 @@ plugins:
 | endpoint_id | text | Endpoint ID |
 | channel_type | text | 会话类型 (group/private/channel) |
 | channel_id | text | 会话 ID |
+| creator_id | text | 订阅创建者 ID |
+| creator_name | text | 订阅创建者名称 |
+| created_at | text | 订阅创建时间（ISO 字符串） |
 
 **rss_seen_items** — 已推送条目（去重用）
 
@@ -84,6 +87,8 @@ plugins:
 |------|------|------|
 | feed_url | text | Feed 地址 |
 | item_guid | text | 条目唯一标识 |
+| item_title | text | 条目标题 |
+| seen_at | text | 已读时间（ISO 字符串，用于过期清理） |
 
 ## 依赖
 
