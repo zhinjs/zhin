@@ -1,0 +1,48 @@
+docs/en/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_9644c2a3374f82 122
+  s_079f1dc5e6308d::t_2caf01c4da330a 41-46,61-62,146,149,159-161,170-171,184,196
+plugins/adapters/email/tests/delivery-receipt.test.ts
+  s_079f1dc5e6308d::t_5458781392237d 17,36-39,42
+docs/getting-started/first-plugin.md
+  s_079f1dc5e6308d::t_9644c2a3374f82 122
+  s_079f1dc5e6308d::t_cbaf74b24be524 41-46,61-62,146,149,159-161,170-171,184,196
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_079f1dc5e6308d::t_ff3c81f1304eb7 44-46
+  s_079f1dc5e6308d::t_8712d92b25f0f4 127-128,131,189,202,216,218
+docs/contributing/plugin-experience-plan.md
+  s_079f1dc5e6308d::t_6f61d5fdcba0db 31
+  s_079f1dc5e6308d::t_997eafef77d542 18
+tests/docs/first-plugin-runtime.test.ts
+  s_079f1dc5e6308d::t_87e78636d06554 22,56,61-63,65,75,90,97,105-108,128,135-144,148-150,159-160
+  s_079f1dc5e6308d::t_41b0a1aab063ef 85,145-147
+  s_079f1dc5e6308d::t_223cb350aac7f5 129-134
+plugins/utils/rss/README.md
+  s_079f1dc5e6308d::t_2574288c419a21 80-82,90-91
+plugins/adapters/email/tests/smtp-uncertain-fixture.test.ts
+  s_079f1dc5e6308d::t_5458781392237d 40
+.changeset/plugin-experience-foundation.md
+  s_079f1dc5e6308d::t_9644c2a3374f82 17
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_079f1dc5e6308d::t_76128a5cbcdfcd 177-201,218,227-231,307-332
+  s_079f1dc5e6308d::t_723b71189a6c41 217,219-226
+  s_079f1dc5e6308d::t_e77c1ea9426773 333
+.github/instructions/zhin-plugin.instructions.md
+  s_079f1dc5e6308d::t_997eafef77d542 19-23
+  s_079f1dc5e6308d::t_1b2903df7c4da7 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2aaad23b443df041f804a318982758304f5ec14d",
+  "prompts": {},
+  "sessions": {
+    "s_079f1dc5e6308d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a079da-08f2-7112-8660-7d86c654edb0",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
