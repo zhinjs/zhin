@@ -1,0 +1,30 @@
+.github/workflows/ci.yml
+  s_6562bcb6cc0539::t_c1b22297aa3423 223-224,231-233,235-242
+  s_6562bcb6cc0539::t_413b51310ce6d8 225-228
+scripts/ci/build-windows.test.ts
+  s_6562bcb6cc0539::t_413b51310ce6d8 1-74
+docs/contributing/development.md
+  s_6562bcb6cc0539::t_c1b22297aa3423 36-46
+scripts/ci/build-windows.ps1
+  s_6562bcb6cc0539::t_c1b22297aa3423 1-14,16-17,21-36,38-51
+  s_6562bcb6cc0539::t_1ee0d4e7dcc149 18-20,37
+  s_6562bcb6cc0539::t_413b51310ce6d8 15
+scripts/ci/windows-build-args.json
+  s_6562bcb6cc0539::t_413b51310ce6d8 1-10
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e2f5ab5d9242ba99dad48e298595b2add8762376",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
