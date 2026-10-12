@@ -56,7 +56,7 @@ export function resolveTextFallbackPayload(
 ): string | undefined {
   const trimmed = raw.trim();
   if (map[trimmed]) return map[trimmed];
-  const match = trimmed.match(/^(?:ttt\s+)?(\d)$/i);
+  const match = trimmed.match(/^(?:ttt\s+)?(\d+)$/i);
   if (match && map[match[1]!]) return map[match[1]!];
   return undefined;
 }

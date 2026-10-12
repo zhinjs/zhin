@@ -89,6 +89,17 @@ describe('stripInteractiveCommandText / resolvePayloadFromText', () => {
     expect(resolvePayloadFromText('2', map)).toBe('hub:scope:g_rps');
     expect(resolvePayloadFromText('@bot 1', map)).toBe('hub:scope:g_ttt');
   });
+
+  it('resolves full multi-digit labels without guessing an unmapped number', () => {
+    const map = { '10': 'ttt:scope:cell', '123': 'hub:scope:game' };
+    for (const input of ['10', 'ttt 10', '@bot ttt   10', '<at id="123"/> TTT 10']) {
+      expect(resolvePayloadFromText(input, map)).toBe('ttt:scope:cell');
+    }
+    expect(resolvePayloadFromText('ttt 123', map)).toBe('hub:scope:game');
+    for (const input of ['ttt 1', 'ttt 100', 'ttt 010', 'ttt 10x', 'ttt 10 123']) {
+      expect(resolvePayloadFromText(input, map)).toBeUndefined();
+    }
+  });
 });
 
 describe('collectKeyboardFallbackMaps', () => {

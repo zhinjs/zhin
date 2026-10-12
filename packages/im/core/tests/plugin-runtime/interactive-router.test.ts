@@ -34,4 +34,12 @@ describe('Interactive fallback numbering', () => {
     expect(router.resolvePayload({ ...message('2'), conversation: { ...conversation, id: 'another' } } as Message)).toBe('b');
     expect(router.resolvePayload(message('cancel'))).toBe('stop');
   });
+
+  it('routes prefixed fallback labels after the instance counter reaches multiple digits', () => {
+    const router = new RuntimeInteractiveRouter();
+    const map = Object.fromEntries(Array.from({ length: 10 }, (_, i) => [String(i + 1), `ttt:board:cell-${i}`]));
+    expect(router.rememberFallback(conversation, 1, map)['10']).toBe('ttt:board:cell-9');
+    expect(router.resolvePayload(message('@bot ttt 10'))).toBe('ttt:board:cell-9');
+    expect(router.resolvePayload(message('ttt 11'))).toBeUndefined();
+  });
 });
