@@ -238,6 +238,7 @@ jobs:
         with:
           name: windows-build-resources-node-${{ matrix.node-version }}-attempt-${{ github.run_attempt }}
           path: .tmp/ci/windows-build-resources.json
+          include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
 

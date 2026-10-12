@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +49,7 @@ function fixture(fail = false) {
     })
     : spawnSync('pnpm', args, { cwd: root, encoding: 'utf8', timeout: 30_000 });
   expect(result.error).toBeUndefined();
+  expect(existsSync(join(root, 'events')), result.stdout + result.stderr).toBe(true);
   const events = readFileSync(join(root, 'events'), 'utf8').trim().split('\n');
   return { root, result, events };
 }

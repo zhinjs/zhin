@@ -46,6 +46,6 @@ try {
   $build.Dispose()
 }
 
-# A compiler/build failure remains a failure. Retrying on a poisoned runner hid
-# the first failure's evidence without restoring the ability to spawn processes.
+# A compiler/build failure remains a failure. Retrying on a poisoned runner
+# cannot restore the ability to spawn processes.
 exit $exitCode
