@@ -59,7 +59,7 @@ Do not place a domain-specific Tool at package root merely to make discovery con
   `card`, `button`, etc.), usable without imports. Registered components can be used as named tags.
   Only `<html>` / `<Html>` serializes its children as HTML; optional visuals from
   `@zhin.js/components` belong inside that boundary. Native `button.onClick` receives the clicking
-  Message and its return value becomes a reply; callbacks stay in the original conversation and
+  Message; replyable return content is sent automatically (`null`, booleans and `void` send nothing); callbacks stay in the original conversation and
   active snapshot. Inbound handles return JSX or forward next(); outbound handles call
   `input.replace(JSX)` and then `await next()` to continue delivery, returning void. Omitting
   `next()` stops the send even after replacing its content.

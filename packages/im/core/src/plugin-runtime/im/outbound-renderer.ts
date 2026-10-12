@@ -1,7 +1,7 @@
 import { componentHostToken, type ComponentHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { ConversationRef, Segment } from '@zhin.js/im-contract';
+import type { ConversationRef } from '@zhin.js/im-contract';
 import { isJsxElement, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
-import { renderToSegments, type MessageRenderOptions } from '../../jsx/message-renderer.js';
+import { isNativeMessageTag, renderToSegments, type MessageRenderOptions } from '../../jsx/message-renderer.js';
 import { flattenOutboundArray, MAX_OUTBOUND_ARRAY_DEPTH } from '../../built/outbound-content-arrays.js';
 import {
   ComponentIndex,
@@ -20,7 +20,7 @@ const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
 
 export interface OutboundRenderOptions {
-  readonly jsxCache?: WeakMap<JSXElement, Promise<readonly Segment[]>>;
+  readonly jsxCache?: WeakMap<JSXElement, Promise<unknown>>;
   readonly bindButton?: MessageRenderOptions['bindButton'];
   readonly signal?: AbortSignal;
 }
@@ -50,7 +50,7 @@ export class OutboundRenderer {
     host: ComponentHost | undefined,
     ctx: TemplateContext | undefined,
     depth: number,
-    jsxCache: WeakMap<JSXElement, Promise<readonly Segment[]>>,
+    jsxCache: WeakMap<JSXElement, Promise<unknown>>,
     signal: AbortSignal | undefined,
     arrayAncestors: ReadonlySet<readonly SendContent[]>,
     bindButton: MessageRenderOptions['bindButton'],
@@ -73,21 +73,23 @@ export class OutboundRenderer {
       let segments = jsxCache.get(content);
       if (!segments) {
         const ancestors = new Set(jsxAncestors).add(content);
-        segments = renderToSegments(content, { signal, bindButton,
-          renderComponent: async (name, props) => {
-            const components = snapshot.projections.get(componentFeatureId);
-            if (!isComponentIndex(components)) {
-              throw new TypeError(`Unknown message tag ${name}; register a component or wrap HTML in <html>`);
-            }
-            const rendered = await components.render(requester, name, props, { snapshot, ...(signal ? { signal } : {}) });
-            // Keep returned JSX in this traversal so its cycle/depth guards also
-            // cover named components; re-entering the root cache could deadlock.
-            return isComponentCall(rendered)
-              ? await this.#render(rendered, requester, snapshot, host, ctx, depth + 1,
-                jsxCache, signal, arrayAncestors, bindButton, ancestors) as JSXRenderable
-              : rendered as JSXRenderable;
-          },
-        });
+        const renderNamedComponent = async (name: string, props: typeof content.props): Promise<unknown> => {
+          const components = snapshot.projections.get(componentFeatureId);
+          if (!isComponentIndex(components)) {
+            throw new TypeError(`Unknown message tag ${name}; register a component or wrap HTML in <html>`);
+          }
+          const rendered = await components.render(requester, name, props, { snapshot, ...(signal ? { signal } : {}) });
+          if (rendered == null) return [];
+          // Resolve every SendContent shape with the same depth and ancestry
+          // guards as ComponentCall. Root raw payloads remain opaque.
+          return this.#render(rendered as SendContent, requester, snapshot, host, ctx, depth + 1,
+            jsxCache, signal, arrayAncestors, bindButton, ancestors);
+        };
+        segments = typeof content.type === 'string' && !isNativeMessageTag(content.type)
+          ? renderNamedComponent(content.type, content.props)
+          : renderToSegments(content, { signal, bindButton,
+            renderComponent: async (name, props) => await renderNamedComponent(name, props) as JSXRenderable,
+          });
         jsxCache.set(content, segments);
       }
       const rendered = await segments;

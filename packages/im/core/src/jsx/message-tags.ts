@@ -1,5 +1,5 @@
 import { jsx, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
-import type { MediaRef } from '@zhin.js/im-contract';
+import type { MediaRef, Segment } from '@zhin.js/im-contract';
 import type { Message, SendContent } from '../plugin-runtime/im/contracts.js';
 import type { ButtonData } from '../built/interactive-segments/types.js';
 import type { MessageTagProps } from './intrinsic-elements.js';
@@ -24,7 +24,7 @@ export function Image({ src, alt }: ImageProps): JSXElement {
   else if (/^https?:\/\//i.test(src)) media = { kind: 'url', value: src };
   else if (src.startsWith('base64://')) media = { kind: 'base64', value: src.slice(9) };
   else if (src.startsWith('data:')) {
-    const match = /^data:([^;,]+);base64,([\s\S]+)$/i.exec(src);
+    const match = /^data:([^;,]+)(?:;[^;,]*)*;base64,([\s\S]+)$/i.exec(src);
     if (!match) throw new TypeError('Image data URI must contain base64 media');
     media = { kind: 'base64', value: match[2], mime_type: match[1] };
   } else media = { kind: 'path', value: src };
@@ -47,7 +47,7 @@ export function Markdown(props: MarkdownProps): JSXElement {
 
 /** Platform-native payload; no HTML serialization or cross-platform card schema. */
 export interface CardProps { readonly data: Readonly<Record<string, unknown>>; }
-export function Card({ data }: CardProps): JSXElement { return jsx('card', data); }
+export function Card({ data }: CardProps): Segment { return { type: 'card', data }; }
 
 export type ButtonClickResult = SendContent | number | boolean | null | void;
 export type ButtonClickHandler = (message: Message) => ButtonClickResult | Promise<ButtonClickResult>;

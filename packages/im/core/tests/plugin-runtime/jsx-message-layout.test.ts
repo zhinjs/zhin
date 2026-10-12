@@ -2,7 +2,7 @@ import { createCapabilitySlot, createSnapshotView, rootPluginId } from '@zhin.js
 import { ComponentIndex, componentFeatureId, defineComponent } from '@zhin.js/component';
 import { Fragment, Html, Image, Mention, Card, Markdown, Face, Text, Share, jsx, renderToSegments } from '../../src/jsx.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
-import { component } from '../../src/plugin-runtime/im/contracts.js';
+import { component, raw } from '../../src/plugin-runtime/im/contracts.js';
 
 it('lays out text and component-produced segments in one message, omitting null', async () => {
   const root = rootPluginId();
@@ -108,4 +108,66 @@ it('combines Text and Markdown children while rejecting embedded nontext message
     { type: 'text', data: { text: 'hello world0' } }, { type: 'markdown', data: { content: '**hello**', width: 640 } },
   ]);
   await expect(renderToSegments(jsx('text', { children: jsx('mention', { target: '123' }) }))).rejects.toThrow('must produce text');
+});
+
+it('preserves reserved native Card payload fields and rejects JSX card children', async () => {
+  const data = { key: 'native-key', children: [{ key: 'nested', content: 'native data' }] };
+  expect(await renderToSegments(jsx(Card, { data }))).toEqual([{ type: 'card', data }]);
+  await expect(renderToSegments(jsx('card', { children: jsx('b', { children: 'layout' }) }))).rejects.toThrow('not children');
+});
+
+it('accepts MIME parameters in base64 image data URIs', async () => {
+  expect(await renderToSegments(jsx(Image, { src: 'data:image/svg+xml;charset=utf-8;base64,PHN2Zy8+' }))).toEqual([
+    { type: 'image', data: { media: { kind: 'base64', value: 'PHN2Zy8+', mime_type: 'image/svg+xml' } } },
+  ]);
+});
+
+it('resolves raw content and nested ComponentCall arrays returned by registered JSX tags', async () => {
+  const root = rootPluginId();
+  const slots = [
+    createCapabilitySlot({ owner: root, feature: componentFeatureId, localName: 'mixed', source: '/components/mixed/index.ts',
+      definition: defineComponent({ render: () => [raw({ type: 'text', data: { text: 'raw' } }), [component('nested', {})]] }) }),
+    createCapabilitySlot({ owner: root, feature: componentFeatureId, localName: 'nested', source: '/components/nested/index.ts',
+      definition: defineComponent({ render: () => jsx('mention', { target: '123' }) }) }),
+  ];
+  const view = createSnapshotView(0, { root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [] }]]),
+    config: new Map([[root, {}]]), resources: new Map([[root, new Map()]]),
+    capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
+  });
+  const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex(slots, view)]]) });
+  expect(await new OutboundRenderer().render(jsx('mixed', {}), root, snapshot)).toEqual([
+    { type: 'text', data: { text: 'raw' } }, { type: 'mention', data: { target: '123' } },
+  ]);
+});
+
+it('preserves opaque raw payloads from a registered root JSX component', async () => {
+  const root = rootPluginId();
+  const payload = { native: { key: 'platform-message' } };
+  const render = vi.fn(() => raw(payload));
+  const slot = createCapabilitySlot({ owner: root, feature: componentFeatureId, localName: 'native', source: '/components/native/index.ts',
+    definition: defineComponent({ render }) });
+  const view = createSnapshotView(0, { root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [] }]]),
+    config: new Map([[root, {}]]), resources: new Map([[root, new Map()]]), capabilities: new Map([[slot.id, slot]]), projections: new Map(),
+  });
+  const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex([slot], view)]]) });
+  const node = jsx('native', {});
+  expect(await new OutboundRenderer().render([node, node], root, snapshot)).toEqual([payload, payload]);
+  expect(render).toHaveBeenCalledTimes(1);
+});
+
+it('limits registered JSX tag expansion to 32 component calls', async () => {
+  const root = rootPluginId();
+  const slots = Array.from({ length: 35 }, (_, i) => createCapabilitySlot({ owner: root, feature: componentFeatureId,
+    localName: `part${i}`, source: `/components/part${i}/index.ts`,
+    definition: defineComponent({ render: () => i === 34 ? 'end' : jsx(`part${i + 1}`, {}) }),
+  }));
+  const view = createSnapshotView(0, { root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: 'test', packageRoot: '/test', children: [] }]]),
+    config: new Map([[root, {}]]), resources: new Map([[root, new Map()]]),
+    capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map(),
+  });
+  const snapshot = createSnapshotView(0, { ...view, projections: new Map([[componentFeatureId, new ComponentIndex(slots, view)]]) });
+  await expect(new OutboundRenderer().render(jsx('part0', {}), root, snapshot)).rejects.toThrow('Component render depth exceeded 32');
 });

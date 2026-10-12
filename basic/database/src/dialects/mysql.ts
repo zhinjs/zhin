@@ -210,7 +210,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
   }
 
   formatCreateTable<T extends keyof S>(tableName: T, columns: string[]): string {
-    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`;
+    return `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(String(tableName))} (${columns.join(', ')}) ENGINE=InnoDB ROW_FORMAT=DYNAMIC DEFAULT CHARSET=utf8mb4`;
   }
 
   formatColumnDefinition(field: string, column: Column<any>): string {
@@ -219,6 +219,14 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
     // within InnoDB's 3072-byte index limit under utf8mb4 (4 bytes per character).
     const boundedText = column.type.toLowerCase() === 'text'
       && (column.length !== undefined || column.primary || column.unique);
+    const indexedText = boundedText && (column.primary || column.unique);
+    if (boundedText && (!Number.isInteger(column.length ?? 768) || (column.length ?? 768) < 1)) {
+      throw new RangeError(`MySQL text column ${field} requires a positive integer length`);
+    }
+    if (indexedText && (column.length ?? 768) > 768) {
+      throw new RangeError(`MySQL indexed text column ${field} exceeds the utf8mb4 index limit of 768 characters`);
+    }
+    const collation = indexedText ? ' CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin' : '';
     const type = boundedText ? 'VARCHAR' : this.mapColumnType(column.type);
     const length = boundedText ? `(${column.length ?? 768})` : column.length ? `(${column.length})` : '';
     const nullable = column.nullable === false ? ' NOT NULL' : '';
@@ -233,7 +241,7 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
       defaultVal = ` DEFAULT ${expression ? `(${value})` : value}`;
     }
 
-    return `${name} ${type}${length}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
+    return `${name} ${type}${length}${collation}${primary}${unique}${autoIncrement}${nullable}${defaultVal}`;
   }
 
   async reconcileDefinitions(
@@ -373,6 +381,22 @@ export class MySQLDialect<S extends Record<string, object> = Record<string, obje
 export class MySQL<S extends Record<string, object> = Record<string, object>> extends RelatedDatabase<MySQLDialectConfig, S> {
   constructor(config: MySQLDialectConfig, definitions?: Database.DefinitionObj<S>) {
     super(new MySQLDialect<S>(config), definitions);
+  }
+
+  protected override async initialize(): Promise<void> {
+    const indexedText = [...this.definitions.values()].flatMap(definition =>
+      (Object.entries(definition) as Array<[string, Column<any>]>).filter(([, column]) => column.type.toLowerCase() === 'text' && (column.primary || column.unique)));
+    if (indexedText.length) {
+      const [settings] = await this.dialect.query<Array<{ page_size: number }>>('SELECT @@innodb_page_size AS page_size');
+      const maxLength = Math.min(768, Number(settings?.page_size) * 3 / 64);
+      if (!Number.isFinite(maxLength) || maxLength < 1) throw new Error('Cannot determine MySQL InnoDB text index limit');
+      for (const [name, column] of indexedText) {
+        if ((column.length ?? 768) > maxLength) {
+          throw new RangeError(`MySQL indexed text column ${name} requires ${column.length ?? 768} characters, but innodb_page_size=${settings.page_size} allows ${maxLength}; use a 16KB-or-larger InnoDB page size or declare a smaller key length`);
+        }
+      }
+    }
+    await super.initialize();
   }
 }
 Registry.register('mysql', MySQL);

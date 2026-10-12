@@ -33,7 +33,9 @@ function interactiveConversationKey(conversation: ConversationRef, generation: n
  */
 export class RuntimeInteractiveRouter<Admission = never> {
   readonly #handlers: RegisteredRuntimeInteractiveHandler<Admission>[] = [];
-  readonly #fallbacks = new Map<string, InteractiveFallbackEntry>();
+  readonly #fallbacks = new Map<string, InteractiveFallbackEntry[]>();
+
+  readonly #nextNumbers = new Map<string, number>();
 
   constructor(private readonly fallbackTtlMs = DEFAULT_FALLBACK_TTL_MS) {}
 
@@ -60,13 +62,21 @@ export class RuntimeInteractiveRouter<Admission = never> {
     generation: number,
     map: Record<string, string>,
     ttlMs = this.fallbackTtlMs,
-  ): void {
-    if (Object.keys(map).length === 0) return;
+  ): Record<string, string> {
     this.#pruneFallbacks();
-    this.#fallbacks.set(interactiveConversationKey(conversation, generation), Object.freeze({
-      map: Object.freeze({ ...map }),
-      expiresAt: Date.now() + ttlMs,
-    }));
+    const key = interactiveConversationKey(conversation, generation);
+    const counterKey = interactiveConversationKey(conversation, 0);
+    let next = this.#nextNumbers.get(counterKey) ?? 1;
+    const allocated: Record<string, string> = {};
+    for (const [label, payload] of Object.entries(map)) {
+      allocated[/^\d+$/.test(label) ? String(next++) : label] = payload;
+    }
+    // Counters survive expiry so an old visible keyboard never acquires a new meaning.
+    this.#nextNumbers.set(counterKey, next);
+    const entries = this.#fallbacks.get(key) ?? [];
+    entries.push(Object.freeze({ map: Object.freeze({ ...allocated }), expiresAt: Date.now() + ttlMs }));
+    this.#fallbacks.set(key, entries);
+    return allocated;
   }
 
   resolvePayload(message: Message): string | undefined {
@@ -99,19 +109,17 @@ export class RuntimeInteractiveRouter<Admission = never> {
     generation: number,
   ): Readonly<Record<string, string>> | undefined {
     const key = interactiveConversationKey(conversation, generation);
-    const entry = this.#fallbacks.get(key);
-    if (!entry) return undefined;
-    if (entry.expiresAt < Date.now()) {
-      this.#fallbacks.delete(key);
-      return undefined;
-    }
-    return entry.map;
+    this.#pruneFallbacks();
+    const entries = this.#fallbacks.get(key);
+    return entries ? Object.assign({}, ...entries.map(entry => entry.map)) : undefined;
   }
 
   #pruneFallbacks(): void {
     const now = Date.now();
-    for (const [key, entry] of this.#fallbacks) {
-      if (entry.expiresAt < now) this.#fallbacks.delete(key);
+    for (const [key, entries] of this.#fallbacks) {
+      const active = entries.filter(entry => entry.expiresAt >= now);
+      if (active.length) this.#fallbacks.set(key, active);
+      else this.#fallbacks.delete(key);
     }
   }
 }

@@ -194,14 +194,15 @@ function readDeclaredInteractivePolicy(definition: unknown): InteractivePolicy |
 export function applyOutboundInteractivePolicy(
   payload: unknown,
   policy: InteractivePolicy,
-  remember?: (map: Record<string, string>) => void,
+  remember?: (map: Record<string, string>) => Record<string, string> | void,
 ): unknown {
   if (policy !== 'text' || !Array.isArray(payload)) return payload;
   return payload.map((item) => {
     if (!isKeyboardSegment(item)) return item;
     const data = item.data as KeyboardSegmentData;
-    remember?.(effectiveKeyboardFallbackMap(data));
-    return { type: 'text', data: { text: renderKeyboardAsText(data) } };
+    const map = remember?.(effectiveKeyboardFallbackMap(data));
+    const projected = map ? { ...data, fallback: { hint: data.fallback?.hint ?? '请选择（回复数字）：', map } } : data;
+    return { type: 'text', data: { text: renderKeyboardAsText(projected) } };
   });
 }
 

@@ -23,6 +23,10 @@ export type JSXNode = JSXResolvedNode | PromiseLike<JSXResolvedNode>;
 /** Rendering inputs also accept explicitly annotated async component results. */
 export type JSXRenderable = JSXNode | PromiseLike<JSXNode>;
 
+/** HTML boundaries accept layout nodes, never transport Segments. */
+type HtmlResolvedNode = JSXElement | string | number | boolean | null | undefined | readonly HtmlRenderable[];
+export type HtmlRenderable = HtmlResolvedNode | PromiseLike<HtmlResolvedNode> | PromiseLike<HtmlResolvedNode | PromiseLike<HtmlResolvedNode>>;
+
 /** Explicit async annotations such as Promise<JSXNode> remain valid component returns. */
 export type JSXComponent<P = Record<string, unknown>> = (props: P) => JSXRenderable;
 export type JSXElementType = string | JSXComponent<any> | typeof rawHtmlType;
@@ -35,7 +39,7 @@ export interface JSXElement {
 }
 
 export interface HtmlProps {
-  readonly children?: JSXRenderable;
+  readonly children?: HtmlRenderable;
   readonly width?: number;
   readonly backgroundColor?: string;
   readonly fileName?: string;

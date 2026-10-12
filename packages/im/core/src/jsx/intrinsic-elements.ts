@@ -1,10 +1,14 @@
 import type { JSX as BaseJSX, JSXAttributes, HtmlProps } from '@zhin.js/jsx';
 import type { MediaRef, ForwardSegment, ShareSegment } from '@zhin.js/im-contract';
 import type { ButtonProps, ImageProps, MentionProps, FaceProps, TextProps, MarkdownProps } from './message-tags.js';
+import type { AudioSegment, VideoSegment, FileSegment } from '../built/segment-contract/types.js';
 import type { KeyboardSegmentData, ActionSegmentData } from '../built/interactive-segments/types.js';
 
 type MediaProps = { readonly media: MediaRef; readonly duration?: number; readonly alt?: string; readonly name?: string };
-type HtmlInputProps = HtmlProps & { readonly html?: string };
+type HtmlInputProps = Omit<HtmlProps, 'children'> & (
+  | { readonly html: string; readonly children?: never }
+  | { readonly children?: HtmlProps['children']; readonly html?: never }
+);
 
 /** Lowercase tags mirror Segment.type and its data fields, with typed creation helpers. */
 export interface MessageTagProps {
@@ -12,9 +16,9 @@ export interface MessageTagProps {
   image: ImageProps | { readonly media: MediaRef; readonly alt?: string };
   mention: MentionProps;
   face: FaceProps;
-  audio: MediaProps;
-  video: MediaProps;
-  file: MediaProps;
+  audio: AudioSegment['data'];
+  video: VideoSegment['data'];
+  file: FileSegment['data'];
   record: MediaProps;
   voice: MediaProps;
   reply: { readonly message_id: string };
@@ -22,7 +26,7 @@ export interface MessageTagProps {
   share: ShareSegment['data'];
   dice: { readonly result?: number };
   rps: { readonly result?: number };
-  card: Readonly<Record<string, unknown>>;
+  card: Readonly<Record<string, unknown>> & { readonly children?: never };
   button: ButtonProps;
   keyboard: KeyboardSegmentData;
   action: ActionSegmentData;

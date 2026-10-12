@@ -8,17 +8,23 @@ import type { Message, SendRequest } from './contracts.js';
 import { isKeyboardSegment } from '../../built/interactive-segments/types.js';
 
 const PREFIX = 'zhin:jsx:';
+const BUTTON_TTL_MS = 60 * 60 * 1000;
+
+export function isJsxButtonPayload(payload: string | undefined): boolean {
+  return payload?.startsWith(PREFIX) === true;
+}
 
 interface ButtonBinding {
   readonly onClick: ButtonClickHandler;
   readonly requester: SendRequest['requester'];
   readonly conversationKey: string;
+  readonly expiresAt: number;
 }
 
 export interface JsxButtonBatch {
   bind(props: ButtonProps): Segment;
-  /** Publish only callbacks actually included in a confirmed outgoing message. */
-  activate(payloads: ReadonlySet<string>): void;
+  /** Publish callbacks immediately before transport; revoke them on definitive non-delivery. */
+  activate(payloads: ReadonlySet<string>): () => void;
 }
 
 /** Snapshot-owned callbacks: retired generations are unreachable and can be collected. */
@@ -36,6 +42,7 @@ export class JsxButtonRegistry {
         const payload = onClick ? `${PREFIX}${randomUUID()}` : manualPayload!;
         if (onClick && !props.disabled) pending.set(payload, {
           onClick, requester: request.requester, conversationKey: conversationRefKey(request.conversation),
+          expiresAt: 0,
         });
         return { type: 'keyboard', data: { rows: [[{
           ...options,
@@ -47,19 +54,25 @@ export class JsxButtonRegistry {
       },
       activate: (payloads) => {
         let active = this.#bindings.get(snapshot);
+        const activated: string[] = [];
+        if (active) this.#prune(active);
         for (const [payload, binding] of pending) {
           if (!payloads.has(payload)) continue;
           if (!active) this.#bindings.set(snapshot, active = new Map());
-          active.set(payload, binding);
+          active.set(payload, { ...binding, expiresAt: Date.now() + BUTTON_TTL_MS });
+          activated.push(payload);
         }
         pending.clear();
+        return () => { for (const payload of activated) active?.delete(payload); };
       },
     };
   }
 
   async dispatch(message: Message, payload: string, snapshot: RuntimeSnapshot): Promise<boolean> {
-    if (!payload.startsWith(PREFIX)) return false;
-    const binding = this.#bindings.get(snapshot)?.get(payload);
+    if (!isJsxButtonPayload(payload)) return false;
+    const active = this.#bindings.get(snapshot);
+    if (active) this.#prune(active);
+    const binding = active?.get(payload);
     // Consume stale, unknown and cross-conversation callbacks without invoking user code.
     if (!binding || binding.conversationKey !== conversationRefKey(message.conversation)) return true;
     const bound = bindOperationInput(message, binding.requester, snapshot);
@@ -68,6 +81,11 @@ export class JsxButtonRegistry {
     else if (content != null && typeof content !== 'boolean') await bound.$reply(content);
     return true;
   }
+  #prune(bindings: Map<string, ButtonBinding>): void {
+    const now = Date.now();
+    for (const [payload, binding] of bindings) if (binding.expiresAt <= now) bindings.delete(payload);
+  }
+
 }
 
 export function collectButtonPayloads(payload: unknown): Set<string> {

@@ -1,4 +1,4 @@
-import { Fragment, Html, isJsxElement, rawHtmlType, type JSXRenderable, type JSXProps } from './element.js';
+import { Fragment, Html, isJsxElement, rawHtmlType, type HtmlRenderable, type JSXProps } from './element.js';
 
 export interface HtmlRenderOptions {
   /** Bounds recursive components and untrusted tree depth. Default: 100. */
@@ -98,7 +98,7 @@ function serializeAttributes(props: JSXProps, svg: boolean): string {
 }
 
 /** Serialize the contents of an explicit HTML boundary, without sending or rasterizing. */
-export async function renderToHtml(node: JSXRenderable, options: HtmlRenderOptions = {}): Promise<string> {
+export async function renderToHtml(node: HtmlRenderable, options: HtmlRenderOptions = {}): Promise<string> {
   const maxDepth = options.maxDepth ?? 100;
   if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) throw new RangeError('JSX maxDepth must be a positive integer');
   const ancestors = new WeakSet<object>();

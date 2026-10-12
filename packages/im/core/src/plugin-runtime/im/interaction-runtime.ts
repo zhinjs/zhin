@@ -18,7 +18,7 @@ import {
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent, SendRequest } from './contracts.js';
 import { RuntimeInteractiveRouter } from './interactive-router.js';
-import { JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
+import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
 
 interface UserInteractionClaim {
   readonly resolve: (raw: string) => void;
@@ -75,8 +75,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
-  ): void {
-    this.#router.rememberFallback(conversation, generation, map);
+  ): Record<string, string> {
+    return this.#router.rememberFallback(conversation, generation, map);
   }
 
   async dispatch(message: Message, admission?: Admission, snapshot?: RuntimeSnapshot): Promise<boolean> {
@@ -90,9 +90,11 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   }
 
   resolveClaim(message: Message): boolean {
+    const payload = this.#router.resolvePayload(message);
+    if (isJsxButtonPayload(payload)) return false;
     const claim = this.#claims.get(this.#conversationKey(message));
     if (!claim) return false;
-    claim.resolve(this.#router.resolvePayload(message) ?? message.content);
+    claim.resolve(payload ?? message.content);
     return true;
   }
 

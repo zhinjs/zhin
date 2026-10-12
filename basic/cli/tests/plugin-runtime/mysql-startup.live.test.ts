@@ -45,6 +45,18 @@ describe.skipIf(process.env.ZHIN_TEST_EXTERNAL_DATABASES !== '1')('MySQL startup
       expect(await store.getMessage(event.message.ref)).toEqual(event.message);
       await store.commitCursor('agent', conversation, appended.sequence);
       expect(await store.getCursor('agent', conversation)).toBe(appended.sequence);
+      const caseEvent = { ...event, eventId: 'message:Case' };
+      const lowerEvent = { ...event, eventId: 'message:case' };
+      const spacedEvent = { ...event, eventId: 'message:case ' };
+      for (const distinct of [caseEvent, lowerEvent, spacedEvent]) {
+        expect((await store.append(distinct)).appended).toBe(true);
+        expect((await store.append(distinct)).appended).toBe(false);
+      }
+      await store.commitCursor('Agent', conversation, 10);
+      await store.commitCursor('agent ', conversation, 20);
+      expect(await store.getCursor('agent', conversation)).toBe(appended.sequence);
+      expect(await store.getCursor('Agent', conversation)).toBe(10);
+      expect(await store.getCursor('agent ', conversation)).toBe(20);
       const defaults = host.models.get(`${prefix}defaults`)!;
       await defaults.insert({ id: 'first' });
       expect(await defaults.select()).toEqual([{ id: 'first', label: "o'clock", metadata: { tags: [] } }]);

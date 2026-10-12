@@ -1,4 +1,4 @@
-import { Fragment, Html, isJsxElement, renderToHtml, type JSXRenderable, type HtmlProps, type JSXProps } from '@zhin.js/jsx';
+import { Fragment, Html, isJsxElement, renderToHtml, type JSXRenderable, type HtmlProps, type HtmlRenderable, type JSXProps } from '@zhin.js/jsx';
 import type { Segment, TextSegment } from '@zhin.js/im-contract';
 import { segment } from '../utils.js';
 import { isSegmentContent } from '../plugin-runtime/im/contracts.js';
@@ -10,6 +10,11 @@ const MESSAGE_TAGS = new Set([
   'dice', 'rps', 'share', 'card', 'action', 'html', 'keyboard', 'link', 'markdown',
   'qrcode', 'record', 'tts', 'voice',
 ]);
+
+/** Native and namespaced extension tags do not use ComponentIndex. */
+export function isNativeMessageTag(type: string): boolean {
+  return type === 'button' || MESSAGE_TAGS.has(type) || /^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/.test(type);
+}
 
 export interface MessageRenderOptions {
   readonly maxDepth?: number;
@@ -52,7 +57,7 @@ export async function renderToSegments(node: JSXRenderable, options: MessageRend
           if (props.html !== undefined && props.children !== undefined) throw new TypeError('Html accepts html or children, not both');
           if (props.html !== undefined && typeof props.html !== 'string') throw new TypeError('Html html must be a string');
           const html = typeof props.html === 'string' ? props.html
-            : await renderToHtml(props.children, { maxDepth: Math.max(1, maxDepth - depth) });
+            : await renderToHtml(props.children as HtmlRenderable, { maxDepth: Math.max(1, maxDepth - depth) });
           const { width, backgroundColor, fileName, text } = props as HtmlProps;
           if (html || text) output.push(segment.html({ html,
             ...(width === undefined ? {} : { width }),
@@ -72,7 +77,7 @@ export async function renderToSegments(node: JSXRenderable, options: MessageRend
             output.push(button);
             lastButtonIndex = output.length - 1;
           }
-        } else if (typeof type === 'string' && (MESSAGE_TAGS.has(type) || /^[a-z][a-z0-9-]*(?::[a-z][a-z0-9-]*)+$/.test(type))) {
+        } else if (typeof type === 'string' && isNativeMessageTag(type)) {
           const { children, ...data } = props;
           if ((type === 'text' || type === 'markdown') && children !== undefined) {
             const field = type === 'text' ? 'text' : 'content';
@@ -85,8 +90,6 @@ export async function renderToSegments(node: JSXRenderable, options: MessageRend
             }
             const text = parts.map(part => part.data.text).join('');
             if (text) output.push(segment(type, { ...data, [field]: text }));
-          } else if (type === 'card') {
-            output.push(segment(type, props));
           } else {
             if (children !== undefined) throw new TypeError(`Message tag ${type} stores content in its data props, not children`);
             output.push(segment(type, data));

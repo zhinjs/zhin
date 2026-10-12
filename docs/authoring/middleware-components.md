@@ -101,7 +101,7 @@ export default defineCommand({
 });
 ```
 
-`onClick(message)` 在点击所在会话执行，返回字符串、Segment 或 JSX 就自动回复一次；返回 `null`、`undefined` 或布尔值不发送。数字 `0` 会回复 `0`。开发者也可以在回调中显式调用 `message.$reply()`。回调持有当前 operation 的作者与资源上下文，仅对原会话和当前 generation 有效；插件重载或进程重启后旧按钮失效。需要限制点击者时，回调按 `message.sender` 判断。函数不会写入平台载荷；框架绑定随机回跳标识，支持原生按钮的平台走 callback，不支持的平台降级为数字选项。相邻 `<button>` 合并为一组编号。
+`onClick(message)` 在点击所在会话执行，返回字符串、Segment 或 JSX 就自动回复一次；返回 `null`、`undefined` 或布尔值不发送。数字 `0` 会回复 `0`。开发者也可以在回调中显式调用 `message.$reply()`。回调持有当前 operation 的作者与资源上下文，仅对原会话和当前 generation 有效；回调一小时后或插件重载、进程重启后失效。同一会话的降级编号持续递增，后续键盘不会复用旧编号。需要限制点击者时，回调按 `message.sender` 判断。函数不会写入平台载荷；框架绑定随机回跳标识，支持原生按钮的平台走 callback，不支持的平台降级为数字选项。相邻 `<button>` 合并为一组编号。
 
 `<card {...platformPayload} />` 传递平台原生卡片载荷，由适配器处理；它不是 HTML 样式组件 `Card`。原生 `<markdown>` 输出 Markdown Segment，也不是 HTML 样式组件 `Markdown`。
 

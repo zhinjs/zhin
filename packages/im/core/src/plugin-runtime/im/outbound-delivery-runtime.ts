@@ -4,7 +4,7 @@ import {
   type HtmlRendererHost,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt, type Segment } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
 import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
@@ -35,7 +35,7 @@ interface OutboundDeliveryContext {
     conversation: ConversationRef,
     generation: number,
     map: Record<string, string>,
-  ): void;
+  ): Record<string, string> | void;
   publish(event: RuntimeMessageEvent): void;
 }
 
@@ -52,7 +52,7 @@ export class OutboundDeliveryRuntime {
 
   async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
-    const jsxCache = new WeakMap<JSXElement, Promise<readonly Segment[]>>();
+    const jsxCache = new WeakMap<JSXElement, Promise<unknown>>();
     const buttons = this.context.prepareButtons?.(request, snapshot);
     const renderOptions = { jsxCache, bindButton: buttons?.bind };
     let initialPayload: unknown;
@@ -106,7 +106,7 @@ export class OutboundDeliveryRuntime {
               snapshot,
               (map) => {
                 for (const value of Object.values(map)) buttonPayloads.add(value);
-                this.context.rememberFallback(request.conversation, snapshot.generation, map);
+                return this.context.rememberFallback(request.conversation, snapshot.generation, map);
               },
             );
             for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
@@ -121,6 +121,7 @@ export class OutboundDeliveryRuntime {
             return;
           }
 
+          const revokeButtons = buttons?.activate(buttonPayloads);
           try {
             const result = await requireAdapters(snapshot).send(adapter, {
               conversation: request.conversation,
@@ -131,8 +132,9 @@ export class OutboundDeliveryRuntime {
             receipt = receiptFromEndpointError(error);
           }
 
+          if (receipt.status !== 'sent' && !receipt.failure?.deliveryUnknown) revokeButtons?.();
+
           if (receipt.status === 'sent') {
-            buttons?.activate(buttonPayloads);
             await this.context.record(request, receipt);
             this.context.publish({
               direction: 'outbound',
@@ -194,7 +196,7 @@ async function prepareOutboundPayload(
   rendered: unknown,
   conversation: ConversationRef,
   snapshot: RuntimeSnapshot,
-  rememberInteractiveFallback?: (map: Record<string, string>) => void,
+  rememberInteractiveFallback?: (map: Record<string, string>) => Record<string, string> | void,
 ): Promise<unknown> {
   const adapter = conversation.endpoint.id as CapabilityId;
   const markdownResolved = applyOutboundMarkdownPolicy(

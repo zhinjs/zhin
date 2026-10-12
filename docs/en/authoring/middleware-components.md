@@ -78,7 +78,7 @@ Native HTML and `@zhin.js/html-renderer` (`@pixel.js/shotium`) consume the same 
 
 ### Native message tags and callbacks
 
-Default JSX lays out message Segments. Lowercase native tags require no imports and provide prop types: `text`, `image`, `mention`, `face`, `audio`, `video`, `file`, `record`, `voice`, `reply`, `forward`, `share`, `dice`, `rps`, `card`, `keyboard`, `action`, `markdown`, `link`, `qrcode`, `tts`, plus `button` and the `html` boundary. Tag names mirror `Segment.type`; props mirror `Segment.data`. Image accepts either canonical `media` or a convenient `src` (URL, path, base64 or MediaRef).
+Default JSX lays out message Segments. Lowercase native tags require no imports and provide prop types: `text`, `image`, `mention`, `face`, `audio`, `video`, `file`, `record`, `voice`, `reply`, `forward`, `share`, `dice`, `rps`, `card`, `keyboard`, `action`, `markdown`, `link`, `qrcode`, `tts`, plus `button` and the `html` boundary. Most tag names mirror `Segment.type` and props mirror `Segment.data`; `<button>` is a helper that produces a `keyboard` Segment. Image accepts either canonical `media` or a convenient `src` (URL, path, base64 or MediaRef).
 
 ```tsx
 import { defineCommand } from 'zhin.js/command';
@@ -90,9 +90,9 @@ export default defineCommand({
 });
 ```
 
-`onClick(message)` runs in the clicking conversation and replies once with its returned string, Segment or JSX. Numbers, including `0`, remain visible; null, undefined and booleans send nothing. Explicit `message.$reply()` is also available. Callbacks are not serialized: the runtime binds a random payload to the original plugin author, conversation and active snapshot. Old buttons expire on reload or restart. Applications can inspect `message.sender` to enforce their permissions. Platforms without native buttons use numeric fallback; adjacent buttons share one numbered group.
+`onClick(message)` runs in the clicking conversation and replies once with its returned string, Segment or JSX. Numbers, including `0`, remain visible; null, undefined and booleans send nothing. Explicit `message.$reply()` is also available. Callbacks are not serialized: the runtime binds a random payload to the original plugin author, conversation and active snapshot. Callbacks expire after one hour or on reload/restart. Numeric fallback labels increase within each conversation, so later keyboards do not reuse earlier labels. Applications can inspect `message.sender` to enforce their permissions. Platforms without native buttons use numeric fallback; adjacent buttons share one numbered group.
 
-`<card {...platformPayload} />` preserves the native platform payload. Native `card`, `button` and `markdown` differ from the optional HTML display components named `Card`, `Button` and `Markdown`. Registered `components/music/index.tsx` can render `<share {...props} />` and be invoked without imports as `<music title="Song" url="https://example.com/song" />`. Custom function components can return `null` to omit their position. Unknown named tags must resolve to a registered component; they are never sent as unknown bare Segment types.
+`<card {...platformPayload} />` preserves the native platform payload. Native `card`, `button` and `markdown` differ from the optional HTML display components named `Card`, `Button` and `Markdown`. Registered `components/music/index.tsx` can render `<share {...props} />` and be invoked without imports as `<music title="Song" url="https://example.com/song" />`. Custom function components can return `null` to omit their position. Unqualified unknown tags must resolve to a registered component. Namespaced tags such as `<vendor:poll />` produce extension Segments and require an adapter that supports them.
 
 ## Inbound results
 

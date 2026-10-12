@@ -115,7 +115,8 @@ await db.start();
 MySQL 方言将 `text` 的非空默认值和 `json` 默认值写成表达式，例如
 `TEXT DEFAULT ('')`；普通 `TEXT DEFAULT ''` 会被 MySQL 拒绝。
 声明了 `length` 的 `text` 使用 `VARCHAR(length)`；未声明长度的文本主键或唯一键
-使用 `VARCHAR(768)`，以完整值建立索引。其余文本仍为 `TEXT`。
+使用 `VARCHAR(768)`，以完整值建立索引；显式声明的索引文本长度超过 768 时直接报错。文本主键和唯一键使用 `utf8mb4_0900_bin`，保留大小写及末尾空格的区别。其余文本仍为 `TEXT`。
+新表显式使用 InnoDB `ROW_FORMAT=DYNAMIC`。使用 4KB / 8KB InnoDB 页时，启动会先校验文本索引长度，并提示配置更大的页或显式声明更短的键长度。
 键值应在该长度内；需要更短的业务边界时显式声明 `length`。这里没有使用文本前缀唯一索引，
 避免将前缀相同的不同键误判为重复。
 

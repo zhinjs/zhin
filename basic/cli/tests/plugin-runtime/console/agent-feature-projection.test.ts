@@ -13,7 +13,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import { ComponentIndex, componentFeatureId, defineComponent, type ComponentContext, type ComponentDefinition } from '@zhin.js/component';
 import { component, type SendContent } from '@zhin.js/core/runtime';
-import { jsx } from '@zhin.js/core/jsx';
+import { Html, jsx } from '@zhin.js/core/jsx';
 import {
   PromptSectionIndex,
   defineAgentPromptSection,
@@ -120,31 +120,38 @@ describe('Console generation Component previews', () => {
   const preview = (view: RuntimeSnapshot, name: string, signal: AbortSignal = new AbortController().signal) =>
     renderGenerationComponent(view, { requester: String(child), name, props: { text: 'actual' }, signal });
 
+  it('previews message JSX as native segments without converting it to HTML', async () => {
+    const view = snapshot([slot(child, 'message', () => jsx('image', { src: 'https://example.com/image.png' }))], 12, 'current');
+    expect(await preview(view, 'message')).toEqual([
+      { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/image.png' } } },
+    ]);
+  });
+
   it('renders local JSX with the requested owner, props, signal and exact operation generation', async () => {
     const signal = new AbortController().signal;
     const render = vi.fn(({ text }: { text: string }, context: ComponentContext) => {
       expect(context.owner.id).toBe(child);
       expect(context.requester.id).toBe(child);
       expect(context.signal).toBe(signal);
-      return jsx('b', { children: `${text}:${context.generation}:${context.use(greeting)}` });
+      return jsx(Html, { children: jsx('b', { children: `${text}:${context.generation}:${context.use(greeting)}` }) });
     });
     const parent = vi.fn(() => 'parent');
     const view = snapshot([slot(root, 'card', parent), slot(child, 'card', render)], 12, 'current');
 
-    expect(await preview(view, 'card', signal)).toEqual({ type: 'html', data: { html: '<b>actual:12:current</b>' } });
+    expect(await preview(view, 'card', signal)).toEqual([{ type: 'html', data: { html: '<b>actual:12:current</b>' } }]);
     expect(render).toHaveBeenCalledTimes(1);
     expect(parent).not.toHaveBeenCalled();
   });
 
   it('evaluates async JSX once per preview and recursively flattens mixed content and component calls', async () => {
     const signal = new AbortController().signal;
-    const asyncJsx = vi.fn(async () => jsx('i', { children: 'ready' }));
+    const asyncJsx = vi.fn(async () => jsx(Html, { children: jsx('i', { children: 'ready' }) }));
     const node = jsx(asyncJsx, {});
     const nested = vi.fn(({ text }: { text: string }, context: ComponentContext) => {
       expect(context.owner.id).toBe(root);
       expect(context.requester.id).toBe(child);
       expect(context.signal).toBe(signal);
-      return jsx('b', { children: text });
+      return jsx(Html, { children: jsx('b', { children: text }) });
     });
     const view = snapshot([
       slot(child, 'card', async () => ['before', [node, node, component('nested', { text: 'forwarded' })], 'after']),
@@ -169,18 +176,18 @@ describe('Console generation Component previews', () => {
     const gate = new Promise<void>(resolve => { release = resolve; });
     const render = async (_props: { text: string }, context: ComponentContext) => {
       await gate;
-      return jsx('p', { children: `${context.generation}:${context.use(greeting)}` });
+      return jsx(Html, { children: jsx('p', { children: `${context.generation}:${context.use(greeting)}` }) });
     };
     const slots = [slot(child, 'card', render)];
     const old = preview(snapshot(slots, 1, 'old'), 'card');
     const current = preview(snapshot(slots, 2, 'current'), 'card');
     release();
-    expect(await old).toEqual({ type: 'html', data: { html: '<p>1:old</p>' } });
-    expect(await current).toEqual({ type: 'html', data: { html: '<p>2:current</p>' } });
+    expect(await old).toEqual([{ type: 'html', data: { html: '<p>1:old</p>' } }]);
+    expect(await current).toEqual([{ type: 'html', data: { html: '<p>2:current</p>' } }]);
   });
 
   it('rejects aborted previews before invoking registered components', async () => {
-    const render = vi.fn(() => jsx('b', { children: 'never' }));
+    const render = vi.fn(() => jsx(Html, { children: jsx('b', { children: 'never' }) }));
     const controller = new AbortController();
     controller.abort(new Error('preview cancelled'));
     await expect(preview(snapshot([slot(child, 'card', render)], 1, 'current'), 'card', controller.signal)).rejects.toThrow('preview cancelled');
@@ -192,7 +199,7 @@ describe('Console generation Component previews', () => {
     const cancelled = new Error('preview cancelled during JSX');
     const render = vi.fn(async () => {
       controller.abort(cancelled);
-      return jsx('b', { children: 'discarded' });
+      return jsx(Html, { children: jsx('b', { children: 'discarded' }) });
     });
     const view = snapshot([slot(child, 'card', () => jsx(render, {}))], 1, 'current');
     await expect(preview(view, 'card', controller.signal)).rejects.toBe(cancelled);

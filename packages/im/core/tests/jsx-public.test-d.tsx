@@ -63,3 +63,13 @@ defineMiddleware({
   target: 'outbound',
   handle: async () => node,
 });
+
+// @ts-expect-error HTML string and children are mutually exclusive.
+const mixedHtml = <html html="<b>raw</b>"><b>child</b></html>;
+// @ts-expect-error Audio accepts duration, not file names.
+const audioName = <audio media={{ kind: 'url', value: 'https://example.com/a.mp3' }} name="a" />;
+// @ts-expect-error File accepts name, not duration.
+const fileDuration = <file media={{ kind: 'path', value: 'a.txt' }} duration={10} />;
+// @ts-expect-error Card payload is opaque data, not a JSX layout container.
+const cardChildren = <card><b>child</b></card>;
+void [mixedHtml, audioName, fileDuration, cardChildren];
