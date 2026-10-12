@@ -12,6 +12,7 @@ import {
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
 import type { RuntimeSnapshot, SnapshotLease } from '@zhin.js/plugin-runtime';
+import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import type {
   ConversationRef,
   DeliveryReceipt,
@@ -159,6 +160,14 @@ export class EndpointRuntime {
         requester,
         content: normalizeConsoleContent(input.content),
       }, lease.value);
+      if (result.status !== 'sent') {
+        throw new EndpointDeliveryError(
+          result.failure?.code ?? `outbound_${result.status}`,
+          result.failure?.message ?? 'Outbound delivery was suppressed.',
+          result.failure?.deliveryUnknown ? 'unknown'
+            : result.status === 'rejected' ? 'rejected' : 'not_sent',
+        );
+      }
       return { messageId: result.message?.id ?? '' };
     } finally {
       this.context.release(lease);

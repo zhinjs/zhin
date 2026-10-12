@@ -1,6 +1,6 @@
 import { defineCommand } from 'zhin.js/command';
-import { extractChannelInfo } from '../../../src/channel.js';
-import { getRssSeen, getRssSubs } from '../../../src/db-store.js';
+import { channelSourceError, extractChannelInfo, subscriptionScope } from '../../../src/channel.js';
+import { getRssSubs } from '../../../src/db-store.js';
 import { fetchFeed, resolveRssConfig, type RssConfig } from '../../../src/feed.js';
 import { markItemsSeen } from '../../../src/poll.js';
 import { rssRuntimeToken } from '../../../src/runtime.js';
@@ -18,20 +18,17 @@ export default defineCommand<RssConfig>({
     if (!/^https?:\/\//i.test(url)) return '请提供有效的 HTTP/HTTPS 地址';
 
     const channel = extractChannelInfo(input);
+    if (!channel) return channelSourceError(input);
     const cfg = resolveRssConfig(config);
 
     const existing = await Subs.select().where({
       url,
-      adapter_name: channel.adapterName,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
+      ...subscriptionScope(channel),
     });
     if (existing.length > 0) return '当前会话已订阅该源，无需重复添加';
 
     const currentSubs = await Subs.select().where({
-      adapter_name: channel.adapterName,
-      channel_type: channel.channelType,
-      channel_id: channel.channelId,
+      ...subscriptionScope(channel),
     });
     if (currentSubs.length >= cfg.maxPerGroup) {
       return `当前会话订阅数已达上限 (${cfg.maxPerGroup})，请先取消一些`;

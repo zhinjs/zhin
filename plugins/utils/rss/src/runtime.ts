@@ -1,11 +1,12 @@
 import { createToken } from 'zhin.js';
 import type { RssConfig } from './feed.js';
 import type { RssMemoryDb } from './memory-store.js';
+import type { ChannelInfo } from './channel.js';
 
 export type RssOutboundPush = (input: {
   readonly adapterName: string;
   readonly endpointKey: string;
-  readonly channelType: string;
+  readonly channelType: ChannelInfo['channelType'];
   readonly channelId: string;
   readonly content: string;
 }) => Promise<void>;

@@ -6,10 +6,10 @@ Plugin Runtime 群运营能力包，提供签到积分、消息统计、关键�
 ## 安装与拓扑
 
 ```bash
-pnpm add @zhin.js/plugin-group-suite
+pnpm exec zhin install @zhin.js/plugin-group-suite
 ```
 
-父插件在 `package.json#zhin.plugins` 中声明子插件：
+在应用目录运行上述命令会安装依赖，并在父插件的 `package.json#zhin.plugins` 中挂载实例。手工挂载时将以下条目追加到该清单数组：
 
 ```json
 {

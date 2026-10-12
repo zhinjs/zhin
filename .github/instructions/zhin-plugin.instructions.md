@@ -12,9 +12,11 @@ applyTo: "plugins/**,examples/**"
   Resources, not capability registration.
 - Child packages live one level below `plugins/*`. Logical ancestry comes from `zhin.plugins`, not
   nested directories.
-- Feature providers are explicit `zhin.features` mounts. Apps that depend on `zhin.js` inherit
-  Stable Features via `platformFeatures` — do **not** separately install `@zhin.js/command` /
+- Feature providers are explicit `zhin.features` mounts. Root apps that depend on `zhin.js` inherit
+  Stable Features via `platformFeatures` — they do **not** need separate `@zhin.js/command` /
   `@zhin.js/middleware` / `@zhin.js/handler` / `@zhin.js/adapter` / `@zhin.js/component`.
+  This inheritance is root-only: child plugins must declare each Feature they use in both
+  dependencies and `zhin.features`, as the official plugin packages do.
 
 ## Convention directories
 
@@ -39,8 +41,10 @@ pages/<name>/index.tsx                definePage()
 pages/{nav,footer}/index.tsx          layout overrides
 ```
 
-Each TypeScript capability default-exports exactly one definition. Do not call `usePlugin()`,
-`getPlugin()` or `add*()` in new code. Migrate old code with
+Each TypeScript capability default-exports exactly one definition. Single-file applications may
+register commands with `setup({ addCommand })`, as shown in `examples/single-file-bot`; use
+convention directories when splitting capabilities into files. Do not call the removed
+`usePlugin()` or `getPlugin()` APIs. Migrate old code with
 `.github/skills/migrate-zhin-plugin-runtime`.
 
 Tool placement is an authority and disclosure boundary. Root Tools are plugin-wide; Agent Tools

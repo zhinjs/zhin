@@ -1,9 +1,12 @@
 # Writing Your First Plugin
 
-Want to see "one file is enough" first? The repo's [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) uses `setup({ addCommand })` to register commands with no `commands/` directory -- get it running, then come back to split files.
+Want to see "one file is enough" first? The repo's [single-file-bot](../examples/index.md#single-file-bot-one-botts-is-a-bot) uses `setup({ addCommand })` to register commands with no `commands/` directory -- get it running, then come back to split files.
 
-Going from an empty directory to a runnable **convention directories** plugin takes just five files: one command, one config schema, one `definePlugin` entry point, plus the zhin manifest in `package.json`.
-The `ping-pong` plugin written below uses APIs entirely from the official example [capabilities-bot](https://github.com/zhinjs/zhin/tree/main/examples/capabilities-bot) and can be run directly.
+This tutorial adds a `ping-pong` **convention directory** plugin to an application already connected to Sandbox. For a new project, run `pnpm create zhin-app my-bot -y` and enter `my-bot`; repository contributors can use [minimal-bot](../examples/index.md#minimal-bot-stable-minimal-path).
+
+Create four files under the application's `plugins/ping-pong/`, then mount the plugin in the host manifest. The configuration file belongs to the host; child plugins do not each need their own.
+
+Source TypeScript projects require Node.js ≥22.12.0 and pnpm 9+; the CLI prepares TypeScript loading for `pnpm dev`. The compiled JavaScript library still supports Node.js `^20.19.0 || >=22.12.0`.
 
 Final directory structure:
 
@@ -13,8 +16,9 @@ ping-pong/
 ├── plugin.ts         # definePlugin entry point
 ├── schema.json       # Config contract (defaults + validation)
 ├── commands/
-│   └── ping.ts       # /ping command
-└── zhin.config.yml   # Optional: add this to make "plugin as application"
+│   └── ping/
+│       └── index.ts  # /ping command
+└── zhin.config.yml   # Optional: only when the plugin itself is the application
 ```
 
 ## 1. package.json and the zhin manifest
@@ -29,11 +33,11 @@ ping-pong/
     "dev": "zhin runtime start"
   },
   "dependencies": {
-    "@zhin.js/command": "^1.0.0",
-    "zhin.js": "^4.0.0"
+    "@zhin.js/command": "^1.1.0",
+    "zhin.js": "^1.1.0"
   },
   "devDependencies": {
-    "@zhin.js/cli": "^1.0.0"
+    "@zhin.js/cli": "^1.1.0"
   },
   "zhin": {
     "protocol": 1,
@@ -55,7 +59,7 @@ The `zhin` field is the plugin topology manifest:
 |-------|---------|
 | `entry` | Plugin entry file; must be a package-relative path starting with `./` |
 | `runtime` | `trusted` (runs in the main process) |
-| `features` | Enabled Feature providers; `@zhin.js/command` handles discovering the `commands/` directory |
+| `features` | Child plugins explicitly declare the Features they use; this example mounts Command to discover `commands/`. Root applications depending on `zhin.js` inherit Stable Features by default, but this does not declare capabilities for their children |
 | `plugins` | Mounted sub-plugin instances (empty in this example; see section 5 for mounting) |
 
 ## 2. plugin.ts
@@ -85,7 +89,7 @@ export default definePlugin<PingPongConfig>({
 
 ## 3. commands/ping/index.ts
 
-Files under `commands/` are auto-discovered by the Command Feature; the filename becomes the command name:
+The Command Feature discovers `commands/**/index.ts`; the directory path determines the command name. Here the route is `ping`. Other files in that directory are helpers and do not register commands:
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
@@ -94,7 +98,7 @@ interface PingPongConfig {
   reply: string;
 }
 
-export default defineCommand<PingPongConfig, string>({
+export default defineCommand<PingPongConfig>({
   description: 'Reply with the configured text',
   execute({ config }) {
     return config.reply;
@@ -130,6 +134,14 @@ sub-plugin instances read the `plugins.<instanceKey>` section.
 
 ### Method A: `./` local directory sub-plugin (recommended during development)
 
+Install the local package's declared dependencies first. Installing `zhin.js` in the host does not automatically install the dependencies of an uninstalled local directory:
+
+```bash
+cd plugins/ping-pong
+pnpm install
+cd ../..
+```
+
 Reference it as a `./` relative path in the host application's `package.json#zhin.plugins` (no `..` traversal beyond the package root is allowed):
 
 ```json
@@ -154,7 +166,7 @@ plugins:
 
 ### Method B: Plugin as application
 
-Place `zhin.config.yml` directly in the plugin directory -- the plugin itself becomes the Root:
+Place `zhin.config.yml` directly in the plugin directory -- the plugin itself becomes the Root. It still needs an adapter: a command-only plugin can assemble but cannot receive chat messages without a connected endpoint:
 
 ```yaml
 # ping-pong/zhin.config.yml
@@ -165,19 +177,20 @@ plugins: {}
 ```
 
 ```bash
-cd ping-pong
+cd plugins/ping-pong # from the host application directory
 pnpm install
+pnpm exec zhin setup --adapters  # Select an adapter such as Sandbox and add an Endpoint
 pnpm dev        # zhin runtime start
 ```
 
 ## 6. Startup and verification
 
 ```bash
-zhin runtime start
+pnpm dev
 ```
 
 - The startup log should show `[ping-pong] setup: reply=pong!`
-- Send `/ping` in a connected channel; the bot replies `pong!`
+- Send `/ping` in the host's connected Sandbox or other channel; the bot replies `pong!` (`/` depends on that Endpoint's `commandPrefix` configuration)
 - Editing `commands/ping/index.ts` or `zhin.config.yml` triggers hot reload -- no process restart needed
 - `zhin runtime start --once` can be used for assembly smoke testing (non-interactive)
 
@@ -195,5 +208,5 @@ flowchart TD
 
 ## Next steps
 
-- [Examples at a glance](../examples/index.md): capabilities-bot demonstrates all capabilities including database, cron, Agent tools, proactive outbound, and more
+- [Examples at a glance](../examples/index.md): start with single-file-bot / minimal-bot, then explore database, schedules, Agent tools, and proactive outbound as needed
 - For deeper plugin capabilities (Host Resources, lifecycle, handoff), see [Plugin model](../concepts/plugin-model.md)

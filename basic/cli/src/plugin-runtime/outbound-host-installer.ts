@@ -47,18 +47,16 @@ export function createOutboundHost(im: OutboundRuntimePort): OutboundHost {
         });
         return result.messageId || null;
       } catch (error) {
-        // activity-feedback typing text is best-effort; the adapter/endpoint
-        // may not be resolvable when the AI event carries a capability id
-        // instead of the short platform name (sandbox console smoke, etc.).
         logger.debug(formatCompact({
           op: 'outbound_send_failed',
           adapter: input.adapter,
           endpointKey: input.endpointKey,
           error: error instanceof Error ? error.message : String(error),
         }));
-        // Do NOT re-throw — a failed typing indicator must never fail the
-        // AI turn pipeline that triggered it.
-        return null;
+        // Business callers must distinguish failed delivery from a successful
+        // send without a platform message id. Optional activity feedback owns
+        // its best-effort handling at the call site.
+        throw error;
       }
     },
     async addReaction(input) {

@@ -5,24 +5,18 @@ Zhin.js plugin for qrcode functionality.
 ## Installation
 
 ```bash
-pnpm add @zhin.js/plugin-qrcode
+pnpm exec zhin install @zhin.js/plugin-qrcode
 ```
 
 ## Usage
 
-Add the plugin to your `zhin.config.yml`:
+Run the installation command from your application directory. It installs the package and mounts the `qrcode` instance in `package.json#zhin.plugins`. The corresponding `zhin.config.yml` node is:
 
 ```yaml
 plugins:
-  - @zhin.js/plugin-qrcode
-```
-
-Or via CLI:
-
-```bash
-zhin install @zhin.js/plugin-qrcode
+  qrcode: {}
 ```
 
 ## Configuration
 
-Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.
+This plugin currently has no configuration fields. Its [`schema.json`](./schema.json) accepts an empty object; do not place package names in a `plugins` array.

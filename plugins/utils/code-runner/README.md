@@ -5,24 +5,18 @@ Zhin.js plugin for code-runner functionality.
 ## Installation
 
 ```bash
-pnpm add @zhin.js/plugin-code-runner
+pnpm exec zhin install @zhin.js/plugin-code-runner
 ```
 
 ## Usage
 
-Add the plugin to your `zhin.config.yml`:
+Run the installation command from your application directory. It installs the package and mounts the `code-runner` instance in `package.json#zhin.plugins`. The corresponding `zhin.config.yml` node is:
 
 ```yaml
 plugins:
-  - @zhin.js/plugin-code-runner
-```
-
-Or via CLI:
-
-```bash
-zhin install @zhin.js/plugin-code-runner
+  code-runner: {}
 ```
 
 ## Configuration
 
-Configure in `zhin.config.yml` under the plugin's key. Refer to the plugin source for available options.
+This plugin currently has no configuration fields. Its [`schema.json`](./schema.json) accepts an empty object; do not place package names in a `plugins` array.

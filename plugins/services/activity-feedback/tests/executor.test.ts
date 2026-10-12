@@ -31,6 +31,22 @@ const phaseConfig: ResolvedActivityFeedbackPhaseConfig = {
 };
 
 describe('createOutboundEndpointAccess', () => {
+  it('keeps status hints best-effort when business outbound rejects', async () => {
+    const send = vi.fn().mockRejectedValue(new Error('endpoint offline'));
+    const debug = vi.fn();
+    const access = createOutboundEndpointAccess({ send }, { debug });
+    const resolved = access.resolve('sandbox', 'bot1')!;
+    await expect(resolved.outbound.send({
+      conversation: {
+        endpoint: { id: 'bot1', adapter: 'sandbox' },
+        kind: 'private', id: 'u1',
+      },
+      content: 'working',
+    })).resolves.toBeNull();
+    expect(send).toHaveBeenCalledOnce();
+    expect(debug).toHaveBeenCalledOnce();
+  });
+
   it('按 platform:endpointKey 缓存同一 { endpoint, outbound }，不伪造 Adapter', () => {
     const access = createOutboundEndpointAccess({ send: vi.fn() });
     const first = access.resolve('sandbox', 'bot1');

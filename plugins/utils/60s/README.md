@@ -7,14 +7,12 @@
 ## 安装
 
 ```bash
-npm install @zhin.js/plugin-60s
-# 或
-pnpm add @zhin.js/plugin-60s
+pnpm exec zhin install @zhin.js/plugin-60s
 ```
 
 ## 配置
 
-在 `zhin.config.yml` 中添加插件：
+在应用目录运行安装命令，会安装依赖并挂载到 `package.json#zhin.plugins`，实例名为 `60s`。在 `zhin.config.yml` 的实例节点修改配置：
 
 ```yaml
 plugins:

@@ -10,50 +10,174 @@ afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
+async function writePackage(
+  root: string,
+  name: string,
+  plugins: readonly { package: string; instanceKey: string; optional?: boolean }[] = [],
+  dependencies: Readonly<Record<string, string>> = {},
+): Promise<void> {
+  await mkdir(root, { recursive: true });
+  await writeFile(join(root, 'package.json'), JSON.stringify({
+    name, dependencies,
+    zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins },
+  }));
+}
+
+async function writeSchema(root: string, field: string): Promise<void> {
+  await writeFile(join(root, 'schema.json'), JSON.stringify({
+    type: 'object', properties: { [field]: { type: 'string' } }, required: [field],
+  }));
+}
+
 async function createProject(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'zhin-plugin-schema-catalog-'));
   roots.push(root);
-  await writeFile(join(root, 'package.json'), JSON.stringify({
-    name: 'schema-project',
-    zhin: {
-      plugins: [
-        { package: '@zhin.js/adapter-icqq', instanceKey: 'qq-main' },
-        { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
-      ],
-    },
-  }));
-  await mkdir(join(root, 'node_modules', '@zhin.js', 'adapter-icqq'), { recursive: true });
-  await writeFile(
-    join(root, 'node_modules', '@zhin.js', 'adapter-icqq', 'schema.json'),
-    JSON.stringify({
-      type: 'object',
-      properties: { account: { type: 'string' } },
-      required: ['account'],
-    }),
-  );
+  await writePackage(root, 'schema-project', [
+    { package: '@zhin.js/adapter-icqq', instanceKey: 'qq-main' },
+    { package: '@zhin.js/adapter-sandbox', instanceKey: 'sandbox' },
+  ], { '@zhin.js/adapter-icqq': '*', '@zhin.js/adapter-sandbox': '*' });
+  const qq = join(root, 'node_modules', '@zhin.js', 'adapter-icqq');
+  await writePackage(qq, '@zhin.js/adapter-icqq');
+  await writeSchema(qq, 'account');
   return root;
 }
 
+function expectField(field: string): unknown {
+  return { type: 'object', object: { [field]: { type: 'string', key: field, required: true } } };
+}
+
 describe('PluginSchemaCatalog', () => {
-  it('resolves an instance key through the project plugin manifest', async () => {
+  it('does not let the root alias shadow a declared root child instance', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [{ package: './plugins/child', instanceKey: 'root' }]);
+    await writeSchema(root, 'own');
+    const child = join(root, 'plugins/child');
+    await writePackage(child, 'root-child');
+    await writeSchema(child, 'child');
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readAll(['root', 'plugin'])).resolves.toEqual({
+      root: expectField('child'), plugin: expectField('own'),
+    });
+    await expect(catalog.read('root/root')).resolves.toEqual(expectField('child'));
+  });
+
+  it('resolves the declared package, ignoring an unrelated package named after the instance', async () => {
+    const root = await createProject();
+    const shadow = join(root, 'node_modules', 'qq-main');
+    await writePackage(shadow, 'qq-main');
+    await writeSchema(shadow, 'wrong');
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('qq-main')).resolves.toEqual(expectField('account'));
+    await expect(catalog.read('@zhin.js/adapter-icqq')).resolves.toEqual(expectField('account'));
+    await expect(catalog.read('root/qq-main')).resolves.toEqual(expectField('account'));
+  });
+
+  it('reads a batch and omits unresolved plugins without requiring an unrelated package to resolve', async () => {
     const catalog = new PluginSchemaCatalog(await createProject());
-    await expect(catalog.read('qq-main')).resolves.toMatchObject({
-      type: 'object',
-      object: { account: { type: 'string', key: 'account', required: true } },
+    await expect(catalog.readAll(['qq-main', 'sandbox', 'unknown'])).resolves.toEqual({
+      'qq-main': expectField('account'),
     });
   });
 
-  it('reads a batch against one project catalog and omits missing plugin schemas', async () => {
-    const catalog = new PluginSchemaCatalog(await createProject());
-    await expect(catalog.readAll(['qq-main', 'sandbox'])).resolves.toEqual({
-      'qq-main': {
-        type: 'object',
-        object: { account: { type: 'string', key: 'account', required: true } },
-      },
+  it('resolves multiple local mounts and nested local and npm children from their declaring package', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [
+      { package: './plugins/local', instanceKey: 'first' },
+      { package: './plugins/local', instanceKey: 'second' },
+    ]);
+    const parent = join(root, 'plugins', 'local');
+    await writePackage(parent, 'local-parent', [
+      { package: './plugins/leaf', instanceKey: 'leaf' },
+      { package: '@test/remote', instanceKey: 'remote' },
+    ], { '@test/remote': '*' });
+    await writeSchema(parent, 'parent');
+    const leaf = join(parent, 'plugins', 'leaf');
+    await writePackage(leaf, 'local-leaf');
+    await writeSchema(leaf, 'leaf');
+    const remote = join(parent, 'node_modules', '@test', 'remote');
+    await writePackage(remote, '@test/remote');
+    await writeSchema(remote, 'nested');
+    const rootRemote = join(root, 'node_modules', '@test', 'remote');
+    await writePackage(rootRemote, '@test/remote');
+    await writeSchema(rootRemote, 'wrong');
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.readAll(['first', 'second'])).resolves.toEqual({
+      first: expectField('parent'), second: expectField('parent'),
     });
+    await expect(catalog.read('root/first/leaf')).resolves.toEqual(expectField('leaf'));
+    await expect(catalog.read('second/remote')).resolves.toEqual(expectField('nested'));
   });
-  it('projects actual Host fields and Chinese descriptions instead of an empty placeholder', async () => {
-    const catalog = new PluginSchemaCatalog(await createProject());
+
+  it('resolves local children declared by a mounted npm package and gives exact instance keys precedence', async () => {
+    const root = await createProject();
+    const parent = join(root, 'node_modules', '@zhin.js', 'adapter-icqq');
+    await writePackage(parent, '@zhin.js/adapter-icqq', [
+      { package: './plugins/local', instanceKey: 'child' },
+    ]);
+    const child = join(parent, 'plugins', 'local');
+    await writePackage(child, 'nested-local');
+    await writeSchema(child, 'nested-local');
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('root/qq-main/child')).resolves.toEqual(expectField('nested-local'));
+    await writePackage(root, 'schema-project', [
+      { package: 'collision', instanceKey: 'alias' },
+      { package: './plugins/exact', instanceKey: 'collision' },
+    ], { collision: '*' });
+    const alias = join(root, 'node_modules', 'collision');
+    await writePackage(alias, 'collision');
+    await writeSchema(alias, 'alias');
+    const exact = join(root, 'plugins', 'exact');
+    await writePackage(exact, 'exact');
+    await writeSchema(exact, 'exact');
+    await expect(catalog.read('collision')).resolves.toEqual(expectField('exact'));
+  });
+
+  it('resolves inherited facade defaults from the facade, with explicit instance overrides winning', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [
+      { package: './plugins/override', instanceKey: 'default' },
+    ], { 'zhin.js': '*' });
+    const override = join(root, 'plugins', 'override');
+    await writePackage(override, 'override');
+    await writeSchema(override, 'override');
+    const facade = join(root, 'node_modules', 'zhin.js');
+    await writePackage(facade, 'zhin.js', [
+      { package: './plugins/default', instanceKey: 'default' },
+      { package: './plugins/inherited', instanceKey: 'inherited' },
+    ], { '@zhin.js/core': '*' });
+    await writePackage(join(facade, 'node_modules', '@zhin.js', 'core'), '@zhin.js/core');
+    for (const field of ['default', 'inherited']) {
+      const child = join(facade, 'plugins', field);
+      await writePackage(child, field);
+      await writeSchema(child, field);
+    }
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('default')).resolves.toEqual(expectField('override'));
+    await expect(catalog.read('inherited')).resolves.toEqual(expectField('inherited'));
+  });
+
+  it('does not resolve disabled platform inheritance, even when its packages are malformed', async () => {
+    const root = await createProject();
+    const local = join(root, 'plugins', 'local');
+    await writePackage(local, 'local');
+    await writeSchema(local, 'local');
+    await writeFile(join(root, 'package.json'), JSON.stringify({
+      name: 'schema-project', dependencies: { 'zhin.js': '*', '@zhin.js/core': '*' },
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', platformFeatures: false,
+        plugins: [{ package: './plugins/local', instanceKey: 'local' }] },
+    }));
+    for (const name of ['zhin.js', '@zhin.js/core']) {
+      const installed = join(root, 'node_modules', name);
+      await mkdir(installed, { recursive: true });
+      await writeFile(join(installed, 'package.json'), 'invalid');
+    }
+    await expect(new PluginSchemaCatalog(root).read('local')).resolves.toEqual(expectField('local'));
+  });
+
+  it('projects Host fields without needing a valid Plugin manifest', async () => {
+    const root = await createProject();
+    await writeFile(join(root, 'package.json'), 'invalid');
+    const catalog = new PluginSchemaCatalog(root);
     await expect(catalog.read('http')).resolves.toMatchObject({
       type: 'object',
       object: { readiness: { type: 'object', object: {
@@ -65,16 +189,54 @@ describe('PluginSchemaCatalog', () => {
     });
   });
 
-  it('uses the project root schema for plugin and reports a missing schema honestly', async () => {
+  it('uses the root own schema for plugin and root, and reloads changes across reads', async () => {
     const root = await createProject();
     const catalog = new PluginSchemaCatalog(root);
     await expect(catalog.read('plugin')).resolves.toBeNull();
     await writeFile(join(root, 'schema.json'), JSON.stringify({
       type: 'object', properties: { threshold: { type: 'integer', minimum: 1 } },
     }));
-    await expect(catalog.read('plugin')).resolves.toMatchObject({
-      object: { threshold: { type: 'number', min: 1 } },
-    });
+    for (const name of ['plugin', 'root']) {
+      await expect(catalog.read(name)).resolves.toMatchObject({
+        object: { threshold: { type: 'number', min: 1 } },
+      });
+    }
+    await writeSchema(root, 'changed');
+    await expect(catalog.read('plugin')).resolves.toEqual(expectField('changed'));
   });
 
+  it('rejects undeclared and escaping paths rather than reading arbitrary directories', async () => {
+    const root = await createProject();
+    const catalog = new PluginSchemaCatalog(root);
+    for (const name of ['../outside', 'root/qq-main/../../outside', 'root//qq-main', './plugins/undeclared']) {
+      await expect(catalog.read(name)).resolves.toBeNull();
+    }
+    await writePackage(root, 'schema-project', [
+      { package: './../outside', instanceKey: 'outside' },
+    ]);
+    await expect(catalog.read('outside')).rejects.toThrow('invalid or unavailable Plugin manifest');
+  });
+
+  it.each([
+    '{', 'null', '[]', 'true', '{"type":"string"}', '{"properties":[]}', '{"$ref":"#/$defs/config"}',
+    '{"properties":{"requiredField":42},"required":["requiredField"]}',
+    '{"properties":{"secret":[]}}',
+    '{"properties":{"secret":false}}',
+    '{"properties":{"nested":{"type":"object","properties":{"secret":42}}}}',
+    '{"properties":{"list":{"type":"array","items":42}}}',
+    '{"additionalProperties":42}',
+    '{"$defs":{"invalid":[]}}',
+  ])(
+    'reports malformed schema %s without exposing the absolute project path', async (schema) => {
+      const root = await createProject();
+      const file = join(root, 'node_modules', '@zhin.js', 'adapter-icqq', 'schema.json');
+      await writeFile(file, schema);
+      const catalog = new PluginSchemaCatalog(root);
+      await expect(catalog.read('qq-main')).rejects.toThrow(/schema.json for qq-main/u);
+      await expect(catalog.read('qq-main')).rejects.not.toThrow(root);
+      await expect(catalog.readAll(['qq-main'])).rejects.toThrow(/schema.json for qq-main/u);
+      await writeFile(join(root, 'schema.json'), schema);
+      await expect(catalog.read('plugin')).rejects.toThrow(/schema.json for plugin/u);
+    },
+  );
 });

@@ -1508,6 +1508,40 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('rejects host sends whose canonical delivery was suppressed or failed', async () => {
+    const scenarios = [
+      {
+        outboundMiddleware: async () => undefined,
+        expected: { code: 'outbound_suppressed', disposition: 'not_sent' },
+      },
+      {
+        endpointSend: () => { throw new Error('transport closed'); },
+        expected: { code: 'endpoint_send_failed', disposition: 'unknown' },
+      },
+      {
+        endpointSend: () => '',
+        expected: { code: 'delivery_unconfirmed', disposition: 'unknown' },
+      },
+      {
+        adapterCapabilities: ['inbound'] as Array<'inbound' | 'outbound'>,
+        expected: { code: 'outbound_unsupported', disposition: 'not_sent' },
+      },
+    ];
+    for (const scenario of scenarios) {
+      const fixture = await createFixture([], [], undefined, undefined, undefined, scenario);
+      try {
+        await expect(fixture.im.endpoints.send({
+          adapter: 'memory', endpointKey: 'memory',
+          conversation: { kind: 'private', id: 'room-1' },
+          content: 'host business send',
+        })).rejects.toMatchObject(scenario.expected);
+      } finally {
+        await fixture.adapters.stop();
+        await fixture.store.close();
+      }
+    }
+  });
+
   it('accepts MessageRef and ConversationRef at Core control methods', async () => {
     const calls: string[] = [];
     const control: EndpointControl = {

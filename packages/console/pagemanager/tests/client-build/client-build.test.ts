@@ -151,7 +151,7 @@ describe('Client build adapter', () => {
     await expect(builder.load(source, request)).rejects.toThrow('must have a default export');
   });
 
-  it('sanitizes adversarial localName/publicBase in linear time (no ReDoS)', async () => {
+  it('sanitizes adversarial localName/publicBase within a bounded CPU budget (no ReDoS)', async () => {
     const root = await temp();
     const source = join(root, 'pages/status.tsx');
     await writeSource(source, [
@@ -159,18 +159,26 @@ describe('Client build adapter', () => {
       "export const meta = definePage({ title: 'Status' });",
       'export default function Status() { return null; }',
     ].join('\n'));
+    const warmBuilder = new TypeScriptClientBuilder({
+      projectRoot: root,
+      outDir: join(root, 'dist/client'),
+    });
+    // Warm transpilation before measuring the adversarial sanitization path.
+    await warmBuilder.load(source, pageEntry(source));
+
+    const entry = { ...pageEntry(source), localName: '-'.repeat(100_000) };
+    const publicBase = `/${'/'.repeat(100_000)}assets`;
+    // CPU time excludes filesystem waits and scheduler contention. Start before
+    // construction so publicBase sanitization is covered as well as localName.
+    const start = process.cpuUsage();
     const builder = new TypeScriptClientBuilder({
       projectRoot: root,
       outDir: join(root, 'dist/client'),
-      publicBase: `/${'/'.repeat(100_000)}assets`,
+      publicBase,
     });
-    // 预热 TS transpile，随后仅计时对抗输入路径。
-    await builder.load(source, pageEntry(source));
-
-    const entry = { ...pageEntry(source), localName: '-'.repeat(100_000) };
-    const start = performance.now();
     const artifact = await builder.load<{ module: string }>(source, entry);
-    expect(performance.now() - start).toBeLessThan(100);
+    const cpu = process.cpuUsage(start);
+    expect((cpu.user + cpu.system) / 1_000).toBeLessThan(100);
     expect(artifact.module).toMatch(/^\/assets\/root-root-[a-f0-9]{16}\.js$/u);
   });
 });

@@ -67,6 +67,27 @@ describe('OutboundHost', () => {
     })).resolves.toBeUndefined();
   });
 
+  it('rejects business delivery failures instead of reporting a missing message id', async () => {
+    const error = new Error('endpoint not found');
+    const send = vi.fn().mockRejectedValue(error);
+    const host = createOutboundHost(createRuntime({ send }));
+    await expect(host.send({
+      adapter: 'sandbox', endpointKey: 'missing',
+      conversation: { kind: 'private', id: 'u1' }, content: 'reminder',
+    })).rejects.toBe(error);
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null only for a completed send without a platform message id', async () => {
+    const send = vi.fn().mockResolvedValue({ messageId: '' });
+    const host = createOutboundHost(createRuntime({ send }));
+    await expect(host.send({
+      adapter: 'sandbox', endpointKey: 'bot',
+      conversation: { kind: 'private', id: 'u1' }, content: 'reminder',
+    })).resolves.toBeNull();
+    expect(send).toHaveBeenCalledTimes(1);
+  });
+
   it('projects endpoint capabilities and delegates edit/typing controls', async () => {
     const message = {
       conversation: {

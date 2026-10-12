@@ -84,7 +84,10 @@ export interface OutboundHost {
   runWithView?<T>(operation: () => Promise<T>): Promise<T>;
   /** Exact operations declared by one live Endpoint. */
   capabilities?(input: OutboundEndpointInput): OutboundEndpointCapabilities | undefined;
-  /** Returns platform message id when available (activity-feedback needs it). */
+  /**
+   * Returns the platform message id, or null when delivery completed without
+   * an id. Delivery failures reject; best-effort callers handle them explicitly.
+   */
   send(input: OutboundSendInput): Promise<string | null>;
   /** Optional: platform message reactions (icqq group emoji, etc.). */
   addReaction?(input: OutboundReactionInput): Promise<string | null>;
