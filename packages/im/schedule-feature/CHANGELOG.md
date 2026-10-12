@@ -1,5 +1,13 @@
 # @zhin.js/schedule-feature
 
+## 1.1.3
+
+### Patch Changes
+
+- Updated dependencies [badcc1f]
+  - @zhin.js/feature-kit@1.1.3
+  - @zhin.js/plugin-runtime@1.1.12
+
 ## 1.1.2
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/tailwind",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Optional Tailwind CSS utilities as static inline JSX styles",
   "type": "module",
   "main": "./lib/index.js",

@@ -1,5 +1,20 @@
 # @zhin.js/adapter-qq
 
+## 1.1.6
+
+### Patch Changes
+
+- 2cdb181: Upgrade kook-client to ^1.0.5 and qq-official-bot to ^1.3.1, which include the upstream lifecycle and upload fixes. Remove local SDK patches and validate the published SDK directly in regression fixtures.
+- Updated dependencies [badcc1f]
+  - @zhin.js/core@1.1.41
+  - @zhin.js/feature-kit@1.1.3
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/agent-feature@1.1.4
+  - @zhin.js/skill@1.1.4
+  - @zhin.js/tool@1.1.4
+  - @zhin.js/host-http@1.1.4
+  - @zhin.js/permission@1.1.4
+
 ## 1.1.5
 
 ### Patch Changes

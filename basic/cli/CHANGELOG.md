@@ -1,5 +1,35 @@
 # @zhin.js/cli
 
+## 1.1.8
+
+### Patch Changes
+
+- badcc1f: Unify lazy JSX and HTML delivery across commands, inbound middleware and registered components. Remove the former JSX/template component runtimes, respect declared adapter HTML policies, and preserve author/generation ownership for automatic and explicit replies.
+
+  Add the optional @zhin.js/components library with composable JSXRenderable display props, shared themes, symmetric spacing and local style/text overrides. Include tables, lists, Markdown with highlighted code blocks, and display-only checkbox, radio, switch and button states; provide a reusable preview gallery. Update scaffolds, examples and public authoring documentation together.
+
+  Add optional official Tailwind static-utility compilation to inline styles. Consolidate raster rendering on @pixel.js/shotium, remove the Satori image toolkit, and align raster format contracts with actual PNG/JPEG/WebP results.
+
+  Reject cascade-dependent Tailwind values including unset, track the installed Tailwind version in the bundled theme provenance, and preserve both repository and upstream MIT attribution. Keep optional gallery dependency failures visible and document asynchronous Tailwind initialization.
+
+- b36452a: Add an optional TypeSafe AI Jev structured-decision provider with typed Choice, Score and Noul results, bounded cancellation-aware requests, response validation, and generation-owned cleanup. Add explicit TypeSafe setup and local doctor checks; preserve chat configuration, store credentials as environment references, and begin recommendation in shadow mode.
+- Updated dependencies [badcc1f]
+- Updated dependencies [b36452a]
+- Updated dependencies [b36452a]
+  - @zhin.js/command@1.1.5
+  - @zhin.js/component@1.1.4
+  - @zhin.js/core@1.1.41
+  - @zhin.js/plugin-runtime@1.1.12
+  - @zhin.js/middleware@1.1.4
+  - @zhin.js/scaffold-wizard@1.1.3
+  - @zhin.js/runtime@1.1.5
+  - @zhin.js/ai@1.1.37
+  - @zhin.js/adapter@1.1.17
+  - @zhin.js/pagemanager@1.1.5
+  - @zhin.js/prompt-section@1.1.3
+  - @zhin.js/host-http@1.1.4
+  - @zhin.js/config-file@1.1.4
+
 ## 1.1.7
 
 ### Patch Changes
