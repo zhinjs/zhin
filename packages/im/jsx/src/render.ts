@@ -1,4 +1,4 @@
-import { Fragment, isJsxElement, rawHtmlType, type JSXRenderable, type JSXProps } from './element.js';
+import { Fragment, Html, isJsxElement, rawHtmlType, type JSXRenderable, type JSXProps } from './element.js';
 
 export interface HtmlRenderOptions {
   /** Bounds recursive components and untrusted tree depth. Default: 100. */
@@ -97,7 +97,7 @@ function serializeAttributes(props: JSXProps, svg: boolean): string {
   return attributes.length ? ` ${attributes.join(' ')}` : '';
 }
 
-/** The only JSX serializer; it produces markup without sending or rasterizing it. */
+/** Serialize the contents of an explicit HTML boundary, without sending or rasterizing. */
 export async function renderToHtml(node: JSXRenderable, options: HtmlRenderOptions = {}): Promise<string> {
   const maxDepth = options.maxDepth ?? 100;
   if (!Number.isSafeInteger(maxDepth) || maxDepth < 1) throw new RangeError('JSX maxDepth must be a positive integer');
@@ -129,6 +129,7 @@ export async function renderToHtml(node: JSXRenderable, options: HtmlRenderOptio
       }
       if (!isJsxElement(value)) throw new TypeError('Unsupported JSX child: expected a branded JSX element');
       const { type, props } = value;
+      if (type === Html) throw new TypeError('Html cannot be nested inside HTML; place it in the message layout');
       if (type === Fragment) return await render(props.children, depth + 1, svg);
       if (type === rawHtmlType) {
         if (typeof props.html !== 'string') throw new TypeError('Raw HTML must be a string');

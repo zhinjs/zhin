@@ -4,7 +4,7 @@ import {
   type HtmlRendererHost,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt, type Segment } from '@zhin.js/im-contract';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
 import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
@@ -24,10 +24,12 @@ import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
 import { runRuntimeMiddleware } from './runtime-middleware.js';
+import { collectButtonPayloads, type JsxButtonBatch } from './jsx-button-registry.js';
 
 const logger = getLogger('im.outbound');
 
 interface OutboundDeliveryContext {
+  prepareButtons?(request: SendRequest, snapshot: RuntimeSnapshot): JsxButtonBatch;
   record(request: SendRequest, receipt: DeliveryReceipt): Promise<void>;
   rememberFallback(
     conversation: ConversationRef,
@@ -50,7 +52,9 @@ export class OutboundDeliveryRuntime {
 
   async deliver(request: SendRequest, snapshot: RuntimeSnapshot): Promise<DeliveryReceipt> {
     const adapter = request.conversation.endpoint.id as CapabilityId;
-    const jsxCache = new WeakMap<JSXElement, Promise<string>>();
+    const jsxCache = new WeakMap<JSXElement, Promise<readonly Segment[]>>();
+    const buttons = this.context.prepareButtons?.(request, snapshot);
+    const renderOptions = { jsxCache, bindButton: buttons?.bind };
     let initialPayload: unknown;
     try {
       const rendered = await this.#renderer.render(
@@ -59,7 +63,7 @@ export class OutboundDeliveryRuntime {
         snapshot,
         request.conversation,
         request.incoming,
-        { jsxCache },
+        renderOptions,
       );
       initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
     } catch (error) {
@@ -89,22 +93,23 @@ export class OutboundDeliveryRuntime {
         async () => {
           terminalEntered = true;
           let payload: unknown;
+          const buttonPayloads = new Set<string>();
           try {
             // Native payload replacements remain possible; only authoring values need evaluation.
             const replacement = envelope.payload;
             const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
-              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, { jsxCache })
+              ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, renderOptions)
               : replacement;
             payload = await prepareOutboundPayload(
               replaced,
               request.conversation,
               snapshot,
-              (map) => this.context.rememberFallback(
-                request.conversation,
-                snapshot.generation,
-                map,
-              ),
+              (map) => {
+                for (const value of Object.values(map)) buttonPayloads.add(value);
+                this.context.rememberFallback(request.conversation, snapshot.generation, map);
+              },
             );
+            for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
             receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
               ? receiptFromEndpointError(error, false) : rejectedDeliveryReceipt('outbound_payload_rejected');
@@ -127,6 +132,7 @@ export class OutboundDeliveryRuntime {
           }
 
           if (receipt.status === 'sent') {
+            buttons?.activate(buttonPayloads);
             await this.context.record(request, receipt);
             this.context.publish({
               direction: 'outbound',

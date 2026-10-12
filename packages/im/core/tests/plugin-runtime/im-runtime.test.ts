@@ -65,7 +65,7 @@ import {
   type RuntimeMessageEvent,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
-import { jsx } from '../../src/jsx.js';
+import { Fragment, Html, jsx } from '../../src/jsx.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -123,6 +123,72 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it.each(['native', 'text'] as const)('executes JSX onClick through %s button ingress and replies as its author', async (interactive) => {
+    const root = rootPluginId();
+    const child = childPluginId(root, 'button-author');
+    const sent: unknown[] = [];
+    const owners: PluginId[] = [];
+    const clicked = vi.fn((message: Message) => jsx(Fragment, { children: [
+      'hello ', jsx('mention', { target: message.sender!.id }), jsx('share', { title: 'music', url: 'https://example.com/song' }),
+    ] }));
+    const quiet = vi.fn(() => null);
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      adapterSegments: { interactive }, commandOwner: child,
+      commandResult: () => jsx(Fragment, { children: [
+        jsx('button', { label: '回复', onClick: clicked }), jsx('button', { label: '静默', onClick: quiet }),
+      ] }),
+      inboundMiddleware: (_input, next) => next(),
+      outboundMiddleware: (input, next) => { owners.push(input.requester); return next(); },
+    });
+    try {
+      await receive(fixture.im, fixtureInput(fixture, '/gh issue list open'));
+      const input = fixtureInput(fixture, '');
+      const keyboard = (sent[0] as { payload: Array<{ data: { rows?: Array<Array<{ payload: string }>>; text?: string } }> }).payload[0];
+      expect(JSON.stringify(keyboard)).not.toContain('onClick');
+      if (interactive === 'text') expect(keyboard.data.text).toContain('2. 静默');
+      const click = (index: number) => receive(fixture.im, { ...input,
+        content: interactive === 'text' ? String(index + 1) : '',
+        sender: { id: 'clicker' },
+        ...(interactive === 'native' ? { segments: [{ type: 'action', data: { id: 'a', payload: keyboard.data.rows![0][index].payload } }] } : {}),
+      });
+      expect(await click(0)).toMatchObject({ matched: true, command: 'interactive' });
+      expect(clicked).toHaveBeenCalledTimes(1);
+      expect(owners).toEqual([child, child]);
+      expect((sent[1] as { payload: unknown }).payload).toEqual([
+        { type: 'text', data: { text: 'hello ' } }, { type: 'mention', data: { target: 'clicker' } },
+        { type: 'share', data: { title: 'music', url: 'https://example.com/song' } },
+      ]);
+      await click(1);
+      expect(quiet).toHaveBeenCalledTimes(1);
+      expect(sent).toHaveLength(2);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('blocks cross-conversation, disabled and retired-generation JSX callbacks', async () => {
+    const sent: unknown[] = [];
+    const clicked = vi.fn(() => 'clicked');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      adapterSegments: { interactive: 'native' },
+      commandResult: () => jsx(Fragment, { children: [
+        jsx('button', { label: 'active', onClick: clicked }), jsx('button', { label: 'disabled', disabled: true, onClick: clicked }),
+      ] }),
+      inboundMiddleware: (_input, next) => next(), outboundMiddleware: (_input, next) => next(),
+    });
+    try {
+      const input = fixtureInput(fixture, '/gh issue list open');
+      await receive(fixture.im, input);
+      const rows = (sent[0] as { payload: Array<{ data: { rows: Array<Array<{ payload: string }>> } }> }).payload[0].data.rows;
+      const action = (payload: string) => ({ ...input, content: '', segments: [{ type: 'action', data: { id: 'a', payload } }] });
+      const wrong = action(rows[0][0].payload);
+      await receive(fixture.im, { ...wrong, conversation: { ...wrong.conversation, id: 'another-room' } });
+      await receive(fixture.im, action(rows[0][1].payload));
+      expect(clicked).not.toHaveBeenCalled();
+      fixture.store.commit(0, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
+      await receive(fixture.im, action(rows[0][0].payload));
+      expect(clicked).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
   it.each(['command', 'command-shortcut', 'middleware'] as const)('binds every explicit %s send to its component author', async (entry) => {
     const root = rootPluginId();
     const child = childPluginId(root, 'explicit-author');
@@ -205,7 +271,7 @@ describe('IM Runtime', () => {
 
   it.each(['command', 'middleware', 'component'] as const)('sends %s JSX through the real runtime exactly once', async (entry) => {
     const sent: unknown[] = [];
-    const rendered = vi.fn(() => jsx('b', { children: 'ready' }));
+    const rendered = vi.fn(() => jsx(Html, { children: jsx('b', { children: 'ready' }) }));
     const fixture = await createFixture([], sent, undefined, undefined, undefined, {
       adapterSegments: { html: 'direct' },
       commandResult: entry === 'command' ? () => rendered() : undefined,

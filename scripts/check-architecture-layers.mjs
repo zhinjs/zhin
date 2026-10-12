@@ -40,7 +40,7 @@ const layers = {
   'packages/host/http-contract': { level: 0, allowedImports: [] },
   'basic/cli': { level: 0, allowedImports: ['basic', 'packages/im', 'packages/host', 'packages/console'] },
   'basic': { level: 0, allowedImports: ['basic'] },
-  'packages/im/jsx': { level: 0, allowedImports: [] },
+  'packages/im/jsx': { level: 0, allowedImports: ['packages/im/im-contract'] },
   'packages/toolkit/tailwind': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/toolkit/components': { level: 0, allowedImports: ['packages/im/jsx'] },
   'packages/im/im-contract': { level: 0, allowedImports: [] },

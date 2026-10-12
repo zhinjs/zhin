@@ -1,7 +1,7 @@
 import { componentHostToken, type ComponentHost, type TemplateContext, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
-import type { ConversationRef } from '@zhin.js/im-contract';
-import { isJsxElement, renderToHtml, type JSXElement } from '@zhin.js/jsx';
-import { segment } from '../../utils.js';
+import type { ConversationRef, Segment } from '@zhin.js/im-contract';
+import { isJsxElement, type JSXElement, type JSXRenderable } from '@zhin.js/jsx';
+import { renderToSegments, type MessageRenderOptions } from '../../jsx/message-renderer.js';
 import { flattenOutboundArray, MAX_OUTBOUND_ARRAY_DEPTH } from '../../built/outbound-content-arrays.js';
 import {
   ComponentIndex,
@@ -20,7 +20,8 @@ const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
 
 export interface OutboundRenderOptions {
-  readonly jsxCache?: WeakMap<JSXElement, Promise<string>>;
+  readonly jsxCache?: WeakMap<JSXElement, Promise<readonly Segment[]>>;
+  readonly bindButton?: MessageRenderOptions['bindButton'];
   readonly signal?: AbortSignal;
 }
 
@@ -37,7 +38,7 @@ export class OutboundRenderer {
     const host = resolveComponentHost(snapshot);
     const ctx = conversation ? buildTemplateContext(conversation, incoming) : undefined;
     const rendered = await this.#render(content, requester, snapshot, host, ctx, 0,
-      options.jsxCache ?? new WeakMap(), options.signal, new Set());
+      options.jsxCache ?? new WeakMap(), options.signal, new Set(), options.bindButton);
     options.signal?.throwIfAborted();
     return rendered;
   }
@@ -49,9 +50,11 @@ export class OutboundRenderer {
     host: ComponentHost | undefined,
     ctx: TemplateContext | undefined,
     depth: number,
-    jsxCache: WeakMap<JSXElement, Promise<string>>,
+    jsxCache: WeakMap<JSXElement, Promise<readonly Segment[]>>,
     signal: AbortSignal | undefined,
     arrayAncestors: ReadonlySet<readonly SendContent[]>,
+    bindButton: MessageRenderOptions['bindButton'],
+    jsxAncestors: ReadonlySet<JSXElement> = new Set(),
   ): Promise<unknown> {
     signal?.throwIfAborted();
     if (depth > maxComponentDepth) throw new Error('Component render depth exceeded 32');
@@ -61,19 +64,35 @@ export class OutboundRenderer {
       if (arrayAncestors.size >= MAX_OUTBOUND_ARRAY_DEPTH) throw new RangeError('SendContent array depth exceeded 512');
       // Each parallel branch gets its own ancestry; repeated sibling arrays are valid.
       const ancestors = new Set(arrayAncestors).add(content);
-      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth, jsxCache, signal, ancestors)));
+      const items = await Promise.all(content.map((item) => this.#render(item, requester, snapshot, host, ctx, depth, jsxCache, signal, ancestors, bindButton, jsxAncestors)));
       signal?.throwIfAborted();
       return flattenOutboundArray(items);
     }
     if (isJsxElement(content)) {
-      let html = jsxCache.get(content);
-      if (!html) {
-        html = renderToHtml(content);
-        jsxCache.set(content, html);
+      if (jsxAncestors.has(content)) throw new TypeError('Circular JSX component tree');
+      let segments = jsxCache.get(content);
+      if (!segments) {
+        const ancestors = new Set(jsxAncestors).add(content);
+        segments = renderToSegments(content, { signal, bindButton,
+          renderComponent: async (name, props) => {
+            const components = snapshot.projections.get(componentFeatureId);
+            if (!isComponentIndex(components)) {
+              throw new TypeError(`Unknown message tag ${name}; register a component or wrap HTML in <html>`);
+            }
+            const rendered = await components.render(requester, name, props, { snapshot, ...(signal ? { signal } : {}) });
+            // Keep returned JSX in this traversal so its cycle/depth guards also
+            // cover named components; re-entering the root cache could deadlock.
+            return isComponentCall(rendered)
+              ? await this.#render(rendered, requester, snapshot, host, ctx, depth + 1,
+                jsxCache, signal, arrayAncestors, bindButton, ancestors) as JSXRenderable
+              : rendered as JSXRenderable;
+          },
+        });
+        jsxCache.set(content, segments);
       }
-      const rendered = await html;
+      const rendered = await segments;
       signal?.throwIfAborted();
-      return rendered ? segment.html({ html: rendered }) : [];
+      return rendered;
     }
     if (isRawContent(content)) return content.payload;
     if (isSegmentContent(content)) {
@@ -92,7 +111,8 @@ export class OutboundRenderer {
         content.props,
         { snapshot, ...(signal ? { signal } : {}) },
       );
-      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal, arrayAncestors);
+      if (rendered == null) return [];
+      return this.#render(rendered, requester, snapshot, host, ctx, depth + 1, jsxCache, signal, arrayAncestors, bindButton, jsxAncestors);
     }
     throw new TypeError('Unsupported SendContent');
   }

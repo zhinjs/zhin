@@ -80,7 +80,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component → JSX 渲染<br/>raw 透传 / 数组展开]
+    A["$reply(content) / $replyFrom / gateway.send"] --> R[OutboundRenderer<br/>component → JSX 排版为 Segment<br/>raw 透传 / 数组展开]
     R --> N[normalizeOutboundPayload<br/>html 段 → 图片/文本<br/>Adapter 声明 direct 保留 HTML]
     N --> V["createOutboundEnvelope<br/>conversation·requester·generation"]
     V --> MW["中间件 outbound<br/>可 envelope.replace(payload)"]
@@ -88,7 +88,7 @@ flowchart LR
     S --> E["endpoint.send({conversation, payload})"]
 ```
 
-- **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
+- **SendContent 形态**（`packages/im/core/src/plugin-runtime/im/contracts.ts`）：字符串；canonical `Segment`（一等公民，见下文「多模态」）；消息 JSX（默认映射 Segment，仅 `<html>` 子树转 HTML）；`component(name, props)` 组件调用（经 `ComponentIndex` 递归渲染，深度上限 32）；`raw(payload)` 原样透传；以及它们的数组嵌套。
 - **Envelope** 携带 `conversation`（结构化会话寻址 `ConversationRef`，`@zhin.js/im-contract`）、`requester`（发起方插件，用于组件权限与审计）、`generation`，并提供 `replace(payload)` 给出站中间件改写内容。
 - **出站中间件**与入站共用一套定义，`target: 'outbound'` 即拦截出站。
 - **运行时所有权**集中在 `OutboundDeliveryRuntime`：它独占渲染、媒体与交互策略投影、出站中间件、Endpoint 投递、会话事实记账和消息观察事件发布。`ImRuntime` 只负责取得正确的 generation 租约并委托投递。

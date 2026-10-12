@@ -24,8 +24,7 @@ void node;
 
 // @ts-expect-error Props of function components remain type checked.
 const invalidProps = <Text text={42} />;
-// @ts-expect-error Promise-valued components are supported, plain segments are not JSX nodes.
-const invalidSegment: JSXNode = { type: 'image', data: {} };
+const segmentNode: JSXNode = { type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png' } } };
 // @ts-expect-error JSX expressions have the lazy brand, not plain string identity.
 const invalidElement: JSX.Element = '<div />';
-void [invalidProps, invalidSegment, invalidElement];
+void [invalidProps, segmentNode, invalidElement];

@@ -4,7 +4,9 @@ sidebar: false
 
 # JSX、组件与 HTML 出站重整计划
 
-状态：P0–P5 已实现并完成本地验收，等待 PR / CI。2026-10-09 基于 `codex/stability-console-acceptance` / `b8c0f46c7` 的审计；实现分支 `feat/jsx-html-components` 已更新到最新 main。三个 Agent 分别审计公共契约、返回值链路和平台策略；中间件语义、样式包名和旧入口直接移除均已由用户确认。
+当前契约修订（2026-10-12）：默认 JSX 排版消息并映射 Segment，小写内置标签无需导入且有属性类型；只有 `<html>` / `<Html>` 子树转 HTML。原生 `button.onClick` 的返回值触发回复，回调受会话与 snapshot 约束。本文下方保留此前实施记录，其中“全部 JSX 转 HTML”的设计已被本次用户确认的契约取代；创作请以 [中间件与组件](../authoring/middleware-components.md) 为准。
+
+历史状态：P0–P5 已实现并完成本地验收，等待 PR / CI。2026-10-09 基于 `codex/stability-console-acceptance` / `b8c0f46c7` 的审计；实现分支 `feat/jsx-html-components` 已更新到最新 main。三个 Agent 分别审计公共契约、返回值链路和平台策略；中间件语义、样式包名和旧入口直接移除均已由用户确认。
 
 ## 目标与已确认行为
 

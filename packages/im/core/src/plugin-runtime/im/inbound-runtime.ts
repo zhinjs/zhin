@@ -206,7 +206,7 @@ export class InboundRuntime {
             await this.#runHandlers(lease.value, 'message.receive', [
               withEndpointEventPayload(source, message),
             ]);
-            result = await this.#dispatchInteractive(message, requester, admission)
+            result = await this.#dispatchInteractive(message, requester, admission, lease.value)
               ?? await this.#dispatcher.dispatch(message, lease.value, interactionFactory);
             if (!result.matched && ingressRoute) {
               logger.debug(formatCompact({
@@ -375,8 +375,9 @@ export class InboundRuntime {
     message: Message,
     requester: PluginId,
     admission?: GenerationAdmissionGate,
+    snapshot?: RuntimeSnapshot,
   ): Promise<MessageDispatchResult | undefined> {
-    const handled = await this.context.interactions.dispatch(message, admission);
+    const handled = await this.context.interactions.dispatch(message, admission, snapshot);
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;

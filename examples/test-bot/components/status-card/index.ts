@@ -39,6 +39,6 @@ export default defineComponent<StatusCardProps>({
     const body = jsx(Card, {
       children: [jsx(CardHeader, { title, subtitle: "test-bot" }), ...rows],
     });
-    return jsx(CardCanvas, { children: body });
+    return jsx('html', { children: jsx(CardCanvas, { children: body }) });
   },
 });

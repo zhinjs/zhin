@@ -20,7 +20,7 @@ import {
 } from '@zhin.js/adapter';
 import { MiddlewareIndex, defineMiddleware, middlewareFeatureId } from '@zhin.js/middleware';
 import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import { Fragment, jsx } from '../../src/jsx.js';
+import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
 import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
@@ -131,7 +131,7 @@ function rasterRenderer() {
 
 describe('JSX outbound delivery through a real Endpoint', () => {
   it.each(['root', 'nested-mixed'] as const)('evaluates a reused %s replacement JSX root once and retains segment order', async (mode) => {
-    const render = vi.fn(async () => jsx('b', { children: 'Ready' }));
+    const render = vi.fn(async () => jsx(Html, { children: jsx('b', { children: 'Ready' }) }));
     const node = jsx(render, {});
     const html = { type: 'html', data: { html: '<b>Ready</b>' } };
     const mention = segment.mention('alice');
@@ -163,7 +163,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
   it('normalizes media and applies media fallback alongside direct HTML', async () => {
     const f = await fixture({ segments: { html: 'direct', outboundMedia: ['url'] } });
     expect((await f.send([
-      jsx('b', { children: 'Ready' }),
+      jsx(Html, { children: jsx('b', { children: 'Ready' }) }),
       segment.image({ kind: 'base64', value: 'aGVsbG8=' }, 'image unavailable'),
       segment.image({ kind: 'url', value: 'https://cdn.example/image.png' }),
     ])).status).toBe('sent');
@@ -176,7 +176,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
 
   it('does not let direct HTML bypass the declared supported-segment contract', async () => {
     const f = await fixture({ segments: { html: 'direct', supported: ['html', 'text'] } });
-    const receipt = await f.send([jsx('b', { children: 'Ready' }), segment.mention('alice')]);
+    const receipt = await f.send([jsx(Html, { children: jsx('b', { children: 'Ready' }) }), segment.mention('alice')]);
     expect(receipt.status).toBe('unsupported');
     expect(receipt.failure?.code).toBe('unsupported_operation');
     expect(f.sent).toEqual([]);
@@ -186,7 +186,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
 
   it('does not let direct HTML bypass canonical validation for other segments', async () => {
     const f = await fixture({ segments: { html: 'direct' } });
-    const receipt = await f.send([jsx('b', { children: 'Ready' }), { type: 'text', data: {} }]);
+    const receipt = await f.send([jsx(Html, { children: jsx('b', { children: 'Ready' }) }), { type: 'text', data: {} }]);
     expect(receipt.status).toBe('rejected');
     expect(f.sent).toEqual([]);
   });
@@ -194,7 +194,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
   it.each(['direct', 'image', 'text'] as const)('uses declared HTML %s policy on a supplier-neutral Endpoint', async (html) => {
     const renderer = rasterRenderer();
     const f = await fixture({ segments: { html }, renderer });
-    expect((await f.send(jsx('b', { children: 'Ready' }))).status).toBe('sent');
+    expect((await f.send(jsx(Html, { children: jsx('b', { children: 'Ready' }) }))).status).toBe('sent');
     expect(renderer.render).toHaveBeenCalledTimes(html === 'image' ? 1 : 0);
     expect(f.sent[0]?.payload).toEqual(html === 'direct'
       ? [{ type: 'html', data: { html: '<b>Ready</b>' } }]
@@ -214,7 +214,7 @@ describe('JSX outbound delivery through a real Endpoint', () => {
   it('does not rasterize for an Endpoint that only accepts URL media', async () => {
     const renderer = rasterRenderer();
     const f = await fixture({ segments: { html: 'image', outboundMedia: ['url'] }, renderer });
-    expect((await f.send(jsx('b', { children: 'Ready' }))).status).toBe('sent');
+    expect((await f.send(jsx(Html, { children: jsx('b', { children: 'Ready' }) }))).status).toBe('sent');
     expect(renderer.render).not.toHaveBeenCalled();
     expect(f.sent[0]?.payload).toEqual([{ type: 'text', data: { text: 'Ready' } }]);
   });

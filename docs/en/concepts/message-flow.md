@@ -146,4 +146,4 @@ When an adapter plugin instance configuration declares `endpoints: [{name, ...}]
 
 Therefore, "two QQ accounts each receiving their own messages and sending their own replies" requires no special code -- just configure two endpoint entries.
 
-Command results are pending until the inbound chain unwinds. Middleware may forward or replace them, then ImRuntime replies once with the final content owner. Matched commands returning void remain handled. Explicit replies bind to the command or middleware owner and are independent of automatic replies. JSX and outbound replacements use the same HTML segment rendering and declared adapter policy.
+Command results are pending until the inbound chain unwinds. Middleware may forward or replace them, then ImRuntime replies once with the final content owner. Matched commands returning void remain handled. Explicit replies bind to the command or middleware owner and are independent of automatic replies. JSX and outbound replacements use the same Segment layout. Only explicit `<html>` / `<Html>` subtrees use HTML serialization and the declared adapter HTML policy.

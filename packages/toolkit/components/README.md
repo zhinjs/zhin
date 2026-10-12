@@ -6,7 +6,7 @@
 pnpm add @zhin.js/components
 ```
 
-在 Zhin 项目中配置 `jsx: "react-jsx"`、`jsxImportSource: "zhin.js"`，即可在命令、中间件或注册组件中直接返回 JSX。独立使用时安装 `@zhin.js/jsx` 和 `@zhin.js/components`，把 `jsxImportSource` 设为 `@zhin.js/jsx`，通过它的 `renderToHtml` 输出 HTML。
+在 Zhin 项目中配置 `jsx: "react-jsx"`、`jsxImportSource: "zhin.js"`，即可在命令、中间件或注册组件中返回 JSX；本包的 HTML 展示组件须放在 `<html>` / `<Html>` 边界内，默认 JSX 则排版原生消息段。独立使用时安装 `@zhin.js/jsx` 和 `@zhin.js/components`，把 `jsxImportSource` 设为 `@zhin.js/jsx`，通过它的 `renderToHtml` 输出 HTML。
 
 服务端 TSX 支持只负责 JSX 转译，不包含样式构建。**不支持直接 `import './card.css'`、CSS Modules 或 CSS 的 `?raw` 导入**，也不提供 Sass/SCSS、Less、Stylus、PostCSS 等预处理或生成流程。原生 JSX 标签使用内联 `style`（CSS 对象或声明字符串）；样式组件使用 `ThemeProvider` 和 `custom.style`。浏览器 Console 页面走独立构建链路，不属于此服务端 TSX 承诺。
 
@@ -38,7 +38,7 @@ export function StatusCard() {
 }
 ```
 
-组件返回惰性 JSX 树，文本统一转义；普通字符串即使包含 HTML 标签也会显示为文本。需要 HTML 字符串时调用 `await renderToHtml(node)`。Zhin 出站通过 `$reply` 或 Adapter 的统一链路，由平台能力决定最终发送 HTML、图片还是文本。图表仅用于展示，不提供平台按钮或点击事件。
+组件返回惰性 JSX 树，文本统一转义；普通字符串即使包含 HTML 标签也会显示为文本。需要 HTML 字符串时调用 `await renderToHtml(node)`。Zhin 出站先用 `<html><StatusCard /></html>` 标明 HTML 内容，再通过 `$reply` 或 Adapter 的统一链路，由平台能力决定最终发送 HTML、图片还是文本。原生 `<card>` 保留平台卡片载荷；原生 `<button onClick={...}>` 提供消息回调，本包同名的 `Card` / `Button` 是 HTML 展示组件。图表仅用于展示，不提供平台按钮或点击事件。
 
 ## 统一主题与局部调整
 
