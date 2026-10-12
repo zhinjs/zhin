@@ -43,6 +43,19 @@ test.describe('documentation site journeys', () => {
       event.event === 'search' && event.searchTerm === 'Docker' && Number(event.resultCount) > 0
     ))).toBe(true);
 
+    // Body-only matches have no title highlights; a case edit can leave the
+    // entire result DOM unchanged, but it is still a separate search event.
+    await search.fill('timeoutMs');
+    await expect.poll(() => insights.some((event) => event.searchTerm === 'timeoutMs')).toBe(true);
+    const previousResults = await page.locator('.VPLocalSearchBox .result')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    expect(previousResults.length).toBeGreaterThan(0);
+    await search.fill('timeoutms');
+    await expect.poll(() => insights.filter((event) => event.searchTerm === 'timeoutms'))
+      .toEqual([expect.objectContaining({ event: 'search', resultCount: previousResults.length })]);
+    expect(await page.locator('.VPLocalSearchBox .result')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual(previousResults);
+
     await page.goto('/definitely-missing-zhin-document');
     await expect.poll(() => insights.some((event) => event.event === 'not_found')).toBe(true);
     await expect.poll(() => insights.some((event) => event.event === 'page_exit')).toBe(true);

@@ -154,6 +154,7 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
   let searchTimer: number | undefined;
   let searchObserver: MutationObserver | undefined;
   let lastSearchKey = '';
+  let completedSearchQuery: string | undefined;
 
   const stopSearchCollection = () => {
     window.clearTimeout(searchTimer);
@@ -198,8 +199,11 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     // a completed search; wait for the rendered result instead of guessing.
     if (resultCount === 0 && !noResults) return;
     // Positive results can remain from the preceding query until search runs.
-    if (resultCount > 0 && !resultsChanged) return;
+    // Case-only edits reuse the completed result because local search folds case.
+    const sameSearch = query.toLowerCase() === completedSearchQuery?.toLowerCase();
+    if (resultCount > 0 && !resultsChanged && !sameSearch) return;
     stopSearchCollection();
+    completedSearchQuery = query;
     const key = `${query}\u0000${resultCount}\u0000${noResults}`;
     if (key === lastSearchKey) return;
     lastSearchKey = key;
@@ -252,6 +256,7 @@ export function installDocsInsights(router: Router, options: { endpoint: string;
     currentPath = sanitizeDocsPath(to);
     pageStartedAt = performance.now();
     lastSearchKey = '';
+    completedSearchQuery = undefined;
     emitEntry();
   };
   router.onAfterRouteChange = routeChangeWrapper;
