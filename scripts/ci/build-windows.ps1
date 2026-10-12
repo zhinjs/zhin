@@ -36,11 +36,27 @@ try {
   $exitCode = $build.ExitCode
   if ($null -eq $exitCode) { throw 'Windows build exited without a readable exit code.' }
 } finally {
+  $peaks = [ordered]@{}
+  foreach ($metric in @('processes', 'node', 'cmd', 'conhost', 'handles', 'workingSetBytes')) {
+    $peaks[$metric] = ($samples | Measure-Object -Property $metric -Maximum).Maximum
+  }
+  # Write the small summary from this live PowerShell process. A poisoned runner
+  # may be unable to start the Node action which uploads the full sample file.
+  $summary = [pscustomobject]@{
+    image = $env:ImageOS
+    imageVersion = $env:ImageVersion
+    nodeVersion = $env:CI_NODE_VERSION
+    exitCode = $build.ExitCode
+    sampleCount = $samples.Count
+    sampledPeaks = $peaks
+  }
+  Write-Host ('[windows-build] ' + ($summary | ConvertTo-Json -Depth 3 -Compress))
   [pscustomobject]@{
     image = $env:ImageOS
     imageVersion = $env:ImageVersion
     nodeVersion = $env:CI_NODE_VERSION
     exitCode = $build.ExitCode
+    sampledPeaks = $peaks
     samples = $samples.ToArray()
   } | ConvertTo-Json -Depth 4 | Set-Content (Join-Path $diagnostics 'windows-build-resources.json')
   $build.Dispose()

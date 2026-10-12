@@ -38,6 +38,7 @@ CI 的 Windows 构建使用 `scripts/ci/build-windows.ps1`：单个 pnpm 进程�
 重复启动 pnpm 与 cmd 的开销。Linux 和日常本地构建继续使用 Turbo。Windows 作业保留
 原始失败退出码，并上传 `windows-build-resources-*` 诊断附件，记录 runner 镜像、Node
 版本以及进程、句柄和内存采样；不记录环境变量、命令行或凭据。
+采样峰值同时写入构建日志，即使 runner 无法启动附件上传进程也能查看。
 
 排查 CI 时先看失败步骤及原始日志：类型错误、断言失败、文档漂移必须修复源码或测试；
 `0xC0000142`（`STATUS_DLL_INIT_FAILED`）发生在 Windows 子进程初始化阶段，应结合

@@ -73,6 +73,9 @@ describe('Windows CI build orchestration', () => {
       const diagnostics = JSON.parse(readFileSync(join(root, '.tmp/ci/windows-build-resources.json'), 'utf8'));
       expect(diagnostics.exitCode).toBe(7);
       expect(diagnostics.samples.length).toBeGreaterThan(0);
+      const summary = result.stdout.split('\n').find(line => line.startsWith('[windows-build] '));
+      expect(summary).toBeDefined();
+      expect(JSON.parse(summary!.slice('[windows-build] '.length))).toMatchObject({ exitCode: 7 });
     }
   }, 30_000);
 
