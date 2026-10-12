@@ -135,7 +135,7 @@ function assertPublicDefault(schema: Schema, value: unknown): void {
 function assertJsonValue(value: unknown, parents = new Set<object>()): void {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return;
   if (typeof value === 'number' && Number.isFinite(value)) return;
-  if (typeof value === 'object' && value !== null) {
+  if (typeof value === 'object') {
     if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) {
       throw new TypeError('Configuration defaults must contain only JSON values');
     }
