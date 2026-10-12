@@ -33,7 +33,7 @@ plugins:
 
 订阅管理命令需要真实的 IM 会话来源，不会为无会话调用创建全局订阅。当前支持不含父容器或线程信息的私聊、群聊与频道；当 `conversation.parent` 或 `threadId` 存在时，会明确提示暂不支持该地址，不会丢弃字段后订阅频道本体。
 
-如果旧订阅记录保存了错误的端点或用户身份，系统无法可靠反推出原始会话，需要取消旧记录后重新订阅；缺失或非法地址不会通过猜测进行投递。
+如果旧订阅记录保存了错误的端点或用户身份，系统无法可靠反推出原始会话。`rss-remove` 只删除当前 Bot、当前会话的订阅，不能清理归属不明的旧记录；需由管理员在数据库中核对插件实例和完整订阅字段，备份后按记录精确删除，再在真实会话重新订阅。不要仅凭 URL 或会话 ID 批量删除，以免影响其他 Bot。缺失或非法地址不会通过猜测进行投递；字段齐全但值错误的旧记录不会被自动识别或迁移。
 
 ## 工作原理
 
@@ -75,7 +75,7 @@ plugins:
 | feed_title | text | Feed 标题（自动获取） |
 | adapter_name | text | 适配器名称 |
 | endpoint_id | text | Endpoint ID |
-| channel_type | text | 会话类型 (group/private) |
+| channel_type | text | 会话类型 (group/private/channel) |
 | channel_id | text | 会话 ID |
 
 **rss_seen_items** — 已推送条目（去重用）

@@ -117,7 +117,7 @@ function convertObjectSchema(
   });
 }
 
-function isConsoleSchemaJson(schema: Record<string, unknown>): boolean {
+export function isConsoleSchemaJson(schema: Record<string, unknown>): boolean {
   if (schema.object != null || schema.list != null || schema.inner != null) return true;
   if (typeof schema.type === 'string'
     && ['dict', 'union', 'tuple', 'intersect', 'const', 'any', 'date', 'regexp'].includes(schema.type)) {

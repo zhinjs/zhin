@@ -1,6 +1,6 @@
 # 编写第一个插件
 
-想先看「一个文件就够」？仓库 [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) 用 `setup({ addCommand })` 注册命令，没有 `commands/` 目录——跑通再回来拆文件。
+想先看「一个文件就够」？仓库 [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人) 用 `setup({ addCommand })` 注册命令，没有 `commands/` 目录——跑通再回来拆文件。
 
 下面为已接通 Sandbox 的应用添加一个 `ping-pong` **约定目录**插件。新项目先运行 `pnpm create zhin-app my-bot -y`，进入 `my-bot`；仓库贡献者可使用 [minimal-bot](../examples/index.md#minimal-bot-stable-最小路径)。
 
@@ -112,6 +112,8 @@ export default defineCommand<PingPongConfig>({
 
 `schema.json`（JSON Schema 2020-12）声明配置契约与默认值：
 
+Console 表单只支持可转换的字段结构；`$ref`、`anyOf`、`oneOf`、`allOf`、`prefixItems` 暂不支持，会明确报错。运行时的 JSON Schema 配置校验与 Console 表单转换是不同能力。
+
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -180,6 +182,7 @@ plugins: {}
 cd plugins/ping-pong # 从宿主应用目录进入
 pnpm install
 pnpm exec zhin setup --adapters  # 选择 Sandbox 等适配器，添加 Endpoint
+pnpm install                   # 安装 setup 新增的适配器依赖
 pnpm dev        # zhin runtime start
 ```
 

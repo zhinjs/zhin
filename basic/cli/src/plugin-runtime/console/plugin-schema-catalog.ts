@@ -9,7 +9,7 @@ import {
   type ChildPluginReference,
   type ResolvedPackage,
 } from '@zhin.js/runtime';
-import { jsonSchemaToConsoleSchema } from './console-schema.js';
+import { isConsoleSchemaJson, jsonSchemaToConsoleSchema } from './console-schema.js';
 
 const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 
@@ -170,11 +170,6 @@ async function readOwnSchema(root: string, name: string): Promise<Record<string,
     && (!schema.properties || typeof schema.properties !== 'object' || Array.isArray(schema.properties))) {
     throw new Error(`schema.json for ${name} properties must be an object`);
   }
-  if (schema.properties === undefined
-    && (schema.anyOf !== undefined || schema.oneOf !== undefined
-      || schema.allOf !== undefined || schema.$ref !== undefined)) {
-    throw new Error(`schema.json for ${name} root schema must declare properties`);
-  }
   assertSchemaStructure(schema, `schema.json for ${name}`);
   return schema;
 }
@@ -185,6 +180,21 @@ function assertSchemaStructure(value: unknown, location: string): void {
     throw new Error(`${location} must contain a supported schema object`);
   }
   const schema = value as Record<string, unknown>;
+  // The form converter does not resolve references or compose JSON Schemas.
+  // Reject these even beside supported properties, instead of displaying a partial form.
+  for (const key of ['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems']) {
+    if (schema[key] !== undefined) {
+      throw new Error(`${location}.${key} is not supported by Console forms`);
+    }
+  }
+  if (schema.required !== undefined) {
+    const nativeFlag = typeof schema.required === 'boolean' && isConsoleSchemaJson(schema);
+    if (!nativeFlag && (!Array.isArray(schema.required)
+      || !schema.required.every((key) => typeof key === 'string')
+      || new Set(schema.required).size !== schema.required.length)) {
+      throw new Error(`${location}.required must be a unique string array or a native Schema boolean`);
+    }
+  }
   for (const key of ['properties', 'patternProperties', '$defs', 'definitions', 'object']) {
     const children = schema[key];
     if (children === undefined) continue;
@@ -204,7 +214,7 @@ function assertSchemaStructure(value: unknown, location: string): void {
       assertSchemaStructure(child, `${location}.${key}`);
     }
   }
-  for (const key of ['anyOf', 'oneOf', 'allOf', 'prefixItems', 'list']) {
+  for (const key of ['list']) {
     const children = schema[key];
     if (children === undefined) continue;
     if (!Array.isArray(children)) throw new Error(`${location}.${key} must be an array`);

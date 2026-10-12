@@ -1,6 +1,6 @@
 # Writing Your First Plugin
 
-Want to see "one file is enough" first? The repo's [single-file-bot](../examples/index.md#single-file-bot-one-botts-is-a-bot) uses `setup({ addCommand })` to register commands with no `commands/` directory -- get it running, then come back to split files.
+Want to see "one file is enough" first? The repo's [single-file-bot](../examples/index.md#single-file-bot-one-bot-ts-is-a-bot) uses `setup({ addCommand })` to register commands with no `commands/` directory -- get it running, then come back to split files.
 
 This tutorial adds a `ping-pong` **convention directory** plugin to an application already connected to Sandbox. For a new project, run `pnpm create zhin-app my-bot -y` and enter `my-bot`; repository contributors can use [minimal-bot](../examples/index.md#minimal-bot-stable-minimal-path).
 
@@ -112,6 +112,8 @@ The command's `config` and the `context.config.get()` in `setup` share the same 
 
 `schema.json` (JSON Schema 2020-12) declares the config contract and defaults:
 
+Console forms support convertible field structures; `$ref`, `anyOf`, `oneOf`, `allOf`, and `prefixItems` are currently unsupported and produce explicit errors. Runtime JSON Schema configuration validation and Console form conversion are separate capabilities.
+
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -180,6 +182,7 @@ plugins: {}
 cd plugins/ping-pong # from the host application directory
 pnpm install
 pnpm exec zhin setup --adapters  # Select an adapter such as Sandbox and add an Endpoint
+pnpm install                   # Install the adapter dependencies added by setup
 pnpm dev        # zhin runtime start
 ```
 

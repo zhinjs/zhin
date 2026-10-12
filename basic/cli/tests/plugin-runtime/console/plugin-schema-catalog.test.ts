@@ -217,6 +217,87 @@ describe('PluginSchemaCatalog', () => {
     await expect(catalog.read('outside')).rejects.toThrow('invalid or unavailable Plugin manifest');
   });
 
+  it('preserves native Schema required flags, lists and unions', async () => {
+    const root = await createProject();
+    const schema = {
+      type: 'object', required: true,
+      object: {
+        token: { type: 'string', required: true },
+        optional: { type: 'string', required: false },
+        targets: { type: 'list', required: true, inner: { type: 'string', required: true } },
+        mode: { type: 'union', list: [{ type: 'string' }, { type: 'number' }] },
+        pair: { type: 'tuple', list: [{ type: 'string' }, { type: 'number' }] },
+      },
+    };
+    await writeFile(join(root, 'schema.json'), JSON.stringify(schema));
+    await expect(new PluginSchemaCatalog(root).read('plugin')).resolves.toEqual(schema);
+  });
+
+  it.each(['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems'])(
+    'rejects unsupported %s even beside supported properties and at nested locations', async (keyword) => {
+      const root = await createProject();
+      const catalog = new PluginSchemaCatalog(root);
+      const unsupported = keyword === '$ref' ? '#/$defs/token' : [{ type: 'string' }];
+      const simple = { type: 'object', properties: { token: { type: 'string' } } };
+      for (const schema of [
+        { ...simple, [keyword]: unsupported },
+        { ...simple, properties: { token: { type: 'string', [keyword]: unsupported } } },
+        { ...simple, properties: { targets: { type: 'array', items: { [keyword]: unsupported } } } },
+        { type: 'object', object: { token: { type: 'string', [keyword]: unsupported } } },
+      ]) {
+        await writeFile(join(root, 'schema.json'), JSON.stringify(schema));
+        await expect(catalog.read('plugin')).rejects.toThrow(`${keyword} is not supported by Console forms`);
+        await expect(catalog.readAll(['plugin'])).rejects.toThrow(`${keyword} is not supported by Console forms`);
+      }
+    },
+  );
+
+  it('rejects JSON Schema tuple prefixItems instead of converting the array to an unconstrained list', async () => {
+    const root = await createProject();
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', properties: {
+        pair: { type: 'array', prefixItems: [{ type: 'string' }, { type: 'number' }] },
+      },
+    }));
+    await expect(new PluginSchemaCatalog(root).read('plugin')).rejects.toThrow(
+      'schema.json for plugin.properties.pair.prefixItems is not supported by Console forms',
+    );
+  });
+
+  it.each([true, false])('rejects JSON Schema required boolean %j while native flags remain supported', async (required) => {
+    const root = await createProject();
+    const catalog = new PluginSchemaCatalog(root);
+    for (const schema of [
+      { type: 'object', properties: { token: { type: 'string' } }, required },
+      { $schema: 'https://json-schema.org/draft/2020-12/schema', type: 'object', required },
+      { type: 'object', properties: {
+        nested: { type: 'object', properties: { token: { type: 'string' } }, required },
+      } },
+    ]) {
+      await writeFile(join(root, 'schema.json'), JSON.stringify(schema));
+      await expect(catalog.read('plugin')).rejects.toThrow('.required must be a unique string array');
+      await expect(catalog.readAll(['plugin'])).rejects.toThrow('.required must be a unique string array');
+    }
+  });
+
+  it.each(['token', null, 42, {}, [42], ['token', 'token']])(
+    'rejects malformed required metadata %j instead of making fields optional', async (required) => {
+      const root = await createProject();
+      const catalog = new PluginSchemaCatalog(root);
+      for (const schema of [
+        { type: 'object', properties: { token: { type: 'string' } }, required },
+        { type: 'object', properties: {
+          nested: { type: 'object', properties: { token: { type: 'string' } }, required },
+        } },
+        { type: 'object', object: { token: { type: 'string', required } } },
+      ]) {
+        await writeFile(join(root, 'schema.json'), JSON.stringify(schema));
+        await expect(catalog.read('plugin')).rejects.toThrow('.required must be a unique string array');
+        await expect(catalog.readAll(['plugin'])).rejects.toThrow('.required must be a unique string array');
+      }
+    },
+  );
+
   it.each([
     '{', 'null', '[]', 'true', '{"type":"string"}', '{"properties":[]}', '{"$ref":"#/$defs/config"}',
     '{"properties":{"requiredField":42},"required":["requiredField"]}',
