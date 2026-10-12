@@ -4,6 +4,8 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { PluginSchemaCatalog } from '../../../src/plugin-runtime/console/plugin-schema-catalog.js';
 import { Schema } from '../../../../../basic/schema/src/index.js';
+import { definePlugin } from '@zhin.js/plugin-runtime';
+import { RootRuntime } from '@zhin.js/runtime';
 
 const roots: string[] = [];
 
@@ -48,6 +50,62 @@ function expectField(field: string): unknown {
 }
 
 describe('PluginSchemaCatalog', () => {
+  it('keeps isolated Plugin forms on the committed Runtime schema after a failed reload', async () => {
+    const root = await realpath(await createProject());
+    await writePackage(root, 'isolated-schema-project', [{ package: './plugins/child', instanceKey: 'child' }]);
+    const child = join(root, 'plugins/child');
+    await mkdir(child, { recursive: true });
+    await writeFile(join(root, 'plugin.ts'), '');
+    await writeFile(join(child, 'plugin.ts'), 'throw new Error("must never execute in Host");');
+    await writeFile(join(child, 'package.json'), JSON.stringify({
+      name: 'isolated-schema-child',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', runtime: 'isolated' },
+    }));
+    const schemaFile = join(child, 'schema.json');
+    await writeFile(schemaFile, JSON.stringify({ type: 'object', properties: { count: { type: 'number', default: 1 } } }));
+    const loaded: string[] = [];
+    let rejectCandidate = false;
+    const runtime = new RootRuntime({
+      projectRoot: root,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      modules: {
+        async load<T>(source: string): Promise<T> {
+          loaded.push(source);
+          if (source !== join(root, 'plugin.ts')) throw new Error('Isolated code loaded in Host');
+          return { default: definePlugin({ name: 'isolated-schema-project' }) } as T;
+        },
+        async close() {},
+      },
+      isolation: {
+        async prepare() {
+          if (rejectCandidate) throw new Error('isolated candidate failed');
+          return { descriptor: { name: 'isolated-schema-child' }, dispose() {} };
+        },
+      },
+    });
+    const catalog = new PluginSchemaCatalog(root, () => runtime.configurationSchemas);
+    try {
+      const committed = await runtime.start();
+      expect(runtime.configurationSchemas.get(child)?.properties).toMatchObject({ count: { default: 1 } });
+      await expect(catalog.read('child')).resolves.toMatchObject({ object: { count: { default: 1 } } });
+      await writeFile(schemaFile, JSON.stringify({
+        type: 'object', properties: { count: { type: 'number', default: 2 }, candidate: { type: 'string' } },
+      }));
+      rejectCandidate = true;
+      await expect(runtime.reload()).rejects.toThrow('isolated candidate failed');
+      expect(runtime.snapshot).toBe(committed);
+      const form = await catalog.read('child');
+      expect(form).toMatchObject({ object: { count: { default: 1 } } });
+      expect(form).not.toHaveProperty('object.candidate');
+      rejectCandidate = false;
+      await runtime.reload();
+      await expect(catalog.read('child')).resolves.toMatchObject({ object: { count: { default: 2 }, candidate: { type: 'string' } } });
+      expect(loaded.every(source => source === join(root, 'plugin.ts'))).toBe(true);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
   it('uses committed declarations for an entire read and refreshes on the next read', async () => {
     const root = await realpath(await createProject());
     const qq = join(root, 'node_modules', '@zhin.js', 'adapter-icqq');

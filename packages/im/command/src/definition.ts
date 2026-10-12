@@ -490,12 +490,14 @@ export function createCommandContext(
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   const session = resolveCommandSession(input);
+  const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };
+  const optionValues: Record<string, CommandParameterValue> = { __proto__: null, ...options };
   const result = {
     ...context,
     ...session,
     args: Object.freeze([...args]),
-    params: Object.freeze({ ...params }),
-    options: Object.freeze({ ...options }),
+    params: Object.freeze(parameterValues),
+    options: Object.freeze(optionValues),
     segments: freezeSegments(segments),
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
     ...(interaction !== undefined ? { interaction } : {}),

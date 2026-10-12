@@ -1589,6 +1589,52 @@ describe('central command argument declarations', () => {
     await expect(index.dispatch('foo --quiet 7 2')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 7, count: 2 }, options: { quiet: true } } });
   });
 
+  it('parses inline quoted option values without leaking their tokens into positional text', async () => {
+    const index = indexFor(defineCommand({
+      params: { body: { type: 'text' } },
+      options: { note: { type: 'string', alias: 'n' } },
+      execute: ({ params, options }) => ({ params, options }),
+    }));
+    await expect(index.dispatch('remind --note="hello world" actual body')).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
+    });
+    await expect(index.dispatch("remind -n='hello world' actual body")).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
+    });
+    await expect(index.dispatch('remind --note="say \\\"hi\\\"" actual body')).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'say "hi"' } },
+    });
+  });
+
+  it('collects text catch-all values by message segment when options are declared', async () => {
+    const index = indexFor(defineCommand({
+      params: { slug: { type: 'text', rest: true } },
+      options: { quiet: { type: 'boolean' } },
+      execute: ({ params, options }) => ({ params, options }),
+    }), 'files/$slug', { name: 'slug', type: 'text', rest: true });
+    await expect(index.dispatch('files hello world --quiet')).resolves.toMatchObject({
+      status: 'executed', value: { params: { slug: ['hello world'] }, options: { quiet: true } },
+    });
+    await expect(index.dispatch([
+      { type: 'text', data: { text: 'files --quiet first item  ' } },
+      { type: 'text', data: { text: '\n second "quoted"\n  line' } },
+    ])).resolves.toMatchObject({
+      status: 'executed', value: { params: { slug: ['first item  ', '\n second "quoted"\n  line'] }, options: { quiet: true } },
+    });
+  });
+
+  it('treats Object.prototype names as ordinary declared fields, including omitted options', async () => {
+    const index = indexFor(defineCommand({
+      params: { constructor: { type: 'string' }, toString: { type: 'string' } },
+      options: { constructor: { type: 'string' }, toString: { type: 'string', default: 'default' }, valueOf: { type: 'string' } },
+      execute: ({ params, options }) => ({ params, options, omitted: options.valueOf }),
+    }));
+    await expect(index.dispatch('remind first second --constructor chosen')).resolves.toMatchObject({
+      status: 'executed', value: { params: { constructor: 'first', toString: 'second' }, options: { constructor: 'chosen', toString: 'default' }, omitted: undefined },
+    });
+    await expect(index.dispatch('remind first second --constructor one --constructor two')).resolves.toMatchObject({ status: 'invalid' });
+  });
+
   it('preserves structured arguments and quoted option-like values', async () => {
     const index = indexFor(defineCommand({ params: { who: { type: 'mention' }, caption: { type: 'string' } }, options: { count: { type: 'integer', default: 1 } }, execute: ({ params, options }) => ({ params, options }) }), 'upload');
     await expect(index.dispatch([{ type: 'text', data: { text: 'upload --count 2 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: ' "--option-like text"' } }])).resolves.toMatchObject({ status: 'executed', value: { params: { who: 'alice', caption: '--option-like text' }, options: { count: 2 } } });

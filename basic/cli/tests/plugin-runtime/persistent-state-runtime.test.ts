@@ -38,6 +38,8 @@ it('discovers reminder and preferences plugins with owner-bound state across HMR
     await touch(join(root, `commands/${name}/index.ts`));
     modules.set(join(root, 'plugin.ts'), { default: definePlugin({ name,
       setup({ resources }) {
+        expect(Reflect.get(resources, 'parent')).toBeUndefined();
+        expect(Reflect.ownKeys(resources)).not.toContain('parent');
         expect(resources.has(databaseRootHostToken)).toBe(false);
         expect(resources.has(outboundRootHostToken)).toBe(false);
         expect(() => resources.use(databaseRootHostToken)).toThrow('Missing resource');

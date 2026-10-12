@@ -76,31 +76,47 @@ function validateSchema(name: string, schema: CommandParamSchema): void {
   }
 }
 
-type Token = { readonly value: string; readonly quoted: boolean; readonly raw?: string; readonly before?: string } | Readonly<CommandSegment>;
-function isTextToken(value: Token | undefined): value is { readonly value: string; readonly quoted: boolean; readonly raw?: string; readonly before?: string } {
+interface TextToken {
+  readonly value: string;
+  readonly quoted: boolean;
+  readonly raw?: string;
+  readonly before?: string;
+  readonly first?: boolean;
+  readonly after?: string;
+  /** Original message segment, retained while options are removed. */
+  readonly segment?: number;
+}
+type Token = TextToken | Readonly<CommandSegment>;
+function isTextToken(value: Token | undefined): value is TextToken {
   return value !== undefined && 'value' in value;
 }
 function tokenize(segments: readonly Readonly<CommandSegment>[]): Token[] {
-  return segments.flatMap<Token>((segment) => {
+  return segments.flatMap<Token>((segment, segmentIndex) => {
     if (segment.type !== 'text' || typeof segment.data.text !== 'string') return [segment];
     const tokens: Token[] = [];
-    const pattern = /"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|(\S+)/gu;
+    const pattern = /(--?[a-zA-Z][a-zA-Z0-9_-]*=)(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')|"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|(\S+)/gu;
     let end = 0;
     for (const match of segment.data.text.matchAll(pattern)) {
-      tokens.push({ value: (match[1] ?? match[2] ?? match[3] ?? '').replace(/\\(["'\\])/gu, '$1'), quoted: match[3] === undefined, raw: match[0], before: segment.data.text.slice(end, match.index) });
+      const value = match[1] !== undefined ? match[1] + (match[2] ?? match[3] ?? '') : match[4] ?? match[5] ?? match[6] ?? '';
+      tokens.push({ value: value.replace(/\\(["'\\])/gu, '$1'), quoted: match[1] === undefined && match[6] === undefined, raw: match[0], before: segment.data.text.slice(end, match.index), first: tokens.length === 0, segment: segmentIndex });
       end = (match.index ?? 0) + match[0].length;
     }
+    const last = tokens.at(-1);
+    if (isTextToken(last)) tokens[tokens.length - 1] = { ...last, after: segment.data.text.slice(end) };
     return tokens;
   });
 }
 function segmentsFromTokens(tokens: readonly Token[]): readonly Readonly<CommandSegment>[] {
   const result: CommandSegment[] = [];
+  let lastTextSegment: number | undefined;
   for (const token of tokens) {
     if (isTextToken(token)) {
       const last = result.at(-1);
-      if (last?.type === 'text') result[result.length - 1] = { type: 'text', data: { text: `${last.data.text}${token.before || ' '}${token.raw ?? token.value}` } };
-      else result.push({ type: 'text', data: { text: token.raw ?? token.value } });
-    } else result.push(token);
+      const text = (token.raw ?? token.value) + (token.after ?? '');
+      if (last?.type === 'text' && lastTextSegment === token.segment) result[result.length - 1] = { type: 'text', data: { text: `${last.data.text}${token.before || ' '}${text}` } };
+      else result.push({ type: 'text', data: { text: (token.first ? token.before ?? '' : '') + text } });
+      lastTextSegment = token.segment;
+    } else { result.push(token); lastTextSegment = undefined; }
   }
   return Object.freeze(result);
 }
@@ -161,8 +177,8 @@ export function parseCommandArguments(
   initial: Readonly<Record<string, CommandParameterValue>>,
   session: CommandSession,
 ): ParsedCommandArguments {
-  const params: Record<string, CommandParameterValue> = { ...initial };
-  const options: Record<string, CommandParameterValue> = {};
+  const params: Record<string, CommandParameterValue> = { __proto__: null, ...initial };
+  const options: Record<string, CommandParameterValue> = { __proto__: null };
   const issues: CommandValidationIssue[] = [];
   const tokens = tokenize(remaining);
   const positional: Token[] = [];
@@ -181,7 +197,7 @@ export function parseCommandArguments(
     if (!name) { issues.push({ field: flag, message: `Unknown option ${flag}` }); continue; }
     const schema = schemas[name];
     if (!schema) continue;
-    if (name in options) { issues.push({ field: name, message: `Duplicate option --${name}` }); continue; }
+    if (Object.hasOwn(options, name)) { issues.push({ field: name, message: `Duplicate option --${name}` }); continue; }
     let value: CommandParameterValue | undefined;
     if (inline !== undefined) value = convert(schema, { value: inline, quoted: false });
     else if (schema.type === 'boolean') value = true;
@@ -193,18 +209,20 @@ export function parseCommandArguments(
     else options[name] = value;
   }
   for (const [name, schema] of Object.entries(schemas ?? {})) {
-    if (!(name in options) && schema.default !== undefined) options[name] = typeof schema.default === 'function' ? schema.default(session) : schema.default;
+    if (!Object.hasOwn(options, name) && schema.default !== undefined) options[name] = typeof schema.default === 'function' ? schema.default(session) : schema.default;
     if (options[name] !== undefined) { const issue = validateValue(`--${name}`, schema, options[name], session); if (issue) issues.push(issue); }
     else if (schema.optional === false) issues.push({ field: name, message: `Missing option --${name}` });
   }
   const declared = Object.entries(definition.params ?? {});
   for (const [name, declaredSchema] of declared) {
     const schema = definition.$parameter?.name === name ? { ...declaredSchema, optional: definition.$parameter.optional ?? declaredSchema.optional, rest: definition.$parameter.rest ?? declaredSchema.rest } : declaredSchema;
-    if (!(name in params)) {
+    if (!Object.hasOwn(params, name)) {
       let value: CommandParameterValue | undefined;
       if (schema.rest) {
         const raw = positional.splice(0);
-        const converted = raw.map((token) => convert(schema, token));
+        const converted = schema.type === 'text'
+          ? segmentsFromTokens(raw).map((segment) => segment.type === 'text' && typeof segment.data.text === 'string' ? segment.data.text : undefined)
+          : raw.map((token) => convert(schema, token));
         if (converted.some((item) => item === undefined)) issues.push({ field: name, message: `${name}: expected ${schema.type}` });
         else if (converted.length > 0 || schema.optional) value = converted as readonly (string | number | boolean | Readonly<Record<string, unknown>>)[];
       } else if (schema.type === 'text') {
@@ -231,7 +249,7 @@ export function parseCommandArguments(
     if (params[name] !== undefined) { const effective = definition.$parameter?.name === name && definition.$parameter.rest ? { ...schema, rest: true } : schema; const issue = validateValue(name, effective, params[name], session); if (issue) issues.push(issue); }
   }
   if (declared.length > 0 && !definition.$parameter && positional.length > 0) issues.push({ field: 'arguments', message: 'Unexpected arguments' });
-  return Object.freeze({ params: Object.freeze(params), options: Object.freeze(options), remaining: schemas === undefined && declared.every(([name]) => name in initial) ? remaining : segmentsFromTokens(positional), issues: Object.freeze(issues) });
+  return Object.freeze({ params: Object.freeze(params), options: Object.freeze(options), remaining: schemas === undefined && declared.every(([name]) => Object.hasOwn(initial, name)) ? remaining : segmentsFromTokens(positional), issues: Object.freeze(issues) });
 }
 
 export function commandUsage(name: string, definition: CommandDefinition): string {

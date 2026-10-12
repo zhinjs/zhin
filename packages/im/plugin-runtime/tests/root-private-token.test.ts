@@ -8,6 +8,37 @@ import {
 } from '../src/index.js';
 
 describe('Root-private resource tokens', () => {
+  it('does not expose the parent Scope as an escape hatch to Root process resources', () => {
+    const rootId = rootPluginId();
+    const root = new Scope(rootId);
+    const child = new Scope(childPluginId(rootId, 'feature'), root);
+    const grandchild = new Scope(childPluginId(child.owner, 'nested'), child);
+    const privateToken = createRootPrivateToken<object>('root.private.raw-host');
+    const inheritedToken = createToken<string>('root.public.inherited');
+    root.provide(privateToken, { rawHost: true });
+    root.provide(inheritedToken, 'root-value');
+
+    for (const scope of [child, grandchild]) {
+      expect(Reflect.get(scope, 'parent')).toBeUndefined();
+      expect(Reflect.ownKeys(scope)).not.toContain('parent');
+      expect(Object.values(scope)).not.toContain(root);
+      expect(Object.values(scope)).not.toContain(child);
+      expect(scope.has(privateToken)).toBe(false);
+      expect(() => scope.use(privateToken)).toThrow('Missing resource');
+      expect(scope.use(inheritedToken)).toBe('root-value');
+      // Public JS properties cannot redirect the private resolution chain.
+      Object.defineProperty(scope, 'parent', { value: new Scope(rootId) });
+      expect(scope.use(inheritedToken)).toBe('root-value');
+      expect(() => scope.use(privateToken)).toThrow('Missing resource');
+    }
+
+    root.seal();
+    child.seal();
+    grandchild.seal();
+    expect(grandchild.snapshot().get(inheritedToken.id)).toBe('root-value');
+    expect(grandchild.snapshot().has(privateToken.id)).toBe(false);
+  });
+
   it('remain usable by Root composition but never enter child scope or snapshots', () => {
     const rootId = rootPluginId();
     const root = new Scope(rootId);

@@ -94,6 +94,31 @@ describe('configuration declaration export', () => {
     expect(() => Schema.any().default(cycle).toJsonSchema()).toThrow('cannot be cyclic');
   });
 
+  it('rejects defaults inside union alternatives before Runtime strict compilation', () => {
+    expect(() => Schema.object({
+      connection: Schema.union([
+        Schema.object({ host: Schema.string().default('localhost') }),
+        Schema.string(),
+      ]),
+    }).toJsonSchema()).toThrow('Defaults inside union alternatives cannot be applied by Runtime');
+    expect(() => Schema.union([
+      Schema.object({ nested: Schema.list(Schema.object({ enabled: Schema.boolean().default(true) })) }),
+      Schema.string(),
+    ]).toJsonSchema()).toThrow('Defaults inside union alternatives');
+    expect(() => Schema.union([
+      Schema.object({ kind: Schema.const('named') }),
+      Schema.string(),
+    ]).toJsonSchema()).toThrow('Defaults inside union alternatives');
+    const validate = configValidator(Schema.object({
+      mode: Schema.union([Schema.const('auto'), Schema.const('manual')]).default('auto'),
+      connection: Schema.union([Schema.object({ host: Schema.string() }), Schema.string()])
+        .default({ host: 'localhost' }),
+    }));
+    const input = {};
+    expect(validate(input)).toBe(true);
+    expect(input).toEqual({ mode: 'auto', connection: { host: 'localhost' } });
+  });
+
   it('closes the combined object intersection instead of rejecting each other’s fields', () => {
     const schema = Schema.object({
       connection: Schema.intersect([

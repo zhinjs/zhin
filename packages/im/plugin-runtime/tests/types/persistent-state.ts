@@ -1,8 +1,12 @@
-import { createDeliveryTarget, type PluginDatabaseHost, type OutboundHost } from '../../src/index.js';
+import { createDeliveryTarget, type PluginDatabaseHost, type OutboundHost, type Scope } from '../../src/index.js';
 
 declare const message: Parameters<typeof createDeliveryTarget>[0];
 declare const database: PluginDatabaseHost;
 declare const outbound: OutboundHost;
+declare const resources: Scope;
+
+// @ts-expect-error Plugin resources cannot escape to their parent Scope's process ports.
+void resources.parent;
 
 const target = createDeliveryTarget(message);
 void database.state.forConversation(target).set('target', target);

@@ -77,8 +77,8 @@ accidental token prefixes, and ambiguous fully dynamic routes remain unmatched. 
 Host calls need an actual PermissionSubject; missing Message/interaction stays explicit.
 CommandIndex.execute without a subject cannot bypass permissions. Approval remains independent.
 
-Real consumers: [QR generation](../../../plugins/utils/qrcode/README.md) and
-[code execution](../../../plugins/utils/code-runner/README.md).
+Real consumers: [QR generation](https://github.com/zhinjs/zhin/tree/main/plugins/utils/qrcode) and
+[code execution](https://github.com/zhinjs/zhin/tree/main/plugins/utils/code-runner).
 
 TypeScript cannot read directory shapes. For `[[id]]` without a default, declare
 `params.id.optional: true`; for `[...items]`, declare `params.items.rest: true` so the

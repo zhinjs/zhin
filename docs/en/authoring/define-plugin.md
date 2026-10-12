@@ -62,6 +62,8 @@ Continue to configure secrets with `apiKey: ${SUBSCRIPTION_API_KEY}`. `.secret()
 
 Plugin configuration currently requires an object root declaring `properties`. Console supports basic nested objects, lists, dictionaries, and field annotations. Schema can export standard validation contracts for `union`, `intersect`, and `tuple`, but their complete form editors and `$ref` support still require coordinated verification with the separate Console frontend. Console explicitly rejects unsupported shapes. A unified declaration does not imply an editor for every JSON Schema construct.
 
+Place a union default on the union field: `Schema.union([...]).default(...)`. Runtime cannot choose which alternative should supply a nested default, so exporting defaults inside alternatives rejects the declaration. Direct `Schema.const(...)` alternatives work; literal fields inside alternative objects also carry defaults and are rejected.
+
 Choose one configuration source per plugin: inline `config` or root `schema.json`. Defining both rejects startup. Isolated plugins use only `schema.json`; configuration composition never imports their entry into Host. Plugin changes reload the affected plugin and invalid candidates retain the previous generation. Root Host still determines when system settings require process restart.
 
 Real examples: [repeater](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts) declares constrained defaults, while [short-url](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts) explicitly declares an empty strict business configuration.

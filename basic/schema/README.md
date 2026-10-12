@@ -165,6 +165,8 @@ plugins:
 
 插件配置当前必须是声明了 `properties` 的对象根。Console 支持基础嵌套对象、列表、字典及字段元信息；`union`、`intersect`、`tuple` 可以导出标准校验契约，但组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。
 
+`union` 的默认值应声明在联合字段自身（例如 `Schema.union([...]).default(...)`）；联合分支内部的默认值无法由 Runtime 确定应用到哪一分支，因此导出时明确拒绝。直接作为联合选项的 `Schema.const(...)` 可以使用，但分支对象内的 `Schema.const(...)` 也携带默认值，同样受此限制。
+
 现有业务输入解析和 `schema.toJSON()` / `Schema.fromJSON()` 保持各自的内部序列化格式；使用标准配置契约请调用 `.toJsonSchema()`。
 
 ## 工具函数

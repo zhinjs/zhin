@@ -42,7 +42,10 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
       result.items = false;
       result.minItems = result.maxItems = options.list?.length ?? 0;
       break;
-    case 'union': result.anyOf = (options.list ?? []).map(toJsonSchema); break;
+    case 'union':
+      for (const branch of options.list ?? []) assertUnionBranchDefaults(branch, true);
+      result.anyOf = (options.list ?? []).map(toJsonSchema);
+      break;
     case 'intersect': {
       const branches = (options.list ?? []).map(toJsonSchema);
       if (branches.every(branch => branch.type === 'object')) {
@@ -84,6 +87,18 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
   };
   if (Object.keys(annotations).length) result['x-zhin-config'] = annotations;
   return result;
+}
+
+/** Ajv cannot apply defaults inside anyOf alternatives without choosing a branch. */
+function assertUnionBranchDefaults(schema: Schema, branchRoot = false): void {
+  // A literal alternative carries its value as an intrinsic const annotation;
+  // it never fills a nested property and must remain usable in literal unions.
+  if (schema.meta.default !== undefined && !(branchRoot && schema.meta.type === 'const')) {
+    throw new TypeError('Defaults inside union alternatives cannot be applied by Runtime; place the default on the union field');
+  }
+  for (const field of Object.values(schema.options.object ?? {})) assertUnionBranchDefaults(field);
+  if (schema.options.inner) assertUnionBranchDefaults(schema.options.inner);
+  for (const item of schema.options.list ?? []) assertUnionBranchDefaults(item, schema.meta.type === 'union');
 }
 
 /** Defaults on an enclosing object/list must not smuggle a secret into forms. */

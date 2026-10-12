@@ -77,8 +77,8 @@ export default defineCommand({
 `commandNamespace`。帮助读取遵循相同权限，不执行业务。没有声明参数的命令仍可通过
 `args` / `segments` 自行处理自由输入。
 
-真实范例：[二维码生成](../../plugins/utils/qrcode/README.md)用文本、图片尺寸与默认值，
-[代码运行](../../plugins/utils/code-runner/README.md)保留动态语言目录，并声明代码和超时选项。
+真实范例：[二维码生成](https://github.com/zhinjs/zhin/tree/main/plugins/utils/qrcode)用文本、图片尺寸与默认值，
+[代码运行](https://github.com/zhinjs/zhin/tree/main/plugins/utils/code-runner)保留动态语言目录，并声明代码和超时选项。
 
 动态目录的路径形态无法被 TypeScript 读取。使用无默认值的 `[[id]]` 时，声明
 `params.id.optional: true`；使用 `[...items]` 时声明 `params.items.rest: true`，

@@ -4,6 +4,7 @@
 "@zhin.js/command": patch
 "@zhin.js/core": patch
 "@zhin.js/middleware": patch
+"@zhin.js/isolate": patch
 "@zhin.js/permission": patch
 "@zhin.js/plugin-runtime": patch
 "@zhin.js/runtime": patch
@@ -14,4 +15,4 @@
 "@zhin.js/plugin-short-url": patch
 ---
 
-Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root.
+Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root. Reject inline configuration in isolated plugins inside their own realm; isolated configuration uses schema.json.

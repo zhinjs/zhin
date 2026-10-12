@@ -210,6 +210,40 @@ export default {
 });
 
 describe('RootRuntime isolated Plugin HMR', () => {
+  it.each<[IsolateMode, boolean]>([
+    ['worker', false], ['worker', true], ['process', false], ['process', true],
+  ])('rejects inline config in the %s realm (schema.json present: %s) without Host-importing it', async (mode, hasSchema) => {
+    const project = await createProject();
+    const entry = join(project, 'plugins/child/plugin.mjs');
+    await writeFile(entry, `
+export default {
+  name: 'inline-config',
+  config: { toJsonSchema() { throw new Error('inline schema must not be evaluated'); } },
+  setup() { throw new Error('invalid config must fail before setup'); }
+};
+`);
+    if (hasSchema) {
+      await writeJson(join(project, 'plugins/child/schema.json'), {
+        type: 'object', properties: { value: { type: 'number', default: 2 } },
+      });
+    }
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    const runtime = new RootRuntime({
+      projectRoot: project,
+      modules,
+      isolation: new NodeIsolatedPluginRuntime({ mode }),
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+    });
+    try {
+      await expect(runtime.start()).rejects.toThrow('isolated Plugin cannot declare inline config; use schema.json');
+      expect(runtime.snapshot.generation).toBe(0);
+      expect(modules.loadCount(entry)).toBe(0);
+    } finally {
+      await runtime.stop();
+    }
+  });
+
   it('drains the old generation, rolls back a broken candidate, and never Host-imports it', async () => {
     const project = await createProject();
     const entry = join(project, 'plugins/child/plugin.mjs');

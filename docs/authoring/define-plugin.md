@@ -62,6 +62,8 @@ export default definePlugin({
 
 当前插件配置必须使用声明了 `properties` 的对象根。Console 支持基础嵌套对象、列表、字典及其字段元信息；Schema 能导出 `union`、`intersect` 和 `tuple` 的标准校验契约，但这些组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。配置声明统一不代表所有 JSON Schema 都已有对应编辑器。
 
+联合类型的默认值放在联合字段上：`Schema.union([...]).default(...)`。分支内部的默认值在标准 Runtime 校验中无法消歧，因此导出时拒绝；直接作为联合选项的 `Schema.const(...)` 可用，分支对象内部带默认值的字面量字段则同样拒绝。
+
 每个插件只选择一个配置来源：内联 `config` 或根目录 `schema.json`；同时存在会拒绝启动。isolated 插件只使用 `schema.json`，配置组合不会在 Host 执行其入口。插件配置变更重载对应插件，非法候选配置保留旧代；系统配置的进程重启仍由 Root Host 决定。
 
 真实用例：[复读机](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts)集中声明有范围的默认值，[短网址](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts)明确声明无业务配置并拒绝未知字段。

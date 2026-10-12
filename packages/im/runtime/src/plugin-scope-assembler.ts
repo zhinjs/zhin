@@ -187,7 +187,9 @@ export class PluginScopeAssembler {
       role: node.parent ? 'child' : 'root',
     });
     let metadata: PluginDefinition['metadata'];
-    let configSchema: Readonly<Record<string, unknown>> | undefined;
+    // Schema composition is Host-owned even when Plugin execution is isolated.
+    // Commit the validated JSON declaration with both kinds of Plugin snapshot.
+    const configSchema = this.configResolver.schema?.(node);
     if (manifest.runtime === 'isolated') {
       if (!node.parent) throw new Error('Root Plugin cannot use runtime: isolated');
       if (node.features.length > 0) {
@@ -249,7 +251,6 @@ export class PluginScopeAssembler {
       signal.throwIfAborted();
       if (returned) scope.disposers.add(returned);
       metadata = definition.metadata;
-      configSchema = this.configResolver.schema?.(node);
     }
     scope.seal();
 
