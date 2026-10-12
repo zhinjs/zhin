@@ -272,6 +272,18 @@ jobs:
       - name: build documentation
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm docs:build
+        env:
+          VITE_DOCS_INSIGHTS_ENDPOINT: /__docs-insights
+          VITE_DOCS_INSIGHTS_SITE_ID: zhin-docs-test
+
+      # Exercise the same browser gate as Pages before a PR is merged.
+      - name: install docs browser
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: test docs journeys
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm test:docs:e2e:run
 
       - name: run tests with coverage
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24

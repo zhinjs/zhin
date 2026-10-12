@@ -3,6 +3,15 @@ import { expect, test } from '@playwright/test';
 test.describe('documentation site journeys', () => {
   test('collects consented search, 404, and exit insights without URL secrets', async ({ page }) => {
     const insights: Array<Record<string, unknown>> = [];
+    // Keep a cold index pending beyond the former fixed polling window.
+    let searchIndexRequested = false;
+    let releaseSearchIndex!: () => void;
+    const searchIndexGate = new Promise<void>((resolve) => { releaseSearchIndex = resolve; });
+    await page.route(/\/@localSearchIndex[^/]+\.js$/u, async (route) => {
+      searchIndexRequested = true;
+      await searchIndexGate;
+      await route.continue();
+    });
     await page.route('**/__docs-insights', async (route) => {
       const payload = route.request().postDataJSON() as Record<string, unknown>;
       insights.push(payload);
@@ -20,7 +29,32 @@ test.describe('documentation site journeys', () => {
     const search = page.locator('#localsearch-input');
     await expect(search).toBeVisible();
     await search.fill('qzxwvkjhgfds');
-    await expect.poll(() => insights.some((event) => event.event === 'search_no_results')).toBe(true);
+    await expect.poll(() => searchIndexRequested).toBe(true);
+    await page.waitForTimeout(2_200);
+    expect(insights.filter((event) => String(event.event).startsWith('search'))).toEqual([]);
+    releaseSearchIndex();
+    await expect(page.locator('.VPLocalSearchBox .no-results')).toBeVisible();
+    await expect.poll(() => insights.filter((event) => event.event === 'search_no_results'))
+      .toEqual([expect.objectContaining({ searchTerm: 'qzxwvkjhgfds', resultCount: 0 })]);
+
+    await search.fill('Docker');
+    await expect(page.locator('.VPLocalSearchBox .result').first()).toBeVisible();
+    await expect.poll(() => insights.some((event) => (
+      event.event === 'search' && event.searchTerm === 'Docker' && Number(event.resultCount) > 0
+    ))).toBe(true);
+
+    // Body-only matches have no title highlights; a case edit can leave the
+    // entire result DOM unchanged, but it is still a separate search event.
+    await search.fill('timeoutMs');
+    await expect.poll(() => insights.some((event) => event.searchTerm === 'timeoutMs')).toBe(true);
+    const previousResults = await page.locator('.VPLocalSearchBox .result')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')));
+    expect(previousResults.length).toBeGreaterThan(0);
+    await search.fill('timeoutms');
+    await expect.poll(() => insights.filter((event) => event.searchTerm === 'timeoutms'))
+      .toEqual([expect.objectContaining({ event: 'search', resultCount: previousResults.length })]);
+    expect(await page.locator('.VPLocalSearchBox .result')
+      .evaluateAll((links) => links.map((link) => link.getAttribute('href')))).toEqual(previousResults);
 
     await page.goto('/definitely-missing-zhin-document');
     await expect.poll(() => insights.some((event) => event.event === 'not_found')).toBe(true);
