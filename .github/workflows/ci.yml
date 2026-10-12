@@ -220,30 +220,27 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24 && github.head_ref != 'changeset-release/main' && !startsWith(github.head_ref, 'dependabot/') && !startsWith(github.head_ref, 'chore/deps-')
         run: pnpm changeset status
 
-      # Large Windows builds can fail to initialize a child process with
-      # STATUS_DLL_INIT_FAILED when Turbo fans out multiple nested tsc/tsup processes.
+      # Avoid per-package pnpm/cmd orchestrators on Windows. The same package
+      # scripts run serially in dependency order under one pnpm process.
+      - name: verify Windows build failure handling
+        if: runner.os == 'Windows'
+        run: pnpm exec vitest run scripts/ci/build-windows.test.ts
+
       - name: build packages (Windows)
         if: runner.os == 'Windows'
-        run: |
-          # Invoke pnpm through Start-Process so GitHub's pwsh wrapper cannot
-          # terminate the script on a native STATUS_DLL_INIT_FAILED exit before
-          # an incremental retry starts.
-          $pnpm = (Get-Command pnpm.cmd -ErrorAction Stop).Source
-          $statusDllInitFailed = -1073741502
-          $maxAttempts = 3
-          for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
-            $build = Start-Process -FilePath $pnpm -ArgumentList @('build', '--concurrency=1') -NoNewWindow -Wait -PassThru
-            if ($build.ExitCode -eq 0) { exit 0 }
-            if ($build.ExitCode -ne $statusDllInitFailed -or $attempt -eq $maxAttempts) {
-              exit $build.ExitCode
-            }
+        run: ./scripts/ci/build-windows.ps1
+        env:
+          CI_NODE_VERSION: ${{ matrix.node-version }}
 
-            # Turbo reuses completed tasks. Give Windows time to release the
-            # failed child process before starting the incremental retry.
-            $delaySeconds = 2 * $attempt
-            Write-Warning "Windows build attempt $attempt hit STATUS_DLL_INIT_FAILED; retrying in $delaySeconds seconds."
-            Start-Sleep -Seconds $delaySeconds
-          }
+      - name: upload Windows build resource samples
+        if: ${{ always() && runner.os == 'Windows' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-build-resources-node-${{ matrix.node-version }}-attempt-${{ github.run_attempt }}
+          path: .tmp/ci/windows-build-resources.json
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: build packages
         if: runner.os != 'Windows'
