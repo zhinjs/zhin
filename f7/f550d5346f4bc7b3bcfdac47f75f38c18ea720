@@ -1,0 +1,23 @@
+scripts/ci/build-windows.test.ts
+  s_6562bcb6cc0539::t_678b73847b93c3 2,52
+.github/workflows/ci.yml
+  s_6562bcb6cc0539::t_678b73847b93c3 241
+scripts/ci/build-windows.ps1
+  s_6562bcb6cc0539::t_678b73847b93c3 49-50
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f7f550d5346f4bc7b3bcfdac47f75f38c18ea720",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
