@@ -284,8 +284,10 @@ try {
       signal: AbortSignal.timeout(10_000),
     });
     const preview = await previewResponse.json();
-    if (!previewResponse.ok || preview.data?.output?.type !== 'html'
-      || !preview.data.output.data?.html?.includes('candidate Console JSX accepted')) {
+    const previewSegments = preview.data?.output;
+    if (!previewResponse.ok || !Array.isArray(previewSegments) || previewSegments.length !== 1
+      || previewSegments[0]?.type !== 'html'
+      || !previewSegments[0].data?.html?.includes('candidate Console JSX accepted')) {
       throw new Error(`Console JSX preview failed: ${JSON.stringify(preview)}`);
     }
     await requestHello(origin, token, 'acceptance-bot', '/card', 'html');

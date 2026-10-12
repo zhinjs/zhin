@@ -35,7 +35,7 @@ export class RuntimeInteractiveRouter<Admission = never> {
   readonly #handlers: RegisteredRuntimeInteractiveHandler<Admission>[] = [];
   readonly #fallbacks = new Map<string, InteractiveFallbackEntry[]>();
 
-  readonly #nextNumbers = new Map<string, number>();
+  #nextNumber = 1;
 
   constructor(private readonly fallbackTtlMs = DEFAULT_FALLBACK_TTL_MS) {}
 
@@ -65,14 +65,11 @@ export class RuntimeInteractiveRouter<Admission = never> {
   ): Record<string, string> {
     this.#pruneFallbacks();
     const key = interactiveConversationKey(conversation, generation);
-    const counterKey = interactiveConversationKey(conversation, 0);
-    let next = this.#nextNumbers.get(counterKey) ?? 1;
     const allocated: Record<string, string> = {};
     for (const [label, payload] of Object.entries(map)) {
-      allocated[/^\d+$/.test(label) ? String(next++) : label] = payload;
+      allocated[/^\d+$/.test(label) ? String(this.#nextNumber++) : label] = payload;
     }
-    // Counters survive expiry so an old visible keyboard never acquires a new meaning.
-    this.#nextNumbers.set(counterKey, next);
+    // One runtime counter survives expiry/generation changes without retaining conversation IDs.
     const entries = this.#fallbacks.get(key) ?? [];
     entries.push(Object.freeze({ map: Object.freeze({ ...allocated }), expiresAt: Date.now() + ttlMs }));
     this.#fallbacks.set(key, entries);

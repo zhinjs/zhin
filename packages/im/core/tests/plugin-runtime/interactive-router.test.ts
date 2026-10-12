@@ -17,6 +17,8 @@ describe('Interactive fallback numbering', () => {
       now += 51;
       expect(router.resolvePayload(message('1'))).toBeUndefined();
       expect(router.resolvePayload(message('2'))).toBe('new');
+      // The old generation mapping is still live, so this proves isolation.
+      expect(router.resolvePayload(message('2', 2))).toBeUndefined();
       now += 100;
       expect(router.rememberFallback(conversation, 2, { '1': 'replacement' })).toEqual({ '3': 'replacement' });
       expect(router.resolvePayload(message('2', 2))).toBeUndefined();
@@ -24,10 +26,12 @@ describe('Interactive fallback numbering', () => {
     } finally { clock.mockRestore(); }
   });
 
-  it('isolates numbering by conversation and preserves explicitly named choices', () => {
+  it('shares an increasing counter while isolating lookup by conversation', () => {
     const router = new RuntimeInteractiveRouter();
     expect(router.rememberFallback(conversation, 1, { '1': 'a', cancel: 'stop' })).toEqual({ '1': 'a', cancel: 'stop' });
-    expect(router.rememberFallback({ ...conversation, id: 'another' }, 1, { '1': 'b' })).toEqual({ '1': 'b' });
+    expect(router.rememberFallback({ ...conversation, id: 'another' }, 1, { '1': 'b' })).toEqual({ '2': 'b' });
+    expect(router.resolvePayload(message('2'))).toBeUndefined();
+    expect(router.resolvePayload({ ...message('2'), conversation: { ...conversation, id: 'another' } } as Message)).toBe('b');
     expect(router.resolvePayload(message('cancel'))).toBe('stop');
   });
 });
