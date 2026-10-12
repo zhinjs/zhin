@@ -203,6 +203,31 @@ describe('PluginSchemaCatalog', () => {
     await expect(new PluginSchemaCatalog(root).read('local')).resolves.toEqual(expectField('local'));
   });
 
+  it('rejects effective inherited duplicates but permits declared overrides to shadow duplicate defaults', async () => {
+    const root = await createProject();
+    await writePackage(root, 'schema-project', [], { 'zhin.js': '*' });
+    const facade = join(root, 'node_modules', 'zhin.js');
+    await writePackage(facade, 'zhin.js', [
+      { package: './plugins/first', instanceKey: 'duplicate' },
+      { package: './plugins/second', instanceKey: 'duplicate' },
+    ], { '@zhin.js/core': '*' });
+    await writePackage(join(facade, 'node_modules', '@zhin.js', 'core'), '@zhin.js/core');
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('duplicate')).rejects.toMatchObject({
+      cause: { message: 'Duplicate child instanceKey in schema-project' },
+    });
+    const override = { package: './plugins/override', instanceKey: 'duplicate' };
+    await writePackage(root, 'schema-project', [override], { 'zhin.js': '*' });
+    const child = join(root, 'plugins', 'override');
+    await writePackage(child, 'override');
+    await writeSchema(child, 'override');
+    await expect(catalog.read('duplicate')).resolves.toEqual(expectField('override'));
+    await writePackage(root, 'schema-project', [override, override], { 'zhin.js': '*' });
+    await expect(catalog.read('duplicate')).rejects.toMatchObject({
+      cause: { message: 'Duplicate child instanceKey in schema-project' },
+    });
+  });
+
   it('projects Host fields without needing a valid Plugin manifest', async () => {
     const root = await createProject();
     await writeFile(join(root, 'package.json'), 'invalid');
@@ -215,6 +240,21 @@ describe('PluginSchemaCatalog', () => {
           owner: { type: 'string', required: true }, name: { type: 'string', required: true },
         } } },
       } } },
+    });
+  });
+
+  it('keeps the known Host projection available in batches containing other Host and Plugin forms', async () => {
+    const catalog = new PluginSchemaCatalog(await createProject());
+    const keys = ['http', 'database', 'ai', 'mcp', 'a2a', 'speech', 'htmlRenderer', 'assistant', 'log_level'];
+    await expect(catalog.readAll([...keys, 'qq-main'])).resolves.toMatchObject({
+      ...Object.fromEntries(keys.map((key) => [key, { type: key === 'log_level' ? 'union' : 'object' }])),
+      'qq-main': expectField('account'),
+      ai: { object: { agent: { object: { execApprovalMode: { type: 'string', options: [
+        { label: 'ask', value: 'ask' }, { label: 'bypass', value: 'bypass' }, { label: 'auto', value: 'auto' },
+      ] } } } } },
+    });
+    await expect(catalog.read('log_level')).resolves.toMatchObject({
+      type: 'union', list: [{ type: 'string' }, { type: 'number' }],
     });
   });
 
@@ -291,6 +331,33 @@ describe('PluginSchemaCatalog', () => {
     await expect(new PluginSchemaCatalog(root).read('plugin')).rejects.toThrow(
       'schema.json for plugin.properties.pair.prefixItems is not supported by Console forms',
     );
+  });
+
+  it('rejects legacy tuple items instead of presenting arbitrary list values as valid', async () => {
+    const root = await createProject();
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', properties: {
+        pair: { type: 'array', items: [{ type: 'string' }, { type: 'number' }] },
+      },
+    }));
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('plugin')).rejects.toThrow(
+      'schema.json for plugin.properties.pair.items tuple schemas are not supported by Console forms',
+    );
+    await expect(catalog.readAll(['plugin'])).rejects.toThrow('.items tuple schemas are not supported');
+  });
+
+  it.each([false, true])('rejects patternProperties alongside ordinary fields, nested=%j', async (nested) => {
+    const root = await createProject();
+    const constrained = {
+      type: 'object', properties: { token: { type: 'string' } },
+      patternProperties: { '^extra_': { type: 'string' } },
+    };
+    await writeFile(join(root, 'schema.json'), JSON.stringify(nested
+      ? { type: 'object', properties: { config: constrained } } : constrained));
+    const catalog = new PluginSchemaCatalog(root);
+    await expect(catalog.read('plugin')).rejects.toThrow('patternProperties is not supported by Console forms');
+    await expect(catalog.readAll(['plugin'])).rejects.toThrow('patternProperties is not supported by Console forms');
   });
 
   it.each([true, false])('rejects JSON Schema required boolean %j while native flags remain supported', async (required) => {

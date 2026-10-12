@@ -37,7 +37,7 @@ it.each(['cut', 'accepted', 'rejected', 'partial'])('actual nodemailer and final
     const receipt = await runtime.send('local fixture', mode === 'partial' ? 'actor@example.com, other@example.com' : 'actor@example.com');
     if (mode === 'accepted') expect(receipt).toMatchObject({ status: 'sent', message: { id: expect.any(String) } });
     else {
-      expect(receipt).toMatchObject({ status: 'failed', failure: { code: mode === 'rejected' ? 'platform_rejected' : 'delivery_unconfirmed' } });
+      expect(receipt).toMatchObject({ status: mode === 'rejected' ? 'rejected' : 'failed', failure: { code: mode === 'rejected' ? 'platform_rejected' : 'delivery_unconfirmed' } });
       expect(receipt.failure?.deliveryUnknown === true).toBe(mode !== 'rejected');
     }
     const expectedData = mode === 'rejected' ? 0 : 1;

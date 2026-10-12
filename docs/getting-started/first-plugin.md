@@ -33,11 +33,16 @@ ping-pong/
     "dev": "zhin runtime start"
   },
   "dependencies": {
-    "@zhin.js/command": "^1.1.0",
     "zhin.js": "^1.1.0"
   },
   "devDependencies": {
     "@zhin.js/cli": "^1.1.0"
+  },
+  "peerDependencies": {
+    "@zhin.js/command": "^1.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/command": { "optional": true }
   },
   "zhin": {
     "protocol": 1,
@@ -52,6 +57,8 @@ ping-pong/
   }
 }
 ```
+
+Command provider 由宿主提供，子插件将它声明为可选 npm peer，避免自行安装另一份 provider。这里的 `optional` 只影响 npm 安装；运行时的 `zhin.features` 仍要求 Command 必须可用。
 
 `zhin` 字段是插件拓扑的清单：
 
@@ -112,7 +119,7 @@ export default defineCommand<PingPongConfig>({
 
 `schema.json`（JSON Schema 2020-12）声明配置契约与默认值：
 
-Console 表单只支持可转换的字段结构；`$ref`、`anyOf`、`oneOf`、`allOf`、`prefixItems` 暂不支持，会明确报错。运行时的 JSON Schema 配置校验与 Console 表单转换是不同能力。
+Console 对插件的 `schema.json` 只支持可转换的字段结构；`$ref`、`anyOf`、`oneOf`、`allOf`、`prefixItems`、`patternProperties` 和数组形式的 `items` 暂不支持，会明确报错。内置 Host 配置沿用既有字段投影，表单不能代表完整的 JSON Schema 约束；复杂 `ai`、`htmlRenderer` 配置建议用配置文件或 Console 源码编辑器。运行时的 JSON Schema 配置校验与 Console 表单转换是不同能力。
 
 ```json
 {
@@ -136,9 +143,10 @@ Console 表单只支持可转换的字段结构；`$ref`、`anyOf`、`oneOf`、`
 
 ### 方式 A：`./` 本地目录子插件（推荐开发期）
 
-先安装这个本地包声明的依赖；宿主安装 `zhin.js` 不会自动安装尚未作为依赖包挂载的本地目录的依赖：
+先在宿主应用根目录显式安装共享的 Command provider。Root 依赖 `zhin.js` 时继承 Stable Features，并优先解析这个直接依赖，再回退到 Core 的依赖；子插件通过 peer 使用宿主的同一份 provider：
 
 ```bash
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
 cd plugins/ping-pong
 pnpm install
 cd ../..
@@ -148,6 +156,9 @@ cd ../..
 
 ```json
 {
+  "dependencies": {
+    "@zhin.js/command": "^1.1.0"
+  },
   "zhin": {
     "plugins": [
       { "package": "./plugins/ping-pong", "instanceKey": "ping-pong" }
@@ -155,6 +166,8 @@ cd ../..
   }
 }
 ```
+
+把依赖与挂载项合并到宿主原有清单，保留其他依赖和设置。`pnpm create zhin-app` 创建的项目已将 `plugins/*` 纳入 workspace，应在其中安装子插件，不要再给挂载的子插件添加 Command 直接依赖：Runtime 要求同一包只来自一个物理目录，即使两份版本的 Feature API 兼容也不例外。
 
 然后在宿主的 `zhin.config.yml` 给这个实例传配置：
 
@@ -168,7 +181,7 @@ plugins:
 
 ### 方式 B：插件即应用
 
-把 `zhin.config.yml` 直接放进插件目录，插件自己就是 Root。此时还需接入适配器；只有 Command 的插件可以装配，但不能凭空收到聊天消息：
+把 `zhin.config.yml` 直接放进插件目录，插件自己就是 Root。此时需要给这个应用添加 Command 直接依赖；可选 peer 本身不会安装 provider。此时还需接入适配器；只有 Command 的插件可以装配，但不能凭空收到聊天消息：
 
 ```yaml
 # ping-pong/zhin.config.yml
@@ -180,7 +193,7 @@ plugins: {}
 
 ```bash
 cd plugins/ping-pong # 从宿主应用目录进入
-pnpm install
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check # 此时该包本身就是宿主应用
 pnpm exec zhin setup --adapters  # 选择 Sandbox 等适配器，添加 Endpoint
 pnpm install                   # 安装 setup 新增的适配器依赖
 pnpm dev        # zhin runtime start

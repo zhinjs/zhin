@@ -45,6 +45,9 @@ export class PluginSchemaCatalog {
     declarations?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
+      // These allowlisted sections belong to the versioned Runtime contract, not
+      // third-party schema files. Preserve their existing form projection: it is
+      // not a complete JSON Schema editor; Runtime remains the config validator.
       const raw = pluginName === 'plugin'
         ? declarations?.get(await realpath(this.#projectRoot)) ?? await readOwnSchema(this.#projectRoot, 'plugin')
         : HOST_CONFIG_SCHEMA.properties[pluginName as keyof typeof HOST_CONFIG_SCHEMA.properties];
@@ -129,10 +132,11 @@ async function childReferences(
     }
   }
   const ownKeys = new Set(declared.map((item) => item.instanceKey));
-  if (ownKeys.size !== declared.length) {
+  const merged = mergeChildPluginReferences(declared, inherited);
+  if (new Set(merged.map((item) => item.instanceKey)).size !== merged.length) {
     throw new Error(`Duplicate child instanceKey in ${pkg.name}`);
   }
-  return mergeChildPluginReferences(declared, inherited).map((reference) => ({
+  return merged.map((reference) => ({
     reference,
     owner: ownKeys.has(reference.instanceKey) ? pkg : facade!,
   }));
@@ -190,7 +194,7 @@ function assertSchemaStructure(value: unknown, location: string): void {
   const schema = value as Record<string, unknown>;
   // The form converter does not resolve references or compose JSON Schemas.
   // Reject these even beside supported properties, instead of displaying a partial form.
-  for (const key of ['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems']) {
+  for (const key of ['$ref', 'anyOf', 'oneOf', 'allOf', 'prefixItems', 'patternProperties']) {
     if (schema[key] !== undefined) {
       throw new Error(`${location}.${key} is not supported by Console forms`);
     }
@@ -203,7 +207,7 @@ function assertSchemaStructure(value: unknown, location: string): void {
       throw new Error(`${location}.required must be a unique string array or a native Schema boolean`);
     }
   }
-  for (const key of ['properties', 'patternProperties', '$defs', 'definitions', 'object']) {
+  for (const key of ['properties', '$defs', 'definitions', 'object']) {
     const children = schema[key];
     if (children === undefined) continue;
     if (!children || typeof children !== 'object' || Array.isArray(children)) {
@@ -217,10 +221,9 @@ function assertSchemaStructure(value: unknown, location: string): void {
     const child = schema[key];
     if (child === undefined || (key === 'additionalProperties' && typeof child === 'boolean')) continue;
     if (key === 'items' && Array.isArray(child)) {
-      child.forEach((item, index) => assertSchemaStructure(item, `${location}.${key}[${index}]`));
-    } else {
-      assertSchemaStructure(child, `${location}.${key}`);
+      throw new Error(`${location}.items tuple schemas are not supported by Console forms`);
     }
+    assertSchemaStructure(child, `${location}.${key}`);
   }
   for (const key of ['list']) {
     const children = schema[key];
