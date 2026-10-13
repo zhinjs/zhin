@@ -18,9 +18,12 @@ export * from './message-dispatcher.js';
 export type {
   RuntimeMessageEvent,
   RuntimeMessageEventSource,
+  RuntimeMessageRendering,
+  OutboundFallbackReason,
 } from './message-events.js';
 export * from './outbound-renderer.js';
 export * from './outbound-segments.js';
+export * from './outbound-projection.js';
 
 export * from '../../notice.js';
 export * from '../../request.js';

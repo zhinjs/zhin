@@ -259,6 +259,7 @@ export class PluginScopeAssembler {
       instanceKey: node.instanceKey,
       packageName: node.package.name,
       packageRoot: node.package.root,
+      ...(typeof node.package.packageJson.version === 'string' ? { packageVersion: node.package.packageJson.version } : {}),
       parent: node.parent,
       children: Object.freeze(node.children.map((child) => child.id)),
       metadata,

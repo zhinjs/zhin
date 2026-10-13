@@ -5,6 +5,7 @@ import { teachAdd } from '../../src/teach-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
+  permit: ['group()', 'role(owner,admin,master,trusted)'],
   description: '教我正则问答',
   execute({ config, input, args, owner, use }) {
     return teachAdd(input ?? {}, resolveGroupSuiteConfig(config), args.join(' '), true, resolveGroupSuiteRuntime({ owner, use }));

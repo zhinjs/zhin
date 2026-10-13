@@ -12,6 +12,7 @@ import {
   NodePackageResolver,
   ProjectGraphService,
   validatePluginConfigSchema,
+  parsePluginConfigSchema,
 } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -21,6 +22,16 @@ afterEach(async () => {
 });
 
 describe('hierarchical Plugin config', () => {
+  it('normalizes defaults with the same validation engine without changing caller input', () => {
+    const schema = { type: 'object', properties: { retries: { type: 'integer', default: 3, minimum: 1 } }, additionalProperties: false };
+    const input = {};
+    expect(parsePluginConfigSchema(schema, input)).toEqual({ value: { retries: 3 }, errors: [] });
+    expect(input).toEqual({});
+    const invalid = { retries: 0 };
+    expect(parsePluginConfigSchema(schema, invalid).errors).toEqual(validatePluginConfigSchema(schema, invalid));
+    expect(invalid).toEqual({ retries: 0 });
+  });
+
   it('uses the same absent config defaults and local references for candidate validation and composition', async () => {
     const rootSchema = { type: 'object', required: ['token'],
       $defs: { token: { type: 'string', minLength: 2 } },

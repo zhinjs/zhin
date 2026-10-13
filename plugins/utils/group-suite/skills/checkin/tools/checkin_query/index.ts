@@ -1,3 +1,4 @@
+import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getCheckinModel } from '../../../../src/db-store.js';
 import { groupSuiteRuntimeToken } from '../../../../src/runtime-state.js';
@@ -13,18 +14,17 @@ export default defineAgentTool<{ user_id?: string; group_id?: string }>({
     },
   },
   requiresApproval: 'never',
+  scopes: ['group'],
   async execute({ user_id: userId, group_id: requestedGroupId }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     const model = getCheckinModel(runtime.db);
     if (!model) return '签到数据库尚未就绪';
-    const groupId = requestedGroupId ?? currentGroupId(context.origin);
+    const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const query = {
       ...(userId ? { user_id: userId } : {}),
-      ...(groupId ? { context_type: 'group', context_id: groupId } : {}),
+      context_type: 'group', context_id: groupId,
     };
-    const rows = Object.keys(query).length > 0
-      ? await model.select().where(query)
-      : await model.select();
+    const rows = await model.select().where(query);
     if (userId) {
       if (rows.length === 0) return `用户 ${userId} 没有签到记录`;
       const user = rows[0]!;
@@ -35,7 +35,3 @@ export default defineAgentTool<{ user_id?: string; group_id?: string }>({
     return `签到系统统计\n总用户: ${rows.length}\n总积分: ${totalPoints}\n今日签到: ${todayCount}人`;
   },
 });
-
-function currentGroupId(origin: import('@zhin.js/tool').ToolInvocationOrigin): string {
-  return origin.kind === 'im' && origin.scope !== 'private' ? origin.sceneId : '';
-}

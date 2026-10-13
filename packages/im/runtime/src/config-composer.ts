@@ -302,15 +302,23 @@ function formatErrors(errors: readonly ErrorObject[]): readonly string[] {
   });
 }
 
-/** Validate Console candidates with the same strict engine and defaults as composition. */
-export function validatePluginConfigSchema(schema: JsonSchema, input: unknown): readonly ErrorObject[] {
+/** Reuses Runtime validation/defaults without mutating the caller's configuration. */
+export function parsePluginConfigSchema(schema: JsonSchema, input: unknown): Readonly<{
+  value: unknown;
+  errors: readonly ErrorObject[];
+}> {
   const validate = configurationValidator().compile({
     type: 'object',
     ...(schema.$defs ? { $defs: schema.$defs } : {}),
     properties: { candidate: schema },
   });
   const candidate = { candidate: structuredClone(input === undefined ? schema.default ?? {} : input) };
-  return validate(candidate) ? [] : structuredClone(validate.errors ?? []);
+  const valid = validate(candidate);
+  return Object.freeze({ value: candidate.candidate, errors: valid ? [] : structuredClone(validate.errors ?? []) });
+}
+
+export function validatePluginConfigSchema(schema: JsonSchema, input: unknown): readonly ErrorObject[] {
+  return parsePluginConfigSchema(schema, input).errors;
 }
 
 function configurationValidator(): Ajv2020 {

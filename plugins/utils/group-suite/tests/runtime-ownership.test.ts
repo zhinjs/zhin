@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addKeyword, listKeywords } from '../src/keyword-store.js';
+import { addKeyword, listKeywords, keywordStore } from '../src/keyword-store.js';
 import { createInMemoryGroupSuiteDb } from '../src/memory-store.js';
 import { createGroupSuiteRuntime, resolveGroupSuiteRuntime } from '../src/runtime-state.js';
 import { recordMessage } from '../src/stats-lib.js';
@@ -9,11 +9,12 @@ describe('group-suite owner-scoped runtime', () => {
     const left = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
     const right = createGroupSuiteRuntime(createInMemoryGroupSuiteDb());
 
-    addKeyword('hello', 'left', left.keywords);
-    recordMessage({ sender: { id: 'u1' }, target: 'g1', metadata: { type: 'group' } }, left);
+    const input = { conversation: { kind: 'group' as const, id: 'g1', endpoint: { id: 'bot', adapter: 'test' } } };
+    addKeyword('hello', 'left', keywordStore(input, left));
+    recordMessage({ ...input, sender: { id: 'u1' } }, left);
 
-    expect(listKeywords(left.keywords)).toEqual([['hello', 'left']]);
-    expect(listKeywords(right.keywords)).toEqual([]);
+    expect(listKeywords(keywordStore(input, left))).toEqual([['hello', 'left']]);
+    expect(listKeywords(keywordStore(input, right))).toEqual([]);
     expect(left.statsBuffer.size).toBe(1);
     expect(right.statsBuffer.size).toBe(0);
   });

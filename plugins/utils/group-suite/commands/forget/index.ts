@@ -5,6 +5,7 @@ import { teachForget } from '../../src/teach-lib.js';
 import { resolveGroupSuiteRuntime } from '../../src/runtime-state.js';
 
 export default defineCommand<GroupSuiteConfig, string, Message>({
+  permit: ['group()', 'role(owner,admin,master,trusted)'],
   description: '忘记问答（删除问答对）',
   execute({ input, args, owner, use }) {
     return teachForget(input ?? {}, args.join(' '), resolveGroupSuiteRuntime({ owner, use }));

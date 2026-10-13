@@ -1,15 +1,14 @@
 import { definePlugin, databaseHostToken } from 'zhin.js';
-import type { GroupSuiteConfig } from './src/config.js';
+import { resolveGroupSuiteConfig, type GroupSuiteConfig } from './src/config.js';
 import { createInMemoryGroupSuiteDb, type GroupSuiteMemoryDb } from './src/memory-store.js';
 import { createGroupSuiteRuntime, groupSuiteRuntimeToken } from './src/runtime-state.js';
-import { flushStatsBuffer } from './src/stats-lib.js';
 import { defineGroupSuiteTables } from './src/tables.js';
 
 /**
  * Plugin Runtime:
  * - checkin / teach / stats commands + keyword middleware
  * - DB: prefer `databaseHostToken`; else in-memory fallback
- * - Stats buffer: periodic flush every 10s + final flush on dispose
+ * - Stats writes run inside admitted schedule/query operations
  */
 export default definePlugin<GroupSuiteConfig>({
   name: 'group-suite',
@@ -26,15 +25,13 @@ export default definePlugin<GroupSuiteConfig>({
       }
       return createInMemoryGroupSuiteDb();
     })();
+    const config = resolveGroupSuiteConfig(context.config.get());
+    if (config.keywordReply && !config.ephemeralKeywords) {
+      // Fail before activation rather than claiming durable keywords in a memory fallback.
+      if (!context.resources.has(databaseHostToken)) throw new Error('Persistent keywords require a Database Host; demos may explicitly set ephemeralKeywords: true');
+      void context.resources.use(databaseHostToken).state;
+    }
     const runtime = createGroupSuiteRuntime(db);
     context.resources.provide(groupSuiteRuntimeToken, runtime);
-
-    const flushTimer = setInterval(() => {
-      void flushStatsBuffer(runtime);
-    }, 10_000);
-    context.lifecycle.add(async () => {
-      clearInterval(flushTimer);
-      await flushStatsBuffer(runtime);
-    });
   },
 });

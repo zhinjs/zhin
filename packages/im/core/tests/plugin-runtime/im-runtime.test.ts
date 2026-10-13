@@ -273,6 +273,8 @@ describe('IM Runtime', () => {
         ...(payload ? { segments: [{ type: 'action', data: { payload } }] } : {}),
       });
       expect(clicked).not.toHaveBeenCalled();
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toMatchObject({ payload: '交互已过期或不可用，请重新发起。' });
     } finally { clock.mockRestore(); await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
@@ -329,7 +331,7 @@ describe('IM Runtime', () => {
       fixture.store.commit(0, { snapshot: snapshotState(fixture.store.current), dispose: () => undefined });
       await receive(fixture.im, action(rows[0][0].payload));
       expect(clicked).not.toHaveBeenCalled();
-      expect(sent).toHaveLength(1);
+      expect(sent).toHaveLength(3);
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
   it.each(['command', 'command-shortcut', 'middleware'] as const)('binds every explicit %s send to its component author', async (entry) => {
@@ -2497,7 +2499,7 @@ describe('IM Runtime', () => {
       conversation,
       content: '1',
       sender: { id: 'alice' },
-    })).resolves.toMatchObject({ matched: false });
+    })).resolves.toMatchObject({ matched: true, command: 'interactive' });
     expect(firstCalls).toEqual(['1']);
 
     await first.adapters.stop();

@@ -43,3 +43,4 @@ export * from './delivery-target.js';
 export * from './persistent-state.js';
 export * from './inbox.js';
 export * from './system-log.js';
+export * from './plugin-verification.js';

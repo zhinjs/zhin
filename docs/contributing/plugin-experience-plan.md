@@ -59,3 +59,17 @@ CLI 和 Console 使用同一安装与配置服务：安装 → 依赖检查 → 
 渲染预览显示图片/原生内容/文本与降级原因；长期交互使用独立动作记录，不能保留旧 generation 的闭包。公开测试夹具通过真实发现、解析、权限与消息链路驱动合成端点，实机验收单独记录。
 
 首阶段仅涉及 Console Host 的 Schema 读取。独立 Console 前端的完整安装配置流程、嵌套配置表单与功能验证将在后续阶段验收。
+
+### 第三阶段交付边界
+
+本阶段保留 `schedules/<name>/index.ts`，并补齐 `execute(ctx)`。每次执行的 owner、generation、config 与资源解析由 Runtime 提供；`plugin.ts` 注入同一定义。持久化的是业务状态和投递目标，不保存上下文、Client 或回调。示例见 [Schedule Feature](https://github.com/zhinjs/zhin/blob/main/packages/im/schedule-feature/README.md)。
+
+| 调用方 | 当前验收范围 |
+| --- | --- |
+| [持久提醒](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md) | 一次性与周期提醒、本人原会话取消、SQLite 重启恢复、两实例及 HMR；未知投递停止自动重试，本地数据库探针不证明平台投递成功 |
+| [群运营](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/README.md) | 关键词持久化、群欢迎、管理与查询卡片；配置、端点、会话及实例隔离；消息统计采用定时批量写入，近期缓冲不是持久 outbox |
+| [公开测试夹具](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/plugin-test-kit/README.md) | 真正的发现、命令解析、权限与消息链路；合成端点记录最终交付载荷，测试应用仍会执行插件代码，不能作为副作用沙箱 |
+| CLI / Console Host | 同一安装服务输出安装、声明、配置、应用及当前 generation 证据；业务验证必须先披露 effects，并绑定 generation、项目修订及检查修订 |
+| 出站与预览 | 预览按所选端点策略投影，显示图片、原生内容、文本和降级原因；真实发送后的诊断反映最终载荷，预览不发送消息、不激活按钮且不运行出站中间件 |
+
+独立 Console 前端完整消费这些接口、嵌套配置表单、真实平台验收及第二阶段遗留的共同冷却/并发机制仍需单独交付，不能据此勾选第三阶段的全部验收项。

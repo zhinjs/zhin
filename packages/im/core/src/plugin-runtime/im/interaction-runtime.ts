@@ -82,6 +82,10 @@ export class RuntimeInteractionCoordinator<Admission = never> {
   async dispatch(message: Message, admission?: Admission, snapshot?: RuntimeSnapshot): Promise<boolean> {
     const payload = this.#router.resolvePayload(message);
     if (payload && snapshot && await this.#buttons.dispatch(message, payload, snapshot)) return true;
+    if (this.#router.isExpiredFallback(message)) {
+      await message.$reply('交互已过期或不可用，请重新发起。');
+      return true;
+    }
     return this.#router.dispatch(message, admission);
   }
 
@@ -91,6 +95,8 @@ export class RuntimeInteractionCoordinator<Admission = never> {
 
   resolveClaim(message: Message): boolean {
     const payload = this.#router.resolvePayload(message);
+    // A current question owns ordinary text answers, including numbers that once
+    // labelled an expired button. Explicit JSX callbacks still belong to buttons.
     if (isJsxButtonPayload(payload)) return false;
     const claim = this.#claims.get(this.#conversationKey(message));
     if (!claim) return false;

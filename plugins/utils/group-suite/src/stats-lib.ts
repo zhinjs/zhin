@@ -1,3 +1,4 @@
+import { conversationKey, requireConversation, type ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getStatsModel } from './db-store.js';
 import {
@@ -26,29 +27,14 @@ export function monthStartStr(): string {
 }
 
 function bufferKey(userId: string, groupId: string, date: string): string {
-  return `${userId}:${groupId}:${date}`;
+  return JSON.stringify([userId, groupId, date]);
 }
 
-export function resolveGroupId(input: {
-  conversation?: { readonly kind?: string; readonly id?: string };
-  metadata?: Readonly<Record<string, unknown>>;
-}): string {
-  const meta = input.metadata ?? {};
-  const channelType = String(meta.type ?? meta.channelType ?? '');
-  if (channelType === 'group' || channelType === 'guild' || channelType === 'channel') {
-    return String(meta.channelId ?? input.conversation?.id ?? '');
-  }
-  if (input.conversation && channelType !== 'private') {
-    return String(input.conversation.id ?? '');
-  }
-  return '';
+export function resolveGroupId(input: ConversationInput): string {
+  return conversationKey(requireConversation(input));
 }
 
-export function recordMessage(input: {
-  sender?: { readonly id: string; readonly name?: string };
-  conversation?: { readonly kind?: string; readonly id?: string };
-  metadata?: Readonly<Record<string, unknown>>;
-}, runtime: GroupSuiteRuntime): void {
+export function recordMessage(input: ConversationInput, runtime: GroupSuiteRuntime): void {
   const targetBuffer = runtime.statsBuffer;
   const { id: userId, name: userName } = resolveSender(input);
   if (!userId) return;
@@ -69,7 +55,16 @@ export function recordMessage(input: {
   }
 }
 
-export async function flushStatsBuffer(runtime: GroupSuiteRuntime): Promise<void> {
+export function flushStatsBuffer(runtime: GroupSuiteRuntime): Promise<void> {
+  if (runtime.statsFlush) return runtime.statsFlush;
+  const flush = flushStatsBatch(runtime).finally(() => {
+    if (runtime.statsFlush === flush) runtime.statsFlush = undefined;
+  });
+  runtime.statsFlush = flush;
+  return flush;
+}
+
+async function flushStatsBatch(runtime: GroupSuiteRuntime): Promise<void> {
   const targetBuffer = runtime.statsBuffer;
   const M = getStatsModel(runtime.db);
   if (!M || targetBuffer.size === 0) return;
@@ -139,11 +134,7 @@ export async function queryStats(
   return result;
 }
 
-type MessageInput = {
-  sender?: { readonly id: string; readonly name?: string };
-  target?: string;
-  metadata?: Readonly<Record<string, unknown>>;
-};
+type MessageInput = ConversationInput;
 
 export async function statsRankText(
   input: MessageInput,

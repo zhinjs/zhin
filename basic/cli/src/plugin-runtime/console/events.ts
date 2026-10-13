@@ -30,6 +30,8 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
     channelId: event.conversation.id,
     content: event.contentPreview,
     timestamp: event.timestamp,
+    messageId: event.messageId,
+    ...(event.rendering ? { rendering: event.rendering } : {}),
   });
 }
 

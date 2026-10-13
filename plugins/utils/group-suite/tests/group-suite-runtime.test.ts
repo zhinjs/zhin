@@ -1,3 +1,4 @@
+import { resolveGroupId } from '../src/stats-lib.js';
 import { describe, expect, it, beforeEach } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { parseMiddlewareDefinition } from '@zhin.js/middleware';
@@ -23,6 +24,7 @@ import statsUserTool from '../skills/group-daily-analysis/tools/stats_user/index
 import groupAnnounceTool from '../skills/group-daily-analysis/tools/group_announce/index.ts';
 import {
   addKeyword,
+  keywordStore,
   listKeywords,
   matchKeyword,
   resolveGroupSuiteConfig,
@@ -43,7 +45,7 @@ let runtime: GroupSuiteRuntime;
 const emptyCtx = {
   owner: {} as never,
   generation: 0,
-  config: {},
+  config: { ephemeralKeywords: true },
   use: () => runtime as never,
   args: [] as string[],
   params: {} as Record<string, string | number | boolean>,
@@ -52,7 +54,7 @@ const emptyCtx = {
 
 const groupInput = {
   sender: { id: 'u1', name: 'Alice' },
-  conversation: { kind: 'group', id: 'g1' },
+  conversation: { kind: 'group' as const, id: 'g1', endpoint: { id: 'bot', adapter: 'test' } },
   content: '',
   metadata: { type: 'group', senderName: 'Alice' },
 };
@@ -91,9 +93,9 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
   });
 
   it('manages keyword store', () => {
-    addKeyword('你好', '你好呀', runtime.keywords);
-    expect(matchKeyword('说你好', runtime.keywords)).toBe('你好呀');
-    expect(listKeywords(runtime.keywords)).toHaveLength(1);
+    addKeyword('你好', '你好呀', keywordStore(groupInput, runtime));
+    expect(matchKeyword('说你好', keywordStore(groupInput, runtime))).toBe('你好呀');
+    expect(listKeywords(keywordStore(groupInput, runtime))).toHaveLength(1);
   });
 
   it('checkin / mypoints work against in-memory store', async () => {
@@ -115,6 +117,7 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
       { user_id: 'u1' },
       {
         use: () => runtime,
+        project: () => ({ describe: () => [{ id: 'bot', name: 'memory' }], clientAdapter: () => 'test' }),
         origin: { kind: 'im', platform: 'test', endpoint: 'memory', scope: 'group', sceneId: 'g1' },
       } as never,
     );
@@ -200,11 +203,12 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
   it('keyword-add uses params + trailing args', async () => {
     const result = await keywordAdd.execute({
       ...emptyCtx,
+      input: groupInput as never,
       params: { keyword: 'hi' },
       args: ['hello', 'there'],
     });
     expect(String(result)).toContain('已添加');
-    expect(matchKeyword('say hi', runtime.keywords)).toBe('hello there');
+    expect(matchKeyword('say hi', keywordStore(groupInput, runtime))).toBe('hello there');
   });
 
   it('flushStatsBuffer 只移除写成功的 key，失败行留缓冲不丢计数', async () => {
@@ -235,14 +239,14 @@ describe('@zhin.js/plugin-group-suite runtime (slice-2)', () => {
     // u1 落库并出缓冲；u2 失败留缓冲
     expect(runtime.statsBuffer.size).toBe(1);
     expect([...runtime.statsBuffer.values()][0]).toMatchObject({ user_id: 'u2', count: 1 });
-    let stats1 = await queryStats('g1', '0000-00-00', runtime);
+    let stats1 = await queryStats(resolveGroupId(groupInput), '0000-00-00', runtime);
     expect(stats1.get('u1')?.count).toBe(2);
     expect(stats1.get('u2')).toBeUndefined();
 
     // 恢复后重试，u2 计数不丢
     await flushStatsBuffer(runtime);
     expect(runtime.statsBuffer.size).toBe(0);
-    stats1 = await queryStats('g1', '0000-00-00', runtime);
+    stats1 = await queryStats(resolveGroupId(groupInput), '0000-00-00', runtime);
     expect(stats1.get('u1')?.count).toBe(2);
     expect(stats1.get('u2')?.count).toBe(1);
   });

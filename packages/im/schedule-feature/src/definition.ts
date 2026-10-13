@@ -1,6 +1,13 @@
-import type { ScheduleJobRegistration } from '@zhin.js/plugin-runtime';
+import type { CapabilityContext } from '@zhin.js/feature-kit';
 
-export type ScheduleDefinition = Omit<ScheduleJobRegistration, 'id' | 'owner'>;
+/** Operation-scoped owner, configuration and resources; never persist this context. */
+export type ScheduleContext<TConfig = unknown> = CapabilityContext<TConfig>;
+
+export interface ScheduleDefinition<TConfig = unknown> {
+  readonly cron: string;
+  readonly description?: string;
+  execute(context: ScheduleContext<TConfig>): void | Promise<void>;
+}
 
 declare module '@zhin.js/plugin-runtime' {
   interface PluginSetupContext {
@@ -8,15 +15,15 @@ declare module '@zhin.js/plugin-runtime' {
   }
 }
 
-export function defineSchedule(definition: ScheduleDefinition): Readonly<ScheduleDefinition> {
-  return parseScheduleDefinition(definition);
+export function defineSchedule<TConfig = unknown>(definition: ScheduleDefinition<TConfig>): Readonly<ScheduleDefinition<TConfig>> {
+  return parseScheduleDefinition<TConfig>(definition);
 }
 
-export function parseScheduleDefinition(value: unknown): Readonly<ScheduleDefinition> {
+export function parseScheduleDefinition<TConfig = unknown>(value: unknown): Readonly<ScheduleDefinition<TConfig>> {
   if (!value || typeof value !== 'object') {
     throw new TypeError('Schedule definition must be an object');
   }
-  const definition = value as Partial<ScheduleDefinition>;
+  const definition = value as Partial<ScheduleDefinition<TConfig>>;
   if (typeof definition.cron !== 'string' || definition.cron.trim() === '') {
     throw new TypeError('Schedule definition requires a non-empty cron string');
   }

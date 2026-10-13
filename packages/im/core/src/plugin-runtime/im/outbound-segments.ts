@@ -18,6 +18,7 @@ import {
 } from '../../built/interactive-segments/types.js';
 import { isMediaRef, type Segment } from '../../built/segment-contract/index.js';
 import { markdownToPlainText } from '../../built/rich-segments/markdown-to-text.js';
+import type { OutboundFallbackReason } from './message-events.js';
 
 /**
  * Outbound payload normalization for the Plugin Runtime IM pipeline.
@@ -66,6 +67,7 @@ export interface NormalizeOutboundOptions {
   readonly mediaPolicy?: OutboundMediaPolicy;
   readonly htmlPolicy?: 'direct' | 'image' | 'text';
   readonly onHtmlFallback?: (reason: 'renderer_unavailable' | 'renderer_failed' | 'media_unsupported') => void;
+  readonly onFallback?: (reason: OutboundFallbackReason) => void;
 }
 
 /** HTML transport is an adapter capability, independent of its package name. */
@@ -235,12 +237,13 @@ export async function normalizeOutboundPayload(
     const resolved = await Promise.all(
       flattenOutboundArray(payload).map((item) => normalizeOneSegment(item, renderer, mediaPolicy, options)),
     );
-    return applyOutboundMediaPolicy(resolved, mediaPolicy);
+    return applyOutboundMediaPolicy(resolved, mediaPolicy, options?.onFallback);
   }
   if (isOutboundSegment(payload)) {
     return applyOutboundMediaPolicy(
       [await normalizeOneSegment(payload, renderer, mediaPolicy, options)],
       mediaPolicy,
+      options?.onFallback,
     );
   }
   return payload;
@@ -279,6 +282,7 @@ async function renderHtmlSegment(
   const html = typeof data.html === 'string' ? data.html : '';
   // url-or-text 端点无法投递 base64 图片（本层无上传通道），直接文本降级，跳过渲染。
   if (options?.htmlPolicy === 'text') {
+    if (html) options.onFallback?.('html_text_policy');
     return { type: 'text', data: { text: htmlSegmentFallbackText(data, html) } };
   }
   if (html && renderer && mediaPolicy !== 'url-or-text') {
@@ -305,11 +309,14 @@ async function renderHtmlSegment(
         };
       }
       options?.onHtmlFallback?.('renderer_failed');
+      options?.onFallback?.('renderer_failed');
     } catch {
       options?.onHtmlFallback?.('renderer_failed');
+      options?.onFallback?.('renderer_failed');
     }
   } else if (html) {
     options?.onHtmlFallback?.(mediaPolicy === 'url-or-text' ? 'media_unsupported' : 'renderer_unavailable');
+    options?.onFallback?.(mediaPolicy === 'url-or-text' ? 'media_unsupported' : 'renderer_unavailable');
   }
   return { type: 'text', data: { text: htmlSegmentFallbackText(data, html) } };
 }
@@ -323,6 +330,7 @@ const MEDIA_SEGMENT_TYPES = new Set(['image', 'audio', 'video', 'file']);
 function applyOutboundMediaPolicy(
   segments: Segment[],
   mediaPolicy: OutboundMediaPolicy,
+  onFallback?: (reason: OutboundFallbackReason) => void,
 ): Segment[] {
   if (mediaPolicy !== 'url-or-text') return segments;
   return segments.map((segment) => {
@@ -330,6 +338,7 @@ function applyOutboundMediaPolicy(
     const data = segment.data as { media?: unknown; alt?: unknown; name?: unknown };
     const media = data.media;
     if (!isMediaRef(media) || media.kind === 'url') return segment;
+    onFallback?.('media_unsupported');
     const label = typeof data.alt === 'string' && data.alt
       ? data.alt
       : typeof data.name === 'string' && data.name

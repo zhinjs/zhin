@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
+import { withConfigFileLock } from './config-file-lock.js';
 import type {
   ConfigDocumentPort,
   ConfigDocumentSnapshot,
@@ -155,7 +156,8 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
   }
 
   commit(): Promise<ConfigDocumentSnapshot> {
-    return this.mutate(() => this.#commit());
+    return this.mutate(() => this.#state === 'prepared'
+      ? withConfigFileLock(this.#file, () => this.#commit()) : this.#commit());
   }
 
   async #commit(): Promise<ConfigDocumentSnapshot> {
@@ -176,7 +178,8 @@ class PreparedConfigFileDocument implements PreparedConfigDocument {
   }
 
   rollback(): Promise<void> {
-    return this.mutate(() => this.#rollback());
+    return this.mutate(() => this.#state === 'committed'
+      ? withConfigFileLock(this.#file, () => this.#rollback()) : this.#rollback());
   }
 
   async #rollback(): Promise<void> {

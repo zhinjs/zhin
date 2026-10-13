@@ -188,6 +188,9 @@
       "@zhin.js/plugin-runtime": [
         "./packages/im/plugin-runtime/src/index.ts"
       ],
+      "@zhin.js/plugin-test-kit": [
+        "./packages/toolkit/plugin-test-kit/src/index.ts"
+      ],
       "@zhin.js/runtime": [
         "./packages/im/runtime/src/index.ts"
       ],
@@ -305,7 +308,8 @@
     "basic/schema/tests/config-types.fixture.ts",
     "packages/im/core/tests/middleware-types.fixture.ts",
     "packages/im/command/tests/types/declarations.ts",
-    "packages/im/plugin-runtime/tests/types/persistent-state.ts"
+    "packages/im/plugin-runtime/tests/types/persistent-state.ts",
+    "packages/toolkit/plugin-test-kit/tests/types/public.ts"
   ],
   "exclude": [
     "node_modules",

@@ -12,9 +12,11 @@ export interface PendingStatsIncrement {
 /** All mutable state owned by one group-suite plugin instance. */
 export interface GroupSuiteRuntime {
   readonly db: GroupSuiteMemoryDb;
-  readonly keywords: Map<string, string>;
+  readonly keywords: Map<string, Map<string, string>>;
   readonly teachCooldowns: Map<string, number>;
   readonly statsBuffer: Map<string, PendingStatsIncrement>;
+  /** Single-flight flush shared by admitted queries and scheduler calls. */
+  statsFlush?: Promise<void>;
   readonly checkinChains: Map<string, Promise<unknown>>;
 }
 

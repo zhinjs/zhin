@@ -14,7 +14,7 @@ const scheduleFeature = defineFeatureProvider({
       id: 'schedules-index',
       layouts: [{ segments: ['schedules', capture('name')], localName: (values) => captured(values, 'name') }],
     })],
-    validate: parseScheduleDefinition,
+    validate: value => parseScheduleDefinition(value),
   },
   runtime: {
     project(slots, context) {

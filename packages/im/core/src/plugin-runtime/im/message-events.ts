@@ -2,6 +2,15 @@ import type { PluginId } from '@zhin.js/plugin-runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 import type { MessageSenderRef } from './contracts.js';
 
+export type OutboundFallbackReason = 'renderer_unavailable' | 'renderer_failed' | 'media_unsupported'
+  | 'html_text_policy' | 'markdown_text_policy' | 'interactive_text_policy';
+
+/** Final payload handed to the Endpoint, not a claim about the remote client's display. */
+export interface RuntimeMessageRendering {
+  readonly forms: readonly ('text' | 'image' | 'native')[];
+  readonly fallbacks: readonly OutboundFallbackReason[];
+}
+
 /** Bounded message projection for runtime observers such as Console and Inbox. */
 export interface RuntimeMessageEvent {
   readonly direction: 'inbound' | 'outbound';
@@ -11,6 +20,7 @@ export interface RuntimeMessageEvent {
   readonly contentPreview: string;
   readonly messageId?: string;
   readonly timestamp: number;
+  readonly rendering?: RuntimeMessageRendering;
 }
 
 export interface RuntimeMessageEventSource {

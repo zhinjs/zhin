@@ -1,0 +1,23 @@
+{
+  "name": "@zhin.js/plugin-test-kit",
+  "version": "1.0.0",
+  "description": "Real Plugin Runtime integration fixtures with synthetic IM endpoints",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": { ".": { "types": "./lib/index.d.ts", "development": "./src/index.ts", "import": "./lib/index.js" } },
+  "files": ["lib", "README.md"],
+  "scripts": { "build": "tsc", "clean": "rimraf lib", "test": "vitest run --root ../../.. packages/toolkit/plugin-test-kit/tests", "prepublishOnly": "pnpm run build" },
+  "dependencies": {
+    "@zhin.js/adapter": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/runtime": "workspace:*"
+  },
+  "devDependencies": { "@types/node": "^26.1.2", "typescript": "^6.0.3", "vitest": "^4.1.10" },
+  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/zhinjs/zhin.git", "directory": "packages/toolkit/plugin-test-kit" },
+  "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
+}

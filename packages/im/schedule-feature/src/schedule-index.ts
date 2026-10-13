@@ -12,6 +12,7 @@ import {
   type PluginId,
 } from '@zhin.js/plugin-runtime';
 import type { ScheduleDefinition } from './definition.js';
+import { createCapabilityContext } from '@zhin.js/feature-kit';
 
 export class ScheduleIndex {
   readonly $projection = 'zhin.schedule-index/1' as const;
@@ -42,7 +43,7 @@ export class ScheduleIndex {
           id: slot.localName,
           cron: slot.definition.cron,
           description: slot.definition.description,
-          execute: slot.definition.execute,
+          execute: () => slot.definition.execute(createCapabilityContext(this.snapshot, slot.owner, this.#admission)),
         }));
       }
     } catch (error) {

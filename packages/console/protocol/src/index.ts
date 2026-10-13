@@ -96,6 +96,12 @@ export interface ConsoleMessageEventData extends ConsoleEndpointEventData {
   readonly messageId?: string;
   readonly sender?: unknown;
   readonly requester?: unknown;
+  /** Projection handed to the Endpoint; no remote display guarantee. */
+  readonly rendering?: Readonly<{
+    forms: readonly ('text' | 'image' | 'native')[];
+    fallbacks: readonly ('renderer_unavailable' | 'renderer_failed' | 'media_unsupported'
+      | 'html_text_policy' | 'markdown_text_policy' | 'interactive_text_policy')[];
+  }>;
 }
 
 export interface ConsoleEventPayloadMap {
@@ -370,6 +376,10 @@ export const CONFIG_RPC = Object.freeze({
 
 /** Console plugin management RPC names. Mutations remain full-scope only. */
 export const PLUGIN_RPC = Object.freeze({
+  INSPECT: 'plugin:inspect',
+  APPLY: 'plugin:apply',
+  PLAN_VERIFICATION: 'plugin:plan-verification',
+  VERIFY: 'plugin:verify',
   PLAN_INSTALL: 'plugin:plan-install',
   INSTALL: 'plugin:install',
   PLAN_UNINSTALL: 'plugin:plan-uninstall',
@@ -395,6 +405,8 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'entries:get',
   'pages:list',
   // Raw persisted configuration may contain secrets; demo is not a general read-only authority.
+  PLUGIN_RPC.INSPECT,
+  PLUGIN_RPC.PLAN_VERIFICATION,
   PLUGIN_RPC.PLAN_INSTALL,
   PLUGIN_RPC.PLAN_UNINSTALL,
   PLUGIN_RPC.PLAN_UPDATE,
@@ -423,6 +435,8 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
 export const DEMO_RPC_WRITE_BLOCKLIST: ReadonlySet<string> = new Set([
   CONFIG_RPC.SET,
   CONFIG_RPC.REPLACE_SOURCE,
+  PLUGIN_RPC.APPLY,
+  PLUGIN_RPC.VERIFY,
   PLUGIN_RPC.INSTALL,
   PLUGIN_RPC.UNINSTALL,
   PLUGIN_RPC.UPDATE,

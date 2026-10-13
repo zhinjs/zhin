@@ -48,7 +48,11 @@ Root 先用组合后的 JSON Schema 校验候选文档，再执行受影响 Plug
 
 环境变量表达式作为普通字符串保留。环境 overlay 和 secret 解析属于 Root Resource，不由文件适配器展开。
 
-同一个 Document 实例的 commit 与 rollback 串行执行；从相同 revision 准备的并发事务只有第一个可提交，后续事务报告冲突。此保护不提供跨 Document 实例或跨进程的原子比较交换；外部写入仍由 revision 检查发现。
+同一个 Document 实例的 commit 与 rollback 串行执行；不同 Document 实例与独立进程通过同目录 `.<filename>.zhin-lock` 文件互斥。revision 检查与原子 rename 位于同一临界区，从相同 revision 准备的并发事务只有第一个可提交，后续事务报告冲突。没有模块全局状态或自动抢锁。
+
+锁等待最长 5 秒。活跃 writer 超时会明确报错；已退出 writer 的残留锁立即报告进程与路径，要求检查配置文件后手动移除锁再重试。PID 权限不足不视为进程已死；读写锁的真实 I/O 错误保持原错误，操作与清理同时失败会保留两个原因。失败不会删除不属于本 writer 的锁。
+
+这是协作式跨进程互斥：所有框架配置写入应使用 ConfigFileDocument。普通编辑器或第三方直接 writeFile 不遵守锁；revision 能检测检查前的改动，但不能提供对任意外部写入的文件系统原子 CAS 保证。
 
 ## 开发验证
 

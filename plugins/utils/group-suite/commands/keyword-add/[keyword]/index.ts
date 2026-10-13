@@ -1,16 +1,17 @@
 import { defineCommand } from 'zhin.js/command';
-import { addKeyword } from '../../../src/keyword-store.js';
+import type { Message } from '@zhin.js/core/runtime';
 import type { GroupSuiteConfig } from '../../../src/config.js';
-import { resolveGroupSuiteRuntime } from '../../../src/runtime-state.js';
+import { keywords } from '../../../src/keywords.js';
 
-export default defineCommand<GroupSuiteConfig>({
-  description: '添加关键词自动回复',
+export default defineCommand<GroupSuiteConfig, string, Message>({
+  permit: ['group()', 'role(owner,admin,master,trusted)'],
+  description: '添加当前群关键词自动回复',
   params: { keyword: { type: 'string' } },
-  execute({ params, args, owner, use }) {
-    const keyword = String(params.keyword ?? '');
-    const reply = args.join(' ').trim();
+  async execute(context) {
+    const keyword = String(context.params.keyword ?? '');
+    const reply = context.args.join(' ').trim();
     if (!keyword || !reply) return '请提供关键词和回复内容';
-    addKeyword(keyword, reply, resolveGroupSuiteRuntime({ owner, use }).keywords);
+    await keywords(context.input, context).update(store => { store.set(keyword, reply); });
     return `已添加关键词「${keyword}」→「${reply}」`;
   },
 });

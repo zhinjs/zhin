@@ -79,6 +79,11 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
 
   registerConsoleEntryRoutes({ http, consoleRuntime });
   registerConsoleSystemRoutes({ http, base, im, snapshot });
+  const pluginManagement = createPluginManagementPort(projectRoot, {
+    snapshots,
+    lifecycleFile: pluginLifecycleFile,
+    requestRestart: onRestart ? () => { setTimeout(onRestart, 500); } : undefined,
+  });
   registerConsolePluginRoutes({
     http,
     base,
@@ -86,6 +91,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     pluginLifecycleFile,
     im,
     snapshot,
+    pluginManagement,
   });
   registerConsoleRpcRoute({
     http,
@@ -96,11 +102,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration,
-    pluginManagement: createPluginManagementPort(projectRoot, {
-      readConfigRevision: () => configuration.readSource().then(source => source.revision),
-      readConfigDocument: () => configuration.readDocument(),
-      removeConfigKey: (instanceKey) => configuration.removeKey(instanceKey),
-    }),
+    pluginManagement,
     im,
     onRestart,
     databaseHost,

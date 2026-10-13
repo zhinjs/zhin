@@ -73,8 +73,12 @@ export class JsxButtonRegistry {
     const active = this.#bindings.get(snapshot);
     if (active) this.#prune(active);
     const binding = active?.get(payload);
-    // Consume stale, unknown and cross-conversation callbacks without invoking user code.
-    if (!binding || binding.conversationKey !== conversationRefKey(message.conversation)) return true;
+    // Never invoke a retired closure. The reply uses this incoming operation's scope.
+    if (!binding) {
+      await message.$reply('交互已过期或不可用，请重新发起。');
+      return true;
+    }
+    if (binding.conversationKey !== conversationRefKey(message.conversation)) return true;
     const bound = bindOperationInput(message, binding.requester, snapshot);
     const content = await binding.onClick(bound);
     if (typeof content === 'number') await bound.$reply(jsx('text', { text: String(content) }));

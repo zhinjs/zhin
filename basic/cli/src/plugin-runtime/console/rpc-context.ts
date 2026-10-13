@@ -95,7 +95,7 @@ function createRpcContext(
       const plan = await pluginManagement?.planInstall(target.packageName);
       const config = await configuration.readDocument();
       const validation = await configuration.validatePluginConfig(target.instanceKey, config[target.instanceKey]);
-      return { pluginName: target.instanceKey, packageName: target.packageName, planScope: 'package', plan: plan ?? null, validation };
+      return { pluginName: target.instanceKey, packageName: target.packageName, planScope: 'package', plan: plan ?? null, validation, state: await pluginManagement?.inspect?.(target.instanceKey) ?? null };
     },
     listEndpoints: im ? async () => im.endpoints.list() : undefined,
     getEndpoint: im

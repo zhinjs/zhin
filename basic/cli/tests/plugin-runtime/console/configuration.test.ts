@@ -19,6 +19,19 @@ afterEach(async () => {
 });
 
 describe('config document flatten / write namespace', () => {
+  it('loads only the selected production dotenv layer using formal Runtime environment rules', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-env-mode-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'env-fixture', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, plugins: [] } }));
+    await writeFile(join(root, 'zhin.config.json'), '{}');
+    await writeFile(join(root, '.env.development'), 'ZHIN_CONSOLE_DEV_ONLY=test-value\n');
+    await writeFile(join(root, '.env.production'), 'zhin_console_prod_only=test-value\n');
+    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(join(root, 'zhin.config.json')), environmentName: 'production' });
+    expect(await store.validatePluginConfig('missing', { token: '${ZHIN_CONSOLE_DEV_ONLY}', prod: '${zhin_console_prod_only}' })).toMatchObject({ missingEnv: ['ZHIN_CONSOLE_DEV_ONLY'] });
+    await writeFile(join(root, 'schema.json'), JSON.stringify({ type: 'object', properties: { token: { type: 'string', default: '${ZHIN_CONSOLE_DEV_ONLY}' } } }));
+    expect(await store.validatePluginConfig('plugin', {})).toMatchObject({ missingEnv: ['ZHIN_CONSOLE_DEV_ONLY'] });
+  });
+
   it('flattens plugins.<key> to top-level for Console config:get-all', () => {
     const flat = flattenConfigDocument({
       http: { port: 8086 },

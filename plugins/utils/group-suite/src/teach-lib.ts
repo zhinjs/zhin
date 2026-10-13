@@ -1,3 +1,4 @@
+import type { ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getTeachModel } from './db-store.js';
 import {
@@ -70,12 +71,7 @@ function qaWhereKey(row: {
   };
 }
 
-type MessageInput = {
-  sender?: { readonly id: string; readonly name?: string };
-  target?: string;
-  content?: unknown;
-  metadata?: Readonly<Record<string, unknown>>;
-};
+type MessageInput = ConversationInput;
 
 async function findMatch(
   content: string,
@@ -86,12 +82,9 @@ async function findMatch(
 ): Promise<Record<string, unknown> | null> {
   const QA = getTeachModel(runtime.db);
   if (!QA) return null;
-  const allItems = (await QA.select()) as Record<string, unknown>[];
-  const candidates = allItems.filter(
-    (item) =>
-      item.context_type === 'global' ||
-      (item.context_type === ctxType && item.context_id === ctxId),
-  );
+  const candidates = (await QA.select().where({
+    context_type: ctxType, context_id: ctxId,
+  })) as Record<string, unknown>[];
   for (const item of candidates) {
     if (!item.is_regex && item.question === content) return item;
   }
@@ -196,9 +189,7 @@ export async function teachList(
   const safePage = Math.max(1, page);
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const allItems = (await QA.select().where(
-    ctxType === 'global'
-      ? { context_type: 'global' }
-      : { context_type: ctxType, context_id: ctxId },
+    { context_type: ctxType, context_id: ctxId },
   )) as Record<string, unknown>[];
   if (allItems.length === 0) return '还没有教过任何问答哦～';
   const totalPages = Math.ceil(allItems.length / cfg.teachPageSize);
@@ -210,7 +201,7 @@ export async function teachList(
     const q = item.is_regex ? `/${item.question}/` : item.question;
     return `${start + i + 1}. ${prefix} ${q} → ${item.answer}`;
   });
-  const header = ctxType === 'global' ? '全局问答列表' : '本群问答列表';
+  const header = '本会话问答列表';
   return `${header}\n${lines.join('\n')}\n第 ${pageNum}/${totalPages} 页 · 共 ${allItems.length} 条`;
 }
 
@@ -253,7 +244,7 @@ export async function tryTeachReply(
   const matched = await findMatch(content, ctxType, ctxId, cfg, runtime);
   if (!matched) return null;
 
-  const cooldownKey = `${matched.question}:${ctxType}:${ctxId}:${matched.is_regex ?? 0}`;
+  const cooldownKey = JSON.stringify([matched.question, ctxType, ctxId, matched.is_regex ?? 0]);
   const cooldowns = runtime.teachCooldowns;
   const last = cooldowns.get(cooldownKey);
   if (last && Date.now() - last < cfg.teachCooldownMs) return null;

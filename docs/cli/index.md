@@ -105,7 +105,7 @@ zhin info <package>
 
 搜索插件市场 / 查看单个插件详情。
 
-## packages：技能/扩展包
+## packages：插件状态与技能/扩展包
 
 ```bash
 zhin packages install <npm:pkg|git:url> [--local]
@@ -115,6 +115,27 @@ zhin packages update [source] [--local]
 ```
 
 管理 zhin-package 技能/扩展包（ADR 0010）；`--local`（`-l`）安装到项目 `.zhin/packages/` 而非全局。
+
+不带 `npm:` / `git:` 前缀的 npm 插件安装与 `zhin install <包名>`、Console 共用项目安装流程：检查依赖、安装实际包、声明实例并补充最小配置。安装完成不代表已发布到当前 generation，也不代表平台已上线或业务功能已验证。
+
+```bash
+zhin packages status <instanceKey>
+zhin packages status <instanceKey> --live http://127.0.0.1:8068
+zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
+zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+  --generation <generation> --project-revision <revision> --check-revision <checkRevision>
+```
+
+实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可用 `--token-env <变量名>` 指定。`apply`、`verify` 需要完整权限；不要把 token 写在 URL 或命令参数中。离线 `status` 只提供文件与包解析证据，离线验证计划没有当前 generation 或可执行检查，不会另行启动 Runtime。
+
+状态分别表示 `installed`（包可解析）、`declared`（实例已声明）、`missing-config`（必填配置或环境变量缺失）、`pending-restart`（当前代尚未应用）、`enabled`（已发布且配置、包版本一致）、`degraded`（声明与实际安装等证据不一致）。`readiness` 独立记录就绪证据：包含适配器但没有平台健康证据时为 `unknown`。`verification` 只表示是否提供业务检查，不把启动成功当作业务通过。
+
+已加载的声明 schema 只适用于同一包版本；更新后改读磁盘上的 `schema.json`。若新版只在 TypeScript 声明配置、没有可读取的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境引用，完整校验须由真正的 Runtime 预检完成。
+
+先查看 `verification-plan` 的作用范围与副作用，再把返回的 `generation`、`projectRevision`、`checkRevision` 传给 `verify`。配置、generation 或检查定义变化会拒绝旧计划。未提供检查的插件返回 `not-configured`；本地检查通过也不意味着平台投递已验证。`apply` 只是申请应用，随后用实时 `status` 确认真正发布。
+
+项目变更使用文件锁与 revision 校验。并发操作或配置漂移会明确失败；安装步骤已经完成时返回部分完成证据，不自动覆盖用户改动。若锁所属进程已经退出，错误会提供锁路径；确认没有安装进程后再删除该锁并重试。
 
 ## setup：交互式配置向导
 

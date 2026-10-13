@@ -1,3 +1,4 @@
+import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getCheckinModel } from '../../../../src/db-store.js';
 import { groupSuiteRuntimeToken } from '../../../../src/runtime-state.js';
@@ -12,16 +13,12 @@ export default defineAgentTool<{ limit?: number; group_id?: string }>({
     },
   },
   requiresApproval: 'never',
+  scopes: ['group'],
   async execute({ limit, group_id: requestedGroupId }, context) {
     const model = getCheckinModel(context.use(groupSuiteRuntimeToken).db);
     if (!model) return '签到数据库尚未就绪';
-    const groupId = requestedGroupId
-      ?? (context.origin.kind === 'im' && context.origin.scope !== 'private'
-        ? context.origin.sceneId
-        : '');
-    const rows = groupId
-      ? await model.select().where({ context_type: 'group', context_id: groupId })
-      : await model.select();
+    const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
+    const rows = await model.select().where({ context_type: 'group', context_id: groupId });
     const count = Math.min(Math.max(Number(limit) || 10, 1), 50);
     const ranked = [...rows]
       .sort((left, right) => Number(right.points ?? 0) - Number(left.points ?? 0))

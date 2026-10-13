@@ -26,13 +26,13 @@ afterEach(async () => {
 });
 
 describe('NativeDevelopmentModuleRuntime', () => {
-  it('keeps unrelated Plugin entry side effects cached while refreshing a helper importer closure', async () => {
+  it.each(['helper', 'plugin-entry'] as const)('keeps unrelated Plugin entry side effects cached while refreshing %s', async mode => {
     const root = await fixture();
     const key = `zhin-native-config-review:${root}`;
     for (const name of ['root', 'child', 'sibling']) {
       const directory = name === 'root' ? root : join(root, 'plugins', name);
       await mkdir(directory, { recursive: true });
-      await writeFile(join(directory, 'package.json'), JSON.stringify({ name: `native-${name}`, type: 'module',
+      await writeFile(join(directory, 'package.json'), JSON.stringify({ name: `native-${name}`, version: '1.0.0', type: 'module',
         zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false,
           ...(name === 'root' ? { plugins: [{ package: './plugins/child', instanceKey: 'child' }, { package: './plugins/sibling', instanceKey: 'sibling' }] } : {}) } }));
       await writeFile(join(directory, 'plugin.js'), `${name === 'child' ? "import { value } from './helper.js';" : 'const value = 1;'}
@@ -53,11 +53,16 @@ const runtime = new RootRuntime({ projectRoot: ${JSON.stringify(root)},
 try {
   await runtime.start();
   const first = { ...globalThis[Symbol.for(${JSON.stringify(key)})] };
-  await writeFile(${JSON.stringify(helper)}, 'export const value = 2;');
+  const versions = [...runtime.snapshot.tree.values()].map(node => node.packageVersion);
+  ${mode === 'helper'
+    ? `await writeFile(${JSON.stringify(helper)}, 'export const value = 2;');`
+    : `const childEntry = ${JSON.stringify(join(root, 'plugins/child/plugin.js'))};
+       const { readFile } = await import('node:fs/promises');
+       await writeFile(childEntry, (await readFile(childEntry, 'utf8')).replace("import { value } from './helper.js';", 'const value = 2;'));`}
   const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('Unexpected process restart'); }, onError() {} });
-  await hmr.enqueue(${JSON.stringify(helper)});
+  await hmr.enqueue(${JSON.stringify(mode === 'helper' ? helper : join(root, 'plugins/child/plugin.js'))});
   process.stdout.write(JSON.stringify({ first, counts: globalThis[Symbol.for(${JSON.stringify(key)})],
-    generation: runtime.snapshot.generation, config: [...runtime.snapshot.config.values()] }));
+    generation: runtime.snapshot.generation, config: [...runtime.snapshot.config.values()], versions }));
 } finally { await runtime.stop(); }
 `);
     const { stdout } = await execFileAsync(process.execPath,
@@ -68,6 +73,7 @@ try {
     expect(result.counts).toEqual({ root: 1, child: 2, sibling: 1 });
     expect(result.generation).toBe(2);
     expect(result.config).toContainEqual({ value: 2 });
+    expect(result.versions).toEqual(['1.0.0', '1.0.0', '1.0.0']);
   });
 
   it('uses URL revisions to reload one directly owned ESM definition', async () => {

@@ -1,3 +1,4 @@
+import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { groupSuiteRuntimeToken } from '../../../../src/runtime-state.js';
 import { flushStatsBuffer, monthStartStr, queryStats, weekStartStr } from '../../../../src/stats-lib.js';
@@ -15,13 +16,11 @@ export default defineAgentTool<{ group_id?: string; period?: Period }>({
     },
   },
   requiresApproval: 'never',
+  scopes: ['group'],
   async execute({ group_id: requestedGroupId, period = 'today' }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     await flushStatsBuffer(runtime);
-    const groupId = requestedGroupId
-      ?? (context.origin.kind === 'im' && context.origin.scope !== 'private'
-        ? context.origin.sceneId
-        : '');
+    const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const fromDate = period === 'week'
       ? weekStartStr()
       : period === 'month' ? monthStartStr() : todayStr();

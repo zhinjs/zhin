@@ -13,6 +13,7 @@ import type { HttpHost } from './http-host.js';
 import { HttpBodyError, readJsonBody } from './json-body.js';
 import { MarketplaceRegistry } from './marketplace-registry.js';
 import type { AuthScope } from './token-registry.js';
+import type { ConsoleMessageEventData } from '@zhin.js/console-protocol';
 
 /** 与 basic/cli 接线方对齐的上下文约定。 */
 export interface ConsoleRestCtx {
@@ -60,6 +61,9 @@ export interface ConsoleAgentIntrospection {
     props: unknown;
     signal: AbortSignal;
   }>): Promise<unknown>;
+  previewComponentDelivery?(input: Readonly<{
+    requester: string; name: string; props: unknown; target: unknown; signal: AbortSignal;
+  }>): Promise<Readonly<{ output: unknown; rendering: NonNullable<ConsoleMessageEventData['rendering']>; generation: number; note: string }>>;
 }
 
 /** Session tree 门面 — 形状对齐 agent 包 SessionTreeRuntimeHandle。 */
@@ -729,6 +733,7 @@ function registerIntrospectionRoutes(
     }
     const lease = ctx.acquireAgentRuntime?.();
     const render = lease?.value.introspection?.renderComponent;
+    const previewDelivery = lease?.value.introspection?.previewComponentDelivery;
     if (!lease || !render) {
       lease?.release();
       writeJson(response, 503, { success: false, error: 'Component Runtime 未就绪' });
@@ -747,19 +752,23 @@ function registerIntrospectionRoutes(
       activeComponentPreviews -= 1;
       lease.release();
     };
-    const renderPromise = Promise.resolve().then(() =>
-      render({ requester, name, props: body.props ?? {}, signal: controller.signal }));
+    const renderPromise = Promise.resolve().then(() => {
+      const input = { requester, name, props: body.props ?? {}, signal: controller.signal };
+      if (body.target === undefined) return render(input).then(output => ({ output }));
+      if (!previewDelivery) throw new Error('Target-aware Component preview 未就绪');
+      return previewDelivery({ ...input, target: body.target });
+    });
     // A timed-out implementation may ignore AbortSignal. Keep its generation
     // lease until the real operation settles; the bounded concurrency gate
     // prevents non-cooperative previews from pinning unbounded generations.
     void renderPromise.then(release, release);
     try {
-      const output = await raceWithAbort(
+      const preview = await raceWithAbort(
         renderPromise,
         controller.signal,
       );
-      assertPreviewOutput(output, options.componentPreviewMaxBytes ?? 256 * 1024);
-      writeJson(response, 200, { success: true, data: { requester, name, output } });
+      assertPreviewOutput(preview, options.componentPreviewMaxBytes ?? 256 * 1024);
+      writeJson(response, 200, { success: true, data: { requester, name, ...preview } });
     } catch (error) {
       const status = error instanceof ComponentPreviewTimeoutError
         ? 408
