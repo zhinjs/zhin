@@ -16,7 +16,7 @@ import { defineCommand } from 'zhin.js/command';
 export default defineCommand({
   description: 'List GitHub issues',
   alias: ['issues'],                 // 可多词；owner 不参与用户路由
-  permit: ['adapter(icqq)', 'role(master)'], // 数组 AND；未过则静默未命中
+  permit: ['adapter(icqq)', 'role(master)'], // 数组 AND；失败返回 denied
   // shortcut: { '列 issue': {} },   // 全局整句
   execute: ({ args }) => `issues:${args.join(',')}`,
 });
@@ -27,7 +27,7 @@ export default defineCommand({
 ```text
 commands/gh/pr/[[title]]/index.ts   -> gh pr [title]    （params: { title: { type: 'string', default: 'defaultTitle' } }）
 commands/upload/[asset]/index.ts    -> upload <asset>   （params: { asset: { type: 'image' } }）
-commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type: 'text' } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
+commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type: 'text', rest: true } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
 ```
 
 文本类型包括 `string`、`word`、`text`、`number`、`integer`、`float`、`boolean`；结构化
@@ -50,12 +50,57 @@ commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type:
 可选声明字段：
 
 - `alias`：替换全部本地静态段；owner 不参与用户路由。
-- `permit`：内置 DSL（`adapter|group|private|channel|user|role`）；失败为静默未命中。
+- `permit`：内置 DSL（`adapter|group|private|channel|user|role`）；失败为 denied，委托 PermissionHost。
 - `shortcut`：全局整句精确匹配 → 预填 `params`。
 
 单文件插件可在 `setup({ addCommand })` 中调用
 `addCommand('hello', defineCommand(...))`。它与目录发现共用 CommandIndex；拆成文件后
 可获得单命令 HMR。
+
+
+## 集中声明参数、选项与帮助
+
+目录提供静态命令路径。静态 `commands/remind/index.ts` 可集中声明任意数量的位置参数；
+现有 `commands/foo/[id]/index.ts` 仍绑定同名 `params.id`，后面的参数无需额外动态目录。
+
+```ts
+export default defineCommand({
+  description: '创建提醒',
+  params: {
+    minutes: { type: 'integer', min: 1, max: 1440, description: '分钟数' },
+    note: { type: 'text', default: '休息一下', description: '提醒内容' },
+  },
+  options: {
+    count: { type: 'integer', alias: 'c', default: 1, min: 1, max: 10 },
+    quiet: { type: 'boolean', default: false },
+  },
+  execute: ({ params, options }) => `${params.minutes}:${params.note}:${options.count}`,
+});
+```
+
+`params` 按声明顺序消费输入；参数类型和 `options` 类型自动推导到 `execute`。
+`optional: true` 无默认值时为 `T | undefined`；`rest: true` 为只读数组且必须最后声明。
+`type: 'text'` 保留文本中的引号、空格和换行，消费连续文本；它应放在其他标量参数之后。
+`min` / `max` 表示数值范围或文本长度；`choices`、`pattern` 与同步 `validate(value, session)`
+提供约束。动态默认值与 shortcut 预填也经过同样校验。非法声明在加载前拒绝。
+
+选项支持 `--count 2`、`--count=2`、`-c 2`；布尔 `--quiet` 为 true，
+`--quiet=false` 为 false。选项可在参数之间出现；负数不是选项。`--` 结束选项解析，
+后面的内容作为参数。未知/重复选项拒绝。`remind --help` 从同一声明生成帮助，包含
+Endpoint 前缀及显式插件命名空间，不执行命令；同一权限声明仍约束帮助读取。
+
+`dispatch()` 返回 `status`：`unmatched`（继续普通消息处理）、`invalid`（`issues` +
+`help`）、`denied`（权限拒绝）、`executed`。后三者 `matched: true`，只有 `executed`
+包含业务结果。可靠静态路径匹配后才提示错误；纯动态路由的模糊聊天保持未匹配。
+受限命令没有可鉴权主体时拒绝，Host 可通过 `dispatch` 提供真实 `PermissionSubject`；
+`execute(name)` 无主体不能绕过权限。审批与命令准入独立。
+
+真实消费者：[二维码](../../../plugins/utils/qrcode/README.md)、
+[代码运行](../../../plugins/utils/code-runner/README.md)。
+
+动态目录的路径形态无法被 TypeScript 读取。使用无默认值的 `[[id]]` 时，声明
+`params.id.optional: true`；使用 `[...items]` 时声明 `params.items.rest: true`，
+让执行参数的可选性、数组类型与运行时一致。目录绑定的参数应放在 `params` 第一项。
 
 ## Runtime
 

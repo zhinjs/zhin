@@ -2,6 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { Schema, SchemaValidationError } from '../src/index.js';
 
 describe('Schema.safeParse', () => {
+  it('returns validate-only input, including omitted defaulted fields at every nesting level', () => {
+    const schema = Schema.object({ count: Schema.number().default(1), nested: Schema.list(Schema.object({ value: Schema.string().default('x') })) });
+    const input = { nested: [{}] };
+    expect(schema.safeParse(input)).toEqual({ success: true, data: input });
+    expect(input).toEqual({ nested: [{}] });
+  });
   it('accepts valid object without filling defaults', () => {
     const schema = Schema.object({
       name: Schema.string().required(),

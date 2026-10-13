@@ -34,3 +34,4 @@ export {
 } from './define.js';
 
 export { createSceneRolePlatformChecker, platformPermission } from './helpers.js';
+export * from './check-permissions.js';

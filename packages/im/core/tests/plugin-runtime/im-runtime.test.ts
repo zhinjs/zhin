@@ -8,6 +8,7 @@ import {
   createCapabilitySlot,
   createGenerationAdmissionGate,
   createSnapshotView,
+  createDeliveryTarget,
   featureId,
   generationAdmissionBinder,
   generationAdmissionSource,
@@ -123,6 +124,30 @@ function receiveEvent(im: ImRuntime, name: string, payload: unknown): Promise<un
 }
 
 describe('IM Runtime', () => {
+  it('replies to invalid and denied commands but leaves ordinary chat unmatched', async () => {
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'ok');
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, validateCommand: true, commandResult: executed,
+    });
+    try {
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list nope'))).resolves.toMatchObject({ matched: true, status: 'invalid' });
+      expect(JSON.stringify(sent[0])).toContain('/gh issue list');
+      await expect(receive(fixture.im, fixtureInput(fixture, '/gh issue list --help'))).resolves.toMatchObject({ matched: true, status: 'executed' });
+      await expect(receive(fixture.im, fixtureInput(fixture, 'ordinary conversation'))).resolves.toMatchObject({ matched: false });
+      expect(sent).toHaveLength(2);
+      expect(executed).not.toHaveBeenCalled();
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+    const denied = await createFixture([], sent, undefined, undefined, undefined, {
+      middleware: false, restrictCommand: true, commandResult: executed,
+    });
+    try {
+      await expect(receive(denied.im, fixtureInput(denied, '/gh issue list open'))).resolves.toMatchObject({ matched: true, status: 'denied' });
+      expect(JSON.stringify(sent[2])).toContain('没有权限');
+      expect(executed).not.toHaveBeenCalled();
+    } finally { await denied.adapters.stop(); await denied.store.close(); }
+  });
+
   it.each(['native', 'text'] as const)('executes JSX onClick through %s button ingress and replies as its author', async (interactive) => {
     const root = rootPluginId();
     const child = childPluginId(root, 'button-author');
@@ -1508,6 +1533,84 @@ describe('IM Runtime', () => {
     await fixture.store.close();
   });
 
+  it('renders rich durable sends with the originating plugin component and middleware context', async () => {
+    const child = childPluginId(rootPluginId(), 'author');
+    const sent: unknown[] = [];
+    const owners: PluginId[] = [];
+    const fixture = await createFixture([], sent, undefined, undefined, undefined, {
+      componentOwner: child,
+      componentResult: () => jsx(Fragment, { children: ['hello ', jsx('mention', { target: 'alice' })] }),
+      outboundMiddleware: (envelope, next) => { owners.push(envelope.requester); return next(); },
+    });
+    try {
+      const input = fixtureInput(fixture, '');
+      const target = createDeliveryTarget({ conversation: { ...input.conversation,
+        endpoint: { ...input.conversation.endpoint, adapter: 'memory' } } });
+      await fixture.im.endpoints.sendTarget(target, component('result', {}), child);
+      await fixture.im.endpoints.sendTarget(target, jsx('share', { title: 'song', url: 'https://example.com/song' }), child);
+      expect(owners).toEqual([child, child]);
+      expect((sent[0] as { payload: unknown }).payload).toEqual([
+        { type: 'text', data: { text: 'hello ' } }, { type: 'mention', data: { target: 'alice' } },
+      ]);
+      expect((sent[1] as { payload: unknown }).payload).toEqual([
+        { type: 'share', data: { title: 'song', url: 'https://example.com/song' } },
+      ]);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('saves an actual inbound Message and sends to its platform identity after a generation commit', async () => {
+    let message: Message | undefined;
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, value => { message = value; });
+    try {
+      const input = fixtureInput(fixture, 'ordinary conversation');
+      await receive(fixture.im, { ...input, conversation: { ...input.conversation,
+        endpoint: { ...input.conversation.endpoint, adapter: 'memory' } } });
+      expect(message).toBeDefined();
+      const target = createDeliveryTarget(message!);
+      expect(target.endpoint.adapter).toBe('memory');
+      const current = fixture.store.current;
+      fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
+      await expect(fixture.im.endpoints.sendTarget(JSON.parse(JSON.stringify(target)), 'reminder'))
+        .resolves.toEqual({ messageId: 'sent-1' });
+      expect(sent).toHaveLength(1);
+      await expect(fixture.im.endpoints.sendTarget({ ...target,
+        endpoint: { ...target.endpoint, adapter: String(rootPluginId()) } }, 'owner is not adapter'))
+        .rejects.toMatchObject({ code: 'endpoint_identity_mismatch', disposition: 'not_sent' });
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
+  it('uses persisted exact targets through the current generation and preserves parent/thread addresses', async () => {
+    const events: string[] = [];
+    const sent: unknown[] = [];
+    const fixture = await createFixture(events, sent);
+    try {
+      const target = JSON.parse(JSON.stringify(createDeliveryTarget({ conversation: {
+        endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
+        kind: 'channel', id: 'child', parent: { kind: 'channel', id: 'guild' }, threadId: 'thread',
+      } })));
+      const current = fixture.store.current;
+      fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
+      await expect(fixture.im.endpoints.sendTarget(target, 'saved target')).resolves.toEqual({ messageId: 'sent-1' });
+      expect(sent.at(-1)).toEqual(expect.objectContaining({ conversation: target }));
+      expect(events).toContain('outbound:enter');
+      await expect(fixture.im.endpoints.sendTarget({ ...target, endpoint: { ...target.endpoint, adapter: 'root/other' } }, 'wrong bot'))
+        .rejects.toMatchObject({ code: 'endpoint_identity_mismatch', disposition: 'not_sent' });
+      await expect(fixture.im.endpoints.sendTarget({ ...target, endpoint: { ...target.endpoint, id: 'memory' } }, 'alias'))
+        .rejects.toMatchObject({ code: 'endpoint_not_found', disposition: 'not_sent' });
+      const next = fixture.store.current;
+      fixture.store.commit(next.generation, {
+        snapshot: { ...snapshotState(next), projections: new Map() }, dispose: () => undefined,
+      });
+      await expect(fixture.im.endpoints.sendTarget(target, 'removed endpoint')).rejects.toThrow();
+      expect(sent).toHaveLength(1);
+    } finally {
+      await fixture.adapters.stop();
+      await fixture.store.close();
+    }
+  });
+
   it('rejects host sends whose canonical delivery was suppressed or failed', async () => {
     const scenarios = [
       {
@@ -2550,6 +2653,8 @@ async function createFixture(
   commandStarted?: () => void,
   options?: {
     middleware?: boolean;
+    validateCommand?: boolean;
+    restrictCommand?: boolean;
     adapterSegments?: { supported?: readonly string[]; html?: 'direct' | 'image' | 'text'; interactive?: 'native' | 'text'; outboundMedia?: readonly ('url' | 'path' | 'base64' | 'upload')[] };
     commandResult?: (input: Message) => SendContent | void | Promise<SendContent | void>;
     componentResult?: () => SendContent | Promise<SendContent>;
@@ -2598,6 +2703,8 @@ async function createFixture(
     localName: 'gh/issue/list',
     source: '/commands/gh/issue/list.ts',
     definition: defineCommand<{}, SendContent | void, Message>({
+      ...(options?.validateCommand ? { params: { count: { type: 'integer' as const, min: 1 } } } : {}),
+      ...(options?.restrictCommand ? { permit: ['role(master)'] } : {}),
       ...(options?.commandShortcut ? { shortcut: { 'author shortcut': {} } } : {}),
       async execute({ args, input }) {
         if (!input) throw new Error('Fixture command requires a Message');

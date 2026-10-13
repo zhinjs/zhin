@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { PluginOutboundHost, childPluginId, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   createOutboundHost,
   type OutboundRuntimePort,
@@ -11,6 +12,7 @@ function createRuntime(
     endpoints: {
       capabilities: () => undefined,
       send: async () => ({ messageId: '' }),
+      sendTarget: async () => ({ messageId: '' }),
       addReaction: async () => null,
       removeReaction: async () => undefined,
       recall: async () => undefined,
@@ -23,6 +25,21 @@ function createRuntime(
 }
 
 describe('OutboundHost', () => {
+  it('delegates durable targets directly without resolving aliases or replacing delivery failures', async () => {
+    const sendTarget = vi.fn().mockResolvedValue({ messageId: 'exact-message' });
+    const send = vi.fn();
+    const owner = childPluginId(rootPluginId(), 'reminder');
+    const host = new PluginOutboundHost(owner, createOutboundHost(createRuntime({ sendTarget, send })));
+    const target = { endpoint: { adapter: 'root/icqq', id: 'exact-endpoint' }, kind: 'channel' as const,
+      id: 'room', parent: { kind: 'channel' as const, id: 'guild' }, threadId: 'thread' };
+    const content = [{ type: 'image', data: { src: 'https://example.org/image.png' } }];
+    expect(await host.sendTarget!(JSON.parse(JSON.stringify(target)), content)).toBe('exact-message');
+    expect(sendTarget).toHaveBeenCalledWith(target, content, owner);
+    expect(send).not.toHaveBeenCalled();
+    const failure = Object.assign(new Error('delivery unknown'), { disposition: 'unknown' });
+    sendTarget.mockRejectedValueOnce(failure);
+    await expect(host.sendTarget!(target, 'reminder')).rejects.toBe(failure);
+  });
   it('delegates to the Endpoint runtime', async () => {
     const sendEndpointMessage = vi.fn().mockResolvedValue({ messageId: 'm1' });
     const host = createOutboundHost(createRuntime({ send: sendEndpointMessage }));

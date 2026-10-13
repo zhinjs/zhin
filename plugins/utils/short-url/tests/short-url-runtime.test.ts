@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import Ajv2020 from 'ajv/dist/2020.js';
 import { parseCommandDefinition } from 'zhin.js/command';
 import plugin from '../plugin.ts';
 import shortenCommand from '../commands/shorten/[url]/index.ts';
@@ -8,6 +9,13 @@ import { expandUrl, isValidUrl } from '../src/short-url-lib.js';
 describe('@zhin.js/plugin-short-url', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('short-url');
+  });
+
+  it('declares an empty strict configuration without a second schema file', () => {
+    const validate = new Ajv2020({ useDefaults: true, strict: true }).compile(plugin.config!.toJsonSchema());
+    expect(validate({})).toBe(true);
+    expect(validate({ apiKey: 'unused' })).toBe(false);
+    expect(plugin.config!.toJsonSchema()).toEqual({ type: 'object', properties: {}, additionalProperties: false });
   });
 
   it('brands shorten and expand commands', () => {

@@ -76,6 +76,9 @@ export function isolateBootstrap(): void {
       if (!definition || typeof definition.name !== 'string') {
         throw new TypeError(`${payload.packageName} does not default-export a Plugin definition`);
       }
+      if (definition.config !== undefined) {
+        throw new TypeError(`${payload.packageName} isolated Plugin cannot declare inline config; use schema.json`);
+      }
       const allowed = new Set(['zhin.isolate.channel', 'zhin.runtime-environment']);
       for (const token of definition.requires ?? []) {
         if (!allowed.has(token.id)) throw new Error(`Host resource cannot cross isolation boundary: ${token.id}`);

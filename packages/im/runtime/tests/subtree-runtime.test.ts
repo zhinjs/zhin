@@ -97,8 +97,9 @@ describe('Plugin subtree HMR', () => {
     await expect(commandIndex(second).execute('child inline')).resolves.toBe('inline:v2');
     await expect(commandIndex(second).execute('sibling status')).resolves.toBe('sibling');
     expect(setupCalls).toEqual({ root: 1, child: 2, sibling: 1 });
-    expect(modules.loadCount(rootSource)).toBe(1);
-    expect(modules.loadCount(siblingSource)).toBe(1);
+    // Config preflight rereads cached module declarations without rerunning setup.
+    expect(modules.loadCount(rootSource)).toBe(3);
+    expect(modules.loadCount(siblingSource)).toBe(3);
     expect(disposed).toEqual([]);
     expect(handoffs.slice(3)).toEqual([
       'child-v2:activate',

@@ -33,6 +33,23 @@ sidebar: false
 
 每个接口至少用两类真实插件验收，防止只给单一业务包装函数。验证多人并发、两个插件实例、配置失败和热重载，不增加全局最新值单例。
 
+### 第二阶段交付记录
+
+本轮基于第一阶段 PR #703，落地 Issue #702 的七项创作接口；参数声明与参数校验/帮助共用一个契约，在表中合并为一行：
+
+| 接口 | 验证调用方与边界 |
+| --- | --- |
+| 参数、选项、校验和帮助 | qrcode、code-runner 通过同一 CommandIndex 解析；错误输入不会被默认值吞掉，普通聊天保持未匹配 |
+| IM 中间件类型 | repeater（入站 Message）；严格类型夹具验证 Message、出站 Envelope、平台 client 与无消息 Host 上下文 |
+| 可保存的投递目标 | reminder、preferences 两个正式 definePlugin Runtime 夹具，保留端点、父频道和线程；Core 回归验证 JSX、自定义组件和发起插件归属 |
+| 轻量状态 | 同两类插件，验证 owner、用户、会话、两实例、数据库 CAS、TTL、局部 HMR、在途操作与重启；独立 PostgreSQL 17 / MySQL 8.4 连接池实测 |
+| 配置声明 | repeater、short-url 使用同一 Schema 导出类型、默认值、校验及表单元信息；配置失败保持旧代，首次登录期间也提供表单 |
+| 统一准入 | CommandIndex 和 `checkPermissions` 委托 PermissionHost；场景、角色、用户和平台权限有回归，Tool 审批继续独立 |
+
+轻量状态目前支持 SQLite、MySQL、PostgreSQL；其他方言明确拒绝。isolated 插件仍须发布 `schema.json`，其入口代码不会为读取配置在 Host 中执行。完全自定义配置 resolver 负责提供自身的 `schema(node)` 元信息。
+
+这里的 reminder / preferences 是使用真实发现、Host 与 HMR 的验收插件，尚不代表第三阶段的生产提醒产品。原计划中的共同冷却与并发准入机制仍待单独实现；本轮没有迁移 RSS 历史目标、增加 outbox 或宣称完成真实 IM 平台验收。
+
 ## 第三阶段：实用插件与安装闭环
 
 优先完成提醒/订阅、关键词回复、群欢迎与管理、查询/状态卡片。一次性提醒与周期任务明确时区、取消、重启恢复、错过执行与重叠策略；业务发送不盲目重试未知投递。

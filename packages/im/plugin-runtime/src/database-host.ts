@@ -3,7 +3,10 @@ import {
   OwnerScopedResourceHost,
   qualifyOwnedResourceName,
 } from './owner-scoped-resource-host.js';
-import { createToken } from './token.js';
+import { createRootPrivateToken, createToken, scopeSetupFinalizer } from './token.js';
+import { PluginStateStore, type PersistentStatePort } from './persistent-state.js';
+import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
+import { OwnerOperation } from './owner-operation.js';
 
 export interface DatabaseHostSelection {
   where(query: Record<string, unknown>): DatabaseHostSelection;
@@ -90,6 +93,8 @@ export interface DatabaseHostConsole {
  * `activateNext` so models are available before commands / cron run.
  */
 export interface DatabaseHost {
+  /** Small-object persistence with database-level compare-and-swap. */
+  readonly state?: PersistentStatePort;
   readonly dialect: string;
   readonly started: boolean;
   /** Register a table schema before `start` (column defs match `@zhin.js/database`). */
@@ -127,28 +132,92 @@ export function qualifyPluginResourceName(owner: PluginId, name: string): string
 export class PluginDatabaseHost extends OwnerScopedResourceHost {
   readonly models: { get(name: string): DatabaseHostModel | undefined };
 
-  constructor(owner: PluginId, private readonly host: DatabaseHost) {
+  readonly #host: DatabaseHost;
+  readonly #admission?: GenerationAdmissionGate;
+  readonly #operation: OwnerOperation;
+
+  constructor(owner: PluginId, host: DatabaseHost, admission?: GenerationAdmissionGate) {
     super(owner);
-    this.models = Object.freeze({ get: (name: string) => this.host.models.get(this.qualify(name)) });
+    this.#host = host;
+    this.#admission = admission;
+    this.#operation = new OwnerOperation(admission, 'Database');
+    this.models = Object.freeze({ get: (name: string) => this.#operation.setup(() => {
+      const model = this.#host.models.get(this.qualify(name));
+      return model ? this.#bindModel(model) : undefined;
+    }) });
+  }
+
+  get state(): PluginStateStore {
+    if (!this.#host.state) throw new Error('Persistent state requires a configured database with atomic state support');
+    return new PluginStateStore(super.owner, this.#host.state, undefined, this.#admission);
+  }
+
+  /** @internal Bound by generation publication, never a plugin authoring operation. */
+  [generationAdmissionBinder](gate: GenerationAdmissionGate): PluginDatabaseHost {
+    const facade = new PluginDatabaseHost(super.owner, this.#host, gate);
+    facade[scopeSetupFinalizer]();
+    return facade;
+  }
+
+  /** @internal Scope-owned declaration window. */
+  [scopeSetupFinalizer](): void { this.#operation.endSetup(); }
+
+  /** @internal Admission source collected by the Runtime. */
+  get [generationAdmissionSource](): readonly GenerationAdmissionGate[] {
+    return this.#admission ? [this.#admission] : [];
   }
 
   get dialect(): string {
-    return this.host.dialect;
+    return this.#host.dialect;
   }
 
   get started(): boolean {
-    return this.host.started;
+    return this.#host.started;
   }
 
   define(name: string, definition: Record<string, unknown>): void {
-    this.host.define(this.qualify(name), definition);
+    this.#operation.setup(() => this.#host.define(this.qualify(name), definition));
   }
 
   tables(): readonly string[] {
-    return Object.freeze(this.host.tables().flatMap((name) => {
+    return this.#operation.setup(() => Object.freeze(this.#host.tables().flatMap((name) => {
       const logical = this.unqualify(name);
       return logical === undefined ? [] : [logical];
-    }));
+    })));
+  }
+
+  #bindSelection(selection: DatabaseHostSelection): DatabaseHostSelection {
+    const modify = (operation: () => DatabaseHostSelection): DatabaseHostSelection => this.#operation.setup(() => {
+      const next = operation();
+      return next === selection ? chain : this.#bindSelection(next);
+    });
+    const chain: DatabaseHostSelection = {
+      where: (query) => modify(() => selection.where(query)),
+      orderBy: (field, direction) => modify(() => selection.orderBy(field, direction)),
+      limit: (count) => modify(() => selection.limit(count)),
+      then: (fulfilled, rejected) => this.#execute(() => Promise.resolve(selection)).then(fulfilled, rejected),
+    };
+    return Object.freeze(chain);
+  }
+
+  #bindModel(model: DatabaseHostModel): DatabaseHostModel {
+    const count = model.count?.bind(model);
+    return Object.freeze({
+      select: <Fields extends string[]>(...fields: SelectFields<Fields>) =>
+        this.#operation.setup(() => this.#bindSelection(model.select<Fields>(...fields))),
+      insert: (row) => this.#execute(() => model.insert(row)),
+      delete: () => this.#operation.setup(() => Object.freeze({
+        where: (query: Record<string, unknown>) => this.#execute(() => model.delete().where(query)),
+      })),
+      update: (patch) => this.#operation.setup(() => Object.freeze({
+        where: (query: Record<string, unknown>) => this.#execute(() => model.update(patch).where(query)),
+      })),
+      ...(count ? { count: (query?: Record<string, unknown>) => this.#execute(() => count(query)) } : {}),
+    } satisfies DatabaseHostModel);
+  }
+
+  async #execute<T>(operation: () => Promise<T>): Promise<T> {
+    return this.#operation.run(operation);
   }
 }
 
@@ -165,7 +234,7 @@ export const databaseHostToken = createToken<PluginDatabaseHost>(
 );
 
 /** Root-only process host for CLI composition and Console administration. */
-export const databaseRootHostToken = createToken<DatabaseHost>(
+export const databaseRootHostToken = createRootPrivateToken<DatabaseHost>(
   'zhin.database.root-host',
   'Plugin Runtime root database host',
 );

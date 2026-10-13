@@ -1,4 +1,8 @@
-import { createToken } from './token.js';
+import { createRootPrivateToken, createToken } from './token.js';
+import type { DeliveryTarget } from './delivery-target.js';
+import type { PluginId } from './identity.js';
+import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
+import { OwnerOperation } from './owner-operation.js';
 
 /**
  * 未锚定 endpoint 的会话地址（结构对齐 `@zhin.js/im-contract` 的
@@ -9,7 +13,7 @@ export interface OutboundConversation {
   readonly kind: 'private' | 'group' | 'channel';
   readonly id: string;
   readonly parent?: Readonly<{
-    readonly kind: 'group' | 'channel';
+    readonly kind: 'private' | 'group' | 'channel';
     readonly id: string;
   }>;
   readonly threadId?: string;
@@ -80,6 +84,8 @@ export interface OutboundMessage {
 }
 
 export interface OutboundHost {
+  /** Sends to persisted exact identities, rejecting stale addresses instead of aliasing another bot. */
+  sendTarget?(target: DeliveryTarget, content: unknown): Promise<string | null>;
   /** Runs related operations against one IM Runtime snapshot captured at ingress. */
   runWithView?<T>(operation: () => Promise<T>): Promise<T>;
   /** Exact operations declared by one live Endpoint. */
@@ -100,8 +106,79 @@ export interface OutboundHost {
   typing?(input: OutboundTypingInput): Promise<void>;
 }
 
+/** Root-only process port: requester is supplied by the owner-bound facade. */
+export interface OutboundRootHost extends Omit<OutboundHost, 'sendTarget'> {
+  sendTarget?(target: DeliveryTarget, content: unknown, requester: PluginId): Promise<string | null>;
+}
+
+/** Preserve the sending plugin as requester, independent of the destination endpoint owner. */
+export class PluginOutboundHost implements OutboundHost {
+  readonly sendTarget?: OutboundHost['sendTarget'];
+  readonly runWithView?: OutboundHost['runWithView'];
+  readonly capabilities?: OutboundHost['capabilities'];
+  readonly addReaction?: OutboundHost['addReaction'];
+  readonly removeReaction?: OutboundHost['removeReaction'];
+  readonly recall?: OutboundHost['recall'];
+  readonly edit?: OutboundHost['edit'];
+  readonly typing?: OutboundHost['typing'];
+
+  readonly #owner: PluginId;
+  readonly #host: OutboundRootHost;
+  readonly #admission?: GenerationAdmissionGate;
+  readonly #operation: OwnerOperation;
+
+  constructor(owner: PluginId, host: OutboundRootHost, admission?: GenerationAdmissionGate) {
+    this.#owner = owner;
+    this.#host = host;
+    this.#admission = admission;
+    this.#operation = new OwnerOperation(admission, 'Outbound');
+    const sendTarget = host.sendTarget?.bind(host);
+    const runWithView = host.runWithView?.bind(host);
+    const capabilities = host.capabilities?.bind(host);
+    const addReaction = host.addReaction?.bind(host);
+    const removeReaction = host.removeReaction?.bind(host);
+    const recall = host.recall?.bind(host);
+    const edit = host.edit?.bind(host);
+    const typing = host.typing?.bind(host);
+    this.sendTarget = sendTarget ? async (target, content) => this.#run(() => sendTarget(target, content, this.#owner)) : undefined;
+    this.runWithView = runWithView ? (operation) => this.#run(() => runWithView(operation)) : undefined;
+    this.capabilities = capabilities ? (input) => this.#run(() => capabilities(input)) : undefined;
+    this.addReaction = addReaction ? (input) => this.#run(() => addReaction(input)) : undefined;
+    this.removeReaction = removeReaction ? (input) => this.#run(() => removeReaction(input)) : undefined;
+    this.recall = recall ? (input) => this.#run(() => recall(input)) : undefined;
+    this.edit = edit ? (input) => this.#run(() => edit(input)) : undefined;
+    this.typing = typing ? (input) => this.#run(() => typing(input)) : undefined;
+  }
+
+  get owner(): PluginId { return this.#owner; }
+
+  async send(input: OutboundSendInput): Promise<string | null> {
+    return this.#run(() => this.#host.send(input));
+  }
+
+  /** @internal Bound by generation publication. */
+  [generationAdmissionBinder](gate: GenerationAdmissionGate): PluginOutboundHost {
+    return new PluginOutboundHost(this.#owner, this.#host, gate);
+  }
+
+  /** @internal Admission source collected by the Runtime. */
+  get [generationAdmissionSource](): readonly GenerationAdmissionGate[] {
+    return this.#admission ? [this.#admission] : [];
+  }
+
+  #run<T>(operation: () => T): T {
+    return this.#operation.run(operation);
+  }
+}
+
 /** @public Plugin-facing cross-platform outbound messaging Host. */
 export const outboundHostToken = createToken<OutboundHost>(
   'zhin.outbound.host',
   'Plugin Runtime outbound push host',
+);
+
+/** Root-only process outbound port for composition and owner binding. */
+export const outboundRootHostToken = createRootPrivateToken<OutboundRootHost>(
+  'zhin.outbound.root-host',
+  'Plugin Runtime root outbound host',
 );

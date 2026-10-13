@@ -1,4 +1,4 @@
-const MAX_CODE_LENGTH = 10000;
+export const MAX_CODE_LENGTH = 10000;
 
 const SUPPORTED_LANGUAGES: Record<string, string> = {
   python: 'main.py',
@@ -13,6 +13,8 @@ const SUPPORTED_LANGUAGES: Record<string, string> = {
   php: 'main.php',
 };
 
+export const supportedLanguages = Object.freeze(Object.keys(SUPPORTED_LANGUAGES));
+
 const GLOT_API_BASE = 'https://glot.io/api/run';
 
 interface RunResult {
@@ -21,7 +23,7 @@ interface RunResult {
   error: string;
 }
 
-export async function runCode(language: string, code: string): Promise<RunResult> {
+export async function runCode(language: string, code: string, timeoutSeconds = 30): Promise<RunResult> {
   const lang = language.toLowerCase().trim();
 
   if (!SUPPORTED_LANGUAGES[lang]) {
@@ -50,7 +52,7 @@ export async function runCode(language: string, code: string): Promise<RunResult
       body: JSON.stringify({
         files: [{ name: fileName, content: code }],
       }),
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutSeconds * 1000),
     });
 
     if (!response.ok) {
@@ -69,7 +71,7 @@ export async function runCode(language: string, code: string): Promise<RunResult
     };
   } catch (e: unknown) {
     const err = e as Error;
-    const msg = err.name === 'TimeoutError' ? '请求超时（30s）' : err.message || '未知错误';
+    const msg = err.name === 'TimeoutError' ? `请求超时（${timeoutSeconds}s）` : err.message || '未知错误';
     return { stdout: '', stderr: '', error: msg };
   }
 }

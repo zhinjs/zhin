@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   childPluginId,
   createCapabilitySlot,
@@ -219,7 +219,7 @@ describe('Command Feature', () => {
     await expect(index.dispatch('client-id', {
       clientAdapter: 'other',
       get $client() { reads += 1; return client; },
-    })).resolves.toEqual({ matched: false });
+    })).resolves.toEqual({ matched: false, status: 'unmatched' });
     expect(reads).toBe(0);
 
     await expect(index.dispatch('client-id', {
@@ -265,7 +265,7 @@ describe('Command Feature', () => {
     } satisfies RuntimeSnapshot;
     const index = new CommandIndex(slots, snapshot);
 
-    expect(index.list()).toEqual([{
+    expect(index.list()).toMatchObject([{
       name: 'gh issue list',
       description: undefined,
       source,
@@ -320,12 +320,13 @@ describe('Command Feature', () => {
     await expect(index.dispatch('gh issue list open assigned', { sender: { id: 'alice' } }))
       .resolves.toEqual({
         matched: true,
+      status: 'executed',
         command: 'gh issue list',
         owner,
         value: 'alice:open,assigned',
       });
-    await expect(index.dispatch('gh issue missing')).resolves.toEqual({ matched: false });
-    await expect(index.dispatch('gh issue listing')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('gh issue missing')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch('gh issue listing')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('compiles optional filename parameters and applies defaults from params', async () => {
@@ -348,7 +349,7 @@ describe('Command Feature', () => {
     expect(slots.map((slot) => slot.localName)).toEqual(['gh/pr/$title']);
 
     const index = new CommandIndex(slots, snapshotFor(owner, slots));
-    expect(index.list()).toEqual([{
+    expect(index.list()).toMatchObject([{
       name: 'gh pr [title]',
       description: undefined,
       source,
@@ -457,14 +458,16 @@ describe('Command Feature', () => {
     });
     await expect(index.dispatch('ep')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       command: 'endpoint list',
       value: 'list:',
     });
     await expect(index.dispatch('e l open')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'list:open',
     });
-    await expect(index.dispatch('qq.ep')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('qq.ep')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('matches multi-word alias with trailing dynamic params', async () => {
@@ -487,6 +490,7 @@ describe('Command Feature', () => {
 
     await expect(index.dispatch('gh issue 42')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'bug:42',
     });
     await expect(index.dispatch('bugs 7')).resolves.toMatchObject({ value: 'bug:7' });
@@ -548,11 +552,13 @@ describe('Command Feature', () => {
 
     await expect(index.dispatch('开虫')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'bug:9',
     });
-    await expect(index.dispatch('开虫 1')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('开虫 1')).resolves.toEqual({ matched: false, status: 'unmatched' });
     await expect(index.dispatch('叮')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'pong',
       command: 'ping',
     });
@@ -593,12 +599,14 @@ describe('Command Feature', () => {
     const result = await index.dispatch('查看我的信息', fakeMessage);
     expect(result).toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'profile:12345',
     });
 
     const noSender = await index.dispatch('查看我的信息');
     expect(noSender).toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'profile:unknown',
     });
   });
@@ -662,7 +670,7 @@ describe('Command Feature', () => {
     expect(plainResult).toMatchObject({ matched: true, value: 'admin' });
   });
 
-  it('treats permit failure as silent miss and skips permit on execute', async () => {
+  it('reports permit failure separately and skips permit on execute', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
@@ -687,7 +695,7 @@ describe('Command Feature', () => {
       content: 'secret',
       sender: { id: '1' },
       metadata: { isMaster: true },
-    })).resolves.toEqual({ matched: false });
+    })).resolves.toMatchObject({ matched: true, status: 'denied' });
 
     await expect(index.dispatch('secret', {
       conversation: {
@@ -700,7 +708,7 @@ describe('Command Feature', () => {
       metadata: { isMaster: true },
     })).resolves.toMatchObject({ matched: true, value: 'ok' });
 
-    await expect(index.execute('secret')).resolves.toBe('ok');
+    await expect(index.execute('secret')).rejects.toThrow('Permission denied');
   });
 
   it.each(['guarded', 'shortcut'])('uses operation permission resources for reused %s while an old check drains', async (input) => {
@@ -723,7 +731,7 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], old);
     const source = { conversation: { endpoint: { id: 'ep', adapter: 'test' }, kind: 'private', id: 'room' }, sender: { id: 'actor' } };
     const draining = index.dispatch(input, source, undefined, '', old);
-    await expect(index.dispatch(input, source, undefined, '', current)).resolves.toEqual({ matched: false });
+    await expect(index.dispatch(input, source, undefined, '', current)).resolves.toMatchObject({ matched: true, status: 'denied' });
     expect(newChecks).toBe(1);
     expect(executions).toBe(0);
     release();
@@ -748,7 +756,7 @@ describe('Command Feature', () => {
     await expect(index.dispatch('guarded', source)).rejects.toBe(failure);
     expect(executions).toBe(0);
     host.checkAll = async () => false;
-    await expect(index.dispatch('guarded', source)).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('guarded', source)).resolves.toMatchObject({ matched: true, status: 'denied' });
     expect(executions).toBe(0);
     host.checkAll = async () => true;
     await expect(index.dispatch('guarded', source)).resolves.toMatchObject({ matched: true, value: 'ok' });
@@ -883,15 +891,17 @@ describe('Command Feature', () => {
     const index = new CommandIndex([rootSlot, childSlot], snapshot);
     await expect(index.dispatch('child status')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       owner: root,
       value: 'root',
     });
     await expect(index.dispatch('status')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       owner: child,
       value: 'child',
     });
-    await expect(index.dispatch('child.status')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('child.status')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('rejects the same user route published by different owners', () => {
@@ -935,7 +945,7 @@ describe('Command Feature', () => {
     await expect(index.dispatch('child admin status')).resolves.toMatchObject({ value: 'child' });
     await expect(index.dispatch('child admin state')).resolves.toMatchObject({ value: 'child' });
     await expect(index.dispatch('child admin 状态')).resolves.toMatchObject({ value: 'child' });
-    await expect(index.dispatch('child status')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('child status')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('dispatches Unicode command names (e.g. Chinese 赞我)', async () => {
@@ -950,16 +960,18 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
     await expect(index.dispatch('赞我')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       command: '赞我',
       value: 'liked:self',
     });
     await expect(index.dispatch('赞我 10')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'liked:10',
     });
   });
 
-  it('treats typed parameter rejection as no match during dispatch', async () => {
+  it('leaves fuzzy text unmatched for a fully dynamic typed parameter route', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
@@ -974,9 +986,10 @@ describe('Command Feature', () => {
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
     // 普通文本命中数字参数路由时不得抛出，应视为未命中。
-    await expect(index.dispatch('hello')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('hello')).resolves.toEqual({ matched: false, status: 'unmatched' });
     await expect(index.dispatch('30')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       value: 'wait:30',
     });
   });
@@ -995,7 +1008,7 @@ describe('Command Feature', () => {
     });
     const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
 
-    await expect(index.dispatch('')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('')).resolves.toEqual({ matched: false, status: 'unmatched' });
     expect(index.has('')).toBe(false);
     await expect(index.execute('gh pr')).resolves.toBe('pr:defaultTitle');
   });
@@ -1062,6 +1075,7 @@ describe('Command Feature', () => {
 
     await expect(index.dispatch(segments)).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       command: 'upload <asset>',
       value: {
         asset: image,
@@ -1109,14 +1123,14 @@ describe('Command Feature', () => {
     ])).resolves.toMatchObject({ matched: true, value: ['a', 'b', 'c'] });
     // 必需捕获所有：零段输入视为不匹配该命令
     expect(index.has('files')).toBe(false);
-    await expect(index.dispatch('files')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('files')).resolves.toMatchObject({ matched: true, status: 'invalid' });
   });
 
   it('matches optional catch-all [[...slug]] with zero segments as an empty array', async () => {
     const owner = rootPluginId();
     const source = '/project/commands/files/[[...slug]]/index.ts';
     const command = defineCommand({
-      params: { slug: { type: 'text', default: [] } },
+      params: { slug: { type: 'text', rest: true, default: [] } },
       execute: ({ params }) => params.slug,
     });
     const host = new MemoryDiscoveryHost({
@@ -1191,7 +1205,7 @@ describe('Command Feature', () => {
     await expect(index.execute('sum 1 2 3.5')).resolves.toEqual([1, 2, 3.5]);
     // 任一词无法转换为 number 即整体不匹配
     expect(index.has('sum 1 x')).toBe(false);
-    await expect(index.dispatch('sum 1 x')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('sum 1 x')).resolves.toMatchObject({ matched: true, status: 'invalid' });
   });
 
   it('matches optional [[name]] without default as undefined when omitted', async () => {
@@ -1311,11 +1325,12 @@ describe('命令用户路由与 owner 身份分离', () => {
     expect(index.list()[0]!.name).toBe('endpoint list');
     await expect(index.dispatch('endpoint list')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       command: 'endpoint list',
       owner: qq,
       value: 'listed',
     });
-    await expect(index.dispatch('qq.endpoint list')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('qq.endpoint list')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('多级 owner 仍只发布本地能力路径', async () => {
@@ -1325,8 +1340,8 @@ describe('命令用户路由与 owner 身份分离', () => {
     expect(index.list()[0]!.name).toBe('foo');
     await expect(index.execute('foo')).resolves.toBe('nested-ok');
     await expect(index.dispatch('foo')).resolves.toMatchObject({ matched: true });
-    await expect(index.dispatch('b.a.foo')).resolves.toEqual({ matched: false });
-    await expect(index.dispatch('b a foo')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('b.a.foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    await expect(index.dispatch('b a foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('root 插件命令无前缀（不变）', async () => {
@@ -1342,12 +1357,13 @@ describe('命令用户路由与 owner 身份分离', () => {
     const slot = slotFor(b, 'foo');
     const index = new CommandIndex([slot], snapshotWithOwners([b], [slot]));
 
-    await expect(index.dispatch('b.foobar')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('b.foobar')).resolves.toEqual({ matched: false, status: 'unmatched' });
     await expect(index.dispatch('foo extra args')).resolves.toMatchObject({
       matched: true,
+      status: 'executed',
       command: 'foo',
     });
-    await expect(index.dispatch('b.foo')).resolves.toEqual({ matched: false });
+    await expect(index.dispatch('b.foo')).resolves.toEqual({ matched: false, status: 'unmatched' });
   });
 
   it('子插件可发布顶层动态首段', async () => {
@@ -1549,3 +1565,295 @@ class MemoryDiscoveryHost implements DiscoveryHost {
     throw new Error('Not implemented');
   }
 }
+
+describe('central command argument declarations', () => {
+  function indexFor(definition: ReturnType<typeof defineCommand>, localName = 'remind', parameter?: CommandParameterDefinition) {
+    const owner = rootPluginId();
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName, source: '/commands/remind/index.ts', definition: parameter ? { ...definition, $parameter: parameter } : definition });
+    return new CommandIndex([slot], snapshotFor(owner, [slot]));
+  }
+
+  it('parses multiple parameters, defaults, interleaved options and negative numbers', async () => {
+    const index = indexFor(defineCommand({
+      params: { minutes: { type: 'integer', min: -5 }, note: { type: 'text', default: 'take a break' } },
+      options: { count: { type: 'integer', alias: 'c', default: 1, min: 1 }, quiet: { type: 'boolean', default: false } },
+      execute: ({ params, options }) => ({ params, options }),
+    }));
+    await expect(index.dispatch('remind -2 --count 3 --quiet hello world')).resolves.toMatchObject({ status: 'executed', value: { params: { minutes: -2, note: 'hello world' }, options: { count: 3, quiet: true } } });
+    await expect(index.dispatch('remind 2')).resolves.toMatchObject({ value: { params: { note: 'take a break' }, options: { count: 1, quiet: false } } });
+    await expect(index.execute('remind 2', ['--count', '4', 'wake', 'up'])).resolves.toMatchObject({ params: { minutes: 2, note: 'wake up' }, options: { count: 4 } });
+  });
+
+  it('supports options before directory-bound parameters through the same index', async () => {
+    const index = indexFor(defineCommand({ params: { id: { type: 'integer' }, count: { type: 'integer' } }, options: { quiet: { type: 'boolean' } }, execute: ({ params, options }) => ({ params, options }) }), 'foo/$id', { name: 'id', type: 'integer' });
+    await expect(index.dispatch('foo --quiet 7 2')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 7, count: 2 }, options: { quiet: true } } });
+  });
+
+  it('parses inline quoted option values without leaking their tokens into positional text', async () => {
+    const index = indexFor(defineCommand({
+      params: { body: { type: 'text' } },
+      options: { note: { type: 'string', alias: 'n' } },
+      execute: ({ params, options }) => ({ params, options }),
+    }));
+    await expect(index.dispatch('remind --note="hello world" actual body')).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
+    });
+    await expect(index.dispatch("remind -n='hello world' actual body")).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'hello world' } },
+    });
+    await expect(index.dispatch('remind --note="say \\\"hi\\\"" actual body')).resolves.toMatchObject({
+      status: 'executed', value: { params: { body: 'actual body' }, options: { note: 'say "hi"' } },
+    });
+  });
+
+  it('collects text catch-all values by message segment when options are declared', async () => {
+    const index = indexFor(defineCommand({
+      params: { slug: { type: 'text', rest: true } },
+      options: { quiet: { type: 'boolean' } },
+      execute: ({ params, options }) => ({ params, options }),
+    }), 'files/$slug', { name: 'slug', type: 'text', rest: true });
+    await expect(index.dispatch('files hello world --quiet')).resolves.toMatchObject({
+      status: 'executed', value: { params: { slug: ['hello world'] }, options: { quiet: true } },
+    });
+    await expect(index.dispatch([
+      { type: 'text', data: { text: 'files --quiet first item  ' } },
+      { type: 'text', data: { text: '\n second "quoted"\n  line' } },
+    ])).resolves.toMatchObject({
+      status: 'executed', value: { params: { slug: ['first item  ', '\n second "quoted"\n  line'] }, options: { quiet: true } },
+    });
+  });
+
+  it('treats Object.prototype names as ordinary declared fields, including omitted options', async () => {
+    const index = indexFor(defineCommand({
+      params: { constructor: { type: 'string' }, toString: { type: 'string' } },
+      options: { constructor: { type: 'string' }, toString: { type: 'string', default: 'default' }, valueOf: { type: 'string' } },
+      execute: ({ params, options }) => ({ params, options, omitted: options.valueOf }),
+    }));
+    await expect(index.dispatch('remind first second --constructor chosen')).resolves.toMatchObject({
+      status: 'executed', value: { params: { constructor: 'first', toString: 'second' }, options: { constructor: 'chosen', toString: 'default' }, omitted: undefined },
+    });
+    await expect(index.dispatch('remind first second --constructor one --constructor two')).resolves.toMatchObject({ status: 'invalid' });
+  });
+
+  it('preserves structured arguments and quoted option-like values', async () => {
+    const index = indexFor(defineCommand({ params: { who: { type: 'mention' }, caption: { type: 'string' } }, options: { count: { type: 'integer', default: 1 } }, execute: ({ params, options }) => ({ params, options }) }), 'upload');
+    await expect(index.dispatch([{ type: 'text', data: { text: 'upload --count 2 ' } }, { type: 'mention', data: { target: 'alice' } }, { type: 'text', data: { text: ' "--option-like text"' } }])).resolves.toMatchObject({ status: 'executed', value: { params: { who: 'alice', caption: '--option-like text' }, options: { count: 2 } } });
+  });
+
+  it('retains code whitespace and quotes when parsing text', async () => {
+    const index = indexFor(defineCommand({ params: { code: { type: 'text' } }, options: { timeout: { type: 'integer', default: 30 } }, execute: ({ params }) => params.code }), 'run');
+    await expect(index.dispatch('run --timeout 5 if True:\n  print("hello world")')).resolves.toMatchObject({ value: 'if True:\n  print("hello world")' });
+  });
+
+  it.each(['remind', 'remind nope', 'remind 0', 'remind 3 --count nope', 'remind 3 --unknown', 'remind 3 --count 1 --count 2'])('reports invalid arguments without executing: %s', async (input) => {
+    const execute = vi.fn();
+    const index = indexFor(defineCommand({ params: { minutes: { type: 'integer', min: 1 } }, options: { count: { type: 'integer', default: 1 } }, execute }));
+    const result = await index.dispatch(input, undefined, undefined, '#');
+    expect(result).toMatchObject({ matched: true, status: 'invalid', help: expect.stringContaining('#remind <minutes>') });
+    expect(result.issues?.length).toBeGreaterThan(0);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('validates shortcut and session-dependent defaults with the same constraints', async () => {
+    const index = indexFor(defineCommand({ params: { minutes: { type: 'integer', min: 1, default: () => 0 } }, shortcut: { later: { minutes: 0 } }, execute: () => 'should not run' }));
+    await expect(index.dispatch('later')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(index.dispatch('remind')).resolves.toMatchObject({ status: 'invalid' });
+    const rest = indexFor(defineCommand({ params: { values: { type: 'integer', rest: true, default: () => 1 } }, execute: () => 'should not run' }));
+    await expect(rest.dispatch('remind')).resolves.toMatchObject({ status: 'invalid' });
+  });
+
+  it('does not replace invalid supplied parameters with defaults or treat them as omitted', async () => {
+    const execute = vi.fn();
+    const withDefault = indexFor(defineCommand({ params: { minutes: { type: 'integer', default: 1 } }, execute }));
+    const optional = indexFor(defineCommand({ params: { minutes: { type: 'integer', optional: true } }, execute }));
+    await expect(withDefault.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: 'minutes', message: 'minutes: expected integer' }] });
+    await expect(optional.dispatch('remind nope')).resolves.toMatchObject({ status: 'invalid' });
+    await expect(withDefault.execute('remind', ['nope'])).rejects.toThrow('minutes: expected integer');
+    expect(execute).not.toHaveBeenCalled();
+    await expect(withDefault.dispatch('remind')).resolves.toMatchObject({ status: 'executed' });
+  });
+
+  it('generates prefix and namespace aware help without executing', async () => {
+    const owner = rootPluginId();
+    const execute = vi.fn();
+    const definition = defineCommand({ description: 'Reminder', params: { minutes: { type: 'integer', min: 1 } }, options: { count: { type: 'integer', default: 1 } }, execute });
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'remind', source: '/commands/remind/index.ts', definition });
+    const snapshot = snapshotFor(owner, [slot]);
+    const index = new CommandIndex([slot], { ...snapshot, config: new Map([[owner, { commandNamespace: 'daily' }]]) });
+    const result = await index.dispatch('daily remind --help', undefined, undefined, '#');
+    expect(String(result.value)).toContain('#daily remind <minutes> [--count <integer>]');
+    expect(String(result.value)).toContain('default: 1');
+    expect(execute).not.toHaveBeenCalled();
+    expect(index.list()[0]?.usage).toBe('daily remind <minutes> [--count <integer>]');
+  });
+
+  it('leaves normal chat, token-prefix accidents and ambiguous dynamic input unmatched', async () => {
+    const index = indexFor(defineCommand({ params: { value: { type: 'integer' } }, execute: () => 'ok' }), '$value', { name: 'value', type: 'integer' });
+    await expect(index.dispatch('hello everyone')).resolves.toEqual({ matched: false, status: 'unmatched' });
+    const staticIndex = indexFor(defineCommand({ params: { minutes: { type: 'integer' } }, execute: () => 'ok' }));
+    await expect(staticIndex.dispatch('reminder 3')).resolves.toEqual({ matched: false, status: 'unmatched' });
+  });
+
+  it('requires an actual permission subject for restricted Host calls', async () => {
+    const owner = rootPluginId();
+    const execute = vi.fn().mockReturnValue('ok');
+    const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'secret', source: '/commands/secret/index.ts', definition: defineCommand({ permit: ['role(master)'], execute }) });
+    const snapshot = snapshotFor(owner, [slot]);
+    const index = new CommandIndex([slot], { ...snapshot, resources: new Map([[owner, new Map([[permissionHostToken.id, new PermissionHost()]])]]) });
+    await expect(index.dispatch('secret')).resolves.toMatchObject({ status: 'denied' });
+    await expect(index.execute('secret')).rejects.toThrow('Permission denied');
+    expect(execute).not.toHaveBeenCalled();
+    await expect(index.dispatch('secret', { sender: { id: 'operator', role: ['master'] } })).resolves.toMatchObject({ status: 'executed', value: 'ok' });
+  });
+
+  it('rejects impossible declarations before startup', () => {
+    expect(() => defineCommand({ params: { n: { type: 'integer', default: 'oops' } }, execute() {} })).toThrow('default');
+    expect(() => defineCommand({ params: { n: { type: 'integer', default: [] } }, execute() {} })).toThrow('rest: true');
+    expect(() => defineCommand({ params: { n: { type: 'integer', min: 5, max: 1 } }, execute() {} })).toThrow('bounds');
+    expect(() => defineCommand({ params: { first: { type: 'string', optional: true }, last: { type: 'string' } }, execute() {} })).toThrow('optional');
+    expect(() => defineCommand({ options: { help: { type: 'boolean' } }, execute() {} })).toThrow('reserved');
+    expect(() => defineCommand({ options: { one: { type: 'boolean', alias: 'a' }, two: { type: 'boolean', alias: 'a' } }, execute() {} })).toThrow('alias');
+  });
+
+  it.each([
+    { x: { type: 'string' as const }, y: { type: 'string' as const, optional: true } },
+    { x: { type: 'string' as const }, y: { type: 'string' as const, default: 'fallback' } },
+    { x: { type: 'string' as const }, rest: { type: 'word' as const, rest: true, optional: true } },
+    { rest: { type: 'word' as const, rest: true } },
+  ])('rejects declaration and directory route overlaps at every accepted arity: %j', (params) => {
+    const owner = rootPluginId();
+    const declared = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params, execute() {} }) });
+    const dynamic = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
+    expect(() => new CommandIndex([declared, dynamic], snapshotFor(owner, [declared, dynamic]))).toThrow('Duplicate Command route');
+  });
+
+  it('rejects rest overlaps beyond the minimum arity', () => {
+    const owner = rootPluginId();
+    const rest = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params: { values: { type: 'word', rest: true } }, execute() {} }) });
+    const fixed = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' }, second: { type: 'string' }, third: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
+    expect(() => new CommandIndex([rest, fixed], snapshotFor(owner, [rest, fixed]))).toThrow('Duplicate Command route');
+  });
+
+  it('rejects undefined dynamic defaults before executing business code', async () => {
+    const execute = vi.fn();
+    const invalidDefault = (() => undefined) as unknown as () => string;
+    for (const definition of [
+      defineCommand({ params: { name: { type: 'string', default: invalidDefault } }, execute }),
+      defineCommand({ options: { name: { type: 'string', default: invalidDefault } }, execute }),
+      defineCommand({ params: { name: { type: 'string' } }, shortcut: { later: { name: invalidDefault } }, execute }),
+    ]) {
+      const index = indexFor(definition);
+      await expect(index.dispatch(definition.shortcut ? 'later' : 'remind')).resolves.toMatchObject({ status: 'invalid' });
+    }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps omitted optional fields absent and treats undefined defaults as omission', async () => {
+    const index = indexFor(defineCommand({ params: { name: { type: 'string', optional: true, default: undefined } }, options: { count: { type: 'integer', default: undefined } }, execute: ({ params, options }) => ({ paramPresent: Object.hasOwn(params, 'name'), optionPresent: Object.hasOwn(options, 'count') }) }));
+    await expect(index.dispatch('remind')).resolves.toMatchObject({ status: 'executed', value: { paramPresent: false, optionPresent: false } });
+  });
+
+  it('retains path-only parameter metadata in the command manifest', () => {
+    const index = indexFor(defineCommand({ execute() {} }), 'foo/$id', { name: 'id', type: 'integer' });
+    expect(index.list()[0]?.parameters).toEqual([{ name: 'id', type: 'integer', required: true }]);
+  });
+
+  it.each([undefined, {}])('intercepts help in any argument position with options %j', async (options) => {
+    const execute = vi.fn();
+    const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
+    for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
+      await expect(index.dispatch(input, undefined, undefined, '#')).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('#scan <url>') });
+    }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('allows quoted and terminated help tokens as literal positional values', async () => {
+    const index = indexFor(defineCommand({ params: { value: { type: 'string' } }, execute: ({ params }) => params.value }));
+    for (const input of ["remind '--help'", 'remind "--help"', 'remind -- --help']) {
+      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: '--help' });
+    }
+  });
+
+  it.each([undefined, {}])('preserves quoted and terminated help in declared directory parameters with options %j', async (options) => {
+    const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
+    const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
+    for (const input of ['scan "--help"', "scan '--help'", 'scan -- --help', 'scan -- "--help"']) {
+      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: { url: '--help', args: [] } });
+    }
+    expect(execute).toHaveBeenCalledTimes(4);
+  });
+
+  it('retains path-only directory argument capture without reinterpreting a consumed terminator', async () => {
+    const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
+    const index = indexFor(defineCommand({ execute }), 'scan/$url', { name: 'url', type: 'string' });
+    await expect(index.dispatch('scan -- --help')).resolves.toMatchObject({ status: 'executed', value: { url: '--', args: ['--help'] } });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([undefined, {}])('preserves undeclared typed directory fields before other declared parameters with options %j', async (options) => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, options, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer' });
+    await expect(index.dispatch('foo 123')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'fallback' } });
+    await expect(index.dispatch('foo 123 actual')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'actual' } });
+  });
+
+  it.each([7, () => 8])('preserves static and dynamic undeclared directory defaults %j', async (defaultValue) => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer', optional: true, defaultValue });
+    await expect(index.dispatch('foo')).resolves.toMatchObject({ status: 'executed', value: { id: typeof defaultValue === 'function' ? 8 : 7, note: 'fallback' } });
+  });
+
+  it('preserves undeclared path values while parsing declared options and subsequent parameters', async () => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string' } }, options: { quiet: { type: 'boolean' } }, execute: ({ params, options }) => ({ params, options }) }), 'foo/$id', { name: 'id', type: 'integer' });
+    await expect(index.dispatch('foo 123 --quiet actual')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 123, note: 'actual' }, options: { quiet: true } } });
+  });
+
+  it('rejects shortcuts that cannot supply a required option', () => {
+    expect(() => indexFor(defineCommand({ options: { count: { type: 'integer', optional: false } }, shortcut: { later: {} }, execute() {} }))).toThrow('required option --count');
+  });
+
+  it('runs a shortcut with defaulted required options', async () => {
+    const index = indexFor(defineCommand({ options: { count: { type: 'integer', optional: false, default: 2 } }, shortcut: { later: {} }, execute: ({ options }) => options.count }));
+    await expect(index.dispatch('later')).resolves.toMatchObject({ status: 'executed', value: 2 });
+  });
+
+  it('leaves option-like tokens to commands without argument declarations', async () => {
+    const index = indexFor(defineCommand({ execute: ({ args }) => args }));
+    await expect(index.dispatch('remind --bogus')).resolves.toMatchObject({ status: 'executed', value: ['--bogus'] });
+  });
+
+  it('retains text whitespace before a structured positional argument', async () => {
+    const index = indexFor(defineCommand({ params: { caption: { type: 'text' }, who: { type: 'mention' } }, execute: ({ params }) => params }));
+    await expect(index.dispatch([{ type: 'text', data: { text: 'remind hello  \n' } }, { type: 'mention', data: { target: 'alice' } }])).resolves.toMatchObject({ status: 'executed', value: { caption: 'hello  \n', who: 'alice' } });
+  });
+
+  it('distinguishes long option names from short aliases', async () => {
+    const index = indexFor(defineCommand({ options: { c: { type: 'integer' }, count: { type: 'integer', alias: 'c' } }, execute: ({ options }) => options }));
+    await expect(index.dispatch('remind --c 2 -c 3')).resolves.toMatchObject({ status: 'executed', value: { c: 2, count: 3 } });
+  });
+});
+
+
+it('rejects identical user route shapes across declaration and dynamic directory styles', () => {
+  const owner = rootPluginId();
+  const first = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params: { id: { type: 'integer' } }, execute() {} }) });
+  const second = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'integer' } }, execute() {} }), $parameter: { name: 'id', type: 'integer' } as const } });
+  expect(() => new CommandIndex([first, second], snapshotFor(owner, [first, second]))).toThrow('Duplicate Command route');
+});
+
+
+it('resolves directory-bound dynamic defaults from the actual session and validates them', async () => {
+  const owner = rootPluginId();
+  const defaultValue = (session: { sender?: { id: string } }) => session.sender?.id ?? 'anonymous';
+  const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'profile/$name', source: '/commands/profile/[[name]]/index.ts', definition: { ...defineCommand({ params: { name: { type: 'string', default: defaultValue } }, execute: ({ params }) => params.name }), $parameter: { name: 'name', type: 'string', optional: true, defaultValue } as const } });
+  const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+  await expect(index.dispatch('profile', { content: 'profile', sender: { id: 'alice' }, conversation: { endpoint: { adapter: 'test', id: 'ep' }, kind: 'private', id: 'room' } })).resolves.toMatchObject({ status: 'executed', value: 'alice' });
+  await expect(index.dispatch('profile')).resolves.toMatchObject({ status: 'executed', value: 'anonymous' });
+});
+
+
+it('accepts native numeric face ids and structured catch-all media values', async () => {
+  const owner = rootPluginId();
+  const slot = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'native', source: '/commands/native/index.ts', definition: defineCommand({ params: { face: { type: 'face' }, images: { type: 'image', rest: true } }, execute: ({ params }) => params }) });
+  const index = new CommandIndex([slot], snapshotFor(owner, [slot]));
+  const result = await index.dispatch([{ type: 'text', data: { text: 'native ' } }, { type: 'face', data: { id: 1 } }, { type: 'image', data: { media: { kind: 'url', url: 'https://example.test/image.png' } } }]);
+  expect(result).toMatchObject({ status: 'executed', value: { face: 1, images: [{ kind: 'url', url: 'https://example.test/image.png' }] } });
+});

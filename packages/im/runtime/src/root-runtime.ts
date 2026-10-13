@@ -32,7 +32,8 @@ import {
   type FeatureProvider,
 } from '@zhin.js/feature-kit';
 import type { ZhinFeatureManifest } from './manifest.js';
-import { ConfigComposer } from './config-composer.js';
+import { ConfigComposer, type JsonSchema } from './config-composer.js';
+import { immutableConfigSchema } from './plugin-config-schema.js';
 import { ConfigPatchPlanner, type ConfigPatchPlan } from './config-patch-planner.js';
 import { defineRuntimeEnvironment, type RuntimeEnvironment } from './environment.js';
 import {
@@ -156,10 +157,18 @@ export class RootRuntime {
   readonly #isolation?: IsolatedPluginRuntimePort;
   #configPatchTail: Promise<unknown> = Promise.resolve();
   #stopResult?: Promise<void>;
+  #initialConfigSchemas: ReadonlyMap<string, JsonSchema> = new Map();
+  #resolveConfigurationReady!: () => void;
+  #rejectConfigurationReady!: (reason: unknown) => void;
+  readonly #configurationReady = new Promise<void>((resolve, reject) => {
+    this.#resolveConfigurationReady = resolve;
+    this.#rejectConfigurationReady = reject;
+  });
   readonly #controller: RootController<RuntimeGenerationState>;
   readonly #disabledPluginInstanceKeys: readonly string[];
 
   constructor(options: RootRuntimeOptions) {
+    void this.#configurationReady.catch(() => undefined);
     this.#projectRoot = normalizeSourcePath(options.projectRoot);
     this.#modules = options.modules;
     this.#environment = defineRuntimeEnvironment(options.environment);
@@ -190,6 +199,19 @@ export class RootRuntime {
     return this.#controller.snapshots;
   }
 
+  /** Committed metadata, or validated startup declarations while first login is pending. */
+  get configurationSchemas(): ReadonlyMap<string, JsonSchema> {
+    const snapshot = this.snapshot;
+    return snapshot.generation === 0 ? new Map(this.#initialConfigSchemas)
+      : new Map([...snapshot.tree.values()].flatMap(node => node.configSchema
+        ? [[node.packageRoot, node.configSchema] as const] : []));
+  }
+
+  /** Metadata readiness is independent of account login and generation activation. */
+  whenConfigurationReady(): Promise<void> {
+    return this.#configurationReady;
+  }
+
   onGenerationCommit(listener: GenerationCommitListener<RuntimeGenerationState>): () => void {
     return this.#controller.onGenerationCommit(listener);
   }
@@ -199,18 +221,23 @@ export class RootRuntime {
   }
 
   async start(): Promise<RuntimeSnapshot> {
-    if (this.#environmentSource) {
-      this.#environmentLayers = defineEnvironmentLayers(await this.#environmentSource.read());
+    try {
+      if (this.#environmentSource) {
+        this.#environmentLayers = defineEnvironmentLayers(await this.#environmentSource.read());
+      }
+      if (this.#configPort) {
+        const snapshot = await this.#configPort.read();
+        this.#configSnapshot = snapshot;
+        this.#configDocument = structuredClone(snapshot.document);
+      }
+      const snapshot = await this.#controller.start(async (current, signal) => {
+        return (await this.#prepare(current, signal)).generation;
+      });
+      return snapshot;
+    } catch (error) {
+      this.#rejectConfigurationReady(error);
+      throw error;
     }
-    if (this.#configPort) {
-      const snapshot = await this.#configPort.read();
-      this.#configSnapshot = snapshot;
-      this.#configDocument = structuredClone(snapshot.document);
-    }
-    const snapshot = await this.#controller.start(async (current, signal) => {
-      return (await this.#prepare(current, signal)).generation;
-    });
-    return snapshot;
   }
 
   async reload(target: PluginId | string = rootPluginId()): Promise<RuntimeSnapshot> {
@@ -250,6 +277,7 @@ export class RootRuntime {
   }
 
   stop(): Promise<void> {
+    this.#rejectConfigurationReady(new Error('Runtime stopped before configuration initialization'));
     if (this.#stopResult) return this.#stopResult;
     const result = (async () => {
       try {
@@ -370,7 +398,7 @@ export class RootRuntime {
       ? defineEnvironmentLayers(await this.#environmentSource.read())
       : this.#environmentLayers;
     const inputPlan = await new RuntimeInputPlanner(
-      new ConfigComposer(this.#disabledPluginInstanceKeys),
+      new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
     ).plan({
       graph: this.#model.graph,
       environment: this.#environment,
@@ -481,18 +509,39 @@ export class RootRuntime {
     if (document === undefined) await this.#refreshConfigDocument();
     const activeDocument = document ?? this.#configDocument;
     if (this.#configResolver) {
+      const customResolver = this.#configResolver;
+      const schemas = new Map(graphNodes(graph.root).flatMap(node => {
+        const schema = customResolver.schema?.(node);
+        return schema ? [[node.id, immutableConfigSchema(schema)] as const] : [];
+      }));
+      const configResolver: PluginConfigResolver = node => customResolver(node);
+      configResolver.schema = node => schemas.get(node.id);
+      if (this.snapshot.generation === 0) {
+        this.#initialConfigSchemas = new Map(graphNodes(graph.root).flatMap(node => {
+          const schema = schemas.get(node.id);
+          return schema ? [[node.package.root, schema] as const] : [];
+        }));
+        this.#resolveConfigurationReady();
+      }
       return {
         graph,
-        configResolver: this.#configResolver,
+        configResolver,
         primaryConfigDocument: Object.freeze({}),
         environmentLayers,
       };
     }
-    const composed = await new ConfigComposer(this.#disabledPluginInstanceKeys)
+    const composed = await new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules)
       .compose(graph, activeDocument);
+    if (this.snapshot.generation === 0) {
+      this.#initialConfigSchemas = new Map(graphNodes(graph.root).flatMap(node => {
+        const schema = composed.ownSchemas.get(node.id);
+        return schema ? [[node.package.root, schema] as const] : [];
+      }));
+      this.#resolveConfigurationReady();
+    }
     return {
       graph,
-      configResolver: this.#configViewResolver(composed.views, environmentLayers),
+      configResolver: this.#configViewResolver(composed.views, environmentLayers, composed.ownSchemas),
       primaryConfigDocument: composed.document,
       environmentLayers,
     };
@@ -516,13 +565,16 @@ export class RootRuntime {
   #configViewResolver(
     views: ReadonlyMap<PluginId, unknown>,
     environmentLayers: EnvironmentLayers = this.#environmentLayers,
+    schemas?: ReadonlyMap<PluginId, Readonly<Record<string, unknown>>>,
   ): PluginConfigResolver {
-    return (node) => {
+    const resolver: PluginConfigResolver = (node) => {
       const view = views.get(node.id);
       if (view === undefined) return undefined;
       return createEnvStore(node.id, this.#environment, environmentLayers)
         .expandMissingAsEmpty(view);
     };
+    resolver.schema = (node) => schemas?.get(node.id);
+    return resolver;
   }
 
   async #applyConfigPatches(patches: readonly ConfigPatch[]): Promise<RuntimeSnapshot> {
@@ -544,7 +596,7 @@ export class RootRuntime {
         disabledPluginInstanceKeys: this.#disabledPluginInstanceKeys,
       }).inspect(this.#projectRoot);
       const planned = await new ConfigPatchPlanner(
-        new ConfigComposer(this.#disabledPluginInstanceKeys),
+        new ConfigComposer(this.#disabledPluginInstanceKeys, this.#modules),
       ).plan(graph, currentDocument, patches);
       plan = planned;
       if (!planned.documentChanged) return undefined;
@@ -568,7 +620,7 @@ export class RootRuntime {
         }
         const inspected: InspectedProject = {
           graph,
-          configResolver: this.#configViewResolver(planned.views),
+          configResolver: this.#configViewResolver(planned.views, this.#environmentLayers, planned.ownSchemas),
           primaryConfigDocument: planned.document,
           environmentLayers: this.#environmentLayers,
         };
@@ -877,6 +929,10 @@ class GenerationAssembler {
 
 interface ModuleNamespace {
   readonly default?: unknown;
+}
+
+function graphNodes(node: PluginGraphNode): readonly PluginGraphNode[] {
+  return [node, ...node.children.flatMap(graphNodes)];
 }
 
 function emptyState(): SnapshotState {

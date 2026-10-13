@@ -9,6 +9,7 @@
 
 export * from '@zhin.js/core';
 export * from '@zhin.js/plugin-runtime';
+export { checkPermissions, permissionHostToken, type PermissionContext, type PermissionSubject } from '@zhin.js/permission';
 
 export { default as logger, formatCompact, formatCompactLog, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 

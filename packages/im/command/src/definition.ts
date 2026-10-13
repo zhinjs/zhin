@@ -11,6 +11,7 @@ import {
   type CapabilityContext,
 } from '@zhin.js/feature-kit';
 import { assertPermitSyntax } from '@zhin.js/permission';
+import { validateArgumentSchemas } from './arguments.js';
 import type { UserInteraction } from '@zhin.js/interaction';
 
 const commandBrand = 'zhin.command/1' as const;
@@ -34,7 +35,7 @@ export type CommandParameterValue =
   | string
   | number
   | boolean
-  | ReadonlyArray<string | number | boolean>
+  | ReadonlyArray<string | number | boolean | Readonly<Record<string, unknown>>>
   | Readonly<Record<string, unknown>>
   | null;
 
@@ -88,7 +89,43 @@ export interface CommandParamSchema {
   readonly type: CommandParameterType;
   readonly default?: CommandDynamicValue;
   readonly description?: string;
+  readonly optional?: boolean;
+  readonly rest?: boolean;
+  readonly min?: number;
+  readonly max?: number;
+  readonly choices?: readonly CommandParameterValue[];
+  readonly pattern?: RegExp;
+  readonly validate?: (value: CommandParameterValue, session: CommandSession) => boolean | string;
 }
+
+export interface CommandOptionSchema extends Omit<CommandParamSchema, 'rest'> {
+  readonly alias?: string;
+}
+
+export type CommandParams = Readonly<Record<string, CommandParamSchema>>;
+export type CommandOptions = Readonly<Record<string, CommandOptionSchema>>;
+type ParameterScalar<S extends CommandParamSchema> = S['type'] extends 'number' | 'integer' | 'float' | 'dice' | 'rps'
+  ? number : S['type'] extends 'boolean' ? boolean
+  : S['type'] extends 'image' ? Readonly<Record<string, unknown>> | string
+  : S['type'] extends 'mention' | 'face' | 'reply' | 'forward' ? string | number : string;
+type ParameterResult<S extends CommandParamSchema> = S extends { readonly rest: true }
+  ? readonly ParameterScalar<S>[] : ParameterScalar<S>;
+type HasDefault<S extends CommandParamSchema> = S extends { readonly default: infer D }
+  ? undefined extends D ? false : true : false;
+type OptionalParam<S extends CommandParamSchema> = S extends { readonly rest: true } ? false
+  : HasDefault<S> extends true ? false : S extends { readonly optional: true } ? true : false;
+type OptionalOption<S extends CommandOptionSchema> = HasDefault<S> extends true ? false
+  : S extends { readonly optional: false } ? false : true;
+export type InferCommandParams<P extends CommandParams> = {
+  readonly [K in keyof P as OptionalParam<P[K]> extends true ? never : K]: ParameterResult<P[K]>;
+} & {
+  readonly [K in keyof P as OptionalParam<P[K]> extends true ? K : never]?: ParameterResult<P[K]>;
+};
+export type InferCommandOptions<O extends CommandOptions> = {
+  readonly [K in keyof O as OptionalOption<O[K]> extends true ? never : K]: ParameterResult<O[K]>;
+} & {
+  readonly [K in keyof O as OptionalOption<O[K]> extends true ? K : never]?: ParameterResult<O[K]>;
+};
 
 /** Minimal structural contract shared with canonical IM segments. */
 export interface CommandSegment {
@@ -226,6 +263,7 @@ export interface CommandContext<
 > extends CapabilityContext<TConfig>, CommandSession {
   readonly args: readonly string[];
   readonly params: Readonly<Record<string, CommandParameterValue>>;
+  readonly options: Readonly<Record<string, CommandParameterValue>>;
   /** Structured arguments left after the command pattern was consumed. */
   readonly segments: readonly Readonly<CommandSegment>[];
   /**
@@ -259,7 +297,8 @@ export interface CommandDefinition<
    * Next.js 风格参数声明：动态段文件名（`[name]` 等）的形态配合这里的
    * 类型 / 默认值 / 描述使用。静态命令可忽略本字段。
    */
-  readonly params?: Readonly<Record<string, CommandParamSchema>>;
+  readonly params?: CommandParams;
+  readonly options?: CommandOptions;
   /**
    * 本地静态段别名（可多词，如 `'gh issue'`）。Capability owner 不参与
    * 用户路由；alias 只替换文件路径提供的静态段。
@@ -299,21 +338,31 @@ type CommandAuthoringDefinition<
   TConfig,
   TResult,
   TInput extends CommandMessage,
+  P extends CommandParams,
+  O extends CommandOptions,
 > =
-  | Omit<CommandDefinition<TConfig, TResult, TInput, undefined>, '$feature' | '$parameter'>
+  | Omit<CommandDefinition<TConfig, TResult, TInput, undefined>, '$feature' | '$parameter' | 'params' | 'options' | 'execute'> & { readonly params?: P; readonly options?: O; execute(context: TypedCommandContext<TConfig, TInput, undefined, P, O>): TResult | Promise<TResult> }
   | {
       [TAdapter in RegisteredAdapterName]: Omit<
         CommandDefinition<TConfig, TResult, TInput, TAdapter>,
-        '$feature' | '$parameter'
-      > & { readonly adapter: TAdapter }
+        '$feature' | '$parameter' | 'params' | 'options' | 'execute'
+      > & { readonly adapter: TAdapter; readonly params?: P; readonly options?: O; execute(context: TypedCommandContext<TConfig, TInput, TAdapter, P, O>): TResult | Promise<TResult> }
     }[RegisteredAdapterName];
+
+type TypedCommandContext<TConfig, TInput extends CommandMessage, TAdapter extends string | undefined, P extends CommandParams, O extends CommandOptions> =
+  Omit<CommandContext<TConfig, TInput, TAdapter>, 'params' | 'options'> & {
+    readonly params: keyof P extends never ? Readonly<Record<string, CommandParameterValue>> : InferCommandParams<P>;
+    readonly options: InferCommandOptions<O>;
+  };
 
 export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
+  const P extends CommandParams = {},
+  const O extends CommandOptions = {},
 >(
-  definition: CommandAuthoringDefinition<TConfig, TResult, TInput>,
+  definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,
 ): Readonly<CommandDefinition<TConfig, TResult, TInput, string | undefined>> {
   if (typeof definition.execute !== 'function') {
     throw new TypeError('Command execute must be a function');
@@ -330,6 +379,7 @@ export function defineCommand<
       }
     }
   }
+  validateArgumentSchemas(definition.params, definition.options);
   validateCommandAlias(definition.alias);
   validateCommandPermit(definition.permit);
   validateCommandShortcutShape(definition.shortcut);
@@ -444,14 +494,18 @@ export function createCommandContext(
   segments: readonly Readonly<CommandSegment>[] = Object.freeze([]),
   interaction?: UserInteraction,
   adapter?: string,
+  options: Readonly<Record<string, CommandParameterValue>> = Object.freeze({}),
 ): CommandContext {
   const context = createCapabilityContext(snapshot, ownerId);
   const session = resolveCommandSession(input);
+  const parameterValues: Record<string, CommandParameterValue> = { __proto__: null, ...params };
+  const optionValues: Record<string, CommandParameterValue> = { __proto__: null, ...options };
   const result = {
     ...context,
     ...session,
     args: Object.freeze([...args]),
-    params: Object.freeze({ ...params }),
+    params: Object.freeze(parameterValues),
+    options: Object.freeze(optionValues),
     segments: freezeSegments(segments),
     ...(input !== undefined ? { input: input as CommandMessage } : {}),
     ...(interaction !== undefined ? { interaction } : {}),

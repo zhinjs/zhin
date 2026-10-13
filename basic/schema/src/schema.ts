@@ -1,10 +1,16 @@
 import { isEmpty } from './utils.js';
 import { safeParseSchema, type SchemaSafeParseResult } from './validate.js';
+import { toJsonSchema, type ConfigFieldMetadata } from './json-schema.js';
 
 export { SchemaValidationError, type SchemaSafeParseResult, type SchemaValidationIssue } from './validate.js';
 export { safeParseSchema };
 
+declare const configPresent: unique symbol;
+declare const inputRequired: unique symbol;
+
 export class Schema<S = any, T = S> {
+    /** Type-only output witness used by Plugin configuration inference. */
+    declare readonly output?: T;
     public [Symbol.toStringTag] = 'Schema';
     constructor(
         public meta: Schema.Meta<S, T>,
@@ -60,9 +66,9 @@ export class Schema<S = any, T = S> {
         };
     }
     /** 设置是否必填 */
-    required(): this {
+    required(): this & Schema.Present & Schema.Required {
         this.meta.required = true;
-        return this;
+        return this as this & Schema.Present & Schema.Required;
     }
     /** 是否隐藏 */
     hidden(): this {
@@ -75,9 +81,25 @@ export class Schema<S = any, T = S> {
         return this;
     }
     /** 设置默认值 */
-    default(defaultValue: T): this {
+    default(defaultValue: T): this & Schema.Present {
         this.meta.default = defaultValue;
+        return this as this & Schema.Present;
+    }
+    /** Secret values remain environment references in application configuration. */
+    secret(): this {
+        if (this.meta.type !== 'string') throw new TypeError('secret only supports string fields');
+        this.meta.secret = true;
         return this;
+    }
+    /** Declare the effect shown in configuration forms. */
+    effect(effect: ConfigFieldMetadata['effect']): this {
+        if (effect !== 'reload') throw new TypeError('Plugin configuration fields support only reload');
+        this.meta.effect = effect;
+        return this;
+    }
+    /** Export the standard JSON Schema consumed by Runtime and Console. */
+    toJsonSchema(): Readonly<Record<string, unknown>> {
+        return toJsonSchema(this);
     }
     /** 设置选项列表 */
     option(list: (T | Schema.Option<T>)[]): this {
@@ -132,30 +154,30 @@ export class Schema<S = any, T = S> {
     }
     /** 声明一个字典类型 */
     static dict<X extends Schema>(input: X, key?: string) {
-        return new Schema<Record<string, Schema.Types<X>>>({ type: 'dict', key }, { inner: input });
+        return new Schema<Record<string, Schema.Input<X>>, Record<string, Schema.Output<X>>>({ type: 'dict', key }, { inner: input });
     }
     static object<X extends Record<string, Schema<any, any>>>(input: X, key: string = '') {
-        return new Schema<Schema.RecordTypes<X>>({ type: 'object', key }, { object: input });
+        return new Schema<Schema.InputRecord<X>, Schema.RecordTypes<X>>({ type: 'object', key }, { object: input });
     }
     /** 声明一个列表类型 */
     static list<X extends Schema>(inner: X, key?: string) {
-        return new Schema<Schema.Types<X>[]>({ type: 'list', key }, { inner });
+        return new Schema<Schema.Input<X>[], Schema.Output<X>[]>({ type: 'list', key }, { inner });
     }
     /** 声明一个元组类型 */
-    static tuple<X extends readonly any[]>(list: X, key?: string) {
-        return new Schema<Schema.Tuple<X>>({ type: 'tuple', key }, { list });
+    static tuple<const X extends readonly any[]>(list: X, key?: string) {
+        return new Schema<Schema.InputTuple<X>, Schema.Tuple<X>>({ type: 'tuple', key }, { list });
     }
     /** 声明一个联合类型 */
-    static union<X extends readonly Schema[]>(list: X, key?: string): Schema<Schema.Union<X>> {
-        return new Schema<Schema.Union<X>>({ type: 'union', key }, { list });
+    static union<const X extends readonly Schema[]>(list: X, key?: string): Schema<Schema.InputUnion<X>, Schema.Union<X>> {
+        return new Schema<Schema.InputUnion<X>, Schema.Union<X>>({ type: 'union', key }, { list });
     }
     /** 声明一个交叉类型 */
-    static intersect<X extends readonly any[]>(list: X, key?: string) {
-        return new Schema<Schema.Intersect<X>>({ type: 'intersect', key }, { list });
+    static intersect<const X extends readonly any[]>(list: X, key?: string) {
+        return new Schema<Schema.InputIntersect<X>, Schema.Intersect<X>>({ type: 'intersect', key }, { list });
     }
     /** 声明一个常量 */
     static const<X extends string | number | boolean>(value: X, key?: string) {
-        return new Schema<X>({ type: 'const', default: value as any, key });
+        return new Schema<X>({ type: 'const', default: value, key }) as Schema<X> & Schema.Present;
     }
     /** 声明任意类型 */
     static any(key?: any) {
@@ -178,8 +200,8 @@ export class Schema<S = any, T = S> {
         return Schema.union(branches as unknown as readonly Schema[]) as unknown as Schema<any>;
     }
     /** validate-only：不填默认值、不 throw */
-    safeParse(value?: unknown): SchemaSafeParseResult<T> {
-        return safeParseSchema(this as unknown as Schema<T>, value);
+    safeParse(value?: unknown): SchemaSafeParseResult<S | undefined> {
+        return safeParseSchema(this, value);
     }
     static resolve<T extends string>(type: T): Schema.Formatter {
         return Schema.formatters.get(type)!;
@@ -192,6 +214,16 @@ export interface Schema<S = any> {
     (value?: S, key?: string): S;
 }
 export namespace Schema {
+    export interface Present { readonly [configPresent]: true }
+    export interface Required { readonly [inputRequired]: true }
+    export type Input<T> = T extends Schema<infer I, any> ? I : never;
+    export type Output<T> = T extends Schema<any, infer O> ? O : never;
+    export type InputRecord<X extends Record<string, Schema>> =
+        { [K in keyof X as X[K] extends Required ? K : never]-?: Input<X[K]> }
+        & { [K in keyof X as X[K] extends Required ? never : K]?: Input<X[K]> };
+    export type InputUnion<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? Input<L> | InputUnion<R> : never;
+    export type InputIntersect<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? Input<L> & InputIntersect<R> : unknown;
+    export type InputTuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? [Input<L>, ...InputTuple<R>] : [];
     export const formatters: Map<string, Formatter> = new Map<string, Formatter>();
     export type Formatter<S = any, T = S> = (this: Schema, key: string, value: S) => T;
     export type JSON<S = any, T = S> = Meta<S, T> & {
@@ -212,17 +244,18 @@ export namespace Schema {
         min?: number;
         max?: number;
         step?: number;
+        secret?: boolean;
+        effect?: ConfigFieldMetadata['effect'];
     }
     export interface Options {
         object?: Record<string, Schema>;
         inner?: Schema;
         list?: readonly Schema[];
     }
-    export type Types<T> = T extends Schema<infer S> ? S : never;
+    export type Types<T> = Output<T>;
     export type RecordTypes<T> = T extends Record<string, Schema>
-        ? {
-            [K in keyof T]?: Types<T[K]>;
-        }
+        ? { [K in keyof T as T[K] extends Present ? K : never]-?: Output<T[K]> }
+            & { [K in keyof T as T[K] extends Present ? never : K]?: Output<T[K]> }
         : unknown;
     export type Union<T extends readonly any[]> = T extends readonly [infer L, ...infer R]
         ? Types<L> | Union<R>
@@ -295,7 +328,7 @@ export namespace Schema {
     };
     export function formatOptionList<T extends (any | Schema.Option)[]>(list: T): Schema.Option[] {
         return list.map(item => {
-            if (typeof item === 'string') {
+            if (typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean') {
                 return {
                     label: `${item}`,
                     value: item,

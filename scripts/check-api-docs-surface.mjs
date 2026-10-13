@@ -33,6 +33,8 @@ const expectedSurface = new Map([
     'PluginScheduleHost', 'PluginSetupContext', 'ScheduleJobRegistration',
     'DatabaseHostType', 'OutboundEndpointOperation', 'databaseHostToken', 'definePlugin',
     'outboundHostToken', 'scheduleHostToken',
+    'PluginConfigSchema', 'DeliveryTarget', 'createDeliveryTarget', 'JsonValue',
+    'StateScope', 'StateRecord', 'StateWriteOptions', 'PersistentStatePort', 'PluginStateStore',
   ]],
   ['zhin.js/adapter', [
     'AdapterContext', 'AdapterDefinition', 'AdapterSegmentPolicy', 'Endpoint',
@@ -57,6 +59,7 @@ const expectedSurface = new Map([
     'CommandParameterDefinition', 'CommandParamSchema', 'CommandScene', 'CommandSegment',
     'CommandSender', 'CommandSession', 'CommandDynamicValue', 'CommandParameterType',
     'CommandParameterValue', 'defineCommand',
+    'CommandParams', 'CommandOptions', 'CommandOptionSchema', 'InferCommandParams', 'InferCommandOptions',
   ]],
   ['zhin.js/component', ['ComponentContext', 'ComponentDefinition', 'defineComponent']],
   ['zhin.js/core/runtime', [
@@ -106,6 +109,25 @@ const expectedMembers = new Map([
     '$sendTo', 'clientAdapter', 'content', 'conversation', 'endpointId', 'generation', 'id',
     'mentioned', 'message', 'metadata', 'replyTo', 'segments', 'sender',
   ]],
+  ['zhin.js.PluginDefinition', ['config', 'metadata', 'name', 'requires', 'setup']],
+  ['zhin.js.PluginConfigSchema', ['output', 'toJsonSchema']],
+  ['zhin.js.PluginDatabaseHost', [
+    'constructor', 'define', 'dialect', 'models', 'owner', 'qualify', 'started', 'state', 'tables', 'unqualify',
+  ]],
+  ['zhin.js.PluginStateStore', ['constructor', 'owner', 'forUser', 'forConversation', 'get', 'set', 'delete', 'update']],
+  ['zhin.js.PersistentStatePort', ['read', 'compareExchange']],
+  ['zhin.js.StateRecord', ['revision', 'value', 'expiresAt']],
+  ['zhin.js.StateWriteOptions', ['ttlMs']],
+  ['zhin.js/command.CommandContext', [
+    '$client', 'adapter', 'args', 'config', 'endpoint', 'generation', 'input', 'interaction',
+    'options', 'owner', 'params', 'project', 'scene', 'segments', 'sender', 'signal', 'use',
+  ]],
+  ['zhin.js/command.CommandOptionSchema', [
+    'alias', 'choices', 'default', 'description', 'max', 'min', 'optional', 'pattern', 'type', 'validate',
+  ]],
+  ['zhin.js/command.CommandDefinition', [
+    'adapter', 'alias', 'description', 'execute', 'options', 'params', 'permit', 'shortcut',
+  ]],
 ]);
 for (const [qualifiedName, expected] of expectedMembers) {
   const separator = qualifiedName.lastIndexOf('.');
@@ -121,6 +143,18 @@ for (const [qualifiedName, expected] of expectedMembers) {
     `${qualifiedName} public members drifted`,
   );
 }
+
+// The public IM documentation must describe the facade's actual defaults,
+// rather than the transport-neutral Feature's unknown input type.
+const middleware = (project.children ?? []).find(module => module.name === 'zhin.js/middleware');
+const defineMiddleware = middleware?.children?.find(child => child.name === 'defineMiddleware');
+assert(defineMiddleware, 'Missing IM middleware facade reflection');
+assert.deepEqual(
+  (defineMiddleware.signatures ?? []).map(signature => signature.typeParameters
+    ?.find(parameter => parameter.name === 'TInput')?.default?.toString()),
+  ['OutboundEnvelope', 'MessageBase'],
+  'Middleware docs must use OutboundEnvelope and canonical Message authoring defaults',
+);
 
 const forbiddenMembers = new Set([
   '$feature', '$parameter', 'addFeature', 'agentStreamBus', 'approvalOnce',

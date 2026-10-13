@@ -146,6 +146,8 @@ SQLite 备份应使用数据库快照或停写复制，不要在写入中直接�
 
 日志默认进入 stdout；daemon 模式写 `.zhin/runtime.log`。设置宿主日志轮转，不要只依赖 Console 清理。告警应携带 Endpoint、Project、runtimeId 或 runId，避免只报一段错误文本。
 
+Runtime Process Host 在启动和运行期间记录 `unhandledRejection`，避免未观察的后台 Promise 拒绝按 Node 默认策略直接结束整个进程；操作恢复仍由对应适配器负责，例如 ICQQ 心跳超时走网络断线与重连流程。启动、命令和消息发送中被调用方观察到的拒绝仍按原链路报错。停止 Runtime 时移除该监听器，不接管 `uncaughtException`；显式配置 Node `--unhandled-rejections=strict` 时仍遵循该严格退出策略。
+
 ## 7. 发布与回滚
 
 1. 暂停会产生新副作用的入口，保留只读探针。

@@ -124,6 +124,13 @@ function resolveParameter(
       `missing params.${hint.name} declaration in defineCommand({ params })`,
     );
   }
+  if (Object.keys(definition.params ?? {})[0] !== hint.name) {
+    throw new CommandPathSyntaxError(source, `params.${hint.name} must be the first parameter declaration`);
+  }
+  if (schema.rest !== undefined && schema.rest !== hint.rest
+    || schema.optional !== undefined && schema.optional !== hint.optional) {
+    throw new CommandPathSyntaxError(source, `params.${hint.name} optional/rest declaration conflicts with the directory shape`);
+  }
   if (!hint.optional && schema.default !== undefined) {
     throw new CommandPathSyntaxError(
       source,

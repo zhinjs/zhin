@@ -130,7 +130,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 
 ## Plugin instance fields
 
-These fields are read directly from each plugin `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.
+These fields use the Runtime schema reader for trusted plugins’ `config: Schema.object(...)` declarations or `schema.json`; isolated plugins must use `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.
 
 ### dingtalk
 
@@ -1407,7 +1407,7 @@ _This Schema declares no fields._
 
 ### repeater
 
-[`plugins/utils/repeater/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/schema.json)
+[`plugins/utils/repeater/src/config.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts)
 
 | Path | Type | Required | Default | Description |
 | --- | --- | --- | --- | --- |
@@ -1428,6 +1428,6 @@ _This Schema declares no fields._
 
 ### short-url
 
-[`plugins/utils/short-url/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/schema.json)
+[`plugins/utils/short-url/plugin.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts)
 
 _This Schema declares no fields._

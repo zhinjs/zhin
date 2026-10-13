@@ -19,4 +19,4 @@ plugins:
 
 ## Configuration
 
-This plugin currently has no configuration fields. Its [`schema.json`](./schema.json) accepts an empty object; do not place package names in a `plugins` array.
+This plugin currently has no configuration fields. Its `plugin.ts` declares `config: Schema.object({})`, shared by Runtime validation and Console forms, and accepts an empty object; do not place package names in a `plugins` array.

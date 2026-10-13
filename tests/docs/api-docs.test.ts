@@ -13,7 +13,7 @@ const publicModules = [
   { source: 'packages/im/command/src/definition.ts', module: 'zhin.js/command' },
   { source: 'packages/im/adapter/src/definition.ts', module: 'zhin.js/adapter' },
   { source: 'packages/im/component/src/definition.ts', module: 'zhin.js/component' },
-  { source: 'packages/im/middleware/src/definition.ts', module: 'zhin.js/middleware' },
+  { source: 'packages/im/core/src/feature/middleware-public-api.ts', module: 'zhin.js/middleware' },
   { source: 'packages/im/handler/src/definition.ts', module: 'zhin.js/handler' },
   { source: 'packages/im/tool/src/definition.ts', module: '@zhin.js/tool' },
   { source: 'packages/im/skill/src/definition.ts', module: '@zhin.js/skill' },

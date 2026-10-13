@@ -72,7 +72,8 @@ type AuthoringForAdapter<TInput, TConfig, TAdapter extends string | undefined> =
     | { readonly target: 'outbound'; handle(context: MiddlewareContext<TInput, TConfig, TAdapter>, next: OutboundMiddlewareNext): void | Promise<void> }
   );
 
-type MiddlewareAuthoringDefinition<TInput, TConfig> =
+/** @internal Shape shared with the typed IM facade; not a separate authoring API. */
+export type MiddlewareAuthoringDefinition<TInput, TConfig> =
   | AuthoringForAdapter<TInput, TConfig, undefined>
   | {
       [TAdapter in RegisteredAdapterName]: AuthoringForAdapter<TInput, TConfig, TAdapter> & {

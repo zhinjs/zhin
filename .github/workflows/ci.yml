@@ -139,6 +139,7 @@ jobs:
           basic/database/tests/live-dialects.test.ts
           basic/cli/tests/plugin-runtime/database-conversation-live.test.ts
           basic/cli/tests/plugin-runtime/mysql-startup.live.test.ts
+          basic/cli/tests/plugin-runtime/persistent-state.live.test.ts
           packages/im/ai/tests/memory/context-repository-database.test.ts
         env:
           NODE_OPTIONS: --throw-deprecation

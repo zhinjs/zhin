@@ -301,7 +301,11 @@
     "packages/im/jsx/src/**/*",
     "packages/toolkit/components/src/**/*",
     "examples/minimal-bot/middlewares/**/*",
-    "packages/im/core/tests/jsx-public.test-d.tsx"
+    "packages/im/core/tests/jsx-public.test-d.tsx",
+    "basic/schema/tests/config-types.fixture.ts",
+    "packages/im/core/tests/middleware-types.fixture.ts",
+    "packages/im/command/tests/types/declarations.ts",
+    "packages/im/plugin-runtime/tests/types/persistent-state.ts"
   ],
   "exclude": [
     "node_modules",

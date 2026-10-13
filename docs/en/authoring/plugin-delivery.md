@@ -26,7 +26,7 @@ Published packages must use a JavaScript entry. A source Root Plugin may use `./
 
 ## 3. Design configuration
 
-Declare defaults, types, and constraints in `schema.json`. Root config reads `plugin:`, while child instances read `plugins.<instanceKey>`. Reference secrets with `${VAR}`; never place them in defaults or examples.
+For trusted plugins, `definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints, and Console form annotations together, with types inferred through `Schema.Output`. A root `schema.json` is another single-source option; defining both is rejected. Isolated plugins use only `schema.json`. See [one configuration declaration](./define-plugin#one-configuration-declaration). Root config reads `plugin:`, while child instances read `plugins.<instanceKey>`. Reference secrets with `${VAR}`; never place them in defaults or examples.
 
 For every change, answer whether it needs a new generation, whether the old generation keeps serving on failure, and how Console proves publication.
 

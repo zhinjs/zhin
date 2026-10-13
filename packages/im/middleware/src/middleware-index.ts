@@ -14,17 +14,19 @@ import type {
 } from './definition.js';
 import { continuationBrand, type MiddlewareContinuation } from './continuation.js';
 
-/** Transmission-neutral result policy supplied by the composition layer. */
+/** @internal Transmission-neutral result policy supplied by the composition layer. */
 export interface MiddlewareResultPolicy<TResult> {
   stop(owner: PluginId): TResult;
   replace(owner: PluginId, value: unknown, downstream: TResult | undefined): TResult;
 }
 
+/** @internal Runtime continuation result. */
 export interface MiddlewareRunResult {
   readonly owner?: PluginId;
   readonly value?: unknown;
 }
 
+/** @internal Runtime inventory projection. */
 export interface MiddlewareDescriptor {
   readonly owner: PluginId;
   readonly name: string;
@@ -39,6 +41,7 @@ interface MiddlewareRecord extends MiddlewareDescriptor {
   readonly slot: Readonly<CapabilitySlot<MiddlewareDefinition>>;
 }
 
+/** @internal Runtime middleware executor. */
 export class MiddlewareIndex {
   readonly $projection = 'zhin.middleware-index/1' as const;
   readonly #records: readonly MiddlewareRecord[];
@@ -170,6 +173,7 @@ export class MiddlewareIndex {
   }
 }
 
+/** @internal Runtime projection guard. */
 export function isMiddlewareIndex(value: unknown): value is MiddlewareIndex {
   return !!value && typeof value === 'object'
     && (value as { readonly $projection?: unknown }).$projection === 'zhin.middleware-index/1';

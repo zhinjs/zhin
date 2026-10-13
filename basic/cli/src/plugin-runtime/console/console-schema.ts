@@ -3,6 +3,35 @@ export function jsonSchemaToConsoleSchema(
   input: unknown,
   key?: string,
 ): Record<string, unknown> | null {
+  const converted = convertSchema(input, key);
+  if (!converted || !input || typeof input !== 'object') return converted;
+  const schema = input as Record<string, unknown>;
+  const annotation = schema['x-zhin-config'];
+  if (annotation && typeof annotation === 'object' && !Array.isArray(annotation)) {
+    const metadata = annotation as Record<string, unknown>;
+    for (const field of ['hidden', 'component', 'options', 'effect']) {
+      if (metadata[field] !== undefined) converted[field] = metadata[field];
+    }
+    if (metadata.secret === true) {
+      converted.secret = true;
+      converted.component = 'password';
+    }
+  }
+  if (schema.writeOnly === true) { converted.secret = true; converted.component = 'password'; }
+  if (schema.type === 'string') {
+    if (typeof schema.minLength === 'number') converted.min = schema.minLength;
+    if (typeof schema.maxLength === 'number') converted.max = schema.maxLength;
+    if (typeof schema.pattern === 'string') converted.pattern = schema.pattern;
+  }
+  if (schema.type === 'array') {
+    if (typeof schema.minItems === 'number') converted.min = schema.minItems;
+    if (typeof schema.maxItems === 'number') converted.max = schema.maxItems;
+  }
+  if (typeof schema.multipleOf === 'number') converted.step = schema.multipleOf;
+  return converted;
+}
+
+function convertSchema(input: unknown, key?: string): Record<string, unknown> | null {
   if (input == null || typeof input !== 'object' || Array.isArray(input)) return null;
   const schema = input as Record<string, unknown>;
 

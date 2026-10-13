@@ -15,7 +15,7 @@ title: 配置参考
 
 建议统一用 `zhin.config.yml`，本文的示例都以它为准。
 
-需要逐字段核对类型、必填项、默认值与插件 Schema 时，请使用[自动生成配置字段参考](./generated)。该页面由 Runtime 源码与插件 `schema.json` 生成，并由 CI 阻止漂移。
+需要逐字段核对类型、必填项、默认值与插件 Schema 时，请使用[自动生成配置字段参考](./generated)。该页面由 Runtime 源码与插件的单一配置声明（`config: Schema.object(...)` 或 `schema.json`）生成，并由 CI 阻止漂移。
 
 ## 这份参考怎么用
 

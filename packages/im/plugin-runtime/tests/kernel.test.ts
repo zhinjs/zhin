@@ -8,6 +8,7 @@ import {
   capabilityId,
   childPluginId,
   createToken,
+  createSnapshotView,
   featureId,
   rootPluginId,
   type SnapshotState,
@@ -25,6 +26,20 @@ function emptyState(): SnapshotState {
 }
 
 describe('Plugin Runtime kernel', () => {
+  it('detaches and deeply freezes custom schema metadata when creating a snapshot', () => {
+    const declaration = { type: 'object', properties: { count: { type: 'number', default: 1 } } };
+    const state = emptyState();
+    const snapshot = createSnapshotView(1, { ...state, tree: new Map([[state.root, {
+      id: state.root, instanceKey: 'root', packageName: 'root', packageRoot: '/root',
+      children: [], configSchema: declaration,
+    }]]) });
+    declaration.properties.count.default = 99;
+    const committed = snapshot.tree.get(state.root)!.configSchema!;
+    expect(committed.properties).toMatchObject({ count: { default: 1 } });
+    expect(Object.isFrozen(committed.properties)).toBe(true);
+    expect(Object.isFrozen((committed.properties as typeof declaration.properties).count)).toBe(true);
+    expect(() => { (committed.properties as typeof declaration.properties).count.default = 3; }).toThrow(TypeError);
+  });
   it('accepts segmented Capability local names without relaxing Plugin keys', () => {
     const root = rootPluginId();
     expect(capabilityId(root, featureId('test.command'), 'gh/issue/list')).toContain(

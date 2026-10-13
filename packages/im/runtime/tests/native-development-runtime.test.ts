@@ -26,6 +26,50 @@ afterEach(async () => {
 });
 
 describe('NativeDevelopmentModuleRuntime', () => {
+  it('keeps unrelated Plugin entry side effects cached while refreshing a helper importer closure', async () => {
+    const root = await fixture();
+    const key = `zhin-native-config-review:${root}`;
+    for (const name of ['root', 'child', 'sibling']) {
+      const directory = name === 'root' ? root : join(root, 'plugins', name);
+      await mkdir(directory, { recursive: true });
+      await writeFile(join(directory, 'package.json'), JSON.stringify({ name: `native-${name}`, type: 'module',
+        zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false,
+          ...(name === 'root' ? { plugins: [{ package: './plugins/child', instanceKey: 'child' }, { package: './plugins/sibling', instanceKey: 'sibling' }] } : {}) } }));
+      await writeFile(join(directory, 'plugin.js'), `${name === 'child' ? "import { value } from './helper.js';" : 'const value = 1;'}
+const counts = globalThis[Symbol.for(${JSON.stringify(key)})]; counts.${name} = (counts.${name} ?? 0) + 1;
+export default { name: '${name}', config: { toJsonSchema() { return { type: 'object', properties: { value: { type: 'number', default: value } } }; } } };
+`);
+    }
+    const helper = join(root, 'plugins/child/helper.js');
+    await writeFile(helper, 'export const value = 1;');
+    const scenario = join(root, 'config-hmr-scenario.mjs');
+    await writeFile(scenario, `
+import { writeFile } from 'node:fs/promises';
+import { RootRuntime, NativeDevelopmentModuleRuntime } from ${JSON.stringify(new URL('../src/index.ts', import.meta.url).href)};
+globalThis[Symbol.for(${JSON.stringify(key)})] = {};
+const runtime = new RootRuntime({ projectRoot: ${JSON.stringify(root)},
+  modules: new NativeDevelopmentModuleRuntime({ projectRoot: ${JSON.stringify(root)}, watch: false }),
+  environment: { name: 'test', mode: 'test', platform: 'node' } });
+try {
+  await runtime.start();
+  const first = { ...globalThis[Symbol.for(${JSON.stringify(key)})] };
+  await writeFile(${JSON.stringify(helper)}, 'export const value = 2;');
+  const hmr = runtime.createHmrCoordinator({ onRestartRequired() { throw new Error('Unexpected process restart'); }, onError() {} });
+  await hmr.enqueue(${JSON.stringify(helper)});
+  process.stdout.write(JSON.stringify({ first, counts: globalThis[Symbol.for(${JSON.stringify(key)})],
+    generation: runtime.snapshot.generation, config: [...runtime.snapshot.config.values()] }));
+} finally { await runtime.stop(); }
+`);
+    const { stdout } = await execFileAsync(process.execPath,
+      [...inheritedStripTypeArguments, '--conditions=development', '--import', tsxLoaderUrl, scenario],
+      { cwd: process.cwd() });
+    const result = JSON.parse(stdout);
+    expect(result.first).toEqual({ root: 1, child: 1, sibling: 1 });
+    expect(result.counts).toEqual({ root: 1, child: 2, sibling: 1 });
+    expect(result.generation).toBe(2);
+    expect(result.config).toContainEqual({ value: 2 });
+  });
+
   it('uses URL revisions to reload one directly owned ESM definition', async () => {
     const root = await fixture();
     const source = join(root, 'commands/status/index.js');

@@ -30,6 +30,48 @@ export default definePlugin<MyConfig>({
 
 > Starting from scratch: for the shortest example see [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人); for the convention directories tutorial see [Writing Your First Plugin](../getting-started/first-plugin.md); for concepts see [Plugin Model](../concepts/plugin-model.md).
 
+## One configuration declaration
+
+A trusted plugin may use the existing `Schema` in `definePlugin.config`. The same declaration produces standard JSON Schema, defaults, constraints, and Console form annotations; `setup` infers the validated output:
+
+```ts
+import { definePlugin, Schema } from 'zhin.js';
+
+const configuration = Schema.object({
+  interval: Schema.number().min(1).default(300).description('Polling interval, seconds').effect('reload'),
+  apiKey: Schema.string().required().secret().component('password'),
+  label: Schema.string(),
+});
+type Config = Schema.Output<typeof configuration>;
+
+export default definePlugin({
+  name: 'subscription',
+  config: configuration,
+  setup({ config }) {
+    const current = config.get();
+    const interval: number = current.interval;
+    const label: string | undefined = current.label;
+    // Consume this generation's validated config without a second default/parser layer.
+  },
+});
+```
+
+`.required()` and `.default()` make output fields present; other fields remain optional. `toJsonSchema()` exports standard JSON Schema, while the existing `toJSON()` keeps the business Schema serialization format.
+
+Continue to configure secrets with `apiKey: ${SUBSCRIPTION_API_KEY}`. `.secret()` exports `writeOnly: true` and `x-zhin-config.secret` annotations and rejects secret defaults; it does not read environment variables or grant permission. Descriptions, choices, hidden fields, component hints, and `.effect('reload')` travel in the same Schema. Console Host uses the Runtime schema reader.
+
+Plugin configuration requires an object root; omit `properties` when there are no own fields, and `{}` is also a valid empty declaration. `properties` declares configurable fields; root composition or references alone cannot supply them. Console supports basic nested objects, lists, dictionaries, and field annotations. Schema can export standard validation contracts for `union`, `intersect`, and `tuple`, but their complete form editors and `$ref` support still require coordinated verification with the separate Console frontend. Console explicitly rejects unsupported shapes. A unified declaration does not imply an editor for every JSON Schema construct.
+
+Place a union default on the union field: `Schema.union([...]).default(...)`. Runtime cannot choose which alternative should supply a nested default, so exporting defaults inside alternatives rejects the declaration. Direct `Schema.const(...)` alternatives work; literal fields inside alternative objects also carry defaults and are rejected.
+
+Union defaults are checked against every structurally matching `safeParse` alternative. A numeric default is allowed beside a secret string alternative, while overlapping secret alternatives still reject it. This check does not use ranges, steps, or choices to guess a branch, so it conservatively rejects when those constraints alone might exclude a secret alternative. Runtime validates the final default against all standard constraints.
+
+Trusted entries load during configuration preflight to read declarations and detect duplicate sources; `setup` does not run then. Keep top-level code declarative and put Host operations and lifecycle side effects in `setup`. Schema builders remain editable while declaring configuration. Runtime copies and deeply freezes their JSON metadata during preflight, so later builder edits do not change the current generation's captured declaration.
+
+Choose one configuration source per plugin: inline `config` or root `schema.json`. Defining both rejects startup. Isolated plugins use only `schema.json`; configuration composition never imports their entry into Host. Plugin changes reload the affected plugin and invalid candidates retain the previous generation. Root Host still determines when system settings require process restart.
+
+Real examples: [repeater](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts) declares constrained defaults, while [short-url](https://github.com/zhinjs/zhin/blob/main/plugins/utils/short-url/plugin.ts) explicitly declares an empty strict business configuration.
+
 ## setup context
 
 The `PluginSetupContext<TConfig>` received by `setup` has all read-only members:
@@ -37,7 +79,7 @@ The `PluginSetupContext<TConfig>` received by `setup` has all read-only members:
 | Member | Type | Purpose |
 | --- | --- | --- |
 | `plugin` | `PluginInstanceView` | Instance view: `id` / `instanceKey` / `parent` / `root` / `role` (`'root' \| 'child'`). Isolated by `instanceKey` in multi-instance deployments |
-| `config` | `ConfigView<TConfig>` | Configuration view, `config.get()` returns a read-only config. Defaults come from the plugin package's `schema.json`, overridden by the `plugin:` section (for Root itself) or `plugins.<key>` section of `zhin.config.yml` |
+| `config` | `ConfigView<TConfig>` | Configuration view, `config.get()` returns a read-only config. Defaults come from inline `config` or the plugin package's `schema.json`, overridden by the `plugin:` section (for Root itself) or `plugins.<key>` section of `zhin.config.yml` |
 | `resources` | `Scope` | Resource scope: `has(token)` / `use(token)` resolve Host tokens, `provide(token, value, dispose?)` publishes resources to child scopes |
 | `lifecycle` | `DisposeStack` | Generation's cleanup stack: cleanup functions registered via `lifecycle.add(dispose)` run in reverse order when the generation ends |
 | `handoff` | `GenerationHandoffRegistry` | Generation handoff registry: `handoff.add(participant)` participates in hot reload transactions (see "Generation Handoff" below) |

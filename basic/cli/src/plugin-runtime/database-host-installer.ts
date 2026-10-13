@@ -20,6 +20,7 @@ import {
   normalizeDatabaseHostConfig,
   type DatabaseHostConfig,
 } from './database-config.js';
+import { createDatabaseState, type StateDatabase } from './database-state.js';
 
 const logger = getLogger('Database');
 
@@ -125,6 +126,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
     connectionConfig as never,
   ) as unknown as RawDatabase;
   let started = false;
+  const state = createDatabaseState(db as unknown as StateDatabase, config.dialect, () => started);
   const wrapped = new Map<string, DatabaseHostModel>();
   const definedTables = new Set<string>();
   const definitions = new Map<string, Record<string, unknown>>();
@@ -138,6 +140,7 @@ export function createDatabaseHost(config: DatabaseHostConfig): DatabaseHost & {
 
   return {
     db,
+    state,
     get dialect() {
       return config.dialect;
     },
@@ -348,12 +351,12 @@ export async function resolveDatabaseConfig(
 }
 
 export function installDatabaseHost(host: DatabaseHost): RootResourceInstaller {
-  return ({ resources, handoff }) => {
+  return ({ resources, handoff, admission }) => {
     // Domain tables (e.g. github_oauth_users) are defined by owning plugins in setup().
     // Plugins receive a root-scoped facade through the historical token. The
     // raw host remains available only to CLI composition through its root token.
     resources.provide(databaseRootHostToken, host);
-    resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), host));
+    resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), host, admission));
     // Host 是进程级共享资源：不能随世代 dispose / 回滚 stop（旧世代仍在用）。
     // start 幂等，stop 由进程退出路径（start-command control.stop）统一触发。
     handoff.add({

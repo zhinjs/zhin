@@ -7,9 +7,12 @@ import {
   createGenerationAdmissionGate,
   createToken,
   PluginDatabaseHost,
+  PluginOutboundHost,
   PluginScheduleHost,
   databaseHostToken,
   databaseRootHostToken,
+  outboundHostToken,
+  outboundRootHostToken,
   featureId,
   rootPluginId,
   scheduleHostToken,
@@ -47,7 +50,10 @@ import {
 } from './primary-config.js';
 import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 
-export type PluginConfigResolver = (node: PluginGraphNode) => unknown;
+export interface PluginConfigResolver {
+  (node: PluginGraphNode): unknown;
+  schema?(node: PluginGraphNode): Readonly<Record<string, unknown>> | undefined;
+}
 
 export interface RootResourceContext {
   /** Exact shadow generation being assembled; never inferred from a latest snapshot. */
@@ -181,6 +187,9 @@ export class PluginScopeAssembler {
       role: node.parent ? 'child' : 'root',
     });
     let metadata: PluginDefinition['metadata'];
+    // Schema composition is Host-owned even when Plugin execution is isolated.
+    // Commit the validated JSON declaration with both kinds of Plugin snapshot.
+    const configSchema = this.configResolver.schema?.(node);
     if (manifest.runtime === 'isolated') {
       if (!node.parent) throw new Error('Root Plugin cannot use runtime: isolated');
       if (node.features.length > 0) {
@@ -253,12 +262,14 @@ export class PluginScopeAssembler {
       parent: node.parent,
       children: Object.freeze(node.children.map((child) => child.id)),
       metadata,
+      ...(configSchema ? { configSchema } : {}),
     }));
     this.config.set(node.id, config);
     this.resources.set(node.id, scope.snapshot());
 
     for (const child of node.children) await this.setupTree(child, signal);
   }
+
 
   #registerSetupCapability<TDefinition>(
     node: PluginGraphNode,
@@ -321,22 +332,29 @@ export class PluginScopeAssembler {
 
   /** Root resources are process-owned; every Plugin Scope receives an owner-bound facade. */
   private installOwnerScopedHosts(scope: Scope, owner: PluginId): void {
-    const database = scope.has(databaseRootHostToken)
-      ? scope.use(databaseRootHostToken)
+    const root = this.scopes.get(rootPluginId());
+    if (!root) throw new Error('Missing root resource scope');
+    // A retired subtree must close its facades even when the parent remains active.
+    const admission = createGenerationAdmissionGate();
+    if (root.has(outboundRootHostToken)) {
+      scope.provide(outboundHostToken, new PluginOutboundHost(owner, root.use(outboundRootHostToken), admission));
+    }
+    const database = root.has(databaseRootHostToken)
+      ? root.use(databaseRootHostToken)
       : undefined;
     if (database) {
       scope.provide(
         databaseHostToken,
-        new PluginDatabaseHost(owner, database),
+        new PluginDatabaseHost(owner, database, admission),
       );
     }
-    const schedule = scope.has(scheduleRootHostToken)
-      ? scope.use(scheduleRootHostToken)
+    const schedule = root.has(scheduleRootHostToken)
+      ? root.use(scheduleRootHostToken)
       : undefined;
     if (schedule) {
       scope.provide(
         scheduleHostToken,
-        new PluginScheduleHost(owner, schedule),
+        new PluginScheduleHost(owner, schedule, admission),
       );
     }
   }

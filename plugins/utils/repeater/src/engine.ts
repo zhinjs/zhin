@@ -1,27 +1,7 @@
-export interface RepeaterConfig {
-  readonly threshold: number;
-  readonly cooldown: number;
-  readonly maxLength: number;
-}
-
-export const DEFAULT_REPEATER_CONFIG: RepeaterConfig = Object.freeze({
-  threshold: 3,
-  cooldown: 30_000,
-  maxLength: 200,
-});
-
-export function resolveRepeaterConfig(raw: unknown): RepeaterConfig {
-  const input = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  const threshold = clampNumber(input.threshold, DEFAULT_REPEATER_CONFIG.threshold, 2, 10);
-  const cooldown = clampNumber(input.cooldown, DEFAULT_REPEATER_CONFIG.cooldown, 5_000, 300_000);
-  const maxLength = clampNumber(input.maxLength, DEFAULT_REPEATER_CONFIG.maxLength, 10, 1_000);
-  return Object.freeze({ threshold, cooldown, maxLength });
-}
-
-function clampNumber(value: unknown, fallback: number, min: number, max: number): number {
-  const n = typeof value === 'number' && Number.isFinite(value) ? value : fallback;
-  return Math.min(max, Math.max(min, Math.trunc(n)));
-}
+import { DEFAULT_REPEATER_CONFIG } from './config.js';
+import type { RepeaterConfig } from './config.js';
+export { DEFAULT_REPEATER_CONFIG } from './config.js';
+export type { RepeaterConfig } from './config.js';
 
 export interface RepeaterInboundFields {
   readonly conversation: {
@@ -69,7 +49,7 @@ export class RepeaterEngine {
   #totalRepeats = 0;
   #cleanupTimer?: ReturnType<typeof setInterval>;
   /** 最近一次 tick 的配置冷却，供 pruneStale 用实际配置而非默认值清理。 */
-  #lastCooldown = DEFAULT_REPEATER_CONFIG.cooldown;
+  #lastCooldown: number = DEFAULT_REPEATER_CONFIG.cooldown;
 
   constructor() {
     this.#cleanupTimer = setInterval(() => this.pruneStale(), 120_000);
