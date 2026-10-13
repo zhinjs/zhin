@@ -66,7 +66,8 @@ CLI 和 Console 使用同一安装与配置服务：安装 → 依赖检查 → 
 
 | 调用方 | 当前验收范围 |
 | --- | --- |
-| [持久提醒](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md) | 一次性与周期提醒、本人原会话取消、SQLite 重启恢复、两实例及 HMR；未知投递停止自动重试，本地数据库探针不证明平台投递成功 |
+| [持久提醒](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md) | 一次性与周期提醒、本人原会话取消、SQLite 重启恢复、两实例及 HMR；未知投递停止自动重试，本地数据库探针不证明平台投递成功；Agent 技能 `reminder`（create/list/cancel） |
+| [日历](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/README.md) | CalDAV / Google / Microsoft 日历查询与创建；Agent 技能 `calendar-scheduling`（list_events / find_free_time / create_event） |
 | [群运营](https://github.com/zhinjs/zhin/blob/main/plugins/utils/group-suite/README.md) | 关键词持久化、群欢迎、管理与查询卡片；配置、端点、会话及实例隔离；消息统计采用定时批量写入，近期缓冲不是持久 outbox |
 | [公开测试夹具](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/plugin-test-kit/README.md) | 真正的发现、命令解析、权限与消息链路；合成端点记录最终交付载荷，测试应用仍会执行插件代码，不能作为副作用沙箱 |
 | CLI / Console Host | 同一安装服务输出安装、声明、配置、应用及当前 generation 证据；业务验证必须先披露 effects，并绑定 generation、项目修订及检查修订 |

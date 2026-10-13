@@ -1,6 +1,18 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": true, "rootDir": "." },
-  "include": ["src/**/*.ts", "plugin.ts", "commands/**/*.ts", "schedules/**/*.ts"],
-  "exclude": ["lib", "node_modules"]
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "src/**/*.ts",
+    "plugin.ts",
+    "commands/**/*.ts",
+    "schedules/**/*.ts",
+    "skills/**/*.ts"
+  ],
+  "exclude": [
+    "lib",
+    "node_modules"
+  ]
 }
