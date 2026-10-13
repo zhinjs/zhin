@@ -75,9 +75,11 @@ export class ScheduleEngine {
   private readonly meta = new Map<string, MemoryScheduleRegistration>();
   private readonly callbacks = new Map<string, ScheduleFireCallback>();
   private disposed = false;
+  private readonly onError?: (err: Error, jobId: string) => void;
 
   constructor(options: ScheduleEngineOptions = {}) {
     this.timezone = options.timezone ?? 'Asia/Shanghai';
+    this.onError = options.onError;
     this.calendar = new CalendarScheduler({
       timezone: this.timezone,
       onError: options.onError
@@ -110,49 +112,47 @@ export class ScheduleEngine {
     };
     this.callbacks.set(id, wrapped);
 
+    // every / at 不经过 CalendarScheduler，需要自行兜住回调异常，避免 unhandledRejection 拖垮进程。
+    const fire = (ctx: JobContext): void => {
+      void Promise.resolve().then(() => wrapped(ctx)).catch((error: unknown) => this.reportError(error, id));
+    };
+
     if (kind === 'every' && options?.everyMs && options.everyMs > 0) {
-      const timer = setInterval(() => {
-        void wrapped({
-          jobId: id,
-          kind: 'solar',
-          scheduledAt: new Date(),
-          solarText: '',
-          lunarText: '',
-        });
-      }, options.everyMs);
-      this.timers.set(id, () => clearInterval(timer));
+      const everyMs = options.everyMs;
+      const handle = scheduleLongTimeout(() => {
+        fire({ jobId: id, kind: 'solar', scheduledAt: new Date(), solarText: '', lunarText: '' });
+        const current = this.meta.get(id);
+        if (current) current.nextExecution = new Date(Date.now() + everyMs);
+      }, everyMs, true);
+      this.timers.set(id, handle.cancel);
       this.meta.set(id, {
         id,
         kind: 'every',
-        everyMs: options.everyMs,
+        everyMs,
         running: true,
-        nextExecution: new Date(Date.now() + options.everyMs),
+        nextExecution: new Date(Date.now() + everyMs),
       });
       return () => this.unregister(id);
     }
 
     if (kind === 'at' && options?.atMs) {
-      const delay = options.atMs - Date.now();
+      const atMs = options.atMs;
+      const delay = atMs - Date.now();
       if (delay <= 0) {
         return () => this.unregister(id);
       }
-      const timer = setTimeout(() => {
-        void wrapped({
-          jobId: id,
-          kind: 'solar',
-          scheduledAt: new Date(options.atMs!),
-          solarText: '',
-          lunarText: '',
-        });
-        this.unregister(id);
-      }, delay);
-      this.timers.set(id, () => clearTimeout(timer));
+      const handle = scheduleLongTimeout(() => {
+        // 先注销再回调：回调里若用同一 id 重新注册，不会被随后的注销误删。
+        if (this.timers.get(id) === handle.cancel) this.unregister(id);
+        fire({ jobId: id, kind: 'solar', scheduledAt: new Date(atMs), solarText: '', lunarText: '' });
+      }, delay, false);
+      this.timers.set(id, handle.cancel);
       this.meta.set(id, {
         id,
         kind: 'at',
-        atMs: options.atMs,
+        atMs,
         running: true,
-        nextExecution: new Date(options.atMs),
+        nextExecution: new Date(atMs),
       });
       return () => this.unregister(id);
     }
@@ -194,6 +194,19 @@ export class ScheduleEngine {
     return () => this.unregister(id);
   }
 
+  private reportError(error: unknown, jobId: string): void {
+    const err = error instanceof Error ? error : new Error(String(error));
+    if (this.onError) {
+      try {
+        this.onError(err, jobId);
+        return;
+      } catch {
+        // onError 自身抛错时退回 console，避免二次 unhandledRejection
+      }
+    }
+    console.error(`[ScheduleEngine] job ${jobId} failed:`, err);
+  }
+
   unregister(id: string): boolean {
     const dispose = this.timers.get(id);
     if (dispose) {
@@ -232,6 +245,40 @@ export class ScheduleEngine {
     }
     this.calendar.stop();
   }
+}
+
+/** Node 定时器上限（约 24.8 天）；超过会被截断为 1ms 并立即触发。 */
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+
+/** 支持超过 MAX_TIMER_DELAY_MS 的 setTimeout / setInterval 语义（分段等待）。 */
+function scheduleLongTimeout(
+  callback: () => void,
+  delayMs: number,
+  repeat: boolean,
+): { cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let cancelled = false;
+  const arm = (remaining: number): void => {
+    if (cancelled) return;
+    const step = Math.min(remaining, MAX_TIMER_DELAY_MS);
+    timer = setTimeout(() => {
+      if (cancelled) return;
+      const left = remaining - step;
+      if (left > 0) {
+        arm(left);
+        return;
+      }
+      if (repeat) arm(delayMs);
+      callback();
+    }, step);
+  };
+  arm(delayMs);
+  return {
+    cancel: () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    },
+  };
 }
 
 export {

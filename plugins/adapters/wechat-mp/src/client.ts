@@ -21,6 +21,7 @@ export type WeChatMpFetch = (
 export class WeChatMpClient {
   #accessToken: string | null = null;
   #tokenExpireTime = 0;
+  #refreshing: Promise<string> | null = null;
 
   constructor(
     readonly config: ResolvedWeChatMpConfig,
@@ -35,9 +36,22 @@ export class WeChatMpClient {
     return !this.#accessToken || Date.now() >= this.#tokenExpireTime;
   }
 
-  async refreshAccessToken(): Promise<string> {
+  /**
+   * 刷新 access_token。并发调用共享同一次请求：微信每次换取新 token 都会使旧 token
+   * 进入失效倒计时，且有每日调用次数上限，重复刷新会互相顶掉并消耗配额。
+   */
+  refreshAccessToken(): Promise<string> {
+    if (!this.#refreshing) {
+      this.#refreshing = this.#fetchAccessToken().finally(() => {
+        this.#refreshing = null;
+      });
+    }
+    return this.#refreshing;
+  }
+
+  async #fetchAccessToken(): Promise<string> {
     const { appId, appSecret } = this.config;
-    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${appId}&secret=${appSecret}`;
+    const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appId)}&secret=${encodeURIComponent(appSecret)}`;
     const response = await this.fetch(url);
     const data = response.data as TokenResponse & WeChatAPIResponse;
     if (!data.access_token) {
@@ -46,7 +60,10 @@ export class WeChatMpClient {
         : 'Failed to get access token');
     }
     this.#accessToken = data.access_token;
-    this.#tokenExpireTime = Date.now() + (data.expires_in - 300) * 1000;
+    // expires_in 缺失/非法时 NaN 会让 tokenExpired 永远为 false；按官方默认 7200s 兜底。
+    const expiresIn = Number(data.expires_in);
+    const lifetimeSec = Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 7200;
+    this.#tokenExpireTime = Date.now() + (lifetimeSec - 300) * 1000;
     return data.access_token;
   }
 
