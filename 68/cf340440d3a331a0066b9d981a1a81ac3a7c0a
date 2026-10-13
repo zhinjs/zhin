@@ -1,0 +1,35 @@
+basic/cli/src/plugin-runtime/process-lifecycle.ts
+  s_2104cc474f1ce5::t_172508122faaee 15-18,21-24,55,57-61,68-69,74-76
+basic/cli/src/plugin-runtime/start-command.ts
+  s_2104cc474f1ce5::t_d0b65ecc4f1d69 262-263,269,318-323,330-339,346,349,352,358,434-437
+basic/cli/tests/plugin-runtime/process-lifecycle.test.ts
+  s_2104cc474f1ce5::t_80931795cf4a90 76,80,85-86,90-92,94-95,131-142
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  s_2104cc474f1ce5::t_118db3d1192c86 1-170
+.changeset/clean-process-shutdown.md
+  s_1375cf63eb844f::t_6af03402748158 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "68cf340440d3a331a0066b9d981a1a81ac3a7c0a",
+  "prompts": {},
+  "sessions": {
+    "s_1375cf63eb844f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13465-9f71-7d51-834b-6de4c338a1d7",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
