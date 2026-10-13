@@ -1,0 +1,201 @@
+packages/im/runtime/tests/root-runtime.test.ts
+  s_6562bcb6cc0539::t_75bd72af7fcc71 74-100
+  s_6562bcb6cc0539::t_844a3fabdd28ad 70
+  s_6562bcb6cc0539::t_4ba5672d019305 21-69,71-73
+plugins/utils/repeater/src/config.ts
+  s_6562bcb6cc0539::t_062dfdbf9544aa 11,13
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_8defb69f8a928f 32
+basic/schema/src/schema.ts
+  s_6562bcb6cc0539::t_a12225c6839ce5 9,69,71,157,164,168,171-172,176,203-204,218-219,221-226
+packages/im/plugin-runtime/tests/owner-host-admission.test.ts
+  s_6562bcb6cc0539::t_8b1f5efd37f11e 2,6,24-53,164-184
+  s_6562bcb6cc0539::t_fb23179e30bbf5 10
+  s_6562bcb6cc0539::t_ceb92e09550f94 1,3-5,7-9,11-23,54-99,118-163,185-210
+  s_6562bcb6cc0539::t_cc7f3bbf5b3a2a 100-117
+docs/en/authoring/commands.md
+  s_6562bcb6cc0539::t_3db7d2401d95bd 55-59,64,69-70,74
+plugins/utils/repeater/tests/repeater-runtime.test.ts
+  s_6562bcb6cc0539::t_b498f295f97201 4,28-29
+plugins/utils/code-runner/commands/run/[language]/index.ts
+  s_6562bcb6cc0539::t_3db7d2401d95bd 7-8,10
+  s_6562bcb6cc0539::t_a07441f37b382a 1,9
+scripts/generate-config-reference.mjs
+  s_6562bcb6cc0539::t_b0b745566a566f 6-14,153-157,204-205
+packages/im/command/tests/command.test.ts
+  s_6562bcb6cc0539::t_cbb2dc133574ad 974,1717-1760,1762,1767,1775-1776,1793-1796,1807-1815
+  s_6562bcb6cc0539::t_7b20ec41a65b01 1797-1806
+  s_6562bcb6cc0539::t_19cda83206c8de 1761,1763-1766,1768-1774
+  s_6562bcb6cc0539::t_38f3fe9066738f 1777-1792
+packages/im/command/README.md
+  s_6562bcb6cc0539::t_3db7d2401d95bd 30
+packages/im/core/tests/middleware-types.fixture.ts
+  s_6562bcb6cc0539::t_6891054d9bee9f 1-5
+  s_6562bcb6cc0539::t_11f9a70bf7f625 6-7
+basic/cli/src/plugin-runtime/schedule-host-installer.ts
+  s_6562bcb6cc0539::t_85ea4c984e24aa 91,94
+basic/schema/tests/config-declaration.test.ts
+  s_6562bcb6cc0539::t_21e24d20dcec84 101-102
+  s_6562bcb6cc0539::t_b498f295f97201 74-99,103,110-111
+  s_6562bcb6cc0539::t_60943259924c47 104
+  s_6562bcb6cc0539::t_a3fc5cf72531b3 100,105-109
+packages/im/runtime/src/index.ts
+  s_6562bcb6cc0539::t_21e24d20dcec84 2
+packages/im/plugin-runtime/tests/persistent-state.test.ts
+  s_6562bcb6cc0539::t_5dcc5e16928969 12,16,20-28,32
+  s_6562bcb6cc0539::t_82d261a760d4d6 29-31
+  s_6562bcb6cc0539::t_eeab84faf9f011 33-34
+basic/cli/src/plugin-runtime/outbound-host-installer.ts
+  s_6562bcb6cc0539::t_2679e1b6142ce9 33-44
+basic/schema/src/validate.ts
+  s_6562bcb6cc0539::t_a12225c6839ce5 154,156
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_6562bcb6cc0539::t_b498f295f97201 182-204
+packages/im/zhin/README.md
+  s_6562bcb6cc0539::t_2679e1b6142ce9 3,22
+.changeset/clear-plugin-authoring.md
+  s_6562bcb6cc0539::t_8f8b1773cb253c 19-20
+basic/schema/tests/safe-parse.test.ts
+  s_6562bcb6cc0539::t_b498f295f97201 5-10
+docs/en/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_b0b745566a566f 63
+  s_6562bcb6cc0539::t_a3fc5cf72531b3 67-70
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_6562bcb6cc0539::t_2679e1b6142ce9 175-177,179-180,184-185,189
+packages/im/permission/tests/check-permissions.test.ts
+  s_6562bcb6cc0539::t_6891054d9bee9f 22-23
+  s_6562bcb6cc0539::t_2679e1b6142ce9 5-21,24-30
+packages/im/core/src/feature/middleware.ts
+  s_6562bcb6cc0539::t_2679e1b6142ce9 5-12
+docs/authoring/define-plugin.md
+  s_6562bcb6cc0539::t_a3fc5cf72531b3 67-70
+  s_6562bcb6cc0539::t_b0b745566a566f 63
+tests/docs/generated-config-reference.test.ts
+  s_6562bcb6cc0539::t_b0b745566a566f 27
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_518f1beb07d4f0 95,304-306,312-316,318-330
+  s_6562bcb6cc0539::t_e02226f7f53810 307-311,317
+packages/im/permission/src/check-permissions.ts
+  s_6562bcb6cc0539::t_2679e1b6142ce9 4,20-24,26
+  s_6562bcb6cc0539::t_6891054d9bee9f 25
+packages/im/command/src/definition.ts
+  s_6562bcb6cc0539::t_0bad959ac7e515 113-118,120-122,125-127,362
+packages/im/command/src/command-index.ts
+  s_6562bcb6cc0539::t_19cda83206c8de 18,276-277,358
+  s_6562bcb6cc0539::t_8a82a7d003c115 528-529
+  s_6562bcb6cc0539::t_e23cf7134c8a0e 121-127,129,153-160,169,185,199,356-357,359,361,523-527,530-562,577-581
+  s_6562bcb6cc0539::t_38f3fe9066738f 81,268,286,360,382
+packages/im/command/tests/types/declarations.ts
+  s_6562bcb6cc0539::t_cbb2dc133574ad 1,30-55
+packages/im/plugin-runtime/src/snapshot.ts
+  s_6562bcb6cc0539::t_b0a18be82bd8e6 278-280,290-295
+  s_6562bcb6cc0539::t_bd9dec5fce7057 296-297
+basic/schema/tests/config-types.fixture.ts
+  s_6562bcb6cc0539::t_b498f295f97201 25-40
+  s_6562bcb6cc0539::t_062dfdbf9544aa 18
+packages/im/plugin-runtime/src/outbound-host.ts
+  s_6562bcb6cc0539::t_dc1c2bc8ee92cc 5,116,128,134-135,143,170
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_6562bcb6cc0539::t_8d67957c9d5db4 176-177
+  s_6562bcb6cc0539::t_bd490583e07eea 9,25,104,115-127,166
+packages/im/plugin-runtime/src/owner-operation.ts
+  s_6562bcb6cc0539::t_31171a9846ec47 13,23,30-31
+  s_6562bcb6cc0539::t_7557720f25cfc3 24-28
+  s_6562bcb6cc0539::t_dc1c2bc8ee92cc 1-3,8,10-12,14-22,29,32-33,49-58
+  s_6562bcb6cc0539::t_76186ec59e2b99 4-6,9,34-48
+  s_6562bcb6cc0539::t_cc7f3bbf5b3a2a 7
+packages/im/plugin-runtime/src/token.ts
+  s_6562bcb6cc0539::t_31171a9846ec47 33-35,39,59-66,93-94
+packages/im/runtime/src/native-development-runtime.ts
+  s_6562bcb6cc0539::t_062dfdbf9544aa 54,72-73,92,95-97
+  s_6562bcb6cc0539::t_b0a18be82bd8e6 165-168,204
+packages/im/plugin-runtime/src/persistent-state.ts
+  s_6562bcb6cc0539::t_dc1c2bc8ee92cc 118,121-122,125-131
+packages/im/runtime/src/root-runtime.ts
+  s_6562bcb6cc0539::t_b0a18be82bd8e6 36,161-166,171,210-214,224,237-239,513,515-516,518-525,528,540
+  s_6562bcb6cc0539::t_e02226f7f53810 280
+  s_6562bcb6cc0539::t_21e24d20dcec84 512,514,517
+  s_6562bcb6cc0539::t_8d67957c9d5db4 225-236
+basic/schema/src/json-schema.ts
+  s_6562bcb6cc0539::t_062dfdbf9544aa 57,60-65,85-92
+  s_6562bcb6cc0539::t_b0b745566a566f 58-59
+  s_6562bcb6cc0539::t_21e24d20dcec84 142-150
+basic/cli/src/plugin-runtime/start-command.ts
+  s_6562bcb6cc0539::t_bd490583e07eea 154-157
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_6562bcb6cc0539::t_afd58204bf5cbc 1546-1548,1590
+  s_6562bcb6cc0539::t_8f3a629b427665 1561-1583
+packages/im/plugin-runtime/tests/owner-scoped-hosts.test.ts
+  s_6562bcb6cc0539::t_82d261a760d4d6 49
+packages/im/plugin-runtime/tests/kernel.test.ts
+  s_6562bcb6cc0539::t_844a3fabdd28ad 11,29-42
+basic/cli/src/plugin-runtime/console/plugin-schema-catalog.ts
+  s_6562bcb6cc0539::t_e02226f7f53810 59-60
+  s_6562bcb6cc0539::t_bd490583e07eea 19,21,28-31,37,50,57,77-78,168,193
+  s_6562bcb6cc0539::t_8defb69f8a928f 32
+plugins/utils/qrcode/tests/qrcode-runtime.test.ts
+  s_6562bcb6cc0539::t_19cda83206c8de 49-54
+  s_6562bcb6cc0539::t_3db7d2401d95bd 3,37-39,44-48,55-61
+packages/im/runtime/tests/native-development-runtime.test.ts
+  s_6562bcb6cc0539::t_c1b445190edcc0 45-70
+  s_6562bcb6cc0539::t_4ba5672d019305 29-44,71-72
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_6562bcb6cc0539::t_85ea4c984e24aa 357
+packages/im/plugin-runtime/src/schedule-host.ts
+  s_6562bcb6cc0539::t_06e8872c0b20f2 74,81,84
+  s_6562bcb6cc0539::t_31171a9846ec47 6,76-78,80,82
+  s_6562bcb6cc0539::t_85ea4c984e24aa 7-8,42-43,45,48-49,53-55,63,71-73,75,79,83,85-86
+packages/im/plugin-runtime/src/database-host.ts
+  s_6562bcb6cc0539::t_31171a9846ec47 6,157-159,163-164,190,192-195
+  s_6562bcb6cc0539::t_85ea4c984e24aa 9,137,143-147,179,183,186-189,191,196-200,202,205-211,213-217
+  s_6562bcb6cc0539::t_40238b6739a2a7 201,203-204,212
+  s_6562bcb6cc0539::t_06e8872c0b20f2 162
+basic/schema/README.md
+  s_6562bcb6cc0539::t_b0b745566a566f 166
+plugins/utils/qrcode/src/qrcode-lib.ts
+  s_6562bcb6cc0539::t_3db7d2401d95bd 4
+docs/contributing/plugin-experience-plan.md
+  s_6562bcb6cc0539::t_b0b745566a566f 38,43
+plugins/utils/code-runner/tests/code-runner-runtime.test.ts
+  s_6562bcb6cc0539::t_3db7d2401d95bd 22,36,38,44-50
+  s_6562bcb6cc0539::t_aa33346426483c 51
+packages/im/runtime/src/plugin-config-schema.ts
+  s_6562bcb6cc0539::t_b0a18be82bd8e6 34-46
+basic/cli/tests/plugin-runtime/sqlite-availability.ts
+  s_6562bcb6cc0539::t_5dcc5e16928969 1-11
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_693433fdb5070b 133,1410
+basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts
+  s_6562bcb6cc0539::t_5dcc5e16928969 10,54
+  s_6562bcb6cc0539::t_f07c15791057a2 60-61,93-99,135-137,153-158,184-189
+  s_6562bcb6cc0539::t_82d261a760d4d6 5-6,11-49
+packages/im/command/src/arguments.ts
+  s_6562bcb6cc0539::t_19cda83206c8de 109-117
+  s_6562bcb6cc0539::t_0bad959ac7e515 34,222-223,242,259-260
+tests/snapshots/plugin-runtime-api.json
+  s_6562bcb6cc0539::t_7f9c6b43fcfda7 340-341
+basic/cli/tests/plugin-runtime/console/plugin-schema-catalog.test.ts
+  s_6562bcb6cc0539::t_4ba5672d019305 53-68
+basic/cli/tests/plugin-runtime/persistent-state.test.ts
+  s_6562bcb6cc0539::t_5dcc5e16928969 7,15,43,71
+docs/authoring/commands.md
+  s_6562bcb6cc0539::t_3db7d2401d95bd 66,70,74
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_693433fdb5070b 133,1410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2f759767c5655c3546d364bb0646611469d1226d",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
