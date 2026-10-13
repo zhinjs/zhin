@@ -64,6 +64,9 @@ function displayType(schema, fieldPath, rootSchema = schema) {
     if (resolved.anyOf.length === 0) throw new Error(`${fieldPath}: anyOf must not be empty`);
     return resolved.anyOf.map((option, index) => displayType(option, `${fieldPath}.anyOf[${index}]`, rootSchema)).join(' | ');
   }
+  if (Object.hasOwn(resolved, 'const')) {
+    return formatValue(resolved.const);
+  }
   if (resolved.type === 'array' && resolved.items) {
     return `array<${displayType(resolved.items, `${fieldPath}.items`, rootSchema)}>`;
   }

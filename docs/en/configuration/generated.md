@@ -1295,6 +1295,39 @@ _This Schema declares no fields._
 | --- | --- | --- | --- | --- |
 | `plugins.60s.apiBase` | string | no | `"https://60s.viki.moe"` | 60s API base URL |
 
+### calendar
+
+[`plugins/utils/calendar/plugin.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/calendar/plugin.ts)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `plugins.calendar.provider` | `"none"` \| `"caldav"` \| `"google"` \| `"microsoft"` | no | `"none"` | 日历后端；none 时工具返回未启用提示 |
+| `plugins.calendar.timezone` | string | no | `"Asia/Manila"` | 解释无偏移时间与展示用的 IANA 时区 |
+| `plugins.calendar.work_day_start` | string | no | `"09:00"` | — |
+| `plugins.calendar.work_day_end` | string | no | `"18:00"` | — |
+| `plugins.calendar.oauth_redirect_base_url` | string | no | `""` | 聊天授权回调的外部基础地址（如 https://bot.example.com）；留空时使用 zhin HTTP Host 的本机地址 |
+| `plugins.calendar.oauth_callback_path` | string | no | `"/calendar/oauth/callback"` | 聊天授权回调路由，挂在 zhin HTTP Host 上；反向代理/隧道只转发部分路径时可调整 |
+| `plugins.calendar.caldav` | object | no | — | — |
+| `plugins.calendar.caldav.enabled` | boolean | no | `false` | — |
+| `plugins.calendar.caldav.calendar_url` | string | no | `""` | 日历 collection URL |
+| `plugins.calendar.caldav.username` | string | no | `""` | — |
+| `plugins.calendar.caldav.password` | string | no | `""` | — |
+| `plugins.calendar.google` | object | no | — | — |
+| `plugins.calendar.google.enabled` | boolean | no | `false` | — |
+| `plugins.calendar.google.client_id` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_ID} |
+| `plugins.calendar.google.client_secret` | string | no | `""` | ${GOOGLE_CALENDAR_CLIENT_SECRET} |
+| `plugins.calendar.google.refresh_token` | string | no | `""` | ${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取 |
+| `plugins.calendar.google.calendar_id` | string | no | `"primary"` | 日历 ID，默认 primary；可换成其它日历的 id |
+| `plugins.calendar.google.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json） |
+| `plugins.calendar.microsoft` | object | no | — | — |
+| `plugins.calendar.microsoft.enabled` | boolean | no | `false` | — |
+| `plugins.calendar.microsoft.client_id` | string | no | `""` | ${MS_GRAPH_CLIENT_ID} |
+| `plugins.calendar.microsoft.client_secret` | string | no | `""` | 可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET} |
+| `plugins.calendar.microsoft.refresh_token` | string | no | `""` | ${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取 |
+| `plugins.calendar.microsoft.tenant` | string | no | `"common"` | Azure tenant，默认 common |
+| `plugins.calendar.microsoft.calendar_id` | string | no | `""` | 留空或 primary/me = 默认日历；否则为 Graph calendar id |
+| `plugins.calendar.microsoft.token_file` | string | no | `""` | 可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json） |
+
 ### code-runner
 
 [`plugins/utils/code-runner/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/code-runner/schema.json)
