@@ -1,0 +1,31 @@
+plugins/utils/calendar/plugin.ts
+  s_6562bcb6cc0539::t_0a454ac0a5f9ea 74,76,98
+plugins/utils/calendar/src/caldav.ts
+  s_6eb8d20a15fb15::t_ba092f1404c199 5,70-138,145-147,235
+plugins/utils/calendar/tests/caldav-parsing.test.ts
+  s_6eb8d20a15fb15::t_a9a56fb5240caf 1-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "91201a71044938493c05159e76bf7a1784fff47f",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
