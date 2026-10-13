@@ -75,6 +75,8 @@ export class ScheduleEngine {
   private readonly meta = new Map<string, MemoryScheduleRegistration>();
   private readonly callbacks = new Map<string, ScheduleFireCallback>();
   private disposed = false;
+  /** 被暂停的 every / at 任务（这两类不经过 CalendarScheduler，暂停状态自行维护）。 */
+  private readonly pausedLocal = new Set<string>();
   private readonly onError?: (err: Error, jobId: string) => void;
 
   constructor(options: ScheduleEngineOptions = {}) {
@@ -114,6 +116,8 @@ export class ScheduleEngine {
 
     // every / at 不经过 CalendarScheduler，需要自行兜住回调异常，避免 unhandledRejection 拖垮进程。
     const fire = (ctx: JobContext): void => {
+      // 暂停期间跳过触发，恢复后按原周期继续，错过的执行不补发。
+      if (this.pausedLocal.has(id)) return;
       void Promise.resolve().then(() => wrapped(ctx)).catch((error: unknown) => this.reportError(error, id));
     };
 
@@ -143,7 +147,11 @@ export class ScheduleEngine {
       }
       const handle = scheduleLongTimeout(() => {
         // 先注销再回调：回调里若用同一 id 重新注册，不会被随后的注销误删。
-        if (this.timers.get(id) === handle.cancel) this.unregister(id);
+        if (this.timers.get(id) !== handle.cancel) return;
+        // 暂停期间到点的 at 任务直接作废，不在恢复后补发。
+        const paused = this.pausedLocal.has(id);
+        this.unregister(id);
+        if (paused) return;
         fire({ jobId: id, kind: 'solar', scheduledAt: new Date(atMs), solarText: '', lunarText: '' });
       }, delay, false);
       this.timers.set(id, handle.cancel);
@@ -214,16 +222,29 @@ export class ScheduleEngine {
       this.timers.delete(id);
       this.meta.delete(id);
       this.callbacks.delete(id);
+      this.pausedLocal.delete(id);
       return true;
     }
     return false;
   }
 
+  private isLocal(id: string): boolean {
+    const kind = this.meta.get(id)?.kind;
+    return kind === 'every' || kind === 'at';
+  }
+
   pause(id: string): boolean {
+    if (this.isLocal(id)) {
+      this.pausedLocal.add(id);
+      return true;
+    }
     return this.calendar.pause(id);
   }
 
   resume(id: string): boolean {
+    if (this.isLocal(id)) {
+      return this.pausedLocal.delete(id);
+    }
     return this.calendar.resume(id);
   }
 
@@ -232,7 +253,7 @@ export class ScheduleEngine {
       const snap = this.calendar.get(m.id);
       return {
         ...m,
-        running: snap ? !snap.paused && !snap.cancelled : m.running,
+        running: snap ? !snap.paused && !snap.cancelled : m.running && !this.pausedLocal.has(m.id),
         nextExecution: snap?.nextRunAt ?? m.nextExecution,
       };
     });

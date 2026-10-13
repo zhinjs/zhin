@@ -61,4 +61,53 @@ describe('ScheduleEngine', () => {
     engine.dispose();
     vi.useRealTimers();
   });
+
+  it('pauses and resumes every-jobs on the original period without catching up', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn();
+    const engine = new ScheduleEngine();
+    engine.register('tick', 'every', cb, { everyMs: 1000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(engine.pause('tick')).toBe(true);
+    expect(engine.getStatus()[0]?.running).toBe(false);
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(engine.resume('tick')).toBe(true);
+    expect(engine.getStatus()[0]?.running).toBe(true);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(cb).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(cb).toHaveBeenCalledTimes(2);
+    engine.dispose();
+    vi.useRealTimers();
+  });
+
+  it('skips an at-job whose time passes while paused', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn();
+    const engine = new ScheduleEngine();
+    engine.register('once', 'at', cb, { atMs: Date.now() + 1000 });
+    engine.pause('once');
+    await vi.advanceTimersByTimeAsync(2000);
+    engine.resume('once');
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(cb).not.toHaveBeenCalled();
+    engine.dispose();
+    vi.useRealTimers();
+  });
+
+  it('runs a paused-then-resumed at-job at its original time', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn();
+    const engine = new ScheduleEngine();
+    engine.register('later', 'at', cb, { atMs: Date.now() + 1000 });
+    engine.pause('later');
+    await vi.advanceTimersByTimeAsync(500);
+    engine.resume('later');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(cb).toHaveBeenCalledTimes(1);
+    engine.dispose();
+    vi.useRealTimers();
+  });
 });

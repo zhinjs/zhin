@@ -61,4 +61,22 @@ describe('published Lark SDK long connection contract', () => {
     await rejected;
     expect(vi.getTimerCount()).toBe(0);
   });
+  it('clears the previous health-check timer when connect() is called again', async () => {
+    vi.useFakeTimers();
+    let client!: sdk.WSClient;
+    vi.spyOn(sdk.WSClient.prototype, 'start').mockImplementation(async function (this: sdk.WSClient) {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias -- Trigger readiness on the constructed SDK instance.
+      client = this;
+      (client as unknown as { onReady(): void }).onReady();
+    });
+    vi.spyOn(sdk.WSClient.prototype, 'getConnectionStatus').mockReturnValue({ state: 'connected', reconnectAttempts: 0 });
+    const transport = createLarkLongConnection({ config: resolveLarkConfig({ id: 'bot', appId: 'cli_0123456789abcdef', appSecret: 'fixture-secret', mode: 'websocket' }), receive: vi.fn(), disconnected: vi.fn() });
+    await transport.connect();
+    const afterFirst = vi.getTimerCount();
+    expect(afterFirst).toBeGreaterThan(0);
+    await transport.connect();
+    expect(vi.getTimerCount()).toBe(afterFirst);
+    transport.close();
+    expect(vi.getTimerCount()).toBe(0);
+  });
 });
