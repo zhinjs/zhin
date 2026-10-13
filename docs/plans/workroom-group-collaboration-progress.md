@@ -27,7 +27,8 @@ sidebar: false
   - 按审查第 6 条修正方案文档中的事实错误（反向依赖清单、A1 路径、行数、状态行）
   - Nit：`persistence-coordinator.ts` 中执行不到的 `useDatabase === false` 分支；`agent-console.ts` 合并时断言两边的 key 不重叠；`publication-coordinator.test.ts` 断言两个 console 的精确 key 集合；`docs/authoring/host-tokens.md`（中英文）补充 `workroomHostToken`
   - 2026-10-13 · 「fix: 处理 A1/A2a 审查意见」· 顺序不变量测试、架构检查覆盖 workroom-runtime、方案文档事实修正、Console key 重叠断言、host-tokens 文档；首次用工作流脚本执行
-- [ ] A2b-1 收紧 `basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts` 的顺序不变量测试：参照 `packages/im/agent/tests/workroom/database-journal-integrity.test.ts` 的 databaseFixture，先写入一条合法事件再篡改 digest，断言 cause 包含 `stored event digest`，确保拒绝的原因确实是损坏行，而不是其他更早的失败。顺带在方案 §1.2 补一句：入口文件的 re-export 是兼容层，A4 处理
+- [x] A2b-1 收紧 `basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts` 的顺序不变量测试：参照 `packages/im/agent/tests/workroom/database-journal-integrity.test.ts` 的 databaseFixture，先写入一条合法事件再篡改 digest，断言 cause 包含 `stored event digest`，确保拒绝的原因确实是损坏行，而不是其他更早的失败。顺带在方案 §1.2 补一句：入口文件的 re-export 是兼容层，A4 处理
+  - 2026-10-13 · 「test: 收紧 Workroom 激活顺序不变量测试」· 先写合法事件再篡改，断言 cause 含 `stored event digest`；方案 §1.2 补兼容层说明
 - [ ] A2c 拆分 `plugin-runtime/deferred-capability-plan.ts`：`WorkroomCapabilityRealization`、`bindWorkroomCapabilityRealization`、`createWorkroomDeferredCapabilityPlan` 等 workroom 部分移到 `workroom-runtime/`；通用的 `createDeferredCapabilityPlan` 不能再 import workroom 类型，改为接收一个注入的“能力上限”接口。完成后，`packages/im/agent/src` 中除 `workroom/`、`workroom-runtime/`、`portfolio/`、`data-governance/` 之外，只有 `plugin-runtime/index.ts` 和根 `index.ts` 的 re-export 允许引用这四个目录
 - [ ] A3 断开 `data-governance ↔ workroom` 的循环依赖：抽出共享类型，方向固定为 workroom → data-governance
 - [ ] A4a 新建包 `packages/im/workroom`（`@zhin.js/workroom`），参照现有包的 package.json / tsconfig / exports（development 条件）。先把 `workroom/`、`portfolio/`、`data-governance/` 搬过去；agent 侧临时 re-export 保持兼容
@@ -75,9 +76,14 @@ sidebar: false
 - Should fix：顺序不变量测试只断言 `cause: expect.any(Error)`，证明不了是损坏行导致的拒绝 → A2b-1
 - Nit：方案 §1.2 没有提到入口文件的 re-export（并入 A2b-1）；Console key 重叠测试没有覆盖 symbol key（不处理）
 
+### 第 3 轮（2026-10-13，审查 A2b-1）
+
+- 无 Blocking，无遗留问题
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
 
 - 2026-10-13 交互会话：完成 A1、A2a，以及第 1 轮审查的两个 Blocking；配置定时任务
 - 2026-10-13 交互会话：用 step-workflow.js 完成 A2b（4 个 agent，约 4 分钟，验证全部通过，审查无 Blocking）
+- 2026-10-13 18:49 定时运行：完成 A2b-1（4 个 agent，约 2.5 分钟，相关测试 / type-check / 架构与 API 快照检查通过，审查无问题）

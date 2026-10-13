@@ -58,6 +58,8 @@ graph LR
   routing -.->|反向| WR
 ```
 
+注意：`agent` 入口文件对 workroom 符号的 re-export（`packages/im/agent/src/index.ts` 中的 `export * from './workroom/...'`、`./workroom-runtime/...` 等）是兼容层，由 A4 处理，不在本依赖图的边数里。
+
 结论：
 
 1. **`workroom` 本身几乎不依赖 Agent 核心**，它是一个纯领域层，可以整体搬出。

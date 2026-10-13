@@ -5,6 +5,9 @@ import {
   ActivatableWorkroomCatalog,
   FileWorkroomCatalog,
   ActivatableWorkroomJournal,
+  DatabaseWorkroomJournal,
+  MemoryWorkroomJournalPayloadPort,
+  WorkroomKernel,
   type AIService,
 } from '@zhin.js/agent';
 import { type ZhinAgent } from '@zhin.js/agent/runtime';
@@ -87,12 +90,19 @@ describe('WorkroomPersistenceCoordinator', () => {
   });
 
   it('rejects activation on a corrupt Workroom journal before any candidate port is mutated', async () => {
-    const corruptRow = { id: '1', run_id: 'r', sequence: 0, occurred_at: 1, type: 'run.created', payload_json: '{}' };
+    const fixture = await legitJournalRows();
+    // Sanity: the stored row is legitimate before tampering, so the later rejection is caused by the tamper alone.
+    await expect(new DatabaseWorkroomJournal(fixture.database, fixture.model, fixture.payloads).scanStoredHeaders())
+      .resolves.toHaveLength(1);
+    const envelope = JSON.parse(String(fixture.rows[0]!.payload_json)) as { eventId: string };
+    envelope.eventId = 'forged-event-id'; // stored_event_digest deliberately not recomputed
+    fixture.rows[0]!.payload_json = JSON.stringify(envelope);
     const raw = {
       models: new Map<string, unknown>([
-        ['workroom_events', { select: () => ({ where: async () => [corruptRow] }) }],
-        ['workroom_catalog', {}],
+        ['workroom_events', fixture.model],
+        ['workroom_catalog', { select: () => ({ where: async () => [] }) }],
       ]),
+      transaction: fixture.database.transaction,
     };
     const resources = new Scope(rootPluginId());
     resources.provide(databaseRootHostToken, { define: vi.fn(), getRawDatabase: () => raw } as never);
@@ -115,7 +125,7 @@ describe('WorkroomPersistenceCoordinator', () => {
       agent,
       semanticMemory: null,
       journal,
-      journalPayloads: {} as never,
+      journalPayloads: fixture.payloads,
       catalog,
       listAgentNames: () => [],
       recoverHumanIngress,
@@ -125,7 +135,9 @@ describe('WorkroomPersistenceCoordinator', () => {
     handoff.seal();
     const activation = handoff.activateNext(new AbortController().signal);
     await expect(activation).rejects.toThrow('Agent database persistence activation failed');
-    await expect(activation).rejects.toMatchObject({ cause: expect.any(Error) });
+    await expect(activation).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: expect.stringContaining('stored event digest') }),
+    });
 
     expect(agent.configure).not.toHaveBeenCalled();
     expect(agent.upgradeProfilesToDatabase).not.toHaveBeenCalled();
@@ -157,3 +169,30 @@ describe('WorkroomPersistenceCoordinator', () => {
     );
   });
 });
+
+async function legitJournalRows() {
+  const rows: Record<string, unknown>[] = [];
+  const where = async (condition: Record<string, unknown>) => condition.run_id === undefined
+    ? [...rows]
+    : rows.filter(row => row.run_id === condition.run_id);
+  const database = {
+    transaction: async <T>(operation: (transaction: {
+      select(table: string): { where(condition: Record<string, unknown>): Promise<Record<string, unknown>[]> };
+      insertMany(table: string, inserted: Record<string, unknown>[]): Promise<void>;
+    }) => Promise<T>) => await operation({
+      select: () => ({ where }),
+      insertMany: async (_table: string, inserted: Record<string, unknown>[]) => {
+        rows.push(...inserted.map(row => ({ ...row })));
+      },
+    }),
+  };
+  const model = { select: () => ({ where }) };
+  const payloads = new MemoryWorkroomJournalPayloadPort();
+  const kernel = new WorkroomKernel({
+    journal: new DatabaseWorkroomJournal(database, model, payloads),
+    now: () => 100,
+    createId: (() => { let id = 0; return () => `corrupt-activation-${++id}`; })(),
+  });
+  await kernel.createRun({ runId: 'run-corrupt-activation', projectId: 'support', title: 'private title' });
+  return { rows, database, model, payloads };
+}
