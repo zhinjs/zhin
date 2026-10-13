@@ -4,7 +4,7 @@ The best way to learn the framework is to start with something that runs. The `e
 
 | Example | Purpose | Start | Channel |
 |---------|---------|-------|---------|
-| [single-file-bot](#single-file-bot-one-botts-is-a-bot) | **One `bot.ts` is a bot**, zero convention directories | `pnpm --filter single-file-bot dev` | Sandbox + Console |
+| [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot) | **One `bot.ts` is a bot**, zero convention directories | `pnpm --filter single-file-bot dev` | Sandbox + Console |
 | [minimal-bot](#minimal-bot-stable-minimal-path) | **Stable convention directory** minimal path, IM only | `pnpm dev` at repo root | Terminal |
 | [capabilities-bot](#capabilities-bot-defineplugin-capability-showcase) | `definePlugin` capability showcase, plugin + config = app | `pnpm --filter capabilities-bot dev` | Sandbox + Console |
 | [full-bot](#full-bot-l4-reference-with-ai) | **L4 reference**, includes AI stack, semantic memory, MCP | `pnpm dev:full` | Sandbox + NapCat + KOOK |
@@ -102,7 +102,7 @@ pnpm dev                # Or pnpm dev:full at repo root
 
 ## test-bot: Maintainer Kitchen Sink
 
-> **This is not a starter template -- do not copy it as the starting point for a new project.** Use `pnpm create zhin-app`, [single-file-bot](#single-file-bot-one-botts-is-a-bot), or [minimal-bot](#minimal-bot-stable-minimal-path) for new projects.
+> **This is not a starter template -- do not copy it as the starting point for a new project.** Use `pnpm create zhin-app`, [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot), or [minimal-bot](#minimal-bot-stable-minimal-path) for new projects.
 
 Mounts 20+ platform adapters (Sandbox, ICQQ x5, QQ Official, Slack, Discord, Telegram, KOOK, DingTalk, Lark,
 WeCom, LINE, Email, GitHub...) and all feature plugins (game center, lottery, group-suite, rss, code-runner, etc.),

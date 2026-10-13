@@ -7,7 +7,7 @@ useful.
 | What you want to deliver | Start here | You are done when |
 | --- | --- | --- |
 | A bot that receives and sends messages | [IM Bot path](/en/paths/im-bot) | Sandbox and a real platform share the same command and message flow |
-| A bot that understands your business | [Add governed Agent context](/en/authoring/agent-tools#give-an-agent-plugin-owned-context) | The Prompt Section is in the current generation and visible in Console |
+| A bot that understands your business | [Add governed Agent context](/en/authoring/agent-tools#give-the-ai-business-context) | The Prompt Section is in the current generation and visible in Console |
 | Tools, MCP, skills, and sub-agents | [AI Agent path](/en/paths/ai-agent) | The Agent sees only capabilities authorized for the current turn |
 | Operate and diagnose a deployed bot | [Console Admin path](/en/paths/console) | You can inspect endpoints, logs, capabilities, and Agent runs |
 | Operate one product through multiple accounts | [Multi-Endpoint operations](/en/solutions/multi-endpoint-operations) | Each account is diagnosable while business capabilities stay shared |

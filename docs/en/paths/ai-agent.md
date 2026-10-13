@@ -110,5 +110,5 @@ These three layer directories are the only valid layout. The runtime neither rea
 ## Next
 
 - Tool, Prompt, and execution policy: [Agent authoring and safety](../authoring/agent-tools.md)
-- External tool protocol: [MCP configuration](../configuration/#mcpservers-external-mcp-server)
+- External tool protocol: [MCP configuration](../configuration/#mcpservers-external-mcp-servers)
 - Governed multi-Agent collaboration: [Workroom Kernel](../ai/agent.md#workroom-kernel)

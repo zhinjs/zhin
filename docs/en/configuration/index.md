@@ -206,7 +206,7 @@ assistant:
     notifyOnFailure: false         # Whether to notify on Job failure, default false
 ```
 
-The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are always persisted to `schedule-jobs.json`; manage them with [`zhin schedule`](../cli/index.md#schedule).
+The remaining sub-key is `queue` (Schedule execution concurrency/retry/timeout). Schedule facts are always persisted to `schedule-jobs.json`; manage them with [`zhin schedule`](../cli/index.md#schedule-persistent-scheduled-tasks).
 
 ## mcp / a2a
 

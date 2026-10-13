@@ -199,7 +199,7 @@ assistant:
     notifyOnFailure: false         # Job 失败时是否通知，默认 false
 ```
 
-其余子键：`queue`（Schedule execution 的并发/重试/超时）。任务事实固定持久化到 `schedule-jobs.json`，可用 [`zhin schedule`](../cli/index.md#schedule) 管理。
+其余子键：`queue`（Schedule execution 的并发/重试/超时）。任务事实固定持久化到 `schedule-jobs.json`，可用 [`zhin schedule`](../cli/index.md#schedule-持久化调度任务) 管理。
 
 ## mcp / a2a
 

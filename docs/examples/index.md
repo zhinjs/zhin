@@ -4,10 +4,10 @@
 
 | 示例 | 定位 | 启动 | 通道 |
 |------|------|------|------|
-| [single-file-bot](#single-file-bot-一个-botts-就是机器人) | **一个 `bot.ts` 就是 bot**，零约定目录 | `pnpm --filter single-file-bot dev` | Sandbox + Console |
+| [single-file-bot](#single-file-bot-一个-bot-ts-就是机器人) | **一个 `bot.ts` 就是 bot**，零约定目录 | `pnpm --filter single-file-bot dev` | Sandbox + Console |
 | [minimal-bot](#minimal-bot-stable-最小路径) | **Stable 约定目录**最小路径，仅 IM | 根目录 `pnpm dev` | 终端 |
 | [capabilities-bot](#capabilities-bot-defineplugin-能力样板) | `definePlugin` 能力样板，插件 + 配置即应用 | `pnpm --filter capabilities-bot dev` | Sandbox + Console |
-| [full-bot](#full-bot-l4-参考含-ai) | **L4 参考**，含 AI 栈、语义记忆、MCP | `pnpm dev:full` | Sandbox + NapCat + KOOK |
+| [full-bot](#full-bot-l4-参考-含-ai) | **L4 参考**，含 AI 栈、语义记忆、MCP | `pnpm dev:full` | Sandbox + NapCat + KOOK |
 | [test-bot](#test-bot-维护者厨房水槽) | 维护者厨房水槽，全平台全插件 | `pnpm dev:test` | 20+ 适配器 |
 
 ```mermaid
@@ -105,7 +105,7 @@ pnpm dev                # 或仓库根 pnpm dev:full
 
 ## test-bot：维护者厨房水槽
 
-> **这不是入门模板，请勿复制为新项目的起点。** 新项目用 `pnpm create zhin-app`、[single-file-bot](#single-file-bot-一个-botts-就是机器人) 或 [minimal-bot](#minimal-bot-stable-最小路径)。
+> **这不是入门模板，请勿复制为新项目的起点。** 新项目用 `pnpm create zhin-app`、[single-file-bot](#single-file-bot-一个-bot-ts-就是机器人) 或 [minimal-bot](#minimal-bot-stable-最小路径)。
 
 挂载 20+ 平台适配器（Sandbox、ICQQ×5、QQ 官方、Slack、Discord、Telegram、KOOK、钉钉、飞书、
 企业微信、LINE、Email、GitHub……）与全部功能插件（游戏中心、lottery、group-suite、rss、code-runner 等），

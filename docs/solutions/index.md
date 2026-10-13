@@ -5,7 +5,7 @@
 | 你想做什么 | 从这里开始 | 完成标志 |
 | --- | --- | --- |
 | 做一个能收发消息的 Bot | [IM Bot 学习路径](/paths/im-bot) | Sandbox 与目标平台共用同一条命令/消息链 |
-| 让 Bot 理解自己的业务 | [给 Agent 添加受治理上下文](/authoring/agent-tools#让插件给-agent-补充上下文) | Prompt Section 进入当前 generation，可在 Console 验证 |
+| 让 Bot 理解自己的业务 | [给 Agent 添加受治理上下文](/authoring/agent-tools#给-ai-补充业务背景) | Prompt Section 进入当前 generation，可在 Console 验证 |
 | 组合工具、MCP、技能与子 Agent | [AI Agent 学习路径](/paths/ai-agent) | Agent 只看到当前回合有权使用的能力 |
 | 运营和排查已部署的 Bot | [Console 管理路径](/paths/console) | 能查看 Endpoint、日志、能力目录和 Agent 运行状态 |
 | 用多个账号稳定运营同一套业务 | [多 Endpoint 运营](/solutions/multi-endpoint-operations) | 每个账号可独立诊断，业务能力仍只维护一份 |

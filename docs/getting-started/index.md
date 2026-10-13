@@ -67,7 +67,7 @@ Doctor 会检查 Node、pnpm、端口、`HTTP_TOKEN`、CORS 和项目清单。�
 
 | 当前需要 | 推荐形态 | 下一步 |
 | --- | --- | --- |
-| 验证一个想法 | 单文件 `bot.ts` | [single-file-bot](../examples/index.md#single-file-bot-一个-botts-就是机器人) |
+| 验证一个想法 | 单文件 `bot.ts` | [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人) |
 | 做命令与组件 | 单插件 + 约定目录 | [IM Bot 路径](../paths/im-bot.md) |
 | 增加模型与工具 | 挂载 Agent Features | [AI Agent 路径](../paths/ai-agent.md) |
 | 多账号与生产运维 | HTTP Host + Remote Console | [Console 管理路径](../paths/console.md) |
