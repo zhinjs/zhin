@@ -1,6 +1,24 @@
+---
+title: 消息流
+description: 一条消息从平台进入 Bot、经过中间件和命令、再回到平台的完整路径，以及插件为什么不能绕过它直接发消息
+---
+
 # 消息流
 
-用户在群里发一条 `/ping`，到 Bot 的回复落回平台，中间经过的每个环节都在一条单向管道上：**入站**从平台 Endpoint 流向命令/AI，**出站**从插件代码流向平台 Endpoint。`ImRuntime` 同时实现唯一入站边界 `EndpointEventGateway` 与出站服务 `OutboundMessageService`；两边都从 operation 持有的 generation 快照取数，天然热重载安全。
+用户在群里发一条 `/ping`，到 Bot 的回复出现在群里，中间的每一步都在一条**单向管道**上：
+
+```text
+入站：平台 → 适配器 → 中间件 → 命令（没匹配时交给 AI）
+出站：回复 → 渲染（组件、JSX）→ 出站中间件 → 适配器 → 平台
+```
+
+## 对插件作者意味着什么
+
+- **只面对统一的消息。** 不管来自 QQ 还是 Discord，插件拿到的都是同一种 `Message`：`content`、`segments`、`sender`、`conversation`。
+- **发消息只走一条路。** 回复用 `message.$reply()` 或命令的返回值；主动推送用 `outboundHostToken`。**不要直接调用平台 SDK 发消息**，否则会跳过渲染、出站中间件（审核、过滤）和日志。
+- **热重载安全。** 每条消息从进入到回复都使用同一个版本的插件代码，切换版本时不会出现"一半新一半旧"。
+
+下面逐段展开这条管道的实现，适合想深入理解或开发适配器的读者。实现上，`ImRuntime` 同时承担唯一的入站边界 `EndpointEventGateway` 和出站服务 `OutboundMessageService`，两边都从当前操作持有的 generation 快照取数。
 
 ## 入站：Adapter → 中间件 → 命令 → AI 兜底
 

@@ -1,6 +1,25 @@
-# Generation and Lifecycle
+---
+title: Generation and Lifecycle
+description: Why hot reload never interrupts messages in flight, why the old version keeps serving when new code fails, and why plugin resources must register cleanup
+---
 
-After modifying a command file, you don't need to restart the process, and in-flight messages won't be cut off mid-way -- because startup, hot reload, and configuration changes all follow the same path in the runtime: a **generation transaction**. The new generation is fully built in a "shadow" first, then an atomic handoff is performed. At any moment there is exactly one current generation in the process; if the handoff fails, the old generation continues serving as-is -- there is no half-new, half-old intermediate state.
+# Generation and lifecycle
+
+Edit a command file and there is no process restart, and messages being handled aren't cut off. That's because startup, hot reload and config changes all take the same internal path: build the new version **completely** in the background, then switch over in one step. Each version is called a **generation**.
+
+## What you will observe
+
+| You… | What happens |
+| --- | --- |
+| Save a command, middleware or tool file | Only the affected part is rebuilt; it's live within a fraction of a second, no restart |
+| Change one plugin's config in `zhin.config.yml` | That plugin is rebuilt; an invalid new config keeps the old one |
+| Ship code that throws, a missing dependency, a failed external connection | The switch is cancelled, **the old version keeps serving**, and the terminal prints the error |
+| Have messages in flight during the switch | They finish on the old version; new messages use the new one |
+| Add or remove child plugins, or change the structure in `package.json#zhin` | Beyond what hot reload can safely handle — the CLI restarts the process |
+
+Plugin authors have one obligation: **resources acquired in `setup` (timers, connections, registrations) must be released through `context.lifecycle` or the function `setup` returns.** See [Why resources must be attached to lifecycle](#why-resources-must-be-attached-to-lifecycle).
+
+The rest of this page explains how the mechanism works, for readers who want the details or plan to contribute.
 
 ## Snapshot: The World State of a Generation
 

@@ -1,6 +1,24 @@
+---
+title: 分层架构
+description: Zhin.js 由哪些包组成、它们如何分层，以及作为插件作者和贡献者分别需要遵守什么
+---
+
 # 分层架构
 
-`pnpm check:architecture` 会在 CI 里拦住一类错误：下层包 import 了上层包。这个 pnpm workspace monorepo 里，包之间的依赖方向**单向向下**——上层可以依赖下层，下层永远不知道上层的存在。这条方向由 harness 强制检查，不是口头约定。
+Zhin.js 由几十个小包组成，但**写 Bot 和插件时，你几乎只需要安装和导入 `zhin.js`**。本页解释这些包怎样分层、为什么这样分，适合想理解内部原理或参与贡献的读者。
+
+## 先记住三件事
+
+1. **对外只有一个入口。** `zhin.js` 重新导出插件作者需要的 API：`definePlugin` 从 `zhin.js` 导入，`defineCommand` 等从 `zhin.js/command`、`zhin.js/middleware` 等子路径导入。
+2. **AI 是可选的。** 默认安装只有 IM 核心（不到 10MB）；`@zhin.js/agent`、`@zhin.js/ai` 是可选依赖，通过 `zhin.js/agent`、`zhin.js/ai` 使用。
+3. **依赖只能向下。** 上层包可以依赖下层，下层永远不知道上层的存在。这条规则由 `pnpm check:architecture` 在 CI 中强制检查，不是口头约定。
+
+| 你要做的事 | 依赖哪里 |
+| --- | --- |
+| 写 Bot、普通插件 | 只依赖 `zhin.js` |
+| 写 AI 工具 | 再加 `@zhin.js/tool`（`npx zhin setup --ai` 会处理） |
+| 写一种新的能力类型（Feature） | 只依赖 `@zhin.js/feature-kit` / `@zhin.js/plugin-runtime`，不要依赖 `@zhin.js/core` |
+| 给框架本身贡献代码 | 遵守下文的分层规则 |
 
 ## 分层总览
 
@@ -57,7 +75,7 @@ flowchart BT
     rt & core & http & protocolHost --> cli
 ```
 
-依赖关系的权威来源是各包的 `package.json`。读它之前，先记住几个关键事实。
+依赖关系以各包的 `package.json` 为准。从下往上读这张图：
 
 底座是三个彼此独立的零依赖契约：`@zhin.js/plugin-runtime` 提供 generation、snapshot、dispose 与 token；`@zhin.js/im-contract` 提供传输中立的身份、消息段、会话事件与投递语义；`@zhin.js/interaction` 描述用户交互的请求与结论。往上一层，`@zhin.js/feature-kit` 只依赖运行时底座，提供 Feature provider 的注册、发现与投影机制。Feature 层各包（adapter / command / component / middleware / handler / tool / skill / …）只依赖这些底层契约，彼此不互相依赖。
 

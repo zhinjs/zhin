@@ -1,6 +1,24 @@
-# Message Flow
+---
+title: Message Flow
+description: The full path a message takes from the platform into the bot, through middleware and commands, and back — and why plugins must never bypass it to send messages
+---
 
-When a user sends `/ping` in a group chat, through to the Bot's reply landing back on the platform, every step passes through a unidirectional pipeline: **inbound** flows from the platform Endpoint to commands/AI, **outbound** flows from plugin code to the platform Endpoint. `ImRuntime` implements both the sole inbound `EndpointEventGateway` and the outbound `OutboundMessageService`; both use the generation snapshot held by the current operation.
+# Message flow
+
+From a user sending `/ping` in a group to the bot's reply appearing there, every step is on one **one-way pipeline**:
+
+```text
+Inbound:  platform → adapter → middleware → command (or the AI when nothing matches)
+Outbound: reply → rendering (components, JSX) → outbound middleware → adapter → platform
+```
+
+## What this means for plugin authors
+
+- **You only see one kind of message.** Whether it came from QQ or Discord, a plugin gets the same `Message`: `content`, `segments`, `sender`, `conversation`.
+- **There is one way to send.** Reply with `message.$reply()` or a command's return value; push proactively with `outboundHostToken`. **Never call a platform SDK directly to send**, or you skip rendering, outbound middleware (moderation, filtering) and logging.
+- **Hot-reload safe.** Each message uses one version of the plugin code from arrival to reply; there is never a half-old, half-new state during a switch.
+
+The rest of this page walks through the pipeline's implementation, for readers who want the details or are writing adapters. Internally, `ImRuntime` is both the sole inbound boundary `EndpointEventGateway` and the outbound service `OutboundMessageService`; both read from the generation snapshot held by the current operation.
 
 ## Inbound: Adapter -> Middleware -> Command -> AI Fallback
 
