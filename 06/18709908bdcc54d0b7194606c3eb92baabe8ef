@@ -1,0 +1,155 @@
+.changeset/phase-three-console-completion.md
+  s_6562bcb6cc0539::t_68ec0e651c4962 1-21
+basic/cli/src/plugin-management/activity.ts
+  s_2104cc474f1ce5::t_996da6e473a0db 1-12
+basic/cli/src/plugin-runtime/console/api-installer.ts
+  s_6562bcb6cc0539::t_50f6f8aaae4b22 27,77
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_2104cc474f1ce5::t_dfcc7f8fe1b186 27,84
+basic/cli/src/plugin-runtime/console/configuration-projection.ts
+  s_6562bcb6cc0539::t_e411d01ff0ae0b 43,61,68-75
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_2104cc474f1ce5::t_366b4ce6b5ec7d 13,44-46,51-56,89,101,118-119,124,177-183
+basic/cli/src/plugin-runtime/console/inbox.ts
+  s_6562bcb6cc0539::t_c2156a2e5b264c 76-81
+basic/cli/src/plugin-runtime/start-command.ts
+  s_2104cc474f1ce5::t_722fac3a0b45bd 2,114,262-265,268,310
+basic/cli/tests/plugin-runtime/console/inbox.test.ts
+  s_6562bcb6cc0539::t_75c96e53a514a0 147,153,155,160
+docs/contributing/plugin-experience-plan.md
+  s_6562bcb6cc0539::t_7723ea7d8c9940 61,75-85
+packages/console/protocol/src/index.ts
+  s_6562bcb6cc0539::t_060c541310fc90 91-98,219-221,312-313,414-415
+packages/host/http/src/console-rpc-extended/inbox-rpc.ts
+  s_2104cc474f1ce5::t_3360486c7b549c 262,271,275-306
+packages/host/http/tests/console-rpc-extended.test.ts
+  s_2104cc474f1ce5::t_0e3c0f29b9b5d4 580-615
+packages/im/adapter/README.md
+  s_6562bcb6cc0539::t_ba61dd9bc62258 196-206
+packages/im/adapter/src/adapter-index.ts
+  s_6562bcb6cc0539::t_25aae88c22efef 12,484
+packages/im/adapter/src/definition.ts
+  s_6562bcb6cc0539::t_e6191727d818e4 6,57
+packages/im/adapter/src/provider.ts
+  s_6562bcb6cc0539::t_7adbe676de6369 20-22
+packages/im/adapter/tests/adapter.test.ts
+  s_6562bcb6cc0539::t_5217f0a668ce64 82-92
+packages/im/core/src/plugin-runtime/im/endpoint-runtime.ts
+  s_2104cc474f1ce5::t_31cb63a82a9593 15-20,30,101,136,159,306-307
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_6562bcb6cc0539::t_65d7584f709385 116,120-130,147,158,269,287,340
+packages/im/core/tests/plugin-runtime/endpoint-publication.test.ts
+  s_6562bcb6cc0539::t_c17209d689c58e 1-77
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_6562bcb6cc0539::t_4b12ccf1c89a17 57,70,84-89,590,602,607,616,621,659,678,709,759,885,923,979,1028,1070,1108,1427,1462,1473,1495,1517,1545-1636,1793,1852,1887,1922,2085,2110,2120,2131,2143,2155-2169,2180,2207,2247,2282,2303,2317,2329,2345,2363,2385,2411,2445,2486,2519,2532,2546,2576,2646,2706,2723,2750,2783-2787,2798,2892,2897-2911,2913,2929,2936
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_6562bcb6cc0539::t_8a0baa6b3986bc 67-68,72,196,684,686,698-701,718
+packages/im/core/tests/plugin-runtime/side-event-gateway.test.ts
+  s_6562bcb6cc0539::t_1ca3a064aa2c66 257,260,271
+packages/im/feature-kit/README.md
+  s_6562bcb6cc0539::t_795d660ed2a888 32,36-42
+packages/im/feature-kit/src/context.ts
+  s_6562bcb6cc0539::t_b83f38e21f1dfa 11-12,18-21,26-27,32,48-58
+packages/im/feature-kit/src/provider.ts
+  s_6562bcb6cc0539::t_66ad1871b357a3 83-88,119-121
+packages/im/feature-kit/tests/construction-types.fixture.ts
+  s_6562bcb6cc0539::t_5fde25f729bfb8 1-30
+packages/im/feature-kit/tests/feature-kit.test.ts
+  s_6562bcb6cc0539::t_80126991b197dd 6-7,13-14,190-220
+packages/im/mcp-feature/README.md
+  s_6562bcb6cc0539::t_de25e27bae221b 60-70
+packages/im/mcp-feature/src/definition.ts
+  s_6562bcb6cc0539::t_d9ad9e18010318 1,21
+packages/im/mcp-feature/src/mcp-index.ts
+  s_6562bcb6cc0539::t_e4fdabbd97d72d 9,60
+packages/im/mcp-feature/tests/mcp.test.ts
+  s_6562bcb6cc0539::t_d6d709d775e217 20-30
+packages/im/plugin-runtime/src/admission.ts
+  s_6562bcb6cc0539::t_9d8744d5c7abb8 12-13,34-35,99-101,115-117,185,194-196,205-210
+packages/im/plugin-runtime/src/snapshot.ts
+  s_6562bcb6cc0539::t_207de89929649b 137,199,213
+packages/im/plugin-runtime/tests/admission.test.ts
+  s_6562bcb6cc0539::t_ad07e952ef515e 148-171
+packages/im/runtime/package.json
+  s_6562bcb6cc0539::t_f0acde5c6d9388 38
+packages/im/runtime/src/generation-assets.ts
+  s_6562bcb6cc0539::t_b4cacfc0f846e0 81,97-102
+packages/im/runtime/src/slot-generation-preparer.ts
+  s_6562bcb6cc0539::t_f35464a9d09cab 53-57,78
+packages/im/runtime/src/subtree-generation-preparer.ts
+  s_6562bcb6cc0539::t_0bd1285782117b 9,112-126,136,155
+packages/im/runtime/src/topology-generation-preparer.ts
+  s_6562bcb6cc0539::t_a5736f238b5483 12,184
+packages/im/runtime/tests/agent-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_933edcc8b0202f 112,127,138-139,167,171-173
+packages/im/runtime/tests/config-retained-adapter.test.ts
+  s_6562bcb6cc0539::t_135f538e7d8e1b 1-134
+packages/im/runtime/tests/generation-assets.test.ts
+  s_6562bcb6cc0539::t_6b19bf76ba327d 49,83-104
+packages/im/runtime/tests/im-feature-hmr.test.ts
+  s_6562bcb6cc0539::t_e5871dbfb11b18 37,106-107,119
+plugins/adapters/icqq/src/protocol.ts
+  s_2104cc474f1ce5::t_15f0fdf8bf825f 336-338,345
+plugins/adapters/icqq/tests/icqq-runtime.test.ts
+  s_6562bcb6cc0539::t_9ace2a00f6ee03 117-119
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_0552f132fa95b1 1705-1707
+tsconfig.typecheck.json
+  s_6562bcb6cc0539::t_b328aaded4e29c 313-314
+basic/cli/src/plugin-runtime/console/events.ts
+  s_6eb8d20a15fb15::t_bfb3fc50abdb3d 13,15,27,29
+basic/cli/src/plugin-runtime/console/rpc-composition.ts
+  s_6eb8d20a15fb15::t_55a258879b0d30 33
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_6eb8d20a15fb15::t_004455393760b2 1444,1447,1463-1464,1470
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_6eb8d20a15fb15::t_9bba1b273e4ba1 12,23-48,180,199
+packages/im/core/tests/plugin-runtime/endpoint-identity.test.ts
+  s_6eb8d20a15fb15::t_de7662e0c92706 8,23
+packages/im/handler/src/context.ts
+  s_ce6cad79aeaa2d::t_7bfd88ebe9297b 3,11-12
+packages/im/handler/src/handler-index.ts
+  s_ce6cad79aeaa2d::t_5010dbbfd4c520 100
+packages/im/mcp-feature/src/provider.ts
+  s_6eb8d20a15fb15::t_dec91e73b6b3ef 20
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0618709908bdcc54d0b7194606c3eb92baabe8ef",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ce6cad79aeaa2d": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a133f7-0c60-7790-a974-d2a4c66cf457",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
