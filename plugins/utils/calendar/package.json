@@ -1,0 +1,102 @@
+{
+  "name": "@zhin.js/plugin-calendar",
+  "version": "0.1.0",
+  "description": "CalDAV / Google / Microsoft calendar tools for Zhin Agent",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "plugin.js",
+    "src",
+    "lib",
+    "skills",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc -p tsconfig.check.json",
+    "test": "vitest run --root ../../.. plugins/utils/calendar/tests",
+    "prepublishOnly": "pnpm run build",
+    "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+  },
+  "keywords": [
+    "zhin",
+    "zhin.js",
+    "plugin",
+    "calendar",
+    "caldav"
+  ],
+  "license": "MIT",
+  "author": {
+    "name": "lc-cn",
+    "email": "admin@liucl.cn",
+    "url": "https://github.com/lc-cn"
+  },
+  "dependencies": {
+    "@zhin.js/im-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "zhin.js": "workspace:*",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@zhin.js/skill": "workspace:^",
+    "@zhin.js/tool": "workspace:^",
+    "zhin.js": "workspace:^",
+    "zod": "^4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@zhin.js/skill": {
+      "optional": true
+    },
+    "@zhin.js/tool": {
+      "optional": true
+    },
+    "zod": {
+      "optional": true
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "plugins/utils/calendar"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "zhin": {
+    "protocol": 1,
+    "type": "plugin",
+    "entry": "./plugin.js",
+    "engine": "^1.0.0",
+    "runtime": "trusted",
+    "features": [
+      {
+        "package": "@zhin.js/tool",
+        "api": "^1.0.0"
+      },
+      {
+        "package": "@zhin.js/skill",
+        "api": "^1.0.0"
+      }
+    ],
+    "plugins": []
+  }
+}
