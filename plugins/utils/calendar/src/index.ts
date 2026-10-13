@@ -22,6 +22,21 @@ export {
 } from "./config.js";
 export { cleanSecret } from "./secrets.js";
 export { calendarRuntimeToken, type CalendarRuntime } from "./runtime.js";
+export {
+  OAuthTokenManager,
+  OAuthTokenError,
+  type TokenManagerOptions,
+  type TokenSet,
+} from "./token-manager.js";
+export {
+  buildAuthorizeUrl,
+  createPkcePair,
+  createOAuthState,
+  exchangeAuthorizationCode,
+  GOOGLE_AUTH_SCOPES,
+  MICROSOFT_AUTH_SCOPES,
+} from "./oauth-auth.js";
+export { microsoftCalendarBase } from "./oauth.js";
 
 /** Builds the configured provider, or `undefined` when none is enabled. */
 export function createCalendarProvider(
@@ -43,33 +58,32 @@ export function createCalendarProvider(
       timezone: config.timezone,
     });
   }
-  if (
-    config.provider === "google" &&
-    google?.enabled &&
-    cleanSecret(google.access_token ?? "")
-  ) {
+  if (config.provider === "google" && google?.enabled) {
+    const clientId = cleanSecret(google.client_id ?? "");
+    const clientSecret = cleanSecret(google.client_secret ?? "");
+    const refreshToken = cleanSecret(google.refresh_token ?? "");
+    if (!clientId || !clientSecret || !refreshToken) return undefined;
     return createGoogleCalendarProvider({
-      accessToken: cleanSecret(google.access_token ?? ""),
-      refreshToken: cleanSecret(google.refresh_token ?? ""),
-      clientId: cleanSecret(google.client_id ?? ""),
-      clientSecret: cleanSecret(google.client_secret ?? ""),
-      calendarId: google.calendar_id || "primary",
+      clientId,
+      clientSecret,
+      refreshToken,
+      calendarId: (google.calendar_id || "primary").trim() || "primary",
       timezone: config.timezone,
+      tokenFile: cleanSecret(google.token_file ?? "") || undefined,
     });
   }
-  if (
-    config.provider === "microsoft" &&
-    microsoft?.enabled &&
-    cleanSecret(microsoft.access_token ?? "")
-  ) {
+  if (config.provider === "microsoft" && microsoft?.enabled) {
+    const clientId = cleanSecret(microsoft.client_id ?? "");
+    const refreshToken = cleanSecret(microsoft.refresh_token ?? "");
+    if (!clientId || !refreshToken) return undefined;
     return createMicrosoftCalendarProvider({
-      accessToken: cleanSecret(microsoft.access_token ?? ""),
-      refreshToken: cleanSecret(microsoft.refresh_token ?? ""),
-      clientId: cleanSecret(microsoft.client_id ?? ""),
-      clientSecret: cleanSecret(microsoft.client_secret ?? ""),
-      calendarId: microsoft.calendar_id ?? "",
+      clientId,
+      clientSecret: cleanSecret(microsoft.client_secret ?? "") || undefined,
+      refreshToken,
+      calendarId: (microsoft.calendar_id ?? "").trim(),
       timezone: config.timezone,
       tenant: microsoft.tenant || "common",
+      tokenFile: cleanSecret(microsoft.token_file ?? "") || undefined,
     });
   }
   return undefined;

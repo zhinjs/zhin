@@ -1,6 +1,6 @@
 {
   "name": "@zhin.js/plugin-calendar",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CalDAV / Google / Microsoft calendar tools for Zhin Agent",
   "type": "module",
   "main": "./lib/index.js",
@@ -18,7 +18,8 @@
     "src",
     "lib",
     "skills",
-    "README.md"
+    "README.md",
+    "scripts"
   ],
   "scripts": {
     "build": "tsc",
@@ -26,7 +27,8 @@
     "test": "vitest run --root ../../.. plugins/utils/calendar/tests",
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
-    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
+    "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean",
+    "auth": "tsx scripts/auth.ts"
   },
   "keywords": [
     "zhin",

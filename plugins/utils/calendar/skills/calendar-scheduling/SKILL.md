@@ -34,4 +34,5 @@ tools:
 ## 注意
 
 - 没有时区偏移的时间按配置时区解释。
-- 本插件不发起 OAuth；Google / Microsoft 使用预置的 access/refresh token（环境变量）。
+- Google / Microsoft 使用 refresh_token（环境变量）；用 `pnpm --filter @zhin.js/plugin-calendar auth google|microsoft` 获取。access token 仅内存缓存。
+- 操作哪本日历由配置 `calendar_id` 决定（Google 默认 `primary`，Outlook 默认账户主日历）。

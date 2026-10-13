@@ -27,20 +27,57 @@ export const calendarConfig = Schema.object({
   }),
   google: Schema.object({
     enabled: Schema.boolean().default(false),
-    access_token: Schema.string().default("").effect("reload"),
-    refresh_token: Schema.string().default("").effect("reload"),
-    client_id: Schema.string().default("").effect("reload"),
-    client_secret: Schema.string().default("").effect("reload"),
-    calendar_id: Schema.string().default("primary").effect("reload"),
+    client_id: Schema.string()
+      .default("")
+      .description("${GOOGLE_CALENDAR_CLIENT_ID}")
+      .effect("reload"),
+    client_secret: Schema.string()
+      .default("")
+      .description("${GOOGLE_CALENDAR_CLIENT_SECRET}")
+      .effect("reload"),
+    refresh_token: Schema.string()
+      .default("")
+      .description("${GOOGLE_CALENDAR_REFRESH_TOKEN}；用 auth google 获取")
+      .effect("reload"),
+    calendar_id: Schema.string()
+      .default("primary")
+      .description("日历 ID，默认 primary；可换成其它日历的 id")
+      .effect("reload"),
+    token_file: Schema.string()
+      .default("")
+      .description(
+        "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-google-token.json）"
+      )
+      .effect("reload"),
   }),
   microsoft: Schema.object({
     enabled: Schema.boolean().default(false),
-    access_token: Schema.string().default("").effect("reload"),
-    refresh_token: Schema.string().default("").effect("reload"),
-    client_id: Schema.string().default("").effect("reload"),
-    client_secret: Schema.string().default("").effect("reload"),
-    calendar_id: Schema.string().default("").effect("reload"),
-    tenant: Schema.string().default("common").effect("reload"),
+    client_id: Schema.string()
+      .default("")
+      .description("${MS_GRAPH_CLIENT_ID}")
+      .effect("reload"),
+    client_secret: Schema.string()
+      .default("")
+      .description("可选；公共客户端可留空。${MS_GRAPH_CLIENT_SECRET}")
+      .effect("reload"),
+    refresh_token: Schema.string()
+      .default("")
+      .description("${MS_GRAPH_REFRESH_TOKEN}；用 auth microsoft 获取")
+      .effect("reload"),
+    tenant: Schema.string()
+      .default("common")
+      .description("Azure tenant，默认 common")
+      .effect("reload"),
+    calendar_id: Schema.string()
+      .default("")
+      .description("留空或 primary/me = 默认日历；否则为 Graph calendar id")
+      .effect("reload"),
+    token_file: Schema.string()
+      .default("")
+      .description(
+        "可选：持久化轮换后的 refresh_token 的 JSON 路径（如 data/calendar-ms-token.json）"
+      )
+      .effect("reload"),
   }),
 });
 
