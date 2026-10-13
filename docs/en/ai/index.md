@@ -1,114 +1,175 @@
 ---
 title: AI Capabilities Overview
+description: Connect an LLM to your bot — enable it in three steps, learn when the AI replies, let it call tools, and configure models, triggers, access, MCP and execution security
 ---
 
-# AI Capabilities Overview
+# AI capabilities overview
 
-A default installation of zhin.js only sends and receives messages -- it does not "converse." To make it understand `#check tomorrow's weather`, you need to add the AI layer: install a few packages, write an `ai:` section in your config, and the CLI will automatically assemble the Agent Host at startup, routing messages that don't match any command to **ZhinAgent** for processing.
+Out of the box Zhin only runs commands; it doesn't "chat". With AI enabled, **messages that match no command** go to an LLM, which can also call tools you write.
 
-```mermaid
-flowchart LR
-    M[IM message] --> T{ai.trigger match}
-    T -- miss --> C[Command dispatch / group listening]
-    T -- hit --> A[ZhinAgent turn]
-    B[ai.providers] --> A
-    S[ai.mcpServers / plugin tools] --> A
-    A --> R[IM reply]
-```
+AI is optional: without it, the bot depends on no model SDK and needs no API key.
 
-## Installation
+## Enable it in three steps
+
+**1. Run the wizard**
 
 ```bash
-pnpm add @zhin.js/agent zod ai
-pnpm add @ai-sdk/openai   # Install the provider SDK for the vendor you use
+npx zhin setup --ai
+pnpm install
 ```
 
-The provider SDK is an optional peer dependency -- install whichever `sdk` package you use; if missing, the runtime will report `Missing peer dependency` with the install command. On the code side, import `ZhinAgent`, `AIService`, etc. from `zhin.js/agent` (or `@zhin.js/agent`).
+The wizard asks for a model service (OpenAI, Anthropic, DeepSeek, Google, any OpenAI-compatible API, or a local Ollama), installs the SDK and the Agent runtime, and declares the tool and Prompt Section capabilities in `package.json`.
 
-## Configuration skeleton
+**2. Add your key**
 
-All configuration lives in the top-level `ai:` section of `zhin.config.yml`; `${VAR}` expands from environment variables:
+Cloud model keys go in `.env` (the wizard tells you the variable name, e.g. `AI_API_KEY`). Local Ollama needs no key.
+
+**3. Try it**
+
+```bash
+pnpm dev
+```
+
+Send a sentence in a Sandbox DM, or `ai: hello` in a group, and the bot replies with the model.
+
+The wizard writes roughly this to `zhin.config.yml`:
 
 ```yaml
 ai:
-  providers:        # Vendor connections (required)
+  enabled: true
+  providers:
+    openai-main:          # a name you choose
+      sdk: openai
+      apiKey: ${AI_API_KEY}
+  agents:
+    zhin:                 # the main Agent must be named zhin
+      provider: openai-main
+      model: gpt-4o-mini
+```
+
+`providers` say *which model service to connect to*; `agents` say *which Agent uses which model*.
+
+::: details Installing by hand instead of the wizard
+```bash
+pnpm add @zhin.js/agent zod ai
+pnpm add @ai-sdk/openai   # the SDK for your vendor
+```
+
+Installing `@zhin.js/agent` alone doesn't make `tools/` and `prompt-sections/` work — you must also declare `@zhin.js/tool` and `@zhin.js/prompt-section` in `package.json#zhin.features`. In code, import `ZhinAgent`, `AIService` and friends from `zhin.js/agent` (or `@zhin.js/agent`). Model SDKs are optional dependencies; if one is missing, startup reports `Missing peer dependency` with the install command.
+:::
+
+## When the AI replies
+
+Messages that match no command are checked in this order:
+
+| Order | Situation | Default |
+| --- | --- | --- |
+| 1 | Starts with `/`, `!` or `！` | Skip the AI, to avoid clashing with commands |
+| 2 | Starts with `#`, `AI:` or `ai:` | Sent to the AI (DMs and groups), with the prefix removed |
+| 3 | The bot is mentioned in a group or channel | Sent to the AI |
+| 4 | Direct message | The whole message goes to the AI |
+| 5 | A DM containing a configured keyword | Sent to the AI |
+
+So in groups the bot **doesn't** butt in by default — only when mentioned or prefixed. All of this is configurable; see [ai.trigger](#ai-trigger).
+
+## Let the AI do things
+
+By default the AI can only talk. To let it check the weather, search music or query a database, put a tool in `tools/`:
+
+```ts
+// tools/weather/index.ts
+import { defineAgentTool } from '@zhin.js/tool';
+import { z } from 'zod';
+
+export default defineAgentTool<{ city: string }>({
+  description: 'Get the current weather for a city',
+  inputSchema: z.object({ city: z.string().min(1) }),
+  async execute({ city }) {
+    const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
+    return response.text();
+  },
+});
+```
+
+Restricting tools, requiring confirmation, packaging procedures as Skills and adding business context are covered in [Agent tools and Skills](../authoring/agent-tools.md).
+
+## Common adjustments
+
+| I want to… | Change |
+| --- | --- |
+| Switch model or vendor, or use a local model | [ai.providers](#ai-providers) |
+| Trigger in groups without a mention, or change prefixes | [ai.trigger](#ai-trigger) |
+| Open the AI to only some users or groups | [ai.access](#ai-access) |
+| Use different Agents or models in different groups | [ai.agents](#ai-agents) |
+| Let the AI use tools from external MCP servers | [ai.mcpServers](#ai-mcpservers) |
+| Control which shell commands the AI may run and whether they need approval | [ai.agent](#ai-agent) |
+| Understand and reply with voice | [Speech](./speech.md) |
+
+## Configuration reference
+
+Everything lives under `ai:` in `zhin.config.yml`; `${VAR}` expands from environment variables.
+
+### ai.providers
+
+Each provider is keyed by a name you choose; `sdk` picks the model SDK:
+
+```yaml
+ai:
+  providers:
     openrouter:
       sdk: openai-compatible
       baseUrl: ${OPENROUTER_BASE_URL}
       apiKey: ${OPENROUTER_API_KEY}
-  agents:           # Agent bindings (at least zhin is required)
-    zhin:
-      provider: openrouter
-      model: openrouter/free
-  mcpServers: []    # MCP client connections (optional)
-  agent:
-    inboundQueue:
-      groupMode: supersede # default; use fifo to wait in arrival order
-  trigger: {}       # Trigger rules (optional)
-  access: {}        # Access gating (optional)
 ```
 
-At startup, the `ai:` section undergoes **soft-prune**: providers whose credentials expand to empty are removed (logged at debug level only); agents bound to removed providers are skipped along with them. If the `zhin` binding is missing, the Agent Host is not assembled, but IM startup is unaffected.
-
-`ai.agent.inboundQueue.groupMode` is also the default canonical Turn Intent policy:
-`supersede` preserves replacement compatibility, while `fifo` resolves ordinary
-ingress as `new` and waits in arrival order. Adapters, commands, or product policy still resolve
-`steer`, `follow_up`, and `observe` explicitly.
-Cross-participant `steer` and `follow_up` authorization may only come from the Host's trusted
-`resolveTurnIntent` policy; message metadata cannot self-assert it. Tools remain constrained by
-the active turn's authority, while the journal separately records the controlling principal and turn ID.
-
-## ai.providers
-
-Each provider is named by alias; `sdk` determines which AI SDK adapter to use (closed set, ADR 0018):
-
-| sdk | Peer dependency | Key config |
-|-----|-----------------|------------|
+| sdk | Install | Key settings |
+|-----|---------|--------------|
 | `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` |
-| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`baseUrl` auto-appends `/v1`); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
-| `anthropic` | `@ai-sdk/anthropic` | `apiKey`, optional `baseUrl` (auto-appends `/v1`) |
+| `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended automatically); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
+| `anthropic` | `@ai-sdk/anthropic` | `apiKey`, optional `baseUrl` (`/v1` appended) |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`, optional `baseUrl` |
-| `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (auto-appends `/v1beta`) |
-| `ollama` | `@ai-sdk/openai-compatible` (uses OpenAI-compatible interface internally) | `host` (default `http://127.0.0.1:11434`, auto-appends `/v1`), no `apiKey` needed |
+| `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (`/v1beta` appended) |
+| `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey` |
 
-Common fields: `models` (explicit model allowlist), `contextWindow`, `imageGeneration` (text-to-image defaults), and `input` (the explicit accepted modalities: `text | image | audio | video | file`). When `input` is omitted it fails closed to `['text']`; model names and vendors are never used to guess vision/audio/video support.
+Optional fields:
 
-When `models` is not specified, `ModelRegistry` calls `/v1/models` in the background after startup to auto-populate the available model list (restoring the previous cache first, then refreshing asynchronously). When `models` is specified, the YAML allowlist takes precedence. `agents.<name>.model` only needs to appear in the discovered list or allowlist -- no need to list each one manually.
+- `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
+- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name.
+- `contextWindow`: context window size.
+- `imageGeneration`: defaults for text-to-image.
 
-## ai.agents
+### ai.agents
 
-Bind an agent name to a `provider + model`:
+Bind Agent names to `provider + model`. `zhin` is the main Agent and must exist:
 
 ```yaml
 ai:
   agents:
-    zhin:                       # Main Agent, must exist
+    zhin:
       provider: openrouter
       model: openrouter/free
-      mcpServers: [icqq]        # MCP servers mounted on this agent (referenced by name)
-      nickname: Zhi             # LLM self-reference and UI display name
+      mcpServers: [icqq]        # MCP servers this Agent uses
+      nickname: Zhi             # how the AI refers to itself, and its display name
     planner:
       provider: openrouter
       model: openrouter/free
-      match:                    # Optional routing rules (can be an array)
+      match:                    # which messages go to it (may be an array)
         scene: group
-      permission:               # Sub-agent types visible to spawn_task
+      permission:               # which sub-agents it may dispatch
         task: { "researcher": allow, "*": deny }
 ```
 
 | Field | Description |
-|-------|-------------|
-| `provider` / `model` | Reference to the `ai.providers` alias and model id (required) |
-| `mcpServers` | List of `name` references from `ai.mcpServers` |
-| `nickname` | Agent self-reference and UI display name |
-| `match` | Routing rules: `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
-| `permission.task` | glob -> `allow` / `deny`, constraining which sub-agents `spawn_task` can dispatch |
+|------|------|
+| `provider` / `model` | A name from `ai.providers` and a model id (required) |
+| `mcpServers` | Names from `ai.mcpServers` |
+| `nickname` | The AI's self-reference and display name |
+| `match` | Routing conditions: `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
+| `permission.task` | glob → `allow` / `deny`, limiting which sub-agents `spawn_task` may dispatch |
 
-## ai.mcpServers
+### ai.mcpServers
 
-This configures the Agent's **MCP client**: it connects to external MCP servers and makes their tools available to Agent turns. Candidate generation activation connects every configured server before publication; ready tools enter the owner-scoped capability index. This requires the peer dependency `@modelcontextprotocol/sdk`.
-
-To let external AI clients connect to this Zhin bot, configure the top-level `mcp:` block and run `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`. The MCP Host uses the Agent runtime to project Tools from the current generation. This **MCP server** is assembled by the CLI; `ai.mcpServers` does not enable it. See [MCP server setup](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md).
+Connect the AI to **external MCP servers** and use their tools. Requires `@modelcontextprotocol/sdk`.
 
 ```yaml
 ai:
@@ -124,70 +185,107 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-A configured server must become ready while the candidate generation activates. Failure aborts that candidate and leaves the previous generation serving traffic (fail-closed). Agent bindings may reference only servers declared here; unknown names fail configuration validation.
+- Once connected, the server's tools join the tool pool under names prefixed with the server name.
+- **If any server fails to connect, the new config doesn't take effect** and the old version keeps serving.
+- `ai.agents.<name>.mcpServers` may only reference names declared here, or config validation fails.
 
-## Trigger rules (ai.trigger)
+::: tip The other direction: make your bot an MCP server
+To let external AI clients connect to your bot, use the top-level `mcp:` config and run `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`. This is separate from `ai.mcpServers`; setting one doesn't enable the other. See [MCP Server configuration](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md).
+:::
 
-Messages that don't match any command are evaluated in a fixed order to determine whether they should be handed to AI:
-
-1. **Ignore prefixes**: If matched by `ignorePrefixes` (default `/`, `!`, `!`), skip immediately to avoid conflicts with commands;
-2. **Prefix trigger**: If matched by `prefixes` (default `#`, `AI:`, `ai:`), the text after the prefix is taken (works in both direct messages and groups);
-3. **@ trigger**: In groups/channels, if `respondToAt !== false` and the adapter has flagged `mentioned` (e.g. CQ code, app_mention);
-4. **Direct message pass-through**: When `respondToPrivate !== false`, the full text of direct messages goes straight to AI;
-5. **Keywords**: Direct messages only, matches any substring in `keywords`.
+### ai.trigger
 
 ```yaml
 ai:
   trigger:
-    prefixes: ["ai:"]
-    respondToAt: true        # Default true
-    respondToPrivate: true   # Default true
-    timeout: 60000           # Single turn timeout (ms)
-    thinkingMessage: Thinking...  # Optional: placeholder reply before entering AI
-    errorTemplate: "❌ AI processing failed: {error}"
-    masters: ["10001"]       # Trigger-level masters (participate in Owner approval)
-    trusted: []              # Trigger-level trusted (weaker than master)
+    prefixes: ["ai:"]          # default ['#', 'AI:', 'ai:']
+    ignorePrefixes: ["/"]      # default ['/', '!', '！']
+    respondToAt: true          # default true: trigger when mentioned in a group
+    respondToPrivate: true     # default true: trigger on every DM
+    keywords: []               # trigger when a DM contains one of these
+    timeout: 60000             # per-turn timeout (ms)
+    thinkingMessage: Thinking… # optional placeholder reply before processing
+    errorTemplate: "❌ AI failed: {error}"
+    masters: ["10001"]         # users with approval rights
+    trusted: []                # trusted users (below master)
 ```
 
-## Access gating (ai.access)
+Mention triggering relies on the adapter flagging the message as mentioning the bot (CQ codes, Slack `app_mention`, etc.).
 
-Controls which conversations the LLM reply path is open to (useful for platform AIGC compliance scenarios):
+### ai.access
+
+Control which conversations may use the AI (e.g. for platform AIGC compliance):
 
 ```yaml
 ai:
   access:
     mode: whitelist     # open (default) | closed | whitelist
-    users: ["10001"]    # Allowlisted sender.id
-    groups: ["123456"]  # Allowlisted group/channel id
-    denyMessage: AI features are not enabled for this conversation.
+    users: ["10001"]    # allowed user ids
+    groups: ["123456"]  # allowed group / channel ids
+    denyMessage: AI is not enabled for this conversation.
 ```
 
-Direct message denials reply with `denyMessage`; group/channel denials are silent.
+Denied DMs get `denyMessage`; denied groups and channels get no reply.
 
-## Security policies (ai.agent)
+### ai.agent
 
-Execution-type tools like `bash` are subject to defense-in-depth constraints under `ai.agent`:
+`ai.agent` controls how the AI runs — most importantly, the security policy for execution tools like `bash`:
 
 ```yaml
 ai:
   agent:
     execSecurity: allowlist       # deny | allowlist (default) | full
     execPreset: readonly          # readonly | network | development | custom
-    execAllowlist: [make]         # Allowlist when execPreset=custom
+    execAllowlist: [make]         # allowlist when execPreset=custom
     execApprovalMode: ask         # ask (default) | bypass | auto
-    gitStatus: true               # Default true: inject a one-line git status summary into the Runtime section (skipped outside git repos)
-    contextPaths: []              # Extra context files injected into the system prompt (supports ~ and relative paths)
-    systemPromptMaxChars: 100000  # Total prompt budget; opportunistic content yields first, required content fails explicitly if it cannot fit
+    gitStatus: true               # default true: one-line git status in the prompt (skipped outside git repos)
+    contextPaths: []              # extra context files for the system prompt (~ and relative paths ok)
+    systemPromptMaxChars: 100000  # total system prompt character limit
+    inboundQueue:
+      groupMode: supersede        # default; fifo queues a conversation's messages in arrival order
 ```
 
-In addition to `contextPaths`, the global context files `~/.config/zhin/AGENTS.md` and `~/.config/zhin/ZHIN.md` are loaded by default (skipped when missing) and injected as a `# User Context` section before the project bootstrap context; per-file cap is 8KB and the total cap is 16KB.
+**Command allowlists**: `execPreset` widens step by step — `readonly` (ls, cat, grep, find…) → `network` (adds curl, wget, ping…) → `development` (adds npm, node, git, python…). In every mode, dangerous commands such as `sudo`, `eval`, `dd` and `export` are refused, and operations like `rm -rf node_modules` are hard-blocked.
 
-`execPreset` preset allowlists widen progressively: `readonly` (ls/cat/grep/find etc.) -> `network` (adds curl/wget/ping etc.) -> `development` (adds npm/node/git/python etc.). Regardless of the mode, dangerous commands like `sudo`, `eval`, `dd`, `export` are always rejected, and operations like `rm -rf node_modules` are hard-blocked.
+**Approval modes**:
 
-The full check chain is: dangerous blocklist -> environment variable prefix stripping (`FOO=bar cmd` matches against `cmd`) -> wrapper stripping (`timeout 10 cmd`) -> compound command splitting (`&&`/`|` checked segment by segment) -> non-full mode rejects newlines / `$(...)` / backticks -> read-only commands auto-approved. With `execApprovalMode: ask`, the current Turn requests master approval through its `ApprovalPort`; `auto` delegates to a dedicated tool-less review Agent and asks the master through the same port when that reviewer is uncertain, while model errors, timeouts, and invalid output fail closed; `bypass` skips approval without bypassing the dangerous-command blocklist, Tool permissions, filesystem/network boundaries, or sandbox. Group and channel conversations offer four decisions: reject, current invocation, current conversation, and always approve. Conversation approval covers every sender, while always approval covers only the current sender. Private conversations expose only reject, current invocation, and always approve. Every persistent decision stays bound to the current conversation, so one group member's personal decision does not affect another member. `/approve always bash` and `/approve rule <regex>` only manage persistent bypasses for that Endpoint. V1 approval files are not migrated online; rebuild retained rules explicitly before upgrading.
+| `execApprovalMode` | Behavior |
+| --- | --- |
+| `ask` (default) | Ask a master for approval |
+| `auto` | A tool-less reviewer Agent decides; if it can't, it asks a master; model errors, timeouts or invalid output are denied |
+| `bypass` | Skip approval — but never the dangerous-command blocklist, tool permissions, file / network boundaries or the sandbox |
+
+In groups and channels an approval offers "deny / just this once / this conversation / always allow"; in DMs, "deny / just this once / always allow". "This conversation" applies to everyone in it; "always allow" applies only to the current sender; every lasting decision is bound to the current conversation. `/approve always bash` and `/approve rule <regex>` manage this account's persistent allow rules.
+
+::: details More details
+- **Global context files**: besides `contextPaths`, `~/.config/zhin/AGENTS.md` and `~/.config/zhin/ZHIN.md` are loaded automatically (skipped if absent) as a `# User Context` section before project context; 8KB per file, 16KB total.
+- **Prompt budget**: over `systemPromptMaxChars`, `opportunistic` content is removed first; if `required` content doesn't fit, the turn fails explicitly.
+- **Command check chain**: dangerous blocklist → strip env prefixes (`FOO=bar cmd` matches as `cmd`) → strip wrappers (`timeout 10 cmd`) → split compound commands (`&&`, `|` checked per segment) → outside `full`, reject newlines, `$(...)` and backticks → read-only commands pass automatically. Approval goes through the current turn's `ApprovalPort`.
+- **Legacy approval files**: V1 approval files aren't migrated online; rebuild rules explicitly before upgrading.
+- **Message queueing**: `inboundQueue.groupMode` is also the default turn-intent policy. `supersede` lets a new message interrupt the running turn; `fifo` queues in arrival order. `steer`, `follow_up` and `observe` are set explicitly by adapters, commands or other policies; cross-participant `steer` / `follow_up` authorization can only come from the Host's trusted `resolveTurnIntent` policy, never from message metadata. Tools stay bound to the active turn's authority, and the execution log records who triggered the control and the turn ID.
+:::
+
+## How it works
+
+```mermaid
+flowchart LR
+    M[Message arrives] --> C{Matches a command?}
+    C -- yes --> R1[Run the command]
+    C -- no --> T{Meets ai.trigger?}
+    T -- no --> X[No reply]
+    T -- yes --> G{Allowed by ai.access?}
+    G -- no --> X
+    G -- yes --> A[Agent turn]
+    P[ai.providers] --> A
+    S[Tools / MCP] --> A
+    A --> R2[Reply]
+```
+
+At startup Zhin tidies the `ai:` config: providers whose credentials expand to empty are dropped (debug log only), and Agents bound to them are skipped. If no usable `zhin` Agent remains, AI stays off — **without** affecting the rest of the bot.
 
 ## Next steps
 
-- [Agent deep dive](./agent.md): ZhinAgent turns, deferred tools, sub-agents, orchestration, sessions & compaction
-- [Voice capabilities](./speech.md): STT / TTS and `voice_stt` / `voice_tts` tools
-- [Console](../console/index.md): Observe agent sessions and orchestration runs in the web console
+- [Agent tools and Skills](../authoring/agent-tools.md): let the AI call your functions.
+- [Agent deep dive](./agent.md): turns, on-demand tools, sub-tasks, sessions and context compaction.
+- [Speech](./speech.md): speech recognition and voice replies.
+- [Console](../console/index.md): watch AI conversations and runs in the browser.
