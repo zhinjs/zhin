@@ -2,26 +2,26 @@
 layout: home
 ---
 
-<ZhinHero tagline="为生活与工作助手 Bot 而生的多通道 IM 框架。插件是乐高，热重载是日常，Console 就在浏览器里。" />
+<ZhinHero tagline="用 TypeScript 写一次聊天机器人，同时跑在 QQ、微信、Discord、Telegram 等 20+ 平台。默认只是小巧的 IM 框架，需要时再加 AI。" />
 
 <ZhinTerminal>
-<b>$</b> npm create zhin-app my-bot<br>
+<b>$</b> npm create zhin-app my-bot -y<br>
 <b>$</b> cd my-bot && pnpm dev<br>
-<span>✔ IM 黄金路径启动 —— 不需要任何模型 Key</span>
+<span>✔ Bot 已启动 —— 不需要平台账号，也不需要模型 Key</span>
 </ZhinTerminal>
 
 <ZhinRolePaths />
 
 <ZhinFeatureGrid />
 
-<ZhinDuo heading="一个文件，就能打招呼">
+<ZhinDuo heading="一个 Bot 长什么样">
 <template #left>
 
-`bot.ts` — 整个机器人可以就是这一份文件。
+**最小形态**：一个 `bot.ts` 就是整个机器人。
 
 ```ts
-import { defineCommand } from 'zhin.js/command';
 import { definePlugin } from 'zhin.js';
+import { defineCommand } from 'zhin.js/command';
 
 export default definePlugin({
   name: 'my-bot',
@@ -34,24 +34,37 @@ export default definePlugin({
 });
 ```
 
+**功能变多后**：每个能力一个文件，放进约定目录即自动注册。
+
+```text
+my-bot/
+├── plugin.ts                 # 入口：definePlugin()
+├── commands/hello/index.ts   # /hello 命令
+├── middlewares/…             # 关键词回复、过滤
+├── tools/…                   # 给 AI 调用的工具（可选）
+└── zhin.config.yml           # 端口、平台凭据、模型等配置
+```
+
 </template>
 <template #right>
 
-三步跑起来（无需模型 Key）：
+**10 分钟跑通**（无需任何账号或 Key）：
 
 ```bash
 npm create zhin-app my-bot -y
 cd my-bot && pnpm dev
 ```
 
-打开 [console.zhin.dev](https://console.zhin.dev) →
-Sandbox → `/hello`。
+1. 打开 [console.zhin.dev](https://console.zhin.dev)
+2. 填入终端打印的地址和 `.env` 里的 `HTTP_TOKEN`
+3. 在 Sandbox 里发送 `/hello`
 
-想拆成约定目录？`commands/hello/index.ts` 默认导出同一个
-`defineCommand(...)` 即可——见 [minimal-bot](/examples/#minimal-bot-stable-最小路径)。
+**接下来**
+
+- 名词看不懂？→ [核心概念速览](/getting-started/concepts)
+- 写自己的命令 → [第一个插件](/getting-started/first-plugin)
+- 接入真实平台 → [平台适配器](/adapters/)
+- 加 AI → [AI 总览](/ai/)
 
 </template>
-
-完整单文件示例：[single-file-bot](/examples/#single-file-bot-一个-botts-就是机器人)。
-数据库、定时、主动推送、Agent？去 [definePlugin 全景](/authoring/define-plugin) 看 `setup`。
 </ZhinDuo>

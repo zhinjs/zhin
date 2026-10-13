@@ -7,8 +7,8 @@
 <h1 align="center">Zhin.js</h1>
 
 <p align="center">
-  <strong>一套代码，跑遍所有聊天平台的 TypeScript bot 框架</strong><br />
-  多通道 · 按需 AI · Remote Console
+  <strong>用 TypeScript 写一次聊天机器人，同时跑在 20+ 平台</strong><br />
+  QQ · 微信 · 企业微信 · 钉钉 · 飞书 · Discord · Telegram · Slack · KOOK · LINE · …
 </p>
 
 <p align="center">
@@ -28,25 +28,72 @@
 
 <p align="center">
   <a href="https://zhin.js.org">文档</a> ·
-  <a href="https://github.com/zhinjs/zhin/wiki">Wiki 知识入口</a> ·
-  <a href="https://github.com/orgs/zhinjs/projects/3">交付看板</a> ·
   <a href="https://demo.zhin.dev">在线 Demo</a> ·
   <a href="https://console.zhin.dev">Remote Console</a> ·
+  <a href="https://github.com/zhinjs/zhin/wiki">Wiki</a> ·
   <a href="./docs/contributing/development.md">贡献指南</a>
 </p>
 
 ---
 
-Zhin.js 为**在聊天平台做严肃 bot / 助手产品**的开发者和团队而生（私聊、群聊、定时、通知、AI 对话），**不是** Cursor / Claude Code 类 coding agent。三个核心词：
+## Zhin.js 是什么？
 
-- **多通道** — 一套代码跑 20+ 平台（QQ / 微信 / Discord / Slack / 钉钉 / Telegram…），一个 bot 可同时挂多个账号、多个平台
-- **按需 AI** — 默认只是 &lt;10MB 的 IM 框架；装上 `@zhin.js/agent` 就是完整 Agent（工具 / 记忆 / 编排 / MCP），装多少用多少
-- **Remote Console** — 浏览器里管 bot：发消息、改配置、看日志、管定时任务，全程不用碰代码
+Zhin.js 是一个**开发聊天平台机器人**的框架——社区群 Bot、个人助手、通知 / 客服 Bot、AI 对话助手都可以用它来写。
+
+- **一套代码，多个平台。** 适配器把各平台的消息统一成一种格式，你的命令和回复到处都能用。一个 Bot 还能同时登录多个平台的多个账号。
+- **写功能 = 放一个文件。** `commands/hello/index.ts` 就是 `/hello` 命令。中间件、消息卡片、定时任务、AI 工具同理，不需要手写注册代码。
+- **默认很小，需要时再加 AI。** IM 核心不到 10MB，开发测试不需要模型 Key；一条命令即可接入大模型、工具、记忆和 MCP。
+- **热重载不会把 Bot 弄挂。** 保存文件就生效；新代码出错时，旧版本继续服务。
+- **在浏览器里管理。** 打开 [console.zhin.dev](https://console.zhin.dev) 就能发测试消息、看日志、改配置、管插件，无需部署前端。
+
+> Zhin **不是** Cursor / Claude Code 那类写代码的 Agent。它的 AI 能力服务于聊天平台里的机器人。
+
+## 快速开始
+
+不需要任何平台账号，也不需要模型 Key。
+
+```bash
+npm create zhin-app my-bot -y
+cd my-bot
+pnpm dev
+```
+
+1. 打开 [console.zhin.dev](https://console.zhin.dev)。
+2. 填入终端打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）和 `.env` 里的 `HTTP_TOKEN`。
+3. 打开 **Sandbox** 会话，发送 `/hello`，收到回复即成功。
+
+`-y` 表示全部使用默认选项：用浏览器里的 **Sandbox**（模拟聊天窗口）代替真实平台，不启用 AI。环境要求：脚手架项目需要 Node.js **≥22.12.0** 与 pnpm 9+（编译后的库支持 `^20.19.0 || >=22.12.0`）。遇到问题先运行 `npx zhin doctor`。
+
+完整步骤：[快速开始](./docs/getting-started/index.md) · 暂时不想安装？试试 [在线 Demo](https://demo.zhin.dev)。
+
+## 一个 Bot 由什么组成
+
+```text
+ 聊天平台            你的项目（一个插件）                              聊天平台
+ QQ / Discord … ──▶ 适配器 ──▶ 中间件 ──▶ 命令 ─────────────────────▶ 适配器 ──▶ 回复
+                                          │ 没有匹配到命令
+                                          └──▶ AI Agent（可选）──▶ 工具
+```
+
+| 组成部分 | 是什么 | 写在哪里 |
+|----------|--------|----------|
+| **插件** | 你的项目本身就是一个插件；功能多了可以拆成多个子插件 | `plugin.ts` + `package.json` 里的 `zhin` 字段 |
+| **命令** | 用户发送 `/hello` 时执行 | `commands/hello/index.ts` |
+| **中间件** | 每条消息都会经过——关键词回复、过滤 | `middlewares/<name>/index.ts` |
+| **适配器** | 接入某个平台的 npm 包；一个适配器可挂多个账号 | `@zhin.js/adapter-*`，在 `zhin.config.yml` 中配置 |
+| **AI Agent**（可选） | 回答没匹配到命令的消息，并能调用你写的工具 | `tools/<name>/index.ts`，`zhin.config.yml` 的 `ai:` 段 |
+| **Console** | 浏览器管理后台：日志、配置、测试消息 | [console.zhin.dev](https://console.zhin.dev) |
+
+文档里的名词看不懂？读 [核心概念速览](./docs/getting-started/concepts.md)，每个词都有大白话解释。
+
+## 编写功能
+
+整个 Bot 可以只有一个文件：
 
 ```ts
-// bot.ts — 整个机器人可以就是这一份文件
+// bot.ts
+import { definePlugin } from 'zhin.js'
 import { defineCommand } from 'zhin.js/command'
-import { definePlugin } from 'zhin.js/plugin-runtime'
 
 export default definePlugin({
   name: 'my-bot',
@@ -59,123 +106,70 @@ export default definePlugin({
 })
 ```
 
-## Quick Start
+功能变多后，把每个能力放进单独的文件。目录路径就是名字，文件会自动注册：
 
-三步，不用写适配器样板：
+```ts
+// commands/remind/index.ts  →  /remind 10 喝水
+import { defineCommand } from 'zhin.js/command'
+
+export default defineCommand({
+  description: '创建提醒',
+  params: {
+    minutes: { type: 'integer', min: 1, max: 1440 },
+    note: { type: 'text', default: '休息一下' },
+  },
+  options: { quiet: { type: 'boolean', default: false } },   // --quiet
+  execute: ({ params, options }) =>
+    options.quiet ? '好的' : `好的，${params.minutes} 分钟后提醒你：${params.note}`,
+})
+```
+
+```text
+my-bot/
+├── package.json      # zhin 字段：入口、子插件（装了什么）
+├── zhin.config.yml   # 端口、平台凭据、模型（怎么配）
+├── .env              # 密钥：HTTP_TOKEN、API Key
+├── plugin.ts         # 入口：definePlugin()
+├── commands/         # 命令——目录路径即命令名
+├── middlewares/      # 每条消息都会经过
+├── components/       # 可复用的 JSX 消息卡片
+├── schedules/        # 定时任务
+├── tools/            # 给 AI 调用的函数（可选）
+└── pages/            # 自定义 Console 页面
+```
+
+下一步：[编写第一个插件](./docs/getting-started/first-plugin.md) · [全部约定目录](./docs/authoring/conventions.md) · [命令详解](./docs/authoring/commands.md)
+
+## 接入真实平台
 
 ```bash
-npm create zhin-app my-bot -y
-cd my-bot
-pnpm dev
+npx zhin setup --adapters   # 选择平台、填写凭据
+pnpm install && pnpm dev
 ```
 
-打开 [Remote Console](https://console.zhin.dev) → 填入启动日志显示的 API Base（新项目目前默认 `http://127.0.0.1:8068`）→ 在 Sandbox 发送 `/hello`。
+| 平台 | 包名 | 平台 | 包名 |
+|------|------|------|------|
+| Sandbox（本地测试） | `@zhin.js/adapter-sandbox` | QQ（ICQQ） | `@zhin.js/adapter-icqq` |
+| QQ 官方机器人 | `@zhin.js/adapter-qq` | OneBot v11 / v12 | `@zhin.js/adapter-onebot11` / `onebot12` |
+| Discord | `@zhin.js/adapter-discord` | Telegram | `@zhin.js/adapter-telegram` |
+| Slack | `@zhin.js/adapter-slack` | KOOK | `@zhin.js/adapter-kook` |
+| 钉钉 | `@zhin.js/adapter-dingtalk` | 飞书 | `@zhin.js/adapter-lark` |
+| 企业微信 | `@zhin.js/adapter-wecom` | 微信公众号 | `@zhin.js/adapter-wechat-mp` |
+| LINE | `@zhin.js/adapter-line` | NapCat / Milky / Satori | `napcat` / `milky` / `satori` |
+| Email | `@zhin.js/adapter-email` | GitHub | `@zhin.js/adapter-github` |
 
-`-y` 走 IM 黄金路径：Sandbox + Host + Console，**不需要任何模型 Key**。
+每个适配器都标注了成熟度（Stable / Advanced / Experimental）并有独立接入文档：[平台适配器概览](./docs/adapters/index.md)。
 
-| 路径 | 适合谁 | 要多久 |
-|------|--------|--------|
-| [**demo.zhin.dev**](https://demo.zhin.dev) | 零安装点一点 | 立刻 |
-| `npm create zhin-app -y` | 独立项目（推荐） | ~1 分钟 |
-| [`examples/single-file-bot`](./examples/single-file-bot/) | 看「一个 `bot.ts` 就是 bot」 | 克隆后 `pnpm --filter single-file-bot dev` |
-| [`examples/minimal-bot`](./examples/minimal-bot/) | 贡献者 / 约定目录样板 | 根目录 `pnpm dev` |
-
-更多：[安装与启动](./docs/getting-started/index.md) · [示例速览](./docs/examples/index.md) · `npx zhin setup` · `npx zhin doctor`
-
-**要求**：脚手架生成的 TypeScript 项目需要 Node.js **≥22.12.0**、pnpm 9+。编译后的 IM 库支持 Node.js `^20.19.0` 或 `>=22.12.0`。
-
-**&lt;10MB 指 IM 库安装体积**。脚手架项目还会安装 CLI、Sandbox 适配器、页面/布局契约和 JSX 卡片示例。浏览器界面在 [console.zhin.dev](https://console.zhin.dev)；CLI 装配 HTTP Host 与 Console API。`zhin.js` 库本身不包含浏览器界面，也不会自动开启 MCP Server。
-
-## 从一条消息到长期任务
-
-Zhin 从一条标准化消息流开始。一条消息可以命中命令、经过中间件、进入 Agent 回合、调用受治理的能力、启动长期任务，最后从同一条发送链路回到聊天平台。
-
-每一层都可按需安装。IM 核心保持轻量；AI、富媒体、语音、Remote Console 和外部协议只在产品需要时加入。
-
-```mermaid
-flowchart LR
-    A[Adapter 与 Endpoint] --> B[消息管线]
-    B --> C[命令与中间件]
-    B --> D[Agent 回合]
-    D --> E[Tool · Skill · MCP]
-    E --> F[子 Agent · 定时 · Workroom]
-    C --> G[回复]
-    F --> G
-    H[Plugin Runtime · 配置 · Generation] -. 治理 .-> B
-    H -. 治理 .-> D
-    H -. 治理 .-> E
-    I[Journal · Console · Host API] -. 观测 .-> B
-    I -. 观测 .-> D
-    I -. 观测 .-> F
-```
-
-### 完整能力地图
-
-| 能力面 | 覆盖内容 | 继续了解 |
-|--------|----------|----------|
-| **连接** | 20+ Adapter、多账号与多 Endpoint、统一收发消息、富媒体、STT 与 TTS | [Adapter](./docs/adapters/index.md) · [消息流](./docs/concepts/message-flow.md) · [语音](./docs/ai/speech.md) |
-| **交互** | 命令、中间件、组件、回复、定时、通知，以及 AI 触发与访问规则 | [命令](./docs/authoring/commands.md) · [中间件与组件](./docs/authoring/middleware-components.md) · [AI 配置](./docs/ai/index.md) |
-| **扩展** | Plugin manifest、约定目录、作用域实例、子插件、Console 页面与 npm 插件交付 | [插件模型](./docs/concepts/plugin-model.md) · [目录约定](./docs/authoring/conventions.md) · [插件交付](./docs/authoring/plugin-delivery.md) |
-| **理解** | 模型与 Provider 路由、多模态输入、Prompt Section、对话历史、记忆、会话树与 Compaction | [AI 总览](./docs/ai/index.md) · [Agent 创作面](./docs/authoring/agent-tools.md) · [Agent 深入](./docs/ai/agent.md) |
-| **行动** | 内置与插件 Tool、Skill、MCP、延迟发现、权限、审批、取消与执行 Journal | [Tool 与 Skill](./docs/authoring/agent-tools.md) · [Agent Runtime](./packages/im/agent/README.md) · [Capability Seam](./docs/concepts/capability-seams.md) |
-| **协作** | 子 Agent、定时回合、持久化 Workroom Run/Task、Review、Sponsor Gate、恢复与 A2A Host | [Agent 编排](./docs/ai/agent.md) · [受治理 Agent](./docs/solutions/governed-agent.md) · [`packages/host`](./packages/host) |
-| **安全演进** | Generation HMR、候选代校验、原子发布、配置所有权、失败回滚与 Endpoint 生命周期 | [Generation 生命周期](./docs/concepts/generation-lifecycle.md) · [配置即数据](./docs/concepts/config-as-data.md) · [Endpoint 生命周期](./docs/authoring/endpoint-lifecycle.md) |
-| **运维交付** | Remote Console、日志与诊断、HTTP/MCP/A2A Host、脚手架、生产模板、Harness 与 Changesets | [Console](./docs/console/index.md) · [生产运维](./docs/operations/production.md) · [贡献指南](./docs/contributing/development.md) |
-
-### 为长期运行而设计
-
-这些能力共享同一个 Plugin Runtime，不会形成彼此割裂的执行孤岛：
-
-- **发布插件有明确 Runtime 契约** — manifest 声明协议、engine 范围、Feature、子插件、隔离方式和实例；同一 npm 包可以多次挂载，并拥有独立作用域与配置（见[插件模型](./docs/concepts/plugin-model.md)）。
-- **热重载是 Generation 事务** — 新插件树先在旁路 prepare 和校验，再原子发布；候选代失败时，当前 Generation 继续服务（见 [Generation 生命周期](./docs/concepts/generation-lifecycle.md)）。
-- **配置是有所有权的数据** — Schema 沿插件树组合，每个插件只得到自己的 owner projection；带 revision 的更新可在激活失败时回滚（见[配置即数据](./docs/concepts/config-as-data.md)）。
-- **Agent 执行只有一条权威路径** — Prompt、Tool、Skill 与 MCP 进入固定 snapshot；Generation 校验、权限、审批、取消和 Journal 都留在 Turn Runtime（见 [Agent 深入](./docs/ai/agent.md)）。
-- **外部 Provider 也服从同一治理** — Advanced [Capability Seam](./docs/concepts/capability-seams.md) 通过 `CapabilityIngress` 投影 Root 服务，不提供绕过策略的按名称直接执行入口。
-
-<details>
-<summary><strong>Stable / Advanced 能力分档</strong></summary>
-
-| Tier | 特性 | 说明 |
-|------|------|------|
-| **Stable** | IM 核心 | Sandbox + 命令 + Console |
-| **Stable** | AI（可选） | `@zhin.js/agent` + provider |
-| **Stable** | 插件 / 热重载 / TypeScript | Hooks API、完整类型 |
-| **Stable** | 安全（基础） | Bash allowlist、文件策略、审批 |
-| **Advanced** | 多 Endpoint | IM / 邮件 / GitHub / Webhook… |
-| **Advanced** | Feature / MCP / toolSearch | 编排、deferred worker |
-
-</details>
-
-### Install tiers（zhin.js 1.1.x）
-
-> 官方包统一使用 owner 管理的 1.1.x 稳定线；常规发布只增加 patch。
-
-> **SSOT**：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md) · 在线：[Install tiers](https://zhin.js.org/getting-started/#install-tiers) · English: [`README.md`](./README.md)
-
-| 档位 | 安装 | 约 production 体积 | 能力 |
-|------|------|-------------------|------|
-| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [插件模型](/concepts/plugin-model)） |
-| **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
-| **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
-| **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
-| **Rich media** | `+ @zhin.js/html-renderer` | 按平台（含原生引擎） | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
-| **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
-
-1.1 稳定线兼容说明：`import from 'zhin.js'` 不再含 `ZhinAgent` / `AIService`；请 `import from 'zhin.js/agent'` 或 `zhin.js/ai`。详见 [ADR 0019](./docs/snippets/install-tiers.md)。
-
-MCP 有两种不同用途：`ai.mcpServers` 让可选 Agent 连接外部 Server（[Client 配置](./docs/ai/index.md#aimcpservers)）；顶层 `mcp:` 将当前 Bot 暴露为 Server，需要安装 `@zhin.js/mcp` 和 Agent Runtime（[Server 配置](./packages/host/mcp/README.md)）。仅安装 IM 库不会开启任一用途。
-
-> **Windows**：见 [Windows 初始化指南](./docs/getting-started/index.md)。
-
-## Enable AI（optional）
+## 接入 AI（可选）
 
 ```bash
-pnpm add @zhin.js/agent zod ai
-pnpm add @ai-sdk/openai   # 按需替换
+npx zhin setup --ai   # 选择模型服务（OpenAI、Ollama…）并写入配置
+pnpm install && pnpm dev
 ```
+
+向导会安装 Agent 运行时与工具 / Prompt 相关 Feature，并在 `zhin.config.yml` 写入类似配置（密钥写入 `.env`）：
 
 ```yaml
-# zhin.config.yml
 ai:
   enabled: true
   providers:
@@ -186,72 +180,78 @@ ai:
     zhin:
       provider: openai-main
       model: gpt-4o-mini
-  agent:
-    execSecurity: allowlist
-    execApprovalMode: ask
 ```
 
-深入：[AI 模块](./docs/ai/index.md) · [Agent 安全](./docs/ai/agent.md) · [工具与技能](./docs/authoring/agent-tools.md)
+之后，没匹配到命令的消息会交给模型回答——私聊默认触发，群里用 `ai:` 前缀或 @ 触发。往 `tools/` 里加文件即可赋予它新能力；权限、审批、文件与网络访问由框架策略控制，而不是靠提示词。
 
-## Adapters
+下一步：[AI 总览](./docs/ai/index.md) · [Agent 工具、Skill 与 Prompt Section](./docs/authoring/agent-tools.md) · [AI Agent 学习路径](./docs/paths/ai-agent.md)
 
-| 平台 | 包名 | 平台 | 包名 |
-|------|------|------|------|
-| Sandbox（Stable） | `@zhin.js/adapter-sandbox` | QQ / ICQQ | `@zhin.js/adapter-icqq` |
-| QQ 官方 | `@zhin.js/adapter-qq` | NapCat | `@zhin.js/adapter-napcat` |
-| OneBot 11 / 12 | `@zhin.js/adapter-onebot11` / `onebot12` | Discord | `@zhin.js/adapter-discord` |
-| Telegram | `@zhin.js/adapter-telegram` | Slack | `@zhin.js/adapter-slack` |
-| KOOK / 钉钉 / 飞书 | `kook` / `dingtalk` / `lark` | GitHub | `@zhin.js/adapter-github` |
-| Email / 企微 / LINE | `email` / `wecom` / `line` | Satori / WeChat MP | `satori` / `wechat-mp` |
+## 按需安装
 
-完整说明：[适配器文档](./docs/adapters/index.md) · [`plugins/adapters`](./plugins/adapters)
+默认只装 IM 核心；AI、模型 SDK、MCP、图片渲染、语音都是可选包。启用 AI 时推荐使用 `npx zhin setup --ai`，它会一并写好依赖与 Feature 声明。
 
-## Package Map
+### Install tiers（zhin.js 1.1.x）
 
-| 包 | 角色 |
-|----|------|
-| [`zhin.js`](./packages/im/zhin) | IM 入口（1.1.x 稳定线） |
-| [`@zhin.js/core`](./packages/im/core) | Plugin / Adapter / Dispatcher |
-| [`@zhin.js/ai`](./packages/im/ai) | 无 IM 的 AI 引擎 |
-| [`@zhin.js/agent`](./packages/im/agent) | Agent 编排与安全 |
-| [`@zhin.js/cli`](./basic/cli) · [`create-zhin-app`](./packages/toolkit/create-zhin) | CLI / 脚手架 |
+| 档位 | 安装 | 约 production 体积 | 能力 |
+|------|------|-------------------|------|
+| **IM** | `pnpm add zhin.js` + 适配器（如 `@zhin.js/adapter-sandbox`）；dev：`@zhin.js/cli` | **<10MB**（库包） | Plugin Runtime、命令/组件/适配器约定目录（Stable Features 由 `@zhin.js/core` 的 `zhin.features` 继承；Host 为 optional peer + `zhin.plugins`，见 [插件模型](/concepts/plugin-model)） |
+| **AI** | `+ @zhin.js/agent zod ai` | +~12–15MB | ZhinAgent、会话、工具、压缩 |
+| **Provider** | `+ @ai-sdk/openai` 等 | 按厂商 | 大模型调用 |
+| **MCP** | `+ @modelcontextprotocol/sdk` | +~数 MB | MCP Client |
+| **Rich media** | `+ @zhin.js/html-renderer` | 按平台（含原生引擎） | 出站 `html` / `markdown` 转 PNG（未装则降级 text） |
+| **Speech** | `+ @zhin.js/speech` | +~数 MB | 入站 STT、出站 TTS、`segment.tts`（未装则 warn 降级） |
 
-分层与依赖方向：[架构概览](./docs/concepts/architecture.md) · [仓库结构](./docs/contributing/repo-structure.md)
+1.1 起，`ZhinAgent` / `AIService` 需从 `zhin.js/agent` / `zhin.js/ai` 导入，不再从 `zhin.js` 导出。表格来源：[`docs/snippets/install-tiers.md`](./docs/snippets/install-tiers.md)。
 
-JSX 创作使用 `zhin.js/jsx`，配置 `jsxImportSource: "zhin.js"`。命令、入站中间件和注册组件可直接返回 JSX，按适配器能力输出 HTML、图片或文本。可选 `@zhin.js/components` 提供主题化样式组件，展示位使用可组合的 `JSXRenderable`。服务端 TSX 仅转译 JSX，不支持直接导入 `.css` 或样式预处理；使用内联 `style`、主题和 `custom.style`。 可选 `@zhin.js/tailwind` 将静态工具类转为内联样式；图片渲染由 `@zhin.js/html-renderer` 使用 `@pixel.js/shotium` 完成。 参见[中间件与组件](https://zhin.js.org/authoring/middleware-components)。
+## 文档导航
 
-## Documentation
+| 我想…… | 从这里开始 |
+|--------|------------|
+| 了解 Zhin 是什么 | [Zhin.js 是什么](./docs/getting-started/introduction.md) · [核心概念速览](./docs/getting-started/concepts.md) |
+| 第一次跑起 Bot | [快速开始](./docs/getting-started/index.md) · [示例项目](./docs/examples/index.md) |
+| 写插件 | [第一个插件](./docs/getting-started/first-plugin.md) · [definePlugin 全景](./docs/authoring/define-plugin.md) · [插件完整交付（测试与发布）](./docs/authoring/plugin-delivery.md) |
+| 接入平台 | [平台适配器](./docs/adapters/index.md) · [配置参考](./docs/configuration/index.md) |
+| 加 AI | [AI 总览](./docs/ai/index.md) · [Agent 深入](./docs/ai/agent.md) |
+| 部署运维 | [部署与恢复](./docs/operations/production.md) · [Console](./docs/console/index.md) · [故障排查](./docs/troubleshooting/index.md) |
+| 理解内部原理 | [分层架构](./docs/concepts/architecture.md) · [插件模型](./docs/concepts/plugin-model.md) · [消息流](./docs/concepts/message-flow.md) · [热重载（Generation）](./docs/concepts/generation-lifecycle.md) |
 
-| | |
-|--|--|
-| **入门** | [快速开始](./docs/getting-started/index.md) · [路线与边界](./docs/index.md) · [稳定性承诺](./docs/concepts/generation-lifecycle.md) · [Docker](./docs/contributing/development.md) · [Windows](./docs/getting-started/index.md) |
-| **基础** | [核心概念](./docs/concepts/architecture.md) · [配置](./docs/configuration/index.md) · [命令](./docs/authoring/commands.md) · [插件](./docs/concepts/plugin-model.md) |
-| **进阶** | [AI](./docs/ai/index.md) · [Prompt Section、工具与技能](./docs/authoring/agent-tools.md) · [Agent Runtime](./packages/im/agent/README.md) · [消息流](./docs/concepts/message-flow.md) |
-| **开发** | [插件开发](./docs/authoring/define-plugin.md) · [贡献](./docs/contributing/development.md) · [架构](./docs/concepts/architecture.md) |
-| **知识索引** | [按问题查找](./docs/wiki/index.md) · [原始资料与勘误](./docs/wiki/archive.md) |
+文档站：[zhin.js.org](https://zhin.js.org)（导航栏可切换英文）。
 
-站点：[zhin.js.org](https://zhin.js.org)
-
-## CLI
+## CLI 速查
 
 ```bash
-pnpm dev                 # 开发（本仓默认 minimal-bot；维护者回归用 pnpm dev:test）
-npx zhin new my-plugin   # 插件模板
-npx zhin setup           # 增量配置向导
-npx zhin doctor          # 环境诊断
-npx zhin search <kw>     # 搜插件
+npx zhin setup            # 给已有项目补充平台、AI、数据库
+npx zhin doctor           # 诊断 Node、端口、Token、清单
+npx zhin new my-plugin    # 创建插件包
+npx zhin search <关键词>   # 搜索社区插件
+npx zhin install <插件名>  # 安装并挂载插件
 ```
 
-## Contributing
+全部命令：[CLI 参考](./docs/cli/index.md)。
+
+## 包一览
+
+| 包 | 作用 |
+|----|------|
+| [`zhin.js`](./packages/im/zhin) | 你要安装的主包——插件作者需要的 API 都从这里导入 |
+| [`create-zhin-app`](./packages/toolkit/create-zhin) | 项目脚手架（`npm create zhin-app`） |
+| [`@zhin.js/cli`](./basic/cli) | `zhin` 命令：启动、配置、诊断、发布 |
+| [`@zhin.js/agent`](./packages/im/agent) | 可选的 AI Agent 运行时，含安全策略 |
+| [`@zhin.js/adapter-*`](./plugins/adapters) | 各平台适配器 |
+| [`plugins/`](./plugins) | 官方插件：小游戏、提醒、RSS、日历、内容审核…… |
+
+各层如何组合：[分层架构](./docs/concepts/architecture.md) · [仓库结构](./docs/contributing/repo-structure.md)。
+
+## 参与贡献
 
 ```bash
 git clone https://github.com/zhinjs/zhin.git
 cd zhin
 pnpm install && pnpm build
-cd examples/minimal-bot && pnpm dev
+pnpm dev                  # 运行 examples/minimal-bot
 ```
 
-见 [贡献指南](./docs/contributing/development.md)。根目录 `pnpm dev` 指向 Stable 约定目录样板 `minimal-bot`；想看「一个文件就是 bot」用 `pnpm --filter single-file-bot dev`。厨房水槽用 `pnpm dev:test`（`test-bot`），**非**用户模板。
+其他入口：`pnpm --filter single-file-bot dev`（单文件 Bot）、`pnpm dev:test`（维护者用的全功能 `test-bot`，不是用户模板）。检查项、代码约定和发布流程见 [贡献指南](./docs/contributing/development.md)。
 
 <p align="center">
   <a href="https://github.com/zhinjs/zhin/graphs/contributors">

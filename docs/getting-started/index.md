@@ -1,6 +1,8 @@
 # 10 分钟跑通第一个 Bot
 
-本页只完成一个结果：在浏览器 Sandbox 里向新 Bot 发送 `/hello`，并收到真实 Runtime 的回复。这个闭环不需要平台账号，也不需要模型 Key。
+本页只完成一个结果：在浏览器 Sandbox 里向新 Bot 发送 `/hello`，并收到回复。整个过程不需要平台账号，也不需要模型 Key。
+
+> 还不清楚 Zhin.js 是做什么的？先花 5 分钟读 [Zhin.js 是什么](./introduction.md)。
 
 ## 开始前
 
@@ -16,7 +18,7 @@ cd my-bot
 pnpm dev
 ```
 
-`-y` 创建 IM 黄金路径：HTTP Host、Sandbox、Remote Console 和 `/hello` 示例都已配置。需要选择真实平台、数据库或 AI 时，去掉 `-y` 使用交互向导。
+`-y` 表示全部使用默认选项：只接入 Sandbox（浏览器里的模拟聊天窗口）、开启 Console 所需的 HTTP 服务、附带一个 `/hello` 命令，不启用 AI。想在创建时就选择真实平台、数据库或 AI，去掉 `-y` 使用交互向导；之后也可以随时用 `npx zhin setup` 补充。
 
 ## 2. 在 Console 验证
 
@@ -27,7 +29,7 @@ pnpm dev
 3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`。
 4. 打开“渠道与会话”中的 Sandbox，会话里发送 `/hello`。
 
-收到回复才算首跑成功。此时已经验证了 Console 鉴权、HTTP Host、Sandbox Endpoint、命令发现和出站回复整条链路。
+收到回复才算首跑成功。这一条消息走完了完整的链路：Console 通过 HTTP 连上 Bot → Sandbox 适配器收到消息 → 匹配到 `commands/hello` → 回复经同一个适配器发回。之后接入真实平台，只是把 Sandbox 换成对应的适配器。
 
 ## 3. 认识刚生成的项目
 
@@ -42,11 +44,16 @@ my-bot/
 └── pages/                # 插件贡献的 Console 页面
 ```
 
-`package.json#zhin` 是拓扑唯一事实源；`zhin.config.yml` 只保存配置值。约定目录与 `setup()` 注册的能力最终进入同一个 generation projection。
+记住两点就够了：
+
+- **`package.json` 的 `zhin` 字段描述“装了什么”**（入口、子插件），**`zhin.config.yml` 描述“怎么配”**（端口、凭据、插件配置），密钥放 `.env`。
+- **放进 `commands/`、`components/`、`pages/` 等约定目录的文件会被自动注册**，不需要在 `plugin.ts` 里手动登记。
+
+这些名词的完整解释见 [核心概念速览](./concepts.md)。
 
 ## 4. 修改并观察热重载
 
-打开 `commands/hello/index.ts`，修改返回文案并保存，再发送 `/hello`。新请求应进入新 generation；已经开始的请求继续使用原快照。
+打开 `commands/hello/index.ts`，修改返回文案并保存，再发送 `/hello`——不用重启就能看到新回复。正在处理中的消息会用旧代码跑完；如果新代码有错误，旧版本会继续工作，终端会打印错误原因。
 
 ## 遇到问题
 
@@ -69,4 +76,9 @@ Doctor 会检查 Node、pnpm、端口、`HTTP_TOKEN`、CORS 和项目清单。�
 
 <!--@include: ../snippets/install-tiers.md#tiers-table-->
 
-继续学习时先选目标，不必先读完整包结构：[从问题选解决方案](../solutions/)。
+## 下一步
+
+1. [核心概念速览](./concepts.md)：把文档里常见的名词一次弄懂。
+2. [第一个插件](./first-plugin.md)：写一个带配置的 `/ping` 命令。
+3. [平台适配器](../adapters/index.md)：用 `npx zhin setup --adapters` 接入真实平台。
+4. [AI 总览](../ai/index.md)：用 `npx zhin setup --ai` 接入大模型。
