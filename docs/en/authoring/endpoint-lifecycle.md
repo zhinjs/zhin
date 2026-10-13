@@ -1,61 +1,25 @@
-# WS/SSE Endpoint Lifecycle
+---
+title: "Endpoint Lifecycle"
+description: "Use createEndpointLifecycle for WebSocket / SSE adapters — connect, reconnect with backoff, heartbeat watchdog, stop — plus several accounts per adapter, Endpoint lifecycle hooks and content resolution"
+---
 
-Anyone who has hand-written a long-lived connection reconnection loop has hit the same pitfalls: a stale socket's late close event kills the new connection, a race between stop and connect throws unhandled rejections, and backoff timers are forgotten during cleanup. Long-lived connection endpoints (WebSocket / SSE) actually need the same state machine -- connect, disconnect, exponential backoff reconnect, heartbeat watchdog, and active stop. `@zhin.js/adapter`'s `createEndpointLifecycle` consolidates this state machine into a base, used by adapters like napcat. **When writing new WS/SSE endpoints, use the base directly -- don't hand-write `#started` / `#reconnectTimer` flags anymore.**
+# Endpoint lifecycle
 
-## State Machine
+**Read this page when writing a WebSocket or SSE adapter.** Every long-lived connection needs the same logic: connect, reconnect with exponential backoff after a disconnect, heartbeat checks, and a clean stop. `createEndpointLifecycle` from `zhin.js/adapter` packages that as a ready-made base; napcat and other official adapters use it.
 
-```mermaid
-stateDiagram-v2
-  [*] --> idle
-  idle --> connecting: start(connectFn)
-  connecting --> open: connectFn resolve
-  connecting --> idle: connectFn reject<br/>(reset, no reconnect armed)
-  connecting --> stopped: stop() race<br/>(silent settle)
-  open --> reconnecting: handle.notifyClosed()<br/>and reconnect enabled
-  open --> closed: notifyClosed()<br/>and reconnect: false
-  reconnecting --> open: Reconnect success (backoff reset)
-  reconnecting --> closed: Consecutive failures reach maxAttempts
-  idle --> stopped: stop()
-  open --> stopped: stop()
-  reconnecting --> stopped: stop()
-  stopped --> connecting: start() again
-```
+The classic bugs when hand-writing it: a late close event from an old socket kills the new connection; `stop()` racing a connect causes an unhandled rejection; a backoff timer is never cleared. The base avoids all of them — **stop writing `#started` / `#reconnectTimer` flags by hand.**
 
-The most easily misunderstood point first: **initial connection failure is not the same as disconnect-reconnect**. When `start()`'s `connectFn` rejects, the state resets to `idle` and reconnect is not armed; the caller gets the error and can retry. Only connections that have **been open** arm backoff reconnect upon receiving `notifyClosed()`. Second, the stop-during-connect race: if `stop()` is called while `connectFn` is awaiting, `start()` silently resolves (active stop is not a failure).
-
-Two more state-checking details: `started` is `true` if and only if the state is `connecting` / `open` / `reconnecting`; each connect attempt increments an internal generation, and **stale connection handles' `notifyClosed` / `onForceClose` are always ignored** -- late events from old sockets do not pollute the new connection.
-
-## Configuration
+## Minimal usage
 
 ```ts
 import { createEndpointLifecycle } from 'zhin.js/adapter';
 
-const lifecycle = createEndpointLifecycle({
-  name: config.name,              // Used only for log fields
-  reconnect: {
-    initialIntervalMs: 5_000,     // First reconnect interval, default 5000
-    multiplier: 2,                // Backoff multiplier, default 2 (1 = fixed interval)
-    maxIntervalMs: 60_000,        // Backoff cap, default 60000
-    jitterMs: 250,                // Random jitter upper bound, default 250
-    maxAttempts: Infinity,        // Consecutive failure limit, exhausted enters closed terminal state
-  },
-  heartbeat: {
-    intervalMs: 30_000,           // Default interval for startHeartbeat; <=0 disables it
-    watchdogMisses: 0,            // Watchdog rounds, default 0 = disabled
-  },
-});
-```
+const lifecycle = createEndpointLifecycle({ name: config.name });
 
-`reconnect: false` disables automatic reconnect; after the remote end disconnects, it goes directly to `closed`. The actual delay = `min(initial * multiplier^attempt, max) + random(0, jitter)`, with the attempt counter resetting on successful reconnect; the first disconnect logs a WARN, subsequent retries are silently demoted to DEBUG to avoid log flooding. Tests can inject `random: () => 0` for a deterministic backoff sequence.
-
-## start / stop / notifyClosed
-
-The `connectFn` contract: resolve when the connection opens, reject on failure or close before opening. It receives an `EndpointConnectHandle`:
-
-```ts
+// Connect: connectFn resolves when the connection opens, rejects on failure or close before open
 await lifecycle.start(async (handle) => {
   const ws = new WebSocket(url, { headers });
-  // Register the force-close function each time a new socket is obtained: both stop() and watchdog will call it
+  // Register a force-close function: stop() and the heartbeat watchdog both call it
   handle.onForceClose(() => { try { ws.close(); } catch { /* ignore */ } });
 
   await new Promise<void>((resolve, reject) => {
@@ -66,7 +30,7 @@ await lifecycle.start(async (handle) => {
       resolve();
     });
     ws.on('close', (code, reason) => {
-      // Remote disconnect: notify the base (reconnect only armed if previously open)
+      // Tell the base the peer disconnected; only connections that were once open reconnect
       handle.notifyClosed(new Error(`WS closed: ${code} ${reason}`));
       if (!settled) { settled = true; reject(new Error(`WS closed: ${code}`)); }
     });
@@ -75,15 +39,23 @@ await lifecycle.start(async (handle) => {
     });
   });
 });
+
+// Stop: clears every timer, force-closes the connection, never triggers a reconnect
+await lifecycle.stop();
 ```
 
-`stop()` is an active stop: it clears all timers (reconnect + heartbeat), calls registered force-close functions, wakes all race waiters, **never triggers reconnect**, and is idempotent. Adapters call the base first in `stop()`, then perform their own cleanup:
+Two behaviors to remember:
+
+- **A failed first connection doesn't reconnect automatically.** `start()` throws the error to you and you decide whether to retry; only a connection that **was once open** reconnects after a disconnect.
+- **`stop()` is an intentional stop**: safe to call repeatedly, never triggers a reconnect; if called while connecting, `start()` resolves quietly (stopping isn't a failure).
+
+In the adapter's own `stop()`, call the base first, then clean up your own state:
 
 ```ts
 // plugins/adapters/napcat/src/ws-endpoint.ts (excerpt)
 async stop(): Promise<void> {
-  await this.#lifecycle.stop();          // Clear timers + force-close ws + race settle
-  this.#unregisterAgent?.();             // Adapter-specific cleanup
+  await this.#lifecycle.stop();          // clear timers + force-close ws + settle races
+  this.#unregisterAgent?.();             // adapter-specific cleanup
   rejectAllPending(this.#pending);
   this.#inboundDeduper.clear();
   if (this.#ws) {
@@ -93,103 +65,85 @@ async stop(): Promise<void> {
 }
 ```
 
-## Heartbeat and PONG Watchdog
-
-The heartbeat API has only three methods:
+## Configure reconnection and heartbeat
 
 ```ts
-lifecycle.startHeartbeat(beat, intervalMs?);  // Start heartbeat (repeated calls clear old timer first)
-lifecycle.stopHeartbeat();                    // Manually clear heartbeat (base auto-calls on close/stop/watchdog)
-lifecycle.notifyHeartbeatAck();               // Feed the watchdog: reset counter on any response
+const lifecycle = createEndpointLifecycle({
+  name: config.name,              // logging only
+  reconnect: {
+    initialIntervalMs: 5_000,     // first retry delay, default 5000
+    multiplier: 2,                // backoff factor, default 2 (1 = fixed interval)
+    maxIntervalMs: 60_000,        // delay cap, default 60000
+    jitterMs: 250,                // max random jitter, default 250
+    maxAttempts: Infinity,        // consecutive failures before entering closed
+  },
+  heartbeat: {
+    intervalMs: 30_000,           // default interval for startHeartbeat; <=0 disables
+    watchdogMisses: 0,            // missed rounds tolerated, default 0 = off
+  },
+});
 ```
 
-Watchdog logic: when `watchdogMisses: N` is enabled, each heartbeat round first increments the miss counter; **after N consecutive rounds without any response** (`notifyHeartbeatAck` was not called), the base proactively calls the force-close function registered via `onForceClose` -- the underlying `close` event drives `notifyClosed`, following the normal backoff reconnect. Both `message` and `pong` callbacks on the ws should feed the watchdog:
+- `reconnect: false` disables reconnection; a disconnect goes straight to `closed`.
+- Actual delay = `min(initial × multiplier^attempt, max) + random(0, jitter)`, reset after a successful reconnect. The first disconnect logs WARN, later retries DEBUG, to avoid log spam.
+- In tests, pass `random: () => 0` for a deterministic backoff sequence.
+
+### Heartbeat watchdog
+
+```ts
+lifecycle.startHeartbeat(beat, intervalMs?);  // start (calling again clears the previous timer)
+lifecycle.stopHeartbeat();                    // stop manually (called automatically on close, stop, watchdog)
+lifecycle.notifyHeartbeatAck();               // "feed the dog": call on any reply from the peer
+```
+
+With `watchdogMisses: N`, if **N consecutive heartbeats get no reply at all**, the base calls your force-close function; the socket's `close` event then fires `notifyClosed` and normal backoff reconnection follows. So feed the watchdog in both `message` and `pong`:
 
 ```ts
 ws.on('pong', () => this.#lifecycle.notifyHeartbeatAck());
 ws.on('message', (data) => {
-  this.#lifecycle.notifyHeartbeatAck();   // Traffic means alive
+  this.#lifecycle.notifyHeartbeatAck();   // any traffic means it's alive
   handleMessage(data);
 });
 ```
 
-## Reference Implementation: napcat ws-endpoint
+## Several accounts on one adapter
 
-`plugins/adapters/napcat/src/ws-endpoint.ts` is the canonical usage of the base, structured in just four blocks:
-
-```ts
-export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
-  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
-  readonly #lifecycle: EndpointLifecycle;
-  #ws?: NapCatWsSocket;
-
-  constructor(options: NapCatWsEndpointOptions) {
-    super();
-    // 1. Create the base during construction; reconnect_interval legacy semantics = fixed interval:
-    //    multiplier 1 + no jitter + no cap
-    this.#lifecycle = createEndpointLifecycle({
-      name: options.config.name,
-      reconnect: {
-        initialIntervalMs: options.config.reconnect_interval,
-        multiplier: 1,
-        maxIntervalMs: Number.MAX_SAFE_INTEGER,
-        jitterMs: 0,
-      },
-    });
-  }
-
-  async start(): Promise<void> {
-    if (this.#lifecycle.started) return;                 // Idempotent
-    await this.#lifecycle.start((handle) => this.#connect(handle));
-  }
-  // stop() see previous section; #connect(handle) see start/notifyClosed section
-}
-```
-
-Compared to hand-written state machines, the base removes these fields and branches:
-
-| Hand-written era | After base takeover |
-| --- | --- |
-| `#started` / `#stopping` / `opened` flags | `lifecycle.state` / `lifecycle.started` |
-| `#reconnectTimer` + hand-written `setTimeout` chains | Built-in backoff loop, interruptible sleep, stop wakes immediately |
-| `#heartbeatTimer` + missed PONG counting | `startHeartbeat` + `watchdogMisses` + `notifyHeartbeatAck` |
-| "Stale socket's late close event kills new connection" | Generation-expired handles auto-invalidated |
-| "stop vs connect race causing unhandled rejection" | stopWaiters race settle, silent resolve |
-
-The adapter side retains only protocol-specific logic: the Client API transport, pending request rejection (`rejectAllPending`), and inbound deduplicator cleanup (`deduper.clear()`). Client is a distinct object; Endpoint owns only account connectivity, lifecycle, and event ingress.
-
-## Adapter 1:N Endpoints and Per-Endpoint Config
-
-An Adapter package is declared once (`adapters/napcat/index.ts` -> `defineAdapter`), but can be expanded into **multiple endpoint instances** in configuration. The expansion rules are in `packages/im/adapter/src/adapter-index.ts`'s `expandEndpointConfigs`: when the plugin instance config contains a non-empty `endpoints: [{ id, ...overrides }]`, endpoints are created per array item, with base config = instance config minus the `endpoints` key, shallow-merged per item, with `id` forcibly written; when `endpoints` is empty or absent, a single endpoint is created from the instance config. `id` must be a non-empty string without `~` or `\0`; duplicate or invalid ids reject the candidate configuration. The expanded endpoint id is `<capabilityId>~<id>`.
+An adapter is declared once (`adapters/napcat/index.ts` → `defineAdapter`), but config can expand it into **several account connections (Endpoints)**:
 
 ```yaml
 # examples/full-bot/zhin.config.yml (excerpt)
 plugins:
   napcat:
-    connection: ws                 # Base config: shared by all endpoints
+    connection: ws                 # shared config for every account
     endpoints:
-      - id: full-bot-napcat      # Each endpoint's individual config
+      - id: full-bot-napcat        # per-account config
         url: ${ONEBOT11_WS_URL}
         access_token: ${ONEBOT11_ACCESS_TOKEN}
 ```
 
-The `context.config` received by `create(context)` is the **merged single-endpoint config**, and `context.endpointId` is that endpoint's id (`context.name` is the adapter slot name) -- adapter code does not need to be aware of the 1:N expansion; one endpoint instance serves one connection.
+- With a non-empty `endpoints`, each entry creates one account: the shared config (minus the `endpoints` key) is **shallow-merged** with the entry, and `id` is forced in. With `endpoints` empty or missing, one account is created from the shared config.
+- `id` must be a non-empty string without `~` or `\0`; duplicate or invalid ids make the new config fail. The expanded account id is `<capabilityId>~<id>`.
+- The `context.config` passed to `create(context)` is the **merged single-account config**, and `context.endpointId` is the account id (`context.name` is the adapter name). Adapter code never needs to know how many accounts exist; one instance serves one connection.
 
-The lifecycle hooks of the Endpoint instance itself are driven by the Adapter Index, aligned with generation transactions:
+The expansion lives in `expandEndpointConfigs` in `packages/im/adapter/src/adapter-index.ts`.
 
-| Hook | Timing |
+## Endpoint lifecycle hooks
+
+When you extend `Endpoint` with your own connection flow, the framework calls these hooks at each stage of a version switch:
+
+| Hook | When |
 | --- | --- |
-| `start()` | Allocate transport resources while the candidate activates |
-| `open()` | Open the Endpoint-local event flow during candidate activation; the central generation gate still rejects inbound traffic before commit |
-| `close()` | Stop admitting new events, preserve in-flight work |
-| `stop()` | Release transport resources, call must be idempotent |
-| `send(request)` | Outbound send |
+| `start()` | The new version activates; allocate connection resources |
+| `open()` | The new version activates; open the local event stream (inbound is still refused until the switch commits) |
+| `close()` | Stop accepting new events; keep in-flight work |
+| `stop()` | Release connection resources; must be safe to call repeatedly |
+| `send(request)` | Send a message |
 
-`NapCatWsEndpoint` correspondence: `start()` internally uses `lifecycle.start(...)` to establish connection; `open()` / `close()` toggle the `#open` flag (`admit()` only accepts events when open); `stop()` goes through the base stop plus specific cleanup.
+For `NapCatWsEndpoint`: `start()` calls `lifecycle.start(...)` to connect; `open()` / `close()` flip an `#open` flag (events are accepted only while open); `stop()` calls the base `stop()` and then its own cleanup.
 
-## References, merged forwards, and media resolution
+## Resolving quotes, merged forwards and media
 
-An Endpoint that can retrieve content by a native platform id should expose the single `content: EndpointContentPort`. Do not add `$getMsg`, quote metadata, or eager-forward text enrichment:
+If the platform can look up content by native id, the Endpoint should provide a single `content: EndpointContentPort` — don't stuff `$getMsg`, quote metadata or pre-expanded forward text into messages:
 
 ```ts
 interface EndpointContentPort {
@@ -205,4 +159,81 @@ interface EndpointContentPort {
 }
 ```
 
-The result must be one of `resolved | not_found | unsupported | forbidden | expired | failed`. Return `unsupported` when the platform has no such capability; never return guessed or empty content. `resolve()` must observe the signal and depth/entry/character budgets. Core holds the current generation's snapshot lease for the complete asynchronous call. Message/forward speakers are neutral `actor` data and must never become model roles. Media may resolve to a stable URL, validated base64/path, or an explicit failure; never expose token-bearing download URLs to the Agent.
+- The result must be one of `resolved | not_found | unsupported | forbidden | expired | failed`. Without platform support return `unsupported` — never empty or guessed content.
+- `resolve()` must honor `signal` and the depth, entry and character budgets; Core holds the current version's snapshot lease for the whole async call.
+- Authors inside messages and forwards are written as neutral `actor` data and must **never** be mapped to model roles.
+- Media may return a stable URL, validated base64 / path, or an explicit failure; never expose token-bearing download URLs to the Agent.
+
+## Going deeper
+
+### State machine
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> connecting: start(connectFn)
+  connecting --> open: connectFn resolves
+  connecting --> idle: connectFn rejects<br/>(reset, no reconnect)
+  connecting --> stopped: stop() race<br/>(settles silently)
+  open --> reconnecting: handle.notifyClosed()<br/>with reconnect on
+  open --> closed: notifyClosed()<br/>with reconnect: false
+  reconnecting --> open: reconnect succeeds (backoff resets)
+  reconnecting --> closed: maxAttempts consecutive failures
+  idle --> stopped: stop()
+  open --> stopped: stop()
+  reconnecting --> stopped: stop()
+  stopped --> connecting: start() again
+```
+
+- `started` is `true` exactly when the state is `connecting` / `open` / `reconnecting`.
+- Every connection attempt bumps an internal version, and **`notifyClosed` / `onForceClose` on stale handles are ignored** — late events from an old socket can't affect the new connection.
+
+### Example: napcat's ws-endpoint
+
+`plugins/adapters/napcat/src/ws-endpoint.ts` is the canonical use of the base, in four parts:
+
+```ts
+export class NapCatWsEndpoint extends Endpoint<NapcatClient> {
+  readonly client = new NapcatClient((action, params) => this.#callApi(action, params));
+  readonly #lifecycle: EndpointLifecycle;
+  #ws?: NapCatWsSocket;
+
+  constructor(options: NapCatWsEndpointOptions) {
+    super();
+    // 1. Create the base in the constructor; reconnect_interval keeps its legacy fixed-interval meaning:
+    //    multiplier 1, no jitter, no cap
+    this.#lifecycle = createEndpointLifecycle({
+      name: options.config.name,
+      reconnect: {
+        initialIntervalMs: options.config.reconnect_interval,
+        multiplier: 1,
+        maxIntervalMs: Number.MAX_SAFE_INTEGER,
+        jitterMs: 0,
+      },
+    });
+  }
+
+  async start(): Promise<void> {
+    if (this.#lifecycle.started) return;                 // idempotent
+    await this.#lifecycle.start((handle) => this.#connect(handle));
+  }
+  // stop() as in "Minimal usage"; #connect(handle) as above
+}
+```
+
+What the base removes for you:
+
+| Hand-written | With the base |
+| --- | --- |
+| `#started` / `#stopping` / `opened` flags | `lifecycle.state` / `lifecycle.started` |
+| `#reconnectTimer` + a hand-rolled `setTimeout` chain | Built-in backoff loop with interruptible waits; `stop()` wakes it immediately |
+| `#heartbeatTimer` + a missed-reply counter | `startHeartbeat` + `watchdogMisses` + `notifyHeartbeatAck` |
+| A late close from an old socket killing the new one | Stale handles expire automatically |
+| `stop()` racing a connect into an unhandled rejection | Racing waits are settled together and resolve silently |
+
+The adapter keeps only protocol logic: the Client's API transport, rejecting pending requests (`rejectAllPending`) and clearing the inbound deduper (`deduper.clear()`). The Client is a separate object; the Endpoint owns only the account connection, lifecycle and event entry.
+
+## Next steps
+
+- [Adapter authoring](./adapters.md): the basic `defineAdapter` form.
+- [Message flow](../concepts/message-flow.md): the full inbound and outbound path.

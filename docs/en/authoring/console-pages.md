@@ -1,83 +1,74 @@
 ---
-title: Console Pages and Layout
-description: pages/ convention, @zhin.js/page and @zhin.js/layout, client build pipeline (/assets/client + /esm proxy), sandbox page instance
+title: "Console Pages and Layouts"
+description: "Add a Console page to your plugin: the pages/ convention, page metadata, routes, navigation and footer layouts, and how pages are built and loaded"
 ---
 
-# Console Pages and Layout
+# Console pages and layouts
 
-Plugins can do more than send messages to groups -- they can contribute entire React pages to the Remote Console. The sandbox adapter's `/sandbox` chat page is built exactly this way. The mechanism is consistent with commands and components: **`pages/` is a convention directory**, discovered by the `@zhin.js/page` (pages) and `@zhin.js/layout` (layout) Features, with the client build pipeline compiling TSX into browser-loadable ES modules.
+Plugins can do more than send chat messages — they can contribute whole React pages to Remote Console. The Sandbox adapter's `/sandbox` chat page is one.
 
-## pages/ Convention (@zhin.js/page)
+Like commands, pages live in a **convention directory**, `pages/`; files are discovered automatically and compiled into modules the browser can load.
 
-Under the plugin package root's `pages/` directory, only `<name>/index.tsx` or `index.ts` modules are pages: **default-export a React component**, and use the named export `meta` to declare metadata (`definePage` from `@zhin.js/console-contract`). Sibling components and helpers remain ordinary colocated modules:
+## Your first page
 
 ```tsx
-// pages/index/index.tsx (plugins/adapters/sandbox)
+// pages/index/index.tsx
 import { definePage } from '@zhin.js/console-contract';
-import SandboxChat from './SandboxChat';
 
 export const meta = definePage({
-  title: 'Sandbox',
+  title: 'My Plugin',
   icon: 'Box',
   order: 10,
 });
 
-export default function SandboxPage() {
-  return <SandboxChat />;
+export default function MyPluginPage() {
+  return <div>Hello from my plugin</div>;
 }
 ```
 
-All `meta` fields are optional; `definePage` validates unknown keys and throws:
+- The **default export** is a React component — the page content.
+- The **named export `meta`** declares title, icon and order.
+- Only `pages/<name>/index.tsx` (or `index.ts`) is a page; other files in the folder can be imported as components and helpers.
+
+Start the bot, open Console, and the page appears in the navigation.
+
+## Page metadata
+
+Every `meta` field is optional; `definePage` throws on unknown keys:
 
 | Field | Default | Description |
 | --- | --- | --- |
-| `title` | Generated from file name (`foo-bar` -> `Foo Bar`) | Navigation and page header title |
-| `icon` | None | Icon name (lucide style, e.g., `'Box'`, `'Workflow'`) |
-| `order` | `100` | Navigation sort order, smaller values appear first |
-| `hideInNav` | `false` | Don't appear in navigation |
-| `requiredPermissions` | `[]` | Permissions required for access |
-| `requiredRoles` | `[]` | Roles required for access |
+| `title` | Generated from the folder name (`foo-bar` → `Foo Bar`) | Navigation and header title |
+| `icon` | none | A lucide-style icon name, e.g. `'Box'`, `'Workflow'` |
+| `order` | `100` | Navigation order; lower comes first |
+| `hideInNav` | `false` | Hide from navigation |
+| `requiredPermissions` | `[]` | Permissions required to access |
+| `requiredRoles` | `[]` | Roles required to access |
 
-### Routing Rules
+## Page addresses
 
-Route = plugin path + page name (`pageRoute`, `packages/console/plugin-contract/src/page.ts`):
+Address = plugin path + page name:
 
-| File | Plugin | Route |
+| File | Owning plugin | Address |
 | --- | --- | --- |
 | `pages/index/index.tsx` | `sandbox` | `/sandbox` |
-| `pages/workroom/index.tsx` | root (application) | `/p-workroom` |
-| `pages/index/index.tsx` | root (application) | `/` |
+| `pages/workroom/index.tsx` | your bot (root) | `/p-workroom` |
+| `pages/index/index.tsx` | your bot (root) | `/` |
 
-That is: `index` maps to the plugin path itself (no leaf segment), while other files map to `p-<name>` leaf segments. Route conflicts (two pages computing the same route) report errors at startup.
+`index` maps to the plugin path itself; other pages map to `p-<name>`. Two pages resolving to the same address fail at startup. Implementation: `pageRoute` in `packages/console/plugin-contract/src/page.ts`.
 
-## Layout (@zhin.js/layout)
+## Custom navigation and footer
 
-Two reserved file names under `pages/` provide layout slots: `pages/nav/index.tsx` corresponds to the `nav` slot (navigation area), and `pages/footer/index.tsx` corresponds to the `footer` slot (footer area). Layout files only need to default-export a React component, no `meta` needed; when both `.ts` and `.tsx` exist for the same slot, `.tsx` takes precedence.
+`pages/` has two reserved names:
 
-## Client Build Pipeline
+- `pages/nav/index.tsx`: the navigation area
+- `pages/footer/index.tsx`: the footer
 
-Page/layout files have `target: client`, so they don't go through Node module loading during discovery. Instead, they are handed to the Client Module adapter (`TypeScriptClientBuilder`, `packages/console/pagemanager`):
+Default-export a React component; no `meta` needed. When both `.ts` and `.tsx` exist for a slot, `.tsx` wins. Projects created by `npm create zhin-app` already include both as examples.
 
-```mermaid
-flowchart LR
-    A["pages/*/index.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild bundling)"]
-    B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
-    B --> D["pages.manifest.json"]
-    C --> E["GET /assets/client/*<br/>(immutable cache)"]
-    F["Bare imports react etc.<br/>whitelist rewriting"] --> G["GET /esm/:enc.mjs<br/>Host proxy build"]
-    E --> H[Browser imports page module]
-    G --> H
-```
+## Example: the Sandbox chat page
 
-First, the output: each page is bundled into `<owner>-<localName>-<contentHash>.js`, written to `.zhin/client/` under the project, and served via the Host route `GET /assets/client/*` (`cache-control: immutable` -- when the content hash changes, the file name changes). `@zhin.js/console-contract` is inlined as an identity-function stub during bundling, and `meta` is obtained through static extraction.
-
-Next, the bare import problem. Browsers cannot resolve bare imports like `import 'react'`, so imports in the whitelist `ALLOWED_ESM_CANONICAL` (`react`, `react-dom`, `react-dom/client`, `react/jsx-runtime(-dev)`, `react-router`, `react-router-dom`) are rewritten to `/esm/<enc>.mjs`, built on demand and proxied by the Host, ensuring the entire Console has only one React instance; canonical imports outside the whitelist return 403.
-
-Host routes are mounted in `basic/cli/src/plugin-runtime/console/host.ts`: `GET /console` is the page index, `GET /console/api/pages` returns the page list, `GET /*` catch-all matches routes to pages and returns the page shell (containing importmap and module mount script), returning 404 for no match and 403 for insufficient permissions. Page modules are loaded in the browser via `import(moduleUrl)`, with the default export mounted to `#root`.
-
-## sandbox Adapter Page Instance
-
-The sandbox adapter (`plugins/adapters/sandbox`) is the canonical consumer of this mechanism. Its `package.json#zhin` declares:
+The Sandbox adapter (`plugins/adapters/sandbox`) provides both an adapter and a page, so its `package.json#zhin` declares two Features:
 
 ```json
 {
@@ -94,13 +85,15 @@ The sandbox adapter (`plugins/adapters/sandbox`) is the canonical consumer of th
 }
 ```
 
-The two Features each handle their own domain: `@zhin.js/adapter` discovers the adapter under `adapters/` (WebSocket `/sandbox` Endpoint); `@zhin.js/page` discovers `pages/index/index.tsx`, so the Console gets a **`/sandbox` chat page**. The `SandboxChat` component connects via WebSocket to the Host's `/sandbox` (base and token from `pages/sandboxTransport.ts`), with message sending and receiving going through the unified IM pipeline -- sending a message in the page is equivalent to a real platform's inbound message, going through middleware, command matching, and AI unmatched handling.
+- `@zhin.js/adapter` discovers the adapter under `adapters/`, providing the WebSocket `/sandbox` connection.
+- `@zhin.js/page` discovers `pages/index/index.tsx`, which is why Console shows a `/sandbox` chat page.
 
-This makes "debugging without a real platform" the default development path: `pnpm dev` (examples/minimal-bot) starts Sandbox + Console, which can verify commands, component rendering, and Agent behavior. Pages render outbound html segments inline (the sandbox adapter directly consumes html, skipping image/text normalization -- see [Middleware and Components](./middleware-components.md)).
+The page's `SandboxChat` component connects to `/sandbox` over WebSocket (address and token in `pages/sandboxTransport.ts`). Sending a message in the page is equivalent to a real platform receiving one: it goes through middleware, command matching and the AI. So you can fully debug commands, component rendering and the Agent without any real platform. Sandbox displays outbound HTML directly instead of converting it to an image or text — see [Middleware & components](./middleware-components.md#how-it-looks-on-each-platform).
 
-The plugin entry itself can remain minimal (`plugins/adapters/sandbox/plugin.ts`):
+The plugin entry itself needs nothing; the page and adapter are discovered automatically:
 
 ```ts
+// plugins/adapters/sandbox/plugin.ts
 import { definePlugin } from 'zhin.js';
 
 export default definePlugin({
@@ -109,4 +102,26 @@ export default definePlugin({
 });
 ```
 
-Pages and adapters are all discovered by Feature conventions -- the entry doesn't need to manually mount anything.
+## How it works
+
+Page files run in the **browser**, so Node doesn't load them; the client builder (`TypeScriptClientBuilder`, `packages/console/pagemanager`) bundles them with esbuild:
+
+```mermaid
+flowchart LR
+    A["pages/*/index.tsx<br/>meta = definePage()"] --> B["TypeScriptClientBuilder<br/>(esbuild bundle)"]
+    B --> C[".zhin/client/<owner>-<name>-<hash>.js"]
+    B --> D["pages.manifest.json"]
+    C --> E["GET /assets/client/*<br/>(immutable cache)"]
+    F["bare imports like react<br/>rewritten via allowlist"] --> G["GET /esm/:enc.mjs<br/>Host proxy build"]
+    E --> H[Browser loads page module]
+    G --> H
+```
+
+- **Output**: each page is bundled as `<owner>-<localName>-<contentHash>.js` into the project's `.zhin/client/` and served by `GET /assets/client/*` (`cache-control: immutable`; new content means a new file name). `@zhin.js/console-contract` is replaced with a no-op stub at bundle time, and `meta` is extracted statically.
+- **One React only**: browsers don't understand bare imports like `import 'react'`, so imports on the `ALLOWED_ESM_CANONICAL` allowlist (`react`, `react-dom`, `react-dom/client`, `react/jsx-runtime(-dev)`, `react-router`, `react-router-dom`) are rewritten to `/esm/<enc>.mjs`, built and proxied on demand by the Host so the whole Console shares one React instance. Anything off the allowlist returns 403.
+- **Routes**: registered in `basic/cli/src/plugin-runtime/console/host.ts`. `GET /console` is the page index, `GET /console/api/pages` returns the page manifest, and other paths are matched to pages and served a page shell (with an importmap and mount script); no match returns 404, insufficient permission 403. The browser loads the page with `import(moduleUrl)` and mounts the default export on `#root`.
+
+## Next steps
+
+- [Convention directories](./conventions.md): where other capabilities go.
+- [Console](../console/index.md): what Console itself can do.

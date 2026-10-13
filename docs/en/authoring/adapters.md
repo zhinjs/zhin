@@ -1,10 +1,26 @@
+---
+title: "Adapter Authoring"
+description: "Write an adapter for a platform Zhin doesn't support yet: the minimal implementation, connecting and cleanup, sending and receiving, multiple accounts, and when you need the lower-level Endpoint"
+---
+
 # Adapter authoring
 
-A platform adapter has three jobs: create the platform client, translate platform events into Zhin events, and translate outbound Zhin requests into platform calls. The framework owns hot reload, Endpoint identity, generation admission, and cleanup.
+An adapter connects one chat platform to Zhin. **You only need this page if the platform you want has no official adapter yet**; supported platforms are listed under [Adapters](../adapters/index.md).
 
-Create a TypeScript file under the plugin or project's `adapters/` directory and default-export `defineAdapter()`:
+An adapter does three things:
+
+1. creates the platform SDK client;
+2. turns platform events into Zhin's unified messages;
+3. turns outgoing Zhin messages into platform API calls.
+
+Hot reload, account identity, version switching and resource cleanup are handled by the framework.
+
+## Minimal implementation
+
+Create `adapters/<platform>/index.ts` in your plugin and default-export `defineAdapter()`:
 
 ```ts
+// adapters/example/index.ts
 import { defineAdapter } from 'zhin.js/adapter';
 import { ExampleClient } from 'example-sdk';
 
@@ -41,10 +57,65 @@ export default defineAdapter<{ readonly token: string }>({
 });
 ```
 
-`client` is the platform SDK object exposed as `context.$client` in commands and as `event.client` in handler event parameters. `connect()` resolves when the platform is ready. Register each acquired resource with `onCleanup()` immediately; the framework unwinds them in reverse order if later setup fails. For one cleanup action, returning it from `connect()` remains a shorthand. `events.message()` attaches the current Endpoint identity automatically. `send()` returns the platform message id.
+Piece by piece:
 
-Implement synchronous `activate({ events })` when a listener or input stream must belong only to the active generation; return its release function. Ordinary SDK listeners belong in `connect()`.
+| Part | Purpose |
+| --- | --- |
+| `capabilities` | Declares receiving (`inbound`), sending (`outbound`), or both — at least one |
+| `create(context)` | Called once per account; `context.config` is that account's config |
+| `client` | The platform SDK instance. Commands get it as `context.$client`, event handlers as `event.client` |
+| `connect()` | Connects to the platform and **returns only once it is usable** |
+| `onCleanup(fn)` | Register cleanup right after acquiring each resource. If later setup fails, the framework rolls back in reverse order |
+| `events.message()` | Reports an incoming message; the framework fills in the account identity |
+| `send()` | Sends a message and returns the platform message id |
 
-Only protocols that need custom multi-stage connection behavior should extend `Endpoint`. Use [`createEndpointLifecycle`](./endpoint-lifecycle.md) for WebSocket, SSE, heartbeat, and reconnect behavior. Translate platform-specific share, audio, and card structures at the `send()` protocol boundary.
+With a single cleanup action you can also just return it from `connect()`.
 
-See [`examples/minimal-bot/adapters/terminal/index.ts`](../../../examples/minimal-bot/adapters/terminal/index.ts) for a runnable implementation.
+## Common tasks
+
+### Receive this platform's messages in your bot
+
+Mount the plugin containing the adapter on your bot and configure it in `zhin.config.yml`:
+
+```yaml
+plugins:
+  example:
+    token: ${EXAMPLE_TOKEN}
+```
+
+After startup, check in Console's Conversations & Channels that the account is online and receiving. Mounting is covered in [First plugin · Mount it on your bot](../getting-started/first-plugin.md).
+
+### Several accounts on one adapter
+
+No code changes. Add an `endpoints` array in config; each entry creates a separate account connection, and `create(context)` receives the merged per-account config. Rules: [Endpoint lifecycle · Several accounts on one adapter](./endpoint-lifecycle.md#several-accounts-on-one-adapter).
+
+### Listeners only the active version may hold
+
+Some listeners or input streams may be held by only one version during a hot-reload switch. Implement a synchronous `activate({ events })` returning a release function; the framework calls it on switch and rollback. Ordinary SDK listeners belong in `connect()`.
+
+### WebSocket / SSE, heartbeats and reconnection
+
+Don't write your own reconnect state machine — use [`createEndpointLifecycle`](./endpoint-lifecycle.md).
+
+### Platform-specific message formats
+
+Convert platform-specific structures such as `share`, audio or cards at the `send()` boundary. Plugins still send through `Message.$reply` or `Adapter.sendMessage`; never open a separate send path.
+
+### Manage accounts from chat
+
+`createEndpointCommands` generates `<adapter> endpoint list / add / remove` commands; see [Commands · Endpoint management commands for adapters](./commands.md#endpoint-management-commands-for-adapters).
+
+## When to extend Endpoint
+
+`defineAdapter` as above covers most platforms. Only when a protocol needs a **custom multi-stage connection flow** should you extend the `Endpoint` class and implement `start` / `open` / `close` / `stop` yourself; see [Endpoint lifecycle hooks](./endpoint-lifecycle.md#endpoint-lifecycle-hooks).
+
+## Reference implementations
+
+- [`examples/minimal-bot/adapters/terminal/index.ts`](https://github.com/zhinjs/zhin/blob/main/examples/minimal-bot/adapters/terminal/index.ts): treats the terminal as a chat platform — good to study.
+- [`plugins/adapters/napcat`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/napcat): WebSocket / HTTP connection modes using `createEndpointLifecycle`.
+
+## Next steps
+
+- [Endpoint lifecycle](./endpoint-lifecycle.md): long-lived connections, heartbeats, reconnection and multiple accounts.
+- [Message flow](../concepts/message-flow.md): the full path of a message through the framework.
+- [Complete plugin delivery](./plugin-delivery.md): test the adapter with the adapter harness and publish it.
