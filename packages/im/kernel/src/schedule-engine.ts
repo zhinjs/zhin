@@ -33,7 +33,7 @@ export interface MemoryScheduleRegistration {
 
 export interface ScheduleEngineOptions {
   timezone?: string;
-  onError?: (err: Error, jobId: string) => void;
+  onError?: (err: Error, jobId: string) => void | Promise<void>;
 }
 
 function jobScheduleToResolved(
@@ -77,7 +77,7 @@ export class ScheduleEngine {
   private disposed = false;
   /** 被暂停的 every / at 任务（这两类不经过 CalendarScheduler，暂停状态自行维护）。 */
   private readonly pausedLocal = new Set<string>();
-  private readonly onError?: (err: Error, jobId: string) => void;
+  private readonly onError?: (err: Error, jobId: string) => void | Promise<void>;
 
   constructor(options: ScheduleEngineOptions = {}) {
     this.timezone = options.timezone ?? 'Asia/Shanghai';
@@ -204,15 +204,17 @@ export class ScheduleEngine {
 
   private reportError(error: unknown, jobId: string): void {
     const err = error instanceof Error ? error : new Error(String(error));
-    if (this.onError) {
-      try {
-        this.onError(err, jobId);
-        return;
-      } catch {
-        // onError 自身抛错时退回 console，避免二次 unhandledRejection
+    const fallback = (): void => console.error(`[ScheduleEngine] job ${jobId} failed:`, err);
+    if (!this.onError) return fallback();
+    try {
+      // onError 可能是异步函数：其 rejection 同样要兜住，避免二次 unhandledRejection。
+      const result: unknown = this.onError(err, jobId);
+      if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
+        Promise.resolve(result).catch(() => fallback());
       }
+    } catch {
+      fallback();
     }
-    console.error(`[ScheduleEngine] job ${jobId} failed:`, err);
   }
 
   unregister(id: string): boolean {
@@ -279,21 +281,21 @@ function scheduleLongTimeout(
 ): { cancel: () => void } {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let cancelled = false;
-  const arm = (remaining: number): void => {
+  // 以绝对截止时间计算剩余量：分段定时器被推迟触发时不会累积误差。
+  const arm = (deadline: number): void => {
     if (cancelled) return;
-    const step = Math.min(remaining, MAX_TIMER_DELAY_MS);
+    const remaining = Math.max(0, deadline - Date.now());
     timer = setTimeout(() => {
       if (cancelled) return;
-      const left = remaining - step;
-      if (left > 0) {
-        arm(left);
+      if (deadline - Date.now() > 0) {
+        arm(deadline);
         return;
       }
-      if (repeat) arm(delayMs);
+      if (repeat) arm(Math.max(deadline + delayMs, Date.now() + 1));
       callback();
-    }, step);
+    }, Math.min(remaining, MAX_TIMER_DELAY_MS));
   };
-  arm(delayMs);
+  arm(Date.now() + delayMs);
   return {
     cancel: () => {
       cancelled = true;

@@ -7,6 +7,10 @@ import type { WeChatMediaUploadResult } from './media-upload.js';
 import { defineEndpointClient } from 'zhin.js/adapter';
 
 const TOKEN_INVALID_ERRCODES = new Set([40001, 40014, 42001]);
+/** 换取 token 请求的超时，防止挂起的请求让 single-flight 永久卡住。 */
+const TOKEN_FETCH_TIMEOUT_MS = 15_000;
+/** 官方 access_token 有效期为 7200s；对异常大的 expires_in 设上限。 */
+const MAX_TOKEN_LIFETIME_SEC = 7200;
 
 export type WeChatMpFetch = (
   url: string,
@@ -52,7 +56,13 @@ export class WeChatMpClient {
   async #fetchAccessToken(): Promise<string> {
     const { appId, appSecret } = this.config;
     const url = `https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appId)}&secret=${encodeURIComponent(appSecret)}`;
-    const response = await this.fetch(url);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const response = await Promise.race([
+      this.fetch(url),
+      new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => reject(new Error('Failed to get access token: request timed out')), TOKEN_FETCH_TIMEOUT_MS);
+      }),
+    ]).finally(() => clearTimeout(timeout));
     const data = response.data as TokenResponse & WeChatAPIResponse;
     if (!data.access_token) {
       throw new Error(data.errmsg
@@ -62,7 +72,9 @@ export class WeChatMpClient {
     this.#accessToken = data.access_token;
     // expires_in 缺失/非法时 NaN 会让 tokenExpired 永远为 false；按官方默认 7200s 兜底。
     const expiresIn = Number(data.expires_in);
-    const lifetimeSec = Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : 7200;
+    const lifetimeSec = Number.isFinite(expiresIn) && expiresIn > 0
+      ? Math.min(expiresIn, MAX_TOKEN_LIFETIME_SEC)
+      : MAX_TOKEN_LIFETIME_SEC;
     this.#tokenExpireTime = Date.now() + (lifetimeSec - 300) * 1000;
     return data.access_token;
   }
@@ -71,22 +83,32 @@ export class WeChatMpClient {
     path: string,
     init?: Parameters<WeChatMpFetch>[1],
   ): Promise<T> {
+    return (await this.#requestWithToken<T>(path, init)).data;
+  }
+
+  async #requestWithToken<T>(
+    path: string,
+    init?: Parameters<WeChatMpFetch>[1],
+  ): Promise<{ readonly data: T; readonly token: string | null }> {
     if (this.tokenExpired) await this.refreshAccessToken();
+    const token = this.#accessToken;
     const separator = path.includes('?') ? '&' : '?';
     const response = await this.fetch(
-      `https://api.weixin.qq.com${path}${separator}access_token=${this.#accessToken}`,
+      `https://api.weixin.qq.com${path}${separator}access_token=${token}`,
       init,
     );
-    return response.data as T;
+    return { data: response.data as T, token };
   }
 
   async sendCustomerService(messageData: unknown): Promise<WeChatAPIResponse> {
-    let result = await this.request<WeChatAPIResponse>(
+    const first = await this.#requestWithToken<WeChatAPIResponse>(
       '/cgi-bin/message/custom/send',
       { method: 'POST', body: messageData },
     );
+    let result = first.data;
     if (result.errcode && TOKEN_INVALID_ERRCODES.has(Number(result.errcode))) {
-      await this.refreshAccessToken();
+      // 失败请求使用的 token 若已被其他请求换掉，直接用新 token 重试，不再重复刷新。
+      if (this.#accessToken === first.token) await this.refreshAccessToken();
       result = await this.request<WeChatAPIResponse>(
         '/cgi-bin/message/custom/send',
         { method: 'POST', body: messageData },

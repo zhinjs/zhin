@@ -53,11 +53,13 @@ describe('ScheduleEngine', () => {
   it('keeps a job re-registered with the same id from inside an at-callback', async () => {
     vi.useFakeTimers();
     const engine = new ScheduleEngine();
-    engine.register('again', 'at', () => {
+    const atCallback = vi.fn(() => {
       engine.register('again', 'every', vi.fn(), { everyMs: 1000 });
-    }, { atMs: Date.now() + 100 });
+    });
+    engine.register('again', 'at', atCallback, { atMs: Date.now() + 100 });
     await vi.advanceTimersByTimeAsync(200);
-    expect(engine.getStatus().map((s) => s.id)).toEqual(['again']);
+    expect(atCallback).toHaveBeenCalledTimes(1);
+    expect(engine.getStatus().map((s) => [s.id, s.kind])).toEqual([['again', 'every']]);
     engine.dispose();
     vi.useRealTimers();
   });
@@ -106,6 +108,38 @@ describe('ScheduleEngine', () => {
     await vi.advanceTimersByTimeAsync(500);
     engine.resume('later');
     await vi.advanceTimersByTimeAsync(500);
+    expect(cb).toHaveBeenCalledTimes(1);
+    engine.dispose();
+    vi.useRealTimers();
+  });
+
+  it('falls back to console when an async onError rejects', async () => {
+    vi.useFakeTimers();
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    const engine = new ScheduleEngine({ onError: (async () => { throw new Error('hook'); }) });
+    engine.register('boom2', 'every', () => { throw new Error('job'); }, { everyMs: 1000 });
+    await vi.advanceTimersByTimeAsync(1000);
+    await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+    expect(unhandled).not.toHaveBeenCalled();
+    process.off('unhandledRejection', unhandled);
+    consoleError.mockRestore();
+    engine.dispose();
+    vi.useRealTimers();
+  });
+
+  it('computes remaining long delay from wall clock when a chunk fires late', async () => {
+    vi.useFakeTimers();
+    const cb = vi.fn();
+    const engine = new ScheduleEngine();
+    const start = Date.now();
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    engine.register('late', 'at', cb, { atMs: start + thirtyDays });
+    // 模拟系统休眠：墙上时间跳过 10 天，但定时器未推进
+    vi.setSystemTime(start + 10 * 24 * 60 * 60 * 1000);
+    await vi.advanceTimersByTimeAsync(2_147_483_647);
+    // 第一段触发时已过约 34.8 天 > 30 天，应立即执行而非再等剩余的 5.2 天
     expect(cb).toHaveBeenCalledTimes(1);
     engine.dispose();
     vi.useRealTimers();
