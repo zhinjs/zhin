@@ -289,6 +289,7 @@ export class WeChatMpEndpoint extends Endpoint<WeChatMpClient> {
   }
 
   #startTokenRefreshTimer(): void {
+    if (this.#tokenRefreshTimer) clearInterval(this.#tokenRefreshTimer);
     this.#tokenRefreshTimer = setInterval(() => {
       if (this.client.tokenExpired) {
         void this.client.refreshAccessToken().catch((error) => {
@@ -296,6 +297,7 @@ export class WeChatMpEndpoint extends Endpoint<WeChatMpClient> {
         });
       }
     }, 3_600_000);
+    (this.#tokenRefreshTimer as { unref?: () => void }).unref?.();
   }
 }
 
