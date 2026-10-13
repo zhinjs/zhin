@@ -68,13 +68,12 @@ export default definePlugin({
       return buildRedirectUri(localOriginFromAddress(address), callbackPath);
     };
 
-    let auth: CalendarAuthService<DeliveryTarget> | undefined;
     const managers = createOAuthTokenManagers(config, {
       credentials,
       onAuthorizationLost: (provider, message) =>
-        auth?.notifyAuthorizationLost(provider, message),
+        auth.notifyAuthorizationLost(provider, message),
     });
-    auth = new CalendarAuthService<DeliveryTarget>({
+    const auth = new CalendarAuthService<DeliveryTarget>({
       config,
       managers,
       credentials,
@@ -96,7 +95,7 @@ export default definePlugin({
 
     const releaseRoute = http
       ? registerOAuthCallbackRoute(http, callbackPath, (searchParams) =>
-          auth!.handleCallback(searchParams)
+          auth.handleCallback(searchParams)
         )
       : undefined;
     return () => {

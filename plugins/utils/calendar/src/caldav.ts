@@ -2,6 +2,7 @@
  * Minimal CalDAV client (RFC 4791) for listing and creating VEVENTs.
  * Works with iCloud, Fastmail and Nextcloud calendars.
  */
+import { randomUUID } from "node:crypto";
 import type {
   CalendarEvent,
   CalendarProvider,
@@ -66,18 +67,84 @@ function extractField(block: string, name: string): string | undefined {
     : undefined;
 }
 
+/** Returns the text content of every `<href>` element (any namespace prefix). */
+export function extractHrefs(xml: string): string[] {
+  const hrefs: string[] = [];
+  let cursor = 0;
+  while (cursor < xml.length) {
+    const tagStart = xml.indexOf("<", cursor);
+    if (tagStart === -1) {
+      break;
+    }
+    const tagEnd = xml.indexOf(">", tagStart);
+    if (tagEnd === -1) {
+      break;
+    }
+    const tagName = readTagName(xml.slice(tagStart + 1, tagEnd));
+    cursor = tagEnd + 1;
+    if (localName(tagName) !== "href") {
+      continue;
+    }
+    const closingStart = xml.indexOf("</", cursor);
+    if (closingStart === -1) {
+      break;
+    }
+    const value = xml.slice(cursor, closingStart).trim();
+    if (value) {
+      hrefs.push(value);
+    }
+    cursor = closingStart;
+  }
+  return hrefs;
+}
+
+function readTagName(tagContent: string): string {
+  if (tagContent.startsWith("/") || tagContent.startsWith("?")) {
+    return "";
+  }
+  let end = 0;
+  while (end < tagContent.length && !/[\s/]/.test(tagContent[end]!)) {
+    end += 1;
+  }
+  return tagContent.slice(0, end);
+}
+
+function localName(tagName: string): string {
+  const colonIndex = tagName.lastIndexOf(":");
+  return tagName.slice(colonIndex + 1).toLowerCase();
+}
+
+/** Returns the body between each BEGIN:VEVENT / END:VEVENT pair. */
+export function extractVeventBlocks(text: string): string[] {
+  const beginMarker = "BEGIN:VEVENT";
+  const endMarker = "END:VEVENT";
+  const blocks: string[] = [];
+  let cursor = 0;
+  while (cursor < text.length) {
+    const begin = text.indexOf(beginMarker, cursor);
+    if (begin === -1) {
+      break;
+    }
+    const bodyStart = begin + beginMarker.length;
+    const end = text.indexOf(endMarker, bodyStart);
+    if (end === -1) {
+      break;
+    }
+    blocks.push(text.slice(bodyStart, end));
+    cursor = end + endMarker.length;
+  }
+  return blocks;
+}
+
 /** Parses VEVENT components from a CalDAV multistatus response. */
 export function parseCalDavEvents(
   xml: string,
   timezone: string
 ): CalendarEvent[] {
   const events: CalendarEvent[] = [];
-  const hrefs = [
-    ...xml.matchAll(/<[^:>]*:?href[^>]*>([^<]+)<\/[^:>]*:?href>/gi),
-  ].map((m) => m[1]!.trim());
-  const calendars = [...xml.matchAll(/BEGIN:VEVENT([\s\S]*?)END:VEVENT/g)];
-  calendars.forEach((match, index) => {
-    const block = match[1]!;
+  const hrefs = extractHrefs(xml);
+  const blocks = extractVeventBlocks(xml);
+  blocks.forEach((block, index) => {
     const uid = extractField(block, "UID") ?? hrefs[index] ?? `event-${index}`;
     const summary = extractField(block, "SUMMARY") ?? "(无标题)";
     const startRaw = extractField(block, "DTSTART");
@@ -165,9 +232,7 @@ export function createCalDavProvider(options: CalDavOptions): CalendarProvider {
       return parseCalDavEvents(await response.text(), options.timezone);
     },
     async createEvent(input, signal) {
-      const uid = `${Date.now()}-${Math.random()
-        .toString(36)
-        .slice(2, 10)}@zhin`;
+      const uid = `${randomUUID()}@zhin`;
       const url = new URL(`${uid}.ics`, base).toString();
       const response = await fetchImpl(url, {
         method: "PUT",

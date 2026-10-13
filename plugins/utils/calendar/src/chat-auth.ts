@@ -76,13 +76,29 @@ export function parseOAuthProvider(
   return undefined;
 }
 
+function trimTrailingSlashes(value: string): string {
+  let end = value.length;
+  while (end > 0 && value[end - 1] === "/") {
+    end -= 1;
+  }
+  return value.slice(0, end);
+}
+
+function trimLeadingSlashes(value: string): string {
+  let start = 0;
+  while (start < value.length && value[start] === "/") {
+    start += 1;
+  }
+  return value.slice(start);
+}
+
 /** Joins a base URL and the callback path, tolerating extra/missing slashes. */
 export function buildRedirectUri(
   baseUrl: string,
   callbackPath: string
 ): string {
-  const trimmedBase = baseUrl.trim().replace(/\/+$/, "");
-  const normalizedPath = `/${callbackPath.trim().replace(/^\/+/, "")}`;
+  const trimmedBase = trimTrailingSlashes(baseUrl.trim());
+  const normalizedPath = `/${trimLeadingSlashes(callbackPath.trim())}`;
   return `${trimmedBase}${normalizedPath}`;
 }
 
