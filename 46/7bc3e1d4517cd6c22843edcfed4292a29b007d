@@ -1,0 +1,25 @@
+examples/platform-acceptance-bot/commands/acceptance/index.ts
+  s_6562bcb6cc0539::t_f9e6a2e841709f 21-26,35-36,48
+scripts/platform-acceptance/README.md
+  s_6562bcb6cc0539::t_998a4df8cd9d89 54-58
+scripts/platform-acceptance/probe-command.ts
+  s_6562bcb6cc0539::t_2eb50429e9b90e 21-26,35-36,48
+tests/platform-acceptance/probe-command.test.ts
+  s_6562bcb6cc0539::t_a746219eb5a00d 29,54,84-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "467bc3e1d4517cd6c22843edcfed4292a29b007d",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
