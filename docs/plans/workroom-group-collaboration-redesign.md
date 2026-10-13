@@ -228,11 +228,12 @@ B 阶段与旧 Workroom 并存，通过配置选择。
 2. 默认切到新 Room；旧机制按第 4 节的去留表，逐个移入可选插件或删除。
 3. 更新 `docs/plans/agent-workroom-orchestration-decision-map.md`，把与新目标冲突的“已确认边界”标记为 Superseded，并补一份 ADR。
 
-## 6. 待决问题
+## 6. 已确认的决定（2026-10-13）
 
-1. **是否有线上数据**依赖现有 Workroom Journal / Catalog / 加密 vault？决定 legacy 迁移和 data-governance 能否直接删。
-2. **首批要支持的平台**是哪个？每个 Bot 是独立账号，对 Endpoint 配置与 `messageRoute` 有影响。
-3. **coordinator 是不是必需的**？还是允许没有 coordinator、全靠 @ 和角色匹配？
-4. **reviewer / 审核环节**要不要强制？还是作为可选角色？
-5. 远程执行（A2A、跨进程 Bot）是否在近期范围内？不在的话，阶段 A 后可以直接冻结 remote 相关代码。
-6. **成员 Bot 用的是哪类账号**（例如 QQ 协议号 / OneBot、Telegram Bot API）？协议号能看到彼此的消息，§3.4 的身份层是必需的；官方 Bot API 通常看不到其他 Bot 的消息，主要靠关联层兜底。
+1. **没有线上数据。** 现有 Workroom Journal / Catalog / 加密 vault 都不需要迁移；legacy 迁移代码可以直接删，data-governance 移出主路径。
+2. **首批平台是 QQ 个人号（ICQQ / OneBot）。** 成员 Bot 互相看得到消息，§3.4 的身份层必须先做。端到端验收先用 Sandbox 模拟多 Bot。
+3. **coordinator 可选，reviewer 可选。** 有 coordinator 时，没有 @ 的人类消息交给它；没有时按角色匹配。reviewer 只是普通角色，不强制审核。
+4. **不做 A2A 远程执行。** remote dispatch / callback / issuance 相关代码冻结，阶段 C 移出主路径。
+5. 执行过程只在本地提交，不推送、不开 PR，由维护者审阅后再决定。
+
+进度记录在 [workroom-group-collaboration-progress.md](./workroom-group-collaboration-progress.md)。
