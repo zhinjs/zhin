@@ -1,0 +1,21 @@
+plugins/adapters/wechat-mp/src/client.ts
+  s_ba92c46e2669a8::t_c10317e3fff339 24,39-52,54,63-66
+plugins/adapters/wechat-mp/src/endpoint.ts
+  s_ba92c46e2669a8::t_8150bd4f2c0c07 292,300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fca95ea9fac14d9def9644661baf40a1b73aec38",
+  "prompts": {},
+  "sessions": {
+    "s_ba92c46e2669a8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f9f-c644-7433-9e3c-fca0277bc680",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
