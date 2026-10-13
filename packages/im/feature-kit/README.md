@@ -29,8 +29,16 @@ Command、Middleware、Component、Tool、Skill、Agent、Page 等都应是独�
 | `FeatureRuntime.project()` | 从 Slot 构造只读索引、matcher 或 manifest 等派生物 |
 | `FeatureBuildAdapter` | 将 source 映射为可选构建产物计划 |
 | `directoryModules()` | 按声明式目录布局发现固定 `index.ts(x)` 并加载 default export |
+| `createConstructionContext()` | 仅提供 owner/config/generation/signal/use 的 transport 创建上下文，不提供 `project` |
 | `createCapabilityContext()` | 从 immutable snapshot 建立 owner/config/resource 执行上下文 |
 | `OwnerCapabilityIndex` | nearest-owner resolve、visible view 与稳定 qualified name |
+
+插件子树重载默认重新构建 Feature 投影，因为执行索引可能捕获构建时的完整 snapshot。
+只有不依赖其他 owner 旧投影的外部资源持有者，才可声明
+`runtime.retain: 'when-owner-unchanged'`：该 Feature 的 owner 作用域、配置或自身能力发生变化时仍会重建，
+未变的 transport 可以共享生命周期租约，避免无关插件配置更新重新登录账号。
+Adapter provider 使用此声明；Handler、Command 等执行上下文索引不应因此复用旧 snapshot。
+此声明描述子树或能力文件重载的复用资格，不替代 generation 准入和失败补偿。
 
 ## 定义 Feature
 

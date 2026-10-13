@@ -9,6 +9,7 @@ import {
 } from '../../../src/plugin-runtime/console/configuration.js';
 import {
   configKeyPatch,
+  configKeyRemovePatch,
   flattenConfigDocument,
 } from '../../../src/plugin-runtime/console/configuration-projection.js';
 
@@ -19,6 +20,32 @@ afterEach(async () => {
 });
 
 describe('config document flatten / write namespace', () => {
+  it('never pairs a same-named Plugin value with a Host configuration path or schema', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-config-collision-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'collision-fixture', version: '1.0.0', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', plugins: [] } }));
+    const document = { plugins: { ai: { pluginOnly: 'original' } } };
+    const file = join(root, 'zhin.config.json');
+    await writeFile(file, JSON.stringify(document));
+    const store = new ConsoleConfigurationStore({ projectRoot: root, document: createConfigDocument(file) });
+    const source = await store.readSource();
+    expect(source.configKeys).toContain('ai');
+    expect(source.configPaths).not.toHaveProperty('ai');
+    await expect(store.readSchema('ai')).rejects.toThrow(/同时指向 Host 与插件/);
+    await expect(store.validatePluginConfig('ai', {})).rejects.toThrow(/配置源码/);
+    expect(() => configKeyPatch(document, 'ai', {})).toThrow(/配置源码/);
+    expect(() => configKeyRemovePatch(document, 'ai')).toThrow(/配置源码/);
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(document);
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'collision-fixture', zhin: { plugins: [{ package: '@test/http', instanceKey: 'http' }] } }));
+    const hostOnly = { http: { port: 8098 }, plugins: {} };
+    await writeFile(file, JSON.stringify(hostOnly));
+    expect((await store.readSource()).configPaths).not.toHaveProperty('http');
+    await expect(store.readSchema('http')).rejects.toThrow(/已声明插件/);
+    await expect(store.setKey('http', { pluginOnly: 'required' })).rejects.toThrow(/配置源码/);
+    await expect(store.removeKey('http')).rejects.toThrow(/配置源码/);
+    expect(JSON.parse(await readFile(file, 'utf8'))).toEqual(hostOnly);
+  });
+
   it('loads only the selected production dotenv layer using formal Runtime environment rules', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-env-mode-'));
     tempRoots.push(root);
@@ -150,6 +177,7 @@ describe('config document flatten / write namespace', () => {
     const current = await configuration.readSource();
     expect(current.format).toBe('json');
     expect(current.configKeys).toEqual(['http']);
+    expect(current.configPaths).toEqual({ http: ['http'] });
     const source = '{\n  "http": { "port": 2000 }\n}\n';
     await expect(configuration.replaceSource(source, current.revision)).resolves.toEqual({
       revision: expect.any(String),
@@ -168,6 +196,7 @@ describe('config document flatten / write namespace', () => {
     const configuration = createStore(root, 'zhin.config.yml');
     const current = await configuration.readSource();
 
+    expect(current.configPaths?.sandbox).toEqual(['plugins', 'sandbox']);
     await expect(configuration.replaceSource(
       'plugins:\n  sandbox:\n    enabled: true\n',
       current.revision,

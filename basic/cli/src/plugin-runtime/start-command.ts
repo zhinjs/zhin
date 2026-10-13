@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import { PluginManagementActivity } from '../plugin-management/activity.js';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
@@ -110,6 +111,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 async function runProcessStartCommand(options: StartCommandOptions): Promise<void> {
+  const pluginManagementActivity = new PluginManagementActivity();
   const parsed = parseStartOptions(options.args);
   ensureTypeScriptSpecifierRemap();
   const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
@@ -257,8 +259,13 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     },
     async onRestartRequired(plan) {
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
+      if (pluginManagementActivity.active) {
+        getLogger('runtime').info('插件管理操作进行中，依赖变更等待操作完成后显式应用');
+        return;
+      }
       process.exitCode = processRestartExitCode;
       await control.stop();
+      process.exit(processRestartExitCode);
     },
     onReload(plan, generation, durationMs) {
       getLogger('runtime').info(formatCompact({
@@ -300,6 +307,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
+    pluginManagementActivity,
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
     onRestart: () => {

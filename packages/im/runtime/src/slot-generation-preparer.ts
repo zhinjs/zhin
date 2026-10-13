@@ -50,13 +50,11 @@ export class SlotGenerationPreparer {
       for (const slot of replacements) capabilities.set(slot.id, slot);
     }
 
-    // Capability-file HMR projects only the owning Features. The complete
-    // snapshot below is assembled by retaining every other projection.
-    const providers = [...selectedByFeature.keys()].map((feature) => {
-      const provider = this.model.providers.get(feature);
-      if (!provider) throw new Error(`Missing Feature provider for ${feature}`);
-      return provider;
-    });
+    // Snapshot-capturing execution indexes need a current view even when their
+    // own definitions were not edited. Retain only explicitly shareable resources.
+    const providers = [...this.model.providers.values()].filter((provider) =>
+      selectedByFeature.has(provider.id) || provider.runtime.retain !== 'when-owner-unchanged');
+    const projectedFeatures = providers.map((provider) => provider.id);
     const projected = await new FeatureProjector(providers).project(
       current.generation + 1,
       {
@@ -77,7 +75,7 @@ export class SlotGenerationPreparer {
         this.model.featureIdsByPackageRoot,
       );
       const assets = this.model.assets.replaceProjections(
-        selectedByFeature.keys(),
+        projectedFeatures,
         projected.disposers,
       );
       return prepareRuntimeGeneration(

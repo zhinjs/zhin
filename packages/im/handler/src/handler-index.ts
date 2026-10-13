@@ -97,7 +97,7 @@ export class HandlerIndex {
     const records = this.#byEvent.get(event);
     if (!records) return;
     for (const record of records) {
-      const base = createCapabilityContext(this.#snapshot, record.owner);
+      const base = createCapabilityContext(options?.snapshot ?? this.#snapshot, record.owner);
       const interaction = options?.resolveInteraction?.(event, args);
       const context: HandlerContext = Object.freeze({
         ...base,

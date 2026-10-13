@@ -6,7 +6,7 @@ import {
 } from '@zhin.js/plugin-runtime';
 import {
   OwnerCapabilityIndex,
-  createCapabilityContext,
+  createConstructionContext,
   type OwnerCapabilityEntry,
 } from '@zhin.js/feature-kit';
 import {
@@ -57,7 +57,7 @@ export class McpIndex {
       for (const entry of index.entries()) {
         signal.throwIfAborted();
         const client = await entry.slot.definition.create(
-          createCapabilityContext(snapshot, entry.owner, undefined, signal),
+          createConstructionContext(snapshot, entry.owner, undefined, signal),
         );
         signal.throwIfAborted();
         assertMcpClient(client, entry.source);

@@ -17,6 +17,7 @@ const mcpFeature = defineFeatureProvider({
     validate: parseMcpDefinition,
   },
   runtime: {
+    retain: 'when-owner-unchanged',
     async project(slots, context) {
       const index = await McpIndex.create(slots, context.snapshot, context.signal);
       return {

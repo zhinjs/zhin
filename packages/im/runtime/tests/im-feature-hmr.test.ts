@@ -34,7 +34,7 @@ afterEach(async () => {
 });
 
 describe('IM Feature slot HMR', () => {
-  it('replaces only the changed Feature projection and keeps Adapter endpoints running', async () => {
+  it('refreshes operation views while keeping unchanged Adapter endpoints running', async () => {
     const project = await createProject();
     const modules = new FakeModules();
     const pluginSource = join(project, 'plugin.ts');
@@ -103,8 +103,8 @@ describe('IM Feature slot HMR', () => {
     expect(second.generation).toBe(2);
     await expect(runPing(second)).resolves.toBe('ping:v2');
     expect(second.projections.get(adapterFeatureId)).toBe(first.projections.get(adapterFeatureId));
-    expect(second.projections.get(componentFeatureId)).toBe(first.projections.get(componentFeatureId));
-    expect(second.projections.get(middlewareFeatureId)).toBe(first.projections.get(middlewareFeatureId));
+    expect(second.projections.get(componentFeatureId)).not.toBe(first.projections.get(componentFeatureId));
+    expect(second.projections.get(middlewareFeatureId)).not.toBe(first.projections.get(middlewareFeatureId));
     expect(endpoints).toEqual({ creates: 1, starts: 1, opens: 1, closes: 0, stops: 0 });
     expect(modules.loadCount(commandSource)).toBe(2);
     expect(modules.loadCount(adapterSource)).toBe(1);
@@ -116,7 +116,7 @@ describe('IM Feature slot HMR', () => {
 
     expect(third.generation).toBe(3);
     await expect(runTrace(third)).resolves.toEqual(['v2:enter', 'terminal', 'v2:exit']);
-    await expect(renderStatus(third)).resolves.toBe('status:v1:1');
+    await expect(renderStatus(third)).resolves.toBe('status:v1:3');
     expect(third.projections.get(adapterFeatureId)).toBe(first.projections.get(adapterFeatureId));
     expect(endpoints).toEqual({ creates: 1, starts: 1, opens: 1, closes: 0, stops: 0 });
     expect(modules.loadCount(middlewareSource)).toBe(2);

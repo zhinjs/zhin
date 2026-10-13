@@ -79,6 +79,17 @@ const testEndpointEvents = Object.freeze({
 });
 
 describe('Adapter Feature', () => {
+  it('rejects JavaScript project access during transport creation instead of capturing another Feature', async () => {
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: adapterFeatureId, localName: 'invalid-construction', source: '/fixture/index.ts',
+      definition: defineAdapter({ capabilities: ['outbound'], create(context) {
+        expect(Reflect.has(context, 'project')).toBe(false);
+        const invalid = context as unknown as { project(feature: unknown): never };
+        return invalid.project(adapterFeatureId);
+      } }),
+    });
+    await expect(createAdapterIndex([slot], snapshot([slot]))).rejects.toThrow(/project/);
+  });
+
   it('derives explicit endpoint operations from the adapter declaration', () => {
     const definition = defineAdapter({
       capabilities: ['inbound', 'outbound'],

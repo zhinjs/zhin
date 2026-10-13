@@ -10,7 +10,7 @@ import {
 import { HOST_CONFIG_KEYS, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../start/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
-import { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
+import { assertUnambiguousConfigKey, configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
 import { PluginSchemaCatalog } from './plugin-schema-catalog.js';
 
@@ -41,11 +41,19 @@ export class ConsoleConfigurationStore {
   readSource(): Promise<ConsoleConfigSource> {
     return this.#afterMutations(async () => {
       const snapshot = await this.#document.readSource();
+      const configKeys = await this.#listKeys(snapshot.document);
+      const declaredPlugins = await readPluginPackageMap(this.#projectRoot);
+      const pluginConfigs = readPluginConfigurationMap(snapshot.document);
       return Object.freeze({
         source: snapshot.source,
         format: snapshot.format === 'YAML' ? 'yaml' : 'json',
         revision: snapshot.revision,
-        configKeys: await this.#listKeys(snapshot.document),
+        configKeys,
+        configPaths: Object.freeze(Object.fromEntries(configKeys.filter(key =>
+          !HOST_CONFIG_KEYS.includes(key as typeof HOST_CONFIG_KEYS[number])
+          || (!declaredPlugins.has(key)
+            && !Object.prototype.hasOwnProperty.call(pluginConfigs, key))).map(key =>
+          [key, configKeyPatch(snapshot.document, key, undefined).path]))),
       });
     });
   }
@@ -78,6 +86,7 @@ export class ConsoleConfigurationStore {
   setKey(pluginName: string, data: unknown): Promise<{ restartRequired: boolean }> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
+      await this.#assertUnambiguousKey(current.document, pluginName);
       const prepared = await this.#document.prepare(current, [
         configKeyPatch(current.document, pluginName, data),
       ]);
@@ -89,6 +98,7 @@ export class ConsoleConfigurationStore {
   removeKey(pluginName: string): Promise<{ restartRequired: boolean }> {
     return this.#serialize(async () => {
       const current = await this.#document.read();
+      await this.#assertUnambiguousKey(current.document, pluginName);
       const prepared = await this.#document.prepare(current, [
         configKeyRemovePatch(current.document, pluginName),
       ]);
@@ -105,11 +115,13 @@ export class ConsoleConfigurationStore {
     return writeEnvFile(this.#projectRoot, filename, content);
   }
 
-  readSchema(pluginName?: string): Promise<unknown> {
+  async readSchema(pluginName?: string): Promise<unknown> {
+    if (pluginName) await this.#assertUnambiguousKey((await this.#document.read()).document, pluginName);
     return this.#schemas.read(pluginName);
   }
 
   async validatePluginConfig(pluginName: string, data: unknown): Promise<PluginConfigValidation> {
+    await this.#assertUnambiguousKey((await this.#document.read()).document, pluginName);
     const schema = await this.#schemas.readJson(pluginName);
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
@@ -160,6 +172,13 @@ export class ConsoleConfigurationStore {
     }
     for (const key of (await readPluginPackageMap(this.#projectRoot)).keys()) keys.add(key);
     return [...keys].sort((left, right) => left.localeCompare(right));
+  }
+
+  async #assertUnambiguousKey(document: RuntimeConfigDocument, key: string): Promise<void> {
+    assertUnambiguousConfigKey(document, key);
+    if (HOST_CONFIG_KEYS.includes(key) && (await readPluginPackageMap(this.#projectRoot)).has(key)) {
+      throw new Error(`配置键 ${key} 同时指向 Host 与已声明插件；请在配置源码中明确编辑 ${key} 或 plugins.${key}`);
+    }
   }
 
   #afterMutations<T>(operation: () => Promise<T>): Promise<T> {

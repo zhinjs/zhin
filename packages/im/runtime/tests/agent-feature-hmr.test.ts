@@ -109,6 +109,7 @@ describe('Agent Feature slot HMR', () => {
     expect(readAgent(first)).toBe('Planner v1');
     expect(readPrompt(first)).toBe('Project rules v1');
     await expect(callMcp(first)).resolves.toEqual({ value: 'x' });
+    await expect(projection(first, mcpFeatureId, McpIndex).callTool(rootPluginId(), 'memory', 'illegal-project', {})).rejects.toThrow(/project/);
     expect(setups).toBe(1);
 
     const hmr = runtime.createHmrCoordinator({
@@ -123,6 +124,7 @@ describe('Agent Feature slot HMR', () => {
     expect(readAgent(second)).toBe('Planner v1');
     expect(readPrompt(second)).toBe('Project rules v1');
     expect(second.projections.get(mcpFeatureId)).toBe(firstMcp);
+    await expect(projection(second, mcpFeatureId, McpIndex).callTool(rootPluginId(), 'memory', 'illegal-project', {})).rejects.toThrow(/project/);
     expect(modules.loadCount(toolSource)).toBe(2);
     expect(modules.loadCount(mcpSource)).toBe(1);
     expect(setups).toBe(1);
@@ -133,8 +135,8 @@ describe('Agent Feature slot HMR', () => {
 
     expect(readAgent(third)).toBe('Planner v2');
     expect(readPrompt(third)).toBe('Project rules v1');
-    await expect(executeTool(third)).resolves.toBe('v2:value:2');
-    expect(third.projections.get(toolFeatureId)).toBe(second.projections.get(toolFeatureId));
+    await expect(executeTool(third)).resolves.toBe('v2:value:3');
+    expect(third.projections.get(toolFeatureId)).not.toBe(second.projections.get(toolFeatureId));
     expect(third.projections.get(mcpFeatureId)).toBe(firstMcp);
     for (const provider of Object.values(providers)) {
       expect(modules.loadCount(provider)).toBe(1);
@@ -162,11 +164,13 @@ function lookupTool(version: string) {
 
 function memoryMcp(events: string[]) {
   return defineMcp({
-    create: () => ({
+    create: (context) => ({
       start() { events.push('start'); },
       stop() { events.push('stop'); },
       listTools: () => [{ name: 'search' }],
-      callTool: (_name, input) => input,
+      callTool: (name, input) => name === 'illegal-project'
+        ? (context as unknown as { project(feature: unknown): unknown }).project(toolFeatureId)
+        : input,
     }),
   });
 }

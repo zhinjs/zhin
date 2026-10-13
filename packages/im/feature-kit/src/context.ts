@@ -8,22 +8,28 @@ import {
   type Token,
 } from '@zhin.js/plugin-runtime';
 
-export interface CapabilityContext<TConfig = unknown> {
+/** Owner-lifetime resources available while constructing a reusable transport. */
+export interface ConstructionContext<TConfig = unknown> {
   readonly signal: AbortSignal;
   readonly owner: PluginNodeSnapshot;
   readonly generation: number;
   readonly config: Readonly<TConfig>;
   use<T>(token: Token<T>): T;
+}
+
+/** Context for an operation whose caller owns this generation snapshot. */
+export interface CapabilityContext<TConfig = unknown> extends ConstructionContext<TConfig> {
   /** Resolve a generation-owned Feature projection from this operation's snapshot. */
   project<T>(feature: FeatureId): T;
 }
 
-export function createCapabilityContext<TConfig = unknown>(
+/** Deliberately excludes operation projections from the actual runtime object. */
+export function createConstructionContext<TConfig = unknown>(
   snapshot: RuntimeSnapshot,
   ownerId: PluginId,
   admission?: GenerationAdmissionGate,
   signal: AbortSignal = new AbortController().signal,
-): CapabilityContext<TConfig> {
+): ConstructionContext<TConfig> {
   const owner = snapshot.tree.get(ownerId);
   const resources = snapshot.resources.get(ownerId);
   if (!owner || !resources) throw new Error(`Broken Capability owner: ${ownerId}`);
@@ -39,6 +45,17 @@ export function createCapabilityContext<TConfig = unknown>(
       const value = resources.get(token.id) as T;
       return admission ? bindGenerationAdmission(value, admission) : value;
     },
+  });
+}
+
+export function createCapabilityContext<TConfig = unknown>(
+  snapshot: RuntimeSnapshot,
+  ownerId: PluginId,
+  admission?: GenerationAdmissionGate,
+  signal: AbortSignal = new AbortController().signal,
+): CapabilityContext<TConfig> {
+  return Object.freeze({
+    ...createConstructionContext<TConfig>(snapshot, ownerId, admission, signal),
     project<T>(feature: FeatureId): T {
       if (!snapshot.projections.has(feature)) {
         throw new Error(`Missing Feature projection ${feature}`);

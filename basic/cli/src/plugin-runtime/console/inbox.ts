@@ -73,7 +73,12 @@ export function buildInboxMessageRow(
       : (event.sender?.name ?? null),
     sender_payload: '{}',
     content: event.contentPreview,
-    raw: null,
+    raw: JSON.stringify({
+      $console: 'zhin.message-observation/1',
+      direction: event.direction,
+      conversation: event.conversation,
+      ...(event.rendering ? { rendering: event.rendering } : {}),
+    }),
     created_at: event.timestamp,
   };
 }

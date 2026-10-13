@@ -145,4 +145,28 @@ describe('generation admission', () => {
     await owner.close();
     await foreignOwner.close();
   });
+  it('publishes the pointer and complete admission vector before synchronous activation/retirement callbacks', async () => {
+    const root = new RootController(state());
+    const old = createGenerationAdmissionGate();
+    await root.start(() => ({ snapshot: state(old), dispose: () => undefined }));
+    const first = createGenerationAdmissionGate();
+    const second = createGenerationAdmissionGate();
+    const observed: number[] = [];
+    old.onDeactivate(() => {
+      expect(first.active).toBe(true); expect(second.active).toBe(true);
+      const lease = root.snapshots.acquire(); observed.push(lease.value.generation); lease.release();
+    });
+    first.onActivate(() => {
+      expect(second.active).toBe(true); expect(old.active).toBe(false);
+      const lease = root.snapshots.acquire(); observed.push(lease.value.generation); lease.release();
+      expect(second.enter(() => root.snapshot.generation)).toBe(2);
+    });
+    const candidate: SnapshotState = { ...state(first),
+      projections: new Map([[ingressFeature, { [generationAdmissionSource]: [first, second] }]]),
+    };
+    await root.transact(() => ({ snapshot: candidate, dispose: () => undefined }));
+    expect(observed).toEqual([2, 2]);
+    await root.stop();
+  });
+
 });
