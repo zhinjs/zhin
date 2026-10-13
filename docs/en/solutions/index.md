@@ -7,7 +7,7 @@ useful.
 | What you want to deliver | Start here | You are done when |
 | --- | --- | --- |
 | A bot that receives and sends messages | [IM Bot path](/en/paths/im-bot) | Sandbox and a real platform share the same command and message flow |
-| A bot that understands your business | [Add governed Agent context](/en/authoring/agent-tools#give-the-ai-business-context) | The Prompt Section is in the current generation and visible in Console |
+| A bot that understands your business | [Give the AI business context](/en/authoring/agent-tools#give-the-ai-business-context) | Console's capability catalog shows your Prompt Section is active |
 | Tools, MCP, skills, and sub-agents | [AI Agent path](/en/paths/ai-agent) | The Agent sees only capabilities authorized for the current turn |
 | Operate and diagnose a deployed bot | [Console Admin path](/en/paths/console) | You can inspect endpoints, logs, capabilities, and Agent runs |
 | Operate one product through multiple accounts | [Multi-Endpoint operations](/en/solutions/multi-endpoint-operations) | Each account is diagnosable while business capabilities stay shared |
@@ -18,11 +18,9 @@ useful.
 
 ## Recommended delivery order
 
-1. Establish a repeatable golden path in Sandbox.
+1. Get the simplest flow working in Sandbox first.
 2. Connect one real platform without leaking adapter details into business code.
 3. Enable AI only when needed; govern prompts, tools, and authority separately.
-4. Use Console to verify the generation that is actually published instead of
-   treating the configuration file as runtime truth.
+4. Use Console to confirm what is actually running, rather than trusting what the config file says.
 
-If you do not have a project yet, use the default IM golden path in
-[Quick Start](/en/getting-started/).
+No project yet? Start with the [Quick Start](/en/getting-started/).
