@@ -71,6 +71,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     const pluginName = resolvePluginNameForEnable(pluginToInstall, pluginType, process.cwd());
     const shouldEnable = options.enable !== false && !options.global;
+    if (options.saveDev && shouldEnable) throw new Error('--save-dev 不能自动启用 Runtime 插件，请改用生产依赖或加 --no-enable');
     const enablePreview = shouldEnable && pluginName
       ? previewEnablePlugin(process.cwd(), pluginName)
       : undefined;
@@ -100,7 +101,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
     }
     if (!pluginName) throw new Error('无法确定包名，请使用 npm 包名或带 package.json 的本地目录');
     const result = await new PluginManagementWorkflow(process.cwd()).install(
-      pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:')
+      pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall)
         ? pluginToInstall : pluginName,
       undefined, undefined,
       { enable: shouldEnable, saveDev: options.saveDev, source: installArgs.at(-1) },

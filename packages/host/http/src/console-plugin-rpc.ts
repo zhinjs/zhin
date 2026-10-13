@@ -48,7 +48,7 @@ export async function dispatchPluginConsoleRpc(
         if (!name) return { requestId, error: 'instanceKey or packageName is required' };
         const port = ctx.pluginManagement;
         if (!port) return { requestId, error: 'Plugin management is not configured' };
-        if (type === PLUGIN_RPC.APPLY || type === PLUGIN_RPC.VERIFY) {
+        if (type === PLUGIN_RPC.APPLY || type === PLUGIN_RPC.PLAN_VERIFICATION || type === PLUGIN_RPC.VERIFY) {
           if (ctx.authScope !== 'full') return { requestId, error: 'Full scope required' };
         }
         if (type === PLUGIN_RPC.INSPECT && port.inspect) return { requestId, data: await port.inspect(name) };

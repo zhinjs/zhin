@@ -8,6 +8,7 @@ import { type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract
 import { rootPluginId, type ConfigPatch, type PluginId, type RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { NativeDevelopmentModuleRuntime, NodePackageResolver, RootRuntime,
   type ModuleRuntime, type RootResourceInstaller } from '@zhin.js/runtime';
+import { captureDeliveryValue } from './delivery-capture.js';
 import { withTestEndpoints } from './test-module-runtime.js';
 
 export interface PluginTestKitOptions {
@@ -80,8 +81,8 @@ export class PluginTestKit {
         send: (request: EndpointSendRequest) => {
           const id = `test-${this.#nextDelivery++}`;
           this.#attempts.push(Object.freeze({ endpoint: name, id,
-            conversation: freezeValue(structuredClone(request.conversation)),
-            payload: freezeValue(structuredClone(request.payload)),
+            conversation: captureDeliveryValue(request.conversation),
+            payload: captureDeliveryValue(request.payload),
           }));
           return id;
         },
@@ -117,7 +118,7 @@ export class PluginTestKit {
   /** The same PermissionHost consumed by real command admission. */
   get permissions(): ImRuntime['permissionHost'] { return this.#im.permissionHost; }
   get generation(): number { return this.#root.snapshot.generation; }
-  get deliveries(): readonly TestDelivery[] { return Object.freeze(this.#attempts.map(item => freezeValue(structuredClone(item)))); }
+  get deliveries(): readonly TestDelivery[] { return Object.freeze(this.#attempts.map(item => captureDeliveryValue(item))); }
   clearDeliveries(): void { this.#attempts.splice(0); }
 
   start(): Promise<number> {
@@ -190,12 +191,4 @@ export class PluginTestKit {
     if (!sink) throw new Error(`Unknown test endpoint: ${endpoint}`);
     return sink;
   }
-}
-
-function freezeValue<T>(value: T): T {
-  if (value && typeof value === 'object' && !ArrayBuffer.isView(value)) {
-    for (const child of Object.values(value)) freezeValue(child);
-    Object.freeze(value);
-  }
-  return value;
 }

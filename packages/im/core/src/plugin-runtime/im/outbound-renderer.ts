@@ -45,7 +45,7 @@ export class OutboundRenderer {
     }
     const buttons = new JsxButtonRegistry().prepare({ content, requester, conversation }, snapshot);
     const rendered = await this.render(content, requester, snapshot, conversation, undefined, { ...options, bindButton: buttons.bind });
-    const result = await projectOutboundPayload(rendered, conversation, snapshot);
+    const result = await projectOutboundPayload(rendered, conversation, snapshot, options);
     options.signal?.throwIfAborted();
     return result;
   }

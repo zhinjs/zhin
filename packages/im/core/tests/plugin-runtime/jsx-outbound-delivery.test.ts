@@ -114,8 +114,8 @@ async function fixture(options: FixtureOptions = {}) {
     sent,
     record,
     publish,
-    preview: (content: SendContent) => new OutboundRenderer().preview(content, root, snapshot,
-      { endpoint: { id: String(adapter.id), adapter: 'test' }, kind: 'private', id: 'room' }),
+    preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, root, snapshot,
+      { endpoint: { id: String(adapter.id), adapter: 'test' }, kind: 'private', id: 'room' }, { signal }),
     send: (content: SendContent) => runtime.deliver({
       requester: root,
       conversation: { endpoint: { id: String(adapter.id), adapter: String(root) }, kind: 'private', id: 'room' },
@@ -135,6 +135,28 @@ function rasterRenderer() {
 }
 
 describe('JSX outbound delivery through a real Endpoint', () => {
+  it('cancels a target preview while the HTML host is pending without text fallback or sending', async () => {
+    const controller = new AbortController();
+    let started!: () => void, rejectHost!: (error: Error) => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const host = { render: vi.fn((_html: string, options?: HtmlRenderOptions) => {
+      expect(options?.signal).toBe(controller.signal);
+      started();
+      return new Promise<never>((_resolve, reject) => { rejectHost = reject; });
+    }) };
+    const f = await fixture({ segments: { html: 'image' }, renderer: host });
+    const preview = f.preview(jsx(Html, { children: 'Pending' }), controller.signal);
+    const reason = new Error('preview canceled');
+    const rejected = expect(preview).rejects.toBe(reason);
+    await entered;
+    controller.abort(reason);
+    await rejected;
+    rejectHost(new Error('late renderer failure'));
+    await Promise.resolve();
+    expect(f.sent).toEqual([]);
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.record).not.toHaveBeenCalled();
+  });
   it.each(['array', 'text'] as const)('drops discarded fallback diagnostics after middleware mutates %s in place', async mode => {
     const f = await fixture({ mutate(payload) {
       if (!Array.isArray(payload)) throw new Error('Expected normalized segments');

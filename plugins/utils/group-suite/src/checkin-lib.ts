@@ -158,7 +158,8 @@ export async function pointsRank(
     const prefix = i < 3 ? medals[i] : `${i + 1}.`;
     return `${prefix} ${u.user_name || u.user_id} — ${u.points}分 (${u.total_checkins}天)`;
   });
-  const title = ctxType === 'group' ? '本群积分排行' : '全局积分排行';
+  const title = ctxType === 'group' ? '本群积分排行'
+    : ctxType === 'channel' ? '本频道积分排行' : '当前私聊积分排行';
   const { id: userId } = resolveSender(input);
   const myRank = sorted.findIndex((u) => u.user_id === userId);
   const footer = myRank >= 0 ? `\n你的排名: 第${myRank + 1}名` : '';

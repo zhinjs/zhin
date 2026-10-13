@@ -39,5 +39,7 @@ export function toolGroupConversation(context: {
   return createDeliveryTarget({ conversation: {
     endpoint: { id: String(matches[0]!.id), adapter: origin.platform },
     kind: 'group', id: groupId ?? origin.sceneId,
+    ...(origin.threadId !== undefined && (groupId === undefined || groupId === origin.sceneId)
+      ? { threadId: origin.threadId } : {}),
   } });
 }

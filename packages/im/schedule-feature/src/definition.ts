@@ -10,8 +10,8 @@ export interface ScheduleDefinition<TConfig = unknown> {
 }
 
 declare module '@zhin.js/plugin-runtime' {
-  interface PluginSetupContext {
-    addSchedule(localName: string, definition: ScheduleDefinition): void;
+  interface PluginSetupContext<TConfig = unknown> {
+    addSchedule(localName: string, definition: ScheduleDefinition<TConfig>): void;
   }
 }
 

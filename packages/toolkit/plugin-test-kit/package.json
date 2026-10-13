@@ -6,7 +6,7 @@
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
   "exports": { ".": { "types": "./lib/index.d.ts", "development": "./src/index.ts", "import": "./lib/index.js" } },
-  "files": ["lib", "README.md"],
+  "files": ["lib", "src", "README.md"],
   "scripts": { "build": "tsc", "clean": "rimraf lib", "test": "vitest run --root ../../.. packages/toolkit/plugin-test-kit/tests", "prepublishOnly": "pnpm run build" },
   "dependencies": {
     "@zhin.js/adapter": "workspace:*",

@@ -45,6 +45,33 @@ async function mounted(root: string, names = ['reminder']) {
 }
 
 describe('Shared CLI and Console plugin workflow', () => {
+  it('plans dependency-only installs without manifest or configuration writes', async () => {
+    const root = await fixture();
+    const before = await readFile(join(root, 'package.json'), 'utf8');
+    expect(await new PluginManagementWorkflow(root).planInstall('reminder', { enable: false })).toMatchObject({ restartRequired: false, changes: { packageManifest: 'unchanged', config: 'unchanged' } });
+    expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(before);
+  });
+
+  it('rejects save-dev and enable before invoking the package manager or changing any project file', async () => {
+    const root = await fixture();
+    const runner = vi.fn(runPackageManager);
+    const before = await readFile(join(root, 'package.json'), 'utf8');
+    await expect(new PluginManagementWorkflow(root, { installDependencies: runner }).install('reminder', undefined, undefined, { saveDev: true })).rejects.toThrow('--no-enable');
+    expect(runner).not.toHaveBeenCalled();
+    expect(await readFile(join(root, 'package.json'), 'utf8')).toBe(before);
+  });
+
+  it.each(['ordinary', 'missing-feature'])('rejects a version-matching update to an invalid %s package and reports completed stages', async kind => {
+    const root = await fixture();
+    await mounted(root);
+    const workflow = new PluginManagementWorkflow(root, { installDependencies: async (args, directory) => {
+      await runPackageManager(args, directory);
+      await writeFile(join(root, 'node_modules/reminder/package.json'), JSON.stringify({ name: 'reminder', version: '2.0.0', ...(kind === 'ordinary' ? {} : { dependencies: { 'missing-feature': '^1' }, zhin: { ...manifest, features: [{ package: 'missing-feature' }] } }) }));
+    } });
+    await expect(workflow.update('reminder', '2.0.0')).rejects.toMatchObject({ name: 'PluginManagementOperationError', completedStages: ['dependency-update'] });
+    expect(await workflow.inspect('reminder')).toMatchObject({ version: '2.0.0' });
+  });
+
   it('does not equate a dependency declaration with an installed package', async () => {
     const root = await fixture();
     const file = join(root, 'package.json');

@@ -36,7 +36,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
       const data = await Promise.all(plugins.map(async plugin => ({
         ...plugin,
         manageable: authScope !== 'demo' && plugin.manageable,
-        ...(plugin.manageable && pluginManagement?.inspect ? { management: await pluginManagement.inspect(plugin.instanceKey) } : {}),
+        ...await inspectPlugin(pluginManagement, plugin.instanceKey, plugin.manageable),
       })));
       writeJson(response, 200, { success: true, data, total: plugins.length });
     } catch (error) {
@@ -83,7 +83,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
           success: true,
           data: {
             ...managed,
-            ...(managed.manageable && pluginManagement?.inspect ? { management: await pluginManagement.inspect(managed.instanceKey) } : {}),
+            ...await inspectPlugin(pluginManagement, managed.instanceKey, managed.manageable),
             manageable: authScope !== 'demo' && managed.manageable,
             readOnly: authScope === 'demo',
             packageRoot: displayConsolePath(packageDir, projectRoot),
@@ -103,7 +103,7 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
         ), manageable: authScope !== 'demo' && managedPlugins.some(item =>
           item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable,
         ), readOnly: authScope === 'demo',
-        ...(pluginManagement?.inspect && managedPlugins.some(item => item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable) ? { management: await pluginManagement.inspect(node.instanceKey) } : {}) },
+        ...await inspectPlugin(pluginManagement, node.instanceKey, managedPlugins.some(item => item.instanceKey === node.instanceKey && item.packageName === node.packageName && item.manageable)) },
       });
     } catch (error) {
       writeJson(response, 500, {
@@ -115,4 +115,10 @@ export function registerConsolePluginRoutes(options: RegisterConsolePluginRoutes
     summary: 'Plugin detail',
     tags: ['plugins'],
   });
+}
+
+async function inspectPlugin(port: PluginManagementPort | undefined, instanceKey: string, manageable: boolean) {
+  if (!manageable || !port?.inspect) return {};
+  try { return { management: await port.inspect(instanceKey) }; }
+  catch (error) { return { managementError: error instanceof Error ? error.message : String(error) }; }
 }

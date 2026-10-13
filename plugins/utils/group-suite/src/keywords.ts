@@ -5,6 +5,10 @@ import { requireConversation } from './conversation-scope.js';
 import { keywordStore } from './keyword-store.js';
 import { resolveGroupSuiteRuntime } from './runtime-state.js';
 
+export const KEYWORD_STORAGE_REQUIREMENT = '关键词管理需要 Database Host 的持久状态服务；请配置数据库，或显式设置 ephemeralKeywords: true 使用临时词库';
+class KeywordStorageRequirementError extends Error {}
+const MAX_KEYWORD_BYTES = 64 * 1024;
+
 type KeywordRows = readonly (readonly [string, string])[];
 interface KeywordContext {
   readonly config: Readonly<Partial<GroupSuiteConfig>>;
@@ -28,7 +32,11 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
       },
     };
   }
-  const state = context.use(databaseHostToken).state.forConversation(createDeliveryTarget({ conversation: target }));
+  const hostState = (() => {
+    try { return context.use(databaseHostToken).state; }
+    catch (cause) { throw new KeywordStorageRequirementError(KEYWORD_STORAGE_REQUIREMENT, { cause }); }
+  })();
+  const state = hostState.forConversation(createDeliveryTarget({ conversation: target }));
   return {
     read: async () => (await state.get<KeywordRows>('keywords')) ?? [],
     update: async (updater: (current: Map<string, string>) => void) => {
@@ -42,8 +50,20 @@ export function keywords(input: ConversationInput | undefined, context: KeywordC
   };
 }
 
+/** Management commands surface a storage requirement instead of inventing an empty dictionary. */
+export function keywordsForCommand(input: ConversationInput | undefined, context: KeywordContext) {
+  try { return keywords(input, context); }
+  catch (error) {
+    if (error instanceof KeywordStorageRequirementError) return error.message;
+    throw error;
+  }
+}
+
 function assertLimit(store: Map<string, string>): void {
   if (store.size > 200) throw new Error('Group keywords are limited to 200 entries');
+  if (new TextEncoder().encode(JSON.stringify([...store.entries()])).byteLength >= MAX_KEYWORD_BYTES) {
+    throw new Error('Keyword dictionary JSON must be below 64 KiB (UTF-8); shorten replies or remove entries');
+  }
   for (const [keyword, reply] of store) {
     if (!keyword || keyword.length > 200 || !reply || reply.length > 2000) {
       throw new Error('Keyword must contain 1–200 characters and reply 1–2000 characters');

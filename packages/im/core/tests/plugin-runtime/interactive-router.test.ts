@@ -13,6 +13,7 @@ describe('Interactive fallback numbering', () => {
       clock.mockReturnValue(1100);
       expect(router.resolvePayload(message('1'))).toBeUndefined();
       expect(router.isExpiredFallback(message('1'))).toBe(true);
+      expect(router.isExpiredFallback({ ...message('1'), conversation: { ...conversation, endpoint: { ...conversation.endpoint, id: 'other' } } } as Message)).toBe(false);
       expect(router.isExpiredFallback({ ...message('1'), conversation: { ...conversation, threadId: 'other' } } as Message)).toBe(false);
       expect(router.isExpiredFallback(message('2'))).toBe(false);
       clock.mockReturnValue(1200);

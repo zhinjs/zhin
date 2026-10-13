@@ -44,7 +44,7 @@ write files or send real messages. Never point it at a production app or include
 
 - `receive()` enters the synthetic Endpoint event sink, then real ingress/middleware/command dispatch.
 - `send()` runs the real renderer, outbound middleware and segment negotiation; terminal captures are
-  detached, readonly snapshots in `deliveries`. `clearDeliveries()` clears them without reusing message IDs.
+  detached, readonly metadata snapshots in `deliveries`. Node/Web streams remain opaque references: captures do not consume or freeze them, so tests may inspect identity and subsequently read the stream. Byte buffers are copied. `clearDeliveries()` clears captures without reusing message IDs.
 - `reloadSource(absolutePath)` submits a changed file to the real HMR coordinator and reports `reloaded`,
   `unchanged`, `failed` or `restart-required`, with the committed generation. Edit the test app first.
   A process restart requirement latches the native coordinator; close this kit and create a new one.
@@ -71,3 +71,11 @@ SQLite test-state persistence is real; the fixture's statistics/check-in/teachin
 The HTML renderer is a stub. These tests do **not** prove browser screenshot fidelity, platform
 login, delivery, role mapping or production database portability. Real-platform acceptance remains a
 separate, explicitly authorized test with an adapter account and harmless target conversation.
+
+## SQLite fixture compatibility
+
+The kit itself supports Node 20.19+ and does not require SQLite. Its base native integration test
+runs without importing `node:sqlite`. SQLite-specific repository acceptance requires Node 22.5+;
+Node 22.5–22.12 child processes include `--experimental-sqlite`, and Node 20 explicitly skips those
+optional persistence cases. They never substitute memory storage while claiming durable persistence.
+The selected flags also propagate into the fresh-process restart probe.

@@ -24,8 +24,10 @@ export async function projectOutboundPayload(
     readonly inheritedFallbacks?: readonly OutboundFallbackReason[];
     /** Keep keyboard payloads until outbound middleware has had a chance to replace them. */
     readonly deferInteractive?: boolean;
+    readonly signal?: AbortSignal;
   } = {},
 ): Promise<OutboundProjection> {
+  options.signal?.throwIfAborted();
   const adapter = conversation.endpoint.id as CapabilityId;
   const reasons = new Set(options.inheritedFallbacks);
   const values = Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered;
@@ -38,7 +40,9 @@ export async function projectOutboundPayload(
     mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
     htmlPolicy: resolveOutboundHtmlPolicy(adapter, snapshot),
     onFallback: reason => reasons.add(reason),
+    signal: options.signal,
   });
+  options.signal?.throwIfAborted();
   const interactive = resolveOutboundInteractivePolicy(adapter, snapshot);
   if (interactive === 'text' && Array.isArray(payload) && payload.some(item => item?.type === 'keyboard')) {
     reasons.add('interactive_text_policy');

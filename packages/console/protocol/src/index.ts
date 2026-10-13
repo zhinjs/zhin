@@ -406,7 +406,6 @@ export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([
   'pages:list',
   // Raw persisted configuration may contain secrets; demo is not a general read-only authority.
   PLUGIN_RPC.INSPECT,
-  PLUGIN_RPC.PLAN_VERIFICATION,
   PLUGIN_RPC.PLAN_INSTALL,
   PLUGIN_RPC.PLAN_UNINSTALL,
   PLUGIN_RPC.PLAN_UPDATE,

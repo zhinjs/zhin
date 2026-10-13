@@ -4,6 +4,30 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { JsonConfigDocument } from '../src/json-config-document.js';
 import { withConfigFileLock } from '../src/config-file-lock.js';
+import { writeFileSync, unlinkSync } from 'node:fs';
+
+it.each(['replaced', 'released'] as const)('rechecks an exited writer marker that was %s before diagnosing abandonment', async mode => {
+  const directory = await mkdtemp(join(tmpdir(), 'zhin-config-probe-race-'));
+  const file = join(directory, 'config.json'), lock = join(directory, '.config.json.zhin-lock');
+  const oldPid = 999999;
+  const probe = vi.spyOn(process, 'kill').mockImplementation(pid => {
+    if (pid === oldPid) {
+      if (mode === 'released') unlinkSync(lock);
+      else writeFileSync(lock, JSON.stringify({ pid: process.pid, nonce: 'live-successor' }));
+      throw Object.assign(new Error('old writer exited'), { code: 'ESRCH' });
+    }
+    expect(pid).toBe(process.pid);
+    unlinkSync(lock); // The live successor finishes before the next acquisition.
+    return true;
+  });
+  try {
+    await writeFile(lock, JSON.stringify({ pid: oldPid, nonce: 'old-writer' }));
+    const operation = vi.fn(async () => 'committed');
+    await expect(withConfigFileLock(file, operation)).resolves.toBe('committed');
+    expect(operation).toHaveBeenCalledOnce();
+    await expect(readFile(lock, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
+  } finally { probe.mockRestore(); await rm(directory, { recursive: true, force: true }); }
+});
 
 it('admits only one of two concurrently committed transactions prepared from the same revision', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'zhin-config-concurrent-')); const file = join(directory, 'config.json');

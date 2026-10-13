@@ -52,7 +52,7 @@
     "ephemeralKeywords": {
       "type": "boolean",
       "default": false,
-      "description": "Explicit volatile keywords; false requires persistent Database Host state."
+      "description": "Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked."
     }
   }
 }

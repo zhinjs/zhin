@@ -1,10 +1,10 @@
 // Test boundary only: the real PluginStateStore runs over durable SQLite CAS;
 // group statistics models are intentionally volatile here and are not a production database test.
-import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { createInMemoryGroupSuiteDb } from '../../../../plugins/utils/group-suite/src/memory-store.ts';
 
-export function sqliteStateHost(path) {
+export async function sqliteStateHost(path) {
+  const { DatabaseSync } = await import('node:sqlite');
   const sqlite = new DatabaseSync(path);
   sqlite.exec('CREATE TABLE IF NOT EXISTS test_state (id TEXT PRIMARY KEY, revision TEXT NOT NULL, value TEXT NOT NULL, expires_at INTEGER)');
   const stateKey = (owner, scope, key) => JSON.stringify([owner, scope, key]);

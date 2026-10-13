@@ -206,12 +206,13 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return Object.freeze({ ...target, ...await this.#revisions(), installed: installed.installed, plugin: installed.plugin, version: installed.version, declared, status, dependencies, validation, generation, published, readiness, restartRequired, disabled, issues: Object.freeze(issues), verification });
   }
 
-  async planInstall(request: string): Promise<PluginInstallPlan> {
+  async planInstall(request: string, options: Pick<PluginInstallOptions, 'enable'> = {}): Promise<PluginInstallPlan> {
     const spec = npmSpec(request);
     const state = await this.inspect(spec.name);
     const config = this.#configuration();
     const document = config ? await config.store.readDocument() : {};
-    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: !state.declared || state.restartRequired, changes: Object.freeze({ packageManifest: state.declared ? 'unchanged' : 'add-plugin', config: !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(!config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
+    const enable = options.enable !== false;
+    return Object.freeze({ packageName: spec.name, instanceKey: state.instanceKey, projectRevision: state.projectRevision, configurationRevision: state.revision, alreadyInstalled: state.installed, alreadyDeclared: state.declared, restartRequired: enable ? !state.declared || state.restartRequired : state.declared && state.restartRequired, changes: Object.freeze({ packageManifest: !enable || state.declared ? 'unchanged' : 'add-plugin', config: !enable ? 'unchanged' : !config ? 'schema-required' : Object.hasOwn(document, state.instanceKey) ? 'unchanged' : 'create-entry' }), warnings: Object.freeze([...state.issues, ...(enable && !config ? ['Root YAML/JSON 配置文件缺失，请先运行 zhin setup'] : []), '安装/声明不表示业务验证通过；配置就绪后显式 apply 和 verify']) });
   }
 
   async #assertRevision(expectedRevision?: string, expectedProjectRevision?: string) {
@@ -259,10 +260,11 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   }
 
   async install(request: string, expectedRevision?: string, expectedProjectRevision?: string, options: PluginInstallOptions = {}) {
+    if (options.saveDev && options.enable !== false) throw new Error('--save-dev cannot enable a Runtime plugin; use --no-enable or install as a production dependency');
     const spec = npmSpec(request);
     return this.#mutate(async completed => {
       const previous = await this.#assertRevision(expectedRevision, expectedProjectRevision);
-      const plan = await this.planInstall(request);
+      const plan = await this.planInstall(request, options);
       await this.#pnpm(['add', ...(options.saveDev ? ['-D'] : []), options.source ?? spec.spec]);
       completed.push('dependency-install');
       const installed = await this.#installed(spec.name);
@@ -340,6 +342,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       if ((await this.#revisions()).revision !== previous.revision) throw new Error('Root config changed during update');
       const state = await this.inspect(plan.instanceKey);
       if (state.version !== plan.targetVersion) throw new Error('Package manager did not install the requested exact version');
+      if (!state.installed || !state.plugin || state.dependencies !== 'passed' || state.issues.length) throw new Error('Updated package failed plugin/dependency verification');
       return { plan, installedVersion: state.version, restartRequired: !plan.alreadyCurrent };
     }, request);
   }

@@ -9,6 +9,7 @@ const CAPABILITY_DIRECTORIES = [
   'agents',
   'tools',
   'hooks',
+  'handlers',
   'commands',
   'components',
   'mcps',

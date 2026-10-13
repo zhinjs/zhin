@@ -14,6 +14,8 @@ export async function requestPluginConsole<T>(
   const base = url.pathname === '/' ? '/api' : url.pathname.replace(/\/$/u, '');
   url.pathname = `${base}/console/request`;
   const token = process.env[tokenEnvironment];
+  const loopback = url.hostname === 'localhost' || url.hostname === '[::1]' || /^127(?:\.\d{1,3}){3}$/u.test(url.hostname);
+  if (token && url.protocol === 'http:' && !loopback) throw new Error('Console credentials require HTTPS for non-loopback hosts');
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },

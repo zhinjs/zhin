@@ -78,7 +78,7 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
   if (opts.dryRun) {
     logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
     logger.log(`将执行: pnpm ${buildInstallArgs(source, 'npm', {}).join(' ')}`);
-    logger.log(JSON.stringify(await workflow.planInstall(source), null, 2));
+    logger.log(JSON.stringify(await workflow.planInstall(source, { enable: opts.enable }), null, 2));
     return;
   }
   const result = await workflow.install(source, undefined, undefined, { enable: opts.enable });
@@ -87,6 +87,7 @@ export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallO
   if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再检查当前 generation。');
   const hint = adapterConfigHintForPackage(resolved.package);
   if (hint) logger.log(hint);
+  if (resolved.adapter?.setupHint) logger.log(resolved.adapter.setupHint);
 }
 
 interface LiveOptions { live?: string; tokenEnv?: string }

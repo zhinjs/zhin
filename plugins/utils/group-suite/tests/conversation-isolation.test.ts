@@ -33,7 +33,7 @@ it('does not attribute legacy bare group records to any endpoint', async () => {
   expect(await tryTeachReply({ ...first, content: 'legacy' }, resolveGroupSuiteConfig({}), runtime)).toBeNull();
 });
 
-it('single-flights overlapping query/schedule flushes without losing new increments', async () => {
+it('serializes overlapping caller watermarks without draining traffic arriving later', async () => {
   const db = createInMemoryGroupSuiteDb();
   const model = db.models.get('message_stats')!;
   let resume!: () => void;
@@ -42,12 +42,13 @@ it('single-flights overlapping query/schedule flushes without losing new increme
   const runtime = createGroupSuiteRuntime({ models: { get: name => name === 'message_stats' ? delayed : db.models.get(name) } });
   recordMessage(first, runtime);
   const one = flushStatsBuffer(runtime);
+  recordMessage(first, runtime);
   const two = flushStatsBuffer(runtime);
-  expect(one).toBe(two);
   recordMessage(first, runtime); resume();
   await Promise.all([one, two]);
   expect([...runtime.statsBuffer.values()][0]?.count).toBe(1);
+  expect((await queryStats(resolveGroupId(first), '', runtime)).get('u')?.count).toBe(2);
   await flushStatsBuffer(runtime);
   expect(runtime.statsBuffer.size).toBe(0);
-  expect((await queryStats(resolveGroupId(first), '', runtime)).get('u')?.count).toBe(2);
+  expect((await queryStats(resolveGroupId(first), '', runtime)).get('u')?.count).toBe(3);
 });

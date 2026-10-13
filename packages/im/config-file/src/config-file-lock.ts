@@ -57,7 +57,15 @@ async function acquire(lock: string): Promise<FileHandle> {
       if (typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0) {
         try { process.kill(pid, 0); }
         catch (probe) {
-          if (hasCode(probe, 'ESRCH')) throw new Error(`Previous configuration writer ${pid} exited. Inspect ${lock} and the config file, then remove the abandoned lock before retrying.`, { cause: probe });
+          if (hasCode(probe, 'ESRCH')) {
+            // The probed writer may have released its lock before exiting;
+            // never diagnose a replacement writer's marker as abandoned.
+            let current: string;
+            try { current = await readFile(lock, 'utf8'); }
+            catch (readError) { if (hasCode(readError, 'ENOENT')) continue; throw readError; }
+            if (current !== source) continue;
+            throw new Error(`Previous configuration writer ${pid} exited. Inspect ${lock} and the config file, then remove the abandoned lock before retrying.`, { cause: probe });
+          }
           if (!hasCode(probe, 'EPERM')) throw probe;
         }
       }

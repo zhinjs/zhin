@@ -43,6 +43,7 @@ export function recordMessage(input: ConversationInput, runtime: GroupSuiteRunti
   const pending = targetBuffer.get(key);
   if (pending) {
     pending.count++;
+    pending.recorded++;
     pending.user_name = userName;
   } else {
     targetBuffer.set(key, {
@@ -51,26 +52,40 @@ export function recordMessage(input: ConversationInput, runtime: GroupSuiteRunti
       group_id: groupId,
       date: todayStr(),
       count: 1,
+      recorded: 1,
+      flushed: 0,
     });
   }
 }
 
+interface StatsBatchEntry {
+  readonly key: string;
+  readonly entry: PendingStatsIncrement;
+  readonly watermark: number;
+}
+
+/** Flush only the increments visible to this caller; new traffic cannot prolong its batch. */
 export function flushStatsBuffer(runtime: GroupSuiteRuntime): Promise<void> {
-  if (runtime.statsFlush) return runtime.statsFlush;
-  const flush = flushStatsBatch(runtime).finally(() => {
+  const batch = [...runtime.statsBuffer.entries()].map(([key, entry]) => ({
+    key, entry, watermark: entry.recorded,
+  }));
+  const previous = runtime.statsFlush ?? Promise.resolve();
+  const flush = previous.catch(() => undefined).then(() => flushStatsBatch(runtime, batch)).finally(() => {
     if (runtime.statsFlush === flush) runtime.statsFlush = undefined;
   });
   runtime.statsFlush = flush;
   return flush;
 }
 
-async function flushStatsBatch(runtime: GroupSuiteRuntime): Promise<void> {
+async function flushStatsBatch(runtime: GroupSuiteRuntime, batch: readonly StatsBatchEntry[]): Promise<void> {
   const targetBuffer = runtime.statsBuffer;
+  if (batch.length === 0) return;
   const M = getStatsModel(runtime.db);
-  if (!M || targetBuffer.size === 0) return;
-  for (const [key, entry] of [...targetBuffer.entries()]) {
-    // 快照本次要落库的计数；flush 期间新累计的部分留在缓冲
-    const countSnapshot = entry.count;
+  if (!M) return;
+  for (const { key, entry, watermark } of batch) {
+    // Earlier batches may already have committed part/all of this caller's watermark.
+    const countSnapshot = Math.min(entry.count, watermark - entry.flushed);
+    if (countSnapshot <= 0 || targetBuffer.get(key) !== entry) continue;
     try {
       const existing = (await M.select().where({
         user_id: entry.user_id,
@@ -99,6 +114,7 @@ async function flushStatsBatch(runtime: GroupSuiteRuntime): Promise<void> {
       }
       // 只移除写入成功的部分；失败的 key 留在缓冲等下一轮重试
       entry.count -= countSnapshot;
+      entry.flushed += countSnapshot;
       if (entry.count <= 0 && targetBuffer.get(key) === entry) targetBuffer.delete(key);
     } catch {
       /* single row failure: keep entry in buffer for next flush */

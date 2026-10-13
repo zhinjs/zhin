@@ -15,10 +15,16 @@ import { requestPluginConsole } from '../src/plugin-management/console-client.js
 import { packagesCommand } from '../src/commands/packages.js';
 import type { ConsoleRuntime } from '@zhin.js/pagemanager/plugin-runtime';
 
-afterEach(() => vi.unstubAllEnvs());
+const roots: string[] = [];
+afterEach(async () => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+  await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true })));
+});
 describe('CLI uses the running Console control plane', () => {
   it('runs status, explicit plan and approved business verification through a real owner and full-scope HTTP endpoint', async () => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-plugin-console-client-')));
+    roots.push(root);
     const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false };
     await mkdir(join(root, 'node_modules/reminder'), { recursive: true });
     await mkdir(join(root, '.zhin'));
@@ -67,6 +73,7 @@ describe('CLI uses the running Console control plane', () => {
       expect(result).toMatchObject({ status: 'passed', scope: 'local', current: true });
       expect(run).toHaveBeenCalledTimes(1);
       vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'fixture-demo-token');
+      await expect(requestPluginConsole(host, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: 'reminder' })).rejects.toThrow();
       await expect(requestPluginConsole(host, { type: PLUGIN_RPC.VERIFY, instanceKey: 'reminder', checkId: 'local-task', expectedGeneration: plan.generation, expectedProjectRevision: plan.projectRevision, expectedCheckRevision: plan.checkRevision })).rejects.toThrow();
       expect(run).toHaveBeenCalledTimes(1);
       await expect(readFile(join(root, '.zhin/probe.json'))).rejects.toMatchObject({ code: 'ENOENT' });
@@ -85,5 +92,19 @@ describe('CLI uses the running Console control plane', () => {
     for (const host of ['http://user:pass@localhost', 'http://localhost?token=secret', 'file:///tmp/project']) {
       await expect(requestPluginConsole(host, { type: PLUGIN_RPC.INSPECT })).rejects.toThrow('base URL');
     }
+  });
+
+  it('never transmits a token over remote HTTP while supporting HTTPS and literal loopback', async () => {
+    vi.stubEnv('ZHIN_CONSOLE_TOKEN', 'fixture-secret');
+    const fetch = vi.fn(async () => ({ ok: true, json: async () => ({ data: {} }) }));
+    vi.stubGlobal('fetch', fetch);
+    for (const host of ['http://console.example', 'http://192.168.1.1', 'http://localhost.example']) {
+      await expect(requestPluginConsole(host, { type: PLUGIN_RPC.INSPECT })).rejects.toThrow('require HTTPS');
+    }
+    expect(fetch).not.toHaveBeenCalled();
+    for (const host of ['https://console.example', 'http://127.0.0.1', 'http://127.1.2.3', 'http://localhost', 'http://[::1]']) {
+      await expect(requestPluginConsole(host, { type: PLUGIN_RPC.INSPECT })).resolves.toEqual({});
+    }
+    expect(fetch).toHaveBeenCalledTimes(5);
   });
 });

@@ -63,6 +63,7 @@ export interface OutboundSegmentsPolicy {
 }
 
 export interface NormalizeOutboundOptions {
+  readonly signal?: AbortSignal;
   /** 缺省 `url-or-text`（未声明 adapter 的保守兜底：仅 URL 媒体可达）。 */
   readonly mediaPolicy?: OutboundMediaPolicy;
   readonly htmlPolicy?: 'direct' | 'image' | 'text';
@@ -232,6 +233,7 @@ export async function normalizeOutboundPayload(
   renderer?: HtmlRendererHost,
   options?: NormalizeOutboundOptions,
 ): Promise<unknown> {
+  options?.signal?.throwIfAborted();
   const mediaPolicy = options?.mediaPolicy ?? DEFAULT_MEDIA_POLICY;
   if (Array.isArray(payload)) {
     const resolved = await Promise.all(
@@ -287,13 +289,14 @@ async function renderHtmlSegment(
   }
   if (html && renderer && mediaPolicy !== 'url-or-text') {
     try {
-      const result = await renderer.render(html, {
+      const result = await awaitHtmlRender(renderer.render(html, {
+        ...(options?.signal ? { signal: options.signal } : {}),
         width: typeof data.width === 'number' ? data.width : DEFAULT_CARD_WIDTH,
         format: 'png',
         ...(typeof data.backgroundColor === 'string'
           ? { backgroundColor: data.backgroundColor }
           : {}),
-      });
+      }), options?.signal);
       if (result.format === 'png' && result.data && typeof result.data === 'object') {
         const base64 = Buffer.from(result.data as Uint8Array).toString('base64');
         return {
@@ -311,6 +314,7 @@ async function renderHtmlSegment(
       options?.onHtmlFallback?.('renderer_failed');
       options?.onFallback?.('renderer_failed');
     } catch {
+      options?.signal?.throwIfAborted();
       options?.onHtmlFallback?.('renderer_failed');
       options?.onFallback?.('renderer_failed');
     }
@@ -319,6 +323,22 @@ async function renderHtmlSegment(
     options?.onFallback?.(mediaPolicy === 'url-or-text' ? 'media_unsupported' : 'renderer_unavailable');
   }
   return { type: 'text', data: { text: htmlSegmentFallbackText(data, html) } };
+}
+
+/** Abort the caller promptly even when the optional host cannot cancel its work. */
+async function awaitHtmlRender<T>(work: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return work;
+  let onAbort!: () => void;
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      onAbort = () => reject(signal.reason);
+      signal.addEventListener('abort', onAbort, { once: true });
+      // Attach both handlers even when already aborted: late host rejection is
+      // observed and cannot become an unhandled rejection after cancellation.
+      work.then(resolve, reject);
+      if (signal.aborted) onAbort();
+    });
+  } finally { signal.removeEventListener('abort', onAbort); }
 }
 
 /**

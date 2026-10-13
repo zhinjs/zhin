@@ -57,6 +57,24 @@ describe('persistent reminder through real Runtime discovery', () => {
     } finally { await f.runtime.stop(); await f.db.stop(); }
   });
 
+  it.skipIf(!sqliteAvailable)('advances every overdue cycle and delivers a later due reminder in the same batch-one scan', async () => {
+    const f = await fixture({ maxTasks: 32, batchSize: 1 });
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
+    try {
+      await f.runtime.start();
+      for (let i = 0; i < 30; i++) await f.command(`a remind every 60 missed-${i}`, { ...alice, sender: { id: `sender-${i}` } });
+      await f.command('a remind after 600 due-after-cycles');
+      clock.mockReturnValue(Date.now() + 600_000);
+      await f.jobs[0]!.execute();
+      expect(f.send).toHaveBeenCalledTimes(1);
+      expect(f.send.mock.calls[0]![1]).toBe('⏰ 提醒：due-after-cycles');
+      const host = f.runtime.snapshot.resources.get(childPluginId(rootPluginId(), 'alpha'))!.get(databaseHostToken.id) as PluginDatabaseHost;
+      const book = (await host.state.get<ReminderBook>(REMINDER_STATE_KEY))!;
+      expect(book.tasks.filter(task => task.intervalMs !== null && task.nextRunAt > Date.now())).toHaveLength(30);
+      expect(book.tasks.find(task => task.text === 'due-after-cycles')!.status).toBe('delivered');
+    } finally { await f.runtime.stop(); await f.db.stop(); }
+  });
+
   it.skipIf(!sqliteAvailable)('skips overdue cycles, prevents overlap, stops failed/unknown deliveries and persists pre-send crash disposition', async () => {
     const f = await fixture(); const clock = vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000);
     try {

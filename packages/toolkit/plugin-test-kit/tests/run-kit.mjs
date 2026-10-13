@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { shouldCopyFixture } from './fixture-copy-filter.mjs';
+import { sqliteRuntimeArguments } from './sqlite-runtime.mjs';
+import { Readable } from 'node:stream';
+import { raw } from '@zhin.js/core/runtime';
 import { sqliteStateHost } from './sqlite-state-host.mjs';
 import { manualScheduleHost } from './schedule-host.mjs';
 import { cp, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises';
@@ -15,7 +19,7 @@ const put = async (path, content) => { await mkdir(dirname(path), {recursive:tru
 const json = async (path, value) => put(path, JSON.stringify(value));
 const link = async (name, source) => {
   const destination = join(temporary, 'node_modules', name);
-  await mkdir(dirname(destination), {recursive:true}); await symlink(source, destination, 'dir');
+  await mkdir(dirname(destination), {recursive:true}); await symlink(source, destination, process.platform === 'win32' ? 'junction' : 'dir');
 };
 let kit;
 let stateDatabase;
@@ -29,15 +33,15 @@ try {
   await json(join(temporary,'package.json'), {name:'@test/kit-app', type:'module', dependencies:{'zhin.js':'*','@zhin.js/command':'*','@zhin.js/tool':'*','@zhin.js/skill':'*'}, zhin:{protocol:1,type:'plugin',entry:'./main.ts', plugins: mounted ? [{package:'./plugins/group-suite',instanceKey:'alpha'},{package:'./plugins/group-suite',instanceKey:'beta'}] : []}});
   await put(join(temporary,'main.ts'), "import {definePlugin, Schema} from 'zhin.js';export default definePlugin({name:'kit-app',config:Schema.object({label:Schema.string().default('v1')})});");
   if (mounted) {
-    await cp(join(repo,'plugins/utils/group-suite'),join(temporary,'plugins/group-suite'),{recursive:true,filter: source => !['node_modules','lib','.zhin'].includes(source.split('/').at(-1))});
-    await symlink(await realpath(join(repo,'plugins/utils/group-suite/node_modules')),join(temporary,'plugins/group-suite/node_modules'),'dir');
+    await cp(join(repo,'plugins/utils/group-suite'),join(temporary,'plugins/group-suite'),{recursive:true,filter: shouldCopyFixture});
+    await symlink(await realpath(join(repo,'plugins/utils/group-suite/node_modules')),join(temporary,'plugins/group-suite/node_modules'),process.platform === 'win32' ? 'junction' : 'dir');
   } else {
     await put(join(temporary,'commands/echo/[value]/index.ts'), "import {defineCommand} from 'zhin.js/command';export default defineCommand({permit:['group()','role(admin)'],params:{value:{type:'integer',min:1}},execute:({params,config})=>config.label+':'+params.value});");
     await put(join(temporary,'middlewares/trace/index.ts'), "import {defineMiddleware} from 'zhin.js/middleware';export default defineMiddleware({target:'outbound',async handle({input},next){if(input.payload==='block')return;await next();}});");
   }
   const config = mounted ? {plugins:{alpha:{commandNamespace:'alpha', keywordReply:true, welcomeMessage:'欢迎 {name} ({id})'},beta:{commandNamespace:'beta',keywordReply:true}}} : {};
   let renderCalls = 0;
-  if(mounted) stateDatabase=sqliteStateHost(join(temporary,'state.sqlite'));
+  if(mounted) stateDatabase=await sqliteStateHost(join(temporary,'state.sqlite'));
   kit = await PluginTestKit.create({projectRoot:temporary,config,endpoints:['test','other'],segments: {html:'image',outboundMedia:['base64'],interactive:'text'}, installResources: mounted ? ({resources}) => {resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));resources.provide(databaseRootHostToken,stateDatabase.host);resources.provide(databaseHostToken,new PluginDatabaseHost(rootPluginId(),stateDatabase.host));if(mode==='group')resources.provide(htmlRendererToken, {async render(){renderCalls++;return {data:Buffer.from('fake-image'),format:'png',mimeType:'image/png',width:1,height:1};}});} : undefined});
   assert.equal(await kit.start(),1);
   const incoming = (content, roles=[],group='g1',endpoint='test') => kit.receive({content, conversation:{kind:'group',id:group},sender:{id:'u1',name:'Alice',roles},endpoint});
@@ -47,6 +51,13 @@ try {
     assert.equal((await incoming('echo x',['admin']))?.status,'invalid');
     assert.equal((await incoming('echo 2',['admin']))?.status,'executed');
     assert.equal(kit.deliveries.at(-1).payload,'v1:2');
+    const stream = Readable.from(['native upload']);
+    const native = { image: stream, label: { text: 'original' } };
+    assert.equal((await kit.send({conversation:{kind:'group',id:'g1'},content:raw(native)})).status,'sent');
+    const capture = kit.deliveries.at(-1).payload;
+    assert.equal(capture.image,stream); assert.equal(stream.destroyed,false); assert.equal(Object.isFrozen(stream),false);
+    native.label.text='changed'; assert.equal(kit.deliveries.at(-1).payload.label.text,'original');
+    let received='';for await(const part of stream)received+=String(part);assert.equal(received,'native upload');
     const before = kit.deliveries.length;
     assert.equal((await kit.send({conversation:{kind:'group',id:'g1'},content:'block'})).status,'suppressed');
     assert.equal(kit.deliveries.length,before);
@@ -123,7 +134,7 @@ try {
     await incoming('bye');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     await incoming('hi',[],'g1','other');assert.equal(kit.deliveries.at(-1).payload,'goodbye');
     await kit.close();stateDatabase.close();stateDatabase=undefined;
-    const output=execFileSync(process.execPath,['--conditions=development','--import','tsx',fileURLToPath(new URL('./restart-probe.mjs',import.meta.url)),temporary],{encoding:'utf8'});
+    const output=execFileSync(process.execPath,[...(sqliteRuntimeArguments() ?? []),'--conditions=development','--import','tsx',fileURLToPath(new URL('./restart-probe.mjs',import.meta.url)),temporary],{encoding:'utf8'});
     assert.match(output,/KEYWORDS_PROCESS_RESTART_OK/);
     // No silent persistence fallback when a Database Host is absent.
     kit=await PluginTestKit.create({projectRoot:temporary,config,installResources:({resources})=>{resources.provide(scheduleRootHostToken,schedules.host);resources.provide(scheduleHostToken,new PluginScheduleHost(rootPluginId(),schedules.host));}});

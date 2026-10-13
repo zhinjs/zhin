@@ -108,7 +108,7 @@ zhin info <package>
 ## packages：插件状态与技能/扩展包
 
 ```bash
-zhin packages install <npm:pkg|git:url> [--local]
+zhin packages install <pkg|npm:skill-pack|git:url> [--local]
 zhin packages remove <name> [--local]
 zhin packages list [--local]
 zhin packages update [source] [--local]
@@ -127,9 +127,11 @@ zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
   --generation <generation> --project-revision <revision> --check-revision <checkRevision>
 ```
 
-实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可用 `--token-env <变量名>` 指定。`apply`、`verify` 需要完整权限；不要把 token 写在 URL 或命令参数中。离线 `status` 只提供文件与包解析证据，离线验证计划没有当前 generation 或可执行检查，不会另行启动 Runtime。
+实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可用 `--token-env <变量名>` 指定。`verification-plan`、`apply`、`verify` 需要完整权限；不要把 token 写在 URL 或命令参数中。离线 `status` 只提供文件与包解析证据，离线验证计划没有当前 generation 或可执行检查，不会另行启动 Runtime。
 
-状态分别表示 `installed`（包可解析）、`declared`（实例已声明）、`missing-config`（必填配置或环境变量缺失）、`pending-restart`（当前代尚未应用）、`enabled`（已发布且配置、包版本一致）、`degraded`（声明与实际安装等证据不一致）。`readiness` 独立记录就绪证据：包含适配器但没有平台健康证据时为 `unknown`。`verification` 只表示是否提供业务检查，不把启动成功当作业务通过。
+携带 token 的远程请求必须使用 HTTPS；HTTP 仅限 `localhost`、`127.0.0.0/8` 和 `::1` 环回地址。自动启用的 Runtime 插件必须安装为生产依赖，`--save-dev` 需同时指定 `--no-enable`；该组合在安装前检查。
+
+状态分别表示 `installed`（包可解析）、`declared`（实例已声明）、`missing-config`（必填配置或环境变量缺失、配置值不符合 schema）、`pending-restart`（当前代尚未应用）、`enabled`（已发布且配置、包版本一致）、`degraded`（声明与实际安装等证据不一致，或依赖检查失败）。`readiness` 独立记录就绪证据：包含适配器但没有平台健康证据时为 `unknown`。`verification` 只表示是否提供业务检查，不把启动成功当作业务通过。
 
 已加载的声明 schema 只适用于同一包版本；更新后改读磁盘上的 `schema.json`。若新版只在 TypeScript 声明配置、没有可读取的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境引用，完整校验须由真正的 Runtime 预检完成。
 
