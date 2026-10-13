@@ -17,6 +17,9 @@ const adapterFeature = defineFeatureProvider({
     validate: parseAdapterDefinition,
   },
   runtime: {
+    // Bound transport callbacks enter the current Host gateway; unrelated owner
+    // updates need not reconnect accounts whose scopes and definitions are unchanged.
+    retain: 'when-owner-unchanged',
     async project(slots, context) {
       const index = await AdapterIndex.create(slots, context.snapshot, context.signal);
       return {

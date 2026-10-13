@@ -333,13 +333,16 @@ export function resolveIcqqConfig(config: IcqqEndpointConfig): ResolvedIcqqConfi
  * 入站归一化 → ConversationRef：群临时会话（temp）映射为群容器内的 private
  * 会话（parent kind 'group'）；频道消息的所属 guild 进 `parent`（kind 'channel'）。
  */
+/** ICQQ 平台标识，与 Endpoint identity.adapter / clientAdapter 保持一致。 */
+export const ICQQ_ADAPTER_NAME = 'icqq' as const;
+
 export function icqqInboundConversation(endpointKey: string, input: {
   readonly channelType: 'private' | 'group' | 'channel';
   readonly channelId: string;
   readonly channelParentGroupId?: string;
   readonly guildId?: string;
 }): ConversationRef {
-  const endpoint = { id: endpointKey, adapter: endpointKey.split('\0')[0] ?? endpointKey };
+  const endpoint = { id: endpointKey, adapter: ICQQ_ADAPTER_NAME };
   if (input.channelType === 'private' && input.channelParentGroupId) {
     return {
       endpoint,

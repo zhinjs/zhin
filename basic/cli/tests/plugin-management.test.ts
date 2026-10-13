@@ -7,11 +7,51 @@ import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { loadRuntimeEnvironmentLayers } from '../src/plugin-runtime/start/environment.js';
 import { definePlugin, pluginVerificationToken } from '@zhin.js/plugin-runtime';
 import { PluginManagementWorkflow, PluginManagementOperationError } from '../src/plugin-management/workflow.js';
+import { PluginManagementActivity } from '../src/plugin-management/activity.js';
 import { createPluginManagementPort } from '../src/plugin-runtime/console/plugin-management.js';
+import adapterFeature, { Endpoint, defineAdapter, adapterFeatureId, isAdapterIndex, endpointEventGatewayToken, type EndpointTransportState } from '@zhin.js/adapter';
 
 const roots: string[] = [];
 const manifest = { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false, features: [], plugins: [] };
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+
+it('keeps dependency and declaration writes inside one process-owned restart guard', async () => {
+  const root = await fixture();
+  const activity = new PluginManagementActivity();
+  const workflow = new PluginManagementWorkflow(root, { activity, installDependencies: async (args, directory) => {
+    expect(activity.active).toBe(true);
+    await runPackageManager(args, directory);
+    expect(activity.active).toBe(true);
+  } });
+  const operation = workflow.install('reminder');
+  expect(activity.active).toBe(true);
+  expect((await operation).state).toMatchObject({ installed: true, declared: true, restartRequired: true });
+  expect(activity.active).toBe(false);
+  await expect(new PluginManagementWorkflow(root, { activity, installDependencies: async () => { throw new Error('registry unavailable'); } }).install('another')).rejects.toThrow('registry unavailable');
+  expect(activity.active).toBe(false);
+});
+
+it('finishes an exact installed version without reinstalling after a lost receipt', async () => {
+  const root = await fixture();
+  await runPackageManager(['add', 'reminder@1.0.0'], root);
+  const installDependencies = vi.fn(runPackageManager);
+  const workflow = new PluginManagementWorkflow(root, { installDependencies });
+  expect((await workflow.install('reminder@1.0.0')).state).toMatchObject({ installed: true, version: '1.0.0', declared: true });
+  expect(installDependencies).not.toHaveBeenCalled();
+  await workflow.install('reminder@1.0.1');
+  expect(installDependencies).toHaveBeenCalledTimes(1);
+});
+
+it('still runs the package manager when the declared range is not the requested exact pin', async () => {
+  const root = await fixture();
+  await runPackageManager(['add', 'reminder@1.0.0'], root);
+  const project = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  project.dependencies.reminder = '^1.0.0';
+  await writeFile(join(root, 'package.json'), JSON.stringify(project));
+  const installDependencies = vi.fn(runPackageManager);
+  await new PluginManagementWorkflow(root, { installDependencies }).install('reminder@1.0.0');
+  expect(installDependencies).toHaveBeenCalledTimes(1);
+});
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-plugin-workflow-')));
   roots.push(root);
@@ -45,6 +85,67 @@ async function mounted(root: string, names = ['reminder']) {
 }
 
 describe('Shared CLI and Console plugin workflow', () => {
+  it('uses actual owner-scoped adapter transport and admission evidence instead of publication or phase alone', async () => {
+    const root = await fixture();
+    await mounted(root, ['reminder', 'preferences']);
+    const project = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    project.dependencies['@test/adapter'] = 'workspace:*';
+    project.zhin.features = [{ package: '@test/adapter' }];
+    await writeFile(join(root, 'package.json'), JSON.stringify(project));
+    await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - packages/*\n');
+    await mkdir(join(root, 'packages/adapter'), { recursive: true });
+    await writeFile(join(root, 'packages/adapter/package.json'), JSON.stringify({ name: '@test/adapter', version: '1.0.0', zhin: { protocol: 1, type: 'feature', entry: './index.js' } }));
+    await writeFile(join(root, 'packages/adapter/index.js'), '');
+    for (const name of ['reminder', 'preferences']) await writeFile(join(root, `node_modules/${name}/package.json`), JSON.stringify({
+      name, version: '1.0.0', peerDependencies: { '@test/adapter': '*' }, zhin: { ...manifest, features: [{ package: '@test/adapter' }] },
+    }));
+    const config = { plugins: { reminder: { endpoints: [{ id: 'one' }, { id: 'two' }] }, preferences: { endpoints: [{ id: 'one' }] } } };
+    await writeFile(join(root, 'zhin.config.json'), JSON.stringify(config));
+    const states = new Map<string, EndpointTransportState | undefined>([['root/reminder:one', 'open'], ['root/reminder:two', 'open'], ['root/preferences:one', 'closed']]);
+    class LiveEndpoint extends Endpoint {
+      readonly client = {};
+      constructor(readonly key: string) { super(); }
+      get transportState() { return states.get(this.key); }
+    }
+    const plugin = () => ({ default: definePlugin({ name: 'platform', config: { toJsonSchema: () => ({ type: 'object', properties: {
+      endpoints: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+    } }) }, setup({ addAdapter }) {
+      addAdapter('platform', defineAdapter({ capabilities: ['inbound'], create: context => new LiveEndpoint(`${context.owner.id}:${context.endpointId}`) }));
+    } }) });
+    const files = new Map<string, unknown>([
+      [join(root, 'plugin.js'), { default: definePlugin({ name: 'root' }) }],
+      [join(root, 'packages/adapter/index.js'), { default: adapterFeature }],
+      [join(root, 'node_modules/reminder/plugin.js'), plugin()],
+      [join(root, 'node_modules/preferences/plugin.js'), plugin()],
+    ]);
+    const modules: ModuleRuntime = { async load<T>(file: string) { return files.get(file) as T; }, async close() {} };
+    const runtime = new RootRuntime({ projectRoot: root, modules, environment: { name: 'test', mode: 'test', platform: 'node' }, config,
+      installResources({ resources }) { resources.provide(endpointEventGatewayToken, { receive: async () => undefined }); },
+    });
+    try {
+      await runtime.start();
+      const workflow = new PluginManagementWorkflow(root, { snapshots: runtime.snapshots });
+      expect(await workflow.inspect('reminder')).toMatchObject({ published: true, readiness: 'ready' });
+      expect(await workflow.inspect('preferences')).toMatchObject({ published: true, readiness: 'degraded' });
+      for (const transportState of ['connecting', 'reconnecting', 'idle'] as const) {
+        states.set('root/reminder:two', transportState);
+        expect(await workflow.inspect('reminder')).toMatchObject({ published: true, readiness: 'pending' });
+      }
+      states.set('root/reminder:two', undefined);
+      expect(await workflow.inspect('reminder')).toMatchObject({ published: true, readiness: 'unknown' });
+      states.set('root/reminder:two', 'closed');
+      expect(await workflow.inspect('reminder')).toMatchObject({ published: true, readiness: 'degraded' });
+      states.set('root/reminder:two', 'stopped');
+      expect(await workflow.inspect('reminder')).toMatchObject({ readiness: 'degraded' });
+      states.set('root/reminder:two', 'open');
+      const index = runtime.snapshot.projections.get(adapterFeatureId);
+      if (!isAdapterIndex(index)) throw new Error('missing real AdapterIndex');
+      await index.close();
+      expect(index.describe().filter(endpoint => endpoint.owner === 'root/reminder').every(endpoint => endpoint.transportState === 'open' && !endpoint.admitted)).toBe(true);
+      expect(await workflow.inspect('reminder')).toMatchObject({ readiness: 'pending' });
+    } finally { await runtime.stop(); }
+  });
+
   it('plans dependency-only installs without manifest or configuration writes', async () => {
     const root = await fixture();
     const before = await readFile(join(root, 'package.json'), 'utf8');
@@ -334,6 +435,11 @@ describe('Shared CLI and Console plugin workflow', () => {
     try {
       const workflow = createPluginManagementPort(root, { snapshots: runtime.snapshots });
       const planA = await workflow.verificationPlan('reminder');
+      const replacementHost = createPluginManagementPort(root, { snapshots: runtime.snapshots });
+      const replacementPlan = await replacementHost.verificationPlan('reminder');
+      expect(replacementPlan.generation).toBe(planA.generation);
+      expect(replacementPlan.checkRevision).not.toBe(planA.checkRevision);
+      await expect(replacementHost.verify('reminder', 'test', planA.generation, planA.projectRevision, planA.checkRevision)).rejects.toThrow('Verification plan changed');
       files.set(join(root, 'node_modules/reminder/plugin.js'), plugin(runB, 'platform'));
       await runtime.reload('root/reminder');
       await expect(workflow.verify('reminder', 'test', planA.generation, planA.projectRevision, planA.checkRevision)).rejects.toThrow('Verification plan changed');

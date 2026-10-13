@@ -1702,6 +1702,9 @@ importers:
       '@zhin.js/component':
         specifier: workspace:*
         version: link:../component
+      '@zhin.js/handler':
+        specifier: workspace:*
+        version: link:../handler
       '@zhin.js/layout':
         specifier: workspace:*
         version: link:../../console/layout

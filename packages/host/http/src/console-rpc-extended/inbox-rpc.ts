@@ -259,6 +259,7 @@ export function mapNoticeRow(row: Record<string, unknown>): Record<string, unkno
 }
 
 function mapMessageRow(row: Record<string, unknown>): Record<string, unknown> {
+  const observation = readMessageObservation(row.raw);
   return {
     id: row.id,
     platformMessageId: row.platform_message_id,
@@ -267,7 +268,40 @@ function mapMessageRow(row: Record<string, unknown>): Record<string, unknown> {
     raw: row.raw,
     timestamp: row.created_at,
     channel: channelFromStoredRow(row),
+    ...observation,
   };
+}
+
+function isStoredConversation(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const conversation = value as Record<string, unknown>;
+  const endpoint = conversation.endpoint as Record<string, unknown> | null | undefined;
+  if (!endpoint || typeof endpoint !== 'object'
+    || typeof endpoint.id !== 'string' || typeof endpoint.adapter !== 'string'
+    || typeof conversation.kind !== 'string' || typeof conversation.id !== 'string') return false;
+  if (conversation.threadId !== undefined && typeof conversation.threadId !== 'string') return false;
+  if (conversation.parent !== undefined) {
+    const parent = conversation.parent as Record<string, unknown> | null;
+    if (!parent || typeof parent !== 'object' || typeof parent.kind !== 'string' || typeof parent.id !== 'string') return false;
+  }
+  return true;
+}
+
+/** Older rows have no observation; do not invent their direction or diagnostics. */
+function readMessageObservation(raw: unknown): Record<string, unknown> {
+  if (typeof raw !== 'string') return {};
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (!value || typeof value !== 'object') return {};
+    const entry = value as Record<string, unknown>;
+    if (entry.$console !== 'zhin.message-observation/1'
+      || (entry.direction !== 'inbound' && entry.direction !== 'outbound')) return {};
+    return { direction: entry.direction,
+      ...(isStoredConversation(entry.conversation) ? { conversation: entry.conversation } : {}),
+      ...(entry.direction === 'outbound' && entry.rendering && typeof entry.rendering === 'object'
+        ? { rendering: entry.rendering } : {}),
+    };
+  } catch { return {}; }
 }
 
 function actorFromStoredRow(

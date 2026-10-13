@@ -78,6 +78,7 @@ export class GenerationAssets {
   replaceScopes(
     scopeOrder: readonly PluginId[],
     replacements: ReadonlyMap<PluginId, Dispose>,
+    projectedFeatures: Iterable<FeatureId>,
     projectionDisposers: ReadonlyMap<FeatureId, Dispose>,
   ): GenerationAssets {
     const owners = new Set(scopeOrder);
@@ -93,12 +94,12 @@ export class GenerationAssets {
       if (!lifetime) throw new Error(`Cannot retain unknown Plugin Scope: ${owner}`);
       lifetimes.set(owner, lifetime);
     }
-    const projectionLifetimes = new Map(
-      [...projectionDisposers].map(([feature, dispose]) => [
-        feature,
-        new SharedLifetime(dispose),
-      ]),
-    );
+    const projectionLifetimes = new Map(this.#projectionLifetimes);
+    for (const feature of projectedFeatures) {
+      const dispose = projectionDisposers.get(feature);
+      if (dispose) projectionLifetimes.set(feature, new SharedLifetime(dispose));
+      else projectionLifetimes.delete(feature);
+    }
     return new GenerationAssets(scopeOrder, lifetimes, projectionLifetimes);
   }
 

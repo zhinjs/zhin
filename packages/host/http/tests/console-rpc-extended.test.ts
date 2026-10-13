@@ -577,6 +577,42 @@ describe('dispatchExtendedConsoleRpc', () => {
       expect(data.inboxEnabled).toBe(true);
     });
 
+    it('restores recorded delivery direction and diagnostics without inventing evidence for older rows', async () => {
+      const conversation = { endpoint: { adapter: 'icqq', id: 'exact-capability' }, kind: 'private', id: 'friend', threadId: 'thread-1' };
+      const rendering = { forms: ['text'], fallbacks: ['interactive_text_policy'] };
+      const base = { adapter: 'icqq', endpoint_id: 'bot', channel_id: 'friend', channel_type: 'private', sender_id: 'bot', content: 'button', created_at: 7000 };
+      const result = await dispatchExtendedConsoleRpc('inbox.messages', { adapter: 'icqq', endpointKey: 'bot', channelId: 'friend', channelType: 'private' }, makeCtx({ databaseHost: makeInboxDb({ unified_inbox_message: [
+        { ...base, id: 1, platform_message_id: 'actual-id', raw: JSON.stringify({ $console: 'zhin.message-observation/1', direction: 'outbound', conversation, rendering }) },
+        { ...base, id: 2, raw: null },
+        { ...base, id: 3, raw: '{malformed' },
+      ] }) }));
+      const rows = (result as { data: { messages: Record<string, unknown>[] } }).data.messages;
+      expect(rows.find(row => row.id === 1)).toMatchObject({ platformMessageId: 'actual-id', direction: 'outbound', conversation, rendering, timestamp: 7000 });
+      for (const row of rows.filter(row => row.id !== 1)) {
+        expect(row).not.toHaveProperty('direction');
+        expect(row).not.toHaveProperty('rendering');
+      }
+    });
+
+    it('drops a malformed stored conversation but keeps the recorded direction', async () => {
+      const base = { adapter: 'icqq', endpoint_id: 'bot', channel_id: 'friend', channel_type: 'private', sender_id: 'bot', content: 'x', created_at: 8000 };
+      const bad = [
+        { endpoint: { id: 1, adapter: 'icqq' }, kind: 'private', id: 'friend' },
+        { endpoint: { id: 'a', adapter: 'icqq' }, kind: 'private' },
+        { endpoint: { id: 'a', adapter: 'icqq' }, kind: 'private', id: 'friend', parent: { kind: 'group' } },
+        'not-an-object',
+      ];
+      const result = await dispatchExtendedConsoleRpc('inbox.messages', { adapter: 'icqq', endpointKey: 'bot', channelId: 'friend', channelType: 'private' }, makeCtx({ databaseHost: makeInboxDb({ unified_inbox_message: bad.map((conversation, index) => ({
+        ...base, id: index + 1, raw: JSON.stringify({ $console: 'zhin.message-observation/1', direction: 'inbound', conversation }),
+      })) }) }));
+      const rows = (result as { data: { messages: Record<string, unknown>[] } }).data.messages;
+      expect(rows).toHaveLength(bad.length);
+      for (const row of rows) {
+        expect(row).toMatchObject({ direction: 'inbound' });
+        expect(row).not.toHaveProperty('conversation');
+      }
+    });
+
     it('inbox.messages filters by channel, parent and before cursors', async () => {
       const messageRows = [
         {

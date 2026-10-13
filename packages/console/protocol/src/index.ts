@@ -88,6 +88,14 @@ export interface ConsoleNoticeEventData extends ConsoleEndpointEventData {
 }
 
 export interface ConsoleMessageEventData extends ConsoleEndpointEventData {
+  /** Exact runtime identity; includes parent and thread when present. */
+  readonly conversation?: Readonly<{
+    endpoint: Readonly<{ id: string; adapter: string }>;
+    kind: string;
+    id: string;
+    parent?: Readonly<{ kind: string; id: string }>;
+    threadId?: string;
+  }>;
   readonly direction: 'inbound' | 'outbound';
   readonly channelType: string;
   readonly channelId: string;
@@ -208,6 +216,9 @@ export interface ConsoleInboxMessageRow {
   readonly channel: ConsoleEventChannel;
   readonly adapter?: string;
   readonly endpointKey?: string;
+  readonly direction?: ConsoleMessageEventData['direction'];
+  readonly rendering?: ConsoleMessageEventData['rendering'];
+  readonly conversation?: ConsoleMessageEventData['conversation'];
 }
 
 export interface ConsoleInboxNoticesResult {
@@ -298,6 +309,8 @@ export type ConsoleEndpointOperation = 'recall' | 'edit' | 'reaction' | 'typing'
 
 /** Endpoint row shared by the Host and Remote Console. */
 export interface ConsoleEndpointSummary {
+  /** Canonical target for projection and message correlation, independent of display names. */
+  readonly endpoint?: Readonly<{ id: string; adapter: string }>;
   readonly name: string;
   readonly adapter: string;
   readonly connected: boolean;
@@ -398,6 +411,8 @@ export interface ConsoleConfigSource {
   readonly format: ConsoleConfigFormat;
   readonly revision: string;
   readonly configKeys: readonly string[];
+  /** Paths resolved by the same authority used for key mutations; never infer from labels. */
+  readonly configPaths?: Readonly<Record<string, readonly string[]>>;
 }
 
 export const DEMO_RPC_ALLOWLIST: ReadonlySet<string> = new Set([

@@ -224,6 +224,9 @@ try {
   const manifest = JSON.parse(await readFile(manifestFile, 'utf8'));
   if (platform !== 'sandbox') {
     manifest.dependencies[`@zhin.js/adapter-${platform}`] = '*';
+    // Own the optional command provider explicitly: registry peer auto-resolution
+    // cannot substitute a semver package for this candidate's file tarball.
+    manifest.dependencies['@zhin.js/command'] = '*';
     manifest.zhin.plugins = manifest.zhin.plugins.filter(entry => (typeof entry === 'string' ? entry : entry.package) !== '@zhin.js/adapter-sandbox');
     manifest.zhin.plugins.push({ package: `@zhin.js/adapter-${platform}`, instanceKey: platform });
   }

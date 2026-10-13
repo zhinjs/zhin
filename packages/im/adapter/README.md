@@ -193,3 +193,14 @@ class 与 compact Endpoint 均需提供健康 getter，否则报告 `unknown`，
 验证：`pnpm --filter @zhin.js/adapter test && pnpm --filter @zhin.js/adapter build`。
 
 架构说明见 [Plugin Monorepo 与 Feature Provider](../../../docs/architecture/target-implementation/plugin-monorepo-and-features.md)。
+
+
+### Transport 创建上下文
+
+`create(context)` 只提供 `owner`、`config`、`generation`、`signal` 和 `use(token)`；
+Adapter 还提供端点的 `id`、`endpointId` 和 `name`。这些值属于 owner 的创建生命周期，
+不是每次消息或工具调用的 operation snapshot。未改 owner 的连接可跨局部热重载保留。
+
+创建上下文不提供 `project()`，类型和实际对象都如此；JavaScript 强行调用会抛出
+`TypeError`，不会悄悄读取旧代投影。需要跨 Feature 的业务执行放在 command、handler、
+middleware 或 tool 中，通过它们当前 operation 的上下文解析。

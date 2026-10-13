@@ -133,8 +133,8 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
       leases: 0,
       retired: false,
     };
-    replaceGenerationAdmissions(new Set(), admissions, this, () => this.#retain(record));
     this.#current = record;
+    replaceGenerationAdmissions(new Set(), admissions, this, () => undefined, () => this.#retain(record));
   }
 
   get current(): RuntimeSnapshot {
@@ -196,11 +196,11 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
       previous.admissions,
       admissions,
       this,
+      () => { this.#current = next; },
       () => this.#retain(next),
     );
     // Commit only swaps the active pointer. The previous record may still be
     // serving in-flight work, so disposal is deferred to its final lease.
-    this.#current = next;
     previous.retired = true;
     this.#retired.add(previous);
     this.#disposeIfReady(previous);
@@ -210,7 +210,7 @@ export class SnapshotStore<TState = undefined> implements SnapshotReader {
   async close(): Promise<void> {
     if (this.#closed) return;
     this.#closed = true;
-    replaceGenerationAdmissions(this.#current.admissions, new Set(), this);
+    replaceGenerationAdmissions(this.#current.admissions, new Set(), this, () => undefined);
     this.#current.retired = true;
     this.#retired.add(this.#current);
     this.#disposeIfReady(this.#current);

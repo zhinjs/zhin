@@ -30,6 +30,7 @@ export interface ConsoleRpcConfigurationPort {
     format: 'yaml' | 'json';
     revision: string;
     configKeys: readonly string[];
+    configPaths?: Readonly<Record<string, readonly string[]>>;
   }>>;
   readDocument(): Promise<Record<string, unknown>>;
   replaceSource(

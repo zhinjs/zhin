@@ -40,6 +40,7 @@ export function configKeyPatch(
 ): ConfigPatch {
   if (isForbiddenConfigKey(key)) throw new Error(`Invalid config key: ${key}`);
   const plugins = readPluginConfigurationMap(document);
+  assertUnambiguousConfigKey(document, key);
   const inPlugins = Object.prototype.hasOwnProperty.call(plugins, key);
   const topLevel = HOST_CONFIG_KEY_SET.has(key)
     || (Object.prototype.hasOwnProperty.call(document, key) && key !== 'plugins' && !inPlugins);
@@ -57,10 +58,19 @@ export function configKeyRemovePatch(
 ): ConfigPatch {
   if (isForbiddenConfigKey(key)) throw new Error(`Invalid config key: ${key}`);
   const plugins = readPluginConfigurationMap(document);
+  assertUnambiguousConfigKey(document, key);
   const inPlugins = Object.prototype.hasOwnProperty.call(plugins, key);
   const topLevel = HOST_CONFIG_KEY_SET.has(key)
     || (Object.prototype.hasOwnProperty.call(document, key) && key !== 'plugins' && !inPlugins);
   return Object.freeze({ op: 'remove', path: Object.freeze(topLevel ? [key] : ['plugins', key]) });
+}
+
+/** Flat Console keys cannot distinguish a Host section from a same-named Plugin. */
+export function assertUnambiguousConfigKey(document: RuntimeConfigDocument, key: string): void {
+  if (HOST_CONFIG_KEY_SET.has(key)
+    && Object.prototype.hasOwnProperty.call(readPluginConfigurationMap(document), key)) {
+    throw new Error(`配置键 ${key} 同时指向 Host 与插件；请在配置源码中明确编辑 ${key} 或 plugins.${key}`);
+  }
 }
 
 function isForbiddenConfigKey(key: string): boolean {

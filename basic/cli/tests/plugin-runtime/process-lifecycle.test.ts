@@ -73,20 +73,26 @@ describe('Process Lifecycle', () => {
     dispose();
   });
 
-  it('forces a failed exit when the Shutdown Budget is exhausted', async () => {
+  it('forces the signal exit code and reports pending components when the Shutdown Budget is exhausted', async () => {
     vi.useFakeTimers();
     const process = new FakeProcessAdapter();
     const requestStop = vi.fn(() => new Promise<void>(() => undefined));
+    const reportForcedExit = vi.fn();
     const dispose = installProcessLifecycle({
       process,
       requestStop,
       shutdownBudgetMs: 10_000,
+      describePending: () => ['runtime'],
+      reportForcedExit,
     });
 
     process.emit('SIGTERM');
-    await vi.advanceTimersByTimeAsync(10_000);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(process.forcedExitCodes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
 
-    expect(process.forcedExitCodes).toEqual([1]);
+    expect(process.forcedExitCodes).toEqual([143]);
+    expect(reportForcedExit).toHaveBeenCalledWith('budget', ['runtime']);
     dispose();
   });
 
@@ -121,5 +127,17 @@ describe('Process Lifecycle', () => {
 
     expect(externalListener).toHaveBeenCalledTimes(1);
     expect(requestStop).not.toHaveBeenCalled();
+  });
+
+  it('defaults to a 5s budget, unrefs the timer and clears it after a successful stop', async () => {
+    vi.useFakeTimers();
+    const process = new FakeProcessAdapter();
+    const dispose = installProcessLifecycle({ process, requestStop: vi.fn(async () => undefined) });
+    process.emit('SIGINT');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(process.forcedExitCodes).toEqual([]);
+    dispose();
   });
 });

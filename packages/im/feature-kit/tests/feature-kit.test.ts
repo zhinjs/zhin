@@ -3,11 +3,15 @@ import {
   capabilityId,
   childPluginId,
   createCapabilitySlot,
+  createSnapshotView,
+  createToken,
   featureId,
   rootPluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import {
+  createConstructionContext,
+  createCapabilityContext,
   FeatureCatalog,
   FeatureConflictError,
   FeatureDiscovery,
@@ -182,4 +186,35 @@ describe('Feature provider kit', () => {
       'shared',
     ]);
   });
+});
+
+it('retention is explicit and rejects unknown policies instead of silently treating them as reusable', () => {
+  expect(provider.runtime.retain).toBeUndefined();
+  const retained = defineFeatureProvider({ ...provider, runtime: { ...provider.runtime, retain: 'when-owner-unchanged' } });
+  expect(retained.runtime.retain).toBe('when-owner-unchanged');
+  expect(Object.isFrozen(retained.runtime)).toBe(true);
+  expect(() => defineFeatureProvider({ ...provider, runtime: { ...provider.runtime, retain: 'always' } } as never)).toThrow('retention policy');
+});
+
+
+it('construction context contains only owner-lifetime resources while operations retain project', () => {
+  const owner = rootPluginId();
+  const token = createToken<string>('fixture.transport');
+  const feature = featureId('fixture.operation');
+  const snapshot = createSnapshotView(1, { root: owner,
+    tree: new Map([[owner, { id: owner, instanceKey: 'root', packageName: 'test', packageRoot: '/fixture', children: [] }]]),
+    config: new Map([[owner, { account: 'test' }]]),
+    resources: new Map([[owner, new Map([[token.id, 'transport']])]]),
+    capabilities: new Map(), projections: new Map([[feature, 'operation']]),
+  });
+  const context = createConstructionContext<{ account: string }>(snapshot, owner);
+  expect(Object.keys(context).sort()).toEqual(['config', 'generation', 'owner', 'signal', 'use']);
+  expect(Object.isFrozen(context)).toBe(true);
+  expect(context.config.account).toBe('test');
+  expect(context.use(token)).toBe('transport');
+  expect(Reflect.has(context, 'project')).toBe(false);
+  const invalid = context as unknown as { project(feature: unknown): unknown };
+  expect(() => invalid.project(feature)).toThrow(TypeError);
+  expect(() => invalid.project(feature)).toThrow(/project/);
+  expect(createCapabilityContext(snapshot, owner).project(feature)).toBe('operation');
 });

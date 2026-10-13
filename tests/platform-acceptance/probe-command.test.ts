@@ -26,7 +26,7 @@ it.each([
       process.env.ZHIN_ACCEPTANCE_POLICY = policyPath;
       const endpoint = { recall: async () => { throw Object.assign(new Error('controlled failure'), { code, disposition }); } };
       await probe.execute({
-        input: { content: 'probe:sample123 action:reply-recall', conversation: { endpoint: { adapter: 'root/test' }, kind: 'private', id: 'room' }, $reply: async () => ({ status: 'sent', message: { id: 'message' } }) },
+        input: { content: 'probe:sample123 action:reply-recall', conversation: { endpoint: { id: 'test', adapter: 'test' }, kind: 'private', id: 'room' }, $reply: async () => ({ status: 'sent', message: { id: 'message' } }) },
         endpoint: 'test', generation: 1,
         project: () => ({ connection: () => endpoint, resolve: () => 'test', clientAdapter: () => 'test', describe: () => [{ id: 'test', admitted: true }] }),
       } as never);
@@ -51,7 +51,7 @@ it('both probes select only fixed image samples, preserve legacy evidence and em
       await writeFile(policyPath, JSON.stringify({ version: 1, platform: 'test', actions: ['reply-image'], minIntervalMs: 1000, maxSends: 3, eventsPath, targets: [{ alias: 'private-a', adapter: 'root/test', endpoint: 'test', kind: 'private', id: 'room' }] }));
       process.env.ZHIN_ACCEPTANCE_POLICY = policyPath;
       const reply = vi.fn(async (payload: any) => { images.push(payload[1].data.media.value); return { status: 'sent', message: { id: 'image' } }; });
-      const context = (content: string) => ({ input: { content, conversation: { endpoint: { adapter: 'root/test' }, kind: 'private', id: 'room' }, $reply: reply }, endpoint: 'test', generation: 1, project: () => ({ connection: () => ({}), resolve: () => 'test', clientAdapter: () => 'test', describe: () => [{ id: 'test', admitted: true }] }) });
+      const context = (content: string) => ({ input: { content, conversation: { endpoint: { id: 'test', adapter: 'test' }, kind: 'private', id: 'room' }, $reply: reply }, endpoint: 'test', generation: 1, project: () => ({ connection: () => ({}), resolve: () => 'test', clientAdapter: () => 'test', describe: () => [{ id: 'test', admitted: true }] }) });
       await probe.execute(context('probe:image0001 action:reply-image image:https://example.com/secret') as never);
       expect(reply).not.toHaveBeenCalled();
       await probe.execute(context('probe:image0001 action:reply-image') as never);
@@ -80,4 +80,36 @@ it('both probes select only fixed image samples, preserve legacy evidence and em
     expect(tags).toEqual(['IHDR', 'IDAT', 'IEND']); expect(scanlines.length).toBe(128 * (1 + 128 * 3));
     for (let row = 0; row < 128; row++) expect(scanlines[row * 385]).toBe(0);
   } finally { if (previous === undefined) delete process.env.ZHIN_ACCEPTANCE_POLICY; else process.env.ZHIN_ACCEPTANCE_POLICY = previous; await rm(directory, { recursive: true, force: true }); }
+});
+
+it('authorizes the resolved policy instance instead of comparing an owner with the canonical platform name', async () => {
+  const probes = [(await import('../../scripts/platform-acceptance/probe-command.js')).default, (await import('../../examples/platform-acceptance-bot/commands/acceptance/index.js')).default];
+  const directory = await mkdtemp(join(tmpdir(), 'zhin-probe-identity-'));
+  const previous = process.env.ZHIN_ACCEPTANCE_POLICY;
+  try {
+    for (const [number, probe] of probes.entries()) {
+      const eventsPath = join(directory, `events-${number}.jsonl`);
+      const policyPath = join(directory, 'policy.json');
+      await writeFile(policyPath, JSON.stringify({ version: 1, platform: 'test', actions: ['reply-text'], minIntervalMs: 1000, maxSends: 1, eventsPath,
+        targets: [{ alias: 'private-a', adapter: 'root/allowed', endpoint: 'bot', kind: 'private', id: 'room' }] }));
+      process.env.ZHIN_ACCEPTANCE_POLICY = policyPath;
+      const reply = vi.fn(async () => ({ status: 'sent', message: { id: 'sent' } }));
+      const connection = vi.fn(() => ({ transportState: 'open' }));
+      const index = { connection, resolve: (owner: string, id: string) => owner === 'root/allowed' && id === 'bot' ? 'allowed-id' : undefined,
+        clientAdapter: () => 'test', describe: () => [{ id: 'allowed-id', admitted: true }] };
+      const input = { content: 'probe:sample123', conversation: { endpoint: { id: 'foreign-id', adapter: 'test' }, kind: 'private', id: 'room' }, $reply: reply };
+      const context = { input, endpoint: 'bot', generation: 1, project: () => index };
+      await probe.execute(context as never);
+      expect(reply).not.toHaveBeenCalled();
+      expect(connection).not.toHaveBeenCalled();
+      await probe.execute({ ...context, input: { ...input, conversation: { ...input.conversation, endpoint: { id: 'allowed-id', adapter: 'test' } } } } as never);
+      expect(reply).toHaveBeenCalledOnce();
+      expect(connection).toHaveBeenCalledWith('root/allowed', 'bot');
+      expect(JSON.parse((await readFile(eventsPath, 'utf8')).trim().split('\n').at(-1)!)).toMatchObject({ target: 'private-a', result: 'confirmed' });
+    }
+  } finally {
+    if (previous === undefined) delete process.env.ZHIN_ACCEPTANCE_POLICY;
+    else process.env.ZHIN_ACCEPTANCE_POLICY = previous;
+    await rm(directory, { recursive: true, force: true });
+  }
 });

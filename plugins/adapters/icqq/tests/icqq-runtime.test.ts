@@ -114,6 +114,9 @@ describe('icqq protocol helpers', () => {
   });
 
   it('normalizes inbound conversations', () => {
+    expect(icqqInboundConversation('root/icqq\0zhin.adapter\0icqq~8596238', {
+      channelType: 'private', channelId: '1659488338',
+    }).endpoint).toEqual({ id: 'root/icqq\0zhin.adapter\0icqq~8596238', adapter: 'icqq' });
     expect(icqqInboundConversation('test-endpoint', { channelType: 'group', channelId: '100' }))
       .toMatchObject({ kind: 'group', id: '100' });
     expect(icqqInboundConversation('test-endpoint', {

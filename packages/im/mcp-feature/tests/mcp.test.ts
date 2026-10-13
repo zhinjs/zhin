@@ -17,6 +17,17 @@ import mcpFeature, {
 } from '../src/index.js';
 
 describe('MCP Feature', () => {
+  it('rejects JavaScript project access during transport creation instead of capturing another Feature', async () => {
+    const slot = createCapabilitySlot({ owner: rootPluginId(), feature: mcpFeatureId, localName: 'invalid-construction', source: '/fixture/index.ts',
+      definition: defineMcp({ create(context) {
+        expect(Reflect.has(context, 'project')).toBe(false);
+        const invalid = context as unknown as { project(feature: unknown): never };
+        return invalid.project(mcpFeatureId);
+      } }),
+    });
+    await expect(createMcpIndex([slot], snapshot([slot]))).rejects.toThrow(/project/);
+  });
+
   it('brands provider-neutral MCP client definitions', () => {
     const definition = defineMcp({
       description: 'Memory server',

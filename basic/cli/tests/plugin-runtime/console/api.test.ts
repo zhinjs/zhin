@@ -1441,9 +1441,10 @@ describe('console SSE events', () => {
     messageListener?.({
       direction: 'inbound',
       conversation: {
-        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'root' },
+        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' },
         kind: 'group',
         id: '42',
+        threadId: 'thread-1',
       },
       sender: { id: 'alice' },
       contentPreview: 'hello console',
@@ -1459,12 +1460,14 @@ describe('console SSE events', () => {
     expect(frames).toContain('"sender":{"id":"alice"}');
     expect(frames).toContain('"content":"hello console"');
     expect(frames).toContain('"direction":"inbound"');
+    expect(frames).toContain('"threadId":"thread-1"');
+    expect(frames).toContain('"conversation":');
 
     // 出站 → message.receive（direction: outbound）
     messageListener?.({
       direction: 'outbound',
       conversation: {
-        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'root' },
+        endpoint: { id: 'root\0zhin.adapter\0icqq', adapter: 'icqq' },
         kind: 'group',
         id: '42',
       },

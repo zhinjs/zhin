@@ -35,6 +35,7 @@
     "@zhin.js/agent-feature": "workspace:*",
     "@zhin.js/command": "workspace:*",
     "@zhin.js/component": "workspace:*",
+    "@zhin.js/handler": "workspace:*",
     "@zhin.js/layout": "workspace:*",
     "@zhin.js/mcp-feature": "workspace:*",
     "@zhin.js/middleware": "workspace:*",

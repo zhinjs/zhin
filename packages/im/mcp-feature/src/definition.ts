@@ -1,4 +1,4 @@
-import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type { ConstructionContext } from '@zhin.js/feature-kit';
 
 const mcpBrand = 'zhin.mcp/1' as const;
 
@@ -18,7 +18,7 @@ export interface McpClientInstance {
 export interface McpDefinition<TConfig = unknown> {
   readonly $feature: typeof mcpBrand;
   readonly description?: string;
-  create(context: CapabilityContext<TConfig>): McpClientInstance | Promise<McpClientInstance>;
+  create(context: ConstructionContext<TConfig>): McpClientInstance | Promise<McpClientInstance>;
 }
 
 declare module '@zhin.js/plugin-runtime' {

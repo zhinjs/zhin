@@ -46,6 +46,7 @@ describe('GenerationAssets', () => {
     const second = first.replaceScopes(
       [root, child, sibling],
       new Map([[child, () => { events.push('child-v2'); }]]),
+      [],
       new Map(),
     );
 
@@ -79,4 +80,26 @@ describe('GenerationAssets', () => {
     await second.dispose();
     expect(events).toEqual(['command-v1', 'command-v2', 'adapter', 'root']);
   });
+  it('retains untouched external projections during a Scope replacement and releases them once at shutdown', async () => {
+    const events: string[] = [];
+    const root = rootPluginId();
+    const child = childPluginId(root, 'reminder');
+    const adapter = featureId('test.adapter');
+    const command = featureId('test.command');
+    const first = GenerationAssets.create([
+      [root, () => { events.push('root'); }],
+      [child, () => { events.push('reminder-v1'); }],
+    ], new Map([
+      [adapter, () => { events.push('adapter'); }],
+      [command, () => { events.push('command-v1'); }],
+    ]));
+    const second = first.replaceScopes([root, child],
+      new Map([[child, () => { events.push('reminder-v2'); }]]),
+      [command], new Map([[command, () => { events.push('command-v2'); }]]));
+    await first.dispose();
+    expect(events).toEqual(['command-v1', 'reminder-v1']);
+    await second.dispose(); await second.dispose();
+    expect(events).toEqual(['command-v1', 'reminder-v1', 'command-v2', 'adapter', 'reminder-v2', 'root']);
+  });
+
 });
