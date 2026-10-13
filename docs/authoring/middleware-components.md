@@ -1,25 +1,142 @@
 ---
 title: 中间件与组件
-description: 入站结果传递、出站信封改写与统一 JSX/HTML 渲染
+description: 用中间件做关键词回复和消息过滤，用 JSX 写图文消息、按钮和卡片，并了解不同平台上的显示效果
 ---
 
 # 中间件与组件
 
-指令 `execute`、入站中间件 `handle` 和组件 `render` 可以直接返回 JSX。`zhin.js/jsx` 提供同一套 JSX 类型、编译运行时与 `renderToHtml`；`zhin.js/component` 提供注册组件能力。可选样式组件安装 `@zhin.js/components`，它不依赖 React 或截图引擎。
+- **中间件**是每条消息都会经过的拦截器，适合关键词回复、过滤、审核。
+- **组件**是可复用的消息卡片，用 JSX 编写。
 
-## IM 上下文类型
+命令、中间件和组件都可以直接返回 JSX：同一份内容，在支持图片的平台显示为图片，在其他平台自动降级为文字。
 
-`zhin.js/middleware` 的 `defineMiddleware(...)` 默认给入站 `handle` 提供 `Message`；显式 `target: 'outbound'` 时，`input` 默认是可 `replace(...)` 的 `OutboundEnvelope`。无需给常见 IM 中间件手写断言，设置 `adapter` 后 `$client` 仍按该适配器注册的原生 Client 推导。
+## 中间件
 
-底层 `@zhin.js/middleware` 保持通用的 `unknown` 默认输入，可显式声明 `undefined`；非 IM Host 调用没有凭空生成的消息。Handler 的 `interaction` 仍可能缺失，调用前应检查它是否存在。
+### 关键词回复
 
-## JSX 创作
+```ts
+// middlewares/keyword-reply/index.ts
+import { defineMiddleware } from 'zhin.js/middleware';
+import type { Message } from 'zhin.js';
 
-项目 `tsconfig.json` 设置 `"jsx": "react-jsx"`、`"jsxImportSource": "zhin.js"`，代码保存为 `.tsx`。服务端约定入口支持 `commands/**/index.tsx`、`middlewares/<name>/index.tsx`、`components/<name>/index.tsx`；CLI 开发 loader 转译 JSX，生产模式使用编译产物。
+export default defineMiddleware<Message>({
+  handle({ input }, next) {
+    if (input.content === '状态') return '在线';
+    return next();
+  },
+});
+```
 
-服务端 TSX 支持只负责 JSX 转译，不包含样式构建。**不支持直接 `import './card.css'`、CSS Modules 或 CSS 的 `?raw` 导入**，也不提供 Sass/SCSS、Less、Stylus、PostCSS 等预处理或生成流程。HTML 标签在 `<html>` 内使用内联 `style`（CSS 对象或声明字符串）；样式组件使用 `ThemeProvider` 和 `custom.style`。浏览器 Console 页面走独立构建链路，不属于此服务端 TSX 承诺。
+用户发送"状态"时 Bot 回复"在线"；其他消息通过 `next()` 交给后面的中间件和命令。`input` 就是收到的消息，常用的有 `content`（文字内容）、`sender`（发送者）和 `$reply()`。
+
+### 返回值决定了会发生什么
+
+| 写法 | 结果 |
+| --- | --- |
+| `return '在线'` 或 `return <text>在线</text>` | 不再往下传，直接用这个内容回复 |
+| `return next()` | 交给后面处理，沿用后面产生的回复 |
+| `await next()`，不返回 | 同上 |
+| `await next(); return <text>OK</text>` | 先让后面处理，再把它的回复**替换**成你的内容 |
+| 不调用 `next()`，也不返回 | 吞掉这条消息，不回复 |
+
+- 整条链走完后才会**自动回复一次**；如果中途用 `$reply()` 手动发送，可以发多次，且之后无法撤回。
+- 每个中间件最多调用一次 `next()`。它的返回值只用于往回传递，不是可修改的消息对象。
+- 命令匹配成功但没有返回内容，也视为"已处理"，不会再交给 AI。
+
+### 控制执行顺序
+
+```ts
+export default defineMiddleware<Message>({
+  phase: 'before-dispatch', // 默认；或 'after-dispatch'
+  order: 10,                // 默认 0，越小越先执行
+  handle({ input }, next) { /* ... */ },
+});
+```
+
+排序依次比较：`phase` → `order` → 插件挂载顺序 → 能力 id。
+
+中间件的参数还包括 `config`（本插件配置）、`use(token)`（取用插件服务）、`owner`、`generation`。声明 `adapter` 后，`$client` 会带上该平台 SDK 的类型。
+
+### 改写或拦截 Bot 发出的消息
+
+设置 `target: 'outbound'` 后，中间件处理的是**即将发出**的消息：
 
 ```tsx
+// middlewares/review/index.tsx
+import { defineMiddleware } from 'zhin.js/middleware';
+import type { OutboundEnvelope } from 'zhin.js/core/runtime';
+
+export default defineMiddleware<OutboundEnvelope>({
+  target: 'outbound',
+  async handle({ input }, next) {
+    input.replace(<text>经过审核的内容</text>); // 改写内容
+    await next();                               // 不调用 next() 就不会发送
+  },
+});
+```
+
+出站中间件不通过返回值改写，而是调用 `input.replace()`。`input.payload` 是当前将要发给平台的内容，适合审核和拦截；替换后的内容同样会经过渲染和平台校验。
+
+## 用 JSX 写消息
+
+### 准备工作
+
+在项目 `tsconfig.json` 中设置：
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "zhin.js"
+  }
+}
+```
+
+然后把文件保存为 `.tsx`，例如 `commands/card/index.tsx`。`npm create zhin-app` 生成的项目已经配置好。这里的 JSX 是 Zhin 自己的实现，**与 React 无关**。
+
+### 图文混排
+
+小写标签都是内置的消息元素，不需要 import：
+
+```tsx
+// commands/hi/index.tsx
+import { defineCommand } from 'zhin.js/command';
+
+export default defineCommand({
+  execute: () => <>
+    你好
+    <image src="https://example.com/photo.png" />
+    <mention target="123" />
+  </>,
+});
+```
+
+一条消息按顺序包含：文字、图片、@某人。常用标签有 `text`、`image`、`mention`、`face`、`audio`、`video`、`file`、`reply`、`forward`、`link`、`qrcode`、`markdown`、`keyboard`、`tts` 等，全部列表见 [参考 · 内置标签](#内置标签)。
+
+### 按钮
+
+```tsx
+<button onClick={(message) => <>
+  <text>已点击</text><mention target={message.sender!.id} />
+</>}>查看结果</button>
+```
+
+用户点击后，`onClick` 在原会话里执行，返回的内容会自动回复。支持原生按钮的平台显示按钮，不支持的平台显示为编号选项（"回复 1 查看结果"）。
+
+::: details 按钮的更多规则
+- `onClick` 返回字符串、消息段或 JSX 时自动回复一次；返回 `null`、`undefined` 或布尔值不发送；数字 `0` 会回复 `0`。也可以在回调中调用 `message.$reply()`。
+- 回调只对原会话和当前版本有效：一小时后、插件热重载或进程重启后失效。
+- 要限制谁能点，在回调里判断 `message.sender`。
+- 降级编号在运行期间递增，不会复用旧编号；多个会话交错时可能跳号，但各会话互不干扰。相邻的 `<button>` 会合并为一组编号。
+- 回调函数不会发送到平台；框架会绑定一个随机标识，支持原生按钮的平台通过 callback 回传。
+:::
+
+### 带样式的卡片
+
+安装组件库 `pnpm add @zhin.js/components`，把卡片放进 `<html>` 里：
+
+```tsx
+// commands/status/index.tsx
 import { defineCommand } from 'zhin.js/command';
 import { Card, CardHeader, Badge } from '@zhin.js/components';
 
@@ -33,14 +150,18 @@ export default defineCommand({
 });
 ```
 
-HTML 组件的展示位采用 `JSXRenderable`：支持文本、数字、其他 JSX、数组、异步节点和空值。标题、标签、值等都可组合；颜色、尺寸、百分比等样式或计算参数有各自类型。纯 JSX 函数组件无需注册，异步函数也可以作为标签。HTML 内文本默认转义；普通字符串 `'<b>内容</b>'` 始终是文本。`rawHtml()` 或 `<Raw html={...} />` 仅用于明确插入可信 HTML。
+`<html>` 里的内容会被渲染成 HTML；在不能直接显示 HTML 的平台上，安装了 `@zhin.js/html-renderer` 就转成图片，否则降级为文字。见下文 [不同平台上的效果](#不同平台上的效果)。
 
-样式组件通过 `ThemeProvider` 共享配色、字体、背景、圆角、边框、阴影与文案；局部使用 `custom.style`、`custom.text` 覆盖。默认间距为 4/8/12/16/24px，上下、左右分别对称：组件外距用 margin，容器内距用 padding，Divider 也带外距。普通 block 的相邻纵向 margin 可以折叠；Flex/Grid 下会相加。完整配置见 [组件库说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/components/README.md)。
+组件库不依赖 React 或截图引擎。主题通过 `ThemeProvider` 统一设置（配色、字体、圆角、阴影等），局部用 `custom.style`、`custom.text` 覆盖。完整组件列表见 [组件库说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/components/README.md)。
 
-表格可使用 `Table` 的 `headers`、`rows`，或组合 `TableRow`、`TableCell` 放入其他 JSX。`Checkbox`、`Radio`、`Switch`、`Button` 是展示组件：选中、禁用、按钮变体由 props 决定，没有点击事件或内部状态，在 HTML 与图片消息中均用于展示。
+::: warning 不支持 CSS 文件
+服务端 TSX 只做 JSX 转译，**不能 `import './card.css'`**，也不支持 CSS Modules、Sass、Less、PostCSS。请使用内联 `style`（对象或字符串）、主题，或下面的 Tailwind 工具类。
+:::
+
+### 表格、Markdown 与代码块
 
 ```tsx
-import { Table, Checkbox, Switch, Button } from '@zhin.js/components';
+import { Table, Checkbox, Switch, Button, Markdown, CodeBlock } from '@zhin.js/components';
 
 const report = <Table
   headers={['任务', '完成', '通知', '操作状态']}
@@ -49,22 +170,21 @@ const report = <Table
       <Switch checked label="开启" />, <Button disabled>等待上线</Button>],
   ]}
 />;
-```
-
-`List` 支持有序／无序列表及嵌套展示节点。`Markdown` 的 `source` 是待解析的字符串，标题、列表、引用和表格会变为主题化 JSX；代码围栏交给 `CodeBlock`，提供语言标签、语法高亮、可选行号与换行。`CodeBlock` 也可直接使用，`title` 接受 JSX。原始 HTML 显示为文本，Markdown 图片显示替代文案。
-
-```tsx
-import { Markdown, CodeBlock } from '@zhin.js/components';
 
 const article = <Markdown source={'## 验收记录\n\n- [x] 冒烟通过\n- [ ] 等待上线'} />;
 const snippet = <CodeBlock language="typescript" title={<strong>plugin.ts</strong>}
   source={'const ready = true;\nconsole.log(ready);'} />;
 ```
 
+- `Checkbox`、`Radio`、`Switch`、`Button` 只用于**展示**状态，没有点击事件。需要交互请用上面的 `<button onClick>`。
+- `Markdown` 把字符串渲染成带主题的标题、列表、引用和表格；代码块交给 `CodeBlock`（语言标签、高亮、可选行号）。
+- 也可以用 `TableRow`、`TableCell` 自由组合表格，`List` 支持有序 / 无序和嵌套列表。
 
-### Tailwind 静态工具类
+### Tailwind 工具类
 
-按需安装 `pnpm add @zhin.js/tailwind`，无需 CSS 文件或样式构建插件。初始化一次后，`tw()` 同步返回内联样式，直接接入现有 `style`、`custom.style` 或 `theme.components`：
+```bash
+pnpm add @zhin.js/tailwind
+```
 
 ```tsx
 import { createTailwindStyle } from '@zhin.js/tailwind';
@@ -84,93 +204,11 @@ const card = (
 );
 ```
 
-支持单元素的静态布局、间距、尺寸、字体、颜色、圆角、边框、阴影等；工具类由官方 Tailwind 编译，优先级遵循生成 CSS 的顺序，并非类名字符串的先后顺序。`hover:`、`md:`、`group-*`、`space-*` 等交互、响应式或跨元素选择器无法变成单元素内联样式，会明确报错，未知类也不会被静默忽略。采用 `gap` 或子组件外距处理元素间距。
-
-HTML 与 `@zhin.js/html-renderer`（`@pixel.js/shotium`）消费同一份内联样式；图片是静态结果，字体由渲染环境或显式注册决定。此接口不接管 `className`，也不启用 `.css` 导入、CSS Modules 或预处理器。范围与限制见 [Tailwind 包说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/tailwind/README.md)。
-
-### 原生消息标签与自定义组件
-
-默认 JSX 是消息排版。**内置小写标签无需 import，并提供属性类型提示**：`text`、`image`、`mention`、`face`、`audio`、`video`、`file`、`record`、`voice`、`reply`、`forward`、`share`、`dice`、`rps`、`card`、`keyboard`、`action`、`markdown`、`link`、`qrcode`、`tts`，以及带回调的 `button` 和显式 `html` 边界。标签名对应 `Segment.type`，属性对应 `Segment.data`。`<image src={...}>` 支持 URL、路径、base64 或 `MediaRef`，转换为 canonical `data.media`；也可直接传 `<image media={...} />`。
-
-```tsx
-import { defineCommand } from 'zhin.js/command';
-
-export default defineCommand({
-  execute: () => <>
-    hello
-    <image src="https://example.com/photo.png" />
-    <mention target="123" />
-    <button onClick={(message) => <>
-      <text>已点击</text><mention target={message.sender!.id} />
-    </>}>查看结果</button>
-  </>,
-});
-```
-
-`onClick(message)` 在点击所在会话执行，返回字符串、Segment 或 JSX 就自动回复一次；返回 `null`、`undefined` 或布尔值不发送。数字 `0` 会回复 `0`。开发者也可以在回调中显式调用 `message.$reply()`。回调持有当前 operation 的作者与资源上下文，仅对原会话和当前 generation 有效；回调一小时后或插件重载、进程重启后失效。运行实例统一分配递增的降级编号，后续键盘不会复用旧编号；多个会话交错发送时允许跳号，映射仍按会话隔离。需要限制点击者时，回调按 `message.sender` 判断。函数不会写入平台载荷；框架绑定随机回跳标识，支持原生按钮的平台走 callback，不支持的平台降级为数字选项。相邻 `<button>` 合并为一组编号。
-
-`<card {...platformPayload} />` 传递平台原生卡片载荷，由适配器处理；它不是 HTML 样式组件 `Card`。原生 `<markdown>` 输出 Markdown Segment，也不是 HTML 样式组件 `Markdown`。
-
-注册的命名组件可以直接作为标签，不需要导入：
-
-```tsx
-// components/music/index.tsx
-import { defineComponent } from 'zhin.js/component';
-
-export default defineComponent<{ title: string; url: string; audio?: string }>({
-  render: (props) => <share {...props} />,
-});
-
-// commands/song/index.tsx
-// execute: () => <music title="海阔天空" url="https://music.163.com/#/song?id=387717" />
-```
-
-注册组件仍按当前插件到祖先查找，内置 Segment 名称保留给框架。普通函数 `Foo` 可以决定 `<Foo />` 位置的内容，也可以返回 `null` 省略。JSX 类型命名空间可由插件扩展，以补充自定义小写标签的属性提示；未知名字在运行时必须存在注册组件，不能作为未知 Segment 静默发送。
-
-## 入站中间件
-
-```tsx
-import { defineMiddleware } from 'zhin.js/middleware';
-import type { Message } from 'zhin.js';
-
-export default defineMiddleware<Message>({
-  handle({ input }, next) {
-    if (input.content === '状态') return <text>在线</text>;
-    return next();
-  },
-});
-```
-
-| 写法 | 行为 |
-| --- | --- |
-| `return <text>OK</text>` | 短路下游，形成自动回复结果 |
-| `return next()` | 透传下游结果与作者 |
-| `await next()`，无返回值 | 仍透传下游结果 |
-| `await next(); return <text>OK</text>` | 替换下游尚未发送的自动回复 |
-| 不调用 next，也无返回值 | 消费输入，不自动回复 |
-
-链结束后自动回复一次。显式 `$reply()` 可以发送多次；上游返回值不能撤销已发送的显式回复。命令匹配但返回 void，仍视为已处理，不因没有返回内容而触发 AI。`next()` 返回值是用于透传的 continuation，不是可修改的消息对象；每层最多调用一次。
-
-同一 target 内按 **phase → order → 插件拓扑序 → slot id** 排序。`phase` 默认 `before-dispatch`，另一值为 `after-dispatch`；它是链中的排序分组，自动发送发生在整个链回卷结束后。`order` 默认为 0。上下文包含 `input`、`config`、`use(token)`、`owner`、`generation`；声明 adapter 后 `$client` 获得该平台类型。
-
-## 出站中间件
-
-```tsx
-import { defineMiddleware } from 'zhin.js/middleware';
-import type { OutboundEnvelope } from 'zhin.js/core/runtime';
-
-export default defineMiddleware<OutboundEnvelope>({
-  target: 'outbound',
-  async handle({ input }, next) {
-    input.replace(<text>经过审核的内容</text>);
-    await next();
-  },
-});
-```
-
-出站 `handle` 不返回消息，通过 `replace()` 改写；不调用 `next()` 即停止投递。替换内容也走统一渲染和平台校验。`payload` 是当前候选平台内容，适合审核和拦截，不能绕过 Endpoint 发送边界。
+`tw()` 把类名编译成内联样式，可以用在 `style`、`custom.style` 或主题里。支持布局、间距、尺寸、字体、颜色、圆角、边框、阴影等静态样式；`hover:`、`md:`、`group-*`、`space-*` 这类交互、响应式或跨元素的写法无法转成内联样式，会明确报错。元素间距请用 `gap`。详见 [Tailwind 包说明](https://github.com/zhinjs/zhin/blob/main/packages/toolkit/tailwind/README.md)。
 
 ## 注册组件
+
+把常用的卡片注册成组件，在任何命令里按名字调用：
 
 ```tsx
 // components/status-card/index.tsx
@@ -188,22 +226,39 @@ export default defineComponent<Props>({
 });
 ```
 
-调用使用同一组件入口：
+调用方式：
 
 ```ts
 import { component } from 'zhin.js/component';
 return component('status-card', { title: 'my-bot', rows: [{ label: 'RSS', value: '42MB' }] });
 ```
 
-名字沿调用者插件向祖先查找，子插件可覆盖同名组件。`render(props, context)` 的上下文包含当前 operation 的 config、use、owner、generation 和 requester；异步执行和热重载不会切到另一代资源。注册组件可返回另一组件调用，深度上限 32。
+在 `.tsx` 里，注册过的组件也可以直接当标签用，不需要 import：
 
-组件可提供 `previewProps` 作为 Console 的公开示例数据。Console 预览使用同一消息 JSX 渲染器，并保留本次请求的 generation 与取消信号；返回 `<html>` 时输出 HTML 段，普通消息 JSX 则输出相应的 Segment。
+```tsx
+// components/music/index.tsx
+import { defineComponent } from 'zhin.js/component';
 
-## HTML 与平台能力
+export default defineComponent<{ title: string; url: string; audio?: string }>({
+  render: (props) => <share {...props} />,
+});
 
-统一链路为 **JSX → 有序 Segment → Adapter policy → 出站中间件 → Endpoint**；只有 `<html>` / `<Html>` 子树经过 **HTML → segment.html**。适配器 `segments.html` 声明 `direct` 时保留 HTML（如 Sandbox、Email）；`image` 时使用可选 `@zhin.js/html-renderer` 输出 PNG；`text` 时转文本。未声明采用可渲染则图片、否则文本的策略。direct 只影响 HTML，其他媒体与交互段照常校验。
+// commands/song/index.tsx
+// execute: () => <music title="海阔天空" url="https://music.163.com/#/song?id=387717" />
+```
 
-需要自定义图片宽度或文本降级内容时：
+- 组件名从当前插件开始，逐级向父插件查找；子插件可以覆盖同名组件。内置标签名保留给框架。
+- 提供 `previewProps` 后，Console 可以用这份示例数据预览组件。
+- `title`、`label`、`value` 这类展示位接受 `JSXRenderable`：文本、数字、JSX、数组、异步内容或空值都可以。
+
+## 不同平台上的效果
+
+| 内容 | 平台能直接显示 HTML（如 Sandbox、Email） | 安装了 `@zhin.js/html-renderer` | 都没有 |
+| --- | --- | --- | --- |
+| `<html>` 里的卡片 | 原样显示 HTML | 渲染成 PNG 图片 | 降级为文字 |
+| 图片、@、按钮等消息元素 | 按平台能力发送 | 同左 | 同左 |
+
+需要自定义图片宽度或降级文字时：
 
 ```ts
 import { renderToHtml } from 'zhin.js/jsx';
@@ -211,13 +266,45 @@ import { segment } from 'zhin.js';
 return segment.html({ html: await renderToHtml(node), width: 640, text: '服务在线' });
 ```
 
-缺少 renderer、截图失败或平台无法投递二进制图片时，在投递前降级文本。平台上传或发送失败后不追加文本重发，以免重复。空 JSX 不发消息；JSX 求值失败报告投递错误，不把异常堆栈当聊天内容。生成的 HTML 不再执行文本模板。
+- 缺少渲染器、截图失败或平台无法发送图片时，会在发送前降级为文字；平台发送失败后**不会**再补发文字，避免重复。
+- 空 JSX 不发送消息；JSX 求值出错会记为发送失败，不会把异常堆栈发到聊天里。
 
-混合消息直接用 Fragment：`<>hello<image src="https://example.com/a.png" /><mention target="user-id" /><html><Card /></html></>`，形成一条按顺序排列的图文消息。纯函数组件可返回 Segment、文本、JSX、数组、异步结果或 `null`；空值省略。HTML 标签与 HTML 展示组件只放在 `<html>` 内。
+## 参考
 
-## 游戏插件的双模式降级
+### 内置标签
 
-游戏插件（`plugins/games/*` + `@zhin.js/game-kit`）把「按钮键盘 + 文本数字」做成同一份内容的两种消费方式。支持键盘的平台走按钮模式：`buildGridKeyboard` / `buildChoiceKeyboard` 产出 `keyboard` 段，按钮 payload 形如 `ttt:<sessionId>:<cell>`。没有按钮能力的平台走文本模式：同一条消息附 ASCII 棋盘和 `fallbackHint`（如「落子：回复数字 1-9（仅空格）」），`fallback.map` 把数字映射回 payload。
+小写标签对应消息段类型，属性对应消息段数据，带有类型提示：`text`、`image`、`mention`、`face`、`audio`、`video`、`file`、`record`、`voice`、`reply`、`forward`、`share`、`dice`、`rps`、`card`、`keyboard`、`action`、`markdown`、`link`、`qrcode`、`tts`，以及带回调的 `button` 和 HTML 边界 `html`。
+
+- `<image src={...}>` 接受 URL、路径、base64 或 `MediaRef`，也可以直接传 `<image media={...} />`。
+- `<card {...payload} />` 是平台原生卡片，交给适配器处理；它**不是**组件库里的 `Card`。
+- `<markdown>` 输出 Markdown 消息段；它**不是**组件库里的 `Markdown`。
+
+### 中间件上下文
+
+| 字段 | 说明 |
+| --- | --- |
+| `input` | 入站时是 `Message`；`target: 'outbound'` 时是可 `replace()` 的 `OutboundEnvelope` |
+| `config` | 本插件配置 |
+| `use(token)` | 取用插件服务 |
+| `owner` / `generation` | 所属插件与当前版本号 |
+| `$client` | 声明 `adapter` 后，为该平台的原生客户端类型 |
+
+## 深入
+
+::: details 类型推导与 JSX 细节
+- `zhin.js/middleware` 的 `defineMiddleware` 默认为入站 `handle` 提供 `Message` 类型，出站提供 `OutboundEnvelope`，常见场景不需要手写类型断言。底层 `@zhin.js/middleware` 保持通用的 `unknown` 默认输入；非 IM 的 Host 调用不会凭空生成消息。Handler 的 `interaction` 可能缺失，使用前要检查。
+- 服务端约定入口支持 `commands/**/index.tsx`、`middlewares/<name>/index.tsx`、`components/<name>/index.tsx`；开发时由 CLI 转译 JSX，生产模式使用编译产物。浏览器端的 Console 页面走独立的构建流程。
+- HTML 内的文本默认转义，字符串 `'<b>内容</b>'` 始终是文本；只有 `rawHtml()` 或 `<Raw html={...} />` 会插入可信 HTML。
+- 普通函数组件 `Foo` 不需要注册，可以返回消息段、文本、JSX、数组、异步结果或 `null`（省略）。HTML 标签和 HTML 展示组件只能放在 `<html>` 内。
+- 插件可以扩展 JSX 类型命名空间，为自定义小写标签补充属性提示；运行时遇到未知标签名时必须存在同名注册组件，不会作为未知消息段静默发送。
+- 组件 `render(props, context)` 的上下文包含当前执行的 config、use、owner、generation 与调用方；异步执行和热重载不会切换到另一个版本的资源。组件之间可以嵌套调用，深度上限为 32。Console 预览使用同一渲染器，并保留本次请求的版本与取消信号。
+- 完整链路：JSX → 有序消息段 → 适配器策略 → 出站中间件 → 平台发送；只有 `<html>` 子树会经过 HTML → `segment.html`。适配器的 `segments.html` 声明为 `direct` 时保留 HTML，`image` 时转 PNG，`text` 时转文字；未声明时能渲染就转图片，否则转文字。`direct` 只影响 HTML，其他消息段照常校验。
+- 组件库默认间距为 4/8/12/16/24px；组件外距用 margin、容器内距用 padding。普通块的相邻纵向 margin 会折叠，Flex / Grid 中会相加。Tailwind 类的优先级遵循生成 CSS 的顺序，而不是类名书写顺序；未知类会报错。HTML 与图片渲染（`@pixel.js/shotium`）使用同一份内联样式，字体由渲染环境或显式注册决定。
+:::
+
+### 案例：游戏插件的按钮与数字双模式
+
+游戏插件（`plugins/games/*` + `@zhin.js/game-kit`）展示了"内容只写一遍，按平台能力选择呈现"：支持按钮的平台显示键盘，不支持的平台显示 ASCII 棋盘和"回复数字 1-9"的提示。
 
 ```ts
 // plugins/games/tic-tac-toe/src/board-view.ts（节选）
@@ -235,4 +322,10 @@ return buildGridKeyboard({
 });
 ```
 
-配套的 inbound 中间件把两条输入路径归一：直接 payload（按钮回调转文本）走 `parseGridPayload`；纯数字文本经 `buildGridFallbackMap` 反查为 payload，再走同一处理函数。到这里就能看出，中间件与组件降级是同一思想的两侧：**内容只写一遍，按平台能力选择呈现**。
+按钮的 payload 形如 `ttt:<sessionId>:<cell>`。配套的入站中间件把两条输入路径合并：按钮回调直接用 `parseGridPayload` 解析；纯数字文本先经 `buildGridFallbackMap` 反查成 payload，再走同一个处理函数。
+
+## 下一步
+
+- [命令](./commands.md)：在命令里返回这些内容。
+- [约定目录](./conventions.md)：中间件、组件放在哪里。
+- [平台适配器](../adapters/index.md)：查看各平台支持哪些消息元素。

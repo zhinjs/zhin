@@ -1,73 +1,83 @@
 ---
 title: Agent Tools and Skills
-description: tools/<name>/index.ts convention and setup addTool — one ToolIndex, deferred catalog and load_tool, skills and agents/<name>/agent.json
+description: Let the AI call your functions — write Tools, restrict their scope and approval, package procedures as Skills, add business context with Prompt Sections, and define sub-agents
 ---
 
-# Agent Tools and Skills
+# Agent tools and Skills
 
-Choose a Tool directory from the disclosure scope the capability needs. Every authoring path writes the same candidate-generation capability table and becomes visible through the sole `ToolIndex` only after commit. There is no second dynamic registry.
+With AI enabled, the bot answers messages that match no command using an LLM. This page is about letting it **do things**:
 
-| Directory | Ownership | Model disclosure |
-| --- | --- | --- |
-| `tools/<name>/index.ts` | Plugin-wide Tool | Enters the public deferred catalog when the plugin is enabled |
-| `agents/<agent>/tools/<name>/index.ts` | Agent-private Tool | Enters the capability set after that Agent is selected |
-| `skills/<skill>/tools/<name>/index.ts` | Skill-private Tool | Unlocks after `load_skill` activates that Skill |
-| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Tool private to an Agent Skill | Requires both Agent selection and Skill activation |
+- **Tool**: a function the AI can call — check the weather, search music, query a database.
+- **Skill**: a playbook the AI loads only when needed, optionally with its own Tools.
+- **Prompt Section**: background knowledge for the AI, such as product terms and answer style.
+- **Sub-agent**: a specialized assistant with its own responsibilities, rules and tools.
 
-The initial model surface contains root Tools plus summaries for root Skills and Agents. Private Tool definitions are still validated while preparing the generation, but they do not enter the model Tool catalog before their owner is activated.
+::: tip Before you start
+Run `npx zhin setup --ai` first. The wizard installs a model SDK and declares `@zhin.js/tool` and `@zhin.js/prompt-section`, which is what makes `tools/` and `prompt-sections/` recognized. See the [AI overview](../ai/index.md).
+:::
 
-Reserve root `tools/` for cross-task, frequently useful capabilities that need no domain instructions. A Tool that only makes sense for a platform, workflow, or role belongs to that Skill or Agent. Split a Skill again when it contains independently triggered task domains, so a narrow request does not disclose every Tool schema for an entire platform.
-
-Adapter Skills belong under `agents/<platform>/skills/<name>/`. The platform Agent is selected automatically for matching IM ingress, so turns from other platforms do not receive its private Skill summaries. Declaring multiple automatic Agent candidates for one platform is a routing conflict; merge their responsibilities or require an explicit user selection.
-
-```mermaid
-flowchart LR
-    A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[Candidate capability table]
-    B["setup() → context.addTool()"] --> C
-    C --> D["commit → ToolIndex projection"]
-    D --> E[CapabilityIngress]
-    E --> F{"canAccessTool(message)<br/>platforms/scopes/permissions"}
-    F -->|hidden filtering| G[deferred catalog]
-    G --> H["discover / load_tool / load_skill"]
-    H --> I[Tool set callable by the model]
-```
-
-## Path One: Directory Conventions
-
-After mounting the `@zhin.js/tool` Feature, `index.ts` in any of the four Tool locations is discovered and must default-export `defineAgentTool(...)`. Supporting modules stay beside the entry in the same named directory:
+## Your first tool
 
 ```ts
-// tools/echo/index.ts
+// tools/weather/index.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ message: string }>({
-  description: 'Echo a message back',
-  inputSchema: z.object({ message: z.string().min(1) }),
-  async execute({ message }) {
-    return `echo: ${message}`;
+export default defineAgentTool<{ city: string }>({
+  description: 'Get the current weather for a city',
+  inputSchema: z.object({ city: z.string().min(1) }),
+  requiresApproval: 'never',
+  async execute({ city }) {
+    const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
+    return response.text();
   },
 });
 ```
 
-Definition fields (`packages/im/tool/src/definition.ts`):
+Save, then ask the bot in a DM "What's the weather in Berlin?" — the AI calls this tool and answers from the result.
 
-| Field | Required | Description |
-| --- | --- | --- |
-| `description` | Yes | Functional description for the model |
-| `inputSchema` | No | A Zod 4 object or an object-root JSON Schema; the Tool Feature owns projection and pre-execution validation |
-| `requiresApproval` | No | When the Tool requires approval: `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
-| `platforms` | No | Restrict to adapter platforms (e.g., `['icqq']`), empty = all |
-| `scopes` | No | Restrict to session scenes `'private' \| 'group' \| 'channel'`, empty = all |
-| `permissions` | No | Permit string list (see access control below) |
-| `hidden` | No | Registered but not exposed to the model (callable by name only) |
-| `execute(input, context)` | Yes | `context` is the capability context (`config` / `use(token)` / `owner` / `generation`) |
+- `description` and `inputSchema` are **written for the model**: say clearly what the tool does and what the parameters are, so it gets called at the right moment.
+- `inputSchema` can be a Zod 4 object or a JSON Schema whose root is `object`. The framework validates arguments before calling.
+- Whatever `execute` returns goes back to the model, which turns it into a reply.
 
-The file name is the owner-local name. Agent turns expose the complete tool tree to the model by `qualifiedName`: root tools keep their local name, while child tools join owner path segments and the file name with `__` (for example, `maps__get-weather`). Execution remains bound to the original owner's fixed-generation capability context; it is not re-resolved through the caller's owner.
+## Common tasks
 
-## Path Two: Conditional setup Declaration
+### Restrict where a tool is available
 
-When configuration or injected resources decide whether a tool exists, call `context.addTool()` directly in `setup()`:
+```ts
+export default defineAgentTool({
+  description: 'Kick a group member',
+  platforms: ['icqq'],           // QQ only
+  scopes: ['group'],             // group chats only
+  permissions: ['role(master)'], // only in conversations started by a master
+  // ...
+});
+```
+
+When the conditions don't hold, the model doesn't see the tool at all. `permissions` uses the same rules as a command's [`permit`](./commands.md). `hidden: true` registers the tool without offering it to the model; it can still be called by name.
+
+### Ask the user to confirm first
+
+```ts
+export default defineAgentTool({
+  description: 'Delete a record',
+  requiresApproval: 'always',
+  // ...
+});
+```
+
+| Value | When the user must confirm |
+| --- | --- |
+| `'always'` | Every call |
+| `'once'` | The first call in a conversation |
+| `'on-risk'` (default) | When risky. Unknown plugin operations are confirmed; `bash`, file and network tools skip a second confirmation once security policy has verified the exact command, path or URL |
+| `'never'` | Never |
+
+`'never'` only skips the confirmation step — it **cannot** bypass permissions or network, filesystem and shell security policies.
+
+### Offer a tool based on config
+
+When a config switch or available resource decides, register in `setup` in `plugin.ts`:
 
 ```ts
 // plugins/utils/lottery/plugin.ts (excerpt)
@@ -77,137 +87,60 @@ import { defineAgentTool } from '@zhin.js/tool';
 export default definePlugin({
   name: 'lottery',
   async setup(context) {
-    if (!context.config.get().agentToolsEnabled) return;
+    if (!context.config.get().agentToolsEnabled) return; // not offered when disabled
     context.addTool('lottery_sync', defineAgentTool({
       description: 'Synchronize lottery draws',
       requiresApproval: 'always',
       inputSchema: { type: 'object', properties: {} },
-      execute: async (_input, toolContext) => toolContext.use(lotteryDatabaseToken).sync(),
+      execute: async (_input, toolContext) => {
+        const database = toolContext.use(lotteryDatabaseToken);
+        return database.sync();
+      },
     }));
   },
 });
 ```
 
-`addTool()` writes only the shadow generation. It is never visible if prepare fails and becomes visible atomically on commit, so no manual unregister function is needed. The definition is the same `defineAgentTool()` used by convention files:
+`addTool` behaves exactly like the `tools/` folder and is replaced automatically on hot reload — no manual unregistering.
 
-```ts
-context.addTool('lottery_sync', defineAgentTool({
-  description: tool.description,
-  inputSchema: tool.inputSchema, // zod object or JSON Schema
-  platforms: tool.platforms,
-  scopes: tool.scopes,
-  permissions: tool.permissions,
-  hidden: tool.hidden,
-  requiresApproval: 'never',
-  execute: (input, context) => tool.execute(input, context),
-}));
-```
+### Use plugin services inside a tool
 
-Note: the `execute` closure captures dependencies at `setup()` time. **Do not call plugin locators** (such as `getPlugin()`) **inside the closure** -- the runtime path prohibits dynamic plugin retrieval.
+The second argument to `execute` gives access to plugin services and the current context:
 
-## Unified Access Control: canAccessTool
-
-Tools registered via both paths are filtered by Core's `canAccessTool(tool, message)` against the message context on every Agent turn -- **one predicate governs both paths** (`packages/im/core/src/built/tool.ts`; on the Plugin Runtime side, it's applied through `CapabilityIngress`, see `packages/im/agent/src/plugin-runtime/capability-ingress.ts`).
-
-Four-tuple semantics:
-
-| Field | Determination |
+| Field | Description |
 | --- | --- |
-| `platforms` | Reject if the message's source adapter name (`String(message.$adapter)`) is not in the list |
-| `scopes` | Reject if the session scene (`message.$channel.type`, default `private`) is not in the list |
-| `permissions` | Permit list, checked item by item (AND); commas inside parentheses mean OR |
-| `hidden` | Not included in the tool list given to the model, but still executable by name |
+| `config` | This plugin's config |
+| `use(token)` | Get services the plugin provides |
+| `origin` / `principal` | Which conversation the call came from and which user it acts for |
+| `policy` | The security policy in effect |
+| `question` | Ask the user something (next section) |
+| `$client` | Platform client inferred from the adapter |
 
-Permit syntax is defined by `@zhin.js/permission` (`packages/im/permission/src/builtin.ts`): built-in `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`; platform identity `platform(adapter,perm)` (e.g., group owner/admin, determined by adapter checker); unrecognized permits are always rejected.
+Always get dependencies through this argument rather than looking up other plugins at execution time, so the tool uses the right version of each resource during hot reloads.
 
-`requiresApproval` is evaluated after Tool admission and immediately before execution. `always` asks every time; `once` lets the standard Host remember that Tool for the current session; `on-risk` keeps unknown plugin actions behind confirmation, while Bash, file, and network Tools do not ask twice after their dedicated policy has validated the concrete command, path, or URL. `never` skips only declarative confirmation and cannot bypass permission, network, filesystem, shell, or generation policies.
+### Ask the user from a tool
 
-## Deferred Catalog and load_tool
+Use `context.question` when you need more input from the user. Unattended runs such as schedules don't provide it, so handle its absence. The built-in `ask_user` tool uses the same mechanism and matches replies by conversation and user identity.
 
-Tools are not included in the full prompt. Each turn first builds a **catalog** of tools that pass access control and creates its own deferred controller (`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`); by default only `alwaysLoadedTools` are exposed to the model. The controller creates three meta-tools for that turn: `discover` searches tools/skills by query (and can filter by MCP server), `load_tool` loads a tool schema by name, and `load_skill` loads complete skill instructions and unlocks associated tools. Concurrent turns and subagents use isolated controllers; IM `Message` identity is not a state key.
+### Tools only offered in certain situations
 
-Loading state is persisted per session (`DeferredToolSessionSnapshot`), with an eviction limit. Configuration key `deferredTools` (`ZhinAgentConfig`):
+Where a tool lives decides **when** the model can see it:
 
-| Key | Default | Description |
-| --- | --- | --- |
-| `maxLoadedPerSession` | `12` | Maximum number of tools loaded per session |
-| `discoverTopK` | `5` | Number of results returned by `discover` |
-| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | Always visible to the model |
-| `mcpServers` | `{}` | Override `alwaysLoaded` list per MCP server |
+| Location | Visible to the model |
+| --- | --- |
+| `tools/<name>/index.ts` | Once the plugin is enabled (discoverable) |
+| `skills/<skill>/tools/<name>/index.ts` | After that Skill is loaded |
+| `agents/<agent>/tools/<name>/index.ts` | When that sub-agent is selected |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | When that Agent is selected and its Skill loaded |
 
-The Anthropic SDK channel marks unloaded tools with `deferLoading`; other channels only deliver the loaded set.
+Keep root `tools/` for general, frequent tools that need no extra explanation. Tools that only make sense for one platform, workflow or role belong in that Skill or Agent so they don't take up prompt space otherwise. Every tool is still validated at startup, even when not yet offered.
 
-`ask_user` is a framework-provided, generation-owned Tool capability rather than Plugin Prompt middleware.
-It requests input through the current Turn's `QuestionPort` and matches replies by canonical session and authenticated subject. Plugin tools that need the same interaction must depend on `ToolExecutionContext.question` and handle an absent port. Unattended Turns, including Schedule, do not receive this port and must not fall back to global Message, Adapter, or user queues.
+### Give the AI business context
 
-## Skills, main Agents, and sub-agents
-
-Skills use `skills/<name>/SKILL.md`. A plugin main Agent uses the standard root `AGENTS.md`. Named sub-agents use self-contained `agents/<name>/` directories discovered by `@zhin.js/agent-feature`.
-
-Every sub-agent requires `agent.json`, `system.md`, `boundaries.md`, and `conventions.md`; `workflows/`, `tools/`, `skills/`, `hooks/`, and `knowledge/` are optional. `conventions.md` extends the root `AGENTS.md` and must not conflict with it. Add recurring project mistakes to that file. See the [`@zhin.js/agent-feature` README on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md) for the complete manifest and directory contract.
-
-The `tools` field in `agent.json` may request additional public Tools. `agents/<agent>/tools/<name>/index.ts` defines an Agent-private Tool. A Skill-private Tool lives at `skills/<skill>/tools/<name>/index.ts`; an Agent-private Skill and its Tools live at `agents/<agent>/skills/<skill>/SKILL.md` and its nested `tools/<name>/index.ts`. Every Tool still passes the same permission, approval, and generation admission path.
-
-## Plugin Agent authoring directories
-
-```text
-my-plugin/
-├── AGENTS.md
-├── tools/
-│   └── short-url/
-│       ├── index.ts
-│       └── client.ts
-├── skills/short-url/
-│   ├── SKILL.md
-│   ├── tools/normalize/index.ts
-│   └── hooks/audit/index.ts
-├── hooks/audit/index.ts
-└── agents/reviewer/
-    ├── agent.json
-    ├── system.md
-    ├── boundaries.md
-    ├── conventions.md
-    ├── workflows/
-    ├── tools/check-result/index.ts
-    ├── skills/review/
-    │   ├── SKILL.md
-    │   ├── tools/check-result/index.ts
-    │   └── hooks/audit/index.ts
-    ├── hooks/audit/index.ts
-    └── knowledge/
-```
-
-`tools/<name>/index.ts` and `addTool()` use the same `AgentToolDefinition`, `ToolExecutionContext`, and `ToolIndex`. The execution context provides fixed-generation `config`, `use(token)`, `origin`, `principal`, `policy`, `question`, and an adapter-inferred `$client`.
-
-## Give an Agent plugin-owned context
-
-Use Prompt Sections when a plugin needs the Agent to understand business vocabulary,
-output rules, or tool-use constraints. A section is a generation-owned capability:
-a failed hot reload publishes nothing, while an in-flight turn keeps the exact
-generation it started with.
-
-### 1. Mount the Prompt Section Feature
-
-Declare both the dependency and the Feature:
-
-```json
-{
-  "dependencies": {
-    "@zhin.js/prompt-section": "latest"
-  },
-  "zhin": {
-    "features": [
-      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
-    ]
-  }
-}
-```
-
-### 2. Declare a context section
-
-Create `prompt-sections/project-rules/index.ts` at the plugin root:
+Use a Prompt Section for product terms, answer conventions or tool-use constraints:
 
 ```ts
+// prompt-sections/project-rules/index.ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 export default defineAgentPromptSection({
@@ -221,23 +154,165 @@ export default defineAgentPromptSection({
 });
 ```
 
-The first-level directory name supplies the local name; Zhin combines it with the plugin
-owner to form a globally unique identity. `order` controls presentation only.
-`retention` controls what happens when the prompt budget is tight:
-`required` must fit or the turn fails explicitly, `preferred` is retained before
-`opportunistic`, and opportunistic content yields first. `maxChars` caps this
-section, while `profiles` selects interactive turns, scheduled turns, or both.
-Use optional `platforms` to publish the section only to matching IM turns, for
-example `platforms: ['github']`.
-The total budget is configured by `ai.agent.systemPromptMaxChars`.
+The folder name is the section's name; no `id` needed. After saving, new conversations use the new content and conversations already in progress keep the old version.
 
-### 3. Verify the published generation
+- `order` decides position within a layer; `retention` decides what gets dropped first when the prompt budget is tight. Fields: [Reference](#prompt-section-fields).
+- Console's capability catalog shows whether **Prompt Sections** are active (source, version, budget policy) but never their text, since it may contain internal policy. Runnable example: `examples/full-bot/prompt-sections/custom/index.ts`.
+- A Prompt Section **only changes the model's context; it grants no tools, data or approval rights**.
 
-Open **Prompt Sections** in the Console capability catalog to inspect owner,
-source, generation, profiles, and budget policy. Introspection deliberately omits
-the prompt text because it can contain internal product policy. A runnable example
-is in `examples/full-bot/prompt-sections/custom/index.ts`.
+::: details Declaring the Prompt Section capability by hand
+Without `npx zhin setup --ai`, declare both the dependency and the Feature in `package.json`:
 
-A Prompt Section changes model context; it **does not grant tool, data, or approval
-authority**. Those permissions still come from Tool Features, Runtime resources,
-and Host policy.
+```json
+{
+  "dependencies": {
+    "@zhin.js/prompt-section": "latest"
+  },
+  "zhin": {
+    "features": [
+      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
+    ]
+  }
+}
+```
+:::
+
+### Package a procedure as a Skill
+
+A Skill is `skills/<name>/SKILL.md`: a playbook with frontmatter. The model normally sees only its summary, loads the full text when needed, and that unlocks the tools in its folder.
+
+```markdown
+---
+name: memory-consolidate
+description: At turn end or when the master says "remember", write 1–3 retrievable facts to memory_entries
+tools:
+  - memory_upsert
+  - memory_search
+---
+
+(Detailed steps go here…)
+```
+
+Split a Skill that covers several independently triggered tasks, so a simple task doesn't pull in every tool. Skills shipped by adapters go in `agents/<platform>/skills/<name>/` and appear only in that platform's conversations.
+
+### Define a sub-agent
+
+A sub-agent is an `agents/<name>/` folder with its own responsibilities, boundaries and tools. It must contain four files:
+
+| File | Contents |
+| --- | --- |
+| `agent.json` | Name, model, extra public tools, etc. |
+| `system.md` | Role and responsibilities |
+| `boundaries.md` | What it must not do |
+| `conventions.md` | Working conventions; may only extend the plugin root's `AGENTS.md`, never contradict it |
+
+Optional `workflows/`, `tools/`, `skills/`, `hooks/` and `knowledge/` hold scenario flows, private tools, private Skills, hooks and a knowledge base. Mistakes that recur belong in `conventions.md`.
+
+A platform adapter's Agent is selected automatically when a message arrives from that platform; if one platform has several automatic candidates, routing reports a conflict — merge responsibilities or let the user choose explicitly. Full format: [`@zhin.js/agent-feature`](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md).
+
+## Recommended layout
+
+```text
+my-plugin/
+├── AGENTS.md                         # rules for the main Agent
+├── tools/
+│   └── short-url/
+│       ├── index.ts                  # declares the tool only
+│       └── client.ts                 # implementation in the same folder
+├── skills/short-url/
+│   ├── SKILL.md
+│   ├── tools/normalize/index.ts      # Skill-only tool
+│   └── hooks/audit/index.ts
+├── hooks/audit/index.ts
+└── agents/reviewer/
+    ├── agent.json
+    ├── system.md
+    ├── boundaries.md
+    ├── conventions.md
+    ├── workflows/
+    ├── tools/check-result/index.ts   # Agent-only tool
+    ├── skills/review/
+    │   ├── SKILL.md
+    │   ├── tools/check-result/index.ts
+    │   └── hooks/audit/index.ts
+    ├── hooks/audit/index.ts
+    └── knowledge/
+```
+
+- A tool's `index.ts` only declares; the implementation sits in the same folder. Code shared by several tools of one Skill goes in the Skill root (e.g. `skills/github-account/handlers.ts`).
+- Don't reach into plugin internals from leaf folders with `../../../../src/...`. Genuinely shared runtime contracts should be a stable package API, or be imported once through a bridge module owned by the Skill / Agent.
+
+## Reference
+
+### Tool fields
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `description` | Yes | What the tool does, for the model |
+| `inputSchema` | No | Zod 4 object or a JSON Schema with an `object` root; validated before execution |
+| `requiresApproval` | No | `'never' \| 'on-risk' \| 'once' \| 'always'`, default `'on-risk'` |
+| `platforms` | No | Restrict to platforms, e.g. `['icqq']`; empty means all |
+| `scopes` | No | Restrict to `'private' \| 'group' \| 'channel'`; empty means all |
+| `permissions` | No | Permission rules; all must pass |
+| `hidden` | No | Registered but not offered to the model; still callable by name |
+| `execute(input, context)` | Yes | The function; `context` described above |
+
+### Permission rules
+
+`permissions` is parsed by `@zhin.js/permission`: `adapter(name)`, `group(id,...)`, `private(id,...)`, `channel(id,...)`, `user(id,...)`, `role(master|trusted|user)`, plus adapter-checked platform identity `platform(adapter,perm)` (e.g. group owner / admin). All rules in the list must pass; commas inside one rule mean any-of. **Unrecognized rules are always denied.**
+
+### Prompt Section fields
+
+| Field | Meaning |
+| --- | --- |
+| `layer` | Semantic layer: `role` / `task` / `context` / `safety`, etc. |
+| `order` | Within a layer, larger numbers come first |
+| `retention` | When over budget: `required` can't be dropped (the turn fails explicitly instead of silently truncating); `preferred` is kept preferentially; `opportunistic` yields first |
+| `maxChars` | Character limit for this section |
+| `profiles` | `interactive` (chat), `schedule` (scheduled runs), or both |
+| `platforms` | Optional: inject only on given platforms, e.g. `['github']` |
+
+The total budget is `ai.agent.systemPromptMaxChars`.
+
+### Tool discovery settings
+
+Tools aren't all stuffed into the prompt. `ai.agent.deferredTools` (`ZhinAgentConfig`) controls on-demand loading:
+
+| Key | Default | Description |
+| --- | --- | --- |
+| `maxLoadedPerSession` | `12` | Max tools loaded at once per conversation |
+| `discoverTopK` | `5` | Results returned by `discover` |
+| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | Always visible to the model |
+| `mcpServers` | `{}` | Per-MCP-server overrides of the `alwaysLoaded` list |
+
+## How it works
+
+```mermaid
+flowchart LR
+    A["tools/&lt;name&gt;/index.ts"] --> C[Registered as a capability]
+    B["setup() → addTool()"] --> C
+    C --> D[Tool catalog for this turn]
+    D --> F{"platforms / scopes / permissions<br/>satisfied?"}
+    F -->|yes and not hidden| G[Discoverable tools]
+    G --> H["discover / load_tool / load_skill"]
+    H --> I[Tools the model can call]
+```
+
+1. **Admission.** At the start of each turn, tools are filtered by the message's platform, scope and sender; tools that don't qualify are invisible to the model.
+2. **On-demand loading.** Only `alwaysLoadedTools` are exposed by default. The model searches tools and Skills with `discover` (names and summaries), loads a tool's parameter schema with `load_tool`, and loads a Skill's full text — unlocking its tools — with `load_skill`. Loaded state is kept per conversation and evicted past the limit; concurrent turns and sub-tasks are isolated. The Anthropic channel sends unloaded tools with a `deferLoading` flag; other channels send only loaded ones.
+3. **Approval and execution.** After admission and before execution, `requiresApproval` is checked; execution is bound to the owning plugin's config and resources.
+
+::: details Implementation details
+- Both registration styles write to one capability table published by a single `ToolIndex`; there is no second dynamic registry. `addTool()` writes during the new version's preparation; if preparation fails it never becomes visible, and on success it goes live with the whole version.
+- The admission predicate is Core's `canAccessTool(tool, message)` (`packages/im/core/src/built/tool.ts`), applied on the Plugin Runtime side through `CapabilityIngress` (`packages/im/agent/src/plugin-runtime/capability-ingress.ts`). `platforms` compares `String(message.$adapter)`; `scopes` compares `message.$channel.type` (default `private`).
+- Model-visible names (`qualifiedName`): root plugin tools keep their local name; child plugin tools join the plugin path segments and folder name with `__`, e.g. `maps__get-weather`. Execution stays bound to the original plugin's pinned version context.
+- On-demand loading is managed by a per-turn deferred controller (`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`), with state in `DeferredToolSessionSnapshot`, never keyed by IM `Message`.
+- `ask_user` is a framework capability that requests input through the current turn's `QuestionPort`; unattended turns (e.g. schedules) get no port and never fall back to a global message, adapter or user queue.
+- Agent / Skill private tools are validated during startup preparation but don't enter the model's tool catalog early.
+:::
+
+## Next steps
+
+- [AI overview](../ai/index.md): models, trigger rules, memory and MCP.
+- [Agent deep dive](../ai/agent.md): security policies, approval, sub-tasks and execution logs.
+- [AI Agent learning path](../paths/ai-agent.md): add an Agent to an IM bot step by step.
