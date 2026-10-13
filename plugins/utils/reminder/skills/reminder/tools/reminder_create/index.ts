@@ -36,12 +36,12 @@ export default defineAgentTool({
         "Repeat interval in seconds (min 60). First fire is now+interval."
       ),
   }),
-  async execute(input, context) {
+  async execute({ text, after, at, every_seconds }, context) {
     return replyReminder(async () => {
       const modes = [
-        input.after,
-        input.at,
-        input.every_seconds !== undefined ? "every" : undefined,
+        after,
+        at,
+        every_seconds !== undefined ? "every" : undefined,
       ].filter(Boolean);
       if (modes.length !== 1) {
         throw new ReminderInputError(
@@ -50,30 +50,25 @@ export default defineAgentTool({
       }
       const service = context.use(reminderServiceToken);
       const actor = reminderActorFromTool(context);
-      if (input.every_seconds !== undefined) {
-        const intervalMs = input.every_seconds * 1000;
+      if (every_seconds !== undefined) {
+        const intervalMs = every_seconds * 1000;
         const task = await service.add(
           actor,
-          input.text,
+          text,
           Date.now() + intervalMs,
           intervalMs
         );
         return `已创建周期提醒\n${service.describe(task)}`;
       }
-      if (input.after) {
-        const delayMs = parseRelativeDelayMs(input.after);
-        const task = await service.add(
-          actor,
-          input.text,
-          Date.now() + delayMs,
-          null
-        );
+      if (after) {
+        const delayMs = parseRelativeDelayMs(after);
+        const task = await service.add(actor, text, Date.now() + delayMs, null);
         return `已创建提醒\n${service.describe(task)}`;
       }
       const task = await service.add(
         actor,
-        input.text,
-        parseReminderInstant(input.at!),
+        text,
+        parseReminderInstant(at!),
         null
       );
       return `已创建提醒\n${service.describe(task)}`;

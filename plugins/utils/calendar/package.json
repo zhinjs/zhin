@@ -49,12 +49,12 @@
   },
   "dependencies": {
     "@zhin.js/host-http": "workspace:*",
-    "@zhin.js/im-contract": "workspace:*"
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "@zhin.js/command": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
-    "@zhin.js/tool": "workspace:*",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
@@ -62,19 +62,11 @@
   },
   "peerDependencies": {
     "@zhin.js/command": "workspace:^",
-    "@zhin.js/skill": "workspace:^",
-    "@zhin.js/tool": "workspace:^",
     "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
     "@zhin.js/command": {
-      "optional": true
-    },
-    "@zhin.js/skill": {
-      "optional": true
-    },
-    "@zhin.js/tool": {
       "optional": true
     },
     "zod": {

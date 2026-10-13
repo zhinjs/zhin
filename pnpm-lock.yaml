@@ -3450,16 +3450,16 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
-    devDependencies:
-      '@zhin.js/command':
-        specifier: workspace:*
-        version: link:../../../packages/im/command
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+    devDependencies:
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -3686,16 +3686,16 @@ importers:
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
-    devDependencies:
-      '@zhin.js/schedule-feature':
-        specifier: workspace:*
-        version: link:../../../packages/im/schedule-feature
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../../../packages/im/tool
+    devDependencies:
+      '@zhin.js/schedule-feature':
+        specifier: workspace:*
+        version: link:../../../packages/im/schedule-feature
       typescript:
         specifier: ^6.0.3
         version: 6.0.3

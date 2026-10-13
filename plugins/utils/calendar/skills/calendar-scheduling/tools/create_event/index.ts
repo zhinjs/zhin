@@ -19,19 +19,22 @@ export default defineAgentTool({
     description: z.string().max(2000).optional(),
     all_day: z.boolean().optional(),
   }),
-  async execute(input, context) {
+  async execute(
+    { title, start, end, location, description, all_day },
+    context
+  ) {
     return runCalendarTool(async () => {
       const runtime = context.use(calendarRuntimeToken);
       if (!runtime.provider) return "日历未启用：请先配置 provider 与凭据";
       const timezone = runtime.config.timezone;
       const event = await runtime.provider.createEvent(
         {
-          title: input.title,
-          start: parseDateTimeInZone(input.start, timezone),
-          end: parseDateTimeInZone(input.end, timezone),
-          location: input.location,
-          description: input.description,
-          all_day: input.all_day,
+          title,
+          start: parseDateTimeInZone(start, timezone),
+          end: parseDateTimeInZone(end, timezone),
+          location,
+          description,
+          all_day,
         },
         context.signal
       );

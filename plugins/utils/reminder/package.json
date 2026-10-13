@@ -30,14 +30,14 @@
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean"
   },
   "dependencies": {
-    "@zhin.js/im-contract": "workspace:*"
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "peerDependencies": {
     "zhin.js": "workspace:^",
     "@zhin.js/command": "workspace:^",
     "@zhin.js/schedule-feature": "workspace:^",
-    "@zhin.js/tool": "workspace:^",
-    "@zhin.js/skill": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
@@ -45,12 +45,6 @@
       "optional": true
     },
     "@zhin.js/schedule-feature": {
-      "optional": true
-    },
-    "@zhin.js/tool": {
-      "optional": true
-    },
-    "@zhin.js/skill": {
       "optional": true
     },
     "zod": {
@@ -62,8 +56,6 @@
     "vitest": "^4.1.10",
     "zhin.js": "workspace:*",
     "@zhin.js/schedule-feature": "workspace:*",
-    "@zhin.js/tool": "workspace:*",
-    "@zhin.js/skill": "workspace:*",
     "zod": "^4.4.3"
   },
   "engines": {
