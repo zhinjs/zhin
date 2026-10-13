@@ -48,7 +48,7 @@ Small projects can skip folders and register in `setup({ addCommand })` instead 
 
 ### Command
 
-A function that runs when a user sends something like `/hello` or `/remind 10 drink water`. Params, options, permissions and `--help` are all declared in `defineCommand()`. The command prefix (default `/`) is configured per platform connection. More: [Commands](../authoring/commands.md)
+A function that runs when a user sends something like `/hello` or `/remind 10 drink water`. Params, options, permissions and `--help` are all declared in `defineCommand()`. The command prefix is set per platform connection via `commandPrefix` (the scaffolded Sandbox uses `/`). More: [Commands](../authoring/commands.md)
 
 ### Adapter and Endpoint
 

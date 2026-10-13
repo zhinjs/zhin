@@ -48,7 +48,7 @@ export default definePlugin({
 
 ### 命令（Command）
 
-用户发 `/hello`、`/remind 10 喝水` 这类消息时执行的函数。参数、选项、权限和 `--help` 都在 `defineCommand()` 里声明。命令前缀（默认 `/`）由每个平台连接单独配置。深入：[命令](../authoring/commands.md)
+用户发 `/hello`、`/remind 10 喝水` 这类消息时执行的函数。参数、选项、权限和 `--help` 都在 `defineCommand()` 里声明。命令前缀由每个平台连接的 `commandPrefix` 单独配置（脚手架生成的 Sandbox 设为 `/`）。深入：[命令](../authoring/commands.md)
 
 ### 适配器（Adapter）与 Endpoint
 

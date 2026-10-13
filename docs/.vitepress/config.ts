@@ -147,6 +147,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '平台稳定认证', link: '/contributing/platform-acceptance' },
   { text: '平台验收执行器', link: '/contributing/platform-acceptance-runner' },
   { text: '代码约定', link: '/contributing/conventions' },
+  { text: '文档写作规范', link: '/contributing/writing-docs' },
   { text: 'Public API 面', link: '/contributing/public-api-surface' },
   { text: 'Legacy 概念迁移', link: '/contributing/legacy-concepts' },
 ]
@@ -277,6 +278,7 @@ const enDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Repo Structure', link: '/en/contributing/repo-structure' },
   { text: 'Development Workflow', link: '/en/contributing/development' },
   { text: 'Code Conventions', link: '/en/contributing/conventions' },
+  { text: 'Docs Writing Guide', link: '/en/contributing/writing-docs' },
   { text: 'Public API Surface', link: '/en/contributing/public-api-surface' },
   { text: 'Legacy Concept Migration', link: '/en/contributing/legacy-concepts' },
 ]

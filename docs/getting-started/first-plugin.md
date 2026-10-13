@@ -1,27 +1,42 @@
+---
+title: 编写第一个插件
+description: 从零写一个可配置的 /ping 子插件，挂载到你的 Bot 上，并在不重启的情况下修改它的回复
+---
+
 # 编写第一个插件
 
-想先看「一个文件就够」？仓库 [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人) 用 `setup({ addCommand })` 注册命令，没有 `commands/` 目录——跑通再回来拆文件。
+这一页带你写一个叫 `ping-pong` 的插件：用户发 `/ping`，Bot 回复一段**可以在配置里修改**的文字。
 
-下面为已接通 Sandbox 的应用添加一个 `ping-pong` **约定目录**插件。新项目先运行 `pnpm create zhin-app my-bot -y`，进入 `my-bot`；仓库贡献者可使用 [minimal-bot](../examples/index.md#minimal-bot-stable-最小路径)。
+做完后你会掌握插件的四个基本组成——清单、入口、命令、配置——以及怎样把插件挂到 Bot 上。大约需要 15 分钟。
 
-在应用的 `plugins/ping-pong/` 下创建四个文件，再在宿主清单里挂载。配置文件属于宿主，不必给每个子插件单独创建。
+::: tip 开始前
+- 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -y`）。
+- Node.js ≥22.12.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
+:::
 
-源码 TypeScript 项目要求 Node.js ≥22.12.0 和 pnpm 9+，`pnpm dev` 由 CLI 准备 TypeScript 加载。编译后的 JavaScript 库仍支持 Node.js `^20.19.0 || >=22.12.0`。
+::: details 只想要最少的代码？
+一个文件也能注册命令：在 `plugin.ts` 的 `setup({ addCommand })` 里调用 `addCommand('ping', defineCommand({ ... }))` 即可，见示例 [single-file-bot](../examples/index.md#single-file-bot-一个-bot-ts-就是机器人)。本页演示的是功能变多后更推荐的"一个能力一个文件"写法。
+:::
 
-最终目录结构：
+## 你要创建的文件
+
+在 `my-bot/plugins/ping-pong/` 下创建四个文件：
 
 ```text
-ping-pong/
-├── package.json      # zhin 清单（拓扑事实来源）
-├── plugin.ts         # definePlugin 入口
-├── schema.json       # 配置契约（默认值 + 校验）
+plugins/ping-pong/
+├── package.json        # ① 插件清单：告诉 Zhin 这是一个插件
+├── plugin.ts           # ② 插件入口
 ├── commands/
 │   └── ping/
-│       └── index.ts  # /ping 命令
-└── zhin.config.yml   # 可选：仅插件自己作为应用时需要
+│       └── index.ts    # ③ /ping 命令
+└── schema.json         # ④ 配置项及默认值
 ```
 
-## 1. package.json 与 zhin 清单
+配置的**值**不写在插件里，而是写在 Bot 的 `zhin.config.yml` 中（第 5 步）。这样同一个插件装到不同 Bot 上，可以有不同的配置。
+
+## 1. 插件清单：package.json
+
+插件就是一个 npm 包。让 Zhin 识别它的，是 `package.json` 里的 `zhin` 字段：
 
 ```json
 {
@@ -58,18 +73,28 @@ ping-pong/
 }
 ```
 
-Command provider 由宿主提供，子插件将它声明为可选 npm peer，避免自行安装另一份 provider。这里的 `optional` 只影响 npm 安装；运行时的 `zhin.features` 仍要求 Command 必须可用。
+现在只需要关注三处：
 
-`zhin` 字段是插件拓扑的清单：
+- **`zhin.entry`**：入口文件，即下一步的 `plugin.ts`。
+- **`zhin.features`**：插件要用到的能力。这里声明了 `@zhin.js/command`，Zhin 才会去扫描 `commands/` 目录。
+- **`peerDependencies`**：`@zhin.js/command` 由 Bot 提供，插件只声明"我需要它"，自己不再安装一份。
+
+::: details 为什么要用 optional peerDependency？其余字段是什么意思？
+同一个能力包在一个 Bot 里只能存在一份。如果子插件把 `@zhin.js/command` 装进自己的 `dependencies`，就会出现两份，启动时报错（即使版本完全相同）。所以子插件把它声明为可选 peer，由 Bot 统一安装。
+
+`optional: true` 只影响 npm 安装行为；运行时 `zhin.features` 里声明的能力仍然**必须**可用。
 
 | 字段 | 含义 |
 |------|------|
-| `entry` | 插件入口文件，必须是 `./` 开头的包内相对路径 |
-| `runtime` | `trusted`（主进程内运行） |
-| `features` | 子插件需要显式声明使用的 Feature；本例挂载 Command 来发现 `commands/`。Root 应用依赖 `zhin.js` 时默认继承 Stable Features，这不会替子插件声明能力 |
-| `plugins` | 挂载的子插件实例（本例为空，见第 5 节挂载方式） |
+| `entry` | 入口文件，必须是 `./` 开头的包内相对路径 |
+| `runtime` | `trusted` 表示在主进程内运行 |
+| `features` | 本插件用到的能力包。你的 Bot（Root 插件）依赖 `zhin.js` 时会自动继承常用能力，但子插件需要自己声明 |
+| `plugins` | 本插件再挂载的子插件，这里为空 |
 
-## 2. plugin.ts
+完整说明见 [插件模型](../concepts/plugin-model.md)。
+:::
+
+## 2. 插件入口：plugin.ts
 
 ```ts
 import { definePlugin } from 'zhin.js';
@@ -94,9 +119,13 @@ export default definePlugin<PingPongConfig>({
 });
 ```
 
-## 3. commands/ping/index.ts
+- `definePlugin` 的 `name` 只能用小写字母、数字和连字符。
+- `setup` 在插件加载时运行。`context.config.get()` 读取这个插件的配置。
+- `setup` 返回的函数会在插件**卸载或热重载前**执行。打开的定时器、连接都应在这里关闭，否则热重载后会残留。
 
-Command Feature 发现 `commands/**/index.ts`，目录路径决定命令名。本例的路径是 `ping`；同目录的其他文件只作为 helper，不会注册命令：
+入口里不需要注册命令——下一步的文件会被自动发现。
+
+## 3. 命令：commands/ping/index.ts
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
@@ -113,13 +142,13 @@ export default defineCommand<PingPongConfig>({
 });
 ```
 
-命令的 `config` 与 `setup` 里 `context.config.get()` 是同一份分层配置。
+**目录路径就是命令名**：`commands/ping/index.ts` 对应 `/ping`，`commands/admin/ban/index.ts` 对应 `/admin ban`。只有 `index.ts` 是命令入口，同目录下的其他文件可以作为辅助模块被引用。
 
-## 4. schema.json 与配置
+`execute` 收到的 `config` 与 `setup` 里读到的是同一份配置。命令的参数、选项和权限写法见 [命令](../authoring/commands.md)。
 
-`schema.json`（JSON Schema 2020-12）声明配置契约与默认值：
+## 4. 配置项：schema.json
 
-Console 对插件的 `schema.json` 只支持可转换的字段结构；`$ref`、`anyOf`、`oneOf`、`allOf`、`prefixItems`、`patternProperties` 和数组形式的 `items` 暂不支持，会明确报错。内置 Host 配置沿用既有字段投影，表单不能代表完整的 JSON Schema 约束；复杂 `ai`、`htmlRenderer` 配置建议用配置文件或 Console 源码编辑器。运行时的 JSON Schema 配置校验与 Console 表单转换是不同能力。
+`schema.json` 声明插件有哪些配置项、默认值是什么。它使用标准 JSON Schema：
 
 ```json
 {
@@ -136,14 +165,15 @@ Console 对插件的 `schema.json` 只支持可转换的字段结构；`$ref`、
 }
 ```
 
-配置注入是**分层**的：Root 插件读 `zhin.config.yml` 的 `plugin:` 段，
-子插件实例读 `plugins.<instanceKey>` 段。
+没有在配置文件里填写 `reply` 时，就使用这里的默认值 `pong`。Console 也会根据它生成配置表单。
 
-## 5. 挂载到应用
+::: details Console 表单支持哪些 JSON Schema 写法？
+Console 只能把可直接映射为表单的结构转换出来；`$ref`、`anyOf`、`oneOf`、`allOf`、`prefixItems`、`patternProperties` 和数组形式的 `items` 暂不支持，会明确报错。运行时的配置校验不受这个限制。复杂的 `ai`、`htmlRenderer` 等配置建议直接编辑配置文件，或使用 Console 的源码编辑器。
+:::
 
-### 方式 A：`./` 本地目录子插件（推荐开发期）
+## 5. 挂载到你的 Bot
 
-先在宿主应用根目录显式安装共享的 Command provider。Root 依赖 `zhin.js` 时继承 Stable Features，并优先解析这个直接依赖，再回退到 Core 的依赖；子插件通过 peer 使用宿主的同一份 provider：
+回到 Bot 根目录 `my-bot/`。先安装插件依赖：
 
 ```bash
 pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
@@ -152,7 +182,7 @@ pnpm install
 cd ../..
 ```
 
-在宿主应用的 `package.json#zhin.plugins` 里以 `./` 相对路径引用（不允许 `..` 越出包根）：
+然后在 **Bot 的** `package.json` 里加上两处（与已有内容合并，不要覆盖）：
 
 ```json
 {
@@ -167,9 +197,10 @@ cd ../..
 }
 ```
 
-把依赖与挂载项合并到宿主原有清单，保留其他依赖和设置。`pnpm create zhin-app` 创建的项目已将 `plugins/*` 纳入 workspace，应在其中安装子插件，不要再给挂载的子插件添加 Command 直接依赖：Runtime 要求同一包只来自一个物理目录，即使两份版本的 Feature API 兼容也不例外。
+- `package` 指向插件目录，必须以 `./` 开头，不能用 `..` 跳出项目。
+- `instanceKey` 是这个插件在 Bot 里的名字，只能用小写字母、数字和连字符。
 
-然后在宿主的 `zhin.config.yml` 给这个实例传配置：
+最后在 **Bot 的** `zhin.config.yml` 里，以 `instanceKey` 为键填写配置：
 
 ```yaml
 plugins:
@@ -177,11 +208,51 @@ plugins:
     reply: pong!
 ```
 
-`instanceKey` 规则：小写字母 / 数字 / 连字符（`^[a-z0-9][a-z0-9-]*$`）。
+::: details 为什么 Bot 也要依赖 @zhin.js/command？
+`npm create zhin-app` 生成的项目已把 `plugins/*` 纳入 pnpm workspace。Bot 直接依赖 `@zhin.js/command`，子插件通过 peer 使用同一份；不要再把它加到子插件的 `dependencies` 里。Zhin 要求每个能力包只来自一个物理目录。
+:::
 
-### 方式 B：插件即应用
+## 6. 运行并验证
 
-把 `zhin.config.yml` 直接放进插件目录，插件自己就是 Root。此时需要给这个应用添加 Command 直接依赖；可选 peer 本身不会安装 provider。此时还需接入适配器；只有 Command 的插件可以装配，但不能凭空收到聊天消息：
+```bash
+pnpm dev
+```
+
+依次确认：
+
+1. 终端出现 `[ping-pong] setup: reply=pong!` —— 插件已加载，并读到了配置。
+2. 在 Sandbox 里发送 `/ping`，Bot 回复 `pong!`。
+3. 把 `zhin.config.yml` 里的 `reply` 改成别的文字并保存，再发 `/ping` —— 不重启就能看到新回复。改 `commands/ping/index.ts` 也一样。
+
+只想检查插件能否正常装配、不想进入交互模式？运行 `zhin runtime start --once`。
+
+::: tip 没有回复？
+- 命令前缀由每个平台连接的 `commandPrefix` 决定；脚手架生成的 Sandbox 设为 `/`，其他平台可能为空。
+- 终端没有出现 setup 日志：检查 Bot `package.json` 里的 `zhin.plugins` 路径。
+- 运行 `npx zhin doctor` 做一次环境检查。
+:::
+
+## 它是怎么工作的
+
+```mermaid
+flowchart TD
+  M[package.json 的 zhin 字段] --> R[Zhin 加载插件]
+  R --> F[Command 能力]
+  F -->|扫描| C[commands/ping/index.ts]
+  R --> E[plugin.ts 的 setup]
+  S[schema.json 默认值] --> CFG[插件配置]
+  Y[zhin.config.yml 覆盖值] --> CFG
+  CFG --> E
+  CFG --> C
+```
+
+启动时，Zhin 读取清单，加载 `features` 里声明的能力；Command 能力扫描 `commands/`，把找到的文件注册为命令。配置由 `schema.json` 的默认值和 `zhin.config.yml` 的值合并而成，同时提供给 `setup` 和命令。保存文件时，这个过程会在后台重新执行一遍，校验通过后才替换旧版本。
+
+## 另一种方式：插件即应用
+
+插件目录里放一个 `zhin.config.yml`，插件自己就能作为一个完整的 Bot 启动，不需要宿主项目。这适合独立开发和调试一个插件。
+
+此时插件就是 Root，配置写在 `plugin:` 下：
 
 ```yaml
 # ping-pong/zhin.config.yml
@@ -191,38 +262,19 @@ plugin:
 plugins: {}
 ```
 
-```bash
-cd plugins/ping-pong # 从宿主应用目录进入
-pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check # 此时该包本身就是宿主应用
-pnpm exec zhin setup --adapters  # 选择 Sandbox 等适配器，添加 Endpoint
-pnpm install                   # 安装 setup 新增的适配器依赖
-pnpm dev        # zhin runtime start
-```
-
-## 6. 启动与验证
+作为独立应用，它还需要自己安装能力包，并接入至少一个适配器才能收到消息：
 
 ```bash
+cd plugins/ping-pong
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
+pnpm exec zhin setup --adapters  # 选择 Sandbox 等适配器
+pnpm install
 pnpm dev
-```
-
-- 启动日志应出现 `[ping-pong] setup: reply=pong!`
-- 在宿主已经接通的 Sandbox 或其他通道里发 `/ping`，Bot 回复 `pong!`（`/` 取决于该 Endpoint 的 `commandPrefix` 配置）
-- 改 `commands/ping/index.ts` 或 `zhin.config.yml` 会触发热重载，无需重启进程
-- `zhin runtime start --once` 可做装配冒烟（不进入交互）
-
-```mermaid
-flowchart TD
-  M[package.json#zhin 清单] --> R[Plugin Runtime]
-  R --> F[Command Feature]
-  F -->|发现| C[commands/ping/index.ts]
-  R --> E[plugin.ts setup]
-  S[schema.json 默认值] --> CFG[分层配置]
-  Y[zhin.config.yml 覆盖] --> CFG
-  CFG --> E
-  CFG --> C
 ```
 
 ## 下一步
 
-- [示例速览](../examples/index.md)：先使用 single-file-bot / minimal-bot，再按需查看数据库、定时任务、Agent 工具与主动出站示例
-- 更深一层的插件能力（Host Resources、lifecycle、handoff）见 [插件模型](../concepts/plugin-model.md)
+- [命令](../authoring/commands.md)：给 `/ping` 加参数、选项和权限。
+- [约定目录](../authoring/conventions.md)：了解中间件、组件、定时任务等其他能力放在哪里。
+- [definePlugin 全景](../authoring/define-plugin.md)：在 `setup` 里使用数据库、定时器、主动发消息。
+- [插件完整交付](../authoring/plugin-delivery.md)：给插件写测试并发布到 npm。
