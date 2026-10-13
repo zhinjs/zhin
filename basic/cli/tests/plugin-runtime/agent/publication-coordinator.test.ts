@@ -64,6 +64,13 @@ describe('AgentHostPublicationCoordinator', () => {
     });
     const control = {} as never;
 
+    expect(Object.keys(resources.use(agentHostToken).console).sort()).toEqual(
+      ['assistant', 'cancelSession', 'listBindings', 'sessionTree', 'trace'],
+    );
+    expect(Object.keys(resources.use(workroomHostToken).console).sort()).toEqual([
+      'dataLifecycle', 'effectSponsor', 'portfolioSponsor', 'workroom', 'workroomCatalog',
+      'workroomControl', 'workroomKnowledge', 'workroomProfiles',
+    ]);
     expect(resources.use(workroomHostToken).console.workroomProfiles).toBeUndefined();
     coordinator.bindWorkroomProfiles(control);
     expect(resources.use(workroomHostToken).console.workroomProfiles).toBe(control);

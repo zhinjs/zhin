@@ -472,6 +472,7 @@ const agentDomainRoots = [
 const agentRuntimeRoots = [
   path.join(repoRoot, 'packages/im/agent/src/config'),
   path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
+  path.join(repoRoot, 'packages/im/agent/src/workroom-runtime'),
 ];
 const agentDomainViolations = [];
 

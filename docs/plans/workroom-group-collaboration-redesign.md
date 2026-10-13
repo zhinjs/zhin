@@ -4,7 +4,7 @@ sidebar: false
 
 # Workroom 重构方案：群内多 Bot 角色协作
 
-状态：Draft（第 1 步：只分析，不改代码）
+状态：Draft（阶段 A 进行中，已落地 A1/A2a；方案内容仍以本文为准）
 
 ## 目标
 
@@ -21,13 +21,13 @@ sidebar: false
 | 位置 | 行数 / 文件 | 内容 |
 |---|---|---|
 | `agent/src/workroom/` | 32,510 / 90 | 事件溯源 Kernel、remote dispatch outbox / callback inbox、profile registry、acceptance、scheduler、legacy migration |
-| `agent/src/plugin-runtime/workroom-*` | 约 19,000 / 61 | 接入 Runtime 的组装层：authority、data-governance、portfolio、acceptance composition |
-| `agent/src/plugin-runtime/` 其余文件 | 约 6,000 / 30 | **通用** Agent runtime：turn engine、capability ingress、native tools。这部分与 Workroom 无关，只是放错了目录 |
+| `agent/src/plugin-runtime/workroom-*`（A1 后位于 `agent/src/workroom-runtime/`） | 约 19,000 / 61 | 接入 Runtime 的组装层：authority、data-governance、portfolio、acceptance composition。其中 `github-*`、`self-delivery-*`、`database-overlay-*` 同样属于 Workroom，已在 A1 一并移走 |
+| `agent/src/plugin-runtime/` 其余文件 | 约 5,200 / 24 个文件（通用 Agent runtime） | **通用** Agent runtime：turn engine、capability ingress、native tools。这部分与 Workroom 无关 |
 | `agent/src/data-governance/` | 6,670 / 12 | 加密 payload vault、披露授权、生命周期 |
 | `agent/src/portfolio/` | 4,323 / 8 | 跨项目容量、admission、sponsor |
 | `basic/cli/src/plugin-runtime/workroom/` 及命令 | 约 6,400 / 23 | CLI 侧 coordinator、`agent-workroom` 命令、legacy payload 命令 |
 
-Workroom 体系合计约 **7.5 万行**。真正的 Agent 核心（turn、tool、prompt、security、session）约 1.5 万行。
+Workroom 体系合计约 **7.5 万行**。真正的 Agent 核心（turn、tool、prompt、security、session 与通用 plugin-runtime）约 4.3 万行（106,787 − 约 63k ≈ 43k）。
 
 ### 1.2 目录级依赖图（`agent/src` 内部）
 
@@ -56,13 +56,12 @@ graph LR
   init -.->|反向| PF
   config -.->|反向| WR
   routing -.->|反向| WR
-  tool -.->|反向 3| PR
 ```
 
 结论：
 
 1. **`workroom` 本身几乎不依赖 Agent 核心**，它是一个纯领域层，可以整体搬出。
-2. **反向依赖只有 5 处**，都可以机械修复：
+2. **反向依赖只有 6 处**（origin/main 原有的核心文件），都可以机械修复；A2a 之后只剩 `plugin-runtime/deferred-capability-plan`，留待 A2c：
 
    | 文件 | 依赖 | 修法 |
    |---|---|---|
@@ -70,10 +69,13 @@ graph LR
    | `init/activate-ai-database-storage.ts` | Workroom journal / catalog、semantic memory | 同上；semantic memory 移入核心 |
    | `config/index.ts` | `validateWorkroomDefinitions` | 移到 Workroom 包的 config 子路径 |
    | `routing/workroom-bot-identity.ts` | `catalog-definition` | 整个文件移入 Workroom 包 |
-   | `tool/turn-tool-runtime.ts`、`tool/conversation-reference-tool.ts` | `plugin-runtime/capability-ingress`、`capability-tools` | 这两个是通用文件，移入核心 `tool/` |
+   | `plugin-runtime/agent-host-port.ts` | Workroom 端口 | 随 A2 拆出 Workroom Host 端口（`workroomHostToken`） |
+   | `plugin-runtime/deferred-capability-plan.ts` | Workroom 相关类型 | A2c 处理（A2 后唯一剩余） |
+
+   注：`tool/*` 依赖通用 `plugin-runtime` 是核心依赖通用代码，不算反向依赖。当前 DB model 由 CLI 持久化协调器分两组注册（`defineAiDatabaseModels` + `defineWorkroomDatabaseModels`），属过渡做法。
 
 3. **`data-governance` 与 `workroom` 互相依赖**（17 / 15），形成循环，拆包前必须先断开。
-4. **`plugin-runtime/` 混放了两类东西**。它通过 `@zhin.js/agent/runtime` 对外导出，有 68 个外部文件在用，`index.ts` 里有 80 处 workroom 导出。所以通用 runtime 被 Workroom 绑住了。
+4. **`plugin-runtime/` 混放了两类东西**。它通过 `@zhin.js/agent/runtime` 对外导出，有 68 个外部文件在用，`index.ts` 里有 72 行 workroom 导出。所以通用 runtime 被 Workroom 绑住了。
 5. `basic/cli` 的测试直接测 workroom 内部的 coordinator，内部重构会被测试锁死。
 
 ## 2. 与目标的错位
@@ -122,7 +124,7 @@ graph LR
 
 关键设计点：**群消息是展示，同进程 Room Bus 才是传输**。原因：
 
-- 多数平台上 Bot 收不到其他 Bot 的消息（例如 Telegram 默认如此）。依赖“Bot 读 Bot 的群消息”来协作不可靠。
+- Telegram Bot 永远收不到其他 Bot 的消息（平台限制，不是默认配置可改）；其他平台多数也收不到或不可靠。依赖“Bot 读 Bot 的群消息”来协作不可靠。
 - 所有成员在同一个 zhin 进程内，直接走进程内事件更可靠，也方便做循环保护。
 - 人看到的群聊记录和实际发生的交接一一对应，可追溯。
 
@@ -168,9 +170,9 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 
 持久化复用 `@zhin.js/database`，一个 Room 一条事件流就够了。
 
-### 3.6 与已锁定里程碑的关系
+### 3.6 与 Generation Projection 里程碑的关系
 
-记忆中锁定的下一阶段是 Generation Projection → Tool Runtime → 可持久化 Journal。新模型应该直接搭在上面：
+下一阶段是 Generation Projection → Tool Runtime → 可持久化 Journal 里程碑。新模型应该直接搭在上面：
 
 - 成员的 turn 就是一个 generation。取消任务等于取消该 generation，工具调用会一起取消。
 - handoff / task 工具是普通的 Tool Runtime 工具，不需要 Workroom 专用的执行通道。
@@ -204,13 +206,13 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 
 ### 阶段 A：拆包，不改行为
 
-1. **A1 分离 `plugin-runtime/`**：通用文件移到核心目录（例如 `agent/src/runtime/`），`workroom-*` 文件移到 `agent/src/workroom/runtime/`。`@zhin.js/agent/runtime` 保持导出不变（临时 re-export），外部 68 个文件不用改。
-2. **A2 修 5 处反向依赖**：DB model 注册改为由 Workroom 自己注册；`validateWorkroomDefinitions` 和 `workroom-bot-identity` 移走。
+1. **A1 分离 `plugin-runtime/`**：`workroom-*` 文件移到 `agent/src/workroom-runtime/`，通用文件留在 `plugin-runtime/`。`@zhin.js/agent/runtime` 的导出保持不变，外部 68 个文件不用改。
+2. **A2 修 6 处反向依赖**（A2a 已完成，仅剩 `deferred-capability-plan`，由 A2c 处理）：DB model 注册改为由 Workroom 自己注册；`validateWorkroomDefinitions` 和 `workroom-bot-identity` 移走。
 3. **A3 断开 `data-governance ↔ workroom` 循环**：抽出两边共享的类型到一个 contract 文件，方向固定为 workroom → data-governance。
 4. **A4 新建 `packages/im/workroom`（`@zhin.js/workroom`）**：把 workroom、portfolio、data-governance 整体搬过去。agent 不再依赖它，CLI 改为可选加载。
 5. **A5 加架构检查**：`check:architecture` 增加规则 `@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试。
 
-阶段 A 结束后：agent 包约 4 万行，Workroom 成为可选包，行为完全不变。
+阶段 A 结束后：agent 包约 4.3 万行，Workroom 成为可选包，行为完全不变。
 
 ### 阶段 B：新 Room 核心（在新包内）
 

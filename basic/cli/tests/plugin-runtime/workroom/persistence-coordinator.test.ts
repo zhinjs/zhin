@@ -8,7 +8,7 @@ import {
   type AIService,
 } from '@zhin.js/agent';
 import { type ZhinAgent } from '@zhin.js/agent/runtime';
-import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
+import { GenerationHandoffStack, Scope, databaseRootHostToken, rootPluginId } from '@zhin.js/plugin-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkroomPersistenceCoordinator } from '../../../src/plugin-runtime/workroom/persistence-coordinator.js';
 
@@ -84,6 +84,55 @@ describe('WorkroomPersistenceCoordinator', () => {
     const removed = await restart(new Set());
     await expect(removed.activate()).rejects.toThrow('unknown configured Bot Endpoint');
     expect((await disk.read()).definitions.local!.enabled).toBe(true); // rejected candidate never rewrites persisted authority
+  });
+
+  it('rejects activation on a corrupt Workroom journal before any candidate port is mutated', async () => {
+    const corruptRow = { id: '1', run_id: 'r', sequence: 0, occurred_at: 1, type: 'run.created', payload_json: '{}' };
+    const raw = {
+      models: new Map<string, unknown>([
+        ['workroom_events', { select: () => ({ where: async () => [corruptRow] }) }],
+        ['workroom_catalog', {}],
+      ]),
+    };
+    const resources = new Scope(rootPluginId());
+    resources.provide(databaseRootHostToken, { define: vi.fn(), getRawDatabase: () => raw } as never);
+    const agent = {
+      configure: vi.fn(),
+      upgradeProfilesToDatabase: vi.fn(),
+      markMemoryPersistenceReady: vi.fn(),
+    } as unknown as ZhinAgent;
+    const handoff = new GenerationHandoffStack();
+    const journal = new ActivatableWorkroomJournal();
+    const catalog = new ActivatableWorkroomCatalog();
+    const recoverHumanIngress = vi.fn(async () => undefined);
+    const persistence = new WorkroomPersistenceCoordinator({
+      projectRoot: process.cwd(),
+      config: {},
+      fixedStorageMode: 'database',
+      resources,
+      handoff,
+      service: {} as AIService,
+      agent,
+      semanticMemory: null,
+      journal,
+      journalPayloads: {} as never,
+      catalog,
+      listAgentNames: () => [],
+      recoverHumanIngress,
+    });
+
+    await persistence.prepare();
+    handoff.seal();
+    const activation = handoff.activateNext(new AbortController().signal);
+    await expect(activation).rejects.toThrow('Agent database persistence activation failed');
+    await expect(activation).rejects.toMatchObject({ cause: expect.any(Error) });
+
+    expect(agent.configure).not.toHaveBeenCalled();
+    expect(agent.upgradeProfilesToDatabase).not.toHaveBeenCalled();
+    expect(journal.active).toBe(false);
+    await expect(Promise.resolve().then(() => catalog.read())).rejects.toThrow('not active');
+    expect(recoverHumanIngress).not.toHaveBeenCalled();
+    expect(agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
   });
 
   it('rejects database mode when the process database Host is absent', async () => {

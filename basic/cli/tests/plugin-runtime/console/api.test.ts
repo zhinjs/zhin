@@ -466,6 +466,23 @@ describe('generation-owned Agent introspection', () => {
     expect(merged?.workroomProfiles).toBe(profiles);
   });
 
+  it('rejects Agent and Workroom console ports with overlapping keys', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: { sessionTree: {}, shared: 1 } }],
+        [workroomToken.id, { console: { workroom: {}, shared: 2 } }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(() => resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toThrow(
+      'must not define overlapping keys: shared',
+    );
+  });
+
   it('returns null when the Workroom Host port is missing', () => {
     const root = rootPluginId();
     const agentToken = { id: tokenId('zhin.host.agent') };

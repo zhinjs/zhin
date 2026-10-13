@@ -114,6 +114,13 @@ export function resolveGenerationAgentConsole(
   const agentConsole = (rootResources?.get(agentToken.id) as { console?: object } | undefined)?.console;
   const workroomConsole = (rootResources?.get(workroomToken.id) as { console?: object } | undefined)?.console;
   if (!agentConsole || !workroomConsole) return null;
+  const overlapping = Reflect.ownKeys(agentConsole)
+    .filter(key => Object.prototype.hasOwnProperty.call(workroomConsole, key));
+  if (overlapping.length > 0) {
+    throw new Error(
+      `Agent and Workroom console ports must not define overlapping keys: ${overlapping.map(String).join(', ')}`,
+    );
+  }
   return Object.freeze(Object.defineProperties({}, {
     ...Object.getOwnPropertyDescriptors(agentConsole),
     ...Object.getOwnPropertyDescriptors(workroomConsole),

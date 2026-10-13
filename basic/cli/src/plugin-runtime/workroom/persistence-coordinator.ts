@@ -142,16 +142,14 @@ export class WorkroomPersistenceCoordinator {
             const raw = database.getRawDatabase();
             if (!raw) throw new Error('Agent persistence requires an active database connection');
             // Validate persisted Workroom authority before any candidate runtime port is mutated.
-            const workroomStorage = this.options.config.sessions?.useDatabase === false
-              ? undefined
-              : await prepareWorkroomDatabaseStorage(raw, this.options.journalPayloads);
+            const workroomStorage = await prepareWorkroomDatabaseStorage(raw, this.options.journalPayloads);
             await activateAiDatabaseStorage(
               raw,
               { aiService: this.options.service, zhinAgent: this.options.agent },
               this.options.config,
               this.options.semanticMemory,
             );
-            workroomStorage?.activate(this.options.journal, this.options.catalog);
+            workroomStorage.activate(this.options.journal, this.options.catalog);
             await this.#activateDatabaseRepositories(raw, signal);
             await assertWorkroomCatalogMatchesGeneration(
               this.options.catalog,
