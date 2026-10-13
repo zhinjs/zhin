@@ -14,7 +14,9 @@ zhin install @zhin.js/plugin-reminder
 ```json
 {
   "features": [{ "package": "@zhin.js/schedule-feature" }],
-  "plugins": [{ "package": "@zhin.js/plugin-reminder", "instanceKey": "reminder" }]
+  "plugins": [
+    { "package": "@zhin.js/plugin-reminder", "instanceKey": "reminder" }
+  ]
 }
 ```
 
@@ -72,3 +74,15 @@ src/                      # 服务、状态契约与指令 helper
 commands/remind/*/index.ts # 集中参数声明与标准 Command dispatcher
 schedules/poll/index.ts   # 正式 Schedule Feature 入口
 ```
+
+## Agent 工具与技能
+
+启用 `@zhin.js/tool` 与 `@zhin.js/skill` Feature 后，本插件提供技能 `reminder` 与工具：
+
+| 工具              | 说明                                                              |
+| ----------------- | ----------------------------------------------------------------- |
+| `reminder_create` | 创建一次性（`after` / `at`）或周期（`every_seconds`）提醒；需批准 |
+| `reminder_list`   | 列出当前发送者在当前会话的提醒                                    |
+| `reminder_cancel` | 按 id 取消；需批准                                                |
+
+与原生 `schedule_add` 的区别：本插件到点**向会话发送提醒文案**；`schedule_*` 到点**再次唤醒 Agent**（可带 cron / 工作日等）。绝对时间仍须带 `Z` 或 `±hh:mm`。
