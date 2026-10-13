@@ -1,0 +1,23 @@
+docs/configuration/generated.md
+  s_2104cc474f1ce5::t_38df435da8cc8a 1298-1330
+docs/en/configuration/generated.md
+  s_2104cc474f1ce5::t_6d7fb7ee971b9a 1298-1330
+scripts/generate-config-reference.mjs
+  s_2104cc474f1ce5::t_4d959cc77e2a94 67-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ace8fb64b848887d60b69dc4be844b55ef4a909",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
