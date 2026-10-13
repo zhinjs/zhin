@@ -18,7 +18,12 @@ export default defineCommand({
     if (policy.version !== 1 || !Array.isArray(policy.actions) || !Number.isInteger(policy.minIntervalMs) || policy.minIntervalMs < 1000 || !Number.isInteger(policy.maxSends) || policy.maxSends < 1 || !Array.isArray(policy.targets)) return;
     const conversation = input.conversation;
     const endpoint = String(context.endpoint ?? '');
-    const target = policy.targets.find((item: any) => item.adapter === conversation.endpoint.adapter && item.endpoint === endpoint && item.kind === conversation.kind && item.id === conversation.id);
+    const index = context.project<AdapterIndex>(adapterFeatureId);
+    // Policy adapter selects a concrete plugin instance; incoming adapter is the
+    // canonical platform name. Bind authorization to the resolved endpoint ID.
+    const target = policy.targets.find((item: any) => item.endpoint === endpoint
+      && item.kind === conversation.kind && item.id === conversation.id
+      && index.resolve(item.adapter, item.endpoint) === conversation.endpoint.id);
     if (!target || !/^[a-zA-Z0-9_-]{1,48}$/.test(target.alias)) return;
     const sampleText = input.content.match(/(?:^|\s)probe:([a-zA-Z0-9_-]{8,64})(?:\s|$)/)?.[1];
     if (!sampleText) return;
@@ -27,9 +32,8 @@ export default defineCommand({
     const requestedImage = input.content.match(/(?:^|\s)image:([^\s]+)(?:\s|$)/)?.[1];
     if (requestedImage !== undefined && (action !== 'reply-image' || !['rgb', 'legacy'].includes(requestedImage))) return;
     const imageSample = requestedImage ?? 'legacy';
-    const index = context.project<AdapterIndex>(adapterFeatureId);
-    const activeEndpoint = index.connection(conversation.endpoint.adapter, endpoint);
-    const resolvedId = index.resolve(conversation.endpoint.adapter, endpoint);
+    const activeEndpoint = index.connection(target.adapter, target.endpoint);
+    const resolvedId = index.resolve(target.adapter, target.endpoint);
     if (!resolvedId || index.clientAdapter(resolvedId) !== policy.platform) return;
     const sample = createHash('sha256').update(`${target.alias}:${action}:${sampleText}${action === 'reply-image' && imageSample === 'rgb' ? ':image:rgb' : ''}`).digest('hex');
     const lockPath = `${policy.eventsPath}.lock`;
@@ -41,7 +45,7 @@ export default defineCommand({
     let callbackAssociation = 'none';
     let callbackPending = false;
     const writeResult = async (outcome: string, observed = false) => {
-      await appendFile(policy.eventsPath, JSON.stringify({ version: 1, phase: 'result', platform: policy.platform, action, ...(action === 'reply-image' ? { imageSample } : {}), generation: context.generation, pid: process.pid, transportState: activeEndpoint?.transportState ?? 'unknown', admitted: index.describe().find(row => row.id === index.resolve(conversation.endpoint.adapter, endpoint))?.admitted ?? false, target: target.alias, sample, time: new Date().toISOString(), result: outcome, ...(action === 'reply-button' ? { callbackObserved: observed, callbackAssociation } : {}), latencyMs: Date.now() - start, rssBytes: process.memoryUsage().rss }) + '\n', { mode: 0o600 });
+      await appendFile(policy.eventsPath, JSON.stringify({ version: 1, phase: 'result', platform: policy.platform, action, ...(action === 'reply-image' ? { imageSample } : {}), generation: context.generation, pid: process.pid, transportState: activeEndpoint?.transportState ?? 'unknown', admitted: index.describe().find(row => row.id === resolvedId)?.admitted ?? false, target: target.alias, sample, time: new Date().toISOString(), result: outcome, ...(action === 'reply-button' ? { callbackObserved: observed, callbackAssociation } : {}), latencyMs: Date.now() - start, rssBytes: process.memoryUsage().rss }) + '\n', { mode: 0o600 });
     };
     try {
       let events: any[] = [];
