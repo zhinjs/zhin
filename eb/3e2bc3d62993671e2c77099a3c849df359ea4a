@@ -1,0 +1,33 @@
+packages/im/kernel/src/schedule-engine.ts
+  s_6562bcb6cc0539::t_34d51301404628 78-79,119-120,150-154,225,231-235,237-240,245-247,256
+packages/im/kernel/tests/schedule-engine.test.ts
+  s_6562bcb6cc0539::t_200857d3bc13d3 64-112
+plugins/adapters/lark/src/long-connection.ts
+  s_2104cc474f1ce5::t_af63998ffd3f0b 66-67,83
+plugins/adapters/lark/tests/sdk-long-connection.test.ts
+  s_6562bcb6cc0539::t_f37fa80f7f4b11 64-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eb3e2bc3d62993671e2c77099a3c849df359ea4a",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
