@@ -63,6 +63,8 @@ export const createLarkLongConnection: LarkLongConnectionFactory = ({ config, re
         await client.start({ eventDispatcher: dispatcher });
         await connected;
         if (cancelled) { client.close({ force: true }); return; }
+        // 重复 connect() 时先清理旧的健康检查定时器，避免泄漏。
+        if (healthTimer) clearInterval(healthTimer);
         healthTimer = setInterval(() => {
           if (!cancelled && ready && client.getConnectionStatus().state !== 'connected') {
             ready = false;
@@ -78,7 +80,7 @@ export const createLarkLongConnection: LarkLongConnectionFactory = ({ config, re
     },
     close() {
       cancelled = true;
-      if (healthTimer) clearInterval(healthTimer);
+      if (healthTimer) { clearInterval(healthTimer); healthTimer = undefined; }
       settleError(new Error('Lark long connection stopped'));
       client.close({ force: true });
       agent?.destroy();
