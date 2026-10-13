@@ -1,0 +1,35 @@
+.changeset/reminder-agent-tools.md
+  s_2104cc474f1ce5::t_f13e29cecf11fe 1-5
+plugins/utils/reminder/package.json
+  s_2104cc474f1ce5::t_3cc222e766aef7 8-23,32-71,73-107
+plugins/utils/reminder/tsconfig.check.json
+  s_2104cc474f1ce5::t_77d9cff42f9a63 3-17
+pnpm-lock.yaml
+  s_2104cc474f1ce5::t_04b465a36b62a8 3445-3469,3687-3692,3702-3704,4715
+plugins/utils/reminder/skills/reminder/SKILL.md
+  s_6eb8d20a15fb15::t_16733f1d35bb11 1-45
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf3bd16a43ca0647765bc5deb2c44214f25de301",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
