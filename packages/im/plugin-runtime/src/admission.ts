@@ -9,6 +9,8 @@ interface AdmissionLifecycle {
   claim(gate: GenerationAdmissionGate, owner: object): void;
   activate(gate: GenerationAdmissionGate, acquire?: () => () => void): void;
   deactivate(gate: GenerationAdmissionGate): void;
+  notifyActivation(gate: GenerationAdmissionGate): void;
+  notifyDeactivation(gate: GenerationAdmissionGate): void;
 }
 
 // Assigned once by the class static block. The closures are a package-private
@@ -29,6 +31,8 @@ export class GenerationAdmissionGate {
       claim: (gate, owner) => { gate.#owner = owner; },
       activate: (gate, acquire) => gate.#activate(acquire),
       deactivate: (gate) => gate.#deactivate(),
+      notifyActivation: (gate) => gate.#notifyActivation(),
+      notifyDeactivation: (gate) => gate.#notifyDeactivation(),
     };
   }
 
@@ -92,6 +96,9 @@ export class GenerationAdmissionGate {
 
   #activate(acquire?: () => () => void): void {
     this.#state = { active: true, acquire };
+  }
+
+  #notifyActivation(): void {
     for (const listener of this.#activationListeners) {
       try {
         listener();
@@ -105,6 +112,9 @@ export class GenerationAdmissionGate {
 
   #deactivate(): void {
     this.#state = { active: false };
+  }
+
+  #notifyDeactivation(): void {
     for (const listener of this.#deactivationListeners) {
       try {
         listener();
@@ -172,6 +182,7 @@ export function replaceGenerationAdmissions(
   previous: ReadonlySet<GenerationAdmissionGate>,
   next: ReadonlySet<GenerationAdmissionGate>,
   owner: object,
+  publishNext: () => void,
   acquireNext?: () => () => void,
 ): void {
   // Validate the complete switch before changing ownership or visibility. A
@@ -180,6 +191,9 @@ export function replaceGenerationAdmissions(
   for (const gate of previous) {
     admissionLifecycle.assertOwner(gate, owner);
   }
+  // This callback is SnapshotStore's infallible pointer assignment. Every
+  // potentially rejecting ownership check has completed before publication.
+  publishNext();
   for (const gate of next) admissionLifecycle.claim(gate, owner);
   for (const gate of previous) {
     if (next.has(gate)) continue;
@@ -188,6 +202,12 @@ export function replaceGenerationAdmissions(
   for (const gate of next) {
     admissionLifecycle.activate(gate, acquireNext);
   }
+  // Publish the complete gate vector before any callback can enter the gateway
+  // or synchronously use another candidate-owned service.
+  for (const gate of previous) {
+    if (!next.has(gate)) admissionLifecycle.notifyDeactivation(gate);
+  }
+  for (const gate of next) admissionLifecycle.notifyActivation(gate);
 }
 
 function isObject(value: unknown): value is object {

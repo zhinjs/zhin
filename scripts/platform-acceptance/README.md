@@ -51,8 +51,11 @@ mode 0600; target IDs are kept only in that local policy:
 }
 ```
 
-`adapter` is the conversation endpoint owner; `endpoint` is incoming
-the command context endpoint ID, as shown by the configured Endpoint, not its display nickname.
+`adapter` selects the adapter plugin instance (for example `root/telegram`);
+`endpoint` is the configured Endpoint ID, not its display nickname. The probe
+resolves that pair through AdapterIndex and compares the unique endpoint ID with
+the incoming canonical conversation. The incoming platform name (for example
+`telegram`) is a separate identity and is not compared with the plugin owner.
 The command silently ignores every nonallowlisted conversation. It performs only
 the explicitly enabled probe action once per unique sample. It cannot send
 unsolicited messages, change membership, or alter Webhooks.

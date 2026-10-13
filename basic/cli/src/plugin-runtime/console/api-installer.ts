@@ -24,6 +24,7 @@ import { ConsoleLoginAssistBindings } from './login-assist-binding.js';
 import { ConsoleMessageBindings } from './message-bindings.js';
 
 export interface ConsoleControlPlaneOptions {
+  readonly pluginManagementActivity?: import('../../plugin-management/activity.js').PluginManagementActivity;
   readonly console: ConsoleRuntime;
   readonly projectRoot: string;
   readonly apiBase?: string;
@@ -73,6 +74,7 @@ export function startConsoleControlPlane(options: StartConsoleControlPlaneOption
       apiBase,
       im: options.im,
       onRestart: options.onRestart,
+      pluginManagementActivity: options.pluginManagementActivity,
       databaseHost: options.databaseHost,
       snapshot: options.snapshot,
       scheduleHost: options.scheduleHost,

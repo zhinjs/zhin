@@ -9,7 +9,7 @@ import {
   type PluginId,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
-import { createCapabilityContext } from '@zhin.js/feature-kit';
+import { createConstructionContext } from '@zhin.js/feature-kit';
 import {
   endpointCapabilitiesOf,
   resolveAdapterOperations,
@@ -481,7 +481,7 @@ async function createEndpoint(
   expansion?: EndpointExpansion,
 ): Promise<Readonly<{ endpoint: Endpoint; operations: readonly AdapterOperation[] }>> {
   const context = Object.freeze({
-    ...createCapabilityContext(snapshot, slot.owner, admission, signal),
+    ...createConstructionContext(snapshot, slot.owner, admission, signal),
     ...(expansion?.config ? { config: expansion.config } : {}),
     id: expansion?.id ?? slot.id,
     endpointId: expansion?.endpointId ?? slot.localName,

@@ -10,8 +10,9 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
   if (event.direction === 'inbound') {
     hub.publish('message.receive', {
       direction: 'inbound' as const,
-      adapter: localName,
+      adapter: event.conversation.endpoint.adapter,
       endpointKey: localName,
+      conversation: event.conversation,
       sender: event.sender,
       channelType: event.conversation.kind,
       channelId: event.conversation.id,
@@ -23,8 +24,9 @@ export function publishMessageEvent(hub: ConsoleEventHub, event: RuntimeMessageE
   }
   hub.publish('message.receive', {
     direction: 'outbound' as const,
-    adapter: localName,
+    adapter: event.conversation.endpoint.adapter,
     endpointKey: localName,
+    conversation: event.conversation,
     requester: event.requester,
     channelType: event.conversation.kind,
     channelId: event.conversation.id,

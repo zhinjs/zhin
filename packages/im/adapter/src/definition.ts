@@ -3,7 +3,7 @@
  * @module zhin.js/adapter
  */
 import type { CapabilityId } from '@zhin.js/plugin-runtime';
-import type { CapabilityContext } from '@zhin.js/feature-kit';
+import type { ConstructionContext } from '@zhin.js/feature-kit';
 import type {
   EndpointCapabilities,
   EndpointOperation,
@@ -54,7 +54,7 @@ export type AdapterMarkdownMode = 'native' | 'text';
 /**
  * Generation-owned construction context for one runtime Endpoint.
  */
-export interface AdapterContext<TConfig = unknown> extends CapabilityContext<TConfig> {
+export interface AdapterContext<TConfig = unknown> extends ConstructionContext<TConfig> {
   readonly id: CapabilityId;
   /** Human-facing Endpoint id from `endpoints[].id`, or the Adapter local name. */
   readonly endpointId: string;

@@ -5,7 +5,7 @@ import { resolveEndpointIdentity } from '../../src/plugin-runtime/im/endpoint-ru
 it('public package alias never selects the first account when root and child have the same endpoint name', () => {
   const root = rootPluginId(); const child = childPluginId(root, 'same');
   const records = [root, child].map(owner => ({ owner, name: 'terminal', id: capabilityId(owner, adapterFeatureId, 'terminal') }));
-  const index = { list: () => records, describe: () => records } as unknown as AdapterIndex;
+  const index = { list: () => records, describe: () => records, clientAdapter: () => 'terminal' } as unknown as AdapterIndex;
   const snapshot = createSnapshotView(1, { root,
     tree: new Map([root, child].map(id => [id, { id, instanceKey: String(id), packageName: 'minimal-bot', packageRoot: '/fixture', children: [] }])),
     config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map(),
@@ -20,7 +20,7 @@ it('public package alias never selects the first account when root and child hav
 it('alias lookup remains pinned to the operation generation when package identities change', () => {
  const root = rootPluginId();
  const record = { owner: root, name: 'terminal', id: capabilityId(root, adapterFeatureId, 'terminal') };
- const index = { list: () => [record], describe: () => [record] } as unknown as AdapterIndex;
+ const index = { list: () => [record], describe: () => [record], clientAdapter: () => 'terminal' } as unknown as AdapterIndex;
  const view = (generation: number, packageName: string) => createSnapshotView(generation, { root,
   tree: new Map([[root, { id: root, instanceKey: 'root', packageName, packageRoot: '/fixture', children: [] }]]),
   config: new Map(), resources: new Map(), capabilities: new Map(), projections: new Map(),

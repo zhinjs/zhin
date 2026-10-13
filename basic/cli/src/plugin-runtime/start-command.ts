@@ -1,4 +1,5 @@
 import { access } from 'node:fs/promises';
+import { PluginManagementActivity } from '../plugin-management/activity.js';
 import { join, relative } from 'node:path';
 import chalk from 'chalk';
 import open from 'open';
@@ -110,6 +111,7 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
 }
 
 async function runProcessStartCommand(options: StartCommandOptions): Promise<void> {
+  const pluginManagementActivity = new PluginManagementActivity();
   const parsed = parseStartOptions(options.args);
   ensureTypeScriptSpecifierRemap();
   const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);
@@ -257,7 +259,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     },
     async onRestartRequired(plan) {
       options.writeError(`${JSON.stringify({ restartRequired: plan }, null, 2)}\n`);
+      // 插件管理操作进行中时不在此重启：依赖/声明变更由插件管理流程的
+      // 「应用/重启」步骤统一显式触发，避免在安装与应用之间意外重启。
+      if (pluginManagementActivity.active) {
+        getLogger('runtime').info('插件管理操作进行中，依赖变更等待操作完成后显式应用');
+        return;
+      }
       process.exitCode = processRestartExitCode;
+      // 仅设置 exitCode，让事件循环自然结束，保证 stderr/管道日志完整写出。
       await control.stop();
     },
     onReload(plan, generation, durationMs) {
@@ -300,38 +309,53 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     pluginLifecycleFile,
     pluginLifecycleStore,
     configuration: consoleConfigurationStore,
+    pluginManagementActivity,
     snapshot: () => host.runtime.snapshot,
     snapshots: host.runtime.snapshots,
     onRestart: () => {
       // The native TypeScript supervisor treats this code as an intentional
       // process-generation restart in both foreground Desktop and daemon mode.
-      process.exit(processRestartExitCode);
+      // 只设置 exitCode 并完整停止，进程在所有句柄释放后自然退出（端口随之释放）。
+      process.exitCode = processRestartExitCode;
+      void control.stop().catch((error: unknown) => {
+        options.writeError(`${error instanceof Error ? error.stack ?? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      });
     },
   });
   const disposeReadiness = registerReadinessRoutes(httpHost, {
     snapshots: host.runtime.snapshots,
     agentBindings: agentHost?.bindings,
   }, httpConfig.apiBase);
-  control.stop = async () => {
+  let stopping: Promise<void> | undefined;
+  /** Components whose stop has begun but not settled; reported on a forced exit. */
+  const stoppingComponents = new Set<string>();
+  const stage = async (name: string, run: () => unknown): Promise<void> => {
+    stoppingComponents.add(name);
+    try { await run(); } finally { stoppingComponents.delete(name); }
+  };
+  // 幂等：Console 重启、依赖变更、信号与孤儿看门狗可能并发请求停止。
+  control.stop = () => (stopping ??= stopAll());
+  const stopAll = async (): Promise<void> => {
     try {
       disposeReadiness();
       disposeConsoleControlPlane();
       // Process ingress owns WebSocket operation leases. Close it before Root
       // drain so long-lived connections release those leases instead of
       // deadlocking SnapshotStore.close().
-      await httpHost.close();
+      await stage('http', () => httpHost.close());
     } finally {
       try {
-        await host.stop();
+        await stage('runtime', () => host.stop());
       } finally {
         try {
-          scheduleHost.stop();
+          await stage('schedule', () => scheduleHost.stop());
         } finally {
           try {
             systemLogStore.dispose();
           } finally {
             try {
-              await databaseHost.stop();
+              await stage('database', () => databaseHost.stop());
             } finally {
               pluginLifecycleStore.dispose();
               complete();
@@ -407,6 +431,10 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const disposeProcessLifecycle = installProcessLifecycle({
     process: nodeProcessLifecycleAdapter,
     requestStop: () => control.stop(),
+    describePending: () => [...stoppingComponents],
+    reportForcedExit: (reason, pending) => {
+      options.writeError(`${JSON.stringify({ forcedExit: reason, stillStopping: pending })}\n`);
+    },
     reportError: reportStopError,
   });
   try { await completed; }

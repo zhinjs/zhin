@@ -254,10 +254,10 @@ describe('ImRuntime side-event handlers', () => {
   }
 
   it('receiveNotice dispatches generation-safe handlers', async () => {
-    const { receive, noticed, liveClient, adapter, close } = await createFixture();
+    const { receive, noticed, liveClient, liveEndpoint, close } = await createFixture();
     const notice = buildNotice({}, {
       id: 'n1',
-      clientAdapter: 'memory',
+      clientAdapter: liveEndpoint.identity.adapter,
       endpointId: 'memory',
       type: 'notice',
       conversation: sideEventConversation('group', 'g1'),
@@ -268,7 +268,7 @@ describe('ImRuntime side-event handlers', () => {
     expect(noticed).toHaveLength(1);
     expect(noticed[0]).toMatchObject({
       name: 'notice.receive',
-      payload: { ...notice, conversation: { ...notice.conversation, endpoint: { id: adapter.id, adapter: String(adapter.owner) } }, generation: 0 },
+      payload: { ...notice, conversation: { ...notice.conversation, endpoint: liveEndpoint.identity }, generation: 0 },
       client: liveClient,
     });
     expect(() => (noticed[0] as { payload: Notice }).payload.$client).toThrow('expired');

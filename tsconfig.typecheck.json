@@ -310,7 +310,8 @@
     "packages/im/command/tests/types/declarations.ts",
     "packages/im/plugin-runtime/tests/types/persistent-state.ts",
     "packages/toolkit/plugin-test-kit/tests/types/public.ts",
-    "packages/im/schedule-feature/tests/types/config.ts"
+    "packages/im/schedule-feature/tests/types/config.ts",
+    "packages/im/feature-kit/tests/construction-types.fixture.ts"
   ],
   "exclude": [
     "node_modules",

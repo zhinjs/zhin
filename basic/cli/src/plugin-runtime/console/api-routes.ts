@@ -24,6 +24,7 @@ import { registerConsoleRpcRoute } from './rpc-route.js';
 import { registerConsoleSystemRoutes } from './system-routes.js';
 
 export interface RegisterConsoleRoutesOptions {
+  readonly pluginManagementActivity?: import('../../plugin-management/activity.js').PluginManagementActivity;
   readonly http: HttpHost;
   readonly consoleRuntime: ConsoleRuntime;
   readonly projectRoot: string;
@@ -80,6 +81,7 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
   registerConsoleEntryRoutes({ http, consoleRuntime });
   registerConsoleSystemRoutes({ http, base, im, snapshot });
   const pluginManagement = createPluginManagementPort(projectRoot, {
+    activity: options.pluginManagementActivity,
     snapshots,
     lifecycleFile: pluginLifecycleFile,
     requestRestart: onRestart ? () => { setTimeout(onRestart, 500); } : undefined,

@@ -12,12 +12,12 @@ import {
   type EndpointManagementCapability,
 } from '@zhin.js/adapter';
 import { normalizeDeliveryTarget, type DeliveryTarget, type CapabilityId, type PluginId, type RuntimeSnapshot, type SnapshotLease } from '@zhin.js/plugin-runtime';
-import { EndpointDeliveryError } from '@zhin.js/im-contract';
-import type {
-  ConversationRef,
-  DeliveryReceipt,
-  EndpointCapabilities,
-  MessageRef,
+import {
+  EndpointDeliveryError,
+  type ConversationRef,
+  type DeliveryReceipt,
+  type EndpointCapabilities,
+  type MessageRef,
 } from '@zhin.js/im-contract';
 import type {
   ConversationAddress,
@@ -27,6 +27,7 @@ import type {
 
 export interface EndpointRuntimeSummary {
   readonly id: string;
+  readonly endpoint: ConversationRef['endpoint'];
   readonly name: string;
   readonly adapter: string;
   readonly owner: string;
@@ -97,6 +98,7 @@ export class EndpointRuntime {
       requireAdapters(snapshot).describe().map((row) =>
         Object.freeze({
           id: String(row.id),
+          endpoint: Object.freeze({ id: String(row.id), adapter: requireAdapters(snapshot).clientAdapter(row.id) }),
           name: row.name,
           adapter: adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
           owner: row.owner,
@@ -131,6 +133,7 @@ export class EndpointRuntime {
       if (!row) return null;
       return Object.freeze({
         name: row.name,
+        endpoint: Object.freeze({ id: String(row.id), adapter: index.clientAdapter(row.id) }),
         adapter: adapterTypeName(snapshot.tree.get(row.owner)?.packageName) ?? row.name,
         connected: row.connected,
           admitted: row.admitted,
@@ -152,8 +155,8 @@ export class EndpointRuntime {
       if (!resolved) throw new Error('endpoint not found');
       const requester = index.owner(resolved);
       const conversation: ConversationRef = {
-        endpoint: { id: String(resolved), adapter: String(requester) },
         ...input.conversation,
+        endpoint: { id: String(resolved), adapter: index.clientAdapter(resolved) },
       };
       const result = await this.context.send({
         conversation,
@@ -300,7 +303,8 @@ export function resolveEndpointIdentity(snapshot: RuntimeSnapshot, index: Adapte
   const matches = index.list().filter(record => {
     const localName = record.id.split('\0').pop() ?? record.id;
     const alias = adapterTypeName(snapshot.tree.get(record.owner)?.packageName);
-    const adapterMatches = alias === adapter || record.name === adapter || String(record.id) === adapter
+    const adapterMatches = index.clientAdapter(record.id) === adapter
+      || alias === adapter || record.name === adapter || String(record.id) === adapter
       || localName === adapter || String(record.owner) === adapter || record.owner.endsWith(`/${adapter}`);
     const endpointMatches = record.name === endpointKey || String(record.id) === endpointKey
       || record.id.endsWith(`/${endpointKey}`) || live.get(record.id) === endpointKey;

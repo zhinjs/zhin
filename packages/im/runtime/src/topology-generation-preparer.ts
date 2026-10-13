@@ -9,6 +9,7 @@ import {
   type FeatureId,
   type PluginId,
   type RuntimeSnapshot,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import {
   FeatureCatalog,
@@ -18,7 +19,6 @@ import {
 } from '@zhin.js/feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ZhinFeatureManifest } from './manifest.js';
@@ -181,6 +181,7 @@ export class TopologyGenerationPreparer {
       const assets = this.model.assets.replaceScopes(
         graphOrder(this.graph),
         replacements,
+        new Set([...this.model.providers.keys(), ...featureTopology.providers.keys()]),
         projectionDisposers,
       );
       return prepareRuntimeGeneration(

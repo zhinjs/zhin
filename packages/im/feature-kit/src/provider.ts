@@ -80,6 +80,12 @@ export interface FeatureProjection<T> {
 }
 
 export interface FeatureRuntime<TDefinition, TProjection> {
+  /**
+   * Opt in only for projections that can share external resources across a
+   * generation replacement without capturing another owner's old snapshot.
+   * The default is to rebuild; every changed owner/slot still rebuilds this Feature.
+   */
+  readonly retain?: 'when-owner-unchanged';
   project(
     slots: readonly Readonly<CapabilitySlot<TDefinition>>[],
     context: ProjectionContext,
@@ -109,6 +115,9 @@ export function defineFeatureProvider<TDefinition, TProjection>(
 ): Readonly<FeatureProvider<TDefinition, TProjection>> {
   if (provider.protocol !== 1) {
     throw new TypeError(`Unsupported Feature provider protocol: ${provider.protocol}`);
+  }
+  if (provider.runtime.retain !== undefined && provider.runtime.retain !== 'when-owner-unchanged') {
+    throw new TypeError('Unsupported Feature runtime retention policy');
   }
   const conventionIds = new Set<string>();
   for (const convention of provider.authoring.conventions) {

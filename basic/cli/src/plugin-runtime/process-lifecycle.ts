@@ -12,9 +12,16 @@ export interface InstallProcessLifecycleOptions {
   readonly requestStop: () => void | Promise<void>;
   readonly shutdownBudgetMs?: number;
   readonly reportError?: (error: unknown) => void;
+  /** Names of components still stopping, logged when the budget is exhausted. */
+  readonly describePending?: () => readonly string[];
+  /** Called right before a forced exit (budget exhausted or repeated signal). */
+  readonly reportForcedExit?: (reason: 'budget' | 'repeated-signal', pending: readonly string[]) => void;
 }
 
-export const DEFAULT_SHUTDOWN_BUDGET_MS = 10_000;
+/** Conventional 128 + signal number exit codes. */
+const SIGNAL_EXIT_CODES: Readonly<Record<ProcessLifecycleSignal, number>> = { SIGHUP: 129, SIGINT: 130, SIGTERM: 143 };
+
+export const DEFAULT_SHUTDOWN_BUDGET_MS = 5_000;
 
 export const nodeProcessLifecycleAdapter: ProcessLifecycleAdapter = {
   on(signal, listener) {
@@ -45,21 +52,28 @@ export function installProcessLifecycle(
   let disposed = false;
   let forceTimer: ReturnType<typeof setTimeout> | undefined;
 
-  const forceExit = (code: number): void => {
+  const forceExit = (code: number, reason: 'budget' | 'repeated-signal'): void => {
     if (disposed || phase === 'completed') return;
+    try {
+      options.reportForcedExit?.(reason, options.describePending?.() ?? []);
+    } catch {
+      // Diagnostics must never prevent the forced exit.
+    }
     adapter.forceExit(code);
   };
 
   const handleSignal = (signal: ProcessLifecycleSignal): void => {
     if (disposed || phase === 'completed') return;
     if (phase === 'stopping') {
-      if (signal === 'SIGINT') forceExit(130);
-      else if (signal === 'SIGTERM') forceExit(143);
+      // A second Ctrl+C / SIGTERM during shutdown exits immediately.
+      if (signal === 'SIGINT' || signal === 'SIGTERM') forceExit(SIGNAL_EXIT_CODES[signal], 'repeated-signal');
       return;
     }
 
     phase = 'stopping';
-    forceTimer = setTimeout(() => forceExit(1), shutdownBudgetMs);
+    forceTimer = setTimeout(() => forceExit(SIGNAL_EXIT_CODES[signal], 'budget'), shutdownBudgetMs);
+    // The budget timer must never keep an otherwise finished process alive.
+    forceTimer.unref?.();
 
     void (async () => {
       try {

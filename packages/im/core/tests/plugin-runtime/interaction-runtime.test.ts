@@ -64,13 +64,12 @@ function receive(
   payload: Parameters<ImRuntime['endpointEvents']['receive']>[0]['payload'],
 ): Promise<MessageDispatchResult> {
   const input = payload as { conversation?: { endpoint?: { id?: string } } };
+  const endpoint = im.endpoints.list().find(row => row.id === input.conversation?.endpoint?.id)?.endpoint;
+  if (!endpoint) throw new Error('Unknown interaction fixture Endpoint');
   return im.endpointEvents.receive(Object.freeze({
     name: 'message.receive',
     payload,
-    endpoint: Object.freeze({
-      id: (input.conversation?.endpoint?.id ?? 'test-endpoint') as never,
-      name: 'test',
-    }),
+    endpoint: { ...endpoint, id: endpoint.id as Parameters<ImRuntime['endpointEvents']['receive']>[0]['endpoint']['id'] },
     client: ignoredEndpointEvents,
   })) as Promise<MessageDispatchResult>;
 }
@@ -194,7 +193,7 @@ describe('UserInteraction via ImRuntime', () => {
     const root = rootPluginId();
     return {
       conversation: {
-        endpoint: { id: String(capabilityId(root, adapterFeatureId, 'memory')), adapter: String(root) },
+        endpoint: { id: String(capabilityId(root, adapterFeatureId, 'memory')), adapter: 'memory' },
         kind: 'group' as const,
         id: 'room-1',
       },
@@ -682,8 +681,9 @@ describe('UserInteraction via ImRuntime', () => {
 
   it('keeps same-user interaction claims isolated by canonical thread identity', async () => {
     const { im } = await createInteractionFixture();
+    const endpoint = im.endpoints.list()[0]!.endpoint;
     const createThreadMessage = (threadId: string) => new Message(
-      { ...incomingMessage('start').conversation, threadId },
+      { ...incomingMessage('start').conversation, endpoint, threadId },
       'start',
       1,
       async () => ({ status: 'sent' as const }),
@@ -694,6 +694,10 @@ describe('UserInteraction via ImRuntime', () => {
     const first = threadOne.ask({ type: 'text', title: '线程一' });
     const second = threadTwo.ask({ type: 'text', title: '线程二' });
     await new Promise<void>((resolve) => queueMicrotask(resolve));
+
+    await expect(receive(im, {
+      ...incomingMessage('无关线程'), conversation: { ...incomingMessage('无关线程').conversation, threadId: 'thread-other' },
+    })).resolves.toMatchObject({ matched: false });
 
     await expect(receive(im, {
       ...incomingMessage('答案二'),
@@ -711,6 +715,7 @@ describe('UserInteraction via ImRuntime', () => {
   it('createInteraction(bind.subjectId) 只接受该用户的回复', async () => {
     const { im } = await createInteractionFixture();
     const incoming = incomingMessage('start', 'user-1');
+    incoming.conversation.endpoint = im.endpoints.list()[0]!.endpoint;
     const delivered: string[] = [];
     const message = new Message(
       incoming.conversation,

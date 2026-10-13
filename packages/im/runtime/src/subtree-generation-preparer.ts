@@ -6,11 +6,11 @@ import {
   type FeatureId,
   type PluginId,
   type RuntimeSnapshot,
+  type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
 import { FeatureDiscovery } from '@zhin.js/feature-kit';
 import type { RuntimeEnvironment } from './environment.js';
 import type { EnvironmentLayers } from './environment-store.js';
-import type { RuntimeConfigDocument } from '@zhin.js/plugin-runtime';
 import { FeatureProjector, composeGenerationHandoffs } from './feature-projector.js';
 import type { IsolatedPluginRuntimePort } from './isolation.js';
 import type { ModuleRuntime } from './module-runtime.js';
@@ -109,7 +109,21 @@ export class SubtreeGenerationPreparer {
         for (const slot of slots) addCapabilitySlot(capabilities, slot);
       }
 
-      const projected = await new FeatureProjector(this.model.providers.values()).project(
+      // Most indexes capture a complete construction snapshot and must rebuild.
+      // Only an explicitly shareable projection may retain unchanged transports.
+      const affectedFeatures = new Set<FeatureId>([...this.model.providers.values()]
+        .filter((provider) => provider.runtime.retain !== 'when-owner-unchanged')
+        .map((provider) => provider.id));
+      for (const [feature, featureRoots] of this.model.rootsByFeature) {
+        if (featureRoots.some((entry) => roots.some((root) => isWithin(entry.owner, root)))) {
+          affectedFeatures.add(feature);
+        }
+      }
+      for (const slot of [...current.capabilities.values(), ...capabilities.values()]) {
+        if (roots.some((root) => isWithin(slot.owner, root))) affectedFeatures.add(slot.feature);
+      }
+      const providers = [...this.model.providers.values()].filter((provider) => affectedFeatures.has(provider.id));
+      const projected = await new FeatureProjector(providers).project(
         current.generation + 1,
         {
           root: current.root,
@@ -119,6 +133,7 @@ export class SubtreeGenerationPreparer {
           capabilities,
         },
         signal,
+        current.projections,
       );
       for (const [feature, dispose] of projected.disposers) {
         projectionDisposers.set(feature, dispose);
@@ -137,6 +152,7 @@ export class SubtreeGenerationPreparer {
       const assets = this.model.assets.replaceScopes(
         [...nodes.keys()],
         replacements,
+        affectedFeatures,
         projectionDisposers,
       );
       return prepareRuntimeGeneration(

@@ -113,13 +113,21 @@ export class InboundRuntime {
     source: EndpointEvent<IncomingMessage>,
     admission?: GenerationAdmissionGate,
   ): Promise<MessageDispatchResult> {
-    const input = source.payload;
+    const receivedAt = Date.now();
     const lease = this.context.acquire();
     let active = true;
     try {
-      const conversation = input.conversation;
-      const adapter = conversation.endpoint.id as CapabilityId;
-      const requester = requireAdapters(lease.value).owner(adapter);
+      const adapter = source.endpoint.id as CapabilityId;
+      const adapters = requireAdapters(lease.value);
+      const requester = adapters.owner(adapter);
+      // Routing identity belongs to the bound Endpoint, never to a protocol
+      // normalizer's payload or a Plugin owner inferred from a CapabilityId.
+      const conversation = Object.freeze({ ...source.payload.conversation,
+        endpoint: Object.freeze({ id: source.endpoint.id, adapter: adapters.clientAdapter(adapter) }),
+      });
+      const input = Object.freeze({ ...source.payload, conversation,
+        ...(source.payload.message ? { message: Object.freeze({ ...source.payload.message, conversation }) } : {}),
+      });
       logger.debug(formatCompact({
         op: 'receive',
         conv: formatConversationLog(conversation),
@@ -136,7 +144,7 @@ export class InboundRuntime {
         (content, replyRequester = requester, targetConversation) => {
           if (!active) throw new Error('Message reply scope has ended');
           const effectiveConversation = targetConversation
-            ? { endpoint: conversation.endpoint, ...targetConversation }
+            ? { ...targetConversation, endpoint: conversation.endpoint }
             : conversation;
           return this.context.deliver({
             conversation: effectiveConversation,
@@ -147,7 +155,7 @@ export class InboundRuntime {
               content: input.content,
               segments: input.segments,
               messageId: input.message?.id,
-              timestamp: Date.now(),
+              timestamp: receivedAt,
               endpointId: input.endpointId,
               mentioned: input.mentioned,
             },
@@ -258,7 +266,7 @@ export class InboundRuntime {
         ...(input.sender !== undefined ? { sender: input.sender } : {}),
         contentPreview: previewMessageContent(input.content),
         ...(input.message?.id ? { messageId: input.message.id } : {}),
-        timestamp: Date.now(),
+        timestamp: receivedAt,
       });
       return result;
     } finally {
@@ -276,7 +284,7 @@ export class InboundRuntime {
       const context: EndpointEventContext = {
         endpoint: {
           id: source.endpoint.id,
-          adapter: String(requireAdapters(lease.value).owner(source.endpoint.id)),
+          adapter: requireAdapters(lease.value).clientAdapter(source.endpoint.id),
         },
         generation: lease.value.generation,
         client: () => {
@@ -329,6 +337,7 @@ export class InboundRuntime {
     const index = handlers(snapshot);
     if (!index) return;
     const options: HandlerDispatchOptions = {
+      snapshot,
       resolveInteraction: (name, interactionArgs) => {
         const eventContext = interactionArgs[0] as EndpointEvent | undefined;
         const payload = eventContext?.payload;

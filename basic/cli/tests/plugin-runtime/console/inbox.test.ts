@@ -144,18 +144,20 @@ describe('buildInboxMessageRow', () => {
       sender_name: null,
       sender_payload: '{}',
       content: 'hello',
-      raw: null,
+      raw: JSON.stringify({ $console: 'zhin.message-observation/1', direction: 'inbound', conversation: inboundEvent().conversation }),
       created_at: 1_700_000_000_000,
     });
   });
 
   it('maps outbound events: sender is the endpoint itself', () => {
+    const rendering = { forms: ['text'] as const, fallbacks: ['interactive_text_policy'] as const };
     const row = buildInboxMessageRow(
-      inboundEvent({ direction: 'outbound', sender: undefined, messageId: undefined }),
+      inboundEvent({ direction: 'outbound', sender: undefined, messageId: undefined, rendering }),
       resolveEndpoint,
     );
     expect(row.sender_id).toBe('1234');
     expect(row.platform_message_id).toBe('local:1700000000000');
+    expect(JSON.parse(String(row.raw))).toMatchObject({ direction: 'outbound', rendering });
   });
 
   it('stores the routable adapter slot for an expanded slot~endpoint capability', () => {

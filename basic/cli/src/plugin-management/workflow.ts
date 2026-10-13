@@ -15,12 +15,15 @@ import type {
   PluginUninstallPlan, PluginUpdatePlan, PluginVerificationResult, PluginVerificationPlan,
 } from '@zhin.js/host-http';
 import { ConsoleConfigurationStore } from '../plugin-runtime/console/configuration.js';
+import { adapterFeatureId, isAdapterIndex } from '@zhin.js/adapter';
+import type { PluginManagementActivity } from './activity.js';
 import { readPluginLifecycleState, resolvePluginLifecycleFile } from '../plugin-runtime/plugin-lifecycle-store.js';
 
 const execute = promisify(execFile);
 type Project = { dependencies?: Record<string, string>; optionalDependencies?: Record<string, string>; devDependencies?: Record<string, string>; zhin?: { plugins?: { package: string; instanceKey: string }[] } };
 
 export interface PluginManagementOptions {
+  readonly activity?: PluginManagementActivity;
   readonly snapshots?: SnapshotReader;
   readonly requestRestart?: () => void | Promise<void>;
   /** Real package-manager boundary; tests use independent on-disk packages. */
@@ -37,6 +40,7 @@ export interface PluginInstallOptions {
 export class PluginManagementWorkflow implements PluginManagementPort {
   readonly #root: string;
   readonly #options: PluginManagementOptions;
+  readonly #verificationIncarnation = randomUUID();
   constructor(projectRoot: string, options: PluginManagementOptions = {}) {
     this.#root = resolve(projectRoot);
     this.#options = options;
@@ -191,7 +195,19 @@ export class PluginManagementWorkflow implements PluginManagementPort {
         const applied = primary ? readPluginConfigurationMap(primary.document) : undefined;
         const candidate = node.configSchema ? parsePluginConfigSchema(node.configSchema, config[target.instanceKey]).value : config[target.instanceKey] ?? {};
         published = Boolean(installed.version && node.packageVersion === installed.version && applied && isDeepStrictEqual(applied[target.instanceKey] ?? {}, candidate));
-        if (published && ![...lease.value.capabilities.values()].some(slot => slot.owner === owner && String(slot.feature) === 'zhin.adapter')) readiness = 'ready';
+        if (published) {
+          const hasAdapters = [...lease.value.capabilities.values()].some(slot => slot.owner === owner && String(slot.feature) === 'zhin.adapter');
+          if (!hasAdapters) readiness = 'ready';
+          else {
+            const adapters = lease.value.projections.get(adapterFeatureId);
+            if (isAdapterIndex(adapters)) {
+              const endpoints = adapters.describe().filter(endpoint => endpoint.owner === owner);
+              if (endpoints.length) readiness = endpoints.every(endpoint => endpoint.connected && endpoint.admitted)
+                ? 'ready' : endpoints.some(endpoint => endpoint.transportState === 'closed' || endpoint.transportState === 'stopped')
+                  ? 'degraded' : endpoints.some(endpoint => endpoint.transportState === 'unknown') ? 'unknown' : 'pending';
+            }
+          }
+        }
         if (lease.value.resources.get(node.id)?.has(pluginVerificationToken.id)) verification = 'available';
       }
     } finally { lease?.release(); }
@@ -222,6 +238,12 @@ export class PluginManagementWorkflow implements PluginManagementPort {
   }
 
   async #mutate<T>(operation: (completed: string[]) => Promise<T>, request?: string): Promise<T> {
+    return this.#options.activity
+      ? this.#options.activity.run(() => this.#mutateLocked(operation, request))
+      : this.#mutateLocked(operation, request);
+  }
+
+  async #mutateLocked<T>(operation: (completed: string[]) => Promise<T>, request?: string): Promise<T> {
     const directory = join(this.#root, '.zhin');
     await mkdir(directory, { recursive: true });
     const file = join(directory, 'plugin-management.lock');
@@ -265,7 +287,18 @@ export class PluginManagementWorkflow implements PluginManagementPort {
     return this.#mutate(async completed => {
       const previous = await this.#assertRevision(expectedRevision, expectedProjectRevision);
       const plan = await this.planInstall(request, options);
-      await this.#pnpm(['add', ...(options.saveDev ? ['-D'] : []), options.source ?? spec.spec]);
+      const existing = await this.#installed(spec.name);
+      const { project: installedProject } = await this.#project();
+      // An exact installed artifact can finish declaration/configuration after
+      // a lost receipt without running the package manager again. Tags/ranges,
+      // alternate sources and dependency-tier changes still need installation.
+      // The declared range must already be the requested exact pin; otherwise
+      // skipping would leave package.json at an older/looser range.
+      if (options.source || options.saveDev || installedProject.dependencies?.[spec.name] !== spec.version
+        || !spec.version || !existing.installed
+        || existing.error || existing.version !== spec.version) {
+        await this.#pnpm(['add', ...(options.saveDev ? ['-D'] : []), options.source ?? spec.spec]);
+      }
       completed.push('dependency-install');
       const installed = await this.#installed(spec.name);
       if (!installed.installed) throw new Error('Package manager completed but the installed package is unavailable');
@@ -369,7 +402,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const node = lease && [...lease.value.tree.values()].find(item => item.parent === rootPluginId() && item.instanceKey === target.instanceKey && item.packageName === (installed.pkg?.name ?? target.packageName));
       const host = node && lease?.value.resources.get(node.id)?.get(pluginVerificationToken.id) as import('@zhin.js/plugin-runtime').PluginVerificationHost | undefined;
       const checks = verificationChecks(host);
-      return Object.freeze({ ...target, generation: lease?.value.generation ?? null, projectRevision: revisions.projectRevision, checkRevision: checksRevision(node?.id, checks), checks });
+      return Object.freeze({ ...target, generation: lease?.value.generation ?? null, projectRevision: revisions.projectRevision, checkRevision: checksRevision(this.#verificationIncarnation, node?.id, checks), checks });
     } finally { lease?.release(); }
   }
 
@@ -382,7 +415,7 @@ export class PluginManagementWorkflow implements PluginManagementPort {
       const node = lease && [...lease.value.tree.values()].find(item => item.parent === rootPluginId() && item.instanceKey === target.instanceKey && item.packageName === (installed.pkg?.name ?? target.packageName));
       const host = node && lease?.value.resources.get(node.id)?.get(pluginVerificationToken.id) as import('@zhin.js/plugin-runtime').PluginVerificationHost | undefined;
       const checks = verificationChecks(host);
-      if (expectedGeneration !== (lease?.value.generation ?? null) || typeof expectedProjectRevision !== 'string' || (await this.#revisions()).projectRevision !== expectedProjectRevision || checksRevision(node?.id, checks) !== expectedCheckRevision) throw new Error('Verification plan changed; refresh the check and its effects before approving again');
+      if (expectedGeneration !== (lease?.value.generation ?? null) || typeof expectedProjectRevision !== 'string' || (await this.#revisions()).projectRevision !== expectedProjectRevision || checksRevision(this.#verificationIncarnation, node?.id, checks) !== expectedCheckRevision) throw new Error('Verification plan changed; refresh the check and its effects before approving again');
       const check = checks.find(item => item.id === checkId);
       if (!host || !check || !lease || state.status !== 'enabled' || state.generation !== lease.value.generation) return { ...target, checkId, generation: lease?.value.generation ?? null, current: false, status: 'not-configured', scope: null, summary: 'No applied current plugin business verification is configured', evidence: [] };
       const outcome = await host.run(checkId);
@@ -414,15 +447,15 @@ function verificationChecks(host?: import('@zhin.js/plugin-runtime').PluginVerif
   if (new Set(checks.map(check => check.id)).size !== checks.length) throw new Error('Duplicate plugin verification check id');
   return Object.freeze(checks);
 }
-function checksRevision(owner: string | undefined, checks: readonly import('@zhin.js/plugin-runtime').PluginVerificationCheck[]) {
-  return createHash('sha256').update(JSON.stringify([owner, checks])).digest('hex');
+function checksRevision(incarnation: string, owner: string | undefined, checks: readonly import('@zhin.js/plugin-runtime').PluginVerificationCheck[]) {
+  return createHash('sha256').update(JSON.stringify([incarnation, owner, checks])).digest('hex');
 }
 
 function npmSpec(value: string) {
   const match = /^(?<name>(?:@[a-z0-9._-]+\/)?[a-z0-9][a-z0-9._-]*)(?:@(?<version>[^\s]+))?$/u.exec(value.trim());
   if (!match?.groups) throw new Error('Plugin management accepts npm package names with an optional version/tag');
   const name = match.groups.name!;
-  return { name, spec: match.groups.version ? `${name}@${match.groups.version}` : name };
+  return { name, version: match.groups.version, spec: match.groups.version ? `${name}@${match.groups.version}` : name };
 }
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 function notFound(error: unknown) { return error instanceof Error && 'code' in error && error.code === 'ENOENT'; }
