@@ -1,0 +1,35 @@
+.changeset/plugin-calendar-oauth-refresh.md
+  s_6eb8d20a15fb15::t_18c2183b44805b 1-5
+plugins/utils/calendar/README.md
+  s_6eb8d20a15fb15::t_9e27042faf0098 3,11,22,27,32,35-37,41-42,44-50,53-98,104-105
+plugins/utils/calendar/package.json
+  s_6eb8d20a15fb15::t_9ae0f2dfdac544 3,21-22,30-31
+plugins/utils/calendar/src/config.ts
+  s_6eb8d20a15fb15::t_87cb93f3c95e8e 30-51,55-80
+plugins/utils/calendar/src/index.ts
+  s_6eb8d20a15fb15::t_cef08a73a4e299 25-39,61-65,67-70,72,75-78,80-83,86
+plugins/utils/calendar/src/oauth-auth.ts
+  s_6eb8d20a15fb15::t_8bbf3b37e3a576 1-145
+plugins/utils/calendar/src/oauth.ts
+  s_6eb8d20a15fb15::t_e44f6bd9036bc4 2-3,11,14,16,20-21,23,45-95,100-114,120,128-130,141,148,151,153-155,174-182,189-204,210-211,216-224,235,252-255,261-262
+plugins/utils/calendar/src/token-manager.ts
+  s_6eb8d20a15fb15::t_f827951800aeca 1-261
+plugins/utils/calendar/tests/oauth-token.test.ts
+  s_6eb8d20a15fb15::t_8f8f1672cdd901 1-209
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "65e01ee8151ee69243951a5e3f8e8cf6abf187e9",
+  "prompts": {},
+  "sessions": {
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
