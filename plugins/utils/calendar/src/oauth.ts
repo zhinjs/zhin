@@ -8,12 +8,22 @@ import type {
   CreateEventInput,
 } from "./types.js";
 import { formatInZone } from "./time.js";
-import { OAuthTokenManager, type TokenManagerLogger } from "./token-manager.js";
+import {
+  OAuthTokenManager,
+  type AuthorizationLostListener,
+  type RefreshTokenStore,
+  type TokenManagerLogger,
+} from "./token-manager.js";
 
 export interface OAuthCalendarOptions {
   readonly clientId: string;
   readonly clientSecret?: string;
-  readonly refreshToken: string;
+  /** Fallback refresh token from config/env. */
+  readonly refreshToken?: string;
+  readonly tokenStore?: RefreshTokenStore;
+  readonly onAuthorizationLost?: AuthorizationLostListener;
+  /** Use an existing manager (shared with the chat auth flow) instead of creating one. */
+  readonly tokenManager?: OAuthTokenManager;
   readonly calendarId: string;
   readonly timezone: string;
   readonly tenant?: string;
@@ -97,20 +107,24 @@ export function createGoogleCalendarProvider(
   options: OAuthCalendarOptions
 ): CalendarProvider {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const manager = new OAuthTokenManager({
-    provider: "google",
-    clientId: options.clientId,
-    clientSecret: options.clientSecret,
-    initialRefreshToken: options.refreshToken,
-    tokenFile: options.tokenFile,
-    fetchImpl,
-    logger: options.logger,
-  });
+  const manager =
+    options.tokenManager ??
+    new OAuthTokenManager({
+      provider: "google",
+      clientId: options.clientId,
+      clientSecret: options.clientSecret,
+      initialRefreshToken: options.refreshToken,
+      tokenFile: options.tokenFile,
+      fetchImpl,
+      logger: options.logger,
+      tokenStore: options.tokenStore,
+      onAuthorizationLost: options.onAuthorizationLost,
+    });
   const calendarId = encodeURIComponent(options.calendarId.trim() || "primary");
   let hydrated = false;
   async function ensureHydrated(): Promise<void> {
     if (hydrated) return;
-    await manager.hydrateFromFile();
+    await manager.hydrate();
     hydrated = true;
   }
 
@@ -190,21 +204,25 @@ export function createMicrosoftCalendarProvider(
   options: OAuthCalendarOptions
 ): CalendarProvider {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const manager = new OAuthTokenManager({
-    provider: "microsoft",
-    clientId: options.clientId,
-    clientSecret: options.clientSecret,
-    tenant: options.tenant,
-    initialRefreshToken: options.refreshToken,
-    tokenFile: options.tokenFile,
-    fetchImpl,
-    logger: options.logger,
-  });
+  const manager =
+    options.tokenManager ??
+    new OAuthTokenManager({
+      provider: "microsoft",
+      clientId: options.clientId,
+      clientSecret: options.clientSecret,
+      tenant: options.tenant,
+      initialRefreshToken: options.refreshToken,
+      tokenFile: options.tokenFile,
+      fetchImpl,
+      logger: options.logger,
+      tokenStore: options.tokenStore,
+      onAuthorizationLost: options.onAuthorizationLost,
+    });
   const base = microsoftCalendarBase(options.calendarId);
   let hydrated = false;
   async function ensureHydrated(): Promise<void> {
     if (hydrated) return;
-    await manager.hydrateFromFile();
+    await manager.hydrate();
     hydrated = true;
   }
 

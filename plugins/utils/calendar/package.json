@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./lib/index.js",
   "types": "./lib/index.d.ts",
+  "bin": {
+    "zhin-calendar-auth": "./lib/cli/auth.js"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -15,11 +18,12 @@
   },
   "files": [
     "plugin.js",
+    "commands",
     "src",
     "lib",
     "skills",
     "README.md",
-    "scripts"
+    "CHANGELOG.md"
   ],
   "scripts": {
     "build": "tsc",
@@ -28,7 +32,7 @@
     "prepublishOnly": "pnpm run build",
     "prepack": "pnpm run build && node ../../../scripts/build-plugin-runtime-entries.mjs",
     "postpack": "node ../../../scripts/build-plugin-runtime-entries.mjs --clean",
-    "auth": "tsx scripts/auth.ts"
+    "auth": "tsx src/cli/auth.ts"
   },
   "keywords": [
     "zhin",
@@ -44,9 +48,11 @@
     "url": "https://github.com/lc-cn"
   },
   "dependencies": {
+    "@zhin.js/host-http": "workspace:*",
     "@zhin.js/im-contract": "workspace:*"
   },
   "devDependencies": {
+    "@zhin.js/command": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
     "typescript": "^6.0.3",
@@ -55,12 +61,16 @@
     "zod": "^4.4.3"
   },
   "peerDependencies": {
+    "@zhin.js/command": "workspace:^",
     "@zhin.js/skill": "workspace:^",
     "@zhin.js/tool": "workspace:^",
     "zhin.js": "workspace:^",
     "zod": "^4.0.0"
   },
   "peerDependenciesMeta": {
+    "@zhin.js/command": {
+      "optional": true
+    },
     "@zhin.js/skill": {
       "optional": true
     },
@@ -90,6 +100,10 @@
     "engine": "^1.0.0",
     "runtime": "trusted",
     "features": [
+      {
+        "package": "@zhin.js/command",
+        "api": "^1.0.0"
+      },
       {
         "package": "@zhin.js/tool",
         "api": "^1.0.0"

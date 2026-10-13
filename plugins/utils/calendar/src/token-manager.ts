@@ -18,13 +18,34 @@ export interface TokenManagerLogger {
   warn(message: string): void;
 }
 
+/** Persistent storage for the refresh token (e.g. zhin plugin database state). */
+export interface RefreshTokenStore {
+  load(): Promise<string | undefined>;
+  save(refreshToken: string): Promise<void>;
+}
+
+export type AuthorizationLostListener = (
+  provider: OAuthProviderKind,
+  message: string
+) => void | Promise<void>;
+
+/** Chat command that (re-)authorizes a provider; shown in user-facing errors. */
+export function authCommandFor(provider: OAuthProviderKind): string {
+  return `calendar auth ${provider}`;
+}
+
 export interface TokenManagerOptions {
   readonly provider: OAuthProviderKind;
   readonly clientId: string;
   /** Optional for Microsoft public/native clients. Required for Google. */
   readonly clientSecret?: string;
   readonly tenant?: string;
-  readonly initialRefreshToken: string;
+  /** Fallback refresh token from config/env; the token store wins when it has a value. */
+  readonly initialRefreshToken?: string;
+  /** Refresh token persisted by the chat authorization flow. */
+  readonly tokenStore?: RefreshTokenStore;
+  /** Called once when the refresh token is rejected (invalid_grant). */
+  readonly onAuthorizationLost?: AuthorizationLostListener;
   /**
    * Optional path to persist rotated refresh tokens (JSON).
    * When unset, rotation only logs a warning (update env manually).
@@ -68,18 +89,15 @@ export class OAuthTokenManager {
   #accessToken = "";
   #expiresAt = 0;
   #inflight: Promise<string> | undefined;
+  readonly #tokenStore: RefreshTokenStore | undefined;
+  readonly #onAuthorizationLost: AuthorizationLostListener | undefined;
+  #authorizationLostMessage = "";
 
   constructor(options: TokenManagerOptions) {
     if (!options.clientId.trim()) {
       throw new OAuthTokenError(
         "config",
         `${options.provider}: 缺少 client_id`
-      );
-    }
-    if (!options.initialRefreshToken.trim()) {
-      throw new OAuthTokenError(
-        "config",
-        `${options.provider}: 缺少 refresh_token`
       );
     }
     if (options.provider === "google" && !options.clientSecret?.trim()) {
@@ -96,7 +114,51 @@ export class OAuthTokenManager {
       warn: (message) => console.warn(message),
     };
     this.#skewMs = options.skewMs ?? DEFAULT_SKEW_MS;
-    this.#refreshToken = options.initialRefreshToken.trim();
+    this.#refreshToken = (options.initialRefreshToken ?? "").trim();
+    this.#tokenStore = options.tokenStore;
+    this.#onAuthorizationLost = options.onAuthorizationLost;
+  }
+
+  get provider(): OAuthProviderKind {
+    return this.#provider;
+  }
+
+  /** Whether a refresh token is available (stored or from config). */
+  get hasRefreshToken(): boolean {
+    return this.#refreshToken !== "";
+  }
+
+  /** Whether the last refresh attempt was rejected with invalid_grant. */
+  get authorizationLost(): boolean {
+    return this.#authorizationLostMessage !== "";
+  }
+
+  /**
+   * Loads persisted tokens: token_file overlay first, then the token store,
+   * which takes precedence over config/env because it is written by chat auth.
+   */
+  async hydrate(): Promise<void> {
+    await this.hydrateFromFile();
+    if (!this.#tokenStore) {
+      return;
+    }
+    const storedRefreshToken = (await this.#tokenStore.load())?.trim() ?? "";
+    if (storedRefreshToken) {
+      this.#refreshToken = storedRefreshToken;
+    }
+  }
+
+  /** Replaces the refresh token after a successful chat authorization. */
+  setRefreshToken(refreshToken: string): void {
+    this.#refreshToken = refreshToken.trim();
+    this.#accessToken = "";
+    this.#expiresAt = 0;
+    this.#authorizationLostMessage = "";
+  }
+
+  /** Forgets all tokens held in memory (used by `calendar logout`). */
+  clearTokens(): void {
+    this.setRefreshToken("");
   }
 
   /** Current refresh token (may change after Microsoft rotation). */
@@ -157,6 +219,22 @@ export class OAuthTokenManager {
   }
 
   async #refresh(): Promise<string> {
+    if (this.#authorizationLostMessage) {
+      throw new OAuthTokenError(
+        "invalid_grant",
+        this.#authorizationLostMessage
+      );
+    }
+    if (!this.#refreshToken) {
+      throw new OAuthTokenError(
+        "not_authorized",
+        `${
+          this.#provider
+        }: 日历尚未授权。请 master 在聊天中发送「${authCommandFor(
+          this.#provider
+        )}」完成授权。`
+      );
+    }
     const body = new URLSearchParams({
       client_id: this.#clientId,
       refresh_token: this.#refreshToken,
@@ -189,14 +267,14 @@ export class OAuthTokenManager {
       const errCode = String(data.error ?? "");
       const errDesc = String(data.error_description ?? text.slice(0, 200));
       if (errCode === "invalid_grant" || /invalid_grant/i.test(errDesc)) {
-        throw new OAuthTokenError(
-          "invalid_grant",
-          `${
-            this.#provider
-          }: refresh_token 已失效或被撤销（invalid_grant）。请重新运行 pnpm --filter @zhin.js/plugin-calendar auth ${
-            this.#provider
-          }，并把新的 refresh_token 写回环境变量。详情：${errDesc}`
-        );
+        const message = `${
+          this.#provider
+        }: 日历授权已失效或被撤销（invalid_grant）。请 master 在聊天中发送「${authCommandFor(
+          this.#provider
+        )}」重新授权。详情：${errDesc}`;
+        this.#authorizationLostMessage = message;
+        await this.#notifyAuthorizationLost(message);
+        throw new OAuthTokenError("invalid_grant", message);
       }
       throw new OAuthTokenError(
         errCode || "http_error",
@@ -221,7 +299,14 @@ export class OAuthTokenManager {
       typeof data.refresh_token === "string" ? data.refresh_token.trim() : "";
     if (rotated && rotated !== this.#refreshToken) {
       this.#refreshToken = rotated;
-      if (this.#tokenFile) {
+      if (this.#tokenStore) {
+        await this.#tokenStore.save(rotated);
+        this.#logger.warn(
+          `[calendar] ${
+            this.#provider
+          }: 提供方返回了新的 refresh_token，已写入插件数据库`
+        );
+      } else if (this.#tokenFile) {
         await this.#persist();
         this.#logger.warn(
           `[calendar] ${
@@ -242,6 +327,18 @@ export class OAuthTokenManager {
     }
 
     return this.#accessToken;
+  }
+
+  async #notifyAuthorizationLost(message: string): Promise<void> {
+    if (!this.#onAuthorizationLost) {
+      return;
+    }
+    try {
+      await this.#onAuthorizationLost(this.#provider, message);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      this.#logger.warn(`[calendar] 授权失效通知发送失败：${reason}`);
+    }
   }
 
   async #persist(): Promise<void> {

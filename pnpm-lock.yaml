@@ -3444,10 +3444,16 @@ importers:
 
   plugins/utils/calendar:
     dependencies:
+      '@zhin.js/host-http':
+        specifier: workspace:*
+        version: link:../../../packages/host/http
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../../../packages/im/im-contract
     devDependencies:
+      '@zhin.js/command':
+        specifier: workspace:*
+        version: link:../../../packages/im/command
       '@zhin.js/skill':
         specifier: workspace:*
         version: link:../../../packages/im/skill

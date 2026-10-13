@@ -1,6 +1,7 @@
 import { defineAgentTool } from "@zhin.js/tool";
 import { z } from "zod";
 import { calendarRuntimeToken } from "../../../../src/runtime.js";
+import { runCalendarTool } from "../../../../src/tool-errors.js";
 import { parseDateTimeInZone } from "../../../../src/time.js";
 
 export default defineAgentTool({
@@ -19,20 +20,22 @@ export default defineAgentTool({
     all_day: z.boolean().optional(),
   }),
   async execute(input, context) {
-    const runtime = context.use(calendarRuntimeToken);
-    if (!runtime.provider) return "日历未启用：请先配置 provider 与凭据";
-    const timezone = runtime.config.timezone;
-    const event = await runtime.provider.createEvent(
-      {
-        title: input.title,
-        start: parseDateTimeInZone(input.start, timezone),
-        end: parseDateTimeInZone(input.end, timezone),
-        location: input.location,
-        description: input.description,
-        all_day: input.all_day,
-      },
-      context.signal
-    );
-    return `已创建事件 [${event.id}]\n${event.title}\n${event.start} → ${event.end}（${timezone}）`;
+    return runCalendarTool(async () => {
+      const runtime = context.use(calendarRuntimeToken);
+      if (!runtime.provider) return "日历未启用：请先配置 provider 与凭据";
+      const timezone = runtime.config.timezone;
+      const event = await runtime.provider.createEvent(
+        {
+          title: input.title,
+          start: parseDateTimeInZone(input.start, timezone),
+          end: parseDateTimeInZone(input.end, timezone),
+          location: input.location,
+          description: input.description,
+          all_day: input.all_day,
+        },
+        context.signal
+      );
+      return `已创建事件 [${event.id}]\n${event.title}\n${event.start} → ${event.end}（${timezone}）`;
+    });
   },
 });
