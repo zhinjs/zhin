@@ -1,0 +1,22 @@
+plugins/adapters/icqq/src/protocol.ts
+  s_6562bcb6cc0539::t_dda94194c241c6 409
+plugins/adapters/icqq/tests/icqq-outbound-images.test.ts
+  s_6562bcb6cc0539::t_0ed6d0fc5d6f1f 18,51-67
+  s_6562bcb6cc0539::t_2f636bccd6e8a1 68-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ac1305426968b5ad4f444039ab834d6abee5a108",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
