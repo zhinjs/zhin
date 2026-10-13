@@ -10,11 +10,11 @@ import {
   createSnapshotWorkroomProfileGenerationView,
   digestWorkroomProfileCatalogProject,
   installWorkroomProfileAuthorityResources,
-} from '../../src/plugin-runtime/workroom-profile-authority-composition.js';
+} from '../../src/workroom-runtime/workroom-profile-authority-composition.js';
 import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
-import { workroomProjectProfileRegistryToken } from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
-import { workroomDynamicPlanningPolicyToken } from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
-import { createWorkroomProfileOverlay } from '../../src/plugin-runtime/workroom-profile-authority-runtime.js';
+import { workroomProjectProfileRegistryToken } from '../../src/workroom-runtime/workroom-assignment-authority-provider.js';
+import { workroomDynamicPlanningPolicyToken } from '../../src/workroom-runtime/workroom-dynamic-planning-provider.js';
+import { createWorkroomProfileOverlay } from '../../src/workroom-runtime/workroom-profile-authority-runtime.js';
 
 const sha = (value: string): string => `sha256:${value.repeat(64).slice(0, 64)}`;
 

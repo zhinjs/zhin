@@ -2,7 +2,7 @@ import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
 import {
   installWorkroomPortfolioControlWorker,
   portfolioControlWorkerToken,
-} from '../../src/plugin-runtime/workroom-portfolio-control-composition.js';
+} from '../../src/workroom-runtime/workroom-portfolio-control-composition.js';
 import { MemoryPortfolioControlOutboxRepository } from '../../src/portfolio/capacity-control-outbox.js';
 import { vi } from 'vitest';
 

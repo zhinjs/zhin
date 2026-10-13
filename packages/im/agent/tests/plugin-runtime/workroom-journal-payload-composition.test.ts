@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createGenerationOwnedWorkroomJournalPayloadPort,
-} from '../../src/plugin-runtime/workroom-journal-payload-composition.js';
+} from '../../src/workroom-runtime/workroom-journal-payload-composition.js';
 import {
   MemoryWorkroomJournalPayloadPort,
   WorkroomJournalPayloadAuthorityUnavailableError,

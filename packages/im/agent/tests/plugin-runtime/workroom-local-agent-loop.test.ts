@@ -3,7 +3,7 @@ import {
   DurableReportLocalModelExecutionPort,
   type WorkroomLocalAgentTurnPort,
   type WorkroomEvidencePayloadWriterPort,
-} from '../../src/plugin-runtime/workroom-local-agent-loop.js';
+} from '../../src/workroom-runtime/workroom-local-agent-loop.js';
 import type { DeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
 

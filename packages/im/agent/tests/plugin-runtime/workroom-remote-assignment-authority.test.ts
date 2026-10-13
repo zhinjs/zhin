@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createGenerationWorkroomRemoteAssignmentAuthority,
-} from '../../src/plugin-runtime/workroom-remote-assignment-authority.js';
+} from '../../src/workroom-runtime/workroom-remote-assignment-authority.js';
 
 describe('generation Remote Assignment authority proxy', () => {
   it('fails closed without a current Profile authority and resolves every call anew', async () => {

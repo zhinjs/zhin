@@ -8,7 +8,7 @@ import {
   JournalWorkroomRunProfilePinAuthority,
   KernelPlanAdmissionRunProfilePinWriter,
   WORKROOM_KERNEL_PLAN_ADMISSION_PRINCIPAL,
-} from '../../src/plugin-runtime/workroom-run-profile-pin-authority.js';
+} from '../../src/workroom-runtime/workroom-run-profile-pin-authority.js';
 
 const SHA = `sha256:${'a'.repeat(64)}`;
 

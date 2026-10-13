@@ -10,10 +10,10 @@ import type {
 } from '../../src/data-governance/payload-lifecycle.js';
 import {
   ActivatableWorkroomDataGovernanceStorage,
-} from '../../src/plugin-runtime/workroom-data-governance-storage.js';
+} from '../../src/workroom-runtime/workroom-data-governance-storage.js';
 import type {
   WorkroomDataGovernancePayloadVaultPort,
-} from '../../src/plugin-runtime/workroom-data-governance-runtime.js';
+} from '../../src/workroom-runtime/workroom-data-governance-runtime.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 describe('Workroom Data Governance storage cutover', () => {

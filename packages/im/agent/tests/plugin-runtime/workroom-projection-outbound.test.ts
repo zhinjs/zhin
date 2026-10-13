@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { OutboundMessageService } from '@zhin.js/core/runtime';
 import {
   createWorkroomProjectionOutboundMessageServicePort,
-} from '../../src/plugin-runtime/workroom-projection-outbound.js';
+} from '../../src/workroom-runtime/workroom-projection-outbound.js';
 import type { WorkroomProjectionOutboxItem } from '../../src/workroom/projection-outbox/index.js';
 
 describe('Workroom Projection unified outbound', () => {

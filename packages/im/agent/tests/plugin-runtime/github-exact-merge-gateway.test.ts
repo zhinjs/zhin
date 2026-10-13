@@ -1,4 +1,4 @@
-import { GitHubExactMergeInspector, WorkroomExactMergeGateway } from '../../src/plugin-runtime/github-exact-merge-gateway.js';
+import { GitHubExactMergeInspector, WorkroomExactMergeGateway } from '../../src/workroom-runtime/github-exact-merge-gateway.js';
 import { createWorkroomEffectIntent, MemoryWorkroomEffectJournal, WorkroomEffectLedger } from '../../src/workroom/effect-ledger.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 

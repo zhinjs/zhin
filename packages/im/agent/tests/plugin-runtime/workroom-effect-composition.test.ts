@@ -10,11 +10,11 @@ import {
   installWorkroomEffectResources,
   workroomEffectIntentWriterToken,
   workroomEffectRuntimeToken,
-} from '../../src/plugin-runtime/workroom-effect-composition.js';
+} from '../../src/workroom-runtime/workroom-effect-composition.js';
 import {
   workroomGitBranchProtectionAuthorityToken,
   workroomGitWorkspaceLeaseAuthorityToken,
-} from '../../src/plugin-runtime/workroom-effect-production.js';
+} from '../../src/workroom-runtime/workroom-effect-production.js';
 
 describe('standard Workroom Effect composition', () => {
   it('starts without a Git provider and durably blocks the exact Effect without churn', async () => {

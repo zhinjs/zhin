@@ -4,7 +4,7 @@ import { createAssignmentExecutionEnvelope, type AssignmentExecutorPort } from '
 import type { WorkroomLocalAssignmentAuthorityPort } from '../../src/workroom/local-assignment-issuance.js';
 import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
-import { WorkroomLocalAssignmentRuntime } from '../../src/plugin-runtime/workroom-local-assignment-runtime.js';
+import { WorkroomLocalAssignmentRuntime } from '../../src/workroom-runtime/workroom-local-assignment-runtime.js';
 
 const SHA_A = `sha256:${'a'.repeat(64)}`;
 const SHA_B = `sha256:${'b'.repeat(64)}`;

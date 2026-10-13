@@ -13,7 +13,7 @@ import {
   WorkroomProjectionRuntime,
   WorkroomProjectionScheduler,
   workroomProjectionCatalogBindingDigest,
-} from '../../src/plugin-runtime/workroom-projection-runtime.js';
+} from '../../src/workroom-runtime/workroom-projection-runtime.js';
 import { createTestProjectionGovernance } from '../workroom/projection-governance-fixture.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import type { PortfolioSponsorProjection } from '../../src/portfolio/sponsor-projection.js';

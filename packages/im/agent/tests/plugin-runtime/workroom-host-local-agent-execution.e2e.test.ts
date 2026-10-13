@@ -3,8 +3,8 @@ import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime
 import {
   bindWorkroomCapabilityRealization,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
-import { createAgentCoreWorkroomLocalTurnPort } from '../../src/plugin-runtime/workroom-local-agent-core-adapter.js';
-import { DurableReportLocalModelExecutionPort } from '../../src/plugin-runtime/workroom-local-agent-loop.js';
+import { createAgentCoreWorkroomLocalTurnPort } from '../../src/workroom-runtime/workroom-local-agent-core-adapter.js';
+import { DurableReportLocalModelExecutionPort } from '../../src/workroom-runtime/workroom-local-agent-loop.js';
 import type { AgentCore } from '../../src/core/agent-core.js';
 import type { AgentLoopTurnInput } from '../../src/core/agent-core-run.js';
 import type { ZhinAgentPrivate } from '../../src/internal/agent-host.js';
@@ -15,7 +15,7 @@ import {
 import {
   LocalAssignmentExecutor,
   type LocalAssignmentCapabilityProjectionPort,
-} from '../../src/plugin-runtime/workroom-local-assignment-executor.js';
+} from '../../src/workroom-runtime/workroom-local-assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySnapshot,

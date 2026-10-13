@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createFileWorkroomDataLifecycleRuntime } from '../../src/plugin-runtime/workroom-data-lifecycle-composition.js';
+import { createFileWorkroomDataLifecycleRuntime } from '../../src/workroom-runtime/workroom-data-lifecycle-composition.js';
 
 describe('createFileWorkroomDataLifecycleRuntime', () => {
   it('returns only narrow control/worker/overdue ports and is generation-cancelled', async () => {

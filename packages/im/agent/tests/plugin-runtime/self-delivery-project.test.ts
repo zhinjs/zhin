@@ -5,9 +5,9 @@ import { describe, it, expect, vi } from 'vitest';
 import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
 import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
-import { createSelfDeliveryProjectForHost } from '../../src/plugin-runtime/self-delivery-project-composition.js';
+import { createSelfDeliveryProjectForHost } from '../../src/workroom-runtime/self-delivery-project-composition.js';
 import { digestWorkroomCatalogProjectBinding, type WorkroomDefinition } from '../../src/workroom/catalog-definition.js';
-import { SelfDeliveryProject, createSelfDeliveryGitHubIssueReader, type SelfDeliveryProjectPorts } from '../../src/plugin-runtime/self-delivery-project.js';
+import { SelfDeliveryProject, createSelfDeliveryGitHubIssueReader, type SelfDeliveryProjectPorts } from '../../src/workroom-runtime/self-delivery-project.js';
 
 function ports(): SelfDeliveryProjectPorts {
   const hash = `sha256:${'a'.repeat(64)}`;

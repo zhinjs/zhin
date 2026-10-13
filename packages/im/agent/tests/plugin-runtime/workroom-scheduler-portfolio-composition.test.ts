@@ -2,24 +2,24 @@ import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import {
   installWorkroomSchedulerPortfolioDispatchResources,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-composition.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-composition.js';
 import {
   workroomSchedulerAssignmentRouteRegistryToken,
-} from '../../src/plugin-runtime/workroom-scheduler-route-registry.js';
+} from '../../src/workroom-runtime/workroom-scheduler-route-registry.js';
 import {
   workroomSchedulerPortfolioRequestAuthorityToken,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-supply.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-supply.js';
 import {
   workroomSchedulerCapacityRequestToken,
-} from '../../src/plugin-runtime/workroom-portfolio-capacity.js';
+} from '../../src/workroom-runtime/workroom-portfolio-capacity.js';
 import {
   workroomSchedulerDispatchSupplyToken,
-} from '../../src/plugin-runtime/workroom-scheduler-runtime.js';
+} from '../../src/workroom-runtime/workroom-scheduler-runtime.js';
 import {
   workroomSchedulerPortfolioOpaqueHeadId,
   workroomSchedulerPortfolioPayloadDigest,
   workroomSchedulerPortfolioRequestId,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-contract.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-contract.js';
 import { createWorkroomSchedulerPolicySnapshot, decideWorkroomSchedule } from '../../src/workroom/workroom-scheduler.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 

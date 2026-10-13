@@ -6,14 +6,14 @@ import {
   FileWorkroomAcceptanceProjectionRepository,
   FileWorkroomKernelRiskHeaderRepository,
   type WorkroomAcceptanceProjectionPayloadPort,
-} from '../../src/plugin-runtime/workroom-acceptance-fact-providers.js';
+} from '../../src/workroom-runtime/workroom-acceptance-fact-providers.js';
 import {
   createGenerationRemoteContextReleaseCapability,
   PinnedProfileWorkroomAcceptanceProjectionSource,
   WorkroomAcceptanceProfileProjectionRuntime,
   WorkroomArtifactRiskHeaderResolver,
   WorkroomAuthenticatedArtifactRiskProducer,
-} from '../../src/plugin-runtime/workroom-acceptance-internal-providers.js';
+} from '../../src/workroom-runtime/workroom-acceptance-internal-providers.js';
 import { compileWorkroomProfile, type CapabilityPack } from '../../src/workroom/profile-compiler.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import {

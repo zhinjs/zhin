@@ -12,7 +12,7 @@ import {
 import {
   WorkroomDataGovernanceAuthorityWriter,
   type ProjectDataGovernanceAuthorityCandidate,
-} from '../../src/plugin-runtime/workroom-data-governance-authority-writer.js';
+} from '../../src/workroom-runtime/workroom-data-governance-authority-writer.js';
 import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 

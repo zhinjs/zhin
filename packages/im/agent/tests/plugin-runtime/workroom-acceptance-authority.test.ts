@@ -3,7 +3,7 @@ import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   createGenerationWorkroomAcceptanceAuthority,
   workroomAcceptanceAuthorityToken,
-} from '../../src/plugin-runtime/workroom-acceptance-authority.js';
+} from '../../src/workroom-runtime/workroom-acceptance-authority.js';
 import type { WorkroomAcceptanceAuthorizationInput } from '../../src/workroom/acceptance-control.js';
 
 describe('generation Workroom acceptance authority', () => {

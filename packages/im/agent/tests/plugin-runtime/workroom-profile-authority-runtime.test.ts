@@ -9,12 +9,12 @@ import {
   createWorkroomProfileOverlay,
   type WorkroomProfileAuthorityDecision,
   type WorkroomProfileAuthorityRequest,
-} from '../../src/plugin-runtime/workroom-profile-authority-runtime.js';
+} from '../../src/workroom-runtime/workroom-profile-authority-runtime.js';
 import {
   createWorkroomDynamicPlanningGenerationSnapshot,
   createWorkroomDynamicPlanningPolicySnapshot,
   type WorkroomDynamicPlanningPolicyRequest,
-} from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
+} from '../../src/workroom-runtime/workroom-dynamic-planning-provider.js';
 import { FileProjectProfileJournal } from '../../src/workroom/file-profile-journal.js';
 import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
 import {

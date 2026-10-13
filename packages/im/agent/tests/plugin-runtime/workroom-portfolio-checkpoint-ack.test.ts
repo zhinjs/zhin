@@ -1,7 +1,7 @@
 import {
   PortfolioCheckpointAckPendingError,
   WorkroomPortfolioCheckpointAckAdapter,
-} from '../../src/plugin-runtime/workroom-portfolio-checkpoint-ack.js';
+} from '../../src/workroom-runtime/workroom-portfolio-checkpoint-ack.js';
 import {
   createPortfolioControlItem,
   createPortfolioControlOutboxEvent,

@@ -8,10 +8,10 @@ import {
 } from '../../src/data-governance/governance-authority-repository.js';
 import {
   createWorkroomDataGovernanceBootstrapCandidate,
-} from '../../src/plugin-runtime/workroom-data-governance-bootstrap.js';
+} from '../../src/workroom-runtime/workroom-data-governance-bootstrap.js';
 import {
   WorkroomDataGovernanceAuthorityWriter,
-} from '../../src/plugin-runtime/workroom-data-governance-authority-writer.js';
+} from '../../src/workroom-runtime/workroom-data-governance-authority-writer.js';
 import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { createCatalogGovernedWorkroomProjectionAuthority } from '../../src/workroom/runtime.js';
 

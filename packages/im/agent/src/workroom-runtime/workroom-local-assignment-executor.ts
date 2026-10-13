@@ -13,7 +13,7 @@ import {
   type DeferredCapabilityPlan,
   type WorkroomCapabilityRealization,
   type WorkroomDeferredCapabilityPlanOptions,
-} from './deferred-capability-plan.js';
+} from '../plugin-runtime/deferred-capability-plan.js';
 import type { WorkroomRoleCapabilitySnapshot } from '../workroom/role-capability-snapshot.js';
 
 export interface LocalModelProgressEvent {

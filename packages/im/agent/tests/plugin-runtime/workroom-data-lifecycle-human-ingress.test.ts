@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   createWorkroomDataLifecycleHumanIngressControlPort,
-} from '../../src/plugin-runtime/workroom-data-lifecycle-human-ingress.js';
-import type { WorkroomDataLifecycleConsoleControlPort } from '../../src/plugin-runtime/workroom-data-lifecycle-console.js';
+} from '../../src/workroom-runtime/workroom-data-lifecycle-human-ingress.js';
+import type { WorkroomDataLifecycleConsoleControlPort } from '../../src/workroom-runtime/workroom-data-lifecycle-console.js';
 import type {
   HumanIngressTypedControlInput,
   HumanIngressTypedControlPort,

@@ -12,7 +12,7 @@ import {
   type LocalAssignmentCapabilityProjectionPort,
   type LocalModelExecutionEvent,
   type LocalModelExecutionPort,
-} from '../../src/plugin-runtime/workroom-local-assignment-executor.js';
+} from '../../src/workroom-runtime/workroom-local-assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
   createWorkroomRoleCapabilitySnapshot,

@@ -3,7 +3,7 @@ import {
   createWorkroomReviewerVerdictCommandPort,
   ProfileWorkroomAcceptanceAuthority,
   WorkroomReviewerViewReader,
-} from '../../src/plugin-runtime/workroom-reviewer-authority-runtime.js';
+} from '../../src/workroom-runtime/workroom-reviewer-authority-runtime.js';
 import type { WorkroomRunState } from '../../src/workroom/kernel-contracts.js';
 
 describe('Workroom Reviewer and Sponsor production authority', () => {

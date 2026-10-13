@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   PinnedProfileWorkroomSchedulerPortfolioRequestAuthority,
   workroomSchedulerPortfolioScopeBindingDigest,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-request-authority.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-request-authority.js';
 import {
   workroomSchedulerPortfolioOpaqueHeadId,
   workroomSchedulerPortfolioPayloadDigest,
   workroomSchedulerPortfolioRequestId,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-contract.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-contract.js';
 import { createPortfolioPolicySnapshot } from '../../src/portfolio/portfolio-journal.js';
 import {
   createWorkroomSchedulerPolicySnapshot,

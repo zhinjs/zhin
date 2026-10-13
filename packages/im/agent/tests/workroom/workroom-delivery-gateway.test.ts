@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { vi } from 'vitest';
 import { FileWorkroomEffectJournal } from '../../src/workroom/file-effect-ledger.js';
 import { WorkroomEffectLedger, createWorkroomEffectIntent, type WorkroomEffectAuthorizationPort } from '../../src/workroom/effect-ledger.js';
-import { WorkroomEffectRuntime } from '../../src/plugin-runtime/workroom-effect-runtime.js';
+import { WorkroomEffectRuntime } from '../../src/workroom-runtime/workroom-effect-runtime.js';
 import {
   WorkroomDeliveryGateway, type WorkroomDeliveryProviderPort, type WorkroomDeliveryObservation,
   type WorkroomDeliveryRequest,
-} from '../../src/plugin-runtime/workroom-delivery-gateway.js';
+} from '../../src/workroom-runtime/workroom-delivery-gateway.js';
 
 const sha = (value: string) => `sha256:${value.repeat(64)}`;
 

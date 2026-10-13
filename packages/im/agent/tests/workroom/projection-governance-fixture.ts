@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { MaterializedDisclosureManifest } from '../../src/data-governance/disclosure-manifest.js';
 import type {
   GovernedDisclosureManifestRequest,
-} from '../../src/plugin-runtime/workroom-data-governance-runtime.js';
+} from '../../src/workroom-runtime/workroom-data-governance-runtime.js';
 import type {
   WorkroomProjectionGovernancePort,
   WorkroomProjectionOutboxItem,

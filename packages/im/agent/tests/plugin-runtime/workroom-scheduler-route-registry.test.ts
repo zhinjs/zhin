@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   GenerationOwnedWorkroomSchedulerAssignmentRouteRegistry,
-} from '../../src/plugin-runtime/workroom-scheduler-route-registry.js';
+} from '../../src/workroom-runtime/workroom-scheduler-route-registry.js';
 import {
   createWorkroomSchedulerPolicySnapshot,
   decideWorkroomSchedule,

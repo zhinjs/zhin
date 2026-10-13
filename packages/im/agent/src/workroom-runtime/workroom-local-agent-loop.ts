@@ -1,5 +1,5 @@
 import { createToken } from '@zhin.js/plugin-runtime';
-import type { DeferredCapabilityPlan } from './deferred-capability-plan.js';
+import type { DeferredCapabilityPlan } from '../plugin-runtime/deferred-capability-plan.js';
 import type {
   LocalModelExecutionPort,
   LocalModelExecutionRequest,

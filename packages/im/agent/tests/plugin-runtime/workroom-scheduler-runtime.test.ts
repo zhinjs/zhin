@@ -5,7 +5,7 @@ import {
   WorkroomSchedulerDurablyBlockedError,
   WorkroomSchedulerAssignmentRouteUnavailableError,
   RemoteWorkroomSchedulerDispatchSupply,
-} from '../../src/plugin-runtime/workroom-scheduler-runtime.js';
+} from '../../src/workroom-runtime/workroom-scheduler-runtime.js';
 import { createWorkroomSchedulerPolicySnapshot } from '../../src/workroom/workroom-scheduler.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 

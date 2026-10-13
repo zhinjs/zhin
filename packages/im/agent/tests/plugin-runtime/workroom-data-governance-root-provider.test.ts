@@ -4,7 +4,7 @@ import {
   createWorkroomDataGovernanceRootProviderRequest,
   resolveWorkroomDataGovernanceRootAuthorities,
   workroomDataGovernanceRootProviderToken,
-} from '../../src/plugin-runtime/workroom-data-governance-root-provider.js';
+} from '../../src/workroom-runtime/workroom-data-governance-root-provider.js';
 
 describe('Workroom Data Governance Root provider', () => {
   it('resolves exact generation-bound crypto and governance without snapshot exposure', async () => {

@@ -1,7 +1,7 @@
 import {
   WorkroomPortfolioControlRuntime,
-} from '../../src/plugin-runtime/workroom-portfolio-control-runtime.js';
-import { GenerationOwnedPortfolioCapacityRuntime } from '../../src/plugin-runtime/workroom-portfolio-capacity.js';
+} from '../../src/workroom-runtime/workroom-portfolio-control-runtime.js';
+import { GenerationOwnedPortfolioCapacityRuntime } from '../../src/workroom-runtime/workroom-portfolio-capacity.js';
 import {
   MemoryPortfolioControlOutboxRepository,
   replayPortfolioControlOutbox,
@@ -9,7 +9,7 @@ import {
   type PortfolioControlOutboxItem,
 } from '../../src/portfolio/capacity-control-outbox.js';
 import { vi } from 'vitest';
-import { PortfolioGrantAssignmentCompensatedError } from '../../src/plugin-runtime/workroom-portfolio-grant-assignment.js';
+import { PortfolioGrantAssignmentCompensatedError } from '../../src/workroom-runtime/workroom-portfolio-grant-assignment.js';
 import {
   InMemoryPortfolioJournalRepository,
   createPortfolioPolicySnapshot,

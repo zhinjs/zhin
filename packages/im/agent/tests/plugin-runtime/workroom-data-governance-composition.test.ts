@@ -6,15 +6,15 @@ import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import {
   installWorkroomDataGovernanceResources,
-} from '../../src/plugin-runtime/workroom-data-governance-composition.js';
-import { workroomPlanningDisclosureToken } from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
-import { workroomAssignmentDisclosureManifestAuthorityToken } from '../../src/plugin-runtime/workroom-assignment-authority-grant-runtime.js';
+} from '../../src/workroom-runtime/workroom-data-governance-composition.js';
+import { workroomPlanningDisclosureToken } from '../../src/workroom-runtime/workroom-dynamic-planning-provider.js';
+import { workroomAssignmentDisclosureManifestAuthorityToken } from '../../src/workroom-runtime/workroom-assignment-authority-grant-runtime.js';
 import {
   workroomEvidencePayloadWriterToken,
   workroomTaskReportPayloadToken,
-} from '../../src/plugin-runtime/workroom-local-agent-loop.js';
-import { workroomDisclosureManifestAuthorityToken } from '../../src/plugin-runtime/workroom-data-governance-runtime.js';
-import { workroomAcceptanceProjectionPayloadToken } from '../../src/plugin-runtime/workroom-acceptance-fact-providers.js';
+} from '../../src/workroom-runtime/workroom-local-agent-loop.js';
+import { workroomDisclosureManifestAuthorityToken } from '../../src/workroom-runtime/workroom-data-governance-runtime.js';
+import { workroomAcceptanceProjectionPayloadToken } from '../../src/workroom-runtime/workroom-acceptance-fact-providers.js';
 
 describe('standard Workroom Data Governance composition', () => {
   it('publishes only governed generation ports and durably blocks without Project/KMS authority', async () => {

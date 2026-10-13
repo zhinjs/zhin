@@ -10,18 +10,18 @@ import {
 import {
   CatalogWorkroomPriorityAuthority,
   workroomPriorityAuthorityReference,
-} from '../../src/plugin-runtime/workroom-priority-authority.js';
+} from '../../src/workroom-runtime/workroom-priority-authority.js';
 import {
   WorkroomAssignmentCheckpointDelivery,
   WorkroomPreemptionRuntime,
   type WorkroomPreemptionUnavailableControlPort,
-} from '../../src/plugin-runtime/workroom-preemption-runtime.js';
-import { LocalWorkroomSchedulerDispatchSupply } from '../../src/plugin-runtime/workroom-local-assignment-supply.js';
+} from '../../src/workroom-runtime/workroom-preemption-runtime.js';
+import { LocalWorkroomSchedulerDispatchSupply } from '../../src/workroom-runtime/workroom-local-assignment-supply.js';
 import {
   WorkroomSchedulerRuntime,
   createWorkroomSchedulerKernelCommandPort,
-} from '../../src/plugin-runtime/workroom-scheduler-runtime.js';
-import { WorkroomLocalAssignmentRuntime } from '../../src/plugin-runtime/workroom-local-assignment-runtime.js';
+} from '../../src/workroom-runtime/workroom-scheduler-runtime.js';
+import { WorkroomLocalAssignmentRuntime } from '../../src/workroom-runtime/workroom-local-assignment-runtime.js';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
 import { AssignmentObservationIngress } from '../../src/workroom/assignment-observation-ingress.js';
 import type {

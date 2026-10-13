@@ -3,7 +3,7 @@ import {
   createPortfolioSponsorHumanIngressControlPort,
   portfolioSponsorCommandAuthorityToken,
   portfolioSponsorCommandToken,
-} from '../../src/plugin-runtime/workroom-portfolio-sponsor.js';
+} from '../../src/workroom-runtime/workroom-portfolio-sponsor.js';
 import {
   Scope,
   childPluginId,

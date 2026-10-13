@@ -5,15 +5,15 @@ import {
   defineOverlayPackPromotionDatabaseModel,
   type OverlayPackPromotionDatabase,
   type OverlayPackPromotionDatabaseModel,
-} from '../../src/plugin-runtime/database-overlay-pack-promotion-repository.js';
+} from '../../src/workroom-runtime/database-overlay-pack-promotion-repository.js';
 import {
   MemoryOverlayPackPromotionRepository,
   WorkroomOverlayPackPromotionRuntime,
-} from '../../src/plugin-runtime/workroom-overlay-pack-promotion.js';
+} from '../../src/workroom-runtime/workroom-overlay-pack-promotion.js';
 import {
   createCapabilityPackManifest,
   type CapabilityPackPublication,
-} from '../../src/plugin-runtime/workroom-profile-authority-runtime.js';
+} from '../../src/workroom-runtime/workroom-profile-authority-runtime.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 describe('Database Overlay Pack Promotion repository', () => {
@@ -39,7 +39,7 @@ describe('Database Overlay Pack Promotion repository', () => {
     const record = await source.read('promotion:customer-support');
     expect(record?.status).toBe('published');
     if (!record || record.status !== 'published') throw new Error('fixture promotion was not published');
-    const prepared = await import('../../src/plugin-runtime/workroom-overlay-pack-promotion.js')
+    const prepared = await import('../../src/workroom-runtime/workroom-overlay-pack-promotion.js')
       .then(module => module.preparedOverlayPackPromotionRecord(record));
     await repository.prepare(prepared);
     await repository.markPublished(record);

@@ -7,12 +7,12 @@ import {
   portfolioGrantAssignmentIssuerPreview,
   type PortfolioGrantAssignmentClaim,
   type PortfolioGrantAssignmentIssueResult,
-} from '../../src/plugin-runtime/workroom-portfolio-grant-assignment.js';
+} from '../../src/workroom-runtime/workroom-portfolio-grant-assignment.js';
 import {
   workroomSchedulerPortfolioOpaqueHeadId,
   workroomSchedulerPortfolioPayloadDigest,
   workroomSchedulerPortfolioRequestId,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-contract.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-contract.js';
 import {
   PortfolioAdmissionApplication,
   portfolioCapacityRequestDigest,

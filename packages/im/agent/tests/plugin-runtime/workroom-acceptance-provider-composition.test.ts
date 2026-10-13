@@ -11,8 +11,8 @@ import {
   TypedWorkroomAcceptanceCheckRunner,
   createWorkroomGovernedAcceptanceProjection,
   createWorkroomKernelRiskHeader,
-} from '../../src/plugin-runtime/workroom-acceptance-provider-composition.js';
-import { PinnedWorkroomAcceptancePolicy } from '../../src/plugin-runtime/workroom-risk-acceptance-runtime.js';
+} from '../../src/workroom-runtime/workroom-acceptance-provider-composition.js';
+import { PinnedWorkroomAcceptancePolicy } from '../../src/workroom-runtime/workroom-risk-acceptance-runtime.js';
 import {
   MemoryProjectProfileJournal,
   ProjectProfileRegistry,

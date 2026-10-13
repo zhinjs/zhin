@@ -2,7 +2,7 @@ import {
   createWorkroomDataLifecycleConsoleControl,
   type WorkroomDataLifecycleConsoleAuthorityRequest,
   type WorkroomDataLifecycleSubjectExportAuditRecord,
-} from '../../src/plugin-runtime/workroom-data-lifecycle-console.js';
+} from '../../src/workroom-runtime/workroom-data-lifecycle-console.js';
 import type {
   PayloadLifecycleControlPort,
   PayloadLifecycleState,

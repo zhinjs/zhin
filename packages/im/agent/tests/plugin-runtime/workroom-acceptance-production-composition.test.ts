@@ -6,33 +6,33 @@ import {
   SponsorDecisionWorkroomEffectAuthorizationProjector,
   WorkroomEffectAuthorizationProjectionRuntime,
   installWorkroomAcceptanceResources,
-} from '../../src/plugin-runtime/workroom-acceptance-production-composition.js';
+} from '../../src/workroom-runtime/workroom-acceptance-production-composition.js';
 import {
   createWorkroomGovernedAcceptanceProjection,
   createWorkroomKernelRiskHeader,
-} from '../../src/plugin-runtime/workroom-acceptance-provider-composition.js';
+} from '../../src/workroom-runtime/workroom-acceptance-provider-composition.js';
 import {
   workroomAcceptancePolicyDecisionToken,
-} from '../../src/plugin-runtime/workroom-acceptance-policy.js';
+} from '../../src/workroom-runtime/workroom-acceptance-policy.js';
 import {
   workroomAcceptanceAuthorityToken,
-} from '../../src/plugin-runtime/workroom-acceptance-authority.js';
+} from '../../src/workroom-runtime/workroom-acceptance-authority.js';
 import {
   workroomAcceptanceCheckRunnerToken,
   workroomTrustedRiskFactsToken,
-} from '../../src/plugin-runtime/workroom-risk-acceptance-runtime.js';
+} from '../../src/workroom-runtime/workroom-risk-acceptance-runtime.js';
 import {
   workroomExecutionContextReleaseToken,
   workroomProjectMemorySchemaAuthorityToken,
-} from '../../src/plugin-runtime/workroom-accepted-source-runtime.js';
+} from '../../src/workroom-runtime/workroom-accepted-source-runtime.js';
 import {
   workroomAcceptancePrincipalRegistryToken,
   workroomReviewerViewReaderToken,
-} from '../../src/plugin-runtime/workroom-reviewer-authority-runtime.js';
+} from '../../src/workroom-runtime/workroom-reviewer-authority-runtime.js';
 import {
   GenerationOwnedP7EffectAuthorization,
   workroomPersistedEffectAuthorizationFactsToken,
-} from '../../src/plugin-runtime/workroom-effect-production.js';
+} from '../../src/workroom-runtime/workroom-effect-production.js';
 import {
   MemoryWorkroomEffectJournal,
   WorkroomEffectLedger,

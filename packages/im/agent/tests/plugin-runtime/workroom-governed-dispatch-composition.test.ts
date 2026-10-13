@@ -2,10 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   createGenerationOwnedWorkroomGovernedOutboundComposition,
   GenerationOwnedWorkroomGovernedDispatchAuthority,
-} from '../../src/plugin-runtime/workroom-governed-dispatch-composition.js';
+} from '../../src/workroom-runtime/workroom-governed-dispatch-composition.js';
 import type {
   WorkroomDisclosureManifestAuthorityPort,
-} from '../../src/plugin-runtime/workroom-data-governance-runtime.js';
+} from '../../src/workroom-runtime/workroom-data-governance-runtime.js';
 import { remoteDisclosureFixture } from '../workroom/remote-disclosure-fixture.js';
 
 describe('generation-owned governed dispatch composition', () => {

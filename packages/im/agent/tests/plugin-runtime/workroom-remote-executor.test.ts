@@ -3,7 +3,7 @@ import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   createGenerationWorkroomRemoteExecutorPort,
   workroomRemoteExecutorToken,
-} from '../../src/plugin-runtime/workroom-remote-executor.js';
+} from '../../src/workroom-runtime/workroom-remote-executor.js';
 import {
   WORKROOM_A2A_EXTENSION_URI,
   createWorkroomRemoteDispatchOutboxItem,

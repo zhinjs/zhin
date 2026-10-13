@@ -2,7 +2,7 @@ import {
   GenerationOwnedPortfolioCapacityRuntime,
   type PortfolioKernelCommandAuthorityPort,
   type WorkroomSchedulerCapacityRequest,
-} from '../../src/plugin-runtime/workroom-portfolio-capacity.js';
+} from '../../src/workroom-runtime/workroom-portfolio-capacity.js';
 import {
   InMemoryPortfolioJournalRepository,
   createPortfolioPolicySnapshot,

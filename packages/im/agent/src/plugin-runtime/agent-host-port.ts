@@ -12,20 +12,20 @@ import type {
   PublishProjectProfileCommand,
   PublishProjectProfileRollbackCommand,
   WorkroomProfileControlPort,
-} from './workroom-profile-authority-runtime.js';
+} from '../workroom-runtime/workroom-profile-authority-runtime.js';
 import type {
   PortfolioSponsorCommandPort,
   PortfolioSponsorProjectionReadPort,
-} from './workroom-portfolio-sponsor.js';
+} from '../workroom-runtime/workroom-portfolio-sponsor.js';
 import type {
   WorkroomEffectSponsorDecisionCommand,
   WorkroomEffectSponsorDecisionRecord,
-} from './workroom-acceptance-production-composition.js';
+} from '../workroom-runtime/workroom-acceptance-production-composition.js';
 import type {
   ProjectKnowledgeEntry,
   ProjectKnowledgeSnapshot,
 } from '../workroom/project-knowledge-registry.js';
-import type { WorkroomDataLifecycleConsoleControlPort } from './workroom-data-lifecycle-console.js';
+import type { WorkroomDataLifecycleConsoleControlPort } from '../workroom-runtime/workroom-data-lifecycle-console.js';
 import type {
   WorkroomRunControlCommand,
   WorkroomRunControlReceipt,

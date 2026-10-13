@@ -12,13 +12,13 @@ import {
   createWorkroomEphemeralContextProviderReceipt,
   type WorkroomAcceptanceProjectionPayloadPort,
   type WorkroomRiskHeaderProducerAuthorityPort,
-} from '../../src/plugin-runtime/workroom-acceptance-fact-providers.js';
+} from '../../src/workroom-runtime/workroom-acceptance-fact-providers.js';
 import {
   KernelHeaderWorkroomRiskFacts,
   TypedWorkroomAcceptanceCheckRunner,
   createWorkroomGovernedAcceptanceProjection,
   createWorkroomKernelRiskHeader,
-} from '../../src/plugin-runtime/workroom-acceptance-provider-composition.js';
+} from '../../src/workroom-runtime/workroom-acceptance-provider-composition.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 const SHA = (value: string): string => digest(value);

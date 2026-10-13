@@ -2,19 +2,19 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   PortfolioFirstWorkroomSchedulerDispatchSupply,
   WorkroomSchedulerPortfolioCapacityUnavailableError,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-supply.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-supply.js';
 import {
   workroomSchedulerPortfolioOpaqueHeadId,
   workroomSchedulerPortfolioPayloadDigest,
   workroomSchedulerPortfolioRequestId,
-} from '../../src/plugin-runtime/workroom-scheduler-portfolio-contract.js';
+} from '../../src/workroom-runtime/workroom-scheduler-portfolio-contract.js';
 import {
   WorkroomSchedulerAssignmentRouteUnavailableError,
   WorkroomSchedulerDurablyBlockedError,
-} from '../../src/plugin-runtime/workroom-scheduler-runtime.js';
+} from '../../src/workroom-runtime/workroom-scheduler-runtime.js';
 import { createWorkroomSchedulerPolicySnapshot, decideWorkroomSchedule } from '../../src/workroom/workroom-scheduler.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
-import type { WorkroomSchedulerCapacityRequest } from '../../src/plugin-runtime/workroom-portfolio-capacity.js';
+import type { WorkroomSchedulerCapacityRequest } from '../../src/workroom-runtime/workroom-portfolio-capacity.js';
 
 describe('Portfolio-first Workroom Scheduler supply', () => {
   it('submits the exact content-free Capacity Request and never claims an Assignment directly', async () => {

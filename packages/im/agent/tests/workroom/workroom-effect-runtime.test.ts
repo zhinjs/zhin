@@ -13,7 +13,7 @@ import {
 import {
   WorkroomEffectOutcomeUnknownError,
   WorkroomEffectRuntime,
-} from '../../src/plugin-runtime/workroom-effect-runtime.js';
+} from '../../src/workroom-runtime/workroom-effect-runtime.js';
 
 describe('Workroom Effect Runtime', () => {
   it('persists attempt before dispatch and reconciles unknown without redispatch after restart', async () => {

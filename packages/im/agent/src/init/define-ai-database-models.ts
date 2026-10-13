@@ -23,7 +23,7 @@ import {
   PAYLOAD_VAULT_HANDOFF_RETIREMENT_MODEL,
 } from '../data-governance/payload-vault-storage-handoff.js';
 import { WORKROOM_PROJECT_KNOWLEDGE_MODEL } from '../workroom/database-project-knowledge-journal.js';
-import { WORKROOM_OVERLAY_PACK_PROMOTIONS_MODEL } from '../plugin-runtime/database-overlay-pack-promotion-repository.js';
+import { WORKROOM_OVERLAY_PACK_PROMOTIONS_MODEL } from '../workroom-runtime/database-overlay-pack-promotion-repository.js';
 
 export type AiDatabaseModelDefiner = (
   name: string,

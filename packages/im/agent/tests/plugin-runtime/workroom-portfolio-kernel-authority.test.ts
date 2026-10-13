@@ -1,4 +1,4 @@
-import { WorkroomPortfolioAssignmentFailureAuthority } from '../../src/plugin-runtime/workroom-portfolio-kernel-authority.js';
+import { WorkroomPortfolioAssignmentFailureAuthority } from '../../src/workroom-runtime/workroom-portfolio-kernel-authority.js';
 import {
   PortfolioAdmissionApplication,
   portfolioCapacityRequestDigest,
@@ -15,7 +15,7 @@ import {
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
 import { replayWorkroom } from '../../src/workroom/kernel-state.js';
-import { workroomSchedulerPortfolioOpaqueHeadId } from '../../src/plugin-runtime/workroom-portfolio-grant-assignment.js';
+import { workroomSchedulerPortfolioOpaqueHeadId } from '../../src/workroom-runtime/workroom-portfolio-grant-assignment.js';
 
 const SHA = `sha256:${'a'.repeat(64)}`;
 

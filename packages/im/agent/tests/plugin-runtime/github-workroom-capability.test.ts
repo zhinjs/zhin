@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
-import { createGitHubWorkroomCapability } from '../../src/plugin-runtime/github-workroom-capability.js';
-import { ProductionGitWorkroomEffectGateway } from '../../src/plugin-runtime/workroom-effect-production.js';
+import { createGitHubWorkroomCapability } from '../../src/workroom-runtime/github-workroom-capability.js';
+import { ProductionGitWorkroomEffectGateway } from '../../src/workroom-runtime/workroom-effect-production.js';
 import { createGitWorkspaceLease } from '../../src/workroom/git-workspace-gateway.js';
 import { MemoryWorkroomEffectJournal, WorkroomEffectLedger, createWorkroomEffectIntent } from '../../src/workroom/effect-ledger.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';

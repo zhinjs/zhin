@@ -3,7 +3,7 @@ import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value
 import {
   createCatalogWorkroomPlanGateAuthority,
   createGenerationWorkroomPlanGateAuthority,
-} from '../../src/plugin-runtime/workroom-plan-gate-authority.js';
+} from '../../src/workroom-runtime/workroom-plan-gate-authority.js';
 import type { WorkroomPlanGateAuthorizationInput } from '../../src/workroom/plan-approval-control.js';
 
 const definition = Object.freeze({

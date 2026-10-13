@@ -5,14 +5,14 @@ import { vi } from 'vitest';
 import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
 import { createWorkroomEffectIntent } from '../../src/workroom/effect-ledger.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
-import { installWorkroomEffectResources } from '../../src/plugin-runtime/workroom-effect-composition.js';
-import { workroomPersistedEffectAuthorizationFactsToken } from '../../src/plugin-runtime/workroom-effect-production.js';
+import { installWorkroomEffectResources } from '../../src/workroom-runtime/workroom-effect-composition.js';
+import { workroomPersistedEffectAuthorizationFactsToken } from '../../src/workroom-runtime/workroom-effect-production.js';
 import {
   workroomDeliveryProviderToken,
   type WorkroomDeliveryObservation,
   type WorkroomDeliveryRequest,
   type WorkroomDeliveryProviderPort,
-} from '../../src/plugin-runtime/workroom-delivery-gateway.js';
+} from '../../src/workroom-runtime/workroom-delivery-gateway.js';
 
 const sha = (value: string) => `sha256:${value.repeat(64)}`;
 

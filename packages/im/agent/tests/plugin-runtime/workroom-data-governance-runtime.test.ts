@@ -25,12 +25,12 @@ import {
 } from '../../src/data-governance/governed-payload-write-saga.js';
 import {
   WorkroomDataGovernanceRuntime,
-} from '../../src/plugin-runtime/workroom-data-governance-runtime.js';
-import { createWorkroomGovernedAcceptanceProjection } from '../../src/plugin-runtime/workroom-acceptance-provider-composition.js';
+} from '../../src/workroom-runtime/workroom-data-governance-runtime.js';
+import { createWorkroomGovernedAcceptanceProjection } from '../../src/workroom-runtime/workroom-acceptance-provider-composition.js';
 import {
   createWorkroomDynamicPlanningGenerationSnapshot,
   createWorkroomPlanningDisclosureSourceBinding,
-} from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
+} from '../../src/workroom-runtime/workroom-dynamic-planning-provider.js';
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
 import {
   createWorkroomStructuredTaskReport,

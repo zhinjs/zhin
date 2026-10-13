@@ -5,12 +5,12 @@ import {
   FileOverlayPackPromotionRepository,
   MemoryOverlayPackPromotionRepository,
   WorkroomOverlayPackPromotionRuntime,
-} from '../../src/plugin-runtime/workroom-overlay-pack-promotion.js';
+} from '../../src/workroom-runtime/workroom-overlay-pack-promotion.js';
 import {
   createCapabilityPackManifest,
   createWorkroomProfileOverlay,
   type CapabilityPackPublication,
-} from '../../src/plugin-runtime/workroom-profile-authority-runtime.js';
+} from '../../src/workroom-runtime/workroom-profile-authority-runtime.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 const generationView = (current = 7) => ({

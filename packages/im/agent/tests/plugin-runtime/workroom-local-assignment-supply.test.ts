@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import {
   LocalWorkroomSchedulerDispatchSupply,
   PinnedProfileCatalogLocalAssignmentRoute,
-} from '../../src/plugin-runtime/workroom-local-assignment-supply.js';
+} from '../../src/workroom-runtime/workroom-local-assignment-supply.js';
 import type { WorkroomDispatchTaskDecision } from '../../src/workroom/workroom-scheduler.js';
 
 describe('Local Workroom Scheduler supply', () => {

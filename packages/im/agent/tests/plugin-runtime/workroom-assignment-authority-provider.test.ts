@@ -5,7 +5,7 @@ import {
   digestWorkroomCatalogProjectBinding,
   digestWorkroomRemoteEndpointAuthority,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
-} from '../../src/plugin-runtime/workroom-assignment-authority-provider.js';
+} from '../../src/workroom-runtime/workroom-assignment-authority-provider.js';
 import { createWorkroomAssignmentAuthorityGrant } from '../../src/workroom/assignment-authority.js';
 import { rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { SkillIndex, skillFeatureId } from '@zhin.js/skill';

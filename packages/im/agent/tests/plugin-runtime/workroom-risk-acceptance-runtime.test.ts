@@ -3,7 +3,7 @@ import {
   PinnedWorkroomAcceptancePolicy,
   type WorkroomAcceptancePolicyFactsPort,
   type WorkroomTrustedRiskFactsPort,
-} from '../../src/plugin-runtime/workroom-risk-acceptance-runtime.js';
+} from '../../src/workroom-runtime/workroom-risk-acceptance-runtime.js';
 import type { WorkroomAcceptanceDecisionInput } from '../../src/workroom/acceptance-policy.js';
 import { createWorkroomStructuredTaskReport } from '../../src/workroom/workroom-task-report-store.js';
 

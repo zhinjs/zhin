@@ -8,7 +8,7 @@ import { createGitWorkspaceLease } from '../../src/workroom/git-workspace-gatewa
 import {
   GenerationOwnedP7EffectAuthorization,
   ProductionGitWorkroomEffectGateway,
-} from '../../src/plugin-runtime/workroom-effect-production.js';
+} from '../../src/workroom-runtime/workroom-effect-production.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 
 describe('production Workroom Effect authorities', () => {

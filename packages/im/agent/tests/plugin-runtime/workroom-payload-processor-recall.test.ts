@@ -5,7 +5,7 @@ import {
   WorkroomPayloadEffectGatewayRouter,
   type PayloadProcessorRecallEffectFacts,
   type PayloadPurgeReceiptIssuerPort,
-} from '../../src/plugin-runtime/workroom-payload-processor-recall.js';
+} from '../../src/workroom-runtime/workroom-payload-processor-recall.js';
 import type { PayloadPurgeDispatch, PayloadPurgeReceipt } from '../../src/data-governance/payload-lifecycle.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 

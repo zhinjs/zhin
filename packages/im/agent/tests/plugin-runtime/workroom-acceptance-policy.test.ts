@@ -3,7 +3,7 @@ import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import {
   createGenerationWorkroomAcceptancePolicyPort,
   workroomAcceptancePolicyDecisionToken,
-} from '../../src/plugin-runtime/workroom-acceptance-policy.js';
+} from '../../src/workroom-runtime/workroom-acceptance-policy.js';
 import type {
   WorkroomAcceptanceContractPinInput,
   WorkroomAcceptanceDecisionInput,

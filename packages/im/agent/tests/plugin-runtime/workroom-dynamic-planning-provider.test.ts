@@ -8,7 +8,7 @@ import {
   createWorkroomPlanningDisclosure,
   createWorkroomPlanningDisclosureSourceBinding,
   type WorkroomDynamicPlanningPolicyRequest,
-} from '../../src/plugin-runtime/workroom-dynamic-planning-provider.js';
+} from '../../src/workroom-runtime/workroom-dynamic-planning-provider.js';
 import { digestWorkroomCatalogProjectBinding } from '../../src/workroom/catalog-definition.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
 import type { HumanIngressPlanningInput } from '../../src/workroom/human-ingress-orchestrator.js';

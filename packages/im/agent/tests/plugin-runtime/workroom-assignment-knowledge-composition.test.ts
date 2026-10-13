@@ -7,7 +7,7 @@ import {
   createGenerationWorkroomEphemeralAssignmentContext,
   createCatalogProjectKnowledgeSourceAuthority,
   createP12WorkroomKnowledgeContentReader,
-} from '../../src/plugin-runtime/workroom-assignment-knowledge-composition.js';
+} from '../../src/workroom-runtime/workroom-assignment-knowledge-composition.js';
 
 const SHA = (value: string) => `sha256:${createHash('sha256').update(value).digest('hex')}`;
 

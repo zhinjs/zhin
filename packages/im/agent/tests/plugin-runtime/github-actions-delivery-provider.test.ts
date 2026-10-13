@@ -2,8 +2,8 @@ import { createHash } from 'node:crypto';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { GitHubActionsDeliveryProvider } from '../../src/plugin-runtime/github-actions-delivery-provider.js';
-import type { WorkroomDeliveryDispatch } from '../../src/plugin-runtime/workroom-delivery-gateway.js';
+import { GitHubActionsDeliveryProvider } from '../../src/workroom-runtime/github-actions-delivery-provider.js';
+import type { WorkroomDeliveryDispatch } from '../../src/workroom-runtime/workroom-delivery-gateway.js';
 
 const sha = 'a'.repeat(40), head = 'b'.repeat(40);
 const bytes = Buffer.from('real archive bytes in the HTTP fixture');
