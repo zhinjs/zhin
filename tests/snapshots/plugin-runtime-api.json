@@ -40,6 +40,7 @@
     "export * from '../workroom-runtime/workroom-assignment-authority-grant-runtime.js';",
     "export * from '../workroom-runtime/workroom-assignment-authority-provider.js';",
     "export * from '../workroom-runtime/workroom-assignment-knowledge-composition.js';",
+    "export * from '../workroom-runtime/workroom-capability-realization.js';",
     "export * from '../workroom-runtime/workroom-data-governance-authority-writer.js';",
     "export * from '../workroom-runtime/workroom-data-governance-bootstrap.js';",
     "export * from '../workroom-runtime/workroom-data-governance-composition.js';",

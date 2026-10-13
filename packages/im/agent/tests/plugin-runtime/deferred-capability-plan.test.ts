@@ -3,15 +3,19 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import {
-  bindWorkroomCapabilityRealization,
   createDeferredCapabilityPlan,
-  createWorkroomDeferredCapabilityPlan,
+  isReservedControlToolName,
   primeAgentSkillForIntent,
-  type WorkroomCapabilityRealization,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
+import {
+  bindWorkroomCapabilityRealization,
+  createWorkroomDeferredCapabilityPlan,
+  type WorkroomCapabilityRealization,
+} from '../../src/workroom-runtime/workroom-capability-realization.js';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
 import {
   createWorkroomRoleCapabilityReference,
+  getWorkroomRoleCommandDescriptors,
   createWorkroomRoleCapabilitySnapshot,
   createWorkroomRoleCapabilitySupply,
   type WorkroomRoleCapabilitySnapshot,
@@ -19,6 +23,81 @@ import {
 } from '../../src/workroom/role-capability-snapshot.js';
 
 describe('DeferredCapabilityPlan', () => {
+  const bareCapabilities = (owner: ReturnType<typeof rootPluginId>, tools: readonly ToolCapability[], skills: AgentCapabilities['skills'] = Object.freeze([])): AgentCapabilities => Object.freeze({
+    generation: 1,
+    owner,
+    tools: Object.freeze(tools),
+    skills,
+    agents: Object.freeze([]),
+    mcp: Object.freeze([]),
+    promptSections: Object.freeze([]),
+  });
+
+  it('exposes only what an injected ceiling returns and propagates ceiling failures', () => {
+    const owner = rootPluginId();
+    const allowedSkill = skill(owner, 'allowed', 'Allowed workflow.');
+    const capabilities = bareCapabilities(
+      owner,
+      [tool(owner, 'alpha', 'Alpha'), tool(owner, 'beta', 'Beta')],
+      Object.freeze([allowedSkill, skill(owner, 'denied', 'Denied workflow.')]),
+    );
+    const base = {
+      capabilities,
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: { alwaysLoadedTools: ['alpha', 'beta'] } },
+      persistSnapshot: async () => undefined,
+    };
+    const plan = createDeferredCapabilityPlan({
+      ...base,
+      ceiling: {
+        project: (given) => ({
+          tools: given.tools.filter(item => item.name === 'alpha'),
+          skills: given.skills.filter(item => item.qualifiedName === 'allowed'),
+        }),
+      },
+    });
+    expect(plan.capabilities.map(item => item.name)).toContain('alpha');
+    expect(plan.capabilities.map(item => item.name)).not.toContain('beta');
+    expect(plan.resolvedTools.map(item => item.name)).toContain('alpha');
+    expect(plan.resolvedTools.map(item => item.name)).not.toContain('beta');
+
+    expect(() => createDeferredCapabilityPlan({
+      ...base,
+      ceiling: { project: () => { throw new Error('untrusted projection'); } },
+    })).toThrow('untrusted projection');
+  });
+
+  it('hides reserved workroom control tools when no ceiling is injected', () => {
+    const owner = rootPluginId();
+    const plan = createDeferredCapabilityPlan({
+      capabilities: bareCapabilities(owner, [
+        tool(owner, 'weather', 'Weather'),
+        tool(owner, 'workroom_transition', 'control'),
+        tool(owner, 'x__workroom_create_run', 'control'),
+      ]),
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: { alwaysLoadedTools: ['weather', 'workroom_transition', 'x__workroom_create_run'] } },
+      persistSnapshot: async () => undefined,
+    });
+    const names = plan.capabilities.map(item => item.name);
+    expect(names).toContain('weather');
+    expect(names).not.toContain('workroom_transition');
+    expect(names).not.toContain('x__workroom_create_run');
+  });
+
+  it('classifies every Workroom control tool name as reserved', () => {
+    const names = [
+      ...(['orchestrator', 'executor', 'reviewer', 'integration'] as const)
+        .flatMap(role => getWorkroomRoleCommandDescriptors(role).map(command => command.toolName)),
+      'workroom_create_run',
+      'workroom_plan_task',
+      'workroom_transition',
+    ];
+    expect(names.length).toBeGreaterThan(3);
+    for (const name of names) expect(isReservedControlToolName(name), name).toBe(true);
+    expect(isReservedControlToolName('weather')).toBe(false);
+  });
+
   it('loads projected tools and skills without a classic registry or ambient runtime', async () => {
     const owner = rootPluginId();
     const saved: import('@zhin.js/ai').DeferredToolSessionSnapshot[] = [];

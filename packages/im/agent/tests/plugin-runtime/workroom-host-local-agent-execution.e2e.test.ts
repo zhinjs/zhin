@@ -2,7 +2,7 @@ import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import {
   bindWorkroomCapabilityRealization,
-} from '../../src/plugin-runtime/deferred-capability-plan.js';
+} from '../../src/workroom-runtime/workroom-capability-realization.js';
 import { createAgentCoreWorkroomLocalTurnPort } from '../../src/workroom-runtime/workroom-local-agent-core-adapter.js';
 import { DurableReportLocalModelExecutionPort } from '../../src/workroom-runtime/workroom-local-agent-loop.js';
 import type { AgentCore } from '../../src/core/agent-core.js';

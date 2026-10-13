@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
-import { bindWorkroomCapabilityRealization } from '../../src/plugin-runtime/deferred-capability-plan.js';
+import { bindWorkroomCapabilityRealization } from '../../src/workroom-runtime/workroom-capability-realization.js';
 import {
   createAssignmentExecutionEnvelope,
   type AssignmentExecutionObservation,

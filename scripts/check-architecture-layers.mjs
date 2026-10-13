@@ -506,3 +506,44 @@ if (agentDomainViolations.length) {
 }
 
 console.log('Harness Agent domain boundary check: OK.');
+
+// Only the barrel files may re-export the four Agent domain directories;
+// every other Agent source file must stay generic (inject ports instead).
+const agentSrcRoot = path.join(repoRoot, 'packages/im/agent/src');
+const agentDomainDirs = ['workroom', 'workroom-runtime', 'portfolio', 'data-governance']
+  .map(name => path.join(agentSrcRoot, name));
+const agentReexportAllowed = new Set([
+  path.join(agentSrcRoot, 'plugin-runtime/index.ts'),
+  path.join(agentSrcRoot, 'index.ts'),
+]);
+const insideDir = (target, root) => target === root || target.startsWith(`${root}${path.sep}`);
+const agentReexportViolations = [];
+const agentSrcFiles = [];
+walkTs(agentSrcRoot, agentSrcFiles);
+for (const file of agentSrcFiles) {
+  if (agentDomainDirs.some(root => insideDir(file, root)) || agentReexportAllowed.has(file)) continue;
+  const content = fs.readFileSync(file, 'utf8');
+  for (const importPath of parseImports(content)) {
+    if (!importPath.startsWith('.')) continue;
+    const target = path.resolve(path.dirname(file), importPath);
+    const domain = agentDomainDirs.find(root => insideDir(target, root));
+    if (!domain) continue;
+    agentReexportViolations.push({
+      file: path.relative(repoRoot, file),
+      import: importPath,
+      reason: `only plugin-runtime/index.ts and index.ts may reference ${path.relative(repoRoot, domain)}`,
+    });
+  }
+}
+
+if (agentReexportViolations.length) {
+  console.error('\nHarness Agent domain re-export boundary check: FAILED\n');
+  for (const violation of agentReexportViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Agent domain re-export boundary check: OK.');

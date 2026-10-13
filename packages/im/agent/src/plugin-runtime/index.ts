@@ -110,6 +110,7 @@ export * from '../workroom-runtime/workroom-effect-composition.js';
 export * from '../workroom-runtime/workroom-payload-processor-recall.js';
 export * from './capability-ingress.js';
 export * from './deferred-capability-plan.js';
+export * from '../workroom-runtime/workroom-capability-realization.js';
 export * from './full-agent-turn-engine.js';
 export * from './host-tool-projection.js';
 export * from './host-mcp-projection.js';

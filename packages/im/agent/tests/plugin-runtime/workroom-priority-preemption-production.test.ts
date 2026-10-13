@@ -2,11 +2,11 @@ import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolInvocationContext } from '@zhin.js/tool';
 import type { AgentCapabilities, ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
+import { createDeferredCapabilityPlan } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import {
   bindWorkroomCapabilityRealization,
-  createDeferredCapabilityPlan,
   createWorkroomDeferredCapabilityPlan,
-} from '../../src/plugin-runtime/deferred-capability-plan.js';
+} from '../../src/workroom-runtime/workroom-capability-realization.js';
 import {
   CatalogWorkroomPriorityAuthority,
   workroomPriorityAuthorityReference,

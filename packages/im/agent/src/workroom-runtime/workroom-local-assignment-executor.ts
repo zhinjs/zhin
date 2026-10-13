@@ -8,12 +8,12 @@ import {
   type AssignmentExecutorPort,
   type AssignmentProgressObservation,
 } from '../workroom/assignment-executor.js';
+import type { DeferredCapabilityPlan } from '../plugin-runtime/deferred-capability-plan.js';
 import {
   createWorkroomDeferredCapabilityPlan,
-  type DeferredCapabilityPlan,
   type WorkroomCapabilityRealization,
   type WorkroomDeferredCapabilityPlanOptions,
-} from '../plugin-runtime/deferred-capability-plan.js';
+} from './workroom-capability-realization.js';
 import type { WorkroomRoleCapabilitySnapshot } from '../workroom/role-capability-snapshot.js';
 
 export interface LocalModelProgressEvent {
