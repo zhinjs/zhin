@@ -1,0 +1,115 @@
+plugins/adapters/icqq/tests/icqq-outbound-images.test.ts
+  s_6562bcb6cc0539::t_15554ce855ab01 6,8
+  s_6562bcb6cc0539::t_10cd10fb606789 5,69-70,80,136,140
+  s_6562bcb6cc0539::t_6ab80d3903930d 1-4,7,9-68,71-79,81-135,137-139,141-150
+packages/im/runtime/tests/schedule-admission-runtime.test.ts
+  s_6562bcb6cc0539::t_39cfb32e2adc32 8
+  s_6562bcb6cc0539::t_df43220254cf36 60
+  s_6562bcb6cc0539::t_732eb074dd7491 43-44,46-47,51,55-56,112-113
+  s_6562bcb6cc0539::t_6342b6cd7a9a88 48-50
+  s_6562bcb6cc0539::t_51b4c458961184 1-7,9-42,57-59,61-87,91-111,114
+  s_6562bcb6cc0539::t_b895d76f2acad9 45,52-54,88-90
+packages/im/plugin-runtime/src/token.ts
+  s_6562bcb6cc0539::t_2e8107636d36ae 39,60,62,64,93
+plugins/adapters/icqq/src/managed-client.ts
+  s_6562bcb6cc0539::t_b0b1a8cfa3d8f9 36-42
+  s_6562bcb6cc0539::t_c1f211c79fc375 1-22,25-35,43-52
+  s_6562bcb6cc0539::t_0c24c7b1237bfb 23-24
+basic/cli/tests/plugin-runtime/process-rejections.test.ts
+  s_6562bcb6cc0539::t_13680e8d4b990a 39-55,68
+  s_6562bcb6cc0539::t_8d884428cbe3e2 1-38,56-67,69-75
+packages/im/plugin-runtime/tests/owner-host-admission.test.ts
+  s_6562bcb6cc0539::t_4acd0e877139eb 8,56,229
+  s_6562bcb6cc0539::t_51b4c458961184 193-203
+  s_6562bcb6cc0539::t_69eca211f09507 7,54-55,142-145,215-219,222,228,233-235
+docs/operations/production.md
+  s_6562bcb6cc0539::t_54d6bad0ad7d53 149-150
+packages/im/schedule-feature/tests/schedule.test.ts
+  s_6562bcb6cc0539::t_1333dac18d9e38 95-128
+  s_6562bcb6cc0539::t_f3928c66eaec39 4-6,63,68-69,91-92
+plugins/adapters/icqq/src/endpoint.ts
+  s_6562bcb6cc0539::t_0037d6c0355f7b 200
+  s_6562bcb6cc0539::t_b0b1a8cfa3d8f9 203-206
+  s_6562bcb6cc0539::t_a20f075e5cc929 55,349
+  s_6562bcb6cc0539::t_c1f211c79fc375 62,190-191,199,201-202,207-212
+  s_6562bcb6cc0539::t_d6274e690338a4 213-214
+basic/cli/src/plugin-runtime/process-rejections.ts
+  s_6562bcb6cc0539::t_8d884428cbe3e2 1-21
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_13ca1aa1cb98ad 14,24-51
+plugins/adapters/icqq/src/protocol.ts
+  s_6562bcb6cc0539::t_a20f075e5cc929 2-3,396-411,452
+basic/cli/src/plugin-runtime/start-command.ts
+  s_6562bcb6cc0539::t_8d884428cbe3e2 61,97-111
+plugins/adapters/icqq/tests/icqq-heartbeat.test.ts
+  s_6562bcb6cc0539::t_b0b1a8cfa3d8f9 79-90
+  s_6562bcb6cc0539::t_4e8a61fac8f9e0 117,119,138
+  s_6562bcb6cc0539::t_0037d6c0355f7b 4-6,36-41,43-54,56-57
+  s_6562bcb6cc0539::t_8b38d057d95fdf 55
+  s_6562bcb6cc0539::t_4dbb24de9a8b07 164-189
+  s_6562bcb6cc0539::t_bad49ceb98cc59 42
+  s_6562bcb6cc0539::t_0c24c7b1237bfb 104-113
+  s_6562bcb6cc0539::t_0292e521b54453 71-78
+  s_6562bcb6cc0539::t_13ebf10971a5a4 1-3,7-35,58-70,91-103,114-116,118,120-137,139-163,190
+plugins/utils/group-suite/tests/group-suite-runtime.test.ts
+  s_6562bcb6cc0539::t_e25b894bc873dc 3
+packages/im/command/src/command-index.ts
+  s_6562bcb6cc0539::t_9adfc20f21d369 360
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_6562bcb6cc0539::t_fd002a3e3eb9d8 1,182-216,219,221,224,226-229
+  s_6562bcb6cc0539::t_05ae8843fdc748 217-218,220,222-223,225
+packages/im/schedule-feature/src/schedule-index.ts
+  s_6562bcb6cc0539::t_834e361a285efc 49-51
+  s_6562bcb6cc0539::t_1e6f757d41a012 4-7,12,19-20,36-41,66-68
+  s_6562bcb6cc0539::t_1333dac18d9e38 57-59,61-62,64
+  s_6562bcb6cc0539::t_4acd0e877139eb 60
+  s_6562bcb6cc0539::t_2e8107636d36ae 3
+plugins/utils/content-moderation/tests/content-moderation.test.ts
+  s_6562bcb6cc0539::t_e25b894bc873dc 2
+basic/cli/src/plugin-runtime/schedule-host-installer.ts
+  s_6562bcb6cc0539::t_a3b61deee30232 27,31-37,41,43,53-55,59-60,62,65-69,73-77,87
+plugins/utils/link-poster/tests/link-poster-runtime.test.ts
+  s_6562bcb6cc0539::t_e25b894bc873dc 2
+.changeset/clear-plugin-authoring.md
+  s_6562bcb6cc0539::t_d3aae63ae3abec 11-12,23-24
+packages/im/plugin-runtime/src/owner-operation.ts
+  s_6562bcb6cc0539::t_1e6f757d41a012 43-47
+  s_6562bcb6cc0539::t_2e8107636d36ae 14,32-41
+  s_6562bcb6cc0539::t_bc5d7895870585 42
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_05ae8843fdc748 312
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_6562bcb6cc0539::t_05ae8843fdc748 119-121
+packages/im/plugin-runtime/src/schedule-host.ts
+  s_6562bcb6cc0539::t_2e8107636d36ae 48,54,57-58,72,87-90,93,115,120
+  s_6562bcb6cc0539::t_85cd0701c5cad2 27-31
+  s_6562bcb6cc0539::t_fa8dfee9a6756e 75
+  s_6562bcb6cc0539::t_f3928c66eaec39 46,55-56,73-74,76-77
+  s_6562bcb6cc0539::t_a3b61deee30232 21-22,91
+  s_6562bcb6cc0539::t_1e6f757d41a012 47,49-53,78-86
+packages/im/command/tests/command.test.ts
+  s_6562bcb6cc0539::t_834c843c0ffe1b 1804-1808
+  s_6562bcb6cc0539::t_210bbfd8399d28 1793-1803
+packages/im/plugin-runtime/src/database-host.ts
+  s_6562bcb6cc0539::t_2e8107636d36ae 190-193,195-198
+basic/cli/tests/plugin-runtime/schedule-publication-runtime.test.ts
+  s_6562bcb6cc0539::t_f2b3292a8c77ed 1-16,24-74,76-87,89-95,97-107
+  s_6562bcb6cc0539::t_3ae7907265cd25 17-19,23,75,88,96
+  s_6562bcb6cc0539::t_3fb0e97bf92064 20-22
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "634a88bdadaa07c9deaf91c88866a22f83218302",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
