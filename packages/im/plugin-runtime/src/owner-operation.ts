@@ -11,6 +11,7 @@ export class OwnerOperation {
   readonly #label: string;
   #published = false;
   #setupOpen = true;
+  #disposed = false;
 
   constructor(gate: GenerationAdmissionGate | undefined, label: string) {
     this.#gate = gate;
@@ -28,7 +29,22 @@ export class OwnerOperation {
     finally { release(); }
   }
 
-  endSetup(): void { this.#setupOpen = false; }
+  endSetup(reason: 'seal' | 'dispose' = 'seal'): void {
+    this.#setupOpen = false;
+    if (reason === 'dispose') this.#disposed = true;
+  }
+
+  /** Runtime-only staging after setup seal, never on a published or failed owner. */
+  stage<T>(operation: () => T): T {
+    if (this.#published || this.#disposed) throw new Error(`${this.#label} staging belongs to an inactive generation`);
+    return operation();
+  }
+
+  /** A projection may derive a new candidate from a live owner, never a retired one. */
+  prepareProjection<T>(operation: () => T): T {
+    if (this.#disposed || this.#published && !this.#gate?.active) throw new Error(`${this.#label} preparation belongs to an inactive generation`);
+    return operation();
+  }
 
   run<T>(operation: () => T): T {
     if (!this.#gate) return operation();

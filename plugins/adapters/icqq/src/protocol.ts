@@ -1,6 +1,6 @@
 import type { MessageElem, Sendable, ShareElem } from '@icqqjs/icqq';
-import type { ConversationRef } from '@zhin.js/im-contract';
-import type { MessageSegment } from "zhin.js";
+import { isMediaRef, type ConversationRef } from '@zhin.js/im-contract';
+import type { MessageSegment, SendContent } from "zhin.js";
 import { resolveIcqqMediaFile } from "./cq-message.js";
 
 export type ActionResult = {
@@ -393,6 +393,22 @@ const ICQQ_STANDALONE_ELEMENTS = new Set([
   'long_msg',
 ] as const);
 
+/** Normalize inline image bytes before either temporary-file or native-base64 delivery. */
+export function normalizeIcqqImageMedia(content: SendContent): SendContent {
+  if (Array.isArray(content)) return content.map(normalizeIcqqImageMedia);
+  if (!isWireSegment(content) || content.type !== 'image') return content;
+  const data = normalizeIcqqImageData(content.data);
+  return data === content.data ? content : { ...content, data } as MessageSegment;
+}
+
+function normalizeIcqqImageData(data: Record<string, unknown> | undefined): Record<string, unknown> | undefined {
+  const media = data?.media;
+  if (!isMediaRef(media) || !/^data:/i.test(media.value)) return data;
+  const parsed = /^data:(image\/[^;,]+)(?:;[^;,]*)*;base64,([\s\S]+)$/i.exec(media.value);
+  if (!parsed) throw new TypeError('ICQQ image data URL must contain base64 image data');
+  return { ...data, media: { ...media, kind: 'base64', value: parsed[2]!, mime_type: media.mime_type ?? parsed[1]! } };
+}
+
 /**
  * Project canonical Zhin segments directly into the native ICQQ Sendable
  * algebra. ICQQ's direct client does not parse Zhin's historical `[image:x]`
@@ -433,7 +449,7 @@ export function formatOutboundBody(payload: unknown): Sendable {
         return { type: 'at', qq };
       }
       case 'image': {
-        const arg = resolveIcqqMediaFile(item.data);
+        const arg = resolveIcqqMediaFile(normalizeIcqqImageData(item.data));
         if (!arg) throw new TypeError('ICQQ image segment requires canonical data.media');
         return { type: 'image', file: arg };
       }

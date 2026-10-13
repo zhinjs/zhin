@@ -1790,6 +1790,22 @@ describe('central command argument declarations', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it.each([undefined, {}])('preserves undeclared typed directory fields before other declared parameters with options %j', async (options) => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, options, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer' });
+    await expect(index.dispatch('foo 123')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'fallback' } });
+    await expect(index.dispatch('foo 123 actual')).resolves.toMatchObject({ status: 'executed', value: { id: 123, note: 'actual' } });
+  });
+
+  it.each([7, () => 8])('preserves static and dynamic undeclared directory defaults %j', async (defaultValue) => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string', default: 'fallback' } }, execute: ({ params }) => params }), 'foo/$id', { name: 'id', type: 'integer', optional: true, defaultValue });
+    await expect(index.dispatch('foo')).resolves.toMatchObject({ status: 'executed', value: { id: typeof defaultValue === 'function' ? 8 : 7, note: 'fallback' } });
+  });
+
+  it('preserves undeclared path values while parsing declared options and subsequent parameters', async () => {
+    const index = indexFor(defineCommand({ params: { note: { type: 'string' } }, options: { quiet: { type: 'boolean' } }, execute: ({ params, options }) => ({ params, options }) }), 'foo/$id', { name: 'id', type: 'integer' });
+    await expect(index.dispatch('foo 123 --quiet actual')).resolves.toMatchObject({ status: 'executed', value: { params: { id: 123, note: 'actual' }, options: { quiet: true } } });
+  });
+
   it('rejects shortcuts that cannot supply a required option', () => {
     expect(() => indexFor(defineCommand({ options: { count: { type: 'integer', optional: false } }, shortcut: { later: {} }, execute() {} }))).toThrow('required option --count');
   });

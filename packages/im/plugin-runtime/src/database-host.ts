@@ -187,12 +187,15 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
   }
 
   #bindSelection(selection: DatabaseHostSelection): DatabaseHostSelection {
-    let current = selection;
+    const modify = (operation: () => DatabaseHostSelection): DatabaseHostSelection => this.#operation.setup(() => {
+      const next = operation();
+      return next === selection ? chain : this.#bindSelection(next);
+    });
     const chain: DatabaseHostSelection = {
-      where: (query) => this.#operation.setup(() => { current = current.where(query); return chain; }),
-      orderBy: (field, direction) => this.#operation.setup(() => { current = current.orderBy(field, direction); return chain; }),
-      limit: (count) => this.#operation.setup(() => { current = current.limit(count); return chain; }),
-      then: (fulfilled, rejected) => this.#execute(() => Promise.resolve(current)).then(fulfilled, rejected),
+      where: (query) => modify(() => selection.where(query)),
+      orderBy: (field, direction) => modify(() => selection.orderBy(field, direction)),
+      limit: (count) => modify(() => selection.limit(count)),
+      then: (fulfilled, rejected) => this.#execute(() => Promise.resolve(selection)).then(fulfilled, rejected),
     };
     return Object.freeze(chain);
   }

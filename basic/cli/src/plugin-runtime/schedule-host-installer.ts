@@ -24,21 +24,23 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
       }));
     },
   });
-  const jobs = new Map<string, {
+  type Registration = {
     cron: string;
     description?: string;
     owner?: PluginId;
-    registration: symbol;
-  }>();
+    physicalId: string;
+    isActive?: () => boolean;
+  };
+  const jobs = new Map<string, Map<string, Registration>>();
+  let sequence = 0;
+  const visible = (id: string): Registration | undefined =>
+    [...(jobs.get(id)?.values() ?? [])].reverse().find(job => job.isActive?.() !== false);
 
   return {
     register(job: ScheduleJobRegistration): () => void {
-      const registration = Symbol(job.id);
-      if (jobs.has(job.id)) {
-        scheduler.cancel(job.id);
-        jobs.delete(job.id);
-      }
+      const physicalId = `zhin.runtime.schedule.${++sequence}`;
       scheduler.solar(job.cron, async () => {
+        if (visible(job.id)?.physicalId !== physicalId) return;
         try {
           await job.execute();
         } catch (error) {
@@ -48,26 +50,31 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
             error: error instanceof Error ? error.message : String(error),
           }));
         }
-      }, job.id, { id: job.id });
-      jobs.set(job.id, {
+      }, '', { id: physicalId });
+      const registrations = jobs.get(job.id) ?? new Map<string, Registration>();
+      registrations.set(physicalId, {
         cron: job.cron,
         description: job.description,
         owner: job.owner,
-        registration,
+        physicalId,
+        isActive: job.isActive,
       });
+      jobs.set(job.id, registrations);
       logger.debug(formatCompact({ op: 'schedule_register', id: job.id, cron: job.cron }));
       return () => {
-        // A newer generation may already have replaced this job under the same
-        // stable id. Its predecessor must not cancel the replacement on retire.
-        if (jobs.get(job.id)?.registration !== registration) return;
-        scheduler.cancel(job.id);
-        jobs.delete(job.id);
+        // Each generation owns only its physical registration. Rollback keeps
+        // the previous job, and retirement cannot cancel the newly published one.
+        scheduler.cancel(physicalId);
+        registrations.delete(physicalId);
+        if (registrations.size === 0) jobs.delete(job.id);
       };
     },
     list() {
-      return Object.freeze([...jobs.entries()].map(([id, meta]) => {
-        const snap = scheduler.get(id);
-        return Object.freeze({
+      return Object.freeze([...jobs.keys()].flatMap((id) => {
+        const meta = visible(id);
+        if (!meta) return [];
+        const snap = scheduler.get(meta.physicalId);
+        return [Object.freeze({
           id,
           cron: meta.cron,
           description: meta.description,
@@ -77,7 +84,7 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
           running: snap ? !snap.paused && !snap.cancelled : true,
           nextExecution: snap?.nextRunAt ? snap.nextRunAt.getTime() : undefined,
           plugin: meta.owner ?? id.split('/')[0],
-        });
+        })];
       }));
     },
     stop() {

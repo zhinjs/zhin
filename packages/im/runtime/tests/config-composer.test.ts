@@ -11,6 +11,7 @@ import {
   ConfigValidationError,
   NodePackageResolver,
   ProjectGraphService,
+  validatePluginConfigSchema,
 } from '../src/index.js';
 
 const temporary: string[] = [];
@@ -20,6 +21,34 @@ afterEach(async () => {
 });
 
 describe('hierarchical Plugin config', () => {
+  it('uses the same absent config defaults and local references for candidate validation and composition', async () => {
+    const rootSchema = { type: 'object', required: ['token'],
+      $defs: { token: { type: 'string', minLength: 2 } },
+      properties: { token: { $ref: '#/$defs/token' } },
+    };
+    const childSchema = { ...rootSchema, default: { token: 'ok' } };
+    const root = await configProject({ rootSchema, childSchema });
+    const graph = await new ProjectGraphService(await NodePackageResolver.create(root)).inspect(root);
+    const composer = new ConfigComposer();
+    const composed = await composer.compose(graph, { plugin: { token: 'ok' } });
+    expect(composed.views.get(graph.root.children[0]!.id)).toEqual({ token: 'ok' });
+    const ownRoot = composed.ownSchemas.get(graph.root.id)!;
+    const ownChild = composed.ownSchemas.get(graph.root.children[0]!.id)!;
+    expect(validatePluginConfigSchema(ownRoot, undefined)).toMatchObject([{ keyword: 'required', params: { missingProperty: 'token' } }]);
+    await expect(composer.compose(graph, {})).rejects.toBeInstanceOf(ConfigValidationError);
+    expect(validatePluginConfigSchema(ownChild, undefined)).toEqual([]);
+    expect(validatePluginConfigSchema(ownRoot, { token: 'ok' })).toEqual([]);
+    expect(validatePluginConfigSchema(ownRoot, null)).toMatchObject([{ keyword: 'type' }]);
+    await writeFile(join(root, 'schema.json'), JSON.stringify({ ...rootSchema, default: { token: 'ok' } }));
+    const defaulted = await composer.compose(graph, {});
+    expect(defaulted.views.get(graph.root.id)).toEqual({ token: 'ok' });
+    expect(validatePluginConfigSchema(defaulted.ownSchemas.get(graph.root.id)!, undefined)).toEqual([]);
+    await writeFile(join(root, 'plugins/child/schema.json'), JSON.stringify({ ...rootSchema, default: { token: 'x' } }));
+    expect(validatePluginConfigSchema({ ...ownChild, default: { token: 'x' } }, undefined)).toMatchObject([{ keyword: 'minLength' }]);
+    await expect(composer.compose(graph, {})).rejects.toBeInstanceOf(ConfigValidationError);
+    expect(childSchema.default).toEqual({ token: 'ok' });
+  });
+
   it('uses the authoring declaration for defaults, validation and owner metadata', async () => {
     const root = await configProject({ rootSchema: {}, childSchema: {} });
     await rm(join(root, 'schema.json'));

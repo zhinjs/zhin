@@ -58,6 +58,7 @@ import {
   resolvePluginLifecycleFile,
 } from './plugin-lifecycle-store.js';
 import { installProcessLifecycle, nodeProcessLifecycleAdapter } from './process-lifecycle.js';
+import { installProcessRejectionHandler } from './process-rejections.js';
 import {
   ProjectEnvironmentFileSource,
   parseStartOptions,
@@ -93,6 +94,21 @@ function readableCapabilityId(value: string): string {
 }
 
 export async function runStartCommand(options: StartCommandOptions): Promise<void> {
+  const disposeRejections = installProcessRejectionHandler(process, (reason) => {
+    getLogger('runtime').error(formatCompact({
+      event: 'unhandledRejection',
+      error: reason instanceof Error ? `${reason.name}: ${reason.message}`
+        : typeof reason === 'string' ? reason : 'Non-Error rejection',
+    }));
+  });
+  try {
+    await runProcessStartCommand(options);
+  } finally {
+    disposeRejections();
+  }
+}
+
+async function runProcessStartCommand(options: StartCommandOptions): Promise<void> {
   const parsed = parseStartOptions(options.args);
   ensureTypeScriptSpecifierRemap();
   const environmentSource = new ProjectEnvironmentFileSource(options.root, parsed.environment);

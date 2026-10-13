@@ -357,7 +357,7 @@ export class CommandIndex {
       const helpRequested = literalResult && hasCommandBoundary(literalResult.remaining)
         && requestsCommandHelp(normalizeSegments(literalResult.remaining));
       const parseDeclaredArguments = !exact && route.record.parameter && route.literalMatcher !== undefined
-        && (route.record.slot.definition.params !== undefined || route.record.slot.definition.options !== undefined || helpRequested);
+        && (Object.hasOwn(route.record.slot.definition.params ?? {}, route.record.parameter.name) || helpRequested);
       const result = parseDeclaredArguments ? literalResult : route.matcher.match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
       const parameter = route.record.parameter;

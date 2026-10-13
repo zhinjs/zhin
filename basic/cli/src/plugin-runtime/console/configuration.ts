@@ -116,6 +116,9 @@ export class ConsoleConfigurationStore {
       for (const issue of validatePluginConfigSchema(schema, data)) {
         const location = issue.instancePath.replace(/^\/candidate/u, '').split('/').slice(1)
           .map(key => key.replaceAll('~1', '/').replaceAll('~0', '~'));
+        if (issue.keyword === 'required' && typeof issue.params.missingProperty === 'string') {
+          location.push(issue.params.missingProperty);
+        }
         errors.push({
           path: `$${location.map(key => `.${key}`).join('')}`,
           message: issue.keyword === 'type'

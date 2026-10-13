@@ -4,6 +4,8 @@ import {
   type DatabaseHost, type DatabaseHostModel, type DatabaseHostSelection,
   type ScheduleHost, type ScheduleJobRegistration, type SnapshotState,
   generationAdmissionBinder,
+  stagePluginScheduleRegistration,
+  createPluginScheduleCandidate,
 } from '../src/index.js';
 
 const owner = childPluginId(rootPluginId(), 'reminder');
@@ -49,6 +51,9 @@ describe('owner Host generation admission', () => {
     await failedScheduleScope.disposers.dispose();
     expect(() => schedule.register({ id: 'failed', cron: '* * * * * *', execute() {} })).toThrow('inactive generation');
     expect(() => schedule[generationAdmissionBinder](failedGate).list()).toThrow('inactive generation');
+    expect(() => stagePluginScheduleRegistration(schedule, { id: 'failed', cron: '* * * * * *', execute() {} })).toThrow('inactive generation');
+    expect(() => stagePluginScheduleRegistration(schedule[generationAdmissionBinder](failedGate), { id: 'clone', cron: '* * * * * *', execute() {} })).toThrow('inactive generation');
+    expect(() => createPluginScheduleCandidate(schedule, createGenerationAdmissionGate())).toThrow('inactive generation');
   });
 
   it('preserves optional durable target capability', () => {
@@ -134,7 +139,10 @@ describe('owner Host generation admission', () => {
     const facade = new PluginDatabaseHost(owner, port, gate);
     facade.define('messages', {});
     const retained = facade.models.get('messages')!;
-    const query = retained.select('id').where({ id: 1 }).orderBy('id').limit(1);
+    const query = retained.select('id');
+    expect(query.where({ id: 1 })).toBe(query);
+    expect(query.orderBy('id')).toBe(query);
+    expect(query.limit(1)).toBe(query);
     await expect(Promise.resolve(query)).rejects.toThrow('inactive generation');
     expect(executeSelect).not.toHaveBeenCalled();
     const store = new SnapshotStore(state([facade]));
@@ -182,6 +190,17 @@ describe('owner Host generation admission', () => {
     expect(execute).not.toHaveBeenCalled();
     await query;
     expect(execute).toHaveBeenCalledWith([['where', { id: 1 }], ['orderBy', 'id', 'DESC'], ['limit', 5]]);
+    const base = facade.models.get('messages')!.select('id');
+    const alice = base.where({ sender: 'alice' });
+    const bob = base.where({ sender: 'bob' });
+    const ordered = alice.orderBy('id', 'ASC');
+    const limited = alice.limit(2);
+    await Promise.all([base, alice, bob, ordered, limited]);
+    expect(execute.mock.calls.slice(1).map(([steps]) => steps)).toEqual([
+      [], [['where', { sender: 'alice' }]], [['where', { sender: 'bob' }]],
+      [['where', { sender: 'alice' }], ['orderBy', 'id', 'ASC']],
+      [['where', { sender: 'alice' }], ['limit', 2]],
+    ]);
     await store.close();
   });
 
@@ -193,18 +212,27 @@ describe('owner Host generation admission', () => {
     const facade = new PluginScheduleHost(owner, port, gate);
     const execute = vi.fn();
     const dispose = facade.register({ id: 'remind', cron: '* * * * * *', execute });
+    const scope = new Scope(owner);
+    scope.provide(createToken('test.schedule'), facade);
+    scope.seal();
+    expect(() => facade.register({ id: 'sealed', cron: '* * * * * *', execute })).toThrow('inactive generation');
+    const disposeStaged = stagePluginScheduleRegistration(facade, { id: 'staged', cron: '* * * * * *', execute });
     expect(() => jobs[0].execute()).toThrow('inactive generation');
     const store = new SnapshotStore(state([facade]));
+    expect(() => stagePluginScheduleRegistration(facade, { id: 'published', cron: '* * * * * *', execute })).toThrow('inactive generation');
     jobs[0].execute();
     expect(execute).toHaveBeenCalledTimes(1);
     store.commit(0, { snapshot: state([]), dispose: () => undefined });
     expect(() => facade.register({ id: 'stale', cron: '* * * * * *', execute })).toThrow('inactive generation');
     expect(() => facade.list()).toThrow('inactive generation');
+    expect(() => stagePluginScheduleRegistration(facade, { id: 'retired', cron: '* * * * * *', execute })).toThrow('inactive generation');
+    expect(() => createPluginScheduleCandidate(facade, createGenerationAdmissionGate())).toThrow('inactive generation');
     expect(() => jobs[0].execute()).toThrow('inactive generation');
     // Cleanup remains callable after retirement and cannot introduce a new job.
     dispose();
-    expect(disposeJob).toHaveBeenCalledTimes(1);
-    expect(jobs).toHaveLength(1);
+    disposeStaged();
+    expect(disposeJob).toHaveBeenCalledTimes(2);
+    expect(jobs).toHaveLength(2);
     await store.close();
   });
 });

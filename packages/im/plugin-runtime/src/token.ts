@@ -36,7 +36,7 @@ export const scopeSetupFinalizer: unique symbol = Symbol('ScopeSetupFinalizer');
 export class Scope {
   readonly #bindings = new Map<TokenId, Binding>();
   readonly #parent?: Scope;
-  readonly #setupFinalizers = new Set<() => void>();
+  readonly #setupFinalizers = new Set<(reason: 'seal' | 'dispose') => void>();
   #sealed = false;
 
   constructor(
@@ -57,11 +57,11 @@ export class Scope {
       token,
     }));
     if (value && typeof value === 'object') {
-      const finalize = (value as { [scopeSetupFinalizer]?: () => void })[scopeSetupFinalizer];
+      const finalize = (value as { [scopeSetupFinalizer]?: (reason: 'seal' | 'dispose') => void })[scopeSetupFinalizer];
       if (typeof finalize === 'function') {
-        const endSetup = () => finalize.call(value);
+        const endSetup = (reason: 'seal' | 'dispose') => finalize.call(value, reason);
         this.#setupFinalizers.add(endSetup);
-        this.disposers.add(endSetup);
+        this.disposers.add(() => endSetup('dispose'));
       }
     }
     if (dispose) this.disposers.add(dispose);
@@ -90,7 +90,7 @@ export class Scope {
 
   seal(): void {
     this.#sealed = true;
-    for (const finalize of this.#setupFinalizers) finalize();
+    for (const finalize of this.#setupFinalizers) finalize('seal');
     this.#setupFinalizers.clear();
     this.disposers.seal();
   }

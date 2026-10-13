@@ -52,12 +52,14 @@ import {
 import {
   formatInboundContent,
   formatOutboundBody,
+  normalizeIcqqImageMedia,
   icqqInboundConversation,
   icqqOutboundTarget,
   type IcqqInboundMessage,
   type ResolvedIcqqConfig,
 } from './protocol.js';
 import type { SystemMessage as IcqqSystemMessage } from './types.js';
+import { ManagedIcqqClient, type IcqqBackgroundOperation } from './managed-client.js';
 
 export interface IcqqEndpointOptions {
   readonly id: CapabilityId;
@@ -83,14 +85,6 @@ const BOUND_EVENTS = [
   'system.login.error',
   'system.login.auth',
 ] as const;
-
-class ManagedIcqqClient extends Client {
-  cancelReconnect(): void {
-    if (!this.login_timer) return;
-    clearTimeout(this.login_timer);
-    this.login_timer = null;
-  }
-}
 
 export class IcqqEndpoint extends Endpoint<Client> {
   readonly client: ManagedIcqqClient;
@@ -193,12 +187,29 @@ export class IcqqEndpoint extends Endpoint<Client> {
   constructor(options: IcqqEndpointOptions) {
     super();
     const nativeConfig = resolveNativeClientConfig(options.config);
-    this.client = new ManagedIcqqClient(Number(options.config.id), nativeConfig);
+    this.client = new ManagedIcqqClient(Number(options.config.id), nativeConfig,
+      (operation, error) => this.#handleBackgroundFailure(operation, error));
     this.#contentResolver = new IcqqContentResolver(this.client);
     this.content = this.#contentResolver.port;
     this.#logger = getAdapterLogger('icqq', options.config.id);
     this.#options = options;
     this.endpointName = options.config.id;
+  }
+
+  #handleBackgroundFailure(operation: IcqqBackgroundOperation, error: unknown): void {
+    if (!this.#started || this.#stopped || this.#retiring) return;
+    this.#logger.warn(formatCompact({
+      op: `icqq_${operation}_failed`, endpoint: this.endpointName,
+      error: error instanceof Error ? error.message
+        : error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message
+        : typeof error === 'string' ? error : 'Unknown ICQQ SDK background failure',
+      ...(error && typeof error === 'object' && 'code' in error && typeof error.code === 'number' ? { code: error.code } : {}),
+    }));
+    if (operation === 'sso-heartbeat' && !this.client.isOnline()) return;
+    if (operation === 'login' && !this.#everOnline) return;
+    // Delegate to the SDK's existing transport termination, offline event and
+    // reconn_interval policy. No account-level logout or second retry timer.
+    this.client.emit('internal.error.network', -2, `ICQQ ${operation} failed`);
   }
 
   #ignoreReactionAck(action: 'add' | 'remove', task: Promise<unknown> | unknown): void {
@@ -335,7 +346,7 @@ export class IcqqEndpoint extends Endpoint<Client> {
     if (!this.#started) throw new EndpointDeliveryError('endpoint_disconnected', 'icqq endpoint 未连接', 'not_sent');
     const mediaMode = resolveIcqqOutboundMediaMode(this.#options.config);
     const prepared = isIcqqSegmentPayload(payload)
-      ? prepareIcqqOutboundMedia(payload, mediaMode)
+      ? prepareIcqqOutboundMedia(normalizeIcqqImageMedia(payload), mediaMode)
       : { content: payload, dispose() {} };
     try {
       const message = formatOutboundBody(prepared.content);

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   createCapabilitySlot,
+  createGenerationAdmissionGate,
+  PluginScheduleHost,
+  qualifyPluginScheduleId,
   rootPluginId,
   scheduleHostToken,
   type RuntimeSnapshot,
@@ -57,12 +60,13 @@ describe('Schedule Feature', () => {
       source: '/project/schedules/heartbeat/index.ts',
       definition,
     });
-    const resources = new Map<string, unknown>([[scheduleHostToken.id, {
+    const resources = new Map<string, unknown>([[scheduleHostToken.id, new PluginScheduleHost(owner, {
       register(job: { id: string; cron: string }) {
         events.push(`register:${job.id}:${job.cron}`);
         return () => events.push(`dispose:${job.id}`);
       },
-    }]]);
+      list: () => [],
+    }, createGenerationAdmissionGate())]]);
     const snapshot = {
       generation: 1,
       root: owner,
@@ -84,8 +88,42 @@ describe('Schedule Feature', () => {
     index.start();
     index.stop();
     expect(events).toEqual([
-      'register:heartbeat:0 * * * * *',
-      'dispose:heartbeat',
+      `register:${qualifyPluginScheduleId(owner, 'heartbeat')}:0 * * * * *`,
+      `dispose:${qualifyPluginScheduleId(owner, 'heartbeat')}`,
     ]);
+  });
+
+  it('cleans every staged registration and preserves activation failure when one disposer throws', () => {
+    const owner = rootPluginId();
+    const activationError = new Error('third job activation failed');
+    const cleanupError = new Error('second job cleanup failed');
+    const cleaned: string[] = [];
+    let registrations = 0;
+    const host = new PluginScheduleHost(owner, {
+      register(job) {
+        if (++registrations === 3) throw activationError;
+        return () => {
+          cleaned.push(job.id);
+          if (job.id === qualifyPluginScheduleId(owner, 'second')) throw cleanupError;
+        };
+      },
+      list: () => [],
+    }, createGenerationAdmissionGate());
+    const slots = ['first', 'second', 'third'].map(localName => createCapabilitySlot({ owner,
+      feature: scheduleFeatureId, localName, source: `/project/schedules/${localName}/index.ts`,
+      definition: defineSchedule({ cron: '0 * * * * *', execute() {} }) }));
+    const snapshot: RuntimeSnapshot = { generation: 1, root: owner, tree: new Map(), config: new Map(),
+      resources: new Map([[owner, new Map([[scheduleHostToken.id, host]])]]),
+      capabilities: new Map(slots.map(slot => [slot.id, slot])), projections: new Map() };
+    const index = new ScheduleIndex(slots, snapshot);
+    let failure: unknown;
+    try { index.start(); } catch (error) { failure = error; }
+    expect(cleaned).toEqual([qualifyPluginScheduleId(owner, 'second'), qualifyPluginScheduleId(owner, 'first')]);
+    expect(failure).toBeInstanceOf(AggregateError);
+    if (!(failure instanceof AggregateError)) throw new Error('Expected combined failure');
+    expect(failure.cause).toBe(activationError);
+    expect(failure.errors[0]).toBe(activationError);
+    expect(failure.errors[1]).toMatchObject({ errors: [cleanupError] });
+    expect(() => index.stop()).not.toThrow();
   });
 });

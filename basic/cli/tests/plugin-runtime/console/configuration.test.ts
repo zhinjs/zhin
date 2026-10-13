@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -179,6 +179,54 @@ describe('config document flatten / write namespace', () => {
 });
 
 describe('Console schema validation', () => {
+  it('reports the exact missing required field, including nested objects and array items', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-required-paths-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', required: ['token'], properties: {
+        token: { type: 'string' },
+        credentials: { type: 'object', required: ['api/key~'], properties: { 'api/key~': { type: 'string' } } },
+        endpoints: { type: 'array', items: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } } },
+      },
+    }));
+    const result = await createStore(root, 'zhin.config.yml').validatePluginConfig('plugin', {
+      credentials: {}, endpoints: [{}],
+    });
+    expect(result.valid).toBe(false);
+    expect(result.errors.map(error => error.path)).toEqual(['$.token', '$.credentials.api/key~', '$.endpoints.0.id']);
+  });
+
+  it('validates absent root and embedded plugin config using object defaults without mutating declarations', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-absent-config-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), '{}\n');
+    await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'console-project',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [{ package: './child', instanceKey: 'child' }] },
+    }));
+    const child = join(root, 'child');
+    await mkdir(child);
+    await writeFile(join(child, 'package.json'), JSON.stringify({ name: 'console-child',
+      zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' },
+    }));
+    const schema = { type: 'object', required: ['token'],
+      $defs: { token: { type: 'string', minLength: 2 } },
+      properties: { token: { $ref: '#/$defs/token' } },
+    };
+    const store = createStore(root, 'zhin.config.yml');
+    for (const [name, directory] of [['plugin', root], ['child', child]] as const) {
+      const file = join(directory, 'schema.json');
+      await writeFile(file, JSON.stringify(schema));
+      expect(await store.validatePluginConfig(name, undefined)).toMatchObject({ valid: false, errors: [{ path: '$.token' }] });
+      await writeFile(file, JSON.stringify({ ...schema, default: { token: 'ok' } }));
+      expect(await store.validatePluginConfig(name, undefined)).toMatchObject({ valid: true });
+      expect(await store.validatePluginConfig(name, null)).toMatchObject({ valid: false });
+      await writeFile(file, JSON.stringify({ ...schema, default: { token: 'x' } }));
+      expect(await store.validatePluginConfig(name, undefined)).toMatchObject({ valid: false, errors: [{ path: '$.token' }] });
+      expect(JSON.parse(await readFile(file, 'utf8'))).toMatchObject({ default: { token: 'x' } });
+    }
+  });
+
   it('uses the Runtime standard validator for strings, lists, step, unknown fields and references', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-standard-validation-'));
     tempRoots.push(root);

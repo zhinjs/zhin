@@ -309,7 +309,7 @@ export function validatePluginConfigSchema(schema: JsonSchema, input: unknown): 
     ...(schema.$defs ? { $defs: schema.$defs } : {}),
     properties: { candidate: schema },
   });
-  const candidate = { candidate: structuredClone(input) };
+  const candidate = { candidate: structuredClone(input === undefined ? schema.default ?? {} : input) };
   return validate(candidate) ? [] : structuredClone(validate.errors ?? []);
 }
 
