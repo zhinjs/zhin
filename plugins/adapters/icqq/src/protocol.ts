@@ -406,7 +406,7 @@ function normalizeIcqqImageData(data: Record<string, unknown> | undefined): Reco
   if (!isMediaRef(media) || !/^data:/i.test(media.value)) return data;
   const parsed = /^data:(image\/[^;,]+)(?:;[^;,]*)*;base64,([\s\S]+)$/i.exec(media.value);
   if (!parsed) throw new TypeError('ICQQ image data URL must contain base64 image data');
-  return { ...data, media: { ...media, kind: 'base64', value: parsed[2]!, mime_type: media.mime_type ?? parsed[1]! } };
+  return { ...data, media: { ...media, kind: 'base64', value: parsed[2]!, mime_type: (media.mime_type ?? parsed[1]!).toLowerCase() } };
 }
 
 /**

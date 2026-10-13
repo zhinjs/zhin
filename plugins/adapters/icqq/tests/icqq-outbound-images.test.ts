@@ -15,6 +15,7 @@ vi.mock('@icqqjs/icqq', async () => import('./_icqq-mock.js'));
 import definition from '../adapters/icqq/index.js';
 import { IcqqEndpoint } from '../src/endpoint.js';
 import { formatOutboundBody, normalizeIcqqImageMedia } from '../src/protocol.js';
+import { prepareIcqqOutboundMedia } from '../src/outbound-media.js';
 import { icqqRuntimeStateToken } from '../src/icqq-runtime-state.js';
 
 const bytes = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT1sAAAAASUVORK5CYII=', 'base64');
@@ -45,6 +46,25 @@ describe('ICQQ inline image projection', () => {
     }
     expect(() => formatOutboundBody({ type: 'image', data: { media: { kind: 'url', value: 'data:image/png,not-base64' } } }))
       .toThrow('ICQQ image data URL must contain base64 image data');
+  });
+
+  it.each([undefined, 'IMAGE/PNG'])('normalizes mixed-case MIME before temporary-file delivery (override=%s)', mime_type => {
+    const content = { type: 'image', data: { media: { kind: 'url' as const,
+      value: `DATA:IMAGE/PNG;charset=utf-8;BASE64,${base64}`, ...(mime_type ? { mime_type } : {}),
+    } } };
+    const normalized = normalizeIcqqImageMedia(content);
+    expect(normalized).toMatchObject({ data: { media: { mime_type: 'image/png' } } });
+    const prepared = prepareIcqqOutboundMedia(normalized, 'file');
+    const projected = formatOutboundBody(prepared.content) as ImageElem;
+    expect(typeof projected.file).toBe('string');
+    if (typeof projected.file !== 'string') throw new Error('Expected materialized file');
+    const file = projected.file;
+    try {
+      expect(file).toMatch(/\.png$/);
+      expect(readFileSync(file)).toEqual(bytes);
+      expect(content.data.media.value).toContain('IMAGE/PNG');
+    } finally { prepared.dispose(); }
+    expect(existsSync(file)).toBe(false);
   });
 
   it('produces native base64 input that the installed SDK can actually probe', async () => {
