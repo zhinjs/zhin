@@ -1,0 +1,23 @@
+plugins/utils/calendar/package.json
+  s_6eb8d20a15fb15::t_bb5ec354113d06 52-54
+plugins/utils/reminder/package.json
+  s_6eb8d20a15fb15::t_19982b0a34b593 33-35
+pnpm-lock.yaml
+  s_6eb8d20a15fb15::t_0bd0f979de9148 3459-3462,3695-3698
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "880381723413cb990f5ca936ee743616529c57c6",
+  "prompts": {},
+  "sessions": {
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
