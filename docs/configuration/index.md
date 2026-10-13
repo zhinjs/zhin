@@ -1,8 +1,26 @@
 ---
 title: "配置参考"
+description: "zhin.config.yml 的结构与每个顶层键：HTTP、数据库、AI、插件与适配器账号、环境变量展开与校验流程"
 ---
 
 # 配置参考
+
+本页是 `zhin.config.yml` 的完整参考。第一次配置时，先运行 `npx zhin setup` 生成一份能启动的配置，再回来查需要改的字段。
+
+## 最常见的修改
+
+| 我想…… | 看这里 |
+| --- | --- |
+| 换 HTTP 端口、让外网访问 Console | [http](#http) |
+| 接入数据库 | [database](#database) |
+| 给插件或适配器填配置、填平台凭据 | [plugin 与 plugins](#plugin-与-plugins) |
+| 一个适配器登录多个账号 | [endpoints 数组](#endpoints-数组-一个实例挂多个账号) |
+| 设置 master、命令前缀 | [适配器实例](#适配器实例-master-trusted-commandprefix) |
+| 配置 AI 模型 | [ai](#ai)，或直接看 [AI 总览](../ai/index.md) |
+| 引用 `.env` 里的密钥 | [环境变量展开](#环境变量展开) |
+| 看一份完整的最小配置 | [最小配置](#最小配置) |
+
+## 配置文件的位置
 
 启动时 `zhin runtime start` 会在项目根目录找配置文件，按下面的顺序找到第一个就停；同时存在多个则直接报错，不会帮你猜：
 
@@ -19,7 +37,7 @@ title: "配置参考"
 
 ## 这份参考怎么用
 
-先运行 `npx zhin setup` 生成可启动配置，再按本页修改字段。提交前运行 `npx zhin doctor`；启动后以 Console 展示的当前 generation 为准，不要把磁盘文件当成已生效事实。
+提交前运行 `npx zhin doctor` 检查。启动后以 Console 显示的实际运行状态为准——配置文件写了什么，不等于已经生效了什么（例如新配置校验失败时，运行中的仍是旧配置）。
 
 | 你要改变什么 | 应该放在哪里 |
 | --- | --- |

@@ -1,10 +1,23 @@
 ---
-title: Production Deployment and Operations
+title: "Production Deployment and Operations"
+description: "Run the bot as a recoverable service: release checks, reverse proxy and auth, Docker / systemd / Kubernetes templates, supervision, backup, monitoring and rollback"
 ---
 
 # Run Zhin as a recoverable service
 
 Use this for a single Bot, a team Workroom, or Remote Console. The goal is explicit ownership for process, ingress, secrets, state, monitoring, backup, and recovery.
+
+## Five things to have before going live
+
+| Item | How | Details |
+| --- | --- | --- |
+| Pinned dependencies | Commit the lockfile; never run production on drifting `latest` | [1. Release baseline](#_1-release-baseline) |
+| Host not exposed directly | Bind the Host to `127.0.0.1` and terminate HTTPS at a reverse proxy | [2. Network and authentication](#_2-network-and-authentication) |
+| Secrets only via environment | `HTTP_TOKEN`, platform credentials and model keys live in `.env` or a secret manager | [2. Network and authentication](#_2-network-and-authentication) |
+| Automatic restart on crash | Supervise with Docker, systemd or Kubernetes | [3. Templates](#_3-copy-ready-deployment-templates) · [4. Supervision](#_4-process-supervision) |
+| Recoverable data | Back up the database, `.zhin/` and `data/schedule-jobs.json` regularly, and rehearse restores | [5. Durable state and backup](#_5-durable-state-and-backup) |
+
+Use `/pub/health` and `/pub/ready` for health checks; see [6. Monitoring and alerts](#_6-monitoring-and-alerts).
 
 ## 1. Release baseline
 

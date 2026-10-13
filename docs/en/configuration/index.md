@@ -1,8 +1,26 @@
 ---
 title: "Configuration Reference"
+description: "The structure of zhin.config.yml and every top-level key: HTTP, database, AI, plugins and adapter accounts, environment expansion and validation"
 ---
 
 # Configuration Reference
+
+This is the complete reference for `zhin.config.yml`. When configuring for the first time, run `npx zhin setup` to generate a config that boots, then come back here for the fields you need to change.
+
+## Most common changes
+
+| I want to… | See |
+| --- | --- |
+| Change the HTTP port or expose Console externally | [http](#http) |
+| Connect a database | [database](#database) |
+| Configure a plugin or adapter, add platform credentials | [plugin and plugins](#plugin-and-plugins) |
+| Log one adapter into several accounts | [endpoints array](#endpoints-array-one-instance-with-multiple-accounts) |
+| Set masters or the command prefix | [Adapter instances](#adapter-instances-master-trusted-commandprefix) |
+| Configure AI models | [ai](#ai), or the [AI overview](../ai/index.md) |
+| Reference secrets from `.env` | [Environment variable expansion](#environment-variable-expansion) |
+| See a complete minimal config | [Minimal configuration](#minimal-configuration) |
+
+## Where the config file lives
 
 At startup, `zhin runtime start` checks these project-root candidates in order. If more than one exists, startup fails instead of guessing:
 
@@ -19,7 +37,7 @@ For field-by-field types, required fields, defaults, and plugin schemas, use the
 
 ## How to use this reference
 
-Run `npx zhin setup` to generate a bootable configuration, then change fields with this page. Run `npx zhin doctor` before committing. After startup, trust the generation shown in Console rather than treating a disk file as applied state.
+Run `npx zhin doctor` before committing. After startup, trust what Console shows is actually running — what the file says isn't necessarily what's live (for example, if a new config fails validation, the old one keeps running).
 
 | What you need to change | Where it belongs |
 | --- | --- |
