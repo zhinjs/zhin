@@ -1,0 +1,23 @@
+.changeset/plugin-calendar-initial.md
+  s_2104cc474f1ce5::t_a3920bd237f433 1-5
+plugins/utils/calendar/skills/calendar-scheduling/SKILL.md
+  s_2104cc474f1ce5::t_08a6c5ee2bee36 1-37
+plugins/utils/calendar/tsconfig.json
+  s_2104cc474f1ce5::t_aeb9556554e399 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ee24bc719dbc5b489861bf0a8498324a382e747",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
