@@ -1,0 +1,79 @@
+plugins/utils/calendar/commands/calendar/auth/index.ts
+  s_2104cc474f1ce5::t_011c4b98e4918d 1-29
+plugins/utils/calendar/commands/calendar/logout/index.ts
+  s_2104cc474f1ce5::t_427ff4de997fde 1-18
+plugins/utils/calendar/commands/calendar/status/index.ts
+  s_2104cc474f1ce5::t_a0dba11557f0fe 1-10
+plugins/utils/calendar/package.json
+  s_6562bcb6cc0539::t_a83aeed940d601 8-10,21,26,35,51,55,64,71-73,103-106
+plugins/utils/calendar/plugin.ts
+  s_6562bcb6cc0539::t_887fbc8a6a2a40 1-7,12,14-25,35-90,92-94,96-104
+plugins/utils/calendar/skills/calendar-scheduling/tools/create_event/index.ts
+  s_6562bcb6cc0539::t_7f06dec919a600 4,23-39
+plugins/utils/calendar/skills/calendar-scheduling/tools/find_free_time/index.ts
+  s_6562bcb6cc0539::t_b8a2995c6ddd03 5,24-47
+plugins/utils/calendar/skills/calendar-scheduling/tools/list_events/index.ts
+  s_6562bcb6cc0539::t_026b336275afaa 4,20-40
+plugins/utils/calendar/src/chat-auth.ts
+  s_2104cc474f1ce5::t_7eeddc5ec7f4ca 1-336
+plugins/utils/calendar/src/cli/auth.ts
+  s_2104cc474f1ce5::t_fc98565ecc80ee 3,5-9,13,26,30-33,39-40,44-53,55,57-61,67-78,83-86,88-130,133-134,136,139-141,148-159,161-162,164,167-179,182,185-186,205,219-228,231-233
+plugins/utils/calendar/src/config.ts
+  s_2104cc474f1ce5::t_6145fdb2773a42 19-30
+plugins/utils/calendar/src/credential-store.ts
+  s_6562bcb6cc0539::t_1299923aa14531 1-79
+plugins/utils/calendar/src/http-callback.ts
+  s_2104cc474f1ce5::t_256e4800071b7b 1-55
+plugins/utils/calendar/src/index.ts
+  s_6562bcb6cc0539::t_02198481918e6f 9-14,34-36,40-53,64-115,118-119,124,138,140-149,153-155,160,165,167-176,179-181,186
+plugins/utils/calendar/src/oauth-session.ts
+  s_6562bcb6cc0539::t_4ffbab40fe4967 1-65
+plugins/utils/calendar/src/runtime.ts
+  s_6562bcb6cc0539::t_18cb1adcaed4a1 4,9-10
+plugins/utils/calendar/src/token-manager.ts
+  s_2104cc474f1ce5::t_1dbafd42ccef75 21-36,43-48,92-94,117-161,222-237,270-277,302-309,332-343
+plugins/utils/calendar/src/tool-errors.ts
+  s_6562bcb6cc0539::t_dad6264f5fa295 1-18
+plugins/utils/calendar/tests/chat-auth.test.ts
+  s_6562bcb6cc0539::t_133264a697266f 1-228
+plugins/utils/calendar/tsconfig.check.json
+  s_6562bcb6cc0539::t_f80dde114e60bd 4
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_117ebdf37060e2 3447-3449,3454-3456
+.changeset/plugin-calendar-chat-auth.md
+  s_ba92c46e2669a8::t_e194b62102c7d6 1-5
+plugins/utils/calendar/README.md
+  s_ba92c46e2669a8::t_adaf17cc3486f1 3-5,17-21,28-48,58-60,65-67,72,83-91,93,95,97-98,100,102-104,107,109,111-120,122,124,127-178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1e82297294b46b519ec141c601ba37dd4409d12",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ba92c46e2669a8": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12f9f-c644-7433-9e3c-fca0277bc680",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
