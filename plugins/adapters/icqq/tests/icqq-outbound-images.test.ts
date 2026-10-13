@@ -55,11 +55,12 @@ describe('ICQQ inline image projection', () => {
     const normalized = normalizeIcqqImageMedia(content);
     expect(normalized).toMatchObject({ data: { media: { mime_type: 'image/png' } } });
     const prepared = prepareIcqqOutboundMedia(normalized, 'file');
-    const projected = formatOutboundBody(prepared.content) as ImageElem;
-    expect(typeof projected.file).toBe('string');
-    if (typeof projected.file !== 'string') throw new Error('Expected materialized file');
-    const file = projected.file;
+    let file: string;
     try {
+      const projected = formatOutboundBody(prepared.content) as ImageElem;
+      expect(typeof projected.file).toBe('string');
+      if (typeof projected.file !== 'string') throw new Error('Expected materialized file');
+      file = projected.file;
       expect(file).toMatch(/\.png$/);
       expect(readFileSync(file)).toEqual(bytes);
       expect(content.data.media.value).toContain('IMAGE/PNG');
