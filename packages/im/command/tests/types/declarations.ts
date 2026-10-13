@@ -1,4 +1,4 @@
-import { defineCommand } from '../../src/index.js';
+import { defineCommand, type CommandParameterValue } from '../../src/index.js';
 
 defineCommand({
   params: {
@@ -25,5 +25,31 @@ defineCommand({
     // @ts-expect-error optional input is not guaranteed in Host calls
     input.$reply('hello');
     return [count, name, tags, size, loud, wrong, missingParam, missingOption];
+  },
+});
+
+const possibleDefault: number | undefined = Math.random() > 0.5 ? 1 : undefined;
+defineCommand({
+  params: { note: { type: 'string', optional: true, default: undefined } },
+  options: { count: { type: 'integer', default: undefined }, size: { type: 'integer', default: possibleDefault } },
+  execute({ params, options }) {
+    const omittedParams: typeof params = {};
+    const omittedOptions: typeof options = {};
+    // @ts-expect-error an undefined default does not guarantee a value
+    const guaranteedCount: number = options.count;
+    // @ts-expect-error a possibly undefined default does not guarantee a value
+    const guaranteedSize: number = options.size;
+    // @ts-expect-error optional params may be omitted when default is undefined
+    const guaranteedNote: string = params.note;
+    return [omittedParams, omittedOptions, guaranteedCount, guaranteedSize, guaranteedNote];
+  },
+});
+
+defineCommand({
+  execute({ params }) {
+    const dynamic: CommandParameterValue = params.path;
+    // @ts-expect-error absent declarations retain the broad record, not a string-only inference
+    const stringOnly: string = params.path;
+    return [dynamic, stringOnly];
   },
 });

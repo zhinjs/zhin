@@ -71,6 +71,44 @@ describe('configuration declaration export', () => {
     expect(schema.toJsonSchema()).toMatchObject({ properties: { count: { enum: [1, 2] }, enabled: { enum: [false] } } });
   });
 
+  it('rejects non-JSON choices and invalid numeric steps before compilation', () => {
+    for (const value of [NaN, Infinity, -Infinity]) {
+      expect(() => Schema.number().option([value]).toJsonSchema()).toThrow('only JSON values');
+    }
+    for (const step of [0, -1, NaN, Infinity]) {
+      expect(() => Schema.number().step(step).toJsonSchema()).toThrow('positive finite');
+    }
+    const validate = configValidator(Schema.object({ count: Schema.number().step(1) }));
+    expect(validate({ count: 1 })).toBe(true);
+    expect(validate({ count: 1.5 })).toBe(false);
+  });
+
+  it('closes a nested object intersection only at the completed combined shape', () => {
+    const validate = configValidator(Schema.object({ connection: Schema.intersect([
+      Schema.intersect([
+        Schema.object({ host: Schema.string().required() }),
+        Schema.object({ port: Schema.number().default(5432) }),
+      ]),
+      Schema.object({ database: Schema.string().required() }),
+    ]).required() }));
+    const input = { connection: { host: 'localhost', database: 'zhin' } };
+    expect(validate(input)).toBe(true);
+    expect(input).toEqual({ connection: { host: 'localhost', database: 'zhin', port: 5432 } });
+    expect(validate({ connection: { ...input.connection, unexpected: true } })).toBe(false);
+  });
+
+  it('checks secret defaults only in all structurally matching union alternatives', () => {
+    expect(Schema.union([Schema.string().secret(), Schema.number()]).default(1).toJsonSchema().default).toBe(1);
+    expect(() => Schema.union([Schema.string(), Schema.string().secret()]).default('token').toJsonSchema())
+      .toThrow('Secret configuration fields cannot contain default values');
+    expect(() => Schema.union([Schema.string().min(8).secret(), Schema.string()]).default('safe').toJsonSchema())
+      .toThrow('Secret configuration fields cannot contain default values');
+    const validate = configValidator(Schema.object({ value: Schema.union([
+      Schema.string().secret(), Schema.number().min(2),
+    ]).default(1) }));
+    expect(validate({})).toBe(false);
+  });
+
   it('exports tuples, dictionaries and literal alternatives using JSON Schema 2020-12', () => {
     const schema = Schema.object({
       coordinates: Schema.tuple([Schema.number(), Schema.number()]).required(),

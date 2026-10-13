@@ -15,7 +15,7 @@ import {
   toPermissionSubject,
   type PermissionHost,
 } from '@zhin.js/permission';
-import { commandUsage, commandHelp, parseCommandArguments, type CommandValidationIssue } from './arguments.js';
+import { commandUsage, commandHelp, parseCommandArguments, requestsCommandHelp, type CommandValidationIssue } from './arguments.js';
 import {
   createCommandContext,
   resolveCommandSession,
@@ -78,6 +78,7 @@ interface CommandMatch {
   readonly command: CommandRecord;
   readonly params: Readonly<Record<string, CommandDynamicValue>>;
   readonly remaining: readonly Readonly<CommandSegment>[];
+  readonly helpRequested: boolean;
 }
 
 export type CommandMatchInput = string | readonly Readonly<CommandSegment>[];
@@ -117,12 +118,15 @@ export class CommandIndex {
     const occupancy = new Map<string, string>();
     const shortcuts = new Map<string, ShortcutEntry>();
 
-    const claim = (key: string, source: string): void => {
-      const existing = occupancy.get(key);
-      if (existing !== undefined) {
-        throw new Error(`Duplicate Command route "${key}" (${source} vs ${existing})`);
+    const claim = (keys: readonly string[], source: string): void => {
+      for (const key of keys) {
+        for (const [occupied, existing] of occupancy) {
+          if (routeShapesOverlap(key, occupied)) {
+            throw new Error(`Duplicate Command route "${key}" (${source} vs ${existing})`);
+          }
+        }
       }
-      occupancy.set(key, source);
+      for (const key of keys) occupancy.set(key, source);
     };
 
     for (const slot of slots) {
@@ -146,10 +150,14 @@ export class CommandIndex {
         source: slot.source,
         usage: commandUsage(name, slot.definition),
         options: Object.freeze({ ...slot.definition.options }),
-        parameters: Object.freeze(Object.entries(slot.definition.params ?? {}).map(([key, schema]) => ({
-          name: key, ...schema, ...(parameter?.name === key ? parameter : {}), defaultValue: schema.default,
-          required: parameter?.name === key ? isRequiredParameter(parameter) : !schema.optional && schema.default === undefined,
-        }))),
+        parameters: Object.freeze([
+          ...Object.entries(slot.definition.params ?? {}).map(([key, schema]) => ({
+            name: key, ...schema, ...(parameter?.name === key ? parameter : {}), defaultValue: schema.default,
+            required: parameter?.name === key ? isRequiredParameter(parameter) : !schema.optional && schema.default === undefined,
+          })),
+          ...(parameter && !Object.hasOwn(slot.definition.params ?? {}, parameter.name)
+            ? [{ ...parameter, required: isRequiredParameter(parameter) }] : []),
+        ]),
         ...(alias ? { alias } : {}),
         ...(permit ? { permit } : {}),
         ...(shortcutKeys && shortcutKeys.length > 0 ? { shortcut: shortcutKeys } : {}),
@@ -158,9 +166,7 @@ export class CommandIndex {
         parameter,
       });
 
-      claim(occupancyKey(primarySegments, parameter), slot.source);
-      const argumentShape = declaredRouteShape(primarySegments, slot.definition);
-      if (argumentShape !== occupancyKey(primarySegments, parameter)) claim(argumentShape, slot.source);
+      claim([...new Set([occupancyKey(primarySegments, parameter), ...declaredRouteShapes(primarySegments, slot.definition)])], slot.source);
       routes.push({
         record,
         segments: primarySegments,
@@ -176,9 +182,7 @@ export class CommandIndex {
             primarySegments.slice(namespace.length),
           )];
           assertParameterSegment(aliasSegments, parameter, `${slot.source} alias ${JSON.stringify(entry)}`);
-          claim(occupancyKey(aliasSegments, parameter), `${slot.source} alias ${JSON.stringify(entry)}`);
-          const argumentShape = declaredRouteShape(aliasSegments, slot.definition);
-          if (argumentShape !== occupancyKey(aliasSegments, parameter)) claim(argumentShape, `${slot.source} alias ${JSON.stringify(entry)}`);
+          claim([...new Set([occupancyKey(aliasSegments, parameter), ...declaredRouteShapes(aliasSegments, slot.definition)])], `${slot.source} alias ${JSON.stringify(entry)}`);
           routes.push({
             record,
             segments: Object.freeze(aliasSegments),
@@ -192,7 +196,7 @@ export class CommandIndex {
       if (slot.definition.shortcut) {
         for (const [rawTrigger, prefill] of Object.entries(slot.definition.shortcut)) {
           const trigger = [...namespace, ...splitCommand(rawTrigger)].join(' ');
-          claim(trigger, `${slot.source} shortcut ${JSON.stringify(trigger)}`);
+          claim([trigger], `${slot.source} shortcut ${JSON.stringify(trigger)}`);
           shortcuts.set(trigger, {
             record,
             params: Object.freeze(resolveShortcutParams(
@@ -261,7 +265,7 @@ export class CommandIndex {
     }
     const shortcut = this.#matchShortcut(input);
     const match = shortcut
-      ? { command: shortcut.record, params: shortcut.params, remaining: Object.freeze([]) }
+      ? { command: shortcut.record, params: shortcut.params, remaining: Object.freeze([]), helpRequested: false }
       : this.#match(input, false);
     if (!match) {
       const candidate = this.#invalidRoute(input);
@@ -269,8 +273,8 @@ export class CommandIndex {
       if (!commandAdapterMatches(candidate, source)) return Object.freeze({ matched: false, status: 'unmatched' });
       if (!(await this.#permitAllows(candidate, source, operationSnapshot))) return this.#denied(candidate);
       const help = commandHelp(candidate.name, candidate.slot.definition, commandPrefix);
-      const text = exactMessageText(input);
-      if (text && /(?:^|\s)--help$/u.test(text)) return Object.freeze({ matched: true, status: 'executed', command: candidate.name, owner: candidate.slot.owner, value: help });
+      const segments = normalizeSegments(typeof input === 'string' ? [{ type: 'text', data: { text: input } }] : input);
+      if (requestsCommandHelp(segments)) return Object.freeze({ matched: true, status: 'executed', command: candidate.name, owner: candidate.slot.owner, value: help });
       return Object.freeze({ matched: true, status: 'invalid', command: candidate.name, owner: candidate.slot.owner,
         issues: Object.freeze([{ field: candidate.parameter?.name ?? 'arguments', message: 'Missing or invalid command parameter' }]), help });
     }
@@ -279,7 +283,7 @@ export class CommandIndex {
     const definition = match.command.slot.definition;
     const authorSource = bindOperationInput(source, match.command.slot.owner, operationSnapshot);
     const help = commandHelp(match.command.name, definition, commandPrefix);
-    if (exactMessageText(match.remaining) === '--help') {
+    if (match.helpRequested) {
       return Object.freeze({ matched: true, status: 'executed', command: match.command.name, owner: match.command.slot.owner, value: help });
     }
     const parsed = parseCommandArguments(definition, match.remaining, resolveDynamicParams(match.params, authorSource), resolveCommandSession(authorSource));
@@ -349,8 +353,12 @@ export class CommandIndex {
 
     for (const route of this.#routes) {
       // Options may appear between the literal route and a directory-bound parameter.
-      const parseDeclaredArguments = !exact && route.record.parameter && route.record.slot.definition.options !== undefined && route.literalMatcher !== undefined;
-      const result = (parseDeclaredArguments && route.literalMatcher ? route.literalMatcher : route.matcher).match(asMatcherSegments(segments));
+      const literalResult = !exact ? route.literalMatcher?.match(asMatcherSegments(segments)) : undefined;
+      const helpRequested = literalResult && hasCommandBoundary(literalResult.remaining)
+        && requestsCommandHelp(normalizeSegments(literalResult.remaining));
+      const parseDeclaredArguments = !exact && route.record.parameter && route.literalMatcher !== undefined
+        && (route.record.slot.definition.params !== undefined || route.record.slot.definition.options !== undefined || helpRequested);
+      const result = parseDeclaredArguments ? literalResult : route.matcher.match(asMatcherSegments(segments));
       if (!result || !hasCommandBoundary(result.remaining)) continue;
       const parameter = route.record.parameter;
       const params: Record<string, CommandDynamicValue> = { ...result.params };
@@ -371,6 +379,7 @@ export class CommandIndex {
         command: route.record,
         params: Object.freeze(params),
         remaining,
+        helpRequested: literalResult ? !!helpRequested : requestsCommandHelp(remaining),
       };
     }
     return undefined;
@@ -511,9 +520,46 @@ function occupancyKey(
   return parameter ? routeShape(segments) : segments.join(' ');
 }
 
-function declaredRouteShape(segments: readonly string[], definition: CommandDefinition): string {
-  const argumentsTail = Object.keys(definition.params ?? {}).filter((name) => name !== definition.$parameter?.name).map(() => '$');
-  return [...segments.map((segment) => segment.startsWith('$') ? '$' : segment), ...argumentsTail].join(' ');
+/** Accepted token arities, including optional tails and an unbounded rest tail. */
+function declaredRouteShapes(segments: readonly string[], definition: CommandDefinition): readonly string[] {
+  let variants: string[][] = [[]];
+  const append = (token: string, optional = false): void => {
+    const withToken = variants.map((variant) => [...variant, token]);
+    variants = [...new Map((optional ? [...variants, ...withToken] : withToken)
+      .map((variant) => [variant.join(' '), variant])).values()];
+  };
+  for (const segment of segments) {
+    if (!segment.startsWith('$')) { append(segment); continue; }
+    const parameter = definition.$parameter;
+    if (!parameter) continue;
+    if (parameter.rest) append(isRequiredParameter(parameter) ? '$+' : '$*');
+    else append('$', !isRequiredParameter(parameter));
+  }
+  for (const [name, schema] of Object.entries(definition.params ?? {})) {
+    if (name === definition.$parameter?.name) continue;
+    const optional = schema.optional === true || schema.default !== undefined;
+    if (schema.rest) append(optional ? '$*' : '$+');
+    else append('$', optional);
+  }
+  return [...new Set(variants.map((variant) => variant.join(' ')))];
+}
+
+function routeShapesOverlap(left: string, right: string): boolean {
+  const shape = (key: string) => {
+    const tokens = key.split(' ');
+    const repeat = tokens.at(-1);
+    const rest = repeat === '$*' || repeat === '$+';
+    const prefix = rest ? tokens.slice(0, -1) : tokens;
+    return { prefix, min: prefix.length + (repeat === '$+' ? 1 : 0), max: rest ? Infinity : prefix.length };
+  };
+  const a = shape(left);
+  const b = shape(right);
+  const length = Math.max(a.min, b.min);
+  if (length > Math.min(a.max, b.max)) return false;
+  for (let index = 0; index < length; index++) {
+    if ((a.prefix[index] ?? '$') !== (b.prefix[index] ?? '$')) return false;
+  }
+  return true;
 }
 
 function normalizeAliasList(
@@ -528,6 +574,11 @@ function resolveShortcutParams(
   prefill: Readonly<Record<string, CommandDynamicValue>>,
   source: string,
 ): Record<string, CommandDynamicValue> {
+  for (const [name, schema] of Object.entries(definition.options ?? {})) {
+    if (schema.optional === false && schema.default === undefined) {
+      throw new TypeError(`Invalid shortcut for ${source}: cannot supply required option --${name}`);
+    }
+  }
   const allowed = new Set<string>();
   const parameter = definition.$parameter;
   if (parameter) allowed.add(parameter.name);

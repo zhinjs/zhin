@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import Ajv2020 from 'ajv/dist/2020.js';
 import { parseCommandDefinition } from 'zhin.js/command';
-import { parseMiddlewareDefinition } from 'zhin.js/middleware';
+import { parseMiddlewareDefinition } from '@zhin.js/middleware';
 import plugin from '../plugin.ts';
 import middleware from '../middlewares/repeater/index.ts';
 import statusCommand from '../commands/repeater-status/index.ts';
@@ -25,6 +25,8 @@ describe('@zhin.js/plugin-repeater', () => {
     expect(validate(empty)).toBe(true);
     expect(empty).toEqual(DEFAULT_REPEATER_CONFIG);
     expect(validate({ threshold: 1 })).toBe(false);
+    expect(validate({ threshold: 2.5 })).toBe(false);
+    expect(validate({ maxLength: 20.5 })).toBe(false);
     expect(validate({ threshold: '3' })).toBe(false);
     expect(validate({ unknown: true })).toBe(false);
     expect(plugin.config!.toJsonSchema()).toMatchObject({

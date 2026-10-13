@@ -46,7 +46,7 @@ describe('owner-scoped host facades', () => {
     await state.forUser(target.endpoint, 'alice').set('preference', true);
     await db.state.forConversation(target).set('target', target);
     db.define('sessions', {});
-    await sender.sendTarget(target, 'hello');
+    await sender.sendTarget?.(target, 'hello');
     scheduler.register({ id: 'cleanup', cron: '0 0 * * * *', execute: () => undefined });
     expect(port.compareExchange).toHaveBeenNthCalledWith(1, owner,
       { kind: 'user', endpoint: target.endpoint, senderId: 'alice' }, 'preference', undefined, true, null);

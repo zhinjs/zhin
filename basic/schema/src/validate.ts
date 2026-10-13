@@ -151,9 +151,9 @@ function validateOnly(schema: Schema, path: string, value: unknown): unknown {
   }
 }
 
-export function safeParseSchema<T>(schema: Schema<T>, value: unknown): SchemaSafeParseResult<T> {
+export function safeParseSchema<S, T>(schema: Schema<S, T>, value: unknown): SchemaSafeParseResult<S | undefined> {
   try {
-    const data = validateOnly(schema as Schema, 'value', value) as T;
+    const data = validateOnly(schema as Schema, 'value', value) as S | undefined;
     return { success: true, data };
   } catch (err) {
     return { success: false, error: SchemaValidationError.fromUnknown(err) };

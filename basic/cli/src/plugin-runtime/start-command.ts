@@ -151,7 +151,10 @@ export async function runStartCommand(options: StartCommandOptions): Promise<voi
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
-    configDeclarations: () => host.runtime.configurationSchemas,
+    configDeclarations: async () => {
+      await host.runtime.whenConfigurationReady();
+      return host.runtime.configurationSchemas;
+    },
   });
   const host = new RootHost({
     projectRoot: options.root,

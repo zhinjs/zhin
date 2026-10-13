@@ -3,6 +3,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { tsImport } from 'tsx/esm/api';
+import { spawnSync } from 'node:child_process';
+
+// Plugin declarations resolve workspace packages to authoring sources after an
+// install-only checkout; generated lib/ artifacts are never a prerequisite.
+if (!process.execArgv.includes('--conditions=development')) {
+  const result = spawnSync(process.execPath, ['--conditions=development', ...process.argv.slice(1)], { stdio: 'inherit' });
+  if (result.error) throw result.error;
+  process.exit(result.status ?? 1);
+}
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const checkOnly = process.argv.includes('--check');
@@ -141,7 +150,11 @@ async function pluginEntries() {
       : undefined;
     const schema = await readPluginConfigSchema({ root, name: packageJson.name, packageJson }, modules);
     if (!schema) continue;
-    const relative = path.relative(repoRoot, hasFileSchema ? file : sourceEntry).split(path.sep).join('/');
+    const configHelper = path.join(root, 'src/config.ts');
+    const importedConfigHelper = !hasFileSchema && fs.existsSync(configHelper)
+      && /from\s+['"]\.\/src\/config\.js['"]/u.test(fs.readFileSync(sourceEntry, 'utf8'))
+      && /Schema\.object\(/u.test(fs.readFileSync(configHelper, 'utf8'));
+    const relative = path.relative(repoRoot, hasFileSchema ? file : importedConfigHelper ? configHelper : sourceEntry).split(path.sep).join('/');
     const key = path.basename(root);
     result.push({ key, relative, rows: flattenProperties(schema, `plugins.${key}`, new Set(), schema) });
   }
@@ -188,8 +201,8 @@ function render(locale) {
 
   lines.push('', `## ${zh ? '插件实例字段' : 'Plugin instance fields'}`, '');
   lines.push(zh
-    ? '以下字段通过 Runtime 的统一读取器从插件 `config: Schema.object(...)` 声明或 `schema.json` 生成。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。'
-    : 'These fields use the Runtime schema reader for each plugin’s `config: Schema.object(...)` declaration or `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.');
+    ? '以下字段通过 Runtime 的统一读取器从 trusted 插件的 `config: Schema.object(...)` 声明或 `schema.json` 生成；isolated 插件只能使用 `schema.json`。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。'
+    : 'These fields use the Runtime schema reader for trusted plugins’ `config: Schema.object(...)` declarations or `schema.json`; isolated plugins must use `schema.json`. The `<name>` in `plugins.<name>` is the default instanceKey.');
 
   for (const plugin of plugins) {
     lines.push('', `### ${plugin.key}`, '');

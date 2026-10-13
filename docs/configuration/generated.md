@@ -130,7 +130,7 @@ outline: [2, 3]
 
 ## 插件实例字段
 
-以下字段通过 Runtime 的统一读取器从插件 `config: Schema.object(...)` 声明或 `schema.json` 生成。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。
+以下字段通过 Runtime 的统一读取器从 trusted 插件的 `config: Schema.object(...)` 声明或 `schema.json` 生成；isolated 插件只能使用 `schema.json`。`plugins.<name>` 中的 `<name>` 是默认 instanceKey。
 
 ### dingtalk
 
@@ -1407,7 +1407,7 @@ _该 Schema 没有声明字段。_
 
 ### repeater
 
-[`plugins/utils/repeater/plugin.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/plugin.ts)
+[`plugins/utils/repeater/src/config.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/repeater/src/config.ts)
 
 | 路径 | 类型 | 必填 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |

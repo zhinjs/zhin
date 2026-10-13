@@ -29,7 +29,7 @@ describe('hierarchical Plugin config', () => {
     const rootSchema = Schema.object({ label: Schema.string().default('root') });
     const childSchema = Schema.object({ count: Schema.number().min(1).default(2), token: Schema.string().secret() });
     const modules = { async load<T>(source: string): Promise<T> {
-      return { default: definePlugin({ name: 'fixture', config: source.includes('/plugins/child/') ? childSchema : rootSchema }) } as T;
+      return { default: definePlugin({ name: 'fixture', config: source === join(graph.root.children[0]!.package.root, 'plugin.ts') ? childSchema : rootSchema }) } as T;
     } };
     const composer = new ConfigComposer([], modules);
     const composed = await composer.compose(graph, { plugins: { child: { token: '${TOKEN}' } } });

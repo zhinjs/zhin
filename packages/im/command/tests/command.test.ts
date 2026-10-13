@@ -971,7 +971,7 @@ describe('Command Feature', () => {
     });
   });
 
-  it('reports typed parameter rejection as invalid during dispatch', async () => {
+  it('leaves fuzzy text unmatched for a fully dynamic typed parameter route', async () => {
     const owner = rootPluginId();
     const slot = createCapabilitySlot({
       owner,
@@ -1713,6 +1713,105 @@ describe('central command argument declarations', () => {
     expect(() => defineCommand({ params: { first: { type: 'string', optional: true }, last: { type: 'string' } }, execute() {} })).toThrow('optional');
     expect(() => defineCommand({ options: { help: { type: 'boolean' } }, execute() {} })).toThrow('reserved');
     expect(() => defineCommand({ options: { one: { type: 'boolean', alias: 'a' }, two: { type: 'boolean', alias: 'a' } }, execute() {} })).toThrow('alias');
+  });
+
+  it.each([
+    { x: { type: 'string' as const }, y: { type: 'string' as const, optional: true } },
+    { x: { type: 'string' as const }, y: { type: 'string' as const, default: 'fallback' } },
+    { x: { type: 'string' as const }, rest: { type: 'word' as const, rest: true, optional: true } },
+    { rest: { type: 'word' as const, rest: true } },
+  ])('rejects declaration and directory route overlaps at every accepted arity: %j', (params) => {
+    const owner = rootPluginId();
+    const declared = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params, execute() {} }) });
+    const dynamic = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
+    expect(() => new CommandIndex([declared, dynamic], snapshotFor(owner, [declared, dynamic]))).toThrow('Duplicate Command route');
+  });
+
+  it('rejects rest overlaps beyond the minimum arity', () => {
+    const owner = rootPluginId();
+    const rest = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo', source: '/commands/foo/index.ts', definition: defineCommand({ params: { values: { type: 'word', rest: true } }, execute() {} }) });
+    const fixed = createCapabilitySlot({ owner, feature: commandFeatureId, localName: 'foo/$id', source: '/commands/foo/[id]/index.ts', definition: { ...defineCommand({ params: { id: { type: 'string' }, second: { type: 'string' }, third: { type: 'string' } }, execute() {} }), $parameter: { name: 'id', type: 'string' } as const } });
+    expect(() => new CommandIndex([rest, fixed], snapshotFor(owner, [rest, fixed]))).toThrow('Duplicate Command route');
+  });
+
+  it('rejects undefined dynamic defaults before executing business code', async () => {
+    const execute = vi.fn();
+    const invalidDefault = (() => undefined) as unknown as () => string;
+    for (const definition of [
+      defineCommand({ params: { name: { type: 'string', default: invalidDefault } }, execute }),
+      defineCommand({ options: { name: { type: 'string', default: invalidDefault } }, execute }),
+      defineCommand({ params: { name: { type: 'string' } }, shortcut: { later: { name: invalidDefault } }, execute }),
+    ]) {
+      const index = indexFor(definition);
+      await expect(index.dispatch(definition.shortcut ? 'later' : 'remind')).resolves.toMatchObject({ status: 'invalid' });
+    }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('keeps omitted optional fields absent and treats undefined defaults as omission', async () => {
+    const index = indexFor(defineCommand({ params: { name: { type: 'string', optional: true, default: undefined } }, options: { count: { type: 'integer', default: undefined } }, execute: ({ params, options }) => ({ paramPresent: Object.hasOwn(params, 'name'), optionPresent: Object.hasOwn(options, 'count') }) }));
+    await expect(index.dispatch('remind')).resolves.toMatchObject({ status: 'executed', value: { paramPresent: false, optionPresent: false } });
+  });
+
+  it('retains path-only parameter metadata in the command manifest', () => {
+    const index = indexFor(defineCommand({ execute() {} }), 'foo/$id', { name: 'id', type: 'integer' });
+    expect(index.list()[0]?.parameters).toEqual([{ name: 'id', type: 'integer', required: true }]);
+  });
+
+  it.each([undefined, {}])('intercepts help in any argument position with options %j', async (options) => {
+    const execute = vi.fn();
+    const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
+    for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
+      await expect(index.dispatch(input, undefined, undefined, '#')).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('#scan <url>') });
+    }
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('allows quoted and terminated help tokens as literal positional values', async () => {
+    const index = indexFor(defineCommand({ params: { value: { type: 'string' } }, execute: ({ params }) => params.value }));
+    for (const input of ["remind '--help'", 'remind "--help"', 'remind -- --help']) {
+      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: '--help' });
+    }
+  });
+
+  it.each([undefined, {}])('preserves quoted and terminated help in declared directory parameters with options %j', async (options) => {
+    const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
+    const index = indexFor(defineCommand({ params: { url: { type: 'string' } }, options, execute }), 'scan/$url', { name: 'url', type: 'string' });
+    for (const input of ['scan "--help"', "scan '--help'", 'scan -- --help', 'scan -- "--help"']) {
+      await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: { url: '--help', args: [] } });
+    }
+    expect(execute).toHaveBeenCalledTimes(4);
+  });
+
+  it('retains path-only directory argument capture without reinterpreting a consumed terminator', async () => {
+    const execute = vi.fn(({ params, args }) => ({ url: params.url, args }));
+    const index = indexFor(defineCommand({ execute }), 'scan/$url', { name: 'url', type: 'string' });
+    await expect(index.dispatch('scan -- --help')).resolves.toMatchObject({ status: 'executed', value: { url: '--', args: ['--help'] } });
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects shortcuts that cannot supply a required option', () => {
+    expect(() => indexFor(defineCommand({ options: { count: { type: 'integer', optional: false } }, shortcut: { later: {} }, execute() {} }))).toThrow('required option --count');
+  });
+
+  it('runs a shortcut with defaulted required options', async () => {
+    const index = indexFor(defineCommand({ options: { count: { type: 'integer', optional: false, default: 2 } }, shortcut: { later: {} }, execute: ({ options }) => options.count }));
+    await expect(index.dispatch('later')).resolves.toMatchObject({ status: 'executed', value: 2 });
+  });
+
+  it('leaves option-like tokens to commands without argument declarations', async () => {
+    const index = indexFor(defineCommand({ execute: ({ args }) => args }));
+    await expect(index.dispatch('remind --bogus')).resolves.toMatchObject({ status: 'executed', value: ['--bogus'] });
+  });
+
+  it('retains text whitespace before a structured positional argument', async () => {
+    const index = indexFor(defineCommand({ params: { caption: { type: 'text' }, who: { type: 'mention' } }, execute: ({ params }) => params }));
+    await expect(index.dispatch([{ type: 'text', data: { text: 'remind hello  \n' } }, { type: 'mention', data: { target: 'alice' } }])).resolves.toMatchObject({ status: 'executed', value: { caption: 'hello  \n', who: 'alice' } });
+  });
+
+  it('distinguishes long option names from short aliases', async () => {
+    const index = indexFor(defineCommand({ options: { c: { type: 'integer' }, count: { type: 'integer', alias: 'c' } }, execute: ({ options }) => options }));
+    await expect(index.dispatch('remind --c 2 -c 3')).resolves.toMatchObject({ status: 'executed', value: { c: 2, count: 3 } });
   });
 });
 

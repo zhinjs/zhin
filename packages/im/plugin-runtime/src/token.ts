@@ -30,9 +30,13 @@ type InheritedBinding = Readonly<{ status: 'found'; binding: Binding }>
   | Readonly<{ status: 'blocked' }>
   | undefined;
 
+/** @internal Ends a facade's candidate declarations on seal or failed setup disposal. */
+export const scopeSetupFinalizer: unique symbol = Symbol('ScopeSetupFinalizer');
+
 export class Scope {
   readonly #bindings = new Map<TokenId, Binding>();
   readonly #parent?: Scope;
+  readonly #setupFinalizers = new Set<() => void>();
   #sealed = false;
 
   constructor(
@@ -52,6 +56,14 @@ export class Scope {
       rootPrivate: rootPrivateTokens.has(token),
       token,
     }));
+    if (value && typeof value === 'object') {
+      const finalize = (value as { [scopeSetupFinalizer]?: () => void })[scopeSetupFinalizer];
+      if (typeof finalize === 'function') {
+        const endSetup = () => finalize.call(value);
+        this.#setupFinalizers.add(endSetup);
+        this.disposers.add(endSetup);
+      }
+    }
     if (dispose) this.disposers.add(dispose);
   }
 
@@ -78,6 +90,8 @@ export class Scope {
 
   seal(): void {
     this.#sealed = true;
+    for (const finalize of this.#setupFinalizers) finalize();
+    this.#setupFinalizers.clear();
     this.disposers.seal();
   }
 

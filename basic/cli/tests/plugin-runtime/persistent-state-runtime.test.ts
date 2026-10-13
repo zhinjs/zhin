@@ -2,20 +2,63 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { createDeliveryTarget, databaseHostToken, databaseRootHostToken, definePlugin, outboundHostToken, outboundRootHostToken, PluginOutboundHost, rootPluginId,
-  type RuntimeSnapshot, type PluginStateStore, type OutboundHost } from '@zhin.js/plugin-runtime';
+  PluginDatabaseHost, PluginScheduleHost, scheduleHostToken, scheduleRootHostToken,
+  type RuntimeSnapshot, type PluginStateStore, type OutboundHost, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import commandFeature, { CommandIndex, commandFeatureId, defineCommand } from '@zhin.js/command';
 import { RootRuntime, type ModuleRuntime } from '@zhin.js/runtime';
 import { createDatabaseHost, installDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
+import { sqliteAvailable } from './sqlite-availability.js';
+
+it('closes captured candidate Host declaration windows when actual Plugin setup fails', async () => {
+  const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-state-failed-setup-')));
+  const modules = new FixtureModules();
+  let database!: PluginDatabaseHost;
+  let schedule!: PluginScheduleHost;
+  const databasePort: DatabaseHost = {
+    dialect: 'test', started: false, define: vi.fn(), tables: () => [], models: { get: () => undefined },
+    getRawDatabase: () => undefined, start: async () => undefined, stop: async () => undefined,
+  };
+  const schedulePort = { register: vi.fn().mockReturnValue(() => undefined), list: () => [] };
+  await writeJson(join(project, 'package.json'), { name: '@test/failed-setup',
+    zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts' } });
+  await touch(join(project, 'plugin.ts'));
+  modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'failed-setup', setup({ resources }) {
+    database = resources.use(databaseHostToken);
+    schedule = resources.use(scheduleHostToken);
+    database.define('allowed-in-setup', {});
+    schedule.register({ id: 'allowed-in-setup', cron: '* * * * * *', execute() {} });
+    throw new Error('setup intentionally failed');
+  } }) });
+  const runtime = new RootRuntime({ projectRoot: project, modules,
+    environment: { name: 'test', mode: 'test', platform: 'node' },
+    installResources({ resources, admission }) {
+      resources.provide(databaseRootHostToken, databasePort);
+      resources.provide(databaseHostToken, new PluginDatabaseHost(rootPluginId(), databasePort, admission));
+      resources.provide(scheduleRootHostToken, schedulePort);
+      resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), schedulePort, admission));
+    },
+  });
+  try {
+    await expect(runtime.start()).rejects.toThrow('setup intentionally failed');
+    expect(() => database.define('failed-candidate', {})).toThrow('inactive generation');
+    expect(() => database.models.get('allowed-in-setup')).toThrow('inactive generation');
+    expect(() => schedule.register({ id: 'failed-candidate', cron: '* * * * * *', execute() {} })).toThrow('inactive generation');
+    expect(schedulePort.register).toHaveBeenCalledTimes(1);
+    expect(databasePort.define).toHaveBeenCalledTimes(1);
+  } finally { await runtime.stop(); await rm(project, { recursive: true, force: true }); }
+});
 
 const target = createDeliveryTarget({ conversation: { endpoint: { adapter: 'root/icqq', id: 'root/icqq\0adapter\0main' },
   kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'topic' } });
 
-it('discovers reminder and preferences plugins with owner-bound state across HMR and restart', async () => {
+it.skipIf(!sqliteAvailable)('discovers reminder and preferences plugins with owner-bound state across HMR and restart', async () => {
   const project = await realpath(await mkdtemp(join(tmpdir(), 'zhin-state-runtime-')));
   const modules = new FixtureModules();
   const sendTarget = vi.fn().mockResolvedValue('reminder-id');
   const scopes = new Map<string, PluginStateStore>();
   const senders = new Map<string, OutboundHost>();
+  const databases = new Map<string, PluginDatabaseHost>();
+  const schedulers = new Map<string, PluginScheduleHost>();
   await writeJson(join(project, 'package.json'), { name: '@test/root', dependencies: {
     '@test/reminder': 'workspace:*', '@test/preferences': 'workspace:*', '@test/command': 'workspace:*' },
   zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', plugins: [
@@ -47,6 +90,13 @@ it('discovers reminder and preferences plugins with owner-bound state across HMR
         expect(resources.use(databaseHostToken).owner).toBe(`root/${name}`);
         scopes.set(name, resources.use(databaseHostToken).state);
         senders.set(name, resources.use(outboundHostToken));
+        const database = resources.use(databaseHostToken);
+        database.define('records', { id: { type: 'integer', primary: true } });
+        databases.set(name, database);
+        const schedule = resources.use(scheduleHostToken);
+        const dispose = schedule.register({ id: 'cleanup', cron: '* * * * * *', execute() {} });
+        resources.disposers.add(dispose);
+        schedulers.set(name, schedule);
       },
     }) });
   }
@@ -82,6 +132,9 @@ it('discovers reminder and preferences plugins with owner-bound state across HMR
       const host = { send: vi.fn(), sendTarget };
       context.resources.provide(outboundRootHostToken, host);
       context.resources.provide(outboundHostToken, new PluginOutboundHost(rootPluginId(), host, context.admission));
+      const scheduler = { register: vi.fn().mockReturnValue(() => undefined), list: () => [] };
+      context.resources.provide(scheduleRootHostToken, scheduler);
+      context.resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), scheduler, context.admission));
     },
   });
   let runtime = createRuntime();
@@ -97,6 +150,12 @@ it('discovers reminder and preferences plugins with owner-bound state across HMR
     const previousStore = scopes.get('reminder')!.forConversation(target);
     const retainedSibling = scopes.get('preferences')!.forUser(target.endpoint, 'alice');
     const previousSender = senders.get('reminder')!;
+    const previousDatabase = databases.get('reminder')!;
+    const previousModel = previousDatabase.models.get('records')!;
+    const previousQuery = previousModel.select('id');
+    const siblingModel = databases.get('preferences')!.models.get('records')!;
+    const previousSchedule = schedulers.get('reminder')!;
+    await previousModel.insert({ id: 1 });
     // An already-started read holds the old generation lease while HMR publishes.
     const port = database.state!;
     const originalRead = port.read.bind(port);
@@ -122,6 +181,12 @@ it('discovers reminder and preferences plugins with owner-bound state across HMR
     await expect(previousStore.get('count')).rejects.toThrow('inactive generation');
     await expect(previousStore.update('count', () => 999)).rejects.toThrow('inactive generation');
     await expect(previousSender.sendTarget!(target, 'stale reminder')).rejects.toThrow('inactive generation');
+    await expect(previousModel.insert({ id: 2 })).rejects.toThrow('inactive generation');
+    await expect(Promise.resolve(previousQuery)).rejects.toThrow('inactive generation');
+    expect(() => previousDatabase.define('stale-table', {})).toThrow('inactive generation');
+    expect(() => previousDatabase.tables()).toThrow('inactive generation');
+    expect(() => previousSchedule.register({ id: 'stale-job', cron: '* * * * * *', execute() {} })).toThrow('inactive generation');
+    await expect(siblingModel.count!()).resolves.toBe(0);
     expect(await retainedSibling.get('count')).toBe(2);
     expect(await commands(runtime.snapshot).execute('reminder')).toBe(2);
     expect(sendTarget).toHaveBeenCalledWith(target, 'remember', 'root/reminder');

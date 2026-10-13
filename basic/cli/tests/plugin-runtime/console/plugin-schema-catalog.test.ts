@@ -50,6 +50,22 @@ function expectField(field: string): unknown {
 }
 
 describe('PluginSchemaCatalog', () => {
+  it('waits for declaration metadata without treating early startup as an absent inline schema', async () => {
+    const root = await realpath(await createProject());
+    let initialize!: () => void;
+    const ready = new Promise<void>(resolve => { initialize = resolve; });
+    const catalog = new PluginSchemaCatalog(root, async () => {
+      await ready;
+      return new Map([[root, Schema.object({ count: Schema.number().default(1) }).toJsonSchema()]]);
+    });
+    let completed = false;
+    const reading = catalog.read('plugin').then(value => { completed = true; return value; });
+    await Promise.resolve();
+    expect(completed).toBe(false);
+    initialize();
+    await expect(reading).resolves.toMatchObject({ object: { count: { default: 1 } } });
+  });
+
   it('keeps isolated Plugin forms on the committed Runtime schema after a failed reload', async () => {
     const root = await realpath(await createProject());
     await writePackage(root, 'isolated-schema-project', [{ package: './plugins/child', instanceKey: 'child' }]);

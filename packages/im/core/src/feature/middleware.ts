@@ -2,7 +2,14 @@
  * IM authoring defaults; the underlying Feature remains transport independent.
  * @module zhin.js/middleware
  */
-export * from '@zhin.js/middleware';
+export type {
+  MiddlewareContinuation,
+  MiddlewareDefinitionBase,
+  MiddlewareNext,
+  MiddlewarePhase,
+  MiddlewareTarget,
+  OutboundMiddlewareNext,
+} from '@zhin.js/middleware';
 import {
   defineMiddleware as defineFeatureMiddleware,
   type MiddlewareAuthoringDefinition,

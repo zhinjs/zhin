@@ -52,21 +52,26 @@ export default defineCommand({
     minutes: { type: 'integer', min: 1, max: 1440 },
     note: { type: 'text', default: 'Take a break' },
   },
-  options: { count: { type: 'integer', alias: 'c', default: 1, min: 1, max: 10 } },
-  execute: ({ params, options }) => `${params.minutes}:${params.note}:${options.count}`,
+  options: {
+    count: { type: 'integer', alias: 'c', default: 1, min: 1, max: 10 },
+    quiet: { type: 'boolean', default: false },
+  },
+  execute: ({ params, options }) => `${params.minutes}:${params.note}:${options.count}:${options.quiet}`,
 });
 ```
 
 Parameters are consumed in declaration order and infer the `execute` types. Optional values
-without defaults include `undefined`; `rest: true` produces a readonly array and must be last.
+without defaults are optional properties and read as `T | undefined`; `rest: true` produces a readonly array and must be last.
 Required parameters cannot follow optional ones. Text parameters retain quotes and newlines
 and consume contiguous text, so place them after scalar parameters. Bounds apply to numbers
 or text length; `choices`, `pattern`, and synchronous `validate(value, session)` add constraints.
 Dynamic defaults and shortcut prefills go through the same validation.
+Invalid static defaults, parameter ordering and duplicate short aliases fail at load time;
+dynamic default results are validated during dispatch.
 
 Options support `--count 2`, `--count=2`, and `-c 2`, including between positional parameters.
 Boolean flags mean true; `--quiet=false` means false. Negative numbers are values, and `--`
-ends option parsing. Unknown and duplicate options are invalid. `remind --help` derives help
+ends option parsing. When `params` or `options` is declared, unknown and duplicate options are invalid. `remind --help` derives help
 from the same declarations, including the current Endpoint prefix and explicit plugin
 `commandNamespace`. It respects command permissions and does not execute business code.
 

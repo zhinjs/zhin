@@ -92,18 +92,7 @@ export class ConfigComposer {
     });
 
     const document = structuredClone(input) as Record<string, unknown>;
-    const ajv = new Ajv2020({
-      allErrors: true,
-      useDefaults: true,
-      strict: true,
-      // 当前内置 schema 无需 union（log_level 的 ['string','number'] 是 type 数组，
-      // 不触发 allowUnionTypes）；保留此项是面向未来插件 schema 可能出现的
-      // anyOf/oneOf 标量 union，避免届时 Ajv strict 模式直接报错。
-      allowUnionTypes: true,
-    });
-    ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
-    ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
-    ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+    const ajv = configurationValidator();
     const validate = ajv.compile(effectiveSchema);
     if (!validate(document)) {
       throw new ConfigValidationError(formatErrors(validate.errors ?? []), source);
@@ -311,4 +300,31 @@ function formatErrors(errors: readonly ErrorObject[]): readonly string[] {
     }
     return base;
   });
+}
+
+/** Validate Console candidates with the same strict engine and defaults as composition. */
+export function validatePluginConfigSchema(schema: JsonSchema, input: unknown): readonly ErrorObject[] {
+  const validate = configurationValidator().compile({
+    type: 'object',
+    ...(schema.$defs ? { $defs: schema.$defs } : {}),
+    properties: { candidate: schema },
+  });
+  const candidate = { candidate: structuredClone(input) };
+  return validate(candidate) ? [] : structuredClone(validate.errors ?? []);
+}
+
+function configurationValidator(): Ajv2020 {
+  const ajv = new Ajv2020({
+    allErrors: true,
+    useDefaults: true,
+    strict: true,
+    // 当前内置 schema 无需 union（log_level 的 ['string','number'] 是 type 数组，
+    // 不触发 allowUnionTypes）；保留此项是面向未来插件 schema 可能出现的
+    // anyOf/oneOf 标量 union，避免届时 Ajv strict 模式直接报错。
+    allowUnionTypes: true,
+  });
+  ajv.addKeyword({ keyword: 'x-descriptionZh', schemaType: 'string' });
+  ajv.addKeyword({ keyword: 'x-keyPlaceholder', schemaType: 'string' });
+  ajv.addKeyword({ keyword: 'x-zhin-config', schemaType: 'object' });
+  return ajv;
 }

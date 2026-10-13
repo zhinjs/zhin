@@ -1,4 +1,10 @@
-import { defineMiddleware } from '../src/feature/middleware.js';
+import {
+  defineMiddleware,
+  // @ts-expect-error The IM facade does not expose its internal overload input helper.
+  type MiddlewareAuthoringDefinition,
+} from '../src/feature/middleware.js';
+declare const internalOverloadInput: MiddlewareAuthoringDefinition;
+void internalOverloadInput;
 import { defineMiddleware as defineFeatureMiddleware } from '@zhin.js/middleware';
 import type { Message, OutboundEnvelope } from '../src/plugin-runtime/im/contracts.js';
 import type { HandlerContext } from '@zhin.js/handler';

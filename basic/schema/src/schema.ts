@@ -6,6 +6,7 @@ export { SchemaValidationError, type SchemaSafeParseResult, type SchemaValidatio
 export { safeParseSchema };
 
 declare const configPresent: unique symbol;
+declare const inputRequired: unique symbol;
 
 export class Schema<S = any, T = S> {
     /** Type-only output witness used by Plugin configuration inference. */
@@ -65,9 +66,9 @@ export class Schema<S = any, T = S> {
         };
     }
     /** 设置是否必填 */
-    required(): this & Schema.Present {
+    required(): this & Schema.Present & Schema.Required {
         this.meta.required = true;
-        return this as this & Schema.Present;
+        return this as this & Schema.Present & Schema.Required;
     }
     /** 是否隐藏 */
     hidden(): this {
@@ -153,26 +154,26 @@ export class Schema<S = any, T = S> {
     }
     /** 声明一个字典类型 */
     static dict<X extends Schema>(input: X, key?: string) {
-        return new Schema<Record<string, Schema.Types<X>>>({ type: 'dict', key }, { inner: input });
+        return new Schema<Record<string, Schema.Input<X>>, Record<string, Schema.Output<X>>>({ type: 'dict', key }, { inner: input });
     }
     static object<X extends Record<string, Schema<any, any>>>(input: X, key: string = '') {
         return new Schema<Schema.InputRecord<X>, Schema.RecordTypes<X>>({ type: 'object', key }, { object: input });
     }
     /** 声明一个列表类型 */
     static list<X extends Schema>(inner: X, key?: string) {
-        return new Schema<Schema.Types<X>[]>({ type: 'list', key }, { inner });
+        return new Schema<Schema.Input<X>[], Schema.Output<X>[]>({ type: 'list', key }, { inner });
     }
     /** 声明一个元组类型 */
     static tuple<const X extends readonly any[]>(list: X, key?: string) {
-        return new Schema<Schema.Tuple<X>>({ type: 'tuple', key }, { list });
+        return new Schema<Schema.InputTuple<X>, Schema.Tuple<X>>({ type: 'tuple', key }, { list });
     }
     /** 声明一个联合类型 */
-    static union<const X extends readonly Schema[]>(list: X, key?: string): Schema<Schema.Union<X>> {
-        return new Schema<Schema.Union<X>>({ type: 'union', key }, { list });
+    static union<const X extends readonly Schema[]>(list: X, key?: string): Schema<Schema.InputUnion<X>, Schema.Union<X>> {
+        return new Schema<Schema.InputUnion<X>, Schema.Union<X>>({ type: 'union', key }, { list });
     }
     /** 声明一个交叉类型 */
     static intersect<const X extends readonly any[]>(list: X, key?: string) {
-        return new Schema<Schema.Intersect<X>>({ type: 'intersect', key }, { list });
+        return new Schema<Schema.InputIntersect<X>, Schema.Intersect<X>>({ type: 'intersect', key }, { list });
     }
     /** 声明一个常量 */
     static const<X extends string | number | boolean>(value: X, key?: string) {
@@ -199,8 +200,8 @@ export class Schema<S = any, T = S> {
         return Schema.union(branches as unknown as readonly Schema[]) as unknown as Schema<any>;
     }
     /** validate-only：不填默认值、不 throw */
-    safeParse(value?: unknown): SchemaSafeParseResult<T> {
-        return safeParseSchema(this as unknown as Schema<T>, value);
+    safeParse(value?: unknown): SchemaSafeParseResult<S | undefined> {
+        return safeParseSchema(this, value);
     }
     static resolve<T extends string>(type: T): Schema.Formatter {
         return Schema.formatters.get(type)!;
@@ -214,8 +215,15 @@ export interface Schema<S = any> {
 }
 export namespace Schema {
     export interface Present { readonly [configPresent]: true }
+    export interface Required { readonly [inputRequired]: true }
+    export type Input<T> = T extends Schema<infer I, any> ? I : never;
     export type Output<T> = T extends Schema<any, infer O> ? O : never;
-    export type InputRecord<X extends Record<string, Schema>> = { [K in keyof X]?: Types<X[K]> };
+    export type InputRecord<X extends Record<string, Schema>> =
+        { [K in keyof X as X[K] extends Required ? K : never]-?: Input<X[K]> }
+        & { [K in keyof X as X[K] extends Required ? never : K]?: Input<X[K]> };
+    export type InputUnion<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? Input<L> | InputUnion<R> : never;
+    export type InputIntersect<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? Input<L> & InputIntersect<R> : unknown;
+    export type InputTuple<X extends readonly any[]> = X extends readonly [infer L, ...infer R] ? [Input<L>, ...InputTuple<R>] : [];
     export const formatters: Map<string, Formatter> = new Map<string, Formatter>();
     export type Formatter<S = any, T = S> = (this: Schema, key: string, value: S) => T;
     export type JSON<S = any, T = S> = Meta<S, T> & {

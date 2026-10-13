@@ -330,7 +330,6 @@
     "export * from './package-contract.js';",
     "export * from './package-resolver.js';",
     "export * from './platform-features.js';",
-    "export * from './plugin-config-schema.js';",
     "export * from './primary-config.js';",
     "export * from './process-restart.js';",
     "export * from './project-graph.js';",
@@ -338,7 +337,8 @@
     "export * from './root-runtime.js';",
     "export * from './source-ownership.js';",
     "export * from './topology-transaction.js';",
-    "export * from './typescript-specifier-remap.js';"
+    "export * from './typescript-specifier-remap.js';",
+    "export{readPluginConfigSchema}from './plugin-config-schema.js';"
   ],
   "skill": [
     "export * from './definition.js';",

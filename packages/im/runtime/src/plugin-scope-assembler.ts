@@ -354,7 +354,7 @@ export class PluginScopeAssembler {
     if (schedule) {
       scope.provide(
         scheduleHostToken,
-        new PluginScheduleHost(owner, schedule),
+        new PluginScheduleHost(owner, schedule, admission),
       );
     }
   }

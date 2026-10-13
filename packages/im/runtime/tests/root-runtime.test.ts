@@ -18,6 +18,86 @@ afterEach(async () => {
 });
 
 describe('RootRuntime tracer bullet', () => {
+  it('publishes detached custom-resolver schemas before pending setup completes', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    const declaration = { type: 'object', properties: { count: { type: 'number', default: 1 } } };
+    let finish!: () => void;
+    let entered!: () => void;
+    const setupEntered = new Promise<void>(resolve => { entered = resolve; });
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root', setup() {
+      entered();
+      return new Promise<void>(resolve => { finish = resolve; });
+    } }) });
+    modules.set(join(project, 'packages/command/index.ts'), { default: commandFeature });
+    modules.set(join(project, 'commands/gh/issue/list/index.ts'), { default: defineCommand({ execute: () => 'ok' }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' },
+      config: Object.assign(() => ({}), { schema: () => declaration }) });
+    const ready = runtime.whenConfigurationReady();
+    const starting = runtime.start();
+    try {
+      await ready;
+      await setupEntered;
+      expect(runtime.snapshot.generation).toBe(0);
+      const initial = runtime.configurationSchemas.get(project)!;
+      declaration.properties.count.default = 99;
+      expect(initial.properties).toMatchObject({ count: { default: 1 } });
+      expect(Object.isFrozen(initial.properties)).toBe(true);
+      finish();
+      const committed = await starting;
+      expect(committed.tree.get(committed.root)?.configSchema?.properties).toMatchObject({ count: { default: 1 } });
+    } finally {
+      finish?.();
+      await runtime.stop();
+    }
+  });
+
+  it('rejects metadata waiters on initial composition failure and stop before initialization', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root',
+      config: { toJsonSchema() { throw new Error('configuration preflight failed'); } } }) });
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    const waiting = expect(runtime.whenConfigurationReady()).rejects.toThrow('configuration preflight failed');
+    await expect(runtime.start()).rejects.toThrow('configuration preflight failed');
+    await waiting;
+    await runtime.stop();
+    const stopped = new RootRuntime({ projectRoot: project, modules: new FakeModuleRuntime(),
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    const stopping = expect(stopped.whenConfigurationReady()).rejects.toThrow('stopped before configuration initialization');
+    await expect(stopped.stop()).rejects.toThrow('Cannot stop RootController from idle');
+    await stopping;
+  });
+
+  it('rejects metadata waiters when stop aborts an in-flight configuration preflight', async () => {
+    const project = await createProject();
+    const modules = new FakeModuleRuntime();
+    modules.set(join(project, 'plugin.ts'), { default: definePlugin({ name: 'root' }) });
+    let entered!: () => void;
+    let release!: () => void;
+    const loading = new Promise<void>(resolve => { entered = resolve; });
+    const held = new Promise<void>(resolve => { release = resolve; });
+    const originalLoad = modules.load.bind(modules);
+    modules.load = async <T>(source: string): Promise<T> => {
+      entered();
+      await held;
+      return originalLoad<T>(source);
+    };
+    const runtime = new RootRuntime({ projectRoot: project, modules,
+      environment: { name: 'test', mode: 'test', platform: 'node' } });
+    const waiting = expect(runtime.whenConfigurationReady()).rejects.toThrow('stopped before configuration initialization');
+    const starting = runtime.start();
+    const aborted = expect(starting).rejects.toThrow('Root lifecycle is stopping');
+    await loading;
+    const stopping = runtime.stop();
+    await waiting;
+    release();
+    await aborted;
+    await stopping;
+  });
+
   it('commits validated declaration metadata and keeps the old generation on invalid config', async () => {
     const project = await createProject();
     const modules = new FakeModuleRuntime();

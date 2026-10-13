@@ -172,18 +172,21 @@ export class EndpointRuntime {
     const lease = this.context.acquire();
     try {
       const index = requireAdapters(lease.value);
-      let owner: string;
+      const id = conversation.endpoint.id as CapabilityId;
+      let owner: PluginId;
+      let adapter: string;
       try {
-        owner = String(index.owner(conversation.endpoint.id as CapabilityId));
+        owner = index.owner(id);
+        adapter = index.clientAdapter(id);
       } catch {
         throw new EndpointDeliveryError('endpoint_not_found', 'The saved delivery endpoint no longer exists.', 'not_sent');
       }
-      if (owner !== conversation.endpoint.adapter) {
-        throw new EndpointDeliveryError('endpoint_identity_mismatch', 'The saved delivery endpoint belongs to a different plugin.', 'not_sent');
+      if (adapter !== conversation.endpoint.adapter) {
+        throw new EndpointDeliveryError('endpoint_identity_mismatch', 'The saved delivery endpoint belongs to a different adapter.', 'not_sent');
       }
       const result = await this.context.send({
         conversation,
-        requester: requester ?? index.owner(conversation.endpoint.id as CapabilityId),
+        requester: requester ?? owner,
         // The unified renderer validates JSX, components and native Segments.
         content: content as SendContent,
       }, lease.value);

@@ -30,8 +30,18 @@ export interface OutboundRuntimePort {
 export function createOutboundHost(im: OutboundRuntimePort): OutboundRootHost {
   return {
     async sendTarget(target, content, requester) {
-      const result = await im.endpoints.sendTarget(target, content, requester);
-      return result.messageId || null;
+      try {
+        const result = await im.endpoints.sendTarget(target, content, requester);
+        return result.messageId || null;
+      } catch (error) {
+        logger.debug(formatCompact({
+          op: 'outbound_send_failed',
+          adapter: target.endpoint.adapter,
+          endpointKey: target.endpoint.id,
+          error: error instanceof Error ? error.message : String(error),
+        }));
+        throw error;
+      }
     },
     runWithView: (operation) => im.runWithSnapshotView(operation),
     capabilities(input) {

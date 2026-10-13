@@ -51,6 +51,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   #pendingDependencies?: Map<string, ModuleDependencyAnalysis>;
   #watchRoots: readonly string[];
   #revision = 0;
+  readonly #entryRevisions = new Map<string, number>();
   #closed = false;
 
   constructor(options: NativeDevelopmentModuleRuntimeOptions) {
@@ -68,7 +69,8 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     const analysis = this.#pendingDependencies?.get(normalized)
       ?? await this.#dependencies.analyze(normalized);
     const url = pathToFileURL(normalized);
-    url.searchParams.set('zhin-generation', String(this.#revision));
+    if (!this.#entryRevisions.has(normalized)) this.#entryRevisions.set(normalized, this.#revision);
+    url.searchParams.set('zhin-generation', String(this.#entryRevisions.get(normalized)));
     let loaded: T;
     try {
       loaded = await import(url.href) as T;
@@ -87,8 +89,12 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
   }
 
   invalidate(source: string): void {
+    const impacted = this.#dependencies.affectedSources(source);
     this.#dependencies.invalidate(source);
     this.#revision += 1;
+    for (const entry of new Set([normalizeSourcePath(source), ...impacted])) {
+      this.#entryRevisions.set(entry, this.#revision);
+    }
   }
 
   affectedSources(source: string): readonly string[] {
@@ -156,6 +162,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     }
     this.#pendingDependencies = undefined;
     this.#dependencies.retain(sources);
+    const retained = new Set(sources.map(normalizeSourcePath));
+    for (const entry of this.#entryRevisions.keys()) {
+      if (!retained.has(entry)) this.#entryRevisions.delete(entry);
+    }
   }
 
   rollbackGeneration(): void {
@@ -191,6 +201,7 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     this.#watchers.clear();
     this.#pendingDependencies = undefined;
     this.#dependencies.clear();
+    this.#entryRevisions.clear();
     await this.#tsxLoader?.close?.();
   }
 

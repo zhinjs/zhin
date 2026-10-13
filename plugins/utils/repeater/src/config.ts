@@ -8,9 +8,9 @@ export const DEFAULT_REPEATER_CONFIG = Object.freeze({
 
 /** Runtime validation, inferred types and Console forms share this declaration. */
 export const repeaterConfig = Schema.object({
-  threshold: Schema.number().min(2).max(10).default(DEFAULT_REPEATER_CONFIG.threshold).description('触发复读的最少人数').effect('reload'),
+  threshold: Schema.number().min(2).max(10).step(1).default(DEFAULT_REPEATER_CONFIG.threshold).description('触发复读的最少人数').effect('reload'),
   cooldown: Schema.number().min(5_000).max(300_000).default(DEFAULT_REPEATER_CONFIG.cooldown).description('同一群冷却时间 (ms)').effect('reload'),
-  maxLength: Schema.number().min(10).max(1_000).default(DEFAULT_REPEATER_CONFIG.maxLength).description('消息长度上限').effect('reload'),
+  maxLength: Schema.number().min(10).max(1_000).step(1).default(DEFAULT_REPEATER_CONFIG.maxLength).description('消息长度上限').effect('reload'),
 });
 
 export type RepeaterConfig = Schema.Output<typeof repeaterConfig>;

@@ -54,8 +54,15 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
         // properties contributed by the other intersection branches.
         result.unevaluatedProperties = false;
         result.allOf = branches.map(branch => {
-          if (branch.additionalProperties !== false) return branch;
-          const { additionalProperties: _closed, ...openBranch } = branch;
+          // The outer intersection owns closure, including nested intersections.
+          const { additionalProperties, unevaluatedProperties, ...rest } = branch;
+          const openBranch: Record<string, unknown> = { ...rest };
+          if (additionalProperties !== false && additionalProperties !== undefined) {
+            openBranch.additionalProperties = additionalProperties;
+          }
+          if (unevaluatedProperties !== false && unevaluatedProperties !== undefined) {
+            openBranch.unevaluatedProperties = unevaluatedProperties;
+          }
           return openBranch;
         });
       } else result.allOf = branches;
@@ -75,8 +82,14 @@ export function toJsonSchema(schema: Schema): ConfigJsonSchema {
   const maxKey = meta.type === 'number' ? 'maximum' : meta.type === 'string' ? 'maxLength' : meta.type === 'list' ? 'maxItems' : undefined;
   if (meta.min !== undefined && minKey) result[minKey] = meta.min;
   if (meta.max !== undefined && maxKey) result[maxKey] = meta.max;
-  if (meta.step !== undefined && meta.type === 'number') result.multipleOf = meta.step;
-  if (meta.options?.length) result.enum = meta.options.map(option => option.value);
+  if (meta.step !== undefined && meta.type === 'number') {
+    if (!Number.isFinite(meta.step) || meta.step <= 0) throw new TypeError('Configuration step must be a positive finite number');
+    result.multipleOf = meta.step;
+  }
+  if (meta.options?.length) {
+    for (const option of meta.options) assertJsonValue(option.value);
+    result.enum = structuredClone(meta.options.map(option => option.value));
+  }
   if (meta.secret) result.writeOnly = true;
   const annotations: ConfigFieldMetadata = {
     ...(meta.secret ? { secret: true } : {}),
@@ -126,7 +139,15 @@ function assertPublicDefault(schema: Schema, value: unknown): void {
         if (inner) assertPublicDefault(inner, item);
       });
       break;
-    case 'union': case 'intersect':
+    case 'union':
+      // Validate-only matching is deliberately broader than JSON constraints:
+      // inspect every structurally matching branch, including overlaps, so a
+      // secret branch can never be bypassed by choosing a public alternative.
+      for (const branch of schema.options.list ?? []) {
+        if (branch.safeParse(value).success) assertPublicDefault(branch, value);
+      }
+      break;
+    case 'intersect':
       for (const branch of schema.options.list ?? []) assertPublicDefault(branch, value);
       break;
   }

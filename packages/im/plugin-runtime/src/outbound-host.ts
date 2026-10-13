@@ -2,6 +2,7 @@ import { createRootPrivateToken, createToken } from './token.js';
 import type { DeliveryTarget } from './delivery-target.js';
 import type { PluginId } from './identity.js';
 import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
+import { OwnerOperation } from './owner-operation.js';
 
 /**
  * 未锚定 endpoint 的会话地址（结构对齐 `@zhin.js/im-contract` 的
@@ -112,6 +113,7 @@ export interface OutboundRootHost extends Omit<OutboundHost, 'sendTarget'> {
 
 /** Preserve the sending plugin as requester, independent of the destination endpoint owner. */
 export class PluginOutboundHost implements OutboundHost {
+  readonly sendTarget?: OutboundHost['sendTarget'];
   readonly runWithView?: OutboundHost['runWithView'];
   readonly capabilities?: OutboundHost['capabilities'];
   readonly addReaction?: OutboundHost['addReaction'];
@@ -123,11 +125,14 @@ export class PluginOutboundHost implements OutboundHost {
   readonly #owner: PluginId;
   readonly #host: OutboundRootHost;
   readonly #admission?: GenerationAdmissionGate;
+  readonly #operation: OwnerOperation;
 
   constructor(owner: PluginId, host: OutboundRootHost, admission?: GenerationAdmissionGate) {
     this.#owner = owner;
     this.#host = host;
     this.#admission = admission;
+    this.#operation = new OwnerOperation(admission, 'Outbound');
+    const sendTarget = host.sendTarget?.bind(host);
     const runWithView = host.runWithView?.bind(host);
     const capabilities = host.capabilities?.bind(host);
     const addReaction = host.addReaction?.bind(host);
@@ -135,6 +140,7 @@ export class PluginOutboundHost implements OutboundHost {
     const recall = host.recall?.bind(host);
     const edit = host.edit?.bind(host);
     const typing = host.typing?.bind(host);
+    this.sendTarget = sendTarget ? async (target, content) => this.#run(() => sendTarget(target, content, this.#owner)) : undefined;
     this.runWithView = runWithView ? (operation) => this.#run(() => runWithView(operation)) : undefined;
     this.capabilities = capabilities ? (input) => this.#run(() => capabilities(input)) : undefined;
     this.addReaction = addReaction ? (input) => this.#run(() => addReaction(input)) : undefined;
@@ -150,13 +156,6 @@ export class PluginOutboundHost implements OutboundHost {
     return this.#run(() => this.#host.send(input));
   }
 
-  async sendTarget(target: DeliveryTarget, content: unknown): Promise<string | null> {
-    return this.#run(() => {
-      if (!this.#host.sendTarget) throw new Error('Outbound Host does not support durable delivery targets');
-      return this.#host.sendTarget(target, content, this.#owner);
-    });
-  }
-
   /** @internal Bound by generation publication. */
   [generationAdmissionBinder](gate: GenerationAdmissionGate): PluginOutboundHost {
     return new PluginOutboundHost(this.#owner, this.#host, gate);
@@ -168,17 +167,7 @@ export class PluginOutboundHost implements OutboundHost {
   }
 
   #run<T>(operation: () => T): T {
-    if (!this.#admission) return operation();
-    const release = this.#admission.acquire();
-    if (!release) throw new Error('Outbound operation belongs to an inactive generation');
-    try {
-      const result = operation();
-      if (result && typeof (result as unknown as { then?: unknown }).then === 'function') {
-        return Promise.resolve(result).finally(release) as T;
-      }
-      release();
-      return result;
-    } catch (error) { release(); throw error; }
+    return this.#operation.run(operation);
   }
 }
 

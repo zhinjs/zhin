@@ -1,6 +1,6 @@
 import { CommandIndex, commandFeatureId, type CommandDefinition } from 'zhin.js/command';
 import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from 'zhin.js/plugin-runtime';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseCommandDefinition } from 'zhin.js/command';
 import { isRawContent } from '@zhin.js/core/runtime';
 import { buildQrImageUrl, qrImageSegment } from '../src/qrcode-lib.js';
@@ -34,10 +34,30 @@ describe('@zhin.js/plugin-qrcode', () => {
     const index = commandIndex('gen', qrcodeCommand);
     const result = await index.dispatch('gen ping');
     expect(isRawContent(result.value) && result.value.payload).toEqual({ type: 'image', data: { url: buildQrImageUrl('ping') } });
-    await expect(index.dispatch('gen ping -s 10')).resolves.toMatchObject({ status: 'invalid', issues: [{ field: '--size' }] });
+    const invalid = await index.dispatch('gen ping -s 10');
+    expect(invalid).toMatchObject({ status: 'invalid', issues: [{ field: '--size' }] });
+    expect(invalid.value).toBeUndefined();
     const help = await index.dispatch('gen --help', undefined, undefined, '#');
     expect(String(help.value)).toContain('#gen <text> [--size <integer>]');
     expect(String(help.value)).toContain('default: 300');
+  });
+
+  it('shows scan help before issuing a decode HTTP request', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      for (const options of [undefined, {}]) {
+        const index = commandIndex('scan/$url', { ...scanCommand, options, $parameter: { name: 'url', type: 'string' } });
+        for (const input of ['scan --help', 'scan --help https://example.org', 'scan https://example.org --help']) {
+          await expect(index.dispatch(input)).resolves.toMatchObject({ status: 'executed', value: expect.stringContaining('scan <url>') });
+        }
+      }
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally { vi.unstubAllGlobals(); }
+  });
+
+  it.each([0, -1, 300.5, 1025, NaN, Infinity, '300&size=1'])('rejects invalid QR helper size %s', (size) => {
+    expect(() => buildQrImageUrl('hello', size as number)).toThrow('integer between 64 and 1024');
   });
 });
 

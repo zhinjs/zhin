@@ -27,7 +27,7 @@ export default defineCommand({
 ```text
 commands/gh/pr/[[title]]/index.ts   -> gh pr [title]    （params: { title: { type: 'string', default: 'defaultTitle' } }）
 commands/upload/[asset]/index.ts    -> upload <asset>   （params: { asset: { type: 'image' } }）
-commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type: 'text' } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
+commands/search/[...kw]/index.ts    -> search <...kw>   （params: { kw: { type: 'text', rest: true } }，运行时 params.kw 为数组；元素粒度随类型：text 逐消息段，word/string 逐词，number/boolean 逐词转换）
 ```
 
 文本类型包括 `string`、`word`、`text`、`number`、`integer`、`float`、`boolean`；结构化

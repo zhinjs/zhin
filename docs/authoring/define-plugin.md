@@ -60,9 +60,13 @@ export default definePlugin({
 
 密钥在应用配置中继续写为 `apiKey: ${SUBSCRIPTION_API_KEY}`。`.secret()` 导出 `writeOnly: true` 与 `x-zhin-config.secret` 提示，禁止密钥默认值；它不会读取环境变量或授予权限。描述、选项、隐藏字段、组件类型与 `.effect('reload')` 在同一 Schema 的元信息中提供，Console Host 从 Runtime 的统一读取器获取。
 
-当前插件配置必须使用声明了 `properties` 的对象根。Console 支持基础嵌套对象、列表、字典及其字段元信息；Schema 能导出 `union`、`intersect` 和 `tuple` 的标准校验契约，但这些组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。配置声明统一不代表所有 JSON Schema 都已有对应编辑器。
+插件配置根必须是对象；没有自有字段时可省略 `properties`，`{}` 也是合法的空配置声明。`properties` 用于声明可配置字段，不能只依赖根级组合或引用来提供字段。Console 支持基础嵌套对象、列表、字典及其字段元信息；Schema 能导出 `union`、`intersect` 和 `tuple` 的标准校验契约，但这些组合类型和 `$ref` 的完整表单编辑仍需独立 Console 前端协同验收，当前 Console 对不支持的形态明确报错。配置声明统一不代表所有 JSON Schema 都已有对应编辑器。
 
 联合类型的默认值放在联合字段上：`Schema.union([...]).default(...)`。分支内部的默认值在标准 Runtime 校验中无法消歧，因此导出时拒绝；直接作为联合选项的 `Schema.const(...)` 可用，分支对象内部带默认值的字面量字段则同样拒绝。
+
+联合默认值检查全部通过 `safeParse` 结构匹配的分支；数字默认值不会因不匹配的密钥字符串分支被拒绝，同时匹配密钥分支则仍禁止导出。该检查不根据范围、步长或选项猜测分支，因此这些约束无法排除密钥分支时保守拒绝。最终默认值是否满足所有标准约束由 Runtime 校验。
+
+可信插件入口在配置预检时就会加载，以读取声明并发现重复来源；此时不执行 `setup`。入口顶层只定义能力，把 Host 操作和生命周期副作用放到 `setup`。Schema 构建器可在声明阶段调整；Runtime 在预检时复制并深冻结 JSON 元数据，后续构建器修改不会改变已捕获的当前代配置声明。
 
 每个插件只选择一个配置来源：内联 `config` 或根目录 `schema.json`；同时存在会拒绝启动。isolated 插件只使用 `schema.json`，配置组合不会在 Host 执行其入口。插件配置变更重载对应插件，非法候选配置保留旧代；系统配置的进程重启仍由 Root Host 决定。
 

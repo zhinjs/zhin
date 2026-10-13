@@ -6,7 +6,7 @@ import {
   readPluginConfigurationMap,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS, validatePluginConfigSchema } from '@zhin.js/runtime';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
@@ -22,7 +22,7 @@ export class ConsoleConfigurationStore {
   constructor(options: {
     readonly projectRoot: string;
     readonly document: ConfigFileDocument;
-    readonly configDeclarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+    readonly configDeclarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>> | Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>>;
   }) {
     this.#projectRoot = options.projectRoot;
     this.#document = options.document;
@@ -101,7 +101,7 @@ export class ConsoleConfigurationStore {
   }
 
   async validatePluginConfig(pluginName: string, data: unknown): Promise<PluginConfigValidation> {
-    const schema = await this.#schemas.read(pluginName);
+    const schema = await this.#schemas.readJson(pluginName);
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
     const envNames = new Set(Object.keys(process.env));
@@ -112,7 +112,19 @@ export class ConsoleConfigurationStore {
         if (match) envNames.add(match[1]!);
       }
     }
-    validateValue(schema, data, '$', errors, missingEnv, envNames);
+    if (schema) {
+      for (const issue of validatePluginConfigSchema(schema, data)) {
+        const location = issue.instancePath.replace(/^\/candidate/u, '').split('/').slice(1)
+          .map(key => key.replaceAll('~1', '/').replaceAll('~0', '~'));
+        errors.push({
+          path: `$${location.map(key => `.${key}`).join('')}`,
+          message: issue.keyword === 'type'
+            ? `类型应为 ${issue.params.type === 'array' ? 'list' : String(issue.params.type)}`
+            : issue.message ?? issue.keyword,
+        });
+      }
+    }
+    collectEnvironmentReferences(data, missingEnv, envNames);
     return Object.freeze({
       valid: errors.length === 0,
       errors: Object.freeze(errors),
@@ -151,64 +163,18 @@ export class ConsoleConfigurationStore {
   }
 }
 
-function validateValue(
-  schema: unknown,
+function collectEnvironmentReferences(
   value: unknown,
-  path: string,
-  errors: Array<{ path: string; message: string }>,
   missingEnv: Set<string>,
   envNames: ReadonlySet<string>,
 ): void {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) return;
-  const definition = schema as Record<string, unknown>;
   if (typeof value === 'string') {
     for (const name of value.matchAll(/\$\{([A-Z_][A-Z0-9_]*)\}/gu)) {
       if (!envNames.has(name[1]!)) missingEnv.add(name[1]!);
     }
   }
-  if (definition.required === true && (value === undefined || value === null || value === '')) {
-    errors.push({ path, message: '必填项不能为空' });
-    return;
-  }
-  if (value == null) return;
-  const type = typeof definition.type === 'string' ? definition.type : undefined;
-  const validType = type === 'number' || type === 'integer'
-    ? typeof value === 'number' && Number.isFinite(value) && (type !== 'integer' || Number.isInteger(value))
-    : type === 'boolean' ? typeof value === 'boolean'
-      : type === 'string' ? typeof value === 'string'
-        : type === 'list' ? Array.isArray(value)
-          : type === 'object' ? typeof value === 'object' && !Array.isArray(value)
-            : true;
-  if (!validType) {
-    errors.push({ path, message: `类型应为 ${type}` });
-    return;
-  }
-  if (typeof value === 'number') {
-    if (definition.integer === true && !Number.isInteger(value)) {
-      errors.push({ path, message: '须为整数' });
-    }
-    if (typeof definition.min === 'number' && value < definition.min) {
-      errors.push({ path, message: `不能小于 ${definition.min}` });
-    }
-    if (typeof definition.max === 'number' && value > definition.max) {
-      errors.push({ path, message: `不能大于 ${definition.max}` });
-    }
-  }
-  if (Array.isArray(definition.options) && !definition.options.some((option) => (
-    option && typeof option === 'object' && 'value' in option
-      ? (option as { value?: unknown }).value === value
-      : option === value
-  ))) errors.push({ path, message: '值不在允许范围内' });
-  if (type === 'object' && definition.object && typeof definition.object === 'object') {
-    const object = value as Record<string, unknown>;
-    for (const [key, child] of Object.entries(definition.object as Record<string, unknown>)) {
-      validateValue(child, object[key], `${path}.${key}`, errors, missingEnv, envNames);
-    }
-  }
-  if (type === 'list' && definition.inner) {
-    for (const [index, item] of (value as unknown[]).entries()) {
-      validateValue(definition.inner, item, `${path}[${index}]`, errors, missingEnv, envNames);
-    }
+  if (value && typeof value === 'object') {
+    for (const item of Object.values(value)) collectEnvironmentReferences(item, missingEnv, envNames);
   }
 }
 

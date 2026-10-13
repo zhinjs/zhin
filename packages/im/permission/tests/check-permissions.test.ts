@@ -2,6 +2,32 @@ import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { checkPermissions, PermissionHost, permissionHostToken } from '../src/index.js';
 
 describe('shared permission admission', () => {
+  it('denies identity-empty subjects before invoking a permissive platform checker', async () => {
+    const resources = new Scope(rootPluginId());
+    const host = new PermissionHost();
+    const checker = vi.fn(() => true);
+    host.registerPlatform('icqq', checker);
+    resources.provide(permissionHostToken, host);
+    const context = { use: resources.use.bind(resources) };
+    await expect(checkPermissions(context, ['platform(icqq,ban)'])).resolves.toBe(false);
+    await expect(checkPermissions(context, ['platform(icqq,ban)'], {})).resolves.toBe(false);
+    expect(checker).not.toHaveBeenCalled();
+  });
+
+  it('denies missing hosts without swallowing errors from actual permission checks', async () => {
+    const resources = new Scope(rootPluginId());
+    const context = { input: { sender: { id: 'alice' } }, use: resources.use.bind(resources) };
+    await expect(checkPermissions(context, ['role(master)'])).resolves.toBe(false);
+    await expect(checkPermissions(context, [])).resolves.toBe(true);
+    await expect(checkPermissions({ input: context.input, use: () => undefined as never }, ['role(master)']))
+      .resolves.toBe(false);
+    const host = new PermissionHost();
+    host.registerPlatform('icqq', () => { throw new Error('checker unavailable'); });
+    resources.provide(permissionHostToken, host);
+    await expect(checkPermissions(context, ['platform(icqq,ban)'], { adapter: 'icqq', sender: { id: 'alice' } }))
+      .rejects.toThrow('checker unavailable');
+  });
+
   it('delegates message filters to the same host used by commands', async () => {
     const resources = new Scope(rootPluginId());
     const host = new PermissionHost();

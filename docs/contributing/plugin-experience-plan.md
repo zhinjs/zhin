@@ -35,12 +35,12 @@ sidebar: false
 
 ### 第二阶段交付记录
 
-本轮基于第一阶段 PR #703，落地 Issue #702 的七项创作接口：
+本轮基于第一阶段 PR #703，落地 Issue #702 的七项创作接口；参数声明与参数校验/帮助共用一个契约，在表中合并为一行：
 
 | 接口 | 验证调用方与边界 |
 | --- | --- |
 | 参数、选项、校验和帮助 | qrcode、code-runner 通过同一 CommandIndex 解析；错误输入不会被默认值吞掉，普通聊天保持未匹配 |
-| IM 中间件类型 | repeater、short-url；严格类型夹具验证 Message、出站 Envelope、平台 client 与无消息 Host 上下文 |
+| IM 中间件类型 | repeater（入站 Message）；严格类型夹具验证 Message、出站 Envelope、平台 client 与无消息 Host 上下文 |
 | 可保存的投递目标 | reminder、preferences 两个正式 definePlugin Runtime 夹具，保留端点、父频道和线程；Core 回归验证 JSX、自定义组件和发起插件归属 |
 | 轻量状态 | 同两类插件，验证 owner、用户、会话、两实例、数据库 CAS、TTL、局部 HMR、在途操作与重启；独立 PostgreSQL 17 / MySQL 8.4 连接池实测 |
 | 配置声明 | repeater、short-url 使用同一 Schema 导出类型、默认值、校验及表单元信息；配置失败保持旧代，首次登录期间也提供表单 |

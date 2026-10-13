@@ -3,9 +3,10 @@ import {
   OwnerScopedResourceHost,
   qualifyOwnedResourceName,
 } from './owner-scoped-resource-host.js';
-import { createRootPrivateToken, createToken } from './token.js';
+import { createRootPrivateToken, createToken, scopeSetupFinalizer } from './token.js';
 import { PluginStateStore, type PersistentStatePort } from './persistent-state.js';
 import { generationAdmissionBinder, generationAdmissionSource, type GenerationAdmissionGate } from './admission.js';
+import { OwnerOperation } from './owner-operation.js';
 
 export interface DatabaseHostSelection {
   where(query: Record<string, unknown>): DatabaseHostSelection;
@@ -133,12 +134,17 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
 
   readonly #host: DatabaseHost;
   readonly #admission?: GenerationAdmissionGate;
+  readonly #operation: OwnerOperation;
 
   constructor(owner: PluginId, host: DatabaseHost, admission?: GenerationAdmissionGate) {
     super(owner);
     this.#host = host;
     this.#admission = admission;
-    this.models = Object.freeze({ get: (name: string) => this.#host.models.get(this.qualify(name)) });
+    this.#operation = new OwnerOperation(admission, 'Database');
+    this.models = Object.freeze({ get: (name: string) => this.#operation.setup(() => {
+      const model = this.#host.models.get(this.qualify(name));
+      return model ? this.#bindModel(model) : undefined;
+    }) });
   }
 
   get state(): PluginStateStore {
@@ -148,8 +154,13 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
 
   /** @internal Bound by generation publication, never a plugin authoring operation. */
   [generationAdmissionBinder](gate: GenerationAdmissionGate): PluginDatabaseHost {
-    return new PluginDatabaseHost(super.owner, this.#host, gate);
+    const facade = new PluginDatabaseHost(super.owner, this.#host, gate);
+    facade[scopeSetupFinalizer]();
+    return facade;
   }
+
+  /** @internal Scope-owned declaration window. */
+  [scopeSetupFinalizer](): void { this.#operation.endSetup(); }
 
   /** @internal Admission source collected by the Runtime. */
   get [generationAdmissionSource](): readonly GenerationAdmissionGate[] {
@@ -165,14 +176,45 @@ export class PluginDatabaseHost extends OwnerScopedResourceHost {
   }
 
   define(name: string, definition: Record<string, unknown>): void {
-    this.#host.define(this.qualify(name), definition);
+    this.#operation.setup(() => this.#host.define(this.qualify(name), definition));
   }
 
   tables(): readonly string[] {
-    return Object.freeze(this.#host.tables().flatMap((name) => {
+    return this.#operation.setup(() => Object.freeze(this.#host.tables().flatMap((name) => {
       const logical = this.unqualify(name);
       return logical === undefined ? [] : [logical];
-    }));
+    })));
+  }
+
+  #bindSelection(selection: DatabaseHostSelection): DatabaseHostSelection {
+    let current = selection;
+    const chain: DatabaseHostSelection = {
+      where: (query) => this.#operation.setup(() => { current = current.where(query); return chain; }),
+      orderBy: (field, direction) => this.#operation.setup(() => { current = current.orderBy(field, direction); return chain; }),
+      limit: (count) => this.#operation.setup(() => { current = current.limit(count); return chain; }),
+      then: (fulfilled, rejected) => this.#execute(() => Promise.resolve(current)).then(fulfilled, rejected),
+    };
+    return Object.freeze(chain);
+  }
+
+  #bindModel(model: DatabaseHostModel): DatabaseHostModel {
+    const count = model.count?.bind(model);
+    return Object.freeze({
+      select: <Fields extends string[]>(...fields: SelectFields<Fields>) =>
+        this.#operation.setup(() => this.#bindSelection(model.select<Fields>(...fields))),
+      insert: (row) => this.#execute(() => model.insert(row)),
+      delete: () => this.#operation.setup(() => Object.freeze({
+        where: (query: Record<string, unknown>) => this.#execute(() => model.delete().where(query)),
+      })),
+      update: (patch) => this.#operation.setup(() => Object.freeze({
+        where: (query: Record<string, unknown>) => this.#execute(() => model.update(patch).where(query)),
+      })),
+      ...(count ? { count: (query?: Record<string, unknown>) => this.#execute(() => count(query)) } : {}),
+    } satisfies DatabaseHostModel);
+  }
+
+  async #execute<T>(operation: () => Promise<T>): Promise<T> {
+    return this.#operation.run(operation);
   }
 }
 

@@ -115,11 +115,19 @@ export function copyJson(value: JsonValue): JsonValue {
   const ancestors = new Set<object>();
   const visit = (item: unknown): void => {
     if (item === null || typeof item === 'string' || typeof item === 'boolean') return;
-    if (typeof item === 'number' && Number.isFinite(item)) return;
+    if (typeof item === 'number' && Number.isFinite(item) && !Object.is(item, -0)) return;
     if (!item || typeof item !== 'object') throw new TypeError('Persistent state must be JSON-safe');
     if (ancestors.has(item)) throw new TypeError('Persistent state must not contain cycles');
-    if (!Array.isArray(item) && Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
+    if (Array.isArray(item) ? Object.getPrototypeOf(item) !== Array.prototype
+      : Object.getPrototypeOf(item) !== Object.prototype && Object.getPrototypeOf(item) !== null) {
       throw new TypeError('Persistent state objects must be plain JSON objects');
+    }
+    if (Object.getOwnPropertySymbols(item).length) throw new TypeError('Persistent state must not contain symbol properties');
+    if ('toJSON' in item && !Object.hasOwn(item, 'toJSON')) throw new TypeError('Persistent state must not inherit toJSON');
+    if (Array.isArray(item)) {
+      for (let index = 0; index < item.length; index++) {
+        if (!Object.hasOwn(item, index)) throw new TypeError('Persistent state arrays must not contain holes');
+      }
     }
     ancestors.add(item);
     for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(item))) {
@@ -130,7 +138,6 @@ export function copyJson(value: JsonValue): JsonValue {
       }
     }
     for (const child of Array.isArray(item) ? item : Object.values(item)) visit(child);
-    if (Object.getOwnPropertySymbols(item).length) throw new TypeError('Persistent state must not contain symbol properties');
     ancestors.delete(item);
   };
   visit(value);

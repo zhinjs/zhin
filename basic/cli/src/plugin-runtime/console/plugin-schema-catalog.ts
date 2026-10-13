@@ -16,21 +16,25 @@ const HOST_CONFIG_KEY_SET = new Set<string>(HOST_CONFIG_KEYS);
 /** Resolves schemas using the same package roots and declarations as Runtime. */
 export class PluginSchemaCatalog {
   readonly #projectRoot: string;
-  readonly #declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>;
+  readonly #declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>> | Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>>;
 
-  constructor(projectRoot: string, declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>>) {
+  constructor(projectRoot: string, declarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>> | Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>>) {
     this.#projectRoot = projectRoot;
     this.#declarations = declarations;
   }
 
   async read(pluginName?: string): Promise<unknown> {
     if (!pluginName) return null;
-    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), this.#declarations?.());
+    return this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.());
+  }
+
+  async readJson(pluginName: string): Promise<Readonly<Record<string, unknown>> | null> {
+    return (await this.#read(pluginName, () => NodePackageResolver.create(this.#projectRoot), await this.#declarations?.(), true)) as Readonly<Record<string, unknown>> | null;
   }
 
   async readAll(keys: Iterable<string>): Promise<Record<string, unknown>> {
     let resolver: Promise<NodePackageResolver> | undefined;
-    const declarations = this.#declarations?.();
+    const declarations = await this.#declarations?.();
     const entries = await Promise.all([...keys].map(async (key) => [
       key,
       await this.#read(key, () => resolver ??= NodePackageResolver.create(this.#projectRoot), declarations),
@@ -43,14 +47,17 @@ export class PluginSchemaCatalog {
     pluginName: string,
     resolver: () => Promise<NodePackageResolver>,
     declarations?: ReadonlyMap<string, Readonly<Record<string, unknown>>>,
+    rawSchema = false,
   ): Promise<unknown> {
     if (HOST_CONFIG_KEY_SET.has(pluginName)) {
       // These allowlisted sections belong to the versioned Runtime contract, not
       // third-party schema files. Preserve their existing form projection: it is
       // not a complete JSON Schema editor; Runtime remains the config validator.
       const raw = pluginName === 'plugin'
-        ? declarations?.get(await realpath(this.#projectRoot)) ?? await readOwnSchema(this.#projectRoot, 'plugin')
+        ? declarations?.get(await realpath(this.#projectRoot)) ?? await readOwnSchema(this.#projectRoot, 'plugin', !rawSchema)
         : HOST_CONFIG_SCHEMA.properties[pluginName as keyof typeof HOST_CONFIG_SCHEMA.properties];
+      if (rawSchema) return raw && pluginName !== 'plugin'
+        ? { ...raw, $defs: HOST_CONFIG_SCHEMA.$defs } : raw ?? null;
       if (raw && pluginName === 'plugin') assertSchemaStructure(raw, 'config declaration for plugin');
       return jsonSchemaToConsoleSchema(raw);
     }
@@ -67,7 +74,8 @@ export class PluginSchemaCatalog {
       throw new Error(`Cannot resolve schema for ${pluginName}: invalid or unavailable Plugin manifest`, { cause: error });
     }
     if (!target) return null;
-    const schema = declarations?.get(target.root) ?? await readOwnSchema(target.root, pluginName);
+    const schema = declarations?.get(target.root) ?? await readOwnSchema(target.root, pluginName, !rawSchema);
+    if (rawSchema) return schema;
     if (schema) assertSchemaStructure(schema, `config declaration for ${pluginName}`);
     return jsonSchemaToConsoleSchema(schema);
   }
@@ -157,7 +165,7 @@ async function resolveReference(
 }
 
 /** Missing schemas have no form; malformed schemas must not masquerade as missing. */
-async function readOwnSchema(root: string, name: string): Promise<Record<string, unknown> | null> {
+async function readOwnSchema(root: string, name: string, forForm = true): Promise<Record<string, unknown> | null> {
   let text: string;
   try {
     text = await readFile(join(root, 'schema.json'), 'utf8');
@@ -182,7 +190,7 @@ async function readOwnSchema(root: string, name: string): Promise<Record<string,
     && (!schema.properties || typeof schema.properties !== 'object' || Array.isArray(schema.properties))) {
     throw new Error(`schema.json for ${name} properties must be an object`);
   }
-  assertSchemaStructure(schema, `schema.json for ${name}`);
+  if (forForm) assertSchemaStructure(schema, `schema.json for ${name}`);
   return schema;
 }
 

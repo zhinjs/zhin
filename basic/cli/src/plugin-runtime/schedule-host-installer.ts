@@ -88,10 +88,10 @@ export function createScheduleHost(): ScheduleHost & { stop(): void } {
 }
 
 export function installScheduleHost(host?: ScheduleHost & { stop(): void }): RootResourceInstaller {
-  return ({ resources, lifecycle }) => {
+  return ({ resources, lifecycle, admission }) => {
     const instance = host ?? createScheduleHost();
     resources.provide(scheduleRootHostToken, instance);
-    resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), instance));
+    resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), instance, admission));
     // A supplied Host is process-owned and intentionally shared by overlapping
     // generations. Only an instance created by this installer belongs to Scope.
     if (!host) lifecycle.add(() => instance.stop());

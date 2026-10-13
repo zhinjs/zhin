@@ -31,5 +31,17 @@ export async function readPluginConfigSchema(
   if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
     throw new TypeError(`${pkg.name} configuration must contain a JSON Schema object`);
   }
-  return structuredClone(schema) as Readonly<Record<string, unknown>>;
+  return immutableConfigSchema(schema as Readonly<Record<string, unknown>>);
+}
+
+/** Detached declaration metadata for preflight and custom-resolver startup views. */
+export function immutableConfigSchema(schema: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  const copy = structuredClone(schema);
+  const freeze = (value: unknown): void => {
+    if (!value || typeof value !== 'object') return;
+    for (const child of Object.values(value)) freeze(child);
+    Object.freeze(value);
+  };
+  freeze(copy);
+  return copy;
 }

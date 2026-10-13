@@ -63,15 +63,15 @@ export default defineCommand({
 ```
 
 `params` 按声明顺序消费输入，类型自动推导到 `execute`。`optional: true` 无默认值时
-是 `T | undefined`；`rest: true` 是只读数组且必须最后声明。必需参数不能放在可选参数之后。
+是可省略属性，读取时为 `T | undefined`；`rest: true` 是只读数组且必须最后声明。必需参数不能放在可选参数之后。
 `text` 保留原始文本中的引号与换行，消费连续文本，应放在其他标量参数之后。
 `min` / `max` 约束数值或文本长度；`choices` 限定可选值；`pattern` 检查文本；
 `validate(value, session)` 返回 true、false 或错误文案。动态默认值与 shortcut 预填也会校验。
-非法默认值、参数顺序、重复选项别名在加载期报错。
+非法静态默认值、参数顺序、重复选项别名在加载期报错；动态默认值的返回值在派发时校验。
 
 选项支持 `--count 2`、`--count=2`、`-c 2`。布尔 `--quiet` 为 true，
 `--quiet=false` 为 false。选项可在位置参数之间出现，负数不会被误认成选项；
-`--` 之后不再解析选项，未知或重复选项会报校验失败。
+`--` 之后不再解析选项。声明 `params` 或 `options` 时，未知或重复选项会报校验失败。
 
 `remind --help` 从同一声明生成帮助，自动显示当前 Endpoint 的前缀与插件显式配置的
 `commandNamespace`。帮助读取遵循相同权限，不执行业务。没有声明参数的命令仍可通过

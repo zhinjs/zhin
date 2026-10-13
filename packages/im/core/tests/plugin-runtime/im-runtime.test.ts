@@ -1543,7 +1543,9 @@ describe('IM Runtime', () => {
       outboundMiddleware: (envelope, next) => { owners.push(envelope.requester); return next(); },
     });
     try {
-      const target = createDeliveryTarget(fixtureInput(fixture, ''));
+      const input = fixtureInput(fixture, '');
+      const target = createDeliveryTarget({ conversation: { ...input.conversation,
+        endpoint: { ...input.conversation.endpoint, adapter: 'memory' } } });
       await fixture.im.endpoints.sendTarget(target, component('result', {}), child);
       await fixture.im.endpoints.sendTarget(target, jsx('share', { title: 'song', url: 'https://example.com/song' }), child);
       expect(owners).toEqual([child, child]);
@@ -1556,13 +1558,36 @@ describe('IM Runtime', () => {
     } finally { await fixture.adapters.stop(); await fixture.store.close(); }
   });
 
+  it('saves an actual inbound Message and sends to its platform identity after a generation commit', async () => {
+    let message: Message | undefined;
+    const sent: unknown[] = [];
+    const fixture = await createFixture([], sent, value => { message = value; });
+    try {
+      const input = fixtureInput(fixture, 'ordinary conversation');
+      await receive(fixture.im, { ...input, conversation: { ...input.conversation,
+        endpoint: { ...input.conversation.endpoint, adapter: 'memory' } } });
+      expect(message).toBeDefined();
+      const target = createDeliveryTarget(message!);
+      expect(target.endpoint.adapter).toBe('memory');
+      const current = fixture.store.current;
+      fixture.store.commit(current.generation, { snapshot: snapshotState(current), dispose: () => undefined });
+      await expect(fixture.im.endpoints.sendTarget(JSON.parse(JSON.stringify(target)), 'reminder'))
+        .resolves.toEqual({ messageId: 'sent-1' });
+      expect(sent).toHaveLength(1);
+      await expect(fixture.im.endpoints.sendTarget({ ...target,
+        endpoint: { ...target.endpoint, adapter: String(rootPluginId()) } }, 'owner is not adapter'))
+        .rejects.toMatchObject({ code: 'endpoint_identity_mismatch', disposition: 'not_sent' });
+      expect(sent).toHaveLength(1);
+    } finally { await fixture.adapters.stop(); await fixture.store.close(); }
+  });
+
   it('uses persisted exact targets through the current generation and preserves parent/thread addresses', async () => {
     const events: string[] = [];
     const sent: unknown[] = [];
     const fixture = await createFixture(events, sent);
     try {
       const target = JSON.parse(JSON.stringify(createDeliveryTarget({ conversation: {
-        endpoint: { id: String(fixture.adapter.id), adapter: String(rootPluginId()) },
+        endpoint: { id: String(fixture.adapter.id), adapter: 'memory' },
         kind: 'channel', id: 'child', parent: { kind: 'channel', id: 'guild' }, threadId: 'thread',
       } })));
       const current = fixture.store.current;

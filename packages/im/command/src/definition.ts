@@ -110,13 +110,21 @@ type ParameterScalar<S extends CommandParamSchema> = S['type'] extends 'number' 
   : S['type'] extends 'mention' | 'face' | 'reply' | 'forward' ? string | number : string;
 type ParameterResult<S extends CommandParamSchema> = S extends { readonly rest: true }
   ? readonly ParameterScalar<S>[] : ParameterScalar<S>;
+type HasDefault<S extends CommandParamSchema> = S extends { readonly default: infer D }
+  ? undefined extends D ? false : true : false;
+type OptionalParam<S extends CommandParamSchema> = S extends { readonly rest: true } ? false
+  : HasDefault<S> extends true ? false : S extends { readonly optional: true } ? true : false;
+type OptionalOption<S extends CommandOptionSchema> = HasDefault<S> extends true ? false
+  : S extends { readonly optional: false } ? false : true;
 export type InferCommandParams<P extends CommandParams> = {
-  readonly [K in keyof P]: P[K] extends { readonly rest: true } ? ParameterResult<P[K]> : P[K] extends { readonly default: unknown } ? ParameterResult<P[K]>
-    : P[K] extends { readonly optional: true } ? ParameterResult<P[K]> | undefined : ParameterResult<P[K]>;
+  readonly [K in keyof P as OptionalParam<P[K]> extends true ? never : K]: ParameterResult<P[K]>;
+} & {
+  readonly [K in keyof P as OptionalParam<P[K]> extends true ? K : never]?: ParameterResult<P[K]>;
 };
 export type InferCommandOptions<O extends CommandOptions> = {
-  readonly [K in keyof O]: O[K] extends { readonly default: unknown } | { readonly optional: false } ? ParameterResult<O[K]>
-    : ParameterResult<O[K]> | undefined;
+  readonly [K in keyof O as OptionalOption<O[K]> extends true ? never : K]: ParameterResult<O[K]>;
+} & {
+  readonly [K in keyof O as OptionalOption<O[K]> extends true ? K : never]?: ParameterResult<O[K]>;
 };
 
 /** Minimal structural contract shared with canonical IM segments. */
@@ -351,7 +359,7 @@ export function defineCommand<
   TConfig = unknown,
   TResult = unknown,
   TInput extends CommandMessage = CommandMessage,
-  const P extends CommandParams = CommandParams,
+  const P extends CommandParams = {},
   const O extends CommandOptions = {},
 >(
   definition: CommandAuthoringDefinition<TConfig, TResult, TInput, P, O>,

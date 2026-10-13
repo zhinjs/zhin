@@ -179,6 +179,29 @@ describe('config document flatten / write namespace', () => {
 });
 
 describe('Console schema validation', () => {
+  it('uses the Runtime standard validator for strings, lists, step, unknown fields and references', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-console-standard-validation-'));
+    tempRoots.push(root);
+    await writeFile(join(root, 'zhin.config.yml'), 'plugin: {}\n');
+    await writeFile(join(root, 'schema.json'), JSON.stringify({
+      type: 'object', additionalProperties: false,
+      $defs: { code: { type: 'string', minLength: 2, maxLength: 3, pattern: '^[A-Z]+$' } },
+      properties: {
+        code: { $ref: '#/$defs/code' },
+        items: { type: 'array', minItems: 1, maxItems: 2, items: { type: 'string' } },
+        count: { type: 'number', multipleOf: 1 },
+      },
+    }));
+    const store = createStore(root, 'zhin.config.yml');
+    const valid = { code: 'AB', items: ['x'], count: 2 };
+    expect(await store.validatePluginConfig('plugin', valid)).toMatchObject({ valid: true });
+    for (const value of [{ ...valid, code: 'a' }, { ...valid, code: 'ABCD' },
+      { ...valid, items: [] }, { ...valid, items: ['x', 'y', 'z'] }, { ...valid, count: 2.5 },
+      { ...valid, unknown: true }]) {
+      expect(await store.validatePluginConfig('plugin', value)).toMatchObject({ valid: false });
+    }
+    expect(valid).toEqual({ code: 'AB', items: ['x'], count: 2 });
+  });
   it('enforces root project integer bounds and rejects container type errors without throwing', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-console-schema-validation-'));
     tempRoots.push(root);

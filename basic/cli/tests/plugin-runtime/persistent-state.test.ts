@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { childPluginId, rootPluginId, PluginDatabaseHost, createDeliveryTarget } from '@zhin.js/plugin-runtime';
 import { createDatabaseHost } from '../../src/plugin-runtime/database-host-installer.js';
 import { createDatabaseState, type StateDatabase } from '../../src/plugin-runtime/database-state.js';
+import { sqliteAvailable } from './sqlite-availability.js';
 
 const ownerA = childPluginId(rootPluginId(), 'reminder');
 const ownerB = childPluginId(rootPluginId(), 'welcome');
@@ -11,7 +12,7 @@ const target = createDeliveryTarget({ conversation: { endpoint: { adapter: 'root
   kind: 'channel', id: 'room', parent: { kind: 'channel', id: 'guild' }, threadId: 'topic' } });
 
 describe('plugin persistent state', () => {
-  it('atomically increments across independent database connections and plugin instances', async () => {
+  it.skipIf(!sqliteAvailable)('atomically increments across independent database connections and plugin instances', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-state-'));
     const config = { dialect: 'sqlite', filename: join(dir, 'state.sqlite') } as const;
     const dbA = createDatabaseHost(config);
@@ -39,7 +40,7 @@ describe('plugin persistent state', () => {
     }
   });
 
-  it('isolates users, exact endpoints, parent channels and threads, and survives restart', async () => {
+  it.skipIf(!sqliteAvailable)('isolates users, exact endpoints, parent channels and threads, and survives restart', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-state-scope-'));
     const config = { dialect: 'sqlite', filename: join(dir, 'state.sqlite') } as const;
     let db = createDatabaseHost(config);
@@ -67,7 +68,7 @@ describe('plugin persistent state', () => {
     }
   });
 
-  it('expires values and atomically replaces expired rows; supports deletion and detached copies', async () => {
+  it.skipIf(!sqliteAvailable)('expires values and atomically replaces expired rows; supports deletion and detached copies', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'zhin-state-ttl-'));
     const db = createDatabaseHost({ dialect: 'sqlite', filename: join(dir, 'state.sqlite') });
     try {

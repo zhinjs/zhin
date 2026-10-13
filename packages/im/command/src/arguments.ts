@@ -31,7 +31,7 @@ export function validateArgumentSchemas(params?: CommandParams, options?: Comman
   if (options !== undefined && (!options || typeof options !== 'object' || Array.isArray(options))) {
     throw new TypeError('Command options must be a record');
   }
-  const aliases = new Set<string>(Object.keys(options ?? {}));
+  const aliases = new Set<string>();
   for (const [name, schema] of Object.entries(options ?? {})) {
     validateSchema(name, schema);
     if (!scalarTypes.has(schema.type) || schema.type === 'text') {
@@ -105,6 +105,15 @@ function tokenize(segments: readonly Readonly<CommandSegment>[]): Token[] {
     if (isTextToken(last)) tokens[tokens.length - 1] = { ...last, after: segment.data.text.slice(end) };
     return tokens;
   });
+}
+/** Reserved flags use the same quoted-token and option-terminator rules as arguments. */
+export function requestsCommandHelp(segments: readonly Readonly<CommandSegment>[]): boolean {
+  for (const token of tokenize(segments)) {
+    if (!isTextToken(token) || token.quoted) continue;
+    if (token.value === '--') return false;
+    if (token.value === '--help') return true;
+  }
+  return false;
 }
 function segmentsFromTokens(tokens: readonly Token[]): readonly Readonly<CommandSegment>[] {
   const result: CommandSegment[] = [];
@@ -210,7 +219,8 @@ export function parseCommandArguments(
   }
   for (const [name, schema] of Object.entries(schemas ?? {})) {
     if (!Object.hasOwn(options, name) && schema.default !== undefined) options[name] = typeof schema.default === 'function' ? schema.default(session) : schema.default;
-    if (options[name] !== undefined) { const issue = validateValue(`--${name}`, schema, options[name], session); if (issue) issues.push(issue); }
+    if (Object.hasOwn(options, name) && options[name] === undefined) issues.push({ field: name, message: `--${name}: default returned undefined` });
+    else if (options[name] !== undefined) { const issue = validateValue(`--${name}`, schema, options[name], session); if (issue) issues.push(issue); }
     else if (schema.optional === false) issues.push({ field: name, message: `Missing option --${name}` });
   }
   const declared = Object.entries(definition.params ?? {});
@@ -229,7 +239,7 @@ export function parseCommandArguments(
         const raw: string[] = [];
         while (isTextToken(positional[0])) {
           const token = positional.shift() as Extract<Token, { value: string }>;
-          raw.push(`${raw.length > 0 ? token.before || ' ' : ''}${token.raw ?? token.value}`);
+          raw.push(`${raw.length > 0 ? token.before || ' ' : ''}${token.raw ?? token.value}${token.after ?? ''}`);
         }
         if (raw.length > 0) value = raw.join('');
       } else if (positional.length > 0) {
@@ -246,7 +256,8 @@ export function parseCommandArguments(
         issues.push({ field: name, message: `${name}: expected ${schema.type}` });
       }
     }
-    if (params[name] !== undefined) { const effective = definition.$parameter?.name === name && definition.$parameter.rest ? { ...schema, rest: true } : schema; const issue = validateValue(name, effective, params[name], session); if (issue) issues.push(issue); }
+    if (Object.hasOwn(params, name) && params[name] === undefined) issues.push({ field: name, message: `${name}: default or shortcut returned undefined` });
+    else if (params[name] !== undefined) { const effective = definition.$parameter?.name === name && definition.$parameter.rest ? { ...schema, rest: true } : schema; const issue = validateValue(name, effective, params[name], session); if (issue) issues.push(issue); }
   }
   if (declared.length > 0 && !definition.$parameter && positional.length > 0) issues.push({ field: 'arguments', message: 'Unexpected arguments' });
   return Object.freeze({ params: Object.freeze(params), options: Object.freeze(options), remaining: schemas === undefined && declared.every(([name]) => Object.hasOwn(initial, name)) ? remaining : segmentsFromTokens(positional), issues: Object.freeze(issues) });

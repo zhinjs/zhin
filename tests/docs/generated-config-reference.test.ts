@@ -24,7 +24,7 @@ describe('generated configuration reference', () => {
       expect(content).toContain('`plugins.sandbox.endpoints`');
       expect(content).toContain('"websocket"');
       expect(content).toContain('plugins/adapters/qq/schema.json');
-      expect(content).toContain('plugins/utils/repeater/plugin.ts');
+      expect(content).toContain('plugins/utils/repeater/src/config.ts');
       expect(content).toContain('plugins/utils/short-url/plugin.ts');
       expect(content).toContain('`plugins.repeater.threshold`');
       expect(content).not.toContain('plugins/utils/repeater/schema.json');

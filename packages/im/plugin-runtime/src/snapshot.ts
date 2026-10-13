@@ -275,7 +275,9 @@ export function createSnapshotView(
   return Object.freeze({
     ...state,
     generation,
-    tree: readonlyMap(state.tree),
+    tree: readonlyMap([...state.tree].map(([owner, node]) => [owner, node.configSchema
+      ? Object.freeze({ ...node, configSchema: freezeSchema(structuredClone(node.configSchema)) })
+      : node])),
     config: readonlyMap(state.config),
     resources: readonlyMap(
       [...state.resources].map(([owner, resources]) => [owner, readonlyMap(resources)]),
@@ -283,6 +285,14 @@ export function createSnapshotView(
     capabilities: readonlyMap(state.capabilities),
     projections: readonlyMap(state.projections),
   });
+}
+
+function freezeSchema<T>(value: T): T {
+  if (value && typeof value === 'object') {
+    for (const child of Object.values(value)) freezeSchema(child);
+    Object.freeze(value);
+  }
+  return value;
 }
 
 class ReadonlyMapView<K, V> implements ReadonlyMap<K, V> {

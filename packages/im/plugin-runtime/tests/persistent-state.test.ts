@@ -9,12 +9,27 @@ describe('persistent state JSON contract', () => {
     expect((copy as typeof original).target).not.toBe(original.target);
   });
 
-  it.each([NaN, Infinity, undefined, new Date(), { callback: () => undefined }, Array(2),
+  it.each([NaN, Infinity, -0, undefined, new Date(), { callback: () => undefined }, Array(2),
     Object.defineProperty({}, 'hidden', { value: 'lost' }),
     Object.defineProperty({}, 'value', { enumerable: true, get() { throw new Error('getter should not execute'); } }),
     { [Symbol('ignored')]: 1 }, Object.assign([1], { ignored: 2 }),
-  ])('rejects values that JSON.stringify would silently change %#', (value) => {
+  ].map((value) => ({ value })))('rejects values that JSON.stringify would silently change %#', ({ value }) => {
     expect(() => copyJson(value as JsonValue)).toThrow(/Persistent state/);
+  });
+
+  it('rejects array subclasses and inherited or own toJSON without executing them', () => {
+    const transform = vi.fn(() => 'changed');
+    class LossyArray extends Array { toJSON = transform; }
+    class InheritedLossyArray extends Array { toJSON() { return transform(); } }
+    const subclass = new InheritedLossyArray(1, 2);
+    for (const value of [new LossyArray(1, 2), subclass, Object.assign([1, 2], { toJSON: transform })]) {
+      expect(() => copyJson(value)).toThrow('Persistent state');
+    }
+    expect(transform).not.toHaveBeenCalled();
+    const sparse = [1, 2, 3];
+    delete sparse[1];
+    expect(() => copyJson(sparse)).toThrow('holes');
+    expect(copyJson([0, 1, 2])).toEqual([0, 1, 2]);
   });
 
   it('rejects cycles and limits UTF-8 bytes rather than characters', () => {
