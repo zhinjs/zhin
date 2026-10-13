@@ -1,0 +1,142 @@
+packages/toolkit/plugin-test-kit/src/index.ts
+  s_6562bcb6cc0539::t_2a10127fec224b 11,84-85,121
+plugins/utils/group-suite/commands/keyword-add/[keyword]/index.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 4,14-16
+packages/im/config-file/tests/concurrent-transaction.test.ts
+  s_6562bcb6cc0539::t_80d013fb97d39c 7-30
+plugins/utils/group-suite/commands/keyword-remove/[keyword]/index.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 4,13-14
+scripts/build-plugin-runtime-entries.mjs
+  s_6562bcb6cc0539::t_3dae42d3d70904 12
+basic/cli/src/commands/packages.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 81,90
+plugins/utils/group-suite/src/runtime-state.ts
+  s_6562bcb6cc0539::t_39dccbe3db2929 10-11,20
+basic/cli/src/plugin-management/workflow.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 209,214-215,263,267,345
+plugins/utils/group-suite/src/checkin-lib.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 161-162
+packages/im/config-file/src/config-file-lock.ts
+  s_6562bcb6cc0539::t_3dae42d3d70904 60-68
+packages/toolkit/plugin-test-kit/tests/restart-probe.mjs
+  s_6562bcb6cc0539::t_2a10127fec224b 8
+basic/cli/src/plugin-management/console-client.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 17-18
+packages/toolkit/plugin-test-kit/tests/sqlite-runtime.mjs
+  s_6562bcb6cc0539::t_2a10127fec224b 1-6
+packages/im/plugin-runtime/src/html-renderer.ts
+  s_6562bcb6cc0539::t_9ad79e393f2389 4-5
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_9fd7e80eaaf6c0 1362,1417
+tsconfig.typecheck.json
+  s_6562bcb6cc0539::t_1c80e549442289 312-313
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_9fd7e80eaaf6c0 1362,1417
+packages/im/schedule-feature/README.md
+  s_6562bcb6cc0539::t_12d7c55ead9530 22
+basic/cli/src/commands/install.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 74,104
+packages/im/config-file/README.md
+  s_6562bcb6cc0539::t_3dae42d3d70904 53
+scripts/build-plugin-runtime-entries.test.ts
+  s_6562bcb6cc0539::t_495f7a75acd462 3,53
+  s_6562bcb6cc0539::t_3dae42d3d70904 25,45,58,67-68
+plugins/utils/group-suite/commands/keyword-list/index.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 4,10-12
+basic/cli/tests/plugin-management-review.test.ts
+  s_6562bcb6cc0539::t_c54df7940812cf 25,29,36,38-50,52-53,58-59,62-63,73,76,95
+  s_6562bcb6cc0539::t_a7a30ce95f9520 1-24,26-28,30-35,37,51,54-57,60-61,64-72,74-75,77-94,96
+packages/toolkit/plugin-test-kit/tests/capture.test.ts
+  s_6562bcb6cc0539::t_6c8a4910092d36 22-33
+  s_6562bcb6cc0539::t_d1ba502c8d92c6 1-21,34-56
+plugins/utils/group-suite/tests/conversation-isolation.test.ts
+  s_6562bcb6cc0539::t_39dccbe3db2929 36,45,53
+  s_6562bcb6cc0539::t_848af1ab829168 50
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_6562bcb6cc0539::t_9ad79e393f2389 48
+basic/cli/tests/plugin-management-console-client.test.ts
+  s_6562bcb6cc0539::t_9b51851e963467 18-23,27,76,96-108
+  s_6562bcb6cc0539::t_220585718140e7 109
+plugins/utils/group-suite/README.md
+  s_6562bcb6cc0539::t_ad9f4d51827db1 42-43,47-48,78-79
+plugins/utils/group-suite/src/stats-lib.ts
+  s_6562bcb6cc0539::t_39dccbe3db2929 46,55-56,61-67,69-73,80,82,84-88,117
+basic/cli/src/plugin-runtime/console/plugin-routes.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 39,86,106,119-123
+  s_6562bcb6cc0539::t_9e340b6b7f5c09 124
+packages/host/http/tests/console-plugin-workflow.test.ts
+  s_6562bcb6cc0539::t_c54df7940812cf 3,26
+  s_6562bcb6cc0539::t_8aaa61cd177754 13,19,25,30-31,44
+packages/im/core/src/plugin-runtime/im/outbound-projection.ts
+  s_6562bcb6cc0539::t_9ad79e393f2389 27,30,43,45
+plugins/utils/group-suite/schema.json
+  s_6562bcb6cc0539::t_ad9f4d51827db1 55
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_6562bcb6cc0539::t_3dae42d3d70904 16
+packages/toolkit/plugin-test-kit/src/delivery-capture.ts
+  s_6562bcb6cc0539::t_6c8a4910092d36 12-16,34-40
+  s_6562bcb6cc0539::t_2a10127fec224b 1-11,17-33,41-48
+packages/im/schedule-feature/tests/types/config.ts
+  s_6562bcb6cc0539::t_80d013fb97d39c 1-12
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_6562bcb6cc0539::t_9ad79e393f2389 66,236,292-293,299,317,328-341
+  s_6562bcb6cc0539::t_59c843af67442a 342-343
+plugins/utils/group-suite/tests/review-regressions.test.ts
+  s_6562bcb6cc0539::t_848af1ab829168 2-92
+  s_6562bcb6cc0539::t_ae50db1fff3dfc 1
+plugins/utils/group-suite/src/conversation-scope.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 42-43
+packages/toolkit/plugin-test-kit/README.md
+  s_6562bcb6cc0539::t_d1ba502c8d92c6 47,74-81
+packages/im/schedule-feature/src/definition.ts
+  s_6562bcb6cc0539::t_3dae42d3d70904 13-14
+packages/toolkit/plugin-test-kit/tests/fixture-copy-filter.mjs
+  s_6562bcb6cc0539::t_2a10127fec224b 1-4
+plugins/utils/group-suite/src/keywords.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 8-11,35-39,53-61,64-66
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_6562bcb6cc0539::t_9ad79e393f2389 117-118,138-159
+basic/cli/tests/plugin-management.test.ts
+  s_6562bcb6cc0539::t_9b51851e963467 48-74
+plugins/utils/reminder/README.md
+  s_6562bcb6cc0539::t_2a10127fec224b 61
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_6562bcb6cc0539::t_d1ba502c8d92c6 60-75
+  s_6562bcb6cc0539::t_78b9a027a96eb3 58-59
+docs/cli/index.md
+  s_6562bcb6cc0539::t_8aaa61cd177754 130,134
+  s_6562bcb6cc0539::t_c54df7940812cf 132-133
+  s_6562bcb6cc0539::t_078d6cae8b27d5 111
+packages/toolkit/plugin-test-kit/tests/run-kit.mjs
+  s_6562bcb6cc0539::t_2a10127fec224b 3-6,22,36-37,44,54-60,137
+plugins/utils/reminder/src/config.ts
+  s_6562bcb6cc0539::t_2a10127fec224b 5
+plugins/utils/group-suite/commands/stats-card/index.ts
+  s_6562bcb6cc0539::t_ad9f4d51827db1 9,20
+packages/host/http/src/console-plugin-rpc.ts
+  s_6562bcb6cc0539::t_c16ac563de0c41 51
+packages/toolkit/plugin-test-kit/tests/sqlite-state-host.mjs
+  s_6562bcb6cc0539::t_2a10127fec224b 6-7
+.changeset/practical-plugin-workflow.md
+  s_6562bcb6cc0539::t_b5e9292281c5fb 20-21
+packages/toolkit/plugin-test-kit/package.json
+  s_6562bcb6cc0539::t_2a10127fec224b 9
+plugins/utils/group-suite/tests/practical-runtime.test.ts
+  s_6562bcb6cc0539::t_b5222a0e3def01 4,6-8,11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3be4b95fdc4e6079123cd8f35a02953a55549f71",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
