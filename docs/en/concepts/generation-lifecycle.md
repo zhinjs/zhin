@@ -1,6 +1,6 @@
 ---
-title: Generation and Lifecycle
-description: Why hot reload never interrupts messages in flight, why the old version keeps serving when new code fails, and why plugin resources must register cleanup
+title: "Generation and Lifecycle"
+description: "Why hot reload never interrupts messages in flight, why the old version keeps serving when new code fails, and why plugin resources must register cleanup"
 ---
 
 # Generation and lifecycle

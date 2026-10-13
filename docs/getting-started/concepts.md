@@ -1,6 +1,6 @@
 ---
-title: 核心概念速览
-description: 用大白话解释 Zhin.js 文档里反复出现的名词：插件、约定目录、Feature、适配器、Endpoint、Host、Console、Agent、Generation 等
+title: "核心概念速览"
+description: "用大白话解释 Zhin.js 文档里反复出现的名词：插件、约定目录、Feature、适配器、Endpoint、Host、Console、Agent、Generation 等"
 ---
 
 # 核心概念速览

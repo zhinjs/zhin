@@ -1,6 +1,6 @@
 ---
-title: Convention Directories
-description: Which folder each capability goes in, what the entry file is called, and how folder names become command or capability names
+title: "Convention Directories"
+description: "Which folder each capability goes in, what the entry file is called, and how folder names become command or capability names"
 ---
 
 # Convention directories

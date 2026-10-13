@@ -1,6 +1,6 @@
 ---
-title: Agent Tools and Skills
-description: Let the AI call your functions — write Tools, restrict their scope and approval, package procedures as Skills, add business context with Prompt Sections, and define sub-agents
+title: "Agent Tools and Skills"
+description: "Let the AI call your functions — write Tools, restrict their scope and approval, package procedures as Skills, add business context with Prompt Sections, and define sub-agents"
 ---
 
 # Agent tools and Skills

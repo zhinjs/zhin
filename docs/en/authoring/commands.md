@@ -1,6 +1,6 @@
 ---
-title: Commands (defineCommand)
-description: Write /xxx commands — params, options, aliases, permissions, image and card replies, subcommands, command prefixes, and what happens on bad input
+title: "Commands (defineCommand)"
+description: "Write /xxx commands — params, options, aliases, permissions, image and card replies, subcommands, command prefixes, and what happens on bad input"
 ---
 
 # Commands

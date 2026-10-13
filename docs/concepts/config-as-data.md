@@ -1,6 +1,6 @@
 ---
-title: 配置即数据
-description: zhin.config.yml 的结构、配置如何校验并分发给每个插件、为什么修改配置要么完整生效要么完整回滚
+title: "配置即数据"
+description: "zhin.config.yml 的结构、配置如何校验并分发给每个插件、为什么修改配置要么完整生效要么完整回滚"
 ---
 
 # 配置即数据

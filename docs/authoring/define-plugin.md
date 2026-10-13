@@ -1,6 +1,6 @@
 ---
-title: definePlugin
-description: 插件入口 plugin.ts 的写法：起名、声明配置、在 setup 里使用数据库、定时任务、主动推送、AI 工具，并在热重载时正确清理
+title: "definePlugin"
+description: "插件入口 plugin.ts 的写法：起名、声明配置、在 setup 里使用数据库、定时任务、主动推送、AI 工具，并在热重载时正确清理"
 ---
 
 # definePlugin：插件入口

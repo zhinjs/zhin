@@ -1,6 +1,6 @@
 ---
-title: Message Flow
-description: The full path a message takes from the platform into the bot, through middleware and commands, and back — and why plugins must never bypass it to send messages
+title: "Message Flow"
+description: "The full path a message takes from the platform into the bot, through middleware and commands, and back — and why plugins must never bypass it to send messages"
 ---
 
 # Message flow

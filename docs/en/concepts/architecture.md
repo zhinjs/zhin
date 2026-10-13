@@ -1,6 +1,6 @@
 ---
-title: Layered Architecture
-description: Which packages make up Zhin.js, how they are layered, and what plugin authors and contributors each need to respect
+title: "Layered Architecture"
+description: "Which packages make up Zhin.js, how they are layered, and what plugin authors and contributors each need to respect"
 ---
 
 # Layered architecture

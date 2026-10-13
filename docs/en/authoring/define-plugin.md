@@ -1,6 +1,6 @@
 ---
-title: definePlugin
-description: How to write a plugin entry: name it, declare config, use databases, schedules, proactive messages and AI tools in setup, and clean up correctly on hot reload
+title: "definePlugin"
+description: "How to write a plugin entry: name it, declare config, use databases, schedules, proactive messages and AI tools in setup, and clean up correctly on hot reload"
 ---
 
 # definePlugin: the plugin entry

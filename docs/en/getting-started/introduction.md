@@ -1,6 +1,6 @@
 ---
-title: What is Zhin.js
-description: One page on what Zhin.js solves, who it is for, what a bot is made of, and where to read next
+title: "What is Zhin.js"
+description: "One page on what Zhin.js solves, who it is for, what a bot is made of, and where to read next"
 ---
 
 # What is Zhin.js

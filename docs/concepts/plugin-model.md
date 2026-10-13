@@ -1,6 +1,6 @@
 ---
-title: 插件模型
-description: 插件是什么、插件树如何组成、Plugin 与 Feature 的区别、instanceKey 与同一插件挂载多次、插件即应用
+title: "插件模型"
+description: "插件是什么、插件树如何组成、Plugin 与 Feature 的区别、instanceKey 与同一插件挂载多次、插件即应用"
 ---
 
 # 插件模型

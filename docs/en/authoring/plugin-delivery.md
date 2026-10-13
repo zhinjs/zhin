@@ -1,6 +1,6 @@
 ---
-title: Complete Plugin Delivery
-description: Turn a working plugin into one that is configurable, hot-reloadable, tested and publishable to npm — design, implementation, local acceptance, tests and the release checklist
+title: "Complete Plugin Delivery"
+description: "Turn a working plugin into one that is configurable, hot-reloadable, tested and publishable to npm — design, implementation, local acceptance, tests and the release checklist"
 ---
 
 # Complete plugin delivery

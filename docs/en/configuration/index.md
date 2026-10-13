@@ -1,5 +1,5 @@
 ---
-title: Configuration Reference
+title: "Configuration Reference"
 ---
 
 # Configuration Reference

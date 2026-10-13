@@ -1,6 +1,6 @@
 ---
-title: Zhin.js 是什么
-description: 用一页说清 Zhin.js 解决什么问题、适合谁、一个 Bot 由哪些部分组成，以及接下来该读哪里
+title: "Zhin.js 是什么"
+description: "用一页说清 Zhin.js 解决什么问题、适合谁、一个 Bot 由哪些部分组成，以及接下来该读哪里"
 ---
 
 # Zhin.js 是什么

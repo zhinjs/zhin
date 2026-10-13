@@ -1,6 +1,6 @@
 ---
-title: Core concepts at a glance
-description: Plain-language definitions of the terms used throughout the Zhin.js docs — plugin, convention directories, Feature, adapter, Endpoint, Host, Console, Agent, Generation
+title: "Core concepts at a glance"
+description: "Plain-language definitions of the terms used throughout the Zhin.js docs — plugin, convention directories, Feature, adapter, Endpoint, Host, Console, Agent, Generation"
 ---
 
 # Core concepts at a glance

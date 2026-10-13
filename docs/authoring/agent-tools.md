@@ -1,6 +1,6 @@
 ---
-title: Agent 工具与技能
-description: 让 AI 调用你写的函数：编写 Tool、限制可用范围与审批、用 Skill 封装流程、用 Prompt Section 补充业务背景、定义子 Agent
+title: "Agent 工具与技能"
+description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与审批、用 Skill 封装流程、用 Prompt Section 补充业务背景、定义子 Agent"
 ---
 
 # Agent 工具与技能

@@ -1,6 +1,6 @@
 ---
-title: Config as Data
-description: The structure of zhin.config.yml, how config is validated and handed to each plugin, and why a change either applies fully or rolls back fully
+title: "Config as Data"
+description: "The structure of zhin.config.yml, how config is validated and handed to each plugin, and why a change either applies fully or rolls back fully"
 ---
 
 # Config as data

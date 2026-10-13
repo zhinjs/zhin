@@ -1,6 +1,6 @@
 ---
-title: Write your first plugin
-description: Build a configurable /ping child plugin from scratch, mount it on your bot, and change its reply without restarting
+title: "Write your first plugin"
+description: "Build a configurable /ping child plugin from scratch, mount it on your bot, and change its reply without restarting"
 ---
 
 # Write your first plugin

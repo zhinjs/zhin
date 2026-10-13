@@ -1,6 +1,6 @@
 ---
-title: Middleware & Components
-description: Use middleware for keyword replies and filtering, write mixed messages, buttons and cards in JSX, and see how they look on each platform
+title: "Middleware & Components"
+description: "Use middleware for keyword replies and filtering, write mixed messages, buttons and cards in JSX, and see how they look on each platform"
 ---
 
 # Middleware & components

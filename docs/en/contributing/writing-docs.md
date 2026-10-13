@@ -1,6 +1,6 @@
 ---
-title: Docs Writing Guide
-description: Page types, layout templates, progressive disclosure and language rules for the Zhin.js user docs
+title: "Docs Writing Guide"
+description: "Page types, layout templates, progressive disclosure and language rules for the Zhin.js user docs"
 ---
 
 # Docs writing guide
@@ -106,4 +106,5 @@ Internal terms aren't banned — on concept and reference pages they are the pre
 - [ ] Is internal vocabulary confined to the second half?
 - [ ] Any paragraph over four lines, or more than one warning?
 - [ ] Is there a "Next steps" section?
+- [ ] Are frontmatter `title` / `description` values double-quoted? (An unquoted `: ` inside a value breaks YAML parsing and the whole site build.)
 - [ ] Do `pnpm check:doc-links`, `pnpm check:doc-orphans` and `pnpm docs:build` pass?

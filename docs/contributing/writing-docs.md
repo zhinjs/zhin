@@ -1,6 +1,6 @@
 ---
-title: 文档写作规范
-description: Zhin.js 用户文档的页面类型、版式模板、渐进披露节奏与语言规则
+title: "文档写作规范"
+description: "Zhin.js 用户文档的页面类型、版式模板、渐进披露节奏与语言规则"
 ---
 
 # 文档写作规范
@@ -158,4 +158,5 @@ mermaid 或 text 图，只画读者需要记住的部分。
 - [ ] 有没有超过 4 行的段落、超过一个的 warning？
 - [ ] 结尾有"下一步"吗？
 - [ ] 英文页结构同步了吗？
+- [ ] frontmatter 的 `title` / `description` 用双引号包裹了吗？（值里出现英文冒号加空格会导致 YAML 解析失败、整站构建失败）
 - [ ] `pnpm check:doc-links`、`pnpm check:doc-orphans` 和 `pnpm docs:build` 通过了吗？

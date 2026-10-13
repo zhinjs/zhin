@@ -1,6 +1,6 @@
 ---
-title: AI Capabilities Overview
-description: Connect an LLM to your bot — enable it in three steps, learn when the AI replies, let it call tools, and configure models, triggers, access, MCP and execution security
+title: "AI Capabilities Overview"
+description: "Connect an LLM to your bot — enable it in three steps, learn when the AI replies, let it call tools, and configure models, triggers, access, MCP and execution security"
 ---
 
 # AI capabilities overview

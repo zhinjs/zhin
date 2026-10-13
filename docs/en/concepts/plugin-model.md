@@ -1,6 +1,6 @@
 ---
-title: Plugin Model
-description: What a plugin is, how the plugin tree is built, Plugin vs Feature, instanceKey and mounting a plugin more than once, and plugins as applications
+title: "Plugin Model"
+description: "What a plugin is, how the plugin tree is built, Plugin vs Feature, instanceKey and mounting a plugin more than once, and plugins as applications"
 ---
 
 # Plugin Model

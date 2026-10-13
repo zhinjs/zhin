@@ -1,6 +1,6 @@
 ---
-title: 命令（defineCommand）
-description: 编写 /xxx 命令：参数、选项、别名、权限、回复图片与卡片、子命令、命令前缀，以及输入有误时的行为
+title: "命令（defineCommand）"
+description: "编写 /xxx 命令：参数、选项、别名、权限、回复图片与卡片、子命令、命令前缀，以及输入有误时的行为"
 ---
 
 # 命令
