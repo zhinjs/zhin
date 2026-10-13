@@ -128,8 +128,12 @@ export function createGoogleCalendarProvider(
       const response = await withBearer(manager, fetchImpl, url.toString(), {
         signal,
       });
-      if (!response.ok)
-        throw new Error(`Google Calendar 列表失败：HTTP ${response.status}`);
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => "")).slice(0, 300);
+        throw new Error(
+          `Google Calendar 列表失败：HTTP ${response.status} ${detail}`
+        );
+      }
       const data = (await response.json()) as {
         items?: Record<string, unknown>[];
       };
@@ -222,8 +226,12 @@ export function createMicrosoftCalendarProvider(
           prefer: `outlook.timezone="${options.timezone}"`,
         }
       );
-      if (!response.ok)
-        throw new Error(`Microsoft Graph 列表失败：HTTP ${response.status}`);
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => "")).slice(0, 300);
+        throw new Error(
+          `Microsoft Graph 列表失败：HTTP ${response.status} ${detail}`
+        );
+      }
       const data = (await response.json()) as {
         value?: Record<string, unknown>[];
       };
