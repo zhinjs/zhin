@@ -1,0 +1,25 @@
+.changeset/plugin-calendar-chat-auth.md
+  s_6eb8d20a15fb15::t_c096339e151a2f 2
+.changeset/plugin-calendar-initial.md
+  s_6eb8d20a15fb15::t_3d0e84cfee7fe1 2
+.changeset/plugin-calendar-oauth-refresh.md
+  s_6eb8d20a15fb15::t_cc3edf7262309b 2
+.changeset/reminder-agent-tools.md
+  s_6eb8d20a15fb15::t_022900d593930c 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d7c3b574093dcaff59c3a47c2259ad21b90b1688",
+  "prompts": {},
+  "sessions": {
+    "s_6eb8d20a15fb15": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0c308-1cb8-7b22-996b-d675199d9934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
