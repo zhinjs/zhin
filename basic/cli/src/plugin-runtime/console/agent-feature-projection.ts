@@ -2,7 +2,7 @@ import { commandFeatureId, isCommandIndex } from '@zhin.js/command';
 import { componentFeatureId, isComponentIndex } from '@zhin.js/component';
 import { isMiddlewareIndex, middlewareFeatureId } from '@zhin.js/middleware';
 import { isPromptSectionIndex, promptSectionFeatureId } from '@zhin.js/prompt-section';
-import type { PluginId, RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { normalizeDeliveryTarget, type PluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import { component, OutboundRenderer } from '@zhin.js/core/runtime';
 import { displayConsolePath } from './display-path.js';
 
@@ -84,6 +84,18 @@ export async function renderGenerationComponent(
     undefined,
     { signal: input.signal },
   );
+}
+
+export async function previewGenerationComponentDelivery(
+  snapshot: RuntimeSnapshot | undefined,
+  input: Readonly<{ requester: string; name: string; props: unknown; target: unknown; signal: AbortSignal }>,
+) {
+  if (!snapshot) throw new Error('Component Runtime 未就绪');
+  const target = normalizeDeliveryTarget(input.target);
+  const result = await new OutboundRenderer().preview(component(input.name, input.props), input.requester as PluginId,
+    snapshot, target, { signal: input.signal });
+  return { output: result.payload, rendering: result.rendering, generation: snapshot.generation,
+    note: 'Endpoint projection only; preview does not run outbound middleware, send messages or activate buttons.' };
 }
 
 export function listGenerationTools(

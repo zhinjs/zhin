@@ -5,6 +5,7 @@ import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execFileSync } from 'node:child_process';
+import { PluginManagementWorkflow } from '../plugin-management/workflow.js';
 import {
   applyProjectConfigPlan,
   createProjectConfigPlan,
@@ -70,6 +71,7 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
 
     const pluginName = resolvePluginNameForEnable(pluginToInstall, pluginType, process.cwd());
     const shouldEnable = options.enable !== false && !options.global;
+    if (options.saveDev && shouldEnable) throw new Error('--save-dev 不能自动启用 Runtime 插件，请改用生产依赖或加 --no-enable');
     const enablePreview = shouldEnable && pluginName
       ? previewEnablePlugin(process.cwd(), pluginName)
       : undefined;
@@ -92,64 +94,23 @@ async function installPluginAction(plugin: string, options: InstallOptions) {
       return;
     }
 
-    // 执行安装（使用 execFileSync 防止 shell 注入）
-    try {
-      let sharedTransaction = false;
-      if (pluginType === 'npm' && shouldEnable && pluginName) {
-        const { createPluginManagementPort } = await import('../plugin-runtime/console/plugin-management.js');
-        await createPluginManagementPort(process.cwd()).install?.(pluginName);
-        sharedTransaction = true;
-      } else {
-        execFileSync('pnpm', installArgs, {
-          cwd: process.cwd(),
-          stdio: 'inherit'
-        });
-      }
-
-      logger.success('✓ 插件安装成功！');
-      logger.log('');
-
-      // 如果是 git 插件，提供额外说明
-      if (pluginType === 'git') {
-        logger.log('📝 Git 插件已安装到 node_modules/');
-        logger.log('');
-      }
-
-      if (shouldEnable && pluginName && !sharedTransaction) {
-        const enableResult = await enablePluginInProjectConfig(process.cwd(), pluginName);
-        logger.log(`🔌 ${enableResult.message}`);
-        // 新 Plugin Runtime 按 package.json 的 zhin.plugins 清单挂载——光写配置不会加载
-        const manifestMerged = await mergePluginManifestIntoPackageJson(process.cwd(), [{
-          package: pluginName,
-          instanceKey: packageToInstanceKey(pluginName),
-        }]);
-        if (manifestMerged) {
-          logger.log(`🧩 已在 package.json 的 zhin.plugins 清单中挂载 ${pluginName}`);
-        }
-        if (enableResult.status === 'missing-config' || enableResult.status === 'unsupported-config') {
-          logger.log('可手动添加到 zhin.config.yml:');
-          logger.log('plugins:');
-          logger.log(`  ${packageToInstanceKey(pluginName)}: {}`);
-        }
-        if (pluginName.startsWith('@zhin.js/adapter-') && pluginName !== '@zhin.js/adapter-sandbox') {
-          logger.log('');
-          logger.log('🧭 适配器下一步：运行 zhin setup --adapters 添加 Endpoint，或启动后在 Console / IM 中执行 /endpoint add。');
-        }
-      } else if (pluginName) {
-        logger.log('🔌 未自动启用插件。可手动添加到 zhin.config.yml:');
-        logger.log('plugins:');
-        logger.log(`  ${packageToInstanceKey(pluginName)}: {}`);
-      }
-
-      logger.log('');
-      logger.log('下一步：');
-      logger.log('  pnpm dev');
-      logger.log('  zhin doctor');
-
-    } catch (error) {
-      logger.error('安装失败');
-      throw error;
+    if (options.global) {
+      execFileSync('pnpm', installArgs, { cwd: process.cwd(), stdio: 'inherit' });
+      logger.success('✓ 全局依赖安装完成（未挂载到项目 Runtime）');
+      return;
     }
+    if (!pluginName) throw new Error('无法确定包名，请使用 npm 包名或带 package.json 的本地目录');
+    const result = await new PluginManagementWorkflow(process.cwd()).install(
+      pluginType === 'npm' && !pluginToInstall.startsWith('.') && !pluginToInstall.startsWith('file:') && !path.isAbsolute(pluginToInstall)
+        ? pluginToInstall : pluginName,
+      undefined, undefined,
+      { enable: shouldEnable, saveDev: options.saveDev, source: installArgs.at(-1) },
+    );
+    logger.success(`✓ 依赖安装完成：${result.state.packageName}@${result.state.version ?? 'unknown'}`);
+    logger.log(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+    if (!result.state.plugin) logger.log('该包是普通依赖，不会挂载到 Plugin Runtime。');
+    if (result.state.status === 'missing-config') logger.log('运行 zhin setup 补齐配置和环境变量，再应用。');
+    if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再用 packages status 检查当前 generation。');
 
   } catch (error: unknown) {
     logger.error(`安装插件失败: ${error instanceof Error ? error.message : String(error)}`);

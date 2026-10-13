@@ -54,6 +54,8 @@ export type RuntimeConsoleRpcMessage = {
 export type RuntimeConsoleRpcReply = Record<string, unknown>;
 
 export interface PluginInstallPlan {
+  readonly projectRevision?: string;
+  readonly configurationRevision?: string | null;
   readonly packageName: string;
   readonly instanceKey: string;
   readonly alreadyDeclared: boolean;
@@ -67,6 +69,8 @@ export interface PluginInstallPlan {
 }
 
 export interface PluginUninstallPlan {
+  readonly projectRevision?: string;
+  readonly configurationRevision?: string | null;
   readonly packageName: string;
   readonly instanceKey: string;
   readonly installed: boolean;
@@ -76,6 +80,8 @@ export interface PluginUninstallPlan {
 }
 
 export interface PluginUpdatePlan {
+  readonly projectRevision?: string;
+  readonly configurationRevision?: string | null;
   readonly packageName: string;
   readonly instanceKey: string;
   readonly currentVersion: string | null;
@@ -86,19 +92,66 @@ export interface PluginUpdatePlan {
   readonly restartRequired: boolean;
 }
 
+export interface PluginManagementState {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly installed: boolean;
+  readonly plugin: boolean;
+  readonly declared: boolean;
+  readonly version: string | null;
+  readonly revision: string | null;
+  readonly projectRevision: string;
+  readonly status: 'not-installed' | 'installed' | 'declared' | 'missing-config' | 'pending-restart' | 'enabled' | 'degraded';
+  readonly dependencies: 'unchecked' | 'passed' | 'failed';
+  readonly validation: PluginConfigValidation | null;
+  readonly generation: number | null;
+  readonly published: boolean;
+  readonly readiness: 'unknown' | 'ready' | 'pending' | 'degraded';
+  readonly restartRequired: boolean;
+  readonly disabled: boolean;
+  readonly issues: readonly string[];
+  /** Publication is never proof of a successful business action. */
+  readonly verification: 'not-configured' | 'available';
+}
+
+export interface PluginVerificationPlan {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly generation: number | null;
+  readonly projectRevision: string;
+  readonly checkRevision: string;
+  readonly checks: readonly import('@zhin.js/plugin-runtime').PluginVerificationCheck[];
+}
+
+export interface PluginVerificationResult {
+  readonly packageName: string;
+  readonly instanceKey: string;
+  readonly checkId: string;
+  readonly generation: number | null;
+  readonly current: boolean;
+  readonly status: 'passed' | 'failed' | 'not-configured';
+  readonly scope: 'local' | 'platform' | null;
+  readonly summary: string;
+  readonly evidence: readonly string[];
+}
+
 export interface PluginManagementPort {
+  inspect?(packageName: string): Promise<PluginManagementState>;
+  apply?(packageName: string, expectedProjectRevision?: string): Promise<{ readonly requested: boolean; readonly state: PluginManagementState }>;
+  verificationPlan?(packageName: string): Promise<PluginVerificationPlan>;
+  verify?(packageName: string, checkId: string, expectedGeneration: number | null, expectedProjectRevision: string, expectedCheckRevision: string): Promise<PluginVerificationResult>;
   planInstall(packageName: string): Promise<PluginInstallPlan>;
-  install?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+  install?(packageName: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
     readonly plan: PluginInstallPlan;
     readonly restartRequired: boolean;
   }>>;
   planUninstall?(packageName: string): Promise<PluginUninstallPlan>;
-  uninstall?(packageName: string, expectedRevision?: string): Promise<Readonly<{
+  uninstall?(packageName: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
     readonly plan: PluginUninstallPlan;
     readonly restartRequired: boolean;
   }>>;
   planUpdate?(packageName: string, targetVersion: string): Promise<PluginUpdatePlan>;
-  update?(packageName: string, targetVersion: string, expectedRevision?: string): Promise<Readonly<{
+  update?(packageName: string, targetVersion: string, expectedRevision?: string, expectedProjectRevision?: string): Promise<Readonly<{
     readonly plan: PluginUpdatePlan;
     readonly installedVersion: string;
     readonly restartRequired: boolean;
@@ -106,6 +159,8 @@ export interface PluginManagementPort {
 }
 
 export interface PluginConfigValidation {
+  /** False means only environment-reference checks ran; Runtime must validate TS-only declarations. */
+  readonly schemaAvailable?: boolean;
   readonly valid: boolean;
   readonly errors: readonly { readonly path: string; readonly message: string }[];
   readonly missingEnv: readonly string[];

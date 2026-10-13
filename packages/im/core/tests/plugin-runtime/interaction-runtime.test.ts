@@ -26,6 +26,8 @@ import {
   type MessageDispatchResult,
   type SendContent,
 } from '../../src/plugin-runtime/im/index.js';
+import { RuntimeInteractiveRouter } from '../../src/plugin-runtime/im/interactive-router.js';
+import { RuntimeInteractionCoordinator } from '../../src/plugin-runtime/im/interaction-runtime.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -95,6 +97,27 @@ function baseState(slots: readonly CapabilitySlot[]): SnapshotState {
 }
 
 describe('UserInteraction via ImRuntime', () => {
+  it('lets a current numeric question accept the label of an expired button', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    const router = new RuntimeInteractiveRouter(100);
+    const interactions = new RuntimeInteractionCoordinator(router);
+    const conversation = { endpoint: { adapter: 'test', id: 'main' }, kind: 'group' as const, id: 'room' };
+    const reply = vi.fn(async () => ({ status: 'sent' as const }));
+    const message = new Message(conversation, '1', 1, reply, { id: 'alice' });
+    const abort = new AbortController();
+    try {
+      router.rememberFallback(conversation, 1, { '1': 'old:button:action' });
+      clock.mockReturnValue(1100);
+      const answer = interactions.create(message).ask({ type: 'number', title: '数量', min: 1, signal: abort.signal }).catch(error => error);
+      await vi.waitFor(() => expect(reply).toHaveBeenCalledTimes(1));
+      await vi.waitFor(() => expect(interactions.resolveClaim(message)).toBe(true));
+      await expect(answer).resolves.toBe(1);
+      expect(reply).toHaveBeenCalledTimes(1);
+    } finally {
+      abort.abort();
+      clock.mockRestore();
+    }
+  });
   async function createInteractionFixture() {
     const sent: unknown[] = [];
     const events: string[] = [];

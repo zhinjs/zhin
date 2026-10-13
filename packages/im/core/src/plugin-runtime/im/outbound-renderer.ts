@@ -15,6 +15,9 @@ import {
   type IncomingContext,
   type SendContent,
 } from './contracts.js';
+import { JsxButtonRegistry } from './jsx-button-registry.js';
+import { requireAdapters } from './endpoint-runtime.js';
+import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
 
 const maxComponentDepth = 32;
 const TEMPLATE_MARKER = '${';
@@ -26,6 +29,27 @@ export interface OutboundRenderOptions {
 }
 
 export class OutboundRenderer {
+  /** Target projection only: no middleware, transport or live button registration. */
+  async preview(
+    content: SendContent,
+    requester: PluginId,
+    snapshot: RuntimeSnapshot,
+    conversation: ConversationRef,
+    options: Pick<OutboundRenderOptions, 'signal'> = {},
+  ): Promise<OutboundProjection> {
+    const adapters = requireAdapters(snapshot);
+    const endpointId = conversation.endpoint.id as import('@zhin.js/plugin-runtime').CapabilityId;
+    if (adapters.clientAdapter(endpointId) !== conversation.endpoint.adapter) throw new Error('Preview endpoint identity mismatch');
+    if (!adapters.list().find(item => item.id === endpointId)?.capabilities.includes('outbound')) {
+      throw new Error('Preview endpoint does not support outbound messages');
+    }
+    const buttons = new JsxButtonRegistry().prepare({ content, requester, conversation }, snapshot);
+    const rendered = await this.render(content, requester, snapshot, conversation, undefined, { ...options, bindButton: buttons.bind });
+    const result = await projectOutboundPayload(rendered, conversation, snapshot, options);
+    options.signal?.throwIfAborted();
+    return result;
+  }
+
   async render(
     content: SendContent,
     requester: PluginId,

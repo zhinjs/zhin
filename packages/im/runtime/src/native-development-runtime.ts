@@ -116,6 +116,10 @@ export class NativeDevelopmentModuleRuntime implements ModuleRuntime {
     // invalidates those owned entries and the generation query refreshes their
     // complete project-local import closure.
     if (this.affectedSources(normalized).length > 1) return false;
+    // An already loaded ESM entry has the same revisioned import closure as a
+    // capability entry. Its manifest may name plugin.ts or any other filename;
+    // Runtime ownership, rather than directory spelling, chooses its reload.
+    if (this.#entryRevisions.has(normalized) && isExecutableSource(normalized)) return false;
     const parts = relative(packageRoot, normalized).split(sep);
     const capability = parts.findIndex((part) => capabilityRoots.has(part));
     if (capability < 0) return isExecutableSource(normalized);

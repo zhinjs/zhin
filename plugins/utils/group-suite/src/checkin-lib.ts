@@ -1,3 +1,4 @@
+import type { ConversationInput } from './conversation-scope.js';
 import type { GroupSuiteConfig } from './config.js';
 import { getCheckinModel } from './db-store.js';
 import {
@@ -64,7 +65,7 @@ function serializedCheckin<T>(
 }
 
 export async function doCheckin(
-  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: ConversationInput,
   cfg: GroupSuiteConfig,
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
@@ -113,7 +114,7 @@ export async function doCheckin(
 }
 
 export async function myPoints(
-  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: ConversationInput,
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
   const M = getCheckinModel(runtime.db);
@@ -139,7 +140,7 @@ export async function myPoints(
 }
 
 export async function pointsRank(
-  input: { sender?: { readonly id: string; readonly name?: string }; target?: string; metadata?: Readonly<Record<string, unknown>> },
+  input: ConversationInput,
   cfg: GroupSuiteConfig,
   runtime: GroupSuiteRuntime,
 ): Promise<string> {
@@ -147,9 +148,7 @@ export async function pointsRank(
   if (!M) return '签到数据库尚未就绪';
   const { type: ctxType, id: ctxId } = resolveContextKey(input);
   const all = (await M.select().where(
-    ctxType === 'global'
-      ? { context_type: 'global' }
-      : { context_type: ctxType, context_id: ctxId },
+    { context_type: ctxType, context_id: ctxId },
   )) as Record<string, unknown>[];
   if (all.length === 0) return '还没有人签到过哦～';
   const sorted = all.sort((a, b) => Number(b.points || 0) - Number(a.points || 0));
@@ -159,7 +158,8 @@ export async function pointsRank(
     const prefix = i < 3 ? medals[i] : `${i + 1}.`;
     return `${prefix} ${u.user_name || u.user_id} — ${u.points}分 (${u.total_checkins}天)`;
   });
-  const title = ctxType === 'group' ? '本群积分排行' : '全局积分排行';
+  const title = ctxType === 'group' ? '本群积分排行'
+    : ctxType === 'channel' ? '本频道积分排行' : '当前私聊积分排行';
   const { id: userId } = resolveSender(input);
   const myRank = sorted.findIndex((u) => u.user_id === userId);
   const footer = myRank >= 0 ? `\n你的排名: 第${myRank + 1}名` : '';

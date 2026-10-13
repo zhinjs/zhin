@@ -12,6 +12,7 @@ import {
   listGenerationPromptSections,
   listGenerationTools,
   renderGenerationComponent,
+  previewGenerationComponentDelivery,
 } from './agent-feature-projection.js';
 
 function createAgentRuntime(
@@ -26,6 +27,7 @@ function createAgentRuntime(
       middlewares: () => listGenerationMiddlewares(getSnapshot(), projectRoot),
       components: () => listGenerationComponents(getSnapshot(), projectRoot),
       renderComponent: input => renderGenerationComponent(getSnapshot(), input),
+      previewComponentDelivery: input => previewGenerationComponentDelivery(getSnapshot(), input),
       bindings: () => configuration.listBindings(),
       tools: () => listGenerationTools(getSnapshot(), projectRoot),
       promptSections: () => listGenerationPromptSections(getSnapshot(), projectRoot),

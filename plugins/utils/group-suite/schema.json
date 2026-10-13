@@ -3,15 +3,56 @@
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "keywordReply": { "type": "boolean", "default": false },
-    "basePointsMin": { "type": "number", "default": 10 },
-    "basePointsMax": { "type": "number", "default": 30 },
-    "streakBonus": { "type": "number", "default": 5 },
-    "streakCap": { "type": "number", "default": 50 },
-    "rankSize": { "type": "number", "default": 10 },
-    "teachMaxPerGroup": { "type": "number", "default": 200 },
-    "teachCooldownMs": { "type": "number", "default": 3000 },
-    "teachAllowRegex": { "type": "boolean", "default": true },
-    "teachPageSize": { "type": "number", "default": 10 }
+    "keywordReply": {
+      "type": "boolean",
+      "default": false
+    },
+    "basePointsMin": {
+      "type": "number",
+      "default": 10
+    },
+    "basePointsMax": {
+      "type": "number",
+      "default": 30
+    },
+    "streakBonus": {
+      "type": "number",
+      "default": 5
+    },
+    "streakCap": {
+      "type": "number",
+      "default": 50
+    },
+    "rankSize": {
+      "type": "number",
+      "default": 10
+    },
+    "teachMaxPerGroup": {
+      "type": "number",
+      "default": 200
+    },
+    "teachCooldownMs": {
+      "type": "number",
+      "default": 3000
+    },
+    "teachAllowRegex": {
+      "type": "boolean",
+      "default": true
+    },
+    "teachPageSize": {
+      "type": "number",
+      "default": 10
+    },
+    "welcomeMessage": {
+      "type": "string",
+      "maxLength": 2000,
+      "default": "",
+      "description": "Group welcome text. Empty disables; {name}/{id} refer to the joined member."
+    },
+    "ephemeralKeywords": {
+      "type": "boolean",
+      "default": false,
+      "description": "Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked."
+    }
   }
 }

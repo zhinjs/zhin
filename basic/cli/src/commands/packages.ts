@@ -1,7 +1,5 @@
 import { Command } from 'commander';
-import { execFileSync } from 'node:child_process';
 import { formatCompact } from '@zhin.js/logger';
-import { packageToInstanceKey } from '@zhin.js/scaffold-wizard';
 import {
   installZhinPackage,
   listZhinPackageSkillRoots,
@@ -11,18 +9,17 @@ import {
 } from '../utils/zhin-packages.js';
 import {
   adapterConfigHintForPackage,
-  readInstalledZhinField,
-  registerPluginInManifest,
   resolveInstallRoute,
   type ResolvedInstall,
 } from '../utils/plugin-registry.js';
 import {
   buildInstallArgs,
-  enablePluginInProjectConfig,
-  previewEnablePlugin,
 } from './install.js';
 import { runPluginInfo, runPluginSearch } from './search.js';
 import { logger } from '../utils/logger.js';
+import { PluginManagementWorkflow } from '../plugin-management/workflow.js';
+import { requestPluginConsole } from '../plugin-management/console-client.js';
+import { PLUGIN_RPC } from '@zhin.js/console-protocol';
 
 const packagesCommand = new Command('packages')
   .description('插件生态入口：搜索/查看/安装插件与 zhin-package 技能包（ADR 0010）');
@@ -69,79 +66,79 @@ packagesCommand
       return;
     }
 
-    await installNpmPlugin(resolved, opts);
+    await installNpmPlugin(resolved, opts, source);
   });
 
 /**
  * a/b) npm 插件安装：pnpm add → 判定是否 zhin 插件 → 启用配置 + 注册 zhin.plugins 清单
  */
-async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallOptions) {
+export async function installNpmPlugin(resolved: ResolvedInstall, opts: InstallOptions, source = resolved.package) {
   const cwd = process.cwd();
-  const pkg = resolved.package;
-  const installArgs = buildInstallArgs(pkg, 'npm', {});
-  const shouldEnable = opts.enable !== false;
-  const enablePreview = shouldEnable ? previewEnablePlugin(cwd, pkg) : undefined;
-
-  if (enablePreview?.status === 'unsupported-config') {
-    throw new Error(enablePreview.message);
-  }
-
+  const workflow = new PluginManagementWorkflow(cwd);
   if (opts.dryRun) {
     logger.log('🧪 dry-run：不会安装依赖，也不会修改配置。');
-    logger.log(`将执行: pnpm ${installArgs.join(' ')}`);
-    if (shouldEnable) {
-      if (enablePreview) logger.log(`将启用: ${enablePreview.message}`);
-      logger.log(`将挂载: package.json 的 zhin.plugins 清单添加 ${pkg}`);
-    }
+    logger.log(`将执行: pnpm ${buildInstallArgs(source, 'npm', {}).join(' ')}`);
+    logger.log(JSON.stringify(await workflow.planInstall(source, { enable: opts.enable }), null, 2));
     return;
   }
-
-  try {
-    execFileSync('pnpm', installArgs, { cwd, stdio: 'inherit' });
-  } catch (error) {
-    logger.error('安装失败');
-    throw error;
-  }
-  logger.success(`✓ ${pkg} 安装成功！`);
-  logger.log('');
-
-  // 判定插件身份：命中已知适配器，或已安装包的 package.json 带 zhin 字段
-  const zhinField = readInstalledZhinField(cwd, pkg);
-  const isZhinPlugin = resolved.route === 'adapter' || zhinField !== null;
-
-  if (!isZhinPlugin) {
-    logger.log('ℹ️ 该包不含 zhin 字段，已作为普通依赖安装（不会挂载到 Plugin Runtime）。');
-    return;
-  }
-
-  if (shouldEnable) {
-    const enableResult = await enablePluginInProjectConfig(cwd, pkg);
-    logger.log(`🔌 ${enableResult.message}`);
-    const manifestMerged = await registerPluginInManifest(cwd, pkg);
-    if (manifestMerged) {
-      logger.log(`🧩 已在 package.json 的 zhin.plugins 清单中挂载 ${pkg}`);
-    }
-  } else {
-    logger.log('🔌 未自动启用插件。可手动添加到 zhin.config.yml:');
-    logger.log('plugins:');
-    logger.log(`  ${packageToInstanceKey(pkg)}: {}`);
-  }
-
-  // a) 已知适配器：提示完成凭据配置
-  const hint = adapterConfigHintForPackage(pkg);
-  if (hint) {
-    logger.log('');
-    logger.log(`🧭 适配器下一步：${hint}`);
-    if (resolved.adapter?.setupHint) {
-      logger.log(`   ${resolved.adapter.setupHint}`);
-    }
-  }
-
-  logger.log('');
-  logger.log('下一步：');
-  logger.log('  pnpm dev');
-  logger.log('  zhin doctor');
+  const result = await workflow.install(source, undefined, undefined, { enable: opts.enable });
+  logger.success(`✓ ${result.state.packageName}@${result.state.version ?? 'unknown'} 依赖安装完成`);
+  logger.log(`插件状态: ${result.state.status}；功能验证: ${result.state.verification}`);
+  if (result.restartRequired) logger.log('配置就绪后启动/重启 Host，再检查当前 generation。');
+  const hint = adapterConfigHintForPackage(resolved.package);
+  if (hint) logger.log(hint);
+  if (resolved.adapter?.setupHint) logger.log(resolved.adapter.setupHint);
 }
+
+interface LiveOptions { live?: string; tokenEnv?: string }
+
+packagesCommand
+  .command('status <name>')
+  .description('查看安装、声明、配置、当前 generation 与验证证据')
+  .option('--live <host-url>', '从运行中的 Host 读取当前 generation；省略时仅检查本地文件')
+  .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .action(async (name: string, options: LiveOptions) => {
+    const state = options.live
+      ? await requestPluginConsole(options.live, { type: PLUGIN_RPC.INSPECT, instanceKey: name }, options.tokenEnv)
+      : await new PluginManagementWorkflow(process.cwd()).inspect(name);
+    console.log(JSON.stringify(state, null, 2));
+  });
+
+packagesCommand
+  .command('apply <name>')
+  .description('请求运行中的 Host 应用配置；返回申请结果，随后用 status 检查是否真正发布')
+  .requiredOption('--live <host-url>', '运行中的 Host URL')
+  .requiredOption('--project-revision <revision>', 'status/plan 返回的项目 revision')
+  .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .action(async (name: string, options: LiveOptions & { projectRevision: string }) => {
+    console.log(JSON.stringify(await requestPluginConsole(options.live!, { type: PLUGIN_RPC.APPLY, instanceKey: name, expectedProjectRevision: options.projectRevision }, options.tokenEnv), null, 2));
+  });
+
+packagesCommand
+  .command('verification-plan <name>')
+  .description('列出业务检查及副作用，不执行；离线时明确报告未配置验证')
+  .option('--live <host-url>', '运行中的 Host URL')
+  .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .action(async (name: string, options: LiveOptions) => {
+    const plan = options.live
+      ? await requestPluginConsole(options.live, { type: PLUGIN_RPC.PLAN_VERIFICATION, instanceKey: name }, options.tokenEnv)
+      : await new PluginManagementWorkflow(process.cwd()).verificationPlan(name);
+    console.log(JSON.stringify(plan, null, 2));
+  });
+
+packagesCommand
+  .command('verify <name> <check-id>')
+  .description('执行已查看副作用的精确业务检查；运行期变更会拒绝旧计划')
+  .requiredOption('--live <host-url>', '运行中的 Host URL')
+  .requiredOption('--generation <number>', '验证计划的 generation')
+  .requiredOption('--project-revision <revision>', '验证计划的项目 revision')
+  .requiredOption('--check-revision <revision>', '验证计划的检查摘要')
+  .option('--token-env <name>', 'Console token 所在环境变量', 'ZHIN_CONSOLE_TOKEN')
+  .action(async (name: string, checkId: string, options: LiveOptions & { generation: string; projectRevision: string; checkRevision: string }) => {
+    const expectedGeneration = Number(options.generation);
+    if (!Number.isSafeInteger(expectedGeneration) || expectedGeneration < 0) throw new Error('generation must be a nonnegative integer');
+    console.log(JSON.stringify(await requestPluginConsole(options.live!, { type: PLUGIN_RPC.VERIFY, instanceKey: name, checkId, expectedGeneration, expectedProjectRevision: options.projectRevision, expectedCheckRevision: options.checkRevision }, options.tokenEnv), null, 2));
+  });
 
 packagesCommand
   .command('remove <name>')

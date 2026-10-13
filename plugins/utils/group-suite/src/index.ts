@@ -6,6 +6,7 @@ export type { GroupSuiteConfig } from './config.js';
 export { doCheckin, myPoints, pointsRank } from './checkin-lib.js';
 export {
   addKeyword,
+  keywordStore,
   listKeywords,
   matchKeyword,
   removeKeyword,

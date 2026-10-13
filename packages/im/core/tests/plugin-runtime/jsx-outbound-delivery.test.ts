@@ -23,6 +23,7 @@ import { EndpointDeliveryError } from '@zhin.js/im-contract';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { segment } from '../../src/utils.js';
 import { OutboundDeliveryRuntime } from '../../src/plugin-runtime/im/outbound-delivery-runtime.js';
+import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
 import { raw, type OutboundEnvelope, type SendContent } from '../../src/plugin-runtime/im/contracts.js';
 
 const activeAdapters: AdapterIndex[] = [];
@@ -34,6 +35,7 @@ interface FixtureOptions {
   readonly segments?: AdapterSegmentPolicy;
   readonly renderer?: HtmlRendererHost;
   readonly replace?: unknown;
+  readonly mutate?: (payload: unknown) => void;
   readonly onSend?: (request: EndpointSendRequest) => string | Promise<string>;
 }
 
@@ -72,6 +74,7 @@ async function fixture(options: FixtureOptions = {}) {
       target: 'outbound',
       async handle({ input }, next) {
         if (options.replace !== undefined) input.replace(options.replace);
+        options.mutate?.(input.payload);
         await next();
       },
     }),
@@ -111,6 +114,8 @@ async function fixture(options: FixtureOptions = {}) {
     sent,
     record,
     publish,
+    preview: (content: SendContent, signal?: AbortSignal) => new OutboundRenderer().preview(content, root, snapshot,
+      { endpoint: { id: String(adapter.id), adapter: 'test' }, kind: 'private', id: 'room' }, { signal }),
     send: (content: SendContent) => runtime.deliver({
       requester: root,
       conversation: { endpoint: { id: String(adapter.id), adapter: String(root) }, kind: 'private', id: 'room' },
@@ -130,6 +135,74 @@ function rasterRenderer() {
 }
 
 describe('JSX outbound delivery through a real Endpoint', () => {
+  it('cancels a target preview while the HTML host is pending without text fallback or sending', async () => {
+    const controller = new AbortController();
+    let started!: () => void, rejectHost!: (error: Error) => void;
+    const entered = new Promise<void>(resolve => { started = resolve; });
+    const host = { render: vi.fn((_html: string, options?: HtmlRenderOptions) => {
+      expect(options?.signal).toBe(controller.signal);
+      started();
+      return new Promise<never>((_resolve, reject) => { rejectHost = reject; });
+    }) };
+    const f = await fixture({ segments: { html: 'image' }, renderer: host });
+    const preview = f.preview(jsx(Html, { children: 'Pending' }), controller.signal);
+    const reason = new Error('preview canceled');
+    const rejected = expect(preview).rejects.toBe(reason);
+    await entered;
+    controller.abort(reason);
+    await rejected;
+    rejectHost(new Error('late renderer failure'));
+    await Promise.resolve();
+    expect(f.sent).toEqual([]);
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.record).not.toHaveBeenCalled();
+  });
+  it.each(['array', 'text'] as const)('drops discarded fallback diagnostics after middleware mutates %s in place', async mode => {
+    const f = await fixture({ mutate(payload) {
+      if (!Array.isArray(payload)) throw new Error('Expected normalized segments');
+      if (mode === 'array') payload.splice(0, payload.length, segment.text('replacement'));
+      else payload[0].data.text = 'replacement';
+    } });
+    expect((await f.send(segment.html({ html: '<b>original</b>', text: 'original' }))).status).toBe('sent');
+    expect(f.sent[0]?.payload).toEqual([segment.text('replacement')]);
+    expect(f.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: { forms: ['text'], fallbacks: [] } }));
+  });
+  it('previews final target policy without transport or live callbacks and agrees with sent diagnostics', async () => {
+    const f = await fixture({ segments: { html: 'text', interactive: 'text', markdown: 'text' } });
+    const content = [jsx(Html, { children: jsx('b', { children: 'Status' }) }),
+      { type: 'markdown', data: { content: '**ready**' } },
+      jsx('button', { label: 'retry', onClick: vi.fn() })];
+    const preview = await f.preview(content);
+    expect(preview.payload).toEqual([
+      { type: 'text', data: { text: 'Status' } },
+      { type: 'text', data: { text: 'ready' } },
+      expect.objectContaining({ type: 'text' }),
+    ]);
+    expect(preview.rendering).toEqual({ forms: ['text'], fallbacks: [
+      'markdown_text_policy', 'html_text_policy', 'interactive_text_policy',
+    ] });
+    expect(f.sent).toEqual([]);
+    expect(f.publish).not.toHaveBeenCalled();
+    expect(f.record).not.toHaveBeenCalled();
+    expect((await f.send(content.slice(0, 2))).status).toBe('sent');
+    expect(f.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: {
+      forms: ['text'], fallbacks: ['markdown_text_policy', 'html_text_policy'],
+    } }));
+  });
+
+  it('reports raster images and drops discarded initial fallbacks after middleware replaces the content', async () => {
+    const renderer = rasterRenderer();
+    const image = await fixture({ segments: { html: 'image' }, renderer });
+    await image.send(jsx(Html, { children: 'Status' }));
+    expect(image.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: { forms: ['image'], fallbacks: [] } }));
+    const replaced = await fixture({ segments: { html: 'image' }, replace: 'replaced' });
+    await replaced.send(jsx(Html, { children: 'Discarded' }));
+    expect(replaced.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: { forms: ['text'], fallbacks: [] } }));
+    const failed = await fixture({ renderer: { render: async () => { throw new Error('private renderer details'); } } });
+    await failed.send(jsx(Html, { children: 'Fallback' }));
+    expect(failed.publish).toHaveBeenCalledWith(expect.objectContaining({ rendering: { forms: ['text'], fallbacks: ['renderer_failed'] } }));
+    expect(JSON.stringify(failed.publish.mock.calls)).not.toContain('private renderer details');
+  });
   it.each(['root', 'nested-mixed'] as const)('evaluates a reused %s replacement JSX root once and retains segment order', async (mode) => {
     const render = vi.fn(async () => jsx(Html, { children: jsx('b', { children: 'Ready' }) }));
     const node = jsx(render, {});

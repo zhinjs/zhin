@@ -1,7 +1,25 @@
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { buildProjectFileTree, listEnvFiles, readProjectFile, saveProjectFile } from '../src/project-files.js';
+import { buildProjectFileTree, isProjectPathAllowed, listEnvFiles, readProjectFile, saveProjectFile } from '../src/project-files.js';
+
+it('edits formal plugin entries, capabilities and configuration without admitting legacy or blocked paths', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'zhin-project-capabilities-'));
+  try {
+    const paths = ['plugin.ts', 'plugin.tsx', 'zhin.config.json', 'zhin.config.yaml', 'schema.json', 'AGENTS.md',
+      'schedules/poll/index.ts', 'handlers/welcome/index.ts', 'hooks/check/index.ts', 'mcps/local/index.ts',
+      'agents/group/skills/manage/tools/mute/index.ts'];
+    for (const relative of paths) {
+      await saveProjectFile(root, relative, 'fixture');
+      await expect(readProjectFile(root, relative)).resolves.toMatchObject({ content: 'fixture' });
+    }
+    const tree = await buildProjectFileTree(root);
+    expect(tree.map(item => item.name)).toEqual(expect.arrayContaining(['schedules', 'handlers', 'hooks', 'mcps', 'plugin.ts', 'zhin.config.json']));
+    expect(isProjectPathAllowed('mcp/local/index.ts')).toBe(false);
+    expect(isProjectPathAllowed('schedules/poll/node_modules/private.ts')).toBe(false);
+    expect(isProjectPathAllowed('mcps/../data/secrets')).toBe(false);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
 
 it('denies symlink escapes for reads, overwrites, new parents, tree and env inventory', async () => {
   const fixture = await mkdtemp(path.join(tmpdir(), 'zhin-project-files-'));

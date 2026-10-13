@@ -5,6 +5,22 @@ const conversation = { endpoint: { adapter: 'test', id: 'test' }, kind: 'group' 
 const message = (content: string, generation = 1) => ({ content, conversation, generation }) as Message;
 
 describe('Interactive fallback numbering', () => {
+  it('recognizes expired labels for their exact endpoint/conversation, for a bounded extra TTL', () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1000);
+    try {
+      const router = new RuntimeInteractiveRouter(100);
+      router.rememberFallback(conversation, 1, { '1': 'old:action:1' });
+      clock.mockReturnValue(1100);
+      expect(router.resolvePayload(message('1'))).toBeUndefined();
+      expect(router.isExpiredFallback(message('1'))).toBe(true);
+      expect(router.isExpiredFallback({ ...message('1'), conversation: { ...conversation, endpoint: { ...conversation.endpoint, id: 'other' } } } as Message)).toBe(false);
+      expect(router.isExpiredFallback({ ...message('1'), conversation: { ...conversation, threadId: 'other' } } as Message)).toBe(false);
+      expect(router.isExpiredFallback(message('2'))).toBe(false);
+      clock.mockReturnValue(1200);
+      expect(router.isExpiredFallback(message('1'))).toBe(false);
+      expect(router.rememberFallback(conversation, 2, { '1': 'new:action:1' })).toEqual({ '2': 'new:action:1' });
+    } finally { clock.mockRestore(); }
+  });
   it('expires keyboards independently without reusing numbers after expiry or generation replacement', () => {
     let now = 1000;
     const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);

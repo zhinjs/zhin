@@ -18,6 +18,8 @@ export interface PluginNodeSnapshot {
   readonly id: PluginId;
   readonly instanceKey: string;
   readonly packageName: string;
+  /** Package version read when this owner was assembled, never from later disk contents. */
+  readonly packageVersion?: string;
   readonly packageRoot: string;
   readonly parent?: PluginId;
   readonly children: readonly PluginId[];

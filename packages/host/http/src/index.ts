@@ -59,6 +59,9 @@ export {
   type PluginUninstallPlan,
   type PluginUpdatePlan,
   type PluginManagementPort,
+  type PluginManagementState,
+  type PluginVerificationResult,
+  type PluginVerificationPlan,
   type PluginConfigValidation,
 } from './console-rpc.js';
 export { dispatchPluginConsoleRpc } from './console-plugin-rpc.js';

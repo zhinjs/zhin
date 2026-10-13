@@ -2,16 +2,32 @@ import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import {
-  PluginScheduleHost, definePlugin, rootPluginId, scheduleHostToken, scheduleRootHostToken,
+  PluginScheduleHost, createToken, definePlugin, rootPluginId, scheduleHostToken, scheduleRootHostToken,
   type ScheduleHost, type ScheduleJobRegistration,
 } from '@zhin.js/plugin-runtime';
-import scheduleFeature, { defineSchedule } from '../../schedule-feature/src/index.js';
+import scheduleFeature, { defineSchedule, type ScheduleContext } from '../../schedule-feature/src/index.js';
 import { RootRuntime, type ModuleRuntime } from '../src/index.js';
 
 const temporary: string[] = [];
 afterEach(async () => { await Promise.all(temporary.splice(0).map(path => rm(path, { recursive: true }))); });
 
 describe('Schedule Feature candidate publication', () => {
+  it('supplies each execution with the published owner, config and scoped resources across HMR', async () => {
+    const { runtime, jobs, scheduleSource, execute, resourceToken, resource } = await fixture();
+    try {
+      await runtime.start();
+      await jobs[0]!.execute();
+      const first = execute.mock.calls[0]![0]!;
+      expect(first).toMatchObject({ owner: { id: rootPluginId() }, generation: 1, config: { label: 'daily' } });
+      expect(first.use(resourceToken)).toBe(resource);
+      const hmr = runtime.createHmrCoordinator({ onError() {}, onRestartRequired() {} });
+      try { await hmr.enqueue(scheduleSource); } finally { await hmr.stop(); }
+      expect(() => jobs[0]!.execute()).toThrow('inactive generation');
+      await jobs[2]!.execute();
+      expect(execute.mock.calls[1]![0]!.generation).toBe(2);
+      expect(execute.mock.calls[1]![0]!.use(resourceToken)).toBe(resource);
+    } finally { await runtime.stop(); }
+  });
   it('stages discovered schedules after Scope seal and runs only after publication', async () => {
     const { runtime, jobs, active, captured, execute, duringRegistration } = await fixture();
     try {
@@ -75,9 +91,13 @@ async function fixture(failSecond = false) {
     zhin: { protocol: 1, type: 'plugin', entry: './plugin.ts', features: [{ package: '@test/schedule' }] } });
   await json('packages/schedule/package.json', { name: '@test/schedule', zhin: { protocol: 1, type: 'feature', entry: './index.ts' } });
   let host: PluginScheduleHost | undefined;
-  await add('plugin.ts', { default: definePlugin({ name: 'root', setup({ resources }) { host = resources.use(scheduleHostToken); } }) });
+  const resourceToken = createToken<{ label: string }>('test.schedule.resource');
+  const resource = { label: 'owned resource' };
+  await add('plugin.ts', { default: definePlugin({ name: 'root',
+    config: { toJsonSchema: () => ({ type: 'object', properties: { label: { type: 'string' } } }) },
+    setup({ resources }) { host = resources.use(scheduleHostToken); } }) });
   await add('packages/schedule/index.ts', { default: scheduleFeature });
-  const execute = vi.fn();
+  const execute = vi.fn((_context?: ScheduleContext) => undefined);
   for (const name of ['first', 'second']) await add(`schedules/${name}/index.ts`, { default: defineSchedule({ cron: '* * * * * *', execute }) });
   const jobs: ScheduleJobRegistration[] = [];
   const active = new Set<ScheduleJobRegistration>();
@@ -105,10 +125,12 @@ async function fixture(failSecond = false) {
   }, async close() {} };
   const runtime = new RootRuntime({ projectRoot: await realpath(project), modules,
     environment: { name: 'test', mode: 'test', platform: 'node' },
+    config: { plugin: { label: 'daily' } },
     installResources({ resources, admission }) {
+      resources.provide(resourceToken, resource);
       resources.provide(scheduleRootHostToken, port);
       resources.provide(scheduleHostToken, new PluginScheduleHost(rootPluginId(), port, admission));
     } });
-  return { runtime, jobs, active, captured: () => host, execute, duringRegistration,
+  return { runtime, jobs, active, captured: () => host, execute, duringRegistration, resourceToken, resource,
     scheduleSource: join(project, 'schedules/first/index.ts') };
 }

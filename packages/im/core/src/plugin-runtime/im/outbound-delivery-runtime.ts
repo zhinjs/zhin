@@ -1,7 +1,5 @@
 import {
-  htmlRendererToken,
   type CapabilityId,
-  type HtmlRendererHost,
   type RuntimeSnapshot,
 } from '@zhin.js/plugin-runtime';
 import { EndpointDeliveryError, type ConversationRef, type DeliveryReceipt } from '@zhin.js/im-contract';
@@ -9,17 +7,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isJsxElement, type JSXElement } from '@zhin.js/jsx';
 import { createOutboundEnvelope, isComponentCall, isRawContent, type OutboundEnvelope, type SendContent, type SendRequest } from './contracts.js';
 import { OutboundRenderer } from './outbound-renderer.js';
-import {
-  applyOutboundInteractivePolicy,
-  applyOutboundMarkdownPolicy,
-  normalizeOutboundPayload,
-  resolveOutboundInteractivePolicy,
-  resolveOutboundMarkdownPolicy,
-  resolveOutboundMediaPolicy,
-  resolveOutboundHtmlPolicy,
-  resolveOutboundSupportedSegments,
-} from './outbound-segments.js';
-import { assertCanonicalSegments } from '../../built/segment-contract/assert.js';
+import { projectOutboundPayload, type OutboundProjection } from './outbound-projection.js';
 import { flattenOutboundArray } from '../../built/outbound-content-arrays.js';
 import { requireAdapters } from './endpoint-runtime.js';
 import { formatConversationLog, previewMessageContent, type RuntimeMessageEvent } from './message-events.js';
@@ -56,6 +44,7 @@ export class OutboundDeliveryRuntime {
     const buttons = this.context.prepareButtons?.(request, snapshot);
     const renderOptions = { jsxCache, bindButton: buttons?.bind };
     let initialPayload: unknown;
+    let initialProjection: OutboundProjection;
     try {
       const rendered = await this.#renderer.render(
         request.content,
@@ -65,7 +54,8 @@ export class OutboundDeliveryRuntime {
         request.incoming,
         renderOptions,
       );
-      initialPayload = await prepareOutboundPayload(rendered, request.conversation, snapshot);
+      initialProjection = await projectOutboundPayload(rendered, request.conversation, snapshot, { deferInteractive: true });
+      initialPayload = initialProjection.payload;
     } catch (error) {
       if (error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent') return receiptFromEndpointError(error, false);
       return rejectedDeliveryReceipt('outbound_payload_rejected');
@@ -83,6 +73,15 @@ export class OutboundDeliveryRuntime {
       generation: snapshot.generation,
       clientAdapter: adapters.clientAdapter(adapter),
     }, initialPayload, () => adapters.clientById(adapter));
+    // Record identities and fallback text before middleware can mutate the array
+    // or its segments. Do not copy/serialize media buffers or streams.
+    const initialItems = Array.isArray(initialPayload) ? initialPayload.map(item => ({
+      item, type: item?.type, text: item?.type === 'text' ? item.data?.text : undefined,
+    })) : undefined;
+    const retainsInitialProjection = (value: unknown): boolean => value === initialPayload
+      && (!initialItems || (Array.isArray(value) && value.length === initialItems.length
+        && initialItems.every(({ item, type, text }, index) => value[index] === item
+          && item?.type === type && (type !== 'text' || item.data?.text === text))));
     let terminalEntered = false;
     let receipt: DeliveryReceipt | undefined;
 
@@ -93,6 +92,7 @@ export class OutboundDeliveryRuntime {
         async () => {
           terminalEntered = true;
           let payload: unknown;
+          let projection: OutboundProjection;
           const buttonPayloads = new Set<string>();
           try {
             // Native payload replacements remain possible; only authoring values need evaluation.
@@ -100,15 +100,14 @@ export class OutboundDeliveryRuntime {
             const replaced = replacement !== initialPayload && needsAuthoringRender(replacement)
               ? await this.#renderer.render(replacement as SendContent, request.requester, snapshot, request.conversation, request.incoming, renderOptions)
               : replacement;
-            payload = await prepareOutboundPayload(
-              replaced,
-              request.conversation,
-              snapshot,
-              (map) => {
+            projection = await projectOutboundPayload(replaced, request.conversation, snapshot, {
+              inheritedFallbacks: retainsInitialProjection(replacement) ? initialProjection.rendering.fallbacks : [],
+              rememberFallback: (map) => {
                 for (const value of Object.values(map)) buttonPayloads.add(value);
                 return this.context.rememberFallback(request.conversation, snapshot.generation, map);
               },
-            );
+            });
+            payload = projection.payload;
             for (const value of collectButtonPayloads(payload)) buttonPayloads.add(value);
           } catch (error) {
             receipt = error instanceof EndpointDeliveryError && error.code === 'unsupported_operation' && error.disposition === 'not_sent'
@@ -138,6 +137,7 @@ export class OutboundDeliveryRuntime {
             await this.context.record(request, receipt);
             this.context.publish({
               direction: 'outbound',
+              rendering: projection.rendering,
               conversation: request.conversation,
               requester: request.requester,
               contentPreview: previewMessageContent(payload),
@@ -190,51 +190,6 @@ export function failedDeliveryReceipt(code: string, retryable = false): Delivery
       ...(retryable ? { retryable: true } : {}),
     }),
   });
-}
-
-async function prepareOutboundPayload(
-  rendered: unknown,
-  conversation: ConversationRef,
-  snapshot: RuntimeSnapshot,
-  rememberInteractiveFallback?: (map: Record<string, string>) => Record<string, string> | void,
-): Promise<unknown> {
-  const adapter = conversation.endpoint.id as CapabilityId;
-  const markdownResolved = applyOutboundMarkdownPolicy(
-    Array.isArray(rendered) ? flattenOutboundArray(rendered) : rendered,
-    resolveOutboundMarkdownPolicy(adapter, snapshot),
-  );
-  let payload = await normalizeOutboundPayload(markdownResolved, resolveHtmlRenderer(snapshot), {
-      mediaPolicy: resolveOutboundMediaPolicy(adapter, snapshot),
-      htmlPolicy: resolveOutboundHtmlPolicy(adapter, snapshot),
-      onHtmlFallback: reason => logger.debug(formatCompact({ op: 'html_fallback', reason, generation: snapshot.generation })),
-    });
-  if (rememberInteractiveFallback) {
-    payload = applyOutboundInteractivePolicy(
-      payload,
-      resolveOutboundInteractivePolicy(adapter, snapshot),
-      rememberInteractiveFallback,
-    );
-  }
-  if (Array.isArray(payload)) {
-    // Empty text carries no wire content, including HTML's empty fallback.
-    // Remove it before canonical validation (required strings reject '').
-    payload = payload.filter(item => !(item?.type === 'text' && item.data?.text === ''));
-    assertCanonicalSegments(payload);
-  }
-  const supported = resolveOutboundSupportedSegments(adapter, snapshot);
-  const supportedPayload = rememberInteractiveFallback ? payload : applyOutboundInteractivePolicy(payload, resolveOutboundInteractivePolicy(adapter, snapshot));
-  if (supported && Array.isArray(supportedPayload)) {
-    const unsupported = supportedPayload.find(segment => segment && typeof segment === 'object' && typeof segment.type === 'string' && !supported.includes(segment.type));
-    if (unsupported) throw new EndpointDeliveryError('unsupported_operation', `Adapter does not support canonical segment ${unsupported.type}`, 'not_sent');
-  }
-  return payload;
-}
-
-function resolveHtmlRenderer(snapshot: RuntimeSnapshot): HtmlRendererHost | undefined {
-  const host = snapshot.resources.get(snapshot.root)?.get(htmlRendererToken.id);
-  return host && typeof (host as HtmlRendererHost).render === 'function'
-    ? host as HtmlRendererHost
-    : undefined;
 }
 
 function receiptFromEndpointResult(

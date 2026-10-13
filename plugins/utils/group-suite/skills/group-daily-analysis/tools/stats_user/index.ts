@@ -1,3 +1,4 @@
+import { conversationKey, toolGroupConversation } from '../../../../src/conversation-scope.js';
 import { defineAgentTool } from '@zhin.js/tool';
 import { getStatsModel } from '../../../../src/db-store.js';
 import { groupSuiteRuntimeToken } from '../../../../src/runtime-state.js';
@@ -15,18 +16,16 @@ export default defineAgentTool<{ user_id: string; group_id?: string }>({
     required: ['user_id'],
   },
   requiresApproval: 'never',
+  scopes: ['group'],
   async execute({ user_id: userId, group_id: requestedGroupId }, context) {
     const runtime = context.use(groupSuiteRuntimeToken);
     await flushStatsBuffer(runtime);
     const model = getStatsModel(runtime.db);
     if (!model) return '统计数据库尚未就绪';
-    const groupId = requestedGroupId
-      ?? (context.origin.kind === 'im' && context.origin.scope !== 'private'
-        ? context.origin.sceneId
-        : '');
+    const groupId = conversationKey(toolGroupConversation(context, requestedGroupId));
     const rows = await model.select().where({
       user_id: userId,
-      ...(groupId ? { group_id: groupId } : {}),
+      group_id: groupId,
     });
     if (rows.length === 0) return `用户 ${userId} 暂无消息记录`;
     const today = todayStr();

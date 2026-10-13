@@ -1358,6 +1358,8 @@ _This Schema declares no fields._
 | `plugins.group-suite.teachCooldownMs` | number | no | `3000` | — |
 | `plugins.group-suite.teachAllowRegex` | boolean | no | `true` | — |
 | `plugins.group-suite.teachPageSize` | number | no | `10` | — |
+| `plugins.group-suite.welcomeMessage` | string | no | `""` | Group welcome text. Empty disables; {name}/{id} refer to the joined member. |
+| `plugins.group-suite.ephemeralKeywords` | boolean | no | `false` | Explicit volatile keywords. With false, automatic replies require Database Host at startup and keyword management requires its persistent state service when invoked. |
 
 ### link-poster
 
@@ -1404,6 +1406,18 @@ _This Schema declares no fields._
 [`plugins/utils/qrcode/schema.json`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/qrcode/schema.json)
 
 _This Schema declares no fields._
+
+### reminder
+
+[`plugins/utils/reminder/src/config.ts`](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/src/config.ts)
+
+| Path | Type | Required | Default | Description |
+| --- | --- | --- | --- | --- |
+| `plugins.reminder.timezone` | string | no | `"UTC"` | 显示提醒时间的 IANA 时区；绝对时间仍必须提供 ISO offset |
+| `plugins.reminder.maxTasks` | number | no | `20` | 每个插件实例新建时允许的活跃任务上限（待触发或未确认）；降低上限不删除既有任务 |
+| `plugins.reminder.maxTasksPerSender` | number | no | `10` | 同一发送者在同一会话的任务上限 |
+| `plugins.reminder.batchSize` | number | no | `5` | 每次扫描最多投递的任务数 |
+| `plugins.reminder.missedGraceSeconds` | number | no | `15` | 周期轮次超过此延迟后跳过；停机期间不补历史轮次 |
 
 ### repeater
 

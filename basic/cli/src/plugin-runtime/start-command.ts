@@ -27,6 +27,7 @@ import { setLevel, getLogger, formatCompact, type LogLevelInput } from '@zhin.js
 import {
   ConfigValidationError,
   createEnvStore,
+  envStoreToken,
   type RootResourceInstaller,
   ensureTypeScriptSpecifierRemap,
   expandEnvironmentValue,
@@ -167,6 +168,14 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const consoleConfigurationStore = new ConsoleConfigurationStore({
     projectRoot: options.root,
     document: config,
+    environmentName: runtimeEnvironment.name,
+    environmentForPlugin: instanceKey => {
+      const lease = host.runtime.snapshots.acquire();
+      try {
+        const node = [...lease.value.tree.values()].find(item => item.parent === rootPluginId() && item.instanceKey === instanceKey);
+        return node ? lease.value.resources.get(node.id)?.get(envStoreToken.id) as import('@zhin.js/runtime').EnvStore | undefined : undefined;
+      } finally { lease.release(); }
+    },
     configDeclarations: async () => {
       await host.runtime.whenConfigurationReady();
       return host.runtime.configurationSchemas;

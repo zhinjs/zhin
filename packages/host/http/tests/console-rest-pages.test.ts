@@ -594,6 +594,24 @@ describe('console-rest-pages introspection', () => {
     expect(denied.status).toBe(403);
   });
 
+  it('returns target projection diagnostics through the same full-scope preview route', async () => {
+    const runtime = fakeAgentRuntime();
+    const target = { endpoint: { adapter: 'test', id: 'endpoint' }, kind: 'group', id: 'room' };
+    const preview = vi.fn(async () => ({ output: [{ type: 'text', data: { text: 'Status' } }],
+      rendering: { forms: ['text' as const], fallbacks: ['renderer_unavailable' as const] },
+      generation: 7, note: 'No transport or callback activation.' }));
+    runtime.introspection!.previewComponentDelivery = preview;
+    const base = await startHost(baseCtx({ acquireAgentRuntime: () => lease(runtime) }));
+    const response = await fetch(`${base}/api/introspection/components/render`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ requester: 'root', name: 'status-card', target }),
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { generation: 7,
+      output: [{ type: 'text', data: { text: 'Status' } }], rendering: { forms: ['text'], fallbacks: ['renderer_unavailable'] } } });
+    expect(preview).toHaveBeenCalledWith(expect.objectContaining({ requester: 'root', name: 'status-card', target }));
+  });
+
   it('bounds Component preview time and serialized output', async () => {
     let released = 0;
     const stalled = new Promise<never>(() => {});

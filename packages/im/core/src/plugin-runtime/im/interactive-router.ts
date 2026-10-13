@@ -1,4 +1,4 @@
-import type { ConversationRef } from '@zhin.js/im-contract';
+import { conversationRefKey, type ConversationRef } from '@zhin.js/im-contract';
 import { resolvePayloadFromText } from '../../built/interactive-segments/action.js';
 import type { Segment } from '../../built/segment-contract/types.js';
 import type { Message } from './contracts.js';
@@ -18,13 +18,16 @@ interface InteractiveFallbackEntry {
   readonly expiresAt: number;
 }
 
+interface ExpiredFallbackEntry {
+  readonly conversationKey: string;
+  readonly map: Readonly<Record<string, string>>;
+  readonly expiresAt: number;
+}
+
+const MAX_EXPIRED_BATCHES = 1000;
+
 function interactiveConversationKey(conversation: ConversationRef, generation: number): string {
-  const base = `${String(conversation.endpoint.id)}~${conversation.kind}:${conversation.id}`;
-  const parent = conversation.parent
-    ? `@${conversation.parent.kind}:${conversation.parent.id}`
-    : '';
-  const thread = conversation.threadId ? `#${conversation.threadId}` : '';
-  return `${generation}:${base}${parent}${thread}`;
+  return `${generation}:${conversationRefKey(conversation)}`;
 }
 
 /**
@@ -34,6 +37,7 @@ function interactiveConversationKey(conversation: ConversationRef, generation: n
 export class RuntimeInteractiveRouter<Admission = never> {
   readonly #handlers: RegisteredRuntimeInteractiveHandler<Admission>[] = [];
   readonly #fallbacks = new Map<string, InteractiveFallbackEntry[]>();
+  readonly #expired: ExpiredFallbackEntry[] = [];
 
   #nextNumber = 1;
 
@@ -87,6 +91,22 @@ export class RuntimeInteractiveRouter<Admission = never> {
     );
   }
 
+  /** Bounded label-only history: stale text buttons are not mistaken for new input. */
+  isExpiredFallback(message: Message): boolean {
+    if (actionPayloadFromSegments(message.segments) || this.resolvePayload(message)) return false;
+    const key = conversationRefKey(message.conversation);
+    const currentKey = interactiveConversationKey(message.conversation, message.generation);
+    const matches = (map: Readonly<Record<string, string>>) =>
+      resolvePayloadFromText(message.content, map) !== undefined;
+    if (this.#expired.some(entry => entry.conversationKey === key && matches(entry.map))) return true;
+    // A generation change invalidates even a keyboard whose TTL has not elapsed.
+    for (const [batchKey, entries] of this.#fallbacks) {
+      if (batchKey !== currentKey && batchKey.slice(batchKey.indexOf(':') + 1) === key
+        && entries.some(entry => matches(entry.map))) return true;
+    }
+    return false;
+  }
+
   async dispatch(message: Message, admission?: Admission): Promise<boolean> {
     const payload = this.resolvePayload(message);
     if (!payload) return false;
@@ -114,10 +134,22 @@ export class RuntimeInteractiveRouter<Admission = never> {
   #pruneFallbacks(): void {
     const now = Date.now();
     for (const [key, entries] of this.#fallbacks) {
-      const active = entries.filter(entry => entry.expiresAt >= now);
+      const active = entries.filter(entry => entry.expiresAt > now);
+      for (const entry of entries) {
+        if (entry.expiresAt > now || entry.expiresAt + this.fallbackTtlMs <= now) continue;
+        this.#expired.push({
+          conversationKey: key.slice(key.indexOf(':') + 1),
+          map: Object.freeze(Object.fromEntries(Object.keys(entry.map).map(label => [label, 'expired']))),
+          expiresAt: entry.expiresAt + this.fallbackTtlMs,
+        });
+      }
       if (active.length) this.#fallbacks.set(key, active);
       else this.#fallbacks.delete(key);
     }
+    for (let i = this.#expired.length - 1; i >= 0; i--) {
+      if (this.#expired[i]!.expiresAt <= now) this.#expired.splice(i, 1);
+    }
+    if (this.#expired.length > MAX_EXPIRED_BATCHES) this.#expired.splice(0, this.#expired.length - MAX_EXPIRED_BATCHES);
   }
 }
 

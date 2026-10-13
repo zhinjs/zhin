@@ -1,6 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildPluginRuntimeEntries,
@@ -22,6 +22,7 @@ describe('build-plugin-runtime-entries', () => {
     await mkdir(join(root, 'commands/gh/status'), { recursive: true });
     await mkdir(join(root, 'tools/lookup'), { recursive: true });
     await mkdir(join(root, 'hooks/audit'), { recursive: true });
+    await mkdir(join(root, 'handlers/welcome'), { recursive: true });
     await mkdir(join(root, 'agents/reviewer/tools/inspect'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({
       name: '@test/plugin',
@@ -41,6 +42,7 @@ describe('build-plugin-runtime-entries', () => {
       "import value from '../../src/value.js';\nexport default value as number;\n",
     );
     await writeFile(join(root, 'hooks/audit/index.ts'), 'export default {} as object;\n');
+    await writeFile(join(root, 'handlers/welcome/index.ts'), 'export default { handle() {} };\n');
     await writeFile(
       join(root, 'agents/reviewer/tools/inspect/index.ts'),
       'export default {} as object;\n',
@@ -48,11 +50,12 @@ describe('build-plugin-runtime-entries', () => {
 
     const outputs = await buildPluginRuntimeEntries(root);
 
-    expect(outputs.map((path) => path.slice(root.length + 1))).toEqual([
+    expect(outputs.map((path) => relative(root, path).split(sep).join('/'))).toEqual([
       'plugin.js',
       'agents/reviewer/tools/inspect/index.js',
       'tools/lookup/index.js',
       'hooks/audit/index.js',
+      'handlers/welcome/index.js',
       'commands/gh/status/index.js',
     ]);
     expect(await readFile(join(root, 'plugin.js'), 'utf8'))
@@ -61,6 +64,8 @@ describe('build-plugin-runtime-entries', () => {
       .toContain('../../lib/value.js');
     expect(await readFile(join(root, 'tools/lookup/index.js'), 'utf8'))
       .toContain('../../lib/value.js');
+    await cleanPluginRuntimeEntries(root);
+    await expect(readFile(join(root, 'handlers/welcome/index.js'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' });
   });
 
   it('cleans only files carrying the generated marker', async () => {

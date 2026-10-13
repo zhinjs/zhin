@@ -460,6 +460,10 @@ describe('console REST routes', () => {
         plugins: [{ package: '@zhin.js/adapter-icqq', instanceKey: 'custom-icqq' }] },
     }));
     await writeFile(join(projectRoot, 'zhin.config.yml'), 'plugin:\n  custom-icqq: {}\n');
+    const installedRoot = join(projectRoot, 'node_modules', '@zhin.js', 'adapter-icqq');
+    await mkdir(installedRoot, { recursive: true });
+    await writeFile(join(installedRoot, 'package.json'), JSON.stringify({ name: '@zhin.js/adapter-icqq', version: '1.2.3', zhin: { protocol: 1, type: 'plugin', entry: './plugin.js', platformFeatures: false } }));
+    await writeFile(join(installedRoot, 'plugin.js'), 'export default {};');
     const { port } = await startHost({ projectRoot });
     const response = await fetch(`http://127.0.0.1:${port}/api/console/request`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -1466,10 +1470,12 @@ describe('console SSE events', () => {
       },
       requester: 'root' as RuntimeMessageEvent['requester'],
       contentPreview: 'reply text',
+      rendering: { forms: ['text'], fallbacks: ['renderer_unavailable'] },
       timestamp: 1_700_000_000_001,
     });
     const outbound = await readUntil('"direction":"outbound"');
     expect(outbound).toContain('"content":"reply text"');
+    expect(outbound).toContain('"rendering":{"forms":["text"],"fallbacks":["renderer_unavailable"]}');
 
     const historyResponse = await fetch(`http://127.0.0.1:${port}/api/events/history?after=0&limit=10`);
     expect(historyResponse.status).toBe(200);

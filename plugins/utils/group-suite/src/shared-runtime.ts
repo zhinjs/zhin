@@ -1,3 +1,4 @@
+import { conversationKey, requireConversation, type ConversationInput } from './conversation-scope.js';
 export function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -17,20 +18,10 @@ export function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-/** Runtime Message → group/global context */
-export function resolveContextKey(input: {
-  conversation?: { readonly kind?: string; readonly id?: string };
-  metadata?: Readonly<Record<string, unknown>>;
-}): { type: string; id: string } {
-  const meta = input.metadata ?? {};
-  const channelType = String(meta.type ?? meta.channelType ?? '');
-  if (channelType === 'group' || channelType === 'guild' || channelType === 'channel') {
-    return { type: 'group', id: String(meta.channelId ?? input.conversation?.id ?? '') };
-  }
-  if (input.conversation && channelType !== 'private') {
-    return { type: 'group', id: String(input.conversation.id ?? '') };
-  }
-  return { type: 'global', id: '' };
+/** Every scene includes endpoint, parent and thread; no cross-bot global fallback. */
+export function resolveContextKey(input: ConversationInput): { type: string; id: string } {
+  const target = requireConversation(input);
+  return { type: target.kind, id: conversationKey(target) };
 }
 
 export function resolveSender(input: {

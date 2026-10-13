@@ -206,6 +206,15 @@ export default defineAdapter<NapCatEndpointConfig>({
 
 `capabilities` 至少含 `inbound` / `outbound` 之一；`create` 返回的 Endpoint 生命周期见 [WS/SSE 端点生命周期](./endpoint-lifecycle.md)。
 
+### schedules/ — `defineSchedule`
+
+目录任务使用 `schedules/<name>/index.ts`；同目录可放 helper。`execute(ctx)` 获得本次执行所属的
+owner、generation、config、`use(token)` 与 `project(feature)`，也支持在 `plugin.ts` 中用
+`addSchedule` 注入同一定义。任务没有入站 Message；需要跨重启保存的数据应使用现有持久状态，
+不能缓存整个 ctx、Client 或旧代回调。完整示例与执行边界见
+[Schedule Feature](https://github.com/zhinjs/zhin/blob/main/packages/im/schedule-feature/README.md) 和
+[持久提醒插件](https://github.com/zhinjs/zhin/blob/main/plugins/utils/reminder/README.md)。
+
 ### tools/ — `defineAgentTool`
 
 ```ts

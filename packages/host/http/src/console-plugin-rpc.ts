@@ -40,6 +40,31 @@ export async function dispatchPluginConsoleRpc(
           },
         };
       }
+      case PLUGIN_RPC.INSPECT:
+      case PLUGIN_RPC.APPLY:
+      case PLUGIN_RPC.PLAN_VERIFICATION:
+      case PLUGIN_RPC.VERIFY: {
+        const name = stringField(message, 'instanceKey') || stringField(message, 'packageName');
+        if (!name) return { requestId, error: 'instanceKey or packageName is required' };
+        const port = ctx.pluginManagement;
+        if (!port) return { requestId, error: 'Plugin management is not configured' };
+        if (type === PLUGIN_RPC.APPLY || type === PLUGIN_RPC.PLAN_VERIFICATION || type === PLUGIN_RPC.VERIFY) {
+          if (ctx.authScope !== 'full') return { requestId, error: 'Full scope required' };
+        }
+        if (type === PLUGIN_RPC.INSPECT && port.inspect) return { requestId, data: await port.inspect(name) };
+        if (type === PLUGIN_RPC.APPLY && port.apply) return { requestId, data: await port.apply(name, optionalString(message.expectedProjectRevision)) };
+        if (type === PLUGIN_RPC.PLAN_VERIFICATION && port.verificationPlan) return { requestId, data: await port.verificationPlan(name) };
+        if (type === PLUGIN_RPC.VERIFY && port.verify) {
+          const checkId = stringField(message, 'checkId');
+          if (!checkId) return { requestId, error: 'checkId is required' };
+          const expectedGeneration = message.expectedGeneration;
+          const projectRevision = stringField(message, 'expectedProjectRevision');
+          const checkRevision = stringField(message, 'expectedCheckRevision');
+          if (!(expectedGeneration === null || typeof expectedGeneration === 'number' && Number.isSafeInteger(expectedGeneration) && expectedGeneration >= 0) || !projectRevision || !checkRevision) return { requestId, error: 'expectedGeneration, expectedProjectRevision and expectedCheckRevision are required' };
+          return { requestId, data: await port.verify(name, checkId, expectedGeneration, projectRevision, checkRevision) };
+        }
+        return { requestId, error: 'Plugin workflow operation is not configured' };
+      }
       case PLUGIN_RPC.PLAN_INSTALL: {
         const packageName = stringField(message, 'packageName');
         if (!packageName) return { requestId, error: 'packageName is required' };
@@ -55,6 +80,7 @@ export async function dispatchPluginConsoleRpc(
         const result = await ctx.pluginManagement.install(
           packageName,
           optionalString(message.expectedRevision),
+          optionalString(message.expectedProjectRevision),
         );
         ctx.publishEvent?.('plugin:installed', { packageName, restartRequired: result.restartRequired });
         return { requestId, data: { success: true, ...result } };
@@ -78,6 +104,7 @@ export async function dispatchPluginConsoleRpc(
         const result = await ctx.pluginManagement.uninstall(
           packageName,
           optionalString(message.expectedRevision),
+          optionalString(message.expectedProjectRevision),
         );
         ctx.publishEvent?.('plugin:uninstalled', { packageName, restartRequired: result.restartRequired });
         return { requestId, data: { success: true, ...result } };
@@ -104,6 +131,7 @@ export async function dispatchPluginConsoleRpc(
           packageName,
           targetVersion,
           optionalString(message.expectedRevision),
+          optionalString(message.expectedProjectRevision),
         );
         ctx.publishEvent?.('plugin:updated', {
           packageName,
@@ -128,7 +156,7 @@ export async function dispatchPluginConsoleRpc(
         return undefined;
     }
   } catch (error) {
-    return { requestId, error: error instanceof Error ? error.message : String(error) };
+    return { requestId, error: error instanceof Error ? error.message : String(error), ...(error instanceof Error && 'completedStages' in error ? { data: { completedStages: error.completedStages, ...('state' in error ? { state: error.state } : {}) } } : {}) };
   }
 }
 

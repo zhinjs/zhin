@@ -1,6 +1,8 @@
 import { createToken } from './token.js';
 
 export interface HtmlRenderOptions {
+  /** Cooperative cancellation; callers also stop awaiting hosts that ignore it. */
+  readonly signal?: AbortSignal;
   readonly width?: number;
   /** Static raster output; defaults to PNG. */
   readonly format?: 'png' | 'jpeg' | 'webp';

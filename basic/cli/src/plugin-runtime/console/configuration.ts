@@ -4,9 +4,11 @@ import type { ConsoleConfigSource } from '@zhin.js/console-protocol';
 import type { PluginConfigValidation } from '@zhin.js/host-http';
 import {
   readPluginConfigurationMap,
+  rootPluginId,
   type RuntimeConfigDocument,
 } from '@zhin.js/plugin-runtime';
-import { HOST_CONFIG_KEYS, validatePluginConfigSchema } from '@zhin.js/runtime';
+import { HOST_CONFIG_KEYS, parsePluginConfigSchema, createEnvStore, type EnvStore } from '@zhin.js/runtime';
+import { loadRuntimeEnvironmentLayers } from '../start/environment.js';
 import { readPluginPackageMap } from './plugin-package-map.js';
 import { configKeyPatch, configKeyRemovePatch, flattenConfigDocument } from './configuration-projection.js';
 import { readEnvFile, writeEnvFile } from './environment-files.js';
@@ -17,16 +19,23 @@ export class ConsoleConfigurationStore {
   readonly #projectRoot: string;
   readonly #document: ConfigFileDocument;
   readonly #schemas: PluginSchemaCatalog;
+  readonly #environmentName: () => string;
+  readonly #environmentForPlugin?: (pluginName: string) => Pick<EnvStore, 'has'> | undefined;
   #mutationTail: Promise<void> = Promise.resolve();
 
   constructor(options: {
     readonly projectRoot: string;
     readonly document: ConfigFileDocument;
     readonly configDeclarations?: () => ReadonlyMap<string, Readonly<Record<string, unknown>>> | Promise<ReadonlyMap<string, Readonly<Record<string, unknown>>>>;
+    readonly environmentName?: string | (() => string);
+    readonly environmentForPlugin?: (pluginName: string) => Pick<EnvStore, 'has'> | undefined;
   }) {
     this.#projectRoot = options.projectRoot;
     this.#document = options.document;
     this.#schemas = new PluginSchemaCatalog(options.projectRoot, options.configDeclarations);
+    const environmentName = options.environmentName;
+    this.#environmentName = typeof environmentName === 'function' ? environmentName : () => environmentName ?? (process.env.NODE_ENV === 'production' ? 'production' : 'development');
+    this.#environmentForPlugin = options.environmentForPlugin;
   }
 
   readSource(): Promise<ConsoleConfigSource> {
@@ -104,16 +113,13 @@ export class ConsoleConfigurationStore {
     const schema = await this.#schemas.readJson(pluginName);
     const errors: Array<{ path: string; message: string }> = [];
     const missingEnv = new Set<string>();
-    const envNames = new Set(Object.keys(process.env));
-    for (const file of ['.env', '.env.development', '.env.production']) {
-      const source = await readEnvFile(this.#projectRoot, file);
-      for (const line of source.split(/\r?\n/u)) {
-        const match = /^\s*([A-Z_][A-Z0-9_]*)\s*=/u.exec(line);
-        if (match) envNames.add(match[1]!);
-      }
-    }
+    const candidate = schema ? parsePluginConfigSchema(schema, data) : { value: data, errors: [] };
+    const environmentName = this.#environmentName();
+    const environment = this.#environmentForPlugin?.(pluginName) ?? createEnvStore(rootPluginId(),
+      { name: environmentName, mode: environmentName === 'production' ? 'production' : 'development', platform: 'node' },
+      await loadRuntimeEnvironmentLayers(this.#projectRoot, environmentName));
     if (schema) {
-      for (const issue of validatePluginConfigSchema(schema, data)) {
+      for (const issue of candidate.errors) {
         const location = issue.instancePath.replace(/^\/candidate/u, '').split('/').slice(1)
           .map(key => key.replaceAll('~1', '/').replaceAll('~0', '~'));
         if (issue.keyword === 'required' && typeof issue.params.missingProperty === 'string') {
@@ -127,8 +133,9 @@ export class ConsoleConfigurationStore {
         });
       }
     }
-    collectEnvironmentReferences(data, missingEnv, envNames);
+    collectEnvironmentReferences(candidate.value, missingEnv, environment);
     return Object.freeze({
+      schemaAvailable: schema !== null,
       valid: errors.length === 0,
       errors: Object.freeze(errors),
       missingEnv: Object.freeze([...missingEnv].sort()),
@@ -169,15 +176,15 @@ export class ConsoleConfigurationStore {
 function collectEnvironmentReferences(
   value: unknown,
   missingEnv: Set<string>,
-  envNames: ReadonlySet<string>,
+  environment: Pick<EnvStore, 'has'>,
 ): void {
   if (typeof value === 'string') {
-    for (const name of value.matchAll(/\$\{([A-Z_][A-Z0-9_]*)\}/gu)) {
-      if (!envNames.has(name[1]!)) missingEnv.add(name[1]!);
+    for (const name of value.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/gu)) {
+      if (!environment.has(name[1]!)) missingEnv.add(name[1]!);
     }
   }
   if (value && typeof value === 'object') {
-    for (const item of Object.values(value)) collectEnvironmentReferences(item, missingEnv, envNames);
+    for (const item of Object.values(value)) collectEnvironmentReferences(item, missingEnv, environment);
   }
 }
 
