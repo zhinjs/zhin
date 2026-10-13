@@ -44,7 +44,7 @@ export {
   resolveWorkroomBotIdentity,
   type WorkroomBotIdentityInput,
   type ResolvedWorkroomBotIdentity,
-} from './routing/workroom-bot-identity.js';
+} from './workroom-runtime/workroom-bot-identity.js';
 export { validateWorkroomDefinitions } from './workroom/validate-catalog.js';
 export type {
   IAgentTurnProcessor,

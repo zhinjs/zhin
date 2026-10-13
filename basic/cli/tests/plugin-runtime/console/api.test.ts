@@ -42,6 +42,24 @@ import {
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
 
+const WORKROOM_CONSOLE_KEYS = new Set([
+  'workroom', 'workroomControl', 'workroomCatalog', 'workroomProfiles',
+  'workroomKnowledge', 'portfolioSponsor', 'effectSponsor', 'dataLifecycle',
+]);
+
+/** Split a combined Console fixture into the Agent and Workroom Host ports the Root publishes. */
+function splitHostPorts(host: { console: Record<string, unknown> } & Record<string, unknown>) {
+  const agentConsole: Record<string, unknown> = {};
+  const workroomConsole: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(host.console))) {
+    Object.defineProperty(WORKROOM_CONSOLE_KEYS.has(key) ? workroomConsole : agentConsole, key, descriptor);
+  }
+  return new Map<unknown, unknown>([
+    [tokenId('zhin.host.agent'), { ...host, console: agentConsole }],
+    [tokenId('zhin.host.workroom'), { console: workroomConsole }],
+  ]);
+}
+
 describe('isKnownConversationSession', () => {
   it('matches the durable inbox using all four canonical session fields', async () => {
     const queries: Record<string, unknown>[] = [];
@@ -410,19 +428,54 @@ describe('generation-owned Agent introspection', () => {
 
   it('reads all Console Agent ports from the same root generation resource', () => {
     const root = rootPluginId();
-    const token = { id: tokenId('zhin.host.agent') };
-    const consolePort = {
-      sessionTree: {},
-      workroom: {},
-      assistant: null,
-      trace: {},
-    };
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const agentConsole = { sessionTree: {}, assistant: null, trace: {} };
+    const workroomConsole = { workroom: {}, workroomCatalog: {} };
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[token.id, { console: consolePort }]])]]),
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: agentConsole }],
+        [workroomToken.id, { console: workroomConsole }],
+      ])]]),
     } as unknown as RuntimeSnapshot;
 
-    expect(resolveGenerationAgentConsole(snapshot, token)).toBe(consolePort);
+    expect(resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toEqual({
+      ...agentConsole,
+      ...workroomConsole,
+    });
+  });
+
+  it('keeps late-bound Workroom getters live after merging the Console view', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    let profiles: object | undefined = undefined;
+    const workroomConsole = { workroom: {}, get workroomProfiles() { return profiles; } };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: { sessionTree: {} } }],
+        [workroomToken.id, { console: workroomConsole }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const merged = resolveGenerationAgentConsole(snapshot, agentToken, workroomToken);
+    expect(merged?.workroomProfiles).toBeUndefined();
+    profiles = {};
+    expect(merged?.workroomProfiles).toBe(profiles);
+  });
+
+  it('returns null when the Workroom Host port is missing', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[agentToken.id, { console: {} }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toBeNull();
   });
 });
 
@@ -520,14 +573,14 @@ describe('console REST routes', () => {
     };
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {},
           workroom: {},
           assistant: null,
           trace: { list: () => traceSnapshot },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -615,13 +668,13 @@ describe('console REST routes', () => {
     }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: { listRuns, getRun, getReadiness },
           workroomControl: { execute: executeControl }, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -732,13 +785,13 @@ describe('console REST routes', () => {
     const cancelSession = vi.fn(() => true);
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           cancelSession,
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -767,7 +820,7 @@ describe('console REST routes', () => {
     const publishKnowledge = vi.fn(async () => ({ projectId: 'engineering', revision: 0 }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
@@ -783,7 +836,7 @@ describe('console REST routes', () => {
             read: vi.fn(), publish: publishKnowledge, rollback: vi.fn(),
           },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -872,14 +925,14 @@ describe('console REST routes', () => {
     }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           workroomCatalog: { read: readCatalog },
           listBindings: () => [],
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const release = vi.fn();
     const snapshots = {
@@ -925,14 +978,14 @@ describe('console REST routes', () => {
     const decideEffect = vi.fn(async command => ({ ...command, principalId: 'human:alice', digest: 'sha256:decision' }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           portfolioSponsor: { read, execute },
           effectSponsor: { decide: decideEffect },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -1056,13 +1109,13 @@ describe('console REST routes', () => {
     });
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           dataLifecycle: { read, listOverdue, execute },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),

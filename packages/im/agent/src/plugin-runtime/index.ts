@@ -3,6 +3,7 @@ export * from './decision-runtime.js';
 export * from '../decision/index.js';
 export { normalizeAgentDecisionConfig } from '../decision/config.js';
 export * from './agent-host-port.js';
+export * from '../workroom-runtime/workroom-host-port.js';
 export * from './agent-event-bus.js';
 export * from './agent-trace-runtime.js';
 export * from './native-bash-tool.js';
@@ -13,6 +14,11 @@ export type { ComposedZhinAgentRuntime } from '../init/compose-zhin-agent-runtim
 export { activateAiDatabaseStorage } from '../init/activate-ai-database-storage.js';
 export { defineAiDatabaseModels } from '../init/define-ai-database-models.js';
 export type { AiDatabaseModelDefiner } from '../init/define-ai-database-models.js';
+export { defineWorkroomDatabaseModels } from '../workroom-runtime/workroom-database-models.js';
+export {
+  prepareWorkroomDatabaseStorage,
+  type PreparedWorkroomDatabaseStorage,
+} from '../workroom-runtime/workroom-database-storage.js';
 export {
   ensureMcpConnections,
   ensureMcpConnectionsForBinding,

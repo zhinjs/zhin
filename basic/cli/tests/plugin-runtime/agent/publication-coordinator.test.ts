@@ -1,4 +1,4 @@
-import { agentHostToken } from '@zhin.js/agent/runtime';
+import { agentHostToken, workroomHostToken } from '@zhin.js/agent/runtime';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { AgentHostPublicationCoordinator } from '../../../src/plugin-runtime/agent/publication-coordinator.js';
@@ -19,6 +19,7 @@ describe('AgentHostPublicationCoordinator', () => {
       bootstrapText: '',
     })).toThrow('generation replaced');
     expect(resources.has(agentHostToken)).toBe(false);
+    expect(resources.has(workroomHostToken)).toBe(false);
   });
 
   it('projects late-bound controls through the already-published Host port', () => {
@@ -63,9 +64,10 @@ describe('AgentHostPublicationCoordinator', () => {
     });
     const control = {} as never;
 
-    expect(resources.use(agentHostToken).console.workroomProfiles).toBeUndefined();
+    expect(resources.use(workroomHostToken).console.workroomProfiles).toBeUndefined();
     coordinator.bindWorkroomProfiles(control);
-    expect(resources.use(agentHostToken).console.workroomProfiles).toBe(control);
+    expect(resources.use(workroomHostToken).console.workroomProfiles).toBe(control);
+    expect(resources.use(agentHostToken).console).not.toHaveProperty('workroomProfiles');
     expect(() => coordinator.bindWorkroomProfiles(control)).toThrow(
       'Workroom Profile control is already bound',
     );

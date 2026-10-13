@@ -10,6 +10,7 @@ import {
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   agentHostToken,
+  workroomHostToken,
   remoteAssignmentDispatchServiceToken,
   remoteAssignmentDispatchSchedulerToken,
   remoteAssignmentDispatchCommandServiceToken,
@@ -60,6 +61,7 @@ describe('Protocol Host composition', () => {
       introspection: { listMcpServers: () => [] },
       console: {} as never,
     });
+    resources.provide(workroomHostToken, { console: { workroomCatalog: {} } as never });
     resources.provide(workroomSchedulerAssignmentRouteRegistryToken, {
       generation: 1,
       register: registerRoute,

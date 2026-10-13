@@ -126,6 +126,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         workroomRemoteCallbackRuntimeToken,
         workroomRemoteExecutorToken,
         workroomSchedulerAssignmentRouteRegistryToken,
+        workroomHostToken,
       }, {
         WorkroomRemoteCallbackGateway,
       }] = await Promise.all([
@@ -229,6 +230,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
             && resources.has(workroomProjectProfileRegistryToken)
             && resources.has(workroomAssignmentAuthorityGrantToken)) {
             const agentHost = resources.use(agentHostToken);
+            const workroomHost = resources.use(workroomHostToken);
             resources.provide(
               workroomRemoteAssignmentAuthorityToken,
               Object.freeze({
@@ -250,7 +252,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
                     return await new GenerationOwnedWorkroomAssignmentAuthorityProvider({
                       generation: generationSupply,
                       profiles: resources.use(workroomProjectProfileRegistryToken),
-                      catalog: agentHost.console.workroomCatalog,
+                      catalog: workroomHost.console.workroomCatalog,
                       grants: resources.use(workroomAssignmentAuthorityGrantToken),
                       endpoints: remoteTransport,
                     }).resolve(input);

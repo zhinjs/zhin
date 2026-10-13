@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveWorkroomBotIdentity } from '../../src/routing/workroom-bot-identity.js';
+import { resolveWorkroomBotIdentity } from '../../src/workroom-runtime/workroom-bot-identity.js';
 
 describe('resolveWorkroomBotIdentity', () => {
   it('resolves an exact enabled Workroom Bot identity without granting execution routing', () => {

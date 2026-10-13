@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { AIConfig } from '@zhin.js/ai';
 import {
   ActivatableWorkroomJournal,
   DatabaseWorkroomJournal,
@@ -9,9 +8,8 @@ import {
 } from '../../src/workroom/journal/index.js';
 import { WORKROOM_EVENT_MODEL } from '../../src/workroom/journal-model.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
-import { activateAiDatabaseStorage } from '../../src/init/activate-ai-database-storage.js';
+import { prepareWorkroomDatabaseStorage } from '../../src/workroom-runtime/workroom-database-storage.js';
 import { ActivatableWorkroomCatalog } from '../../src/workroom/catalog.js';
-import type { AIServiceRefs } from '../../src/internal/ai-service-refs.js';
 
 describe('Database Workroom Journal row integrity', () => {
   it('persists and revalidates canonical event and row-binding digests after restart', async () => {
@@ -95,25 +93,14 @@ describe('Database Workroom Journal row integrity', () => {
     const catalog = new ActivatableWorkroomCatalog();
     const db = {
       models: new Map<string, unknown>([
-        ['agent_sessions', {}],
-        ['agent_messages', {}],
-        ['agent_summaries', {}],
         ['workroom_events', fixture.model],
         ['workroom_catalog', { select: () => ({ where: async () => [] }) }],
       ]),
       transaction: fixture.database.transaction,
     };
-    const refs = {
-      zhinAgent: { configure: () => undefined },
-    } as unknown as AIServiceRefs;
-    await expect(activateAiDatabaseStorage(
+    await expect(prepareWorkroomDatabaseStorage(
       db,
-      refs,
-      { sessions: { useDatabase: true } } as AIConfig,
-      journal,
       fixture.payloads,
-      catalog,
-      null,
     )).rejects.toThrow('offline export/purge');
     expect(journal.active).toBe(false);
   });

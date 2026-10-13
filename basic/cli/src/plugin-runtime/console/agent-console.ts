@@ -21,6 +21,7 @@ import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-r
  */
 let agentModule: {
   agentHostToken?: { readonly id: TokenId };
+  workroomHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
 void import('@zhin.js/agent/runtime')
@@ -99,15 +100,24 @@ export type AgentConsolePort = {
   readonly dataLifecycle?: WorkroomDataLifecycleConsoleControlPort;
 };
 
+/**
+ * Agent 与 Workroom 分别发布各自的 Host token；Console 门面在这里合并成一个视图。
+ * 用属性描述符合并，保留 Workroom 控制端口的惰性 getter（这些端口在 generation 内晚绑定）。
+ */
 export function resolveGenerationAgentConsole(
   snapshot: RuntimeSnapshot | undefined,
-  token: { readonly id: TokenId } | undefined,
+  agentToken: { readonly id: TokenId } | undefined,
+  workroomToken: { readonly id: TokenId } | undefined,
 ): AgentConsolePort | null {
-  if (!snapshot || !token) return null;
-  const host = snapshot.resources.get(snapshot.root)?.get(token.id) as {
-    console?: AgentConsolePort;
-  } | undefined;
-  return host?.console ?? null;
+  if (!snapshot || !agentToken || !workroomToken) return null;
+  const rootResources = snapshot.resources.get(snapshot.root);
+  const agentConsole = (rootResources?.get(agentToken.id) as { console?: object } | undefined)?.console;
+  const workroomConsole = (rootResources?.get(workroomToken.id) as { console?: object } | undefined)?.console;
+  if (!agentConsole || !workroomConsole) return null;
+  return Object.freeze(Object.defineProperties({}, {
+    ...Object.getOwnPropertyDescriptors(agentConsole),
+    ...Object.getOwnPropertyDescriptors(workroomConsole),
+  })) as AgentConsolePort;
 }
 
 export function resolveCurrentAgentIntrospection(
@@ -119,7 +129,11 @@ export function resolveCurrentAgentIntrospection(
 export function resolveCurrentAgentConsole(
   snapshot: RuntimeSnapshot | undefined,
 ): AgentConsolePort | null {
-  return resolveGenerationAgentConsole(snapshot, agentModule?.agentHostToken);
+  return resolveGenerationAgentConsole(
+    snapshot,
+    agentModule?.agentHostToken,
+    agentModule?.workroomHostToken,
+  );
 }
 
 export function acquireGenerationAgentConsole(snapshots?: SnapshotReader): {

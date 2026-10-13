@@ -6,6 +6,7 @@ import {
   agentTurnEngineToken,
   createFullAgentTurnEngine,
   turnJournalStoreToken,
+  workroomHostToken,
   type AgentHostEffectSponsorControlPort,
   type AgentHostPortfolioSponsorControlPort,
   type AgentHostWorkroomKnowledgeControlPort,
@@ -74,6 +75,14 @@ export class AgentHostPublicationCoordinator {
       }),
       console: Object.freeze({
         sessionTree: sessionTreeRuntime,
+        listBindings: () => agent.listBindings(),
+        assistant: schedule.assistantRuntime,
+        trace: traceRuntime,
+        cancelSession: (sessionKey: string) => agent.agent.cancelSession(sessionKey),
+      }),
+    }));
+    resources.provide(workroomHostToken, Object.freeze({
+      console: Object.freeze({
         workroom: workroom.runtime,
         workroomControl: Object.freeze({
           execute: (
@@ -82,10 +91,6 @@ export class AgentHostPublicationCoordinator {
           ) => workroom.kernel.controlRun(command, authenticatedPrincipal),
         }),
         workroomCatalog: workroom.catalog,
-        listBindings: () => agent.listBindings(),
-        assistant: schedule.assistantRuntime,
-        trace: traceRuntime,
-        cancelSession: (sessionKey: string) => agent.agent.cancelSession(sessionKey),
         get workroomProfiles() { return resolveWorkroomProfiles(); },
         get workroomKnowledge() { return resolveWorkroomKnowledge(); },
         get portfolioSponsor() { return resolvePortfolioSponsor(); },

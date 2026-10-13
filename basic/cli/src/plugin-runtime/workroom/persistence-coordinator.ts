@@ -23,6 +23,8 @@ import {
   activateAiDatabaseStorage,
   createGenerationOwnedWorkroomDataGovernanceStorage,
   defineAiDatabaseModels,
+  defineWorkroomDatabaseModels,
+  prepareWorkroomDatabaseStorage,
   portfolioJournalRepositoryToken,
   type SemanticMemoryRuntime,
   type ZhinAgent,
@@ -38,7 +40,7 @@ import {
 import { assertWorkroomCatalogMatchesGeneration } from './projection.js';
 
 type RootResourceContext = Parameters<RootResourceInstaller>[0];
-type WorkroomJournalPayloadPort = Parameters<typeof activateAiDatabaseStorage>[4];
+type WorkroomJournalPayloadPort = Parameters<typeof prepareWorkroomDatabaseStorage>[1];
 type DataGovernanceStorage = ReturnType<typeof createGenerationOwnedWorkroomDataGovernanceStorage>;
 
 export interface WorkroomPersistenceCoordinatorOptions {
@@ -128,9 +130,10 @@ export class WorkroomPersistenceCoordinator {
     }
     const database = resources.use(databaseRootHostToken);
     try {
-      const tableCount = defineAiDatabaseModels((name, definition) => {
+      const define = (name: string, definition: Record<string, unknown>) => {
         database.define(name, definition);
-      });
+      };
+      const tableCount = defineAiDatabaseModels(define) + defineWorkroomDatabaseModels(define);
       this.#pendingActivation = true;
       this.options.handoff.add({
         activateNext: async signal => {
@@ -138,15 +141,17 @@ export class WorkroomPersistenceCoordinator {
           try {
             const raw = database.getRawDatabase();
             if (!raw) throw new Error('Agent persistence requires an active database connection');
+            // Validate persisted Workroom authority before any candidate runtime port is mutated.
+            const workroomStorage = this.options.config.sessions?.useDatabase === false
+              ? undefined
+              : await prepareWorkroomDatabaseStorage(raw, this.options.journalPayloads);
             await activateAiDatabaseStorage(
               raw,
               { aiService: this.options.service, zhinAgent: this.options.agent },
               this.options.config,
-              this.options.journal,
-              this.options.journalPayloads,
-              this.options.catalog,
               this.options.semanticMemory,
             );
+            workroomStorage?.activate(this.options.journal, this.options.catalog);
             await this.#activateDatabaseRepositories(raw, signal);
             await assertWorkroomCatalogMatchesGeneration(
               this.options.catalog,
