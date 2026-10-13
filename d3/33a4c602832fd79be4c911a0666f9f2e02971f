@@ -1,0 +1,429 @@
+docs/authoring/conventions.md
+  s_6562bcb6cc0539::t_f8e4b10aa8fa18 209-214,217
+  s_6562bcb6cc0539::t_eac9c682b62ab5 215-216
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_6562bcb6cc0539::t_6a826257054ab7 29-30,100-110,112,114-120
+  s_6562bcb6cc0539::t_cbb1135cc02154 111,113
+packages/im/schedule-feature/src/provider.ts
+  s_6562bcb6cc0539::t_a0d52ca87a6f77 17
+basic/cli/src/plugin-runtime/console/agent-runtime-resolver.ts
+  s_6562bcb6cc0539::t_c07e0746e21940 15,30
+packages/im/schedule-feature/README.md
+  s_6562bcb6cc0539::t_6fdcc4d6699b44 7,12-13,19-22
+basic/cli/src/plugin-runtime/console/events.ts
+  s_6562bcb6cc0539::t_96de029ebd1060 33-34
+plugins/utils/group-suite/src/stats-lib.ts
+  s_6562bcb6cc0539::t_aaf62789e42386 30,58-67
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1,33-34,37,137
+basic/cli/src/plugin-runtime/console/plugin-management.ts
+  s_6562bcb6cc0539::t_2dfbdb950a6975 1,3-5
+packages/im/plugin-runtime/src/snapshot.ts
+  s_6562bcb6cc0539::t_dc6fd8ed395402 21-22
+packages/im/runtime/tests/native-development-runtime.test.ts
+  s_6562bcb6cc0539::t_cad6293ebf4e5a 35,56,65,76
+  s_6562bcb6cc0539::t_4d92518b10eae6 29,57-61,63
+packages/console/protocol/src/index.ts
+  s_6562bcb6cc0539::t_b43b55512b4f24 379-382,408-409,438-439
+  s_6562bcb6cc0539::t_96de029ebd1060 99-104
+plugins/utils/group-suite/schedules/flush-stats/index.ts
+  s_6562bcb6cc0539::t_aaf62789e42386 1-11
+packages/im/config-file/src/config-file-document.ts
+  s_6562bcb6cc0539::t_909cbab1cc2110 4
+  s_6562bcb6cc0539::t_a564d71f0f6561 159-160,181-182
+plugins/utils/reminder/src/index.ts
+  s_6562bcb6cc0539::t_77341817d9b88f 1-2
+plugins/utils/group-suite/commands/keyword-remove/[keyword]/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 2,4,6-7
+  s_6562bcb6cc0539::t_44da7a515a6df3 8,10-11,13-15
+plugins/utils/group-suite/plugin.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 2,28-33
+  s_6562bcb6cc0539::t_aaf62789e42386 11
+plugins/utils/group-suite/src/conversation-scope.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1-43
+plugins/utils/group-suite/middlewares/keyword-reply/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 19
+  s_6562bcb6cc0539::t_7e6ec89795a4b3 5,28
+plugins/utils/group-suite/src/checkin-lib.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1,68,117,143,151
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_6562bcb6cc0539::t_3e91bdf6a794dc 1473,1478
+  s_b426cc705305bf::t_2b11d9104af251 463-466
+packages/toolkit/plugin-test-kit/tests/schedule-host.mjs
+  s_6562bcb6cc0539::t_567deef37ed6d8 1-15
+docs/contributing/plugin-experience-plan.md
+  s_6562bcb6cc0539::t_3cc75c70959f8c 62-64,66-68,72-75
+  s_6562bcb6cc0539::t_eac9c682b62ab5 65,69-71
+.changeset/practical-plugin-workflow.md
+  s_6562bcb6cc0539::t_3cc75c70959f8c 1-5,7-19
+  s_6562bcb6cc0539::t_883d798781a3bf 6
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_6562bcb6cc0539::t_b08a7bed509a0c 10,47,57-58,95,103,105,109-110,140
+  s_6562bcb6cc0539::t_44626a0ec7480f 76-84,104
+plugins/utils/group-suite/commands/keyword-add/[keyword]/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 2,4,6-7
+  s_6562bcb6cc0539::t_465ae0e4910a5a 8,10-12,14
+plugins/utils/group-suite/package.json
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 21,69,82-84,124-126
+  s_6562bcb6cc0539::t_aaf62789e42386 4,22,70-71,85-87,127-131
+plugins/utils/reminder/commands/remind/after/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-2,4-16
+  s_6562bcb6cc0539::t_ea8388e2a20899 3
+packages/toolkit/plugin-test-kit/tests/restart-probe.mjs
+  s_6562bcb6cc0539::t_567deef37ed6d8 4-12
+  s_6562bcb6cc0539::t_52b4e0f929ef3f 1-3,13-22
+basic/cli/tests/plugin-management-console-client.test.ts
+  s_6562bcb6cc0539::t_65aa058c5ae27c 15-80
+  s_6562bcb6cc0539::t_193efa157bb046 12-14
+  s_6562bcb6cc0539::t_8d129cb6e5b8e4 81-83
+  s_9072f907b10194::t_67ed2f444cb3e6 1-11,84-89
+plugins/utils/group-suite/commands/forget/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 8
+packages/im/runtime/src/plugin-scope-assembler.ts
+  s_6562bcb6cc0539::t_dc6fd8ed395402 262
+plugins/utils/reminder/package.json
+  s_6562bcb6cc0539::t_57055161fdc87f 9
+  s_6562bcb6cc0539::t_cdb691c6e966a6 18
+  s_6562bcb6cc0539::t_77341817d9b88f 1-8,10-17,19-27
+packages/im/runtime/src/native-development-runtime.ts
+  s_6562bcb6cc0539::t_4d92518b10eae6 119-122
+packages/im/runtime/tests/config-composer.test.ts
+  s_6562bcb6cc0539::t_65aa058c5ae27c 15,25-34
+packages/im/core/src/plugin-runtime/im/outbound-segments.ts
+  s_6562bcb6cc0539::t_e87161f5d0594b 21,70,240,246,285,312,315,319,333,341
+plugins/utils/reminder/commands/remind/every/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-2,4-16
+  s_6562bcb6cc0539::t_2247888a27b01e 3
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  s_6562bcb6cc0539::t_623f6b14cfb65e 1,21-28,30,40,94-109,137-145,149-152
+packages/im/schedule-feature/src/schedule-index.ts
+  s_6562bcb6cc0539::t_43205595722810 15,46
+basic/cli/tests/plugin-management.test.ts
+  s_6562bcb6cc0539::t_418d4465f113e2 7,169-190
+  s_6562bcb6cc0539::t_f5ca032509c10b 248-272,333,337
+  s_6562bcb6cc0539::t_e88cbe67ca2fd9 152,198-208,334-336
+  s_6562bcb6cc0539::t_1af56d2497ab62 49-51,53,60,66,69,80,83,87-88,90,94,97,109,112,124,129,132,136,139,146,149,156,159-160,191,194-197,209,212,218,221-222,228,230-247,273-318,322,340-342,358
+  s_6562bcb6cc0539::t_aaaf297652b1f3 4-6
+  s_6562bcb6cc0539::t_facef8a27e80cf 8-9
+  s_6562bcb6cc0539::t_fc96a0be63a689 46-48
+  s_6562bcb6cc0539::t_c0c00444e60316 52
+  s_6562bcb6cc0539::t_56d18cde863110 54-56
+  s_6562bcb6cc0539::t_122d445947535b 59
+  s_6562bcb6cc0539::t_29e66eafea7b1c 61-65
+  s_6562bcb6cc0539::t_da5c0735f61416 67-68
+  s_6562bcb6cc0539::t_3df21bbe0a5733 70-72,77-79
+  s_6562bcb6cc0539::t_3d4111aa941e4f 81-82
+  s_6562bcb6cc0539::t_8720ca4ac080a2 84-86
+  s_6562bcb6cc0539::t_1488b18d1ea1c4 89
+  s_6562bcb6cc0539::t_3597901d17d714 91-93
+  s_6562bcb6cc0539::t_79e317837b1405 95-96
+  s_6562bcb6cc0539::t_670444ae79c2b8 98-100,106-108
+  s_6562bcb6cc0539::t_353a78fdad7c8d 110-111
+  s_6562bcb6cc0539::t_3e086778472d7a 113-115,121-123
+  s_6562bcb6cc0539::t_0bc2cdcbce5dcb 125-128
+  s_6562bcb6cc0539::t_1ec958a00b67ca 130-131
+  s_6562bcb6cc0539::t_7c729b930d2b33 133-135
+  s_6562bcb6cc0539::t_d0602919f1a3c9 137-138
+  s_6562bcb6cc0539::t_af3a3a8e96a2b8 140-145
+  s_6562bcb6cc0539::t_d11490d272a896 147-148
+  s_6562bcb6cc0539::t_da1f2921ee77a0 150-151
+  s_6562bcb6cc0539::t_f7b583a30dfcad 153-155
+  s_6562bcb6cc0539::t_fe853dc286e4f8 157-158
+  s_6562bcb6cc0539::t_96a7cad681195f 161-163,166-168
+  s_6562bcb6cc0539::t_74bb33127cb2ec 192-193
+  s_6562bcb6cc0539::t_9f08452a9b1629 210-211
+  s_6562bcb6cc0539::t_6b576f47c4f158 213-217
+  s_6562bcb6cc0539::t_0c0a8e3a525ca7 219-220
+  s_6562bcb6cc0539::t_7e1bf6e5cc777c 223-227
+  s_6562bcb6cc0539::t_cd28dbddba3975 229
+  s_6562bcb6cc0539::t_b980f45ad127fd 321
+  s_6562bcb6cc0539::t_e4ddbe0977943d 323-325
+  s_6562bcb6cc0539::t_f272f0189d5a8b 338-339
+  s_6562bcb6cc0539::t_31ed795be7fe33 343-345,355-357
+  s_9072f907b10194::t_b3117bd2984d39 1,3,12-45,73-76,101-105,116-120,164-165,326-331,346-354
+plugins/utils/reminder/src/service.ts
+  s_6562bcb6cc0539::t_cdb691c6e966a6 1-39,43-49,54-142,144-146,161-163,165-171
+  s_6562bcb6cc0539::t_3d09fcaf1a1f0c 52-53
+  s_6562bcb6cc0539::t_4dd66ef80fdf17 40-42,50-51,143,147-160,164
+plugins/utils/group-suite/src/shared-runtime.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1,21-24
+packages/im/runtime/tests/schedule-admission-runtime.test.ts
+  s_6562bcb6cc0539::t_4d5725055f6ece 20,27-28,96-98,100
+  s_6562bcb6cc0539::t_a0d52ca87a6f77 128
+  s_6562bcb6cc0539::t_c649ced23df329 5,8,15-19,21-26,29-30,94-95,130,134
+packages/host/http/src/console-rest-pages.ts
+  s_6562bcb6cc0539::t_c07e0746e21940 16,64-66,736,755-760,766,770-771
+plugins/utils/reminder/tsconfig.json
+  s_6562bcb6cc0539::t_77341817d9b88f 1-6
+plugins/utils/group-suite/middlewares/stats-count/index.ts
+  s_6562bcb6cc0539::t_aaf62789e42386 7
+  s_6562bcb6cc0539::t_a5ca6c74d7ef76 13-14
+tsconfig.typecheck.json
+  s_6562bcb6cc0539::t_f8e4b10aa8fa18 191-193,311-312
+packages/im/core/src/plugin-runtime/im/jsx-button-registry.ts
+  s_6562bcb6cc0539::t_623f6b14cfb65e 76-81
+basic/cli/src/plugin-management/workflow.ts
+  s_6562bcb6cc0539::t_b1d17dc0024f15 200,301,351,375,386-387
+  s_6562bcb6cc0539::t_f5ca032509c10b 73,75-85
+  s_6562bcb6cc0539::t_2dfbdb950a6975 1-4,6-7,9,11-14,16-32,34-55,57-58,91-97,99-103,106,112,117,121-128,135-167,169-173,176-181,184-186,197,199,201-204,207-213,215-222,224-236,238-239,241-242,244,247-262,264-265,268-272,274-281,283-288,290-293,295-300,302-304,306-309,313-320,322,324-328,331-333,336-338,341-343,345-350,352-359,361,364-365,367,370-372,374,377-378,380,385,388-389,403-425
+  s_6562bcb6cc0539::t_1af56d2497ab62 311
+  s_6562bcb6cc0539::t_4c46a2907d3c16 8,61-72
+  s_6562bcb6cc0539::t_939d658cb119b4 5,10,168,182,188,190-191,195-196,198,205,214,223,240,243,245-246,263,267,273,282,289,294,305,312,321,323,330,334-335,339-340,344,390-402
+  s_6562bcb6cc0539::t_a3e10466514d01 56,59-60,74,86-90,174
+  s_6562bcb6cc0539::t_fa31e5e69cd12f 15
+  s_6562bcb6cc0539::t_2a033a0785274f 33
+  s_6562bcb6cc0539::t_9afa532c8be464 98
+  s_6562bcb6cc0539::t_929dd6dfcc2abf 104-105
+  s_6562bcb6cc0539::t_eb6bd47e6a8081 107-111
+  s_6562bcb6cc0539::t_bec165a013523f 113-116
+  s_6562bcb6cc0539::t_1a4d5f183d87ab 118-120
+  s_6562bcb6cc0539::t_3a662ff3cf70fc 129-134
+  s_6562bcb6cc0539::t_ac0707b061f816 175
+  s_6562bcb6cc0539::t_0ae83ef248e6d7 183
+  s_6562bcb6cc0539::t_494be7634ae9c1 187
+  s_6562bcb6cc0539::t_048787847b08be 189
+  s_6562bcb6cc0539::t_237e1ae5de69ed 192-194
+  s_6562bcb6cc0539::t_f265ad180be918 206
+  s_6562bcb6cc0539::t_2e0a6f75594a71 237
+  s_6562bcb6cc0539::t_b98c65a05a9833 266
+  s_6562bcb6cc0539::t_81c3328126dd96 310
+  s_6562bcb6cc0539::t_4372127c5c79b0 329
+  s_6562bcb6cc0539::t_f706c7016fa0c2 360
+  s_6562bcb6cc0539::t_220f484960247c 362-363
+  s_6562bcb6cc0539::t_56479feb9faa96 366
+  s_6562bcb6cc0539::t_098653289e2a10 368-369
+  s_6562bcb6cc0539::t_d598ff0b0c31ae 373
+  s_6562bcb6cc0539::t_257d74c091585a 376
+  s_6562bcb6cc0539::t_7b093b5fb4ee10 379
+  s_6562bcb6cc0539::t_2b9ec8abbd6067 381-384
+plugins/utils/group-suite/handlers/welcome/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 1-24
+plugins/utils/group-suite/src/keyword-store.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 2,33
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 1,3-4,23-32,34-39
+  s_6562bcb6cc0539::t_372e772dd2386e 40
+plugins/utils/group-suite/src/runtime-state.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 15
+  s_6562bcb6cc0539::t_aaf62789e42386 18-19
+plugins/utils/reminder/commands/remind/list/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-2,4-14
+  s_6562bcb6cc0539::t_ff875cea2408f4 3
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_6562bcb6cc0539::t_4d5725055f6ece 276-277,334,2502
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_6562bcb6cc0539::t_64d9483a11e699 8-22
+packages/im/config-file/src/config-file-lock.ts
+  s_6562bcb6cc0539::t_909cbab1cc2110 1-11,13-21,25-26,29-33,41-63,65-72
+  s_6562bcb6cc0539::t_f47c93fa66a6d9 12,22-24,27-28,34-40,64
+plugins/utils/reminder/src/config.ts
+  s_6562bcb6cc0539::t_77341817d9b88f 1-16
+packages/toolkit/plugin-test-kit/package.json
+  s_6562bcb6cc0539::t_2c6347db2c9c25 1-23
+plugins/utils/group-suite/src/teach-lib.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1,74,85-87,192
+  s_6562bcb6cc0539::t_03259ce36b6091 204,247
+docs/configuration/generated.md
+  s_6562bcb6cc0539::t_dd03688bb7fd3e 1361-1362,1410-1420
+  s_6562bcb6cc0539::t_758fe7d85f47d0 1421
+plugins/utils/group-suite/commands/teach/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 8
+docs/en/configuration/generated.md
+  s_6562bcb6cc0539::t_dd03688bb7fd3e 1361-1362,1410-1420
+  s_6562bcb6cc0539::t_9d63b0c00595d0 1421
+packages/host/http/tests/project-files.test.ts
+  s_6562bcb6cc0539::t_883d798781a3bf 4-22
+packages/im/core/src/plugin-runtime/im/outbound-renderer.ts
+  s_6562bcb6cc0539::t_c07e0746e21940 18-20,32-52
+plugins/utils/group-suite/src/keywords.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 1-52
+plugins/utils/reminder/plugin.ts
+  s_6562bcb6cc0539::t_77341817d9b88f 1,4-19,33-35
+  s_6562bcb6cc0539::t_57055161fdc87f 3,20-25,27-32
+  s_6562bcb6cc0539::t_995a3e9db3d223 2,26
+plugins/utils/reminder/tests/reminder-runtime.test.ts
+  s_6562bcb6cc0539::t_1763350b617baf 1-23,25-48,50-87,89-183,185-206,210-212,215-219,221
+  s_6562bcb6cc0539::t_ac73c30011cd52 49,88,213-214,220
+  s_6562bcb6cc0539::t_95c7b0ff0faf6d 24,184,207-209
+plugins/utils/reminder/src/runtime.ts
+  s_6562bcb6cc0539::t_77341817d9b88f 1-4
+basic/cli/src/plugin-runtime/console/agent-feature-projection.ts
+  s_6562bcb6cc0539::t_c07e0746e21940 5,89-98
+  s_6562bcb6cc0539::t_e6d23488a3f0e7 99-100
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_6562bcb6cc0539::t_623f6b14cfb65e 85-88
+  s_6562bcb6cc0539::t_44626a0ec7480f 98-99
+packages/toolkit/plugin-test-kit/README.md
+  s_6562bcb6cc0539::t_a1f873376168a8 1-73
+packages/host/http/src/project-files.ts
+  s_6562bcb6cc0539::t_883d798781a3bf 14-17,19,24-30,33-34
+basic/cli/src/plugin-runtime/start-command.ts
+  s_6562bcb6cc0539::t_4c46a2907d3c16 30,171-178
+plugins/utils/reminder/README.md
+  s_6562bcb6cc0539::t_ff95a28f7e445e 1-8,10-11,19,22-50,52-64,66-74
+  s_6562bcb6cc0539::t_f8fe5ff88f9d4b 9,12-18,20-21,51,65
+packages/im/core/src/plugin-runtime/im/message-events.ts
+  s_6562bcb6cc0539::t_e87161f5d0594b 5-13,23
+packages/im/plugin-runtime/src/plugin-verification.ts
+  s_6562bcb6cc0539::t_b43b55512b4f24 1-26
+packages/im/core/tests/plugin-runtime/jsx-outbound-delivery.test.ts
+  s_6562bcb6cc0539::t_44626a0ec7480f 38,77,138-147
+  s_6562bcb6cc0539::t_64d9483a11e699 26,117-118,148-183
+packages/toolkit/plugin-test-kit/tsconfig.json
+  s_6562bcb6cc0539::t_2c6347db2c9c25 1-6
+packages/im/schedule-feature/src/definition.ts
+  s_6562bcb6cc0539::t_43205595722810 1,3-10,18-19,22,26
+basic/cli/tests/plugin-runtime/console/configuration.test.ts
+  s_6562bcb6cc0539::t_f4f3ef65e3c91e 31-32
+  s_6562bcb6cc0539::t_418d4465f113e2 22-24,26-30,33-34
+  s_6562bcb6cc0539::t_9e9c4a4dd7b394 25
+plugins/utils/group-suite/schema.json
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 51-55
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 6-50,56
+plugins/utils/reminder/commands/remind/cancel/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-2,4-8,10-11
+  s_6562bcb6cc0539::t_43583213ea9e4c 3,9
+plugins/utils/group-suite/commands/teach-regex/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 8
+packages/im/core/src/plugin-runtime/im/outbound-projection.ts
+  s_6562bcb6cc0539::t_e87161f5d0594b 1-24,27-45,47-51,55-67
+  s_6562bcb6cc0539::t_7e7ec030d7f7ed 25-26,46,52-54
+packages/im/schedule-feature/src/index.ts
+  s_6562bcb6cc0539::t_a0d52ca87a6f77 2
+packages/toolkit/plugin-test-kit/tests/types/public.ts
+  s_6562bcb6cc0539::t_a1f873376168a8 1-21
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_6562bcb6cc0539::t_96de029ebd1060 21-22,26
+packages/host/http/src/console-rpc.ts
+  s_6562bcb6cc0539::t_939d658cb119b4 57-58,72-73,83-84,104
+  s_6562bcb6cc0539::t_f5ca032509c10b 162-163
+  s_6562bcb6cc0539::t_b43b55512b4f24 95-103,105-108,110-137,139-140,144,149,154
+  s_6562bcb6cc0539::t_89262cf3e0003c 109
+  s_6562bcb6cc0539::t_4ca1accd02e892 141-142
+plugins/utils/reminder/commands/remind/at/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 2,4-7,9-16
+  s_6562bcb6cc0539::t_a5f1305d0fb2ac 1,3,8
+plugins/utils/group-suite/commands/keyword-list/index.ts
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 2,4,6-7
+  s_6562bcb6cc0539::t_6e54f25438c08d 8-10
+packages/host/http/src/index.ts
+  s_6562bcb6cc0539::t_b43b55512b4f24 62-63
+  s_6562bcb6cc0539::t_bc0163ee415604 64
+packages/host/http/tests/console-rest-pages.test.ts
+  s_6562bcb6cc0539::t_3e91bdf6a794dc 597-614
+plugins/utils/group-suite/src/config.ts
+  s_6562bcb6cc0539::t_dbe1a80f2968aa 3-4,20
+  s_6562bcb6cc0539::t_8a52b7cd74fba5 5-6,21
+packages/toolkit/plugin-test-kit/tests/run-kit.mjs
+  s_6562bcb6cc0539::t_567deef37ed6d8 4-121
+  s_6562bcb6cc0539::t_d1cae0fff571e8 1-3,122-135
+plugins/utils/group-suite/tests/practical-runtime.test.ts
+  s_6562bcb6cc0539::t_567deef37ed6d8 5-8
+  s_6562bcb6cc0539::t_331a26bff9a286 1-4,9-10
+plugins/utils/group-suite/README.md
+  s_6562bcb6cc0539::t_a1f873376168a8 3-4,6,12,15,18-20,25-27,39-41,43-45,47-50,52-57,61-70,72-77,85-90
+tests/snapshots/plugin-runtime-api.json
+  s_6562bcb6cc0539::t_dd86dfb7daac04 188,192,302
+docs/cli/index.md
+  s_6562bcb6cc0539::t_f5ca032509c10b 134-135
+  s_6562bcb6cc0539::t_65aa058c5ae27c 108,120-133,136-138
+  s_6562bcb6cc0539::t_cee05e67e0c06d 119
+  s_6562bcb6cc0539::t_7c348bc82b00b6 139
+packages/im/plugin-runtime/src/index.ts
+  s_6562bcb6cc0539::t_b43b55512b4f24 46
+packages/toolkit/plugin-test-kit/src/index.ts
+  s_6562bcb6cc0539::t_aaf62789e42386 38,44-45,158-159,164
+  s_6562bcb6cc0539::t_29815d49894412 4,51-52,75-76,78,81,120,147-152
+  s_6562bcb6cc0539::t_b397fe9e1c7deb 1-3,5-37,39-43,46-50,53-74,77,79-80,82-119,121-146,153-157,160-163,165-201
+basic/cli/src/plugin-runtime/console/configuration.ts
+  s_6562bcb6cc0539::t_4c46a2907d3c16 11,22-23,30-31,38,117-120,179,182-183,187
+  s_6562bcb6cc0539::t_f5ca032509c10b 138
+  s_6562bcb6cc0539::t_f4f3ef65e3c91e 7,10,116,122,136
+  s_6562bcb6cc0539::t_418d4465f113e2 36-37
+packages/im/config-file/tests/concurrent-transaction.test.ts
+  s_6562bcb6cc0539::t_a564d71f0f6561 36-37,52-53,57-60,73-75,79-82,84,87-88,92,94,137-173
+  s_6562bcb6cc0539::t_4041034b7faf64 1-2,6,33-35,38-51,54-56,61-72,76-78,83,85-86,89-91,93,95-136
+packages/toolkit/plugin-test-kit/src/test-module-runtime.ts
+  s_6562bcb6cc0539::t_b397fe9e1c7deb 1-39
+plugins/utils/reminder/src/caller.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-2,4-5,7-13
+  s_6562bcb6cc0539::t_f4f876cdb2963e 3,6
+plugins/utils/reminder/schedules/poll/index.ts
+  s_6562bcb6cc0539::t_57055161fdc87f 1-8
+basic/cli/src/commands/install.ts
+  s_6562bcb6cc0539::t_1d473163707689 8,96-99,101-112
+basic/cli/src/commands/packages.ts
+  s_6562bcb6cc0539::t_a016379c34efac 20-22,69,75,77,80-81,84-90,92,94-104,106-114,116-126,128-140
+basic/cli/src/plugin-management/console-client.ts
+  s_6562bcb6cc0539::t_ec5293bb0361de 1-29
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  s_6562bcb6cc0539::t_3d07721e7fe67a 82-86,94,105
+basic/cli/src/plugin-runtime/console/plugin-routes.ts
+  s_6562bcb6cc0539::t_954cd7f6389568 2,22,26,36-41,86,105-106
+basic/cli/src/plugin-runtime/console/rpc-context.ts
+  s_6562bcb6cc0539::t_bcdbc82ad8213c 98
+packages/host/http/src/console-plugin-rpc.ts
+  s_6562bcb6cc0539::t_203b6b8956407e 43-67,83,107,134,159
+packages/host/http/tests/console-plugin-workflow.test.ts
+  s_6562bcb6cc0539::t_210251ebdc2a39 1-44
+packages/im/config-file/README.md
+  s_6562bcb6cc0539::t_b5ad898538e1dc 51-55
+packages/im/runtime/src/config-composer.ts
+  s_6562bcb6cc0539::t_20a1af563813fd 305-309,316-321
+packages/toolkit/plugin-test-kit/tests/runtime.test.ts
+  s_6562bcb6cc0539::t_69e049cb8405fb 1-11
+packages/toolkit/plugin-test-kit/tests/sqlite-state-host.mjs
+  s_6562bcb6cc0539::t_b76f41a8c1c956 1-38
+plugins/utils/group-suite/commands/stats-card/index.ts
+  s_6562bcb6cc0539::t_4bfa8dd35c795c 1-24
+plugins/utils/group-suite/skills/checkin/tools/checkin_query/index.ts
+  s_6562bcb6cc0539::t_2cec07912265fa 1,17,22,25,27
+plugins/utils/group-suite/skills/checkin/tools/checkin_rank/index.ts
+  s_6562bcb6cc0539::t_563cdc86907bdf 1,16,20-21
+plugins/utils/group-suite/skills/group-daily-analysis/tools/stats_query/index.ts
+  s_6562bcb6cc0539::t_f40dde6ed15c04 1,19,23
+plugins/utils/group-suite/skills/group-daily-analysis/tools/stats_user/index.ts
+  s_6562bcb6cc0539::t_bbd1fc3b7a5029 1,19,25,28
+plugins/utils/group-suite/src/index.ts
+  s_6562bcb6cc0539::t_25afbf8e1d3eaf 9
+plugins/utils/group-suite/tests/conversation-isolation.test.ts
+  s_6562bcb6cc0539::t_bca5efce526c65 1-53
+plugins/utils/group-suite/tests/group-suite-runtime.test.ts
+  s_6562bcb6cc0539::t_cf51f4f75b94a3 1,27,48,57,96-98,120,206,211,242,249
+plugins/utils/group-suite/tests/runtime-ownership.test.ts
+  s_6562bcb6cc0539::t_cad41ffdd88f41 2,12-14,16-17
+plugins/utils/reminder/tsconfig.check.json
+  s_6562bcb6cc0539::t_35df8ea3c1303f 1-6
+pnpm-lock.yaml
+  s_6562bcb6cc0539::t_08f4515ae0e835 1908-1935,3503-3505,3512-3514,3650-3671,4681
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d333a4c602832fd79be4c911a0666f9f2e02971f",
+  "prompts": {},
+  "sessions": {
+    "s_6562bcb6cc0539": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0b3b3-8301-7b60-8118-c0c0db9330ea",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9072f907b10194": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1333c-6d2d-7791-8ac6-ca67046d28dd",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_b426cc705305bf": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a13319-03f6-7ac2-b5b9-060c8e4f02a6",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
