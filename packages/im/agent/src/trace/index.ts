@@ -32,3 +32,15 @@ export {
 export type { TurnTraceStore } from './turn-trace-store.js';
 export { formatTurnTrace, formatTurnTraceList } from './turn-trace-format.js';
 export type { FormatTurnTraceOptions } from './turn-trace-format.js';
+export {
+  CONTEXT_BUDGET_SEGMENTS,
+  FIXED_CONTEXT_SEGMENTS,
+  buildContextBudgetReport,
+  estimatePromptTokens,
+} from './context-budget.js';
+export type {
+  ContextBudgetReport,
+  ContextBudgetSection,
+  ContextBudgetSegment,
+  ContextBudgetInput,
+} from './context-budget.js';
