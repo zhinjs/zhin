@@ -128,4 +128,24 @@ describe('/tasks commands', () => {
     expect(await handleDetachedTaskCommand(runner, actor, '/task')).toContain('用法');
     expect(await handleDetachedTaskCommand(runner, actor, '你好')).toBeNull();
   });
+
+  it('parses /task commands in linear time even on pathological whitespace', async () => {
+    const runner = new DetachedTaskRunner({ store: new InMemoryDetachedTaskStore(), executors: { g: { run: async () => ({ summary: '' }) } } });
+    // The previous overlapping-quantifier regex backtracked on "/task\tstop\t" + many tabs.
+    const tabs = '\t'.repeat(50_000);
+    const input = `/task${tabs}stop${tabs}`;
+    const started = performance.now();
+    const reply = await handleDetachedTaskCommand(runner, actor, input);
+    const elapsed = performance.now() - started;
+    expect(reply).toBe('用法：/task stop <id>');
+    expect(elapsed).toBeLessThan(200);
+    expect(await handleDetachedTaskCommand(runner, actor, `/task${tabs}redirect${tabs}tsk_x${tabs}改成 只看周末`)).toBe(
+      '找不到可操作的后台任务 tsk_x。',
+    );
+    const store = new InMemoryDetachedTaskStore();
+    const live = new DetachedTaskRunner({ store, executors: { g: { run: async () => ({ summary: '' }) } } });
+    await live.create({ kind: 'g', goal: 'x', sessionId: 's1', createdBy: 'u1', taskId: 'tsk_x' });
+    expect(await handleDetachedTaskCommand(live, actor, '/task redirect tsk_x 改成月报 再加封面')).toContain('下一步');
+    expect((await live.get('tsk_x'))?.pendingSteering).toEqual(['改成月报 再加封面']);
+  });
 });

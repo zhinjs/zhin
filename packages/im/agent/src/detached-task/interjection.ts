@@ -129,14 +129,22 @@ export async function handleDetachedTaskCommand(
       ...(recent.length ? ['最近结束：', ...recent.map(line)] : []),
     ].join('\n');
   }
-  const match = /^\/task\s+(stop|redirect)(?:\s+(\S+))?(?:\s+([\s\S]+))?$/iu.exec(text);
-  if (!match) return /^\/task(?:\s|$)/iu.test(text) ? '用法：/tasks、/task stop <id>、/task redirect <id> <新要求>' : null;
-  const [, action, id, rest] = match;
-  if (!id) return `用法：/task ${action.toLowerCase()} <id>${action.toLowerCase() === 'redirect' ? ' <新要求>' : ''}`;
+  // Whitespace split — linear in input length; no overlapping regex quantifiers (CodeQL ReDoS).
+  // "/task redirect <id> <text with spaces>" keeps everything after the id as the new goal.
+  const parts = text.split(/\s+/u);
+  if (parts[0]?.toLowerCase() !== '/task') return null;
+  const action = parts[1]?.toLowerCase();
+  if (action !== 'stop' && action !== 'redirect') {
+    return '用法：/tasks、/task stop <id>、/task redirect <id> <新要求>';
+  }
+  const id = parts[2];
+  if (!id) return `用法：/task ${action} <id>${action === 'redirect' ? ' <新要求>' : ''}`;
+  // Rebuild the trailing text without re-scanning with an ambiguous regex.
+  const rest = action === 'redirect' && parts.length > 3 ? parts.slice(3).join(' ') : undefined;
   const task = await runner.get(id);
   if (!task || !mayControl(task, actor)) return `找不到可操作的后台任务 ${id}。`;
   if (!isActiveDetachedTask(task)) return `后台任务 ${id} 当前状态：${STATUS_LABEL[task.status]}，无法操作。`;
-  if (action.toLowerCase() === 'stop') {
+  if (action === 'stop') {
     await runner.cancel(id);
     return `已停止后台任务 ${id}。`;
   }
