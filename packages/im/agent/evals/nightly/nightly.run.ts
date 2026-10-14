@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 /**
  * Nightly real-model eval entry (`pnpm eval:nightly`). Not part of the PR gate.
  *
@@ -19,13 +20,17 @@ import { BudgetedCompletionPort, resolveNightlyBudget } from './budget.js';
 import { CAPABILITY_MATRIX } from './matrix-cases.js';
 import { diffReports, renderMarkdown, type NightlyReport } from './report.js';
 import { runNightlyMatrix } from './runner.js';
+import { liveSeedCases } from './seed-cases.js';
+import { loadEvalCases, type EvalCase } from '../framework/index.js';
+
+const seedCases = liveSeedCases(loadEvalCases(import.meta.glob<{ default: EvalCase }>('../cases/*.case.ts', { eager: true })));
 
 const PROVIDER = 'minimax';
 const env = process.env;
 const apiKey = env.MINIMAX_API_KEY?.trim();
 
 describe('nightly real-model evals', () => {
-  it.skipIf(!apiKey)('capability matrix (skipped without MINIMAX_API_KEY)', async () => {
+  it.skipIf(!apiKey)('capability matrix + seed cases (skipped without MINIMAX_API_KEY)', async () => {
     const budget = resolveNightlyBudget(env);
     const modelIds = (env.NIGHTLY_MODELS ?? 'minimax-m3').split(',').map((id) => id.trim()).filter(Boolean);
     const config: ProviderInstanceConfig = {
@@ -40,6 +45,7 @@ describe('nightly real-model evals', () => {
       provider: PROVIDER,
       models: modelIds.map((id) => createLlmTransportModel(PROVIDER, config, id)),
       cases: CAPABILITY_MATRIX,
+      seedCases,
       port,
       budget,
     });

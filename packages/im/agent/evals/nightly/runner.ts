@@ -3,12 +3,15 @@ import { createUserMessage, type LlmCompletionPort, type Model } from '@zhin.js/
 import { BudgetExceededError, type BudgetedCompletionPort, type NightlyBudget } from './budget.js';
 import type { CapabilityCase } from './matrix-cases.js';
 import { summarizeCase, type CaseRunResult, type ModelSummary, type NightlyReport } from './report.js';
+import type { NightlySeedCase } from './seed-cases.js';
 import { observe, type LlmJudge } from './semantic.js';
 
 export interface NightlyRunInput {
   readonly provider: string;
   readonly models: readonly Model[];
   readonly cases: readonly CapabilityCase[];
+  /** M0.2 seed cases replayed through the eval driver (see seed-cases.ts); run after the matrix. */
+  readonly seedCases?: readonly NightlySeedCase[];
   readonly port: BudgetedCompletionPort | (LlmCompletionPort & { usage(): { requests: number; totalTokens: number } });
   readonly budget: NightlyBudget;
   /** Optional judge; unused by the built-in matrix, which relies on deterministic semantic checks. */
@@ -52,6 +55,34 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
       }
       cases.push(summarizeCase(definition.id, definition.capability, results));
     }
+    for (const seed of input.seedCases ?? []) {
+      const results: CaseRunResult[] = [];
+      for (let run = 0; run < input.budget.runsPerCase; run++) {
+        if (stoppedByBudget || budgetSpent(input)) {
+          stoppedByBudget = true;
+          results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: 'skipped: budget exhausted' });
+          continue;
+        }
+        try {
+          const result = await seed.run(model, input.port);
+          // The harness turns a budget stop mid-case into a failed turn; don't count that run.
+          if (!result.pass && budgetSpent(input)) {
+            stoppedByBudget = true;
+            results.push({ ...result, skipped: true, error: 'skipped: budget exhausted mid-case' });
+          } else {
+            results.push(result);
+          }
+        } catch (error) {
+          if (error instanceof BudgetExceededError) stoppedByBudget = true;
+          results.push({
+            pass: false, checks: [], totalTokens: 0, toolCalls: 0,
+            ...(error instanceof BudgetExceededError ? { skipped: true } : {}),
+            error: `${error instanceof BudgetExceededError ? '' : 'harness error: '}${error instanceof Error ? error.message.slice(0, 200) : String(error)}`,
+          });
+        }
+      }
+      cases.push(summarizeCase(seed.id, 'seed-case', results));
+    }
     models.push({ model: model.id, cases });
   }
 
@@ -65,4 +96,9 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
     stoppedByBudget,
     models,
   };
+}
+
+function budgetSpent(input: NightlyRunInput): boolean {
+  const usage = input.port.usage();
+  return usage.requests >= input.budget.maxRequests || usage.totalTokens >= input.budget.maxTotalTokens;
 }
