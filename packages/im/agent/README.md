@@ -125,7 +125,7 @@ Prompt Section 投影。身份由 owner 与本地名共同决定，重复身份�
 
 ## 模块化架构（理想蓝图 8 模块）
 
-`src/` 按职责拆分为 8 个理想模块 + Workroom Kernel（单包，可选 subpath export）：
+`src/` 按职责拆分为 8 个理想模块：
 
 ```
 packages/im/agent/src/
@@ -141,26 +141,13 @@ packages/im/agent/src/
   turn/          Turn pipeline、inbound 队列、auto-continue、metrics
   config/        ZhinAgent 配置 SSOT、model harness
   resource-hub/  Skill / SubAgent / MCP / Hook support resources
-  workroom/      Workroom Kernel — versioned Journal + pure replay/decision
   zhin-agent/    ZhinAgent 门面类（单文件 index.ts）
   init/          Plugin Runtime 组合、数据库激活与 ZhinAgent dispose 生命周期
 ```
 
-Workroom Journal 以 `workroom/journal/index.ts` 作为唯一领域入口。入口只公开 Journal
-端口、错误、适配器和稳定的摘要函数；内部依赖保持单向：事件校验与受治理载荷引用位于
-底层，存储事件编解码和控制投影建立在其上，载荷发布/回放复用控制投影，Memory、File、
-Database 适配器只组合这些机制。新增存储实现应实现 `WorkroomJournal`，不应把数据库、
-文件系统或载荷治理逻辑重新放进领域入口。
+普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom 的持久编排（Run/Task/Assignment、验收、Journal、Projection Outbox）由 [`@zhin.js/workroom`](../workroom/README.md) 承载。
 
-Workroom Projection Outbox 同样以 `workroom/projection-outbox/index.ts` 为唯一领域入口。
-Binding 和持久 Item 必须显式携带 `audience` 与绑定代际 `cursorId`；运行时不会猜测旧
-快照的默认 audience，也不会把旧 Run cursor 在线迁移到新绑定。Repository 只负责 CAS
-状态，Tracer 只把权威事实投影为草稿，Governance 物化可披露内容，Delivery Worker
-负责租约和外部投递，四者通过窄端口协作。
-
-普通 `spawn_task` 只执行当前聊天的非 Workroom 子任务，不创建或修改 Run/Task facts。Workroom command adapter 必须持有认证后的 Project capability；标准 Host 已装配 generation-owned Scheduler、Executor、Reviewer authority/view 与 Sponsor typed control，但不会发布模型可写的通用 transition 工具。验收不再是 `WorkroomCommand`：Task 必须先由 generation-owned `workroomAcceptancePolicyDecisionToken` 固定 immutable Contract/Policy snapshot，未 pin 不得 claim；`WorkroomKernel.evaluateTaskAcceptance()` 随后只调用同一可信端口，并用 Journal CAS 写入结构化 Acceptance Record。生产 baseline 只允许 low-risk、全机械检查且证据与 claims 完整的候选自动通过；medium/judgment 与 high/critical 路由分别持久化 Reviewer Assignment / Sponsor Gate，固定 candidate hash、Contract/Policy、owner、deadline 与恢复动作。Reviewer verdict 只能由独立 claimed Reviewer Assignment 的认证提交产生；Sponsor decision 只能经 Catalog/Profile 绑定的认证 typed control 进入，普通 discussion 不能改变状态。缺少受治理 Acceptance Projection source、可信 Risk Header、typed Check、Artifact/Effect facts 或 Context provider 时会形成可恢复的持久 blocker，而不是降级验收。
-
-`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 或 Workroom Run/Task/Assignment 状态。Tool 只通过 `tools/<name>/index.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排只能通过 Workroom Kernel 与专用 typed ports。
+`AgentResourceHub` 是 generation-owned 的 Agent 支持资源入口，管理 Skill、SubAgent、MCP 与 Hook，不拥有 Tool 状态。Tool 只通过 `tools/<name>/index.ts` 或 `context.addTool()` 进入候选 generation，由唯一 `ToolIndex` 发布；持久编排位于 [`@zhin.js/workroom`](../workroom/README.md)。
 
 Agent 生命周期事件由本包的 `AIEventPayload` / `AIEventName` 定义。Runtime 消费方通过
 `subscribeAIEventsOnTarget` 订阅显式 event target；事件契约不再挂在经典 `Plugin` namespace，
@@ -280,7 +267,7 @@ declare module '@zhin.js/core' {
 | Context | 用途 |
 |---------|------|
 | `ctx.ai` | 业务侧 AI 服务：会话、`createAgent`（→ `ServiceAgent`）/ `runAgent`、全局 ZhinAgent |
-| `ctx.agent` | `AgentResourceHub` 支持资源注册：`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；Tool 使用 `context.addTool()`，不承担 Workroom 状态编排 |
+| `ctx.agent` | `AgentResourceHub` 支持资源注册：`addSkill(...)`、`addSubAgent(...)`、`addMcp(...)`、`addHook(...)`；Tool 使用 `context.addTool()` |
 
 主包 `zhin.js` 的 `Plugin.Contexts` 类型已包含上述两项。
 
@@ -378,7 +365,7 @@ useContext('ai', async (ai) => {
 
 ### 4. 多 Agent 协作与普通 chat 委派
 
-普通 chat 可用 `spawn_task` 临时委派子代理；它没有 durable Run/Task、验收或 Project Memory 语义。Project 级多 Agent 协作由 Workroom Kernel 的 versioned Plan、Assignment、Acceptance 与投影承载。旧 `zhin.js/agent` `runPipeline` / `runParallel` / `route` 会立即调用模型且没有可靠状态边界，已在 breaking cutover 中删除；后续构图便利 API 只会生成 Plan proposal，不直接执行 Agent。
+普通 chat 可用 `spawn_task` 临时委派子代理；它没有 durable Run/Task、验收或 Project Memory 语义。Project 级多 Agent 协作由 [`@zhin.js/workroom`](../workroom/README.md) 承载。旧 `zhin.js/agent` `runPipeline` / `runParallel` / `route` 会立即调用模型且没有可靠状态边界，已在 breaking cutover 中删除；后续构图便利 API 只会生成 Plan proposal，不直接执行 Agent。
 
 ## 工具命名策略
 

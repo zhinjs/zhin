@@ -77,6 +77,9 @@ const layers = {
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  // Note: `level` is only an ordering hint. workroom and zhin both sit at 5 but are siblings with no import edge
+  // between them (zhin does not import workroom; workroom does not import zhin), so their relative console
+  // output order is not meaningful.
   // Workroom (A4b): sits above agent. workroom -> agent, never the reverse. Only src/workroom-runtime may use
   // agent; the domain directories (workroom/, portfolio/, data-governance/) stay framework-free (see below).
   'packages/im/workroom': { level: 5, allowedImports: workroomAllowedLayers },

@@ -50,4 +50,5 @@ export type {
 
 // Host-integration seam for external host packages.
 export { collectAgentLoopTurnRun } from './agent-core-run.js';
+/** @internal Host-integration only (used by @zhin.js/workroom); not a stable API. */
 export type { ZhinAgentPrivate } from '../internal/agent-host.js';

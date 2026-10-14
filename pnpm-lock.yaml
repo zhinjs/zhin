@@ -179,9 +179,6 @@ importers:
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../schedule
-      '@zhin.js/workroom':
-        specifier: workspace:*
-        version: link:../../packages/im/workroom
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -243,6 +240,9 @@ importers:
       '@zhin.js/speech':
         specifier: workspace:*
         version: link:../../packages/toolkit/speech
+      '@zhin.js/workroom':
+        specifier: workspace:*
+        version: link:../../packages/im/workroom
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
@@ -1132,9 +1132,6 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
-      '@zhin.js/workroom':
-        specifier: workspace:*
-        version: link:../../im/workroom
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1145,6 +1142,9 @@ importers:
       '@zhin.js/host-http':
         specifier: workspace:*
         version: link:../http
+      '@zhin.js/workroom':
+        specifier: workspace:*
+        version: link:../../im/workroom
       rimraf:
         specifier: ^6.1.3
         version: 6.1.3

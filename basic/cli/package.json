@@ -42,7 +42,6 @@
     "@zhin.js/runtime": "workspace:*",
     "@zhin.js/scaffold-wizard": "workspace:*",
     "@zhin.js/schedule": "workspace:*",
-    "@zhin.js/workroom": "workspace:*",
     "chalk": "^5.6.2",
     "commander": "^15.0.0",
     "cross-spawn": "^7.0.6",
@@ -65,6 +64,7 @@
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/mcp": "workspace:*",
     "@zhin.js/speech": "workspace:*",
+    "@zhin.js/workroom": "workspace:*",
     "typescript": "^6.0.3",
     "zod": "^4.4.3"
   },
@@ -78,6 +78,9 @@
     "@zhin.js/speech": {
       "optional": true
     },
+    "@zhin.js/workroom": {
+      "optional": true
+    },
     "typescript": {
       "optional": true
     }
@@ -86,6 +89,7 @@
     "@zhin.js/a2a": "workspace:^",
     "@zhin.js/agent": "workspace:^",
     "@zhin.js/speech": "workspace:^",
+    "@zhin.js/workroom": "workspace:^",
     "typescript": ">=5.8.0 <7.0.0"
   },
   "repository": {

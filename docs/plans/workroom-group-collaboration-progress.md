@@ -45,8 +45,9 @@ sidebar: false
   - 2026-10-14 · 「fix: 引用边界检查识别 @zhin.js/workroom 裸说明符」· `resolveDomain` 先识别裸说明符（抽出 `scripts/lib/workroom-specifier.mjs`）；typecheck 包含新包 src；112 个兼容层逐个断言只含一行 `export *` 且目标存在；changeset / README 注明深路径导出为临时
 - [x] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
   - 2026-10-14 · 「refactor: 将 workroom-runtime 迁入 @zhin.js/workroom」· agent 不再以任何形式引用 workroom（架构检查强制，含 barrel）；删除 112 个兼容层与重复 fixture；workroom 相关测试随代码迁入新包；快照与 changeset 更新
-- [ ] A4b-1 处理第 11 轮审查意见：`basic/cli/package.json` 中 `@zhin.js/workroom` 改为 devDependency + 可选 peerDependency（与 `@zhin.js/agent` 一致，恢复“AI 另装”的安装图），`@zhin.js/a2a` 考虑把 workroom 也设为 peer 避免出现两份 agent / plugin-runtime 实例；`.changeset/move-workroom-runtime.md` 补 `"zhin.js": patch` 并说明 `zhin.js/agent` 用户改从 `@zhin.js/workroom` 导入；`packages/im/agent/README.md` 删掉或迁走 Workroom Kernel / Journal / Projection Outbox 段落。顺带 Nit：`ZhinAgentPrivate` 从 `@zhin.js/agent/core` 公开导出，标 `@internal` 或改窄接口（可留给 A5）；`check-architecture-layers.mjs` 中 workroom 与 zhin 同为 level 5，补注释或调整层级
-- [ ] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照
+- [x] A4b-1 处理第 11 轮审查意见：`basic/cli/package.json` 中 `@zhin.js/workroom` 改为 devDependency + 可选 peerDependency（与 `@zhin.js/agent` 一致，恢复“AI 另装”的安装图），`@zhin.js/a2a` 考虑把 workroom 也设为 peer 避免出现两份 agent / plugin-runtime 实例；`.changeset/move-workroom-runtime.md` 补 `"zhin.js": patch` 并说明 `zhin.js/agent` 用户改从 `@zhin.js/workroom` 导入；`packages/im/agent/README.md` 删掉或迁走 Workroom Kernel / Journal / Projection Outbox 段落。顺带 Nit：`ZhinAgentPrivate` 从 `@zhin.js/agent/core` 公开导出，标 `@internal` 或改窄接口（可留给 A5）；`check-architecture-layers.mjs` 中 workroom 与 zhin 同为 level 5，补注释或调整层级
+  - 2026-10-14 · 「fix: 恢复 workroom 可选安装并补全 changeset 与文档」· CLI / a2a 对 workroom 改为 dev + 可选 peer；changeset 补 `zhin.js`；agent README 的 Journal / Outbox 段落迁到 workroom README；`ZhinAgentPrivate` 标 `@internal`；架构检查注释说明同级 level 5
+- [ ] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照。注意（第 12 轮 Nit）：CLI 的 `agent/host-installer.ts`、`agent/config.ts`、`agent-workroom.ts` 等仍静态导入 `@zhin.js/workroom`，A4c 要把它们改为可选加载，并删除 changeset 中相应的临时说明
 - [ ] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
 
 ## 阶段 B：新 Room 核心（在 `@zhin.js/workroom` 内，与旧机制并存）
@@ -139,6 +140,12 @@ sidebar: false
 - Should fix：agent README 仍描述已迁走的 workroom 目录 → A4b-1
 - Nit：`ZhinAgentPrivate` 成为 `@zhin.js/agent/core` 公开导出；workroom 与 zhin 同为 level 5 且控制台输出顺序不一致 → 并入 A4b-1
 
+### 第 12 轮（2026-10-14，审查 A4b-1）
+
+- 无 Blocking，无 Should fix（A4b-1 是审查后续条目，以下 Nit 只记录，不新建条目）
+- Nit：changeset 说只装核心时不再拉入 agent / workroom，但 CLI 仍静态导入 `@zhin.js/workroom`（`host-installer.ts:18`、`agent/config.ts:8`），A4c 前发版会让只装 agent 的用户找不到模块 → 已写进 A4c 的注意事项；建议 A4b-1 与 A4c 一起发版
+- Nit：workroom 自己仍把 `@zhin.js/agent`、`@zhin.js/plugin-runtime` 列为普通 dependencies，版本不一致时仍可能出现两份实例 → 留给 A5 评估
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -154,3 +161,4 @@ sidebar: false
 - 2026-10-14 同一次定时运行：完成 A4a（4 个 agent，约 17 分钟，两包 build / type-check / 1193 + 428 个相关测试 / check:architecture、domain-module-boundaries、workroom-ssot、harness-paths / API 快照通过，审查无 Blocking，1 个 Should fix 新增为 A4a-1）。备注：eslint 对 3 个 .mjs 脚本是忽略状态，未实际 lint
 - 2026-10-14 10:49 定时运行：rebase 到最新 origin/main（13 个提交无冲突），install / build 通过；完成 A4a-1（4 个 agent，约 9.8 分钟，两包 build / type-check / 874 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，2 个 Nit 只记录）。备注：继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 A4b（4 个 agent，约 19.6 分钟，四包 build / type-check / 2987 个相关测试 / check:architecture、domain-module-boundaries、harness-paths、no-removed-plugin-api / API 快照 / eslint 0 error 通过，审查无 Blocking，3 个 Should fix 新增为 A4b-1）
+- 2026-10-14 14:57 定时运行：rebase 到最新 origin/main（15 个提交无冲突），install / build 通过；完成 A4b-1（4 个 agent，约 3.6 分钟，四包 build / type-check / 1713 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
