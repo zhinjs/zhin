@@ -1,0 +1,50 @@
+.changeset/harness-config-convergence.md
+  h_b680f75345178a 1-8
+.github/pull_request_template.md
+  h_b680f75345178a 1-12
+basic/cli/src/utils/ai-config-loader.ts
+  h_b680f75345178a 12-13
+basic/cli/src/utils/config-check.ts
+  h_b680f75345178a 303-312
+basic/cli/tests/config-check.test.ts
+  h_b680f75345178a 216-239
+docs/.vitepress/config.ts
+  h_b680f75345178a 83,223
+docs/ai/default-behavior.md
+  h_b680f75345178a 1-104
+docs/en/ai/default-behavior.md
+  h_b680f75345178a 1-104
+package.json
+  h_b680f75345178a 151-152
+packages/im/agent/src/config/deprecated-agent-keys.ts
+  h_b680f75345178a 1-27
+packages/im/agent/src/config/fix-ai-config.ts
+  h_b680f75345178a 4,137-140
+packages/im/agent/src/config/index.ts
+  h_b680f75345178a 9-13
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 61,85,116,129
+packages/im/agent/src/service.ts
+  h_b680f75345178a 9-10,28-29,92-94
+packages/im/agent/tests/config/deprecated-agent-keys.test.ts
+  h_b680f75345178a 1-24
+packages/im/ai/src/types.ts
+  h_b680f75345178a 501,529
+scripts/check-agent-config-inventory.mjs
+  h_b680f75345178a 1-51
+scripts/check-all-harness.mjs
+  h_b680f75345178a 35-39
+tests/docs/config-enum-reference.test.ts
+  h_b680f75345178a 88-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c11c7eaf4df1736ab6e8bfea4a56fb63d941f0bb",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
