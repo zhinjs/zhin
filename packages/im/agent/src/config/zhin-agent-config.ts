@@ -30,6 +30,11 @@ export interface CompactionConfig {
   auto?: boolean;
   keepRecentTokens?: number;
   minKeepCount?: number;
+  /**
+   * Share of the model context window (system prompt and tools included) at
+   * which auto-compaction runs. Default 0.7 (#730).
+   */
+  thresholdRatio?: number;
 }
 
 export interface ScheduleBudgetConfig {

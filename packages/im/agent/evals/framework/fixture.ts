@@ -71,6 +71,8 @@ export interface EvalExpectations {
   readonly modelInputNotContains?: readonly string[];
   /** Strings that must appear in the system prompt of every model request. */
   readonly systemPromptContains?: readonly string[];
+  /** Strings that must each appear in the system prompt of at least one model request (e.g. a compaction summary request). */
+  readonly anySystemPromptContains?: readonly string[];
   /** Number of reply-port sends across the case (final replies plus progress updates). */
   readonly outboundMessages?: number;
 }
@@ -108,6 +110,8 @@ export interface EvalCase {
   readonly promptSections?: readonly EvalPromptSection[];
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
+  /** Context window of the scripted model (default: the provider preset), for compaction cases. */
+  readonly contextWindow?: number;
   readonly script: readonly ScriptStep[];
   /** Unused script steps fail the case unless this is true. */
   readonly allowUnusedSteps?: boolean;

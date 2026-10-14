@@ -84,7 +84,11 @@ export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOpti
 }
 
 async function runInWorkspace(definition: EvalCase, workspace: string | undefined, clock: EvalClock): Promise<EvalRunRecord> {
-  const model = createScriptedModel(definition.script, { extraModels: definition.models, clock });
+  const model = createScriptedModel(definition.script, {
+    extraModels: definition.models,
+    clock,
+    ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
+  });
   const toolNames = (definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name);
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.

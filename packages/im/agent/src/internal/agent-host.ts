@@ -18,6 +18,7 @@ import type { ResolvedAgentBinding } from '../config/types.js';
 import type { RegisteredAgentTool } from '../tool/contracts.js';
 import type { DeferredTurnState } from '../turn/deferred-turn-state.js';
 import type { AgentCompactionRuntime } from '../memory/compaction-runtime.js';
+import type { SessionToldLedger } from '../memory/told-ledger.js';
 import type { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
@@ -38,6 +39,8 @@ export interface AgentSessionHost {
   contextRepository: ContextRepository;
   sessionSystem: SessionSystem | null;
   readonly compactionRuntime: AgentCompactionRuntime;
+  /** Conclusions and commitments already sent to the user, per session (#730). Optional for custom hosts. */
+  readonly toldLedger?: SessionToldLedger;
   readonly ownerApprovals: OwnerApprovalRuntime;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(

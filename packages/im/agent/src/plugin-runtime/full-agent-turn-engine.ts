@@ -147,6 +147,7 @@ async function* runInteractiveTurn(
     deferredStats: plan.deferredStats,
     mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
+    toldLedger: host.toldLedger?.render(prep.sessionId),
   });
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
@@ -261,6 +262,9 @@ async function* runInteractiveTurn(
           ) {
             const code = 'code' in delivery ? delivery.code : delivery.status;
             throw new Error(`Synchronous reply projection failed: ${code}`);
+          }
+          if (delivery.status === 'sent' && completion.result.reply.trim()) {
+            host.toldLedger?.record(prep.sessionId, completion.result.reply, 'reply', context.turn.identity.turnId);
           }
         }
         if (context.turn.intent.kind === 'observe') {
