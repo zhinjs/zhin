@@ -9,6 +9,7 @@ import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { ScriptStep } from './scripted-model.js';
 import type { EvalRunRecord } from './driver.js';
 import type { EvalLiveCheck } from './live-checks.js';
+import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
 
@@ -79,11 +80,35 @@ export interface EvalExpectations {
   readonly anySystemPromptContains?: readonly string[];
   /** Number of reply-port sends across the case (final replies plus progress updates). */
   readonly outboundMessages?: number;
+  /** Strings that must not appear in the system prompt of any model request. */
+  readonly systemPromptNotContains?: readonly string[];
+  /** Bounds on the first turn's estimated context cost. */
+  readonly contextBudget?: EvalContextBudgetExpectation;
   /**
    * Tool events that stream consumers must see, in order, as `type:toolName`
    * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
    */
   readonly streamToolEvents?: readonly string[];
+}
+
+/** A skill visible to the turn. Only its name and one-line trigger are resident; instructions load on demand. */
+export interface EvalSkill {
+  readonly name: string;
+  readonly description: string;
+  readonly instructions: string;
+  /** Tool names the skill unlocks when loaded. */
+  readonly toolNames?: readonly string[];
+  readonly keywords?: readonly string[];
+}
+
+/** Bounds on the first model request's estimated context cost (see TurnTrace.context_budget). */
+export interface EvalContextBudgetExpectation {
+  /** Upper bound on fixed tokens (system, tool schemas, catalogs, memory, bootstrap). */
+  readonly maxFixedTokens?: number;
+  /** Upper bound per segment, e.g. `{ skill_catalog: 400 }`. */
+  readonly maxSegmentTokens?: Readonly<Partial<Record<ContextBudgetSegment, number>>>;
+  /** Exact number of tools whose schema is sent up front. */
+  readonly loadedTools?: number;
 }
 
 export interface EvalPromptSection {
@@ -104,6 +129,7 @@ export interface EvalCase {
   /** One inbound message, or a sequence run as consecutive turns in one session. */
   readonly inbound: EvalInboundMessage | readonly EvalInboundMessage[];
   readonly tools?: readonly EvalTool[];
+  readonly skills?: readonly EvalSkill[];
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
