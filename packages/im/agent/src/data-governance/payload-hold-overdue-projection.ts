@@ -7,7 +7,7 @@ import {
   compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
-} from '../workroom/canonical-value.js';
+} from './canonical-value.js';
 
 export interface PayloadRetentionHoldProjectionState {
   readonly projectId: string;

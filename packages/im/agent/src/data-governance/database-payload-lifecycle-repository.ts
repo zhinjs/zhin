@@ -3,7 +3,7 @@ import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
-} from '../workroom/canonical-value.js';
+} from './canonical-value.js';
 import {
   replayPayloadLifecycle,
   type PayloadLifecycleEvent,

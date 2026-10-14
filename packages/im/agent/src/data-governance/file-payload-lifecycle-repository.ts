@@ -5,12 +5,12 @@ import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
-} from '../workroom/canonical-value.js';
+} from './canonical-value.js';
 import {
   DurableFileStore,
   nodeDurableFileSystem,
   type DurableFileSystem,
-} from '../workroom/durable-file-store.js';
+} from './durable-file-store.js';
 import {
   replayPayloadLifecycle,
   type PayloadLifecycleEvent,

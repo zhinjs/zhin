@@ -18,7 +18,7 @@ import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue,
-} from '../workroom/canonical-value.js';
+} from './canonical-value.js';
 
 export interface PayloadVaultObjectHandle {
   readonly version: 1;

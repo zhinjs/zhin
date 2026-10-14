@@ -1,3 +1,4 @@
+import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
 
 const typed = { includeTypeOnly: true };
@@ -98,5 +99,31 @@ describe('barrel re-export rule', () => {
 
   it('ignores non-restricted imports', () => {
     expect(findBarrelViolations(`import x from './other.js';`, restricted)).toEqual([]);
+  });
+});
+
+describe('data-governance direction rule', () => {
+  const src = '/repo/packages/im/agent/src';
+  const file = `${src}/data-governance/a.ts`;
+  const forbiddenRoots = ['workroom', 'workroom-runtime', 'portfolio'].map(n => `${src}/${n}`);
+  const run = (content: string) => findForbiddenRelativeImports({ file, content, forbiddenRoots });
+
+  it.each([
+    ['import', `import { x } from '../workroom/x.js';`],
+    ['type-only import', `import type { X } from '../workroom/x.js';`],
+    ['export * from', `export * from '../workroom/x.js';`],
+    ['workroom-runtime', `import { x } from '../workroom-runtime/x.js';`],
+    ['portfolio', `import { x } from '../portfolio/x.js';`],
+  ])('reports %s', (_n, content) => {
+    expect(run(content)).toHaveLength(1);
+  });
+
+  it.each([
+    `import { x } from './canonical-value.js';`,
+    `import { x } from '../data-governance/x.js';`,
+    `import fs from 'node:fs';`,
+    `import { x } from '../workroom-extra/x.js';`,
+  ])('does not report %s', content => {
+    expect(run(content)).toEqual([]);
   });
 });

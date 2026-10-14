@@ -5,8 +5,8 @@ import {
   canonicalWorkroomJson,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
-} from '../workroom/canonical-value.js';
-import { DurableFileStore } from '../workroom/durable-file-store.js';
+} from './canonical-value.js';
+import { DurableFileStore } from './durable-file-store.js';
 
 export type GovernedPayloadWriteConsumer =
   | 'authority_source'

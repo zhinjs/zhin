@@ -10,6 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBarrelViolations, parseImports } from './lib/parse-imports.mjs';
+import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -410,6 +411,36 @@ if (agentDomainViolations.length) {
 }
 
 console.log('Harness Agent domain boundary check: OK.');
+
+// Data Governance direction: workroom -> data-governance only, never the reverse.
+const dataGovernanceRoot = path.join(repoRoot, 'packages/im/agent/src/data-governance');
+const dataGovernanceForbiddenRoots = ['workroom', 'workroom-runtime', 'portfolio']
+  .map(name => path.join(repoRoot, 'packages/im/agent/src', name));
+const dataGovernanceViolations = [];
+const dataGovernanceFiles = [];
+walkTs(dataGovernanceRoot, dataGovernanceFiles);
+for (const file of dataGovernanceFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  for (const hit of findForbiddenRelativeImports({ file, content, forbiddenRoots: dataGovernanceForbiddenRoots })) {
+    dataGovernanceViolations.push({
+      file: path.relative(repoRoot, file),
+      import: hit.import,
+      reason: 'data-governance must not depend on workroom/ (direction is workroom -> data-governance)',
+    });
+  }
+}
+
+if (dataGovernanceViolations.length) {
+  console.error('\nHarness Data Governance direction check: FAILED\n');
+  for (const violation of dataGovernanceViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Data Governance direction check: OK.');
 
 // Only the barrel files may re-export the four Agent domain directories;
 // every other Agent source file must stay generic (inject ports instead).

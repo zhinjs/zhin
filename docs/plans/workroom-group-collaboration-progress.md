@@ -35,7 +35,9 @@ sidebar: false
   - 2026-10-14 · 「fix: 收紧 deferred capability plan 与四目录引用检查」· 遗留 `authority` 抛错、ceiling 子集校验、引用检查覆盖 type-only 与 `import()`、barrel 只放行 re-export、`RESERVED_CONTROL_TOOL_PREFIX` 常量
 - [x] A2c-2 处理第 5 轮审查意见：删掉 `scripts/lib/parse-imports.mjs` 中重复的 `export type * from` 正则（会让 barrel 检查把合法的 `export type *` 误报为违规），补 `export type * from` 放行用例和“parseImports 不返回重复项”的测试；`export` 正则支持 `* as ns`，补 `export * as ns` / `export type * as ns` 用例；changeset 补充新导出 `RESERVED_CONTROL_TOOL_PREFIX`（或取消导出）
   - 2026-10-14 · 「fix: 修正 parseImports 重复匹配并支持 export * as ns」· 删掉重复的 `export type *` 正则，`export` 正则支持 `* as ns`，补去重 / barrel 放行 / 命名空间 re-export 用例；changeset 注明 `RESERVED_CONTROL_TOOL_PREFIX`
-- [ ] A3 断开 `data-governance ↔ workroom` 的循环依赖：抽出共享类型，方向固定为 workroom → data-governance
+- [x] A3 断开 `data-governance ↔ workroom` 的循环依赖：抽出共享类型，方向固定为 workroom → data-governance
+  - 2026-10-14 · 「refactor: 断开 data-governance 对 workroom 的反向依赖」· `canonical-value.ts`、`durable-file-store.ts` 原样移入 `data-governance/`，旧路径改为 `export *` 兼容层（有身份测试）；架构检查新增方向约束（抽出 `find-forbidden-imports.mjs` 并补自测）；导出名不变
+- [ ] A3-1 处理第 7 轮审查 Nit：`check-architecture-layers.mjs` 方向约束的报错信息按命中的目录（workroom / workroom-runtime / portfolio）生成；方向约束自测补 `import('../workroom/x.js').X` 内联类型和 `export { x } from` 两个用例；`data-governance/canonical-value.ts` 注释改为“Workroom 与 Data Governance 共享，名称中的 Workroom 前缀为兼容保留”
 - [ ] A4a 新建包 `packages/im/workroom`（`@zhin.js/workroom`），参照现有包的 package.json / tsconfig / exports（development 条件）。先把 `workroom/`、`portfolio/`、`data-governance/` 搬过去；agent 侧临时 re-export 保持兼容
 - [ ] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
 - [ ] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照
@@ -102,6 +104,11 @@ sidebar: false
 
 - 无 Blocking，无遗留问题
 
+### 第 7 轮（2026-10-14，审查 A3）
+
+- 无 Blocking
+- Nit：方向约束报错信息只提 workroom/；自测未覆盖内联 `import()` 类型与 `export { x } from`；`canonical-value.ts` 注释过时 → A3-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -112,3 +119,4 @@ sidebar: false
 - 2026-10-13 定时运行：完成 A2c（4 个 agent，约 5.5 分钟，build / type-check / 436 个 plugin-runtime 测试 / 架构与 API 快照 / workroom-ssot 检查通过，审查无 Blocking，2 个 Should fix 新增为 A2c-1）
 - 2026-10-14 手动触发运行：完成 A2c-1（4 个 agent，约 3.7 分钟，build / type-check / 401 个测试 / 架构与 API 快照检查通过，审查无 Blocking，1 个 Should fix 新增为 A2c-2）
 - 2026-10-14 08:46 定时运行：完成 A2c-2（4 个 agent，约 1.9 分钟，脚本自测 27 个 / deferred-capability-plan 22 个测试、type-check、check:architecture、API 快照检查通过，审查无问题）。备注：Workflow 工具拒绝 `scriptPath` 指向 scheduled-tasks 目录（会话不可读），改为内联传入同一脚本，内容未改
+- 2026-10-14 定时运行（同一次）：完成 A3（4 个 agent，约 2.7 分钟，agent build / type-check / 36 个脚本自测 / 145 个相关测试 / check:architecture / API 快照检查通过，审查无 Blocking，3 个 Nit 新增为 A3-1）

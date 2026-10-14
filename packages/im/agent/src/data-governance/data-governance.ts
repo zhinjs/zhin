@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { compareCanonicalWorkroomText } from '../workroom/canonical-value.js';
+import { compareCanonicalWorkroomText } from './canonical-value.js';
 
 export type ConfidentialityClass =
   | 'public'

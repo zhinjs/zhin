@@ -4,7 +4,7 @@ import {
   compareCanonicalWorkroomText,
   deepFreezeWorkroomValue as deepFreeze,
   digestCanonicalWorkroomValue as digest,
-} from '../workroom/canonical-value.js';
+} from './canonical-value.js';
 
 export type PayloadLifecycleRole = 'data_steward' | 'privacy' | 'compliance';
 export type PayloadLocationKind = 'vault_primary' | 'index' | 'cache' | 'replica' | 'backup' | 'processor';
