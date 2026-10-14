@@ -108,7 +108,7 @@ export class AgentRuntimeFoundation {
       ? new MarkdownKnowledgeIndex(knowledgeDirectory)
       : undefined;
     const semanticMemory = options.config.memory?.semantic?.enabled === true
-      ? new SemanticMemoryRuntime()
+      ? new SemanticMemoryRuntime({ recall: options.config.memory?.semantic?.recall })
       : null;
     if (semanticMemory) options.lifecycle.add(() => semanticMemory.dispose());
     const traceRuntime = createAgentTraceRuntime();

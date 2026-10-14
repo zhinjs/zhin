@@ -92,7 +92,10 @@ export async function activateAiDatabaseStorage(
     refs.zhinAgent.upgradeProfilesToDatabase(profileModel);
   }
 
-  semanticActivation?.runtime.activate(semanticActivation.repository);
+  if (semanticActivation) {
+    semanticActivation.runtime.activate(semanticActivation.repository);
+    refs.zhinAgent.configure({ semanticMemory: semanticActivation.runtime });
+  }
 
   workroomJournal.activate(databaseWorkroomJournal);
   workroomCatalog.activate(new DatabaseWorkroomCatalog(db, workroomCatalogModel));

@@ -337,6 +337,9 @@ ai:
     semantic:
       enabled: true        # 语义记忆：generation-owned memory_search/memory_upsert；要求 Database Host
       autoConsolidate: false
+      recall:              # 每轮 BM25 召回，默认开启
+        topK: 5
+        maxTokens: 400
     # 启用后 memory_entries 必须在候选代激活时可用，否则该代 fail-closed、不发布
     # memoryMcp 已弃用；语义记忆由上述原生 memory_search / memory_upsert 提供
   access:                  # AI 访问控制

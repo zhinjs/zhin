@@ -1,3 +1,4 @@
+import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
  * ZhinAgent 运行时 host 契约 — 供 ideal 模块引用，避免依赖 zhin-agent 门面实现。
  * 成员按域拆为窄接口，ZhinAgentPrivate 组合之；消费方优先用窄接口形参。
@@ -41,6 +42,8 @@ export interface AgentSessionHost {
   readonly compactionRuntime: AgentCompactionRuntime;
   /** Conclusions and commitments already sent to the user, per session (#730). Optional for custom hosts. */
   readonly toldLedger?: SessionToldLedger;
+  /** Active semantic memory for per-turn recall (#734). Optional for custom hosts. */
+  semanticMemory?: SemanticMemoryRuntime | null;
   readonly ownerApprovals: OwnerApprovalRuntime;
   waitForMemoryPersistence(): Promise<void>;
   emitSessionNewEvent(

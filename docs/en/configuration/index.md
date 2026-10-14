@@ -341,6 +341,9 @@ ai:
     semantic:
       enabled: true        # Generation-owned memory_search/memory_upsert; requires the Database Host
       autoConsolidate: false
+      recall:              # per-turn BM25 recall, on by default
+        topK: 5
+        maxTokens: 400
     # memory_entries must be ready during candidate activation or that generation fails closed
     # memoryMcp is deprecated; use the native memory_search / memory_upsert tools above
   access:                  # AI access control

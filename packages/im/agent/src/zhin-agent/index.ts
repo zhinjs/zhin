@@ -1,3 +1,4 @@
+import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 /**
  * ZhinAgent — IM Agent 门面类（组合 ideal 模块；实现见 init/ + internal/）。
  */
@@ -163,6 +164,8 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly deferred = new DeferredTurnState();
   readonly compactionRuntime = new AgentCompactionRuntime();
   readonly toldLedger = new SessionToldLedger();
+  /** Set by database activation when `ai.memory.semantic.enabled`; drives per-turn recall (#734). */
+  semanticMemory: SemanticMemoryRuntime | null = null;
   readonly ownerApprovals = new OwnerApprovalRuntime();
   readonly promptController: PromptController;
   /** 无交互审批面传输的 host 级回退。 */

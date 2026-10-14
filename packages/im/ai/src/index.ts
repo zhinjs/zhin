@@ -338,7 +338,9 @@ export {
   ensureMemoryEntryColumns,
   isMemoryEntryExpired,
 } from './memory/memory-entry-repository.js';
-export type { MemoryEntryRepository, MemoryEntryLocator } from './memory/memory-entry-repository.js';
+export type { MemoryEntryRepository, MemoryEntryLocator, MemoryEntryListInput } from './memory/memory-entry-repository.js';
+export { tokenizeForBm25, rankBm25, rankMemoryEntries, memoryEntryDocument } from './memory/memory-bm25.js';
+export type { Bm25Options, Bm25Hit } from './memory/memory-bm25.js';
 export {
   buildActorPrefix,
   parseAgentMessageExtra,

@@ -3,6 +3,7 @@ import {
   MEMORY_ENTRY_KINDS,
   parseMemoryTags,
   type MemoryEntryKind,
+  type MemoryEntryListInput,
   type MemoryEntryLocator,
   type MemoryEntryRecord,
   type MemoryEntryRepository,
@@ -16,6 +17,12 @@ import {
   type AgentToolDefinition,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import {
+  recallRelevantMemory,
+  type RecallResult,
+  type RecallTurnView,
+  type SemanticRecallOptions,
+} from '../memory/semantic-recall.js';
 import { resolveTurnTrustLevel } from '../security/trust-level.js';
 import { decideMemoryWrite, defaultMemoryScope, memoryExpiry } from '../memory/memory-write-policy.js';
 import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
@@ -33,6 +40,8 @@ export interface SemanticMemoryRuntimeOptions {
    * Without a resolver, bound task state lives until its TTL.
    */
   readonly isTaskActive?: (taskId: string) => boolean;
+  /** Per-turn recall (#734); see `ai.memory.semantic.recall`. */
+  readonly recall?: SemanticRecallOptions;
 }
 
 /** Candidate-owned semantic-memory authority. It becomes ready during required DB activation. */
@@ -66,6 +75,34 @@ export class SemanticMemoryRuntime {
   async find(locator: MemoryEntryLocator, signal: AbortSignal) {
     signal.throwIfAborted();
     return this.#requireRepository().find(locator);
+  }
+
+  /** Whether the database repository is active (recall is skipped otherwise). */
+  get active(): boolean {
+    return this.#repository !== undefined;
+  }
+
+  /**
+   * BM25 top-k memory relevant to `query`, rendered within the recall budget.
+   * Returns null when recall is off, the runtime is inactive, or nothing matches.
+   */
+  async recall(view: RecallTurnView, query: string, signal: AbortSignal): Promise<RecallResult | null> {
+    if (!this.#repository) return null;
+    const result = await recallRelevantMemory(this, view, query, signal, this.#options.recall);
+    if (result) await this.markUsed(result.entries.map((entry) => entry.id));
+    return result;
+  }
+
+  /** Live entries in one scope, newest first (management view). */
+  async list(input: MemoryEntryListInput, signal: AbortSignal) {
+    signal.throwIfAborted();
+    return this.#requireRepository().list(input);
+  }
+
+  /** Deletes one entry; it is never recalled again. */
+  async delete(id: string, signal: AbortSignal): Promise<boolean> {
+    signal.throwIfAborted();
+    return this.#requireRepository().delete(id);
   }
 
   /** Best-effort recall bookkeeping; never fails the search that triggered it. */

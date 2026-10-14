@@ -19,6 +19,8 @@ export interface TurnContextEnvelopeInput {
   agentsContext?: string;
   /** Rendered "already told the user" ledger (#730). */
   toldLedger?: string;
+  /** BM25-recalled semantic memory for this message (#734). */
+  relevantMemory?: string;
 }
 
 export function formatSessionContextLine(turn: TurnContextView): string {
@@ -77,6 +79,7 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
   if (input.agentsContext?.trim()) lines.push(input.agentsContext.trim());
   if (input.toldLedger?.trim()) lines.push(input.toldLedger.trim());
+  if (input.relevantMemory?.trim()) lines.push(input.relevantMemory.trim());
 
   return lines.length === 0
     ? null
