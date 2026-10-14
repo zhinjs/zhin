@@ -1,0 +1,211 @@
+.changeset/add-workroom-package.md
+  s_12c06fe024f38d::t_07bb251d082719 6
+.changeset/move-workroom-runtime.md
+  s_12c06fe024f38d::t_1cb828a90401c2 3-5,8-14
+.changeset/split-workroom-runtime.md
+  s_12c06fe024f38d::t_759d01365d6c01 9-10,12,14
+AGENTS.md
+  s_12c06fe024f38d::t_814e2f167e528f 61
+basic/cli/package.json
+  s_12c06fe024f38d::t_4efb48a5c967a7 41,45
+basic/cli/src/commands/agent-legacy-payloads.ts
+  s_12c06fe024f38d::t_3ae2b025f51a2d 16,29-30,46
+basic/cli/src/commands/agent-legacy-runs.ts
+  s_12c06fe024f38d::t_54c539eaff4976 14-15,48
+basic/cli/src/commands/agent-workroom.ts
+  s_12c06fe024f38d::t_42f2d0d981a9b3 15
+basic/cli/src/plugin-runtime/agent/config.ts
+  s_12c06fe024f38d::t_7fec0ff5118b05 6-8
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_12c06fe024f38d::t_a889015e63055b 14-15,18,25-26,30
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_12c06fe024f38d::t_9e966727bb5f88 9-11,19
+basic/cli/src/plugin-runtime/agent/workroom-port.ts
+  s_12c06fe024f38d::t_fbb41140dde537 1
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_12c06fe024f38d::t_3803a6d6ce175c 6,14,27-33
+basic/cli/src/plugin-runtime/console/data-lifecycle-routes.ts
+  s_12c06fe024f38d::t_234dca891c474f 2
+basic/cli/src/plugin-runtime/console/effect-sponsor-routes.ts
+  s_12c06fe024f38d::t_8877168daf8b8c 2
+basic/cli/src/plugin-runtime/console/portfolio-sponsor-routes.ts
+  s_12c06fe024f38d::t_769b0fc947c35a 2
+basic/cli/src/plugin-runtime/console/workroom-catalog-rpc.ts
+  s_12c06fe024f38d::t_53279cef715f4e 3,55
+basic/cli/src/plugin-runtime/console/workroom-run-control-route.ts
+  s_12c06fe024f38d::t_f749fdf584dfec 2,34
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_12c06fe024f38d::t_ea078e7966c3e6 16,109,135
+basic/cli/src/plugin-runtime/workroom/acceptance-coordinator.ts
+  s_12c06fe024f38d::t_4eb14dc0d0bb68 9,42
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_12c06fe024f38d::t_44852bc8012bdc 8-11,41
+basic/cli/src/plugin-runtime/workroom/data-governance-coordinator.ts
+  s_12c06fe024f38d::t_377fd7b3f726ca 3,14
+basic/cli/src/plugin-runtime/workroom/effect-coordinator.ts
+  s_12c06fe024f38d::t_44d214be56384a 7
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_12c06fe024f38d::t_f006b412564668 1,25
+basic/cli/src/plugin-runtime/workroom/execution-coordinator.ts
+  s_12c06fe024f38d::t_f8d681a29ffad1 4-7,12
+basic/cli/src/plugin-runtime/workroom/host-coordinator.ts
+  s_12c06fe024f38d::t_a116a8e2c585f8 4,7-8,13
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_12c06fe024f38d::t_d7ac01a189f736 15-18,28
+basic/cli/src/plugin-runtime/workroom/human-ingress-route.ts
+  s_12c06fe024f38d::t_45a80475f8797f 19
+basic/cli/src/plugin-runtime/workroom/knowledge-coordinator.ts
+  s_12c06fe024f38d::t_77cfe728a4a73a 2,11
+basic/cli/src/plugin-runtime/workroom/local-data-governance.ts
+  s_12c06fe024f38d::t_e4d572ecc6a17a 17
+basic/cli/src/plugin-runtime/workroom/local-portfolio.ts
+  s_12c06fe024f38d::t_49f484a15c4a4d 25,28-30,40
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_12c06fe024f38d::t_426c7cf68ae165 3-5,23,30-35
+basic/cli/src/plugin-runtime/workroom/planning-bootstrap.ts
+  s_12c06fe024f38d::t_b4a61f55ca89e6 6,12
+basic/cli/src/plugin-runtime/workroom/planning-coordinator.ts
+  s_12c06fe024f38d::t_7b13575ecceba9 1-5,19
+basic/cli/src/plugin-runtime/workroom/portfolio-coordinator.ts
+  s_12c06fe024f38d::t_f64d01a639d796 2,26
+basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts
+  s_12c06fe024f38d::t_6a0d3949d43300 5,15
+basic/cli/src/plugin-runtime/workroom/projection-coordinator.ts
+  s_12c06fe024f38d::t_09f678fca23552 3,10
+basic/cli/src/plugin-runtime/workroom/projection.ts
+  s_12c06fe024f38d::t_4ec1a82daf8c8c 17-18
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_12c06fe024f38d::t_cfd701504c137a 7,31
+basic/cli/tests/plugin-runtime/agent/publication-coordinator.test.ts
+  s_12c06fe024f38d::t_a3369d600efff9 1-2
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_12c06fe024f38d::t_1fad8a69fa8b30 583,624,775,806,914,961,1086
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_12c06fe024f38d::t_42a720ce015bad 13-14,25,29
+basic/cli/tests/plugin-runtime/workroom/assignment-coordinator.test.ts
+  s_12c06fe024f38d::t_3891223b6fb386 1
+basic/cli/tests/plugin-runtime/workroom/effect-coordinator.test.ts
+  s_12c06fe024f38d::t_1d3c3204560b9c 1
+basic/cli/tests/plugin-runtime/workroom/execution-control-coordinator.test.ts
+  s_12c06fe024f38d::t_ed50ec54cbd39e 1
+basic/cli/tests/plugin-runtime/workroom/execution-coordinator.test.ts
+  s_12c06fe024f38d::t_e05df55042acb0 2
+basic/cli/tests/plugin-runtime/workroom/host-coordinator.test.ts
+  s_12c06fe024f38d::t_aceea241efe5c0 1
+basic/cli/tests/plugin-runtime/workroom/human-ingress-route.test.ts
+  s_12c06fe024f38d::t_58bb97cb298404 11
+basic/cli/tests/plugin-runtime/workroom/knowledge-coordinator.test.ts
+  s_12c06fe024f38d::t_e38e8ca0a1214a 4
+basic/cli/tests/plugin-runtime/workroom/local-portfolio.test.ts
+  s_12c06fe024f38d::t_1c021de56911f6 13,16-17,22
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_12c06fe024f38d::t_a4856b92625ca9 4-6,14
+basic/cli/tests/plugin-runtime/workroom/planning-bootstrap.test.ts
+  s_12c06fe024f38d::t_e2de8b5b48e1c8 2
+basic/cli/tests/plugin-runtime/workroom/planning-coordinator.test.ts
+  s_12c06fe024f38d::t_6297500c3751ce 1
+basic/cli/tests/plugin-runtime/workroom/portfolio-coordinator.test.ts
+  s_12c06fe024f38d::t_af5fbe746e0b65 5
+basic/cli/tests/plugin-runtime/workroom/profile-coordinator.test.ts
+  s_12c06fe024f38d::t_28df6b6ae699c8 4
+basic/cli/tests/plugin-runtime/workroom/projection.test.ts
+  s_12c06fe024f38d::t_4931adb729f243 4
+basic/cli/tests/plugin-runtime/workroom/runtime-foundation.test.ts
+  s_12c06fe024f38d::t_05da6e49eb21ed 4
+docs/concepts/architecture.md
+  s_12c06fe024f38d::t_e7ce7ed3d6b02c 97,153
+docs/contributing/repo-structure.md
+  s_12c06fe024f38d::t_c4b59b7fccc67e 55,81
+docs/plans/workroom-group-collaboration-progress.md
+  s_12c06fe024f38d::t_c94fafe140b84f 46-48,134-141,156
+examples/self-delivery-bot/commands/delivery/[issue]/index.ts
+  s_12c06fe024f38d::t_96be55c200a91d 2
+examples/self-delivery-bot/commands/delivery/doctor/index.ts
+  s_12c06fe024f38d::t_35451879d9b7bf 2
+examples/self-delivery-bot/package.json
+  s_12c06fe024f38d::t_ea63237dbbcf7f 13-14
+examples/self-delivery-bot/plugin.ts
+  s_12c06fe024f38d::t_6bfece5a27bac1 3
+examples/self-delivery-bot/tests/runtime.test.ts
+  s_12c06fe024f38d::t_70718fd5469a20 6
+packages/host/a2a/package.json
+  s_12c06fe024f38d::t_0af451a0927956 45-46
+packages/host/a2a/src/workroom-callback-runtime.ts
+  s_12c06fe024f38d::t_4309a30ce9af55 9
+packages/host/a2a/src/workroom-remote-transport.ts
+  s_12c06fe024f38d::t_dd4af6dce96d33 7,13
+packages/host/a2a/tests/workroom-remote-transport.test.ts
+  s_12c06fe024f38d::t_4796e26078d19b 7,10
+packages/im/agent/src/core/index.ts
+  s_12c06fe024f38d::t_01b04571d84351 50-53
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_12c06fe024f38d::t_8d9a278216f2ed 152
+packages/im/agent/src/turn/index.ts
+  s_12c06fe024f38d::t_6d90bf6eb186f4 141-143
+packages/im/workroom/README.md
+  s_12c06fe024f38d::t_9d741ece5f7dbc 3,8,12,14-17,19
+packages/im/workroom/package.json
+  s_12c06fe024f38d::t_4789e8d004c960 24-30
+packages/im/workroom/src/index.ts
+  s_12c06fe024f38d::t_28a46a801253d4 108-213
+packages/im/workroom/src/workroom-runtime/workroom-assignment-authority-provider.ts
+  s_12c06fe024f38d::t_b8951b2eb1c27b 4
+packages/im/workroom/src/workroom-runtime/workroom-capability-realization.ts
+  s_12c06fe024f38d::t_695a9afd7ae5cd 3,8
+packages/im/workroom/src/workroom-runtime/workroom-database-models.ts
+  s_12c06fe024f38d::t_957f98fdbb6ef7 20
+packages/im/workroom/src/workroom-runtime/workroom-local-agent-core-adapter.ts
+  s_12c06fe024f38d::t_78a0a240fed94b 2-7
+packages/im/workroom/src/workroom-runtime/workroom-local-agent-loop.ts
+  s_12c06fe024f38d::t_8563b965865798 2
+packages/im/workroom/src/workroom-runtime/workroom-local-assignment-executor.ts
+  s_12c06fe024f38d::t_aea99fb0c59260 11
+packages/im/workroom/tests/workroom-runtime/local-assignment-executor.test.ts
+  s_12c06fe024f38d::t_add6dae5e4c049 3
+packages/im/workroom/tests/workroom-runtime/public-surface.test.ts
+  s_12c06fe024f38d::t_36ba74a5eea046 1-2,4-21
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_12c06fe024f38d::t_78e7a9cc3b512b 1-5,7-14,17-33,36-37,39,41-53
+packages/im/workroom/tests/workroom-runtime/workroom-deferred-capability-plan.test.ts
+  s_12c06fe024f38d::t_692dee78d4ebff 1-323
+packages/im/workroom/tests/workroom-runtime/workroom-host-local-agent-execution.e2e.test.ts
+  s_12c06fe024f38d::t_a0c0adf6864752 2,8-10
+packages/im/workroom/tests/workroom-runtime/workroom-local-agent-loop.test.ts
+  s_12c06fe024f38d::t_5d55dbd69db527 7
+packages/im/workroom/tests/workroom-runtime/workroom-priority-preemption-production.test.ts
+  s_12c06fe024f38d::t_14284f37964711 4-5
+packages/im/workroom/tests/workroom-runtime/workroom-projection-runtime.test.ts
+  s_12c06fe024f38d::t_80630207b6f225 17
+packages/im/workroom/tests/workroom/validate-catalog.test.ts
+  s_12c06fe024f38d::t_9f1e97d54c01bf 1-143
+pnpm-lock.yaml
+  s_12c06fe024f38d::t_103e032a575201 182-184,661-663,1135-1137,1804-1812,1816-1824
+scripts/check-architecture-layers.mjs
+  s_12c06fe024f38d::t_d4a5d1acd0d2dd 12,14,39-47,79-82,300-304,314-327,349-350,438-445,502-503,511,515,521,530
+scripts/check-architecture-layers.test.ts
+  s_12c06fe024f38d::t_8ee5ae77947968 3-7,162-169,171-178,182-188,190,192-212
+scripts/lib/parse-imports.mjs
+  s_12c06fe024f38d::t_e954841dac4caf 81-82,84,89-90,94
+scripts/lib/workroom-specifier.mjs
+  s_12c06fe024f38d::t_dc3e36f8709462 8-29
+tests/snapshots/api-surface.json
+  s_12c06fe024f38d::t_9630e5415ebee0 122
+tests/snapshots/plugin-runtime-api.json
+  s_12c06fe024f38d::t_78a06f6938be4c 58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9fca3e7f3e8a40d717d896fce0d40032fc4870cf",
+  "prompts": {},
+  "sessions": {
+    "s_12c06fe024f38d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7615080-10c5-4c34-b628-09f855c0d1e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
