@@ -83,7 +83,7 @@ In the `TurnEvent` stream, a user cancel appears as `turn_cancelled` (`code: 'ca
 
 With many tools, putting every tool's parameter schema in the prompt would fill the context. Zhin **loads tools lazily**: a turn keeps only a few meta tools resident, and the model searches and loads others by name when needed.
 
-Resident by default (`alwaysLoadedTools`): `ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`.
+Resident by default (`alwaysLoadedTools`): `ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`. Setting `alwaysLoadedTools` **adds to** this default list; set `alwaysLoadedMode: replace` to replace it entirely.
 
 | Meta tool | Purpose |
 |-----------|---------|

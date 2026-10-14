@@ -67,6 +67,8 @@ export interface EvalExpectations {
   readonly modelInputContains?: readonly string[];
   /** Strings that must never appear in what the model received. */
   readonly modelInputNotContains?: readonly string[];
+  /** Strings that must appear in the system prompt of every model request. */
+  readonly systemPromptContains?: readonly string[];
   /** Number of reply-port sends across the case (final replies plus progress updates). */
   readonly outboundMessages?: number;
   /**
@@ -74,6 +76,13 @@ export interface EvalExpectations {
    * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
    */
   readonly streamToolEvents?: readonly string[];
+}
+
+export interface EvalPromptSection {
+  /** Plugin instance key that owns the section. */
+  readonly plugin: string;
+  readonly title: string;
+  readonly content: string;
 }
 
 export interface EvalCase {
@@ -93,6 +102,8 @@ export interface EvalCase {
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */
   readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
+  /** Prompt sections contributed by third-party plugins (owned by a child plugin, not the agent's owner). */
+  readonly promptSections?: readonly EvalPromptSection[];
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   readonly script: readonly ScriptStep[];

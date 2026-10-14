@@ -83,7 +83,7 @@ ai:
 
 工具很多时，把所有工具的参数定义都塞进提示词会占满上下文。Zhin 的做法是**延迟加载**：回合只常驻少量元工具，模型需要时再检索、按名加载。
 
-默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。
+默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
 
 | 元工具 | 作用 |
 |--------|------|
@@ -176,17 +176,31 @@ ai:
 
 估算的 token 超过 `contextWindow × 0.6` 时触发。压缩分两步：先做轻量裁剪（去掉冗余的工具结果等），再让模型生成一段 `[Previous conversation summary]` 摘要替换旧历史。连续自动压缩失败达到上限后会停止自动压缩，避免反复消耗。
 
-## 群聊成员的权限收紧
+## 信任分级
 
-在 IM 群聊或频道里，由普通群成员发起的回合会自动收紧权限。普通群成员指既不是主人（master），也不在 `trigger.trusted` 信任名单里的人。收紧内容：
+每个回合都有一个发起人信任级别，回合能用的权限 = 发起人信任级别的上限 ∩ 配置策略（`masterShell`、文件权限等）。信任级别只会收窄权限，不会放宽。
 
-- 不提供 `bash`；
-- 文件只读，不提供写入、编辑类工具；
-- 不提供向其他会话发消息的工具（名称含 send/forward/notify 等，或带 `outbound` 标签的工具）。
+| 级别 | 谁 | 上限 |
+|------|----|------|
+| `owner` | 主人（`master` 角色） | 不额外限制，按配置策略 |
+| `trusted_member` | `trigger.trusted` 信任名单里的成员；私聊和非 IM 入口也按这一级处理 | 不额外限制，按配置策略 |
+| `group_member` | 群聊或频道里的其他人 | 不提供 `bash`；文件只读；不提供向其他会话发消息的工具 |
+| `external_content` | 不发起回合，只用来标注回合里的数据 | 同 `group_member`，且永远不能提升权限 |
 
-模型看不到这些工具。即使工具通过延迟加载等途径出现在回合里，执行时也会被拒绝，并给出明确的拒绝原因，不会静默失败。权限只收窄、不放宽，子 agent 也会继承。主人和信任名单里的成员不受影响，私聊不受影响。
+级别只由接入层给出的角色和会话场景决定，消息内容或昵称里自称“主人”不会改变级别。
 
-这是 P3 信任分级（#726）落地前的临时方案，没有关闭开关。如果需要放开某个群成员，把他加入 `trigger.trusted`。
+`group_member` 回合里，`bash`、写入和编辑类工具、外发工具（名称含 send/forward/notify 等，或带 `outbound` 标签）在回合开始前就会移除，模型看不到。即使工具通过延迟加载等途径出现，执行时也会被拒绝（策略名 `trust-level`），并给出明确的中文原因。子 agent 继承发起人的信任级别。
+
+以下内容按 `external_content` 渲染成带来源的数据块，其中的指令不会提升权限：
+
+- 子 agent 的报告（`source="subagent_report"`）；
+- 第三方插件注册的提示词段落（`source="plugin:<插件>"`）和已加载的技能说明（`source="skill"`）；
+- 群里的背景消息（`source=external_content`）；
+- 工具输出、网页、文件、转发消息本来就以工具结果的形式交给模型，不会被当作发起人的指令。
+
+`zhin trace last` 会显示每个回合的发起人和信任级别，回合里每次工具调用（包括被拒绝的高危调用）都可以追溯到它。
+
+**白名单配置**：需要放开某个群成员时，把他的用户 ID 加入 `trigger.trusted`，他发起的回合会按 `trusted_member` 处理。没有额外的开关。
 
 ## 内置工具
 

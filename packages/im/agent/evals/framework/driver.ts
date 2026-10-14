@@ -6,7 +6,8 @@
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { childPluginId, createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { defineAgentPromptSection, type PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { ToolIndex } from '@zhin.js/tool';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
@@ -18,7 +19,7 @@ import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-t
 import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
-import { restrictGroupMemberTurn } from '../../src/security/group-member-policy.js';
+import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
@@ -27,7 +28,7 @@ import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.j
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
 export interface EvalToolInvocation {
@@ -123,7 +124,15 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
     const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, approval, outbound, workspace, trace);
     const context: AgentTurnExecutionContext = {
       turn,
-      capabilities: { generation: 1, owner: rootPluginId(), tools: turnTools, skills: [], agents: [], mcp: [], promptSections: [] },
+      capabilities: {
+        generation: 1,
+        owner: rootPluginId(),
+        tools: turnTools,
+        skills: [],
+        agents: [],
+        mcp: [],
+        promptSections: promptSections(definition),
+      },
       toolCapabilities: turnTools,
       tools: new TurnToolRuntime(turn, turnTools),
       selection: {
@@ -179,10 +188,10 @@ function buildTurn(
   const sessionKey = sessionKeyFor(message);
   const requestedPolicy: TurnPolicyContext = message.policy ?? defaultPolicy(roles, workspace, message.shell === true);
   const origin = { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId } as const;
-  // Same #719 rule AgentRuntime applies before a Turn starts (group members lose shell/write/outbound).
-  const restriction = restrictGroupMemberTurn({ origin, principal: { roles }, policy: requestedPolicy }, tools);
-  const policy = restriction.policy;
-  const turnTools = restriction.tools;
+  // Same #726 trust rule AgentRuntime applies before a Turn starts.
+  const trust = applyTurnTrust({ origin, principal: { roles }, policy: requestedPolicy }, tools);
+  const policy = trust.policy;
+  const turnTools = trust.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
   const turn = createTurnIngress({
     intent: { kind: 'new' },
@@ -212,6 +221,21 @@ function buildTurn(
   return { turn, tools: turnTools };
 }
 
+/** Third-party plugin prompt sections, owned by a child plugin so the engine treats them as external_content. */
+function promptSections(definition: EvalCase): PromptSectionDescriptor[] {
+  return (definition.promptSections ?? []).map((section: EvalPromptSection, index) => {
+    const name = `section-${index + 1}`;
+    return Object.freeze({
+      ...defineAgentPromptSection({ title: section.title, content: section.content }),
+      owner: childPluginId(rootPluginId(), section.plugin),
+      name,
+      qualifiedName: `${section.plugin}:${name}`,
+      source: `eval:${section.plugin}`,
+      generation: 1,
+    });
+  });
+}
+
 function sessionKeyFor(message: EvalInboundMessage): string {
   const scope = message.scope ?? 'private';
   const senderId = message.sender?.id ?? 'eval-user';
@@ -228,6 +252,10 @@ function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, inde
       subjectId: sender.id,
       ...(sender.name ? { displayName: sender.name } : {}),
       roles: [...(sender.roles ?? ['user'])],
+      trustLevel: resolveTurnTrustLevel({
+        origin: { kind: 'im', scope: message.scope ?? 'private' },
+        principal: { roles: sender.roles ?? ['user'] },
+      }),
     },
   });
 }
