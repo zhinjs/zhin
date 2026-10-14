@@ -77,6 +77,7 @@ sidebar: false
 - [x] B2-1 处理第 24 轮审查意见：改写 `.changeset/workroom-inbound-dedup.md`，如实说明 `RoomMembershipPort` 新增可选 `hasRoom(conversation)`，返回 true 时同一会话多 Endpoint 收到的人类消息只路由一次、其余只记录，不实现 `hasRoom` 则行为不变；在方案 §3.2 / §3.4 以及 `inbound-origin.ts` 中 `hasRoom` 的文档注释写明：`hasRoom` 的实现必须与 B2b Room Router 一起上线，Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt（涉及正确性约束，所以新建条目）
   - 2026-10-14 · 「docs: 写明 hasRoom 必须与 Room Router 一起上线」· changeset 改为如实描述可选 `hasRoom` 与“未实现则行为不变”；方案 §3.2 / §3.4 与 `inbound-origin.ts` 注释写明 Router 须对所有成员 Endpoint 解析 @ / 回复与待回答 interaction；确认 `inboundDeduper` 已标 `@internal`；不改运行时行为
 - [ ] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
+  - 2026-10-15 第 1 次执行失败（re-review 仍有 Blocking，改动已回滚，半成品 patch 存在当次会话 scratchpad）。重试时必须先处理“审查记录”第 26 轮列出的问题
 - [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
@@ -251,6 +252,14 @@ sidebar: false
 
 - 无问题。第 24 轮 Nit 中 `inboundDeduper` 公开选项已确认标 `@internal`
 
+### 第 26 轮（2026-10-15，审查 B2b，第 1 次执行失败）
+
+- 第一轮 Blocking（条目内已修，但修复后又出现新的 Blocking）：`hasPendingAnswer` 只要会话里有任何存活的键盘 fallback（默认 TTL 1 小时）就返回 true，不看发送者，也不看本条消息能否解析成按钮；Router 又把 `pending` 放在最高优先级，导致 1 小时内群里所有人类消息都路由给这个 Bot，并被强制 `mentioned=true` → 修复：只有本条消息能解析到某个按钮（action 段，或标签 / 序号匹配）时才算 pending
+- 第二轮 Blocking（未修，导致失败）：Room 内的原生平台按钮回调（如 Telegram callback_query 被 adapter 转成带 action 段的群消息，见 `plugins/adapters/telegram/src/endpoint.ts:555-574`）只有发出键盘的 Bot 收得到。原生键盘平台不调用 `rememberFallback`，JSX payload 也不走 claim，所以 pending 探测为 false，Router 把消息路由到 coordinator 或其他成员，唯一的那份被 `recordOnly='duplicate'` 丢弃。结果是非 coordinator 成员发出的 JSX onClick / payload 按钮全部静默失效。另外 `resolvesLiveFallback` 对任何 action 段都返回 true，不检查 payload 是否属于该成员的键盘。建议：带 action 段（平台回调）的入站视为发给接收它的 Endpoint，跳过 Room 路由和去重，或者只对接收 Endpoint 返回 pending=true；`resolvesLiveFallback` 只在 payload 属于该 fallback map 时计入；补 ImRuntime 测试（有 coordinator 的 Room 中，只被非 coordinator 成员收到的 action 段消息交给该成员的交互处理器）
+- Should fix：`route` 选中的 Endpoint 不一定真的收到了这条消息（`isAvailable` 只看 `registry.isReady`）。例如 Telegram 群开启隐私模式时，未 @ 的消息只投递给部分 Bot；选中的 coordinator 没有副本，其他副本又只记录，消息静默丢失。Router 只能在实际收到副本的 Endpoint 中选择，或者在没收到副本时回退
+- Should fix：上一轮 Blocking 的修复只有 `resolvesLiveFallback` 单元测试，缺 ImRuntime 层的集成测试（B 有存活键盘时，@A 的消息仍路由给 A，按钮标签答复路由给 B 且只消费一次）
+- Nit：`room-router.ts` 的 `@alias` 边界只按 ASCII 判断，CJK 别名 `研究` 会匹配 `@研究员`；`hasLiveFallback` 注释写“只读”，但会触发 `#pruneFallbacks()`；`pending` 探测在 AdapterIndex 不认识的 Endpoint 上会抛错，导致整条消息 fail-closed、没有成员处理
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -280,3 +289,4 @@ sidebar: false
 - 2026-10-14 同一次定时运行：完成 B1c-2（4 个 agent，约 2.8 分钟，core build / type-check / 136 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无 Blocking，1 个 Should fix（测试注释与实际验证不符）只记录）
 - 2026-10-14 22:35 定时运行：rebase 到最新 origin/main（无冲突，基线 fc75499c5），install / build 通过；完成 B2（7 个 agent，约 11 分钟，core build / type-check / 153 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过；首轮审查 1 个 Blocking 在条目内修复，复审无 Blocking，1 个 Should fix + 1 个 Nit 新增为 B2-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 B2-1（4 个 agent，约 2.3 分钟，core build / type-check / 133 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无问题）。备注：本次会话内 `scriptPath` 指向会话自己保存的脚本副本可用
+- 2026-10-15 00:00 定时运行：rebase 到最新 origin/main（29 个提交无冲突），install / build 通过；B2b 执行失败（7 个 agent，约 24 分钟。实现与验证都通过，但 Opus 首轮 1 个 Blocking 修复后，复审又发现新的 Blocking：Room 内原生按钮回调被路由到其他成员后丢弃）。按规则把 diff 和未跟踪文件保存到 scratchpad 后回滚，B2b 记第 1 次失败，审查意见写入第 26 轮。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
