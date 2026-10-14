@@ -1,0 +1,31 @@
+.changeset/workroom-b4-review-followup.md
+  s_ea90e74ad58704::t_211c506ea4c1a1 1-11
+docs/plans/workroom-group-collaboration-progress.md
+  s_ea90e74ad58704::t_388aaa309cb620 94-95,322-326,364
+packages/im/workroom/src/room/room-guards.ts
+  s_ea90e74ad58704::t_ea607b9fe0f01f 84-88,311-316
+packages/im/workroom/src/room/room-send-limiter.ts
+  s_ea90e74ad58704::t_78bfd5845b600d 9-11,19-22,69-79,82-87,89-93,177-187,199-204,209
+packages/im/workroom/src/room/room-task-authorizer.ts
+  s_ea90e74ad58704::t_709ef346a60329 16-18,42-45
+packages/im/workroom/tests/room/room-guards.test.ts
+  s_ea90e74ad58704::t_e5836a5c6db475 186,194-219
+packages/im/workroom/tests/room/room-send-limiter.test.ts
+  s_ea90e74ad58704::t_7813dab41d8fa7 197-227
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9299177f895cc9f3e6267dd34cbafdf21bf1e0f2",
+  "prompts": {},
+  "sessions": {
+    "s_ea90e74ad58704": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df53f1c0-f25d-4f37-9714-2a98dedb0f2e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
