@@ -60,6 +60,14 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   for (const needle of expect.modelInputNotContains ?? []) {
     if (modelInput.includes(needle)) fail('modelInputNotContains', `the model received "${needle}"`);
   }
+  if (expect.streamToolEvents !== undefined) {
+    const seen = run.events
+      .filter((event) => event.type === 'tool_call' || event.type === 'tool_result' || event.type === 'tool_denied')
+      .map((event) => `${event.type}:${(event as { toolName: string }).toolName}`);
+    if (seen.join(',') !== expect.streamToolEvents.join(',')) {
+      fail('streamToolEvents', `expected stream tool events [${expect.streamToolEvents.join(', ')}], got [${seen.join(', ')}]`);
+    }
+  }
   if (expect.outboundMessages !== undefined && run.outbound.length !== expect.outboundMessages) {
     fail('outboundMessages', `expected ${expect.outboundMessages} outbound message(s), got ${run.outbound.length}`);
   }

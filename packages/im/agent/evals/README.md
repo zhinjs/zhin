@@ -84,6 +84,7 @@ export default defineEvalCase({
 | `termination` | The last turn's terminal event type: `turn_end` (the default), `error`, `turn_cancelled`, or `budget_exceeded`. |
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
 | `outboundMessages` | The number of reply-port sends. |
+| `streamToolEvents` | Tool events (`tool_call:name`, `tool_result:name`, `tool_denied:name`) that stream consumers see, in order. The stream is derived from the turn journal. |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
 A case also fails on any of these, whatever its `expect` block says:

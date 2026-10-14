@@ -4,6 +4,7 @@ import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
 import { TurnTraceCollector } from '../trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../trace/turn-trace-registry.js';
+import { createJournalFeed } from '../turn/journal-feed.js';
 import type { TurnTraceStore } from '../trace/turn-trace-store.js';
 import { executeAgentTurn, type TurnEventObserver } from '../turn/execute-agent-turn.js';
 import {
@@ -480,7 +481,9 @@ function createIngressTurn(
     },
     ports: {
       ...request.ports,
-      journal: trace ? createTracingJournal(journal, trace) : journal,
+      journal: createJournalFeed(trace ? createTracingJournal(journal, trace) : journal, {
+        turnId: request.identity.turnId,
+      }),
     },
   });
 }
