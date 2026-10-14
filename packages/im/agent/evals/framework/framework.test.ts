@@ -38,6 +38,25 @@ describe('eval framework', () => {
     expect(evaluateExpectations(definition, run)).toEqual([]);
   });
 
+  it('records a TurnTrace per turn and attaches it to failure reports', async () => {
+    const definition = { ...approvalCase('approve'), expect: { outboundContains: ['this text never appears'] } };
+    const run = await runEvalCase(definition);
+    expect(run.traces).toHaveLength(1);
+    const [trace] = run.traces;
+    expect(trace).toMatchObject({
+      turn_id: 'approval-gate:turn-1',
+      principal: { subject_id: 'owner', roles: ['master'] },
+      termination: { status: 'completed' },
+    });
+    expect(trace!.model_calls.length).toBeGreaterThanOrEqual(1);
+    // Tool events reach the trace through the journal port even though the
+    // engine stream does not carry them (#740).
+    expect(trace!.tool_calls).toEqual([expect.objectContaining({ tool_name: 'forward_message', status: 'ok' })]);
+    const report = formatEvalReport(definition, run, evaluateExpectations(definition, run));
+    expect(report).toContain('turn trace:');
+    expect(report).toContain('回合 approval-gate:turn-1');
+  });
+
   it('observes that a denied approval keeps the tool from running', async () => {
     const definition = { ...approvalCase('deny'), expect: {
       toolsNotCalled: ['forward_message'], approvalRequested: true, outboundContains: ['未转发'],
@@ -118,19 +137,14 @@ describe('eval framework', () => {
   it('supports generic provider faults as script steps', async () => {
     const definition = defineEvalCase({
       id: 'provider-faults',
-      description: 'A provider error and an empty response are scripted like any other step.',
+      description: 'A scripted 429 is a real provider error: the harness retries and the next step answers.',
       source: 'framework self-test',
       inbound: { text: 'hi' },
-      // Provider resilience (#724) would retry a 429; turn retries off so this
-      // self-test checks only that one fault step maps to one request.
-      agentConfig: { providerResilience: { maxRetries: 0 } },
-      script: [{ fault: { kind: 'error', message: 'HTTP 429 rate limited', status: 429 } }],
-      expect: { termination: 'error' },
+      script: [{ fault: { kind: 'error', message: 'HTTP 429 rate limited', status: 429 } }, { text: 'recovered' }],
+      expect: { outboundContains: ['recovered'], modelSteps: 2 },
     });
     const run = await runEvalCase(definition);
-    expect(run.modelRequests).toHaveLength(1);
-    expect(run.extraModelRequests).toBe(0);
-    expect(run.terminals.at(-1)?.type).toBeDefined();
+    expect(evaluateExpectations(definition, run)).toEqual([]);
   });
 
   it('fails a notOffered call that the harness did offer', async () => {

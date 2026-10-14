@@ -129,9 +129,9 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `grep-match-all-rejected` | context, tool-use | #716 agent-file-tool-hygiene (grep ".*" flooded the context) |
 | `grep-skips-node-modules` | context, tool-use | QQ: grep scanned node_modules and blew the context (#716 agent-file-tool-hygiene) |
 | `group-master-unaffected` | approval | #719 group_member turn tightening — master must not be affected (PR #737) |
-| `group-member-no-file-write` | approval, injection | #719 group_member turn tightening (PR #737) (skipped: depends on #737) |
-| `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) (skipped: depends on #737) |
-| `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) (skipped: depends on #737) |
+| `group-member-no-file-write` | approval, injection | #719 group_member turn tightening (PR #737) |
+| `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
+| `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |

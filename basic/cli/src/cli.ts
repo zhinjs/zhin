@@ -19,6 +19,7 @@ import { sendCommand } from './commands/send.js';
 import { watchCommand } from './commands/watch.js';
 import { packagesCommand } from './commands/packages.js';
 import { runtimeCommand } from './commands/runtime.js';
+import { traceCommand } from './commands/trace.js';
 
 const program = new Command();
 
@@ -54,6 +55,7 @@ program.addCommand(needsAgentCommand
   ? (await import('./commands/agent.js')).agentCommand
   : new Command('agent').description('Agent diagnostics and Workroom operations'));
 program.addCommand(runtimeCommand);
+program.addCommand(traceCommand);
 
 try {
   await program.parseAsync();

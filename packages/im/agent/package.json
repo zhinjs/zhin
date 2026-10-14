@@ -86,6 +86,11 @@
       "development": "./src/authoring/entries/evals.ts",
       "import": "./lib/authoring/entries/evals.js"
     },
+    "./trace": {
+      "types": "./lib/trace/index.d.ts",
+      "development": "./src/trace/index.ts",
+      "import": "./lib/trace/index.js"
+    },
     "./security": {
       "types": "./lib/security/index.d.ts",
       "development": "./src/security/index.ts",
