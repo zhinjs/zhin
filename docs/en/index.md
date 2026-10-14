@@ -2,38 +2,38 @@
 layout: home
 ---
 
-<ZhinHero tagline="A multi-channel IM framework built for assistant bots. Plugins are Lego blocks, hot reload is the norm, and Console lives in your browser." />
+<ZhinHero tagline="Write a chat bot once in TypeScript and run it on QQ, WeChat, Discord, Telegram and 20+ other platforms. A small IM framework by default — add AI when you need it." />
 
 <ZhinTerminal>
-<b>$</b> npm create zhin-app my-bot<br>
+<b>$</b> npm create zhin-app my-bot -y<br>
 <b>$</b> cd my-bot && pnpm dev<br>
-<span>✔ IM golden path started — no model key required</span>
+<span>✔ Bot started — no platform account or model key required</span>
 </ZhinTerminal>
 
-<ZhinRolePaths heading="Start from your role" intro="You do not need the full architecture first. Choose the outcome you need now." :items="[
-  { eyebrow: 'BUILD', title: 'Build your first Bot', description: 'Move from Sandbox to one real platform through a repeatable message path.', href: '/en/getting-started/', action: 'Run the golden path' },
-  { eyebrow: 'AUTHOR', title: 'Ship a plugin', description: 'Close capability, configuration, lifecycle, testing, and release as one loop.', href: '/en/authoring/plugin-delivery', action: 'Open the delivery path' },
-  { eyebrow: 'OPERATE', title: 'Deploy and operate', description: 'Own TLS, supervision, monitoring, backup, upgrades, and rollback.', href: '/en/operations/production', action: 'Open production guide' },
-  { eyebrow: 'AGENT', title: 'Build an Agent team', description: 'Govern Prompt, Tool, Workroom, and repository collaboration boundaries.', href: '/en/solutions/governed-agent', action: 'Choose an Agent solution' },
+<ZhinRolePaths heading="What do you want to do?" intro="You don't need the full architecture first. Pick a goal — each path fits in one sitting." :items="[
+  { eyebrow: 'LEARN', title: 'Understand what it is', description: 'One page on what Zhin does and which parts make up a bot.', href: '/en/getting-started/introduction', action: '5-minute overview' },
+  { eyebrow: 'RUN', title: 'Run your first bot', description: 'No platform account or model key — get a reply in the browser Sandbox.', href: '/en/getting-started/', action: 'Start the quick start' },
+  { eyebrow: 'BUILD', title: 'Write your own features', description: 'Commands, keyword replies, schedules, AI tools — drop a file in a folder and it works.', href: '/en/getting-started/first-plugin', action: 'Write a first plugin' },
+  { eyebrow: 'SHIP', title: 'Connect platforms and go live', description: 'Pick adapters for QQ / WeChat / Discord and more, then deploy, monitor and upgrade.', href: '/en/adapters/', action: 'Choose a platform' },
 ]" />
 
 <ZhinFeatureGrid heading="Why Zhin.js" :features="[
-  { title: 'Plugin-based Core', desc: 'A <code>package.json#zhin</code> manifest plus a <code>plugin.ts</code> is all you need. Commands, components, and adapters are discovered from convention directories. Edit a file, get instant hot reload.' },
-  { title: 'Multi-platform, One Message Flow', desc: 'QQ, OneBot, Discord, Telegram, Slack, KOOK, DingTalk, Lark, WeCom, LINE… 20+ adapters mount on demand, all sharing the same send chain.' },
-  { title: 'Zero-deploy Console', desc: 'Host exposes only API. Open your browser to manage plugins, view instances, browse logs, and edit config — the frontend does not need to run alongside the bot.' },
-  { title: 'Opt-in AI', desc: 'Only the IM core ships by default. Install <code>@zhin.js/agent</code> when you need it — providers, MCP, sub-agents, and scheduled tasks unlock layer by layer.' },
-  { title: 'Plugin as Application', desc: 'Drop a <code>zhin.config.yml</code> in a plugin directory and <code>zhin runtime start</code> runs it directly. No host project required.' },
-  { title: 'Unidirectional Layers', desc: 'basic → kernel → ai → core → agent → zhin. Dependencies only flow downward. Each layer is usable standalone — kernel is a pure plugin engine, ai is a pure LLM engine.' },
+  { title: 'One codebase, 20+ platforms', desc: 'QQ, WeChat, WeCom, DingTalk, Lark, Discord, Telegram, Slack, KOOK, LINE… Your code sees one kind of message; adapters handle the platform differences.' },
+  { title: 'A feature is a file', desc: '<code>commands/hello/index.ts</code> is the <code>/hello</code> command. Middleware, components, schedules and AI tools work the same way — no registration boilerplate.' },
+  { title: 'No restarts while coding', desc: 'Save to hot-reload. In-flight messages finish on the old version, and if the new code throws, the old version keeps serving.' },
+  { title: 'Develop with zero accounts', desc: 'The built-in Sandbox is a simulated chat window. Build and test everything without any platform account or model key.' },
+  { title: 'Manage it in the browser', desc: 'Open <code>console.zhin.dev</code>, enter your address and token: send test messages, read logs, edit config, manage plugins. Nothing to deploy.' },
+  { title: 'Opt-in AI', desc: 'The default install is an IM core under 10MB. Run <code>npx zhin setup --ai</code> to add models, tools, memory and MCP.' },
 ]" />
 
-<ZhinDuo heading="One file, one bot">
+<ZhinDuo heading="What a bot looks like">
 <template #left>
 
-`bot.ts` — your entire bot can be just this one file.
+**Smallest form**: one `bot.ts` is the whole bot.
 
 ```ts
-import { defineCommand } from 'zhin.js/command';
 import { definePlugin } from 'zhin.js';
+import { defineCommand } from 'zhin.js/command';
 
 export default definePlugin({
   name: 'my-bot',
@@ -46,24 +46,37 @@ export default definePlugin({
 });
 ```
 
+**As it grows**: one file per capability, auto-registered from convention folders.
+
+```text
+my-bot/
+├── plugin.ts                 # entry: definePlugin()
+├── commands/hello/index.ts   # the /hello command
+├── middlewares/…             # keyword replies, filters
+├── tools/…                   # tools the AI can call (optional)
+└── zhin.config.yml           # port, platform credentials, models
+```
+
 </template>
 <template #right>
 
-Three steps to get running (no model key needed):
+**Running in 10 minutes** (no accounts or keys):
 
 ```bash
 npm create zhin-app my-bot -y
 cd my-bot && pnpm dev
 ```
 
-Open [console.zhin.dev](https://console.zhin.dev) →
-Sandbox → `/hello`.
+1. Open [console.zhin.dev](https://console.zhin.dev)
+2. Enter the address printed in the terminal and `HTTP_TOKEN` from `.env`
+3. Send `/hello` in the Sandbox
 
-Want convention directories instead? Default-export the same
-`defineCommand(...)` from `commands/hello/index.ts` — see [minimal-bot](/en/examples/#minimal-bot-stable-minimal-path).
+**Next**
+
+- Confused by a term? → [Core concepts](/en/getting-started/concepts)
+- Write your own command → [First plugin](/en/getting-started/first-plugin)
+- Connect a real platform → [Adapters](/en/adapters/)
+- Add AI → [AI overview](/en/ai/)
 
 </template>
-
-Full single-file example: [single-file-bot](/en/examples/#single-file-bot-one-bots-is-a-bot).
-Database, cron, proactive push, Agent? Check out [definePlugin overview](/en/authoring/define-plugin) for what `setup` can do.
 </ZhinDuo>

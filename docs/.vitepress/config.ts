@@ -39,39 +39,19 @@ const USE_DOC_PREFIXES = [
 const DEV_DOC_PREFIXES = ['/contributing/', '/target-architecture']
 
 const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
-  { text: '快速开始', link: '/getting-started/' },
-  { text: '第一个插件', link: '/getting-started/first-plugin' },
-  sidebarGroup('解决方案', [
-    { text: '按交付结果选择', link: '/solutions/' },
-    { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
-    { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
-    { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
-    { text: '受治理的研发交付', link: '/solutions/governed-software-delivery' },
+  sidebarGroup('开始', [
+    { text: 'Zhin.js 是什么', link: '/getting-started/introduction' },
+    { text: '快速开始（10 分钟）', link: '/getting-started/' },
+    { text: '核心概念速览', link: '/getting-started/concepts' },
+    { text: '第一个插件', link: '/getting-started/first-plugin' },
   ], false),
-  sidebarGroup('核心概念', [
-    { text: '分层架构', link: '/concepts/architecture' },
-    { text: '插件模型', link: '/concepts/plugin-model' },
-    { text: '配置即数据', link: '/concepts/config-as-data' },
-    { text: 'Generation 生命周期', link: '/concepts/generation-lifecycle' },
-    { text: '消息流', link: '/concepts/message-flow' },
-    { text: '能力接缝', link: '/concepts/capability-seams' },
-  ]),
-  sidebarGroup('插件创作', [
-    { text: 'definePlugin 全景', link: '/authoring/define-plugin' },
-    { text: '插件完整交付', link: '/authoring/plugin-delivery' },
-    { text: '本地联调指南', link: '/authoring/local-dev' },
-    { text: '约定目录', link: '/authoring/conventions' },
-    { text: '适配器开发', link: '/authoring/adapters' },
-    { text: '命令', link: '/authoring/commands' },
-    { text: '中间件与组件', link: '/authoring/middleware-components' },
-    { text: 'Agent 工具', link: '/authoring/agent-tools' },
-    { text: 'Host Token 总览', link: '/authoring/host-tokens' },
-    { text: '端点生命周期', link: '/authoring/endpoint-lifecycle' },
-    { text: '模块级状态', link: '/authoring/module-state' },
-    { text: 'Console 页面', link: '/authoring/console-pages' },
-  ]),
+  sidebarGroup('使用与配置', [
+    { text: 'Console 管理后台', link: '/console/' },
+    { text: '配置参考', link: '/configuration/' },
+    { text: 'CLI 命令', link: '/cli/' },
+  ], false),
   sidebarGroup('平台适配器', [
-    { text: '概览', link: '/adapters/' },
+    { text: '概览与选择', link: '/adapters/' },
     sidebarGroup('Stable', [{ text: 'Sandbox', link: '/adapters/sandbox' }]),
     sidebarGroup('Advanced', [
       { text: 'ICQQ (QQ)', link: '/adapters/icqq' },
@@ -97,39 +77,67 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'GitHub', link: '/adapters/github' },
     ]),
   ]),
-  sidebarGroup('参考', [
-    { text: 'API Reference', link: '/reference/api' },
-    { text: '配置参考', link: '/configuration/' },
-    { text: '配置字段（自动生成）', link: '/configuration/generated' },
-    { text: 'CLI 命令', link: '/cli/' },
-    { text: 'zhin runtime start', link: '/cli/runtime' },
-  ]),
-  sidebarGroup('生产运维', [
-    { text: '故障排查中心', link: '/troubleshooting/' },
-    { text: '文档内容数据闭环', link: '/operations/docs-insights' },
-    { text: '部署与恢复', link: '/operations/production' },
-    { text: '版本兼容与迁移', link: '/operations/upgrades' },
-  ], false),
-  sidebarGroup('AI 模块', [
-    { text: '总览', link: '/ai/' },
+  sidebarGroup('AI 能力（可选）', [
+    { text: 'AI 总览与启用', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
     { text: '结构化决策', link: '/ai/structured-decisions' },
     { text: '执行状态反馈', link: '/advanced/activity-feedback' },
     { text: '语音', link: '/ai/speech' },
     { text: '智能家居（HA）', link: '/advanced/assistant-home-setup' },
   ]),
-  { text: 'Console', link: '/console/' },
-  { text: '示例项目', link: '/examples/' },
-  sidebarGroup('学习路径', [
-    { text: '路径总览', link: '/paths/' },
-    { text: 'IM Bot', link: '/paths/im-bot' },
-    { text: 'AI Agent', link: '/paths/ai-agent' },
-    { text: 'Console 管理', link: '/paths/console' },
+  sidebarGroup('插件开发', [
+    { text: 'definePlugin 全景', link: '/authoring/define-plugin' },
+    { text: '约定目录', link: '/authoring/conventions' },
+    { text: '命令', link: '/authoring/commands' },
+    { text: '中间件与组件', link: '/authoring/middleware-components' },
+    { text: 'Agent 工具', link: '/authoring/agent-tools' },
+    { text: 'Console 页面', link: '/authoring/console-pages' },
+    { text: '模块级状态', link: '/authoring/module-state' },
+    { text: '适配器开发', link: '/authoring/adapters' },
+    { text: '端点生命周期', link: '/authoring/endpoint-lifecycle' },
+    { text: 'Host Token 总览', link: '/authoring/host-tokens' },
+    { text: '本地联调指南', link: '/authoring/local-dev' },
+    { text: '插件完整交付（测试与发布）', link: '/authoring/plugin-delivery' },
   ]),
-  sidebarGroup('真实案例', [
-    { text: '案例总览', link: '/showcase/' },
-    { text: '个人生活助手', link: '/showcase/personal-assistant' },
-    { text: '多平台社区 Bot', link: '/showcase/community-bot' },
+  sidebarGroup('上线运维', [
+    { text: '部署与恢复', link: '/operations/production' },
+    { text: '版本兼容与迁移', link: '/operations/upgrades' },
+    { text: '故障排查中心', link: '/troubleshooting/' },
+    { text: '文档内容数据闭环', link: '/operations/docs-insights' },
+  ]),
+  sidebarGroup('场景与示例', [
+    { text: '示例项目', link: '/examples/' },
+    sidebarGroup('学习路径', [
+      { text: '路径总览', link: '/paths/' },
+      { text: 'IM Bot', link: '/paths/im-bot' },
+      { text: 'AI Agent', link: '/paths/ai-agent' },
+      { text: 'Console 管理', link: '/paths/console' },
+    ]),
+    sidebarGroup('解决方案', [
+      { text: '按交付结果选择', link: '/solutions/' },
+      { text: '多 Endpoint 运营', link: '/solutions/multi-endpoint-operations' },
+      { text: '受治理的业务 Agent', link: '/solutions/governed-agent' },
+      { text: 'GitHub 仓库 Workroom', link: '/solutions/github-workroom' },
+      { text: '受治理的研发交付', link: '/solutions/governed-software-delivery' },
+    ]),
+    sidebarGroup('真实案例', [
+      { text: '案例总览', link: '/showcase/' },
+      { text: '个人生活助手', link: '/showcase/personal-assistant' },
+      { text: '多平台社区 Bot', link: '/showcase/community-bot' },
+    ]),
+  ]),
+  sidebarGroup('深入原理', [
+    { text: '分层架构', link: '/concepts/architecture' },
+    { text: '插件模型', link: '/concepts/plugin-model' },
+    { text: '配置即数据', link: '/concepts/config-as-data' },
+    { text: '消息流', link: '/concepts/message-flow' },
+    { text: 'Generation 生命周期', link: '/concepts/generation-lifecycle' },
+    { text: '能力接缝', link: '/concepts/capability-seams' },
+  ]),
+  sidebarGroup('参考', [
+    { text: 'API Reference', link: '/reference/api' },
+    { text: '配置字段（自动生成）', link: '/configuration/generated' },
+    { text: 'zhin runtime start', link: '/cli/runtime' },
   ]),
 ]
 
@@ -140,6 +148,7 @@ const zhDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: '平台稳定认证', link: '/contributing/platform-acceptance' },
   { text: '平台验收执行器', link: '/contributing/platform-acceptance-runner' },
   { text: '代码约定', link: '/contributing/conventions' },
+  { text: '文档写作规范', link: '/contributing/writing-docs' },
   { text: 'Public API 面', link: '/contributing/public-api-surface' },
   { text: 'Legacy 概念迁移', link: '/contributing/legacy-concepts' },
 ]
@@ -168,38 +177,19 @@ const EN_USE_DOC_PREFIXES = [
 const EN_DEV_DOC_PREFIXES = ['/en/contributing/']
 
 const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
-  { text: 'Quick Start', link: '/en/getting-started/' },
-  { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
-  sidebarGroup('Solutions', [
-    { text: 'Choose by Outcome', link: '/en/solutions/' },
-    { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
-    { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },
-    { text: 'GitHub Repository Workroom', link: '/en/solutions/github-workroom' },
+  sidebarGroup('Start', [
+    { text: 'What is Zhin.js', link: '/en/getting-started/introduction' },
+    { text: 'Quick Start (10 min)', link: '/en/getting-started/' },
+    { text: 'Core Concepts at a Glance', link: '/en/getting-started/concepts' },
+    { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
   ], false),
-  sidebarGroup('Core Concepts', [
-    { text: 'Layered Architecture', link: '/en/concepts/architecture' },
-    { text: 'Plugin Model', link: '/en/concepts/plugin-model' },
-    { text: 'Config as Data', link: '/en/concepts/config-as-data' },
-    { text: 'Generation Lifecycle', link: '/en/concepts/generation-lifecycle' },
-    { text: 'Message Flow', link: '/en/concepts/message-flow' },
-    { text: 'Capability Seam', link: '/en/concepts/capability-seams' },
-  ]),
-  sidebarGroup('Plugin Authoring', [
-    { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },
-    { text: 'Complete Plugin Delivery', link: '/en/authoring/plugin-delivery' },
-    { text: 'Local Development Guide', link: '/en/authoring/local-dev' },
-    { text: 'Convention Directories', link: '/en/authoring/conventions' },
-    { text: 'Adapter Authoring', link: '/en/authoring/adapters' },
-    { text: 'Commands', link: '/en/authoring/commands' },
-    { text: 'Middleware & Components', link: '/en/authoring/middleware-components' },
-    { text: 'Agent Tools', link: '/en/authoring/agent-tools' },
-    { text: 'Endpoint Lifecycle', link: '/en/authoring/endpoint-lifecycle' },
-    { text: 'Host Token Reference', link: '/en/authoring/host-tokens' },
-    { text: 'Module-level State', link: '/en/authoring/module-state' },
-    { text: 'Console Pages', link: '/en/authoring/console-pages' },
-  ]),
+  sidebarGroup('Use & Configure', [
+    { text: 'Console', link: '/en/console/' },
+    { text: 'Configuration', link: '/en/configuration/' },
+    { text: 'CLI Commands', link: '/en/cli/' },
+  ], false),
   sidebarGroup('Platform Adapters', [
-    { text: 'Overview', link: '/en/adapters/' },
+    { text: 'Overview & Choosing', link: '/en/adapters/' },
     sidebarGroup('Stable', [{ text: 'Sandbox', link: '/en/adapters/sandbox' }]),
     sidebarGroup('Advanced', [
       { text: 'ICQQ (QQ)', link: '/en/adapters/icqq' },
@@ -225,37 +215,64 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
       { text: 'GitHub', link: '/en/adapters/github' },
     ]),
   ]),
-  sidebarGroup('Reference', [
-    { text: 'API Reference', link: '/en/reference/api' },
-    { text: 'Configuration', link: '/en/configuration/' },
-    { text: 'Configuration Fields (Generated)', link: '/en/configuration/generated' },
-    { text: 'CLI Commands', link: '/en/cli/' },
-    { text: 'zhin runtime start', link: '/en/cli/runtime' },
-  ]),
-  sidebarGroup('Production Operations', [
-    { text: 'Troubleshooting Center', link: '/en/troubleshooting/' },
-    { text: 'Documentation Insights', link: '/en/operations/docs-insights' },
-    { text: 'Deployment and Recovery', link: '/en/operations/production' },
-    { text: 'Compatibility and Migration', link: '/en/operations/upgrades' },
-  ], false),
-  sidebarGroup('AI Module', [
-    { text: 'Overview', link: '/en/ai/' },
+  sidebarGroup('AI (Optional)', [
+    { text: 'Overview & Enabling AI', link: '/en/ai/' },
     { text: 'Agent Deep Dive', link: '/en/ai/agent' },
     { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
     { text: 'Speech', link: '/en/ai/speech' },
   ]),
-  { text: 'Console', link: '/en/console/' },
-  { text: 'Examples', link: '/en/examples/' },
-  sidebarGroup('Learning Paths', [
-    { text: 'Path Overview', link: '/en/paths/' },
-    { text: 'IM Bot', link: '/en/paths/im-bot' },
-    { text: 'AI Agent', link: '/en/paths/ai-agent' },
-    { text: 'Console Admin', link: '/en/paths/console' },
+  sidebarGroup('Plugin Development', [
+    { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },
+    { text: 'Convention Directories', link: '/en/authoring/conventions' },
+    { text: 'Commands', link: '/en/authoring/commands' },
+    { text: 'Middleware & Components', link: '/en/authoring/middleware-components' },
+    { text: 'Agent Tools', link: '/en/authoring/agent-tools' },
+    { text: 'Console Pages', link: '/en/authoring/console-pages' },
+    { text: 'Module-level State', link: '/en/authoring/module-state' },
+    { text: 'Adapter Authoring', link: '/en/authoring/adapters' },
+    { text: 'Endpoint Lifecycle', link: '/en/authoring/endpoint-lifecycle' },
+    { text: 'Host Token Reference', link: '/en/authoring/host-tokens' },
+    { text: 'Local Development Guide', link: '/en/authoring/local-dev' },
+    { text: 'Complete Plugin Delivery (Test & Publish)', link: '/en/authoring/plugin-delivery' },
   ]),
-  sidebarGroup('Showcase', [
-    { text: 'Showcase Overview', link: '/en/showcase/' },
-    { text: 'Personal Assistant', link: '/en/showcase/personal-assistant' },
-    { text: 'Multi-platform Bot', link: '/en/showcase/community-bot' },
+  sidebarGroup('Operations', [
+    { text: 'Deployment and Recovery', link: '/en/operations/production' },
+    { text: 'Compatibility and Migration', link: '/en/operations/upgrades' },
+    { text: 'Troubleshooting Center', link: '/en/troubleshooting/' },
+    { text: 'Documentation Insights', link: '/en/operations/docs-insights' },
+  ]),
+  sidebarGroup('Scenarios & Examples', [
+    { text: 'Examples', link: '/en/examples/' },
+    sidebarGroup('Learning Paths', [
+      { text: 'Path Overview', link: '/en/paths/' },
+      { text: 'IM Bot', link: '/en/paths/im-bot' },
+      { text: 'AI Agent', link: '/en/paths/ai-agent' },
+      { text: 'Console Admin', link: '/en/paths/console' },
+    ]),
+    sidebarGroup('Solutions', [
+      { text: 'Choose by Outcome', link: '/en/solutions/' },
+      { text: 'Multi-Endpoint Operations', link: '/en/solutions/multi-endpoint-operations' },
+      { text: 'Governed Business Agent', link: '/en/solutions/governed-agent' },
+      { text: 'GitHub Repository Workroom', link: '/en/solutions/github-workroom' },
+    ]),
+    sidebarGroup('Showcase', [
+      { text: 'Showcase Overview', link: '/en/showcase/' },
+      { text: 'Personal Assistant', link: '/en/showcase/personal-assistant' },
+      { text: 'Multi-platform Bot', link: '/en/showcase/community-bot' },
+    ]),
+  ]),
+  sidebarGroup('Under the Hood', [
+    { text: 'Layered Architecture', link: '/en/concepts/architecture' },
+    { text: 'Plugin Model', link: '/en/concepts/plugin-model' },
+    { text: 'Config as Data', link: '/en/concepts/config-as-data' },
+    { text: 'Message Flow', link: '/en/concepts/message-flow' },
+    { text: 'Generation Lifecycle', link: '/en/concepts/generation-lifecycle' },
+    { text: 'Capability Seam', link: '/en/concepts/capability-seams' },
+  ]),
+  sidebarGroup('Reference', [
+    { text: 'API Reference', link: '/en/reference/api' },
+    { text: 'Configuration Fields (Generated)', link: '/en/configuration/generated' },
+    { text: 'zhin runtime start', link: '/en/cli/runtime' },
   ]),
 ]
 
@@ -263,6 +280,7 @@ const enDevDocsSidebar: DefaultTheme.SidebarItem[] = [
   { text: 'Repo Structure', link: '/en/contributing/repo-structure' },
   { text: 'Development Workflow', link: '/en/contributing/development' },
   { text: 'Code Conventions', link: '/en/contributing/conventions' },
+  { text: 'Docs Writing Guide', link: '/en/contributing/writing-docs' },
   { text: 'Public API Surface', link: '/en/contributing/public-api-surface' },
   { text: 'Legacy Concept Migration', link: '/en/contributing/legacy-concepts' },
 ]
@@ -319,7 +337,9 @@ export default withMermaid(defineConfig({
               {
                 text: '入门',
                 items: [
+                  { text: 'Zhin.js 是什么', link: '/getting-started/introduction' },
                   { text: '快速开始', link: '/getting-started/' },
+                  { text: '核心概念速览', link: '/getting-started/concepts' },
                   { text: '第一个插件', link: '/getting-started/first-plugin' },
                   { text: '解决方案', link: '/solutions/' },
                   { text: '学习路径', link: '/paths/' },
@@ -330,8 +350,8 @@ export default withMermaid(defineConfig({
               {
                 text: '深入',
                 items: [
-                  { text: '核心概念', link: '/concepts/architecture' },
-                  { text: '插件创作', link: '/authoring/define-plugin' },
+                  { text: '深入原理', link: '/concepts/architecture' },
+                  { text: '插件开发', link: '/authoring/define-plugin' },
                 ],
               },
             ],
@@ -400,7 +420,9 @@ export default withMermaid(defineConfig({
               {
                 text: 'Getting Started',
                 items: [
+                  { text: 'What is Zhin.js', link: '/en/getting-started/introduction' },
                   { text: 'Quick Start', link: '/en/getting-started/' },
+                  { text: 'Core Concepts at a Glance', link: '/en/getting-started/concepts' },
                   { text: 'First Plugin', link: '/en/getting-started/first-plugin' },
                   { text: 'Solutions', link: '/en/solutions/' },
                   { text: 'Learning Paths', link: '/en/paths/' },
@@ -411,8 +433,8 @@ export default withMermaid(defineConfig({
               {
                 text: 'Deep Dive',
                 items: [
-                  { text: 'Core Concepts', link: '/en/concepts/architecture' },
-                  { text: 'Plugin Authoring', link: '/en/authoring/define-plugin' },
+                  { text: 'Under the Hood', link: '/en/concepts/architecture' },
+                  { text: 'Plugin Development', link: '/en/authoring/define-plugin' },
                 ],
               },
             ],

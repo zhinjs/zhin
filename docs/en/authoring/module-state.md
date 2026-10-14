@@ -1,23 +1,22 @@
-# Runtime State and Generations
+---
+title: "Module-level State"
+description: "Where a plugin's database handle, config and service objects belong: why module-level variables break, and the correct pattern"
+---
 
-Database handles, configuration snapshots, and outbound ports must be bound to both a plugin **owner** and a **generation**. Runtime state has one authority: setup publishes a typed resource into the candidate Scope, and only an operation holding the committed snapshot lease may resolve it.
+# Module-level state
 
-## Anti-pattern: a module-level "current value"
+Plugins often share things between commands, tools and schedules: a database handle, parsed config, a function that sends messages. This page answers one question: **where should those live?**
 
-```ts
-// Bare singletons, registration stacks, and createGenerationStore are not owner resources.
-let currentDb: Database | undefined;
-export function setDb(value: Database) { currentDb = value; }
-export function getDb() { return currentDb; }
-```
+## The answer
 
-Module state cannot identify the calling root, plugin owner, generation, or snapshot lease. Shadow preparation may overwrite the old generation, two instances of the same package may share resources, an old request may read the new generation after commit, and rollback may reveal the wrong value. Replacing one value with a "latest registration" stack only changes overwrite order; it does not establish call identity.
+**Create them in `setup`, publish them with `context.resources.provide(token, value)`, and read them in commands and tools with `use(token)`. Never keep them in module-level variables.**
 
-## Correct model: an owner-bound resource
+## The correct pattern
 
-Define one token that aggregates the plugin's runtime capabilities:
+**1. Define a token** that bundles what the plugin needs at runtime:
 
 ```ts
+// src/runtime-state.ts
 import { createToken } from 'zhin.js';
 
 export interface LotteryRuntime {
@@ -33,63 +32,92 @@ export const lotteryRuntimeToken = createToken<LotteryRuntime>(
 );
 ```
 
-Setup publishes one complete runtime into the candidate generation's owner Scope:
+**2. Create and publish it once in `setup`:**
 
 ```ts
+// plugin.ts
 export default definePlugin<LotteryConfig>({
   name: 'lottery',
   async setup(context) {
     const config = resolveLotteryConfig(context.config.get());
     const db = createLotteryDatabase(context);
     const outbound = createLotteryOutbound(context, config);
+
     const runtime = Object.freeze({
       db,
       config,
       enabledGames: Object.freeze(lotteryEnabledGames(config)),
       outbound,
     });
-
     context.resources.provide(lotteryRuntimeToken, runtime);
+
+    // The schedule callback captures the same runtime instead of reading module state
     context.resources.use(scheduleHostToken).register({
       id: 'lottery/daily-pipeline',
       cron: config.scheduleCron,
-      // The callback captures this owner's runtime; it never reads module state.
       execute: () => runLotteryPipeline(runtime),
     });
   },
 });
 ```
 
-`resources.provide` writes only to the shadow Scope, so a failed candidate is never published. After commit, an old operation continues to hold the old snapshot while a new operation resolves the new runtime. Old resources can be disposed only after the last old lease is released.
-
-## Commands and Tools
-
-Commands and Tools both receive `CapabilityContext.use()` and must resolve the resource owned by their fixed snapshot:
+**3. Read it in commands and tools:**
 
 ```ts
+// commands/lottery-today/index.ts
 export default defineCommand({
   description: 'Show today report',
   async execute({ use }) {
-    return loadTodayReport(use(lotteryRuntimeToken).db);
+    const runtime = use(lotteryRuntimeToken);
+    return loadTodayReport(runtime.db);
   },
 });
 
+// tools/lottery-history/index.ts
 export default defineAgentTool({
   description: 'Query lottery history',
   async execute(input, context) {
-    return loadDraws(context.use(lotteryRuntimeToken).db, input.game, input.count);
+    const runtime = context.use(lotteryRuntimeToken);
+    return loadDraws(runtime.db, input.game, input.count);
   },
 });
 ```
 
-Do not catch `use()` and fall back to a module variable. A missing token means composition is incomplete and must fail closed. A synthetic memory database, empty capability set, or "most recently registered" value disguises a configuration failure as a valid result.
+`use()` throws when the token is missing. **Don't catch that and fall back to a module variable, fake in-memory data or an empty implementation**: a missing token means the plugin wasn't assembled correctly, and it should fail loudly rather than disguise a config error as a normal result.
 
-## Design checks
+## Why module-level variables break
 
-- Does one runtime resource contain the complete DB/config/ports required by that owner?
-- Does every runtime path resolve through a fixed-snapshot `CapabilityContext`, or capture the same runtime during setup?
-- Can module getters, setters, and stores be deleted without pushing complexity into callers?
-- Are two instances, a failed prepare, and an old operation spanning commit fully isolated?
-- Does a missing resource fail explicitly instead of returning `undefined` or enabling a fallback?
+```ts
+// ❌ Don't do this
+let currentDb: Database | undefined;
+export function setDb(value: Database) { currentDb = value; }
+export function getDb() { return currentDb; }
+```
 
-If a callback "cannot access context", change the Host or Feature interface so setup injects an owner-bound closure or execution context. Do not bypass lifecycle ownership with module-global state.
+A module variable exists once, but the Zhin runtime can hold several copies of a plugin's state at the same time:
+
+| Situation | What goes wrong with a module variable |
+| --- | --- |
+| A hot reload is preparing the new version | The value the old version is still using is overwritten before the new version has validated |
+| The new version fails and rolls back | The variable is left holding the failed version's value |
+| The same plugin is mounted twice (two `instanceKey`s) | Both instances share one variable and their data mixes |
+| Old messages are still in flight during a switch | They read the new version's value halfway through |
+
+Turning the variable into a "most recently registered" stack doesn't help — it only changes the overwrite order and still can't tell which plugin and which version a call belongs to. The same goes for global stores like `createGenerationStore`.
+
+Values from `resources.provide` are bound to **this plugin instance at this version**: if the new version fails to prepare they never become visible; after a successful switch, old messages keep the old value and new messages get the new one; the old resources are released once the last old message finishes. See [Generation lifecycle](../concepts/generation-lifecycle.md).
+
+## Checklist
+
+- Does one runtime object hold all the database, config and ports the plugin needs?
+- Does every execution path (commands, tools, schedules) get resources through `use()`, or capture the same runtime in `setup`?
+- With every module-level getter / setter / store removed, is the business code still clear?
+- Do a doubly mounted plugin, a failed hot reload and an old message spanning a switch all stay isolated from each other?
+- Does a missing resource fail explicitly instead of returning `undefined` or degrading silently?
+
+If a callback "can't reach the context", change the interface that defines it so `setup` can inject a closure or execution context with the resources already bound — don't route around the lifecycle with module globals.
+
+## Next steps
+
+- [definePlugin · Provide resources to your own commands and tools](./define-plugin.md#provide-resources-to-your-own-commands-and-tools)
+- [Host Token reference](./host-tokens.md): what the framework lets you `use()`.

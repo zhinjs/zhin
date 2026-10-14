@@ -1,113 +1,175 @@
 ---
-title: AI 能力总览
+title: "AI 能力总览"
+description: "给 Bot 接入大模型：三步启用、AI 什么时候会回复、如何让它调用工具，以及模型、触发规则、访问控制、MCP 与执行安全的配置"
 ---
 
 # AI 能力总览
 
-默认安装的 zhin.js 只会收发消息，不会「回话」。想让它听懂 `#查一下明天天气`，得加装 AI 层：装几个包、在配置里写一段 `ai:`，启动时 CLI 就会自动装配 Agent Host，把未命中命令的消息路由给 **ZhinAgent** 处理。
+默认安装的 Zhin 只会执行命令，不会"聊天"。启用 AI 后，**没有匹配到任何命令的消息**会交给大模型回答，模型还可以调用你写的工具。
 
-```mermaid
-flowchart LR
-    M[IM 消息] --> T{ai.trigger 匹配}
-    T -- 未命中 --> C[命令分发 / 群聊旁听]
-    T -- 命中 --> A[ZhinAgent 回合]
-    B[ai.providers] --> A
-    S[ai.mcpServers / 插件工具] --> A
-    A --> R[IM 回复]
-```
+AI 是可选的：不启用时，Bot 不依赖任何模型 SDK，也不需要 API Key。
 
-## 安装
+## 三步启用
+
+**1. 运行向导**
 
 ```bash
-pnpm add @zhin.js/agent zod ai
-pnpm add @ai-sdk/openai   # 按所用厂商安装对应的 provider SDK
+npx zhin setup --ai
+pnpm install
 ```
 
-provider SDK 是可选 peer 依赖，用到哪个 `sdk` 就装哪个包；缺失时运行时会报 `Missing peer dependency` 并提示安装命令。代码侧从 `zhin.js/agent`（或 `@zhin.js/agent`）导入 `ZhinAgent`、`AIService` 等。
+向导会让你选择模型服务（OpenAI、Anthropic、DeepSeek、Google、OpenAI 兼容接口，或本地的 Ollama），然后安装对应 SDK 和 Agent 运行时，并在 `package.json` 里声明工具与 Prompt Section 能力。
 
-## 配置骨架
+**2. 填写密钥**
 
-全部配置位于 `zhin.config.yml` 的顶层 `ai:` 段，`${VAR}` 从环境变量展开：
+云端模型的 Key 写在 `.env` 里（向导会提示变量名，例如 `AI_API_KEY`）。使用本地 Ollama 时不需要 Key。
+
+**3. 试一试**
+
+```bash
+pnpm dev
+```
+
+在 Sandbox 私聊里直接发一句话，或者在群聊里发 `ai: 你好`，Bot 会用模型回复。
+
+向导写入 `zhin.config.yml` 的配置大致如下：
 
 ```yaml
 ai:
-  providers:        # 厂商连接（必填）
+  enabled: true
+  providers:
+    openai-main:          # 自己起的名字
+      sdk: openai
+      apiKey: ${AI_API_KEY}
+  agents:
+    zhin:                 # 主 Agent，必须叫 zhin
+      provider: openai-main
+      model: gpt-4o-mini
+```
+
+`providers` 定义"连哪个模型服务"，`agents` 定义"哪个 Agent 用哪个模型"。
+
+::: details 不用向导，手动安装
+```bash
+pnpm add @zhin.js/agent zod ai
+pnpm add @ai-sdk/openai   # 按所用厂商安装对应的 SDK
+```
+
+只装 `@zhin.js/agent` 不足以让 `tools/`、`prompt-sections/` 目录生效，还需要在 `package.json#zhin.features` 中声明 `@zhin.js/tool` 与 `@zhin.js/prompt-section`。代码里从 `zhin.js/agent`（或 `@zhin.js/agent`）导入 `ZhinAgent`、`AIService` 等。模型 SDK 是可选依赖，缺失时启动会报 `Missing peer dependency` 并给出安装命令。
+:::
+
+## AI 什么时候会回复
+
+没有匹配到命令的消息，按下面的顺序判断是否交给 AI：
+
+| 顺序 | 情况 | 默认行为 |
+| --- | --- | --- |
+| 1 | 消息以 `/`、`!`、`！` 开头 | 跳过 AI，避免和命令冲突 |
+| 2 | 消息以 `#`、`AI:`、`ai:` 开头 | 交给 AI（私聊和群聊都生效），去掉前缀后作为问题 |
+| 3 | 群聊或频道中 @ 了 Bot | 交给 AI |
+| 4 | 私聊 | 整条消息直接交给 AI |
+| 5 | 私聊中包含设置的关键词 | 交给 AI |
+
+所以在群里，Bot 默认**不会**插话，只有被 @ 或使用前缀时才回复。这些规则都可以修改，见 [ai.trigger](#ai-trigger)。
+
+## 让 AI 做事
+
+AI 默认只能聊天。要让它查天气、搜歌、操作数据库，写一个工具放进 `tools/`：
+
+```ts
+// tools/weather/index.ts
+import { defineAgentTool } from '@zhin.js/tool';
+import { z } from 'zod';
+
+export default defineAgentTool<{ city: string }>({
+  description: '查询城市的实时天气',
+  inputSchema: z.object({ city: z.string().min(1) }),
+  async execute({ city }) {
+    const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
+    return response.text();
+  },
+});
+```
+
+限制工具的使用范围、要求用户确认、用 Skill 封装流程、补充业务背景，见 [Agent 工具与技能](../authoring/agent-tools.md)。
+
+## 常见调整
+
+| 我想…… | 改这里 |
+| --- | --- |
+| 换模型或厂商、接入本地模型 | [ai.providers](#ai-providers) |
+| 让群里不 @ 也能触发，或修改前缀 | [ai.trigger](#ai-trigger) |
+| 只对部分用户或群开放 AI | [ai.access](#ai-access) |
+| 不同的群用不同的 Agent 或模型 | [ai.agents](#ai-agents) |
+| 让 AI 使用外部 MCP 服务器的工具 | [ai.mcpServers](#ai-mcpservers) |
+| 控制 AI 能执行哪些 Shell 命令、是否需要审批 | [ai.agent](#ai-agent) |
+| 让 AI 理解语音、回复语音 | [语音](./speech.md) |
+
+## 配置参考
+
+全部配置位于 `zhin.config.yml` 的 `ai:` 段，`${VAR}` 会从环境变量展开。
+
+### ai.providers
+
+每个 provider 以你起的名字为键，`sdk` 决定使用哪个模型 SDK：
+
+```yaml
+ai:
+  providers:
     openrouter:
       sdk: openai-compatible
       baseUrl: ${OPENROUTER_BASE_URL}
       apiKey: ${OPENROUTER_API_KEY}
-  agents:           # Agent 绑定（至少要有 zhin）
-    zhin:
-      provider: openrouter
-      model: openrouter/free
-  mcpServers: []    # MCP client 连接（可选）
-  agent:
-    inboundQueue:
-      groupMode: supersede # 默认；可设为 fifo，让普通重叠消息按到达顺序等待
-  trigger: {}       # 触发规则（可选）
-  access: {}        # 访问门控（可选）
 ```
 
-启动时会对 `ai:` 做 **soft-prune**：凭据展开后为空的 provider 被剔除（仅记 debug 日志），绑定到被剔除 provider 的 agent 一并跳过；`zhin` 绑定缺失时 Agent Host 不装配，不影响 IM 启动。
-
-`ai.agent.inboundQueue.groupMode` 同时是 canonical Turn Intent 的默认策略：`supersede`
-保持兼容的抢占行为，`fifo` 将普通入站解析为 `new` 并按到达顺序等待。
-`steer`、`follow_up` 与 `observe` 仍由 adapter、command 或其他产品策略显式解析。
-跨参与者的 `steer` / `follow_up` 授权只能由 Host 的可信 `resolveTurnIntent` 策略产生，消息
-metadata 不能自行声明授权。工具继续受 active turn 的 authority 约束，journal 会另外记录
-触发控制的 principal 与 Turn ID。
-
-## ai.providers
-
-每个 provider 以别名命名，`sdk` 决定用哪个 AI SDK 适配器（闭表，ADR 0018）：
-
-| sdk | peer 依赖 | 关键配置 |
+| sdk | 需要安装 | 关键配置 |
 |-----|-----------|----------|
 | `openai` | `@ai-sdk/openai` | `apiKey`，可选 `baseUrl` |
 | `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey`（`baseUrl` 自动补 `/v1`）；Cloudflare Workers AI 可用 `accountId` 代替 `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`，可选 `baseUrl`（自动补 `/v1`） |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`，可选 `baseUrl` |
 | `google` | `@ai-sdk/google` | `apiKey`，可选 `baseUrl`（自动补 `/v1beta`） |
-| `ollama` | `@ai-sdk/openai-compatible`（内部走 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），无需 `apiKey` |
+| `ollama` | `@ai-sdk/openai-compatible`（通过 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），不需要 `apiKey` |
 
-通用字段：`models`（显式模型白名单）、`contextWindow`、`imageGeneration`（文生图默认值）、`input`（模型可接收的显式模态列表：`text | image | audio | video | file`）。`input` 缺省时按 `['text']` fail-closed，不会根据模型名或厂商猜测视觉/音视频能力。
+可选字段：
 
-不写 `models` 时，启动后由 `ModelRegistry` 后台调用 `/v1/models` 自动填充可用模型列表（先恢复上次缓存，再异步刷新）；写了 `models` 则以 YAML 白名单为准。`agents.<name>.model` 只需出现在发现列表或白名单中，无需逐个手写。
+- `models`：允许使用的模型列表。不写时，启动后会自动从 `/v1/models` 获取（先用上次的缓存，再在后台刷新）。
+- `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。
+- `contextWindow`：上下文窗口大小。
+- `imageGeneration`：文生图的默认参数。
 
-## ai.agents
+### ai.agents
 
-把 agent 名绑定到 `provider + model`：
+把 Agent 名字绑定到 `provider + model`。`zhin` 是主 Agent，必须存在：
 
 ```yaml
 ai:
   agents:
-    zhin:                       # 主 Agent，必须存在
+    zhin:
       provider: openrouter
       model: openrouter/free
-      mcpServers: [icqq]        # 该 agent 挂载的 MCP server（按 name 引用）
-      nickname: 小智            # LLM 自称与界面展示名
+      mcpServers: [icqq]        # 这个 Agent 使用的 MCP 服务器
+      nickname: 小智            # AI 的自称和界面展示名
     planner:
       provider: openrouter
       model: openrouter/free
-      match:                    # 可选路由规则（可数组）
+      match:                    # 什么样的消息交给它（可以是数组）
         scene: group
-      permission:               # spawn_task 可见的子 agent 类型
+      permission:               # 它能派出哪些子 Agent
         task: { "researcher": allow, "*": deny }
 ```
 
 | 字段 | 说明 |
 |------|------|
-| `provider` / `model` | 引用 `ai.providers` 的别名与模型 id（必填） |
-| `mcpServers` | 引用 `ai.mcpServers` 中的 `name` 列表 |
-| `nickname` | Agent 自称与界面展示昵称 |
-| `match` | 路由规则：`adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
-| `permission.task` | glob → `allow` / `deny`，约束 `spawn_task` 可派的子 agent |
+| `provider` / `model` | 引用 `ai.providers` 的名字与模型 id（必填） |
+| `mcpServers` | 引用 `ai.mcpServers` 中的 `name` |
+| `nickname` | AI 的自称与展示名 |
+| `match` | 路由条件：`adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
+| `permission.task` | glob → `allow` / `deny`，限制 `spawn_task` 能派出的子 Agent |
 
-## ai.mcpServers
+### ai.mcpServers
 
-这里配置的是 **Agent 的 MCP Client**：连接外部 MCP Server，把对方的工具带入 Agent 回合。声明进入候选 generation，激活时连接；未 ready 会阻止候选代发布，旧代继续服务。连接成功的工具以 owner-qualified 名称进入工具池。需安装 peer `@modelcontextprotocol/sdk`。
-
-如果要让外部 AI 客户端连接当前 Zhin Bot，使用顶层 `mcp:` 配置并运行 `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`；MCP Host 需要 Agent Runtime 投影当前代的 Tool。这是由 CLI 装配的 **MCP Server**，不会因设置 `ai.mcpServers` 而自动开启。参见 [MCP Server 配置](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md)。
+让 AI 连接**外部的 MCP 服务器**，使用对方提供的工具。需要安装 `@modelcontextprotocol/sdk`。
 
 ```yaml
 ai:
@@ -123,49 +185,51 @@ ai:
       args: ["-y", "@modelcontextprotocol/server-filesystem", "/tmp/zhin-mcp-test"]
 ```
 
-配置的 server 必须在候选 generation 激活时 ready；任一连接失败都会阻止候选代发布，旧代继续服务（fail-closed）。Agent binding 只能引用这里已声明的 server，未知名称会使配置校验失败。
+- 连接成功后，对方的工具以带服务器名前缀的名字加入工具池。
+- **任何一个服务器连接失败，新配置都不会生效**，旧版本继续服务。
+- `ai.agents.<name>.mcpServers` 只能引用这里声明过的名字，否则配置校验失败。
 
-## 触发规则（ai.trigger）
+::: tip 反过来：把你的 Bot 变成 MCP 服务器
+如果想让外部 AI 客户端连接你的 Bot，使用顶层的 `mcp:` 配置，并运行 `pnpm add @zhin.js/mcp @zhin.js/agent zod ai`。这与 `ai.mcpServers` 是两回事，设置其中一个不会开启另一个。见 [MCP Server 配置](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/README.md)。
+:::
 
-未命中任何命令的消息按固定顺序判定是否交给 AI：
-
-1. **忽略前缀**：命中 `ignorePrefixes`（默认 `/`、`!`、`！`）直接跳过，避免与命令冲突；
-2. **前缀触发**：命中 `prefixes`（默认 `#`、`AI:`、`ai:`）则取前缀后的文本（私聊、群聊均生效）；
-3. **@ 触发**：群/频道中 `respondToAt !== false` 且适配器标注了 `mentioned`（如 CQ 码、app_mention）；
-4. **私聊直达**：`respondToPrivate !== false` 时私聊全文直接进 AI；
-5. **关键词**：仅私聊，命中 `keywords` 任一子串。
+### ai.trigger
 
 ```yaml
 ai:
   trigger:
-    prefixes: ["ai:"]
-    respondToAt: true        # 默认 true
-    respondToPrivate: true   # 默认 true
-    timeout: 60000           # 单回合超时（ms）
-    thinkingMessage: 思考中…  # 可选：进入 AI 前的占位回复
+    prefixes: ["ai:"]          # 默认 ['#', 'AI:', 'ai:']
+    ignorePrefixes: ["/"]      # 默认 ['/', '!', '！']
+    respondToAt: true          # 默认 true：群里 @ Bot 时触发
+    respondToPrivate: true     # 默认 true：私聊直接触发
+    keywords: []               # 私聊中包含这些词时触发
+    timeout: 60000             # 单轮超时（毫秒）
+    thinkingMessage: 思考中…    # 可选：开始处理前的占位回复
     errorTemplate: "❌ AI 处理失败: {error}"
-    masters: ["10001"]       # trigger 级 master（参与 Owner 审批放行）
-    trusted: []              # trigger 级 trusted（弱于 master）
+    masters: ["10001"]         # 有审批权的用户
+    trusted: []                # 受信任用户（权限低于 master）
 ```
 
-## 访问门控（ai.access）
+@ 触发依赖适配器标记消息为"提到了 Bot"（例如 CQ 码、Slack 的 app_mention）。
 
-控制 LLM 回复路径对哪些会话开放（平台 AIGC 合规等场景）：
+### ai.access
+
+控制哪些会话可以使用 AI（例如为满足平台对 AIGC 的合规要求）：
 
 ```yaml
 ai:
   access:
     mode: whitelist     # open（默认）| closed | whitelist
-    users: ["10001"]    # 白名单 sender.id
-    groups: ["123456"]  # 白名单 group/channel id
+    users: ["10001"]    # 允许的用户 id
+    groups: ["123456"]  # 允许的群 / 频道 id
     denyMessage: 当前会话未开放 AI 功能。
 ```
 
-私聊拒绝时回复 `denyMessage`；群/频道拒绝为静默。
+私聊被拒绝时回复 `denyMessage`；群聊和频道被拒绝时不回复。
 
-## 安全策略（ai.agent）
+### ai.agent
 
-`bash` 这类执行类工具受 `ai.agent` 下的纵深防御约束：
+`ai.agent` 控制 AI 的运行方式，其中最重要的是 `bash` 等执行类工具的安全策略：
 
 ```yaml
 ai:
@@ -174,20 +238,55 @@ ai:
     execPreset: readonly          # readonly | network | development | custom
     execAllowlist: [make]         # execPreset=custom 时的白名单
     execApprovalMode: ask         # ask（默认）| bypass | auto
-    gitStatus: true               # 默认 true：Runtime 段注入单行 git 状态摘要（非 git 仓库自动跳过）
-    contextPaths: []              # 追加注入系统提示词的上下文文件（支持 ~ 与相对路径）
-    systemPromptMaxChars: 100000  # 系统提示词总字符上限；优先移除 opportunistic，required 放不下则明确失败
+    gitStatus: true               # 默认 true：在提示词中注入一行 git 状态（非 git 仓库自动跳过）
+    contextPaths: []              # 额外注入系统提示词的上下文文件（支持 ~ 与相对路径）
+    systemPromptMaxChars: 100000  # 系统提示词总字符上限
+    inboundQueue:
+      groupMode: supersede        # 默认；fifo 表示同一会话的消息按到达顺序排队
 ```
 
-除 `contextPaths` 外，默认还会自动加载全局上下文文件 `~/.config/zhin/AGENTS.md` 与 `~/.config/zhin/ZHIN.md`（不存在则跳过），注入为 `# User Context` 段，置于项目 bootstrap 上下文之前；单文件上限 8KB、总量上限 16KB。
+**命令白名单**：`execPreset` 逐级放宽——`readonly`（ls、cat、grep、find 等）→ `network`（再加 curl、wget、ping 等）→ `development`（再加 npm、node、git、python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 这类操作直接阻断。
 
-`execPreset` 预设白名单逐档放宽：`readonly`（ls/cat/grep/find 等）→ `network`（加 curl/wget/ping 等）→ `development`（加 npm/node/git/python 等）。无论哪种模式，`sudo`、`eval`、`dd`、`export` 等危险命令一律拒绝，`rm -rf node_modules` 类操作硬阻断。
+**审批方式**：
 
-完整的检查链是：危险黑名单 → 环境变量前缀剥离（`FOO=bar cmd` 按 `cmd` 匹配）→ wrapper 剥离（`timeout 10 cmd`）→ 复合命令拆分（`&&`/`|` 逐段检查）→ 非 full 模式拒绝换行 / `$(...)` / 反引号 → 只读命令自动放行。`execApprovalMode: ask` 时，当前 Turn 通过 `ApprovalPort` 请求 master 审批；`auto` 交给无工具的专用审核 Agent，审核 Agent 无法判断时再通过同一端口询问 master，模型错误、超时或无效输出直接拒绝；`bypass` 跳过审批，但不能绕过危险黑名单、Tool 权限、文件/网络边界或沙箱。群聊和频道提供拒绝、仅本次、当前会话与始终允许四种决定：当前会话对所有发送者生效，始终允许只对当前发送者生效；私聊只有拒绝、仅本次与始终允许三种决定。所有持续决定都只绑定当前会话，群聊中的不同发送者互不继承个人决定。`/approve always bash` 与 `/approve rule <正则>` 只管理本 Endpoint 的持久放行。旧版 V1 审批文件不会在线迁移，升级前必须显式重建规则。
+| `execApprovalMode` | 行为 |
+| --- | --- |
+| `ask`（默认） | 向 master 请求审批 |
+| `auto` | 交给一个没有工具的审核 Agent 判断；它无法判断时再询问 master；模型出错、超时或输出无效时直接拒绝 |
+| `bypass` | 跳过审批，但仍然不能绕过危险命令黑名单、工具权限、文件 / 网络边界和沙箱 |
+
+审批时，群聊和频道里可以选择"拒绝 / 仅本次 / 当前会话 / 始终允许"，私聊里是"拒绝 / 仅本次 / 始终允许"。"当前会话"对会话中所有人生效；"始终允许"只对当前发送者生效；所有持续决定都只绑定当前会话。`/approve always bash` 与 `/approve rule <正则>` 管理本账号的持久放行规则。
+
+::: details 更多细节
+- **全局上下文文件**：除 `contextPaths` 外，还会自动加载 `~/.config/zhin/AGENTS.md` 与 `~/.config/zhin/ZHIN.md`（不存在则跳过），作为 `# User Context` 段放在项目上下文之前；单个文件最多 8KB，总计最多 16KB。
+- **提示词预算**：超过 `systemPromptMaxChars` 时，先移除 `opportunistic` 的内容；`required` 的内容放不下时，本轮明确失败。
+- **命令检查链**：危险黑名单 → 去掉环境变量前缀（`FOO=bar cmd` 按 `cmd` 匹配）→ 去掉 wrapper（`timeout 10 cmd`）→ 拆分复合命令（`&&`、`|` 逐段检查）→ 非 `full` 模式下拒绝换行、`$(...)` 和反引号 → 只读命令自动放行。审批通过当前回合的 `ApprovalPort` 发起。
+- **旧版审批文件**：V1 审批文件不会在线迁移，升级前需要显式重建规则。
+- **消息排队**：`inboundQueue.groupMode` 也是默认的回合意图策略。`supersede` 表示新消息打断正在处理的回合；`fifo` 表示按到达顺序等待。`steer`、`follow_up`、`observe` 由适配器、命令或其他策略显式指定；跨参与者的 `steer` / `follow_up` 授权只能由 Host 的可信 `resolveTurnIntent` 策略产生，消息 metadata 不能自行声明。工具始终受当前回合的权限约束，执行日志会记录发起控制的用户与回合 ID。
+:::
+
+## 它是怎么工作的
+
+```mermaid
+flowchart LR
+    M[收到消息] --> C{匹配到命令?}
+    C -- 是 --> R1[执行命令]
+    C -- 否 --> T{符合 ai.trigger?}
+    T -- 否 --> X[不回复]
+    T -- 是 --> G{ai.access 允许?}
+    G -- 否 --> X
+    G -- 是 --> A[Agent 回合]
+    P[ai.providers] --> A
+    S[工具 / MCP] --> A
+    A --> R2[回复]
+```
+
+启动时，Zhin 会自动清理 `ai:` 配置：凭据展开后为空的 provider 会被剔除（只记录 debug 日志），绑定到它的 Agent 一并跳过；如果最终没有可用的 `zhin` Agent，AI 不会启用，但**不影响** Bot 的其他功能正常启动。
 
 ## 下一步
 
-- [结构化决策与 TypeSafe Jev](./structured-decisions.md)：Agent／Skill／Tool 推荐、检索排序与自动审核
-- [Agent 深入](./agent.md)：ZhinAgent 回合、deferred tools、子代理、编排、会话与 compaction
-- [语音能力](./speech.md)：STT / TTS 与 `voice_stt` / `voice_tts` 工具
-- [Console](../console/index.md)：在 Web 控制台观察 agent 会话与编排运行
+- [Agent 工具与技能](../authoring/agent-tools.md)：让 AI 调用你的函数。
+- [Agent 深入](./agent.md)：回合、按需加载工具、子任务、会话与上下文压缩。
+- [结构化决策](./structured-decisions.md)：Agent / Skill / Tool 推荐、检索排序与自动审核。
+- [语音](./speech.md)：语音识别与语音回复。
+- [Console](../console/index.md)：在浏览器里观察 AI 会话与运行情况。

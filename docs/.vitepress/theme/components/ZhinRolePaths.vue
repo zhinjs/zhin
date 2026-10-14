@@ -12,13 +12,13 @@ withDefaults(defineProps<{
   intro?: string
   items?: RolePath[]
 }>(), {
-  heading: '按你的角色开始',
-  intro: '不需要先读完整套架构。选择眼下要交付的结果。',
+  heading: '你想做什么？',
+  intro: '不需要先读完整套架构。挑一个眼下的目标，每条路径都能在一次会话内走完。',
   items: () => [
-    { eyebrow: 'BUILD', title: '第一次做 Bot', description: '从 Sandbox 到真实平台，先跑通一条可重复消息链。', href: '/getting-started/', action: '开始首跑' },
-    { eyebrow: 'AUTHOR', title: '交付一个插件', description: '把能力、配置、生命周期、测试和发布做成完整闭环。', href: '/authoring/plugin-delivery', action: '查看交付路径' },
-    { eyebrow: 'OPERATE', title: '部署与运营', description: '配置 TLS、进程托管、监控、备份、升级和回滚。', href: '/operations/production', action: '进入生产指南' },
-    { eyebrow: 'AGENT', title: '构建 Agent 团队', description: '治理 Prompt、Tool、Workroom 与仓库协作边界。', href: '/solutions/governed-agent', action: '选择 Agent 方案' },
+    { eyebrow: 'LEARN', title: '先弄懂它是什么', description: '一页看懂 Zhin 能做什么、一个 Bot 由哪几部分组成。', href: '/getting-started/introduction', action: '5 分钟了解' },
+    { eyebrow: 'RUN', title: '跑起第一个 Bot', description: '不需要平台账号和模型 Key，在浏览器 Sandbox 里收到第一条回复。', href: '/getting-started/', action: '开始首跑' },
+    { eyebrow: 'BUILD', title: '写自己的功能', description: '命令、关键词回复、定时推送、AI 工具——把文件放进约定目录就生效。', href: '/getting-started/first-plugin', action: '写第一个插件' },
+    { eyebrow: 'SHIP', title: '接平台并上线', description: '选适配器接入 QQ / 微信 / Discord 等，再完成部署、监控与升级。', href: '/adapters/', action: '选择平台' },
   ],
 })
 </script>

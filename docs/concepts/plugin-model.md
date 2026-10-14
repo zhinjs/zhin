@@ -1,6 +1,22 @@
+---
+title: "插件模型"
+description: "插件是什么、插件树如何组成、Plugin 与 Feature 的区别、instanceKey 与同一插件挂载多次、插件即应用"
+---
+
 # 插件模型
 
 两个 QQ 账号接进同一个 Bot，或者把一个游戏插件拆出去单独发布——在 zhin.js 里这两件事用同一个机制解决：插件树。插件就是一个普通的 npm 包，区别只在 `package.json` 里多了一个 `zhin` 字段；Root Plugin（你的项目）在 `zhin.plugins` 里声明子插件，子插件还可以再声明自己的子插件。像乐高积木：每块独立成型，按 instanceKey 卡进指定位置。
+
+## 核心规则
+
+| 规则 | 例子 |
+| --- | --- |
+| 插件 = npm 包 + `package.json` 里的 `zhin` 字段 + `plugin.ts` 入口 | 你的项目本身就是 Root 插件 |
+| 子插件在 `zhin.plugins` 里挂载，每个挂载点有一个 `instanceKey` | `{ "package": "@zhin.js/adapter-qq", "instanceKey": "qq" }` |
+| `instanceKey` 决定子插件读取哪段配置 | `zhin.config.yml` 的 `plugins.qq:` |
+| 同一个包可以挂载多次，各自独立配置 | 两个 `instanceKey` 挂两份同一个游戏插件 |
+| 任何插件放一个 `zhin.config.yml` 就能作为独立应用启动 | 单独开发、调试一个插件 |
+| **Feature** 是负责"扫描约定目录"的特殊包，普通插件不需要写 | `@zhin.js/command` 扫描 `commands/` |
 
 ## `package.json` 的 `zhin` 字段
 

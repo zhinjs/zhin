@@ -1,6 +1,19 @@
-# Config as Data
+---
+title: "Config as Data"
+description: "The structure of zhin.config.yml, how config is validated and handed to each plugin, and why a change either applies fully or rolls back fully"
+---
 
-Change a port on the Console -- either the entire change takes effect, or it rolls back completely. The `zhin.config.yml` on disk will never be left in a half-written state. This is possible because zhin.js configuration is not code but a data document strictly constrained by schemas: each package declares its configuration contract via `schema.json`, the runtime validates the entire document against the effective schema composed from the plugin tree using Ajv strict mode, and then projects the configuration to each plugin by owner. Configuration changes go through transactions with no intermediate state.
+# Config as data
+
+Change a port in Console and either the whole change applies or it rolls back completely — `zhin.config.yml` on disk is never left half-written.
+
+## Remember these points
+
+- **Config is data, not code.** Each plugin declares its options, defaults and constraints with `schema.json` (or `config` in `definePlugin`).
+- **Validated as a whole at startup.** Zhin combines every plugin's declaration and validates the full document strictly (Ajv strict); errors prevent startup or the change.
+- **Each plugin sees only its own section.** Your bot reads `plugin:`, child plugins read `plugins.<instanceKey>:`, and they can't see each other's.
+- **Changes are transactions.** When editing through Console or `zhin config`, a new config that fails validation or activation rolls back automatically and the old one stays in effect.
+- **Secrets go in `.env`.** Reference them in config as `${VAR}`.
 
 ## Document Structure
 

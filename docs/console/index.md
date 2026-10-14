@@ -1,17 +1,28 @@
 ---
-title: Console
+title: "Console"
+description: "在浏览器里管理 Bot：连接方式、能看到什么、出问题时先看哪里"
 ---
 
 # Console
 
-Console 是 Zhin 的运行事实面：它回答当前 generation 发布了什么、消息进入了哪个 Endpoint、Agent 做了什么，以及持久状态是否恢复。
+Console 是 Bot 的浏览器管理后台。你可以在里面**发测试消息、看日志、改配置、管理插件和账号、观察 AI 在做什么**。
 
-`zhin runtime start` 会装配 HTTP Host 与 Console API。你可以用 <https://console.zhin.dev> 连接 Host，也可以打开 Host 提供的本地 `/console` 与 Sandbox 页面。
+它不需要你部署：打开 <https://console.zhin.dev>，填入 Bot 启动时打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）和 `.env` 里的 `HTTP_TOKEN` 即可。也可以直接打开 Bot 自带的本地 `/console` 与 Sandbox 页面。
 
-HTTP Host、Console RPC 与 SSE 属于进程控制面，会在首个 Runtime generation 激活前开始监听。
-因此 ICQQ 等 Adapter 即使正等待扫码、滑块或设备确认，浏览器仍可通过 `login.list`、
-`login.submit` 与 `endpoint.login.pending` 完成登录。此时依赖已发布 generation 的页面和运行时
-投影可能暂时为空或返回未就绪；Adapter 全部完成启动后，Runtime 才发布首个 generation。
+## 连上之后能做什么
+
+| 页面 | 用来做什么 |
+| --- | --- |
+| 渠道与会话 / Sandbox | 给 Bot 发测试消息，查看各平台账号的收发情况 |
+| 运行时能力 | 确认命令、中间件、组件、工具是否已加载，以及来自哪个插件 |
+| 日志 | 按时间和来源查看运行日志 |
+| 配置 | 用表单或源码编辑 `zhin.config.yml`，保存失败会自动回滚 |
+| Agent 工作台 | 查看 AI 的对话、调用了哪些工具、审批与取消记录 |
+| Workrooms | 查看持久任务空间与任务看板 |
+
+::: details 为什么 Bot 还在登录时 Console 就能连上？
+HTTP 服务、Console RPC 与 SSE 属于进程控制面，会在插件全部启动（首个 generation 发布）之前就开始监听。所以 ICQQ 等适配器即使还在等待扫码、滑块或设备确认，浏览器也能通过 `login.list`、`login.submit` 与 `endpoint.login.pending` 完成登录。此时依赖已启动插件的页面可能暂时为空或显示未就绪；适配器全部启动完成后才会正常显示。
+:::
 
 ```mermaid
 flowchart LR

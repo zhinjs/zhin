@@ -1,52 +1,64 @@
 ---
-title: 插件完整交付
+title: "插件完整交付"
+description: "把一个能跑的插件变成可配置、可热重载、有测试、可发布到 npm 的插件：设计、实现、本地验收、测试与发布清单"
 ---
 
-# 从业务能力到可发布插件
+# 插件完整交付
 
-这条路径适合已经完成第一个命令、准备交付可配置、可热更、可测试插件的作者。目标不是“代码能跑”，而是安装、运行、治理、观测和发布形成闭环。
+这一页适合已经写好第一个命令、准备把插件**交给别人使用**的作者。目标不只是"代码能跑"，而是别人能安装、能配置、出错时行为可预期、能在 Console 里观察到，并且能发布到 npm。
 
-## 1. 先写交付契约
+按下面六步走，每一步结尾都有可以自查的问题。
 
-在动手前列出输入、输出、副作用和验收方式。每项能力只选择一个创作入口：单能力放约定目录，共享资源与生命周期放 `plugin.ts`，生态级新能力才创建 Feature。
+## 1. 先写清楚插件要做什么
 
-| 需求 | 入口 |
+动手前列出：用户输入什么、插件输出什么、有哪些副作用（写数据库、发消息、调外部 API），以及怎么验收。然后为每项能力选择**一种**写法：
+
+| 需求 | 放在哪里 |
 | --- | --- |
-| 文本指令 | `commands/*/index.ts` |
-| 入站编排 | `middlewares/*/index.ts` / `handlers/*/index.ts` |
-| 富消息输出 | `components/*/index.tsx` |
-| Agent 行为 | `tools`、`prompt-sections`、`skills` |
-| 数据库、定时任务、主动推送 | `plugin.ts` + Host token |
+| 用户输入的命令 | `commands/*/index.ts` |
+| 处理每条消息或平台事件 | `middlewares/*/index.ts` / `handlers/*/index.ts` |
+| 卡片、图文等富消息 | `components/*/index.tsx` |
+| AI 可调用的动作和背景知识 | `tools/`、`prompt-sections/`、`skills/` |
+| 数据库、定时任务、主动推送 | `plugin.ts` 的 `setup`，通过框架资源（Host token）取用 |
 
-## 2. 建立包与运行拓扑
+单个能力放约定目录；需要共享资源或生命周期的放 `plugin.ts`；只有要给整个生态定义一种新能力时才需要写 Feature。
 
-`package.json#zhin` 声明插件入口、Feature 依赖和子插件实例。`zhin.config.yml` 只提供值；它不会安装包，也不会挂载 Feature。
+## 2. 声明包结构
 
-发布包入口必须是 JavaScript，源码型 Root Plugin 可使用 `./plugin.ts`。可选能力放 optional peer，并在 `setup` 中用 `resources.has(token)` 明确降级。
+- `package.json#zhin` 声明插件入口、用到的 Feature 和子插件。
+- `zhin.config.yml` 只提供配置**值**，它不会安装包，也不会启用 Feature。
+- 发布到 npm 的插件入口必须是 JavaScript（`./plugin.js`）；本地项目可以直接用 `./plugin.ts`。见 [definePlugin · 开发入口与 npm 发布入口](./define-plugin.md#开发入口与-npm-发布入口)。
+- 可选的能力（数据库、HTML 渲染等）声明为 optional peer，并在 `setup` 里先用 `context.resources.has(token)` 判断，缺失时明确降级。
 
 ## 3. 设计配置
 
-trusted 插件使用 `definePlugin({ config: Schema.object(...) })` 同时声明默认值、类型、约束和 Console 表单元信息；`Schema.Output` 推导配置类型。也可使用根目录 `schema.json`，但不能同时定义两个来源；isolated 插件只使用 `schema.json`。详见[统一配置声明](./define-plugin#统一配置声明)。Root 自身读取 `plugin:`，子插件实例读取 `plugins.<instanceKey>`；密钥使用 `${VAR}`，不要写入 Schema 默认值或示例仓库。
+用 `definePlugin({ config: Schema.object(...) })` 一次性声明默认值、类型、约束和 Console 表单信息，`Schema.Output` 会推导出配置类型；也可以用根目录的 `schema.json`，但两者只能选一个（`isolated` 插件只能用 `schema.json`）。见 [definePlugin · 读取配置](./define-plugin.md#读取配置)。
 
-配置变化必须能回答三个问题：是否需要新 generation、失败时旧 generation 是否继续服务、Console 如何证明新值已发布。
+- 你的 Bot 自身读 `plugin:` 段，子插件读 `plugins.<instanceKey>` 段。
+- 密钥用 `${VAR}` 引用环境变量，不要写进 Schema 默认值或示例仓库。
 
-## 4. 实现能力与生命周期
+自查：修改某个配置后，是否需要重载插件？新配置非法时，旧配置是否继续生效？怎样在 Console 里确认新值已经生效？
 
-命令负责显式调用，中间件负责入站顺序，组件负责可移植富消息。Tool 声明模型可调用的动作，Prompt Section 只补充上下文，不能授予工具或数据权限。
+## 4. 实现能力并管理生命周期
 
-连接、定时器和 Host 注册返回的清理函数进入 `lifecycle`。必须在发布前证明就绪的资源使用 `handoff`；候选代失败时，不得污染仍在服务的旧代。
+- 命令响应用户的明确调用；中间件按顺序处理入站消息；组件负责在不同平台都能显示的富消息。
+- Tool 声明 AI 可以执行的动作；Prompt Section 只补充上下文，**不能**授予工具或数据权限。
+- 打开的连接、定时器，以及框架资源注册返回的清理函数，都交给 `lifecycle`（`context.lifecycle.add(...)`），热重载时自动释放。
+- 必须连接成功后才能允许切换到新版本的资源，用 `handoff` 登记。新版本准备失败时，不能影响仍在服务的旧版本。
+
+详见 [definePlugin · 在热重载时释放资源](./define-plugin.md#在热重载时释放资源)。
 
 ## 5. 本地验收
 
-1. 在 Sandbox 验证命令、组件和 Agent 最小路径。
-2. 在 Console 运行时能力核对 owner、来源、顺序和当前 generation。
-3. 修改一个能力文件，确认文件级 HMR；制造一次配置错误，确认旧代继续服务。
-4. 对有副作用的 Tool 验证审批、取消和失败终态。
-5. 重启 Runtime，确认数据库、会话与调度事实按契约恢复。
+1. 在 Sandbox 里把命令、组件和 AI 的最简单用法各走一遍。
+2. 在 Console 的"运行时能力"里核对每项能力的所属插件、来源、顺序和当前版本。
+3. 修改一个能力文件，确认只有它被重载；故意写错一次配置，确认旧版本继续服务。
+4. 对有副作用的 Tool，验证审批、取消和失败时的结果。
+5. 重启 Bot，确认数据库、会话和定时任务按预期恢复。
 
 ## 6. 测试与发布
 
-插件至少覆盖纯函数单测、能力发现测试、一次 Runtime 集成测试和一个失败路径。平台插件还应使用 adapter harness 验证 Endpoint 生命周期与消息归一化。
+插件至少需要：纯函数的单元测试、一个"能力能被发现"的测试、一次完整运行的集成测试，以及一个失败路径的测试。平台适配器还应使用 adapter harness 验证连接生命周期和消息转换。
 
 ```bash
 pnpm build
@@ -55,13 +67,17 @@ pnpm check:plugin-runtime-api
 pnpm check:plugin-capability-publish
 ```
 
-发布前检查 `files`、ESM 入口、peer dependency、生成的约定目录 JavaScript 与 changeset。安装打包产物后再跑一次 Sandbox 黄金路径，不能只测试 workspace 源码。
+发布前检查 `files`、ESM 入口、peer dependency、约定目录生成的 JavaScript 以及 changeset。**用打包后的产物**安装到一个新项目里，再跑一次 Sandbox 的完整流程——不要只测试 workspace 里的源码。
 
-## 完成标准
+## 发布前的完成标准
 
-- 新用户能从 README 完成安装、最小配置与首条消息。
-- 配置错误、依赖缺失和热更失败都有明确行为。
-- Console 能观察运行事实，但不泄露 Prompt 或密钥正文。
-- 包内文档、公共 API、changeset 与实际 tarball 一致。
+- 新用户照着 README 能完成安装、最小配置并收到第一条回复。
+- 配置错误、依赖缺失和热重载失败都有明确的行为和提示。
+- Console 能观察到运行状态，但不会泄露 Prompt 正文或密钥。
+- 包内文档、公开 API、changeset 与实际发布的 tarball 一致。
 
-继续阅读 [`definePlugin` 全景](./define-plugin)、[约定目录](./conventions)与[Console 页面](./console-pages)。
+## 下一步
+
+- [definePlugin](./define-plugin.md)：入口能做的所有事。
+- [约定目录](./conventions.md)：每种能力放在哪里。
+- [Console 页面](./console-pages.md)：给插件加一个管理页面。

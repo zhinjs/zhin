@@ -1,10 +1,22 @@
 ---
-title: Version Compatibility and Migration
+title: "Version Compatibility and Migration"
+description: "Upgrade Zhin safely: compatibility boundaries, preparation, execution steps, when to roll back, and plugin authors' versioning duties"
 ---
 
 # Upgrade Zhin, not just a version string
 
-An upgrade changes the package graph, Feature APIs, configuration, durable data, and runtime generation. Generate a plan first, back up authority, then accept through runtime facts.
+An upgrade changes dependencies, Feature APIs, configuration, durable data and the running plugin versions. The safe flow is: **rehearse first, back up, then verify against what actually runs**.
+
+A routine patch upgrade usually needs only:
+
+```bash
+npx zhin migrate --dry-run   # see what would change
+npx zhin migrate             # upgrade
+npx zhin doctor && pnpm test # check
+npx zhin runtime start --once --mode test  # assembly smoke test
+```
+
+For production, follow the full flow below and take a backup first.
 
 ## Compatibility boundaries
 
