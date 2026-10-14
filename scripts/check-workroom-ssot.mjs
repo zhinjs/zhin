@@ -35,6 +35,7 @@ const legacyDataSurfaceNames = [
 let failed = false;
 const authoritySourcePaths = [
   'packages/im/agent/src',
+  'packages/im/workroom/src',
   'basic/cli/src/plugin-runtime',
 ];
 
@@ -75,7 +76,7 @@ for (const pattern of legacyDataSurfaceNames) {
 }
 
 const legacyOfflineSource = readFileSync(
-  path.join(repoRoot, 'packages/im/agent/src/workroom/legacy-run-offline-migration.ts'),
+  path.join(repoRoot, 'packages/im/workroom/src/workroom/legacy-run-offline-migration.ts'),
   'utf8',
 );
 for (const pattern of [
@@ -91,7 +92,7 @@ for (const pattern of [
 }
 
 const legacyPayloadScannerSource = readFileSync(
-  path.join(repoRoot, 'packages/im/agent/src/workroom/legacy-embedded-payload-migration.ts'),
+  path.join(repoRoot, 'packages/im/workroom/src/workroom/legacy-embedded-payload-migration.ts'),
   'utf8',
 );
 for (const pattern of [
@@ -114,17 +115,17 @@ for (const pattern of [
 if (failed) process.exit(1);
 execFileSync('pnpm', [
   'exec', 'vitest', 'run',
-  'packages/im/agent/tests/workroom/workroom-kernel.test.ts',
-  'packages/im/agent/tests/workroom/plan-revision-kernel.test.ts',
-  'packages/im/agent/tests/workroom/workroom-preemption-kernel.test.ts',
+  'packages/im/workroom/tests/workroom/workroom-kernel.test.ts',
+  'packages/im/workroom/tests/workroom/plan-revision-kernel.test.ts',
+  'packages/im/workroom/tests/workroom/workroom-preemption-kernel.test.ts',
   'packages/im/agent/tests/plugin-runtime/workroom-priority-preemption-production.test.ts',
-  'packages/im/agent/tests/workroom/role-capability-snapshot.test.ts',
-  'packages/im/agent/tests/workroom/assignment-observation-ingress.test.ts',
-  'packages/im/agent/tests/workroom/remote-callback-assignment-ingress.test.ts',
-  'packages/im/agent/tests/workroom/accepted-source-memory-application.test.ts',
-  'packages/im/agent/tests/workroom/project-knowledge-registry.test.ts',
-  'packages/im/agent/tests/workroom/database-project-knowledge-journal.test.ts',
-  'packages/im/agent/tests/workroom/profile-assignment-knowledge.e2e.test.ts',
+  'packages/im/workroom/tests/workroom/role-capability-snapshot.test.ts',
+  'packages/im/workroom/tests/workroom/assignment-observation-ingress.test.ts',
+  'packages/im/workroom/tests/workroom/remote-callback-assignment-ingress.test.ts',
+  'packages/im/workroom/tests/workroom/accepted-source-memory-application.test.ts',
+  'packages/im/workroom/tests/workroom/project-knowledge-registry.test.ts',
+  'packages/im/workroom/tests/workroom/database-project-knowledge-journal.test.ts',
+  'packages/im/workroom/tests/workroom/profile-assignment-knowledge.e2e.test.ts',
   'packages/im/agent/tests/plugin-runtime/workroom-overlay-pack-promotion.test.ts',
   'packages/im/agent/tests/plugin-runtime/database-overlay-pack-promotion-repository.test.ts',
   'packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts',
@@ -132,9 +133,9 @@ execFileSync('pnpm', [
   'packages/im/agent/tests/plugin-runtime/workroom-acceptance-provider-composition.test.ts',
   'packages/im/agent/tests/plugin-runtime/workroom-acceptance-production-composition.test.ts',
   'packages/im/agent/tests/plugin-runtime/workroom-host-local-agent-execution.e2e.test.ts',
-  'packages/im/agent/tests/workroom/legacy-run-offline-migration.test.ts',
+  'packages/im/workroom/tests/workroom/legacy-run-offline-migration.test.ts',
   'basic/cli/tests/agent-legacy-runs.test.ts',
-  'packages/im/agent/tests/workroom/legacy-embedded-payload-migration.test.ts',
+  'packages/im/workroom/tests/workroom/legacy-embedded-payload-migration.test.ts',
   'basic/cli/tests/agent-legacy-payloads.test.ts',
 ], { cwd: repoRoot, stdio: 'inherit' });
 console.log('[check:workroom-ssot] OK — Journal + CAS Kernel is the sole Workroom authority');

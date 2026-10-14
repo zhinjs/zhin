@@ -94,6 +94,7 @@ flowchart BT
 | Feature 层 | `@zhin.js/adapter` `command` `component` `middleware` … | 一类能力的契约（如 `defineAdapter`）+ 投影索引（如 `AdapterIndex`） |
 | AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆，无 IM 概念 |
 | IM 层 | `@zhin.js/core` | Plugin、消息链路、命令分发（见 [消息流](./message-flow.md)） |
+| Workroom 领域 | `@zhin.js/workroom` | Workroom、Portfolio、Data Governance 领域代码；仅依赖 `im-contract`。A4b 前是 `agent` 的临时下层依赖 |
 | Agent | `@zhin.js/agent` | 多模型编排、工具安全策略、MCP client |
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
 | 运行时 | `@zhin.js/runtime` | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR |

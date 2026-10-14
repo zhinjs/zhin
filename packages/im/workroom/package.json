@@ -1,0 +1,60 @@
+{
+  "name": "@zhin.js/workroom",
+  "version": "0.0.0",
+  "description": "Workroom, Portfolio and Data Governance domain for Zhin.js",
+  "type": "module",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "development": "./src/index.ts",
+      "import": "./lib/index.js"
+    },
+    "./workroom/*.js": {
+      "types": "./lib/workroom/*.d.ts",
+      "development": "./src/workroom/*.ts",
+      "import": "./lib/workroom/*.js"
+    },
+    "./portfolio/*.js": {
+      "types": "./lib/portfolio/*.d.ts",
+      "development": "./src/portfolio/*.ts",
+      "import": "./lib/portfolio/*.js"
+    },
+    "./data-governance/*.js": {
+      "types": "./lib/data-governance/*.d.ts",
+      "development": "./src/data-governance/*.ts",
+      "import": "./lib/data-governance/*.js"
+    }
+  },
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf lib",
+    "test": "vitest run --root ../../.. packages/im/workroom/tests"
+  },
+  "dependencies": {
+    "@zhin.js/im-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "rimraf": "^6.1.3",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhinjs/zhin.git",
+    "directory": "packages/im/workroom"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
+  },
+  "license": "MIT",
+  "private": false
+}

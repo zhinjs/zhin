@@ -31,7 +31,7 @@ import {
 } from '../../src/portfolio/portfolio-journal.js';
 import { createAssignmentExecutionEnvelope } from '../../src/workroom/assignment-executor.js';
 import { digestCanonicalWorkroomValue as digest } from '../../src/workroom/canonical-value.js';
-import { capacityGrant, grantFact, route, sha } from '../portfolio/capacity-control-outbox.test.js';
+import { capacityGrant, grantFact, route, sha } from '../portfolio/capacity-control-outbox-fixture.js';
 
 describe('Workroom Portfolio Grant Assignment saga', () => {
   it('uses the Kernel issuer preview and consumes the exact Grant before Assignment claim', async () => {

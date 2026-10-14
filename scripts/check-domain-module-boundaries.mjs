@@ -8,10 +8,19 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const boundaries = [
   {
     name: 'Workroom Journal',
-    directory: 'packages/im/agent/src/workroom/journal',
+    directory: 'packages/im/workroom/src/workroom/journal',
   },
   {
     name: 'Workroom Projection Outbox',
+    directory: 'packages/im/workroom/src/workroom/projection-outbox',
+  },
+  // Temporary A4a compat stubs; removed in A4b.
+  {
+    name: 'Workroom Journal (agent compat)',
+    directory: 'packages/im/agent/src/workroom/journal',
+  },
+  {
+    name: 'Workroom Projection Outbox (agent compat)',
     directory: 'packages/im/agent/src/workroom/projection-outbox',
   },
   {

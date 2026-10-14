@@ -58,6 +58,7 @@ plugin-runtime + feature-kit ─────────────→ runtime 
 | 基础服务 | `basic/logger` `schema` `schedule` `database`、`@zhin.js/kernel` | 日志、校验、存储、调度与通用机制 |
 | AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆；无 IM 概念 |
 | IM 组装 | `@zhin.js/core` | 组合 Adapter、Command、Component、Middleware 与消息链路 |
+| Workroom 领域 | `@zhin.js/workroom` | Workroom / Portfolio / Data Governance 领域代码；仅依赖 `im-contract`（A4b 前为 `agent` 的临时下层依赖） |
 | Agent | `@zhin.js/agent` | ZhinAgent、多模型编排、安全沙箱、MCP |
 | 门面与运行时 | `zhin.js`、`@zhin.js/runtime`、`@zhin.js/cli` | 公共入口、generation 编排和进程装配 |
 

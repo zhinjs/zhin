@@ -125,6 +125,7 @@
     "@zhin.js/prompt-section": "workspace:*",
     "@zhin.js/skill": "workspace:*",
     "@zhin.js/tool": "workspace:*",
+    "@zhin.js/workroom": "workspace:*",
     "he": "^1.2.0",
     "js-yaml": "^5.2.2"
   },

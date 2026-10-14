@@ -39,7 +39,9 @@ sidebar: false
   - 2026-10-14 · 「refactor: 断开 data-governance 对 workroom 的反向依赖」· `canonical-value.ts`、`durable-file-store.ts` 原样移入 `data-governance/`，旧路径改为 `export *` 兼容层（有身份测试）；架构检查新增方向约束（抽出 `find-forbidden-imports.mjs` 并补自测）；导出名不变
 - [x] A3-1 处理第 7 轮审查 Nit：`check-architecture-layers.mjs` 方向约束的报错信息按命中的目录（workroom / workroom-runtime / portfolio）生成；方向约束自测补 `import('../workroom/x.js').X` 内联类型和 `export { x } from` 两个用例；`data-governance/canonical-value.ts` 注释改为“Workroom 与 Data Governance 共享，名称中的 Workroom 前缀为兼容保留”
   - 2026-10-14 · 「chore: 处理 A3 审查 Nit」· 方向约束报错按命中目录生成；自测补内联 `import()` 类型、`export { x } from`、同目录负例和 root 断言；`canonical-value.ts` 注释更新
-- [ ] A4a 新建包 `packages/im/workroom`（`@zhin.js/workroom`），参照现有包的 package.json / tsconfig / exports（development 条件）。先把 `workroom/`、`portfolio/`、`data-governance/` 搬过去；agent 侧临时 re-export 保持兼容
+- [x] A4a 新建包 `packages/im/workroom`（`@zhin.js/workroom`），参照现有包的 package.json / tsconfig / exports（development 条件）。先把 `workroom/`、`portfolio/`、`data-governance/` 搬过去；agent 侧临时 re-export 保持兼容
+  - 2026-10-14 · 「refactor: 新建 @zhin.js/workroom 包并迁入 workroom/portfolio/data-governance」· 112 个源文件纯移动，新包只依赖 `@zhin.js/im-contract`；agent 侧 `export *` 兼容层，导出名不变；架构检查、typecheck 别名、changeset 同步更新
+- [ ] A4a-1 处理第 9 轮审查意见：`check-architecture-layers.mjs` 的 A2c 引用边界检查（`resolveDomain`）也识别 `@zhin.js/workroom` 及其子路径的裸说明符，barrel 与非 barrel 分支一致，补正反用例；顺带：`tsconfig.typecheck.json` 的 `include` 加入 `packages/im/workroom/src/**/*`；agent 侧兼容层补一个轻量测试（只含 `export * from '@zhin.js/workroom/...'`）；changeset 或 README 注明 `./workroom/*.js` 等深路径导出为临时，A4b/A5 后收窄
 - [ ] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
 - [ ] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照
 - [ ] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
@@ -114,6 +116,12 @@ sidebar: false
 
 - 无 Blocking，无遗留问题
 
+### 第 9 轮（2026-10-14，审查 A4a）
+
+- 无 Blocking
+- Should fix：搬迁后 agent 内其他文件可以通过 `@zhin.js/workroom` 裸说明符绕过 A2c 引用边界检查（目前没有文件这样做）→ A4a-1
+- Nit：agent 侧 112 个兼容层没有身份 / 内容测试；`tsconfig.typecheck.json` 未显式包含新包 src；新包深路径导出一经发布就是公开面；`capacity-control-outbox-fixture.ts` 在两个包各有一份（A4b 删除 agent 侧即可，不单独处理）→ 前三项并入 A4a-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -126,3 +134,4 @@ sidebar: false
 - 2026-10-14 08:46 定时运行：完成 A2c-2（4 个 agent，约 1.9 分钟，脚本自测 27 个 / deferred-capability-plan 22 个测试、type-check、check:architecture、API 快照检查通过，审查无问题）。备注：Workflow 工具拒绝 `scriptPath` 指向 scheduled-tasks 目录（会话不可读），改为内联传入同一脚本，内容未改
 - 2026-10-14 定时运行（同一次）：完成 A3（4 个 agent，约 2.7 分钟，agent build / type-check / 36 个脚本自测 / 145 个相关测试 / check:architecture / API 快照检查通过，审查无 Blocking，3 个 Nit 新增为 A3-1）
 - 2026-10-14 09:39 定时运行：rebase 到最新 origin/main（11 个提交无冲突），build 通过；完成 A3-1（4 个 agent，约 1.9 分钟，42 个架构脚本自测 / agent build / type-check / check:architecture / API 快照 / eslint 通过，审查无问题）。备注：`scriptPath` 仍被拒绝，继续内联传入同一脚本
+- 2026-10-14 同一次定时运行：完成 A4a（4 个 agent，约 17 分钟，两包 build / type-check / 1193 + 428 个相关测试 / check:architecture、domain-module-boundaries、workroom-ssot、harness-paths / API 快照通过，审查无 Blocking，1 个 Should fix 新增为 A4a-1）。备注：eslint 对 3 个 .mjs 脚本是忽略状态，未实际 lint

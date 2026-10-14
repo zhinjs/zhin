@@ -110,6 +110,7 @@ for (const entry of fs.readdirSync(adaptersRoot, { withFileTypes: true })) {
 
 for (const root of [
   path.join(repoRoot, 'packages/im/agent/src'),
+  path.join(repoRoot, 'packages/im/workroom/src'),
   path.join(repoRoot, 'plugins/services'),
 ]) {
   for (const file of typescriptFiles(root)) {

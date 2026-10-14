@@ -66,7 +66,9 @@ const layers = {
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  // Workroom domain (A4a): may only depend on the zero-dependency IM contract; agent -> workroom, never the reverse.
+  'packages/im/workroom': { level: 4, allowedImports: ['packages/im/im-contract'] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool', 'packages/im/workroom' /* temporary until A4b/A5 */] },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
@@ -116,6 +118,7 @@ const packageNameToPath = {
   '@zhin.js/config-file': 'packages/im/config-file',
   '@zhin.js/interaction': 'packages/im/interaction',
   '@zhin.js/im-contract': 'packages/im/im-contract',
+  '@zhin.js/workroom': 'packages/im/workroom',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',
@@ -283,6 +286,24 @@ for (const contract of zeroRuntimeDependencyContracts) {
   }
 }
 
+// The workroom package may only depend on the IM contract. A manifest-level
+// dependency on agent (or anything else) would form an agent <-> workroom cycle.
+const workroomAllowedDependencies = new Set(['@zhin.js/im-contract']);
+{
+  const manifestPath = 'packages/im/workroom/package.json';
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
+  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const dependency of Object.keys(manifest[section] ?? {})) {
+      if (workroomAllowedDependencies.has(dependency)) continue;
+      violations.push({
+        file: manifestPath,
+        import: dependency,
+        reason: `@zhin.js/workroom may only depend on @zhin.js/im-contract (${section})`,
+      });
+    }
+  }
+}
+
 if (violations.length) {
   console.error('Harness architecture layer check: FAILED\n');
   console.error('The following imports violate the architecture layer rules:\n');
@@ -370,14 +391,16 @@ console.log('Harness assistant reverse-dependency check: OK.');
 // Runtime composition. Runtime adapters may depend on these domains only in
 // the opposite direction.
 const agentDomainRoots = [
-  'packages/im/agent/src/workroom',
-  'packages/im/agent/src/portfolio',
-  'packages/im/agent/src/data-governance',
+  'packages/im/workroom/src/workroom',
+  'packages/im/workroom/src/portfolio',
+  'packages/im/workroom/src/data-governance',
 ];
 const agentRuntimeRoots = [
   path.join(repoRoot, 'packages/im/agent/src/config'),
   path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
   path.join(repoRoot, 'packages/im/agent/src/workroom-runtime'),
+  // A4b moves workroom-runtime into the workroom package; keep it protected.
+  path.join(repoRoot, 'packages/im/workroom/src/workroom-runtime'),
 ];
 const agentDomainViolations = [];
 
@@ -413,9 +436,9 @@ if (agentDomainViolations.length) {
 console.log('Harness Agent domain boundary check: OK.');
 
 // Data Governance direction: workroom -> data-governance only, never the reverse.
-const dataGovernanceRoot = path.join(repoRoot, 'packages/im/agent/src/data-governance');
+const dataGovernanceRoot = path.join(repoRoot, 'packages/im/workroom/src/data-governance');
 const dataGovernanceForbiddenRoots = ['workroom', 'workroom-runtime', 'portfolio']
-  .map(name => path.join(repoRoot, 'packages/im/agent/src', name));
+  .map(name => path.join(repoRoot, 'packages/im/workroom/src', name));
 const dataGovernanceViolations = [];
 const dataGovernanceFiles = [];
 walkTs(dataGovernanceRoot, dataGovernanceFiles);

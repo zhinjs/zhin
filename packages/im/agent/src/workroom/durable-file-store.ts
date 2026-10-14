@@ -1,1 +1,2 @@
-export * from '../data-governance/durable-file-store.js';
+// Temporary A4a compat layer, removed in A4b.
+export * from '@zhin.js/workroom/workroom/durable-file-store.js';
