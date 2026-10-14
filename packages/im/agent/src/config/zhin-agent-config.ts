@@ -17,6 +17,11 @@ export interface InboundQueueConfig {
   groupMode?: InboundGroupQueueMode;
   ttlMs?: number;
   coalesceWindowMs?: number;
+  /**
+   * Plugin-runtime IM ingress (#725): turns allowed to wait behind the running
+   * turn of one session. Further messages get a short "busy" reply. Default 5.
+   */
+  maxQueuedTurns?: number;
 }
 
 /** ADR 0010 — session compaction config. */

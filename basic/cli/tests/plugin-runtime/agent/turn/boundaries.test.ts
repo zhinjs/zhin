@@ -10,6 +10,7 @@ import {
   createRuntimeTurnAccess,
   createRuntimeTurnRequest,
   deliveryOutcomeFromReceipt,
+  isPlainTextRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
   resolveRuntimeTurnIntent,
@@ -139,6 +140,27 @@ describe('runtime reply delivery outcome bridge', () => {
         id: 'message-1',
       },
     })).toEqual({ status: 'sent', messageId: 'message-1' });
+  });
+});
+
+describe('turn admission message classification (#725)', () => {
+  it('treats text-only messages as mergeable', () => {
+    expect(isPlainTextRuntimeMessage(makeMessage({
+      content: 'hello',
+      segments: [{ type: 'text', data: { text: 'hello' } }],
+    }))).toBe(true);
+  });
+
+  it('keeps quoted, forwarded and media messages out of merges', () => {
+    expect(isPlainTextRuntimeMessage(makeMessage({ content: 'see this', replyTo: { id: 'q1' } }))).toBe(false);
+    expect(isPlainTextRuntimeMessage(makeMessage({
+      content: '[forward]',
+      segments: [{ type: 'forward', data: { forward_id: 'f1' } }],
+    }))).toBe(false);
+    expect(isPlainTextRuntimeMessage(makeMessage({
+      content: '[image]',
+      segments: [{ type: 'image', data: { media: { kind: 'url', value: 'https://example.com/a.png', mime_type: 'image/png' } } }],
+    }))).toBe(false);
   });
 });
 
