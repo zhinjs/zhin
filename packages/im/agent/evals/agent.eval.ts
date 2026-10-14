@@ -10,7 +10,9 @@ const cases = loadEvalCases(import.meta.glob<{ default: EvalCase }>('./cases/*.c
 
 describe('agent evals (scripted model)', () => {
   for (const definition of cases) {
-    it(`${definition.id} — ${definition.description}`, async () => {
+    const test = definition.skip ? it.skip : it;
+    const title = definition.skip ? `${definition.id} — SKIPPED: ${definition.skip}` : `${definition.id} — ${definition.description}`;
+    test(title, async () => {
       const run = await runEvalCase(definition);
       const failures = evaluateExpectations(definition, run);
       if (failures.length > 0) throw new Error(formatEvalReport(definition, run, failures));

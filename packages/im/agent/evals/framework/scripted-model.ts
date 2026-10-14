@@ -19,12 +19,36 @@ import {
 export interface ScriptedToolCall {
   readonly name: string;
   readonly args?: Readonly<Record<string, unknown>>;
+  /**
+   * The harness is expected NOT to offer this tool on this request (policy,
+   * unknown name, deferred). The call is still sent so the harness's handling
+   * of it is exercised; the case fails if the tool *was* offered.
+   */
+  readonly notOffered?: boolean;
 }
 
-/** One model response: either a final text answer or one or more tool calls. */
+/**
+ * A provider-level fault instead of a response. Generic on purpose so
+ * resilience cases (#724) can model rate limits, timeouts and broken
+ * responses: `error` rejects the request with `message` (and an optional
+ * HTTP-like `status`); `empty` returns an assistant message with no content.
+ */
+export type ScriptFault =
+  | Readonly<{ kind: 'error'; message: string; status?: number }>
+  | Readonly<{ kind: 'empty' }>;
+
+/** One model response: a final text answer, one or more tool calls, or a fault. */
 export type ScriptStep =
   | Readonly<{ text: string }>
-  | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string }>;
+  | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string }>
+  | Readonly<{ fault: ScriptFault }>;
+
+export class ScriptedProviderError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message);
+    this.name = 'ScriptedProviderError';
+  }
+}
 
 export interface ScriptedModelRequest {
   readonly index: number;
@@ -34,6 +58,9 @@ export interface ScriptedModelRequest {
   readonly offeredTools: readonly string[];
   /** Text of the latest user-role message, for failure reports. */
   readonly lastUserText: string;
+  /** Text of every non-system message the model received (user, assistant, tool results). */
+  readonly inputText: string;
+  readonly systemPrompt: string;
 }
 
 export interface ScriptedModel {
@@ -47,6 +74,8 @@ export interface ScriptedModel {
    * model could not make them, so a passing case must not depend on them.
    */
   readonly unofferedToolCalls: readonly string[];
+  /** `notOffered` tool calls that the harness did offer. */
+  readonly unexpectedlyOfferedToolCalls: readonly string[];
   /** Requests that arrived after the script ran out (the harness may swallow the error). */
   exhaustedRequests(): number;
   /** Steps that were never consumed. */
@@ -70,6 +99,7 @@ export function createScriptedModel(script: readonly ScriptStep[]): ScriptedMode
 
   const requests: ScriptedModelRequest[] = [];
   const unofferedToolCalls: string[] = [];
+  const unexpectedlyOfferedToolCalls: string[] = [];
   let cursor = 0;
   let exhausted = 0;
 
@@ -78,15 +108,26 @@ export function createScriptedModel(script: readonly ScriptStep[]): ScriptedMode
     const offeredTools = (context.tools ?? []).map((tool) => tool.name);
     const step = script[cursor];
     const calls = step && 'toolCalls' in step ? step.toolCalls : [];
-    requests.push({ index, offeredTools, toolCalls: calls.map((call) => call.name), lastUserText: lastUserText(context) });
+    requests.push({
+      index,
+      offeredTools,
+      toolCalls: calls.map((call) => call.name),
+      lastUserText: lastUserText(context),
+      inputText: contextText(context),
+      systemPrompt: context.systemPrompt ?? '',
+    });
     if (!step) {
       exhausted += 1;
       throw new ScriptExhaustedError(index, script.length);
     }
     cursor += 1;
     for (const call of calls) {
-      if (!offeredTools.includes(call.name)) unofferedToolCalls.push(`${call.name} (request #${index + 1})`);
+      const offered = offeredTools.includes(call.name);
+      const label = `${call.name} (request #${index + 1})`;
+      if (call.notOffered && offered) unexpectedlyOfferedToolCalls.push(label);
+      if (!call.notOffered && !offered) unofferedToolCalls.push(label);
     }
+    if ('fault' in step && step.fault.kind === 'error') throw new ScriptedProviderError(step.fault.message, step.fault.status);
     return toAssistantMessage(step, index);
   };
 
@@ -109,6 +150,7 @@ export function createScriptedModel(script: readonly ScriptStep[]): ScriptedMode
     runtime,
     requests,
     unofferedToolCalls,
+    unexpectedlyOfferedToolCalls,
     exhaustedRequests: () => exhausted,
     remainingSteps: () => script.length - cursor,
   };
@@ -116,7 +158,7 @@ export function createScriptedModel(script: readonly ScriptStep[]): ScriptedMode
 
 function toAssistantMessage(step: ScriptStep, index: number): AssistantMessage {
   const content: AssistantMessage['content'] = [];
-  if (step.text) content.push({ type: 'text', text: step.text });
+  if ('text' in step && step.text) content.push({ type: 'text', text: step.text });
   const calls = 'toolCalls' in step ? step.toolCalls : [];
   calls.forEach((call, offset) => {
     content.push({
@@ -144,4 +186,22 @@ function lastUserText(context: Context): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
   return content.map((block: { text?: string }) => block.text ?? '').join('');
+}
+
+function blockText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map((block: { type?: string; text?: string; name?: string; arguments?: unknown }) => {
+      if (typeof block.text === 'string') return block.text;
+      if (block.type === 'toolCall') return `[call ${block.name} ${JSON.stringify(block.arguments ?? {})}]`;
+      return '';
+    })
+    .join('');
+}
+
+function contextText(context: Context): string {
+  return context.messages
+    .map((message) => `${message.role}: ${blockText((message as { content?: unknown }).content)}`)
+    .join('\n');
 }
