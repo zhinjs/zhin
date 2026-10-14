@@ -1,0 +1,72 @@
+.changeset/agent-compaction-told-ledger.md
+  h_b680f75345178a 1-11
+docs/ai/agent.md
+  h_b680f75345178a 192,195-214
+docs/en/ai/agent.md
+  h_b680f75345178a 192,195-214
+packages/im/agent/evals/cases/compaction-keeps-told.case.ts
+  h_b680f75345178a 1-29
+packages/im/agent/evals/cases/told-ledger-carried.case.ts
+  h_b680f75345178a 1-25
+packages/im/agent/evals/cases/told-ledger-not-cross-session.case.ts
+  h_b680f75345178a 1-21
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 73-77
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 90-94
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 77-78,141-142
+packages/im/agent/evals/framework/scripted-model.ts
+  h_b680f75345178a 109-110,128-132
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 35-39
+packages/im/agent/src/context/context-system.ts
+  h_b680f75345178a 124,163-164
+packages/im/agent/src/context/turn-envelope.ts
+  h_b680f75345178a 20-21,79
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 55,639-642,703-704,716-717,977-983
+packages/im/agent/src/core/turn-event-mapper.ts
+  h_b680f75345178a 43
+packages/im/agent/src/event/turn-event.ts
+  h_b680f75345178a 13-14
+packages/im/agent/src/internal/agent-host.ts
+  h_b680f75345178a 21,42-43
+packages/im/agent/src/memory/compaction-runtime.ts
+  h_b680f75345178a 1,19-22,27-49,53,61,65-67,114,122
+packages/im/agent/src/memory/index.ts
+  h_b680f75345178a 22-28
+packages/im/agent/src/memory/told-ledger.ts
+  h_b680f75345178a 1-139
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_b680f75345178a 179,306-308
+packages/im/agent/src/prompt/system-prompt.ts
+  h_b680f75345178a 340-341,456-464
+packages/im/agent/src/trace/turn-trace-format.ts
+  h_b680f75345178a 64-67,69-70
+packages/im/agent/src/trace/turn-trace.ts
+  h_b680f75345178a 38-39,233
+packages/im/agent/src/zhin-agent/index.ts
+  h_b680f75345178a 32,165,545
+packages/im/agent/tests/memory/compaction-trigger.test.ts
+  h_b680f75345178a 1-20
+packages/im/agent/tests/memory/told-ledger.test.ts
+  h_b680f75345178a 1-55
+packages/im/agent/tests/trace/turn-trace-cache.test.ts
+  h_b680f75345178a 1-27
+packages/im/ai/src/compaction/agent-message-compaction.ts
+  h_b680f75345178a 50-54,160,167,249
+packages/im/ai/src/compaction/compaction.ts
+  h_b680f75345178a 216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "33c52d5d4c64cfa303516356e62282c5c2611299",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
