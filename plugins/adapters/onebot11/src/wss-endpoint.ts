@@ -41,10 +41,13 @@ import {
   type OneBot11PendingAction,
   type OneBot11WsSocket,
 } from './ws-types.js';
+import { probeOnebot11SelfId, resolveOnebot11SelfId } from './self-id.js';
 import { callOnebot11Client, createOnebot11EndpointClient, forwardOnebot11ClientEvents, type Onebot11Client } from './client.js';
 
 export interface OneBot11WssEndpointOptions {
   readonly id: CapabilityId;
+  /** 连接后 best-effort 调用 get_login_info 上报账号（Adapter 工厂开启）。 */
+  readonly probeLoginInfo?: boolean;
   readonly http: HttpHost;
   readonly config: OneBot11WssConfig;
 }
@@ -165,6 +168,8 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   #admitRaw(ev: OneBot11Event): void {
+    const selfId = resolveOnebot11SelfId(ev.self_id);
+    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
@@ -197,6 +202,17 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         error: err instanceof Error ? err.message : String(err),
       }));
     });
+  }
+
+  /** Best-effort 登录账号探测；失败仅 debug，不影响连接。 */
+  async #probeSelfUserId(): Promise<void> {
+    const selfId = await probeOnebot11SelfId(this.client, (error) => {
+      this.#logger.debug(formatCompact({
+        op: 'onebot11_get_login_info_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    });
+    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
   }
 
   #warnPlatformEvent(error: unknown): void {
@@ -263,6 +279,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         lifecycleHandle.notifyClosed(new Error('OneBot11 reverse WebSocket closed'));
       });
     });
+    if (this.#options.probeLoginInfo) void this.#probeSelfUserId();
     this.#logger.debug(formatCompact({
       endpoint: this.#options.config.id,
       mode: 'wss',

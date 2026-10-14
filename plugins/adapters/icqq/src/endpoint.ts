@@ -34,6 +34,7 @@ import {
   messageLookupFromIcqqSource,
   resolveIcqqQuoteIdFromEvent,
   resolveIcqqInboundMedia,
+  resolveIcqqSelfUserId,
   shouldSkipSelfInboundMessage,
   type IcqqMessageEvent,
 } from './icqq-inbound.js';
@@ -590,6 +591,8 @@ export class IcqqEndpoint extends Endpoint<Client> {
       if (this.#retiring) return;
       this.#everOnline = true;
       try {
+        // transport 重连不清除（账号不变）；stop/retire 由基类撤销登记。
+        this.reportSelfUserId(resolveIcqqSelfUserId(this.client));
         this.#resolveStartOnline?.();
         this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
         this.#logSystemEvent('online', event);

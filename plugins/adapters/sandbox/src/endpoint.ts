@@ -179,6 +179,9 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
 
   open(): void {
     this.#open = true;
+    // Synthetic account: Sandbox has no platform login, so its Bot identity is the
+    // configured bot id. Per-connection random names are not Bot accounts.
+    this.reportSelfUserId(this.#options.defaults.id);
   }
 
   close(): void {
@@ -187,6 +190,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
 
   stop(): void {
     this.#open = false;
+    this.reportSelfUserId(undefined);
     this.#wsHandleRelease?.();
     this.#wsHandleRelease = undefined;
     this.#wsPathRelease?.();

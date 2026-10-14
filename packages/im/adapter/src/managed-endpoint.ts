@@ -72,6 +72,7 @@ class ManagedEndpoint<TClient> extends Endpoint<TClient> {
       signal,
       identity: this.identity,
       events,
+      reportSelfUserId: (userId: string | undefined) => { this.#reportSelf(userId); },
     });
     const stack = new DisposeStack();
     const connection: EndpointConnectionContext = Object.freeze({
@@ -120,6 +121,17 @@ class ManagedEndpoint<TClient> extends Endpoint<TClient> {
       this.#open = false;
       throw error;
     }
+    try {
+      const selfUserId = this.#implementation.selfUserId;
+      if (selfUserId) this.#reportSelf(selfUserId);
+    } catch {
+      // A failing getter means "not known"; fail closed by not reporting.
+    }
+  }
+
+  #reportSelf(userId: string | undefined): void {
+    if (this.#stopped) return;
+    this.reportSelfUserId(userId);
   }
 
   async close(): Promise<void> {
