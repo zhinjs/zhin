@@ -1,12 +1,26 @@
 ---
-title: 受治理的研发交付
+title: "受治理的研发交付"
+description: "在 Workroom 中把需求、设计、实现、测试、Review、发布和健康检查组织成一个可验收的计划：入口、外部连接、发布契约与故障恢复"
 ---
 
-# 从需求到可验收的交付
+# 受治理的研发交付
 
-这个 Advanced 方案复用 Workroom Kernel、独立验收和 Effect Ledger，把需求、设计、实现、测试、Review、发布和健康检查组织为同一个版本化计划。默认 IM 安装不引入这些能力。
+这一页讲怎样让多个 Agent 在一个 [GitHub 仓库 Workroom](./github-workroom.md) 里完成一次完整的研发交付：从需求、设计、实现、测试、独立 Review，一直到发布和上线后的健康检查，全部放在同一个有版本的计划里，每一步都有人或独立角色把关。
 
-## 可复用入口
+它的几个核心保证：
+
+- **写代码和 Review 的必须是不同角色**；
+- **发布要单独授权**：计划被批准，不等于任何一次具体发布被批准；
+- **结果说不清就只查询，不重试**：进程重启或响应丢失后，只去查原来那次操作的结果，不会重复发布；
+- **发布失败不自动回滚**：回滚是另一次需要授权的操作。
+
+::: warning 这是高级方案
+它面向要自行装配 CI/CD 连接的部署者，需要编写可信的 Host 代码。默认的 IM 安装不包含这些能力；只想用 Agent 处理 Issue 和 PR 评论，读 [把 GitHub 仓库作为 Workroom](./github-workroom.md) 就够了。
+
+文中常用术语：**Effect** 指一次对外部系统的副作用（如一次部署），**Effect Ledger** 是记录这些副作用的账本，**Journal** 是任务事实的事件日志。Workroom 本身的规则见 [Agent 深入：Workroom Kernel](../ai/agent.md#workroom-kernel)。
+:::
+
+## 可复用的入口
 
 以下入口从 `@zhin.js/agent/runtime` 导出，供可信 Host 组合使用，不能直接暴露成模型可写的状态迁移工具：
 
@@ -77,3 +91,8 @@ pnpm check:delivery
 验收覆盖真实 Kernel admission/调度/验收链、独立 Reviewer/Sponsor、拒绝过期和越权、文件 Journal 重启恢复、CI/产物/环境错配、未知结果仅查询、健康检查失败、GitHub HTTP 契约和统一 Host composition。
 
 这些测试在本地运行，外部 GitHub/CI/CD 使用确定性 HTTP/typed provider fixtures。没有真实仓库、CI 配置、凭据和预发布环境的 smoke 结果，不能声称已完成实际生产交付。当前提供 GitHub ref/PR REST 连接和 CI/CD provider 接入契约；具体 CI/CD 产品的 provider、生产凭据管理及持续监控集成须由部署者装配。
+
+## 下一步
+
+- [把 GitHub 仓库作为 Workroom](./github-workroom.md)：先把仓库接入 Workroom
+- [Agent 深入：Workroom Kernel](../ai/agent.md#workroom-kernel)：任务、分派、验收与 Gate 的规则

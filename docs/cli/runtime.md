@@ -1,30 +1,35 @@
 ---
-title: zhin runtime start 详解
+title: "zhin runtime start"
+description: "启动 Bot 的唯一命令：开发、生产、守护进程和 CI 冒烟四种用法，选项、启动流程、热重载与进程管理"
 ---
 
-# zhin runtime start 详解
+# zhin runtime start
 
-改完一个命令文件，不用重启进程，下一条消息就走新逻辑——开发模式下这一切由 `zhin runtime start` 完成。它直接以 Node 原生 TypeScript 能力执行项目里的 `.ts` 插件源码，按需装配各 Host（HTTP / 数据库 / Console / Agent / MCP / A2A），并在开发模式下提供进程内热重载。
+`zhin runtime start` 是启动 Bot 的唯一命令。它直接运行项目里的 TypeScript 源码，不需要先编译；按配置装配 HTTP、数据库、Console、Agent 等服务；开发模式下保存文件即热重载，不用重启进程。
 
-服务端约定入口也支持 `.tsx`。CLI 会优先交给进程现有 loader；Node 不识别 `.tsx` 时，再为该入口启用隔离的 TSX loader，因此开发 watch、`--no-watch`、supervisor 与 daemon 使用同一条启动命令。项目的 `tsconfig.json` 需设置 `"jsx": "react-jsx"` 和合适的 `"jsxImportSource"`；新脚手架默认使用 `zhin.js`，单文件可用 `/** @jsxImportSource zhin.js */` 覆盖。
+## 常见用法
 
 ```bash
-zhin runtime start                          # 开发模式（默认，watch + HMR）
-zhin runtime start --mode production --no-watch   # 生产模式
-zhin runtime start --daemon                 # 守护进程模式
-zhin runtime start --once                   # 启动一次后退出（CI / 脚本）
+# 日常开发：HMR + Console
+pnpm dev
+
+# 生产：关闭 watch，日志走 stdout（交给 systemd / 容器收集）
+zhin runtime start --mode production --no-watch
+
+# 裸机常驻：daemon + 开机自启
+zhin runtime start --daemon
+zhin service install
+
+# CI 冒烟：起一次确认配置与装配无误
+zhin runtime start --once --mode test
 ```
 
-脚手架生成的项目把常用组合固化成脚本：
-
-```json
-{
-  "scripts": {
-    "dev": "zhin runtime start",
-    "start": "zhin runtime start --mode production --no-watch"
-  }
-}
-```
+| 场景 | 用哪种 |
+| --- | --- |
+| 本地开发 | `pnpm dev`：监听文件、热重载 |
+| 服务器上由 systemd / Docker 管理 | `--mode production --no-watch`：不监听文件，日志输出到 stdout |
+| 服务器上没有进程管理器 | `--daemon`：自带守护进程，崩溃自动拉起 |
+| CI 中检查配置和装配 | `--once`：启动一次就退出，输出 JSON |
 
 ## 选项
 
@@ -46,6 +51,10 @@ zhin runtime start --once                   # 启动一次后退出（CI / 脚�
 前台模式会按 Node 的 TypeScript 支持能力决定是否需要 wrapper。daemon 模式始终使用 supervisor → 子进程两层结构，见下文进程管理。
 
 因为是「源码即运行时」，import 本地 TS 文件必须带 `.js` 扩展名（由运行时做 specifier 重映射），这也是仓库代码约定之一。
+
+::: details `.tsx` 入口是怎么加载的
+服务端约定入口也支持 `.tsx`。CLI 会优先交给进程现有 loader；Node 不识别 `.tsx` 时，再为该入口启用隔离的 TSX loader，因此开发 watch、`--no-watch`、supervisor 与 daemon 使用同一条启动命令。项目的 `tsconfig.json` 需设置 `"jsx": "react-jsx"` 和合适的 `"jsxImportSource"`；新脚手架默认使用 `zhin.js`，单文件可用 `/** @jsxImportSource zhin.js */` 覆盖。
+:::
 
 ## 启动流程
 
@@ -104,21 +113,6 @@ supervisor 常驻并把自身 pid 写入 `<项目根>/.zhin.pid`，bot 进程的
 
 bot 进程每 2 秒检查一次 supervisor（`ZHIN_SUPERVISOR_PID`）与父进程存活状态。wrapper 被 `kill -9`、终端关闭或崩溃时，bot 会主动关闭——不会留下仍握着平台连接和文件监听的僵尸进程。SIGINT / SIGTERM / SIGHUP 也会被转发给子进程。
 
-## 典型场景
-
-```bash
-# 日常开发：HMR + Console
-pnpm dev
-
-# 生产：关闭 watch，日志走 stdout（交给 systemd / 容器收集）
-zhin runtime start --mode production --no-watch
-
-# 裸机常驻：daemon + 开机自启
-zhin runtime start --daemon
-zhin service install
-
-# CI 冒烟：起一次确认配置与装配无误
-zhin runtime start --once --mode test
-```
+## 下一步
 
 相关命令与退出行为见 [CLI 参考](./index.md)，配置项见 [配置参考](../configuration/index.md)，备份与恢复见[生产部署与运维](../operations/production)。

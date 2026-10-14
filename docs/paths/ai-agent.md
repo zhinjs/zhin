@@ -1,15 +1,20 @@
-# 从 IM Bot 增加一个受治理的 Agent
+---
+title: "AI Agent 路径：给 Bot 加上会用工具的 AI"
+description: "在已有的 IM Bot 上接入模型、写一个自定义工具、补充业务背景，并了解记忆与权限边界。约半天"
+---
 
-目标：在已有消息链上增加模型、工具和插件上下文，同时保持权限、Prompt 与 Runtime generation 可观察。建议先完成 [IM Bot 路径](./im-bot.md)。
+# AI Agent 路径：给 Bot 加上会用工具的 AI
 
-## 完成标准
+这条路在已有的机器人上接入大模型：用户私聊或用 `ai:` 开头说话时，由 AI 回复，并且能调用你写的工具（比如查天气）。建议先走完 [IM Bot 路径](./im-bot.md)。
 
-- 私聊或 `ai:` 前缀能触发模型回复。
-- Agent 能发现并调用一个 generation-owned Tool。
-- Prompt Section 出现在 Console 能力目录，但正文不会泄露。
-- 文件、命令和网络权限由策略控制，不由提示词授予。
+做完后你会有：
 
-## 1. 用向导安装完整 AI 拓扑
+- 私聊或 `ai:` 前缀能触发模型回复；
+- 一个 AI 会自动调用的自定义工具；
+- 一段只给 AI 看的业务背景说明；
+- 清楚哪些事 AI 能做、哪些必须由权限策略放行。
+
+## 1. 用向导安装 AI 组件
 
 ```bash
 npx zhin setup --ai
@@ -17,11 +22,13 @@ pnpm install
 pnpm dev
 ```
 
-向导不仅安装模型 SDK，还会挂载 `@zhin.js/tool` 与 `@zhin.js/prompt-section` Feature。只手工安装 `@zhin.js/agent` 不足以建立完整发现拓扑。
+向导会问你用哪个模型服务：云模型的 API Key 写入 `.env`；选 Ollama 可以用本地模型，不需要任何密钥。
 
-云模型 Key 写入 `.env`。本地模型可选择 Ollama，不需要云凭据。
+::: tip 用向导，不要只装 `@zhin.js/agent`
+向导除了模型 SDK，还会挂载 `@zhin.js/tool`（负责发现 `tools/` 目录）和 `@zhin.js/prompt-section`（负责发现 `prompt-sections/` 目录）这两个功能插件。只手动安装 `@zhin.js/agent` 时，后面两步写的文件不会被加载。
+:::
 
-## 2. 核对 provider 与 Agent binding
+## 2. 看一眼生成的模型配置
 
 ```yaml
 ai:
@@ -35,9 +42,12 @@ ai:
       model: gpt-4o-mini
 ```
 
-`providers` 定义连接；`agents` 把角色绑定到 provider 和 model。私聊默认可触发 Agent，群或频道可使用 `ai:`、`AI:`、`#` 前缀，或由适配器提供可信 mention 标记。
+- `providers` 是"怎么连到模型服务"：SDK 类型和密钥；
+- `agents` 是"用哪个模型回复"：把一个 Agent（这里叫 `zhin`）绑定到某个 provider 的某个模型。
 
-## 3. 声明一个 Tool
+重启后私聊 Bot 就会由 AI 回复。在群或频道里，消息需要以 `ai:`、`AI:` 或 `#` 开头，或者 @ 机器人（取决于平台是否支持）。
+
+## 3. 写一个工具
 
 创建 `tools/weather/index.ts`：
 
@@ -58,9 +68,15 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
-文件路径提供本地名称。Tool 进入当前 generation 的能力目录，并按回合权限、平台、场景和审批策略过滤后才对模型可见。
+保存后私聊 Bot："上海天气怎么样？"AI 会自己决定调用这个工具，并用结果组织回复。
 
-## 4. 给插件补充业务上下文
+- 工具名来自文件路径（这里是 `weather`），`description` 和 `inputSchema` 告诉模型什么时候用、怎么传参；
+- `requiresApproval: 'never'` 表示无需人工确认。会改动数据的工具应该要求审批；
+- 工具不是对所有人都可见：Zhin 会按当前用户权限、平台、群/私聊和审批策略过滤后，才把它交给模型。
+
+更多写法见 [Agent 工具与技能](../authoring/agent-tools.md)。
+
+## 4. 给 AI 补充业务背景
 
 创建 `prompt-sections/product-language/index.ts`：
 
@@ -77,11 +93,13 @@ export default defineAgentPromptSection({
 });
 ```
 
-Prompt Section 固定到 generation。热更后，新回合读取新版本；已经开始的回合继续使用旧快照。它只改变模型上下文，不增加任何 Tool、文件或网络权限。
+Prompt Section 是一段注入到 AI 系统提示中的说明，适合放产品术语、回答风格等背景。它**只影响 AI 怎么说，不赋予任何权限**——不能靠写一句"你可以读取所有文件"让 AI 真的获得文件权限。
 
-## 5. 理解记忆边界
+修改后保存即生效：之后开始的对话读到新内容，正在进行的对话继续用旧内容，不会读到一半被换掉。
 
-三层 Markdown 记忆默认可被读取：
+## 5. 了解记忆放在哪
+
+AI 会读取三层 Markdown 记忆文件：
 
 | 层 | 路径 | 适合保存 |
 | --- | --- | --- |
@@ -89,26 +107,32 @@ Prompt Section 固定到 generation。热更后，新回合读取新版本；已
 | 平台级 | `data/memory/platforms/<platform>/` | 群规和平台约束 |
 | 会话级 | `data/memory/sessions/<hash>/` | 当前会话笔记 |
 
-“加载记忆”不等于“允许写入”。写文件仍要经过 Turn 的文件策略与 Tool；全局和平台记忆只有 Endpoint Owner 可以写，会话笔记用于普通会话。
+能读到不等于能写：全局和平台记忆只有 Bot 主人（Endpoint Owner）能让 AI 写入，普通用户的对话只能写会话笔记。
 
-以上三层目录是唯一有效布局。运行时不会读取或迁移 `data/memory/MEMORY.md` 等根目录旧文件，未知层级也会被文件策略拒绝；升级前请显式把需要保留的内容整理到规范目录。
+::: warning 从旧版本升级
+只有上面三层目录有效。`data/memory/MEMORY.md` 这类放在根目录的旧文件既不会被读取，也不会被自动迁移；升级前请手动把需要保留的内容移到对应目录。
+:::
 
 ## 6. 在 Console 验收
 
 1. “Agent 概览”确认 provider、binding 和当前运行态。
-2. “运行时能力”检查 Tool 与 Prompt Section 的 owner、source、generation。
-3. 在“渠道与会话”发起请求，观察 Agent 工作台中的步骤和工具结果。
-4. 重载 Prompt Section，确认旧回合不被新内容污染。
+2. “运行时能力”确认 `weather` 工具和 `product-language` Prompt Section 已加载，来源是你的项目。
+3. 在“渠道与会话”发起请求，在 Agent 工作台查看每一步和工具返回的结果。
+4. 修改 Prompt Section 并保存，确认新对话读到新内容。
 
 ## 安全原则
 
-- Prompt 说明意图，Tool Feature 提供能力，Host 策略决定授权。
-- `required` Prompt Section 放不进预算时应明确失败，不静默截断。
-- MCP Server 先在 `ai.mcpServers` 声明，再由 `agents.<name>.mcpServers` 分配。
-- 工作目录和 shell 安全策略属于 Turn，不从用户文本或 Prompt 自报获得。
+一句话：**提示词说明意图，工具提供能力，权限策略决定放不放行。**
+
+- 用户消息或 Prompt 里写的"我是管理员""工作目录是 /"都不会改变权限；工作目录和 shell 策略由运行时为每轮对话单独决定。
+- 想接外部 MCP 工具：先在 `ai.mcpServers` 声明，再在 `agents.<name>.mcpServers` 里分配给具体 Agent。
+
+::: details Prompt Section 太长放不下怎么办？
+每轮对话的提示词有预算。`retention: 'required'` 的 Section 放不下时这一轮会明确失败，不会被悄悄截断；`opportunistic` 和 `preferred` 的 Section 会依次让出预算（先省略 `opportunistic`）。
+:::
 
 ## 下一步
 
-- 完整 Tool、Prompt 与执行策略：[Agent 创作面与安全](../authoring/agent-tools.md)
-- 外部工具协议：[MCP 配置](../configuration/#mcpservers-外部-mcp-server)
-- 多 Agent 协作空间：[Workroom Kernel](../ai/agent.md#workroom-kernel)
+- [Agent 工具与技能](../authoring/agent-tools.md)：工具审批、Skill、子 Agent 的完整写法
+- [MCP 配置](../configuration/#mcpservers-外部-mcp-server)：接入外部 MCP 工具服务
+- [Agent 深入](../ai/agent.md)：一轮对话怎么运行、怎么取消，以及多 Agent 协作的 Workroom

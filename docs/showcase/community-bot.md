@@ -1,7 +1,14 @@
+---
+title: "案例：多平台社区 Bot"
+description: "一个进程同时运行 5 个 QQ 号、QQ 官方 Bot、Slack 和 GitHub：单实例多账号的配置方式与运维经验"
+---
+
 # 案例：多平台社区 Bot
 
-> 对应示例：[`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)（维护者厨房水槽，能力全集演示）
-> 关键词：单实例多账号、一个进程五个 QQ 号、游戏插件、跨平台 AI
+::: info 案例信息
+- 对应示例：[`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot)（维护者用的全功能演示项目，不是入门模板）
+- 关键词：单实例多账号、一个进程五个 QQ 号、游戏插件、跨平台 AI
+:::
 
 ## 场景
 
@@ -11,8 +18,8 @@ GitHub 仓库通知。以前是每个平台一个进程一套代码，现在要�
 
 ## 为什么选 zhin
 
-核心原因是**单实例多 endpoint**：一个适配器插件实例挂多个账号，
-`endpoints[i]` 各配各的凭据，顶层字段共享。五个 icqq 账号在配置里是
+核心原因是**一个适配器管多个账号**：在 Zhin 里，Bot 在平台上登录的每个账号叫一个 Endpoint。
+一个适配器插件可以挂多个 Endpoint，`endpoints[i]` 各配各的凭据，顶层字段共享。五个 icqq 账号在配置里是
 一个 `icqq` 插件 + 5 个 endpoint，不是一个插件复制五份。
 
 ## 部署架构
@@ -73,3 +80,9 @@ plugins:
 - 日志在 Console「日志」页直接看（SystemLog 落库，带级别过滤），不用 ssh 翻文件。
 - 定时任务（游戏会话清理、彩票 pipeline）在 Console「定时任务」页管理，不用改配置重启。
 - AI 用 OpenRouter 免费模型做兜底，贵模型按 agent 角色分流（`ai.agents.<name>.provider`）。
+
+## 下一步
+
+- [平台适配器](../adapters/index.md)：各平台的准备工作与配置
+- [Console 管理路径](../paths/console.md)：用浏览器管理多个账号
+- [生产部署与运维](../operations/production.md)：上线前的检查清单

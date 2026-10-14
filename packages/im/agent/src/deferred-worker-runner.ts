@@ -5,6 +5,7 @@ import { resolveIMSessionIdFromMessage, type Message } from '@zhin.js/core';
 import { getLogger, formatCompact, formatCompactUsage, truncatePreview } from '@zhin.js/logger';
 import { type AIProvider, type AgentTool, isOmittedToolSummary, sanitizeToolResult, stripHallucinatedToolCalls, createLlmApiRuntime, sdkEntryFromProvider, type ModelRegistry, type LlmApiRuntime } from '@zhin.js/ai';
 import { resolveMcpConnectionFromToolName } from '@zhin.js/ai/mcp-qualified-name';
+import type { ToolInvocationPolicy } from '@zhin.js/tool';
 import { stripThinkBlocks } from './core/text-sanitize.js';
 import { runAgentLoopStandaloneTurn } from './core/agent-loop-standalone.js';
 import type { ToolCallRecord } from './core/tool-calls-user-format.js';
@@ -35,7 +36,14 @@ export interface DeferredWorkerRunOptions {
   llmRuntime?: LlmApiRuntime;
   summaryMaxChars?: number;
   onEvent?: (event: DeferredWorkerLifecycleEvent) => void | Promise<void>;
+  /**
+   * Frozen snapshot of the spawning turn's shell/filesystem policy. Omitted
+   * means no shell: a worker never inherits live turn authority implicitly.
+   */
+  turnPolicy?: Readonly<Pick<ToolInvocationPolicy, 'shell' | 'filesystem'>>;
 }
+
+const DEFERRED_WORKER_NO_SHELL_POLICY: Readonly<Pick<ToolInvocationPolicy, 'shell' | 'filesystem'>> = Object.freeze({});
 
 export interface DeferredWorkerLifecycleEvent {
   phase: 'start' | 'finish';
@@ -179,6 +187,9 @@ ${goal}`;
         userInput: goal,
         maxIterations,
         commMessage: origin,
+        // Deferred workers can outlive the turn that started them, so they never
+        // borrow its live authority: only an explicit frozen policy grants shell.
+        turnPolicy: options.turnPolicy ?? DEFERRED_WORKER_NO_SHELL_POLICY,
         ...buildAgentPromptCacheStreamOptions(execPolicyConfig ?? {}, {
           modelSdk: llmModel.sdk,
           provider: provider.name,

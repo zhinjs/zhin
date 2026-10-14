@@ -93,4 +93,18 @@ describe('ConversationRuntime context hygiene', () => {
 
     expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 顺便看下 README']);
   });
+
+  it('keeps own outbound progress updates out of background events', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    const now = Date.now();
+    await runtime.recordOutbound(
+      { conversation, content: [{ type: 'text', data: { text: '⏳ 已经完成一部分，接下来继续。' } }] } as never,
+      { status: 'sent', message: { conversation, id: 'progress-1' } } as never,
+    );
+    const current = await store.append(message('current', '好的', now, 'user-1'));
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+    expect(JSON.stringify(context.blocks)).not.toContain('已经完成一部分');
+  });
 });
+
