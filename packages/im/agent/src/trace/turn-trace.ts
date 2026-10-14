@@ -25,6 +25,8 @@ export interface TurnTracePrincipal {
   readonly subject_id: string;
   readonly display_name?: string;
   readonly roles: readonly string[];
+  /** Initiator trust level (#726); every tool call in this trace ran under it. */
+  readonly trust_level?: string;
 }
 
 export interface TurnTraceModelCall {
@@ -107,7 +109,12 @@ export type TurnTraceNote =
 export interface TurnTraceInit {
   readonly turnId: string;
   readonly sessionKey: string;
-  readonly principal?: Readonly<{ subjectId: string; displayName?: string; roles: readonly string[] }>;
+  readonly principal?: Readonly<{
+    subjectId: string;
+    displayName?: string;
+    roles: readonly string[];
+    trustLevel?: string;
+  }>;
 }
 
 interface MutableToolCall {
@@ -150,6 +157,7 @@ export class TurnTraceCollector {
         subject_id: init.principal.subjectId,
         ...(init.principal.displayName ? { display_name: init.principal.displayName } : {}),
         roles: Object.freeze([...init.principal.roles]),
+        ...(init.principal.trustLevel ? { trust_level: init.principal.trustLevel } : {}),
       });
     }
   }
@@ -391,6 +399,7 @@ export class TurnTraceCollector {
       subjectId: this.#principal.subject_id,
       ...(this.#principal.display_name ? { displayName: this.#principal.display_name } : {}),
       roles: this.#principal.roles,
+      ...(this.#principal.trust_level ? { trustLevel: this.#principal.trust_level } : {}),
     };
   }
 }

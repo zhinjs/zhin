@@ -62,7 +62,10 @@ it('awaits authorized Jev Skill activation before prompt assembly and AgentCore 
     sessionSystem: sessionSystem as never, contextSystem: { buildTextTurnContext: buildContext } as never });
   for await (const event of engine.run(context)) expect(event.type).toBe('turn_end');
   expect(persisted).toHaveBeenCalledWith('session', expect.objectContaining({ loadedSkills: ['admin'] }));
-  expect(buildContext).toHaveBeenCalledWith(expect.objectContaining({ activeSkillsContext: 'Confirm duration before muting.' }));
+  expect(buildContext).toHaveBeenCalledWith(expect.objectContaining({
+    // #726: skill instructions are labelled as third-party guidance.
+    activeSkillsContext: expect.stringMatching(/^\[external_content source="skill"[^\n]*\]\nConfirm duration before muting\.$/),
+  }));
   expect(resolved.map(tool => tool.name)).toContain('admin__mute');
   expect(provider.evaluate).toHaveBeenCalledTimes(1);
 });

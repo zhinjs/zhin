@@ -133,6 +133,22 @@ describe('sub-agent nesting', () => {
     expect(formatTurnTrace(snapshot)).toContain('子 agent:');
   });
 
+  it('records the initiator trust level so every high-risk call is traceable to who started it (#726)', () => {
+    const trace = new TurnTraceCollector({
+      turnId: 'turn-9',
+      sessionKey: 'im:qq:bot:group:42',
+      principal: { subjectId: 'u-7', roles: ['user'], trustLevel: 'group_member' },
+    });
+    trace.record({ type: 'tool_denied', toolName: 'bash', policy: 'trust-level', reason: 'no shell', toolUseId: 'b1' } as TurnEvent);
+    const child = trace.child('turn-9:subagent:1');
+    trace.finalize();
+    const snapshot = trace.snapshot();
+    expect(snapshot.principal).toEqual({ subject_id: 'u-7', roles: ['user'], trust_level: 'group_member' });
+    expect(snapshot.tool_calls[0]).toMatchObject({ tool_name: 'bash', status: 'denied', policy: 'trust-level' });
+    expect(child.snapshot().principal?.trust_level).toBe('group_member');
+    expect(formatTurnTrace(snapshot)).toContain('信任级别: group_member');
+  });
+
   it('records subagent task lifecycle events', () => {
     const trace = collector();
     trace.record({ type: 'subagent_start', taskId: 'task-1', agentName: 'coder', description: 'fix bug' });
