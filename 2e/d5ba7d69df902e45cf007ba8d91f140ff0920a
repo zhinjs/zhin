@@ -1,0 +1,25 @@
+docs/plans/workroom-group-collaboration-progress.md
+  s_075ce75953323e::t_54af345e08bc60 73-74,234-238,265
+packages/im/core/src/plugin-runtime/im/inbound-origin.ts
+  s_075ce75953323e::t_7a7f715cee9405 112-116
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_075ce75953323e::t_faa98a1bb1ec00 3199,3323,3325-3330,3334-3339,3342-3346
+packages/im/core/tests/plugin-runtime/inbound-origin.test.ts
+  s_075ce75953323e::t_0fc6208438fed3 98-109
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2ed5ba7d69df902e45cf007ba8d91f140ff0920a",
+  "prompts": {},
+  "sessions": {
+    "s_075ce75953323e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c755d550-1f55-4e64-94c4-98f9df272110",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
