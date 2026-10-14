@@ -1,4 +1,5 @@
 import { createUserMessage, renderContextMessage, type AgentMessage, type ContextMessage, type Usage } from '@zhin.js/ai';
+import { renderAgentCatalog, renderSkillCatalog } from '../skill/capability-catalog.js';
 import type { AgentDescriptor } from '@zhin.js/agent-feature';
 import type { SkillDescriptor } from '@zhin.js/skill';
 import type { AIEventPayload } from '../ai-event-subscriber.js';
@@ -585,18 +586,14 @@ function buildCapabilityBootstrap(
   }
   if (selected) {
     parts.push(`## Active specialist: ${selected.qualifiedName}\n${selected.description}\n${selected.instructions}`);
-  } else if (agents.length > 0) {
-    parts.push([
-      '## Available specialist agents',
-      ...agents.map((agent) => `- ${agent.qualifiedName}: ${agent.description}`),
-    ].join('\n'));
+  } else {
+    const agentCatalog = renderAgentCatalog(agents.map((agent) => ({ name: agent.qualifiedName, description: agent.description })));
+    if (agentCatalog) parts.push(agentCatalog);
   }
-  if (skills.length > 0) {
-    parts.push([
-      '## Available skills',
-      ...skills.map((skill) => `- ${skill.qualifiedName}: ${skill.description}`),
-    ].join('\n'));
-  }
+  // Progressive disclosure (#729): names and one-line triggers only; the full
+  // instructions arrive through load_skill or intent priming.
+  const skillCatalog = renderSkillCatalog(skills.map((skill) => ({ name: skill.qualifiedName, description: skill.description })));
+  if (skillCatalog) parts.push(skillCatalog);
   return parts.join('\n\n');
 }
 
