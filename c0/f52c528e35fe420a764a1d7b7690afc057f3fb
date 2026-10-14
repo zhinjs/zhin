@@ -1,0 +1,39 @@
+packages/im/agent/src/core/agent-core-run.ts
+  s_55b80a65a94783::t_4005edee818305 17,492-493,718,757-788
+packages/im/agent/src/core/exhausted-turn-reply.ts
+  s_55b80a65a94783::t_dc66def82d6d7a 1-92
+packages/im/agent/src/core/tool-calls-user-format.ts
+  s_55b80a65a94783::t_117370134ff252 19-31,46,48,62,66-69,75-79,108-111
+packages/im/agent/tests/core/exhausted-turn-reply.test.ts
+  s_55b80a65a94783::t_e03f2253217e4f 1-90
+packages/im/agent/tests/core/max-iterations-reply.e2e.test.ts
+  s_55b80a65a94783::t_801a11af1eb84f 1-95
+packages/im/agent/tests/zhin-agent/tool-calls-user-format.test.ts
+  s_55b80a65a94783::t_425c79dc8b2ef5 37-59
+.changeset/agent-max-iterations-reply.md
+  s_70e1b4cd11c865::t_fb4e0cf1923702 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c0f52c528e35fe420a764a1d7b7690afc057f3fb",
+  "prompts": {},
+  "sessions": {
+    "s_55b80a65a94783": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5eebf16d-653f-4ab6-ad5f-33dd8c83d3bf",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_70e1b4cd11c865": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a50828595cec844e2",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
