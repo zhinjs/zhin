@@ -61,6 +61,8 @@ export interface EvalExpectations {
   readonly termination?: EvalTermination;
   /** Exact number of model requests across the case. */
   readonly modelSteps?: number;
+  /** Model id of every request, in order (fallback cases). */
+  readonly modelIds?: readonly string[];
   /** Bound on model requests across the case. */
   readonly maxModelSteps?: number;
   /** Strings that must appear in what the model received (messages and tool results, not the system prompt). */
@@ -97,6 +99,11 @@ export interface EvalCase {
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */
   readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
+  /**
+   * Extra model ids registered after the primary `scripted-model`, in fallback
+   * order. They become the turn's later `modelCandidates`.
+   */
+  readonly models?: readonly string[];
   /** Prompt sections contributed by third-party plugins (owned by a child plugin, not the agent's owner). */
   readonly promptSections?: readonly EvalPromptSection[];
   /** Agent config overrides (budget, sub-agent mode, …). */
