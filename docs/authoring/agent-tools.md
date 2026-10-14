@@ -282,7 +282,8 @@ my-plugin/
 | --- | --- | --- |
 | `maxLoadedPerSession` | `12` | 每个会话最多同时加载的工具数 |
 | `discoverTopK` | `5` | `discover` 每次返回的条数 |
-| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | 始终对模型可见的工具 |
+| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | 始终对模型可见的工具；配置值追加到默认列表 |
+| `alwaysLoadedMode` | `'extend'` | 设为 `'replace'` 时 `alwaysLoadedTools` 完全替换默认列表 |
 | `mcpServers` | `{}` | 按 MCP 服务器覆盖 `alwaysLoaded` 名单 |
 
 ## 它是怎么工作的
