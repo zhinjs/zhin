@@ -1,0 +1,16 @@
+packages/im/agent/src/detached-task/runner.ts
+  h_b680f75345178a 4,113-114,206-218,252-253,259-260,301-306,309-321,396-401
+packages/im/agent/tests/detached-task/detached-task-interjection.test.ts
+  h_b680f75345178a 113-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0566fe4b69781d98b5225884c05bf9e5a70e4b01",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
