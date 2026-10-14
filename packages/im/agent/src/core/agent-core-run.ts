@@ -110,6 +110,7 @@ function createTurnCompletionPort(input: {
   return createResilientCompletionPort(host.llmRuntime, {
     config,
     fallbackModels,
+    timers: host.config.providerTimers,
     onEvent: (event) => {
       const { type, error, ...fields } = event;
       logger.warn(formatCompact({

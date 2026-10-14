@@ -150,6 +150,12 @@ workflow 均执行此项；它需要 npm 网络与本机随机端口，不属于
 | Stable Smoke（`pnpm check:stable`） | Sandbox + Agent 核心单测 + minimal-bot 契约 |
 | L4-CI（`pnpm check:l4-ci`） | L4 确定性子集（编排/记忆/full-bot 契约）；全量 `pnpm check:l4` 在 nightly 跑 |
 
+## Agent 评测规则
+
+- **修复 agent 行为 bug 的 PR 必须附带评测用例。** 先在 `packages/im/agent/evals/cases/` 里写一条能复现问题的用例（脚本化模型，确定性），确认它在修复前失败、修复后通过，再提交修复。用例的 `source` 写明对应的 issue、PR 或 QQ 事故。写法见 [`packages/im/agent/evals/README.md`](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/evals/README.md)。
+- PR 门禁只跑脚本化用例：`pnpm eval:agent`，不调用真模型。
+- 真模型的能力矩阵只在 nightly 跑（`.github/workflows/nightly-evals.yml`，`pnpm eval:nightly`），作为趋势指标，不作为 PR 必过项；预算上限见评测 README。
+
 ## changeset 工作流
 
 ### 变更审查与兼容性

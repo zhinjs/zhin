@@ -72,6 +72,7 @@ export default defineEvalCase({
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
+| `models` | Extra model ids registered after the primary `scripted-model`, in fallback order (they become the turn's later `modelCandidates`). A step's optional `model` pins which model must receive that request. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
 
 ### Assertions (`expect`)
@@ -86,6 +87,7 @@ export default defineEvalCase({
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
 | `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |
 | `outboundMessages` | The number of reply-port sends. |
+| `modelIds` | The model id of every request, in order (fallback cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
 A case also fails on any of these, whatever its `expect` block says:
@@ -107,6 +109,12 @@ A case also fails on any of these, whatever its `expect` block says:
   returns an assistant message with no content. A malformed tool call is just
   a `toolCalls` step with odd `args`. These fault steps are generic, for
   provider-resilience cases (#724).
+- `{ fault: { kind: 'hang' } }` never answers. It advances the case's virtual
+  clock (`framework/fake-clock.ts`) until the request is aborted, normally by
+  `providerResilience.requestTimeoutMs`, so timeout cases never wait in real
+  time. With no pending timer it fails at once instead of blocking the suite.
+  `runEvalCase(definition, { clock })` accepts your own clock; by default each
+  case gets a fresh fake clock.
 
 Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 
@@ -137,11 +145,14 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
+| `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
 | `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |
 | `provider-rate-limit-retried` | long-task | #724 provider resilience (rate limit → retry) |
 | `provider-retries-exhausted-polite` | long-task | #724 provider resilience (retries exhausted → friendly feedback) |
+| `provider-timeout-exhausted-polite` | long-task | #724 provider resilience (timeouts exhausted → friendly feedback) |
+| `provider-timeout-retried` | long-task | #724 provider resilience (request timeout → retry) |
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
 | `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
@@ -149,6 +160,52 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `subagent-sync-report` | subagent, long-task | #718 sync sub-agents on the plugin-runtime path |
 | `tool-result-summarized` | tool-use | QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format) |
 | `unknown-tool-hinted` | tool-use | QQ: model invented a tool name and the turn looped on "Unknown tool" (#716 core-tools-loaded) |
+
+## Nightly real-model tier (#723)
+
+`evals/nightly/` runs a **model capability matrix** against real MiniMax models
+once a night (`.github/workflows/nightly-evals.yml`, scheduled plus
+`workflow_dispatch`). It is a trend metric, never a PR gate: it does not run on
+pull requests and low pass rates do not fail the job.
+
+| Case | Capability | Passes when |
+|---|---|---|
+| `matrix-tool-call-format` | tool-call format | `get_weather` is called with a `city` argument naming 上海 |
+| `matrix-parallel-calls` | parallel calls | one response calls `get_weather` for both 北京 and 广州 |
+| `matrix-long-context` | long context | the code buried in ~10k characters of filler is returned |
+| `matrix-zh-instruction` | Chinese instruction following | exactly three `- ` lines, in Chinese, nothing else |
+
+Each case is one request, run `runsPerCase` times per model. Checks are
+semantic (tool names, arguments, key facts, structure), not exact wording.
+`semantic.ts` also exposes an `LlmJudge` interface for open questions; the
+built-in matrix does not use it, so the judge costs nothing by default.
+
+**Budget** (hard caps in `budget.ts`; every request goes through
+`BudgetedCompletionPort`, and once a cap is hit the rest of the run is recorded
+as skipped):
+
+| Setting | Default | Env override |
+|---|---|---|
+| Runs per case per model | 3 | `NIGHTLY_RUNS_PER_CASE` |
+| Max requests per run | 60 | `NIGHTLY_MAX_REQUESTS` |
+| Max total tokens per run | 200,000 | `NIGHTLY_MAX_TOKENS` |
+| Max output tokens per request | 1,024 | `NIGHTLY_MAX_OUTPUT_TOKENS` |
+| Request timeout | 120 s | `NIGHTLY_REQUEST_TIMEOUT_MS` |
+
+The default run (1 model × 4 cases × 3 runs) is 12 requests and roughly 60k
+tokens. Models come from `NIGHTLY_MODELS` (default `minimax-m3`).
+
+**Secrets:** the workflow reads the `MINIMAX_API_KEY` repository secret (and the
+optional `MINIMAX_BASE_URL` env). Without it the job logs a notice and skips.
+The key is passed only as an environment variable and is never printed.
+
+**Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average
+tool calls per model × case), `nightly-diff.json` and `nightly.md` (the diff
+against the previous successful night, with regressions of 20 points or more
+flagged). They are uploaded as the `nightly-eval-report` artifact and the
+Markdown goes to the job summary.
+
+Run it locally with `MINIMAX_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
 
 ## Conventions
 

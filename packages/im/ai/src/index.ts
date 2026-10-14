@@ -118,6 +118,7 @@ export type {
   ProviderErrorKind,
   ProviderResilienceConfig,
   ProviderResilienceEvent,
+  ProviderTimers,
   ResilientCompletionOptions,
 } from './llm/index.js';
 
