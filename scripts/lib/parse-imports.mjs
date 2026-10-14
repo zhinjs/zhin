@@ -66,7 +66,7 @@ const STR = `['"]([^'"]+)['"]`;
 /**
  * 解析导入语句（忽略注释和模板字符串中的导入）。
  * 覆盖：单行/多行静态 import、bare import（import 'x'）、
- * export ... from '...' 再导出、动态 import('...')、require('...')。
+ * export ... from '...' 再导出（含 export * as ns）、动态 import('...')、require('...')。
  * 默认跳过纯类型导入（import type / export type）；includeTypeOnly 时一并返回。
  * @param {string} content - 文件内容
  * @param {{ includeTypeOnly?: boolean }} [options]
@@ -80,8 +80,7 @@ export function parseImports(content, { includeTypeOnly = false } = {}) {
     ? [
       new RegExp(`import\\s+(?:type\\s+)?[\\s\\S]*?\\bfrom\\s*${STR}`, 'g'),
       new RegExp(`import\\s*${STR}`, 'g'),
-      new RegExp(`export\\s+(?:type\\s+)?(?:\\*|\\{[\\s\\S]*?\\})\\s*\\bfrom\\s*${STR}`, 'g'),
-      new RegExp(`export\\s+type\\s+\\*\\s+from\\s*${STR}`, 'g'),
+      new RegExp(`(?<![\\w$.])export\\s+(?:type\\s+)?(?:\\*(?:\\s+as\\s+[\\w$]+)?|\\{[\\s\\S]*?\\})\\s*\\bfrom\\s*${STR}`, 'g'),
       new RegExp(`import\\s*\\(\\s*${STR}\\s*\\)`, 'g'),
       new RegExp(`require\\s*\\(\\s*${STR}\\s*\\)`, 'g'),
     ]
@@ -89,8 +88,8 @@ export function parseImports(content, { includeTypeOnly = false } = {}) {
       // 静态 import（含多行 import 块与 bare import），跳过 import type
       /import\s+(?!type\s)[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g,
       /import\s*['"]([^'"]+)['"]/g,
-      // export { ... } from / export * from（含多行），跳过 export type
-      /export\s+(?!type\s)(?:\*|\{[\s\S]*?\})\s*\bfrom\s*['"]([^'"]+)['"]/g,
+      // export { ... } from / export * from / export * as ns from（含多行），跳过 export type
+      /(?<![\w$.])export\s+(?!type\s)(?:\*(?:\s+as\s+[\w$]+)?|\{[\s\S]*?\})\s*\bfrom\s*['"]([^'"]+)['"]/g,
       // 动态 import('...')（含 import('x').Type 内联类型；相对路径本就放行）
       /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
       // require('...')
