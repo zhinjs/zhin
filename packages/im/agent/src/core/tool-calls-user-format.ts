@@ -16,6 +16,19 @@ export interface ToolCallRecord {
 
 const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);
 
+/**
+ * Read-only exploration tools whose bodies (file contents, grep hits, page
+ * text) are context for the model, not answers for the user.
+ */
+const EXPLORATION_TOOLS = new Set(['read_file', 'grep', 'glob', 'list_dir', 'web_fetch']);
+
+/** Per-tool and total caps for the user-facing summary. */
+const MAX_TOOL_BLOCK_CHARS = 2000;
+const MAX_SUMMARY_CHARS = 3000;
+
+const EXPLORATION_ONLY_REPLY =
+  '这一轮只做了资料查阅，还没有整理出结论。回复「继续」我会接着处理，或者把需求说得更具体一些再试。';
+
 function asString(result: unknown): string {
   if (result == null) return '';
   if (typeof result === 'string') return result;
@@ -30,9 +43,9 @@ function formatGenericToolResult(tool: string, result: unknown): string {
   const raw = asString(result);
   if (isMediaToolWithBinaryPayload(tool) && raw.trim().startsWith('{')) {
     const compact = compactMediaToolJsonForModel(tool, raw);
-    return compact.length > 2000 ? `${compact.slice(0, 2000)}…` : compact;
+    return truncate(compact, MAX_TOOL_BLOCK_CHARS);
   }
-  const cleaned = sanitizeToolResult(raw, { maxChars: 2000 });
+  const cleaned = sanitizeToolResult(raw, { maxChars: MAX_TOOL_BLOCK_CHARS });
   if (!cleaned) return '';
   return cleaned;
 }
@@ -46,15 +59,24 @@ export function formatToolCallsForUser(toolCalls: ToolCallRecord[]): string {
   }
 
   const otherParts: string[] = [];
+  let exploredOnly = false;
 
   for (const tc of toolCalls) {
     if (INTERNAL_META_TOOLS.has(tc.tool)) continue;
+    if (EXPLORATION_TOOLS.has(tc.tool)) {
+      exploredOnly = true;
+      continue;
+    }
     const block = formatGenericToolResult(tc.tool, tc.result);
     if (block) otherParts.push(block);
   }
 
   if (otherParts.length > 0) {
-    return otherParts.join('\n\n');
+    return truncate(otherParts.join('\n\n'), MAX_SUMMARY_CHARS);
+  }
+
+  if (exploredOnly) {
+    return EXPLORATION_ONLY_REPLY;
   }
 
   return '未能从工具结果中提取有效信息，请换一种说法或缩小问题范围后重试。';
@@ -82,4 +104,8 @@ function countBracketBlocks(text: string): number {
     cursor = end + 1;
   }
   return count;
+}
+
+function truncate(text: string, maxChars: number): string {
+  return text.length > maxChars ? `${text.slice(0, maxChars)}…` : text;
 }

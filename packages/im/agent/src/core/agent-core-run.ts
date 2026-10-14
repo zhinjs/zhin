@@ -14,6 +14,7 @@ import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
@@ -488,6 +489,8 @@ export async function* runAgentLoopTextTurnRun(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }> = [];
+  /** This turn's prompt plus every message the loop produced; used for reply recovery. */
+  let turnTranscript: AgentMessage[] = [];
 
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
@@ -712,6 +715,7 @@ export async function* runAgentLoopTextTurnRun(
       if (signal?.aborted) continue;
       const userBatch = event.userMessages ?? promptMessages;
       const batch = [...userBatch, ...event.messages];
+      turnTranscript = batch;
       const messageExtras = batch.map((msg, i) => (
         msg.role === 'user' && i === 0 ? userMessageExtra : undefined
       ));
@@ -739,10 +743,6 @@ export async function* runAgentLoopTextTurnRun(
     };
   }
 
-  const reply = sanitizeAssistantReply(lastAssistantText, {
-    toolSummary: formatToolCallsForUser(toolCalls),
-  });
-
   const spawnedSubagent = toolCalls.some(tc => tc.tool === 'spawn_task');
   if (spawnedSubagent) {
     await host.getActiveTurnTracker()?.waitForPendingSubagents();
@@ -754,6 +754,38 @@ export async function* runAgentLoopTextTurnRun(
       && typeof tc.result === 'object'
       && typeof (tc.result as Record<string, unknown>).image === 'string',
     );
+
+  // The loop ran tools but never produced visible text (usually maxIterations
+  // was hit mid-exploration). Ask the model for a tools-off summary instead of
+  // showing raw tool output.
+  const needsReplyRecovery = !delegatedOnly
+    && hasTools
+    && (toolCalls.length > 0 || iterations >= maxIterations)
+    && !lastAssistantText.trim();
+
+  let reply: string;
+  if (needsReplyRecovery) {
+    const summary = await summarizeExhaustedTurn({
+      transport: host.llmRuntime,
+      model: llmModel,
+      systemPrompt,
+      messages: [...loaded.messages, ...turnTranscript],
+      maxIterations,
+      sessionId,
+      signal,
+    });
+    const lastBatch = conversationBatches.at(-1);
+    if (summary.assistant && lastBatch) {
+      lastBatch.messages.push(summary.assistant);
+      lastBatch.messageExtras.push(undefined);
+    }
+    reply = summary.reply;
+    onChunk?.(reply, reply);
+  } else {
+    reply = sanitizeAssistantReply(lastAssistantText, {
+      toolSummary: formatToolCallsForUser(toolCalls),
+    });
+  }
   const finalReply = delegatedOnly ? '' : reply;
 
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {
