@@ -5,6 +5,7 @@ import {
   resolveDeferredApiTools,
 } from '../../src/tool-catalog/tool-catalog.js';
 import { resolveDeferredToolsConfig } from '../../src/tool-catalog/resolve-config.js';
+import { DEFAULT_ALWAYS_LOADED_TOOLS } from '../../src/tool-catalog/types.js';
 import type { AgentTool } from '@zhin.js/ai';
 
 function makeTool(name: string, desc = ''): AgentTool {
@@ -51,5 +52,23 @@ describe('tool-catalog', () => {
     });
     expect(cfg.alwaysLoadedTools).toContain('ask_user');
     expect(cfg.maxLoadedPerSession).toBe(12);
+  });
+
+  it('alwaysLoadedTools extends the default resident set (#740)', () => {
+    const cfg = resolveDeferredToolsConfig({ deferredTools: { alwaysLoadedTools: ['probe_source', 'spawn_task'] } });
+    expect(cfg.alwaysLoadedTools).toEqual([...new Set([...DEFAULT_ALWAYS_LOADED_TOOLS, 'probe_source'])]);
+    expect(cfg.alwaysLoadedTools).toEqual(expect.arrayContaining(['discover', 'load_tool', 'load_skill', 'spawn_task']));
+  });
+
+  it("alwaysLoadedMode 'replace' opts out of the defaults (#740)", () => {
+    const cfg = resolveDeferredToolsConfig({
+      deferredTools: { alwaysLoadedTools: ['spawn_task'], alwaysLoadedMode: 'replace' },
+    });
+    expect(cfg.alwaysLoadedTools).toEqual(['spawn_task']);
+    expect(resolveDeferredToolsConfig({ deferredTools: { alwaysLoadedMode: 'replace' } }).alwaysLoadedTools).toEqual([]);
+  });
+
+  it('no override keeps exactly the defaults', () => {
+    expect(resolveDeferredToolsConfig({}).alwaysLoadedTools).toEqual([...DEFAULT_ALWAYS_LOADED_TOOLS]);
   });
 });
