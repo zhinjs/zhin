@@ -7,6 +7,7 @@ import { RESERVED_TOOL_NAME_PREFIXES, RESERVED_TOOL_NAMES } from '../../src/rese
 import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { ScriptStep } from './scripted-model.js';
+import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
@@ -40,8 +41,19 @@ export interface EvalTool {
   readonly deferred?: boolean;
 }
 
-/** Real native tools the case exposes; they run against the temporary `workspace`. */
-export type EvalNativeTool = 'bash' | 'read_file' | 'write_file' | 'edit_file' | 'list_dir' | 'glob' | 'grep';
+/**
+ * Real native tools the case exposes. File tools and bash run against the
+ * temporary `workspace`; memory tools run against an in-memory store seeded
+ * from `memory`.
+ */
+export type EvalNativeTool =
+  | 'bash' | 'read_file' | 'write_file' | 'edit_file' | 'list_dir' | 'glob' | 'grep'
+  | 'memory_search' | 'memory_upsert';
+
+const MEMORY_TOOLS: readonly EvalNativeTool[] = ['memory_search', 'memory_upsert'];
+
+/** Seed entry for the semantic-memory store (as written by an earlier turn). */
+export type EvalMemoryEntry = MemoryEntryUpsertInput;
 
 /** How the fake approval channel answers approval requests. */
 export type EvalApprovalBehaviour = 'approve' | 'deny' | 'unavailable';
@@ -131,6 +143,8 @@ export interface EvalCase {
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
+  /** Semantic-memory entries present before the first turn (needs a memory native tool). */
+  readonly memory?: readonly EvalMemoryEntry[];
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */
   readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
@@ -170,7 +184,11 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const toolNames = (candidate.tools ?? []).map((tool) => tool.name);
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
-  if (candidate.nativeTools?.length && !candidate.workspace) problems.push('nativeTools need a workspace');
+  const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name));
+  if (workspaceTools.length && !candidate.workspace) problems.push('file and shell nativeTools need a workspace');
+  if (candidate.memory?.length && !candidate.nativeTools?.some((name) => MEMORY_TOOLS.includes(name))) {
+    problems.push('memory seeds need memory_search or memory_upsert in nativeTools');
+  }
   for (const name of toolNames) {
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);

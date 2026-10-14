@@ -313,11 +313,21 @@ export type {
 } from './memory/agent-db-models.js';
 export {
   MEMORY_ENTRY_MODEL,
+  MEMORY_ENTRY_ADDED_COLUMNS,
+  MEMORY_ENTRY_KINDS,
+  MEMORY_ENTRY_HISTORY_LIMIT,
   parseMemoryTags,
   serializeMemoryTags,
+  parseMemoryHistory,
+  isMemoryEntryKind,
+  normalizeMemoryKind,
+  renderMemoryEntriesMarkdown,
 } from './memory/memory-entry-models.js';
 export type {
   MemoryEntryScope,
+  MemoryEntryKind,
+  MemoryEntryTrustLevel,
+  MemoryEntryVersion,
   MemoryEntryRecord,
   MemoryEntryUpsertInput,
   MemoryEntrySearchInput,
@@ -325,8 +335,10 @@ export type {
 export {
   InMemoryMemoryEntryRepository,
   DatabaseMemoryEntryRepository,
+  ensureMemoryEntryColumns,
+  isMemoryEntryExpired,
 } from './memory/memory-entry-repository.js';
-export type { MemoryEntryRepository } from './memory/memory-entry-repository.js';
+export type { MemoryEntryRepository, MemoryEntryLocator } from './memory/memory-entry-repository.js';
 export {
   buildActorPrefix,
   parseAgentMessageExtra,

@@ -18,6 +18,7 @@ description: "AI 一轮对话是怎么运行的：进度显示与取消、按需
 | 工具很多时怎么不撑爆提示词 | [按需加载工具](#按需加载工具) |
 | 把耗时任务交给后台 | [子 Agent 与 spawn_task](#子-agent-与-spawn-task) |
 | 对话历史存在哪里、怎么重置、上下文太长怎么办 | [会话与会话树](#会话与会话树) · [上下文压缩](#上下文压缩) |
+| AI 记住了什么、谁能改记忆 | [语义记忆](#语义记忆) |
 | AI 自带哪些工具、文件和网络的边界 | [内置工具](#内置工具) |
 | 让 AI 每天定时做事 | [定时任务与助手人设](#定时任务与助手人设) |
 | 给某个模型单独调参数 | [按模型调整参数](#按模型调整参数) |
@@ -288,6 +289,28 @@ ai:
       perGroupRequestsPerMinute: 20       # 0 不限（默认）
       exemptOwner: true
 ```
+
+## 语义记忆
+
+开启 `ai.memory.semantic.enabled` 后，`memory_upsert` / `memory_search` 把记忆存进数据库的 `memory_entries` 表。每条记忆包含：
+
+| 字段 | 含义 |
+| --- | --- |
+| `scope` / `scope_key` | 可见范围：`global`、`platform`、`session`（当前会话）、`user`（当前发起人） |
+| `kind` | `user_fact`（稳定事实）、`preference`（偏好）、`task_state`（任务临时状态，会过期）、`episodic`（发生过的事） |
+| `source` / `source_turn` / `trust_level` | 由哪个回合、以哪个[信任级别](#信任分级)写入。由运行时填写，模型无法指定 |
+| `confidence` | 置信度 0–1 |
+| `created_at` / `updated_at` / `expires_at` / `last_used_at` | 创建、更新、过期、最近一次被检索到的时间 |
+| `history` | 内容被覆盖时保留的旧版本（最多 5 个，最新在前） |
+
+写入规则：
+
+- 群成员（`group_member`）只能写自己的 `user` 范围或当前 `session`，不能写 `global` / `platform`；不指定 `scope` 时默认写 `user`。主人和信任成员不指定时仍默认 `global`。
+- 已有的 `user_fact` / `preference` 不能被更低信任级别覆盖，所以群成员改不了主人记下的事实。同级或更高级别写入时以新值为准，旧值进入 `history`。
+- `task_state` 一定会过期：默认 24 小时，`ttl_hours` 最多 168 小时；可用 `task_id` 绑定任务，宿主通过 `SemanticMemoryRuntime` 的 `isTaskActive` 告知任务已结束时，这条状态不再被检索到。
+- 文件记忆（`data/memory/**/MEMORY.md`）保持不变，仍可直接阅读；`renderMemoryEntriesMarkdown()` 可把结构化记忆导出为 Markdown。
+
+升级时，旧版 `memory_entries` 表会在启动时自动补齐新列（`ALTER TABLE … ADD COLUMN`），已有数据不变：旧记录视为 `user_fact`，信任级别为空，按信任成员同级保护。检索方式本次不变，BM25 检索见后续版本。
 
 ## 内置工具
 

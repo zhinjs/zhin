@@ -1,5 +1,9 @@
 import {
+  isMemoryEntryKind,
+  MEMORY_ENTRY_KINDS,
   parseMemoryTags,
+  type MemoryEntryKind,
+  type MemoryEntryLocator,
   type MemoryEntryRecord,
   type MemoryEntryRepository,
   type MemoryEntryScope,
@@ -12,6 +16,8 @@ import {
   type AgentToolDefinition,
   type ToolExecutionContext,
 } from '@zhin.js/tool';
+import { resolveTurnTrustLevel } from '../security/trust-level.js';
+import { decideMemoryWrite, defaultMemoryScope, memoryExpiry } from '../memory/memory-write-policy.js';
 import { rerankDecisionMatches, resolveSearchDecision, type NativeSearchDecisionResolver } from '../decision/retrieval.js';
 
 export interface NativeSemanticMemoryToolFeature {
@@ -20,9 +26,23 @@ export interface NativeSemanticMemoryToolFeature {
   readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, string>>;
 }
 
+export interface SemanticMemoryRuntimeOptions {
+  /**
+   * Whether the task a `task_state` entry is bound to still exists. When it
+   * returns false the entry is hidden from recall (it also expires by TTL).
+   * Without a resolver, bound task state lives until its TTL.
+   */
+  readonly isTaskActive?: (taskId: string) => boolean;
+}
+
 /** Candidate-owned semantic-memory authority. It becomes ready during required DB activation. */
 export class SemanticMemoryRuntime {
   #repository: MemoryEntryRepository | undefined;
+  readonly #options: SemanticMemoryRuntimeOptions;
+
+  constructor(options: SemanticMemoryRuntimeOptions = {}) {
+    this.#options = options;
+  }
 
   activate(repository: MemoryEntryRepository): void {
     if (this.#repository) throw new Error('Semantic memory runtime is already active');
@@ -37,7 +57,25 @@ export class SemanticMemoryRuntime {
     signal.throwIfAborted();
     const result = await this.#requireRepository().search(input);
     signal.throwIfAborted();
-    return result;
+    const isTaskActive = this.#options.isTaskActive;
+    return isTaskActive
+      ? result.filter((entry) => entry.kind !== 'task_state' || !entry.task_id || isTaskActive(entry.task_id))
+      : result;
+  }
+
+  async find(locator: MemoryEntryLocator, signal: AbortSignal) {
+    signal.throwIfAborted();
+    return this.#requireRepository().find(locator);
+  }
+
+  /** Best-effort recall bookkeeping; never fails the search that triggered it. */
+  async markUsed(ids: readonly string[]): Promise<void> {
+    if (ids.length === 0) return;
+    try {
+      await this.#requireRepository().markUsed(ids);
+    } catch {
+      // last_used_at is advisory.
+    }
   }
 
   async upsert(input: MemoryEntryUpsertInput, signal: AbortSignal) {
@@ -73,16 +111,19 @@ export function createNativeSemanticMemoryToolFeatures(
       execute: (input, context) => searchMemory(runtime, input, context, resolveDecision),
     })),
     feature('memory_upsert', defineAgentTool({
-      description: 'Create or update one durable semantic-memory fact in an authorized scope.',
+      description: 'Create or update one durable semantic-memory entry in an authorized scope. '
+        + 'kind: user_fact (stable fact), preference, task_state (temporary, expires), episodic (a past event).',
       inputSchema: Object.freeze({
         type: 'object',
         properties: Object.freeze({
           key: Object.freeze({ type: 'string' }),
           content: Object.freeze({ type: 'string' }),
           scope: Object.freeze({ type: 'string', enum: Object.freeze(['global', 'platform', 'session', 'user']) }),
+          kind: Object.freeze({ type: 'string', enum: MEMORY_ENTRY_KINDS }),
           tags: Object.freeze({ type: 'array', items: Object.freeze({ type: 'string' }), maxItems: 20 }),
-          source: Object.freeze({ type: 'string' }),
           confidence: Object.freeze({ type: 'number', minimum: 0, maximum: 1 }),
+          task_id: Object.freeze({ type: 'string', description: 'Task a task_state entry belongs to.' }),
+          ttl_hours: Object.freeze({ type: 'number', minimum: 0, description: 'Expiry; task_state defaults to 24h (max 168h).' }),
         }),
         required: Object.freeze(['key', 'content']),
       }),
@@ -114,9 +155,11 @@ async function searchMemory(
   const hits = await rerankDecisionMatches(decision, query, candidates,
     entry => `${entry.key}: ${entry.content}\nTags: ${parseMemoryTags(entry.tags).join(', ')}`, limit, context.signal);
   if (hits.length === 0) return `未找到与 "${query}" 相关的记忆条目。`;
+  await runtime.markUsed(hits.map((entry) => entry.id));
   return `找到 ${hits.length} 条记忆：\n${hits.map((entry) => {
     const tags = parseMemoryTags(entry.tags);
     return `- [${entry.scope}${entry.scope_key ? `:${entry.scope_key}` : ''}] ${entry.key}=${entry.content}`
+      + (entry.kind !== 'user_fact' ? ` (${entry.kind})` : '')
       + (tags.length ? ` (tags: ${tags.join(', ')})` : '');
   }).join('\n')}`;
 }
@@ -169,19 +212,35 @@ async function upsertMemory(
 ): Promise<string> {
   const key = requiredString(input.key, 'key');
   const content = requiredString(input.content, 'content');
-  const scope = optionalScope(input.scope) ?? 'global';
+  const level = resolveTurnTrustLevel(context);
+  const scope = optionalScope(input.scope) ?? defaultMemoryScope(level);
+  const kind = optionalKind(input.kind) ?? 'user_fact';
   const tags = Array.isArray(input.tags) ? input.tags.map(String) : undefined;
   const confidence = typeof input.confidence === 'number' ? input.confidence : 1;
+  const ttlHours = typeof input.ttl_hours === 'number' ? input.ttl_hours : undefined;
+  const taskId = kind === 'task_state' && typeof input.task_id === 'string' ? input.task_id.trim() : '';
+  const locator = { scope, scope_key: scopeKey(scope, context), key };
+
+  const existing = await runtime.find(locator, context.signal);
+  const decision = decideMemoryWrite({ level, scope, kind, existing });
+  if (!decision.allowed) return `未写入记忆：${decision.reason}`;
+
+  const expiresAt = memoryExpiry(kind, ttlHours, Date.now());
   const record = await runtime.upsert({
-    scope,
-    scope_key: scopeKey(scope, context),
-    key,
+    ...locator,
     content,
     tags,
-    source: typeof input.source === 'string' ? input.source : 'tool:memory_upsert',
+    kind,
+    // Attribution comes from the turn, never from model input.
+    source: `turn:${context.turnId}`,
+    source_turn: context.turnId,
+    trust_level: level,
+    task_id: taskId,
     confidence,
+    ...(expiresAt !== undefined ? { expires_at: expiresAt } : {}),
   }, context.signal);
-  return `已写入记忆 ${record.id}: [${record.scope}] ${record.key}=${record.content}`;
+  const replaced = existing && existing.content !== record.content ? '（已覆盖旧值，旧版本保留在历史中）' : '';
+  return `已写入记忆 ${record.id}: [${record.scope}] ${record.key}=${record.content}${replaced}`;
 }
 
 function scopeKey(scope: MemoryEntryScope, context: ToolExecutionContext): string {
@@ -198,6 +257,12 @@ function optionalScope(value: unknown): MemoryEntryScope | undefined {
   if (value === undefined) return undefined;
   if (value === 'global' || value === 'platform' || value === 'session' || value === 'user') return value;
   throw new TypeError('scope must be global, platform, session, or user');
+}
+
+function optionalKind(value: unknown): MemoryEntryKind | undefined {
+  if (value === undefined) return undefined;
+  if (isMemoryEntryKind(value)) return value;
+  throw new TypeError(`kind must be one of ${MEMORY_ENTRY_KINDS.join(', ')}`);
 }
 
 function requiredString(value: unknown, field: string): string {

@@ -1,7 +1,13 @@
 /**
  * Wire agent session stores into ZhinAgent.
  */
-import { type AIConfig, AgentSessionStore, DatabaseContextRepository, DatabaseMemoryEntryRepository } from '@zhin.js/ai';
+import {
+  type AIConfig,
+  AgentSessionStore,
+  DatabaseContextRepository,
+  DatabaseMemoryEntryRepository,
+  ensureMemoryEntryColumns,
+} from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import {
@@ -48,17 +54,16 @@ export async function activateAiDatabaseStorage(
   if (semanticEnabled && !semanticMemory) {
     throw new Error('Semantic memory runtime was not prepared');
   }
-  const semanticActivation = semanticEnabled && semanticMemory
-    ? {
-        runtime: semanticMemory,
-        repository: new DatabaseMemoryEntryRepository(
-          requireDatabaseModel<ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0]>(
-            db,
-            'memory_entries',
-          ),
-        ),
-      }
-    : undefined;
+  let semanticActivation: { runtime: SemanticMemoryRuntime; repository: DatabaseMemoryEntryRepository } | undefined;
+  if (semanticEnabled && semanticMemory) {
+    const memoryEntryModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseMemoryEntryRepository>[0]>(
+      db,
+      'memory_entries',
+    );
+    // Tables created before #733 gain the new columns; existing rows are kept.
+    await ensureMemoryEntryColumns(db, memoryEntryModel);
+    semanticActivation = { runtime: semanticMemory, repository: new DatabaseMemoryEntryRepository(memoryEntryModel) };
+  }
 
   const agentSessionStore = new AgentSessionStore(agentSessionModel, {
     sessionIdleArchiveMs: config.sessions?.sessionIdleArchiveMs,
