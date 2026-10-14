@@ -328,6 +328,10 @@ export interface ModelHarnessOverride {
   explorationBudget?: number;
   /** 在系统提示中加入"先规划、限定目标文件"的探索纪律 */
   explorationGuidance?: boolean;
+  /** 每次有进展时延长的步数（覆盖 toolBudget.extendBy） */
+  iterationExtension?: number;
+  /** 单段回合的硬步数上限（覆盖 toolBudget.maxTotalIterations） */
+  maxTotalIterations?: number;
 }
 
 export interface AIConfig {
@@ -466,6 +470,22 @@ export interface AIConfig {
     masterShell?: 'off' | 'isolated';
     /** IM / plugin-runtime 回合的子 Agent：sync 在当前回合内同步运行 spawn_task；off（默认）不提供 */
     subagentTurnMode?: 'off' | 'sync';
+    /** 进度感知的工具调用预算：maxIterations 为软上限，有进展时自动延长；含硬上限与自动续跑 */
+    toolBudget?: {
+      extendBy?: number;
+      progressWindow?: number;
+      maxTotalIterations?: number;
+      maxSubagentTotalIterations?: number;
+      maxWallClockMs?: number;
+      maxTotalTokens?: number;
+      failureStreakLimit?: number;
+      repeatLimit?: number;
+      autoContinue?: 'off' | 'master_dm' | 'on';
+      maxContinuations?: number;
+      progressUpdates?: 'off' | 'private' | 'all';
+      progressMinIntervalMs?: number;
+      progressMaxUpdates?: number;
+    };
     /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 */
     execAllowlist?: string[];
     /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */

@@ -84,6 +84,20 @@ outline: [2, 3]
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | 否 | `"off"` | IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。 |
+| `ai.agent.toolBudget` | object | 否 | — | 进度感知的工具调用预算。maxIterations 为软上限，回合有进展时自动延长；硬上限始终生效。 |
+| `ai.agent.toolBudget.extendBy` | integer | 否 | `10` | 有进展时每次延长的步数；0 关闭。 |
+| `ai.agent.toolBudget.progressWindow` | integer | 否 | `5` | 最近多少步内有进展才延长。 |
+| `ai.agent.toolBudget.maxTotalIterations` | integer | 否 | `40` | 每段回合的硬步数上限。 |
+| `ai.agent.toolBudget.maxSubagentTotalIterations` | integer | 否 | `30` | 回合内子 Agent 的硬步数上限。 |
+| `ai.agent.toolBudget.maxWallClockMs` | integer | 否 | `600000` | 整个回合的时间上限（毫秒）；0 关闭。 |
+| `ai.agent.toolBudget.maxTotalTokens` | integer | 否 | `0` | 整个回合的 Token 上限；0 关闭。 |
+| `ai.agent.toolBudget.failureStreakLimit` | integer | 否 | `3` | 连续失败多少次后不再延长。 |
+| `ai.agent.toolBudget.repeatLimit` | integer | 否 | `2` | 连续重复相同调用多少次后不再延长。 |
+| `ai.agent.toolBudget.autoContinue` | string: `"off"`, `"master_dm"`, `"on"` | 否 | `"master_dm"` | 回合有进展但预算用尽时自动续跑：off 关闭；master_dm 仅主人私聊；on 总是。续跑沿用同一回合的策略与审批。 |
+| `ai.agent.toolBudget.maxContinuations` | integer | 否 | `2` | 每回合最多自动续跑次数。 |
+| `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | 否 | `"private"` | 长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。 |
+| `ai.agent.toolBudget.progressMinIntervalMs` | integer | 否 | `45000` | 两次进度更新的最小间隔（毫秒）。 |
+| `ai.agent.toolBudget.progressMaxUpdates` | integer | 否 | `3` | 每回合最多进度更新次数；0 关闭。 |
 | `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | 否 | `"off"` | IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。 |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
 | `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |

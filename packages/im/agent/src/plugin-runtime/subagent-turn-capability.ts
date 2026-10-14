@@ -1,6 +1,7 @@
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
 import type { AgentCore } from '../core/agent-core.js';
 import { collectAgentLoopTurnRun } from '../core/agent-core-run.js';
+import { resolveToolBudget } from '../core/turn-progress.js';
 import type { ZhinAgentPrivate } from '../internal/agent-host.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnToolExecutionAuthority, TurnToolRuntime } from '../tool/turn-tool-runtime.js';
@@ -206,6 +207,10 @@ async function runSubagentTurn(
     toolLoading: 'deferred',
     conversationPersistence: 'none',
     maxIterations: host.config.maxSubagentIterations,
+    // Same progress-aware budget, lower hard cap, and no auto-continuation:
+    // an unfinished sub-agent reports back to the parent instead.
+    maxTotalIterations: resolveToolBudget(host.config.toolBudget).maxSubagentTotalIterations,
+    autoContinuation: false,
     generation: parentTurn.identity.generation,
   }));
   return result.reply.trim() || '子任务结束，但没有生成报告。';

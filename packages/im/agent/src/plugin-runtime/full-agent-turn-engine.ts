@@ -26,6 +26,7 @@ import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
+import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
 import {
   createSubagentTurnCapability,
   type SubagentModelSelection,
@@ -231,6 +232,7 @@ async function* runInteractiveTurn(
       toolCatalog: plan.catalog,
       toolLoading: 'deferred',
       conversationPersistence: 'session',
+      progressSink: createProgressSink(host, context.turn),
       generation: context.turn.identity.generation,
     }),
   });
@@ -567,4 +569,22 @@ function subagentsEnabled(host: ZhinAgentPrivate, turn: TurnIngress): boolean {
   if (host.config.subagentTurnMode !== 'sync') return false;
   return !turn.session.key.startsWith('workroom:')
     && !turn.principal.roles.includes('workroom_assignment');
+}
+
+/**
+ * Progress updates go out as normal (not auto-recalled) replies next to the
+ * activity indicator. Outbound messages are recorded without an actor, so the
+ * conversation event feed already keeps them out of later background context.
+ */
+function createProgressSink(
+  host: ZhinAgentPrivate,
+  turn: TurnIngress,
+): ((text: string) => Promise<void>) | undefined {
+  const reply = turn.ports.reply;
+  if (!reply || turn.policy.unattended) return undefined;
+  if (!progressUpdatesAllowed(resolveToolBudget(host.config.toolBudget).progressUpdates, turn)) return undefined;
+  return async (text) => {
+    const delivery = await reply.send([{ type: 'text', content: text }]);
+    if (delivery.status !== 'sent') throw new Error(`progress update not sent: ${delivery.status}`);
+  };
 }

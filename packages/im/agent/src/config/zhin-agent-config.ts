@@ -1,3 +1,4 @@
+import type { ToolBudgetSettings } from '../core/turn-progress.js';
 /**
  * ZhinAgent 配置类型 SSOT — 供 host 契约与 zhin-agent 门面共用。
  */
@@ -72,6 +73,8 @@ export interface ZhinAgentConfig {
   maxSubagentIterations?: number;
   /** Plugin-runtime turns: `sync` offers spawn_task as an in-turn sub-agent; `off` (default) hides it. */
   subagentTurnMode?: 'off' | 'sync';
+  /** Progress-aware tool budget (soft maxIterations + extensions, hard caps, auto-continuation). */
+  toolBudget?: Partial<ToolBudgetSettings>;
   subagentTools?: string[];
   subagentTurnWaitMs?: number;
   modelSizeHint?: '' | 'small' | 'medium' | 'large';

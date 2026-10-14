@@ -15,7 +15,8 @@ export const EXPLORATION_GUIDANCE = [
  * Counts consecutive read-only exploration tool calls in one Turn. When the
  * count reaches the budget (and every further multiple), it returns a harness
  * note to append to that tool result so the model stops wandering and either
- * acts, answers, or reports its plan. Any non-exploration tool resets it.
+ * acts, answers, or reports its plan. It resets on the Turn progress signal
+ * (see turn-progress.ts); other non-exploration calls leave it unchanged.
  */
 export class ExplorationBudget {
   readonly #budget: number;
@@ -25,10 +26,10 @@ export class ExplorationBudget {
     this.#budget = Number.isFinite(budget) && budget > 0 ? Math.floor(budget) : 0;
   }
 
-  record(toolName: string): string | undefined {
+  record(toolName: string, progressed = !EXPLORATION_TOOLS.has(toolName)): string | undefined {
     if (this.#budget === 0) return undefined;
     if (!EXPLORATION_TOOLS.has(toolName)) {
-      this.#consecutive = 0;
+      if (progressed) this.#consecutive = 0;
       return undefined;
     }
     this.#consecutive += 1;

@@ -252,4 +252,13 @@ describe('spawn_task on the plugin-runtime (QQ) turn path', () => {
       reason: 'approval required but ApprovalPort unavailable',
     });
   });
+
+  it('surfaces sub-agent progress only through the parent and caps the sub-agent budget', async () => {
+    const { parent, child } = await runQqTurn({ policy: NO_SHELL, tools: [capability('read_file')] });
+    expect(typeof parent?.progressSink).toBe('function');
+    expect(child!.progressSink).toBeUndefined();
+    expect(child!.autoContinuation).toBe(false);
+    expect(child!.maxTotalIterations).toBe(30);
+  });
 });
+
