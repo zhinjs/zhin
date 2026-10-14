@@ -10,6 +10,18 @@ import {
 } from '@zhin.js/tool';
 import { MAX_EDIT_FILE_SIZE, MAX_READ_FILE_SIZE, isFileStale } from '../security/file-policy.js';
 import { findActualStringInFile, preserveQuoteStyleInEdit } from './file-edit-quote-utils.js';
+import { walkWorkspaceFiles } from './file-search-scope.js';
+
+/** Output budgets keep one exploratory call from flooding the model context. */
+const MAX_READ_LINES = 2_000;
+const MAX_LINE_CHARS = 500;
+const MAX_LIST_ENTRIES = 500;
+const MAX_GLOB_FILES = 100;
+const DEFAULT_GREP_MATCHES = 50;
+const MAX_GREP_MATCHES = 200;
+const MAX_GREP_OUTPUT_BYTES = 24 * 1024;
+const MAX_GREP_FILE_BYTES = 2 * 1024 * 1024;
+const NARROW_HINT = 'narrow the pattern, path, or include filter to see more';
 
 export interface NativeFileToolFeature {
   readonly feature: typeof toolFeatureId;
@@ -21,7 +33,7 @@ export interface NativeFileToolFeature {
 export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[] {
   return Object.freeze([
     feature('read_file', defineAgentTool({
-      description: 'Read a UTF-8 text file inside the authorized workspace with optional line slicing.',
+      description: `Read a UTF-8 text file inside the authorized workspace with optional line slicing (at most ${MAX_READ_LINES} lines per call).`,
       inputSchema: objectSchema({
         file_path: { type: 'string', description: 'Path relative to the authorized workspace' },
         offset: { type: 'number', description: 'Zero-based first line' },
@@ -50,13 +62,14 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
       execute: editFile,
     })),
     feature('list_dir', defineAgentTool({
-      description: 'List entries in a directory inside the authorized workspace.',
+      description: `List up to ${MAX_LIST_ENTRIES} entries in a directory inside the authorized workspace.`,
       inputSchema: objectSchema({ path: { type: 'string', description: 'Directory path' } }, ['path']),
       requiresApproval: 'never',
       execute: listDir,
     })),
     feature('glob', defineAgentTool({
-      description: 'Find up to 100 files matching a glob pattern inside the authorized workspace.',
+      description: `Find up to ${MAX_GLOB_FILES} files matching a glob pattern inside the authorized workspace. `
+        + 'Skips node_modules, .git, build output and .gitignore matches unless cwd points inside them.',
       inputSchema: objectSchema({
         pattern: { type: 'string', description: 'Glob pattern such as **/*.ts' },
         cwd: { type: 'string', description: 'Search directory inside the workspace' },
@@ -65,13 +78,15 @@ export function createNativeFileToolFeatures(): readonly NativeFileToolFeature[]
       execute: globFiles,
     })),
     feature('grep', defineAgentTool({
-      description: 'Search UTF-8 files by regular expression inside the authorized workspace.',
+      description: 'Search UTF-8 files by a specific regular expression inside the authorized workspace. '
+        + 'Skips node_modules, .git, build output and .gitignore matches unless path points inside them. '
+        + 'To view a whole file use read_file; to find files use glob or list_dir.',
       inputSchema: objectSchema({
         pattern: { type: 'string', description: 'Regular expression' },
         path: { type: 'string', description: 'File or directory to search' },
         include: { type: 'string', description: 'Optional file glob' },
         ignore_case: { type: 'boolean' },
-        limit: { type: 'number', description: 'Maximum matching lines' },
+        limit: { type: 'number', description: `Maximum matching lines (default ${DEFAULT_GREP_MATCHES}, max ${MAX_GREP_MATCHES})` },
       }, ['pattern']),
       requiresApproval: 'never',
       execute: grepFiles,
@@ -99,10 +114,16 @@ async function readFile(input: Record<string, unknown>, context: ToolExecutionCo
   const content = await fs.readFile(target, { encoding: 'utf8', signal: context.signal });
   const lines = content.split('\n');
   const offset = nonNegativeInteger(input.offset, 0);
-  const limit = nonNegativeInteger(input.limit, lines.length);
-  const sliced = lines.slice(offset, offset + limit);
-  const numbered = sliced.map((line, index) => `${offset + index + 1} | ${line}`).join('\n');
-  return `File: ${target} (${lines.length} lines, showing ${offset + 1}-${Math.min(offset + limit, lines.length)})\n${numbered}`;
+  const limit = Math.min(nonNegativeInteger(input.limit, MAX_READ_LINES), MAX_READ_LINES);
+  const end = Math.min(offset + limit, lines.length);
+  const numbered = lines.slice(offset, end)
+    .map((line, index) => `${offset + index + 1} | ${clipLine(line)}`)
+    .join('\n');
+  const header = `File: ${target} (${lines.length} lines, showing ${offset + 1}-${end})`;
+  const more = end < lines.length
+    ? `\n[${lines.length - end} more lines; call read_file again with offset=${end} to continue]`
+    : '';
+  return `${header}\n${numbered}${more}`;
 }
 
 async function writeFile(input: Record<string, unknown>, context: ToolExecutionContext): Promise<string> {
@@ -138,11 +159,14 @@ async function listDir(input: Record<string, unknown>, context: ToolExecutionCon
   const target = authorizedAbsolutePath(input.path, context);
   context.signal.throwIfAborted();
   const entries = await fs.readdir(target, { withFileTypes: true });
-  return entries.length === 0
-    ? `Directory ${target} is empty`
-    : entries.sort((left, right) => left.name.localeCompare(right.name))
-      .map((entry) => `${entry.isDirectory() ? '[DIR]  ' : '       '}${entry.name}`)
-      .join('\n');
+  if (entries.length === 0) return `Directory ${target} is empty`;
+  const listed = entries.sort((left, right) => left.name.localeCompare(right.name))
+    .slice(0, MAX_LIST_ENTRIES)
+    .map((entry) => `${entry.isDirectory() ? '[DIR]  ' : '       '}${entry.name}`)
+    .join('\n');
+  return entries.length > MAX_LIST_ENTRIES
+    ? `${listed}\n[truncated: showing ${MAX_LIST_ENTRIES} of ${entries.length} entries; use glob with a narrower pattern]`
+    : listed;
 }
 
 async function globFiles(input: Record<string, unknown>, context: ToolExecutionContext): Promise<string> {
@@ -150,60 +174,105 @@ async function globFiles(input: Record<string, unknown>, context: ToolExecutionC
   const pattern = requiredString(input.pattern, 'pattern');
   const matches: string[] = [];
   const matcher = globMatcher(pattern);
-  for await (const file of walkFiles(root, context.signal)) {
+  let truncated = false;
+  for await (const file of walkWorkspaceFiles(root, workspaceRootOf(context), context.signal)) {
     const relative = slash(path.relative(root, file));
-    if (matcher.test(relative)) matches.push(relative);
-    if (matches.length >= 100) break;
+    if (!matcher.test(relative)) continue;
+    if (matches.length >= MAX_GLOB_FILES) {
+      truncated = true;
+      break;
+    }
+    matches.push(relative);
   }
-  return matches.length === 0
-    ? `No files matching '${pattern}'`
-    : `Found ${matches.length} files:\n${matches.join('\n')}`;
+  if (matches.length === 0) return `No files matching '${pattern}'`;
+  const notice = truncated ? `\n[truncated at ${MAX_GLOB_FILES} files; ${NARROW_HINT}]` : '';
+  return `Found ${matches.length} files:\n${matches.join('\n')}${notice}`;
 }
 
 async function grepFiles(input: Record<string, unknown>, context: ToolExecutionContext): Promise<string> {
   const root = authorizedAbsolutePath(input.path, context);
   const pattern = requiredString(input.pattern, 'pattern');
   const expression = new RegExp(pattern, input.ignore_case === true ? 'i' : undefined);
+  assertSelectivePattern(pattern, expression);
   const include = typeof input.include === 'string' && input.include.trim()
     ? globMatcher(input.include)
     : undefined;
-  const limit = Math.max(1, nonNegativeInteger(input.limit, 50));
+  const limit = Math.min(Math.max(1, nonNegativeInteger(input.limit, DEFAULT_GREP_MATCHES)), MAX_GREP_MATCHES);
   const stat = await fs.stat(root);
-  const files = stat.isDirectory() ? walkFiles(root, context.signal) : singleFile(root);
+  const files = stat.isDirectory()
+    ? walkWorkspaceFiles(root, workspaceRootOf(context), context.signal)
+    : singleFile(root);
   const matches: string[] = [];
-  for await (const file of files) {
+  let bytes = 0;
+  let truncated: string | undefined;
+  search: for await (const file of files) {
     context.signal.throwIfAborted();
     if (include && !include.test(path.basename(file))) continue;
-    let content: string;
-    try {
-      content = await fs.readFile(file, { encoding: 'utf8', signal: context.signal });
-    } catch {
-      continue;
-    }
+    const content = await readSearchableText(file, context.signal);
+    if (content === undefined) continue;
     const lines = content.split('\n');
     for (let index = 0; index < lines.length; index += 1) {
-      expression.lastIndex = 0;
-      if (expression.test(lines[index]!)) matches.push(`${slash(path.relative(root, file) || path.basename(file))}:${index + 1}:${lines[index]}`);
-      if (matches.length >= limit) break;
+      if (!expression.test(lines[index]!)) continue;
+      const match = `${slash(path.relative(root, file) || path.basename(file))}:${index + 1}:${clipLine(lines[index]!)}`;
+      if (matches.length >= limit) {
+        truncated = `${limit} matches`;
+        break search;
+      }
+      bytes += Buffer.byteLength(match) + 1;
+      if (bytes > MAX_GREP_OUTPUT_BYTES) {
+        truncated = `${MAX_GREP_OUTPUT_BYTES} bytes`;
+        break search;
+      }
+      matches.push(match);
     }
-    if (matches.length >= limit) break;
   }
-  return matches.length === 0 ? `No matches for '${pattern}'` : matches.join('\n');
+  if (matches.length === 0) return `No matches for '${pattern}'`;
+  return truncated
+    ? `${matches.join('\n')}\n[truncated at ${truncated}; ${NARROW_HINT}]`
+    : matches.join('\n');
 }
 
-async function* walkFiles(root: string, signal: AbortSignal): AsyncGenerator<string> {
-  const entries = await fs.readdir(root, { withFileTypes: true });
-  entries.sort((left, right) => left.name.localeCompare(right.name));
-  for (const entry of entries) {
-    signal.throwIfAborted();
-    const target = path.join(root, entry.name);
-    if (entry.isDirectory()) yield* walkFiles(target, signal);
-    else if (entry.isFile()) yield target;
+/**
+ * A pattern that matches the empty string matches every line of every file:
+ * it dumps whole trees into context instead of locating anything.
+ */
+function assertSelectivePattern(pattern: string, expression: RegExp): void {
+  if (!expression.test('')) return;
+  throw new Error(
+    `grep pattern '${pattern}' matches every line, so it cannot locate anything. `
+    + 'Use read_file to view a file, glob or list_dir to find files, '
+    + 'or give grep a specific text or regular expression to look for.',
+  );
+}
+
+/** Skip oversized and binary files: they are never useful grep context. */
+async function readSearchableText(file: string, signal: AbortSignal): Promise<string | undefined> {
+  try {
+    const stat = await fs.stat(file);
+    if (stat.size > MAX_GREP_FILE_BYTES) return undefined;
+    const buffer = await fs.readFile(file, { signal });
+    if (buffer.subarray(0, 8_192).includes(0)) return undefined;
+    return buffer.toString('utf8');
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return undefined;
   }
+}
+
+function clipLine(line: string): string {
+  return line.length > MAX_LINE_CHARS
+    ? `${line.slice(0, MAX_LINE_CHARS)}… [line truncated, ${line.length} chars]`
+    : line;
 }
 
 async function* singleFile(file: string): AsyncGenerator<string> {
   yield file;
+}
+
+function workspaceRootOf(context: ToolExecutionContext): string {
+  const workspaceRoot = context.policy.filesystem?.workspaceRoot;
+  if (!workspaceRoot) throw new Error('File input was not authorized by TurnToolRuntime');
+  return workspaceRoot;
 }
 
 function authorizedAbsolutePath(value: unknown, context: ToolExecutionContext): string {
@@ -236,8 +305,10 @@ function globMatcher(pattern: string): RegExp {
   for (let index = 0; index < pattern.length; index += 1) {
     const character = pattern[index]!;
     if (character === '*' && pattern[index + 1] === '*') {
-      source += '.*';
-      index += 1;
+      // `**/` also matches zero directories, so `**/package.json` finds the root manifest.
+      const spansSeparator = pattern[index + 2] === '/';
+      source += spansSeparator ? '(?:.*/)?' : '.*';
+      index += spansSeparator ? 2 : 1;
     } else if (character === '*') source += '[^/]*';
     else if (character === '?') source += '[^/]';
     else source += character.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
