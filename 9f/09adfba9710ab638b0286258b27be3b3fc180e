@@ -1,0 +1,31 @@
+.changeset/agent-im-bash-policy.md
+  s_c757df74f34330::t_54270da3a52b5e 1-8
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_c757df74f34330::t_2f3327c33fb7e0 265-266
+basic/cli/src/plugin-runtime/agent/turn/sandbox-policy.ts
+  s_c757df74f34330::t_14b23e62b4fdb9 7-10,36-41,84-99
+docs/configuration/generated.md
+  s_c757df74f34330::t_7634424093f33a 86
+docs/en/configuration/generated.md
+  s_c757df74f34330::t_1bbde8ba8540b0 86
+packages/im/ai/src/types.ts
+  s_c757df74f34330::t_beac91b0a4a1f9 452-457
+packages/im/runtime/src/host-config-schema.json
+  s_c757df74f34330::t_f182cc26464fdd 141-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9f09adfba9710ab638b0286258b27be3b3fc180e",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
