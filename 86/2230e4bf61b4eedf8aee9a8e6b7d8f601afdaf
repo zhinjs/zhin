@@ -1,0 +1,27 @@
+packages/im/agent/evals/README.md
+  s_c757df74f34330::t_1ebdda9ed7eb86 132-134
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_1c09554ed3a445 21,114,117-119,167-172,174,182,199
+packages/im/agent/evals/framework/framework.test.ts
+  s_c757df74f34330::t_54c3370c723712 121,124-125,128
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_c757df74f34330::t_bb18cb3fc74bbd 2,313,316,318-319
+packages/im/agent/src/security/group-member-policy.ts
+  s_c757df74f34330::t_3f5e31e7909b42 63-80
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "862230e4bf61b4eedf8aee9a8e6b7d8f601afdaf",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
