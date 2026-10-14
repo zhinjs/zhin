@@ -1,0 +1,29 @@
+.changeset/agent-exploration-harness.md
+  s_c757df74f34330::t_eedb5ee2b743f8 1-6
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_c757df74f34330::t_eaa84903767297 12-15,55-57,59-72,80,84
+packages/im/agent/src/config/model-harness.ts
+  s_c757df74f34330::t_7a8034637b1849 3-6,18-19,24-25
+packages/im/agent/src/core/agent-core-run.ts
+  s_c757df74f34330::t_d096772e30bbf4 42-46,489-494,661-662
+packages/im/agent/src/core/exploration-budget.ts
+  s_c757df74f34330::t_7e5936d2b214d5 1-41
+packages/im/agent/tests/core/exploration-budget.test.ts
+  s_c757df74f34330::t_ff540a40aec63f 1-51
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4d688b878272029faca223b289a1bd835887d72e",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
