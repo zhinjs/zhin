@@ -7,10 +7,10 @@
  *
  * Levels, from most to least trusted:
  * - owner:            the bot master (`master` role).
- * - trusted_member:   a member on the `trigger.trusted` list; also private
- *                     chats and non-IM ingress, which keep their configured
- *                     policy unchanged.
- * - group_member:     anyone else speaking in a group or channel.
+ * - trusted_member:   a member on the `trigger.trusted` list; also non-IM
+ *                     ingress, which keeps its configured policy unchanged.
+ * - group_member:     anyone else reaching the bot over IM — in a group or
+ *                     channel, or in a private chat (#753).
  * - external_content: never initiates a turn; labels data inside a turn.
  *
  * Replaces the #719 group-member stopgap.
@@ -45,7 +45,7 @@ export const TRUST_CEILINGS: Readonly<Record<TrustLevel, TrustCeiling>> = Object
 export const TRUST_LEVEL_POLICY = 'trust-level';
 
 export const TRUST_RESTRICTION_REASON =
-  '群成员发起的对话暂不支持执行命令、写入文件或向其他会话发消息；如确有需要，请联系主人处理或将你加入信任名单。';
+  '非主人且不在信任名单中的用户发起的对话暂不支持执行命令、写入文件或向其他会话发消息；如确有需要，请联系主人处理或将你加入信任名单。';
 
 const FILE_WRITE_TOOLS = new Set([
   'write_file',
@@ -73,8 +73,9 @@ export function resolveTurnTrustLevel(turn: TrustTurnView): InitiatorTrustLevel 
   const roles = turn.principal.roles;
   if (roles.includes('master')) return 'owner';
   if (roles.includes('trusted')) return 'trusted_member';
-  const shared = turn.origin.kind === 'im' && (turn.origin.scope === 'group' || turn.origin.scope === 'channel');
-  return shared ? 'group_member' : 'trusted_member';
+  // Any IM sender that is neither owner nor on the trusted list — including a
+  // stranger in a private chat (#753) — gets the group_member ceiling.
+  return turn.origin.kind === 'im' ? 'group_member' : 'trusted_member';
 }
 
 /** True when the tool needs authority that `level` does not have. */
