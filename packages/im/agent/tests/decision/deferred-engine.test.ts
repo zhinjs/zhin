@@ -1,4 +1,5 @@
 import { createUserMessage, type AgentTool, type DecisionProvider } from '@zhin.js/ai';
+import { UsageQuota } from '../../src/security/usage-quota.js';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
@@ -40,7 +41,8 @@ it('awaits authorized Jev Skill activation before prompt assembly and AgentCore 
   } };
   const host = {
     emitter: new ZhinAgentEventEmitter(new AgentEventBus()), config: { deferredTools: {} },
-    rateLimiter: { check: () => ({ allowed: true }) }, promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
+    rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(), promptController: new PromptController('one-at-a-time', 'one-at-a-time'),
     contextRepository: { getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
       setDeferredToolSnapshot: persisted }, finalizeActiveTurn: async () => undefined,
   };

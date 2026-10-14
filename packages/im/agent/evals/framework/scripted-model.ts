@@ -44,10 +44,11 @@ export type ScriptFault =
 /**
  * One model response: a final text answer, one or more tool calls, or a fault.
  * `model` optionally pins which model id must receive this request (fallback cases).
+ * `tokens` reports that many total tokens for the response (default 0), for quota cases.
  */
 export type ScriptStep = (
-  | Readonly<{ text: string }>
-  | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string }>
+  | Readonly<{ text: string; tokens?: number }>
+  | Readonly<{ toolCalls: readonly ScriptedToolCall[]; text?: string; tokens?: number }>
   | Readonly<{ fault: ScriptFault }>
 ) & Readonly<{ model?: string }>;
 
@@ -233,10 +234,15 @@ function toAssistantMessage(step: ScriptStep, index: number, modelId: string): A
     api: 'ai-sdk',
     provider: PROVIDER_ALIAS,
     model: modelId,
-    usage: { ...EMPTY_TOKEN_USAGE },
+    usage: scriptedUsage(step),
     stopReason: calls.length > 0 ? 'toolCalls' : 'stop',
     timestamp: 0,
   };
+}
+
+function scriptedUsage(step: ScriptStep): AssistantMessage['usage'] {
+  const tokens = 'tokens' in step && typeof step.tokens === 'number' ? step.tokens : 0;
+  return { ...EMPTY_TOKEN_USAGE, input: tokens, totalTokens: tokens };
 }
 
 function lastUserText(context: Context): string {

@@ -88,6 +88,7 @@ import { disposeZhinAgentResources } from '../init/dispose-zhin-agent.js';
 import type { PhaseTraceConfig } from '../internal/phase-trace.js';
 import type { ApprovalPort } from '../session/approval-port.js';
 import type { TurnEvent } from '../event/turn-event.js';
+import { UsageQuota } from '../security/usage-quota.js';
 import type {
   IAgentTurnProcessor,
   IAgentSessionManager,
@@ -149,6 +150,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
   readonly externalTools: Map<string, RegisteredAgentTool> = new Map();
   userProfiles: UserProfileStore;
   rateLimiter: RateLimiter;
+  readonly usageQuota: UsageQuota;
   subagentSystem: SubagentSystem | null = null;
   private configuredBootstrapContext: string = '';
   private configuredGlobalContext: string = '';
@@ -227,6 +229,7 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.config = merged;
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
+    this.usageQuota = new UsageQuota(this.config.usageQuota);
     this.promptController = new PromptController(
       this.config.steeringMode,
       this.config.followUpMode,

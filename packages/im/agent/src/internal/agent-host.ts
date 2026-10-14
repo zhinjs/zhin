@@ -76,6 +76,8 @@ export interface AgentTurnLifecycleHost {
   readonly phaseConfig: HostPhaseTraceConfig;
   readonly promptTraceConfig: HostPromptTraceConfig;
   readonly rateLimiter: RateLimiter;
+  /** Per-user / per-group token quotas and group rate limit (#727). */
+  readonly usageQuota: import('../security/usage-quota.js').UsageQuota;
   beginActiveTurn(): void;
   finalizeActiveTurn(
     partial: Omit<HostTurnMetrics, 'usage' | 'mainUsage' | 'subagentUsage'> & { usage: Usage },

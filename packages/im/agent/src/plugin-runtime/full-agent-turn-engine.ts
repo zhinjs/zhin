@@ -27,6 +27,11 @@ import { createTurnActivityProjector } from '../activity-feedback/turn-event-pro
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
 import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
+import { TurnProvenance } from '../security/provenance.js';
+import { OutboundLeakInspector, guardReplyPort, type LeakFinding } from '../security/outbound-leak-guard.js';
+import { resolveTurnTrustLevel } from '../security/trust-level.js';
+import type { UsageSubject } from '../security/usage-quota.js';
+import { getLogger } from '@zhin.js/logger';
 import {
   createSubagentTurnCapability,
   type SubagentModelSelection,
@@ -40,6 +45,8 @@ export interface FullAgentTurnEngineOptions {
   readonly loopHooks?: PluginAILoopHookRegistry;
   readonly bootstrapContext?: string;
 }
+
+const logger = getLogger('FullAgentTurnEngine');
 
 /** Generation-owned adapter from canonical TurnIngress to the one full AgentCore. */
 export function createFullAgentTurnEngine(options: FullAgentTurnEngineOptions): AgentTurnEngine {
@@ -92,6 +99,27 @@ async function* runInteractiveTurn(
           emitActivityStop(host, payload, {
             event: 'ai.processing.finish',
             extra: { path: 'rate_limited', reply: text, reason: 'rate_limited' },
+          });
+        }
+      },
+    };
+  }
+
+  const quotaSubject = usageSubjectOf(context.turn, prep.userId);
+  const quota = host.usageQuota.check(quotaSubject);
+  if (!quota.allowed) {
+    // #727: only this user (or this group) is stopped; everyone else carries on.
+    const end = terminal(quota.message, zeroUsage());
+    yield end;
+    return {
+      project: async () => {
+        try {
+          await sessionSystem.touchAfterTurn(host, prep.sessionId);
+          if (context.turn.ports.reply) await context.turn.ports.reply.send(end.output);
+        } finally {
+          emitActivityStop(host, payload, {
+            event: 'ai.processing.finish',
+            extra: { path: 'rate_limited', reply: quota.message, reason: 'quota_exceeded' },
           });
         }
       },
@@ -186,7 +214,17 @@ async function* runInteractiveTurn(
     media,
   );
   subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
-  const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities);
+  const provenance = new TurnProvenance();
+  if (contextText) provenance.record({ kind: 'conversation_context' });
+  const leakInspector = new OutboundLeakInspector({
+    promptTexts: [prompt.personaEnhanced, options.bootstrapContext ?? ''],
+  });
+  const reply = guardedReply(host, context.turn, leakInspector);
+  const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
+    injectionGuard: host.config.injectionGuard,
+    provenance,
+    leakInspector,
+  });
   const promptRuntime = Object.freeze({
     bootstrapContext: buildCapabilityBootstrap(
       options.bootstrapContext,
@@ -234,7 +272,7 @@ async function* runInteractiveTurn(
       toolCatalog: plan.catalog,
       toolLoading: 'deferred',
       conversationPersistence: 'session',
-      progressSink: createProgressSink(host, context.turn),
+      progressSink: createProgressSink(host, context.turn, reply),
       generation: context.turn.identity.generation,
     }),
   });
@@ -250,11 +288,12 @@ async function* runInteractiveTurn(
   return {
     project: async () => {
       try {
-        if (completion.terminal.type === 'turn_end' && context.turn.ports.reply) {
+        host.usageQuota.record(quotaSubject, completion.result.usage.total_tokens);
+        if (completion.terminal.type === 'turn_end' && reply) {
           const outbound = completion.terminal.output.length > 0
             ? completion.terminal.output
             : buildTextTurnOutbound(completion.result.reply, completion.result);
-          const delivery = await context.turn.ports.reply.send(outbound);
+          const delivery = await reply.send(outbound);
           if (
             delivery.status === 'failed'
             || delivery.status === 'rejected'
@@ -354,7 +393,9 @@ async function* runScheduleTurn(
     },
     activeSkillsContext,
   });
-  const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities);
+  const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities, {
+    injectionGuard: host.config.injectionGuard,
+  });
   const promptRuntime = Object.freeze({
     bootstrapContext: options.bootstrapContext,
     activeSkillsContext,
@@ -591,14 +632,42 @@ function subagentsEnabled(host: ZhinAgentPrivate, turn: TurnIngress): boolean {
 function createProgressSink(
   host: ZhinAgentPrivate,
   turn: TurnIngress,
+  reply: TurnIngress['ports']['reply'],
 ): ((text: string) => Promise<void>) | undefined {
-  const reply = turn.ports.reply;
   if (!reply || turn.policy.unattended) return undefined;
   if (!progressUpdatesAllowed(resolveToolBudget(host.config.toolBudget).progressUpdates, turn)) return undefined;
   return async (text) => {
     const delivery = await reply.send([{ type: 'text', content: text }]);
     if (delivery.status !== 'sent') throw new Error(`progress update not sent: ${delivery.status}`);
   };
+}
+
+/**
+ * #727 M3.4: the turn's ReplyPort with the outbound leak check in front of
+ * it. Findings are masked, logged without their content, and the message
+ * continues down the normal send chain.
+ */
+function guardedReply(
+  host: ZhinAgentPrivate,
+  turn: TurnIngress,
+  inspector: OutboundLeakInspector,
+): TurnIngress['ports']['reply'] {
+  const reply = turn.ports.reply;
+  if (!reply || host.config.injectionGuard?.outboundCheck === 'off') return reply;
+  return guardReplyPort(reply, inspector, (findings: readonly LeakFinding[]) => {
+    logger.warn(`outbound leak masked in turn ${turn.identity.turnId}: ${findings.map((f) => `${f.kind}×${f.count}`).join(', ')}`);
+  });
+}
+
+/** Quota key for a turn: the sender, plus the group when the turn comes from a group or channel. */
+function usageSubjectOf(turn: TurnIngress, userId: string): UsageSubject {
+  const origin = turn.origin;
+  const shared = origin.kind === 'im' && (origin.scope === 'group' || origin.scope === 'channel');
+  return Object.freeze({
+    userId,
+    ...(shared ? { groupId: `${origin.platform}:${origin.endpoint}:${origin.sceneId}` } : {}),
+    owner: resolveTurnTrustLevel(turn) === 'owner',
+  });
 }
 
 function labelThirdPartyGuidance(source: string, content: string): string {
