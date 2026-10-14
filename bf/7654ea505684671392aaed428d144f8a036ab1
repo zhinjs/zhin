@@ -1,0 +1,41 @@
+.changeset/add-endpoint-self-user-id.md
+  s_18b2877d46eac6::t_80e24641f6d670 9-10
+docs/plans/workroom-group-collaboration-progress.md
+  s_18b2877d46eac6::t_16b112c26fd39f 65-67,201-206,229
+packages/im/adapter/src/peer-registry.ts
+  s_18b2877d46eac6::t_62368e6b063906 32-33,61-94,102-105,111-114,136-139,143-144,148-149
+packages/im/adapter/tests/endpoint-self-user-id.test.ts
+  s_18b2877d46eac6::t_91f47440dc42cb 109-124
+packages/im/adapter/tests/peer-registry.test.ts
+  s_18b2877d46eac6::t_e85854c030f5f1 33-48,69-93
+plugins/adapters/icqq/src/endpoint.ts
+  s_18b2877d46eac6::t_5fbbeab233add2 596-605
+plugins/adapters/icqq/tests/icqq-self-user-id.test.ts
+  s_18b2877d46eac6::t_9091498757b687 70-91
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_18b2877d46eac6::t_3f6f28a369264b 69,108,127,133,168,212
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_18b2877d46eac6::t_d51bbd0b194482 145,173,216
+plugins/adapters/onebot11/tests/onebot11-factory-defaults.test.ts
+  s_18b2877d46eac6::t_eefbcee90d46cd 1-36
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  s_18b2877d46eac6::t_82ac23b2be6aca 6,129-238
+plugins/adapters/sandbox/src/endpoint.ts
+  s_18b2877d46eac6::t_60b39975e23c68 1
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bf7654ea505684671392aaed428d144f8a036ab1",
+  "prompts": {},
+  "sessions": {
+    "s_18b2877d46eac6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bdd7343-433a-42ad-8926-f428279e6858",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
