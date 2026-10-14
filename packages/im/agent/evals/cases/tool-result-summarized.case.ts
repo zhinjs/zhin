@@ -5,6 +5,7 @@ const RAW_WEATHER = JSON.stringify({ city: 'Shanghai', condition: 'light rain', 
 export default defineEvalCase({
   id: 'tool-result-summarized',
   description: 'Private chat: the agent calls a tool and replies in prose without echoing the raw tool payload.',
+  source: 'QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format)',
   tags: ['tool-use'],
   inbound: { text: '上海今天天气怎么样？' },
   tools: [

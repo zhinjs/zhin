@@ -3,7 +3,11 @@
  * session/context systems) around the scripted model, builds a canonical
  * TurnIngress per inbound message and runs it through FullAgentTurnEngine.
  */
-import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { createCapabilitySlot, rootPluginId, type RuntimeSnapshot } from '@zhin.js/plugin-runtime';
+import { ToolIndex } from '@zhin.js/tool';
 import { AgentCore } from '../../src/core/agent-core.js';
 import { DEFAULT_AGENT_CORE_CONFIG, createDefaultAgentCoreDeps } from '../../src/core/compose-deps.js';
 import { isTurnTerminalEvent, type TurnEvent, type TurnTerminalEvent } from '../../src/event/turn-event.js';
@@ -11,12 +15,15 @@ import { asPrivate } from '../../src/internal/as-private.js';
 import type { ToolCapability } from '../../src/plugin-runtime/capability-ingress.js';
 import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-runtime.js';
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
+import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
+import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
+import { restrictGroupMemberTurn } from '../../src/security/group-member-policy.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalInboundMessage, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
 export interface EvalToolInvocation {
@@ -44,14 +51,25 @@ export interface EvalRunRecord {
   readonly extraModelRequests: number;
   /** Scripted tool calls naming a tool the harness did not offer on that request. */
   readonly unofferedToolCalls: readonly string[];
+  /** `notOffered` scripted calls that the harness offered after all. */
+  readonly unexpectedlyOfferedToolCalls: readonly string[];
 }
 
 const ENDPOINT = 'eval-bot';
 const PLATFORM = 'eval';
 
 export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> {
+  const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
+  try {
+    return await runInWorkspace(definition, workspace);
+  } finally {
+    if (workspace) await rm(workspace, { recursive: true, force: true });
+  }
+}
+
+async function runInWorkspace(definition: EvalCase, workspace: string | undefined): Promise<EvalRunRecord> {
   const model = createScriptedModel(definition.script);
-  const toolNames = (definition.tools ?? []).map((tool) => tool.name);
+  const toolNames = (definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name);
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.
   const alwaysLoadedTools = [
@@ -85,17 +103,20 @@ export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> 
   const approvalRequests: string[] = [];
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
-  const tools = (definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs));
+  const tools = [
+    ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
+    ...nativeCapabilities(definition.nativeTools ?? [], definition.bashOutput ?? '', executedTools, rawToolOutputs),
+  ];
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests);
 
   const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
   for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
-    const turn = buildTurn(definition, message, index, tools, approval, outbound);
+    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, approval, outbound, workspace);
     const context: AgentTurnExecutionContext = {
       turn,
-      capabilities: { generation: 1, owner: rootPluginId(), tools, skills: [], agents: [], mcp: [], promptSections: [] },
-      toolCapabilities: tools,
-      tools: new TurnToolRuntime(turn, tools),
+      capabilities: { generation: 1, owner: rootPluginId(), tools: turnTools, skills: [], agents: [], mcp: [], promptSections: [] },
+      toolCapabilities: turnTools,
+      tools: new TurnToolRuntime(turn, turnTools),
       selection: {
         binding: { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] },
         mcpServers: [],
@@ -125,6 +146,7 @@ export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> 
     unusedScriptSteps: model.remainingSteps(),
     extraModelRequests: model.exhaustedRequests(),
     unofferedToolCalls: model.unofferedToolCalls,
+    unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
   };
 }
 
@@ -135,15 +157,21 @@ function buildTurn(
   tools: readonly ToolCapability[],
   approval: ApprovalOutcomePort | undefined,
   outbound: string[],
+  workspace: string | undefined,
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
   const roles = [...(sender.roles ?? ['user'])];
   const sceneId = scope === 'group' ? 'eval-group' : sender.id;
   const sessionKey = `im:${PLATFORM}:${ENDPOINT}:${scope}:${sceneId}`;
-  const policy: TurnPolicyContext = message.policy ?? { permissions: roles, unattended: false };
+  const requestedPolicy: TurnPolicyContext = message.policy ?? defaultPolicy(roles, workspace, message.shell === true);
+  const origin = { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId } as const;
+  // Same #719 rule AgentRuntime applies before a Turn starts (group members lose shell/write/outbound).
+  const restriction = restrictGroupMemberTurn({ origin, principal: { roles }, policy: requestedPolicy }, tools);
+  const policy = restriction.policy;
+  const turnTools = restriction.tools;
   const turnId = `${definition.id}:turn-${index + 1}`;
-  return createTurnIngress({
+  const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
     origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message` },
@@ -151,7 +179,7 @@ function buildTurn(
     input: { text: message.text },
     session: { key: sessionKey },
     policy,
-    capabilities: { tools: tools.map((tool) => tool.name), skills: [] },
+    capabilities: { tools: turnTools.map((tool) => tool.name), skills: [] },
     signal: new AbortController().signal,
     ports: {
       journal: { append: async () => undefined },
@@ -168,6 +196,7 @@ function buildTurn(
       ...(message.backgroundEvents?.length ? { conversationContext: backgroundContext(message.backgroundEvents) } : {}),
     },
   });
+  return { turn, tools: turnTools };
 }
 
 function backgroundContext(texts: readonly string[]): ConversationContextPort {
@@ -221,5 +250,70 @@ function createApprovalPort(behaviour: EvalApprovalBehaviour, requests: string[]
       requests.push(request.toolName);
       return outcome;
     },
+  };
+}
+
+function defaultPolicy(roles: string[], workspace: string | undefined, shell: boolean): TurnPolicyContext {
+  if (!workspace) return { permissions: roles, unattended: false };
+  return {
+    permissions: roles,
+    unattended: false,
+    filesystem: { workspaceRoot: workspace, workingDirectory: workspace, access: 'workspace-write' },
+    ...(shell
+      ? { shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' } as const }
+      : {}),
+  };
+}
+
+async function createWorkspace(files: Readonly<Record<string, string>>): Promise<string> {
+  // realpath: macOS tmpdir is a symlink, and file policy compares resolved paths.
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'zhin-eval-')));
+  for (const [relative, content] of Object.entries(files)) {
+    await mkdir(dirname(join(root, relative)), { recursive: true });
+    await writeFile(join(root, relative), content);
+  }
+  return root;
+}
+
+/** Real native tool definitions, executed through a ToolIndex; bash gets a canned, shell-free port. */
+function nativeCapabilities(
+  names: readonly EvalNativeTool[],
+  bashOutput: string,
+  executed: EvalToolInvocation[],
+  rawOutputs: string[],
+): ToolCapability[] {
+  if (names.length === 0) return [];
+  const owner = rootPluginId();
+  const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
+  const features = [bash, ...createNativeFileToolFeatures()].filter((feature) => names.includes(feature.name as EvalNativeTool));
+  const slots = features.map((feature) => createCapabilitySlot({
+    owner,
+    feature: feature.feature,
+    localName: feature.name,
+    source: `/builtin/${feature.name}`,
+    definition: feature.definition,
+  }));
+  const index = new ToolIndex(slots, nativeSnapshot(slots));
+  return index.list().map((descriptor) => ({
+    ...descriptor,
+    execute: (async (input: unknown, invocation: Parameters<ToolCapability['execute']>[1]) => {
+      executed.push({ name: descriptor.name, args: (input ?? {}) as Record<string, unknown> });
+      const result = await index.execute(owner, descriptor.name, input, invocation as never);
+      rawOutputs.push(typeof result === 'string' ? result : JSON.stringify(result));
+      return result;
+    }) as ToolCapability['execute'],
+  }));
+}
+
+function nativeSnapshot(slots: readonly ReturnType<typeof createCapabilitySlot>[]): RuntimeSnapshot {
+  const root = rootPluginId();
+  return {
+    generation: 1,
+    root,
+    tree: new Map([[root, { id: root, instanceKey: 'root', packageName: '@zhin.js/agent-evals', packageRoot: '/', children: [] }]]),
+    config: new Map([[root, {}]]),
+    resources: new Map([[root, new Map()]]),
+    capabilities: new Map(slots.map((slot) => [slot.id, slot])),
+    projections: new Map(),
   };
 }

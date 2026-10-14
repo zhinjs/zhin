@@ -18,7 +18,12 @@ export interface EvalInboundMessage {
   readonly sender?: Readonly<{ id: string; name?: string; roles?: readonly string[] }>;
   /** Background conversation events rendered as untrusted data before the message. */
   readonly backgroundEvents?: readonly string[];
-  /** Overrides the default policy derived from the sender. */
+  /**
+   * Grant an isolated shell (the `ai.agent.masterShell: isolated` shape).
+   * Only meaningful with a `workspace`; bash still needs `nativeTools`.
+   */
+  readonly shell?: boolean;
+  /** Overrides the default policy derived from the sender (ignores `shell`). */
   readonly policy?: TurnPolicyContext;
 }
 
@@ -30,7 +35,12 @@ export interface EvalTool {
   /** Throw this message instead of returning a result. */
   readonly error?: string;
   readonly requiresApproval?: 'never' | 'once' | 'always';
+  /** Keep the tool out of the always-loaded set (reachable via the deferred catalog only). */
+  readonly deferred?: boolean;
 }
+
+/** Real native tools the case exposes; they run against the temporary `workspace`. */
+export type EvalNativeTool = 'bash' | 'read_file' | 'write_file' | 'edit_file' | 'list_dir' | 'glob' | 'grep';
 
 /** How the fake approval channel answers approval requests. */
 export type EvalApprovalBehaviour = 'approve' | 'deny' | 'unavailable';
@@ -53,15 +63,30 @@ export interface EvalExpectations {
   readonly modelSteps?: number;
   /** Bound on model requests across the case. */
   readonly maxModelSteps?: number;
+  /** Strings that must appear in what the model received (messages and tool results, not the system prompt). */
+  readonly modelInputContains?: readonly string[];
+  /** Strings that must never appear in what the model received. */
+  readonly modelInputNotContains?: readonly string[];
+  /** Number of reply-port sends across the case (final replies plus progress updates). */
+  readonly outboundMessages?: number;
 }
 
 export interface EvalCase {
   readonly id: string;
   readonly description: string;
+  /** The concrete problem this case guards against (issue/PR number or incident). */
+  readonly source: string;
+  /** Skip with this reason (known gap or unmerged dependency); keep the reason actionable. */
+  readonly skip?: string;
   readonly tags?: readonly EvalTag[];
   /** One inbound message, or a sequence run as consecutive turns in one session. */
   readonly inbound: EvalInboundMessage | readonly EvalInboundMessage[];
   readonly tools?: readonly EvalTool[];
+  readonly nativeTools?: readonly EvalNativeTool[];
+  /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
+  readonly workspace?: Readonly<Record<string, string>>;
+  /** Canned stdout for native `bash` (it never runs a real shell in evals). */
+  readonly bashOutput?: string;
   readonly approval?: EvalApprovalBehaviour;
   /** Agent config overrides (budget, sub-agent mode, …). */
   readonly agentConfig?: Partial<ZhinAgentConfig>;
@@ -83,12 +108,14 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   const problems: string[] = [];
   if (!CASE_ID.test(candidate.id ?? '')) problems.push(`id "${candidate.id}" must be kebab-case`);
   if (!candidate.description?.trim()) problems.push('description is required');
+  if (!candidate.source?.trim()) problems.push('source is required (the issue or incident this case guards against)');
   const inbound = Array.isArray(candidate.inbound) ? candidate.inbound : [candidate.inbound];
   if (inbound.length === 0) problems.push('inbound must contain at least one message');
   if (!Array.isArray(candidate.script) || candidate.script.length === 0) problems.push('script must contain at least one step');
   const toolNames = (candidate.tools ?? []).map((tool) => tool.name);
   const duplicates = toolNames.filter((name, index) => toolNames.indexOf(name) !== index);
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
+  if (candidate.nativeTools?.length && !candidate.workspace) problems.push('nativeTools need a workspace');
   for (const name of toolNames) {
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);

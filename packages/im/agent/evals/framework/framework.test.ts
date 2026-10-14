@@ -18,6 +18,7 @@ const RAW = 'RAW-PAYLOAD {"id":42,"secret_field":"do-not-show"}';
 const approvalCase = (approval: EvalCase['approval']) => defineEvalCase({
   id: 'approval-gate',
   description: 'An approval-gated tool asks the approval channel first.',
+  source: 'framework self-test',
   inbound: { text: '把这条消息转发到运营群', sender: { id: 'owner', roles: ['master'] } },
   tools: [{ name: 'forward_message', requiresApproval: 'once', result: 'forwarded' }],
   approval,
@@ -50,6 +51,7 @@ describe('eval framework', () => {
     const definition = defineEvalCase({
       id: 'leaky-reply',
       description: 'The scripted reply pastes the raw tool payload.',
+      source: 'framework self-test',
       inbound: { text: 'look it up' },
       tools: [{ name: 'lookup', result: RAW }, { name: 'delete_all' }],
       script: [
@@ -86,6 +88,7 @@ describe('eval framework', () => {
     const definition = defineEvalCase({
       id: 'short-script',
       description: 'The script ends while the harness still wants a response.',
+      source: 'framework self-test',
       inbound: { text: 'go' },
       tools: [{ name: 'lookup' }],
       script: [{ toolCalls: [{ name: 'lookup' }] }],
@@ -102,6 +105,7 @@ describe('eval framework', () => {
     const definition = defineEvalCase({
       id: 'unoffered-tool',
       description: 'The script calls a tool that is not available to the turn.',
+      source: 'framework self-test',
       inbound: { text: 'go' },
       script: [{ toolCalls: [{ name: 'not_registered' }] }, { text: 'done' }],
       expect: {},
@@ -109,6 +113,33 @@ describe('eval framework', () => {
     const run = await runEvalCase(definition);
     expect(evaluateExpectations(definition, run).map((failure) => failure.message))
       .toContain('scripted call to not_registered (request #1) names a tool the harness did not offer');
+  });
+
+  it('supports generic provider faults as script steps', async () => {
+    const definition = defineEvalCase({
+      id: 'provider-faults',
+      description: 'A scripted 429 is a real provider error: the harness retries and the next step answers.',
+      source: 'framework self-test',
+      inbound: { text: 'hi' },
+      script: [{ fault: { kind: 'error', message: 'HTTP 429 rate limited', status: 429 } }, { text: 'recovered' }],
+      expect: { outboundContains: ['recovered'], modelSteps: 2 },
+    });
+    const run = await runEvalCase(definition);
+    expect(evaluateExpectations(definition, run)).toEqual([]);
+  });
+
+  it('fails a notOffered call that the harness did offer', async () => {
+    const definition = defineEvalCase({
+      id: 'offered-after-all',
+      description: 'The script claims a tool is withheld, but it is available.',
+      source: 'framework self-test',
+      inbound: { text: 'go' },
+      tools: [{ name: 'lookup' }],
+      script: [{ toolCalls: [{ name: 'lookup', notOffered: true }] }, { text: 'done' }],
+      expect: {},
+    });
+    const run = await runEvalCase(definition);
+    expect(evaluateExpectations(definition, run).map((failure) => failure.assertion)).toContain('notOffered');
   });
 
   it('is deterministic across runs', async () => {
@@ -131,6 +162,7 @@ describe('eval framework', () => {
     expect(validateEvalCase(invalid)).toEqual([
       'id "Bad Id" must be kebab-case',
       'description is required',
+      'source is required (the issue or incident this case guards against)',
       'inbound must contain at least one message',
       'script must contain at least one step',
       'duplicate tool names: dup',

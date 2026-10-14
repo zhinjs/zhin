@@ -52,6 +52,16 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       }
     }
   }
+  const modelInput = run.modelRequests.map((request) => request.inputText).join('\n');
+  for (const needle of expect.modelInputContains ?? []) {
+    if (!modelInput.includes(needle)) fail('modelInputContains', `the model never received "${needle}"`);
+  }
+  for (const needle of expect.modelInputNotContains ?? []) {
+    if (modelInput.includes(needle)) fail('modelInputNotContains', `the model received "${needle}"`);
+  }
+  if (expect.outboundMessages !== undefined && run.outbound.length !== expect.outboundMessages) {
+    fail('outboundMessages', `expected ${expect.outboundMessages} outbound message(s), got ${run.outbound.length}`);
+  }
   const expectedTermination = expect.termination ?? 'turn_end';
   const terminal = run.terminals.at(-1);
   if (terminal?.type !== expectedTermination) {
@@ -70,6 +80,9 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   }
   if (run.extraModelRequests > 0) {
     fail('script', `the harness made ${run.extraModelRequests} model request(s) after the ${definition.script.length}-step script ran out`);
+  }
+  for (const call of run.unexpectedlyOfferedToolCalls) {
+    fail('notOffered', `${call} was expected to be withheld from the model, but the harness offered it`);
   }
   for (const call of run.unofferedToolCalls) {
     fail('script', `scripted call to ${call} names a tool the harness did not offer`);
@@ -91,6 +104,11 @@ export function formatEvalReport(definition: EvalCase, run: EvalRunRecord, failu
   lines.push(`    approvals: [${list(run.approvalRequests)}]`);
   lines.push(`    terminals: [${list(run.terminals.map((event) => event.type))}]`);
   for (const text of run.outbound) lines.push(`    outbound: ${quote(text)}`);
+  if (process.env.EVAL_VERBOSE) {
+    for (const request of run.modelRequests) {
+      lines.push(`    --- model input #${request.index + 1} ---`, request.inputText);
+    }
+  }
   return lines.join('\n');
 }
 

@@ -60,3 +60,21 @@ export function tightenGroupMemberPolicy(policy: Readonly<TurnPolicyContext>): R
       : {}),
   });
 }
+
+/**
+ * The single #719 restriction applied to a Turn before it starts: for an
+ * ordinary group member, restricted tools are removed and the policy is
+ * tightened; any other Turn is returned unchanged. Used by AgentRuntime and
+ * by the agent evals so both exercise the same rule.
+ */
+export function restrictGroupMemberTurn<TTool extends Readonly<{ name: string; tags?: readonly string[] }>>(
+  turn: GroupMemberTurnView & Readonly<{ policy: TurnPolicyContext }>,
+  tools: readonly TTool[],
+): Readonly<{ restricted: boolean; policy: Readonly<TurnPolicyContext>; tools: readonly TTool[] }> {
+  if (!isGroupMemberTurn(turn)) return Object.freeze({ restricted: false, policy: turn.policy, tools });
+  return Object.freeze({
+    restricted: true,
+    policy: tightenGroupMemberPolicy(turn.policy),
+    tools: Object.freeze(tools.filter(tool => !isGroupMemberRestrictedTool(tool))),
+  });
+}
