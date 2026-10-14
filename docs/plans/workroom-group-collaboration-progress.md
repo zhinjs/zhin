@@ -81,7 +81,8 @@ sidebar: false
   - 2026-10-15 · 「feat: 新增 Room Router 与 Room Bus」· 第 2 次执行完成，第 26 轮问题全部处理：平台按钮回调（action 段）跳过 Room 路由与去重、由接收 Endpoint 处理；pending 按内容且只计入属于该会话 fallback 的 payload；目标优先 + 2 秒宽限期回退；@alias 用 Unicode 词边界；Room Bus 只经 `OutboundMessageService.send`；生产代码尚未提供 `roomMembershipToken`，运行时行为不变
 - [x] B2b-1 处理第 27 轮审查意见（涉及“不静默丢消息”的正确性，所以新建条目）：`packages/im/core/src/plugin-runtime/im/inbound-dedup.ts:146` 对不是目标、也不在 `decision.fallbacks` 中的 Endpoint 副本直接判为 `duplicate`，只打 debug 日志（`inbound-runtime.ts:267` 的 `room_non_target_copy`）。`hasRoom` 只按会话匹配（`room-membership.ts:18`，不看 Endpoint），所以同进程中的非成员 Bot、以及 `route` 时未就绪的成员 Endpoint 的副本也会被丢弃；例如 Telegram 隐私模式下 `@X hello` 只有非成员 X 收到，route 却选 coordinator，消息无人处理，且 @ 非成员的消息被强制 `mentioned=true` 交给 coordinator。修复：只对接收 Endpoint 是 Room 成员的副本做路由与去重（`hasRoom` / `route` 检查 `conversation.endpoint.id` 是否在 `room.memberByEndpoint`，或 core 把非成员 Endpoint 当作非 Room 群处理）；成员副本因不在 decision 中被丢弃时改为 warn；补 ImRuntime 测试（只有非成员 Endpoint / 不在 fallbacks 的成员收到的副本不丢失）。顺带 Nit：`packages/im/core/tests/plugin-runtime/im-runtime.test.ts:3784` 测试名写“@A”但消息无 mention 段、答复用序号 `1` 而非标签，改为带 A 的 mention 段（或用真实 `createRoomMembershipPort`）并补标签 `Go` 答复用例，或改名
   - 2026-10-15 · 「fix: Room 路由按接收 Endpoint 成员关系判定，避免静默丢消息」· `hasRoom` / `route` 按会话 + 接收 Endpoint 判定，非成员 Bot 按普通群处理；不在 decision 中的成员副本作为最低优先级接管并打 warn；目标副本已到或已有人接管时仍判 duplicate；三层补测试
-- [ ] B2b-2 处理第 28 轮审查意见（涉及路由正确性，所以新建条目）：`packages/im/workroom/src/room/room-router.ts:139` 人类 `@X hello`（X 为非成员 Bot）且成员 Endpoint 也收到副本时，mentionedMembers 忽略 X、落到 coordinator 分支，coordinator 被强制 `mentioned=true` 插话。修复：mention 段指向的账号都不属于成员时不走 coordinator / role 分支，返回无目标，让成员副本保持原有 mentioned 语义（先到先得、不强制 mentioned）；workroom router 测试补“@ 非成员不交给 coordinator”，ImRuntime 测试补“成员副本不被强制 mentioned”。同时同步方案 `docs/plans/workroom-group-collaboration-redesign.md:132`：hasRoom 按接收 Endpoint 成员关系判定，非成员按普通群处理；不在 `[目标, ...fallbacks]` 中的成员副本作为最低优先级接管并打 warn `room_unlisted_member_takeover`
+- [x] B2b-2 处理第 28 轮审查意见（涉及路由正确性，所以新建条目）：`packages/im/workroom/src/room/room-router.ts:139` 人类 `@X hello`（X 为非成员 Bot）且成员 Endpoint 也收到副本时，mentionedMembers 忽略 X、落到 coordinator 分支，coordinator 被强制 `mentioned=true` 插话。修复：mention 段指向的账号都不属于成员时不走 coordinator / role 分支，返回无目标，让成员副本保持原有 mentioned 语义（先到先得、不强制 mentioned）；workroom router 测试补“@ 非成员不交给 coordinator”，ImRuntime 测试补“成员副本不被强制 mentioned”。同时同步方案 `docs/plans/workroom-group-collaboration-redesign.md:132`：hasRoom 按接收 Endpoint 成员关系判定，非成员按普通群处理；不在 `[目标, ...fallbacks]` 中的成员副本作为最低优先级接管并打 warn `room_unlisted_member_takeover`
+  - 2026-10-15 · 「fix(workroom): @ 非成员时 Room Router 不交给 coordinator」· mention 都不指向成员时返回无目标，成员副本先到先得、不强制 mentioned；方案 §3 同步 hasRoom 成员关系与 room_unlisted_member_takeover
 - [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
@@ -277,6 +278,12 @@ sidebar: false
 - Should fix：方案 §3 第 132 行“非成员副本永远只记录”与新实现矛盾，会误导 B3 / B4 → 并入 B2b-2
 - Nit（只记录）：`im-runtime.test.ts:3789` mock route 只识别 bot-b，“routed to A”用例实际仍测 coordinator 路径；`im-runtime.test.ts:3875` 非成员用例无 mention 段，“not forced mentioned”未真正测到，局部 `route` 遮蔽、多余 `extra: {}`
 
+### 第 29 轮（2026-10-15，审查 B2b-2）
+
+- 无 Blocking / Should fix；第 28 轮 Nit 已顺带处理
+- Nit（只记录）：`im-runtime.test.ts:3793`“@ A 路由到 A”用例中 A 同时是 mock coordinator 默认目标，分不清 mention 与 coordinator 路径，可断言 route 返回 `reason: 'mention'` 或把 coordinator 改为 ids[2]
+- Nit（只记录）：方案第 131 行与 changeset 未点明“非成员账号”也包括群内其他人类（人类 @ 人类时 coordinator 不插话），建议补半句，供 B3 / B4 参考
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -309,3 +316,4 @@ sidebar: false
 - 2026-10-15 00:00 定时运行：rebase 到最新 origin/main（29 个提交无冲突），install / build 通过；B2b 执行失败（7 个 agent，约 24 分钟。实现与验证都通过，但 Opus 首轮 1 个 Blocking 修复后，复审又发现新的 Blocking：Room 内原生按钮回调被路由到其他成员后丢弃）。按规则把 diff 和未跟踪文件保存到 scratchpad 后回滚，B2b 记第 1 次失败，审查意见写入第 26 轮。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-15 00:35 定时运行：rebase 到最新 origin/main（30 个提交无冲突），install / build 通过；B2b 第 2 次执行完成（4 个 agent，约 12.6 分钟，core / workroom build、type-check、405 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 涉及正确性，新增为 B2b-1）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B2b-1（4 个 agent，约 4.4 分钟，core / workroom build、type-check、219 + 348 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix 涉及路由正确性，合并新增为 B2b-2，2 个 Nit 只记录）
+- 2026-10-15 01:35 定时运行：rebase 到最新 origin/main（2 个提交无冲突），install / build 通过；完成 B2b-2（4 个 agent，约 3.7 分钟，core / workroom build、type-check、220 + 1484 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，2 个 Nit 只记录）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改

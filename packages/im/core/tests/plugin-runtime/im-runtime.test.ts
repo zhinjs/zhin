@@ -3719,19 +3719,23 @@ describe('IM Runtime inbound origin routing', () => {
       fallbacks?: (ids: string[], target: string) => string[];
       graceMs?: number;
       route?: (i: RoomInboundRouteInput, ids: string[]) => RoomRouteDecision | undefined;
-      extra?: object;
     } = {}) => {
       const f = await originFixture(() => undefined, {
         ...THREE, adapterSegments: { interactive: 'text' },
-        inboundDeduper: new InboundDeduper(Date.now, options.graceMs ?? 50), ...options.extra,
+        inboundDeduper: new InboundDeduper(Date.now, options.graceMs ?? 50),
       });
       const ids = f.im.endpoints.list().map((row) => String(row.endpoint.id));
       const route = vi.fn((i: RoomInboundRouteInput): RoomRouteDecision | undefined => {
         if (options.route) return options.route(i, ids);
         const pending = ids.find((id) => i.pending(id));
-        const target = pending ?? (i.mentionTargets.includes('bot-b') ? ids[1]! : ids[0]!);
+        // Mirrors the real router: mention of a member account -> that member; mention of only
+        // non-members -> no target; otherwise the coordinator (first Endpoint).
+        const byAccount: Record<string, string> = { 'bot-a': ids[0]!, 'bot-b': ids[1]!, 'bot-c': ids[2]! };
+        const mentioned = i.mentionTargets.map((t) => byAccount[t]).find((id) => id !== undefined);
+        if (!pending && i.mentionTargets.length > 0 && mentioned === undefined) return undefined;
+        const target = pending ?? mentioned ?? ids[0]!;
         return {
-          endpointId: target, reason: pending ? 'pending' : 'coordinator',
+          endpointId: target, reason: pending ? 'pending' : mentioned ? 'mention' : 'coordinator',
           fallbackEndpointIds: options.fallbacks?.(ids, target) ?? ids.filter((id) => id !== target),
         };
       });
@@ -3864,15 +3868,32 @@ describe('IM Runtime inbound origin routing', () => {
       } finally { await close(f); }
     });
 
+    it('a mention of a non-member Bot is not forced mentioned or handed to the coordinator', async () => {
+      const { f, ids, route, seen, msg } = await room({ graceMs: 60_000 });
+      try {
+        const [a, b, c] = ids;
+        const mentionX = [{ type: 'mention', data: { target: 'bot-x' } }] as never;
+        const over = { content: 'hello', segments: mentionX };
+        await expect(receive(f.im, msg(b!, 'nm-1', over))).resolves.toMatchObject({ matched: true });
+        expect(seen).toEqual([{ id: b, mentioned: undefined }]);
+        expect(route).toHaveBeenCalledTimes(1);
+        expect(route).toHaveReturnedWith(undefined);
+        // Two orders, same message id: first-come, once, no wait, no forced mentioned.
+        const started = Date.now();
+        await expect(receive(f.im, msg(c!, 'nm-2', over))).resolves.toMatchObject({ matched: true });
+        await expect(receive(f.im, msg(a!, 'nm-2', over))).resolves.toEqual({ matched: false });
+        expect(Date.now() - started).toBeLessThan(5000);
+        expect(seen).toEqual([{ id: b, mentioned: undefined }, { id: c, mentioned: undefined }]);
+      } finally { await close(f); }
+    });
+
     it('a non-member Endpoint copy is handled as a plain group: not routed, not forced mentioned, not lost', async () => {
-      const route = vi.fn<RouteFn>();
-      const { f, ids, seen, msg } = await room({
-        extra: {},
-      });
+      const { f, ids, route, seen, msg } = await room();
       try {
         const c = ids[2]!;
         commitMembership(f, { isMember: () => false, hasRoom: (conv) => conv.endpoint.id !== c, route });
-        await expect(receive(f.im, msg(c, 'tk-5', { content: '@bot-c hello' }))).resolves.toMatchObject({ matched: true });
+        const mentionC = [{ type: 'mention', data: { target: 'bot-c' } }] as never;
+        await expect(receive(f.im, msg(c, 'tk-5', { content: '@bot-c hello', segments: mentionC }))).resolves.toMatchObject({ matched: true });
         expect(seen).toEqual([{ id: c, mentioned: undefined }]);
         expect(route).not.toHaveBeenCalled();
       } finally { await close(f); }

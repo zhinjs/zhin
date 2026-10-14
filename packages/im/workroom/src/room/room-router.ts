@@ -73,7 +73,8 @@ function mentionedMembers(room: RoomEntry, facts: RoomRouteFacts): RoomMemberEnt
  * pending answer > mention > reply > coordinator > role match. Every step skips unavailable
  * Endpoints (falls through to the next priority); if nothing is available returns `undefined`
  * so the caller falls back to first-come dedup. The decision never depends on which Endpoint
- * received the copy or on its `mentioned` flag.
+ * received the copy or on its `mentioned` flag. A mention segment that points only to accounts
+ * outside the Room yields no target (`undefined`), so it is not handed to the coordinator or role.
  */
 export function routeRoomMessage(room: RoomEntry, facts: RoomRouteFacts): RoomRouteResult | undefined {
   const usable = (member: RoomMemberEntry | undefined): member is RoomMemberEntry =>
@@ -99,13 +100,18 @@ export function routeRoomMessage(room: RoomEntry, facts: RoomRouteFacts): RoomRo
   if (pending) return pick(pending, 'pending');
 
   // Only the first mentioned member counts; if it is unavailable, fall to the next priority.
-  const mention = pick(mentionedMembers(room, facts)[0], 'mention');
+  const mentioned = mentionedMembers(room, facts);
+  const mention = pick(mentioned[0], 'mention');
   if (mention) return mention;
 
   if (facts.replyToEndpointId !== undefined) {
     const reply = pick(room.memberByEndpoint(facts.replyToEndpointId), 'reply');
     if (reply) return reply;
   }
+
+  // The message is addressed to someone outside the Room: no target, so core falls back to
+  // first-come dedup and member copies keep their original `mentioned` semantics.
+  if (facts.mentionTargets.length > 0 && mentioned.length === 0) return undefined;
 
   const coordinator = pick(room.coordinator, 'coordinator');
   if (coordinator) return coordinator;

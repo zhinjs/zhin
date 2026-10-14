@@ -68,8 +68,20 @@ describe('routeRoomMessage', () => {
       .toMatchObject({ endpointId: EP.wri, reason: 'mention' });
   });
 
-  it('ignores mention targets that are not member accounts', () => {
-    expect(route(facts({ mentionTargets: ['stranger'] }))?.reason).toBe('coordinator');
+  it('does not hand a mention of a non-member account to the coordinator or role', () => {
+    expect(route(facts({ mentionTargets: ['stranger'] }))).toBeUndefined();
+    expect(route(facts({ mentionTargets: ['stranger'] }), noCoordinator())).toBeUndefined();
+    expect(route(facts({ mentionTargets: ['stranger', 'acct-res'] })))
+      .toMatchObject({ endpointId: EP.res, reason: 'mention' });
+    expect(route(facts({ mentionTargets: ['stranger'], pending: (id) => id === EP.wri })))
+      .toMatchObject({ endpointId: EP.wri, reason: 'pending' });
+    expect(route(facts({ mentionTargets: ['stranger'], replyToEndpointId: EP.res })))
+      .toMatchObject({ endpointId: EP.res, reason: 'reply' });
+    expect(route(facts({ mentionTargets: ['stranger'], content: 'hey @rex' })))
+      .toMatchObject({ endpointId: EP.res, reason: 'mention' });
+    // a mentioned member that is unavailable still degrades to the coordinator
+    expect(route(facts({ mentionTargets: ['acct-res'], isAvailable: (id) => id !== EP.res })))
+      .toMatchObject({ endpointId: EP.lead, reason: 'coordinator' });
   });
 
   it('degrades to the next priority when the chosen member is unavailable', () => {
