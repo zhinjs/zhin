@@ -48,7 +48,9 @@ export interface RoomTaskServiceOptions {
   readonly logger?: { warn(message: string): void };
 }
 
-export type RoomTaskExecuteInput = Omit<RoomTaskCommand, 'at'> & { readonly at?: number };
+/** `Omit` must distribute over the command union, or the per-command fields (`result`, `to`, ...) are lost. */
+type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
+export type RoomTaskExecuteInput = DistributiveOmit<RoomTaskCommand, 'at'> & { readonly at?: number };
 
 export interface RoomTaskService {
   execute(roomId: string, command: RoomTaskExecuteInput): Promise<RoomTaskExecuteResult>;

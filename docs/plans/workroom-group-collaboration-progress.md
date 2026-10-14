@@ -93,7 +93,8 @@ sidebar: false
   - 2026-10-15 · 「fix(workroom): Room 护栏默认 fail-closed 并提供账号级共享发送限流」· 无角色检查时一律拒绝 `assign`，`next` 可组合且抛错视为拒绝；`checkHandoff` 必须传 `history`；清队列需 `room.cancel_queue` 权限（任意 human 仍可中断当前 turn）；`admitTurn` 改为内部；发送限流器提供共享实例的 `send` / `middleware` 两种形态，changeset 写明 C1 让成员 Endpoint 所有出站共用
 - [x] B4-2 处理第 33 轮审查意见（涉及 fail-closed 契约与发送链正确性）：`packages/im/workroom/tests/room/room-task-authorizer.test.ts:95` 删掉“next 缺省时放行 start / block / handoff”用例（B4-1 只改了名，仍把 fail-open 锁成契约），只保留“其他命令交给 next”的断言，并在 `next` 的 JSDoc 写明 C1 负责 start / block / handoff 的角色检查。`room-send-limiter.ts:66` 的 `middleware(envelope, next)` 不是 core outbound middleware 的签名（`defineMiddleware({ target: 'outbound' })` 的 envelope 在 `context.input`），直接传 context 会让 `reserve` fail-closed 拒绝所有出站：提供直接返回 outbound middleware 定义的 helper（结构类型，不新增依赖）或在 JSDoc / changeset 给出适配示例。顺带：JSDoc / changeset 写明同一出站路径只能用一种形态（middleware 与 `send` 叠用会重复计数），`createRateLimitedOutbound` 标注仅测试 / 独立使用；`room-guards.ts:306` 非敏感 human 清队列被拒时 `RoomCancelResult` 增加 `queueRefused` 原因或至少 `logger.warn`
   - 2026-10-15 · 「fix(workroom): 收紧 Room 护栏契约并提供 outbound middleware helper」· 删除锁定 fail-open 的用例，`next` JSDoc 写明 C1 负责 start / block / handoff 角色检查；发送限流器新增 `outboundMiddleware()`（结构类型，读 `ctx.input`）；文档写明同一路径只用一种形态、`createRateLimitedOutbound` 仅测试 / 独立使用；清队列被拒时返回 `queueRefused` 并 `logger.warn`
-- [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
+- [x] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
+  - 2026-10-15 · 「feat(workroom): 用新 Room 核心重写 multi-agent-room 示例」· 示例内组装 Room 核心（`src/team.ts`，未接入默认运行时），planner 更名 coordinator 并新增 writer；端到端测试用真实 ImRuntime + Sandbox 形状 fixture（无网络 / LLM）覆盖去重路由、两次 handoff、经发送链的群内投影、Task 事件序列与全部 B4 护栏；唤醒按 `event.sequence` 水位去重；`room-task-service.ts` 修正 execute 输入类型（patch changeset）；`pnpm check:all` 通过
 
 ## 阶段 C：切换与清理
 
@@ -324,6 +325,14 @@ sidebar: false
 - 无 Blocking / Should fix，第 33 轮问题已全部处理
 - Nit（只记录，C1 参考）：`room-send-limiter.test.ts:198` `outboundMiddleware()` 只用对象字面量调用 handle，未验证能被 core 的 `defineMiddleware(limiter.outboundMiddleware())` 接受；C1 接线时可补一个类型兼容用例
 
+### 第 35 轮（2026-10-15，审查 B5，阶段 B 收尾）
+
+- 无 Blocking / Should fix；已处理第 31 轮（按 sequence 去重唤醒）与第 34 轮（`defineMiddleware(limiter.outboundMiddleware())` 类型兼容）Nit
+- Nit（只记录，C1 参考）：`examples/multi-agent-room/src/team.ts:296` `bus.handoff` 返回 rejection 时 Task 已在 journal 转给 `next.to`，只记 send_rejected，没人被唤醒，Task 停在 assigned；C1 应改为 escalate（block 并 @人类）
+- Nit（只记录，C1 参考）：`team.ts:259` 只在 script 返回后检查 `signal.aborted`，`speak()` 期间的普通打断仍会继续 handoff / complete；C1 应在 speak 后、handoff / complete 前再检查并补用例
+- Nit（只记录）：示例 README 中旧机制路径未写明所属包（应为 `packages/im/workroom/src/...`），且未说明 `pnpm dev` 现在启动三个互相独立的 Bot、协作只能通过测试看到
+- Nit（只记录）：`multi-agent-room-contract.test.ts:25` owner 仍为 `planner-user`
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -362,3 +371,4 @@ sidebar: false
 - 2026-10-15 同一次定时运行：完成 B4（4 个 agent，约 8 分钟，workroom build、type-check、148 个 room 测试 + 1221 个 workroom 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix 涉及安全 / fail-closed，连同 4 个 Nit 新增为 B4-1）
 - 2026-10-15 03:35 定时运行：rebase 到最新 origin/main（2 个提交；4 处冲突：`activate-ai-database-storage.ts` 保留 main 的语义记忆激活、去掉已迁出的 Workroom 激活；`api-surface.json` 保留 main 新增的 `detached-task` 导出；`ingress-route.ts` 同时保留可选 `workroom` 与 main 的 `detachedTasks`；`console/api.test.ts` 两个用例都保留），install / build / type-check / 173 个相关测试 / API 快照 / check:architecture 通过；完成 B4-1（4 个 agent，约 5.7 分钟，workroom build、type-check、159 个 room 测试 + 1232 个 workroom 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 涉及 fail-closed，连同 3 个 Nit 新增为 B4-2）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B4-2（4 个 agent，约 3.1 分钟，workroom build、type-check、46 个相关测试 + 1236 个 workroom 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，1 个 Nit 只记录）
+- 2026-10-15 定时运行：rebase 到最新 origin/main（40 个本分支提交无冲突，基线 a6ea7b446），install / build 通过；完成 B5（4 个 agent，约 15.7 分钟，workroom / 示例 build、type-check、16 个示例测试 + 163 个 room 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint、**`pnpm check:all`** 通过，审查无 Blocking / Should fix，4 个 Nit 只记录）。阶段 B 全部完成。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改；护栏把从 scheduled-tasks 目录 `cp` 脚本误判为修改外部路径

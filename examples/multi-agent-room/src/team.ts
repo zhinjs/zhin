@@ -1,0 +1,395 @@
+/**
+ * Room team assembly (example-local, NOT wired into the default runtime; that is C1/C2).
+ *
+ * Wires the Room core pieces of `@zhin.js/workroom` into one object:
+ *
+ *   human message -> Room Router (core, picks the member) -> `route()` -> member turn
+ *     -> reply through the shared send limiter -> handoff (Task event + Room Bus projection)
+ *     -> Bus subscriber wakes the next member after the current turn returns.
+ *
+ * Invariants:
+ * - Every outbound (member replies, handoff projections, escalations) goes through ONE `RoomSendLimiter.send`
+ *   in front of the shared `OutboundMessageService`. No other send path exists here.
+ * - Collaboration travels over the in-process Room Bus; group messages are only a visible projection.
+ * - Guards fail closed; the Task authorizer always carries a role check (`next`).
+ */
+import {
+  MemoryRoomTaskJournal,
+  RoomGuardRejectedError,
+  RoomTaskAuthorizationError,
+  createRoomBus,
+  createRoomGuards,
+  createRoomSendLimiter,
+  createRoomTaskAuthorizer,
+  createRoomTaskService,
+  type GuardActor,
+  type RoomBus,
+  type RoomCancelResult,
+  type RoomGuards,
+  type RoomRegistry,
+  type RoomSendLimiter,
+  type RoomSendLimiterOptions,
+  type RoomTaskAuthorizer,
+  type RoomTaskCommand,
+  type RoomTaskService,
+  type RoomTaskView,
+} from '@zhin.js/workroom';
+import type { Message, OutboundMessageService } from 'zhin.js/core/runtime';
+
+type BusRequester = Parameters<typeof createRoomBus>[0]['requester'];
+
+/** What a scripted member decides after speaking. */
+export type MemberDirective =
+  | { readonly type: 'handoff'; readonly to: string; readonly note: string }
+  | { readonly type: 'complete'; readonly result: string }
+  | { readonly type: 'block'; readonly reason: string };
+
+export interface MemberTurnInput {
+  readonly agent: string;
+  readonly task: RoomTaskView;
+  /** The human request (first turn) or the handoff note (later turns). */
+  readonly text: string;
+  /** Aborted when a human cancels the Room turn. */
+  readonly signal: AbortSignal;
+}
+
+export interface MemberTurnOutput {
+  readonly reply: string;
+  readonly next?: MemberDirective;
+}
+
+/** Deterministic stand-in for a model-driven member. */
+export type ScriptedMember = (turn: MemberTurnInput) => Promise<MemberTurnOutput> | MemberTurnOutput;
+
+/** Default scripts: coordinator -> researcher -> writer -> done. */
+export const defaultScripts: Readonly<Record<string, ScriptedMember>> = {
+  coordinator: ({ text }) => ({
+    reply: `收到，我来拆解：${text}`,
+    next: { type: 'handoff', to: 'researcher', note: `请调研：${text}` },
+  }),
+  researcher: ({ text }) => ({
+    reply: `调研完成（${text}）`,
+    next: { type: 'handoff', to: 'writer', note: '调研要点：A、B、C，请成稿' },
+  }),
+  writer: () => ({
+    reply: '简报已完成',
+    next: { type: 'complete', result: '最终简报：A、B、C' },
+  }),
+};
+
+export type TeamFailureKind = 'turn_rejected' | 'turn_error' | 'send_rejected' | 'handoff_refused';
+
+export interface TeamFailure {
+  readonly kind: TeamFailureKind;
+  readonly roomId: string;
+  readonly agent?: string;
+  readonly taskId?: string;
+  readonly error?: unknown;
+  readonly detail: string;
+}
+
+export interface RoomTeamOptions {
+  readonly registry: RoomRegistry;
+  readonly roomId: string;
+  /** The shared outbound service (`ImRuntime`); the only way anything is sent. */
+  readonly outbound: Pick<OutboundMessageService, 'send'>;
+  readonly requester: BusRequester;
+  readonly accountOf: (endpointId: string) => string | undefined;
+  readonly scripts?: Readonly<Record<string, ScriptedMember>>;
+  readonly maxHandoffDepth?: number;
+  readonly maxPingPong?: number;
+  readonly maxTurnsPerMinute?: number;
+  readonly sensitiveAccounts?: readonly string[];
+  /** Overrides for the account-level send limiter (clock, sleep, per-account limits, ...). */
+  readonly limiter?: Omit<RoomSendLimiterOptions, 'inner' | 'accountOf'>;
+  readonly now?: () => number;
+  readonly logger?: { warn(message: string): void };
+}
+
+export interface RoomTeam {
+  readonly guards: RoomGuards;
+  readonly limiter: RoomSendLimiter;
+  readonly bus: RoomBus;
+  readonly taskService: RoomTaskService;
+  readonly journal: MemoryRoomTaskJournal;
+  readonly authorizer: RoomTaskAuthorizer;
+  readonly failures: readonly TeamFailure[];
+  /** For `ingressRouteToken`: starts a Task for the routed member and returns once the turn is queued. */
+  route(message: Message): Promise<boolean>;
+  /** Human interrupt: aborts the running turn; cancels the Task only for a sensitive account. */
+  cancel(taskId: string, actor: { readonly accountId: string }, reason?: string): Promise<{
+    readonly room: RoomCancelResult;
+    readonly task?: RoomTaskView;
+    /** Set when the Task authorizer refused the cancel. */
+    readonly taskRefusal?: string;
+  }>;
+  /** Resolves when every queued or running turn (including woken ones) has settled. */
+  idle(): Promise<void>;
+  dispose(): void;
+}
+
+const humanActor = (accountId: string): string => `human:${accountId}`;
+const humanAccountOf = (by: string): string | undefined => (by.startsWith('human:') ? by.slice('human:'.length) : undefined);
+
+export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
+  const { registry, roomId, requester, accountOf, logger } = options;
+  const room = registry.room(roomId);
+  if (!room) throw new Error(`unknown room ${roomId}`);
+  const scripts = { ...defaultScripts, ...options.scripts };
+  const now = options.now ?? (() => Date.now());
+  const { adapter, kind, id: conversationId } = room.definition.conversation;
+
+  const guards = createRoomGuards({
+    now,
+    ...(options.maxHandoffDepth !== undefined ? { maxHandoffDepth: options.maxHandoffDepth } : {}),
+    ...(options.maxPingPong !== undefined ? { maxPingPong: options.maxPingPong } : {}),
+    ...(options.maxTurnsPerMinute !== undefined ? { maxTurnsPerMinute: options.maxTurnsPerMinute } : {}),
+    ...(options.sensitiveAccounts !== undefined ? { sensitiveAccounts: options.sensitiveAccounts } : {}),
+    ...(logger ? { logger } : {}),
+  });
+
+  // ONE limiter instance in the `send` form, in front of the shared outbound service. Member replies, Bus
+  // projections and escalations all use it, so one Bot account is counted once. (The middleware form is not
+  // layered on top: one path, one form.)
+  const limiter = createRoomSendLimiter({ now, ...options.limiter, inner: options.outbound, accountOf });
+
+  // ---- authorization: partial built-ins (cancel / assign) + our role check as `next` (B4-2 invariant)
+  const actorOf = (by: string): GuardActor | undefined => {
+    const account = humanAccountOf(by);
+    if (account !== undefined) return account === '' ? undefined : { origin: 'human', accountId: account };
+    return room.memberByAgent(by) ? { origin: 'member' } : undefined;
+  };
+  const authorizer = createRoomTaskAuthorizer({
+    guards,
+    actorOf,
+    authorizeAssign: (_room, command) => {
+      const by = room.memberByAgent(command.by);
+      if (!by) return `assign: ${command.by} is not a member of room ${roomId}`;
+      if (by !== room.coordinator) return 'assign: only the coordinator may assign';
+      if (!room.memberByAgent(command.assignee)) return `assign: ${command.assignee} is not a member`;
+      return undefined;
+    },
+    next: (target: string, command: RoomTaskCommand) => {
+      if (target !== roomId) return `unknown room ${target}`;
+      switch (command.type) {
+        case 'create': {
+          if (!actorOf(command.by)) return `create: unknown actor ${command.by}`;
+          if (command.assignee !== undefined && !room.memberByAgent(command.assignee)) {
+            return `create: ${command.assignee} is not a member`;
+          }
+          return undefined;
+        }
+        case 'start':
+        case 'block':
+        case 'complete':
+          return room.memberByAgent(command.by) ? undefined : `${command.type}: ${command.by} is not a member of room ${roomId}`;
+        case 'handoff': {
+          const from = room.memberByAgent(command.by);
+          if (!from) return `handoff: ${command.by} is not a member of room ${roomId}`;
+          const to = room.memberByAgent(command.to);
+          if (!to) return `handoff: ${command.to} is not a member of room ${roomId}`;
+          if (!from.role.handoffTo?.includes(to.roleName)) {
+            return `handoff: role ${from.roleName} may not hand off to role ${to.roleName}`;
+          }
+          return undefined;
+        }
+        default:
+          return undefined; // assign / cancel were checked by the built-ins above
+      }
+    },
+  });
+
+  const journal = new MemoryRoomTaskJournal();
+  let commandSeq = 0;
+  let taskSeq = 0;
+  const nextCommandId = (taskId: string, kindName: string): string => `${taskId}:${kindName}:${++commandSeq}`;
+  const taskService = createRoomTaskService({ journal, authorize: authorizer, now, ...(logger ? { logger } : {}) });
+
+  const bus = createRoomBus({ registry, outbound: limiter, requester, accountOf, ...(logger ? { logger } : {}) });
+
+  const failures: TeamFailure[] = [];
+  const fail = (failure: TeamFailure): void => {
+    failures.push(failure);
+    logger?.warn(`room ${failure.roomId} ${failure.kind}${failure.agent ? ` (${failure.agent})` : ''}: ${failure.detail}`);
+  };
+
+  /** Speak in the group as `agent`, through the shared limiter (the only send path). */
+  const speak = async (agent: string, content: Parameters<RoomSendLimiter['send']>[0]['content'], taskId?: string): Promise<void> => {
+    const member = room.memberByAgent(agent);
+    if (!member) return;
+    const receipt = await limiter.send({
+      conversation: { endpoint: { id: member.endpointId, adapter }, kind, id: conversationId },
+      requester,
+      content,
+    });
+    if (receipt.status !== 'sent') {
+      fail({ kind: 'send_rejected', roomId, agent, ...(taskId ? { taskId } : {}), detail: receipt.failure?.code ?? receipt.status });
+    }
+  };
+
+  /** Ask the human who started the Task to step in, spoken by `agent`'s own Bot. */
+  const askHuman = async (agent: string, task: RoomTaskView | undefined, reason: string): Promise<void> => {
+    const account = task ? humanAccountOf(task.createdBy) : undefined;
+    const text = ` 需要你介入：${reason}`;
+    await speak(agent, account !== undefined
+      ? [{ type: 'mention', data: { target: account, name: account } }, { type: 'text', data: { text } }]
+      : `@人类${text}`, task?.id);
+  };
+
+  // ---- turns
+  const inflight = new Set<Promise<unknown>>();
+  const track = <T>(promise: Promise<T>): Promise<T> => {
+    inflight.add(promise);
+    const settle = () => { inflight.delete(promise); };
+    promise.then(settle, settle);
+    return promise;
+  };
+
+  const runMemberTurn = async (agent: string, taskId: string, text: string, signal: AbortSignal): Promise<void> => {
+    signal.throwIfAborted();
+    let task = await taskService.get(roomId, taskId);
+    if (!task || task.assignee !== agent || (task.status !== 'assigned' && task.status !== 'in_progress')) return;
+    if (task.status === 'assigned') {
+      task = (await taskService.execute(roomId, { type: 'start', commandId: nextCommandId(taskId, 'start'), taskId, by: agent })).state;
+    }
+    const script = scripts[agent];
+    if (!script) throw new Error(`no script for member ${agent}`);
+    const output = await script({ agent, task, text, signal });
+    // A human cancel while the model was running: nothing is said and nothing is handed off.
+    if (signal.aborted) return;
+    await speak(agent, output.reply, taskId);
+    const next = output.next;
+    if (!next) return;
+
+    const current = await taskService.get(roomId, taskId);
+    if (!current || current.status !== 'in_progress' || current.assignee !== agent) return;
+
+    if (next.type === 'complete') {
+      await taskService.execute(roomId, { type: 'complete', commandId: nextCommandId(taskId, 'complete'), taskId, by: agent, result: next.result });
+      return;
+    }
+    if (next.type === 'block') {
+      await taskService.execute(roomId, { type: 'block', commandId: nextCommandId(taskId, 'block'), taskId, by: agent, reason: next.reason });
+      await askHuman(agent, current, next.reason);
+      return;
+    }
+
+    // handoff: guard first, then the Task event, then the Bus (projection + wake-up)
+    const check = guards.checkHandoff({
+      roomId, taskId, from: agent, to: next.to, handoffCount: current.handoffCount, history: await journal.read(roomId),
+    });
+    if (!check.allowed) {
+      await escalate(agent, current, `${check.code}: ${check.reason}`);
+      return;
+    }
+    let handoffEventId: string | undefined;
+    try {
+      const result = await taskService.execute(roomId, {
+        type: 'handoff', commandId: nextCommandId(taskId, 'handoff'), taskId, by: agent, to: next.to, note: next.note,
+      });
+      handoffEventId = result.events.find((event) => event.type === 'task.handoff')?.eventId;
+    } catch (error) {
+      if (!(error instanceof RoomTaskAuthorizationError)) throw error;
+      await escalate(agent, current, error.reason);
+      return;
+    }
+    if (handoffEventId === undefined) return;
+    const delivery = await bus.handoff({
+      id: handoffEventId, room: roomId, from: agent, to: next.to, text: next.note, taskRef: taskId, at: now(),
+    });
+    // The receiving member is woken even when the visible projection failed; the group just does not see it.
+    if (!delivery.projected) {
+      fail({ kind: 'send_rejected', roomId, agent, taskId, detail: delivery.projectionError ?? delivery.rejection ?? 'handoff projection failed' });
+    }
+  };
+
+  /** Stop the chain: block the Task and ask the human. Nobody else is woken. */
+  const escalate = async (agent: string, task: RoomTaskView, reason: string): Promise<void> => {
+    fail({ kind: 'handoff_refused', roomId, agent, taskId: task.id, detail: reason });
+    await taskService.execute(roomId, {
+      type: 'block', commandId: nextCommandId(task.id, 'block'), taskId: task.id, by: agent, reason: `handoff refused (${reason})`,
+    });
+    await askHuman(agent, task, `handoff refused (${reason})`);
+  };
+
+  const queueTurn = (agent: string, taskId: string, text: string): Promise<void> =>
+    track(guards.runExclusive(roomId, (signal) => runMemberTurn(agent, taskId, text, signal)).catch(async (error: unknown) => {
+      const rejected = error instanceof RoomGuardRejectedError;
+      fail({
+        kind: rejected ? 'turn_rejected' : 'turn_error', roomId, agent, taskId, error,
+        detail: error instanceof Error ? error.message : String(error),
+      });
+      // Not silent: the member's Bot tells the group. A cancelled turn is a deliberate human action, no notice.
+      if (error instanceof RoomGuardRejectedError && error.code === 'cancelled') return;
+      const task = await taskService.get(roomId, taskId).catch(() => undefined);
+      await askHuman(agent, task, `回合未能执行（${error instanceof Error ? error.message : String(error)}）`).catch(() => undefined);
+    }));
+
+  // Task events -> sequence of each handoff. Task subscribers are dispatched after the Room serial section and
+  // may interleave, so wake-ups are ordered / de-duplicated by `event.sequence` (review round 31 nit).
+  const sequenceByHandoff = new Map<string, number>();
+  const wokenThrough = new Map<string, number>();
+  const unsubscribeTasks = taskService.subscribe((event) => {
+    if (event.type === 'task.handoff') sequenceByHandoff.set(event.eventId, event.sequence);
+  });
+  // The Bus subscriber only wakes the receiving member. It never awaits the lane: the woken turn is queued
+  // behind the running one (awaiting runExclusive of the same Room from inside a turn would deadlock).
+  const unsubscribeBus = bus.subscribe((event) => {
+    const sequence = sequenceByHandoff.get(event.id);
+    if (sequence === undefined || event.taskRef === undefined) return; // only task.handoff-backed events wake anyone
+    sequenceByHandoff.delete(event.id);
+    if (sequence <= (wokenThrough.get(event.room) ?? -1)) return; // duplicate or stale
+    wokenThrough.set(event.room, sequence);
+    void queueTurn(event.to, event.taskRef, event.text);
+  });
+
+  return {
+    guards, limiter, bus, taskService, journal, authorizer, failures,
+
+    async route(message: Message): Promise<boolean> {
+      // Only a human message starts work; self / member / peer-bot echoes never do.
+      if (message.origin !== 'human') return false;
+      const target = registry.roomOf(message.conversation);
+      if (!target || target.id !== roomId) return false;
+      const member = target.memberByEndpoint(String(message.conversation.endpoint.id));
+      const sender = message.sender?.id;
+      if (!member || typeof sender !== 'string' || sender === '') return false;
+      const taskId = `task-${++taskSeq}`;
+      const title = message.content.trim().slice(0, 200) || 'untitled request';
+      try {
+        await taskService.execute(roomId, {
+          type: 'create', commandId: nextCommandId(taskId, 'create'), taskId, by: humanActor(sender), title, assignee: member.agent,
+        });
+      } catch (error) {
+        fail({ kind: 'turn_error', roomId, agent: member.agent, taskId, error, detail: error instanceof Error ? error.message : String(error) });
+        return false;
+      }
+      void queueTurn(member.agent, taskId, message.content.trim());
+      return true;
+    },
+
+    async cancel(taskId, actor, reason) {
+      const guardActor: GuardActor = { origin: 'human', accountId: actor.accountId };
+      const roomResult = guards.cancelRoom(roomId, guardActor);
+      try {
+        const result = await taskService.execute(roomId, {
+          type: 'cancel', commandId: nextCommandId(taskId, 'cancel'), taskId, by: humanActor(actor.accountId),
+          ...(reason !== undefined ? { reason } : {}),
+        });
+        return { room: roomResult, task: result.state };
+      } catch (error) {
+        if (error instanceof RoomTaskAuthorizationError) return { room: roomResult, taskRefusal: error.reason };
+        throw error;
+      }
+    },
+
+    async idle() {
+      while (inflight.size > 0) await Promise.allSettled([...inflight]);
+    },
+
+    dispose() {
+      unsubscribeTasks();
+      unsubscribeBus();
+    },
+  };
+}
