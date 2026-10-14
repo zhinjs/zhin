@@ -47,3 +47,7 @@ export type {
   AgentLoopStandaloneInput,
   AgentLoopStandaloneResult,
 } from './agent-loop-standalone.js';
+
+// Host-integration seam for external host packages.
+export { collectAgentLoopTurnRun } from './agent-core-run.js';
+export type { ZhinAgentPrivate } from '../internal/agent-host.js';

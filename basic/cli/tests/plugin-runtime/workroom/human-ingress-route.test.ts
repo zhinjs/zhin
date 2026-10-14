@@ -8,7 +8,7 @@ import {
   MemoryHumanIngressApplicationRepository,
   MemoryHumanIngressProposalRepository,
   MemoryInteractionSpaceBindingRepository,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   WorkroomHumanIngressPreRoute,
   createCatalogWorkroomSpace,

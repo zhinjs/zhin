@@ -13,7 +13,7 @@ import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
 import type {
   WorkroomRemoteAssignmentAuthorityInput,
   WorkroomRemoteAssignmentResolvedAuthority,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   expandEnvironmentValue,
   type RootResourceInstaller,
@@ -106,6 +106,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         WorkroomA2aHttpRemoteTransport,
       }, {
         agentHostToken,
+      }, {
         remoteAssignmentDispatchCommandServiceToken,
         remoteAssignmentDispatchSchedulerToken,
         remoteAssignmentDispatchServiceToken,
@@ -127,12 +128,11 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         workroomRemoteExecutorToken,
         workroomSchedulerAssignmentRouteRegistryToken,
         workroomHostToken,
-      }, {
         WorkroomRemoteCallbackGateway,
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
-        import('@zhin.js/agent'),
+        import('@zhin.js/workroom'),
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {

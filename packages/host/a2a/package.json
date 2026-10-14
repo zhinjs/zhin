@@ -42,7 +42,8 @@
     "@a2a-js/sdk": "1.0.0-beta.0",
     "@zhin.js/core": "workspace:*",
     "@zhin.js/host-http-contract": "workspace:*",
-    "@zhin.js/logger": "workspace:*"
+    "@zhin.js/logger": "workspace:*",
+    "@zhin.js/workroom": "workspace:*"
   },
   "peerDependencies": {
     "@zhin.js/agent": "workspace:^",

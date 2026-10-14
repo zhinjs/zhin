@@ -1,6 +1,10 @@
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
-import { isWorkroomPackageSpecifier } from './lib/workroom-specifier.mjs';
+import {
+  isAgentForbiddenWorkroomReference,
+  isForbiddenDomainSpecifier,
+  isWorkroomPackageSpecifier,
+} from './lib/workroom-specifier.mjs';
 
 const typed = { includeTypeOnly: true };
 const spec = './workroom/a.js';
@@ -155,24 +159,56 @@ describe('workroom package specifier rule', () => {
     expect(isWorkroomPackageSpecifier(s)).toBe(false);
   });
 
-  it.each([
-    `export * from '@zhin.js/workroom/workroom/a.js';`,
-    `export { a } from '@zhin.js/workroom';`,
-  ])('barrel may re-export: %s', (source) => {
-    expect(findBarrelViolations(source, isWorkroomPackageSpecifier)).toEqual([]);
-  });
-
-  it.each([
-    `import { a } from '@zhin.js/workroom';`,
-    `import type {A} from '@zhin.js/workroom/workroom/a.js';`,
-    `const m = import('@zhin.js/workroom');`,
-  ])('barrel must not import: %s', (source) => {
-    expect(findBarrelViolations(source, isWorkroomPackageSpecifier)).toHaveLength(1);
-  });
-
   it('non-barrel branch sees bare specifiers, including import type', () => {
     const source = `import type { A } from '@zhin.js/workroom/workroom/a.js';\nimport { b } from '@zhin.js/workroom';`;
     const hits = parseImports(source, typed).filter(isWorkroomPackageSpecifier);
     expect(hits).toEqual(['@zhin.js/workroom/workroom/a.js', '@zhin.js/workroom']);
+  });
+});
+
+describe('agent must not reference workroom (A4b)', () => {
+  it.each([
+    '@zhin.js/workroom',
+    '@zhin.js/workroom/workroom/a.js',
+    './workroom/a.js',
+    '../workroom-runtime/x.js',
+    '../portfolio/x.js',
+    '../../data-governance/x.js',
+  ])('forbids %s, including in barrels', (s) => {
+    expect(isAgentForbiddenWorkroomReference(s)).toBe(true);
+  });
+
+  it.each([
+    '@zhin.js/workroom-extra',
+    '@zhin.js/core',
+    './plugin-runtime/index.js',
+    '../workroom-extra/x.js',
+    'node:path',
+  ])('allows %s', (s) => {
+    expect(isAgentForbiddenWorkroomReference(s)).toBe(false);
+  });
+});
+
+describe('workroom domain directories stay framework-free', () => {
+  it.each([
+    '@zhin.js/agent',
+    '@zhin.js/agent/runtime',
+    '@zhin.js/plugin-runtime',
+    '@zhin.js/core',
+    'zod',
+    'fs',
+  ])('forbids bare import %s', (s) => {
+    expect(isForbiddenDomainSpecifier(s)).toBe(true);
+  });
+
+  it.each([
+    '@zhin.js/im-contract',
+    '@zhin.js/im-contract/sub',
+    'node:path',
+    'node:fs/promises',
+    './x.js',
+    '../workroom/x.js',
+  ])('allows %s', (s) => {
+    expect(isForbiddenDomainSpecifier(s)).toBe(false);
   });
 });

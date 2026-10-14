@@ -149,7 +149,7 @@ export function createDeferredCapabilityPlan(
   options: DeferredCapabilityPlanOptions,
 ): DeferredCapabilityPlan {
   if (options !== null && typeof options === 'object' && 'authority' in options) {
-    throw new Error('createDeferredCapabilityPlan no longer accepts "authority"; use createWorkroomDeferredCapabilityPlan (workroom-runtime) or pass an injected "ceiling"');
+    throw new Error('createDeferredCapabilityPlan no longer accepts "authority"; use createWorkroomDeferredCapabilityPlan or pass an injected "ceiling"');
   }
   const config = resolveDeferredToolsConfig(options.config);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);

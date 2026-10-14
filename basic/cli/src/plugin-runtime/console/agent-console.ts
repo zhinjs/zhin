@@ -3,7 +3,7 @@ import type {
   ConsoleWorkroomKnowledgeControlPort,
   ConsoleWorkroomProfileControlPort,
 } from '@zhin.js/host-http';
-import type { PortfolioSponsorProjection, WorkroomDefinition } from '@zhin.js/agent';
+import type { PortfolioSponsorProjection, WorkroomDefinition } from '@zhin.js/workroom';
 import type {
   AgentHostWorkroomRunControlPort,
   PortfolioSponsorCommand,
@@ -11,7 +11,7 @@ import type {
   WorkroomEffectSponsorDecisionCommand,
   WorkroomEffectSponsorDecisionRecord,
   WorkroomRuntimeHandle,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
 
 /**
@@ -24,8 +24,13 @@ let agentModule: {
   workroomHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
-void import('@zhin.js/agent/runtime')
-  .then((runtime) => { agentModule = runtime as typeof agentModule; })
+void Promise.all([import('@zhin.js/agent/runtime'), import('@zhin.js/workroom')])
+  .then(([runtime, workroom]) => {
+    agentModule = {
+      agentHostToken: runtime.agentHostToken,
+      workroomHostToken: workroom.workroomHostToken,
+    } as typeof agentModule;
+  })
   .catch(() => { agentModule = null; });
 
 export type AgentIntrospection = {

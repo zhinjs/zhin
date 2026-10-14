@@ -1,4 +1,4 @@
-import { workroomProjectionBindingKey } from '@zhin.js/agent';
+import { workroomProjectionBindingKey } from '@zhin.js/workroom';
 import type { Message } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 

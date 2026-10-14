@@ -12,7 +12,7 @@ import {
   type WorkroomRunCancelReasonCode,
   type WorkroomRunReplanReasonCode,
   type WorkroomTaskStatus,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import { hostGet, hostPost, loadHostHttpConfig } from '../utils/host-http.js';
 
 type WorkroomAssignmentOutcome = NonNullable<WorkroomAssignmentState['outcome']>;

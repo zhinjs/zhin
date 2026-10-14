@@ -1,4 +1,4 @@
-import { workroomEffectRuntimeToken } from '@zhin.js/agent/runtime';
+import { workroomEffectRuntimeToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomEffectCoordinator } from '../../../src/plugin-runtime/workroom/effect-coordinator.js';

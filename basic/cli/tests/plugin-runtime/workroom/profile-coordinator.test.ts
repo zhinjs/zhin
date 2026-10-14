@@ -1,7 +1,7 @@
 import {
   ActivatableWorkroomCatalog,
   ActivatableWorkroomJournal,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import { join } from 'node:path';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';

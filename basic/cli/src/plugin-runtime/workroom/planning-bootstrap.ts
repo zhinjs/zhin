@@ -3,13 +3,13 @@ import {
   createWorkroomSchedulerPolicySnapshot,
   type WorkroomDefinition,
   type WorkroomMemberRole,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   createCapabilityPackManifest,
   createWorkroomDynamicPlanningPolicySnapshot,
   createWorkroomProfileOverlay,
   type WorkroomGenerationAuthoritySnapshot,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { LOCAL_WORKROOM_RESOURCE_REQUIREMENTS } from './local-portfolio.js';
 
 export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{

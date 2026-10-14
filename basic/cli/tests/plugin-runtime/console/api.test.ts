@@ -580,6 +580,7 @@ describe('console REST routes', () => {
 
   it('serves the bounded generation-owned Agent Trace projection', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const traceSnapshot = {
@@ -647,6 +648,7 @@ describe('console REST routes', () => {
 
   it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const safeRun = {
@@ -797,6 +799,7 @@ describe('console REST routes', () => {
 
   it('cancels an active Agent task through the generation-owned console port', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const cancelSession = vi.fn(() => true);
@@ -827,6 +830,7 @@ describe('console REST routes', () => {
 
   it('routes authenticated Workroom Profile writes through the generation-owned narrow port', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const publishPack = vi.fn(async (command) => ({ pack: command.pack }));
@@ -934,6 +938,7 @@ describe('console REST routes', () => {
 
   it('exposes the authenticated principal through the Workroom Catalog read contract', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const readCatalog = vi.fn(async () => ({
@@ -980,6 +985,7 @@ describe('console REST routes', () => {
 
   it('keeps Sponsor controls typed and injects the token principal without accepting forged identity', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const projection = { version: 1, portfolioId: 'portfolio-main', sourceSequence: 4,
@@ -1104,6 +1110,7 @@ describe('console REST routes', () => {
 
   it('exposes only token-bound typed Data Lifecycle controls and content-free projections', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const projection = { version: 1, projectId: 'alpha', objectId: 'object-1', sequence: 3,

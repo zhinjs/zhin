@@ -11,19 +11,23 @@ import {
   type AssistantConfig,
   type ApprovalPort,
   type AudioTranscriptionPort,
+} from '@zhin.js/agent';
+import {
   type HumanIngressOrchestratorProposalPort,
   type WorkroomPlanGateAuthorityPort,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   AgentRuntime,
   agentDecisionConfigToken,
   normalizeAgentDecisionConfig,
   resolveAgentDecisionRuntime,
   type TurnIntentResolver,
+} from '@zhin.js/agent/runtime';
+import {
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
   type SelfDeliveryHostConfiguration,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { AgentTurnIngressRoute } from './turn/ingress-route.js';
 import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
 import {

@@ -11,8 +11,8 @@ export interface LegacyRunsOfflineCommandOptions {
 }
 
 export type LegacyRunsOfflineCommandOutput =
-  | import('@zhin.js/agent').LegacyRunOfflineReport
-  | import('@zhin.js/agent').LegacyRunMigrationProposal;
+  | import('@zhin.js/workroom').LegacyRunOfflineReport
+  | import('@zhin.js/workroom').LegacyRunMigrationProposal;
 
 /** Offline-only file command: imports contracts, never constructs a Host or Agent runtime. */
 export async function executeLegacyRunsOfflineCommand(
@@ -45,7 +45,7 @@ export async function executeLegacyRunsOfflineCommand(
       cause: error,
     });
   }
-  const agent = await import('@zhin.js/agent');
+  const agent = await import('@zhin.js/workroom');
   const report = agent.buildLegacyRunOfflineReport(source);
   const value = options.proposal
     ? agent.createLegacyRunMigrationProposal(report, {

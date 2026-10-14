@@ -6,15 +6,17 @@ import {
   agentTurnEngineToken,
   createFullAgentTurnEngine,
   turnJournalStoreToken,
+  type AgentRuntime,
+} from '@zhin.js/agent/runtime';
+import {
   workroomHostToken,
   type AgentHostEffectSponsorControlPort,
   type AgentHostPortfolioSponsorControlPort,
   type AgentHostWorkroomKnowledgeControlPort,
   type AgentHostWorkroomProfileControlPort,
-  type AgentRuntime,
   type WorkroomDataLifecycleConsoleControlPort,
   type WorkroomRunControlCommand,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { observeAgentTurnTrace } from './runtime-factory.js';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';

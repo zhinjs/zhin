@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { FileWorkroomProjectionRepository } from '@zhin.js/agent';
+import { FileWorkroomProjectionRepository } from '@zhin.js/workroom';
 import {
   WorkroomProjectionReplyResolver,
   WorkroomProjectionRuntime,
   WorkroomProjectionScheduler,
   createWorkroomProjectionOutboundMessageServicePort,
   type PortfolioSponsorProjection,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { outboundMessageToken, type ImRuntime } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { rootPluginId } from '@zhin.js/plugin-runtime';

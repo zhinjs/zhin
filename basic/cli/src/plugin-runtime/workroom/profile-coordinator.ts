@@ -2,7 +2,7 @@ import { join } from 'node:path';
 import type {
   ActivatableWorkroomCatalog,
   ActivatableWorkroomJournal,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   JournalWorkroomRunProfilePinAuthority,
   KernelPlanAdmissionRunProfilePinWriter,
@@ -12,7 +12,7 @@ import {
   createWorkroomProfileGenerationView,
   installWorkroomProfileAuthorityResources,
   workroomAcceptanceProjectionSourceAuthorityToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 

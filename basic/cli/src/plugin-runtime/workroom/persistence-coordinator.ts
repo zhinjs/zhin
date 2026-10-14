@@ -1,6 +1,9 @@
 import { join } from 'node:path';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import {
+  type AIService,
+} from '@zhin.js/agent';
+import {
   ActivatableAssignmentAuthorityGrantRepository,
   ActivatableOverlayPackPromotionRepository,
   ActivatablePortfolioControlOutboxRepository,
@@ -17,18 +20,19 @@ import {
   FileProjectKnowledgeJournal,
   FileWorkroomCatalog,
   FileWorkroomJournal,
-  type AIService,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   activateAiDatabaseStorage,
-  createGenerationOwnedWorkroomDataGovernanceStorage,
   defineAiDatabaseModels,
-  defineWorkroomDatabaseModels,
-  prepareWorkroomDatabaseStorage,
-  portfolioJournalRepositoryToken,
   type SemanticMemoryRuntime,
   type ZhinAgent,
 } from '@zhin.js/agent/runtime';
+import {
+  createGenerationOwnedWorkroomDataGovernanceStorage,
+  defineWorkroomDatabaseModels,
+  prepareWorkroomDatabaseStorage,
+  portfolioJournalRepositoryToken,
+} from '@zhin.js/workroom';
 import { databaseRootHostToken, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {

@@ -94,7 +94,7 @@ flowchart BT
 | Feature 层 | `@zhin.js/adapter` `command` `component` `middleware` … | 一类能力的契约（如 `defineAdapter`）+ 投影索引（如 `AdapterIndex`） |
 | AI 引擎 | `@zhin.js/ai` | Provider、agentLoop、会话、记忆，无 IM 概念 |
 | IM 层 | `@zhin.js/core` | Plugin、消息链路、命令分发（见 [消息流](./message-flow.md)） |
-| Workroom 领域 | `@zhin.js/workroom` | Workroom、Portfolio、Data Governance 领域代码；仅依赖 `im-contract`。A4b 前是 `agent` 的临时下层依赖 |
+| Workroom 领域 | `@zhin.js/workroom` | Workroom、Portfolio、Data Governance 领域代码与运行时装配（`src/workroom-runtime/`）；位于 `agent` 之上（workroom → agent，`agent` 不得反向依赖），领域目录仍仅依赖 `im-contract` |
 | Agent | `@zhin.js/agent` | 多模型编排、工具安全策略、MCP client |
 | 门面 | `zhin.js` | 再导出 core 创作面；`zhin.js/agent`、`zhin.js/ai` 子路径按需暴露 |
 | 运行时 | `@zhin.js/runtime` | `RootRuntime`：扫描项目图、组合配置、执行 generation 事务、HMR |
@@ -150,7 +150,7 @@ Plugin Runtime、HTTP 契约和 Console wire 契约，不依赖 Core 或 Agent�
 可以消费 Core、AI 与 Kernel，通过 HTTP 契约接入路由，不依赖具体 HTTP Host 实现。
 插件不直接依赖 Host 进程。
 
-`@zhin.js/agent` 内部也遵循单向边界：`workroom/`、`portfolio/`、`data-governance/` 拥有领域值对象、策略和端口，`plugin-runtime/` 负责把 generation-owned 能力适配到这些端口，`config/` 只负责配置解析。领域目录不得反向导入 `plugin-runtime/` 或 `config/`；该约束由 `pnpm check:architecture` 检查。
+`@zhin.js/workroom` 内部遵循单向边界：`workroom/`、`portfolio/`、`data-governance/` 拥有领域值对象、策略和端口，且不得导入任何框架包（仅 `im-contract` 与 Node 内置模块）；`workroom-runtime/` 负责把 `@zhin.js/agent` 的 generation-owned 能力适配到这些端口。`@zhin.js/agent` 不引用 Workroom；该约束由 `pnpm check:architecture` 检查。
 
 ## JSX 与展示组件
 

@@ -151,3 +151,6 @@ export type {
   TurnAdmissionRequest,
   TurnStopResult,
 } from './turn-admission-gate.js';
+
+// Host-integration seam for external host packages.
+export { runWithAgentTurnConfiguration } from './agent-turn-context.js';

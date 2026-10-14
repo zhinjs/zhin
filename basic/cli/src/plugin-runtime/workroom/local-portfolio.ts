@@ -22,10 +22,12 @@ import {
   type WorkroomKernel,
   type WorkroomAssignmentAuthorityGrantPort,
   type WorkflowPlanProposal,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
+import {
+  digestWorkroomCatalogProjectBinding,
+} from '@zhin.js/workroom';
 import {
   digestCanonicalWorkroomValue,
-  digestWorkroomCatalogProjectBinding,
   portfolioAtomicBundleAuthorityToken,
   portfolioKernelCommandAuthorityToken,
   portfolioPolicyAuthorityToken,
@@ -35,7 +37,7 @@ import {
   type PortfolioKernelCommandAuthorityPort,
   type PortfolioPolicyAuthorityPort,
   type WorkroomSchedulerPortfolioScopeAuthorityPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 
 export const LOCAL_WORKROOM_MODEL_POOL_ID = 'model:local';
 export const LOCAL_WORKROOM_EXECUTOR_POOL_ID = 'executor:local';

@@ -179,6 +179,9 @@ importers:
       '@zhin.js/schedule':
         specifier: workspace:*
         version: link:../schedule
+      '@zhin.js/workroom':
+        specifier: workspace:*
+        version: link:../../packages/im/workroom
       chalk:
         specifier: ^5.6.2
         version: 5.6.2
@@ -655,6 +658,9 @@ importers:
       '@zhin.js/agent':
         specifier: workspace:*
         version: link:../../packages/im/agent
+      '@zhin.js/workroom':
+        specifier: workspace:*
+        version: link:../../packages/im/workroom
       zhin.js:
         specifier: workspace:*
         version: link:../../packages/im/zhin
@@ -1126,6 +1132,9 @@ importers:
       '@zhin.js/logger':
         specifier: workspace:*
         version: link:../../../basic/logger
+      '@zhin.js/workroom':
+        specifier: workspace:*
+        version: link:../../im/workroom
     devDependencies:
       '@types/node':
         specifier: ^26.1.2
@@ -1280,9 +1289,6 @@ importers:
       '@zhin.js/tool':
         specifier: workspace:*
         version: link:../tool
-      '@zhin.js/workroom':
-        specifier: workspace:*
-        version: link:../workroom
       he:
         specifier: ^1.2.0
         version: 1.2.0
@@ -1795,9 +1801,27 @@ importers:
 
   packages/im/workroom:
     dependencies:
+      '@zhin.js/agent':
+        specifier: workspace:*
+        version: link:../agent
+      '@zhin.js/ai':
+        specifier: workspace:*
+        version: link:../ai
+      '@zhin.js/core':
+        specifier: workspace:*
+        version: link:../core
       '@zhin.js/im-contract':
         specifier: workspace:*
         version: link:../im-contract
+      '@zhin.js/plugin-runtime':
+        specifier: workspace:*
+        version: link:../plugin-runtime
+      '@zhin.js/skill':
+        specifier: workspace:*
+        version: link:../skill
+      '@zhin.js/tool':
+        specifier: workspace:*
+        version: link:../tool
     devDependencies:
       '@types/node':
         specifier: ^26.1.2

@@ -10,6 +10,8 @@ import {
 import { httpHostToken } from '@zhin.js/host-http';
 import {
   agentHostToken,
+} from '@zhin.js/agent/runtime';
+import {
   workroomHostToken,
   remoteAssignmentDispatchServiceToken,
   remoteAssignmentDispatchSchedulerToken,
@@ -20,11 +22,11 @@ import {
   workroomSchedulerAssignmentRouteRegistryToken,
   workroomAssignmentAuthorityGrantRepositoryToken,
   workroomAssignmentGrantClaimPreviewToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import {
   MemoryAssignmentAuthorityGrantRepository,
   WORKROOM_A2A_EXTENSION_URI,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import type { RootResourceContext } from '@zhin.js/runtime';
 import { installProtocolHosts } from '../../src/plugin-runtime/protocol-host-installer.js';
 

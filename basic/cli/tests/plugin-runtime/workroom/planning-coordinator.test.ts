@@ -1,4 +1,4 @@
-import { WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL } from '@zhin.js/agent/runtime';
+import { WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL } from '@zhin.js/workroom';
 import { describe, expect, it } from 'vitest';
 import { WorkroomPlanningCoordinator } from '../../../src/plugin-runtime/workroom/planning-coordinator.js';
 

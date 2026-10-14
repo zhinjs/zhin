@@ -1,4 +1,4 @@
-import { workroomSchedulerRuntimeToken } from '@zhin.js/agent/runtime';
+import { workroomSchedulerRuntimeToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomExecutionControlCoordinator } from '../../../src/plugin-runtime/workroom/execution-control-coordinator.js';

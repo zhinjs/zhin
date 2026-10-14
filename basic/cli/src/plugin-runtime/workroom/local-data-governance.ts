@@ -14,7 +14,7 @@ import {
   type WorkroomDataGovernancePublicationDecision,
   type WorkroomDataGovernanceRootProviderResolution,
   installWorkroomDataGovernanceResources,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 
 type CryptographyPort = NonNullable<
 Parameters<typeof installWorkroomDataGovernanceResources>[0]['cryptography']

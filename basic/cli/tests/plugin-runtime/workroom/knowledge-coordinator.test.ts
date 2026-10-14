@@ -1,7 +1,7 @@
 import {
   workroomAssignmentKnowledgeContextToken,
   workroomEphemeralAssignmentContextToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomKnowledgeCoordinator } from '../../../src/plugin-runtime/workroom/knowledge-coordinator.js';

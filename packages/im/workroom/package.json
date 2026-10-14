@@ -10,21 +10,6 @@
       "types": "./lib/index.d.ts",
       "development": "./src/index.ts",
       "import": "./lib/index.js"
-    },
-    "./workroom/*.js": {
-      "types": "./lib/workroom/*.d.ts",
-      "development": "./src/workroom/*.ts",
-      "import": "./lib/workroom/*.js"
-    },
-    "./portfolio/*.js": {
-      "types": "./lib/portfolio/*.d.ts",
-      "development": "./src/portfolio/*.ts",
-      "import": "./lib/portfolio/*.js"
-    },
-    "./data-governance/*.js": {
-      "types": "./lib/data-governance/*.d.ts",
-      "development": "./src/data-governance/*.ts",
-      "import": "./lib/data-governance/*.js"
     }
   },
   "files": [
@@ -36,7 +21,13 @@
     "test": "vitest run --root ../../.. packages/im/workroom/tests"
   },
   "dependencies": {
-    "@zhin.js/im-contract": "workspace:*"
+    "@zhin.js/agent": "workspace:*",
+    "@zhin.js/ai": "workspace:*",
+    "@zhin.js/core": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
+    "@zhin.js/skill": "workspace:*",
+    "@zhin.js/tool": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",

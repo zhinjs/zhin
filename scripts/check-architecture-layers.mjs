@@ -9,9 +9,9 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { findBarrelViolations, parseImports } from './lib/parse-imports.mjs';
+import { parseImports } from './lib/parse-imports.mjs';
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
-import { isWorkroomPackageSpecifier } from './lib/workroom-specifier.mjs';
+import { isAgentForbiddenWorkroomReference, isForbiddenDomainSpecifier } from './lib/workroom-specifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -35,6 +35,15 @@ const providerLayerAllowed = [
   'packages/im/interaction',
   'packages/im/plugin-runtime',
   'packages/im/feature-kit',
+];
+const workroomAllowedLayers = [
+  'packages/im/im-contract',
+  'packages/im/ai',
+  'packages/im/core',
+  'packages/im/plugin-runtime',
+  'packages/im/tool',
+  'packages/im/skill',
+  'packages/im/agent',
 ];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
@@ -67,9 +76,10 @@ const layers = {
   'packages/im/kernel': { level: 1, allowedImports: ['basic'] },
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
-  // Workroom domain (A4a): may only depend on the zero-dependency IM contract; agent -> workroom, never the reverse.
-  'packages/im/workroom': { level: 4, allowedImports: ['packages/im/im-contract'] },
-  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool', 'packages/im/workroom' /* temporary until A4b/A5 */] },
+  'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  // Workroom (A4b): sits above agent. workroom -> agent, never the reverse. Only src/workroom-runtime may use
+  // agent; the domain directories (workroom/, portfolio/, data-governance/) stay framework-free (see below).
+  'packages/im/workroom': { level: 5, allowedImports: workroomAllowedLayers },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
@@ -287,9 +297,11 @@ for (const contract of zeroRuntimeDependencyContracts) {
   }
 }
 
-// The workroom package may only depend on the IM contract. A manifest-level
-// dependency on agent (or anything else) would form an agent <-> workroom cycle.
-const workroomAllowedDependencies = new Set(['@zhin.js/im-contract']);
+// Workroom may depend on the layers it composes (including agent); agent must never
+// declare a manifest dependency on workroom, otherwise the packages form a cycle.
+const workroomAllowedDependencies = new Set(workroomAllowedLayers.map(layer => (
+  Object.entries(packageNameToPath).find(([, target]) => target === layer)?.[0]
+)));
 {
   const manifestPath = 'packages/im/workroom/package.json';
   const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
@@ -299,7 +311,20 @@ const workroomAllowedDependencies = new Set(['@zhin.js/im-contract']);
       violations.push({
         file: manifestPath,
         import: dependency,
-        reason: `@zhin.js/workroom may only depend on @zhin.js/im-contract (${section})`,
+        reason: `@zhin.js/workroom may only depend on ${[...workroomAllowedDependencies].join(', ')} (${section})`,
+      });
+    }
+  }
+}
+{
+  const manifestPath = 'packages/im/agent/package.json';
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
+  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
+    if (Object.hasOwn(manifest[section] ?? {}, '@zhin.js/workroom')) {
+      violations.push({
+        file: manifestPath,
+        import: '@zhin.js/workroom',
+        reason: `@zhin.js/agent must not depend on @zhin.js/workroom (${section}); direction is workroom -> agent`,
       });
     }
   }
@@ -321,7 +346,8 @@ if (violations.length) {
   console.error('  3. packages/im/ai (providers, agents, memory)');
   console.error('  4. packages/im/core (Plugin, Adapter, Endpoint, Command)');
   console.error('  5. packages/im/agent (ZhinAgent, security policies)');
-  console.error('  6. packages/im/zhin (main entry)');
+  console.error('  6. packages/im/workroom (workroom -> agent, never the reverse)');
+  console.error('  7. packages/im/zhin (main entry)');
   console.error('  (parallel) packages/console/{contract,pagemanager,client}\n');
 
   console.error('Each layer can only import from layers below it.');
@@ -399,8 +425,6 @@ const agentDomainRoots = [
 const agentRuntimeRoots = [
   path.join(repoRoot, 'packages/im/agent/src/config'),
   path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
-  path.join(repoRoot, 'packages/im/agent/src/workroom-runtime'),
-  // A4b moves workroom-runtime into the workroom package; keep it protected.
   path.join(repoRoot, 'packages/im/workroom/src/workroom-runtime'),
 ];
 const agentDomainViolations = [];
@@ -411,6 +435,14 @@ for (const domainRoot of agentDomainRoots) {
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf8');
     for (const importPath of parseImports(content, { includeTypeOnly: true })) {
+      if (isForbiddenDomainSpecifier(importPath)) {
+        agentDomainViolations.push({
+          file: path.relative(repoRoot, file),
+          import: importPath,
+          reason: `${domainRoot} may only import @zhin.js/im-contract and node: builtins (framework packages belong in workroom-runtime/)`,
+        });
+        continue;
+      }
       if (!importPath.startsWith('.')) continue;
       const target = path.resolve(path.dirname(file), importPath);
       const forbidden = agentRuntimeRoots.find(root => target === root || target.startsWith(`${root}${path.sep}`));
@@ -467,54 +499,26 @@ if (dataGovernanceViolations.length) {
 
 console.log('Harness Data Governance direction check: OK.');
 
-// Only the barrel files may re-export the four Agent domain directories;
-// every other Agent source file must stay generic (inject ports instead).
+// A4b: Agent is generic. No Agent source file (barrels included) may reference the
+// Workroom package or any Workroom-owned directory; the dependency is workroom -> agent.
 const agentSrcRoot = path.join(repoRoot, 'packages/im/agent/src');
-const agentDomainDirs = ['workroom', 'workroom-runtime', 'portfolio', 'data-governance']
-  .map(name => path.join(agentSrcRoot, name));
-const agentReexportAllowed = new Set([
-  path.join(agentSrcRoot, 'plugin-runtime/index.ts'),
-  path.join(agentSrcRoot, 'index.ts'),
-]);
-const insideDir = (target, root) => target === root || target.startsWith(`${root}${path.sep}`);
 const agentReexportViolations = [];
 const agentSrcFiles = [];
 walkTs(agentSrcRoot, agentSrcFiles);
 for (const file of agentSrcFiles) {
-  if (agentDomainDirs.some(root => insideDir(file, root))) continue;
   const content = fs.readFileSync(file, 'utf8');
-  const isBarrel = agentReexportAllowed.has(file);
-  // Returns a display label for the domain the specifier points at, or undefined.
-  const resolveDomain = (importPath) => {
-    if (isWorkroomPackageSpecifier(importPath)) return '@zhin.js/workroom';
-    if (!importPath.startsWith('.')) return undefined;
-    const target = path.resolve(path.dirname(file), importPath);
-    const matchedRoot = agentDomainDirs.find(root => insideDir(target, root));
-    return matchedRoot === undefined ? undefined : path.relative(repoRoot, matchedRoot);
-  };
-  if (isBarrel) {
-    for (const importPath of findBarrelViolations(content, spec => resolveDomain(spec) !== undefined)) {
-      agentReexportViolations.push({
-        file: path.relative(repoRoot, file),
-        import: importPath,
-        reason: `barrel may only \`export ... from\` the four Agent domain directories or the @zhin.js/workroom package (${resolveDomain(importPath)})`,
-      });
-    }
-    continue;
-  }
   for (const importPath of parseImports(content, { includeTypeOnly: true })) {
-    const domain = resolveDomain(importPath);
-    if (!domain) continue;
+    if (!isAgentForbiddenWorkroomReference(importPath)) continue;
     agentReexportViolations.push({
       file: path.relative(repoRoot, file),
       import: importPath,
-      reason: `only plugin-runtime/index.ts and index.ts may reference ${domain}`,
+      reason: 'packages/im/agent must not reference @zhin.js/workroom or workroom/portfolio/data-governance/workroom-runtime directories',
     });
   }
 }
 
 if (agentReexportViolations.length) {
-  console.error('\nHarness Agent domain re-export boundary check: FAILED\n');
+  console.error('\nHarness Agent -> Workroom reference check: FAILED\n');
   for (const violation of agentReexportViolations) {
     console.error(`  ${violation.file}:`);
     console.error(`    Import: ${violation.import}`);
@@ -523,4 +527,4 @@ if (agentReexportViolations.length) {
   process.exit(1);
 }
 
-console.log('Harness Agent domain re-export boundary check: OK.');
+console.log('Harness Agent -> Workroom reference check: OK.');

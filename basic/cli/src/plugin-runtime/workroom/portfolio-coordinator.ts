@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { FilePortfolioJournalRepository } from '@zhin.js/agent';
+import { FilePortfolioJournalRepository } from '@zhin.js/workroom';
 import {
   GenerationOwnedPortfolioCapacityRuntime,
   WorkroomPortfolioAssignmentFailureAuthority,
@@ -23,7 +23,7 @@ import {
   type PortfolioKernelCommandAuthorityPort,
   type PortfolioSponsorProjection,
   type PortfolioUsageGatewayAuthorityPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { installLocalWorkroomPortfolioAuthorities } from './local-portfolio.js';
 import type { WorkroomPersistenceCoordinator } from './persistence-coordinator.js';

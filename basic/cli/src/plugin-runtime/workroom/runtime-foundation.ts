@@ -4,7 +4,7 @@ import {
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
   type WorkroomPlanGateAuthorityPort,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   CatalogWorkroomPriorityAuthority,
   GenerationWorkroomPriorityAuthority,
@@ -28,7 +28,7 @@ import {
   workroomRemoteAssignmentAuthorityToken,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { Token } from '@zhin.js/plugin-runtime';
 

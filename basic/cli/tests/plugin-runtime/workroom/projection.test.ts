@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { MemoryWorkroomProjectionRepository, workroomProjectionMessageKey } from '@zhin.js/agent';
+import { MemoryWorkroomProjectionRepository, workroomProjectionMessageKey } from '@zhin.js/workroom';
 import {
   assertWorkroomCatalogMatchesGeneration,
   classifyWorkroomIngressSource,

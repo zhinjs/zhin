@@ -78,20 +78,20 @@ export function parseImports(content, { includeTypeOnly = false } = {}) {
 
   const patterns = includeTypeOnly
     ? [
-      new RegExp(`import\\s+(?:type\\s+)?[\\s\\S]*?\\bfrom\\s*${STR}`, 'g'),
-      new RegExp(`import\\s*${STR}`, 'g'),
+      new RegExp(`(?<![\\w$.])import\\s+(?:type\\s+)?[\\s\\S]*?\\bfrom\\s*${STR}`, 'g'),
+      new RegExp(`(?<![\\w$.])import\\s*${STR}`, 'g'),
       new RegExp(`(?<![\\w$.])export\\s+(?:type\\s+)?(?:\\*(?:\\s+as\\s+[\\w$]+)?|\\{[\\s\\S]*?\\})\\s*\\bfrom\\s*${STR}`, 'g'),
-      new RegExp(`import\\s*\\(\\s*${STR}\\s*\\)`, 'g'),
+      new RegExp(`(?<![\\w$.])import\\s*\\(\\s*${STR}\\s*\\)`, 'g'),
       new RegExp(`require\\s*\\(\\s*${STR}\\s*\\)`, 'g'),
     ]
     : [
       // 静态 import（含多行 import 块与 bare import），跳过 import type
-      /import\s+(?!type\s)[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g,
-      /import\s*['"]([^'"]+)['"]/g,
+      /(?<![\w$.])import\s+(?!type\s)[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g,
+      /(?<![\w$.])import\s*['"]([^'"]+)['"]/g,
       // export { ... } from / export * from / export * as ns from（含多行），跳过 export type
       /(?<![\w$.])export\s+(?!type\s)(?:\*(?:\s+as\s+[\w$]+)?|\{[\s\S]*?\})\s*\bfrom\s*['"]([^'"]+)['"]/g,
       // 动态 import('...')（含 import('x').Type 内联类型；相对路径本就放行）
-      /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
+      /(?<![\w$.])import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
       // require('...')
       /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
     ];

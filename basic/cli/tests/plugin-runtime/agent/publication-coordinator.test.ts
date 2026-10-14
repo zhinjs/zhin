@@ -1,4 +1,5 @@
-import { agentHostToken, workroomHostToken } from '@zhin.js/agent/runtime';
+import { agentHostToken } from '@zhin.js/agent/runtime';
+import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { AgentHostPublicationCoordinator } from '../../../src/plugin-runtime/agent/publication-coordinator.js';

@@ -2,14 +2,16 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  type AIService,
+} from '@zhin.js/agent';
+import {
   ActivatableWorkroomCatalog,
   FileWorkroomCatalog,
   ActivatableWorkroomJournal,
   DatabaseWorkroomJournal,
   MemoryWorkroomJournalPayloadPort,
   WorkroomKernel,
-  type AIService,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import { type ZhinAgent } from '@zhin.js/agent/runtime';
 import { GenerationHandoffStack, Scope, databaseRootHostToken, rootPluginId } from '@zhin.js/plugin-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';

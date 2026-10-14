@@ -1,5 +1,5 @@
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
-import { portfolioJournalRepositoryToken } from '@zhin.js/agent/runtime';
+import { portfolioJournalRepositoryToken } from '@zhin.js/workroom';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomExecutionCoordinator } from '../../../src/plugin-runtime/workroom/execution-coordinator.js';
 

@@ -12,18 +12,20 @@ import {
   resolveWorkroomBotIdentity,
   workroomProjectionBindingKey,
   type HumanIngressOrchestratorProposalPort,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
+import {
+  digestWorkroomCatalogProjectBinding,
+} from '@zhin.js/workroom';
 import {
   createGenerationHumanIngressPlanningPort,
   createPortfolioSponsorHumanIngressControlPort,
   createProjectionHumanIngressTargetResolver,
   createWorkroomDataLifecycleHumanIngressControlPort,
-  digestWorkroomCatalogProjectBinding,
   portfolioSponsorCommandToken,
   workroomHumanIngressPlanningToken,
   workroomProjectionCatalogBindingDigest,
   type WorkroomDataLifecycleConsoleControlPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { conversationRefKey } from '@zhin.js/im-contract';

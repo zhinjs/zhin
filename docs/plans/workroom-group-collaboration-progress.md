@@ -43,7 +43,9 @@ sidebar: false
   - 2026-10-14 · 「refactor: 新建 @zhin.js/workroom 包并迁入 workroom/portfolio/data-governance」· 112 个源文件纯移动，新包只依赖 `@zhin.js/im-contract`；agent 侧 `export *` 兼容层，导出名不变；架构检查、typecheck 别名、changeset 同步更新
 - [x] A4a-1 处理第 9 轮审查意见：`check-architecture-layers.mjs` 的 A2c 引用边界检查（`resolveDomain`）也识别 `@zhin.js/workroom` 及其子路径的裸说明符，barrel 与非 barrel 分支一致，补正反用例；顺带：`tsconfig.typecheck.json` 的 `include` 加入 `packages/im/workroom/src/**/*`；agent 侧兼容层补一个轻量测试（只含 `export * from '@zhin.js/workroom/...'`）；changeset 或 README 注明 `./workroom/*.js` 等深路径导出为临时，A4b/A5 后收窄
   - 2026-10-14 · 「fix: 引用边界检查识别 @zhin.js/workroom 裸说明符」· `resolveDomain` 先识别裸说明符（抽出 `scripts/lib/workroom-specifier.mjs`）；typecheck 包含新包 src；112 个兼容层逐个断言只含一行 `export *` 且目标存在；changeset / README 注明深路径导出为临时
-- [ ] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
+- [x] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
+  - 2026-10-14 · 「refactor: 将 workroom-runtime 迁入 @zhin.js/workroom」· agent 不再以任何形式引用 workroom（架构检查强制，含 barrel）；删除 112 个兼容层与重复 fixture；workroom 相关测试随代码迁入新包；快照与 changeset 更新
+- [ ] A4b-1 处理第 11 轮审查意见：`basic/cli/package.json` 中 `@zhin.js/workroom` 改为 devDependency + 可选 peerDependency（与 `@zhin.js/agent` 一致，恢复“AI 另装”的安装图），`@zhin.js/a2a` 考虑把 workroom 也设为 peer 避免出现两份 agent / plugin-runtime 实例；`.changeset/move-workroom-runtime.md` 补 `"zhin.js": patch` 并说明 `zhin.js/agent` 用户改从 `@zhin.js/workroom` 导入；`packages/im/agent/README.md` 删掉或迁走 Workroom Kernel / Journal / Projection Outbox 段落。顺带 Nit：`ZhinAgentPrivate` 从 `@zhin.js/agent/core` 公开导出，标 `@internal` 或改窄接口（可留给 A5）；`check-architecture-layers.mjs` 中 workroom 与 zhin 同为 level 5，补注释或调整层级
 - [ ] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照
 - [ ] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
 
@@ -129,6 +131,14 @@ sidebar: false
 - Nit：新用例只测了 `isWorkroomPackageSpecifier` 等辅助函数，没测到 `check-architecture-layers.mjs:489` `resolveDomain` 的接线；删掉那一行检查测试仍全过。建议把 agent 引用边界判定抽成 `scripts/lib/` 纯函数（file、content、isBarrel → 违规列表），或对临时 fixture 跑一次检查脚本。可在 A5 改架构检查时顺带处理
 - Nit：README / changeset 说深路径在 A4b/A5 后“移除或收窄”并且“together with those compatibility stubs”，而兼容层测试与 stub 标记写的是 stub 在 A4b 删除，时间说法不一致。建议统一为：stub 在 A4b 删除，深路径导出最晚在 A5 收窄。可在 A4b 顺带改
 
+### 第 11 轮（2026-10-14，审查 A4b）
+
+- 无 Blocking
+- Should fix：CLI 把 `@zhin.js/workroom` 设为必需依赖，经由它连带强制安装 agent，违背“AI 另装”且属于阶段 A 不允许的行为变化 → A4b-1
+- Should fix：changeset 未列 `zhin.js`，而 `zhin.js/agent` 公开面也缩小了 → A4b-1
+- Should fix：agent README 仍描述已迁走的 workroom 目录 → A4b-1
+- Nit：`ZhinAgentPrivate` 成为 `@zhin.js/agent/core` 公开导出；workroom 与 zhin 同为 level 5 且控制台输出顺序不一致 → 并入 A4b-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -143,3 +153,4 @@ sidebar: false
 - 2026-10-14 09:39 定时运行：rebase 到最新 origin/main（11 个提交无冲突），build 通过；完成 A3-1（4 个 agent，约 1.9 分钟，42 个架构脚本自测 / agent build / type-check / check:architecture / API 快照 / eslint 通过，审查无问题）。备注：`scriptPath` 仍被拒绝，继续内联传入同一脚本
 - 2026-10-14 同一次定时运行：完成 A4a（4 个 agent，约 17 分钟，两包 build / type-check / 1193 + 428 个相关测试 / check:architecture、domain-module-boundaries、workroom-ssot、harness-paths / API 快照通过，审查无 Blocking，1 个 Should fix 新增为 A4a-1）。备注：eslint 对 3 个 .mjs 脚本是忽略状态，未实际 lint
 - 2026-10-14 10:49 定时运行：rebase 到最新 origin/main（13 个提交无冲突），install / build 通过；完成 A4a-1（4 个 agent，约 9.8 分钟，两包 build / type-check / 874 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，2 个 Nit 只记录）。备注：继续内联传入 step-workflow.js，内容未改
+- 2026-10-14 同一次定时运行：完成 A4b（4 个 agent，约 19.6 分钟，四包 build / type-check / 2987 个相关测试 / check:architecture、domain-module-boundaries、harness-paths、no-removed-plugin-api / API 快照 / eslint 0 error 通过，审查无 Blocking，3 个 Should fix 新增为 A4b-1）

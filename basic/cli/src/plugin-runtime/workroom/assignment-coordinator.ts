@@ -5,7 +5,10 @@ import {
   createAssignmentExecutionEnvelope,
   createDurableWorkroomAssignmentAuthorityGrantProvider,
   createWorkroomRoleCapabilitySnapshot,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
+import {
+  type CapabilityIngress,
+} from '@zhin.js/agent/runtime';
 import {
   DurableReportLocalModelExecutionPort,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
@@ -31,12 +34,11 @@ import {
   workroomPlanningDisclosureToken,
   workroomProjectProfileRegistryToken,
   workroomTaskReportPayloadToken,
-  type CapabilityIngress,
   type SelfDeliveryHostConfiguration,
   type WorkroomEvidencePayloadWriteInput,
   type WorkroomSchedulerPortfolioDispatchResources,
   type WorkroomStructuredDagModelInput,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';

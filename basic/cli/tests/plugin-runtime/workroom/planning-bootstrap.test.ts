@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createCapabilityPackManifest } from '@zhin.js/agent/runtime';
+import { createCapabilityPackManifest } from '@zhin.js/workroom';
 import { createWorkroomPlanningBootstrapArtifacts } from '../../../src/plugin-runtime/workroom/planning-bootstrap.js';
 
 describe('Workroom Planning Console bootstrap', () => {

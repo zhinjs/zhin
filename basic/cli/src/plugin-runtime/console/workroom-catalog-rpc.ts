@@ -1,6 +1,6 @@
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { RuntimeConsoleRpcContext } from '@zhin.js/host-http';
-import type { WorkroomDefinition } from '@zhin.js/agent';
+import type { WorkroomDefinition } from '@zhin.js/workroom';
 import type { AgentConsolePort } from './agent-console.js';
 
 type WorkroomCatalogRpcContext = Required<Pick<
@@ -52,7 +52,7 @@ async function setWorkroomCatalog(
 ): Promise<Readonly<{ revision: string; restartRequired: false }>> {
   const catalog = agent?.workroomCatalog;
   if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
-  const { validateWorkroomDefinitions } = await import('@zhin.js/agent');
+  const { validateWorkroomDefinitions } = await import('@zhin.js/workroom');
   const errors = validateWorkroomDefinitions(
     workrooms,
     agent.listBindings().map(binding => binding.name),

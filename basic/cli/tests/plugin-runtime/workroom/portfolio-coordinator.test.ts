@@ -2,7 +2,7 @@ import {
   GenerationOwnedPortfolioCapacityRuntime,
   portfolioCapacityRuntimeToken,
   portfolioJournalRepositoryToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { WorkroomPortfolioCoordinator } from '../../../src/plugin-runtime/workroom/portfolio-coordinator.js';

@@ -1,4 +1,4 @@
-import { type WorkroomPreemptionState } from '@zhin.js/agent';
+import { type WorkroomPreemptionState } from '@zhin.js/workroom';
 import {
   GenerationOwnedPortfolioCapacityRuntime,
   JournalWorkroomPreemptionCheckpointAckReader,
@@ -22,7 +22,7 @@ import {
   workroomSchedulerDispatchSupplyToken,
   workroomSchedulerRuntimeToken,
   type WorkroomSchedulerPortfolioDispatchResources,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';

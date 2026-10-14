@@ -13,7 +13,7 @@ export interface LegacyPayloadsOfflineCommandOptions {
 }
 
 export type LegacyPayloadsOfflineCommandOutput =
-  import('@zhin.js/agent').LegacyEmbeddedPayloadQuarantineAudit;
+  import('@zhin.js/workroom').LegacyEmbeddedPayloadQuarantineAudit;
 
 /** Offline-only scanner. It never constructs a Host, opens a writer, imports, or purges. */
 export async function executeLegacyPayloadsOfflineCommand(
@@ -26,8 +26,8 @@ export async function executeLegacyPayloadsOfflineCommand(
   }
   const sourceKind = requireSourceKind(options.sourceKind);
   const storage = requireStorage(options.storage);
-  const agent = await import('@zhin.js/agent');
-  let adapter: import('@zhin.js/agent').LegacyEmbeddedPayloadReadAdapter;
+  const agent = await import('@zhin.js/workroom');
+  let adapter: import('@zhin.js/workroom').LegacyEmbeddedPayloadReadAdapter;
   if (storage === 'file') {
     adapter = new agent.FileLegacyEmbeddedPayloadReadAdapter([
       { sourceKind, path: inputPath },
@@ -43,7 +43,7 @@ export async function executeLegacyPayloadsOfflineCommand(
     }
     assertDatabaseExportSourceKind(value, sourceKind);
     adapter = new agent.DatabaseLegacyEmbeddedPayloadReadAdapter(
-      value as import('@zhin.js/agent').LegacyEmbeddedPayloadDatabaseExportV1,
+      value as import('@zhin.js/workroom').LegacyEmbeddedPayloadDatabaseExportV1,
     );
   }
   const report = await agent.scanLegacyEmbeddedPayloads(adapter);

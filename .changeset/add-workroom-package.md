@@ -3,4 +3,4 @@
 "@zhin.js/agent": patch
 ---
 
-Extract the Workroom, Portfolio and Data Governance domain code from `@zhin.js/agent` into the new `@zhin.js/workroom` package. `@zhin.js/agent` re-exports it unchanged (no export name changes); the old internal paths remain as temporary compatibility re-exports.
+Extract the Workroom, Portfolio and Data Governance domain code from `@zhin.js/agent` into the new `@zhin.js/workroom` package. Compatibility stubs at the old internal agent paths are removed in the A4b-era release (see `move-workroom-runtime`); import from `@zhin.js/workroom`.

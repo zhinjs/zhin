@@ -1,4 +1,8 @@
-import type { AIService, WorkroomDefinition } from '@zhin.js/agent';
+import type { AIService } from '@zhin.js/agent';
+import type { WorkroomDefinition } from '@zhin.js/workroom';
+import {
+  digestWorkroomCatalogProjectBinding,
+} from '@zhin.js/workroom';
 import {
   WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
   WorkroomDataGovernanceAuthorityWriter,
@@ -8,12 +12,11 @@ import {
   createWorkroomDynamicPlanningGenerationSnapshot,
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   createWorkroomProfileOverlay,
-  digestWorkroomCatalogProjectBinding,
   digestWorkroomProfileCatalogProject,
   type AgentHostWorkroomProfileControlPort,
   type WorkroomPlanningBootstrapCommand,
   type WorkroomPlanningSetupStatus,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import {
   assessWorkroomDisclosureSetup,
