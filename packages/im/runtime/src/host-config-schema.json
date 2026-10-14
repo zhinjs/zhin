@@ -121,8 +121,22 @@
                 "groupMode": {
                   "type": "string",
                   "enum": ["supersede", "fifo"],
-                  "description": "Replace an older queued group turn, or process all turns in arrival order.",
-                  "x-descriptionZh": "覆盖较早的群聊排队回合，或按到达顺序处理全部回合。"
+                  "description": "supersede (default): a sender's new message replaces their own unanswered turn; fifo: every message waits in arrival order. Other members' messages always queue.",
+                  "x-descriptionZh": "supersede（默认）：同一发起人的新消息会替换他自己尚未回复的回合；fifo：全部按到达顺序排队。其他成员的消息总是排队。"
+                },
+                "ttlMs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 180000,
+                  "description": "A queued turn that waited longer than this is dropped with a short notice. 0 disables expiry.",
+                  "x-descriptionZh": "排队超过该时长的回合会被丢弃并简短提示；0 表示不过期。"
+                },
+                "maxQueuedTurns": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "default": 5,
+                  "description": "Turns allowed to wait behind the running turn of one conversation; further messages get a short busy reply.",
+                  "x-descriptionZh": "同一会话中允许排在当前回合之后的回合数；超出时回复一句“正在忙”。"
                 }
               }
             },
