@@ -256,10 +256,11 @@ describe('exports and isolation', () => {
 
   it('room sources import only sibling files, except the core-facing adapters', () => {
     const dir = join(fileURLToPath(new URL('.', import.meta.url)), '../../src/room');
-    // room-membership / room-bus are the only files that touch core (type-only port contracts).
+    // room-membership / room-bus / room-send-limiter are the only files that touch core (type-only port contracts).
     const coreFacing: Record<string, RegExp> = {
       'room-membership.ts': /^import type \{ RoomMembershipPort \} from '@zhin\.js\/core\/runtime';$/m,
       'room-bus.ts': /^import type \{ OutboundMessageService \} from '@zhin\.js\/core\/runtime';$/m,
+      'room-send-limiter.ts': /^import type \{ OutboundMessageService \} from '@zhin\.js\/core\/runtime';$/m,
     };
     for (const f of readdirSync(dir).filter((n) => n.endsWith('.ts'))) {
       const src = readFileSync(join(dir, f), 'utf8');

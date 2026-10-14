@@ -87,7 +87,9 @@ sidebar: false
   - 2026-10-15 · 「feat(workroom): Room Task 状态机与事件溯源持久化」· `room/` 下新增小型 decide / evolve / replay 状态机（6 个状态、handoff 回到 assigned）、每个 Room 一条事件流（CAS 追加、批量原子）、数据库 journal（digest / 损坏行 fail-closed）与内存 journal；未接入运行时
 - [x] B3-1 处理第 30 轮审查意见：`packages/im/workroom/src/room/room-task-service.ts:110` 的 `dispatch(stored)` 在每个 Room 的串行链内 await 订阅者，订阅者对同一 Room 再次 `execute` 会死锁（C1 把 RoomBus / 工具作为订阅者时容易触发），慢订阅者也会阻塞该 Room 所有命令。改为串行段结束后再分发（serialized 返回已存事件，`execute` 在 run 完成后分发），补“订阅者对同一 Room 调用 execute 不死锁”测试。顺带 Nit：`database-room-task-journal.ts:67` 空批量不校验 `expectedSequence`，与内存 journal 行为不一致，统一并补一个对两种 journal 都跑的契约测试；`room-task.ts:199` 已 `assigned` 时再次 `task.assigned` 会绕过 handoff 的 from 校验且不计 handoffCount，拒绝重派给当前负责人，并在注释或方案中写明 C1 的 authorize 必须限制谁可以对已分配的 Task 重新 assign
   - 2026-10-15 · 「fix(workroom): Room Task 订阅者分发移出串行段并收紧重复指派」· 订阅者在串行段结束后分发（重放命令不分发），补重入不死锁 / 慢订阅者不阻塞 / 重放不重复分发测试；DB journal 空批量校验 `expectedSequence`，两种 journal 共用契约测试；`assigned` 时指派给当前负责人被拒绝，C1 authorize 约束写入 JSDoc 与方案
-- [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
+- [x] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
+  - 2026-10-15 · 「feat(workroom): Room 护栏组件」· `room/` 新增 handoff 深度 / 来回弹跳上限、每分钟 turn 上限与同一 Room 串行发言、人类取消、敏感操作账号白名单（Task authorizer）、按账号的发送频率限制器（包装 Room Bus 的 outbound，仍走发送链）；判定出错 fail-closed；只导出未接入运行时
+- [ ] B4-1 处理第 32 轮审查意见（涉及安全与 fail-closed，所以新建条目）：`packages/im/workroom/src/room/room-task-authorizer.ts:31` 除 `cancel` 外一律放行，单独接入时任何人都能对已分配 Task 重新 assign，绕过 B4 的 handoff 深度 / 来回弹跳上限；改为可组合且默认 fail-closed（无角色检查时拒绝对 assigned / blocked Task 的 assign，或必须传入 `next` authorizer，或改名为局部检查），补“未提供角色检查时 assign 不被静默放行”测试，删掉锁定“其他命令放行”的用例。`room-send-limiter.ts` 只覆盖 Room Bus 投影，同一账号的 `$reply` / generation 出站不计入：提供可作为 outbound middleware 或包装共享 `OutboundMessageService` 的形态（仍在发送链内），按账号共享同一实例，并在 changeset / 方案写明 C1 必须让成员 Endpoint 的所有出站共用它。顺带：`room-guards.ts:275` `cancelRoom` 任意 human 都能清空队列，限制为清队列需 `authorizeSensitive` 账号（任意 human 仅能中断当前 turn）并补测试；`room-guards.ts:211` 未传 `history` 时静默跳过弹跳检查，改为必填；`admitTurn` 与 `runExclusive` 重复占用窗口，JSDoc 写明或改为内部；`room-task-authorizer.test.ts:60` 恒真的排序用例删除或改为真实并发用例
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
 
 ## 阶段 C：切换与清理
@@ -301,6 +303,12 @@ sidebar: false
 - Nit（只记录，C1 参考）：`room-task-service.ts:42` 的 `authorize(roomId, command)` 是同步的、拿不到 Task 当前状态，C1 实际只能按角色限制所有 assign，或需要给 authorize 提供 Task 视图
 - Nit（只记录）：`room-task-service.test.ts:90` 死锁测试的 2 秒 guard 计时器未 clearTimeout
 
+### 第 32 轮（2026-10-15，审查 B4）
+
+- 无 Blocking
+- Should fix：`room-task-authorizer.ts:31` 除 cancel 外全放行，重新 assign 可绕过 handoff 上限；`room-send-limiter.ts` 只覆盖 Room Bus 投影，账号级防风控只部分达成 → 新增 B4-1
+- Nit：`cancelRoom` 任意 human 可清空队列；未传 `history` 时弹跳检查 fail-open；`admitTurn` / `runExclusive` 重复计数；恒真的排序测试 → 并入 B4-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -336,3 +344,4 @@ sidebar: false
 - 2026-10-15 01:35 定时运行：rebase 到最新 origin/main（2 个提交无冲突），install / build 通过；完成 B2b-2（4 个 agent，约 3.7 分钟，core / workroom build、type-check、220 + 1484 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，2 个 Nit 只记录）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B3（4 个 agent，约 7.1 分钟，workroom build、type-check、101 + 940 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 新增为 B3-1，2 个 Nit 并入）。顺带在方案第 131 行补充“非成员账号也包括群内其他人类”
 - 2026-10-15 定时运行：rebase 到最新 origin/main（无冲突），install / build 通过；完成 B3-1（4 个 agent，约 5.4 分钟，workroom build、type-check、117 个 room 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，4 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
+- 2026-10-15 同一次定时运行：完成 B4（4 个 agent，约 8 分钟，workroom build、type-check、148 个 room 测试 + 1221 个 workroom 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix 涉及安全 / fail-closed，连同 4 个 Nit 新增为 B4-1）
