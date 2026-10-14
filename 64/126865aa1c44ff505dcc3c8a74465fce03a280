@@ -1,0 +1,83 @@
+basic/cli/src/utils/optional-workroom.ts
+  s_a2b49f2b1fdbd1::t_8bf5414c0035f1 1-37
+basic/cli/src/plugin-runtime/agent/workroom-loader.ts
+  s_a2b49f2b1fdbd1::t_fa421619991c8d 1-21
+.changeset/move-workroom-runtime.md
+  s_a2b49f2b1fdbd1::t_f893ee7235ea7e 15
+.changeset/optional-workroom-loading.md
+  s_a2b49f2b1fdbd1::t_7de079d226d551 1-5
+basic/cli/src/commands/agent-legacy-payloads.ts
+  s_a2b49f2b1fdbd1::t_8680584b534d5b 4,30
+basic/cli/src/commands/agent-legacy-runs.ts
+  s_a2b49f2b1fdbd1::t_0c62145341923f 4,49
+basic/cli/src/commands/agent-workroom.ts
+  s_a2b49f2b1fdbd1::t_b66cb27900dd47 3-12,15,180,196
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_a2b49f2b1fdbd1::t_44c78e79079447 15-17,21,27-30,34-35,60-64,157-158,191-210,222,224,240,243
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_a2b49f2b1fdbd1::t_a88e247c2a08f8 12-16
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_a2b49f2b1fdbd1::t_7b785413dbb4ad 26,30
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_a2b49f2b1fdbd1::t_14ede88e3fc004 73,89-90,97-101,125,129,149
+basic/cli/src/plugin-runtime/agent/workroom-port.ts
+  s_a2b49f2b1fdbd1::t_a67958a65b30a0 21-27
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_a2b49f2b1fdbd1::t_b864cc47c97d37 27-42,62,65,123,125,128-135
+basic/cli/src/plugin-runtime/console/workroom-catalog-rpc.ts
+  s_a2b49f2b1fdbd1::t_736d6fc8a1fdf6 33,54
+basic/cli/src/plugin-runtime/console/workroom-run-query-routes.ts
+  s_a2b49f2b1fdbd1::t_245b8762040ebb 31-34,67-70,114-117
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_a2b49f2b1fdbd1::t_fb5e840cc3bd45 10,136-138
+basic/cli/src/plugin-runtime/start-command.ts
+  s_a2b49f2b1fdbd1::t_13a8617d8109d6 468-471,483,497,504
+basic/cli/src/plugin-runtime/workroom/host-assembly.ts
+  s_a2b49f2b1fdbd1::t_421f08d0dee6ea 1-99
+basic/cli/src/plugin-runtime/workroom/host-coordinator.ts
+  s_a2b49f2b1fdbd1::t_b85e62633d2212 5,17-19,21-22,55-56,194
+basic/cli/src/plugin-runtime/workroom/module.ts
+  s_a2b49f2b1fdbd1::t_a406f390105093 13-21
+basic/cli/src/plugin-runtime/workroom/orchestrator-conversation.ts
+  s_a2b49f2b1fdbd1::t_279bfce03de816 1-13
+basic/cli/src/plugin-runtime/workroom/publication.ts
+  s_a2b49f2b1fdbd1::t_3bd2aceda3bb64 1-84
+basic/cli/tests/agent-workroom.test.ts
+  s_a2b49f2b1fdbd1::t_e962557e61b9b3 409-422
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_a2b49f2b1fdbd1::t_6008aed651a6d4 1-90
+basic/cli/tests/plugin-runtime/agent/optional-workroom-boundary.test.ts
+  s_a2b49f2b1fdbd1::t_61439cccc3e7da 1-44
+basic/cli/tests/plugin-runtime/agent/publication-coordinator.test.ts
+  s_a2b49f2b1fdbd1::t_785c8080511a49 25,64-70
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_a2b49f2b1fdbd1::t_cb766ec851985a 28
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_a2b49f2b1fdbd1::t_69f005b9d1aa43 24-37
+basic/cli/tests/plugin-runtime/agent/workroom-loader.test.ts
+  s_a2b49f2b1fdbd1::t_ddf7bf9da54a05 1-52
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_a2b49f2b1fdbd1::t_da53af50e0456a 486,490,493-522,526-536,663-705
+basic/cli/tests/plugin-runtime/workroom/host-coordinator.test.ts
+  s_a2b49f2b1fdbd1::t_75b90411ca473f 22
+basic/cli/tests/plugin-runtime/workroom/publication.test.ts
+  s_a2b49f2b1fdbd1::t_c790cafd371c0e 1-65
+docs/plans/workroom-group-collaboration-progress.md
+  s_a2b49f2b1fdbd1::t_d5c859a897288f 50-52,151-156,173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64126865aa1c44ff505dcc3c8a74465fce03a280",
+  "prompts": {},
+  "sessions": {
+    "s_a2b49f2b1fdbd1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "514b15a7-aa87-41f1-a461-1c086e958315",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
