@@ -1,0 +1,29 @@
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_c757df74f34330::t_8c3eba31988dc2 15-21,73-78
+packages/im/agent/src/config/model-harness.ts
+  s_c757df74f34330::t_9f0d6fb4e89ec9 7-10,24-27,34-37
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_c757df74f34330::t_03adeecf4a1c14 4,78-79
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  s_c757df74f34330::t_3fbf7ecb4838c8 287
+packages/im/ai/src/llm/llm-api-runtime.ts
+  s_c757df74f34330::t_0acc3d5a65bd65 27-28
+packages/im/ai/src/types.ts
+  s_c757df74f34330::t_99e2bc1040901b 331-334,487-488
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b237184b765456440ca93d07b9982912820f8044",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
