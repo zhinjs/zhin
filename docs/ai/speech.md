@@ -1,14 +1,16 @@
 ---
-title: 语音能力（Speech）
+title: "语音能力（Speech）"
+description: "让 Bot 听懂语音消息并用语音回复：安装、语音转文字（STT）、文字转语音（TTS）与 Agent 语音工具"
 ---
 
 # 语音能力（Speech）
 
-群里发来一条语音，bot 听懂了内容，还能回一段合成语音——这条链路就是 `@zhin.js/speech` 提供的。它是可选包：在 `zhin.config.yml` 顶层写 `speech:` 段并安装该包后，CLI 启动时自动装配 Speech Host，语音消息入站自动转写（STT），并给 Agent 提供 `voice_stt` / `voice_tts` 两个工具。没装这个包就跳过（仅记 warn），不影响其他能力。
+群里发来一条语音，Bot 听懂了内容，还能回一段合成语音——这就是可选包 `@zhin.js/speech` 提供的能力：
 
-```bash
-pnpm add @zhin.js/speech
-```
+- **入站语音自动转文字**（STT），转写结果交给 AI 处理；
+- **给 AI 两个语音工具**：`voice_stt`（识别）和 `voice_tts`（合成）。
+
+没有安装这个包时，`speech:` 配置会被跳过并记录 warn，不影响其他功能。
 
 ```mermaid
 flowchart LR
@@ -16,6 +18,20 @@ flowchart LR
     S -->|转写文本| A[ZhinAgent 回合]
     A -->|voice_tts 工具| T[TTS provider]
     T -->|base64 音频| A
+```
+
+## 快速启用
+
+```bash
+pnpm add @zhin.js/speech
+```
+
+在 `zhin.config.yml` 顶层加入 `speech:` 段，重启后 CLI 会自动装配 Speech Host：
+
+```yaml
+speech:
+  stt: { provider: openai, model: whisper-1, host: https://api.openai.com, apiKey: ${OPENAI_API_KEY} }
+  tts: { provider: edge, voice: zh-CN-XiaoxiaoNeural }
 ```
 
 ## 配置
@@ -66,14 +82,6 @@ Speech Host 装配后向 Agent 注册两个工具（`source: speech`）：
 | `voice_tts` | `text`（必填）、`voice`（覆盖默认）、`provider`（`edge` / `openai` / `azure` / `custom`） | `{ audio(base64), format, size }` |
 
 `voice_tts` 可按调用临时切换 provider，便于一次部署同时挂多种音色。
-
-## 完整示例
-
-```yaml
-speech:
-  stt: { provider: openai, model: whisper-1, host: https://api.openai.com, apiKey: ${OPENAI_API_KEY} }
-  tts: { provider: edge, voice: zh-CN-XiaoxiaoNeural }
-```
 
 ## 相关
 

@@ -1,34 +1,35 @@
-# Examples at a Glance
+---
+title: "Example projects"
+description: "Runnable examples that ship with the repo, from a one-file bot to a full project with AI. Pick one by what you want to learn and run it"
+---
 
-The best way to learn the framework is to start with something that runs. The `examples/` directory in the repo maintains tiered, progressively complex official examples, all ready to run out of the box (run `pnpm install` at the repo root first):
+# Example projects
 
-| Example | Purpose | Start | Channel |
-|---------|---------|-------|---------|
-| [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot) | **One `bot.ts` is a bot**, zero convention directories | `pnpm --filter single-file-bot dev` | Sandbox + Console |
-| [minimal-bot](#minimal-bot-stable-minimal-path) | **Stable convention directory** minimal path, IM only | `pnpm dev` at repo root | Terminal |
-| [capabilities-bot](#capabilities-bot-defineplugin-capability-showcase) | `definePlugin` capability showcase, plugin + config = app | `pnpm --filter capabilities-bot dev` | Sandbox + Console |
-| [full-bot](#full-bot-l4-reference-with-ai) | **L4 reference**, includes AI stack, semantic memory, MCP | `pnpm dev:full` | Sandbox + NapCat + KOOK |
-| [test-bot](#test-bot-maintainer-kitchen-sink) | Maintainer kitchen sink, all platforms and plugins | `pnpm dev:test` | 20+ adapters |
+The fastest way to read Zhin code is to run a working example. The repo's `examples/` directory holds official examples that go from simple to complete; run `pnpm install` at the repo root and each one starts directly.
 
-```mermaid
-flowchart LR
-  S[single-file-bot<br/>Single file] --> A[minimal-bot<br/>Convention dirs]
-  A --> B[capabilities-bot<br/>Capability showcase]
-  B --> C[full-bot<br/>L4 · With AI]
-  D[test-bot<br/>Kitchen sink<br/>Maintainers only] -. Not a starter template .-> S
-```
+| Example | Look here to see… | Start | Try it in |
+|------|------|------|------|
+| [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot) | The shortest possible bot: a single `bot.ts` | `pnpm --filter single-file-bot dev` | Console Sandbox |
+| [minimal-bot](#minimal-bot-the-smallest-convention-directory-project) | The smallest project using convention directories, no AI | `pnpm dev` at repo root | Terminal |
+| [capabilities-bot](#capabilities-bot-common-capabilities-in-one-plugin) | How one plugin uses config, database, schedules, and tools | `pnpm --filter capabilities-bot dev` | Console Sandbox |
+| [full-bot](#full-bot-a-complete-reference-with-ai) | A complete project with AI, semantic memory, and MCP | `pnpm dev:full` | Sandbox, NapCat, KOOK |
+| [test-bot](#test-bot-for-maintainer-regression) | Maintainer multi-platform regression only; not a template | `pnpm dev:test` | 20+ platforms |
 
-Learning path: **single-file-bot -> minimal-bot -> capabilities-bot -> full-bot**; test-bot is for maintainer reference only.
+We suggest reading them in the order **single-file-bot → minimal-bot → capabilities-bot → full-bot**.
+
+::: tip Just want your own project?
+No need to clone the repo: run `npm create zhin-app my-bot -y`. See [Quick start](../getting-started/index.md).
+:::
 
 ## single-file-bot: One bot.ts Is a Bot
 
-No `commands/` or `components/` directories needed: register commands inside `setup({ addCommand })`, and they go into the same `CommandIndex` as directory-discovered commands.
+No `commands/` or other directories: register commands directly in the plugin entry's `setup({ addCommand })`. Good for demos, one-off scripts, or showing someone how short startup can be.
 
 ```bash
 pnpm --filter single-file-bot dev
 ```
 
-Open [Remote Console](https://console.zhin.dev), set Host to `http://127.0.0.1:8086`, and send **`/hello`** in Sandbox.
+Open [Console](https://console.zhin.dev), set API Base to `http://127.0.0.1:8086`, and send **`/hello`** in Sandbox.
 
 ```text
 single-file-bot/
@@ -37,12 +38,11 @@ single-file-bot/
 └── zhin.config.yml     # sandbox commandPrefix: '/'
 ```
 
-Suitable for demos, one-off scripts, and showing others "how short the startup is". When capabilities grow, split into convention directories (see [minimal-bot](#minimal-bot-stable-minimal-path)). Details in that directory's [README](https://github.com/zhinjs/zhin/tree/main/examples/single-file-bot).
+Commands registered with `addCommand` go into the same command table as discovered ones and behave identically. When the bot grows, split it into convention directories (see minimal-bot below). Details are in that directory's [README](https://github.com/zhinjs/zhin/tree/main/examples/single-file-bot).
 
-## minimal-bot: Stable Minimal Path
+## minimal-bot: the smallest convention-directory project
 
-The smallest runnable convention directory project: one `plugin.ts` + `adapters/` `commands/` `components/`.
-Stable Features (adapter / command / component) are automatically inherited from the framework core, so `features` / `plugins` in `package.json#zhin` can both be empty.
+One `plugin.ts` entry plus `adapters/`, `commands/`, and `components/`, chatting right in your terminal. Adapters, commands, and components are built into the framework, so nothing extra goes in `package.json#zhin`.
 
 ```bash
 # At the repo root
@@ -50,27 +50,26 @@ pnpm install
 pnpm dev            # = pnpm --filter minimal-bot dev
 ```
 
-Wait for the `zhin> ` prompt to appear, then type `/hello` or `/card` (renders a Satori status card) in the same terminal.
-`Ctrl+C` to exit; editing files in convention directories triggers hot reload.
-
-Requires Node >=22.6 (22.6-22.17: CLI automatically adds `--experimental-strip-types`; 22.18+: native TypeScript).
-
-Directory structure:
+When the `zhin> ` prompt appears, type `/hello`, or `/card` to see a rendered status card image, in the same terminal. Editing files in those directories hot-reloads them; `Ctrl+C` exits.
 
 ```text
 minimal-bot/
 ├── plugin.ts                 # definePlugin() entry
-├── schema.json               # Config contract
-├── zhin.config.yml           # plugin / plugins layered config
-├── adapters/terminal/index.ts      # stdin/stdout terminal Endpoint
+├── schema.json               # config fields
+├── zhin.config.yml           # config
+├── adapters/terminal/index.ts      # terminal adapter: stdin/stdout
 ├── commands/hello/index.ts         # /hello
-├── commands/card/index.ts          # /card -> component rendering
-└── components/status-card/index.ts # Satori card component
+├── commands/card/index.ts          # /card -> renders a component
+└── components/status-card/index.ts # status card component
 ```
 
-## capabilities-bot: definePlugin Capability Showcase
+::: details Node.js version
+Requires Node.js >=22.6. On 22.6–22.17 the CLI adds `--experimental-strip-types` to run TypeScript; 22.18+ supports it natively.
+:::
 
-**One plugin + one `zhin.config.yml` is all you need to start** -- a capability demonstration template: a single `setup()` covers common capability surfaces -- config view, database tables, scheduled tasks, Agent tools (with optional degradation), proactive outbound, lifecycle cleanup, Console card metadata -- and demonstrates mounting npm package sub-plugins (`@zhin.js/adapter-sandbox`).
+## capabilities-bot: common capabilities in one plugin
+
+**One plugin plus one `zhin.config.yml`** is enough to start. A single `setup()` demonstrates the common capabilities: reading config, creating a database table, scheduled jobs, an Agent tool (skipped automatically when AI isn't installed), proactive messages, cleanup when the plugin stops, a card on the Console plugins page, and mounting a sub-plugin from an npm package (`@zhin.js/adapter-sandbox`).
 
 ```bash
 cd examples/capabilities-bot
@@ -79,41 +78,45 @@ pnpm dev            # zhin runtime start
 
 After startup:
 
-- Console at `http://127.0.0.1:18099` (token `capabilities-dev-token`); the plugins page shows the `Capabilities Bot` card
-- `whoami` / `stats` commands are registered (the latter demonstrates database counting)
-- Heartbeat scheduled task logs a line every 5 minutes
+- Console is at `http://127.0.0.1:18099` with token `capabilities-dev-token`; the plugins page shows a `Capabilities Bot` card;
+- the `whoami` and `stats` commands are available (the latter demonstrates a database counter);
+- a heartbeat job logs a line every 5 minutes.
 
-See that directory's `README.md` for a side-by-side breakdown of capabilities and code.
+The directory's `README.md` maps each capability to its code.
 
-## full-bot: L4 Reference (With AI)
+## full-bot: a complete reference with AI
 
-Builds on convention directories with a full AI stack: `@zhin.js/agent`, semantic memory, MCP, A2A Agent Mesh,
-plus Sandbox + NapCat + KOOK three adapters and Skill / Tool / Page features.
+Adds the full AI stack on top of convention directories: `@zhin.js/agent`, semantic memory, MCP, and A2A multi-Agent networking, plus the Sandbox, NapCat, and KOOK platforms and Skill / Tool / Page extensions.
 
 ```bash
-# After pnpm install && pnpm build at repo root
+# First run pnpm install && pnpm build at the repo root
 cd examples/full-bot
-cp .env.example .env    # Fill in model Provider Key and HTTP_TOKEN
-pnpm dev                # Or pnpm dev:full at repo root
+cp .env.example .env    # fill in your model service key and HTTP_TOKEN
+pnpm dev                # or pnpm dev:full at the repo root
 ```
 
-- Host defaults to `http://127.0.0.1:8069`; Remote Console's API Base / Token matches the `HTTP_TOKEN` in `.env`
-- Acceptance checklist and NapCat/KOOK live steps in that directory's `ACCEPTANCE.md`
+- The Host defaults to `http://127.0.0.1:8069`; use `HTTP_TOKEN` from `.env` as the Console token;
+- the acceptance checklist and NapCat / KOOK live steps are in that directory's `ACCEPTANCE.md`.
 
-## test-bot: Maintainer Kitchen Sink
+## test-bot: for maintainer regression
 
-> **This is not a starter template -- do not copy it as the starting point for a new project.** Use `pnpm create zhin-app`, [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot), or [minimal-bot](#minimal-bot-stable-minimal-path) for new projects.
+::: warning Not a starter template
+Don't copy it as the start of a new project. Use `npm create zhin-app`, [single-file-bot](#single-file-bot-one-bot-ts-is-a-bot), or [minimal-bot](#minimal-bot-the-smallest-convention-directory-project) instead.
+:::
 
-Mounts 20+ platform adapters (Sandbox, ICQQ x5, QQ Official, Slack, Discord, Telegram, KOOK, DingTalk, Lark,
-WeCom, LINE, Email, GitHub...) and all feature plugins (game center, lottery, group-suite, rss, code-runner, etc.),
-used by maintainers for multi-platform regression testing.
+It mounts 20+ platform adapters (Sandbox, ICQQ x5, QQ Official, Slack, Discord, Telegram, KOOK, DingTalk, Lark, WeCom, LINE, Email, GitHub…) and every feature plugin (game center, lottery, group-suite, rss, code-runner, and more) for maintainers' multi-platform regression testing.
 
 ```bash
-pnpm install && pnpm build   # At repo root
-pnpm dev:test                # Or cd examples/test-bot && pnpm dev
+pnpm install && pnpm build   # at the repo root
+pnpm dev:test                # or cd examples/test-bot && pnpm dev
 ```
 
-Requires Node >=22.18; credentials from that directory's `.env` (template in `.env.example`).
-Console: open `https://console.zhin.dev`, set API Base to `http://127.0.0.1:8086`, Token to `test-bot-dev-token`.
+- Requires Node.js >=22.18; credentials come from that directory's `.env` (template in `.env.example`);
+- in Console, set API Base to `http://127.0.0.1:8086` and Token to `test-bot-dev-token`;
+- to run in the background: `pnpm daemon` (that is, `zhin runtime start --daemon`); `pnpm stop` stops it.
 
-Background daemon mode: `pnpm daemon` (`zhin runtime start --daemon`), `pnpm stop` to stop.
+## Next steps
+
+- [Quick start](../getting-started/index.md): create your own project with the scaffold
+- [Write your first plugin](../getting-started/first-plugin.md): write a configurable command from scratch
+- [Showcase](../showcase/README.md): see how others run Zhin in production

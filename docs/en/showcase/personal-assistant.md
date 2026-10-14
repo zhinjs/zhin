@@ -1,7 +1,14 @@
+---
+title: "Showcase: personal assistant"
+description: "A private assistant on a local Ollama model that chats, remembers, searches your notes, and reminds you on time, with data kept on your machine"
+---
+
 # Showcase: Personal Assistant
 
-> Corresponding example: [`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
-> Keywords: local model, knowledge base, three-layer memory, scheduled tasks, zero cloud cost
+::: info About this story
+- Example: [`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
+- Keywords: local model, knowledge base, three-layer memory, scheduled tasks, zero cloud cost
+:::
 
 ## Scenario
 
@@ -69,3 +76,9 @@ ai:
 - Add `@zhin.js/adapter-qq` -> Same assistant goes to QQ
 - `pnpm add @zhin.js/speech` -> Voice input/playback
 - Switch to a cloud model by just changing `ai.providers`; local and cloud can coexist for routing
+
+## Next steps
+
+- [AI Agent path](../paths/ai-agent.md): add a model and tools to your bot step by step
+- [AI capabilities overview](../ai/index.md): model services, memory, and assistant config
+- [Multi-platform community bot](./community-bot.md): another story

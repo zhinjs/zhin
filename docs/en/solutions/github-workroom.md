@@ -1,14 +1,17 @@
 ---
-title: GitHub Repository Workroom
+title: "Use a GitHub repository as a Workroom"
+description: "Route a GitHub repository's Issue and PR events into multi-Agent collaboration: binding, setup steps, and the boundary with GitHub Projects"
 ---
 
-# Treat one GitHub repository as one Workroom
+# Use a GitHub repository as a Workroom
 
-Use this when repository events should enter a multi-Agent collaboration flow. One repository naturally maps to one Project Workroom; Issue and pull-request comments share that Project boundary.
+A Workroom is a space where several Agents work on tasks together. This page turns one GitHub repository into one Workroom: Issues and PR comments in the repository enter the same collaboration project, where Agents plan, assign, and review the work.
 
-## Identity model
+For teams that want repository events to drive Agent collaboration. The Workroom rules themselves are in [Agent deep dive: Workroom Kernel](../ai/agent.md#workroom-kernel).
 
-The full `repository` address identifies the Workroom, not the Bot. One GitHub App Endpoint may serve multiple Workrooms. Stable `owner/repo` metadata routes an event to the correct Project Inbox.
+## One repository, one Workroom
+
+A Workroom is identified by the **full repository address**, not by the bot. One GitHub App account (Endpoint) can therefore serve several repositories; events go to each project by `owner/repo` and never cross over.
 
 ```json
 {
@@ -20,25 +23,32 @@ The full `repository` address identifies the Workroom, not the Bot. One GitHub A
 }
 ```
 
-## Implementation
+## Steps
 
-1. Install and configure the GitHub adapter. Verify Webhooks carry stable `owner/repo` metadata.
-2. Create a Project in Console Workrooms and assign members, roles, and an Orchestrator Agent.
-3. Set the collaboration space to `repository`, choose the Endpoint, and enter the canonical repository address.
-4. Save the Catalog and send an Issue or pull-request comment. No Host restart is required.
-5. Inspect proposals, Assignments, and Journal facts on the Workroom Task board, then open the Agent trace for execution details.
+1. Install and configure the GitHub adapter, and confirm webhook events carry stable `owner/repo` information.
+2. Create a project on Console's Workroom page and configure members, roles, and the coordinating Orchestrator Agent.
+3. Set the collaboration space type to `repository`, choose the Endpoint, and enter the canonical repository address (such as `zhinjs/zhin`).
+4. Save, then post an Issue or PR comment right away — no restart needed.
+5. Check proposals and assignments on the Workroom task board, and each step in the Agent run record.
 
-## Task versus Project Item
+## Acceptance checklist
 
-A Zhin Task is a Workroom Kernel fact. A GitHub Project Item is only an external projection target. The current Console Task page is a read-only Journal and Kernel view; it does not mutate task state.
+- Issue and PR events from one repository enter the same project.
+- When one Endpoint serves several repositories, no event lands in the wrong Workroom.
+- When two people edit the config at once, the later save asks for a refresh instead of silently overwriting.
+- A failed GitHub Project Item sync doesn't change task state already recorded in Zhin.
 
-Project V2 sync needs a separate Integration Port, idempotent `task-key ↔ item-id` mapping, and a conflict policy. Never use an Item ID as Workroom identity or let Console bypass Kernel state transitions.
+## Relationship with GitHub Projects
 
-## Acceptance
+**Task state lives in the Workroom**; a GitHub Project Item is only an optional external view. Console's task page is a read-only view of the Workroom event log (the Journal) and never changes task state directly.
 
-- Issue and pull-request events from one repository enter one Project.
-- One Endpoint can serve multiple repositories without cross-routing events.
-- Catalog edits publish through revision CAS; concurrent edits request a refresh instead of overwriting silently.
-- Project Item sync failure cannot alter committed Kernel facts.
+::: details Want to sync tasks to GitHub Project V2?
+You need a separate Integration Port that keeps an idempotent `task-key ↔ item-id` mapping and defines a conflict policy. Don't use the Item ID as the Workroom's identity, and don't let Console bypass the Workroom Kernel to write state.
 
-See [Agent deep dive: Workroom Kernel](/en/ai/agent#workroom-kernel) for the full fields.
+Console saves Workroom config with revision CAS (compare the version, then write), which is why concurrent edits ask for a refresh.
+:::
+
+## Next steps
+
+- [Governed software delivery](/solutions/governed-software-delivery) (Chinese only): a full plan template from requirements and independent review to CI/CD and health checks
+- [Agent deep dive: Workroom Kernel](../ai/agent.md#workroom-kernel): the full Workroom fields and rules

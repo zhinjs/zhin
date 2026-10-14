@@ -1,11 +1,20 @@
-# Real-World Deployment Showcase
+---
+title: "Showcase"
+description: "Two deployment stories based on repo examples: why they chose Zhin, how they deployed, key config, and lessons learned"
+---
 
-Showcases speak louder than architecture docs when deciding if zhin is right for you. Here we collect real deployment stories:
-why zhin was chosen, how it was deployed, key configuration, and lessons learned.
+# Showcase
 
-| Showcase | Scenario | Platforms | AI | Keywords |
-|----------|----------|-----------|-----|----------|
-| [Personal Assistant](./personal-assistant.md) | Private assistant: scheduled reminders + knowledge base + chat | Sandbox (can add any IM) | Ollama local model | `life-assistant-bot` |
-| [Multi-Platform Community Bot](./community-bot.md) | One process managing 5 QQ accounts + QQ Official + Slack + GitHub | icqq / qq / slack / github | OpenRouter free model | `test-bot` (maintainer kitchen sink) |
+To judge whether Zhin fits you, seeing how others use it is often faster than reading architecture docs. Each story covers four things: why Zhin, how it's deployed, key configuration, and the pitfalls hit along the way.
 
-Every showcase is based on a directly runnable example from the repo, with sanitized config snippets (`${ENV}` placeholders).
+| Story | Scenario | Platforms | AI | Example |
+|------|------|------|----|--------|
+| [Personal assistant](./personal-assistant.md) | A private assistant: reminders + note search + chat, data stays on your machine | Sandbox (add any chat platform) | Ollama local model | `life-assistant-bot` |
+| [Multi-platform community bot](./community-bot.md) | One process running 5 QQ accounts + QQ Official + Slack + GitHub | icqq / qq / slack / github | OpenRouter free model | `test-bot` |
+
+Every story maps to an example you can run from the repo; config snippets are sanitized, with secrets as `${ENV}` placeholders.
+
+## Next steps
+
+- [Example projects](../examples/index.md): run an example locally first
+- [Learning paths](../paths/README.md): pick a getting-started route by goal

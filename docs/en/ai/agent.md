@@ -1,14 +1,31 @@
 ---
-title: Agent Deep Dive
+title: "Agent Deep Dive"
+description: "How an AI turn runs: progress and cancellation, on-demand tools, sub-agents, sessions and context compaction, built-in tools, schedules, per-model tuning, and multi-agent Workrooms"
 ---
 
-# Agent Deep Dive
+# Agent deep dive
 
-Someone sends `ai: check tomorrow's weather` in a group, and a few seconds later the bot replies with a data-backed answer -- what happened in between? This page follows that path to expand on the [AI overview](./index.md) runtime: ZhinAgent's turn flow, deferred tools, sub-agents and orchestration, session persistence and compaction, Assistant profile and scheduled tasks.
+Someone sends `ai: what's the weather tomorrow` in a group and a few seconds later the bot answers with real data — what happened in between? This page follows that path through the runtime that the [AI overview](./index.md) doesn't cover in detail.
 
-## ZhinAgent turn
+Haven't enabled AI yet? Start with the [AI overview](./index.md). Want the AI to call your functions? See [Agent tools and Skills](../authoring/agent-tools.md).
 
-After a trigger match, Agent Host calls `zhinAgent.process(text, commMessage, tools)` to run a turn:
+## Find by question
+
+| I want to know… | See |
+| --- | --- |
+| How a turn runs, how many iterations, when it times out | [How a turn runs](#how-a-turn-runs) |
+| Show "thinking" progress, or cancel midway | [Showing progress](#showing-progress) · [Cancelling a running turn](#cancelling-a-running-turn) |
+| How lots of tools fit without flooding the prompt | [On-demand tools](#on-demand-tools) |
+| Hand long tasks to the background | [Sub-agents and spawn_task](#sub-agents-and-spawn-task) |
+| Where history is stored, how to reset, what happens when context gets long | [Sessions and session trees](#sessions-and-session-trees) · [Context compaction](#context-compaction) |
+| Which tools the AI has built in, and file / network boundaries | [Built-in tools](#built-in-tools) |
+| Have the AI do things on a schedule | [Schedules and the assistant persona](#schedules-and-the-assistant-persona) |
+| Tune parameters for one model | [Per-model tuning](#per-model-tuning) |
+| Several Agents dividing work in a group or repository | [Workroom Kernel](#workroom-kernel) |
+
+## How a turn runs
+
+Once a message meets the trigger rules, the Agent Host calls `zhinAgent.process(text, commMessage, tools)` to run one **turn**:
 
 ```mermaid
 sequenceDiagram
@@ -16,65 +33,63 @@ sequenceDiagram
     participant H as Agent Host
     participant Z as ZhinAgent
     participant L as LLM (provider)
-    U->>H: ai: check tomorrow's weather
-    H->>H: Collect tools (plugin tools + MCP + built-in + deferred meta)
+    U->>H: ai: what's the weather tomorrow
+    H->>H: Collect tools (plugin + MCP + built-in + deferred meta)
     H->>Z: process(text, commMessage, tools)
     Z->>L: agentLoop: system prompt + session history + tool catalog
-    L-->>Z: tool_call(bash / web_search / spawn_task ...)
-    Z->>Z: Security policy check → execute tool → write back result
-    Z->>L: Continue (until no tool_call or maxIterations reached)
+    L-->>Z: tool_call(bash / web_search / spawn_task …)
+    Z->>Z: Security policy check → run tool → write back result
+    Z->>L: Continue (until no tool_call or maxIterations)
     L-->>Z: Final text
     Z-->>H: OutputElement[]
-    H-->>U: IM reply (appended as a ConversationEvent)
+    H-->>U: IM reply (ConversationEvent appended)
 ```
 
-A few facts worth remembering. ZhinAgent, sub-agents, background workers, and `AIService.runAgent` all go through the **same agentLoop**, so behavior can be consistently expected. Messages in the same session queue up per `ai.agent.inboundQueue` (`groupMode: supersede | fifo`), and concurrent turns do not overwrite each other. When the preferred model fails, it falls back along a candidate chain to other available models from the same provider. `maxIterations` defaults to 15 (`DEFAULT_CONFIG.maxIterations`) and can be overridden per provider/model via the model harness (see below). Timeouts have three layers: the trigger-side single turn is bounded by `ai.trigger.timeout` (default 60000ms), the overall Agent turn defaults to 120000ms (`DEFAULT_CONFIG.timeout`), and tool pre-execution has a separate 15000ms cap (`preExecTimeout`).
+The model may call tools several times and keep reasoning on the results; each round is an **iteration**. Things to remember:
 
-The tool pool for a turn = plugin-registered tools + `ai.mcpServers` connected tools + built-in tools + deferred meta tools + `schedule_*` + `bash` + Host extension tools (e.g. `voice_stt` / `voice_tts`).
+- **Iteration limit**: `maxIterations` defaults to 15 (`DEFAULT_CONFIG.maxIterations`) and can be tuned per model — see [Per-model tuning](#per-model-tuning).
+- **Three layers of timeout**: one turn on the trigger side is limited by `ai.trigger.timeout` (default 60000ms); the whole Agent turn defaults to 120000ms (`DEFAULT_CONFIG.timeout`); tool pre-execution has its own 15000ms cap (`preExecTimeout`).
+- **Messages in one conversation queue**: handled by `ai.agent.inboundQueue` (`groupMode: supersede | fifo`), so concurrent turns never overwrite each other.
+- **Automatic model fallback**: if the preferred model fails, the candidate chain falls back to other available models of the same provider.
+- **Consistent behavior**: the main Agent, sub-agents, background workers and `AIService.runAgent` all use the same agentLoop.
 
-### Thinking transparency and step visualization
+The tools available to a turn = plugin tools + tools from `ai.mcpServers` + built-in tools + on-demand meta tools + `schedule_*` + `bash` + Host extension tools (such as `voice_stt` / `voice_tts`).
 
-During turn execution, the Agent pushes real-time status to the IM side via Activity Feedback. The default behavior sends a static "Thinking..." placeholder, but you can enable **thinking transparency** to show the LLM's actual thinking content (truncated) as activity feedback:
+### Showing progress
+
+While a turn runs, the Agent pushes status to the chat through [Activity feedback](../advanced/activity-feedback.md). By default that's a static "thinking…"; with **thinking transparency** enabled, users see fragments of the model's actual thinking:
 
 ```yaml
 ai:
   agent:
-    thinkingPreview: true          # Show LLM actual thinking content (truncated), default false
-    thinkingPreviewMaxLength: 200  # Max chars to show, default 200
+    thinkingPreview: true          # show the LLM's actual thinking (truncated), default false
+    thinkingPreviewMaxLength: 200  # max characters shown, default 200
 ```
 
-When enabled, users see snippets of the model's reasoning process while waiting for the AI reply, instead of a static placeholder.
-
-When a turn requires multiple tool iterations (e.g. the model calls a tool then continues reasoning), each iteration emits an `iteration_start` event. Activity Feedback updates to show progress like `Processing [2/15]...`. Plugin developers can listen for the `iteration_start` event in the `TurnEvent` stream:
+When a turn needs several tool iterations, each starts with an `iteration_start` event and the status updates to progress like `Processing [2/15]...`. Plugins can listen to the `TurnEvent` stream for progress:
 
 | TurnEvent type | Description |
 |----------------|-------------|
 | `iteration_start` | A new iteration begins, with `iteration` (current round) and `maxIterations` |
-| `thinking` | LLM thinking text fragment (accumulated and pushed continuously when `thinkingPreview` is on) |
+| `thinking` | An LLM thinking fragment (streamed continuously when `thinkingPreview` is on) |
 
 ### Cancelling a running turn
 
-Users can send any of the following messages in IM to **cancel a running Agent turn**:
+Users can send `取消`, `/cancel` or `cancel` in chat to stop the current turn: ZhinAgent aborts the model call and tool execution via `PromptController.cancelSession()` and replies "cancelled". With nothing running, it replies that there's no task in progress.
 
-- `取消`
-- `/cancel`
-- `cancel`
+In the `TurnEvent` stream, a user cancel appears as `turn_cancelled` (`code: 'cancelled'`); a timeout appears as `turn_cancelled` too (`code: 'timeout'`).
 
-When ZhinAgent receives a cancel message, it aborts the current turn's LLM call and tool execution via `PromptController.cancelSession()`, and replies "已取消" (cancelled). If no turn is currently running, it replies "当前没有正在执行的任务" (no active task).
+## On-demand tools
 
-The cancellation terminal event appears as `turn_cancelled` (`code: 'cancelled'`) in the `TurnEvent` stream. Timeout-induced interruptions (`DEFAULT_CONFIG.timeout`) similarly appear as `turn_cancelled` (`code: 'timeout'`).
+With many tools, putting every tool's parameter schema in the prompt would fill the context. Zhin **loads tools lazily**: a turn keeps only a few meta tools resident, and the model searches and loads others by name when needed.
 
-## Deferred tools (discover / load_tool / load_skill)
+Resident by default (`alwaysLoadedTools`): `ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`.
 
-When the number of tools is large, stuffing all schemas into the prompt crowds the context. Zhin.js uses **lazy loading**: a turn keeps only a small set of meta-tools resident, and the model retrieves and loads by name on demand.
-
-Resident tools (default `alwaysLoadedTools`): `ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`.
-
-| Meta-tool | Purpose |
+| Meta tool | Purpose |
 |-----------|---------|
-| `discover` | Search for tools/skills by query (`kind: tool|skill|all`, filterable by MCP server); returns Top-K summaries |
-| `load_tool` | Load a tool schema into the current session by name; callable thereafter |
-| `load_skill` | Load a skill's description text and its declared tools |
+| `discover` | Search tools / skills by keyword (`kind: tool|skill|all`, optionally per MCP server), returning Top-K summaries |
+| `load_tool` | Load a tool's definition into this session so it can be called |
+| `load_skill` | Load a skill's full text and unlock the tools it declares |
 
 Tuning (`ai.agent.deferredTools`):
 
@@ -82,52 +97,249 @@ Tuning (`ai.agent.deferredTools`):
 ai:
   agent:
     deferredTools:
-      maxLoadedPerSession: 12   # Max tools loaded per session (default 12)
-      discoverTopK: 5           # Number of discover results (default 5)
+      maxLoadedPerSession: 12   # max tools loaded per session (default 12)
+      discoverTopK: 5           # results returned by discover (default 5)
       alwaysLoadedTools: [ask_user, spawn_task, discover, load_tool, load_skill]
       mcpServers:
-        icqq: { alwaysLoaded: [send_msg] }   # Resident tools for a specific MCP server
+        icqq: { alwaysLoaded: [send_msg] }   # resident tools for a specific MCP server
 ```
 
-Reserved/built-in tool names (`bash`, `read_file`, `spawn_task`, etc.) cannot be overridden by plugins. For non-reserved tools, later registrations override earlier ones with the same name, and conflicts are logged as warnings.
+Reserved built-in names (`bash`, `read_file`, `spawn_task`…) can't be overridden by plugins; for non-reserved tools with the same name, the later registration wins and a warning is logged.
 
 ## Sub-agents and spawn_task
 
-The main Agent uses `spawn_task` to delegate complex/time-consuming tasks to **background sub-agents** without blocking the main conversation:
+The main Agent can use `spawn_task` to hand complex or slow work to a **background sub-agent** without blocking the conversation.
 
 ```yaml
 ai:
   agent:
-    maxParallelSubagents: 5        # Hard cap on parallel sub-agents (default 5)
+    maxParallelSubagents: 5        # parallel sub-agent cap (default 5)
     toolExecution: tiered          # parallel | sequential | tiered (default)
-    subagentAutoContinue: true     # Wake main Agent to continue after async completion (default true)
-    subagentDirectImDelivery: false # Also send sub-task summary directly to IM (default false)
-    subagentTools: []              # Additional tools allowlisted for sub-agents
+    subagentAutoContinue: true     # wake the main Agent to continue when a sub-task finishes (default true)
+    subagentDirectImDelivery: false # also post the sub-task summary straight to chat (default false)
+    subagentTools: []              # extra tools for sub-agents
 ```
 
-Key `spawn_task` parameters:
+Main `spawn_task` parameters:
 
 | Parameter | Description |
 |-----------|-------------|
-| `task` | Task description (goal, scope, expected output) |
-| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/<name>/agent.json` presets) |
-| `wait` | When `true`, waits synchronously; result returns to the current turn via tool result |
-| `context` | `fork` (inject recent messages from parent session) / `fresh` (empty context) |
-| `tools` / `skills` | Declare tools and skills needed for the sub-task |
+| `task` | Task description: goal, scope, expected output |
+| `agent` | Sub-agent name (must exist in `ai.agents` or `agents/<name>/agent.json`) |
+| `wait` | `true` waits synchronously; the result returns as the tool result in this turn |
+| `context` | `fork` (include the parent session's recent messages) / `fresh` (empty context) |
+| `tools` / `skills` | Tools and skills the sub-task needs |
 
-Several behavioral constraints apply: multiple `spawn_task` calls can be initiated in a single turn -- independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while write/bash operations execute sequentially. Sub-agents use a restricted tool set by default (`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta) and do not automatically inherit all tools from the main session; use `ai.agent.subagentTools` to explicitly add more. The sub-agent types visible to the main Agent are constrained by `ai.agents.<name>.permission.task` (glob -> allow/deny). After async completion, results are **returned to the main Agent first** (written to the main session and auto-continued); the user-visible reply is composed and sent by the main Agent. Sub-agent presets use `agents/<name>/agent.json` plus the three required Markdown entry points and are discovered at startup.
+- One turn can start several `spawn_task`s; independent sub-tasks should run in parallel. In `tiered` mode, read-only tools and spawns run in parallel while writes and `bash` run sequentially.
+- Sub-agents get a restricted tool set by default: `read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` plus the on-demand meta tools — not everything the main session has. Add more with `ai.agent.subagentTools`.
+- Which sub-agents the main Agent may dispatch is controlled by `ai.agents.<name>.permission.task` (glob → allow / deny).
+- When an async task finishes, the result goes **back to the main Agent first** (written into the main session and continued automatically), which then composes the reply to the user.
+- Sub-agents are declared with `agents/<name>/agent.json` plus three core Markdown files and discovered at startup. See [Agent tools and Skills · Define a sub-agent](../authoring/agent-tools.md#define-a-sub-agent).
+
+## Sessions and session trees
+
+With a database available, conversations persist to these tables (in memory otherwise):
+
+| Table | Contents |
+|-------|----------|
+| `agent_sessions` | Agent session metadata (including the session tree's `parent_id` / `active_leaf`) |
+| `agent_messages` | Agent turn messages |
+| `conversation_events` | Chat messages, quote relations and notices (idempotent append) |
+| `conversation_event_cursors` | Unread event cursors per Agent session |
+
+Set `ai.sessions.useDatabase: false` to force memory mode.
+
+One chat conversation can also branch into a **session tree**, managed with chat commands:
+
+| Command | Purpose |
+|---------|---------|
+| `/compact` | Compact the current session's context manually |
+| `/tree` / `/tree N` | View / switch session branches |
+| `/reset` | Reset the session |
+| Send `clear` / `清空` / `重置` | Archive and clear this conversation's AI context |
+
+Masters and permitted users also have `/models`, `/health`, `/cmd`, `/endpoints`, `/bindings`, `/tools` and `/mcp`.
+
+## Context compaction
+
+When a conversation nears the model's context window it's compacted automatically (`ai.agent.compaction`):
+
+```yaml
+ai:
+  agent:
+    compaction:
+      enabled: true
+      auto: true
+      keepRecentTokens: 20000   # token budget for recent messages (default 20000)
+      minKeepCount: 2           # minimum messages kept (default 2)
+```
+
+It triggers when estimated tokens exceed `contextWindow × 0.6`, in two steps: a light trim first (dropping redundant tool results and the like), then the model writes a `[Previous conversation summary]` that replaces the old history. After a limit of consecutive failed auto-compactions, auto-compaction stops to avoid repeated cost.
+
+## Built-in tools
+
+| Category | Tools |
+|----------|-------|
+| Execution | `bash` |
+| Files | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
+| Network | `web_search`, `web_fetch` |
+| Interaction | `ask_user` |
+| Tasks | `spawn_task`, `todo_read`, `todo_write` |
+| Memory / search | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
+| Media | `generate_image`; incoming images go straight to vision-capable models |
+| Meta | `discover`, `load_tool`, `load_skill` |
+| Schedules | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
+
+**File boundary**: file tools work only inside the project directory authorized for the current turn. Relative paths are rooted there; absolute paths must stay inside it; `~`, `../` escapes and symlinks pointing outside are refused. Only normalized paths that pass the check reach the tool; `glob` / `grep` never start a shell subprocess.
+
+**Network boundary**: network tools get HTTPS access only with `ai.agent.execPreset: network`; `readonly` and other presets never open the network implicitly. `web_fetch` re-checks protocol, domain and SSRF for the initial URL and every redirect; private, link-local, CGNAT and multicast addresses are refused, and the actual connection is pinned to the checked address.
+
+**Todos**: `todo_read` / `todo_write` act only on the current session's plan and accept no `chat_id` or path. State is written atomically to `.zhin/todos`; `.zhin/` as a whole is runtime-private and can't be read or listed by file tools.
+
+## Schedules and the assistant persona
+
+The Assistant runtime turns "do things on a schedule" into a ready-made feature: jobs persist in `data/schedule-jobs.json`, `ScheduleJobEngine` runs them on time, and results go back to chat.
+
+```yaml
+assistant:
+  enabled: true
+  profile:
+    enabled: true
+    file: assistant.profile.yml   # relative to the project root; this is the default
+  events:
+    enabled: true                 # expose the POST /api/assistant/events entry point
+  defaults:
+    notifyOnFailure: false
+```
+
+`assistant.profile.yml` declares the persona and routines, synced into scheduled jobs at startup:
+
+```yaml
+version: 1
+persona:
+  soul: You are a thoughtful life assistant.
+routines:
+  heartbeat:
+    enabled: true
+    everyMs: 1800000
+    prompt: Check todos and report.
+  morningBrief:
+    enabled: true
+    scheduleKind: solar      # solar | lunar | workday | freeDay | holiday
+    cron: "0 0 8 * * *"
+    tz: Asia/Shanghai
+    prompt: Write today's morning brief.
+```
+
+- Built-in routines are `heartbeat` (interval), `morningBrief` (08:00 by default), `bedtimeCheck` (22:00 by default) and `weatherReport`; custom keys work too.
+- For mainland-China working days use `workday` (it accounts for adjusted working days), not solar `1-5`.
+- Users can also ask the AI in chat to manage jobs with `schedule_add` / `schedule_list` / `schedule_preview`; external systems can inject events via `POST /api/assistant/events` and list jobs with `GET /api/assistant/jobs`. From the command line: [CLI · schedule](../cli/index.md#schedule-persistent-scheduled-tasks).
+
+## Per-model tuning
+
+Override execution parameters per provider / model (currently `maxIterations`). Merge order: built-in defaults → `providerPatterns` (with `*` wildcards) → exact `models` keys:
+
+```yaml
+ai:
+  agent:
+    modelHarness:
+      providerPatterns:
+        "open*": { maxIterations: 7 }
+      models:
+        "gpt-4o": { maxIterations: 8 }
+        "openai:gpt-4o": { maxIterations: 9 }
+```
 
 ## Workroom Kernel
 
-`WorkroomKernel` accepts only explicit Project-scoped commands and uses a versioned append-only Journal as the sole source of truth for Runs, Tasks, and Assignments. Ordinary chat and `spawn_task` never create a Workroom implicitly, and no generic model-writable transition tool can fabricate execution or acceptance facts. A command adapter must hold an authenticated Project capability and connect dedicated Scheduler, Executor, and Acceptance ports.
+A Workroom lets several Agents **divide work by role** on multi-step tasks in a group, channel or GitHub repository: an Orchestrator understands requests and assigns work, Executors carry it out, Reviewers check it. Unlike ordinary chat, every step is recorded in an append-only journal, so it is auditable and recoverable.
 
-After a normal Workroom discussion is durably recorded in the Project Inbox, a one-shot handoff continues into the Catalog Orchestrator turn and returns the Agent response instead of stopping at an inbox receipt. That turn uses a Project-scoped session and trusted Project/Proposal envelope, excludes the ordinary room session tail and `spawn_task`, and sends through the Catalog Orchestrator Endpoint on the unified outbound path. A projection reply or named-member mention becomes exact TaskInput only when it resolves to one active Assignment; otherwise the runtime asks for clarification. Only an explicit `/work` request enters governed planning and may create a Run or Tasks.
+**Neither ordinary chat nor `spawn_task` creates a Workroom automatically** — only explicit Project commands such as `/work` do.
 
-Persistent Workroom Catalog entries may list `sponsors[]` as authenticated principal ids (for example, `owner:<platform-user-id>`). This membership—not message metadata—authorizes typed Project Sponsor controls and is pinned by the exact Catalog/Project digest carried by a Plan. A member may pin Assignment locality with `assignmentRoute: { "kind": "local" }` or an exact remote route with `assignmentRoute: { "kind": "remote", "endpointId": "..." }`. Omitted routes retain the legacy local meaning; remote execution never guesses among endpoints, and the selected route is covered by the Catalog revision/digest rechecked before claim. A member may also select its Bot/App message outlet with `messageRoute: { "adapter": "icqq", "endpoint": "reviewer-bot" }`; omission reuses the primary `conversation` Endpoint. The routed Bot accepts messages from the same shared room into this Workroom, and that member's progress, milestone, and conclusion projections leave through that Bot. `conversation` remains the ordinary Workroom space. An optional `group | channel` `sponsorConversation` carries typed Sponsor ingress, governed lifecycle/overdue alerts, and Project-scoped Portfolio lane/queue/grant/budget/fairness cards. Several Projects may declare the same address to form one portfolio-level Sponsor Room, while retaining separate Project delivery views. Governance controls may use `/control data-lifecycle project <projectId> ...`, and Portfolio controls may use `/control portfolio <portfolioId> project <projectId> ...`; the Project segment may be omitted only when replying to a current single-Project card. The room address never implies Project authority. A conflicting explicit/reply Project, stale card revision, or retired Endpoint capability produces clarification instead of a command. Ordinary Workroom addresses remain unique and cannot collide with Sponsor Rooms. The Host derives the exact current Endpoint binding at startup/scan time, so the first outbound alert does not depend on prior inbound traffic.
+### Core rules
 
-`/work` never falls back to a fixed single Task. The production ingress creates a Run only when the composition root installs a governed `HumanIngressPlanningPort`; otherwise it persists the request and returns a `planning_unavailable` clarification. `DynamicWorkflowPlanningPort` treats model/Strategy structured DAG output as untrusted: trusted ports inject the exact Project/Catalog, Profile, Orchestrator, planning policy, budget, and Sponsor Gate authority. `WorkflowPlanBuilder` then revalidates the Profile capability ceiling, required/optional Tasks, dependencies/cycles, Task/attempt budgets, and approval gates. Only `WorkroomKernel.admitWorkflowPlan()` may atomically write the resulting Plan and Task facts. A Plan Gate first materializes as an `approval` Blocker, and generic Orchestrator `resolve_blocker` cannot clear it. With a `WorkroomPlanGateAuthorityPort` installed, a human Sponsor can submit an exact replay-safe decision with `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]`.
+- `WorkroomKernel` accepts only explicit, Project-scoped commands and uses a versioned append-only Journal as the single source of truth for Runs / Tasks / Assignments.
+- There is no generic state-transition tool that would let a model fake "executed / accepted". Command adapters must hold an authenticated Project capability and connect the Scheduler, Executor and Acceptance ports separately.
+- Human messages first enter a content-free Project Inbox by full space address, then the Orchestrator arbitrates them into tasks. `conversation.agent` identifies the Orchestrator owning that Inbox, but can **never** bypass arbitration to turn a message straight into Task state.
+- Once ordinary discussion is persisted, a one-time handoff continues that Orchestrator turn and returns the Agent reply directly. That turn uses a Project-scoped session and a trusted Project / Proposal envelope: it doesn't read the ordinary group-chat session tail, doesn't expose `spawn_task`, and always replies through the Catalog Orchestrator Endpoint's unified outbound chain.
+- Replying to a projected card or `@`-mentioning a named member produces an exact TaskInput only when there is **exactly one** active Assignment; otherwise it asks for clarification.
+- Only an explicit `/work` creates Runs / Tasks, through the governed planning entry point.
 
-For first-time planning setup, enter the `projectId` under **Workrooms → Planning & disclosure setup** in Console and run diagnostics. Mutations require a full token bound to a `principalId`; the same principal must be both a Project `sponsor` and a process-owned trusted shared-Pack publisher:
+### Declaring a Workroom in Console
+
+Use Console's **Workrooms** menu to declare the Project boundary, Agent members and roles, and the group, channel or GitHub repository it binds. Workroom definitions live in the **persistent runtime Catalog**, not in the `ai` config file; saving takes effect immediately without a restart. The old `ai.workrooms` config is explicitly rejected with a migration hint. The record key is the `projectId` used by the Workroom Kernel:
+
+```json
+{
+  "projectId": "support",
+  "name": "Customer Support",
+  "enabled": true,
+  "members": [
+    { "agent": "zhin", "role": "orchestrator" },
+    { "agent": "support", "role": "executor" },
+    { "agent": "reviewer", "role": "reviewer" }
+  ],
+  "conversation": {
+    "adapter": "telegram",
+    "endpoint": "support-bot",
+    "kind": "group",
+    "id": "10001",
+    "agent": "support"
+  }
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `members[].agent` | Must reference an Agent in `ai.agents`, with each role using its own binding |
+| `members[].role` | One of `orchestrator | executor | reviewer | integration` |
+| `members[].assignmentRoute` | `{ "kind": "local" }` pins local execution; `{ "kind": "remote", "endpointId": "..." }` pins a single A2A endpoint. Omitted means local; remote execution never guesses between endpoints. The route is persisted with the Catalog revision / digest and re-checked before claiming |
+| `members[].messageRoute` | e.g. `{ "adapter": "icqq", "endpoint": "reviewer-bot" }`: which bot this member speaks through in a shared group. Omitted means the `conversation`'s main Endpoint. Once set, messages received by that bot in the same group join the same Workroom, and the member's progress, milestones and conclusions are posted by it |
+| `sponsors[]` | Authenticated principal ids (e.g. `owner:<platform-user-id>`) allowed to run Project Sponsor controls. This is persistent Catalog authority; self-reported identity in message metadata is never read |
+| `conversation` | The ordinary Workroom space |
+| `sponsorConversation` | Optional separate `group | channel` Sponsor Room carrying Sponsor commands, lifecycle / overdue notices, and Portfolio lane / queue / grant / budget / fairness cards |
+
+More constraints:
+
+- The `agent` of both conversations must be a member with the `orchestrator` role. An enabled Workroom needs at least one Orchestrator and an ordinary space.
+- One Workroom binds one full space address; **one Bot / App Endpoint can serve many Workrooms**, but ordinary Workroom addresses can't be reused or collide with a Sponsor Room.
+- Several Projects may declare the same Sponsor Room, forming a Portfolio-level aggregate room, but each projection is still a separate Project view. In an aggregate room, governance commands look like `/control data-lifecycle project <projectId> ...` and Portfolio commands like `/control portfolio <portfolioId> project <projectId> ...`; when replying to a single Project's card you can omit the Project segment. A room address carries no Project authority by itself: if the explicit Project and the replied card disagree, the card revision is stale, or the Endpoint version drifted, you get a clarification, not an executed command.
+- At startup or scan time the Host builds Sponsor delivery bindings from the persistent Catalog and current Endpoint capabilities, so the first outbound-only alert doesn't need the room to have received a message first.
+
+### A GitHub repository as a Workroom
+
+The GitHub adapter matches `repository` Workrooms using the stable `repo` metadata (`owner/repo`) from webhooks, so every Issue / PR comment thread in one repository joins the same Workroom:
+
+```json
+{
+  "projectId": "zhin-repo",
+  "name": "Zhin Repository",
+  "enabled": true,
+  "members": [{ "agent": "zhin", "role": "orchestrator" }],
+  "conversation": {
+    "adapter": "github",
+    "endpoint": "my-github-bot",
+    "kind": "repository",
+    "id": "zhinjs/zhin",
+    "agent": "zhin"
+  }
+}
+```
+
+A GitHub Project Item is an external projection / sync target for a Task, **not** part of the Workroom's identity. Console's Task page currently reads only Journal and Kernel facts; syncing to Project V2 needs a separate Integration Port, an idempotent task-key ↔ item-id mapping and a conflict policy — Console can't change Task state directly. Full design: [GitHub repository Workroom](../solutions/github-workroom.md).
+
+### Planning tasks with `/work`
+
+`/work` never degrades into a single fixed task:
+
+- It creates a Run only when the composition root installs a governed `HumanIngressPlanningPort`; otherwise it persists the request and returns `planning_unavailable` asking for clarification.
+- `DynamicWorkflowPlanningPort` is recommended: the model or Strategy returns only an **untrusted** structured DAG candidate, while Project / Catalog, Profile, Orchestrator, planning policy, budget and Sponsor Gate authority are injected by trusted ports.
+- `WorkflowPlanBuilder` re-validates the candidate against the Profile capability ceiling, required / optional steps, dependencies and cycles, Task / attempt budgets and approval gates; only `WorkroomKernel.admitWorkflowPlan()` can atomically write Plan / Task facts.
+- A Plan Gate first becomes an `approval` Blocker that the ordinary Orchestrator `resolve_blocker` can't clear. With `WorkroomPlanGateAuthorityPort` installed, a human Sponsor can submit an exact, replayable decision with `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]`.
+
+### Enabling planning for the first time
+
+In Console's **Workrooms → Planning and disclosure**, enter a `projectId` and run diagnostics. Writes need a full token bound to a `principalId`, and that principal must appear both in the Project's `sponsors` and in the process-wide trusted Pack publisher list:
 
 ```yaml
 http:
@@ -153,127 +365,29 @@ ai:
           supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
 ```
 
-The `REPLACE_WITH_*` values above are intentionally invalid placeholders and cannot be saved unchanged. After entering the real contract, restart the Host, sign in with that token, and add `workroom-admin` to the Catalog Project's `sponsors`. A `modelProviders` key must match the `ai.providers` alias used by the Orchestrator binding. Region, training, logging, retention, and deletion values are governance attestations and must match the provider's real policy plus account-level enforcement. For OpenRouter, also enforce [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) and deny data collection. Every Workroom role must reference a distinct `ai.agents` binding. Once diagnostics pass, **Initialize orchestration** publishes a Capability Pack from exact current-generation Agent/Tool/Skill digests, activates the first Project Profile, publishes the default Planning Policy, and lets the authenticated Sponsor sign a Project Data Governance authority. On first publication, a self-hosted Host creates `.zhin/workroom-data-governance-root-key.json` with mode `0600`; it wraps local DEKs and signs authorities, must be included in encrypted backups, and cannot be recovered if lost. Console reports `/work` ready only when both Planning and Disclosure are ready.
+1. The `REPLACE_WITH_*` values are deliberately invalid placeholders and can't be saved as-is. Keys under `modelProviders` must be the `ai.providers` alias used by the Orchestrator; region, training, logging, retention and deletion fields are governance declarations that must match the provider's actual policy and account settings. With OpenRouter, also enable zero data retention and disable data collection in its [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) settings.
+2. Save the real config, restart the Host, log in to Console with that token, and add `workroom-admin` to the Catalog Project's `sponsors`.
+3. Once diagnostics pass, click "Initialize orchestration". Console publishes a Capability Pack from the current version's real Agent / Tool / Skill digests, activates the first Project Profile, publishes the default Planning Policy, and has the authenticated Sponsor issue Project Data Governance authority.
+4. When both Planning and Disclosure show as ready, `/work` can be submitted.
 
-The Workroom Journal backend is fixed when the process starts: `ai.sessions.useDatabase !== false` selects `workroom_events`, and an unready Database Root Host rejects the candidate generation; explicitly setting it to `false` selects the atomic file event stream at `.zhin/workroom-journal`. Hot reload cannot switch this backend. Changing the selection requires a process restart so retired-generation leases and the new generation cannot write to unrelated authorities without shared CAS. Console Run list/detail endpoints remain Project-scoped read-only projections (for example, `GET /api/agent/workroom/runs?projectId=...`) and cannot mutate a Task or Assignment. An authenticated Console has separate typed control surfaces: Profile and Project Knowledge publication/rollback use `workroom.profile.*` / `workroom.knowledge.*` RPCs, Portfolio Sponsors submit exact commands to `POST /api/agent/workroom/portfolio/commands`, and Effect Sponsors use `POST /api/agent/workroom/effects/sponsor-decisions` only for authorization bound to an exact Intent; the command accepts a closed `reasonCode` rather than persistable free-form explanation text. Data Steward, Privacy, and Compliance operators use `/api/agent/workroom/data-lifecycle`, `/overdue`, and `/commands` for content-free lifecycle projections plus Hold, subject erasure/export, retention purge, and reconciliation; these routes are published only when Root-private role authority, the current Catalog Project, and the P12 Console recipient all match. Each surface rederives the principal from the authenticated token and revalidates the current Catalog/Profile/governance revision; identity, approval, or discussion fields supplied in a request body grant no state-writing authority. The optional Remote A2A Executor uses the same Assignment lease/fence/event contract. A new claim is allowed only when persistent Profile, Authority Grant, Workspace, Disclosure, and endpoint Card/auth/transport snapshots match exactly; missing authority remains durably blocked. The old `ai.remoteAgents` poller is not retained.
+::: warning Back up the data-governance root key
+On first issue, a self-hosted Host creates `.zhin/workroom-data-governance-root-key.json` with mode `0600`, used to wrap local data keys and sign authority. Include it in encrypted backups: **if it's lost, existing Payload Vault content can't be recovered.**
+:::
 
-For legacy data, `zhin agent legacy-runs <input>` performs a read-only audit of legacy Run exports, while `zhin agent legacy-payloads <input> --kind <kind>` performs a read-only scan for embedded legacy bodies. Both produce create-only audit/proposal output and never write a new Journal, accept an old result, delete a payload, or run an automatic migration. See [Legacy Concepts](../contributing/legacy-concepts.md).
+::: details Storage backends, Console control planes and remote execution
+- **Storage backend**: the Catalog and Run Journal share one persistence choice. With `ai.sessions.useDatabase !== false` they use the database tables `workroom_catalog` / `workroom_events`, and a Database Root Host that isn't ready makes the new version fail to publish; with it explicitly `false` they fall back to atomic file event streams in `.zhin/workroom-catalog.json` and `.zhin/workroom-journal`. The backend is fixed at process start and **can't change on hot reload** — restart the process to change it, so old and new versions never write two facts sources with no CAS relationship.
+- **Catalog edits**: saves use revision CAS; member references follow the current version's `ai.agents`, and stale references are rejected. Journal facts of existing Runs are never overwritten by Catalog edits.
+- **Read-only projections**: Console's Run list and details are Project-scoped read-only projections (e.g. `GET /api/agent/workroom/runs?projectId=...`) and can't change Tasks / Assignments.
+- **Typed control planes** (isolated from each other): Profiles and Project Knowledge are published or rolled back through `workroom.profile.*` / `workroom.knowledge.*` RPC; a Portfolio Sponsor submits exact commands to `POST /api/agent/workroom/portfolio/commands`; an Effect Sponsor uses `POST /api/agent/workroom/effects/sponsor-decisions` to decide only authorizations bound to an exact Intent, accepting only a closed set of `reasonCode`s and storing no free-form explanation; Data Steward / Privacy / Compliance use `/api/agent/workroom/data-lifecycle`, `/overdue` and `/commands` to query lifecycle projections and run Holds, subject erasure / export and retention purge / reconcile — these endpoints are published only when Root-private role authority, the current Catalog Project and the P12 Console recipient all match. Every endpoint re-derives the principal from the authenticated token and re-checks the current Catalog / Profile / governance revision; identity, approval or discussion self-reported in the request body never grants write access.
+- **Remote execution**: the optional Remote A2A Executor reuses the same Assignment lease / fence / event contract. A new claim is allowed only when the persistent Profile, Authority Grant, Workspace, Disclosure and the endpoint's Card / auth / transport snapshots all match exactly; anything missing blocks persistently. The old `ai.remoteAgents` poller no longer exists.
+:::
 
-## Session persistence and session tree
+### Auditing legacy data
 
-When a database is available, Agent Host persists canonical conversation and Agent-session tables (with an in-memory implementation when no database is installed):
-
-| Table | Contents |
-|-------|----------|
-| `agent_sessions` | Agent session metadata (including session tree `parent_id` / `active_leaf`) |
-| `agent_messages` | Agent turn messages (context store) |
-| `conversation_events` | Canonical IM messages, reference relations, and notice facts (idempotent append) |
-| `conversation_event_cursors` | Unread conversation-event cursor per Agent session |
-
-Set `ai.sessions.useDatabase: false` to force in-memory mode.
-
-Within the same IM conversation, sessions can also be branched into a session tree, managed via IM commands:
-
-| Command | Purpose |
-|---------|---------|
-| `/compact` | Manually compact the current session context |
-| `/tree` / `/tree N` | View / switch session branches |
-| `/reset` | Reset the session |
-| Send `clear` / `reset` | Archive and clear the current session's AI multi-turn context |
-
-Other management commands (master / authorized users): `/models`, `/health`, `/cmd`, `/endpoints`, `/bindings`, `/tools`, `/mcp`.
-
-## Compaction
-
-Context is automatically compressed when approaching the window limit. Configure with `ai.agent.compaction`:
-
-```yaml
-ai:
-  agent:
-    compaction:
-      enabled: true
-      auto: true
-      keepRecentTokens: 20000   # Token budget for keeping recent messages (default 20000)
-      minKeepCount: 2           # Minimum number of messages to keep (default 2)
-```
-
-Compression triggers when estimated tokens exceed `contextWindow x 0.6`. Compression has two stages: first a micro-compact (trimming redundant tool results, etc.), then the LLM generates a `[Previous conversation summary]` to replace old history. If consecutive auto-compressions fail up to the limit, auto-compaction stops to avoid repeated consumption.
-
-## Model harness
-
-Override execution loop parameters per provider / model (currently consuming `maxIterations`). Merge order: TS default table -> `providerPatterns` (supports `*` wildcards) -> `models` exact keys:
-
-```yaml
-ai:
-  agent:
-    modelHarness:
-      providerPatterns:
-        "open*": { maxIterations: 7 }
-      models:
-        "gpt-4o": { maxIterations: 8 }
-        "openai:gpt-4o": { maxIterations: 9 }
-```
-
-## Built-in tools
-
-| Category | Tools |
-|----------|-------|
-| Execution | `bash` |
-| File | `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep` |
-| Network | `web_search`, `web_fetch` |
-| Interaction | `ask_user` |
-| Task | `spawn_task`, `todo_read`, `todo_write` |
-| Memory/Retrieval | `memory_search`, `memory_upsert`, `knowledge_search`, `inspect_conversation_reference` |
-| Media | `generate_image`; inbound images go directly to vision-capable models |
-| Meta | `discover`, `load_tool`, `load_skill` |
-| Scheduling | `schedule_list`, `schedule_add`, `schedule_remove`, `schedule_pause`, `schedule_resume`, `schedule_preview` |
-
-File tools run only inside the project workspace explicitly authorized for the current Turn. Relative paths resolve from that workspace; absolute paths must still remain inside it; `~`, directory traversal, and symlinks targeting paths outside the workspace fail closed in the shared policy facade. Only the canonical path approved by policy reaches the current generation's Tool capability, and `glob` / `grep` do not spawn shell processes.
-
-Network tools receive HTTPS authority only with `ai.agent.execPreset: network`. `web_fetch` revalidates protocol, domain, and SSRF policy for the initial URL and every redirect target. DNS results in private, link-local, CGNAT, or multicast ranges are denied, and the actual connection is pinned to the reviewed address. Other presets, including `readonly`, do not implicitly enable network access.
-
-`todo_read` and `todo_write` operate only on the plan owned by the current canonical session; their input no longer accepts a `chat_id` or filesystem path. State is atomically stored under `.zhin/todos`, and the entire `.zhin/` directory is runtime-private state that generic file tools cannot read or enumerate.
-
-## Assistant profile and scheduled tasks
-
-The Assistant runtime productizes "doing things on a schedule": persistent tasks are stored in `data/schedule-jobs.json` and executed by `ScheduleJobEngine` at the designated time, with results pushed back to IM.
-
-```yaml
-assistant:
-  enabled: true
-  profile:
-    enabled: true
-    file: assistant.profile.yml   # Relative to project root, this is the default name
-  events:
-    enabled: true                 # Enable POST /api/assistant/events external event endpoint
-  defaults:
-    notifyOnFailure: false
-```
-
-`assistant.profile.yml` declares the persona and routines, which are synced to scheduled tasks at startup:
-
-```yaml
-version: 1
-persona:
-  soul: You are a thoughtful life assistant.
-routines:
-  heartbeat:
-    enabled: true
-    everyMs: 1800000
-    prompt: Check to-dos and report.
-  morningBrief:
-    enabled: true
-    scheduleKind: solar      # solar | lunar | workday | freeDay | holiday
-    cron: "0 0 8 * * *"
-    tz: Asia/Shanghai
-    prompt: Generate today's morning briefing.
-```
-
-Built-in routines include `heartbeat` (interval execution), `morningBrief` (default 08:00), `bedtimeCheck` (default 22:00), and `weatherReport`; custom keys are also supported. Note that for mainland China "workday" scenarios, use `workday` (which accounts for make-up workdays) instead of solar's `1-5`.
-
-Users can also manage tasks directly in IM by having the Agent use `schedule_add` / `schedule_list` / `schedule_preview` and other tools. External systems can inject events via `POST /api/assistant/events` and query tasks via `GET /api/assistant/jobs`.
+When upgrading old data, `zhin agent legacy-runs <input>` audits a legacy Run export read-only, and `zhin agent legacy-payloads <input> --kind <kind>` scans legacy inline payloads read-only. Both only produce create-only audits / proposals; they never write a new Journal, accept old results, delete payloads or perform migrations. See [Legacy concept migration](../contributing/legacy-concepts.md).
 
 ## Related
 
-- [AI Capabilities Overview](./index.md): Installation, providers, triggers & security
-- [Voice capabilities](./speech.md): STT/TTS for voice messages
+- [AI overview](./index.md): enabling AI, models, trigger rules and security policies.
+- [Agent tools and Skills](../authoring/agent-tools.md): writing Tools, Skills, Prompt Sections and sub-agents.
+- [Speech](./speech.md): speech recognition and voice replies.

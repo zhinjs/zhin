@@ -1,42 +1,28 @@
+---
+title: "Capability Seam"
+description: "Let a Root Host connect a remote capability service or an existing tool registry to the Agent: when to use it, the service contracts, registration, and how it shares the permission and approval path with regular Tools"
+---
+
 # Capability Seam
 
-Capability Seam is an **Advanced / experimental** provider extension for the Agent Runtime. Regular
-plugins should continue to use `tools/<name>/index.ts`, `skills/<name>/SKILL.md`, `addTool`, or `addSkill`.
-Those Feature paths provide manifest ownership, owner visibility, Generation HMR, and conflict
-validation. Seam is intended for a Root Host that must connect a remote capability service or an
-existing generation-owned registry.
+Most plugins **don't need** this page. To write Tools and Skills, use the convention directories `tools/<name>/index.ts` and `skills/<name>/SKILL.md`, or `addTool` / `addSkill`; they come with a manifest, ownership, hot reload, and duplicate-name checks.
 
-## Production path
+Capability Seam is an advanced extension point for the **Root Host** (the layer that assembles the whole runtime). Reach for it only when you need to connect a remote capability service, an existing tool registry, or a provider that doesn't fit in a single file.
 
-```text
-Tool / Skill Feature ─┐
-                      ├─ CapabilityIngress ─ immutable AgentCapabilities
-Root Capability Seam ─┘                         │
-                                                ▼
-                                          TurnIngress
-                                                │
-                                                ▼
-                                        TurnToolRuntime
-                         generation → permission → approval → journal
-                                                │
-                                                ▼
-                                           Provider
-```
+::: warning Experimental
+This is an Advanced / experimental interface; signatures may change between versions.
+:::
 
-`CapabilityIngress` reads `capabilitySeamToken` from the Root resources in one fixed Runtime
-snapshot. It projects the services into the same capability snapshot as Tool and Skill Features.
-There is no independent `executeTool(name, args)` path for Seam Tools. Only `TurnToolRuntime`
-executes a projected Tool.
+## Do you need it?
 
-This preserves the production invariants:
+| Your situation | Use |
+|---|---|
+| Writing a regular Tool / Skill in a plugin | Convention directories (`tools/`, `skills/`) or `addTool` / `addSkill` |
+| You want a manifest, ownership, and hot reload on file save | Same as above (Feature) |
+| Connecting a remote capability service or existing registry in the Root Host | **Capability Seam** |
+| Bypassing approval or executing a tool directly by name | Not supported through any entry |
 
-- a provider cannot execute after its Generation operation retires;
-- `platforms`, `scopes`, `permissions`, and `hidden` use canonical visibility checks;
-- `requiresApproval` is enforced by the Turn ApprovalPort and fails closed without an interactive port;
-- Tool calls, denials, failures, and results enter the same Turn Journal;
-- duplicate Feature and Seam Tool or Skill names reject capability projection.
-
-## Service contracts
+## Write a capability service
 
 A `ToolService` supplies schemas and the final provider call. Policy metadata on `ToolSchema`
 is copied into the canonical Tool capability. Omitted `requiresApproval` defaults to `on-risk`.
@@ -103,7 +89,7 @@ export class ResearchSkills implements SkillService {
 }
 ```
 
-## Root registration and lifecycle
+## Register it on the Root
 
 Seam is an explicit Root resource. Registrations return idempotent disposers, and the Root Scope
 owns disposal of the complete `SeamIntegration`. Providers therefore prepare, publish, roll back,
@@ -136,7 +122,34 @@ Capability Seam enters Plugin Runtime Scope only through `capabilitySeamToken`. 
 only registers providers and projects capabilities; it does not expose direct `executeTool()` or
 `invokeSkill()` methods.
 
-## Scope and conflicts
+## How it works
+
+Tools from a Seam **go through the same execution path** as regular Tools; there is no side door:
+
+```text
+Tool / Skill Feature ─┐
+                      ├─ CapabilityIngress ─ immutable AgentCapabilities
+Root Capability Seam ─┘                         │
+                                                ▼
+                                          TurnIngress
+                                                │
+                                                ▼
+                                        TurnToolRuntime
+                         generation → permission → approval → journal
+                                                │
+                                                ▼
+                                           Provider
+```
+
+`CapabilityIngress` reads the Root's `capabilitySeamToken` from a fixed runtime snapshot and turns the services into the same capability description as regular Tools and Skills. Seam Tools have no separate `executeTool(name, args)` path; only `TurnToolRuntime` can run them, inside a turn. That gives these guarantees:
+
+- **Follows hot reload**: once its generation retires or the operation ends, the provider can no longer be called;
+- **Same visibility filters**: `platforms`, `scopes`, `permissions`, and `hidden` apply exactly as for regular Tools;
+- **Same approval**: `requiresApproval` is handled by the turn's approval port; when approval is needed and nobody is there to answer, the call is refused;
+- **Same record**: calls, denials, failures, and results go into the same run log (Turn Journal);
+- **Duplicates fail loudly**: a regular Tool and a Seam Tool / Skill with the same name make the new capability snapshot fail instead of silently overriding.
+
+### Scope and conflicts
 
 - `global` providers are visible to every Agent owner under the Root.
 - A provider registered with an owner string is visible only for that owner lookup.
@@ -144,8 +157,7 @@ only registers providers and projects capabilities; it does not expose direct `e
 - A scoped provider can replace a global provider with the same ID.
 - Duplicate visible Tool or Skill names fail during capability projection.
 
-## Existing adapters
-
+::: details Existing adapters
 | Class | Purpose |
 |---|---|
 | `BuiltinToolService` | Adapts QuestionPort interaction for custom Host compositions |
@@ -153,15 +165,11 @@ only registers providers and projects capabilities; it does not expose direct `e
 
 The standard Agent Host does not publish these adapters globally. Built-in Tool and Skill
 capabilities continue to use Feature projection, preserving one visibility and lifecycle model.
+:::
 
-## Feature or Seam?
+## Related
 
-| Scenario | Preferred entry |
-|---|---|
-| Regular Tool or Skill in an npm plugin | Feature directory or `addTool` / `addSkill` |
-| Manifest ownership and file-level HMR | Feature |
-| Root Host remote provider | Capability Seam |
-| Bypassing approval or direct execution by name | Unsupported; use a Turn capability |
-
-See also: [Plugin Model](./plugin-model.md) · [Generation Lifecycle](./generation-lifecycle.md) ·
-[Agent Tool Authoring](../authoring/agent-tools.md) · [Architecture](./architecture.md)
+- [Plugin Model](./plugin-model.md): how Features and convention directories are discovered
+- [Generation and Lifecycle](./generation-lifecycle.md): how capabilities are prepared, published, and retired across hot reloads
+- [Agent Tools and Skills](../authoring/agent-tools.md): how regular plugins write Tools and Skills
+- [Layered Architecture](./architecture.md): layer responsibilities and dependency direction

@@ -1,30 +1,35 @@
 ---
-title: zhin runtime start in Detail
+title: "zhin runtime start"
+description: "The one command that starts the bot: development, production, daemon and CI smoke-test usage, options, startup flow, hot reload and process management"
 ---
 
-# zhin runtime start in Detail
+# zhin runtime start
 
-After modifying a command file, you don't need to restart the process -- the next message runs the new logic. In development mode, all of this is handled by `zhin runtime start`. It directly executes `.ts` plugin source code in your project using Node's native TypeScript capabilities, assembles various Hosts as needed (HTTP / database / Console / Agent / MCP / A2A), and provides in-process hot reloading in development mode.
+`zhin runtime start` is the one command that starts the bot. It runs your TypeScript source directly with no build step, assembles HTTP, database, Console, Agent and other services from config, and in development mode hot-reloads on save without restarting the process.
 
-Server convention entries also support `.tsx`. The CLI first delegates to the process's active loader and enables a scoped TSX loader only when Node does not recognize the extension, so development watch, `--no-watch`, supervisor, and daemon modes use the same command. Set `"jsx": "react-jsx"` and an appropriate `"jsxImportSource"` in `tsconfig.json`; new scaffolds default to `zhin.js`, and a file can override it with `/** @jsxImportSource zhin.js */`.
+## Common usage
 
 ```bash
-zhin runtime start                          # Development mode (default, watch + HMR)
-zhin runtime start --mode production --no-watch   # Production mode
-zhin runtime start --daemon                 # Daemon mode
-zhin runtime start --once                   # Start once then exit (CI / scripts)
+# Daily development: HMR + Console
+pnpm dev
+
+# Production: disable watch, logs go to stdout (collected by systemd / container)
+zhin runtime start --mode production --no-watch
+
+# Bare-metal persistent: daemon + auto-start on boot
+zhin runtime start --daemon
+zhin service install
+
+# CI smoke test: start once to verify configuration and assembly
+zhin runtime start --once --mode test
 ```
 
-Scaffolded projects codify common combinations into scripts:
-
-```json
-{
-  "scripts": {
-    "dev": "zhin runtime start",
-    "start": "zhin runtime start --mode production --no-watch"
-  }
-}
-```
+| Situation | Use |
+| --- | --- |
+| Local development | `pnpm dev`: watches files, hot reload |
+| A server managed by systemd / Docker | `--mode production --no-watch`: no file watching, logs to stdout |
+| A server without a process manager | `--daemon`: built-in supervisor, restarts on crash |
+| Checking config and assembly in CI | `--once`: start once, print JSON and exit |
 
 ## Options
 
@@ -46,6 +51,10 @@ Runtime does not compile the project before startup. Node executes plugin source
 Foreground mode selects a wrapper based on Node's TypeScript support. Daemon mode always uses the supervisor -> child-process structure described below.
 
 Because it's "source as runtime," importing local TS files requires the `.js` extension (the runtime does specifier remapping), which is also one of the repository's code conventions.
+
+::: details How `.tsx` entries are loaded
+Server convention entries also support `.tsx`. The CLI first delegates to the process's active loader and enables a scoped TSX loader only when Node does not recognize the extension, so development watch, `--no-watch`, supervisor, and daemon modes use the same command. Set `"jsx": "react-jsx"` and an appropriate `"jsxImportSource"` in `tsconfig.json`; new scaffolds default to `zhin.js`, and a file can override it with `/** @jsxImportSource zhin.js */`.
+:::
 
 ## Startup Flow
 
@@ -104,21 +113,6 @@ The supervisor stays resident and writes its pid to `<project-root>/.zhin.pid`; 
 
 The bot process checks supervisor (`ZHIN_SUPERVISOR_PID`) and parent process liveness every 2 seconds. If the wrapper is `kill -9`'d, the terminal is closed, or it crashes, the bot will proactively shut down -- preventing zombie processes that still hold platform connections and file watchers. SIGINT / SIGTERM / SIGHUP are also forwarded to the child process.
 
-## Typical Scenarios
-
-```bash
-# Daily development: HMR + Console
-pnpm dev
-
-# Production: disable watch, logs go to stdout (collected by systemd / container)
-zhin runtime start --mode production --no-watch
-
-# Bare-metal persistent: daemon + auto-start on boot
-zhin runtime start --daemon
-zhin service install
-
-# CI smoke test: start once to verify configuration and assembly
-zhin runtime start --once --mode test
-```
+## Next steps
 
 See [CLI Reference](./index.md) for commands, [Configuration Reference](../configuration/index.md) for values, and [Production operations](../operations/production) for backup and recovery.
