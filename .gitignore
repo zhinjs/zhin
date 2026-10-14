@@ -164,3 +164,4 @@ plugins/*/*/mcp/**/*.js
 plugins/*/*/middlewares/**/*.js
 plugins/*/*/pages/**/*.js
 plugins/*/*/tools/**/*.js
+eval-reports/

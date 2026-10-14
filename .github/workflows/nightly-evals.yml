@@ -1,0 +1,105 @@
+name: Nightly model evals
+
+# Real-model trend metrics (#723). Not a PR gate: it never runs on pull requests
+# and low pass rates do not fail the job. The PR gate is `pnpm eval:agent` in ci.yml.
+on:
+  schedule:
+    - cron: '30 18 * * *' # 02:30 Asia/Shanghai
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Comma-separated MiniMax model ids'
+        required: false
+        default: 'minimax-m3'
+      runs_per_case:
+        description: 'Runs per case per model (budget: see packages/im/agent/evals/README.md)'
+        required: false
+        default: '3'
+
+permissions:
+  contents: read
+  actions: read # download the previous night's report for the diff
+
+concurrency:
+  group: nightly-evals
+  cancel-in-progress: false
+
+env:
+  CI: true
+  NPM_TOKEN: ''
+
+jobs:
+  nightly:
+    if: github.repository == 'zhinjs/zhin'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: check secret
+        id: secret
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          if [ -z "$MINIMAX_API_KEY" ]; then
+            echo "::notice::MINIMAX_API_KEY secret is not configured; skipping nightly evals."
+            echo "present=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: setup pnpm
+        if: steps.secret.outputs.present == 'true'
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v4
+        with:
+          version: 9.0.2
+      - name: checkout repository
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: setup node.js
+        if: steps.secret.outputs.present == 'true'
+        uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: install dependencies
+        if: steps.secret.outputs.present == 'true'
+        run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
+        env:
+          NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
+      - name: run dependency lifecycle scripts without registry credentials
+        if: steps.secret.outputs.present == 'true'
+        run: pnpm rebuild
+      - name: build
+        if: steps.secret.outputs.present == 'true'
+        run: pnpm build
+      - name: download previous report
+        if: steps.secret.outputs.present == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-evals.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
+          if [ -n "$run_id" ]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name nightly-eval-report --dir previous-report
+          fi
+      - name: run nightly evals
+        if: steps.secret.outputs.present == 'true'
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          NIGHTLY_MODELS: ${{ inputs.models || 'minimax-m3' }}
+          NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || '3' }}
+          NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports
+          NIGHTLY_PREVIOUS_REPORT: ${{ github.workspace }}/previous-report/nightly.json
+        run: pnpm eval:nightly
+      - name: job summary
+        if: steps.secret.outputs.present == 'true' && always()
+        run: |
+          if [ -f eval-reports/nightly.md ]; then cat eval-reports/nightly.md >> "$GITHUB_STEP_SUMMARY"; fi
+      - name: upload report
+        if: steps.secret.outputs.present == 'true' && always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: nightly-eval-report
+          path: eval-reports/
+          retention-days: 30
+          if-no-files-found: ignore

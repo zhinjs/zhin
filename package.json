@@ -103,6 +103,7 @@
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
     "eval:agent": "turbo run eval --filter=@zhin.js/agent",
+    "eval:nightly": "pnpm -F @zhin.js/agent eval:nightly",
     "test:reporter": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
