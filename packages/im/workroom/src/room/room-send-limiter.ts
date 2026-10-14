@@ -3,9 +3,17 @@ import type { OutboundMessageService } from '@zhin.js/core/runtime';
 /**
  * Per-account send rate limiter for Room output (personal QQ accounts can be risk-controlled by the platform).
  *
- * A decorator over `Pick<OutboundMessageService, 'send'>`: once a slot is granted it still calls the wrapped
- * `send`, so the normal outbound chain (OutboundRenderer -> outbound middleware -> Endpoint) is never bypassed.
- * Intended to wrap RoomBus's `outbound` option only (C1); it is not installed globally.
+ * Two forms over ONE shared instance (`createRoomSendLimiter`), both booking into the same per-account map:
+ * - `send(request)`: a decorator over `Pick<OutboundMessageService, 'send'>`; once a slot is granted it still
+ *   calls the wrapped `send`.
+ * - `middleware(envelope, next)`: an outbound middleware; books a slot, sleeps, then `await next()`.
+ * Either way the normal outbound chain (OutboundRenderer -> outbound middleware -> Endpoint) is never bypassed:
+ * the limiter only delays or refuses before `inner.send` / `next()`.
+ *
+ * C1 MUST make EVERY outbound of a member Endpoint use this same instance (as an outbound middleware, or by
+ * wrapping the shared OutboundMessageService), keyed by account. Wrapping only RoomBus's `outbound` under-counts
+ * `$reply` and generation output of the same account, so the account-level risk-control protection would only
+ * be partial. It is not installed globally by B4.
  */
 
 type DeliveryReceipt = Awaited<ReturnType<OutboundMessageService['send']>>;
@@ -18,8 +26,9 @@ export interface RoomSendLimit {
   readonly minIntervalMs?: number;
 }
 
-export interface RateLimitedOutboundOptions {
-  readonly inner: Pick<OutboundMessageService, 'send'>;
+export interface RoomSendLimiterOptions {
+  /** Wrapped service for the `send` form; without it `send` refuses. Not needed for the `middleware` form. */
+  readonly inner?: Pick<OutboundMessageService, 'send'>;
   /** Bot account of an endpoint (e.g. PeerRegistry.selfOf). Falls back to the endpoint id when unknown. */
   readonly accountOf?: (endpointId: string) => string | undefined;
   readonly now?: () => number;
@@ -33,6 +42,28 @@ export interface RateLimitedOutboundOptions {
   /** Overrides keyed by account (or `endpoint:<id>` for unresolved accounts). */
   readonly perAccount?: Readonly<Record<string, RoomSendLimit>>;
   readonly logger?: { warn(message: string): void };
+}
+
+export interface RateLimitedOutboundOptions extends RoomSendLimiterOptions {
+  readonly inner: Pick<OutboundMessageService, 'send'>;
+}
+
+/** Structural outbound envelope: only what the limiter reads, so no core middleware type is imported. */
+export interface RoomSendEnvelope {
+  readonly conversation: { readonly endpoint: { readonly id: string } };
+}
+
+export class RoomSendRateLimitedError extends Error {
+  constructor(readonly code: string, message: string, readonly retryable: boolean) {
+    super(message);
+    this.name = 'RoomSendRateLimitedError';
+  }
+}
+
+export interface RoomSendLimiter {
+  send(request: Parameters<OutboundMessageService['send']>[0]): Promise<DeliveryReceipt>;
+  /** Outbound middleware form; throws RoomSendRateLimitedError when refused. */
+  middleware(envelope: RoomSendEnvelope, next: () => Promise<void>): Promise<void>;
 }
 
 interface Booking {
@@ -52,7 +83,7 @@ function positive(name: string, value: number | undefined, fallback: number, all
 const rejected = (code: string, message: string, retryable: boolean): DeliveryReceipt =>
   Object.freeze({ status: 'rejected' as const, failure: Object.freeze({ code, message, retryable }) });
 
-export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): Pick<OutboundMessageService, 'send'> {
+export function createRoomSendLimiter(options: RoomSendLimiterOptions): RoomSendLimiter {
   const { inner, logger } = options;
   const now = options.now ?? (() => Date.now());
   const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); }));
@@ -75,7 +106,7 @@ export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): 
   };
 
   /** Synchronous so that arrival order equals booking order. Returns the wait, or a rejection receipt. */
-  const reserve = (request: Parameters<OutboundMessageService['send']>[0]): number | DeliveryReceipt => {
+  const reserve = (request: RoomSendEnvelope): number | DeliveryReceipt => {
     try {
       const endpointId = request.conversation.endpoint.id;
       if (typeof endpointId !== 'string' || endpointId === '') throw new TypeError('request has no endpoint id');
@@ -118,6 +149,7 @@ export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): 
 
   return Object.freeze({
     async send(request: Parameters<OutboundMessageService['send']>[0]): Promise<DeliveryReceipt> {
+      if (!inner) return rejected('room_send_guard_error', 'send limiter has no inner service', false);
       const wait = reserve(request);
       if (typeof wait !== 'number') {
         logger?.warn(`room send refused: ${wait.failure?.code ?? wait.status}`);
@@ -126,5 +158,21 @@ export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): 
       if (wait > 0) await sleep(wait);
       return inner.send(request);
     },
+    async middleware(envelope: RoomSendEnvelope, next: () => Promise<void>): Promise<void> {
+      const wait = reserve(envelope);
+      if (typeof wait !== 'number') {
+        logger?.warn(`room send refused: ${wait.failure?.code ?? wait.status}`);
+        throw new RoomSendRateLimitedError(
+          wait.failure?.code ?? 'room_send_guard_error', wait.failure?.message ?? 'send refused', wait.failure?.retryable ?? false);
+      }
+      if (wait > 0) await sleep(wait);
+      await next();
+    },
   });
+}
+
+/** Thin wrapper kept for the `send` form; share one limiter instance via `createRoomSendLimiter` for all outbound. */
+export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): Pick<OutboundMessageService, 'send'> {
+  const limiter = createRoomSendLimiter(options);
+  return Object.freeze({ send: (request: Parameters<OutboundMessageService['send']>[0]) => limiter.send(request) });
 }

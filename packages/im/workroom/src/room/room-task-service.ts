@@ -41,7 +41,8 @@ export interface RoomTaskServiceOptions {
    *
    * authorize MUST restrict who may issue `assign` against an already-assigned or blocked Task: allow only
    * the lead/coordinator role, because `assign` checks neither `from` nor counts handoffCount. A member who
-   * wants to give up a Task must use `handoff`. The C1 authorize hook has to enforce this.
+   * wants to give up a Task must use `handoff`. The C1 authorize hook has to enforce this: createRoomTaskAuthorizer
+   * is the fail-closed path (it refuses every `assign` unless its `authorizeAssign` role check allows it).
    */
   readonly authorize?: (roomId: string, command: RoomTaskCommand) => string | undefined;
   readonly logger?: { warn(message: string): void };

@@ -20,7 +20,7 @@ function deferred<T = void>() {
 const tick = () => new Promise<void>((r) => setImmediate(r));
 
 describe('room guards: handoff', () => {
-  const base = { roomId: 'r', taskId: 't', from: 'a', to: 'b' };
+  const base = { roomId: 'r', taskId: 't', from: 'a', to: 'b', history: [] as RoomTaskEvent[] };
 
   it('rejects at the depth limit and escalates to a human', () => {
     const guards = createRoomGuards({ maxHandoffDepth: 3 });
@@ -41,8 +41,14 @@ describe('room guards: handoff', () => {
     expect(guards.checkHandoff({ ...base, taskId: 'other', handoffCount: 0, history })).toEqual({ allowed: true });
   });
 
-  it('only checks depth without history', () => {
+  it('passes an empty history', () => {
     expect(createRoomGuards().checkHandoff({ ...base, handoffCount: 0 })).toEqual({ allowed: true });
+  });
+
+  it('rejects a call without history (guard_error, escalateToHuman)', () => {
+    const { history: _history, ...noHistory } = base;
+    const refused = createRoomGuards().checkHandoff({ ...noHistory, handoffCount: 0 } as never);
+    expect(refused).toMatchObject({ allowed: false, code: 'guard_error', escalateToHuman: true });
   });
 
   it('fails closed on malformed input or history', () => {
@@ -57,34 +63,44 @@ describe('room guards: handoff', () => {
 });
 
 describe('room guards: turn rate', () => {
-  it('limits turns per sliding minute and reports retryAfterMs', () => {
+  const turn = (guards: ReturnType<typeof createRoomGuards>, room: string) =>
+    guards.runExclusive(room, async () => 'ok').then(() => ({ allowed: true }), (e: unknown) => e);
+
+  it('limits turns per sliding minute and reports retryAfterMs', async () => {
     const c = clock();
     const guards = createRoomGuards({ now: c.now, maxTurnsPerMinute: 2 });
-    expect(guards.admitTurn('r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
     c.advance(10_000);
-    expect(guards.admitTurn('r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
     c.advance(5_000);
-    expect(guards.admitTurn('r')).toEqual({ allowed: false, code: 'turn_rate', retryAfterMs: 45_000 });
+    expect(await turn(guards, 'r')).toMatchObject({ code: 'turn_rate', retryAfterMs: 45_000 });
     // rejected turns do not occupy the window
     c.advance(45_000);
-    expect(guards.admitTurn('r')).toEqual({ allowed: true });
-    expect(guards.admitTurn('r')).toEqual({ allowed: false, code: 'turn_rate', retryAfterMs: 10_000 });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toMatchObject({ code: 'turn_rate', retryAfterMs: 10_000 });
     c.advance(60_000);
-    expect(guards.admitTurn('r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
   });
 
-  it('keeps rooms independent', () => {
+  it('keeps rooms independent', async () => {
     const c = clock();
     const guards = createRoomGuards({ now: c.now, maxTurnsPerMinute: 1 });
-    expect(guards.admitTurn('a').allowed).toBe(true);
-    expect(guards.admitTurn('b').allowed).toBe(true);
-    expect(guards.admitTurn('a').allowed).toBe(false);
+    expect(await turn(guards, 'a')).toEqual({ allowed: true });
+    expect(await turn(guards, 'b')).toEqual({ allowed: true });
+    expect(await turn(guards, 'a')).toMatchObject({ code: 'turn_rate' });
     expect(guards.stats().rateWindows).toBe(2);
   });
 
-  it('fails closed when the clock is broken', () => {
+  it('consumes exactly one window slot per turn', async () => {
+    const guards = createRoomGuards({ now: clock().now, maxTurnsPerMinute: 2 });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toEqual({ allowed: true });
+    expect(await turn(guards, 'r')).toBeInstanceOf(RoomGuardRejectedError);
+  });
+
+  it('fails closed when the clock is broken', async () => {
     const guards = createRoomGuards({ now: () => Number.NaN });
-    expect(guards.admitTurn('r')).toMatchObject({ allowed: false, code: 'turn_rate' });
+    expect(await turn(guards, 'r')).toMatchObject({ code: 'turn_rate' });
   });
 });
 
@@ -136,8 +152,8 @@ describe('room guards: exclusive turns', () => {
 });
 
 describe('room guards: human cancel', () => {
-  it('aborts the running turn and rejects queued ones for a human', async () => {
-    const guards = createRoomGuards();
+  it('aborts the running turn and rejects queued ones for a sensitive human', async () => {
+    const guards = createRoomGuards({ sensitiveAccounts: ['u1'] });
     const gate = deferred();
     let signal!: AbortSignal;
     const ran: string[] = [];
@@ -154,6 +170,25 @@ describe('room guards: human cancel', () => {
     await tick();
     expect(ran).toEqual([]);
     expect(guards.stats().lanes).toBe(0);
+  });
+
+  it.each([
+    ['an unlisted human', { origin: 'human', accountId: 'nobody' } as const],
+    ['a human without accountId', { origin: 'human' } as const],
+  ])('lets %s interrupt only the running turn', async (_name, actor) => {
+    const guards = createRoomGuards({ sensitiveAccounts: ['u1'] });
+    const gate = deferred();
+    let signal!: AbortSignal;
+    const ran: string[] = [];
+    const running = guards.runExclusive('r', async (s) => { signal = s; await gate.promise; return 'done'; });
+    const queued = guards.runExclusive('r', async () => { ran.push('queued'); return 'q'; });
+    await tick();
+    expect(guards.cancelRoom('r', actor)).toEqual({ cancelledRunning: true, cancelledQueued: 0 });
+    expect(signal.aborted).toBe(true);
+    gate.resolve();
+    expect(await running).toBe('done');
+    expect(await queued).toBe('q');
+    expect(ran).toEqual(['queued']);
   });
 
   it('refuses non-humans and leaves the turn alone', async () => {

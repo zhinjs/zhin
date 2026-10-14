@@ -10,14 +10,17 @@ const actors: Record<string, GuardActor> = {
   dev: { origin: 'member', accountId: 'bot-dev' },
 };
 
-function setup(actorOf: (by: string) => GuardActor | undefined = (by) => actors[by]) {
+function setup(
+  actorOf: (by: string) => GuardActor | undefined = (by) => actors[by],
+  extra: Partial<Parameters<typeof createRoomTaskAuthorizer>[0]> = {},
+) {
   let ids = 0;
   const guards = createRoomGuards({ sensitiveAccounts: ['u-owner'] });
   return createRoomTaskService({
     journal: new MemoryRoomTaskJournal(),
     newId: () => `e${ids++}`,
     now: () => 1,
-    authorize: createRoomTaskAuthorizer({ guards, actorOf }),
+    authorize: createRoomTaskAuthorizer({ guards, actorOf, ...extra }),
   });
 }
 
@@ -49,7 +52,47 @@ describe('createRoomTaskAuthorizer', () => {
     }
   });
 
-  it('does not restrict other commands, so agents can still block and hand off', async () => {
+  it('refuses assign by default when no role check is provided', async () => {
+    const service = setup();
+    await create(service);
+    for (const by of ['dev', 'owner']) {
+      await expect(service.execute('r', { type: 'assign', commandId: `a-${by}`, taskId: 't', by, assignee: 'other' })).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+    }
+    expect((await service.get('r', 't'))?.assignee).toBe('dev');
+
+    await service.execute('r', { type: 'start', commandId: 's1', taskId: 't', by: 'dev' });
+    await service.execute('r', { type: 'block', commandId: 'b1', taskId: 't', by: 'dev', reason: 'x' });
+    await expect(service.execute('r', { type: 'assign', commandId: 'a-blocked', taskId: 't', by: 'dev', assignee: 'dev' })).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+    expect((await service.get('r', 't'))?.status).toBe('blocked');
+  });
+
+  it('applies authorizeAssign: lead allowed, others and throwing checks refused', async () => {
+    const authorizeAssign = (_room: string, command: { by: string }) => (command.by === 'owner' ? undefined : 'lead only');
+    const service = setup(undefined, { authorizeAssign });
+    await create(service);
+    await expect(service.execute('r', { type: 'assign', commandId: 'a1', taskId: 't', by: 'dev', assignee: 'x' })).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+    await service.execute('r', { type: 'assign', commandId: 'a2', taskId: 't', by: 'owner', assignee: 'x' });
+    expect((await service.get('r', 't'))?.assignee).toBe('x');
+
+    const throwing = setup(undefined, { authorizeAssign: () => { throw new Error('role lookup down'); } });
+    await create(throwing);
+    await expect(throwing.execute('r', { type: 'assign', commandId: 'a3', taskId: 't', by: 'owner', assignee: 'x' })).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+  });
+
+  it('calls next for other commands and propagates its refusal', async () => {
+    const seen: string[] = [];
+    const next = (_room: string, command: { type: string }) => {
+      seen.push(command.type);
+      return command.type === 'block' ? 'no blocking' : undefined;
+    };
+    const service = setup(() => undefined, { next });
+    await create(service);
+    await service.execute('r', { type: 'start', commandId: 'c1', taskId: 't', by: 'dev' });
+    await expect(service.execute('r', { type: 'block', commandId: 'c2', taskId: 't', by: 'dev', reason: 'x' })).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+    expect(seen).toEqual(['create', 'start', 'block']);
+  });
+
+  it('still lets start, block and handoff through when next is absent', async () => {
     const service = setup(() => undefined);
     await create(service);
     await service.execute('r', { type: 'start', commandId: 'c1', taskId: 't', by: 'dev' });
@@ -57,16 +100,18 @@ describe('createRoomTaskAuthorizer', () => {
     expect((await service.get('r', 't'))?.status).toBe('blocked');
   });
 
-  it('documents the C1 constraint: subscribers must order by event.sequence', async () => {
+  it('assigns unique contiguous sequences to concurrent executes on one Room', async () => {
     const service = setup(() => undefined);
     const seen: RoomTaskEvent[] = [];
     service.subscribe((event) => { seen.push(event); });
-    await create(service);
-    await service.execute('r', { type: 'start', commandId: 'c1', taskId: 't', by: 'dev' });
-    await service.execute('r', { type: 'block', commandId: 'c2', taskId: 't', by: 'dev', reason: 'x' });
-    // Concurrent executes may interleave dispatch, so a C1 subscriber sorts by sequence rather than trusting arrival.
-    const shuffled = [...seen].reverse();
-    const ordered = [...shuffled].sort((a, b) => a.sequence - b.sequence);
-    expect(ordered.map((e) => e.type)).toEqual(['task.created', 'task.assigned', 'task.started', 'task.blocked']);
+    await Promise.all([
+      service.execute('r', { type: 'create', commandId: 'p1', taskId: 't1', by: 'dev', title: 'a', assignee: 'dev' }),
+      service.execute('r', { type: 'create', commandId: 'p2', taskId: 't2', by: 'dev', title: 'b', assignee: 'dev' }),
+    ]);
+    const sequences = seen.map((e) => e.sequence);
+    expect(new Set(sequences).size).toBe(sequences.length);
+    const sorted = [...sequences].sort((a, b) => a - b);
+    expect(sorted).toEqual(sorted.map((_, i) => sorted[0] + i));
+    expect(sorted).toHaveLength(4);
   });
 });

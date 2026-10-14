@@ -1,5 +1,5 @@
 import { rootPluginId } from '@zhin.js/plugin-runtime';
-import { createRateLimitedOutbound } from '../../src/room/room-send-limiter.js';
+import { createRateLimitedOutbound, createRoomSendLimiter, RoomSendRateLimitedError } from '../../src/room/room-send-limiter.js';
 import { createRoomBus } from '../../src/room/room-bus.js';
 import { registryOf, ACCOUNTS } from './room-fixtures.js';
 
@@ -141,5 +141,57 @@ describe('rate limiter with RoomBus', () => {
     expect(limited.projectionError).toContain('room_send_rate_limited');
     expect(seen).toEqual(['h1', 'h2']);
     expect(sent).toHaveLength(1);
+  });
+});
+
+describe('createRoomSendLimiter (shared instance)', () => {
+  function shared(extra: Record<string, unknown> = {}) {
+    let t = 1_000_000;
+    const sleeps: number[] = [];
+    const sent: unknown[] = [];
+    const limiter = createRoomSendLimiter({
+      inner: { send: async (r: unknown) => { sent.push(r); return { status: 'sent' as const }; } },
+      accountOf: (id) => ({ e1: 'acct-1', e2: 'acct-1', e3: 'acct-3' } as Record<string, string>)[id],
+      now: () => t,
+      sleep: async (ms) => { sleeps.push(ms); t += ms; },
+      minIntervalMs: 1000,
+      ...extra,
+    });
+    return { limiter, sleeps, sent };
+  }
+  const envelope = (id: string) => ({ conversation: { endpoint: { id } } });
+
+  it('spaces middleware sends and calls next after the wait', async () => {
+    const { limiter, sleeps } = shared();
+    const calls: string[] = [];
+    await limiter.middleware(envelope('e1'), async () => { calls.push('a'); });
+    await limiter.middleware(envelope('e2'), async () => { calls.push('b'); });
+    expect(sleeps).toEqual([1000]);
+    expect(calls).toEqual(['a', 'b']);
+  });
+
+  it('refuses by throwing and does not call next', async () => {
+    const { limiter } = shared({ minIntervalMs: 0, maxPerMinute: 1, maxWaitMs: 5000 });
+    await limiter.middleware(envelope('e1'), async () => undefined);
+    let called = false;
+    const error = await limiter.middleware(envelope('e1'), async () => { called = true; }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RoomSendRateLimitedError);
+    expect(error).toMatchObject({ code: 'room_send_rate_limited', retryable: true });
+    expect(called).toBe(false);
+  });
+
+  it('shares counts between send and middleware on one account, and keeps accounts apart', async () => {
+    const { limiter, sleeps, sent } = shared();
+    await limiter.send(request('e1'));
+    await limiter.middleware(envelope('e2'), async () => undefined);
+    expect(sleeps).toEqual([1000]);
+    await limiter.middleware(envelope('e3'), async () => undefined);
+    expect(sleeps).toEqual([1000]);
+    expect(sent).toHaveLength(1);
+  });
+
+  it('fails closed on a malformed envelope', async () => {
+    const { limiter } = shared();
+    await expect(limiter.middleware({} as never, async () => undefined)).rejects.toBeInstanceOf(RoomSendRateLimitedError);
   });
 });

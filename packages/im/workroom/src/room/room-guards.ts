@@ -30,7 +30,7 @@ export class RoomGuardRejectedError extends Error {
   }
 }
 
-export type RoomSensitiveOperation = 'task.cancel' | 'role.change';
+export type RoomSensitiveOperation = 'task.cancel' | 'role.change' | 'room.cancel_queue';
 
 export interface RoomGuardOptions {
   readonly now?: () => number;
@@ -54,8 +54,12 @@ export interface RoomHandoffCheckInput {
   readonly to: string;
   /** `handoffCount` of the RoomTaskView, before this handoff. */
   readonly handoffCount: number;
-  /** Room Task journal history; when absent only the depth limit is checked. */
-  readonly history?: readonly RoomTaskEvent[];
+  /**
+   * Room Task journal history. Required: without it the ping-pong limit cannot be checked, so a call that
+   * omits it is refused (guard_error + escalateToHuman) instead of silently checking depth only. Pass `[]`
+   * for a Task without history.
+   */
+  readonly history: readonly RoomTaskEvent[];
 }
 
 export type RoomHandoffCheck =
@@ -73,7 +77,9 @@ export type RoomTurnAdmission =
   | { readonly allowed: false; readonly code: 'turn_rate'; readonly retryAfterMs: number };
 
 export interface RoomCancelResult {
+  /** Any human may interrupt the running turn. */
   readonly cancelledRunning: boolean;
+  /** Always 0 unless the actor passes `authorizeSensitive('room.cancel_queue')`. */
   readonly cancelledQueued: number;
 }
 
@@ -86,16 +92,20 @@ export interface RoomGuardStats {
 
 export interface RoomGuards {
   checkHandoff(input: RoomHandoffCheckInput): RoomHandoffCheck;
-  admitTurn(roomId: string): RoomTurnAdmission;
   /**
-   * Runs `work` as the next turn of the Room: admitted by the rate window, FIFO-serialized per Room
+   * Runs `work` as the next turn of the Room: admitted by the rate window (this is the only admission path;
+   * the window is internal, so one turn consumes exactly one slot), FIFO-serialized per Room
    * (a failed turn does not affect the next one) and abortable via `cancelRoom`.
    *
    * Do NOT re-enter: calling runExclusive for the same Room from inside `work` and awaiting it deadlocks.
    * Schedule follow-up turns after `work` has returned.
    */
   runExclusive<T>(roomId: string, work: (signal: AbortSignal) => Promise<T>): Promise<T>;
-  /** Human interrupt: aborts the running turn and rejects queued ones. Non-humans are refused (throws). */
+  /**
+   * Human interrupt. Any human aborts the RUNNING turn; rejecting and clearing the queued turns additionally
+   * requires `authorizeSensitive('room.cancel_queue', actor) === undefined` (a configured sensitive account).
+   * Non-humans are refused (throws).
+   */
   cancelRoom(roomId: string, actor: GuardActor): RoomCancelResult;
   /** Returns undefined when allowed, otherwise the refusal reason (RoomTaskServiceOptions.authorize style). */
   authorizeSensitive(op: RoomSensitiveOperation, actor: GuardActor | undefined): string | undefined;
@@ -192,6 +202,18 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
 
   const requireHuman = (actor: GuardActor | undefined): boolean => actor?.origin === 'human';
 
+  const authorizeSensitive = (op: RoomSensitiveOperation, actor: GuardActor | undefined): string | undefined => {
+    try {
+      if (!requireHuman(actor)) return `${op} requires a human actor`;
+      const account = typeof actor?.accountId === 'string' ? actor.accountId.trim() : '';
+      if (account === '') return `${op} requires an identified account`;
+      if (!sensitive.has(account)) return `${op} is not allowed for this account`;
+      return undefined;
+    } catch (error) {
+      return guardError(error);
+    }
+  };
+
   return Object.freeze({
     checkHandoff(input: RoomHandoffCheckInput): RoomHandoffCheck {
       try {
@@ -202,20 +224,19 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
         if (!Number.isSafeInteger(handoffCount) || handoffCount < 0) {
           throw new TypeError('handoffCount must be a non-negative integer');
         }
+        if (!Array.isArray(history)) throw new TypeError('history is required');
         if (handoffCount >= maxHandoffDepth) {
           return {
             allowed: false, code: 'handoff_depth', escalateToHuman: true,
             reason: `task ${taskId} reached the handoff depth limit (${maxHandoffDepth})`,
           };
         }
-        if (history !== undefined) {
-          const pair = countPairHandoffs(history, taskId, from, to);
-          if (pair >= maxPingPong) {
-            return {
-              allowed: false, code: 'ping_pong', escalateToHuman: true,
-              reason: `task ${taskId} bounced ${pair} times between ${from} and ${to} (limit ${maxPingPong})`,
-            };
-          }
+        const pair = countPairHandoffs(history, taskId, from, to);
+        if (pair >= maxPingPong) {
+          return {
+            allowed: false, code: 'ping_pong', escalateToHuman: true,
+            reason: `task ${taskId} bounced ${pair} times between ${from} and ${to} (limit ${maxPingPong})`,
+          };
         }
         return { allowed: true };
       } catch (error) {
@@ -223,8 +244,6 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
         return { allowed: false, code: 'guard_error', escalateToHuman: true, reason: guardError(error) };
       }
     },
-
-    admitTurn,
 
     runExclusive<T>(roomId: string, work: (signal: AbortSignal) => Promise<T>): Promise<T> {
       if (typeof roomId !== 'string' || roomId === '') {
@@ -284,6 +303,7 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
         cancelledRunning = true;
       }
       let cancelledQueued = 0;
+      if (authorizeSensitive('room.cancel_queue', actor) !== undefined) return { cancelledRunning, cancelledQueued };
       for (const turn of lane.queued) {
         turn.cancelled = true;
         turn.controller.abort();
@@ -294,17 +314,7 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
       return { cancelledRunning, cancelledQueued };
     },
 
-    authorizeSensitive(op: RoomSensitiveOperation, actor: GuardActor | undefined): string | undefined {
-      try {
-        if (!requireHuman(actor)) return `${op} requires a human actor`;
-        const account = typeof actor?.accountId === 'string' ? actor.accountId.trim() : '';
-        if (account === '') return `${op} requires an identified account`;
-        if (!sensitive.has(account)) return `${op} is not allowed for this account`;
-        return undefined;
-      } catch (error) {
-        return guardError(error);
-      }
-    },
+    authorizeSensitive,
 
     stats(): RoomGuardStats {
       return { lanes: lanes.size, rateWindows: windows.size };
