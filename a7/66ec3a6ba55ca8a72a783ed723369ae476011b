@@ -1,0 +1,59 @@
+basic/cli/tests/plugin-runtime/agent/publication-coordinator.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 1,22,67,69-70
+packages/im/agent/src/workroom-runtime/workroom-database-models.ts
+  s_99b3f2eaf04135::t_30f087dc3f126e 1-42
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 129,233,255
+packages/im/agent/tests/workroom/database-journal-integrity.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 11,101
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 13,64
+packages/im/agent/src/workroom-runtime/workroom-bot-identity.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 1-78
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 9,78-85
+packages/im/agent/tests/routing/workroom-bot-route.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 2
+packages/im/agent/src/workroom-runtime/workroom-host-port.ts
+  s_99b3f2eaf04135::t_0b474d756b2664 1-141
+packages/im/agent/src/index.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 47
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 26
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 24,103-106,109-110,112-120,132-136
+packages/im/agent/src/plugin-runtime/index.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 6,17-21
+packages/im/agent/tests/activate-ai-database-storage.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 5-6,33-43
+  s_99b3f2eaf04135::t_14d447117aaf9c 44-45
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 3-13,16-18,24-33,47-50
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_99b3f2eaf04135::t_0e3fd2e4b473df 431-452,454-472,475,478
+  s_99b3f2eaf04135::t_bde94f0e3d2ff3 453
+  s_99b3f2eaf04135::t_1aef82308538a0 583,650,767,812,908,961,1091
+  s_99b3f2eaf04135::t_9fdeb67a9717a5 45-62,576,644,761,796,901,954,1085
+packages/im/agent/src/workroom-runtime/workroom-database-storage.ts
+  s_99b3f2eaf04135::t_0fefd6048f7cd3 1-54
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 26-27,43,133,135-136,144-147,154
+tests/snapshots/api-surface.json
+  s_99b3f2eaf04135::t_76775cbb81e88f 205
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a766ec3a6ba55ca8a72a783ed723369ae476011b",
+  "prompts": {},
+  "sessions": {
+    "s_99b3f2eaf04135": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdf2548b-703f-42e3-bb9c-56b34bffa7e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
