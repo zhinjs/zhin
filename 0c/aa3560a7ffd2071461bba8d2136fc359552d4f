@@ -1,0 +1,19 @@
+packages/im/agent/src/init/runtime-management-commands.ts
+  s_78b41e038f9eba::t_89c4de2501a137 120-122,136
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0caa3560a7ffd2071461bba8d2136fc359552d4f",
+  "prompts": {},
+  "sessions": {
+    "s_78b41e038f9eba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-afadb3ff2b2600275",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
