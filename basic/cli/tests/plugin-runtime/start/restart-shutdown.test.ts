@@ -80,7 +80,34 @@ describe('process restart shutdown', () => {
       expect(await portIsFree(port)).toBe(true);
     }
   }, 120_000);
+
+  it('a restart requested while the first generation is still starting exits with the restart code (#742)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'zhin-restart-slow-'));
+    roots.push(root);
+    await cp(join(fixtureSource, 'package.json'), join(root, 'package.json'));
+    // HTTP listens before host.start() finishes; a slow plugin setup makes the
+    // restart request deterministically land inside the start transaction.
+    await writeFile(join(root, 'plugin.ts'), slowStartPlugin);
+    await symlink(join(fixtureSource, 'node_modules'), join(root, 'node_modules'), 'junction');
+    const port = await freePort();
+    await writeFile(join(root, 'zhin.config.yml'), `plugins: {}\nhttp:\n  host: 127.0.0.1\n  port: ${port}\n  token: restart-token\n`);
+    const result = await startAndRestart(root, port);
+    expect(result.killed, result.output).toBe(false);
+    expect(result.output).toContain('restart-requested');
+    expect(result.output).not.toContain('Root lifecycle is stopping');
+    expect(result.code, result.output).toBe(75);
+    expect(await portIsFree(port)).toBe(true);
+  }, 60_000);
 });
+
+const slowStartPlugin = `import { definePlugin } from 'zhin.js';
+export default definePlugin({
+  name: 'slow-start',
+  async setup() {
+    await new Promise(resolve => setTimeout(resolve, 3_000));
+  },
+});
+`;
 
 const hangingPlugin = `import { definePlugin } from 'zhin.js';
 export default definePlugin({

@@ -381,6 +381,16 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
     }
     snapshot = await host.start();
   } catch (error) {
+    // #742: HTTP listens before the first generation is committed, so a
+    // Console restart or a signal can request stop while host.start() is
+    // still running. stop() aborts that start transaction on purpose; the
+    // rejection is the expected consequence, not a startup failure. Let the
+    // stop that is already running finish (it owns the cleanup) and return
+    // normally so the requested exit code (75 restart, 130 signal) stands.
+    if (stopping) {
+      await stopping;
+      return;
+    }
     disposeReadiness();
     disposeConsoleControlPlane();
     await httpHost.close().catch(() => undefined);
