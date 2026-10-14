@@ -1,0 +1,147 @@
+.changeset/agent-progress-aware-tool-budget.md
+  s_2ebbb5e3caac4a::t_226e765da51498 1-7
+.changeset/agent-subagent-turn-policy.md
+  s_2ebbb5e3caac4a::t_56250da8fbff27 1-7
+.changeset/docs-remaining-pages.md
+  s_2ebbb5e3caac4a::t_5d3766ced2ab82 1-4
+docs/advanced/activity-feedback.md
+  s_2ebbb5e3caac4a::t_b90ccea7043649 1-4,6-10
+docs/advanced/assistant-home-setup.md
+  s_2ebbb5e3caac4a::t_d7c8c2f85c445a 1-5,8,10-12,16-18,22-29,55,57-58,66,70,72-75,88-102,105-106,119,121,123-124,126-127,129,143,145,147-148
+docs/ai/agent.md
+  s_2ebbb5e3caac4a::t_efcdfdf392470d 2-3,8,10,12-28,48-54,56,58,60,69,74,78,80,82,84,86,90-92,94,107,109,111,116,118-120,123,127-199,201-251,255-259,261-270,292-302,304-311,329-333,335-338,340,342,368-371,373-375,377-383,385,387,391-393
+docs/ai/speech.md
+  s_2ebbb5e3caac4a::t_e265945c4c6449 2-3,8,10-13,23-36
+docs/ai/structured-decisions.md
+  s_2ebbb5e3caac4a::t_172f8cefd04333 2-3,8,10-13,15,17-21,30-40,42,83
+docs/cli/index.md
+  s_2ebbb5e3caac4a::t_77b15e564236d9 2-3,8,11,14,16-31,43-49,51,62,68,70,73-75,78-80,82,85-91,94-96,98,101-106,109,111-145,152-153,160,162,172,179,181,184,187,189,192,195,197,199,202-205,208,210,213-218,221,223-230,232,234-242,244,246,248,254,256,262,264,266,278-284,286-288,301-306,312-313,315
+docs/cli/runtime.md
+  s_2ebbb5e3caac4a::t_ddac04d73b1c7b 2-3,6,8,10,13-14,16-21,23-24,27-33,55-58,116
+docs/concepts/capability-seams.md
+  s_2ebbb5e3caac4a::t_b9dbf473024738 1-5,8,10,12-14,16,18-23,25,92,124-151,160,168,170,172-175
+docs/configuration/generated.md
+  s_2ebbb5e3caac4a::t_99775742b56be3 87-101
+docs/en/advanced/activity-feedback.md
+  s_2ebbb5e3caac4a::t_21d93c4d03dd2f 2-3,8-10
+docs/en/ai/agent.md
+  s_2ebbb5e3caac4a::t_b9ded224c1a49f 2-3,6,8,10,12-28,36-37,40-42,45,48-54,56,58,60,65-66,69,74,78,80,82,84,86,88,90-92,100-101,104,107,111,116,118-120,123,127-131,133-137,139,141,145-148,150,152,156,159,161,163,165,173-174,177,184,187-189,191,193,195,197,199,201,208,210,215,225,231,234-385,387,391-393
+docs/en/ai/speech.md
+  s_2ebbb5e3caac4a::t_3d8728c4f31f64 2-3,8,10-13,23-36
+docs/en/cli/index.md
+  s_2ebbb5e3caac4a::t_dc7675292f6c13 2-3,6,8,11,14,16-31,43-49,51,62,68,70,73-75,78-80,82,85-91,94-96,98,101-122,125,127,130,133-153,158-160,162,170,172,179,181,184,187,189,192,195,197-199,202-205,208,210,213-218,221,223-230,232,234-242,244,246,248,254,256,262,264,266,270,272,278-284,286,288,291-298,301-306,310,312-313,315
+docs/en/cli/runtime.md
+  s_2ebbb5e3caac4a::t_eeb94bfebca583 2-3,6,8,10,13-14,16-21,23-24,27-33,55-58,116
+docs/en/concepts/capability-seams.md
+  s_2ebbb5e3caac4a::t_579802f1f89a58 1-4,6,8,10,12-14,16,18-23,25,92,125-152,160,168,170,172-175
+docs/en/configuration/generated.md
+  s_2ebbb5e3caac4a::t_ba6aba339eeec2 87-101
+docs/en/examples/index.md
+  s_2ebbb5e3caac4a::t_b739ab36481c8e 1-18,20-22,26,32,41,43,45,53,58-60,62-63,66-68,70-72,81-83,85,87,89,92,94-95,98-99,101,103-105,107,110-111,114-118,120-122
+docs/en/operations/docs-insights.md
+  s_2ebbb5e3caac4a::t_0a61811edac16b 2-3,8-11,76-79
+docs/en/paths/README.md
+  s_2ebbb5e3caac4a::t_304acef454b6a4 1-4,6,8,10-16,22-23
+docs/en/paths/ai-agent.md
+  s_2ebbb5e3caac4a::t_684fd0edfd5c2f 1-4,6,8,10,12-17,25,27-29,31,45-48,50,71-77,79,96,98,100-102,110,112-114,119-121,125-132,134,136-138
+docs/en/paths/console.md
+  s_2ebbb5e3caac4a::t_a3346dd2548389 1-4,6,8,10,12-18,26,34-36,40-42,44,46-48,50,52,54,56-58,60,62,64-65,67-69,71-77,79,81-83,85,87-91,93,95-97
+docs/en/paths/im-bot.md
+  s_2ebbb5e3caac4a::t_ffd3039d6bcaee 1-4,6,8,10,12-16,24,39-41,43,45,86-94,104,106,111,115,117-119,121,123-125
+docs/en/showcase/README.md
+  s_2ebbb5e3caac4a::t_91acde0f295c90 1-4,6,8,10-20
+docs/en/showcase/community-bot.md
+  s_2ebbb5e3caac4a::t_1a0d458a1895ed 1-5,8-11,21-22,84-89
+docs/en/showcase/personal-assistant.md
+  s_2ebbb5e3caac4a::t_4b5326acfd1d05 1-5,8-11,79-84
+docs/en/solutions/github-workroom.md
+  s_2ebbb5e3caac4a::t_0d05d2976a6c88 2-3,6,8,10,12-14,26-34,36-39,41,43,45-46,48-49,51,53-54
+docs/en/solutions/governed-agent.md
+  s_2ebbb5e3caac4a::t_30423e2f38c633 2-3,6,8,10,12-14,16-21,23-27,29,31-34,36,38-39
+docs/en/solutions/index.md
+  s_2ebbb5e3caac4a::t_fc99ae856a54f0 1-5,8,16-18,29-32
+docs/en/solutions/multi-endpoint-operations.md
+  s_2ebbb5e3caac4a::t_f2b529b3ef786e 2-3,6,8,10,12-13,15,17,19-24,26,28-38
+docs/examples/index.md
+  s_2ebbb5e3caac4a::t_80baa11a15774c 1-4,6,8-10,12-16,18-22,26,32,41,43,45,53,58-60,62-63,66-70,72,81-83,85,87,89,92,94-95,98-99,101,103-105,107,114-118,120-122
+docs/operations/docs-insights.md
+  s_2ebbb5e3caac4a::t_007e99a4884a34 2-3,8-11,76-79
+docs/paths/README.md
+  s_2ebbb5e3caac4a::t_42aacf5fe83798 1-5,8,10,12-14,16,22-23
+docs/paths/ai-agent.md
+  s_2ebbb5e3caac4a::t_eb6c72b174e3c9 1-4,6,8,10,12-17,25,27-29,31,45-48,50,71-77,79,96,98,100-102,110,112-114,119-121,125-132,136-138
+docs/paths/console.md
+  s_2ebbb5e3caac4a::t_cd5eef1ea80079 1-4,6,8,10-18,26,34-36,40-42,44,46-48,50,52,54,56-58,60,62,64-65,67-69,71-77,79,81-83,85,87-91,95-97
+docs/paths/im-bot.md
+  s_2ebbb5e3caac4a::t_5ecf523911548e 1-4,6,8,10,12-16,24,39-41,43,45,86-94,104,106,111,115,117-119,123-125
+docs/showcase/README.md
+  s_2ebbb5e3caac4a::t_210cbca432914e 1-4,6,8-10,12-17,19-20
+docs/showcase/community-bot.md
+  s_2ebbb5e3caac4a::t_76c2503daef868 1-5,8-11,21-22,83-88
+docs/showcase/personal-assistant.md
+  s_2ebbb5e3caac4a::t_03591cd1f0fcc0 1-5,8-11,72,75,80-85
+docs/solutions/github-workroom.md
+  s_2ebbb5e3caac4a::t_bccc89532a2718 2-3,6,8,10,12-14,28-32,34,36-39,41,43,45-46,48-49,51,53-54
+docs/solutions/governed-agent.md
+  s_2ebbb5e3caac4a::t_09116f129c820e 2-3,6,8,10,12-14,17-19,23-27,31-36,38-39
+docs/solutions/governed-software-delivery.md
+  s_2ebbb5e3caac4a::t_6fbdeb0dda7401 2-3,6,8,10-23,94-98
+docs/solutions/index.md
+  s_2ebbb5e3caac4a::t_a6408b47dfdf82 1-4,6-8,16-18,29-32
+docs/solutions/multi-endpoint-operations.md
+  s_2ebbb5e3caac4a::t_e76171b10f140c 2-3,8,10,12-15,19-26,30-35,37-38
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_2ebbb5e3caac4a::t_57ebf499ed7234 70-73
+packages/im/agent/src/config/model-harness.ts
+  s_2ebbb5e3caac4a::t_326bbd7ea98b85 7-10,28-31,42-43
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_2ebbb5e3caac4a::t_0b9ea989dfc7dd 1,74-77
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_2ebbb5e3caac4a::t_0ad8d5c1ca9b37 1,45-46
+packages/im/agent/src/core/agent-core-run.ts
+  s_2ebbb5e3caac4a::t_47f3134642698d 47-54,207-214,548,621-646,705,716,730,749,760-761,776,808,817-902,905-936,1000-1004
+packages/im/agent/src/core/exploration-budget.ts
+  s_2ebbb5e3caac4a::t_3991536b9abae8 18-19,29,32
+packages/im/agent/src/core/progress-reporter.ts
+  s_2ebbb5e3caac4a::t_de19c05ec68288 1-135
+packages/im/agent/src/core/turn-progress.ts
+  s_2ebbb5e3caac4a::t_49d5aec46bb45d 1-222
+packages/im/agent/src/deferred-worker-runner.ts
+  s_2ebbb5e3caac4a::t_477f5d2a6c6494 8,39-43,46-47,190-192
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_2ebbb5e3caac4a::t_1b7025357eb88a 29-33,102-112,115-117,186,235,563-590
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_2ebbb5e3caac4a::t_4e47c17de5c44f 1-223
+packages/im/agent/tests/core/progress-budget.test.ts
+  s_2ebbb5e3caac4a::t_2994639cf71eb8 1-354
+packages/im/agent/tests/deferred-worker-runner.test.ts
+  s_2ebbb5e3caac4a::t_4bcc5b88b0eaa5 144-148,188-226,228
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  s_2ebbb5e3caac4a::t_5f766eb8c26feb 1-264
+packages/im/ai/src/llm/agent-loop.ts
+  s_2ebbb5e3caac4a::t_c2bfdec073e4c2 37-41,260-263
+packages/im/ai/src/types.ts
+  s_2ebbb5e3caac4a::t_89861cf73b19e6 331-334,475-492
+packages/im/core/tests/plugin-runtime/conversation-context-hygiene.test.ts
+  s_2ebbb5e3caac4a::t_9dda003b11e0e8 96-108,110
+packages/im/runtime/src/host-config-schema.json
+  s_2ebbb5e3caac4a::t_de950b3449930e 148-174
+tests/docs/config-enum-reference.test.ts
+  s_2ebbb5e3caac4a::t_ec0ad558152091 74,103
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "141a4d497945b65c1038146670e9e7459e9e4b93",
+  "prompts": {},
+  "sessions": {
+    "s_2ebbb5e3caac4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ea2d93-d1b0-4f9c-94d6-f3e31febe303",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
