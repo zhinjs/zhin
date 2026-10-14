@@ -97,6 +97,24 @@ export {
 } from './validate-tool-call.js';
 
 export { agentLoop, agentContextFrom } from './agent-loop.js';
+export {
+  DEFAULT_PROVIDER_RESILIENCE,
+  ProviderRequestError,
+  classifyProviderError,
+  computeBackoffDelay,
+  createResilientCompletionPort,
+  describeProviderFailure,
+  isProviderFailureMessage,
+  parseRetryAfterMs,
+  resolveProviderResilienceConfig,
+} from './provider-resilience.js';
+export type {
+  ProviderErrorClassification,
+  ProviderErrorKind,
+  ProviderResilienceConfig,
+  ProviderResilienceEvent,
+  ResilientCompletionOptions,
+} from './provider-resilience.js';
 export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';
 export type {
   AgentLoopConfig,

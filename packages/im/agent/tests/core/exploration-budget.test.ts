@@ -37,7 +37,7 @@ describe('ExplorationBudget', () => {
 describe('minimax model harness preset', () => {
   it('applies to direct and routed MiniMax M-series models', () => {
     for (const [provider, model] of [['minimax', 'minimax-m3'], ['openrouter', 'minimax/minimax-m3'], ['minimax', 'MiniMax-M2']]) {
-      expect(resolveModelHarness(provider!, model!)).toEqual({ explorationBudget: 5, explorationGuidance: true });
+      expect(resolveModelHarness(provider!, model!)).toEqual({ explorationBudget: 5, explorationGuidance: true, emptyReplyRetries: 1 });
     }
     expect(resolveModelHarness('minimax', 'abab6.5s-chat')).toEqual({});
   });
@@ -46,6 +46,6 @@ describe('minimax model harness preset', () => {
     expect(resolveModelHarness('minimax', 'minimax-m3').maxIterations).toBeUndefined();
     expect(resolveModelHarness('minimax', 'minimax-m3', {
       models: { 'minimax:minimax-m3': { explorationBudget: 0, explorationGuidance: false, maxIterations: 20 } },
-    })).toEqual({ maxIterations: 20, explorationBudget: 0, explorationGuidance: false });
+    })).toEqual({ maxIterations: 20, explorationBudget: 0, explorationGuidance: false, emptyReplyRetries: 1 });
   });
 });
