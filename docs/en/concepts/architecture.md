@@ -1,6 +1,24 @@
-# Layered Architecture
+---
+title: "Layered Architecture"
+description: "Which packages make up Zhin.js, how they are layered, and what plugin authors and contributors each need to respect"
+---
 
-`pnpm check:architecture` catches a class of errors in CI: a lower-layer package importing an upper-layer package. In this pnpm workspace monorepo, the dependency direction between packages is **unidirectional downward** -- upper layers may depend on lower layers, but lower layers never know about upper layers. This direction is enforced by harness checks, not a verbal agreement.
+# Layered architecture
+
+Zhin.js is made of dozens of small packages, but **to write bots and plugins you almost only install and import `zhin.js`**. This page explains how the packages are layered and why — for readers who want to understand the internals or contribute.
+
+## Three things to remember
+
+1. **There is one public entry.** `zhin.js` re-exports what plugin authors need: `definePlugin` from `zhin.js`, `defineCommand` and friends from subpaths such as `zhin.js/command` and `zhin.js/middleware`.
+2. **AI is optional.** The default install is the IM core only (under 10MB); `@zhin.js/agent` and `@zhin.js/ai` are optional and used through `zhin.js/agent` / `zhin.js/ai`.
+3. **Dependencies only point down.** Upper packages may depend on lower ones; lower packages never know upper ones exist. `pnpm check:architecture` enforces this in CI — it isn't just a convention.
+
+| You are… | Depend on |
+| --- | --- |
+| Writing a bot or a regular plugin | `zhin.js` only |
+| Writing AI tools | plus `@zhin.js/tool` (`npx zhin setup --ai` handles it) |
+| Writing a new kind of capability (a Feature) | only `@zhin.js/feature-kit` / `@zhin.js/plugin-runtime` — not `@zhin.js/core` |
+| Contributing to the framework itself | the layering rules below |
 
 ## Layer overview
 
@@ -53,7 +71,7 @@ flowchart BT
     rt & core & host --> cli
 ```
 
-The authoritative source for dependency relationships is each package's `package.json`. Before reading them, keep a few key facts in mind.
+Dependencies are defined by each package's `package.json`. Read the diagram from the bottom up:
 
 The foundation consists of three independent zero-dependency contracts: `@zhin.js/plugin-runtime` owns generation, snapshots, disposal, and tokens; `@zhin.js/im-contract` owns transport-neutral identities, segments, conversation events, and delivery semantics; `@zhin.js/interaction` owns typed user-interaction requests and conclusions. One layer up, `@zhin.js/feature-kit` depends only on the runtime base and provides the registration, discovery, and projection mechanism for Feature providers. Feature-layer packages (adapter / command / component / middleware / handler / tool / skill / ...) depend only on these foundation contracts and do not depend on each other.
 

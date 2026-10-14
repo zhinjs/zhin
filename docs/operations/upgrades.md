@@ -1,10 +1,22 @@
 ---
-title: 版本兼容与迁移
+title: "版本兼容与迁移"
+description: "安全升级 Zhin：兼容边界、升级前准备、执行步骤、何时回滚，以及插件作者的版本责任"
 ---
 
 # 升级 Zhin，而不是覆盖一个版本号
 
-升级同时改变包图、Feature API、配置、持久数据和运行时 generation。安全流程必须先生成计划，再备份权威状态，最后用真实运行事实验收。
+升级同时改变依赖包、Feature API、配置、持久数据和运行中的插件版本。安全的流程是：**先预演，再备份，最后用实际运行结果验收**。
+
+日常的补丁升级通常只需要：
+
+```bash
+npx zhin migrate --dry-run   # 先看会改什么
+npx zhin migrate             # 执行升级
+npx zhin doctor && pnpm test # 检查
+npx zhin runtime start --once --mode test  # 装配冒烟
+```
+
+生产环境请按下文完整流程执行，并在升级前做好备份。
 
 ## 兼容边界
 

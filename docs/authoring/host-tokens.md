@@ -1,82 +1,21 @@
-# Host Token 总览（运行时 API）
+---
+title: "Host Token 总览"
+description: "插件可以从框架取用的资源：主动发消息、数据库与小对象状态、定时任务、Agent、HTML 渲染、HTTP 路由，以及取用规则"
+---
 
-Plugin Runtime 里，插件通过 `context.resources.use(token)`（setup 期）或命令/工具的 `use(token)`（执行期）按 token 取用 Host 能力。本页索引常用 token；各 token 的方法面以对应包的类型定义为准。
+# Host Token 总览
 
-## 消息与投递
+框架提供的能力（发消息、数据库、定时任务、HTTP 路由……）都以 **token** 的形式交给插件。本页列出常用的 token、它们提供什么，以及取用规则。
 
-| Token | 注入后得到 | 关键方法 |
-| --- | --- | --- |
-| `outboundMessageToken`（`zhin.js/core/runtime` 或 `@zhin.js/core/runtime`） | `OutboundMessageService` | `send(request) → DeliveryReceipt` / `registerInteractiveHandler`；入站处理与端点内部发送不属于此公共契约 |
-| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` —— 主动出站；`sendTarget(target, content)` 按完整持久目标精确发送 |
-| `outboundRootHostToken`（`zhin.js`，仅 root） | `OutboundRootHost` | 进程级投递端口；Runtime 为每个插件绑定 `PluginOutboundHost` |
-| `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播 runtime 事件（inbox/Console 消息流的来源） |
+## 怎么取用
 
-## 持久化
-
-| Token | 注入后得到 | 关键方法 |
-| --- | --- | --- |
-| `databaseHostToken`（`zhin.js`） | `PluginDatabaseHost`（包括 root 在内均按 owner 隔离表名） | `define(name, def)` / `models.get(name)`；`state` 保存 JSON 小对象，支持 TTL 与原子更新；`select()` 须显式列名（不支持 `'*'`） |
-| `databaseRootHostToken`（`zhin.js`，仅 root） | `DatabaseHost` | 进程级宿主：Console 管理面、自定义 composition root 用 |
-
-### 完整投递目标与小对象状态
-
-`createDeliveryTarget(message)` 复制公开的 `message.conversation`：准确的 Endpoint ID、Adapter owner、会话类型与 ID、父频道和线程。结果可直接 JSON 序列化或保存到 `database.state`；它不持有 Message、客户端或旧 generation。不要自己把 ID 替换成名称或显示平台名。
+| 在哪里 | 怎么写 |
+| --- | --- |
+| `plugin.ts` 的 `setup` | `context.resources.use(token)` |
+| 命令、工具、定时任务执行时 | 执行参数里的 `use(token)` |
 
 ```ts
-import {
-  createDeliveryTarget, databaseHostToken, outboundHostToken,
-  type DeliveryTarget, type Message, type UseAccessor,
-} from 'zhin.js';
-
-async function remember(message: Message, use: UseAccessor) {
-  const target = createDeliveryTarget(message);
-  const state = use(databaseHostToken).state.forConversation(target);
-  await state.set('target', target);
-  await state.update<number>('count', (current) => (current ?? 0) + 1);
-  await state.set('recent', { text: '提醒我' }, { ttlMs: 60_000 });
-}
-
-async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
-  const outbound = use(outboundHostToken);
-  if (!outbound.sendTarget) throw new Error('当前 Host 未提供完整目标投递');
-  await outbound.sendTarget(stateTarget, '提醒到了');
-}
-```
-
-投递通过当前 operation 的 Runtime 与统一渲染／出站中间件链路。发送者的插件 owner 由 `PluginOutboundHost` 注入，目标的 Adapter owner 只负责寻址；发送者的组件和资源不会被错误地切换为适配器插件。目标端点删除或 owner 不匹配时明确拒绝，不改投同名 Bot；投递异常保留 `EndpointDeliveryError.disposition` 的 `rejected`、`not_sent`、`unknown`，不能对 `unknown` 盲目重试。
-
-`use(databaseHostToken).state` 默认按插件实例 owner 隔离。`forUser(endpoint, senderId)` 再按准确端点和用户隔离；`forConversation(target)` 再按完整会话地址（包括父频道与线程）隔离。`get<T>(key)` 返回独立 JSON 副本或 `undefined`；`set` 覆盖、`delete` 删除；`update` 使用数据库 revision 的 compare-and-swap，跨连接竞争会重新读值并重试。因此 updater 必须是同步纯函数，不能在里面发送消息、调用网络或产生其他副作用。单次更新最多重试 64 次，持续竞争时明确报错。
-
-TTL 单位为毫秒，按写入尝试时刻计算；到期后 `get` 与 `update` 视为不存在。省略 `ttlMs` 表示持久保存，更新会替换原 TTL。单值须小于 64 KiB UTF-8 JSON；函数、Date、NaN、稀疏数组、getter、隐藏属性、循环引用均被拒绝。该接口面向小对象，不替代需要查询、索引或批量事务的业务表。
-
-CLI 的原子状态支持 SQLite、MySQL、PostgreSQL，使用既有 DatabaseHost 和同一个数据库连接服务。缺少持久服务、数据库未连接或选择 MongoDB／Redis 时明确报错，不回退为内存持久化；其他方言既有的 `models` 接口不受影响。不要跨热重载保存 Store：已开始的状态操作持有 lease 并完成，退休 generation 的 Store 新操作会拒绝，应在当前执行上下文重新 `use(databaseHostToken)`。
-
-验收位于 `basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts`：真实 Runtime 发现 reminder（会话状态与持久目标）和 preferences（用户状态）两个插件的命名命令，并验证 owner 隔离、热重载和进程重建后的恢复。`persistent-state.test.ts` 验证两连接并发、多人／端点／父频道／线程隔离和 TTL；`persistent-state.live.test.ts` 在独立 MySQL／PostgreSQL 服务验证 CAS。合成发送夹具不代表真实 IM 平台投递验收。
-
-## 定时与日程
-
-| Token | 注入后得到 | 关键方法 |
-| --- | --- | --- |
-| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（包括 root 在内均按 owner 隔离） | `register({ id, cron, execute })` 返回取消函数 / `list()`；cron 为六段（秒、分、时、日、月、周） |
-| `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级日程宿主 |
-
-## Agent
-
-| Token | 注入后得到 | 关键方法 |
-| --- | --- | --- |
-| `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列举 Agent binding、提交 canonical `TurnRequest`，以及读取 Console/诊断投影；不暴露 ZhinAgent / AIService 实例 |
-| `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | Endpoint owner 提供的可信 intent resolver | 按 adapter / scene 将消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有该 resolver 能为跨参与者控制签发 `authorizedBy: 'product_policy'` |
-
-## 渲染与 HTTP
-
-| Token | 注入后得到 | 关键方法 |
-| --- | --- | --- |
-| `htmlRendererToken`（`zhin.js`） | `HtmlRendererHost` | `render(html, opts)` → png（装了 `@zhin.js/html-renderer` 时可用；未装时出站 html 段降级文本） |
-| `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console/MCP/A2A/适配器 webhook 共用） |
-
-## 用法示例
-
-```ts
+// plugin.ts：每天 9 点往指定群发"早安"
 import { definePlugin, outboundHostToken, scheduleHostToken } from 'zhin.js';
 
 interface ReminderConfig {
@@ -101,15 +40,108 @@ export default definePlugin<ReminderConfig>({
         await outbound.send({ ...target, content: '早安' });
       },
     });
-    lifecycle.add(cancel);
+    lifecycle.add(cancel); // 热重载时取消旧任务
   },
 });
 ```
 
-`target` 放在该插件的配置节点，`adapter` 是已挂载 Adapter 的实例路径，`endpointKey` 是该实例中已配置的 Endpoint 名称，不能用内部 Capability ID 替代。配置层级见[插件模型](../concepts/plugin-model.md)。取消函数加入 `lifecycle`，避免热重载后保留旧任务。
+- `target` 写在该插件的配置里。`adapter` 是已挂载适配器的实例路径，`endpointKey` 是该适配器中配置的账号名，不能用内部的 Capability ID 代替。配置层级见 [插件模型](../concepts/plugin-model.md)。
+- **必需**的 token 写进 `requires`，缺失时拒绝启动；**可选**的先用 `resources.has(token)` 判断。直接 `use()` 一个不存在的 token 会抛错（例如没装 `@zhin.js/agent` 时取 `agentHostToken`）。
+- 数据库、定时任务等 token 会**按插件实例自动隔离**。标注"仅 root"的进程级 token 只在 composition root（`basic/cli`）或显式的 root 场景使用。
 
-规则：setup 中使用 `resources.use()`，命令/工具执行中使用其上下文的 `use()`；token 未安装对应 Host 时会抛错（如未装 `@zhin.js/agent` 取 `agentHostToken`）。必需的 Host 用 `requires` 声明，可选 Host 先用 `resources.has(token)` 检查。Scope 化 token（database/schedule）按插件 owner 自动隔离，root 进程级 token 仅在 composition root（`basic/cli`）或显式 root 场景使用。
+## 常用 token
 
-AI fallback 不是 `OutboundMessageService` 的可变插件 API。composition root 在 generation setup
-中向 root resources 提供内部 `ingressRouteToken`；`ImRuntime.receive` 只从当前消息所持
-snapshot 解析该 route。普通插件不应注册或替换此 token。
+### 发消息
+
+| Token | 得到 | 主要方法 |
+| --- | --- | --- |
+| `outboundHostToken`（`zhin.js`） | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` 主动发送；`sendTarget(target, content)` 按保存下来的完整目标精确发送 |
+| `outboundMessageToken`（`zhin.js/core/runtime`） | `OutboundMessageService` | `send(request) → DeliveryReceipt`、`registerInteractiveHandler`；入站处理与端点内部发送不属于这个公开接口 |
+| `outboundRootHostToken`（`zhin.js`，仅 root） | `OutboundRootHost` | 进程级投递端口；运行时为每个插件绑定 `PluginOutboundHost` |
+| `runtimeEventPublisherToken`（`zhin.js`） | `RuntimeEventPublisher` | 广播运行时事件（收件箱与 Console 消息流的来源） |
+
+### 存数据
+
+| Token | 得到 | 主要方法 |
+| --- | --- | --- |
+| `databaseHostToken`（`zhin.js`） | `PluginDatabaseHost`（root 也按插件隔离表名） | `define(name, def)` / `models.get(name)`；`select()` 必须写明列名（不支持 `'*'`）；`state` 保存 JSON 小对象，见 [下文](#保存小对象和发送目标) |
+| `databaseRootHostToken`（`zhin.js`，仅 root） | `DatabaseHost` | 进程级数据库宿主，供 Console 管理面和自定义 composition root 使用 |
+
+### 定时任务
+
+| Token | 得到 | 主要方法 |
+| --- | --- | --- |
+| `scheduleHostToken`（`zhin.js`） | `PluginScheduleHost`（root 也按插件隔离） | `register({ id, cron, execute })` 返回取消函数；`list()`。cron 为六段：秒 分 时 日 月 周 |
+| `scheduleRootHostToken`（`zhin.js`，仅 root） | `ScheduleHost` | 进程级定时宿主 |
+
+### Agent
+
+| Token | 得到 | 主要方法 |
+| --- | --- | --- |
+| `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列出 Agent 绑定、提交 `TurnRequest`、读取 Console / 诊断信息；不暴露 ZhinAgent / AIService 实例 |
+| `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | 由账号所属插件提供的可信意图解析器 | 按平台 / 场景把消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有它能为跨参与者的控制签发 `authorizedBy: 'product_policy'` |
+
+### 渲染与 HTTP
+
+| Token | 得到 | 主要方法 |
+| --- | --- | --- |
+| `htmlRendererToken`（`zhin.js`） | `HtmlRendererHost` | `render(html, opts)` → PNG；需安装 `@zhin.js/html-renderer`，未安装时出站 HTML 降级为文字 |
+| `httpHostToken`（`@zhin.js/host-http`） | `HttpHost` | `route(method, path, handler, meta?)` 注册 HTTP 路由（Console、MCP、A2A、适配器 webhook 共用） |
+
+## 保存小对象和发送目标
+
+很多插件需要"记住在哪个群里、给谁发提醒"。`createDeliveryTarget(message)` 把收到消息的会话地址复制成一个可以序列化的对象，`database.state` 用来保存这类小对象：
+
+```ts
+import {
+  createDeliveryTarget, databaseHostToken, outboundHostToken,
+  type DeliveryTarget, type Message, type UseAccessor,
+} from 'zhin.js';
+
+async function remember(message: Message, use: UseAccessor) {
+  const target = createDeliveryTarget(message);
+  const state = use(databaseHostToken).state.forConversation(target);
+  await state.set('target', target);
+  await state.update<number>('count', (current) => (current ?? 0) + 1);
+  await state.set('recent', { text: '提醒我' }, { ttlMs: 60_000 });
+}
+
+async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
+  const outbound = use(outboundHostToken);
+  if (!outbound.sendTarget) throw new Error('当前 Host 未提供完整目标投递');
+  await outbound.sendTarget(stateTarget, '提醒到了');
+}
+```
+
+| 方法 | 作用 |
+| --- | --- |
+| `state.get<T>(key)` | 读取，返回独立的 JSON 副本或 `undefined` |
+| `state.set(key, value, { ttlMs? })` | 覆盖写入；`ttlMs` 是有效期（毫秒），省略表示永久保存 |
+| `state.update(key, fn)` | 原子更新：并发冲突时自动重读并重试 |
+| `state.delete(key)` | 删除 |
+| `state.forUser(endpoint, senderId)` | 按账号 + 用户隔离的子空间 |
+| `state.forConversation(target)` | 按完整会话地址（含父频道、线程）隔离的子空间 |
+
+::: warning update 的回调必须是纯函数
+`update` 的回调可能被重试多次（最多 64 次，持续冲突时报错），所以里面不能发消息、请求网络或产生其他副作用。
+:::
+
+::: details 更多规则
+- **目标**：`createDeliveryTarget` 复制的是公开的 `message.conversation`——准确的账号 ID、适配器、会话类型与 ID、父频道和线程。它不持有 Message、客户端或旧版本的引用。不要自己把 ID 换成名字或平台显示名。
+- **投递**：经过当前执行的运行时与统一的渲染 / 出站中间件链路。发送方插件身份由 `PluginOutboundHost` 注入，目标里的适配器只用于寻址，发送方的组件和资源不会被切换成适配器插件的。目标账号被删除或身份不匹配时明确拒绝，不会改投到同名 Bot。投递异常保留 `EndpointDeliveryError.disposition`（`rejected`、`not_sent`、`unknown`），**不要对 `unknown` 盲目重试**。
+- **隔离**：`state` 默认按插件实例隔离，`forUser` / `forConversation` 再细分。
+- **大小与类型**：单个值必须小于 64 KiB（UTF-8 JSON）；函数、Date、NaN、稀疏数组、getter、隐藏属性、循环引用都会被拒绝。它面向小对象，不能替代需要查询、索引或批量事务的业务表。
+- **TTL**：按写入尝试的时刻计算；过期后 `get` 和 `update` 视为不存在；更新会替换原来的 TTL。
+- **数据库支持**：原子状态支持 SQLite、MySQL、PostgreSQL，复用同一个数据库连接。缺少持久服务、数据库未连接，或使用 MongoDB / Redis 时会明确报错，不会退回内存存储；其他方言原有的 `models` 接口不受影响。
+- **热重载**：不要跨热重载保存 Store 对象。已开始的操作会正常完成；旧版本 Store 上的新操作会被拒绝，应在当前执行上下文里重新 `use(databaseHostToken)`。
+- **测试**：`basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts` 用真实运行时验证了 reminder（会话状态与持久目标）和 preferences（用户状态）两个插件的隔离、热重载和进程重建后的恢复；`persistent-state.test.ts` 验证并发、多人 / 账号 / 父频道 / 线程隔离与 TTL；`persistent-state.live.test.ts` 在独立的 MySQL / PostgreSQL 上验证原子更新。合成的发送夹具不代表真实平台的投递验收。
+:::
+
+## 内部 token
+
+AI 兜底回复不是插件可以修改的 API。composition root 在启动时向 root 资源提供内部的 `ingressRouteToken`，`ImRuntime.receive` 只从当前消息持有的快照中读取它。普通插件不应注册或替换这个 token。
+
+## 下一步
+
+- [definePlugin](./define-plugin.md)：在 `setup` 里使用这些资源的完整示例。
+- [模块级状态](./module-state.md)：把自己的服务也做成 token。

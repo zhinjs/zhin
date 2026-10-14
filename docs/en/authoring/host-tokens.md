@@ -1,82 +1,21 @@
-# Host Token Reference (Runtime API)
+---
+title: "Host Token Reference"
+description: "Resources a plugin can take from the framework — proactive messaging, database and small-object state, schedules, Agent, HTML rendering, HTTP routes — and the rules for using them"
+---
 
-In the Plugin Runtime, plugins consume Host capabilities by token: `context.resources.use(token)` during setup, or `use(token)` inside command/tool execution. This page indexes common tokens; method surfaces are defined in the corresponding source packages.
+# Host Token reference
 
-## Messaging & Delivery
+What the framework provides — sending messages, the database, schedules, HTTP routes… — reaches plugins as **tokens**. This page lists the common tokens, what they give you, and the rules for using them.
 
-| Token | Yields | Key methods |
-| --- | --- | --- |
-| `outboundMessageToken` (`zhin.js/core/runtime` or `@zhin.js/core/runtime`) | `OutboundMessageService` | `send(request) → DeliveryReceipt` / `registerInteractiveHandler`; ingress handling and internal endpoint sending are outside this public contract |
-| `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` — proactive outbound; `sendTarget(target, content)` sends to an exact persisted destination |
-| `outboundRootHostToken` (`zhin.js`, root only) | `OutboundRootHost` | Process-wide delivery port; Runtime binds a `PluginOutboundHost` to each plugin |
-| `runtimeEventPublisherToken` (`zhin.js`) | `RuntimeEventPublisher` | Broadcasts runtime events (source of inbox/Console message stream) |
+## How to use them
 
-## Persistence
-
-| Token | Yields | Key methods |
-| --- | --- | --- |
-| `databaseHostToken` (`zhin.js`) | `PluginDatabaseHost` (tables isolated for every owner, including root) | `define(name, def)` / `models.get(name)`; `state` stores small JSON values with TTL and atomic updates; `select()` requires explicit column names (`'*'` rejected) |
-| `databaseRootHostToken` (`zhin.js`, root only) | `DatabaseHost` | Process-wide host for Console administration and custom composition roots |
-
-### Durable destinations and small-object state
-
-`createDeliveryTarget(message)` copies the public `message.conversation`: exact Endpoint ID, Adapter owner, conversation kind/ID, parent and thread. The result can be JSON serialized or stored directly in `database.state`; it retains no Message, client or generation. Do not replace these identities with endpoint names or platform display names.
+| Where | How |
+| --- | --- |
+| `setup` in `plugin.ts` | `context.resources.use(token)` |
+| While a command, tool or schedule runs | `use(token)` on its execution argument |
 
 ```ts
-import {
-  createDeliveryTarget, databaseHostToken, outboundHostToken,
-  type DeliveryTarget, type Message, type UseAccessor,
-} from 'zhin.js';
-
-async function remember(message: Message, use: UseAccessor) {
-  const target = createDeliveryTarget(message);
-  const state = use(databaseHostToken).state.forConversation(target);
-  await state.set('target', target);
-  await state.update<number>('count', (current) => (current ?? 0) + 1);
-  await state.set('recent', { text: 'Remind me' }, { ttlMs: 60_000 });
-}
-
-async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
-  const outbound = use(outboundHostToken);
-  if (!outbound.sendTarget) throw new Error('This Host does not support durable destinations');
-  await outbound.sendTarget(stateTarget, 'Your reminder');
-}
-```
-
-Delivery uses the Runtime from the current operation and the shared rendering/outbound middleware pipeline. `PluginOutboundHost` supplies the sending plugin's owner; the destination Adapter owner only identifies the endpoint. Rendering therefore uses the sending plugin's components and resources. Missing endpoints or mismatched owners reject without redirecting to another bot with a matching name. Delivery errors preserve `EndpointDeliveryError.disposition`: `rejected`, `not_sent`, or `unknown`. Do not blindly retry an unknown delivery.
-
-`use(databaseHostToken).state` isolates values by plugin instance owner. `forUser(endpoint, senderId)` adds exact endpoint/user isolation; `forConversation(target)` adds the complete conversation address, including parent and thread. `get<T>(key)` returns a detached JSON copy or `undefined`; `set` replaces and `delete` removes. `update` compares database revisions atomically and rereads/retries after cross-connection contention. Its updater must be a synchronous pure function: no message sending, network calls or other side effects. Sustained contention fails explicitly after 64 attempts.
-
-TTL is in milliseconds from the write attempt; expired values are absent for both `get` and `update`. Omitting `ttlMs` stores persistently, replacing the previous TTL. Values must be smaller than 64 KiB of UTF-8 JSON. Functions, Dates, NaN, sparse arrays, getters, hidden properties and cycles are rejected. Use business tables for queries, indexes or multi-row transactions.
-
-The CLI implements atomic state for SQLite, MySQL and PostgreSQL on the existing DatabaseHost and database service. Missing persistence, disconnected databases, MongoDB and Redis fail explicitly without an in-memory persistence fallback; other dialects' existing model APIs are unchanged. Do not retain a Store across hot reload: an operation that already started holds a lease and completes, while new operations on a retired generation's Store reject. Resolve it again with `use(databaseHostToken)` in the current execution context.
-
-`basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts` discovers two actual Runtime plugins and their named commands: reminder uses conversation state/durable targets, while preferences uses user state. It verifies owner isolation, hot reload and restoration after rebuilding the process runtime. `persistent-state.test.ts` covers independent connections, users/endpoints/parents/threads and TTL; `persistent-state.live.test.ts` verifies CAS against independent MySQL/PostgreSQL services. Synthetic outbound fixtures do not prove real IM platform delivery.
-
-## Scheduling
-
-| Token | Yields | Key methods |
-| --- | --- | --- |
-| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated for every owner, including root) | `register({ id, cron, execute })` returns a cancel function / `list()`; cron has six fields (second, minute, hour, day, month, weekday) |
-| `scheduleRootHostToken` (`zhin.js`, root only) | `ScheduleHost` | Process-wide schedule host |
-
-## Agent
-
-| Token | Yields | Key methods |
-| --- | --- | --- |
-| `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | Enumerate Agent bindings, submit canonical `TurnRequest`s, and read Console/diagnostic projections; concrete ZhinAgent / AIService instances are not exposed |
-| `turnIntentResolverToken` (`@zhin.js/agent/runtime`) | Trusted intent resolver provided by the endpoint owner | Resolve messages by adapter/scene to `supersede`, `new`, `steer`, `follow_up`, or `observe`; only this resolver may issue `authorizedBy: 'product_policy'` for cross-participant control |
-
-## Rendering & HTTP
-
-| Token | Yields | Key methods |
-| --- | --- | --- |
-| `htmlRendererToken` (`zhin.js`) | `HtmlRendererHost` | `render(html, opts)` → png (requires `@zhin.js/html-renderer`; outbound html degrades to text otherwise) |
-| `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` — shared by Console/MCP/A2A/adapter webhooks |
-
-## Example
-
-```ts
+// plugin.ts: send "Good morning" to a group every day at 9:00
 import { definePlugin, outboundHostToken, scheduleHostToken } from 'zhin.js';
 
 interface ReminderConfig {
@@ -101,16 +40,108 @@ export default definePlugin<ReminderConfig>({
         await outbound.send({ ...target, content: 'Good morning' });
       },
     });
-    lifecycle.add(cancel);
+    lifecycle.add(cancel); // cancel the old job on hot reload
   },
 });
 ```
 
-Place `target` in this plugin's configuration node. `adapter` is the mounted Adapter instance path, and `endpointKey` is the configured Endpoint name within that instance; do not substitute an internal Capability ID. See [Plugin model](../concepts/plugin-model.md) for configuration layers. Add the cancel function to `lifecycle` so hot reload does not leave an old job running.
+- `target` lives in this plugin's config. `adapter` is the instance path of a mounted adapter and `endpointKey` an account name configured in it — not an internal Capability ID. Config layout: [Plugin model](../concepts/plugin-model.md).
+- Put **required** tokens in `requires` so startup refuses when they're missing; check **optional** ones with `resources.has(token)` first. Calling `use()` on a missing token throws (e.g. `agentHostToken` without `@zhin.js/agent` installed).
+- Database, schedule and similar tokens are **isolated per plugin instance automatically**. Process-level tokens marked "root only" are for the composition root (`basic/cli`) or explicit root scenarios.
 
-Rules: use `resources.use()` in setup and the context's `use()` during command/tool execution. Missing Host tokens throw (e.g. `agentHostToken` without `@zhin.js/agent`). Declare required Hosts with `requires`; check optional Hosts with `resources.has(token)` first. Scoped tokens (database/schedule) isolate data per plugin owner automatically; root-level process tokens are for the composition root (`basic/cli`) or explicit root scenarios only.
+## Common tokens
 
-AI fallback is not a mutable `OutboundMessageService` plugin API. During generation setup,
-the composition root provides the internal `ingressRouteToken` in root resources;
-`ImRuntime.receive` resolves it only from the snapshot held by that message. Regular
-plugins must not register or replace this token.
+### Sending messages
+
+| Token | You get | Main methods |
+| --- | --- | --- |
+| `outboundHostToken` (`zhin.js`) | `OutboundHost` | `send({ adapter, endpointKey, conversation, content })` for proactive sends; `sendTarget(target, content)` sends precisely to a saved full target |
+| `outboundMessageToken` (`zhin.js/core/runtime`) | `OutboundMessageService` | `send(request) → DeliveryReceipt`, `registerInteractiveHandler`; inbound handling and endpoint-internal sending aren't part of this public contract |
+| `outboundRootHostToken` (`zhin.js`, root only) | `OutboundRootHost` | Process-level delivery port; the runtime binds a `PluginOutboundHost` for each plugin |
+| `runtimeEventPublisherToken` (`zhin.js`) | `RuntimeEventPublisher` | Broadcast runtime events (the source of the inbox and Console message streams) |
+
+### Storing data
+
+| Token | You get | Main methods |
+| --- | --- | --- |
+| `databaseHostToken` (`zhin.js`) | `PluginDatabaseHost` (table names isolated per plugin, root included) | `define(name, def)` / `models.get(name)`; `select()` needs explicit column names (no `'*'`); `state` stores small JSON objects — see [below](#saving-small-objects-and-delivery-targets) |
+| `databaseRootHostToken` (`zhin.js`, root only) | `DatabaseHost` | Process-level database host for the Console admin surface and custom composition roots |
+
+### Schedules
+
+| Token | You get | Main methods |
+| --- | --- | --- |
+| `scheduleHostToken` (`zhin.js`) | `PluginScheduleHost` (isolated per plugin, root included) | `register({ id, cron, execute })` returns a cancel function; `list()`. Six-field cron: sec min hour day month weekday |
+| `scheduleRootHostToken` (`zhin.js`, root only) | `ScheduleHost` | Process-level schedule host |
+
+### Agent
+
+| Token | You get | Main methods |
+| --- | --- | --- |
+| `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | List Agent bindings, submit a `TurnRequest`, read Console / diagnostic projections; doesn't expose ZhinAgent / AIService instances |
+| `turnIntentResolverToken` (`@zhin.js/agent/runtime`) | A trusted intent resolver provided by the account's owning plugin | Resolves a message to `supersede`, `new`, `steer`, `follow_up` or `observe` by platform / scene; only it may issue `authorizedBy: 'product_policy'` for cross-participant control |
+
+### Rendering and HTTP
+
+| Token | You get | Main methods |
+| --- | --- | --- |
+| `htmlRendererToken` (`zhin.js`) | `HtmlRendererHost` | `render(html, opts)` → PNG; requires `@zhin.js/html-renderer`, otherwise outbound HTML falls back to text |
+| `httpHostToken` (`@zhin.js/host-http`) | `HttpHost` | `route(method, path, handler, meta?)` registers HTTP routes (shared by Console, MCP, A2A and adapter webhooks) |
+
+## Saving small objects and delivery targets
+
+Many plugins need to remember "which group, for whom". `createDeliveryTarget(message)` copies the incoming message's conversation address into a serializable object, and `database.state` stores small objects like it:
+
+```ts
+import {
+  createDeliveryTarget, databaseHostToken, outboundHostToken,
+  type DeliveryTarget, type Message, type UseAccessor,
+} from 'zhin.js';
+
+async function remember(message: Message, use: UseAccessor) {
+  const target = createDeliveryTarget(message);
+  const state = use(databaseHostToken).state.forConversation(target);
+  await state.set('target', target);
+  await state.update<number>('count', (current) => (current ?? 0) + 1);
+  await state.set('recent', { text: 'remind me' }, { ttlMs: 60_000 });
+}
+
+async function deliver(stateTarget: DeliveryTarget, use: UseAccessor) {
+  const outbound = use(outboundHostToken);
+  if (!outbound.sendTarget) throw new Error('This Host does not support full-target delivery');
+  await outbound.sendTarget(stateTarget, 'Reminder!');
+}
+```
+
+| Method | Purpose |
+| --- | --- |
+| `state.get<T>(key)` | Read; returns an independent JSON copy or `undefined` |
+| `state.set(key, value, { ttlMs? })` | Overwrite; `ttlMs` is a lifetime in milliseconds, omitted means permanent |
+| `state.update(key, fn)` | Atomic update; re-reads and retries on concurrent conflicts |
+| `state.delete(key)` | Delete |
+| `state.forUser(endpoint, senderId)` | A sub-space isolated by account + user |
+| `state.forConversation(target)` | A sub-space isolated by full conversation address (incl. parent channel and thread) |
+
+::: warning update callbacks must be pure
+An `update` callback may run several times (up to 64 retries, then it errors under sustained contention), so it must not send messages, call the network or have other side effects.
+:::
+
+::: details More rules
+- **Targets**: `createDeliveryTarget` copies the public `message.conversation` — exact account ID, adapter, conversation kind and ID, parent channel and thread. It holds no Message, client or old-version reference. Don't replace IDs with names or platform display names yourself.
+- **Delivery**: goes through the current execution's runtime and the unified rendering / outbound middleware chain. The sending plugin's identity is injected by `PluginOutboundHost`; the adapter in the target is used only for addressing, so the sender's components and resources never switch to the adapter plugin's. A deleted target account or identity mismatch is refused explicitly — it never redirects to a bot with the same name. Delivery errors keep `EndpointDeliveryError.disposition` (`rejected`, `not_sent`, `unknown`); **never blindly retry `unknown`**.
+- **Isolation**: `state` is isolated per plugin instance by default; `forUser` / `forConversation` narrow it further.
+- **Size and types**: a value must be under 64 KiB of UTF-8 JSON; functions, Date, NaN, sparse arrays, getters, hidden properties and cycles are rejected. It's for small objects, not a replacement for business tables that need queries, indexes or batch transactions.
+- **TTL**: measured from the write attempt; after expiry `get` and `update` treat the key as absent; an update replaces the previous TTL.
+- **Database support**: atomic state supports SQLite, MySQL and PostgreSQL over the same database connection. Missing persistence, a disconnected database, or MongoDB / Redis report an explicit error rather than falling back to memory; other dialects' existing `models` API is unaffected.
+- **Hot reload**: don't keep a Store across hot reloads. Operations already started finish; new operations on an old version's Store are refused — `use(databaseHostToken)` again in the current execution context.
+- **Tests**: `basic/cli/tests/plugin-runtime/persistent-state-runtime.test.ts` uses the real runtime to verify isolation, hot reload and recovery after process restart for the reminder (conversation state and saved targets) and preferences (user state) plugins; `persistent-state.test.ts` covers concurrency, isolation by user / account / parent channel / thread, and TTL; `persistent-state.live.test.ts` verifies atomic updates on real MySQL / PostgreSQL. The synthetic send fixtures are not real platform delivery acceptance.
+:::
+
+## Internal tokens
+
+The AI fallback reply is not a plugin-modifiable API. The composition root provides an internal `ingressRouteToken` to root resources at startup, and `ImRuntime.receive` reads it only from the snapshot the current message holds. Regular plugins must not register or replace it.
+
+## Next steps
+
+- [definePlugin](./define-plugin.md): full examples of using these resources in `setup`.
+- [Module-level state](./module-state.md): turn your own services into tokens.

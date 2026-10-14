@@ -1,52 +1,64 @@
 ---
-title: Complete Plugin Delivery
+title: "Complete Plugin Delivery"
+description: "Turn a working plugin into one that is configurable, hot-reloadable, tested and publishable to npm — design, implementation, local acceptance, tests and the release checklist"
 ---
 
-# From business capability to a publishable plugin
+# Complete plugin delivery
 
-Use this after the first command, when the plugin must become configurable, hot-reloadable, testable, and publishable. Success means installation, runtime, governance, observability, and release form one loop.
+This page is for authors who have a first command working and now want to **hand the plugin to other people**. The goal is more than "the code runs": others can install and configure it, failures behave predictably, it's observable in Console, and it can be published to npm.
 
-## 1. Write the delivery contract
+Work through the six steps below; each ends with questions you can check yourself against.
 
-List inputs, outputs, side effects, and acceptance before implementation. Choose one authoring surface per capability: convention files for one capability, `plugin.ts` for shared lifecycle, and a Feature only for a new ecosystem contract.
+## 1. Write down what the plugin does
 
-| Need | Surface |
+Before coding, list what users send, what the plugin returns, its side effects (database writes, messages, external APIs) and how you'll verify it. Then pick **one** style per capability:
+
+| Need | Where it goes |
 | --- | --- |
-| Explicit text command | `commands/*/index.ts` |
-| Inbound orchestration | `middlewares/*/index.ts` / `handlers/*/index.ts` |
-| Rich message output | `components/*/index.tsx` |
-| Agent behavior | `tools`, `prompt-sections`, `skills` |
-| Database, schedules, proactive delivery | `plugin.ts` + Host tokens |
+| Commands users type | `commands/*/index.ts` |
+| Handling every message or platform event | `middlewares/*/index.ts` / `handlers/*/index.ts` |
+| Cards and other rich messages | `components/*/index.tsx` |
+| Actions and background knowledge for the AI | `tools/`, `prompt-sections/`, `skills/` |
+| Database, schedules, proactive messages | `setup` in `plugin.ts`, via framework resources (Host tokens) |
 
-## 2. Establish package and runtime topology
+One capability goes in a convention directory; shared resources or lifecycle go in `plugin.ts`; write a Feature only when defining a new kind of capability for the whole ecosystem.
 
-`package.json#zhin` declares the plugin entry, Feature dependencies, and child instances. `zhin.config.yml` supplies values; it does not install packages or mount Features.
+## 2. Declare the package structure
 
-Published packages must use a JavaScript entry. A source Root Plugin may use `./plugin.ts`. Keep optional capabilities as optional peers and degrade explicitly with `resources.has(token)`.
+- `package.json#zhin` declares the plugin entry, the Features it uses, and child plugins.
+- `zhin.config.yml` only provides config **values** — it doesn't install packages or enable Features.
+- Plugins published to npm must use a JavaScript entry (`./plugin.js`); local projects can use `./plugin.ts` directly. See [definePlugin · Development entry vs. npm entry](./define-plugin.md#development-entry-vs-npm-entry).
+- Declare optional capabilities (database, HTML rendering…) as optional peers, check them with `context.resources.has(token)` in `setup`, and degrade explicitly when missing.
 
-## 3. Design configuration
+## 3. Design the config
 
-For trusted plugins, `definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints, and Console form annotations together, with types inferred through `Schema.Output`. A root `schema.json` is another single-source option; defining both is rejected. Isolated plugins use only `schema.json`. See [one configuration declaration](./define-plugin#one-configuration-declaration). Root config reads `plugin:`, while child instances read `plugins.<instanceKey>`. Reference secrets with `${VAR}`; never place them in defaults or examples.
+`definePlugin({ config: Schema.object(...) })` declares defaults, types, constraints and Console form hints in one place, with types inferred via `Schema.Output`. A root `schema.json` works too, but use only one of the two (`isolated` plugins must use `schema.json`). See [definePlugin · Read config](./define-plugin.md#read-config).
 
-For every change, answer whether it needs a new generation, whether the old generation keeps serving on failure, and how Console proves publication.
+- Your bot itself reads the `plugin:` section; child plugins read `plugins.<instanceKey>`.
+- Reference secrets with `${VAR}`; never put them in Schema defaults or example repos.
 
-## 4. Implement capability and lifecycle
+Check: after changing a setting, does the plugin need to reload? If the new config is invalid, does the old one stay in effect? How do you confirm in Console that the new value is live?
 
-Commands own explicit calls, middleware owns inbound order, and components own portable rich messages. Tools expose actions to the model. Prompt Sections add context but never grant tool or data authority.
+## 4. Implement capabilities and manage lifecycle
 
-Put cleanup from connections, timers, and Host registrations into `lifecycle`. Use `handoff` for resources that must prove readiness before publication. A failed candidate must not alter the serving generation.
+- Commands answer explicit user calls; middleware processes inbound messages in order; components produce rich messages that render on every platform.
+- Tools declare actions the AI can take; Prompt Sections only add context and **cannot** grant tool or data permissions.
+- Connections, timers and cleanup functions returned by framework resources go into `lifecycle` (`context.lifecycle.add(...)`) and are released automatically on hot reload.
+- Resources that must connect successfully before the switch to a new version is allowed are registered with `handoff`. A new version failing to prepare must never affect the old version still serving.
 
-## 5. Accept locally
+See [definePlugin · Release resources on hot reload](./define-plugin.md#release-resources-on-hot-reload).
 
-1. Prove the minimal command, component, and Agent path in Sandbox.
-2. Inspect owner, source, order, and current generation in Runtime Capabilities.
-3. Edit one capability file to prove file-level HMR; introduce invalid config and prove the old generation stays live.
-4. Verify approval, cancellation, and failure terminal states for side-effecting Tools.
-5. Restart Runtime and verify database, session, and schedule recovery contracts.
+## 5. Local acceptance
+
+1. In the Sandbox, exercise the simplest path of each command, component and AI feature.
+2. In Console's Runtime Capabilities, check each capability's owning plugin, source, order and current version.
+3. Edit one capability file and confirm only it reloads; break the config once on purpose and confirm the old version keeps serving.
+4. For tools with side effects, verify approval, cancellation and the failure outcome.
+5. Restart the bot and confirm the database, conversations and schedules recover as intended.
 
 ## 6. Test and publish
 
-Cover pure functions, capability discovery, one Runtime integration, and one failure path. Platform plugins should also use the adapter harness for Endpoint lifecycle and message normalization.
+At minimum a plugin needs: unit tests for pure functions, a "capabilities are discovered" test, one full runtime integration test, and one failure-path test. Platform adapters should also use the adapter harness to verify connection lifecycle and message conversion.
 
 ```bash
 pnpm build
@@ -55,13 +67,17 @@ pnpm check:plugin-runtime-api
 pnpm check:plugin-capability-publish
 ```
 
-Before release, inspect `files`, ESM entry points, peer dependencies, generated convention JavaScript, and the changeset. Install the packed artifact and rerun the Sandbox golden path; workspace source alone is insufficient.
+Before publishing, check `files`, the ESM entry, peer dependencies, the generated JavaScript in convention directories, and the changeset. **Install the packed tarball** into a fresh project and run the full Sandbox flow again — don't test only the workspace source.
 
 ## Done when
 
-- A new user can install, minimally configure, and send the first message from the README.
-- Invalid config, missing dependencies, and failed reloads have explicit behavior.
-- Console exposes runtime facts without leaking Prompt or secret content.
-- Package docs, public API, changeset, and the actual tarball agree.
+- A new user can install, configure minimally and get a first reply by following the README.
+- Config errors, missing dependencies and failed hot reloads all behave and report clearly.
+- Console shows runtime state without leaking Prompt text or secrets.
+- Package docs, public API, changeset and the actual published tarball agree.
 
-Continue with [`definePlugin` overview](./define-plugin), [convention directories](./conventions), and [Console pages](./console-pages).
+## Next steps
+
+- [definePlugin](./define-plugin.md): everything the entry can do.
+- [Convention directories](./conventions.md): where each capability goes.
+- [Console pages](./console-pages.md): add a management page to your plugin.

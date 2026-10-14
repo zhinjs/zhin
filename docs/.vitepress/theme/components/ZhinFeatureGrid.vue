@@ -10,12 +10,12 @@ withDefaults(defineProps<{
 }>(), {
   heading: '为什么是 Zhin.js',
   features: () => [
-    { title: '插件化内核', desc: '一个 <code>package.json#zhin</code> 清单加一个 <code>plugin.ts</code> 就是一个插件。命令、组件、适配器按约定目录发现，改完文件即热重载。' },
-    { title: '多平台，一套消息流', desc: 'QQ、OneBot、Discord、Telegram、Slack、KOOK、钉钉、飞书、企微、LINE…… 二十个适配器按需挂载，收发走同一条链路。' },
-    { title: 'Console 免部署', desc: 'Host 只暴露 API。打开浏览器就能管插件、看实例、翻日志、改配置——前端不必跟着 Bot 跑。' },
-    { title: 'AI 按需加装', desc: '默认只有 IM 核心。要 AI 时再装 <code>@zhin.js/agent</code>——providers、MCP、子代理、调度任务，逐层解锁。' },
-    { title: '插件即应用', desc: '插件目录里放一个 <code>zhin.config.yml</code>，<code>zhin runtime start</code> 直接启动。不需要先写一个宿主工程。' },
-    { title: '单向分层', desc: 'basic → kernel → ai → core → agent → zhin，依赖只往下走。每层都能单独拿来用——kernel 是纯插件引擎，ai 是纯 LLM 引擎。' },
+    { title: '一套代码，20+ 平台', desc: 'QQ、微信、企业微信、钉钉、飞书、Discord、Telegram、Slack、KOOK、LINE……业务代码只面对一种统一消息，平台差异交给适配器。' },
+    { title: '写功能 = 放一个文件', desc: '<code>commands/hello/index.ts</code> 就是 <code>/hello</code> 命令。中间件、组件、定时任务、AI 工具同理，不用手写注册代码。' },
+    { title: '改代码不用重启', desc: '保存即热重载；正在处理的消息用旧版本跑完，新代码报错时旧版本继续服务，Bot 不会因为一次手滑而掉线。' },
+    { title: '零账号也能开发', desc: '内置 Sandbox 模拟聊天窗口，不用申请任何平台账号或模型 Key，就能完整开发和测试。' },
+    { title: '浏览器里管理', desc: '打开 <code>console.zhin.dev</code> 填入地址和 Token：发测试消息、看日志、改配置、管插件，无需部署前端。' },
+    { title: 'AI 按需加装', desc: '默认只有不到 10MB 的 IM 核心。运行 <code>npx zhin setup --ai</code> 即可接入大模型、工具、记忆与 MCP。' },
   ],
 })
 </script>

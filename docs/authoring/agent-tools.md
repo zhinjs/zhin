@@ -1,78 +1,83 @@
 ---
-title: Agent 工具与技能
-description: tools/<name>/index.ts 约定与 setup addTool、统一 ToolIndex 准入、deferred catalog 与 load_tool、skills 与 agents/<name>/agent.json
+title: "Agent 工具与技能"
+description: "让 AI 调用你写的函数：编写 Tool、限制可用范围与审批、用 Skill 封装流程、用 Prompt Section 补充业务背景、定义子 Agent"
 ---
 
 # Agent 工具与技能
 
-想让模型替用户搜一首歌、查一次乐透推荐？先按披露范围选择 Tool 的目录。创作入口会写入候选 generation 的同一份 capability table，commit 后由唯一 `ToolIndex` 发布；不存在第二个动态注册表。
+启用 AI 后，Bot 会用大模型回答没有匹配到命令的消息。本页讲怎样让它**做事**：
 
-| 目录 | 归属 | 模型披露时机 |
-| --- | --- | --- |
-| `tools/<name>/index.ts` | 插件通用 Tool | 插件启用后进入公共 deferred catalog |
-| `agents/<agent>/tools/<name>/index.ts` | Agent 专用 Tool | 选择该 Agent 后进入能力集 |
-| `skills/<skill>/tools/<name>/index.ts` | Skill 专用 Tool | `load_skill` 激活该 Skill 后解锁 |
-| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | Agent 内 Skill 专用 Tool | 选择 Agent 且激活其 Skill 后解锁 |
+- **Tool**：AI 可以调用的函数，例如查天气、搜歌、查数据库。
+- **Skill**：一份操作手册，AI 需要时才加载，可以附带专用的 Tool。
+- **Prompt Section**：给 AI 的背景知识，例如产品术语和回答规范。
+- **子 Agent**：有独立职责、规则和工具的专门助手。
 
-插件初始只向模型披露根 `tools/` 与根 `skills/`、`agents/` 的摘要。私有 Tool definition 会在 generation prepare 阶段统一校验，但不会提前进入模型 Tool catalog；这样既能在启动时发现无效能力，也不会用未激活能力占用提示词。
+::: tip 开始前
+先运行 `npx zhin setup --ai` 启用 AI。向导会安装模型 SDK，并声明 `@zhin.js/tool` 与 `@zhin.js/prompt-section`，`tools/`、`prompt-sections/` 目录才会被识别。详见 [AI 总览](../ai/index.md)。
+:::
 
-根 `tools/` 只用于跨任务、高频、无需额外领域说明的能力。只在某个平台、工作流或角色中成立的 Tool 必须归入对应 Skill 或 Agent。一个 Skill 若包含多个可以独立触发的任务域，也应继续拆分，避免加载一个简单查询时同时披露整个平台的所有 Tool Schema。
-
-适配器提供的 Skill 应归入 `agents/<platform>/skills/<name>/`。平台 Agent 在对应 IM 平台入站时自动选中，其他平台回合不会看到它的私有 Skill 摘要；同一平台声明多个自动候选 Agent 会在路由时报出冲突，必须合并职责或由用户显式选择。
-
-```mermaid
-flowchart LR
-    A["tools/<name>/index.ts<br/>defineAgentTool"] --> C[候选 capability table]
-    B["setup() → context.addTool()"] --> C
-    C --> D["commit → ToolIndex 投影"]
-    D --> E[CapabilityIngress]
-    E --> F{"canAccessTool(message)<br/>platforms/scopes/permissions"}
-    F -->|hidden 过滤| G[deferred catalog]
-    G --> H["discover / load_tool / load_skill"]
-    H --> I[模型可调用的工具集]
-```
-
-## 路径一：目录约定
-
-挂载 `@zhin.js/tool` Feature 后，四种 Tool 目录中的 `index.ts` 会被发现，并默认导出 `defineAgentTool(...)`。辅助模块可放在同一命名目录内：
-
-Tool 专属 handler、schema 和格式化逻辑应放在所属 Tool 或 Skill 目录；同一 Skill 的多个 Tool
-共用实现可放在 Skill 根目录，例如 `skills/github-account/handlers.ts`。叶子 `index.ts` 只声明
-Tool 并调用同目录能力，不应通过 `../../../../src/...` 获取插件内部实现。确实由多个能力共享的
-运行态契约应形成稳定包 API，或由所属 Skill/Agent 的一个局部桥接模块集中接入。
+## 写第一个工具
 
 ```ts
-// tools/echo/index.ts
+// tools/weather/index.ts
 import { defineAgentTool } from '@zhin.js/tool';
 import { z } from 'zod';
 
-export default defineAgentTool<{ message: string }>({
-  description: 'Echo a message back',
-  inputSchema: z.object({ message: z.string().min(1) }),
-  async execute({ message }) {
-    return `echo: ${message}`;
+export default defineAgentTool<{ city: string }>({
+  description: '查询城市的实时天气',
+  inputSchema: z.object({ city: z.string().min(1) }),
+  requiresApproval: 'never',
+  async execute({ city }) {
+    const response = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
+    return response.text();
   },
 });
 ```
 
-定义字段（`packages/im/tool/src/definition.ts`）：
+保存后在私聊里问 Bot "北京今天天气怎么样"，AI 会调用这个工具并根据结果回答。
 
-| 字段 | 必填 | 说明 |
-| --- | --- | --- |
-| `description` | 是 | 给模型看的功能描述 |
-| `inputSchema` | 否 | Zod 4 object 或根节点为 `object` 的 JSON Schema；由 Tool Feature 统一投影并在执行前校验 |
-| `requiresApproval` | 否 | Tool 何时需要审批：`'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
-| `platforms` | 否 | 限定适配器平台（如 `['icqq']`），空 = 全部 |
-| `scopes` | 否 | 限定会话场景 `'private' \| 'group' \| 'channel'`，空 = 全部 |
-| `permissions` | 否 | permit 字符串列表（见下文准入） |
-| `hidden` | 否 | 注册但不提供给模型（可按名调用） |
-| `execute(input, context)` | 是 | `context` 是能力上下文（`config` / `use(token)` / `owner` / `generation`） |
+- `description` 和 `inputSchema` 是**写给模型看的**：清楚地说明这个工具做什么、参数是什么，模型才会在正确的时机调用它。
+- `inputSchema` 可以是 Zod 4 对象，也可以是根节点为 `object` 的 JSON Schema。调用前框架会先校验参数。
+- `execute` 的返回值会交给模型，由模型组织成回复。
 
-命名目录是 owner 内部的 local name。Agent turn 会把全树工具按 `qualifiedName` 暴露给模型：root 工具保持 local name，子插件工具由 owner 路径段与目录名以 `__` 连接（例如 `maps__get-weather`）。执行仍绑定原 owner 的固定 generation capability context，不通过调用方 owner 重新解析。
+## 常见需求
 
-## 路径二：setup 条件式声明
+### 限制工具的可用范围
 
-需要按配置开关或已注入资源决定是否提供工具时，在 `setup()` 中直接调用 `context.addTool()`：
+```ts
+export default defineAgentTool({
+  description: '踢出群成员',
+  platforms: ['icqq'],          // 只在 QQ 上提供
+  scopes: ['group'],            // 只在群聊中提供
+  permissions: ['role(master)'], // 只有 master 发起的对话才提供
+  // ...
+});
+```
+
+不满足条件时，模型根本看不到这个工具。`permissions` 与命令的 [`permit`](./commands.md) 使用同一套规则。`hidden: true` 表示注册但不提供给模型，只能按名字调用。
+
+### 执行前让用户确认
+
+```ts
+export default defineAgentTool({
+  description: '删除一条记录',
+  requiresApproval: 'always',
+  // ...
+});
+```
+
+| 取值 | 何时需要用户确认 |
+| --- | --- |
+| `'always'` | 每次调用 |
+| `'once'` | 同一会话中第一次调用 |
+| `'on-risk'`（默认） | 有风险时。未知的插件操作会确认；`bash`、文件和网络工具在安全策略已经验证具体命令、路径或 URL 后不再重复确认 |
+| `'never'` | 不需要确认 |
+
+`'never'` 只是跳过确认步骤，**不能**绕过权限、网络、文件系统和 Shell 等安全策略。
+
+### 根据配置决定是否提供工具
+
+需要按配置开关或已有资源决定时，在 `plugin.ts` 的 `setup` 里注册：
 
 ```ts
 // plugins/utils/lottery/plugin.ts（节选）
@@ -82,7 +87,7 @@ import { defineAgentTool } from '@zhin.js/tool';
 export default definePlugin({
   name: 'lottery',
   async setup(context) {
-    if (!context.config.get().agentToolsEnabled) return;
+    if (!context.config.get().agentToolsEnabled) return; // 配置关闭时不提供
     context.addTool('lottery_sync', defineAgentTool({
       description: 'Synchronize lottery draws',
       requiresApproval: 'always',
@@ -96,125 +101,46 @@ export default definePlugin({
 });
 ```
 
-`addTool()` 只写 shadow generation；prepare 失败时从未可见，commit 后才随整代原子发布，无需手工注销。定义仍是同一个 `defineAgentTool()`：
+`addTool` 与 `tools/` 目录的效果完全相同，热重载时会自动替换，不需要手动注销。
 
-```ts
-context.addTool('lottery_sync', defineAgentTool({
-  description: tool.description,
-  inputSchema: tool.inputSchema,
-  platforms: tool.platforms,
-  scopes: tool.scopes,
-  permissions: tool.permissions,
-  hidden: tool.hidden,
-  requiresApproval: 'never',
-  execute: (input, context) => tool.execute(input, context),
-}));
-```
+### 在工具里使用插件服务
 
-依赖应通过 `execute` 的 capability context 解析；不要在执行时调用插件定位器。这样工具始终绑定调用它的固定 generation lease。
+`execute` 的第二个参数可以取用插件提供的服务和当前上下文：
 
-## 统一准入：canAccessTool
-
-两条路径注册的工具，每个 Agent turn 都会经 Core 的 `canAccessTool(tool, message)` 按消息上下文过滤——**一条谓词管两条路径**（`packages/im/core/src/built/tool.ts`；Plugin Runtime 侧经 `CapabilityIngress` 套用，见 `packages/im/agent/src/plugin-runtime/capability-ingress.ts`）。
-
-四元组语义：
-
-| 字段 | 判定 |
+| 字段 | 说明 |
 | --- | --- |
-| `platforms` | 消息来源适配器名（`String(message.$adapter)`）不在列表内则拒绝 |
-| `scopes` | 会话场景（`message.$channel.type`，缺省 `private`）不在列表内则拒绝 |
-| `permissions` | permit 列表，逐条校验（AND）；单条括号内逗号为 OR |
-| `hidden` | 不进入给模型的工具清单，但仍可按名执行 |
+| `config` | 本插件配置 |
+| `use(token)` | 取用插件提供的服务 |
+| `origin` / `principal` | 本次调用来自哪个会话、代表哪个用户 |
+| `policy` | 当前生效的安全策略 |
+| `question` | 向用户提问的接口（见下一节） |
+| `$client` | 按适配器推断的平台客户端 |
 
-permit 语法由 `@zhin.js/permission` 统一定义（`packages/im/permission/src/builtin.ts`）：内建的 `adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`；平台身份 `platform(adapter,perm)`（如群 owner/admin，由适配器 checker 判定）；无法识别的 permit 一律拒绝。
+请始终通过这个参数取用依赖，而不是在执行时查找其他插件。这样工具在热重载期间也能使用正确版本的资源。
 
-`requiresApproval` 在 Tool 通过上述准入后、执行之前判定。`always` 每次确认；`once` 可由标准 Host 在当前会话记住该 Tool；`on-risk` 对未知插件操作保持确认，但 `bash`、文件和网络工具在专用策略已经验证具体命令、路径或 URL 后不重复确认。`never` 只跳过声明式确认，不能绕过权限、网络、文件系统、Shell 或代际策略。
+### 在工具里向用户提问
 
-## deferred catalog 与 load_tool
+需要用户补充信息时使用 `context.question`。定时任务等无人值守的场景不会提供它，所以必须处理它不存在的情况。框架内置的 `ask_user` 工具也基于同一机制，会按会话和用户身份匹配回复。
 
-工具不进全量 prompt。每个 turn 先把通过准入的工具建成 **catalog**，并创建独占的 deferred controller（`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`）；默认只对模型暴露 `alwaysLoadedTools`。其余工具由 controller 为本 turn 创建的三个 meta 工具按需发现与加载：`discover` 按 query 搜索工具/技能（可按 MCP server 过滤），返回名称加简介；`load_tool` 按名加载工具 schema；`load_skill` 加载技能完整指令并解锁其关联工具。并发 turn 和 subagent 使用彼此隔离的 controller，不以 IM `Message` 作为状态键。
+### 只在特定场景下提供的工具
 
-加载状态按会话持久化（`DeferredToolSessionSnapshot`），有上限逐出。配置键 `deferredTools`（`ZhinAgentConfig`）：
+工具放在哪个目录，决定了模型**什么时候**能看到它：
 
-| 键 | 默认 | 说明 |
-| --- | --- | --- |
-| `maxLoadedPerSession` | `12` | 每会话最多加载的工具数 |
-| `discoverTopK` | `5` | `discover` 返回条数 |
-| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | 始终对模型可见 |
-| `mcpServers` | `{}` | 按 MCP server 覆盖 `alwaysLoaded` 名单 |
+| 位置 | 模型何时能看到 |
+| --- | --- |
+| `tools/<name>/index.ts` | 插件启用后，可被发现 |
+| `skills/<skill>/tools/<name>/index.ts` | 该 Skill 被加载后 |
+| `agents/<agent>/tools/<name>/index.ts` | 选中该子 Agent 后 |
+| `agents/<agent>/skills/<skill>/tools/<name>/index.ts` | 选中该 Agent 且加载其 Skill 后 |
 
-Anthropic SDK 通道会把未加载工具以 `deferLoading` 标记下发；其它通道只下发已加载集合。
+根目录 `tools/` 只放通用、高频、不需要额外说明的工具。只在某个平台、工作流或角色下才有意义的工具，应放进对应的 Skill 或 Agent，避免平时占用提示词。所有工具都会在启动时校验，即使暂时不提供给模型。
 
-`ask_user` 是框架提供的 generation-owned Tool capability，不是 Plugin Prompt/middleware。
-它通过当前 Turn 的 `QuestionPort` 请求输入，并按 canonical session 与认证主体匹配回复；
-插件工具若需要同类交互，应依赖 `ToolExecutionContext.question`，且必须处理端口缺失。
-unattended Turn（例如 Schedule）不会注入该端口，不能回退到全局 Message、Adapter 或用户队列。
+### 给 AI 补充业务背景
 
-## Skills、主 Agent 与子 Agent
-
-Skill 使用 `skills/<name>/SKILL.md`。主 Agent 使用插件根目录的标准 `AGENTS.md`。命名子 Agent 使用 `agents/<name>/` 自包含目录，由 `@zhin.js/agent-feature` 发现。
-
-子 Agent 的 `agent.json`、`system.md`、`boundaries.md`、`conventions.md` 缺一不可；`workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 可按需增加。`conventions.md` 必须延伸根 `AGENTS.md`，不能与其冲突。重复出现的错误应固化到该文件。完整 manifest 和目录契约见 GitHub 上的 [`@zhin.js/agent-feature` README](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md)。
-
-`agent.json` 的 `tools` 可声明额外公共 Tool；`agents/<agent>/tools/<name>/index.ts` 会自动成为该 Agent 的私有 Tool。Skill 的私有 Tool 使用 `skills/<skill>/tools/<name>/index.ts`；Agent 私有 Skill 及其 Tool 使用 `agents/<agent>/skills/<skill>/SKILL.md` 和其下的 `tools/<name>/index.ts`。所有 Tool 仍经过统一的权限、审批和 generation 准入。
-
-## 插件 Agent 创作目录
-
-```text
-my-plugin/
-├── AGENTS.md
-├── tools/
-│   └── short-url/
-│       ├── index.ts
-│       └── client.ts
-├── skills/short-url/
-│   ├── SKILL.md
-│   ├── tools/normalize/index.ts
-│   └── hooks/audit/index.ts
-├── hooks/audit/index.ts
-└── agents/reviewer/
-    ├── agent.json
-    ├── system.md
-    ├── boundaries.md
-    ├── conventions.md
-    ├── workflows/
-    ├── tools/check-result/index.ts
-    ├── skills/review/
-    │   ├── SKILL.md
-    │   ├── tools/check-result/index.ts
-    │   └── hooks/audit/index.ts
-    ├── hooks/audit/index.ts
-    └── knowledge/
-```
-
-`tools/<name>/index.ts` 与 `setup()` 中的 `addTool()` 使用同一个 `AgentToolDefinition`、`ToolExecutionContext` 和 `ToolIndex`。执行上下文提供固定 generation 的 `config`、`use(token)`、`origin`、`principal`、`policy`、`question` 与按 adapter 推断的 `$client`。
-
-## 让插件给 Agent 补充上下文
-
-当插件需要 Agent 理解业务术语、输出规范或工具使用约束时，用 Prompt Section 声明这些上下文。它属于插件能力，会跟随 Runtime generation 原子发布：热更失败不会泄漏半成品，已开始的回合继续使用启动时的版本。
-
-### 1. 挂载 Prompt Section Feature
-
-项目需同时声明依赖和 Feature：
-
-```json
-{
-  "dependencies": {
-    "@zhin.js/prompt-section": "latest"
-  },
-  "zhin": {
-    "features": [
-      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
-    ]
-  }
-}
-```
-
-### 2. 声明一段上下文
-
-在插件根目录创建 `prompt-sections/project-rules/index.ts`：
+用 Prompt Section 告诉 AI 产品术语、回答规范或工具使用约束：
 
 ```ts
+// prompt-sections/project-rules/index.ts
 import { defineAgentPromptSection } from '@zhin.js/prompt-section';
 
 export default defineAgentPromptSection({
@@ -228,21 +154,165 @@ export default defineAgentPromptSection({
 });
 ```
 
-一级目录名是本地名称；Zhin 会与插件 owner 组合成全局唯一身份，不需要手写 `id`。`order` 只决定呈现顺序；`retention` 决定预算不足时的保留策略，两者不再混成一个“优先级”。
+目录名就是这段背景的名字，不需要手写 `id`。保存后，新的对话使用新内容；已经开始的对话继续使用原来的版本。
+
+- `order` 决定同一层中的先后顺序；`retention` 决定提示词预算不够时先舍弃谁。字段说明见 [参考](#prompt-section-字段)。
+- 在 Console 的能力目录里可以看到 **Prompt Sections** 是否生效（来源、版本、预算策略），但不会显示正文，因为其中可能包含内部策略。可运行示例：`examples/full-bot/prompt-sections/custom/index.ts`。
+- Prompt Section **只影响模型的上下文，不授予任何工具、数据或审批权限**。
+
+::: details 手动声明 Prompt Section 能力
+如果没有使用 `npx zhin setup --ai`，需要在 `package.json` 里同时声明依赖和 Feature：
+
+```json
+{
+  "dependencies": {
+    "@zhin.js/prompt-section": "latest"
+  },
+  "zhin": {
+    "features": [
+      { "package": "@zhin.js/prompt-section", "api": "^1.0.0" }
+    ]
+  }
+}
+```
+:::
+
+### 用 Skill 封装一套流程
+
+Skill 是 `skills/<name>/SKILL.md`：一份带 frontmatter 的说明书，平时只向模型展示摘要，需要时才加载全文，并解锁它目录下的专用工具。
+
+```markdown
+---
+name: memory-consolidate
+description: 回合末或 master 说「记住」时，将 1–3 条可检索事实写入 memory_entries
+tools:
+  - memory_upsert
+  - memory_search
+---
+
+（这里写详细的操作步骤……）
+```
+
+一个 Skill 如果包含多个可以独立触发的任务，应拆成多个 Skill，避免加载一个简单任务时带出所有工具。适配器提供的 Skill 放在 `agents/<platform>/skills/<name>/`，只在对应平台的对话中出现。
+
+### 定义子 Agent
+
+子 Agent 是 `agents/<name>/` 目录，有自己的职责、边界和工具。它必须包含四个文件：
+
+| 文件 | 内容 |
+| --- | --- |
+| `agent.json` | 名称、模型、额外的公共工具等 |
+| `system.md` | 角色与职责 |
+| `boundaries.md` | 不能做什么 |
+| `conventions.md` | 工作约定，只能在插件根目录 `AGENTS.md` 的基础上延伸，不能冲突 |
+
+可选的 `workflows/`、`tools/`、`skills/`、`hooks/`、`knowledge/` 放场景流程、私有工具、私有 Skill、钩子和知识库。反复出现的错误应该写进 `conventions.md`。
+
+平台适配器的 Agent 会在对应平台的消息到来时自动选中；同一平台有多个自动候选时，路由会报冲突，需要合并职责或由用户显式选择。完整格式见 [`@zhin.js/agent-feature`](https://github.com/zhinjs/zhin/blob/main/packages/im/agent-feature/README.md)。
+
+## 推荐的目录组织
+
+```text
+my-plugin/
+├── AGENTS.md                         # 主 Agent 的规则
+├── tools/
+│   └── short-url/
+│       ├── index.ts                  # 只声明工具
+│       └── client.ts                 # 实现放在同一目录
+├── skills/short-url/
+│   ├── SKILL.md
+│   ├── tools/normalize/index.ts      # Skill 专用工具
+│   └── hooks/audit/index.ts
+├── hooks/audit/index.ts
+└── agents/reviewer/
+    ├── agent.json
+    ├── system.md
+    ├── boundaries.md
+    ├── conventions.md
+    ├── workflows/
+    ├── tools/check-result/index.ts   # Agent 专用工具
+    ├── skills/review/
+    │   ├── SKILL.md
+    │   ├── tools/check-result/index.ts
+    │   └── hooks/audit/index.ts
+    ├── hooks/audit/index.ts
+    └── knowledge/
+```
+
+- 工具的 `index.ts` 只负责声明，实现放在同一目录；同一 Skill 的多个工具共用的代码放在 Skill 根目录（例如 `skills/github-account/handlers.ts`）。
+- 不要从叶子目录用 `../../../../src/...` 引用插件内部实现。确实需要共享的运行时契约，应做成稳定的包 API，或由所属 Skill / Agent 的一个桥接模块集中引入。
+
+## 参考
+
+### Tool 字段
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `description` | 是 | 给模型看的功能描述 |
+| `inputSchema` | 否 | Zod 4 对象，或根节点为 `object` 的 JSON Schema；执行前校验 |
+| `requiresApproval` | 否 | `'never' \| 'on-risk' \| 'once' \| 'always'`，默认 `'on-risk'` |
+| `platforms` | 否 | 限定平台，如 `['icqq']`；为空表示全部 |
+| `scopes` | 否 | 限定场景 `'private' \| 'group' \| 'channel'`；为空表示全部 |
+| `permissions` | 否 | 权限规则列表，全部满足才提供 |
+| `hidden` | 否 | 注册但不提供给模型，仍可按名字调用 |
+| `execute(input, context)` | 是 | 执行函数，`context` 见上文 |
+
+### 权限规则
+
+`permissions` 由 `@zhin.js/permission` 统一解析：`adapter(name)`、`group(id,...)`、`private(id,...)`、`channel(id,...)`、`user(id,...)`、`role(master|trusted|user)`，以及由适配器判断的平台身份 `platform(adapter,perm)`（例如群主 / 管理员）。列表中的规则全部满足才通过；一条规则括号内的逗号表示满足其一。**无法识别的规则一律拒绝。**
+
+### Prompt Section 字段
 
 | 字段 | 含义 |
 | --- | --- |
-| `layer` | 用于表达 `role` / `task` / `context` / `safety` 等语义分层 |
-| `order` | 数字越大，在同一层中越靠前 |
-| `retention` | `required` 不可静默丢失；`preferred` 优先保留；`opportunistic` 先让出预算 |
-| `maxChars` | 这一段可使用的字符上限 |
-| `profiles` | 选择 `interactive`、`schedule` 或两者 |
-| `platforms` | 可选；仅在指定 IM 平台的回合中注入，例如 `['github']` |
+| `layer` | 语义分层：`role` / `task` / `context` / `safety` 等 |
+| `order` | 同一层中，数字越大越靠前 |
+| `retention` | 预算不足时：`required` 不可丢弃（放不下时本轮明确失败，而不是悄悄截断）；`preferred` 优先保留；`opportunistic` 最先让出 |
+| `maxChars` | 这一段的字符上限 |
+| `profiles` | `interactive`（对话）、`schedule`（定时任务）或两者 |
+| `platforms` | 可选，只在指定平台的对话中注入，例如 `['github']` |
 
-`required` 内容放不下时，回合会明确失败，而不是在未告知的情况下截断安全策略。总预算由 `ai.agent.systemPromptMaxChars` 控制。
+总预算由 `ai.agent.systemPromptMaxChars` 控制。
 
-### 3. 验证已生效的版本
+### 工具发现配置
 
-启动后在 Console 的能力目录查看 **Prompt Sections**，可确认 owner、来源、generation、profile 和预算策略。目录不返回提示词正文，因为其中可能包含内部产品策略。可运行示例见 `examples/full-bot/prompt-sections/custom/index.ts`。
+工具不会全部塞进提示词。`ai.agent.deferredTools`（`ZhinAgentConfig`）控制按需加载：
 
-Prompt Section 只影响模型上下文，**不会授予工具、数据或审批权限**。权限仍必须由 Tool Feature、Runtime resource 和 Host 策略提供。
+| 键 | 默认 | 说明 |
+| --- | --- | --- |
+| `maxLoadedPerSession` | `12` | 每个会话最多同时加载的工具数 |
+| `discoverTopK` | `5` | `discover` 每次返回的条数 |
+| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | 始终对模型可见的工具 |
+| `mcpServers` | `{}` | 按 MCP 服务器覆盖 `alwaysLoaded` 名单 |
+
+## 它是怎么工作的
+
+```mermaid
+flowchart LR
+    A["tools/&lt;name&gt;/index.ts"] --> C[注册为能力]
+    B["setup() → addTool()"] --> C
+    C --> D[本轮对话的工具目录]
+    D --> F{"platforms / scopes / permissions<br/>是否满足"}
+    F -->|满足且非 hidden| G[可发现的工具]
+    G --> H["discover / load_tool / load_skill"]
+    H --> I[模型可调用的工具]
+```
+
+1. **准入。** 每轮对话开始时，框架按消息的平台、场景和发送者筛选工具；不满足条件的工具对模型不可见。
+2. **按需加载。** 默认只向模型暴露 `alwaysLoadedTools`。模型通过 `discover` 搜索工具和 Skill（返回名称与简介），用 `load_tool` 加载工具的参数定义，用 `load_skill` 加载 Skill 全文并解锁其工具。已加载的状态按会话保存，超过上限会逐出。并发的对话和子任务彼此隔离。Anthropic 通道会把未加载的工具以 `deferLoading` 标记下发，其他通道只下发已加载的工具。
+3. **审批与执行。** 通过准入后、执行前判断 `requiresApproval`；执行时绑定工具所属插件的配置和资源。
+
+::: details 实现细节
+- 两种注册方式写入同一张能力表，由唯一的 `ToolIndex` 发布，不存在第二个动态注册表。`addTool()` 在新版本准备阶段写入，准备失败时从不可见，切换成功后随整个版本一起生效。
+- 准入谓词是 Core 的 `canAccessTool(tool, message)`（`packages/im/core/src/built/tool.ts`），Plugin Runtime 侧通过 `CapabilityIngress` 套用（`packages/im/agent/src/plugin-runtime/capability-ingress.ts`）。`platforms` 比较 `String(message.$adapter)`；`scopes` 比较 `message.$channel.type`（缺省为 `private`）。
+- 工具的模型可见名（`qualifiedName`）：根插件的工具保持本地名；子插件的工具由插件路径段与目录名以 `__` 连接，例如 `maps__get-weather`。执行时仍绑定原插件的固定版本上下文。
+- 按需加载由每轮独占的 deferred controller 管理（`packages/im/agent/src/tool-catalog/deferred-turn-controller.ts`），状态保存在 `DeferredToolSessionSnapshot`，不以 IM `Message` 作为状态键。
+- `ask_user` 是框架提供的能力，通过当前回合的 `QuestionPort` 请求输入；无人值守的回合（如定时任务）不注入该端口，也不会回退到全局消息、适配器或用户队列。
+- Agent / Skill 私有工具在启动准备阶段统一校验，但不会提前进入模型工具目录。
+:::
+
+## 下一步
+
+- [AI 总览](../ai/index.md)：配置模型、触发规则、记忆与 MCP。
+- [Agent 深入](../ai/agent.md)：安全策略、审批、子任务与执行日志。
+- [AI Agent 学习路径](../paths/ai-agent.md)：从 IM Bot 一步步加上 Agent。

@@ -1,18 +1,28 @@
 ---
-title: Console
+title: "Console"
+description: "Manage your bot in the browser: how to connect, what you can see, and where to look first when something is wrong"
 ---
 
 # Console
 
-Console is Zhin's runtime fact surface. It answers what the current generation published, which Endpoint received a message, what an Agent did, and whether durable state recovered.
+Console is the bot's browser admin UI. Use it to **send test messages, read logs, edit config, manage plugins and accounts, and watch what the AI is doing**.
 
-`zhin runtime start` assembles the HTTP Host and Console API. Connect through <https://console.zhin.dev>, or open the local `/console` and Sandbox pages served by the Host.
+There is nothing to deploy: open <https://console.zhin.dev> and enter the API address the bot prints at startup (new projects default to `http://127.0.0.1:8068`) and the `HTTP_TOKEN` from `.env`. You can also open the bot's own local `/console` and Sandbox pages.
 
-The HTTP Host, Console RPC, and SSE are process control-plane services and begin listening before
-the first Runtime generation activates. A browser can therefore complete QR, slider, or device
-confirmation through `login.list`, `login.submit`, and `endpoint.login.pending` while an Adapter is
-still starting. Pages and runtime projections that require a published generation may remain empty
-or report not ready until every required Adapter finishes startup and the first generation commits.
+## What you can do once connected
+
+| Page | What it's for |
+| --- | --- |
+| Conversations & Channels / Sandbox | Send test messages; see traffic per platform account |
+| Runtime Capabilities | Confirm commands, middleware, components and tools are loaded, and which plugin they come from |
+| Logs | Browse runtime logs by time and source |
+| Config | Edit `zhin.config.yml` through a form or source editor; failed saves roll back automatically |
+| Agent workbench | See AI conversations, tool calls, approvals and cancellations |
+| Workrooms | See persistent task spaces and task boards |
+
+::: details Why can Console connect while the bot is still logging in?
+The HTTP service, Console RPC and SSE are process control-plane services that start listening before all plugins have started (before the first generation is published). So while an adapter such as ICQQ is still waiting for a QR scan, slider or device confirmation, the browser can complete login through `login.list`, `login.submit` and `endpoint.login.pending`. Pages that depend on started plugins may be empty or show not-ready until every adapter finishes starting.
+:::
 
 ```mermaid
 flowchart LR

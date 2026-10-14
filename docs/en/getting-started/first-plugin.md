@@ -1,27 +1,42 @@
-# Writing Your First Plugin
+---
+title: "Write your first plugin"
+description: "Build a configurable /ping child plugin from scratch, mount it on your bot, and change its reply without restarting"
+---
 
-Want to see "one file is enough" first? The repo's [single-file-bot](../examples/index.md#single-file-bot-one-bot-ts-is-a-bot) uses `setup({ addCommand })` to register commands with no `commands/` directory -- get it running, then come back to split files.
+# Write your first plugin
 
-This tutorial adds a `ping-pong` **convention directory** plugin to an application already connected to Sandbox. For a new project, run `pnpm create zhin-app my-bot -y` and enter `my-bot`; repository contributors can use [minimal-bot](../examples/index.md#minimal-bot-stable-minimal-path).
+This page walks you through a plugin called `ping-pong`: a user sends `/ping` and the bot replies with text **you can change in config**.
 
-Create four files under the application's `plugins/ping-pong/`, then mount the plugin in the host manifest. The configuration file belongs to the host; child plugins do not each need their own.
+By the end you will know the four building blocks of a plugin — manifest, entry, command, config — and how to mount a plugin on a bot. It takes about 15 minutes.
 
-Source TypeScript projects require Node.js ≥22.12.0 and pnpm 9+; the CLI prepares TypeScript loading for `pnpm dev`. The compiled JavaScript library still supports Node.js `^20.19.0 || >=22.12.0`.
+::: tip Before you start
+- You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -y`).
+- Node.js ≥22.12.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
+:::
 
-Final directory structure:
+::: details Just want the least code possible?
+One file can register a command too: call `addCommand('ping', defineCommand({ ... }))` inside `setup({ addCommand })` in `plugin.ts`. See [single-file-bot](../examples/index.md#single-file-bot-one-bot-ts-is-a-bot). This page shows the "one capability per file" layout that scales better as features grow.
+:::
+
+## The files you will create
+
+Create four files under `my-bot/plugins/ping-pong/`:
 
 ```text
-ping-pong/
-├── package.json      # zhin manifest (topology source of truth)
-├── plugin.ts         # definePlugin entry point
-├── schema.json       # Config contract (defaults + validation)
+plugins/ping-pong/
+├── package.json        # ① manifest: tells Zhin this is a plugin
+├── plugin.ts           # ② plugin entry
 ├── commands/
 │   └── ping/
-│       └── index.ts  # /ping command
-└── zhin.config.yml   # Optional: only when the plugin itself is the application
+│       └── index.ts    # ③ the /ping command
+└── schema.json         # ④ config options and defaults
 ```
 
-## 1. package.json and the zhin manifest
+Config **values** don't live in the plugin; they go in the bot's `zhin.config.yml` (step 5). That way the same plugin can be configured differently on different bots.
+
+## 1. The manifest: package.json
+
+A plugin is an npm package. What makes Zhin recognize it is the `zhin` field in `package.json`:
 
 ```json
 {
@@ -58,18 +73,28 @@ ping-pong/
 }
 ```
 
-The Command provider is an optional npm peer supplied by the host. This prevents a mounted plugin from installing another provider copy. The `optional` flag applies to npm installation; the `zhin.features` requirement remains mandatory when the plugin runs.
+Three parts matter for now:
 
-The `zhin` field is the plugin topology manifest:
+- **`zhin.entry`** — the entry file, i.e. `plugin.ts` from the next step.
+- **`zhin.features`** — capabilities the plugin uses. Declaring `@zhin.js/command` is what makes Zhin scan the `commands/` folder.
+- **`peerDependencies`** — the bot provides `@zhin.js/command`; the plugin only says "I need it" and doesn't install its own copy.
+
+::: details Why an optional peerDependency? What do the other fields mean?
+A capability package may exist only once in a bot. If the child plugin put `@zhin.js/command` in its own `dependencies`, there would be two copies and startup would fail (even with identical versions). So the child declares it as an optional peer and the bot installs it.
+
+`optional: true` only affects npm installation; at runtime, a capability listed in `zhin.features` is still **required**.
 
 | Field | Meaning |
-|-------|---------|
-| `entry` | Plugin entry file; must be a package-relative path starting with `./` |
-| `runtime` | `trusted` (runs in the main process) |
-| `features` | Child plugins explicitly declare the Features they use; this example mounts Command to discover `commands/`. Root applications depending on `zhin.js` inherit Stable Features by default, but this does not declare capabilities for their children |
-| `plugins` | Mounted sub-plugin instances (empty in this example; see section 5 for mounting) |
+|------|------|
+| `entry` | Entry file; must be a package-relative path starting with `./` |
+| `runtime` | `trusted` runs the plugin in the main process |
+| `features` | Capability packages this plugin uses. Your bot (the Root plugin) inherits the common ones by depending on `zhin.js`, but child plugins must declare their own |
+| `plugins` | Child plugins this plugin mounts — empty here |
 
-## 2. plugin.ts
+Full details: [Plugin model](../concepts/plugin-model.md).
+:::
+
+## 2. The entry: plugin.ts
 
 ```ts
 import { definePlugin } from 'zhin.js';
@@ -94,9 +119,13 @@ export default definePlugin<PingPongConfig>({
 });
 ```
 
-## 3. commands/ping/index.ts
+- The `name` in `definePlugin` may only contain lowercase letters, digits and hyphens.
+- `setup` runs when the plugin loads. `context.config.get()` reads this plugin's config.
+- The function `setup` returns runs **before the plugin unloads or hot-reloads**. Close any timers or connections there, or they will leak across reloads.
 
-The Command Feature discovers `commands/**/index.ts`; the directory path determines the command name. Here the route is `ping`. Other files in that directory are helpers and do not register commands:
+You don't register the command in the entry — the file in the next step is discovered automatically.
+
+## 3. The command: commands/ping/index.ts
 
 ```ts
 import { defineCommand } from 'zhin.js/command';
@@ -113,13 +142,13 @@ export default defineCommand<PingPongConfig>({
 });
 ```
 
-The command's `config` and the `context.config.get()` in `setup` share the same layered configuration.
+**The folder path is the command name**: `commands/ping/index.ts` is `/ping`, and `commands/admin/ban/index.ts` is `/admin ban`. Only `index.ts` is the command entry; other files in the same folder can be imported as helpers.
 
-## 4. schema.json and configuration
+The `config` passed to `execute` is the same config `setup` reads. For params, options and permissions, see [Commands](../authoring/commands.md).
 
-`schema.json` (JSON Schema 2020-12) declares the config contract and defaults:
+## 4. Config options: schema.json
 
-Console forms support convertible field structures in plugin `schema.json`; `$ref`, `anyOf`, `oneOf`, `allOf`, `prefixItems`, `patternProperties`, and array-valued `items` are currently unsupported and produce explicit errors. Built-in Host configuration keeps its existing field projection, which does not represent all JSON Schema constraints; use the config file or Console source editor for complex `ai` and `htmlRenderer` configuration. Runtime JSON Schema configuration validation and Console form conversion are separate capabilities.
+`schema.json` declares which config options the plugin has and their defaults, using standard JSON Schema:
 
 ```json
 {
@@ -136,14 +165,15 @@ Console forms support convertible field structures in plugin `schema.json`; `$re
 }
 ```
 
-Configuration injection is **layered**: the Root plugin reads the `plugin:` section of `zhin.config.yml`;
-sub-plugin instances read the `plugins.<instanceKey>` section.
+If `reply` isn't set in the config file, the default `pong` is used. Console also generates a config form from this file.
 
-## 5. Mounting to an application
+::: details Which JSON Schema features does the Console form support?
+Console can only convert structures that map directly to a form. `$ref`, `anyOf`, `oneOf`, `allOf`, `prefixItems`, `patternProperties` and array-form `items` are not supported yet and report a clear error. Runtime validation is not limited by this. For complex settings such as `ai` or `htmlRenderer`, edit the config file directly or use Console's source editor.
+:::
 
-### Method A: `./` local directory sub-plugin (recommended during development)
+## 5. Mount it on your bot
 
-At the host application root, explicitly install the shared Command provider. A root depending on `zhin.js` inherits Stable Features and resolves this direct dependency before falling back to Core's copy. The child declares Command as a peer and uses the host's provider:
+Go back to the bot root `my-bot/` and install dependencies:
 
 ```bash
 pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
@@ -152,7 +182,7 @@ pnpm install
 cd ../..
 ```
 
-Reference it as a `./` relative path in the host application's `package.json#zhin.plugins` (no `..` traversal beyond the package root is allowed):
+Then add two things to **the bot's** `package.json` (merge with what's there — don't overwrite it):
 
 ```json
 {
@@ -167,9 +197,10 @@ Reference it as a `./` relative path in the host application's `package.json#zhi
 }
 ```
 
-Merge the dependency and mount into the existing host manifest; keep its other dependencies and settings. Projects created by `pnpm create zhin-app` include `plugins/*` in their workspace. Install the child there and do not add Command as its own dependency: Runtime requires one physical provider location per package, even when two installed versions have compatible Feature APIs.
+- `package` points at the plugin folder. It must start with `./` and cannot escape the project with `..`.
+- `instanceKey` is the plugin's name inside this bot: lowercase letters, digits and hyphens only.
 
-Then pass configuration for this instance in the host's `zhin.config.yml`:
+Finally, in **the bot's** `zhin.config.yml`, add the config under the `instanceKey`:
 
 ```yaml
 plugins:
@@ -177,11 +208,51 @@ plugins:
     reply: pong!
 ```
 
-`instanceKey` rules: lowercase letters / digits / hyphens (`^[a-z0-9][a-z0-9-]*$`).
+::: details Why does the bot depend on @zhin.js/command too?
+Projects created by `npm create zhin-app` already include `plugins/*` in the pnpm workspace. The bot depends on `@zhin.js/command` directly and the child uses that same copy through its peer — don't add it to the child's `dependencies`. Zhin requires every capability package to come from exactly one physical directory.
+:::
 
-### Method B: Plugin as application
+## 6. Run and verify
 
-Place `zhin.config.yml` directly in the plugin directory -- the plugin itself becomes the Root. Add Command as a direct dependency of this application; an optional peer alone does not install a provider. It still needs an adapter: a command-only plugin can assemble but cannot receive chat messages without a connected endpoint:
+```bash
+pnpm dev
+```
+
+Check, in order:
+
+1. The terminal prints `[ping-pong] setup: reply=pong!` — the plugin loaded and read its config.
+2. Send `/ping` in the Sandbox and the bot replies `pong!`.
+3. Change `reply` in `zhin.config.yml`, save, and send `/ping` again — the new reply appears without a restart. Editing `commands/ping/index.ts` works the same way.
+
+Just want to check that the plugin assembles, without the interactive mode? Run `zhin runtime start --once`.
+
+::: tip No reply?
+- The command prefix comes from each connection's `commandPrefix`; the scaffolded Sandbox uses `/`, other platforms may use none.
+- No setup log line: check the `zhin.plugins` path in the bot's `package.json`.
+- Run `npx zhin doctor` for an environment check.
+:::
+
+## How it works
+
+```mermaid
+flowchart TD
+  M[zhin field in package.json] --> R[Zhin loads the plugin]
+  R --> F[Command capability]
+  F -->|scans| C[commands/ping/index.ts]
+  R --> E[setup in plugin.ts]
+  S[schema.json defaults] --> CFG[Plugin config]
+  Y[zhin.config.yml values] --> CFG
+  CFG --> E
+  CFG --> C
+```
+
+On startup Zhin reads the manifest and loads the capabilities listed in `features`; the Command capability scans `commands/` and registers each file it finds. Config is the `schema.json` defaults merged with the values from `zhin.config.yml`, and is handed to both `setup` and the command. When you save a file, this whole process re-runs in the background and replaces the old version only after it validates.
+
+## Alternative: a plugin as an application
+
+Put a `zhin.config.yml` inside the plugin folder and the plugin can start as a complete bot on its own, with no host project. This is handy for developing and debugging one plugin in isolation.
+
+The plugin is then the Root, so its config goes under `plugin:`:
 
 ```yaml
 # ping-pong/zhin.config.yml
@@ -191,38 +262,19 @@ plugin:
 plugins: {}
 ```
 
-```bash
-cd plugins/ping-pong # from the host application directory
-pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check # This package is now the host application
-pnpm exec zhin setup --adapters  # Select an adapter such as Sandbox and add an Endpoint
-pnpm install                   # Install the adapter dependencies added by setup
-pnpm dev        # zhin runtime start
-```
-
-## 6. Startup and verification
+As a standalone application it must install the capability package itself and connect at least one adapter to receive messages:
 
 ```bash
+cd plugins/ping-pong
+pnpm add @zhin.js/command@^1.1.0 --ignore-workspace-root-check
+pnpm exec zhin setup --adapters  # pick Sandbox or another adapter
+pnpm install
 pnpm dev
-```
-
-- The startup log should show `[ping-pong] setup: reply=pong!`
-- Send `/ping` in the host's connected Sandbox or other channel; the bot replies `pong!` (`/` depends on that Endpoint's `commandPrefix` configuration)
-- Editing `commands/ping/index.ts` or `zhin.config.yml` triggers hot reload -- no process restart needed
-- `zhin runtime start --once` can be used for assembly smoke testing (non-interactive)
-
-```mermaid
-flowchart TD
-  M[package.json#zhin manifest] --> R[Plugin Runtime]
-  R --> F[Command Feature]
-  F -->|discovers| C[commands/ping/index.ts]
-  R --> E[plugin.ts setup]
-  S[schema.json defaults] --> CFG[Layered config]
-  Y[zhin.config.yml overrides] --> CFG
-  CFG --> E
-  CFG --> C
 ```
 
 ## Next steps
 
-- [Examples at a glance](../examples/index.md): start with single-file-bot / minimal-bot, then explore database, schedules, Agent tools, and proactive outbound as needed
-- For deeper plugin capabilities (Host Resources, lifecycle, handoff), see [Plugin model](../concepts/plugin-model.md)
+- [Commands](../authoring/commands.md): add params, options and permissions to `/ping`.
+- [Convention directories](../authoring/conventions.md): where middleware, components, schedules and other capabilities go.
+- [definePlugin overview](../authoring/define-plugin.md): use databases, timers and proactive messages in `setup`.
+- [Complete plugin delivery](../authoring/plugin-delivery.md): test your plugin and publish it to npm.

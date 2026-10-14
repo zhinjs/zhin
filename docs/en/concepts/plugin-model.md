@@ -1,6 +1,22 @@
+---
+title: "Plugin Model"
+description: "What a plugin is, how the plugin tree is built, Plugin vs Feature, instanceKey and mounting a plugin more than once, and plugins as applications"
+---
+
 # Plugin Model
 
 Connecting two QQ accounts to the same Bot, or splitting a game plugin out for independent publishing -- in zhin.js, both are solved with the same mechanism: the plugin tree. A plugin is an ordinary npm package; the only difference is an extra `zhin` field in `package.json`. The Root Plugin (your project) declares child plugins in `zhin.plugins`, and child plugins can in turn declare their own children. Like LEGO bricks: each one is independently formed and snaps into a designated position by instanceKey.
+
+## Core rules
+
+| Rule | Example |
+| --- | --- |
+| Plugin = npm package + a `zhin` field in `package.json` + a `plugin.ts` entry | Your project itself is the Root plugin |
+| Child plugins are mounted in `zhin.plugins`, each with an `instanceKey` | `{ "package": "@zhin.js/adapter-qq", "instanceKey": "qq" }` |
+| The `instanceKey` decides which config section the child reads | `plugins.qq:` in `zhin.config.yml` |
+| One package can be mounted several times, each configured separately | Two `instanceKey`s mount two copies of the same game plugin |
+| Any plugin with a `zhin.config.yml` can start as a standalone application | Develop and debug one plugin on its own |
+| A **Feature** is a special package that scans a convention directory; regular plugins don't write one | `@zhin.js/command` scans `commands/` |
 
 ## The `zhin` Field in `package.json`
 
