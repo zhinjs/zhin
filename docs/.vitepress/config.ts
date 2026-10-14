@@ -81,6 +81,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'AI 总览与启用', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
     { text: '结构化决策', link: '/ai/structured-decisions' },
+    { text: '后台任务', link: '/ai/detached-tasks' },
     { text: '执行状态反馈', link: '/advanced/activity-feedback' },
     { text: '语音', link: '/ai/speech' },
     { text: '智能家居（HA）', link: '/advanced/assistant-home-setup' },

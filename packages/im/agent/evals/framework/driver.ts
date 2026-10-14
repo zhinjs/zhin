@@ -49,6 +49,8 @@ export interface EvalRunRecord {
   /** Raw mocked tool results, as text, for leak checks. */
   readonly rawToolOutputs: readonly string[];
   readonly approvalRequests: readonly string[];
+  /** Question text of every approval request, in order. */
+  readonly approvalQuestions: readonly string[];
   /** Terminal event of each turn, in order. */
   readonly terminals: readonly TurnTerminalEvent[];
   readonly modelRequests: readonly ScriptedModelRequest[];
@@ -120,6 +122,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const rawToolOutputs: string[] = [];
   const outbound: string[] = [];
   const approvalRequests: string[] = [];
+  const approvalQuestions: string[] = [];
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
   const traces: TurnTrace[] = [];
@@ -127,7 +130,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
     ...nativeCapabilities(definition.nativeTools ?? [], definition.bashOutput ?? '', executedTools, rawToolOutputs),
   ];
-  const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests);
+  const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
   const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
   for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
@@ -173,6 +176,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
     outbound,
     rawToolOutputs,
     approvalRequests,
+    approvalQuestions,
     terminals,
     modelRequests: model.requests,
     unusedScriptSteps: model.remainingSteps(),
@@ -309,7 +313,11 @@ function toCapability(tool: EvalTool, executed: EvalToolInvocation[], rawOutputs
   };
 }
 
-function createApprovalPort(behaviour: EvalApprovalBehaviour, requests: string[]): ApprovalOutcomePort | undefined {
+function createApprovalPort(
+  behaviour: EvalApprovalBehaviour,
+  requests: string[],
+  questions: string[],
+): ApprovalOutcomePort | undefined {
   if (behaviour === 'unavailable') return undefined;
   const outcome: ApprovalOutcome = behaviour === 'approve'
     ? { status: 'approved', decision: 'approve-once' }
@@ -322,6 +330,7 @@ function createApprovalPort(behaviour: EvalApprovalBehaviour, requests: string[]
     },
     requestApprovalOutcome: async (request) => {
       requests.push(request.toolName);
+      questions.push(request.question ?? '');
       return outcome;
     },
   };

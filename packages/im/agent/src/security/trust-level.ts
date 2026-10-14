@@ -68,6 +68,11 @@ export interface TrustTurnView {
 
 type ToolView = Readonly<{ name: string; tags?: readonly string[] }>;
 
+/** Tool names that look like messaging another conversation (send_*, *_forward, notify, ...). */
+export function isOutboundToolName(name: string): boolean {
+  return OUTBOUND_TOOL_NAME.test(name);
+}
+
 /** Trust level of a turn's initiator. Roles come from the trusted product ingress, never from message text. */
 export function resolveTurnTrustLevel(turn: TrustTurnView): InitiatorTrustLevel {
   const roles = turn.principal.roles;
@@ -83,7 +88,7 @@ export function isToolAboveTrust(tool: ToolView, level: TrustLevel): boolean {
   const ceiling = TRUST_CEILINGS[level];
   if (!ceiling.shell && SHELL_TOOLS.has(tool.name)) return true;
   if (!ceiling.fileWrite && FILE_WRITE_TOOLS.has(tool.name)) return true;
-  if (!ceiling.outbound && (OUTBOUND_TOOL_NAME.test(tool.name) || (tool.tags?.includes('outbound') ?? false))) {
+  if (!ceiling.outbound && (isOutboundToolName(tool.name) || (tool.tags?.includes('outbound') ?? false))) {
     return true;
   }
   return false;
