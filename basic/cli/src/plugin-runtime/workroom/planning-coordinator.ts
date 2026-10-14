@@ -1,9 +1,7 @@
 import type { AIService } from '@zhin.js/agent';
-import type { WorkroomDefinition } from '@zhin.js/workroom';
 import {
+  type WorkroomDefinition,
   digestWorkroomCatalogProjectBinding,
-} from '@zhin.js/workroom';
-import {
   WORKROOM_CONTROL_PLANE_ROOT_PRINCIPAL,
   WorkroomDataGovernanceAuthorityWriter,
   assertAcceptanceProjectionDataGovernanceAuthority,

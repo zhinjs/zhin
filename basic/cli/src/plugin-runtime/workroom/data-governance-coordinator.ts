@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ActivatableWorkroomJournal } from '@zhin.js/workroom';
 import {
+  type ActivatableWorkroomJournal,
   createCatalogGovernedConsoleDisclosureAuthority,
   createFileWorkroomDataLifecycleRuntime,
   createGenerationOwnedWorkroomDataGovernanceStorage,

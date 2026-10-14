@@ -5,11 +5,6 @@ import {
   createAssignmentExecutionEnvelope,
   createDurableWorkroomAssignmentAuthorityGrantProvider,
   createWorkroomRoleCapabilitySnapshot,
-} from '@zhin.js/workroom';
-import {
-  type CapabilityIngress,
-} from '@zhin.js/agent/runtime';
-import {
   DurableReportLocalModelExecutionPort,
   GenerationOwnedWorkroomAssignmentAuthorityProvider,
   LocalAssignmentExecutor,
@@ -39,6 +34,9 @@ import {
   type WorkroomSchedulerPortfolioDispatchResources,
   type WorkroomStructuredDagModelInput,
 } from '@zhin.js/workroom';
+import {
+  type CapabilityIngress,
+} from '@zhin.js/agent/runtime';
 import { rootPluginId, type SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';

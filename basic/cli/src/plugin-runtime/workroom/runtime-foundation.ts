@@ -4,8 +4,6 @@ import {
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
   type WorkroomPlanGateAuthorityPort,
-} from '@zhin.js/workroom';
-import {
   CatalogWorkroomPriorityAuthority,
   GenerationWorkroomPriorityAuthority,
   createCatalogGovernedWorkroomProjectionAuthority,

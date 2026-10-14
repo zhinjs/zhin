@@ -6,8 +6,6 @@ import {
   FileWorkroomTaskReportStore,
   type WorkroomTaskReportPayloadReadInput,
   type WorkroomTaskReportPayloadWriteInput,
-} from '@zhin.js/workroom';
-import {
   FileWorkroomAcceptanceProjectionRepository,
   FileWorkroomContextReleaseJournal,
   FileWorkroomEphemeralContextDisposer,

@@ -1,9 +1,7 @@
 import { join } from 'node:path';
-import type {
-  ActivatableWorkroomCatalog,
-  ActivatableWorkroomJournal,
-} from '@zhin.js/workroom';
 import {
+  type ActivatableWorkroomCatalog,
+  type ActivatableWorkroomJournal,
   JournalWorkroomRunProfilePinAuthority,
   KernelPlanAdmissionRunProfilePinWriter,
   PinnedProfileWorkroomAcceptanceProjectionSource,

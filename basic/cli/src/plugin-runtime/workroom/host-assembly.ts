@@ -1,14 +1,14 @@
-import type { HumanIngressOrchestratorProposalPort } from '@zhin.js/workroom';
 import type {
+  HumanIngressOrchestratorProposalPort,
   WorkroomDynamicPlanningPolicyPort,
   WorkroomPlanGateAuthorityPort,
   WorkroomPlanningDisclosurePort,
+  SelfDeliveryHostConfiguration,
 } from '@zhin.js/workroom';
 import type { CapabilityIngress } from '@zhin.js/agent/runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { ImRuntime } from '@zhin.js/core/runtime';
-import type { SelfDeliveryHostConfiguration } from '@zhin.js/workroom';
 import type { AgentHostAIConfig, WorkroomStorageMode } from '../agent/config.js';
 import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
 import { WorkroomHostCoordinator } from './host-coordinator.js';

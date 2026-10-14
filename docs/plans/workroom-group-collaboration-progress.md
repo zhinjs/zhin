@@ -49,7 +49,8 @@ sidebar: false
   - 2026-10-14 · 「fix: 恢复 workroom 可选安装并补全 changeset 与文档」· CLI / a2a 对 workroom 改为 dev + 可选 peer；changeset 补 `zhin.js`；agent README 的 Journal / Outbox 段落迁到 workroom README；`ZhinAgentPrivate` 标 `@internal`；架构检查注释说明同级 level 5
 - [x] A4c CLI 改为可选加载 workroom（未安装时 Agent 照常工作，Console 的 workroom 页面降级）。前置条件（审查第 5 条）：`agent-console.ts` 在缺少 Workroom 端口时只返回 agent console，`AgentConsolePort` 的 `workroom*` 字段改为可选，Workroom 路由自己返回 503；同步修改 `api.test.ts` 中“缺少 Workroom 端口时返回 null”这个测试。更新 api-surface / plugin-runtime-api 快照。注意（第 12 轮 Nit）：CLI 的 `agent/host-installer.ts`、`agent/config.ts`、`agent-workroom.ts` 等仍静态导入 `@zhin.js/workroom`，A4c 要把它们改为可选加载，并删除 changeset 中相应的临时说明
   - 2026-10-14 · 「refactor: CLI 可选加载 @zhin.js/workroom」· CLI 对 workroom 只剩 `import type`，取值改为动态加载；只有包本身缺失才降级，已安装但加载 / 激活失败仍报错（有测试）；Console 缺 Workroom 端口时只返回 agent console，6 个 Workroom 路由返回 503；新增边界测试防止静态导入回归；快照无变化
-- [ ] A4c-1 处理第 13 轮审查 Nit：`basic/cli/src/plugin-runtime/console/agent-console.ts` 解析 `workroomHostToken` 的 `catch {}` 改为用 `isWorkroomPackageMissing` 区分，只有包缺失才降级，其他错误 warn 或置空；两个 import 都完成后再一次性给 `agentModule` 赋值，消除路由短暂返回 503 的窗口；`protocol-host-installer.ts` 的 `.catch` 只在包缺失时包装成 a2a 安装提示，其他错误原样抛出；`optional-workroom-boundary.test.ts` 补副作用导入 `import '@zhin.js/workroom'` 的匹配，并约束 `plugin-runtime/workroom/` 以外的文件只能 `import type` 或动态 `import()` 引用 `workroom/*.js`；顺带清理 basic/cli 中 27 个 `no-duplicate-imports`（`@zhin.js/workroom`）警告和 `agent-workroom.ts` 末尾多余空行
+- [x] A4c-1 处理第 13 轮审查 Nit：`basic/cli/src/plugin-runtime/console/agent-console.ts` 解析 `workroomHostToken` 的 `catch {}` 改为用 `isWorkroomPackageMissing` 区分，只有包缺失才降级，其他错误 warn 或置空；两个 import 都完成后再一次性给 `agentModule` 赋值，消除路由短暂返回 503 的窗口；`protocol-host-installer.ts` 的 `.catch` 只在包缺失时包装成 a2a 安装提示，其他错误原样抛出；`optional-workroom-boundary.test.ts` 补副作用导入 `import '@zhin.js/workroom'` 的匹配，并约束 `plugin-runtime/workroom/` 以外的文件只能 `import type` 或动态 `import()` 引用 `workroom/*.js`；顺带清理 basic/cli 中 27 个 `no-duplicate-imports`（`@zhin.js/workroom`）警告和 `agent-workroom.ts` 末尾多余空行
+  - 2026-10-14 · 「fix: 区分 Workroom 包缺失与加载失败」· Console 只在包缺失时降级（其他错误 warn），`agentModule` 两个 import 完成后一次赋值；a2a 只在包缺失时给安装提示，其他错误原样抛出；边界测试覆盖副作用导入与目录外 `workroom/*.js` 引用；27 个重复 import 合并
 - [ ] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
 
 ## 阶段 B：新 Room 核心（在 `@zhin.js/workroom` 内，与旧机制并存）
@@ -154,6 +155,12 @@ sidebar: false
 - Nit：Console 解析 `workroomHostToken` 时 `catch {}` 不加区分，已安装但加载失败也被当作未安装（启动路径仍 fail-closed）；`agentModule` 分两步赋值有短暂 503 窗口；a2a 的 `.catch` 把所有错误包装成安装提示；边界测试不匹配副作用导入，也不检查间接引用 `workroom/*.js` → 涉及 fail-closed 原则，新增 A4c-1
 - Nit：`agent-workroom.ts` 末尾多余空行 → 并入 A4c-1
 
+### 第 14 轮（2026-10-14，审查 A4c-1）
+
+- 无 Blocking，无 Should fix（A4c-1 是审查后续条目，以下 Nit 只记录，不新建条目）
+- Nit：`protocol-host-installer.ts:136` 去掉 `.catch` 后，包缺失时报通用的 `WORKROOM_INSTALL_HINT`，不再点名 a2a。可保留一个只在包缺失时包装的 `.catch`，或给 `loadWorkroomPackage` 传上下文参数
+- Nit：a2a 路径没有测试覆盖“包缺失 → 安装提示 / 其他错误 → 原样抛出”的区分（只有 Console 路径补了 `agent-console-load.test.ts`）。可在 A5 改 CLI 测试时顺带补
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -171,3 +178,4 @@ sidebar: false
 - 2026-10-14 同一次定时运行：完成 A4b（4 个 agent，约 19.6 分钟，四包 build / type-check / 2987 个相关测试 / check:architecture、domain-module-boundaries、harness-paths、no-removed-plugin-api / API 快照 / eslint 0 error 通过，审查无 Blocking，3 个 Should fix 新增为 A4b-1）
 - 2026-10-14 14:57 定时运行：rebase 到最新 origin/main（15 个提交无冲突），install / build 通过；完成 A4b-1（4 个 agent，约 3.6 分钟，四包 build / type-check / 1713 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 A4c（4 个 agent，约 12.8 分钟，cli build / type-check / 381 个相关测试 / check:architecture / API 快照 / eslint 0 error（27 个 no-duplicate-imports 警告）通过，审查无 Blocking，4 个 Nit 新增为 A4c-1）
+- 2026-10-14 17:10 定时运行：rebase 到最新 origin/main（17 个提交，`docs/authoring/host-tokens.md` 中英文冲突：main 重写了该页，保留 main 版本并重新加入 `workroomHostToken` 一行，来源改为 `@zhin.js/workroom`），install / build 通过；完成 A4c-1（6 个 agent，约 7.7 分钟，cli build / type-check / 354 个相关测试 / check:architecture / API 快照 / no-duplicate-imports 清零通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改

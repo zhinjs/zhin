@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
-import { FileWorkroomProjectionRepository } from '@zhin.js/workroom';
 import {
+  FileWorkroomProjectionRepository,
   WorkroomProjectionReplyResolver,
   WorkroomProjectionRuntime,
   WorkroomProjectionScheduler,

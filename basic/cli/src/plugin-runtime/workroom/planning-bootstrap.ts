@@ -3,8 +3,6 @@ import {
   createWorkroomSchedulerPolicySnapshot,
   type WorkroomDefinition,
   type WorkroomMemberRole,
-} from '@zhin.js/workroom';
-import {
   createCapabilityPackManifest,
   createWorkroomDynamicPlanningPolicySnapshot,
   createWorkroomProfileOverlay,

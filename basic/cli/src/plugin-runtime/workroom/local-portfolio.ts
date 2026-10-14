@@ -22,11 +22,7 @@ import {
   type WorkroomKernel,
   type WorkroomAssignmentAuthorityGrantPort,
   type WorkflowPlanProposal,
-} from '@zhin.js/workroom';
-import {
   digestWorkroomCatalogProjectBinding,
-} from '@zhin.js/workroom';
-import {
   digestCanonicalWorkroomValue,
   portfolioAtomicBundleAuthorityToken,
   portfolioKernelCommandAuthorityToken,

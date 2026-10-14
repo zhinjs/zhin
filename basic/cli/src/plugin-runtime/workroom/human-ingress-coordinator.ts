@@ -12,11 +12,7 @@ import {
   resolveWorkroomBotIdentity,
   workroomProjectionBindingKey,
   type HumanIngressOrchestratorProposalPort,
-} from '@zhin.js/workroom';
-import {
   digestWorkroomCatalogProjectBinding,
-} from '@zhin.js/workroom';
-import {
   createGenerationHumanIngressPlanningPort,
   createPortfolioSponsorHumanIngressControlPort,
   createProjectionHumanIngressTargetResolver,

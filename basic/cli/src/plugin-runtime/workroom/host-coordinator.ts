@@ -1,14 +1,12 @@
 import { join } from 'node:path';
-import type {
-  HumanIngressOrchestratorProposalPort,
-} from '@zhin.js/workroom';
-import type { CapabilityIngress } from '@zhin.js/agent/runtime';
 import {
+  type HumanIngressOrchestratorProposalPort,
   createSelfDeliveryProjectForHost,
   selfDeliveryProjectToken,
   workroomDeliveryProviderToken,
   type SelfDeliveryHostConfiguration,
 } from '@zhin.js/workroom';
+import type { CapabilityIngress } from '@zhin.js/agent/runtime';
 import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';

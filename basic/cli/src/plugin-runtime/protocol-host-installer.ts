@@ -133,9 +133,7 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
-        loadWorkroomPackage().catch((error: unknown) => {
-          throw new Error('a2a 需要安装 @zhin.js/workroom', { cause: error });
-        }),
+        loadWorkroomPackage(),
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {

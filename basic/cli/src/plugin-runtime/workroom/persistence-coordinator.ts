@@ -20,6 +20,10 @@ import {
   FileProjectKnowledgeJournal,
   FileWorkroomCatalog,
   FileWorkroomJournal,
+  createGenerationOwnedWorkroomDataGovernanceStorage,
+  defineWorkroomDatabaseModels,
+  prepareWorkroomDatabaseStorage,
+  portfolioJournalRepositoryToken,
 } from '@zhin.js/workroom';
 import {
   activateAiDatabaseStorage,
@@ -27,12 +31,6 @@ import {
   type SemanticMemoryRuntime,
   type ZhinAgent,
 } from '@zhin.js/agent/runtime';
-import {
-  createGenerationOwnedWorkroomDataGovernanceStorage,
-  defineWorkroomDatabaseModels,
-  prepareWorkroomDatabaseStorage,
-  portfolioJournalRepositoryToken,
-} from '@zhin.js/workroom';
 import { databaseRootHostToken, type DatabaseHost } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import {

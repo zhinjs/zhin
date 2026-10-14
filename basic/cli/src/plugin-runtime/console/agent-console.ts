@@ -3,8 +3,9 @@ import type {
   ConsoleWorkroomKnowledgeControlPort,
   ConsoleWorkroomProfileControlPort,
 } from '@zhin.js/host-http';
-import type { PortfolioSponsorProjection, WorkroomDefinition } from '@zhin.js/workroom';
 import type {
+  PortfolioSponsorProjection,
+  WorkroomDefinition,
   AgentHostWorkroomRunControlPort,
   PortfolioSponsorCommand,
   WorkroomDataLifecycleConsoleControlPort,
@@ -13,6 +14,10 @@ import type {
   WorkroomRuntimeHandle,
 } from '@zhin.js/workroom';
 import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
+import { formatCompact, getLogger } from '@zhin.js/logger';
+import { isWorkroomPackageMissing } from '../../utils/optional-workroom.js';
+
+const logger = getLogger('agent-console');
 
 /**
  * 新 Runtime 的 agent 门面。Session tree 仍由独立服务端口提供；Agent 本体只从
@@ -24,22 +29,45 @@ let agentModule: {
   workroomHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
-// The Agent token must not be lost when the optional Workroom package is absent.
-void (async () => {
+type AgentConsoleModule = NonNullable<typeof agentModule>;
+
+/**
+ * Resolves the Console's token module. Returns null when the Agent package is
+ * absent. Workroom is optional: a genuinely missing package degrades silently
+ * (no Workroom routes); any other load error is reported and also degrades the
+ * Console only (startup still fails closed independently). The result is
+ * produced after both imports settle so it is assigned atomically.
+ */
+export async function loadAgentConsoleModule(
+  importAgent: () => Promise<{ agentHostToken: { readonly id: TokenId } }>,
+  importWorkroom: () => Promise<{ workroomHostToken: { readonly id: TokenId } }>,
+  onWarn: (message: string) => void,
+): Promise<AgentConsoleModule | null> {
+  let agentHostToken: { readonly id: TokenId };
   try {
-    const runtime = await import('@zhin.js/agent/runtime');
-    agentModule = { agentHostToken: runtime.agentHostToken } as typeof agentModule;
+    agentHostToken = (await importAgent()).agentHostToken;
   } catch {
-    agentModule = null;
-    return;
+    return null;
   }
+  let workroomHostToken: { readonly id: TokenId } | undefined;
   try {
-    const workroom = await import('@zhin.js/workroom');
-    agentModule = { ...agentModule, workroomHostToken: workroom.workroomHostToken } as typeof agentModule;
-  } catch {
-    /* Workroom not installed: Agent console only. */
+    workroomHostToken = (await importWorkroom()).workroomHostToken;
+  } catch (error) {
+    if (!isWorkroomPackageMissing(error)) {
+      onWarn(formatCompact({
+        op: 'workroom_console_token_load_failed',
+        error: error instanceof Error ? error.message : String(error),
+      }));
+    }
   }
-})();
+  return { agentHostToken, ...(workroomHostToken ? { workroomHostToken } : {}) };
+}
+
+void loadAgentConsoleModule(
+  () => import('@zhin.js/agent/runtime'),
+  () => import('@zhin.js/workroom'),
+  message => logger.warn(message),
+).then(module => { agentModule = module; });
 
 export type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];

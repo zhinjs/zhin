@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { FilePortfolioJournalRepository } from '@zhin.js/workroom';
 import {
+  FilePortfolioJournalRepository,
   GenerationOwnedPortfolioCapacityRuntime,
   WorkroomPortfolioAssignmentFailureAuthority,
   WorkroomPortfolioSponsorRuntime,

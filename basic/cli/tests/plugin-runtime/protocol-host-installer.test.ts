@@ -22,8 +22,6 @@ import {
   workroomSchedulerAssignmentRouteRegistryToken,
   workroomAssignmentAuthorityGrantRepositoryToken,
   workroomAssignmentGrantClaimPreviewToken,
-} from '@zhin.js/workroom';
-import {
   MemoryAssignmentAuthorityGrantRepository,
   WORKROOM_A2A_EXTENSION_URI,
 } from '@zhin.js/workroom';

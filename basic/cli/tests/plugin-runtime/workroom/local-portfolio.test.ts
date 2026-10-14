@@ -10,11 +10,7 @@ import {
   WorkroomKernel,
   workroomLocalAssignmentId,
   type WorkroomCatalogSnapshot,
-} from '@zhin.js/workroom';
-import {
   digestWorkroomCatalogProjectBinding,
-} from '@zhin.js/workroom';
-import {
   portfolioAtomicBundleAuthorityToken,
   portfolioKernelCommandAuthorityToken,
   portfolioPolicyAuthorityToken,

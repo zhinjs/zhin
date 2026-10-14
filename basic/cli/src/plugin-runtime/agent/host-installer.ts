@@ -15,6 +15,9 @@ import {
 import type {
   HumanIngressOrchestratorProposalPort,
   WorkroomPlanGateAuthorityPort,
+  WorkroomDynamicPlanningPolicyPort,
+  WorkroomPlanningDisclosurePort,
+  SelfDeliveryHostConfiguration,
 } from '@zhin.js/workroom';
 import {
   AgentRuntime,
@@ -24,11 +27,6 @@ import {
   resolveAgentDecisionRuntime,
   type TurnIntentResolver,
 } from '@zhin.js/agent/runtime';
-import type {
-  WorkroomDynamicPlanningPolicyPort,
-  WorkroomPlanningDisclosurePort,
-  SelfDeliveryHostConfiguration,
-} from '@zhin.js/workroom';
 import { AgentTurnIngressRoute } from './turn/ingress-route.js';
 import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
 import type { LocalWorkroomDataGovernanceAuthority } from '../workroom/module.js';

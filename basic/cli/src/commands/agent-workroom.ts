@@ -691,5 +691,3 @@ function isBlockerActions(
   return Array.isArray(value)
     && value.every(action => action === 'resolve' || action === 'replan' || action === 'cancel');
 }
-
-

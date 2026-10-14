@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { ProjectKnowledgeRegistry } from '@zhin.js/workroom';
 import {
+  ProjectKnowledgeRegistry,
   WorkroomAssignmentKnowledgeContextProjector,
   createCatalogProjectKnowledgeSourceAuthority,
   createGenerationWorkroomEphemeralAssignmentContext,

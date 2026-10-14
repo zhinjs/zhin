@@ -1,5 +1,5 @@
-import { type WorkroomPreemptionState } from '@zhin.js/workroom';
 import {
+  type WorkroomPreemptionState,
   GenerationOwnedPortfolioCapacityRuntime,
   JournalWorkroomPreemptionCheckpointAckReader,
   KernelPortfolioGrantAssignmentIssuance,
