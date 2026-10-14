@@ -211,7 +211,6 @@
             "execApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for main Agent commands.", "x-descriptionZh": "主 Agent 命令的审批策略。" },
             "subagentExecApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for sub-Agent commands.", "x-descriptionZh": "子 Agent 命令的审批策略。" },
             "workerExecApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for worker commands.", "x-descriptionZh": "Worker 命令的审批策略。" },
-            "taskExecApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for task commands.", "x-descriptionZh": "Task 命令的审批策略。" },
             "toolExecution": {
               "type": "string",
               "enum": ["parallel", "sequential", "tiered"],

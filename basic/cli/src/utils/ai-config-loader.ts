@@ -9,6 +9,8 @@ export type AiConfigUtils = {
   applyAiConfigFixes: (
     ai: unknown,
   ) => { ai: Record<string, unknown> | undefined; fixes: string[] };
+  /** Retired `ai.agent.*` switches (#735); absent on older agent packages. */
+  findDeprecatedAgentConfigKeys?: (agent: unknown) => Array<{ key: string; reason: string }>;
 };
 
 const MODULE_ID = '@zhin.js/agent/config';

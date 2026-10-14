@@ -1,6 +1,7 @@
 import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
 import { type AgentBindingConfig, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import { normalizeAiRoutingConfig } from './normalize-ai-config.js';
+import { findDeprecatedAgentConfigKeys } from './deprecated-agent-keys.js';
 type LegacyRouteEntry = { priority: number; match: AgentBindingConfig['match'] };
 
 /**
@@ -133,6 +134,10 @@ export function applyAiConfigFixes(
     const agentSection = { ...(preNormalized.agent as Record<string, unknown>) };
     delete agentSection.chatModel;
     delete agentSection.visionModel;
+    for (const { key } of findDeprecatedAgentConfigKeys(agentSection)) {
+      delete agentSection[key];
+      fixes.push(`removed deprecated ai.agent.${key}`);
+    }
     if (Object.keys(agentSection).length > 0) {
       preNormalized.agent = agentSection as AIConfig['agent'];
     } else {
