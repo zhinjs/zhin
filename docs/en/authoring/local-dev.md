@@ -1,0 +1,145 @@
+# Local Development Guide for Plugin Authors
+
+This page is for authors developing local plugins (or zhin source) together with **their own bot project**. It covers the three most common problems: mixed dependency sources, local vs. published version mismatch, and ports / unclean exit. It reflects the current `main` implementation.
+
+## 1. Dependency sources: don't mix `link:` / `workspace:` with npm
+
+Within one generation Zhin requires **exactly one physical location per package**. While the project graph (`packages/im/runtime/src/project-graph.ts`) walks root plugins, child plugins and their declared features (such as `@zhin.js/command`, `@zhin.js/tool`), it:
+
+1. resolves each dependency starting from **the declaring plugin's own directory**;
+2. `realpath`s the package root;
+3. throws if the same package name has two different roots:
+
+```text
+zhin: Multiple package locations for @zhin.js/command are not supported in one generation
+```
+
+Even if both copies have the same version (e.g. `1.1.5`), different locations mean two module instances: tokens, brand markers and `instanceof` don't interoperate. This is an **intentional hard error**, not a false positive.
+
+### Typical trigger
+
+Most dependencies come from npm, but one plugin is `link:`ed to another zhin source checkout:
+
+```json
+{
+  "dependencies": {
+    "zhin.js": "latest",
+    "@zhin.js/plugin-calendar": "link:../zhin/plugins/utils/calendar"
+  }
+}
+```
+
+In the source repo the linked plugin declares `@zhin.js/command` as `workspace:*` / `workspace:^`, so it resolves to the **source repo's** `packages/im/command`, while other plugins resolve to the npm copy in your project's `node_modules/.pnpm`.
+
+### Diagnosis
+
+```bash
+# 1. Who depends on it, and are there multiple versions/variants?
+pnpm why @zhin.js/command
+
+# 2. Where does the linked plugin actually resolve it? (repeat per plugin)
+readlink -f node_modules/@zhin.js/plugin-calendar/node_modules/@zhin.js/command
+readlink -f node_modules/.pnpm/node_modules/@zhin.js/command
+
+# 3. List all link / file / workspace dependencies
+grep -nE '"(link|file|workspace):' package.json plugins/*/package.json
+```
+
+If the two paths in step 2 differ (one in another repo's `packages/im/command`, one in `.pnpm/@zhin.js+command@x.y.z`), this is your problem. Stale version directories left in `node_modules/.pnpm` are harmless; only the actual resolved path matters.
+
+## 2. Local source vs. published zhin.js mismatch
+
+Even without duplicate copies, a local plugin may depend on **unreleased** zhin.js features. Common symptoms:
+
+- `TypeError: Schema....effect is not a function` when loading the plugin (local Schema API is newer than npm);
+- `Invalid Plugin config ... must NOT have additional properties (additionalProperty: xxx)` at startup: the plugin's config schema didn't take effect as written locally, or the npm plugin of the same name is an older version without those fields.
+
+Compare the plugin's `peerDependencies` with what's installed and check that the APIs you use are released:
+
+```bash
+node -p "require('./node_modules/zhin.js/package.json').version"
+npm view zhin.js version
+npm view <plugin-package> version peerDependencies
+```
+
+## 3. Recommended: develop plugins inside the zhin repo
+
+When you need **unreleased** framework features or change framework and plugin together, the easiest path is to develop directly in the zhin monorepo: put the plugin in `plugins/<category>/<name>`, the test bot in `examples/<name>`, and use `workspace:*` for every zhin dependency. The whole workspace has a single resolution path, so the duplicate-copy error from section 1 cannot happen and there is no overrides list to maintain.
+
+```bash
+git clone https://github.com/zhinjs/zhin.git && cd zhin
+pnpm install
+# New plugin: plugins/utils/my-plugin (zhin.js and @zhin.js/* as "workspace:*")
+# Test bot: copy examples/minimal-bot to examples/my-bot, add
+#   "@zhin.js/plugin-my-plugin": "workspace:*"
+# and declare it in package.json zhin.plugins and zhin.config.yml
+pnpm install
+pnpm build
+cd examples/my-bot && pnpm exec zhin runtime start --once
+```
+
+Verified on current `main`: `@zhin.js/command` in both `examples/test-bot` and `plugins/utils/calendar` resolves to the same `packages/im/command`; after `pnpm build`, `zhin runtime start --once` in `examples/minimal-bot` prints `"started": true`.
+
+Other options compared:
+
+- **`pnpm link` / `link:` a single plugin**: not recommended. The linked plugin's `workspace:` dependencies resolve into the source repo, which is exactly the cause of section 1.
+- **yalc**: essentially the same as a tarball (copies build output); can't use unreleased framework APIs and needs an extra tool; not verified in this repo.
+- **tarball (see table below)**: for trying a local plugin in **your own external project** while the framework stays on npm.
+- **`pnpm.overrides` pointing everything local**: fallback when an external project must use the local framework; must cover every zhin package the project uses.
+
+## 4. Three valid setups for external projects
+
+| Setup | How | Use for | Notes |
+|-------|-----|---------|-------|
+| All npm | Plugins also use published versions (`^x.y.z`) | Daily use, production | Only published APIs and config fields |
+| All local | Use `pnpm.overrides` to point `zhin.js` and every `@zhin.js/*` at the same local checkout (`link:`), and run `pnpm build` there first | Changing framework and plugin together | All zhin packages must come from the **same** checkout; missing one brings back section 1's error |
+| Tarball | Run `pnpm pack` in the plugin dir (rewrites `workspace:` to real versions), depend on `file:./vendor/xxx.tgz` | Trying a local plugin with npm framework | Plugin can't use unreleased framework APIs; repack and `pnpm install` after each change |
+
+`pnpm.overrides` example (adjust paths; cover every zhin package your project uses):
+
+```json
+{
+  "pnpm": {
+    "overrides": {
+      "zhin.js": "link:../zhin/packages/im/zhin",
+      "@zhin.js/command": "link:../zhin/packages/im/command",
+      "@zhin.js/runtime": "link:../zhin/packages/im/runtime",
+      "@zhin.js/cli": "link:../zhin/basic/cli"
+    }
+  }
+}
+```
+
+Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
+
+To temporarily disable a plugin, remove its `package.json` dependency, its `zhin.plugins` entry and its `plugins.<instanceKey>` config in `zhin.config.yml` (otherwise you get `/plugins must NOT have additional properties`); you can keep the config commented out for later.
+
+## 5. Ports and clean exit
+
+The control plane listens on `http.host`/`http.port` (default `127.0.0.1:8086`). On `EADDRINUSE`, find the owner first:
+
+```bash
+lsof -nP -iTCP:<port> -sTCP:LISTEN
+```
+
+Only stop processes you know are yours (by PID); avoid `pkill -f "zhin runtime start"`, which can hit other projects' instances.
+
+Current exit behavior:
+
+- **Ctrl+C (SIGINT) / SIGTERM / SIGHUP**: graceful stop, closing HTTP/WS listeners, runtime (adapters, plugin resources), scheduler and database in order; exits `0` on success and frees the port.
+- **Not stopped within 5 seconds**: stderr prints `{"forcedExit":"budget","stillStopping":[...]}` naming components still stopping, then force-exits (SIGINT `130`, SIGTERM `143`, SIGHUP `129`).
+- **Second Ctrl+C while stopping**: exits immediately (`130`) with `"forcedExit":"repeated-signal"`.
+- **Console restart / dependency change requiring restart**: after a full stop, exits naturally with code `75` for the supervisor to relaunch; dependency changes don't interrupt an in-progress plugin management operation, whose apply/restart step triggers it instead.
+- Closing a terminal or script session sends SIGHUP, which also triggers a graceful stop; use `--daemon` or a process manager for long-running background use.
+
+Plugins must release their own timers and connections in dispose; a dispose that never finishes is cut off by the 5-second budget and shows up as `runtime` in `stillStopping`.
+
+## 6. Checklist
+
+- [ ] Every `link:`/`file:`/`workspace:` dependency found by `grep` is expected;
+- [ ] `pnpm why @zhin.js/command` (and `zhin.js`, `@zhin.js/tool`, ...) shows a single resolved path per package;
+- [ ] APIs and config fields used by local plugins exist in the installed zhin.js version;
+- [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / all-local overrides) without mixing;
+- [ ] Ran `pnpm install` after dependency changes and `pnpm build` after local source changes;
+- [ ] Port is free and old instances were stopped by PID before starting;
+- [ ] Ctrl+C exits within 5 seconds without `forcedExit`; if not, check the release logic of components listed in `stillStopping`.
