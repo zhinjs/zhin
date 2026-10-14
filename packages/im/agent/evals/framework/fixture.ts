@@ -7,6 +7,8 @@ import { RESERVED_TOOL_NAME_PREFIXES, RESERVED_TOOL_NAMES } from '../../src/rese
 import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { ScriptStep } from './scripted-model.js';
+import type { EvalRunRecord } from './driver.js';
+import type { EvalLiveCheck } from './live-checks.js';
 
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
 
@@ -123,6 +125,16 @@ export interface EvalCase {
   /** Unused script steps fail the case unless this is true. */
   readonly allowUnusedSteps?: boolean;
   readonly expect: EvalExpectations;
+  /**
+   * Real-model tier (#723): semantic checks used when the nightly runner
+   * replays this case against a real provider. They must also pass on the
+   * scripted run; the PR gate checks that, so they stay honest.
+   */
+  readonly live?: EvalLiveMode;
+}
+
+export interface EvalLiveMode {
+  readonly checks: (run: EvalRunRecord) => readonly EvalLiveCheck[];
 }
 
 /** Identity helper that gives case files type checking. */

@@ -4,6 +4,9 @@ import { BudgetExceededError, BudgetedCompletionPort, DEFAULT_NIGHTLY_BUDGET, re
 import { CAPABILITY_MATRIX, buildHaystack } from './matrix-cases.js';
 import { diffReports, renderMarkdown, summarizeCase, type NightlyReport } from './report.js';
 import { runNightlyMatrix } from './runner.js';
+import { liveSeedCases } from './seed-cases.js';
+import groupMemberNoShell from '../cases/group-member-no-shell.case.js';
+import sessionHistoryCarried from '../cases/session-history-carried.case.js';
 import { observe, semantic } from './semantic.js';
 
 const model = { id: 'm1', provider: 'minimax', api: 'ai-sdk', sdk: 'minimax', input: ['text'], reasoning: false, maxTokens: 1000, contextWindow: 100_000 } as unknown as Model;
@@ -40,7 +43,7 @@ const perfect = (user: string) => {
 
 describe('nightly budget', () => {
   it('has conservative documented defaults and ignores invalid overrides', () => {
-    expect(DEFAULT_NIGHTLY_BUDGET).toMatchObject({ maxRequests: 60, maxTotalTokens: 200_000, runsPerCase: 3 });
+    expect(DEFAULT_NIGHTLY_BUDGET).toMatchObject({ maxRequests: 120, maxTotalTokens: 600_000, runsPerCase: 3 });
     expect(resolveNightlyBudget({ NIGHTLY_RUNS_PER_CASE: '0', NIGHTLY_MAX_REQUESTS: '10' })).toMatchObject({ runsPerCase: 3, maxRequests: 10 });
   });
 
@@ -115,5 +118,54 @@ describe('matrix runner and report', () => {
     expect(diffs).toEqual([expect.objectContaining({ id: 'matrix-zh-instruction', previous: 1, current: 0, status: 'regressed' })]);
     expect(diffReports(undefined, base(1))[0]?.status).toBe('new');
     expect(renderMarkdown(base(0), diffs)).toContain('**Regressions:** m1/matrix-zh-instruction');
+  });
+});
+
+describe('seed cases on the live model hook', () => {
+  const budget = { ...DEFAULT_NIGHTLY_BUDGET, runsPerCase: 1 };
+  const clock = () => new Date('2026-10-14T00:00:00Z');
+  const lastUser = (ctx: { messages: readonly unknown[] }) => userText([...ctx.messages].reverse().find((m) => (m as { role?: string }).role === 'user'));
+  const portFor = (answer: (user: string, offered: readonly string[]) => AssistantMessage): LlmCompletionPort => ({
+    complete: async (_m, ctx) => answer(lastUser(ctx), (ctx.tools ?? []).map((t) => t.name)),
+    completeSimple: async () => { throw new Error('unused'); },
+  });
+  const seeds = liveSeedCases([groupMemberNoShell, sessionHistoryCarried]);
+
+  it('replays seed cases through the driver and grades them with live checks', async () => {
+    const seen: string[][] = [];
+    const port = new BudgetedCompletionPort(portFor((user, offered) => {
+      seen.push([...offered]);
+      if (user.includes('rm -rf')) return text('抱歉，群成员发起的对话不能执行命令。');
+      if (user.includes('代号是什么')) return text('代号是青鸟。');
+      return text('好的，记住了。');
+    }), budget);
+    const report = await runNightlyMatrix({ provider: 'minimax', models: [model], cases: [], seedCases: seeds, port, budget, now: clock });
+    const cases = report.models[0]!.cases;
+    expect(cases.map((c) => [c.id, c.capability, c.passRate])).toEqual([
+      ['seed-group-member-no-shell', 'seed-case', 1],
+      ['seed-session-history-carried', 'seed-case', 1],
+    ]);
+    expect(seen.every((offered) => !offered.includes('bash'))).toBe(true);
+    expect(report.budget.requests).toBe(3);
+  });
+
+  it('fails a seed case when the real answer misses the semantic check', async () => {
+    const port = new BudgetedCompletionPort(portFor(() => text('好的，马上执行。')), budget);
+    const report = await runNightlyMatrix({ provider: 'minimax', models: [model], cases: [], seedCases: seeds.slice(0, 1), port, budget, now: clock });
+    expect(report.models[0]!.cases[0]).toMatchObject({ passRate: 0 });
+    expect(report.models[0]!.cases[0]!.failures[0]).toContain('reply declines');
+  });
+
+  it('skips seed runs once the budget is spent', async () => {
+    const tight = { ...budget, maxRequests: 1 };
+    const port = new BudgetedCompletionPort(portFor(() => text('抱歉，不能执行命令。')), tight);
+    const report = await runNightlyMatrix({ provider: 'minimax', models: [model], cases: [], seedCases: seeds, port, budget: tight, now: clock });
+    expect(report.stoppedByBudget).toBe(true);
+    expect(report.models[0]!.cases[1]).toMatchObject({ skipped: 1, passRate: null });
+  });
+
+  it('only picks non-skipped cases that declare live checks', () => {
+    expect(liveSeedCases([groupMemberNoShell, { ...sessionHistoryCarried, skip: 'x' }, { ...groupMemberNoShell, id: 'no-live', live: undefined }]).map((s) => s.id))
+      .toEqual(['seed-group-member-no-shell']);
   });
 });
