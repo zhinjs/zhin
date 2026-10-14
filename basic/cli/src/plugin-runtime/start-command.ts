@@ -480,13 +480,18 @@ async function loadConfiguredAgentHost(
     import('./workroom/module.js'),
   ]);
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
-  const { createFileTurnTraceStore, defaultTurnTraceFile } = await import('@zhin.js/agent/trace');
+  const { createTurnTraceArchive, defaultTurnTraceDir, defaultTurnTraceFile, resolveTraceArchiveOptions } = await import('@zhin.js/agent/trace');
+  // Persistent trace archive with retention and a size cap (#728); pruned now and hourly on save.
+  const turnTraceStore = createTurnTraceArchive(defaultTurnTraceDir(projectRoot), {
+    ...resolveTraceArchiveOptions(),
+    legacyFile: defaultTurnTraceFile(projectRoot),
+  });
+  void turnTraceStore.prune().catch(() => undefined);
   const initialAi = await agentHost.resolveAiConfig(document);
   const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
   const runtime = new agentHost.AgentRuntime({
     coordinator: new agentHost.AgentTurnCoordinator(),
-    // Recent turns for `zhin trace`; full persistence and retention is #728.
-    turnTraceStore: createFileTurnTraceStore(defaultTurnTraceFile(projectRoot)),
+    turnTraceStore,
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<

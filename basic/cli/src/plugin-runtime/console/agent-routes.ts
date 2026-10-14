@@ -3,11 +3,14 @@ import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { parseBoundedInteger, writeJson } from './http-response.js';
 import { registerWorkroomConsoleRoutes } from './workroom-routes.js';
+import { registerTraceArchiveRoutes } from './trace-archive-routes.js';
 
 export interface RegisterAgentConsoleRoutesOptions {
   readonly http: HttpHost;
   readonly base: string;
   readonly snapshots?: SnapshotReader;
+  /** Enables the persistent trace archive routes (#728). */
+  readonly projectRoot?: string;
 }
 
 export function registerAgentConsoleRoutes(
@@ -145,5 +148,6 @@ export function registerAgentConsoleRoutes(
   });
 
   registerWorkroomConsoleRoutes({ http, base, snapshots });
+  if (options.projectRoot) registerTraceArchiveRoutes({ http, base, projectRoot: options.projectRoot });
 
 }
