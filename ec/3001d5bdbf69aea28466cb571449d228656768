@@ -1,0 +1,21 @@
+packages/im/agent/src/security/provenance.ts
+  s_8ca8c09056bb33::t_0ed258628b35b8 1-155
+packages/im/agent/src/security/trust-level.ts
+  s_8ca8c09056bb33::t_45fabc18e60db3 71-75,90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec3001d5bdbf69aea28466cb571449d228656768",
+  "prompts": {},
+  "sessions": {
+    "s_8ca8c09056bb33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a00c9e658fe5f588a",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
