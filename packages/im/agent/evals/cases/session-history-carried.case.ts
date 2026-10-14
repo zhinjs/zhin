@@ -1,4 +1,4 @@
-import { defineEvalCase } from '../framework/index.js';
+import { defineEvalCase, live } from '../framework/index.js';
 
 export default defineEvalCase({
   id: 'session-history-carried',
@@ -19,4 +19,5 @@ export default defineEvalCase({
     outboundMessages: 2,
     modelSteps: 2,
   },
+  live: { checks: (run) => [live.lastReplyMatches(run, /青鸟/, 'second reply recalls the code name'), live.turnsCompleted(run)] },
 });
