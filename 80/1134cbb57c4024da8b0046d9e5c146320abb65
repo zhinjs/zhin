@@ -1,0 +1,38 @@
+.changeset/agent-task-interjection.md
+  h_b680f75345178a 1-6
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  h_b680f75345178a 4-5,7-8,94-95,228-239,244-259,629-638
+basic/cli/tests/plugin-runtime/agent/turn/detached-task-ingress.test.ts
+  h_b680f75345178a 1-20
+docs/ai/detached-tasks.md
+  h_b680f75345178a 3,46-69
+packages/im/agent/evals/long-task/interjection.eval.ts
+  h_b680f75345178a 1-140
+packages/im/agent/src/detached-task/index.ts
+  h_b680f75345178a 4-5
+packages/im/agent/src/detached-task/interjection.ts
+  h_b680f75345178a 1-146
+packages/im/agent/src/detached-task/runner.ts
+  h_b680f75345178a 58-63,88,129,201-215,220-226,248-252,293-307
+packages/im/agent/src/detached-task/token.ts
+  h_b680f75345178a 1-12
+packages/im/agent/src/detached-task/types.ts
+  h_b680f75345178a 64-70,90-95,124-125,133
+packages/im/agent/src/index.ts
+  h_b680f75345178a 627-629
+packages/im/agent/tests/detached-task/detached-task-interjection.test.ts
+  h_b680f75345178a 1-131
+tests/snapshots/api-surface.json
+  h_b680f75345178a 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "801134cbb57c4024da8b0046d9e5c146320abb65",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
