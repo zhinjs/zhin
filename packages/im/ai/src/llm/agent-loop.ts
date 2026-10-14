@@ -55,6 +55,12 @@ export interface AgentLoopConfig {
   ) => Promise<AgentMessage>;
   /** Refresh tool list after meta-tool load (discover/load_*). */
   refreshTools?: () => LlmTool[] | Promise<LlmTool[]>;
+  /**
+   * Called when the model calls a tool that is not in the current tool list.
+   * Return the tool to load it into this turn and run the call; return
+   * undefined to reject it as unknown. Policy checks still run in executeTool.
+   */
+  resolveMissingTool?: (name: string, signal?: AbortSignal) => Promise<LlmTool | undefined>;
   /** Detect tool result that expanded the session tool set. */
   shouldRecompleteAfterTool?: (result: AgentMessage) => boolean;
   /** Max LLM re-complete calls per iteration after tool mutation (default 1). */
@@ -135,6 +141,15 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
   const { toolCalls, tools, config, executeTool, signal, cause, onResult, onEvent } = options;
   const mode = config.toolExecution ?? 'sequential';
 
+  /** Auto-load a deferred tool the model called directly; mutates the turn's shared tool list. */
+  const loadMissingTool = async (name: string): Promise<void> => {
+    if (!config.resolveMissingTool || tools.some((t) => t.name === name)) return;
+    const resolved = await config.resolveMissingTool(name, signal);
+    if (resolved && !tools.some((t) => t.name === resolved.name)) {
+      tools.push(resolved);
+    }
+  };
+
   const runOne = async (
     rawCall: ParsedToolCall,
     emitResult: (result: AgentMessage) => void = onResult,
@@ -143,6 +158,7 @@ async function executeToolCallsInTurn(options: ExecuteToolCallsOptions): Promise
 
     let toolCall = rawCall;
     try {
+      await loadMissingTool(rawCall.name);
       toolCall = validateToolCall(tools, rawCall);
     } catch (error) {
       const result = createErrorToolResult(

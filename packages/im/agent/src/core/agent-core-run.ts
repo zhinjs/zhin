@@ -134,7 +134,11 @@ export interface AgentLoopTurnInput {
   signal?: AbortSignal;
   deferredStats?: string;
   /** Turn-owned deferred selection authority. Required for deferred loading. */
-  deferredController?: Readonly<{ loadedToolNames(): string[] }>;
+  deferredController?: Readonly<{
+    loadedToolNames(): string[];
+    /** Optional: lets the loop auto-load a deferred tool the model called directly. */
+    load?(name: string): Promise<boolean>;
+  }>;
   /** Catalog paired with deferredController for this exact Turn. */
   toolCatalog?: readonly ToolCatalogItem[];
   /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
@@ -666,6 +670,15 @@ export async function* runAgentLoopTextTurnRun(
       await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
     },
     refreshTools: hasTools ? () => rebuildLlmTools() : undefined,
+    // The model called a deferred catalog tool without load_tool: load it and
+    // run the call. The catalog only holds tools this turn may use, and the
+    // rebuilt list re-applies exec policy, so disallowed tools stay rejected.
+    resolveMissingTool: hasTools && deferredController?.load
+      ? async (name: string) => {
+          if (!(await deferredController.load?.(name))) return undefined;
+          return rebuildLlmTools().find(tool => tool.name === name);
+        }
+      : undefined,
     shouldRecompleteAfterTool: (result: AgentMessage) => {
       if (result.role !== 'toolResult' || !Array.isArray(result.content)) return false;
       return result.content.some(

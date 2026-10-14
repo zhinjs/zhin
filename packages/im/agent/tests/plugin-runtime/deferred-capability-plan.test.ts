@@ -625,3 +625,64 @@ function invocation(): ToolInvocationContext {
     policy: { permissions: ['user'], unattended: false, network: { enabled: false } },
   });
 }
+
+describe('DeferredCapabilityPlan core workspace tools', () => {
+  function planFor(
+    toolNames: readonly string[],
+    options: {
+      snapshot?: import('@zhin.js/ai').DeferredToolSessionSnapshot;
+      maxLoadedPerSession?: number;
+      saved?: import('@zhin.js/ai').DeferredToolSessionSnapshot[];
+    } = {},
+  ) {
+    const owner = rootPluginId();
+    return createDeferredCapabilityPlan({
+      capabilities: Object.freeze({
+        generation: 1,
+        owner,
+        tools: Object.freeze(toolNames.map(name => tool(owner, name, `${name} tool`))),
+        skills: Object.freeze([]),
+        agents: Object.freeze([]),
+        mcp: Object.freeze([]),
+        promptSections: Object.freeze([]),
+      }),
+      sessionSnapshot: options.snapshot ?? { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: { maxLoadedPerSession: options.maxLoadedPerSession } },
+      platform: 'sandbox',
+      persistSnapshot: async (snapshot) => { options.saved?.push(snapshot); },
+    });
+  }
+
+  it('exposes the core file tools by default, but only those the turn was given', () => {
+    const plan = planFor(['read_file', 'grep', 'weather']);
+    const names = plan.resolvedTools.map(entry => entry.name);
+
+    expect(names).toEqual(expect.arrayContaining(['read_file', 'grep']));
+    expect(names).not.toContain('weather');
+    // write_file is a core tool, but this turn was not allowed to have it.
+    expect(names).not.toContain('write_file');
+  });
+
+  it('load() refuses tools outside the turn projection', async () => {
+    const plan = planFor(['read_file', 'weather']);
+
+    expect(await plan.controller.load('weather')).toBe(true);
+    expect(plan.controller.loadedToolNames()).toEqual(['weather']);
+    expect(await plan.controller.load('write_file')).toBe(false);
+    expect(await plan.controller.load('no_such_tool')).toBe(false);
+  });
+
+  it('pinned tools never enter the snapshot, so the load cap cannot evict them', async () => {
+    const saved: import('@zhin.js/ai').DeferredToolSessionSnapshot[] = [];
+    const plan = planFor(['read_file', 'a', 'b', 'c'], { maxLoadedPerSession: 2, saved });
+
+    await execute(plan.capabilities, 'load_tool', { name: 'read_file' });
+    for (const name of ['a', 'b', 'c']) await plan.controller.load(name);
+
+    expect(plan.controller.loadedToolNames()).not.toContain('read_file');
+    expect(plan.controller.loadedToolNames()).toHaveLength(2);
+
+    const nextTurn = planFor(['read_file', 'a', 'b', 'c'], { snapshot: saved.at(-1), maxLoadedPerSession: 2 });
+    expect(nextTurn.resolvedTools.map(entry => entry.name)).toContain('read_file');
+  });
+});
