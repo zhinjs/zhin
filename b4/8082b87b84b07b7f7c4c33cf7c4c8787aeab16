@@ -1,0 +1,57 @@
+.changeset/add-endpoint-self-user-id.md
+  s_18b2877d46eac6::t_7fa3233b1bbc7a 1-8
+docs/plans/workroom-group-collaboration-progress.md
+  s_18b2877d46eac6::t_d21e7b6001f471 63-65,191-198,220
+packages/im/adapter/src/endpoint-contract.ts
+  s_18b2877d46eac6::t_a28dfe5d53ed90 86-90,109-110
+packages/im/adapter/src/endpoint.ts
+  s_18b2877d46eac6::t_1e630b11faa8f1 13,52-58,95-119,135,142,172-173
+packages/im/adapter/src/index.ts
+  s_18b2877d46eac6::t_be50ca2393eb57 11-12
+packages/im/adapter/src/managed-endpoint.ts
+  s_18b2877d46eac6::t_123c61bd020e09 75,124-134
+packages/im/adapter/src/peer-registry.ts
+  s_18b2877d46eac6::t_17191851acf7f9 1-152
+packages/im/adapter/tests/endpoint-self-user-id.test.ts
+  s_18b2877d46eac6::t_9a1e06fe4fe6fe 1-164
+packages/im/adapter/tests/peer-registry.test.ts
+  s_18b2877d46eac6::t_8e9a1ff58f857d 1-88
+plugins/adapters/icqq/src/endpoint.ts
+  s_18b2877d46eac6::t_1218c7633bdde3 37,594-595
+plugins/adapters/icqq/src/icqq-inbound.ts
+  s_18b2877d46eac6::t_6114e70d3d9533 285-293
+plugins/adapters/icqq/tests/icqq-self-user-id.test.ts
+  s_18b2877d46eac6::t_7bae0f1f511048 1-70
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_18b2877d46eac6::t_a3bb5f2ff38bcd 46,52
+plugins/adapters/onebot11/src/self-id.ts
+  s_18b2877d46eac6::t_6774ef8a4302f9 1-28
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_18b2877d46eac6::t_f913e34cc6094b 45,50-51,109,163-164,200-210
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_18b2877d46eac6::t_02253ee8f0a980 44,49-50,171-172,207-217,282
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  s_18b2877d46eac6::t_62a77191a7bd2e 1-128
+plugins/adapters/sandbox/src/endpoint.ts
+  s_18b2877d46eac6::t_df869b9eef7cd3 182-184,193
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_18b2877d46eac6::t_60524026f8c96d 8,36-59
+tests/snapshots/plugin-runtime-api.json
+  s_18b2877d46eac6::t_80f92fbf15b6b5 14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b48082b87b84b07b7f7c4c33cf7c4c8787aeab16",
+  "prompts": {},
+  "sessions": {
+    "s_18b2877d46eac6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bdd7343-433a-42ad-8926-f428279e6858",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
