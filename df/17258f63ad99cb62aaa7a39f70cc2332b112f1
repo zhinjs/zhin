@@ -1,0 +1,31 @@
+.changeset/split-workroom-runtime.md
+  s_0491b9d4752e4a::t_5163c160ac9435 13
+docs/plans/workroom-group-collaboration-progress.md
+  s_0491b9d4752e4a::t_c84a2bcd0ee2de 34-36,94-99,108
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_0491b9d4752e4a::t_26343ab2e6f1a8 30-36,42,61-64,151-153,233-249
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  s_0491b9d4752e4a::t_5ac901ac036f98 9,102-160
+scripts/check-architecture-layers.mjs
+  s_0491b9d4752e4a::t_d38fdefe5d8ad3 12,388,428,430-432,434-447
+scripts/check-architecture-layers.test.ts
+  s_0491b9d4752e4a::t_a7bb9fbc5b99d0 1-69
+scripts/lib/parse-imports.mjs
+  s_0491b9d4752e4a::t_29493d5acb0a92 1-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df17258f63ad99cb62aaa7a39f70cc2332b112f1",
+  "prompts": {},
+  "sessions": {
+    "s_0491b9d4752e4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37d27f3b-eb81-4483-ba9c-29c7549e7934",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
