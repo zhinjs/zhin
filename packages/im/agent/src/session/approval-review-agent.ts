@@ -3,11 +3,15 @@ import type {
   ApprovalJudgmentPort,
   ApprovalReviewDecision,
 } from '../decision/approval-judgment.js';
-import type {
-  ApprovalDecision,
-  ApprovalDecisionPort,
-  ApprovalPort,
-  ApprovalRequestInput,
+import {
+  approvalOutcomeToDecision,
+  isApprovalPortAvailable,
+  requestApprovalOutcome,
+  type ApprovalDecision,
+  type ApprovalOutcome,
+  type ApprovalOutcomePort,
+  type ApprovalPort,
+  type ApprovalRequestInput,
 } from './approval-port.js';
 
 export type { ApprovalReviewDecision } from '../decision/approval-judgment.js';
@@ -115,43 +119,47 @@ export function createAutoApprovalPort(
   reviewer: ApprovalReviewAgent,
   ask?: ApprovalPort,
   judgment?: ApprovalJudgmentPort,
-): ApprovalPort {
-  return Object.freeze({
+): ApprovalOutcomePort {
+  const port: ApprovalOutcomePort = {
     available: true,
-    async requestApproval(input: ApprovalRequestInput) {
-      const timeoutMs = input.timeoutMs ?? 30_000;
-      const controller = new AbortController();
-      const abort = () => controller.abort(input.signal.reason);
-      const timer = setTimeout(() => controller.abort(new Error('Approval timed out')), timeoutMs);
-      input.signal.addEventListener('abort', abort, { once: true });
-      const scopedInput = { ...input, timeoutMs, signal: controller.signal };
+    async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
       try {
         input.signal.throwIfAborted();
-        const recalled = reviewer.recall(scopedInput);
-        if (recalled !== undefined) return recalled;
-        const decision = await reviewer.review(scopedInput, judgment);
+        const recalled = reviewer.recall(input);
+        if (recalled !== undefined) {
+          return recalled
+            ? { status: 'approved', decision: 'approve-once' }
+            : { status: 'denied', by: 'remembered' };
+        }
+        // The reviewer bounds its own judgment; a human escalation is bounded only
+        // by an explicit request timeout, otherwise by the approval surface itself.
+        const decision = await reviewer.review(input, judgment);
         if (decision === 'approve') {
-          reviewer.remember(scopedInput, 'approve-once', 'reviewer');
-          return true;
+          reviewer.remember(input, 'approve-once', 'reviewer');
+          return { status: 'approved', decision: 'approve-once' };
         }
-        if (decision === 'ask' && isApprovalPortAvailable(ask)) {
-          const humanDecision = await settleDecisionBeforeAbort(
-            requestDecision(ask, scopedInput),
-            controller.signal,
-          );
-          reviewer.remember(scopedInput, humanDecision, 'human');
-          return humanDecision !== 'reject';
+        if (decision === 'ask') {
+          if (!isApprovalPortAvailable(ask)) {
+            return { status: 'unavailable', reason: 'the reviewer escalated to a human, but nobody can be asked here' };
+          }
+          const outcome = await settleWithinTimeout(requestApprovalOutcome(ask, input), input);
+          // Only an explicit human answer is remembered; a timeout is not a "no".
+          if (outcome.status === 'approved' || (outcome.status === 'denied' && outcome.by === 'user')) {
+            reviewer.remember(input, approvalOutcomeToDecision(outcome), 'human');
+          }
+          return outcome;
         }
-        reviewer.remember(scopedInput, 'reject', 'reviewer');
-        return false;
+        reviewer.remember(input, 'reject', 'reviewer');
+        return { status: 'denied', by: 'reviewer' };
       } catch {
-        return false;
-      } finally {
-        clearTimeout(timer);
-        input.signal.removeEventListener('abort', abort);
+        return { status: 'unavailable', reason: 'approval review failed' };
       }
     },
-  });
+    async requestApproval(input: ApprovalRequestInput) {
+      return (await port.requestApprovalOutcome(input)).status === 'approved';
+    },
+  };
+  return Object.freeze(port);
 }
 
 export function createBypassApprovalPort(): ApprovalPort {
@@ -161,27 +169,6 @@ export function createBypassApprovalPort(): ApprovalPort {
   });
 }
 
-function isApprovalPortAvailable(port: ApprovalPort | undefined): port is ApprovalPort {
-  return Boolean(port && port.available !== false);
-}
-
-function requestDecision(
-  port: ApprovalPort,
-  input: ApprovalRequestInput,
-): Promise<ApprovalDecision> {
-  const decisionPort = port as Partial<ApprovalDecisionPort>;
-  if (typeof decisionPort.requestApprovalDecision === 'function') {
-    return decisionPort.requestApprovalDecision(input);
-  }
-  return port.requestApproval(input).then(approved => approved ? 'approve-once' : 'reject');
-}
-
-function settleDecisionBeforeAbort(
-  result: Promise<ApprovalDecision>,
-  signal: AbortSignal,
-): Promise<ApprovalDecision> {
-  return settleBeforeAbort(result, signal, 'reject');
-}
 
 async function settleBeforeAbort<T>(
   result: Promise<T>,
@@ -201,5 +188,31 @@ async function settleBeforeAbort<T>(
     // Always attach rejection handling, including when cancellation won the race.
     void result.then(value => finish(value), () => finish(cancelled));
     if (signal.aborted) deny();
+  });
+}
+
+/** Bound a human escalation by the caller's explicit timeout; cancellation stays fail-closed. */
+async function settleWithinTimeout(
+  result: Promise<ApprovalOutcome>,
+  input: ApprovalRequestInput,
+): Promise<ApprovalOutcome> {
+  const cancelled: ApprovalOutcome = { status: 'unavailable', reason: 'the turn was cancelled' };
+  const timedOut: ApprovalOutcome = { status: 'timed_out' };
+  return await new Promise<ApprovalOutcome>((resolve) => {
+    let settled = false;
+    const timer = input.timeoutMs === undefined
+      ? undefined
+      : setTimeout(() => finish(timedOut), input.timeoutMs);
+    const onAbort = () => finish(cancelled);
+    function finish(value: ApprovalOutcome) {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      input.signal.removeEventListener('abort', onAbort);
+      resolve(value);
+    }
+    input.signal.addEventListener('abort', onAbort, { once: true });
+    void result.then(finish, () => finish({ status: 'unavailable', reason: 'the approval prompt failed' }));
+    if (input.signal.aborted) onAbort();
   });
 }

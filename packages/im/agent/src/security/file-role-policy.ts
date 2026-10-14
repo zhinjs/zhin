@@ -66,10 +66,10 @@ const FILE_PERMISSION_MATRIX: Record<FileRole, Record<FileOperation, boolean>> =
 // ── 敏感/危险文件路径判定 ──────────────────────────────────────────
 
 /**
- * 危险文件路径模式 — 覆盖系统配置、密钥、数据库等关键位置。
- * 对 owner 仍允许操作但需二次确认；对 admin 需 Owner 确认；对 user 直接拒绝。
+ * 机密路径模式 — 系统账户文件、凭据与密钥。任何操作（包括读取）都视为危险：
+ * 对 owner 需二次确认；对 admin 需 Owner 确认；对 user 直接拒绝。
  */
-const DANGEROUS_PATH_PATTERNS: RegExp[] = [
+const SECRET_PATH_PATTERNS: RegExp[] = [
   /\/etc\/passwd/i,
   /\/etc\/shadow/i,
   /\/etc\/hosts/i,
@@ -81,13 +81,20 @@ const DANGEROUS_PATH_PATTERNS: RegExp[] = [
   /\.kube\//i,
   /\.config\/gcloud\//i,
   /\.docker\//i,
+  /\.pem$/i,
+  /\.key$/i,
+];
+
+/**
+ * 受保护的项目文件 — 改动会影响构建或仓库状态，但内容本身不含机密。
+ * 写入始终视为危险；owner 读取直接放行，其余角色读取仍按危险处理。
+ */
+const PROTECTED_PROJECT_PATH_PATTERNS: RegExp[] = [
   /\.git\//i,
   /\/package\.json$/i,
   /\/pnpm-lock\.yaml$/i,
   /\/yarn\.lock$/i,
   /\/tsconfig\.json$/i,
-  /\.pem$/i,
-  /\.key$/i,
 ];
 
 /**
@@ -143,7 +150,7 @@ export function checkFilePermission(
     };
   }
 
-  const isDangerous = operation === 'delete' || (filePath ? isDangerousFileOperation(operation, filePath) : false);
+  const isDangerous = operation === 'delete' || (filePath ? isDangerousFileOperation(operation, filePath, role) : false);
 
   if (isDangerous) {
     if (role === 'user') {
@@ -188,12 +195,16 @@ export function checkFilePermission(
  *
  * 危险判定规则:
  *  - delete 操作始终视为危险
- *  - read/create/update 对敏感路径视为危险（与 file-policy.checkFileAccess 对齐）
+ *  - 机密路径（.env、密钥、.ssh 等）的任何操作视为危险（与 file-policy.checkFileAccess 对齐）
+ *  - 受保护项目文件（package.json、锁文件、.git/ 等）的写入视为危险；
+ *    读取仅对非 owner 角色视为危险
  */
-export function isDangerousFileOperation(operation: FileOperation, filePath: string): boolean {
+export function isDangerousFileOperation(operation: FileOperation, filePath: string, role?: FileRole): boolean {
   if (operation === 'delete') return true;
   if (!checkFileAccess(filePath).allowed) return true;
-  return DANGEROUS_PATH_PATTERNS.some(p => p.test(filePath));
+  if (SECRET_PATH_PATTERNS.some(p => p.test(filePath))) return true;
+  if (operation === 'read' && role === 'owner') return false;
+  return PROTECTED_PROJECT_PATH_PATTERNS.some(p => p.test(filePath));
 }
 
 /**

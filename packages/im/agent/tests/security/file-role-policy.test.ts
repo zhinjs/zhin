@@ -93,6 +93,20 @@ describe('checkFilePermission', () => {
 
 
 describe('isDangerousFileOperation', () => {
+  it('lets only the owner read protected project files without confirmation', () => {
+    expect(isDangerousFileOperation('read', '/project/package.json', 'owner')).toBe(false);
+    expect(isDangerousFileOperation('read', '/project/.git/config', 'owner')).toBe(false);
+    expect(isDangerousFileOperation('read', '/project/package.json', 'admin')).toBe(true);
+    expect(isDangerousFileOperation('read', '/project/package.json')).toBe(true);
+    expect(isDangerousFileOperation('update', '/project/package.json', 'owner')).toBe(true);
+  });
+
+  it('keeps secrets dangerous for owner reads', () => {
+    expect(isDangerousFileOperation('read', '/project/.env', 'owner')).toBe(true);
+    expect(isDangerousFileOperation('read', '/project/certs/server.key', 'owner')).toBe(true);
+    expect(isDangerousFileOperation('read', '/home/u/.ssh/id_ed25519', 'owner')).toBe(true);
+  });
+
   it('delete 操作始终危险', () => {
     expect(isDangerousFileOperation('delete', '/tmp/test.txt')).toBe(true);
   });

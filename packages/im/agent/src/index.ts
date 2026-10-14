@@ -275,8 +275,15 @@ export type {
   ApprovalDecision,
   ApprovalDecisionMemory,
   ApprovalDecisionPort,
+  ApprovalOutcome,
+  ApprovalOutcomePort,
   ApprovalPort,
   ApprovalRequestInput,
+} from './session/approval-port.js';
+export {
+  approvalOutcomeToDecision,
+  formatApprovalDenial,
+  requestApprovalOutcome,
 } from './session/approval-port.js';
 export {
   ApprovalReviewAgent,

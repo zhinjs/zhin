@@ -396,6 +396,60 @@ describe('TurnToolRuntime', () => {
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
+  it('lets the owner read protected project files in the workspace without approval', async () => {
+    const execute = vi.fn(async () => '{}');
+    const requestApproval = vi.fn(async () => false);
+    const { turn } = fixture({
+      roles: ['master'],
+      workspaceRoot: process.cwd(),
+      approval: { available: true, requestApproval },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'read_file')]);
+
+    await expect(runtime.execute('read_file', { file_path: 'package.json' }, 'owner-read'))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(requestApproval).not.toHaveBeenCalled();
+  });
+
+  it('still asks the owner before writing a protected project file', async () => {
+    const execute = vi.fn(async () => 'written');
+    const requestApproval = vi.fn(async () => false);
+    const { turn } = fixture({
+      roles: ['master'],
+      workspaceRoot: process.cwd(),
+      approval: { available: true, requestApproval },
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'never', 'write_file')]);
+
+    await expect(runtime.execute('write_file', { file_path: 'package.json', content: '{}' }, 'owner-write'))
+      .resolves.toMatchObject({ status: 'denied', policy: 'file-permission-matrix' });
+    expect(requestApproval).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ status: 'denied', by: 'user' } as const, /denied by the user/],
+    [{ status: 'denied', by: 'reviewer' } as const, /automatic approval reviewer \(no human was asked\)/],
+    [{ status: 'denied', by: 'remembered' } as const, /already rejected/],
+    [{ status: 'timed_out' } as const, /timed out without an answer/],
+    [{ status: 'unavailable', reason: 'prompt undeliverable' } as const, /no approval channel is available \(prompt undeliverable\)/],
+  ])('reports approval outcome %o to the model without inviting a retry', async (outcome, reason) => {
+    const execute = vi.fn(async () => 'done');
+    const { turn } = fixture({
+      approval: {
+        available: true,
+        requestApproval: async () => false,
+        requestApprovalOutcome: async () => outcome,
+      } as import('../../src/session/approval-port.js').ApprovalOutcomePort,
+    });
+    const runtime = new TurnToolRuntime(turn, [tool(execute, 'once', 'plugin_action')]);
+
+    const result = await runtime.execute('plugin_action', {}, 'outcome');
+    expect(result).toMatchObject({ status: 'denied', reason: expect.stringMatching(reason) });
+    expect(result).toMatchObject({ reason: expect.stringMatching(/Do not retry/) });
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('records real settlement but returns cancellation when a tool ignores the signal', async () => {
     const controller = new AbortController();
     let release!: () => void;
