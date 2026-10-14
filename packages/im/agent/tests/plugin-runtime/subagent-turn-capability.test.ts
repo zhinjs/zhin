@@ -43,12 +43,17 @@ async function runQqTurn(options: {
   subagentTurnMode?: 'off' | 'sync';
   spawnArgs?: Record<string, unknown>;
   child?: ChildScript;
+  groupMember?: boolean;
 }) {
   const turn = createTurnIngress({
     intent: { kind: 'new' },
     identity: { rootId: 'root', generation: 3, traceId: 'trace', turnId: 'turn-1' },
-    origin: { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'private', sceneId: 'master', messageId: 'm-1' },
-    principal: { subjectId: 'master', roles: ['master'] },
+    origin: options.groupMember
+      ? { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'group', sceneId: 'group-1', messageId: 'm-1' }
+      : { kind: 'im', platform: 'icqq', endpoint: 'bot', scope: 'private', sceneId: 'master', messageId: 'm-1' },
+    principal: options.groupMember
+      ? { subjectId: 'member', roles: ['user'] }
+      : { subjectId: 'master', roles: ['master'] },
     input: { text: 'please delegate' },
     session: { key: 'im:icqq:bot:private:master' },
     policy: options.policy,
@@ -205,6 +210,15 @@ describe('spawn_task on the plugin-runtime (QQ) turn path', () => {
     expect(narrowed.child!.turnContext.policy.shell).toBeUndefined();
     expect(narrowed.child!.turnContext.policy.filesystem.access).toBe('read-only');
     expect(narrowed.child!.turnContext.capabilities.tools).not.toContain('bash');
+  });
+
+  it('keeps the group-member restriction for sub-agents of a group-member turn', async () => {
+    const tools = [capability('bash'), capability('write_file'), capability('send_message'), capability('read_file')];
+    const { child } = await runQqTurn({ policy: ISOLATED, tools, groupMember: true });
+    expect(child!.turnContext.policy.shell).toBeUndefined();
+    expect(child!.turnContext.policy.filesystem.access).toBe('read-only');
+    expect(child!.turnContext.capabilities.tools).toEqual(['read_file']);
+    expect(names(child!.allTools)).not.toEqual(expect.arrayContaining(['bash', 'write_file', 'send_message']));
   });
 
   it('routes sub-agent approvals to the parent conversation and requester with typed outcomes', async () => {
