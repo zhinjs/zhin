@@ -258,6 +258,11 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
         run: pnpm check:created-project
 
+      # PR gate: scripted-model agent evals (packages/im/agent/evals), deterministic, < 1 min.
+      - name: agent evals (scripted model)
+        if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24
+        run: pnpm eval:agent
+
       # type-check / lint 在 check:all；unit tests 由下方 coverage 覆盖（HARNESS_SKIP_TEST 避免双跑）
       - name: harness checks (incl. type-check, lint)
         if: matrix.os == 'ubuntu-latest' && matrix.node-version == 24

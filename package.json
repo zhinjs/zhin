@@ -102,6 +102,7 @@
     "type-check": "tsc --noEmit -p tsconfig.typecheck.json",
     "link": "pnpm --filter @zhin.js/cli exec npm link",
     "test": "vitest run",
+    "eval:agent": "turbo run eval --filter=@zhin.js/agent",
     "test:reporter": "vitest run --reporter=verbose",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

@@ -102,6 +102,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "eval": "vitest run --config evals/vitest.config.ts",
     "clean": "rimraf lib && find src -type f \\( -name '*.js' -o -name '*.d.ts' -o -name '*.js.map' -o -name '*.d.ts.map' \\) -delete 2>/dev/null || true"
   },
   "dependencies": {
