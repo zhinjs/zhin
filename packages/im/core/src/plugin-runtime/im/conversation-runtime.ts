@@ -19,6 +19,12 @@ import { segmentsToPlainText } from '../../built/segment-contract/text.js';
 import type { Notice } from '../../notice.js';
 import type { IncomingMessage, MessageSenderRef, SendRequest } from './contracts.js';
 
+/**
+ * Backlog messages older than this are dropped from the next turn's context:
+ * a stale command from hours ago is not something the current reply should answer.
+ */
+export const CONVERSATION_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
+
 /** Owns one ImRuntime's conversation fact store, projections, and consumer cursors. */
 export class ConversationRuntime {
   #events: ConversationEventStore;
@@ -62,10 +68,29 @@ export class ConversationRuntime {
       throughSequence,
       limit,
     );
+    const notBefore = Date.now() - CONVERSATION_CONTEXT_MAX_AGE_MS;
+    const relevant: SequencedConversationEvent[] = [];
+    for (const entry of events) {
+      // Only message timestamps are runtime-assigned; notice clocks are adapter-defined.
+      if (entry.event.type === 'message.created' && entry.event.timestamp < notBefore) continue;
+      if (await this.#isOwnRecall(entry.event)) continue;
+      relevant.push(entry);
+    }
     return Object.freeze({
-      blocks: aggregateConversationContext(events, excludeMessageId),
+      blocks: aggregateConversationContext(relevant, excludeMessageId),
       cursor: Math.max(cursor, throughSequence),
     });
+  }
+
+  /**
+   * The bot recalling its own outbound message (e.g. an activity indicator with
+   * autoRemove) is self-generated noise, not a conversation fact for the model.
+   * Outbound messages are recorded without an actor, which identifies them here.
+   */
+  async #isOwnRecall(event: ConversationEvent): Promise<boolean> {
+    if (event.type !== 'message.recalled') return false;
+    const recalled = await this.#events.getMessage(event.message);
+    return recalled !== undefined && recalled.actor === undefined;
   }
 
   commitContext(conversation: ConversationRef, consumer: string, cursor: number): Promise<void> {
