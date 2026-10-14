@@ -285,6 +285,7 @@
     "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
     "packages/im/agent/evals/**/*.ts",
+    "packages/im/workroom/src/**/*",
     "examples/minimal-bot/plugin.ts",
     "examples/minimal-bot/adapters/**/*",
     "examples/minimal-bot/agents/**/*",

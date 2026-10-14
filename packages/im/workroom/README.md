@@ -18,4 +18,4 @@ import `workroom/` or `portfolio/`.
 
 The `./workroom/*.js`, `./portfolio/*.js` and `./data-governance/*.js` deep subpaths exist only so
 `@zhin.js/agent` can keep one-line compatibility re-exports at its old internal paths during A4a.
-They are removed in A4b together with those compatibility stubs. Use the package root (`@zhin.js/workroom`).
+They are removed or narrowed after A4b/A5, together with those compatibility stubs. Use the package root (`@zhin.js/workroom`).

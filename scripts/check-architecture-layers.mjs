@@ -11,6 +11,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findBarrelViolations, parseImports } from './lib/parse-imports.mjs';
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
+import { isWorkroomPackageSpecifier } from './lib/workroom-specifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -483,17 +484,20 @@ for (const file of agentSrcFiles) {
   if (agentDomainDirs.some(root => insideDir(file, root))) continue;
   const content = fs.readFileSync(file, 'utf8');
   const isBarrel = agentReexportAllowed.has(file);
+  // Returns a display label for the domain the specifier points at, or undefined.
   const resolveDomain = (importPath) => {
+    if (isWorkroomPackageSpecifier(importPath)) return '@zhin.js/workroom';
     if (!importPath.startsWith('.')) return undefined;
     const target = path.resolve(path.dirname(file), importPath);
-    return agentDomainDirs.find(root => insideDir(target, root));
+    const matchedRoot = agentDomainDirs.find(root => insideDir(target, root));
+    return matchedRoot === undefined ? undefined : path.relative(repoRoot, matchedRoot);
   };
   if (isBarrel) {
     for (const importPath of findBarrelViolations(content, spec => resolveDomain(spec) !== undefined)) {
       agentReexportViolations.push({
         file: path.relative(repoRoot, file),
         import: importPath,
-        reason: `barrel may only \`export ... from\` the four Agent domain directories (${path.relative(repoRoot, resolveDomain(importPath))})`,
+        reason: `barrel may only \`export ... from\` the four Agent domain directories or the @zhin.js/workroom package (${resolveDomain(importPath)})`,
       });
     }
     continue;
@@ -504,7 +508,7 @@ for (const file of agentSrcFiles) {
     agentReexportViolations.push({
       file: path.relative(repoRoot, file),
       import: importPath,
-      reason: `only plugin-runtime/index.ts and index.ts may reference ${path.relative(repoRoot, domain)}`,
+      reason: `only plugin-runtime/index.ts and index.ts may reference ${domain}`,
     });
   }
 }

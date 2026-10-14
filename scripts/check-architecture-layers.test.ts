@@ -1,5 +1,6 @@
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
+import { isWorkroomPackageSpecifier } from './lib/workroom-specifier.mjs';
 
 const typed = { includeTypeOnly: true };
 const spec = './workroom/a.js';
@@ -132,5 +133,46 @@ describe('data-governance direction rule', () => {
 
   it.each(['workroom', 'workroom-runtime', 'portfolio'])('exposes the matching root for %s', name => {
     expect(run(`import { x } from '../${name}/x.js';`)[0].root).toBe(`${src}/${name}`);
+  });
+});
+
+describe('workroom package specifier rule', () => {
+  it.each([
+    '@zhin.js/workroom',
+    '@zhin.js/workroom/workroom/a.js',
+    '@zhin.js/workroom/portfolio/b.js',
+  ])('matches %s', (s) => {
+    expect(isWorkroomPackageSpecifier(s)).toBe(true);
+  });
+
+  it.each([
+    '@zhin.js/workroom-extra',
+    '@zhin.js/workroomx',
+    '@zhin.js/agent',
+    './workroom/a.js',
+    'workroom',
+  ])('does not match %s', (s) => {
+    expect(isWorkroomPackageSpecifier(s)).toBe(false);
+  });
+
+  it.each([
+    `export * from '@zhin.js/workroom/workroom/a.js';`,
+    `export { a } from '@zhin.js/workroom';`,
+  ])('barrel may re-export: %s', (source) => {
+    expect(findBarrelViolations(source, isWorkroomPackageSpecifier)).toEqual([]);
+  });
+
+  it.each([
+    `import { a } from '@zhin.js/workroom';`,
+    `import type {A} from '@zhin.js/workroom/workroom/a.js';`,
+    `const m = import('@zhin.js/workroom');`,
+  ])('barrel must not import: %s', (source) => {
+    expect(findBarrelViolations(source, isWorkroomPackageSpecifier)).toHaveLength(1);
+  });
+
+  it('non-barrel branch sees bare specifiers, including import type', () => {
+    const source = `import type { A } from '@zhin.js/workroom/workroom/a.js';\nimport { b } from '@zhin.js/workroom';`;
+    const hits = parseImports(source, typed).filter(isWorkroomPackageSpecifier);
+    expect(hits).toEqual(['@zhin.js/workroom/workroom/a.js', '@zhin.js/workroom']);
   });
 });
