@@ -1,0 +1,20 @@
+docs/authoring/local-dev.md
+  h_b680f75345178a 106-109
+docs/en/authoring/local-dev.md
+  h_b680f75345178a 106-109
+scripts/zhin-local.mjs
+  h_b680f75345178a 27,29-32,34,72-88,106,108,129-130,149-155,169,171,173
+scripts/zhin-local.test.ts
+  h_b680f75345178a 5,45,108-139
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d6177989694fb3ef5e43fb81e0fbc0fb5185b477",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
