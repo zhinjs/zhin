@@ -18,6 +18,8 @@ import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-r
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
+import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
+import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
@@ -26,7 +28,7 @@ import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 
@@ -87,7 +89,11 @@ export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOpti
 
 async function runInWorkspace(definition: EvalCase, workspace: string | undefined, clock: EvalClock): Promise<EvalRunRecord> {
   const model = createScriptedModel(definition.script, { extraModels: definition.models, clock });
-  const toolNames = (definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name);
+  const toolNames = [
+    ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
+    // Memory tools stay resident so memory cases exercise the write policy, not discovery.
+    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_')),
+  ];
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.
   const alwaysLoadedTools = [
@@ -126,7 +132,9 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const traces: TurnTrace[] = [];
   const tools = [
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
-    ...nativeCapabilities(definition.nativeTools ?? [], definition.bashOutput ?? '', executedTools, rawToolOutputs),
+    ...await nativeCapabilities(
+      definition.nativeTools ?? [], definition.bashOutput ?? '', definition.memory ?? [], executedTools, rawToolOutputs,
+    ),
   ];
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
@@ -362,17 +370,26 @@ async function createWorkspace(files: Readonly<Record<string, string>>): Promise
   return root;
 }
 
-/** Real native tool definitions, executed through a ToolIndex; bash gets a canned, shell-free port. */
-function nativeCapabilities(
+/**
+ * Real native tool definitions, executed through a ToolIndex; bash gets a
+ * canned, shell-free port and memory tools an in-memory store.
+ */
+async function nativeCapabilities(
   names: readonly EvalNativeTool[],
   bashOutput: string,
+  memory: readonly EvalMemoryEntry[],
   executed: EvalToolInvocation[],
   rawOutputs: string[],
-): ToolCapability[] {
+): Promise<ToolCapability[]> {
   if (names.length === 0) return [];
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
-  const features = [bash, ...createNativeFileToolFeatures()].filter((feature) => names.includes(feature.name as EvalNativeTool));
+  const repository = new InMemoryMemoryEntryRepository();
+  for (const entry of memory) await repository.upsert(entry);
+  const semanticMemory = new SemanticMemoryRuntime();
+  semanticMemory.activate(repository);
+  const features = [bash, ...createNativeFileToolFeatures(), ...createNativeSemanticMemoryToolFeatures(semanticMemory)]
+    .filter((feature) => names.includes(feature.name as EvalNativeTool));
   const slots = features.map((feature) => createCapabilitySlot({
     owner,
     feature: feature.feature,

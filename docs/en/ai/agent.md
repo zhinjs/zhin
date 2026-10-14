@@ -18,6 +18,7 @@ Haven't enabled AI yet? Start with the [AI overview](./index.md). Want the AI to
 | How lots of tools fit without flooding the prompt | [On-demand tools](#on-demand-tools) |
 | Hand long tasks to the background | [Sub-agents and spawn_task](#sub-agents-and-spawn-task) |
 | Where history is stored, how to reset, what happens when context gets long | [Sessions and session trees](#sessions-and-session-trees) · [Context compaction](#context-compaction) |
+| What the AI remembers, and who can change it | [Semantic memory](#semantic-memory) |
 | Which tools the AI has built in, and file / network boundaries | [Built-in tools](#built-in-tools) |
 | Have the AI do things on a schedule | [Schedules and the assistant persona](#schedules-and-the-assistant-persona) |
 | Tune parameters for one model | [Per-model tuning](#per-model-tuning) |
@@ -181,6 +182,28 @@ ai:
 ```
 
 It triggers when estimated tokens exceed `contextWindow × 0.6`, in two steps: a light trim first (dropping redundant tool results and the like), then the model writes a `[Previous conversation summary]` that replaces the old history. After a limit of consecutive failed auto-compactions, auto-compaction stops to avoid repeated cost.
+
+## Semantic memory
+
+With `ai.memory.semantic.enabled`, `memory_upsert` / `memory_search` store memory in the `memory_entries` database table. Each entry has:
+
+| Field | Meaning |
+| --- | --- |
+| `scope` / `scope_key` | Visibility: `global`, `platform`, `session` (this conversation), `user` (the current initiator) |
+| `kind` | `user_fact` (stable fact), `preference`, `task_state` (temporary, expires), `episodic` (something that happened) |
+| `source` / `source_turn` / `trust_level` | Which turn wrote it and at which trust level. Filled in by the runtime; the model cannot set it |
+| `confidence` | 0–1 |
+| `created_at` / `updated_at` / `expires_at` / `last_used_at` | Created, updated, expiry, and last recalled times |
+| `history` | Previous versions kept when content is replaced (up to 5, newest first) |
+
+Write rules:
+
+- A group member (`group_member`) can write only to their own `user` scope or the current `session`, never `global` / `platform`. Without a `scope` their writes default to `user`; owner and trusted members still default to `global`.
+- An existing `user_fact` / `preference` cannot be overwritten from a lower trust level, so a group member cannot change what the owner recorded. Writes from the same or a higher level win, and the old value moves to `history`.
+- `task_state` always expires: 24 hours by default, `ttl_hours` at most 168. Bind it to a task with `task_id`; when the host's `isTaskActive` (on `SemanticMemoryRuntime`) reports the task gone, the state is no longer recalled.
+- File memory (`data/memory/**/MEMORY.md`) is unchanged and stays readable; `renderMemoryEntriesMarkdown()` exports structured memory as Markdown.
+
+On upgrade, an existing `memory_entries` table gains the new columns at startup (`ALTER TABLE … ADD COLUMN`) and keeps its rows: old entries read as `user_fact` with an empty trust level, protected like a trusted member's. Retrieval is unchanged for now; BM25 retrieval comes in a later release.
 
 ## Built-in tools
 
