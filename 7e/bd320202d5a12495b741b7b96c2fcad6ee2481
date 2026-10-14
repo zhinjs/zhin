@@ -1,0 +1,60 @@
+.changeset/agent-context-budget.md
+  h_b680f75345178a 1-6
+docs/ai/agent.md
+  h_b680f75345178a 93-104
+docs/en/ai/agent.md
+  h_b680f75345178a 93-104
+packages/im/agent/evals/agent.eval.ts
+  h_b680f75345178a 5-8,10-12,16-17,26,30-35
+packages/im/agent/evals/cases/context-deferred-tool-index.case.ts
+  h_b680f75345178a 1-29
+packages/im/agent/evals/cases/context-fixed-cost-bounded.case.ts
+  h_b680f75345178a 1-33
+packages/im/agent/evals/cases/context-skill-catalog-compact.case.ts
+  h_b680f75345178a 1-39
+packages/im/agent/evals/cases/context-skill-loaded-on-demand.case.ts
+  h_b680f75345178a 1-26
+packages/im/agent/evals/cases/context-tool-index-respects-policy.case.ts
+  h_b680f75345178a 1-17
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 69-72,78-95
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 31,34,159,234-237,257-271
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 11,93-96,104-123,142
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 57-59,519,531,564-568,580-594,1087-1092
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  h_b680f75345178a 2,587-589,591-594
+packages/im/agent/src/prompt/system-prompt.ts
+  h_b680f75345178a 26,320-321,498
+packages/im/agent/src/skill/capability-catalog.ts
+  h_b680f75345178a 1-82
+packages/im/agent/src/trace/context-budget.ts
+  h_b680f75345178a 1-152
+packages/im/agent/src/trace/index.ts
+  h_b680f75345178a 35-46
+packages/im/agent/src/trace/turn-trace-format.ts
+  h_b680f75345178a 3,73-74,109-137
+packages/im/agent/src/trace/turn-trace.ts
+  h_b680f75345178a 12,94-95,111,151,205-209,351
+packages/im/agent/tests/skill/capability-catalog.test.ts
+  h_b680f75345178a 1-47
+packages/im/agent/tests/trace/context-budget.test.ts
+  h_b680f75345178a 1-70
+packages/im/ai/src/llm/agent-loop.ts
+  h_b680f75345178a 365-367,384,421-422
+packages/im/ai/tests/llm/agent-loop-recomplete.test.ts
+  h_b680f75345178a 1-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7ebd320202d5a12495b741b7b96c2fcad6ee2481",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
