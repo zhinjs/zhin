@@ -16,6 +16,8 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
+import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import type { EvalApprovalBehaviour, EvalCase, EvalInboundMessage, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
@@ -44,6 +46,8 @@ export interface EvalRunRecord {
   readonly extraModelRequests: number;
   /** Scripted tool calls naming a tool the harness did not offer on that request. */
   readonly unofferedToolCalls: readonly string[];
+  /** One TurnTrace per inbound turn, built exactly as production builds them. */
+  readonly traces: readonly TurnTrace[];
 }
 
 const ENDPOINT = 'eval-bot';
@@ -85,12 +89,15 @@ export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> 
   const approvalRequests: string[] = [];
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
+  const traces: TurnTrace[] = [];
   const tools = (definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs));
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests);
 
   const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
   for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
-    const turn = buildTurn(definition, message, index, tools, approval, outbound);
+    const trace = createTurnTrace(definition, message, index);
+    const releaseTrace = registerTurnTrace(trace);
+    const turn = buildTurn(definition, message, index, tools, approval, outbound, trace);
     const context: AgentTurnExecutionContext = {
       turn,
       capabilities: { generation: 1, owner: rootPluginId(), tools, skills: [], agents: [], mcp: [], promptSections: [] },
@@ -101,15 +108,23 @@ export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> 
         mcpServers: [],
       },
     };
-    const stream = engine.run(context);
-    while (true) {
-      const step = await stream.next();
-      if (step.done) {
-        await step.value?.project();
-        break;
+    try {
+      const stream = engine.run(context);
+      while (true) {
+        const step = await stream.next();
+        if (step.done) {
+          await step.value?.project();
+          break;
+        }
+        // Like executeAgentTurn, every engine event is committed to the journal.
+        await turn.ports.journal.append(step.value);
+        events.push(step.value);
+        if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
       }
-      events.push(step.value);
-      if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
+    } finally {
+      releaseTrace();
+      trace.finalize();
+      traces.push(trace.snapshot());
     }
   }
 
@@ -125,6 +140,7 @@ export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> 
     unusedScriptSteps: model.remainingSteps(),
     extraModelRequests: model.exhaustedRequests(),
     unofferedToolCalls: model.unofferedToolCalls,
+    traces,
   };
 }
 
@@ -135,12 +151,13 @@ function buildTurn(
   tools: readonly ToolCapability[],
   approval: ApprovalOutcomePort | undefined,
   outbound: string[],
+  trace: TurnTraceCollector,
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
   const roles = [...(sender.roles ?? ['user'])];
   const sceneId = scope === 'group' ? 'eval-group' : sender.id;
-  const sessionKey = `im:${PLATFORM}:${ENDPOINT}:${scope}:${sceneId}`;
+  const sessionKey = sessionKeyFor(message);
   const policy: TurnPolicyContext = message.policy ?? { permissions: roles, unattended: false };
   const turnId = `${definition.id}:turn-${index + 1}`;
   return createTurnIngress({
@@ -154,7 +171,7 @@ function buildTurn(
     capabilities: { tools: tools.map((tool) => tool.name), skills: [] },
     signal: new AbortController().signal,
     ports: {
-      journal: { append: async () => undefined },
+      journal: createTracingJournal({ append: async () => undefined }, trace),
       reply: {
         send: async (output) => {
           const text = output
@@ -166,6 +183,26 @@ function buildTurn(
       },
       ...(approval ? { approval } : {}),
       ...(message.backgroundEvents?.length ? { conversationContext: backgroundContext(message.backgroundEvents) } : {}),
+    },
+  });
+}
+
+function sessionKeyFor(message: EvalInboundMessage): string {
+  const scope = message.scope ?? 'private';
+  const senderId = message.sender?.id ?? 'eval-user';
+  const sceneId = scope === 'group' ? 'eval-group' : senderId;
+  return `im:${PLATFORM}:${ENDPOINT}:${scope}:${sceneId}`;
+}
+
+function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, index: number): TurnTraceCollector {
+  const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
+  return new TurnTraceCollector({
+    turnId: `${definition.id}:turn-${index + 1}`,
+    sessionKey: sessionKeyFor(message),
+    principal: {
+      subjectId: sender.id,
+      ...(sender.name ? { displayName: sender.name } : {}),
+      roles: [...(sender.roles ?? ['user'])],
     },
   });
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   SnapshotStore,
   childPluginId,
@@ -355,6 +355,52 @@ describe('Agent CapabilityIngress', () => {
       identity: { rootId: 'root', generation: 0, traceId: 'trace-1', turnId: 'turn-1' },
       capabilities: { tools: ['child__lookup', 'child__memory__search'], skills: ['research'] },
     });
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
+  it('saves a TurnTrace with tool events from the journal when a trace store is configured (#722)', async () => {
+    const fixture = await createFixture();
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn }) {
+      yield { type: 'usage', usage: { promptTokens: 10, completionTokens: 5, totalTokens: 15 } };
+      // Tool runtimes write tool events straight to the journal, not the stream.
+      await turn.ports.journal.append({ type: 'tool_call', toolName: 'lookup', args: { q: 'x' }, toolUseId: 'c1' });
+      await turn.ports.journal.append({ type: 'tool_failed', toolName: 'lookup', toolUseId: 'c1', error: 'boom', durationMs: 2 });
+      yield terminalEvent();
+    }));
+    const saved: import('../../src/trace/turn-trace.js').TurnTrace[] = [];
+    const runtime = new AgentRuntime({
+      coordinator: new AgentTurnCoordinator(),
+      turnTraceStore: {
+        save: async (trace) => { saved.push(trace); },
+        list: async () => saved,
+        latest: async () => saved.at(-1),
+        find: async () => undefined,
+      },
+    });
+    runtime.attach(store);
+
+    await runtime.execute(fixture.child, {
+      identity: { traceId: 'trace-t', turnId: 'turn-t' },
+      origin: { kind: 'http', sessionId: 'http-t' },
+      intent: { kind: 'new' },
+      principal: { subjectId: 'user-1', roles: ['user'] },
+      input: { text: 'hello' },
+      session: { key: 'http:http-t' },
+      policy: { permissions: ['user'], unattended: false },
+      signal: new AbortController().signal,
+      ports: {},
+    }, selection([]));
+
+    await vi.waitFor(() => expect(saved).toHaveLength(1));
+    expect(saved[0]).toMatchObject({
+      turn_id: 'turn-t',
+      session_key: 'http:http-t',
+      principal: { subject_id: 'user-1' },
+      usage: { total_tokens: 15 },
+      termination: { status: 'completed' },
+    });
+    expect(saved[0]!.tool_calls).toEqual([expect.objectContaining({ tool_name: 'lookup', status: 'failed', error: 'boom' })]);
     await fixture.mcp.stop();
     await store.close();
   });

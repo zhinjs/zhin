@@ -1,4 +1,5 @@
 import { EMPTY_DEFERRED_TOOL_SNAPSHOT, createUserMessage } from '@zhin.js/ai';
+import { createScopedTraceJournal } from '../trace/turn-trace-registry.js';
 import type { AgentCore } from '../core/agent-core.js';
 import { collectAgentLoopTurnRun } from '../core/agent-core-run.js';
 import { resolveToolBudget } from '../core/turn-progress.js';
@@ -178,7 +179,7 @@ async function runSubagentTurn(
     signal: parentTurn.signal,
     ports: Object.freeze({
       // Child tool events land in the parent's journal for one audit trail.
-      journal: parentTurn.ports.journal,
+      journal: createScopedTraceJournal(parentTurn.ports.journal, { turnId, sessionKey }),
       ...(parentTurn.ports.approval ? { approval: parentTurn.ports.approval } : {}),
       ...(parentTurn.ports.question ? { question: parentTurn.ports.question } : {}),
     }),
