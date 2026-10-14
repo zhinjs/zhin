@@ -121,6 +121,9 @@ describe('eval framework', () => {
       description: 'A provider error and an empty response are scripted like any other step.',
       source: 'framework self-test',
       inbound: { text: 'hi' },
+      // Provider resilience (#724) would retry a 429; turn retries off so this
+      // self-test checks only that one fault step maps to one request.
+      agentConfig: { providerResilience: { maxRetries: 0 } },
       script: [{ fault: { kind: 'error', message: 'HTTP 429 rate limited', status: 429 } }],
       expect: { termination: 'error' },
     });
