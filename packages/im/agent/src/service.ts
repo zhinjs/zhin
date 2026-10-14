@@ -6,7 +6,8 @@
 import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
-import { DEFAULT_CONFIG } from './config/index.js';
+import { DEFAULT_CONFIG, findDeprecatedAgentConfigKeys } from './config/index.js';
+import { getLogger } from '@zhin.js/logger';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
@@ -24,6 +25,8 @@ import {
   type PluginBeforeToolCallHandler,
   type PluginTransformContextHandler,
 } from './plugin-loop-hooks.js';
+
+const logger = getLogger('AIService');
 /** AIService 程序化 Agent 句柄（agentLoop 隔离上下文，非 legacy `Agent` 类） */
 export interface ServiceAgent {
   run(userInput: AgentRunInput): Promise<ServiceAgentResult>;
@@ -86,6 +89,9 @@ export class AIService {
     this.triggerConfig = config.trigger || {};
     this.accessConfig = config.access || {};
     this.agentConfig = config.agent;
+    for (const { key, reason } of findDeprecatedAgentConfigKeys(config.agent)) {
+      logger.warn(`ai.agent.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
+    }
     this.imageGenerationGlobal = config.imageGeneration;
   }
 
