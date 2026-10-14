@@ -23,6 +23,7 @@ import {
 } from './rules/index.js';
 import { ModelAwarePromptBuilder } from './model-aware-builder.js';
 import { PromptAssemblyRegistry } from './prompt-assembly-registry.js';
+import { estimatePromptTokens } from './estimate-tokens.js';
 export { enforcePromptBudget } from './prompt-budget.js';
 import type { PromptLayer } from './prompt-builder.js';
 export const FIXED_DISCIPLINE_RULES = [
@@ -316,6 +317,8 @@ function buildActiveSkillsSection(activeSkillsContext: string): string | null {
 export interface PromptSectionDebugInfo {
   id: string;
   approxChars: number;
+  /** CJK-aware token estimate of the section text. */
+  approxTokens: number;
 }
 
 interface DefaultPromptSectionDefinition {
@@ -492,7 +495,7 @@ function resolvePromptAssemblyRegistry(ctx: RichSystemPromptContext): PromptAsse
 export function describePromptSectionsForDebug(ctx: RichSystemPromptContext): PromptSectionDebugInfo[] {
   return resolvePromptAssemblyRegistry(ctx)
     .entries(ctx)
-    .map(({ id, content }) => ({ id, approxChars: content.length }));
+    .map(({ id, content }) => ({ id, approxChars: content.length, approxTokens: estimatePromptTokens(content) }));
 }
 
 export function buildRichSystemPrompt(ctx: RichSystemPromptContext): string {

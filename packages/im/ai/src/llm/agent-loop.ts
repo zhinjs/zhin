@@ -362,6 +362,9 @@ export async function* agentLoop(
       yield event;
     }
 
+    // A re-completion that answers in text (no further tool calls) is the
+    // final reply; asking the model again would cost a step and repeat it.
+    let recompleteAnswered = false;
     if (recompletePending && config.refreshTools && recompleteCount < maxRecomplete) {
       const refreshed = await config.refreshTools();
       tools = [...refreshed];
@@ -378,6 +381,7 @@ export async function* agentLoop(
         messages.push(followUp);
         emitted.push(followUp);
         const followCalls = extractToolCalls(followUp);
+        recompleteAnswered = followCalls.length === 0 && extractText(followUp as AssistantMessage).length > 0;
         if (followCalls.length > 0) {
           const followEvents: AgentEvent[] = [];
           await executeToolCallsInTurn({
@@ -414,7 +418,8 @@ export async function* agentLoop(
     }
 
     const last = messages[messages.length - 1];
-    if (last?.role === 'assistant' && extractText(last as AssistantMessage).length > 0 && toolResults.length === 0) {
+    if (last?.role === 'assistant' && extractText(last as AssistantMessage).length > 0
+      && (toolResults.length === 0 || recompleteAnswered)) {
       break;
     }
   }
