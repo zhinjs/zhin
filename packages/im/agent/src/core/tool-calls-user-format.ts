@@ -20,7 +20,7 @@ const INTERNAL_META_TOOLS = new Set(['load_skill', 'discover', 'load_tool']);
  * Read-only exploration tools whose bodies (file contents, grep hits, page
  * text) are context for the model, not answers for the user.
  */
-const EXPLORATION_TOOLS = new Set(['read_file', 'grep', 'glob', 'list_dir', 'web_fetch']);
+export const EXPLORATION_TOOLS: ReadonlySet<string> = new Set(['read_file', 'grep', 'glob', 'list_dir', 'web_fetch']);
 
 /** Per-tool and total caps for the user-facing summary. */
 const MAX_TOOL_BLOCK_CHARS = 2000;

@@ -38,6 +38,7 @@ import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
+import { createMissingToolResolver } from './missing-tool-resolver.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -673,11 +674,12 @@ export async function* runAgentLoopTextTurnRun(
     // The model called a deferred catalog tool without load_tool: load it and
     // run the call. The catalog only holds tools this turn may use, and the
     // rebuilt list re-applies exec policy, so disallowed tools stay rejected.
-    resolveMissingTool: hasTools && deferredController?.load
-      ? async (name: string) => {
-          if (!(await deferredController.load?.(name))) return undefined;
-          return rebuildLlmTools().find(tool => tool.name === name);
-        }
+    resolveMissingTool: hasTools
+      ? createMissingToolResolver({
+          catalog,
+          load: deferredController?.load?.bind(deferredController),
+          rebuild: rebuildLlmTools,
+        })
       : undefined,
     shouldRecompleteAfterTool: (result: AgentMessage) => {
       if (result.role !== 'toolResult' || !Array.isArray(result.content)) return false;

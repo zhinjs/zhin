@@ -78,4 +78,19 @@ describe('ConversationRuntime context hygiene', () => {
     expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 刚才那个']);
     expect(context.cursor).toBe(current.sequence);
   });
+
+  it('keeps an approval prompt and its interaction answer out of background events', async () => {
+    const store = new MemoryConversationEventStore();
+    const runtime = new ConversationRuntime(store);
+    const now = Date.now();
+    await store.append(message('prompt', '操作确认 回复 y / 同意 允许一次', now));
+    await store.append(message('answer', 'y', now, 'user-1'));
+    runtime.markInteractionAnswer({ conversation, id: 'answer' } as never);
+    await store.append(message('later', '顺便看下 README', now, 'user-1'));
+    const current = await store.append(message('current', 'hi', now, 'user-1'));
+
+    const context = await runtime.readContext(conversation, 'agent', current.sequence, 50, 'current');
+
+    expect(context.blocks.map((block) => block.text)).toEqual(['User (user-1): 顺便看下 README']);
+  });
 });

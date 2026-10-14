@@ -11,6 +11,7 @@ import {
   type ConversationResolution,
   type ConversationRef,
   type DeliveryReceipt,
+  type MessageRef,
   type SequencedConversationEvent,
   type Segment,
 } from '@zhin.js/im-contract';
@@ -25,9 +26,13 @@ import type { IncomingMessage, MessageSenderRef, SendRequest } from './contracts
  */
 export const CONVERSATION_CONTEXT_MAX_AGE_MS = 30 * 60 * 1000;
 
+const MAX_TRACKED_INTERACTION_ANSWERS = 1_000;
+
 /** Owns one ImRuntime's conversation fact store, projections, and consumer cursors. */
 export class ConversationRuntime {
   #events: ConversationEventStore;
+  /** Messages consumed as answers to an interaction prompt (e.g. an approval reply). */
+  readonly #interactionAnswers = new Set<string>();
 
   constructor(events: ConversationEventStore = new MemoryConversationEventStore()) {
     this.#events = events;
@@ -74,6 +79,8 @@ export class ConversationRuntime {
       // Only message timestamps are runtime-assigned; notice clocks are adapter-defined.
       if (entry.event.type === 'message.created' && entry.event.timestamp < notBefore) continue;
       if (await this.#isOwnRecall(entry.event)) continue;
+      if (entry.event.type === 'message.created'
+        && this.#interactionAnswers.has(messageRefKey(entry.event.message.ref))) continue;
       relevant.push(entry);
     }
     return Object.freeze({
@@ -91,6 +98,20 @@ export class ConversationRuntime {
     if (event.type !== 'message.recalled') return false;
     const recalled = await this.#events.getMessage(event.message);
     return recalled !== undefined && recalled.actor === undefined;
+  }
+
+  /**
+   * An answer to an interaction prompt (an approval `y`, a menu choice) was
+   * already handled by that prompt; replaying it as background would invite
+   * the model to answer it again. Kept in memory and bounded: the context age
+   * window makes older answers irrelevant anyway.
+   */
+  markInteractionAnswer(message: MessageRef): void {
+    this.#interactionAnswers.add(messageRefKey(message));
+    if (this.#interactionAnswers.size > MAX_TRACKED_INTERACTION_ANSWERS) {
+      const oldest = this.#interactionAnswers.values().next().value;
+      if (oldest !== undefined) this.#interactionAnswers.delete(oldest);
+    }
   }
 
   commitContext(conversation: ConversationRef, consumer: string, cursor: number): Promise<void> {
