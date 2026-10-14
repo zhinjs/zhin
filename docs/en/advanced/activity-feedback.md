@@ -1,10 +1,13 @@
 ---
-title: Activity Feedback
+title: "Activity Feedback"
+description: "Show typing, a reaction or a status message in chat while the AI works: installation, per-platform and per-scene config, when each phase appears and what to recommend"
 ---
 
 # Activity Feedback
 
-`@zhin.js/service-activity-feedback` projects Agent execution state into the originating IM conversation, so users can see that work is still progressing.
+An AI turn can take seconds to tens of seconds. `@zhin.js/service-activity-feedback` shows "typing…", a reaction or a status message in the original conversation so users know the bot is still working, and cleans it up when done.
+
+**Fastest path**: install and mount the plugin as described below — the defaults already work. Read the configuration section and the two reference tables only when you need per-platform tuning.
 
 ## What it covers
 
