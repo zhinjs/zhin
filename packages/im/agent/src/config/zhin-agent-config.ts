@@ -2,7 +2,7 @@ import type { ToolBudgetSettings } from '../core/turn-progress.js';
 /**
  * ZhinAgent 配置类型 SSOT — 供 host 契约与 zhin-agent 门面共用。
  */
-import type { RateLimitConfig, QueueMode, ProviderResilienceConfig } from '@zhin.js/ai';
+import type { RateLimitConfig, QueueMode, ProviderResilienceConfig, ProviderTimers } from '@zhin.js/ai';
 import type { DeferredToolsConfig } from '../tool-catalog/types.js';
 import type { ModelHarnessConfig } from './model-harness.js';
 
@@ -17,6 +17,11 @@ export interface InboundQueueConfig {
   groupMode?: InboundGroupQueueMode;
   ttlMs?: number;
   coalesceWindowMs?: number;
+  /**
+   * Plugin-runtime IM ingress (#725): turns allowed to wait behind the running
+   * turn of one session. Further messages get a short "busy" reply. Default 5.
+   */
+  maxQueuedTurns?: number;
 }
 
 /** ADR 0010 — session compaction config. */
@@ -82,6 +87,8 @@ export interface ZhinAgentConfig {
   modelHarness?: ModelHarnessConfig;
   /** Provider retry / backoff / timeout / fallback; unset keys use DEFAULT_PROVIDER_RESILIENCE. */
   providerResilience?: ProviderResilienceConfig;
+  /** Test seam: timers for the provider request timeout (evals inject a virtual clock). Not a YAML option. */
+  providerTimers?: ProviderTimers;
   phaseTrace?: boolean;
   promptTrace?: boolean;
   promptTraceVerbose?: boolean;

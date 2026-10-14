@@ -8,12 +8,14 @@ export interface ResolvedInboundQueueConfig {
   groupMode: InboundGroupQueueMode;
   ttlMs: number;
   coalesceWindowMs: number;
+  maxQueuedTurns: number;
 }
 
 export const DEFAULT_INBOUND_QUEUE_CONFIG: ResolvedInboundQueueConfig = {
   groupMode: 'supersede',
   ttlMs: 180_000,
   coalesceWindowMs: 30_000,
+  maxQueuedTurns: 5,
 };
 
 export function normalizeInboundQueueConfig(
@@ -26,7 +28,10 @@ export function normalizeInboundQueueConfig(
   const coalesceWindowMs = typeof raw?.coalesceWindowMs === 'number' && raw.coalesceWindowMs >= 0
     ? raw.coalesceWindowMs
     : DEFAULT_INBOUND_QUEUE_CONFIG.coalesceWindowMs;
-  return { groupMode, ttlMs, coalesceWindowMs };
+  const maxQueuedTurns = typeof raw?.maxQueuedTurns === 'number' && Number.isInteger(raw.maxQueuedTurns) && raw.maxQueuedTurns >= 0
+    ? raw.maxQueuedTurns
+    : DEFAULT_INBOUND_QUEUE_CONFIG.maxQueuedTurns;
+  return { groupMode, ttlMs, coalesceWindowMs, maxQueuedTurns };
 }
 
 export function validateInboundQueueConfig(raw?: InboundQueueConfig | null): string[] {
@@ -43,6 +48,12 @@ export function validateInboundQueueConfig(raw?: InboundQueueConfig | null): str
     && (typeof raw.coalesceWindowMs !== 'number' || !Number.isFinite(raw.coalesceWindowMs) || raw.coalesceWindowMs < 0)
   ) {
     errors.push('ai.agent.inboundQueue.coalesceWindowMs must be a non-negative number');
+  }
+  if (
+    raw.maxQueuedTurns !== undefined
+    && (typeof raw.maxQueuedTurns !== 'number' || !Number.isInteger(raw.maxQueuedTurns) || raw.maxQueuedTurns < 0)
+  ) {
+    errors.push('ai.agent.inboundQueue.maxQueuedTurns must be a non-negative integer');
   }
   return errors;
 }
