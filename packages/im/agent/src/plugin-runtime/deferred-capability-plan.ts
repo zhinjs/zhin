@@ -37,6 +37,8 @@ const WORKROOM_REALIZATION_ISSUER = Symbol('WorkroomCapabilityRealization.issuer
 export interface DeferredCapabilityController {
   loadedToolNames(): string[];
   loadedSkillInstructions(): string[];
+  /** Load a public catalog tool into the session. Returns false when it is not in this turn's catalog. */
+  load(name: string): Promise<boolean>;
 }
 
 export interface DeferredCapabilityPlan {
@@ -171,7 +173,13 @@ export function primeAgentSkillForIntent(options: Readonly<{
   if (!skill) return Object.freeze({ snapshot });
 
   const config = resolveDeferredToolsConfig(options.config);
-  const withTools = activateSkill(snapshot, skill, options.capabilities.tools, config.maxLoadedPerSession);
+  const withTools = activateSkill(
+    snapshot,
+    skill,
+    options.capabilities.tools,
+    config.maxLoadedPerSession,
+    new Set(config.alwaysLoadedTools),
+  );
   return Object.freeze({ snapshot: withTools, skill });
 }
 
@@ -196,7 +204,13 @@ export async function primeSkillsForIntent(options: Readonly<{
   const config = resolveDeferredToolsConfig(options.config);
   let snapshot = projectSessionSnapshot(options.sessionSnapshot, options.capabilities);
   for (const skill of [...skills].reverse()) {
-    snapshot = activateSkill(snapshot, skill, options.capabilities.tools, config.maxLoadedPerSession);
+    snapshot = activateSkill(
+      snapshot,
+      skill,
+      options.capabilities.tools,
+      config.maxLoadedPerSession,
+      new Set(config.alwaysLoadedTools),
+    );
   }
   return Object.freeze({ snapshot, skill: skills[0], skills: Object.freeze(skills) });
 }
@@ -242,6 +256,7 @@ export function createDeferredCapabilityPlan(
     platform: options.platform,
     topK: config.discoverTopK,
     maxLoaded: config.maxLoadedPerSession,
+    pinned: alwaysLoaded,
     getSnapshot: () => snapshot,
     persist,
     decision: options.decision,
@@ -249,9 +264,17 @@ export function createDeferredCapabilityPlan(
   const capabilities = Object.freeze([...executableCapabilities, ...metaCapabilities]);
   const allTools = capabilities.map(capabilityAsAgentTool);
   const catalog = buildToolCatalog({ tools: allTools, alwaysLoaded });
+  const publicToolNames = new Set(publicCatalog.map(item => item.name));
   const controller: DeferredCapabilityController = Object.freeze({
     loadedToolNames: () => getLoadedToolNamesFromSnapshot(snapshot),
     loadedSkillInstructions: () => loadedSkillInstructions(projected.skills, snapshot),
+    load: async (name: string) => {
+      if (!publicToolNames.has(name)) return false;
+      if (!alwaysLoaded.has(name)) {
+        await persist(touchToolInSnapshot(snapshot, name, config.maxLoadedPerSession));
+      }
+      return true;
+    },
   });
   const resolvedTools = resolveDeferredApiTools(
     catalog,
@@ -380,6 +403,8 @@ interface MetaCapabilityOptions {
   readonly platform?: string;
   readonly topK: number;
   readonly maxLoaded: number;
+  /** Always-loaded tools: never written to the snapshot, so they never count against `maxLoaded`. */
+  readonly pinned: ReadonlySet<string>;
   readonly getSnapshot: () => DeferredToolSessionSnapshot;
   readonly persist: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
   readonly decision?: AgentDecisionRuntime;
@@ -437,7 +462,9 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const name = String(recordOf(raw).name ?? '');
       const item = byName.get(name);
       if (!item) return `Tool "${name}" not found in catalog.`;
-      await options.persist(touchToolInSnapshot(options.getSnapshot(), name, options.maxLoaded));
+      if (!options.pinned.has(name)) {
+        await options.persist(touchToolInSnapshot(options.getSnapshot(), name, options.maxLoaded));
+      }
       return `Loaded tool "${name}".\nParameters schema:\n${JSON.stringify(item.fullTool.parameters, null, 2)}\n__zhin_tools_mutated__`;
     }),
     metaCapability(options.owner, 'load_skill', 'Load projected skill instructions into this session.', {
@@ -449,7 +476,9 @@ function createMetaCapabilities(options: MetaCapabilityOptions): readonly ToolCa
       const skill = resolveSkill(options.skills, name);
       if (!skill) return `Skill '${name}' not found in the active generation.`;
       const toolNames = resolveSkillTools(skill, options.tools);
-      await options.persist(activateSkill(options.getSnapshot(), skill, options.tools, options.maxLoaded));
+      await options.persist(
+        activateSkill(options.getSnapshot(), skill, options.tools, options.maxLoaded, options.pinned),
+      );
       const unlocked = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
       return `${skill.instructions}${unlocked}\n__zhin_tools_mutated__`;
     }),
@@ -515,9 +544,10 @@ function activateSkill(
   skill: SkillDescriptor,
   tools: readonly ToolCapability[],
   maxLoaded: number,
+  pinned: ReadonlySet<string>,
 ): DeferredToolSessionSnapshot {
-  return touchToolsInSnapshot(addSkillToSnapshot(snapshot, skill.qualifiedName),
-    resolveSkillTools(skill, tools), maxLoaded);
+  const toolNames = resolveSkillTools(skill, tools).filter(name => !pinned.has(name));
+  return touchToolsInSnapshot(addSkillToSnapshot(snapshot, skill.qualifiedName), toolNames, maxLoaded);
 }
 
 function disclosedToolCatalog(options: MetaCapabilityOptions): ToolCatalogItem[] {

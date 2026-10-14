@@ -47,4 +47,28 @@ describe('sandbox per-session Turn policy', () => {
     expect(resolveSandboxTurnPolicy({ platform: 'icqq', isMaster: true, projectRoot: '/safe', metadata }))
       .toEqual({ filesystem: { workspaceRoot: '/safe', workingDirectory: '/safe', access: 'workspace-write' } });
   });
+
+  describe('IM master shell opt-in (ai.agent.masterShell)', () => {
+    const base = { platform: 'icqq', projectRoot: '/projects/bot', metadata: {} } as const;
+
+    it('keeps bash disabled by default', () => {
+      expect(resolveSandboxTurnPolicy({ ...base, isMaster: true, scope: 'private' }).shell).toBeUndefined();
+    });
+
+    it('grants an isolated shell to the master in a private chat when opted in', () => {
+      expect(resolveSandboxTurnPolicy({ ...base, isMaster: true, scope: 'private', masterShell: 'isolated' }))
+        .toEqual({
+          filesystem: { workspaceRoot: '/projects/bot', workingDirectory: '/projects/bot', access: 'workspace-write' },
+          shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
+        });
+    });
+
+    it('never grants it in groups or to non-masters', () => {
+      expect(resolveSandboxTurnPolicy({ ...base, isMaster: true, scope: 'group', masterShell: 'isolated' }).shell)
+        .toBeUndefined();
+      expect(resolveSandboxTurnPolicy({ ...base, isMaster: false, scope: 'private', masterShell: 'isolated' }).shell)
+        .toBeUndefined();
+    });
+  });
 });
+

@@ -112,6 +112,7 @@ export class ImRuntime implements OutboundMessageService {
       deliver: (request, snapshot) => this.#outbound.deliver(request, snapshot),
       recordIncoming: (input, sender) => this.#conversations.recordIncoming(input, sender),
       recordNotice: (notice) => this.#conversations.recordNotice(notice),
+      markInteractionAnswer: (message) => this.#conversations.markInteractionAnswer(message),
       publish: (event) => this.#messageEventStream.publish(event),
     }, options.commandPrefix);
     this.endpoints = new EndpointRuntime({

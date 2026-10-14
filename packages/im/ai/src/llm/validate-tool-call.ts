@@ -12,10 +12,21 @@ export class ToolCallValidationError extends Error {
   }
 }
 
+/** Points the model at the discovery meta-tools when they are available. */
+function unknownToolMessage(tools: LlmTool[], name: string): string {
+  const names = new Set(tools.map((t) => t.name));
+  const hints: string[] = [];
+  if (names.has('discover')) hints.push('use `discover` to search for tools');
+  if (names.has('load_tool')) hints.push('call `load_tool` with an exact name from the results');
+  return hints.length > 0
+    ? `Unknown tool: ${name}. It is not available in this turn; ${hints.join(', then ')}.`
+    : `Unknown tool: ${name}`;
+}
+
 export function validateToolCall(tools: LlmTool[], toolCall: ParsedToolCall): ParsedToolCall {
   const tool = tools.find((t) => t.name === toolCall.name);
   if (!tool) {
-    throw new ToolCallValidationError(`Unknown tool: ${toolCall.name}`, toolCall.name);
+    throw new ToolCallValidationError(unknownToolMessage(tools, toolCall.name), toolCall.name);
   }
 
   const parsed = tool.parameters.safeParse(toolCall.arguments);

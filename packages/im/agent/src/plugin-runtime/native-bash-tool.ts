@@ -28,6 +28,36 @@ export interface BashExecutionPort {
   execute(request: BashExecutionRequest): Promise<BashExecutionResult>;
 }
 
+export const BASH_TOOL_NAME = 'bash';
+
+/**
+ * Whether a Turn policy authorizes shell execution at all. Only two shapes
+ * run: an isolated (container) shell over read-only/workspace-write files, or
+ * an explicitly unrestricted shell with danger-full-access. Anything else,
+ * including a missing `shell` policy, means bash must not be offered.
+ */
+export function turnPolicyAllowsShell(
+  policy: Pick<ToolInvocationPolicy, 'shell' | 'filesystem'> | undefined,
+): boolean {
+  const filesystem = policy?.filesystem;
+  const shell = policy?.shell;
+  if (!filesystem?.workspaceRoot || !shell || shell.security === 'deny') return false;
+  const access = filesystem.access;
+  if (shell.isolation === 'required') return access === 'read-only' || access === 'workspace-write';
+  if (shell.isolation === 'none') return access === 'danger-full-access';
+  return false;
+}
+
+/** Drops bash from a tool or catalog list when the Turn policy cannot run it. */
+export function withoutForbiddenShell<T extends { readonly name: string }>(
+  policy: Pick<ToolInvocationPolicy, 'shell' | 'filesystem'> | undefined,
+  tools: readonly T[],
+): T[] {
+  return turnPolicyAllowsShell(policy)
+    ? [...tools]
+    : tools.filter(tool => tool.name !== BASH_TOOL_NAME);
+}
+
 /** Executes one policy-authorized command using the exact Turn isolation boundary. */
 export class SandboxBashExecutionPort implements BashExecutionPort {
   readonly #baseConfig: Readonly<Partial<SandboxConfig>>;
@@ -39,14 +69,15 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
   async execute(request: BashExecutionRequest): Promise<BashExecutionResult> {
     request.signal.throwIfAborted();
     const filesystem = request.policy.filesystem;
-    const access = filesystem?.access;
-    const isolation = request.policy.shell?.isolation;
-    const isolated = isolation === 'required'
-      && (access === 'read-only' || access === 'workspace-write');
-    const unrestricted = isolation === 'none' && access === 'danger-full-access';
-    if (!filesystem?.workspaceRoot || (!isolated && !unrestricted)) {
-      throw new Error('Bash execution requires an explicit Turn filesystem and isolation policy');
+    if (!filesystem || !turnPolicyAllowsShell(request.policy)) {
+      // Normally unreachable: the agent loop hides bash from turns that cannot run it.
+      throw new Error(
+        'Shell execution is disabled for this conversation by policy. Do not retry bash; '
+        + 'use the file tools instead or tell the user it is unavailable here.',
+      );
     }
+    const access = filesystem.access;
+    const unrestricted = request.policy.shell?.isolation === 'none';
 
     const sandbox = unrestricted
       ? new Sandbox({ ...this.#baseConfig, enabled: false })
@@ -70,7 +101,7 @@ export class SandboxBashExecutionPort implements BashExecutionPort {
 /** Native generation ToolFeature for shell execution. */
 export class NativeBashToolFeature {
   readonly feature = toolFeatureId;
-  readonly name = 'bash';
+  readonly name = BASH_TOOL_NAME;
   readonly definition: Readonly<AgentToolDefinition<Record<string, unknown>, string>>;
   readonly #execution: BashExecutionPort;
 

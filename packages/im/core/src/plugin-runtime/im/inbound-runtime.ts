@@ -61,6 +61,8 @@ interface InboundRuntimeContext {
     sender: MessageSenderRef | undefined,
   ): Promise<number | undefined>;
   recordNotice(notice: Notice): Promise<void>;
+  /** Keep a message that answered an interaction prompt out of later agent context. */
+  markInteractionAnswer?(message: NonNullable<IncomingMessage['message']>): void;
   publish(event: RuntimeMessageEvent): void;
 }
 
@@ -183,6 +185,7 @@ export class InboundRuntime {
       if (claimed) {
         result = interactionResult(requester);
       } else if (this.context.interactions.resolveClaim(message)) {
+        if (input.message) this.context.markInteractionAnswer?.(input.message);
         result = interactionResult(requester);
       } else {
         const interactionFactory = (value: unknown) =>

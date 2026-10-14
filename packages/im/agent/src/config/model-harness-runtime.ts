@@ -9,6 +9,10 @@ export const MODEL_HARNESS_DEFAULTS: ModelHarnessRow[] = [
   { provider: 'ollama', modelPattern: /(?:qwen|llama|mistral).*(?:14b|32b)/i, maxIterations: 6 },
   { provider: 'openai', modelPattern: /gpt-4(\.|o|$)/i, maxIterations: 7 },
   { provider: 'anthropic', modelPattern: /claude-3|claude-4/i, maxIterations: 7 },
+  // MiniMax M-series (direct or routed as `minimax/minimax-m3`): strong tool use but
+  // prone to long read-only exploration before acting. Keep the configured
+  // iteration budget and steer it with guidance plus an earlier exploration nudge.
+  { modelPattern: /(?:^|\/)minimax-m\d/i, explorationBudget: 5, explorationGuidance: true },
 ];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -48,11 +52,24 @@ function providerPatternToRegExp(pattern: string): RegExp {
 }
 
 function sanitizeResolvedHarness(input: Record<string, unknown>): ResolvedModelHarness {
-  const maxIterationsRaw = input.maxIterations;
-  if (typeof maxIterationsRaw === 'number' && Number.isFinite(maxIterationsRaw)) {
-    return { maxIterations: maxIterationsRaw };
+  const resolved: ResolvedModelHarness = {};
+  if (typeof input.maxIterations === 'number' && Number.isFinite(input.maxIterations)) {
+    resolved.maxIterations = input.maxIterations;
   }
-  return {};
+  if (typeof input.explorationBudget === 'number'
+    && Number.isFinite(input.explorationBudget)
+    && input.explorationBudget >= 0) {
+    resolved.explorationBudget = Math.floor(input.explorationBudget);
+  }
+  if (typeof input.explorationGuidance === 'boolean') {
+    resolved.explorationGuidance = input.explorationGuidance;
+  }
+  return resolved;
+}
+
+function rowHarness(row: ModelHarnessRow): Record<string, unknown> {
+  const { provider: _provider, modelPattern: _modelPattern, ...harness } = row;
+  return harness;
 }
 
 export function resolveModelHarness(
@@ -60,11 +77,11 @@ export function resolveModelHarness(
   modelName: string,
   config?: ModelHarnessConfig,
 ): ResolvedModelHarness {
-  const defaultHarness: ResolvedModelHarness = (() => {
+  const defaultHarness: Record<string, unknown> = (() => {
     for (const row of MODEL_HARNESS_DEFAULTS) {
       if (row.provider && row.provider !== providerName) continue;
       if (!row.modelPattern.test(modelName)) continue;
-      return { maxIterations: row.maxIterations };
+      return rowHarness(row);
     }
     return {};
   })();

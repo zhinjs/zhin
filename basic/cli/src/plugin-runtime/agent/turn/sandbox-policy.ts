@@ -4,6 +4,10 @@ import type { TurnRequest } from '@zhin.js/agent';
 export interface SandboxTurnPolicyInput {
   readonly platform: string;
   readonly isMaster: boolean;
+  /** Conversation scope of the IM turn; IM shell access is only ever granted in private chats. */
+  readonly scope?: 'private' | 'group' | 'channel';
+  /** `ai.agent.masterShell`; anything but 'isolated' keeps bash disabled outside the sandbox. */
+  readonly masterShell?: 'off' | 'isolated';
   readonly metadata: Readonly<Record<string, unknown>>;
   readonly projectRoot: string;
   readonly defaultNetwork?: TurnRequest['policy']['network'];
@@ -29,7 +33,12 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
     }),
     ...(input.defaultNetwork ? { network: input.defaultNetwork } : {}),
   });
-  if (input.platform !== 'sandbox' || !input.isMaster) return fallback;
+  if (input.platform !== 'sandbox') {
+    return allowsMasterImShell(input)
+      ? Object.freeze({ ...fallback, shell: MASTER_IM_ISOLATED_SHELL })
+      : fallback;
+  }
+  if (!input.isMaster) return fallback;
   const run = readRunConfig(input.metadata.sandboxAgentRun);
   if (!run) return fallback;
 
@@ -70,6 +79,22 @@ export function resolveSandboxTurnPolicy(input: SandboxTurnPolicyInput): Resolve
     shell,
     ...(network ? { network } : {}),
   });
+}
+
+/**
+ * Opt-in shell for the master's IM private chat. Always container-isolated:
+ * the bash port refuses `isolation: 'none'` unless access is danger-full-access,
+ * and there is deliberately no IM path to that.
+ */
+const MASTER_IM_ISOLATED_SHELL: NonNullable<TurnRequest['policy']['shell']> = Object.freeze({
+  security: 'allowlist',
+  execPreset: 'development',
+  approvalMode: 'auto',
+  isolation: 'required',
+});
+
+function allowsMasterImShell(input: SandboxTurnPolicyInput): boolean {
+  return input.masterShell === 'isolated' && input.isMaster && input.scope === 'private';
 }
 
 function readRunConfig(value: unknown): Readonly<{

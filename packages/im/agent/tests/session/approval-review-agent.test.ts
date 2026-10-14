@@ -10,7 +10,7 @@ import {
   createAutoApprovalPort,
 } from '../../src/session/approval-review-agent.js';
 import { LlmApprovalJudgment } from '../../src/decision/approval-judgment.js';
-import type { ApprovalDecisionPort } from '../../src/session/approval-port.js';
+import type { ApprovalDecisionPort, ApprovalOutcomePort } from '../../src/session/approval-port.js';
 
 const model: Model = {
   id: 'reviewer',
@@ -41,11 +41,7 @@ describe('ApprovalReviewAgent', () => {
     const input = request('ask');
 
     await expect(port.requestApproval(input)).resolves.toBe(true);
-    expect(requestApproval).toHaveBeenCalledWith(expect.objectContaining({
-      ...input,
-      timeoutMs: 30_000,
-      signal: expect.any(AbortSignal),
-    }));
+    expect(requestApproval).toHaveBeenCalledWith(input);
   });
 
   it('fails closed on invalid model output without escalating', async () => {
@@ -181,6 +177,57 @@ describe('ApprovalReviewAgent', () => {
     await expect(port.requestApproval(input)).resolves.toBe(false);
     await expect(port.requestApproval({ ...input, requestId: 'reject-again' }))
       .resolves.toBe(false);
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(requestApprovalDecision).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('createAutoApprovalPort outcomes', () => {
+  it('attributes a reviewer rejection to the reviewer, not the user', async () => {
+    const port = createAutoApprovalPort(reviewer('{"decision":"reject","reason":"destructive"}'));
+    await expect(port.requestApprovalOutcome(request('reviewer-reject')))
+      .resolves.toEqual({ status: 'denied', by: 'reviewer' });
+  });
+
+  it('reports a missing human channel when the reviewer escalates', async () => {
+    const port = createAutoApprovalPort(reviewer('{"decision":"ask","reason":"unclear"}'));
+    await expect(port.requestApprovalOutcome(request('no-human')))
+      .resolves.toMatchObject({ status: 'unavailable' });
+  });
+
+  it('reports a timed-out escalation and does not remember it as a rejection', async () => {
+    const { agent } = trackedReviewer([
+      '{"decision":"ask","reason":"unclear"}',
+      '{"decision":"ask","reason":"unclear"}',
+    ]);
+    const outcomes = [{ status: 'timed_out' } as const, { status: 'approved', decision: 'approve-once' } as const];
+    const ask: ApprovalOutcomePort = {
+      available: true,
+      requestApproval: async () => false,
+      requestApprovalOutcome: vi.fn(async () => outcomes.shift()!),
+    };
+    const port = createAutoApprovalPort(agent, ask);
+
+    await expect(port.requestApprovalOutcome(request('first'))).resolves.toEqual({ status: 'timed_out' });
+    await expect(port.requestApprovalOutcome(request('second')))
+      .resolves.toEqual({ status: 'approved', decision: 'approve-once' });
+    expect(ask.requestApprovalOutcome).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes an explicit human rejection through and remembers it', async () => {
+    const { agent, complete } = trackedReviewer(['{"decision":"ask","reason":"unclear"}']);
+    const requestApprovalDecision = vi.fn(async () => 'reject' as const);
+    const ask: ApprovalDecisionPort = {
+      available: true,
+      requestApprovalDecision,
+      requestApproval: async () => false,
+    };
+    const port = createAutoApprovalPort(agent, ask);
+
+    await expect(port.requestApprovalOutcome(request('human-no')))
+      .resolves.toEqual({ status: 'denied', by: 'user' });
+    await expect(port.requestApprovalOutcome(request('human-no-again')))
+      .resolves.toEqual({ status: 'denied', by: 'remembered' });
     expect(complete).toHaveBeenCalledTimes(1);
     expect(requestApprovalDecision).toHaveBeenCalledTimes(1);
   });

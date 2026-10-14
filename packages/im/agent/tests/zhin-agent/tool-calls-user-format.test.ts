@@ -34,3 +34,26 @@ describe('looksLikeInternalToolDump + sanitizeAssistantReply', () => {
     expect(out).not.toContain('Done. Information retrieved');
   });
 });
+
+describe('formatToolCallsForUser exploration tools', () => {
+  it('never includes bodies of read-only exploration tools', () => {
+    const out = formatToolCallsForUser([
+      { tool: 'read_file', result: 'File: secret.ts\n1 | const token = 1;' },
+      { tool: 'grep', result: 'node_modules/foo/package.json:2: "name"' },
+      { tool: 'list_dir', result: '[DIR]  handlers' },
+      { tool: 'glob', result: 'a.ts\nb.ts' },
+      { tool: 'web_fetch', result: '<html>page</html>' },
+    ]);
+    expect(out).not.toMatch(/secret\.ts|node_modules|handlers|a\.ts|<html>/);
+    expect(out).toContain('继续');
+  });
+
+  it('keeps non-exploration results but caps the total length', () => {
+    const out = formatToolCallsForUser([
+      { tool: 'read_file', result: 'File: x.ts' },
+      ...Array.from({ length: 5 }, (_, i) => ({ tool: 'web_search', result: `${i}`.repeat(1500) })),
+    ]);
+    expect(out).not.toContain('File: x.ts');
+    expect(out.length).toBeLessThanOrEqual(3001);
+  });
+});

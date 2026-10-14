@@ -760,42 +760,44 @@ describe('IM Runtime', () => {
       kind: 'group' as const,
       id: 'room-window',
     };
+    // Real clock offsets keep the backlog inside the context age window.
+    const base = Date.now();
     for (let index = 1; index <= 55; index += 1) {
       await fixture.conversationEvents.append(Object.freeze({
         eventId: `background-${index}`,
         conversation,
-        timestamp: index,
+        timestamp: base + index,
         type: 'message.created' as const,
         message: Object.freeze({
           ref: Object.freeze({ conversation, id: `background-${index}` }),
           actor: Object.freeze({ id: `user-${index}` }),
           segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: `context-${index}` }) }]),
-          timestamp: index,
+          timestamp: base + index,
         }),
       }));
     }
     const current = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'current-56',
       conversation,
-      timestamp: 56,
+      timestamp: base + 56,
       type: 'message.created' as const,
       message: Object.freeze({
         ref: Object.freeze({ conversation, id: 'current-56' }),
         actor: Object.freeze({ id: 'current-user' }),
         segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: 'current question' }) }]),
-        timestamp: 56,
+        timestamp: base + 56,
       }),
     }));
     const future = await fixture.conversationEvents.append(Object.freeze({
       eventId: 'future-57',
       conversation,
-      timestamp: 57,
+      timestamp: base + 57,
       type: 'message.created' as const,
       message: Object.freeze({
         ref: Object.freeze({ conversation, id: 'future-57' }),
         actor: Object.freeze({ id: 'future-user' }),
         segments: Object.freeze([{ type: 'text', data: Object.freeze({ text: 'future message' }) }]),
-        timestamp: 57,
+        timestamp: base + 57,
       }),
     }));
 

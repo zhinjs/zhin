@@ -262,6 +262,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
             const turnPolicy = resolveSandboxTurnPolicy({
               platform: turnAccess.origin.kind === 'im' ? turnAccess.origin.platform : '',
               isMaster: senderRoles.isMaster,
+              scope: turnAccess.origin.kind === 'im' ? turnAccess.origin.scope : undefined,
+              masterShell: service.getAgentConfig()?.masterShell,
               metadata: message.metadata,
               projectRoot: options.projectRoot,
               defaultNetwork: interactiveNetworkPolicy(service.getAgentConfig()),

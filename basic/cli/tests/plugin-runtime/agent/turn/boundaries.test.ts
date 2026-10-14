@@ -452,7 +452,9 @@ describe('canonical IM interaction adapter', () => {
           seen.push(request);
           expect(request.type).toBe('select');
           if (request.type === 'select') {
-            expect(request.default).toBe('reject');
+            // Timeouts must surface as timed_out rather than defaulting to a rejection.
+            expect(request.default).toBeUndefined();
+            expect(request.options?.[1]?.aliases).toEqual(expect.arrayContaining(['y', '同意']));
             expect(request.options?.map(option => option.value)).toEqual([
               'reject',
               'approve-once',
@@ -475,6 +477,40 @@ describe('canonical IM interaction adapter', () => {
     expect(seen[0]?.title).toBe('操作确认');
     expect(seen[0]?.description).toContain('是否继续');
     expect(seen[0]?.tip).toContain('当前 Host、当前会话和当前发起者');
+  });
+
+  it.each([
+    ['UserInteractionTimeoutError', { status: 'timed_out' }],
+    ['UserInteractionDeliveryError', { status: 'unavailable', reason: 'the approval prompt could not be delivered' }],
+  ])('maps an approval prompt %s to a typed outcome instead of a user denial', async (name, expected) => {
+    const port = createRuntimeApprovalPort({
+      isMaster: false,
+      interaction: {
+        async ask() {
+          const error = new Error('interaction ended');
+          error.name = name;
+          throw error;
+        },
+        async sequence() { return {} as never; },
+      },
+    });
+    await expect(port.requestApprovalOutcome({
+      requestId: 'a-outcome',
+      toolName: 'read_file',
+      conversationScope: 'private',
+      question: 'continue?',
+      signal: new AbortController().signal,
+    })).resolves.toEqual(expected);
+  });
+
+  it('reports a missing approval surface as unavailable', async () => {
+    const port = createRuntimeApprovalPort({ isMaster: false });
+    await expect(port.requestApprovalOutcome({
+      requestId: 'a-none',
+      toolName: 'read_file',
+      question: 'continue?',
+      signal: new AbortController().signal,
+    })).resolves.toMatchObject({ status: 'unavailable' });
   });
 
   it('fails closed when a non-master has no master UserInteraction', async () => {
