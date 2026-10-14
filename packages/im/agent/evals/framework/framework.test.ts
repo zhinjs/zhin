@@ -4,6 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  createFakeClock,
   defineEvalCase,
   evaluateExpectations,
   formatEvalReport,
@@ -190,5 +191,52 @@ describe('eval framework', () => {
     const valid = approvalCase('approve');
     expect(() => loadEvalCases({ 'a.case.ts': { default: valid }, 'b.case.ts': { default: valid } }))
       .toThrow('b.case.ts: id "approval-gate" already used by a.case.ts');
+  });
+});
+
+describe('eval framework: multi-model and virtual clock', () => {
+  it('fires fake-clock timers only when advanced, in time order', () => {
+    const clock = createFakeClock();
+    const fired: string[] = [];
+    clock.setTimeout(() => fired.push('late'), 50);
+    const cancelled = clock.setTimeout(() => fired.push('cancelled'), 5);
+    clock.setTimeout(() => fired.push('early'), 10);
+    clock.clearTimeout(cancelled);
+    expect(fired).toEqual([]);
+    while (clock.runNext()) { /* drain */ }
+    expect(fired).toEqual(['early', 'late']);
+    expect(clock.now()).toBe(50);
+  });
+
+  it('flags a step pinned to a model that the request did not go to', async () => {
+    const definition = defineEvalCase({
+      id: 'model-pin-mismatch',
+      description: 'The script expects the fallback model, but the primary answers.',
+      source: 'framework self-test',
+      inbound: { text: 'hi' },
+      models: ['scripted-fallback'],
+      script: [{ model: 'scripted-fallback', text: 'hello' }],
+      expect: {},
+    });
+    const run = await runEvalCase(definition);
+    expect(run.modelRequests.map((request) => request.model)).toEqual(['scripted-model']);
+    expect(evaluateExpectations(definition, run).map((failure) => failure.assertion)).toContain('model');
+  });
+
+  it('fails a hang step loudly when no timeout is armed instead of waiting forever', async () => {
+    const definition = defineEvalCase({
+      id: 'hang-without-timeout',
+      description: 'A hang step with the request timeout disabled.',
+      source: 'framework self-test',
+      inbound: { text: 'hi' },
+      agentConfig: { providerResilience: { requestTimeoutMs: 0, maxRetries: 0 } },
+      script: [{ fault: { kind: 'hang' } }],
+      expect: {},
+    });
+    const run = await runEvalCase(definition);
+    // The point is that the case returns at all: the hang step rejects at once
+    // instead of blocking the suite until the vitest timeout.
+    expect(run.modelRequests).toHaveLength(1);
+    expect(run.terminals.at(-1)?.type).toBe('turn_end');
   });
 });

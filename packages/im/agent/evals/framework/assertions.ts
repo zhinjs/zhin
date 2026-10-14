@@ -73,6 +73,13 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   if (expect.modelSteps !== undefined && steps !== expect.modelSteps) {
     fail('modelSteps', `expected ${expect.modelSteps} model requests, got ${steps}`);
   }
+  if (expect.modelIds !== undefined) {
+    const actual = run.modelRequests.map((request) => request.model);
+    if (actual.join(',') !== expect.modelIds.join(',')) {
+      fail('modelIds', `expected requests to go to [${expect.modelIds.join(', ')}], got [${actual.join(', ')}]`);
+    }
+  }
+  for (const mismatch of run.modelMismatches) fail('model', mismatch);
   if (expect.maxModelSteps !== undefined && steps > expect.maxModelSteps) {
     fail('maxModelSteps', `expected at most ${expect.maxModelSteps} model requests, got ${steps}`);
   }
@@ -98,7 +105,7 @@ export function formatEvalReport(definition: EvalCase, run: EvalRunRecord, failu
   lines.push('  trace:');
   lines.push(`    model requests: ${run.modelRequests.length}`);
   for (const request of run.modelRequests) {
-    lines.push(`      #${request.index + 1} offered=[${list(request.offeredTools)}] called=[${list(request.toolCalls)}] user=${quote(request.lastUserText)}`);
+    lines.push(`      #${request.index + 1} model=${request.model} offered=[${list(request.offeredTools)}] called=[${list(request.toolCalls)}] user=${quote(request.lastUserText)}`);
   }
   lines.push(`    attempted tools: [${list(run.attemptedTools)}]`);
   lines.push(`    executed tools: [${list(run.executedTools.map((tool) => tool.name))}]`);
