@@ -114,7 +114,7 @@ describe('validateRoomDefinitions', () => {
       { agent: 'Lead', role: 'worker', botEndpoint: bot('b1') },
       { agent: 'lead', role: 'worker', botEndpoint: bot('b2') },
     ];
-    expectIssue(a, 'rooms.dev.members.1.agent: agent "lead" conflicts case-insensitively');
+    expectIssue(a, 'rooms.dev.members.1.agent: agent "lead" conflicts case-insensitively with rooms.dev.members.0.agent');
     expect(issuesOf(a).some((i) => i.includes('duplicate agent'))).toBe(false);
     const b = minimal();
     b.dev.members.push({ agent: 'a1', role: 'worker', botEndpoint: bot('b2') });
@@ -199,7 +199,7 @@ describe('validateRoomDefinitions', () => {
     const d2 = full(); d2.dev.members[1].aliases = ['Boss'];
     expectIssue(d2, 'rooms.dev.members.1.aliases.0: invalid alias');
     const e = full(); e.dev.members[1].aliases = ['lead'];
-    expectIssue(e, 'rooms.dev.members.1.aliases.0: alias "lead" conflicts');
+    expectIssue(e, 'rooms.dev.members.1.aliases.0: alias "lead" conflicts with rooms.dev.members.0.agent');
     const f = minimal(); f.dev.members[0].aliases = ['Bad Alias'];
     expectIssue(f, 'rooms.dev.members.0.aliases.0: invalid alias');
     const g = minimal();
@@ -254,11 +254,23 @@ describe('exports and isolation', () => {
     expect(typeof mod.validateWorkroomDefinitions).toBe('function');
   });
 
-  it('room sources import only sibling files', () => {
+  it('room sources import only sibling files, except the core-facing adapters', () => {
     const dir = join(fileURLToPath(new URL('.', import.meta.url)), '../../src/room');
+    // room-membership / room-bus are the only files that touch core (type-only port contracts).
+    const coreFacing: Record<string, RegExp> = {
+      'room-membership.ts': /^import type \{ RoomMembershipPort \} from '@zhin\.js\/core\/runtime';$/m,
+      'room-bus.ts': /^import type \{ OutboundMessageService \} from '@zhin\.js\/core\/runtime';$/m,
+    };
     for (const f of readdirSync(dir).filter((n) => n.endsWith('.ts'))) {
       const src = readFileSync(join(dir, f), 'utf8');
-      expect(src).not.toMatch(/@zhin\.js\//);
+      const external = src.match(/from '@zhin\.js\/[^']+'/g) ?? [];
+      if (coreFacing[f]) {
+        expect(src).toMatch(coreFacing[f]!);
+        for (const spec of external) expect(spec).toMatch(/@zhin\.js\/(core\/runtime|plugin-runtime)'/);
+        expect(src).not.toMatch(/^import (?!type)[^\n]*@zhin\.js\//m);
+      } else {
+        expect(external).toEqual([]);
+      }
       expect(src).not.toMatch(/\.\.\/(workroom|workroom-runtime|portfolio|data-governance)\b/);
     }
   });

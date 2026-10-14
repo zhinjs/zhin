@@ -111,7 +111,7 @@
     "export * from './outbound-renderer.js';",
     "export * from './outbound-segments.js';",
     "export type{EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
-    "export type{MessageOrigin,RoomMembershipPort}from './inbound-origin.js';",
+    "export type{MessageOrigin,RoomInboundRouteInput,RoomMembershipPort,RoomRouteDecision,}from './inbound-origin.js';",
     "export type{RuntimeMessageEvent,RuntimeMessageEventSource,RuntimeMessageRendering,OutboundFallbackReason,}from './message-events.js';",
     "export{EndpointRuntime}from './endpoint-runtime.js';",
     "export{isMessageOrigin,roomMembershipToken}from './inbound-origin.js';"

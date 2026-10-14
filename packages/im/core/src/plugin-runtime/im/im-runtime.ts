@@ -56,7 +56,7 @@ import {
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
 import { InboundDeduper } from './inbound-dedup.js';
-import { OutboundLedger } from './outbound-ledger.js';
+import { OutboundLedger, ledgerScopeOf } from './outbound-ledger.js';
 import { createInboundOriginClassifier } from './inbound-origin.js';
 
 /** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
@@ -72,10 +72,16 @@ export interface ImRuntimeOptions {
   readonly conversationEvents?: ConversationEventStore;
   /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /**
+   * 探测 `inboundClaim` 这类进程级 prompt 在该 Endpoint 上、对该发送者是否有待回答项。
+   * Room Router 用它把消息送到持有待回答状态的成员 Endpoint。必须同步、无副作用。
+   * 仓库内没有生产实现；缺省按 false（即 inboundClaim 的待回答不参与 Room 路由）。
+   */
+  readonly inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
   /** 覆盖进程级 Peer Registry（测试用，避免污染单例）。 */
   readonly peerRegistry?: Pick<PeerRegistry, 'lookup' | 'isReady' | 'selfOf'>;
   /** @internal 覆盖入站去重器（测试用）；去重仅作用于 Room 会话。 */
-  readonly inboundDeduper?: Pick<InboundDeduper, 'claim'>;
+  readonly inboundDeduper?: Pick<InboundDeduper, 'claim'> & Partial<Pick<InboundDeduper, 'arbitrate'>>;
   /**
    * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
    * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
@@ -107,8 +113,9 @@ export class ImRuntime implements OutboundMessageService {
     this.#conversations = new ConversationRuntime(options.conversationEvents);
     const ledger = new OutboundLedger();
     const deduper = options.inboundDeduper ?? new InboundDeduper();
+    const registry = options.peerRegistry ?? getProcessPeerRegistry();
     const originClassifier = createInboundOriginClassifier({
-      registry: options.peerRegistry ?? getProcessPeerRegistry(),
+      registry,
       ledger,
     });
     this.#outbound = new OutboundDeliveryRuntime({
@@ -124,6 +131,9 @@ export class ImRuntime implements OutboundMessageService {
       inboundClaim: options.inboundClaim,
       originClassifier,
       deduper,
+      registry,
+      inboundClaimPending: options.inboundClaimPending,
+      resolveReplyTarget: (conversation, id) => ledger.matchById(ledgerScopeOf(conversation), id)?.endpointId,
       enrichSender: options.enrichSender,
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),

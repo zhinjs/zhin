@@ -126,6 +126,16 @@ graph LR
 
 **Router 入口是去重的**：同一条人类群消息会到达 N 个成员 Endpoint；仅对已确认属于某个启用 Room 的群会话（Room 成员端口 `hasRoom`），ingress 按 (adapter, conversation, sender, message id) 在 60 秒内只保留第一个到达的，其余只作为聊天记录保存，不再路由。没有平台消息 id 的消息、私聊和非 Room 群不去重（非 Room 群在 B2b Router 上线前保持每个 Endpoint 各自处理：@ 判定与 interaction/prompt 都相对接收 Endpoint，全局去重会让被 @ 的后到 Bot 永不回复）。胜出的 Endpoint 是任意的，所以 Router 必须根据消息内容和 Registry 决定 @ / 回复目标，不能依据“哪个 Endpoint 收到了它”（`mentioned` 是相对接收 Endpoint 而言的）。`hasRoom` 的实现必须与 B2b Room Router 一起上线，不得先于 Router 单独实现；Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标，以及待回答的 interaction / prompt（落败 Endpoint 只记录不路由，它上面挂起的 interaction / prompt 与 @ 只有 Router 才能代为解析）。
 
+**Router 已实现（B2b）**：`RoomMembershipPort` 的 `hasRoom` 与可选的 `route` 成对提供（workroom 里只有 `createRoomMembershipPort` 这一个工厂，测试断言“有 `hasRoom` 就一定有 `route`”）。core 在去重位置用可信数据构造路由输入（`mentionTargets` 取自 mention segment，`replyToEndpointId` 取自出站 ledger，`pending` / `accountOf` / `isAvailable` 三个探针分别来自 interaction 状态、Peer Registry 的账号与就绪状态），调用同步、无副作用的 `route`，由 Router 决定目标 Endpoint：
+- 优先级固定为 待回答 > @ > 回复 > coordinator > 按 role 匹配（无 coordinator，或 coordinator 不可用时）；多个 @ 取文中第一个被 @ 的成员（平台 mention segment 先于文本 `@别名`）；每一步都跳过不可用的 Endpoint，顺位降级，全都不可用时返回 `undefined`，回退到先到先得去重。
+- **决策按消息缓存**（同 平台+会话+发送者+消息 id，60 秒）：第一个到达的副本算一次 `route`，其余副本复用结果，否则先被消费掉待回答状态的 Endpoint 之后，另一个副本会重算出不同结果而双重处理。`route` 返回目标之外还带 `fallbackEndpointIds`（其余可用成员，按 generalist → chat/general → 声明顺序）。`route` 返回 `undefined` 或抛错（warn 日志）时退化为先到先得，不丢消息。
+- **目标优先 + 宽限期接管**：core 无法预知哪些 Endpoint 会收到副本（例如 Telegram 开启 privacy mode 时，未 @ 的消息只投递给部分 Bot）。因此：目标 Endpoint 的副本立即处理，强制 `mentioned=true`（`mentioned` 相对接收 Endpoint，否则 AI ingress 不触发）；目标已到达后其余副本只记录，不路由，不 publish。非目标副本若先于目标到达，且本 Endpoint 在 `[目标, ...fallbackEndpointIds]` 中，则等待目标副本（宽限期默认 2 秒，等待期间持有 snapshot lease，此时尚未写入历史）；宽限期内目标没到，优先级最高的已到达成员副本接管（debug 日志 `room_target_missing_takeover`，同样强制 `mentioned=true`），其余等待者只记录。目标副本晚到则判 duplicate，只记录。不在成员列表里的 Endpoint（非成员 Bot）的副本永远只记录，不接管。结果：只要至少一个成员 Endpoint 收到副本，这条 keyed 的 Room 人类消息就恰好被处理一次；代价是目标没收到副本时有一个宽限期的延迟。
+- **平台按钮回调绕过 Room 路由**：带 action 段的入站（如 Telegram `callback_query` 被 adapter 转成带 action 段的群消息）只投递给发出键盘的那个 Bot，只有它的 Endpoint 持有该键盘的 JSX registry / fallback。这类入站视为发给接收它的 Endpoint：不 route、不去重（不 claim、不缓存、不强制 mentioned），永远由接收它的 Endpoint 处理。action 段只由 adapter 从平台回调结构生成，普通文本消息无法携带。bot 来源（member / peer_bot）照旧只记录。
+- **unkeyed 保持逐 Endpoint 处理**：没有消息 id、没有发送者或私聊的消息无法仲裁，不 route、不丢弃，每个 Endpoint 各自处理自己的副本（已知限制：可能重复处理，但不丢消息）。
+- **待回答仅内容相关**：`pending(endpointId)` 只在“本条消息能解析到该 Endpoint 的某个按钮（action 段且 payload 属于该会话存活键盘，或标签 / 序号文本命中），或该发送者在该 Endpoint 上有待回答的 claim”时为 true；仅仅“发过键盘”不会让所有人类消息被它截走。探针对 AdapterIndex 不认识的 Endpoint 返回 false，不会让整条消息 fail closed。
+- 已知限制：`inboundClaim` 这类进程级 prompt 需要宿主通过 `ImRuntimeOptions.inboundClaimPending(conversation, senderId)` 告诉 core 哪个 Endpoint 上有待回答项；仓库内目前没有生产实现，缺省按 false（即这类 prompt 不参与 Room 路由，只在被选中的目标 Endpoint 上被 `inboundClaim` 看到）。
+- 文本 `@别名` 需要别名后面有分隔符（空格或标点），边界按 Unicode 判断：`@研究` 不匹配 `@研究员`，但 CJK 无空格连写（`@研究员帮我`）也不匹配；可靠路径是平台 mention segment。
+
 关键设计点：**群消息是展示，同进程 Room Bus 才是传输**。原因：
 
 - Telegram Bot 永远收不到其他 Bot 的消息（平台限制，不是默认配置可改）；其他平台多数也收不到或不可靠。依赖“Bot 读 Bot 的群消息”来协作不可靠。
@@ -162,7 +172,7 @@ graph LR
 
 3. **上下文层**：Agent 看到的历史里，每条消息的发言人标签由 `origin` 生成，例如 `[human:张三]`、`[member:researcher]`。现有的 `[sender:...]` 标签（`packages/im/ai/src/memory/user-message-presentation.ts`）可以扩展这个字段。正文里写“我是真人”“我是管理员”一律无效。另外，`stripUserSpoofedSenderPrefix`（`packages/im/core/src/built/roles.ts`）目前只剥离**开头**的伪造前缀，需要改为对正文中所有类似标签做转义。
 
-入站去重发生在 origin 判定之后，只作用于 `human`：同一条人类消息在其他成员 Endpoint 上的重复投递只记录、不路由，也不推送到控制台消息流。去重判定出错时 fail closed（仅记录、不路由，打 warn 日志，并照常推送到控制台消息流以便运维发现；只有确认的重复才不推送）。语义是“不重复路由”，该条消息本身不会被任何 Endpoint 处理，但不会静默消失；私聊中的平台消息 id 可能是账号级的，不跨 Endpoint 信任。同 §3.2：`hasRoom` 必须与 B2b Room Router 一起上线，Router 要覆盖所有成员 Endpoint 的 @ / 回复 / interaction / prompt，这是 B2b 的不变量（已知缺口：当前测试固定了落败 Endpoint 上 interaction 不被消费的行为，仅因 `hasRoom` 暂无实现而不生效）。
+入站去重发生在 origin 判定之后，只作用于 `human`：同一条人类消息在其他成员 Endpoint 上的重复投递只记录、不路由，也不推送到控制台消息流。去重判定出错时 fail closed（仅记录、不路由，打 warn 日志，并照常推送到控制台消息流以便运维发现；只有确认的重复才不推送）。语义是“不重复路由”，该条消息本身不会被任何 Endpoint 处理，但不会静默消失；私聊中的平台消息 id 可能是账号级的，不跨 Endpoint 信任。同 §3.2：`hasRoom` 必须与 B2b Room Router 一起上线，Router 要覆盖所有成员 Endpoint 的 @ / 回复 / interaction / prompt，这是 B2b 的不变量（B2b 已实现：有 `route` 时，落败 Endpoint 上待回答的 interaction 由 Router 路由到持有它的 Endpoint 并被消费；只实现 `hasRoom` 而没有 `route` 时仍是 B2 的先到先得，落败 Endpoint 上的状态不会被消费，测试固定了这一回退行为）。
 
 剩下的风险是**不在 Registry 里的外部 Bot**（别人拉进群的机器人）会被当成人类。缓解办法：
 

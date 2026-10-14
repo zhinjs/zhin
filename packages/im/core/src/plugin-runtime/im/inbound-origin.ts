@@ -27,14 +27,51 @@ export interface RoomMembershipPort {
     conversation: ConversationRef,
   ): boolean;
   /**
-   * 该会话是否属于某个启用的 Room。仅当返回 true 时，入站才做跨 Endpoint 去重；
+   * 该会话是否属于某个启用的 Room。仅当返回 true 时，入站才做跨 Endpoint 去重 / 路由；
    * 缺省（未实现）等同 false：普通群保持每个 Endpoint 各自处理。
    *
-   * `hasRoom` 的实现必须与 B2b Room Router 一起上线；在 Router 上线前，去重落败的 Endpoint 上
-   * 待回答的 interaction / prompt 与 @ 不会被消费。Router 必须对所有成员 Endpoint
-   * （而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt。
+   * `hasRoom` 与 `route` 必须成对实现（B2b Room Router 已实现）：去重落败的 Endpoint 上
+   * 待回答的 interaction / prompt 与 @ 只有在 `route` 把目标 Endpoint 解析出来时才会被消费。
+   * 仅实现 `hasRoom` 而没有 `route` 时回退到 B2 的先到先得，落败 Endpoint 上的状态不会被消费。
+   *
+   * 带 action 段的入站（平台按钮回调）不经过 hasRoom / route：它只投递给发出键盘的那个 Endpoint，
+   * 永远由接收它的 Endpoint 处理。
    */
   hasRoom?(conversation: ConversationRef): boolean;
+  /**
+   * Room 内一条人类群消息应由哪个成员 Endpoint 处理。必须同步、无副作用。
+   *
+   * 返回 `undefined`（无可用成员）退化为先到先得。抛错同样退化为先到先得并告警（不丢消息）。
+   * Router 只能保证“实际收到副本的成员 Endpoint”里有人处理：core 无法预知哪些 Endpoint 会收到副本
+   * （例如 Telegram 隐私模式下未 @ 的消息只投递给部分 Bot），所以目标没收到副本时，
+   * `fallbackEndpointIds` 中的成员在宽限期后按优先级接管。决策按消息缓存，每条消息只决定一次。
+   */
+  route?(input: RoomInboundRouteInput): RoomRouteDecision | undefined;
+}
+
+/** core 用可信数据构造的路由输入；不信任正文。 */
+export interface RoomInboundRouteInput {
+  /** 接收副本的会话（endpoint 为接收副本的 Endpoint）。 */
+  readonly conversation: ConversationRef;
+  readonly senderId: string;
+  readonly content: string;
+  /** 取自 segments 中 `type==='mention'` 的 `data.target`。 */
+  readonly mentionTargets: readonly string[];
+  /** 被回复的消息若是本进程某 Bot 发的（出站 ledger 命中），为该 Bot 的 Endpoint id。 */
+  readonly replyToEndpointId?: string;
+  /** 该 Endpoint 上该发送者是否有待回答的 interaction / claim / prompt。 */
+  pending(endpointId: string): boolean;
+  /** Endpoint 的 Bot 账号（registry.selfOf）。 */
+  accountOf(endpointId: string): string | undefined;
+  /** Endpoint 是否就绪（registry.isReady）。 */
+  isAvailable(endpointId: string): boolean;
+}
+
+export interface RoomRouteDecision {
+  readonly endpointId: string;
+  readonly reason: 'pending' | 'mention' | 'reply' | 'coordinator' | 'role';
+  /** 目标之后的其余可用成员 Endpoint，按接管优先级排序（不含目标）。 */
+  readonly fallbackEndpointIds: readonly string[];
 }
 
 export const roomMembershipToken = createToken<RoomMembershipPort>('zhin.im.room-membership');

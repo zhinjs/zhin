@@ -196,7 +196,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
       membersRaw.forEach((member, i) => {
         if (isPlainObject(member)) {
           const agent = own(member, 'agent');
-          if (isCleanString(agent) && !names.has(agent.toLowerCase())) names.set(agent.toLowerCase(), `members.${i}.agent`);
+          if (isCleanString(agent) && !names.has(agent.toLowerCase())) names.set(agent.toLowerCase(), `${rp}.members.${i}.agent`);
         }
       });
       membersRaw.forEach((member, i) => {
@@ -213,7 +213,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
           if (memberAgents.has(agent)) {
             issues.push(`${mp}.agent: duplicate agent "${agent}"`);
           } else if (agentLower.has(lower)) {
-            issues.push(`${mp}.agent: agent "${agent}" conflicts case-insensitively with member ${agentLower.get(lower)}`);
+            issues.push(`${mp}.agent: agent "${agent}" conflicts case-insensitively with ${rp}.members.${agentLower.get(lower)}.agent`);
           }
           memberAgents.add(agent);
           if (!agentLower.has(lower)) agentLower.set(lower, i);
@@ -255,7 +255,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
               const k = alias.toLowerCase();
               const prev = names.get(k);
               if (prev !== undefined) issues.push(`${ap}: alias "${alias}" conflicts with ${prev}`);
-              else names.set(k, `members.${i}.aliases.${j}`);
+              else names.set(k, `${rp}.members.${i}.aliases.${j}`);
             });
           }
         }
