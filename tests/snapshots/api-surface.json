@@ -15,6 +15,7 @@
     "export * from './data-governance/encrypted-database-payload-vault.js';",
     "export * from './data-governance/payload-hold-overdue-projection.js';",
     "export * from './data-governance/payload-vault-storage-handoff.js';",
+    "export * from './detached-task/index.js';",
     "export * from './interaction/index.js';",
     "export * from './plugin-runtime/database-overlay-pack-promotion-repository.js';",
     "export * from './plugin-runtime/workroom-assignment-knowledge-composition.js';",
