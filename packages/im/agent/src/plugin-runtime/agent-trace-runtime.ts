@@ -131,6 +131,14 @@ export function createAgentTraceRuntime(options: Readonly<{
   });
 }
 
+/**
+ * Shared trace redaction: secret-named keys become `[redacted]`, long strings
+ * are truncated and nesting is bounded. Used by Console trace and TurnTrace.
+ */
+export function redactTraceValue(value: unknown): unknown {
+  return sanitizeValue(value, 0);
+}
+
 function sanitizeEvent(event: TurnEvent): Readonly<Record<string, unknown>> {
   const { type: _type, ...data } = event;
   return Object.freeze(sanitizeRecord(data, 0));

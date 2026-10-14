@@ -305,6 +305,28 @@ zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [
 | `workroom cancel` / `request-replan` | 需要当前 Project Sponsor 权限，并用 `expected-sequence` 防止并发冲突。`request-replan` 只记录重规划请求并暂停调度，不会假装已经生成了新的计划版本 |
 | `legacy-runs` / `legacy-payloads` | 离线只读审计，不启动 Bot，也不写入新的 Workroom Journal |
 
+### trace：查看最近的 Agent 回合
+
+需要安装 AI 栈。机器人每处理完一次 AI 对话，就把这一回合的 trace 写进 `data/agent-traces/recent.json`（只保留最近 50 条）。排查问题时不用再翻 `bot.db` 和 journal：
+
+```bash
+zhin trace            # 等同于 zhin trace last，打印最近一次回合
+zhin trace <turnId>   # 指定回合，可以只写 id 前缀
+zhin trace --list     # 列出最近记录的回合
+zhin trace last --json
+```
+
+| 选项 | 作用 |
+| --- | --- |
+| `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数 |
+| `--json` | 输出原始 JSON（snake_case 字段） |
+| `--no-timeline` | 不打印逐步时间线 |
+| `--cwd <dir>` | 项目根目录，默认当前目录 |
+
+一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合，以及结束原因。输出开头会单独标出**首个失败步骤**。
+
+trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`。按 prompt 分段统计 token、持久化保留期和 Console 页面在后续 issue（#728）中实现。
+
 ## 退出码
 
 | 退出码 | 含义 |

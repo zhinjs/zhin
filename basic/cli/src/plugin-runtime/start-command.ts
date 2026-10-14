@@ -135,7 +135,7 @@ async function runProcessStartCommand(options: StartCommandOptions): Promise<voi
   const databaseConfig = await resolveDatabaseConfig(options.root, hostConfig);
   // Agent is an optional install tier. Do not resolve its module from the
   // IM-only startup graph unless the project actually configures Agent state.
-  const agentHost = await loadConfiguredAgentHost(hostConfig);
+  const agentHost = await loadConfiguredAgentHost(hostConfig, options.root);
   const endpointRoles = await createEndpointRoleResolver(hostConfig);
   const speechHandle = await prepareSpeechHost(await resolveSpeechConfig(hostConfig));
   const htmlRendererHost = await prepareHtmlRendererHost(hostConfig);
@@ -461,6 +461,7 @@ interface ConfiguredAgentHost {
 
 async function loadConfiguredAgentHost(
   config: RuntimeConfigDocument | ConfigDocumentPort,
+  projectRoot: string,
 ): Promise<ConfiguredAgentHost | undefined> {
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
@@ -469,9 +470,14 @@ async function loadConfiguredAgentHost(
     import('./workroom/module.js'),
   ]);
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
+  const { createFileTurnTraceStore, defaultTurnTraceFile } = await import('@zhin.js/agent/trace');
   const initialAi = await agentHost.resolveAiConfig(document);
   const workroomStorageMode = agentHost.resolveWorkroomStorageMode(initialAi);
-  const runtime = new agentHost.AgentRuntime({ coordinator: new agentHost.AgentTurnCoordinator() });
+  const runtime = new agentHost.AgentRuntime({
+    coordinator: new agentHost.AgentTurnCoordinator(),
+    // Recent turns for `zhin trace`; full persistence and retention is #728.
+    turnTraceStore: createFileTurnTraceStore(defaultTurnTraceFile(projectRoot)),
+  });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<
     typeof workroom.createLocalWorkroomDataGovernanceAuthority
