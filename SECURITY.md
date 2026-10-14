@@ -71,7 +71,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
    - 定期轮换 API 密钥和令牌
 
 3. **访问控制**
-   - 限制 Host API（`:8086`）的暴露范围；Remote Console 见 [docs/console-remote.md](docs/console-remote.md)
+   - 限制 Host API（`:8086`）的暴露范围；Remote Console 见 [docs/console/index.md](docs/console/index.md)
    - 在生产环境中使用 HTTPS
    - 考虑使用反向代理（如 Nginx）增加安全层
 
@@ -178,7 +178,7 @@ Zhin.js 团队和社区非常重视安全问题。我们感谢您帮助我们保
 
 1. **Remote Console / Host API**
    - Host HTTP 默认 `127.0.0.1:8086`（仅 API）；管理界面在 Remote Console，勿把该端口当作公网 Web UI 暴露
-   - 生产环境限制 API 来源、使用强 `HTTP_TOKEN`；Remote Console 登录见 [docs/console-remote.md](docs/console-remote.md)
+   - 生产环境限制 API 来源、使用强 `HTTP_TOKEN`；Remote Console 登录见 [docs/console/index.md](docs/console/index.md)
 
 2. **插件系统**
    - 插件在同一进程中运行，具有完整的系统访问权限

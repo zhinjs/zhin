@@ -96,6 +96,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: '适配器开发', link: '/authoring/adapters' },
     { text: '端点生命周期', link: '/authoring/endpoint-lifecycle' },
     { text: 'Host Token 总览', link: '/authoring/host-tokens' },
+    { text: '本地联调指南', link: '/authoring/local-dev' },
     { text: '插件完整交付（测试与发布）', link: '/authoring/plugin-delivery' },
   ]),
   sidebarGroup('上线运维', [
@@ -231,6 +232,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
     { text: 'Adapter Authoring', link: '/en/authoring/adapters' },
     { text: 'Endpoint Lifecycle', link: '/en/authoring/endpoint-lifecycle' },
     { text: 'Host Token Reference', link: '/en/authoring/host-tokens' },
+    { text: 'Local Development Guide', link: '/en/authoring/local-dev' },
     { text: 'Complete Plugin Delivery (Test & Publish)', link: '/en/authoring/plugin-delivery' },
   ]),
   sidebarGroup('Operations', [
