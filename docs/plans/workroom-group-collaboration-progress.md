@@ -83,7 +83,9 @@ sidebar: false
   - 2026-10-15 · 「fix: Room 路由按接收 Endpoint 成员关系判定，避免静默丢消息」· `hasRoom` / `route` 按会话 + 接收 Endpoint 判定，非成员 Bot 按普通群处理；不在 decision 中的成员副本作为最低优先级接管并打 warn；目标副本已到或已有人接管时仍判 duplicate；三层补测试
 - [x] B2b-2 处理第 28 轮审查意见（涉及路由正确性，所以新建条目）：`packages/im/workroom/src/room/room-router.ts:139` 人类 `@X hello`（X 为非成员 Bot）且成员 Endpoint 也收到副本时，mentionedMembers 忽略 X、落到 coordinator 分支，coordinator 被强制 `mentioned=true` 插话。修复：mention 段指向的账号都不属于成员时不走 coordinator / role 分支，返回无目标，让成员副本保持原有 mentioned 语义（先到先得、不强制 mentioned）；workroom router 测试补“@ 非成员不交给 coordinator”，ImRuntime 测试补“成员副本不被强制 mentioned”。同时同步方案 `docs/plans/workroom-group-collaboration-redesign.md:132`：hasRoom 按接收 Endpoint 成员关系判定，非成员按普通群处理；不在 `[目标, ...fallbacks]` 中的成员副本作为最低优先级接管并打 warn `room_unlisted_member_takeover`
   - 2026-10-15 · 「fix(workroom): @ 非成员时 Room Router 不交给 coordinator」· mention 都不指向成员时返回无目标，成员副本先到先得、不强制 mentioned；方案 §3 同步 hasRoom 成员关系与 room_unlisted_member_takeover
-- [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
+- [x] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
+  - 2026-10-15 · 「feat(workroom): Room Task 状态机与事件溯源持久化」· `room/` 下新增小型 decide / evolve / replay 状态机（6 个状态、handoff 回到 assigned）、每个 Room 一条事件流（CAS 追加、批量原子）、数据库 journal（digest / 损坏行 fail-closed）与内存 journal；未接入运行时
+- [ ] B3-1 处理第 30 轮审查意见：`packages/im/workroom/src/room/room-task-service.ts:110` 的 `dispatch(stored)` 在每个 Room 的串行链内 await 订阅者，订阅者对同一 Room 再次 `execute` 会死锁（C1 把 RoomBus / 工具作为订阅者时容易触发），慢订阅者也会阻塞该 Room 所有命令。改为串行段结束后再分发（serialized 返回已存事件，`execute` 在 run 完成后分发），补“订阅者对同一 Room 调用 execute 不死锁”测试。顺带 Nit：`database-room-task-journal.ts:67` 空批量不校验 `expectedSequence`，与内存 journal 行为不一致，统一并补一个对两种 journal 都跑的契约测试；`room-task.ts:199` 已 `assigned` 时再次 `task.assigned` 会绕过 handoff 的 from 校验且不计 handoffCount，拒绝重派给当前负责人，并在注释或方案中写明 C1 的 authorize 必须限制谁可以对已分配的 Task 重新 assign
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
 
@@ -284,6 +286,12 @@ sidebar: false
 - Nit（只记录）：`im-runtime.test.ts:3793`“@ A 路由到 A”用例中 A 同时是 mock coordinator 默认目标，分不清 mention 与 coordinator 路径，可断言 route 返回 `reason: 'mention'` 或把 coordinator 改为 ids[2]
 - Nit（只记录）：方案第 131 行与 changeset 未点明“非成员账号”也包括群内其他人类（人类 @ 人类时 coordinator 不插话），建议补半句，供 B3 / B4 参考
 
+### 第 30 轮（2026-10-15，审查 B3）
+
+- 无 Blocking
+- Should fix：`room-task-service.ts:110` 订阅者在 Room 串行链内被 await，重入 execute 会死锁 → 新增 B3-1
+- Nit：DB journal 空批量不校验 expectedSequence，与内存实现不一致；已 assigned 时再次 assign 可绕过 handoff 规则 → 并入 B3-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -317,3 +325,4 @@ sidebar: false
 - 2026-10-15 00:35 定时运行：rebase 到最新 origin/main（30 个提交无冲突），install / build 通过；B2b 第 2 次执行完成（4 个 agent，约 12.6 分钟，core / workroom build、type-check、405 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 涉及正确性，新增为 B2b-1）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B2b-1（4 个 agent，约 4.4 分钟，core / workroom build、type-check、219 + 348 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix 涉及路由正确性，合并新增为 B2b-2，2 个 Nit 只记录）
 - 2026-10-15 01:35 定时运行：rebase 到最新 origin/main（2 个提交无冲突），install / build 通过；完成 B2b-2（4 个 agent，约 3.7 分钟，core / workroom build、type-check、220 + 1484 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，2 个 Nit 只记录）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
+- 2026-10-15 同一次定时运行：完成 B3（4 个 agent，约 7.1 分钟，workroom build、type-check、101 + 940 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 新增为 B3-1，2 个 Nit 并入）。顺带在方案第 131 行补充“非成员账号也包括群内其他人类”

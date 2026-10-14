@@ -271,7 +271,9 @@ describe('exports and isolation', () => {
       } else {
         expect(external).toEqual([]);
       }
-      expect(src).not.toMatch(/\.\.\/(workroom|workroom-runtime|portfolio|data-governance)\b/);
+      // Task files may use the shared canonical JSON / digest helper and nothing else from the legacy tree.
+      const withoutCanonical = src.replace(/from '\.\.\/workroom\/canonical-value\.js'/g, "from ''");
+      expect(withoutCanonical).not.toMatch(/\.\.\/(workroom|workroom-runtime|portfolio|data-governance)\b/);
     }
   });
 });

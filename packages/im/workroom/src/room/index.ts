@@ -4,3 +4,7 @@ export * from './room-registry.js';
 export * from './room-router.js';
 export * from './room-membership.js';
 export * from './room-bus.js';
+export * from './room-task.js';
+export * from './room-task-journal.js';
+export * from './database-room-task-journal.js';
+export * from './room-task-service.js';

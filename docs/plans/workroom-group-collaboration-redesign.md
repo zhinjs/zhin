@@ -128,7 +128,7 @@ graph LR
 
 **Router 已实现（B2b）**：`RoomMembershipPort` 的 `hasRoom` 与可选的 `route` 成对提供（workroom 里只有 `createRoomMembershipPort` 这一个工厂，测试断言“有 `hasRoom` 就一定有 `route`”）。core 在去重位置用可信数据构造路由输入（`mentionTargets` 取自 mention segment，`replyToEndpointId` 取自出站 ledger，`pending` / `accountOf` / `isAvailable` 三个探针分别来自 interaction 状态、Peer Registry 的账号与就绪状态），调用同步、无副作用的 `route`，由 Router 决定目标 Endpoint：
 - 优先级固定为 待回答 > @ > 回复 > coordinator > 按 role 匹配（无 coordinator，或 coordinator 不可用时）；多个 @ 取文中第一个被 @ 的成员（平台 mention segment 先于文本 `@别名`）；每一步都跳过不可用的 Endpoint，顺位降级，全都不可用时返回 `undefined`，回退到先到先得去重。
-  - 只 @ 了非成员账号（mention segment 指向的账号都不属于成员，且无文本 `@别名` 命中）时没有目标：Router 返回 `undefined`，不交给 coordinator / role，退化为先到先得去重，成员副本保持原有 `mentioned` 语义，不强制 mentioned。已被 @ 的成员不可用时仍按原顺位降级。
+  - 只 @ 了非成员账号（mention segment 指向的账号都不属于成员，且无文本 `@别名` 命中；非成员账号也包括群内其他人类用户，人类 @ 人类时 coordinator 不插话）时没有目标：Router 返回 `undefined`，不交给 coordinator / role，退化为先到先得去重，成员副本保持原有 `mentioned` 语义，不强制 mentioned。已被 @ 的成员不可用时仍按原顺位降级。
 - **决策按消息缓存**（同 平台+会话+发送者+消息 id，60 秒）：第一个到达的副本算一次 `route`，其余副本复用结果，否则先被消费掉待回答状态的 Endpoint 之后，另一个副本会重算出不同结果而双重处理。`route` 返回目标之外还带 `fallbackEndpointIds`（其余可用成员，按 generalist → chat/general → 声明顺序）。`route` 返回 `undefined` 或抛错（warn 日志）时退化为先到先得，不丢消息。
 - **目标优先 + 宽限期接管**：core 无法预知哪些 Endpoint 会收到副本（例如 Telegram 开启 privacy mode 时，未 @ 的消息只投递给部分 Bot）。因此：目标 Endpoint 的副本立即处理，强制 `mentioned=true`（`mentioned` 相对接收 Endpoint，否则 AI ingress 不触发）；目标已到达后其余副本只记录，不路由，不 publish。非目标副本若先于目标到达，且本 Endpoint 在 `[目标, ...fallbackEndpointIds]` 中，则等待目标副本（宽限期默认 2 秒，等待期间持有 snapshot lease，此时尚未写入历史）；宽限期内目标没到，优先级最高的已到达成员副本接管（debug 日志 `room_target_missing_takeover`，同样强制 `mentioned=true`），其余等待者只记录。目标副本晚到则判 duplicate，只记录。`hasRoom` 按接收 Endpoint 的成员关系判定，只有成员 Endpoint 收到的副本才走 route / 去重；同群里的非成员 Bot 按普通群处理（处理自己的副本，不 claim、不仲裁、不强制 mentioned）。不在 `[目标, ...fallbackEndpointIds]` 中的成员副本（例如路由时尚未就绪的成员）作为最低优先级的接管候选，同样等待宽限期；若它接管成功，打 warn 日志 `room_unlisted_member_takeover`（另有 debug `room_target_missing_takeover`）。结果：只要至少一个成员 Endpoint 收到副本，这条 keyed 的 Room 人类消息就恰好被处理一次；代价是目标没收到副本时有一个宽限期的延迟。
 - **平台按钮回调绕过 Room 路由**：带 action 段的入站（如 Telegram `callback_query` 被 adapter 转成带 action 段的群消息）只投递给发出键盘的那个 Bot，只有它的 Endpoint 持有该键盘的 JSX registry / fallback。这类入站视为发给接收它的 Endpoint：不 route、不去重（不 claim、不缓存、不强制 mentioned），永远由接收它的 Endpoint 处理。action 段只由 adapter 从平台回调结构生成，普通文本消息无法携带。bot 来源（member / peer_bot）照旧只记录。
@@ -186,6 +186,15 @@ graph LR
 Task 状态用小型事件溯源：`created → assigned → in_progress → done / blocked / cancelled`，外加 `handoff` 事件。现有 `workroom/kernel-state.ts` 的 `decide / evolve / replay` 模式可以借用，但状态机要大幅缩小（去掉 lease、preempt、acceptance revision、scheduler clock）。
 
 持久化复用 `@zhin.js/database`，一个 Room 一条事件流就够了。
+
+**B3 已实现**（`packages/im/workroom/src/room/room-task*.ts`、`database-room-task-journal.ts`，与旧 Workroom 并存，未接入运行时）：
+
+- 状态 6 个：`created / assigned / in_progress / done / blocked / cancelled`，`done`、`cancelled` 为终态；没有 lease、preempt、acceptance revision、scheduler clock。
+- 转移：`assign` 可用于 created / assigned / blocked（in_progress 必须先 block 或走 handoff）；`start` 仅 assigned / blocked 且为当前 assignee；`block`、`complete` 仅 in_progress 且为 assignee（reason / result 必填）；`cancel` 任何非终态、不限 actor；终态后任何命令都显式报错。
+- `handoff`：仅 assigned / in_progress / blocked，由当前 assignee 发起，`to !== from`；evolve 后 assignee 变为 `to`，状态**回到 assigned**（原 in_progress 的任务由新负责人重新 start），`handoffCount + 1`。
+- 命令带 `commandId` 幂等键；同 id 同内容重放不产生新事件，同 id 不同内容报冲突。replay 重新校验每条事件的转移合法性，任何违例 fail closed。
+- 一个 Room 一条事件流（sequence 从 0 连续，CAS 追加）；DB 表 `room_task_events`（行含 canonical JSON、event digest 与 row binding digest，损坏行读写都拒绝）。表尚未并入 `defineWorkroomDatabaseModels`，由 C1 接线。
+- 成员是否在 Room 内、`role.handoffTo` 是否允许等授权不在状态机内，由调用方通过 `authorize` 钩子（C1 工具层 / Bus）负责；B3 也不接 RoomBus、不投影群消息，handoff 的群内可见投影仍由 room-bus 负责，C1 再组合。
 
 ### 3.6 与 Generation Projection 里程碑的关系
 
