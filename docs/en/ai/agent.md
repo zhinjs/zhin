@@ -89,7 +89,18 @@ In the `TurnEvent` stream, a user cancel appears as `turn_cancelled` (`code: 'ca
 
 With many tools, putting every tool's parameter schema in the prompt would fill the context. Zhin **loads tools lazily**: a turn keeps only a few meta tools resident, and the model searches and loads others by name when needed.
 
-Resident by default (`alwaysLoadedTools`): `ask_user`, `spawn_task`, `discover`, `load_tool`, `load_skill`. Setting `alwaysLoadedTools` **adds to** this default list; set `alwaysLoadedMode: replace` to replace it entirely.
+The resident core set (`alwaysLoadedTools`) has two groups:
+
+- Interaction and orchestration: `ask_user`, `spawn_task`, and the meta tools `discover`, `load_tool`, `load_skill`.
+- Workspace files: `read_file`, `list_dir`, `glob`, `grep`, `edit_file`, `write_file`. The model calls these directly most often, so keeping them resident saves an "unknown tool" round trip. They are still subject to the turn's tool filters and exec policy; for example, a turn started by a group member gets no file-writing tools.
+
+`bash` is not resident because whether it can run depends on the turn's shell isolation policy. Setting `alwaysLoadedTools` **adds to** this default list; set `alwaysLoadedMode: replace` to replace it entirely.
+
+Other tools send no parameter schema. The system prompt lists them in a `## Deferred tools` section with their name and a description of at most 60 characters, up to 40 entries; beyond that it points the model at `discover`. The model can call `load_tool(name)` to get the schema, and calling the tool directly also loads it. The index only contains tools this turn may use: tools removed by policy (such as `bash` without shell access) never appear.
+
+Skills use progressive disclosure: the system prompt lists each skill's name and the first line of its trigger description (at most 96 characters, up to 40 entries), and the specialist agent catalog works the same way. A skill's full instructions enter the context only after `load_skill`, or when intent matching activates it.
+
+The context cost of each turn's first model request is estimated per segment and stored in the turn trace's `context_budget` field, which `zhin trace last` shows: system prompt, tool schemas, deferred tool index, skill catalog, specialist agent catalog, loaded skills, memory, bootstrap, history and the current input, plus the largest prompt sections. These are estimates (CJK ≈ 1 token per character, other text ≈ 4 characters per token); real usage is still in the model call records.
 
 | Meta tool | Purpose |
 |-----------|---------|
