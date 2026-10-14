@@ -213,3 +213,27 @@ log_level: 1
     expect(summary.exitCode).toBe(1);
   });
 });
+
+describe('config check: deprecated ai.agent keys (#735)', () => {
+  let tmpDir: string;
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-config-check-735-'));
+  });
+  afterEach(async () => {
+    await fs.remove(tmpDir);
+  });
+
+  it('报告可修复的弃用警告', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins: {}
+ai:
+  enabled: true
+  agent:
+    maxSkills: 3
+`);
+    const result = await runConfigCheck(tmpDir, {});
+    const issue = result.issues.find((i) => i.code === 'ai.agent_maxSkills_deprecated');
+    expect(issue?.severity).toBe('warn');
+    expect(issue?.fixable).toBe(true);
+  });
+});

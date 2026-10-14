@@ -148,7 +148,8 @@
     "check:skill-authoring-boundaries": "node scripts/check-skill-authoring-boundaries.mjs",
     "check:agent-authoring-boundaries": "node scripts/check-agent-authoring-boundaries.mjs",
     "check:hook-authoring-boundaries": "node scripts/check-hook-authoring-boundaries.mjs",
-    "check:install-size": "node scripts/check-install-size.mjs"
+    "check:install-size": "node scripts/check-install-size.mjs",
+    "check:agent-config-inventory": "node scripts/check-agent-config-inventory.mjs"
   },
   "devDependencies": {
     "@ai-sdk/minimax": "^3.0.15",

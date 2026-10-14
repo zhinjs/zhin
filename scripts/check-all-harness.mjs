@@ -33,6 +33,11 @@ const EXCLUSIVE_CHECKS = new Set([
 
 const checks = [
   {
+    name: 'Agent Config Inventory',
+    command: 'pnpm check:agent-config-inventory',
+    description: 'ai.agent.* 开关清单完整且数量不超基线（#735）',
+  },
+  {
     name: 'Unit Tests',
     command: 'pnpm test',
     description: '全量 Vitest（pnpm test）',
