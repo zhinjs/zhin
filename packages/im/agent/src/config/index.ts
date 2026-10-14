@@ -6,6 +6,11 @@ export {
 export { validateAiRoutingConfig } from './validate-ai-config.js';
 export { validateWorkroomDefinitions } from '../workroom/validate-catalog.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
+export {
+  DEPRECATED_AGENT_CONFIG_KEYS,
+  findDeprecatedAgentConfigKeys,
+  type DeprecatedAgentConfigKey,
+} from './deprecated-agent-keys.js';
 export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type {
