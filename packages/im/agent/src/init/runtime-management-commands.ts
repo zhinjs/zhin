@@ -117,8 +117,9 @@ export async function handleRuntimeManagementCommand(
 async function handleOwnMemoryCommand(deps: RuntimeManagementDeps, text: string): Promise<string | null> {
   const runtime = deps.semanticMemory;
   const isList = /^\/memory\s*$/iu.test(text);
-  const forget = text.match(/^\/forget(?:\s+(.+))?$/iu);
-  if (!isList && !forget) return null;
+  // Prefix test plus slice (no backtracking regex over user input).
+  const isForget = /^\/forget(?:\s|$)/iu.test(text);
+  if (!isList && !isForget) return null;
   if (!runtime?.active || !deps.senderId) return null;
   const signal = new AbortController().signal;
   const scope = { scope: 'user' as const, scope_key: deps.senderId };
@@ -132,7 +133,7 @@ async function handleOwnMemoryCommand(deps: RuntimeManagementDeps, text: string)
       .join('\n');
   }
 
-  const target = forget?.[1]?.trim();
+  const target = text.slice('/forget'.length).trim();
   if (!target) return 'ℹ️ 用法：/forget <key 或 id>，或 /forget all';
   const entries = await runtime.list({ ...scope, limit: Number.MAX_SAFE_INTEGER }, signal);
   const matches = target.toLowerCase() === 'all'
