@@ -1,0 +1,41 @@
+.changeset/agent-eval-ingress-admission.md
+  s_c757df74f34330::t_099c376fa7f8a2 1-5
+packages/im/agent/evals/README.md
+  s_c757df74f34330::t_4db41e1c947ada 163-176
+packages/im/agent/evals/framework/index.ts
+  s_c757df74f34330::t_261a39fd257cca 11-12
+packages/im/agent/evals/framework/ingress.ts
+  s_c757df74f34330::t_c5893278493382 1-257
+packages/im/agent/evals/ingress-cases/cancel-stops-own-turn.case.ts
+  s_c757df74f34330::t_d34714c0417597 1-23
+packages/im/agent/evals/ingress-cases/master-cancel-stops-member.case.ts
+  s_c757df74f34330::t_93c278223bb7c1 1-16
+packages/im/agent/evals/ingress-cases/members-queued-fifo.case.ts
+  s_c757df74f34330::t_e527d52182e203 1-22
+packages/im/agent/evals/ingress-cases/queue-full-rejected.case.ts
+  s_c757df74f34330::t_105a052d2a8cf8 1-24
+packages/im/agent/evals/ingress-cases/queued-burst-coalesced.case.ts
+  s_c757df74f34330::t_a8b461a2a758e1 1-21
+packages/im/agent/evals/ingress-cases/queued-turn-expires.case.ts
+  s_c757df74f34330::t_13d452de9e3caf 1-18
+packages/im/agent/evals/ingress-cases/same-sender-followup-merged.case.ts
+  s_c757df74f34330::t_4fd066a28c90e5 1-19
+packages/im/agent/evals/ingress.eval.ts
+  s_c757df74f34330::t_27087afe1d5746 1-24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a01d1051e7cda5142e96d72df38f9589a0ae7ed6",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
