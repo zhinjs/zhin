@@ -1,0 +1,113 @@
+.changeset/agent-eval-seed-cases.md
+  s_2ebbb5e3caac4a::t_f07cc3076d7485 1-5
+packages/im/agent/evals/README.md
+  s_2ebbb5e3caac4a::t_5b647c32d66f3a 69-73,85-86,97-142,148-152
+packages/im/agent/evals/cases/auto-continuation-master-dm.case.ts
+  s_c757df74f34330::t_981dc8f931f18b 1-27
+packages/im/agent/evals/cases/background-event-not-answered.case.ts
+  s_c757df74f34330::t_16c2eb42ea0960 1-24
+packages/im/agent/evals/cases/bash-master-isolated-runs.case.ts
+  s_c757df74f34330::t_c181ae2fec93db 1-22
+packages/im/agent/evals/cases/budget-extends-on-progress.case.ts
+  s_c757df74f34330::t_230433c93b8aca 7
+packages/im/agent/evals/cases/exploration-budget-hint.case.ts
+  s_c757df74f34330::t_63551bb8b07b61 1-25
+packages/im/agent/evals/cases/group-master-unaffected.case.ts
+  s_c757df74f34330::t_d20c23219a55a0 1-15
+packages/im/agent/evals/cases/group-member-no-file-write.case.ts
+  s_c757df74f34330::t_5f55f73a227c34 1-17
+packages/im/agent/evals/cases/group-member-no-outbound.case.ts
+  s_c757df74f34330::t_6c0d35e3669a95 1-16
+packages/im/agent/evals/cases/group-member-no-shell.case.ts
+  s_c757df74f34330::t_f8266f56790b8d 1-17
+packages/im/agent/evals/cases/group-member-read-only-lookup.case.ts
+  s_c757df74f34330::t_8a8648b3a4b3b2 1-15
+packages/im/agent/evals/cases/session-history-carried.case.ts
+  s_c757df74f34330::t_e0473b13e5be8c 1-22
+packages/im/agent/evals/cases/subagent-approval-routed.case.ts
+  s_c757df74f34330::t_d532e453ecde01 1-24
+packages/im/agent/evals/cases/subagent-no-bash-when-parent-cannot.case.ts
+  s_c757df74f34330::t_9df7a428e31d57 1-26
+packages/im/agent/evals/cases/subagent-sync-report.case.ts
+  s_c757df74f34330::t_1589c137c7c8eb 7
+packages/im/agent/evals/cases/tool-result-summarized.case.ts
+  s_c757df74f34330::t_24cb3b4966382e 8
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_510ec263c89ae9 6-10,18-19,25,53-54,61-69,71,105-108,113,148,159,166,248-312
+packages/im/agent/evals/framework/fixture.ts
+  s_c757df74f34330::t_b137660d60ca1e 21-26,38-39,42-44,66-71,77-80,85-89,111,118
+packages/im/agent/evals/framework/framework.test.ts
+  s_c757df74f34330::t_8550fc363192b2 21,54,91,108,118-146,167
+packages/im/agent/evals/framework/index.ts
+  s_2ebbb5e3caac4a::t_feb9b385d2410d 1-2,5
+packages/im/agent/evals/agent.eval.ts
+  s_2ebbb5e3caac4a::t_003899fe0c93d2 13-15
+packages/im/agent/evals/cases/approval-approved-runs.case.ts
+  s_65e31a9eb312ad::t_efa94fd6f080e6 1-21
+packages/im/agent/evals/cases/approval-denied-not-retried.case.ts
+  s_65e31a9eb312ad::t_85fbd97b794da2 1-21
+packages/im/agent/evals/cases/approval-unavailable-typed.case.ts
+  s_65e31a9eb312ad::t_5a649a84371c94 1-21
+packages/im/agent/evals/cases/bash-hidden-without-shell-policy.case.ts
+  s_65e31a9eb312ad::t_d85270bee441d6 1-23
+packages/im/agent/evals/cases/budget-no-extend-on-failures.case.ts
+  s_65e31a9eb312ad::t_5d0aa5d5d37cbf 1-23
+packages/im/agent/evals/cases/budget-no-extend-on-repeat.case.ts
+  s_65e31a9eb312ad::t_d3d73bc65d15ff 1-21
+packages/im/agent/evals/cases/deferred-tool-autoloaded.case.ts
+  s_65e31a9eb312ad::t_22f482b8f1aaeb 1-19
+packages/im/agent/evals/cases/exhausted-summary-fallback.case.ts
+  s_65e31a9eb312ad::t_53f555d21af47b 1-21
+packages/im/agent/evals/cases/exhausted-turn-summary.case.ts
+  s_65e31a9eb312ad::t_de6e63c19ef935 1-25
+packages/im/agent/evals/cases/grep-match-all-rejected.case.ts
+  s_65e31a9eb312ad::t_5910a055197d16 1-22
+packages/im/agent/evals/cases/grep-skips-node-modules.case.ts
+  s_65e31a9eb312ad::t_0633f815e823da 1-25
+packages/im/agent/evals/cases/unknown-tool-hinted.case.ts
+  s_65e31a9eb312ad::t_1eaf1b38a43432 1-20
+packages/im/agent/evals/framework/assertions.ts
+  s_65e31a9eb312ad::t_5b7a5ef3790423 55-64,84-86,107-111
+packages/im/agent/evals/framework/scripted-model.ts
+  s_13081b337ae0b0::t_ac8dbd222ee9c0 22-27,30-40,43-51,61-63,77-78,102,111-118,125-128,130,153,161,190-207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a4a71546ea94390bc42d5315e949db6f51c497e7",
+  "prompts": {},
+  "sessions": {
+    "s_13081b337ae0b0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ab4083626395a039c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2ebbb5e3caac4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ea2d93-d1b0-4f9c-94d6-f3e31febe303",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_65e31a9eb312ad": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a004415f0749a281b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
