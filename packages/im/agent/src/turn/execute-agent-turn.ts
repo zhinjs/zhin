@@ -3,6 +3,7 @@ import type { TurnEvent, TurnTerminalEvent } from '../event/turn-event.js';
 import type { TurnIngress, TurnOutcome } from './turn-ingress.js';
 import { TurnTerminalGate } from './turn-terminal.js';
 import { TurnJournalCommitError } from './journal-integrity.js';
+import { journalFeedOf } from './journal-feed.js';
 
 export interface TurnTerminalProjection {
   project(): void | Promise<void>;
@@ -32,6 +33,10 @@ export async function executeAgentTurn(
   const gate = new TurnTerminalGate();
   let observedUsage = emptyUsage;
   let stream: ReturnType<TurnEventSource> | undefined;
+  // When the journal carries a feed, observers read committed journal facts
+  // (including authority tool events) instead of the raw engine stream.
+  const feed = journalFeedOf(turn.ports.journal);
+  const closeFeed = feed?.open();
   try {
     stream = run(turn);
     while (true) {
@@ -43,13 +48,17 @@ export async function executeAgentTurn(
       } catch (error) {
         return failedOutcome('turn_journal_commit_failed', error, true, observedUsage);
       }
-      if (!gate.accept(event)) continue;
-      if (event.type === 'usage') observedUsage = addUsage(observedUsage, event.usage);
-      try {
-        await observe?.(event);
-      } catch {
-        // Observers are projections. Once an event is accepted by the terminal
-        // gate, projection failure cannot rewrite the execution fact.
+      const committed = feed ? feed.drain() : [event];
+      for (const fact of committed) {
+        if (!gate.accept(fact)) continue;
+        if (fact.type === 'usage') observedUsage = addUsage(observedUsage, fact.usage);
+        try {
+          await observe?.(fact);
+        } catch {
+          // Observers are projections. Once an event is accepted by the terminal
+          // gate, projection failure cannot rewrite the execution fact.
+        }
+        if (gate.terminal) break;
       }
       if (gate.terminal) {
         try {
@@ -83,6 +92,7 @@ export async function executeAgentTurn(
         };
     return commitSyntheticTerminal(turn, gate, terminal, observedUsage);
   } finally {
+    closeFeed?.();
     try {
       await stream?.return(undefined);
     } catch {

@@ -27,6 +27,8 @@ import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import type { SkillDescriptor } from '@zhin.js/skill';
+import { createJournalFeed } from '../../src/turn/journal-feed.js';
+import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
 import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
@@ -159,18 +161,12 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
       },
     };
     try {
-      const stream = engine.run(context);
-      while (true) {
-        const step = await stream.next();
-        if (step.done) {
-          await step.value?.project();
-          break;
-        }
-        // Like executeAgentTurn, every engine event is committed to the journal.
-        await turn.ports.journal.append(step.value);
-        events.push(step.value);
-        if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
-      }
+      // Same path as AgentRuntime: the journal is the single source and
+      // `events` is the journal-derived feed (includes authority tool events).
+      await executeAgentTurn(turn, () => engine.run(context), (event) => {
+        events.push(event);
+        if (isTurnTerminalEvent(event)) terminals.push(event);
+      });
     } finally {
       releaseTrace();
       trace.finalize();
@@ -233,7 +229,7 @@ function buildTurn(
     },
     signal: new AbortController().signal,
     ports: {
-      journal: createTracingJournal({ append: async () => undefined }, trace),
+      journal: createJournalFeed(createTracingJournal({ append: async () => undefined }, trace), { turnId }),
       reply: {
         send: async (output) => {
           const text = output

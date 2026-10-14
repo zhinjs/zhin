@@ -82,6 +82,11 @@ export interface EvalExpectations {
   readonly systemPromptNotContains?: readonly string[];
   /** Bounds on the first turn's estimated context cost. */
   readonly contextBudget?: EvalContextBudgetExpectation;
+  /**
+   * Tool events that stream consumers must see, in order, as `type:toolName`
+   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
+   */
+  readonly streamToolEvents?: readonly string[];
 }
 
 /** A skill visible to the turn. Only its name and one-line trigger are resident; instructions load on demand. */

@@ -6,6 +6,8 @@ export { processTextTurn } from './turn-pipeline.js';
 export type { ProcessTextTurnOptions } from './turn-pipeline.js';
 
 export { executeAgentTurn } from './execute-agent-turn.js';
+export { createJournalFeed, journalFeedOf } from './journal-feed.js';
+export type { JournalFeed } from './journal-feed.js';
 export type { TurnEventObserver, TurnEventSource } from './execute-agent-turn.js';
 export { streamTurnEvents } from './turn-event-source.js';
 export type { TurnEventSink, TurnEventSourceInput } from './turn-event-source.js';
