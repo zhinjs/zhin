@@ -24,14 +24,22 @@ let agentModule: {
   workroomHostToken?: { readonly id: TokenId };
 } | null | undefined;
 
-void Promise.all([import('@zhin.js/agent/runtime'), import('@zhin.js/workroom')])
-  .then(([runtime, workroom]) => {
-    agentModule = {
-      agentHostToken: runtime.agentHostToken,
-      workroomHostToken: workroom.workroomHostToken,
-    } as typeof agentModule;
-  })
-  .catch(() => { agentModule = null; });
+// The Agent token must not be lost when the optional Workroom package is absent.
+void (async () => {
+  try {
+    const runtime = await import('@zhin.js/agent/runtime');
+    agentModule = { agentHostToken: runtime.agentHostToken } as typeof agentModule;
+  } catch {
+    agentModule = null;
+    return;
+  }
+  try {
+    const workroom = await import('@zhin.js/workroom');
+    agentModule = { ...agentModule, workroomHostToken: workroom.workroomHostToken } as typeof agentModule;
+  } catch {
+    /* Workroom not installed: Agent console only. */
+  }
+})();
 
 export type AgentIntrospection = {
   listTools(): readonly { name: string; hidden?: boolean; description?: string }[];
@@ -51,10 +59,10 @@ export function resolveGenerationAgentIntrospection(
 
 export type AgentConsolePort = {
   readonly sessionTree: ConsoleAgentRuntime['sessionTree'];
-  readonly workroom: WorkroomRuntimeHandle;
+  readonly workroom?: WorkroomRuntimeHandle;
   readonly workroomControl?: AgentHostWorkroomRunControlPort;
   readonly assistant: AssistantRuntime | null;
-  readonly workroomCatalog: {
+  readonly workroomCatalog?: {
     read(): Promise<Readonly<{
       definitions: Readonly<Record<string, WorkroomDefinition>>;
       revision: string;
@@ -112,13 +120,19 @@ export type AgentConsolePort = {
 export function resolveGenerationAgentConsole(
   snapshot: RuntimeSnapshot | undefined,
   agentToken: { readonly id: TokenId } | undefined,
-  workroomToken: { readonly id: TokenId } | undefined,
+  workroomToken?: { readonly id: TokenId },
 ): AgentConsolePort | null {
-  if (!snapshot || !agentToken || !workroomToken) return null;
+  if (!snapshot || !agentToken) return null;
   const rootResources = snapshot.resources.get(snapshot.root);
   const agentConsole = (rootResources?.get(agentToken.id) as { console?: object } | undefined)?.console;
-  const workroomConsole = (rootResources?.get(workroomToken.id) as { console?: object } | undefined)?.console;
-  if (!agentConsole || !workroomConsole) return null;
+  if (!agentConsole) return null;
+  const workroomConsole = workroomToken
+    ? (rootResources?.get(workroomToken.id) as { console?: object } | undefined)?.console
+    : undefined;
+  if (!workroomConsole) {
+    // Workroom not installed (or not published): Agent console alone; Workroom routes answer 503.
+    return Object.freeze(Object.defineProperties({}, Object.getOwnPropertyDescriptors(agentConsole))) as AgentConsolePort;
+  }
   const overlapping = Reflect.ownKeys(agentConsole)
     .filter(key => Object.prototype.hasOwnProperty.call(workroomConsole, key));
   if (overlapping.length > 0) {

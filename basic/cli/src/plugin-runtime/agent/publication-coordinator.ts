@@ -8,19 +8,9 @@ import {
   turnJournalStoreToken,
   type AgentRuntime,
 } from '@zhin.js/agent/runtime';
-import {
-  workroomHostToken,
-  type AgentHostEffectSponsorControlPort,
-  type AgentHostPortfolioSponsorControlPort,
-  type AgentHostWorkroomKnowledgeControlPort,
-  type AgentHostWorkroomProfileControlPort,
-  type WorkroomDataLifecycleConsoleControlPort,
-  type WorkroomRunControlCommand,
-} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import { observeAgentTurnTrace } from './runtime-factory.js';
 import type { AgentRuntimeFoundation } from './runtime-foundation.js';
-import type { WorkroomRuntimeFoundation } from '../workroom/module.js';
 
 type RootResources = Parameters<RootResourceInstaller>[0]['resources'];
 
@@ -30,31 +20,19 @@ export interface AgentHostPublicationCoordinatorOptions {
   readonly resources: RootResources;
   readonly processRuntime: AgentRuntime;
   readonly agent: AgentRuntimeFoundation;
-  readonly workroom: WorkroomRuntimeFoundation;
   readonly bootstrapText: string;
 }
 
-/** Publishes the Agent Host ports and owns their late-bound Console controls. */
+/** Publishes the Agent Host ports. Workroom ports are published separately and only when installed. */
 export class AgentHostPublicationCoordinator {
-  #workroomProfiles?: AgentHostWorkroomProfileControlPort;
-  #workroomKnowledge?: AgentHostWorkroomKnowledgeControlPort;
-  #portfolioSponsor?: AgentHostPortfolioSponsorControlPort;
-  #effectSponsor?: AgentHostEffectSponsorControlPort;
-  #dataLifecycle?: WorkroomDataLifecycleConsoleControlPort;
-
   constructor(options: AgentHostPublicationCoordinatorOptions) {
     options.signal.throwIfAborted();
-    const { resources, agent, workroom } = options;
+    const { resources, agent } = options;
     const { service, composition, traceRuntime, schedule, sessionTreeRuntime } = agent;
     const resourceHub = agent.agent.resourceHub;
     if (!resourceHub) {
       throw new Error('Agent Host requires a ready AgentResourceHub before generation publication');
     }
-    const resolveWorkroomProfiles = () => this.#workroomProfiles;
-    const resolveWorkroomKnowledge = () => this.#workroomKnowledge;
-    const resolvePortfolioSponsor = () => this.#portfolioSponsor;
-    const resolveEffectSponsor = () => this.#effectSponsor;
-    const resolveDataLifecycle = () => this.#dataLifecycle;
     resources.provide(agentHostToken, Object.freeze({
       protocol: Object.freeze({
         listBindings: () => agent.listBindings(),
@@ -83,23 +61,6 @@ export class AgentHostPublicationCoordinator {
         cancelSession: (sessionKey: string) => agent.agent.cancelSession(sessionKey),
       }),
     }));
-    resources.provide(workroomHostToken, Object.freeze({
-      console: Object.freeze({
-        workroom: workroom.runtime,
-        workroomControl: Object.freeze({
-          execute: (
-            command: WorkroomRunControlCommand,
-            authenticatedPrincipal: Readonly<{ principalId: string }>,
-          ) => workroom.kernel.controlRun(command, authenticatedPrincipal),
-        }),
-        workroomCatalog: workroom.catalog,
-        get workroomProfiles() { return resolveWorkroomProfiles(); },
-        get workroomKnowledge() { return resolveWorkroomKnowledge(); },
-        get portfolioSponsor() { return resolvePortfolioSponsor(); },
-        get effectSponsor() { return resolveEffectSponsor(); },
-        get dataLifecycle() { return resolveDataLifecycle(); },
-      }),
-    }));
     resources.provide(
       turnJournalStoreToken,
       new FileJournalStore(join(options.projectRoot, '.zhin', 'agent-journal')),
@@ -113,33 +74,4 @@ export class AgentHostPublicationCoordinator {
       bootstrapContext: options.bootstrapText,
     }));
   }
-
-  bindWorkroomProfiles(control: AgentHostWorkroomProfileControlPort): void {
-    this.#workroomProfiles = bindOnce(this.#workroomProfiles, control, 'Workroom Profile control');
-  }
-
-  bindWorkroomKnowledge(control: AgentHostWorkroomKnowledgeControlPort): void {
-    this.#workroomKnowledge = bindOnce(this.#workroomKnowledge, control, 'Workroom Knowledge control');
-  }
-
-  bindPortfolioSponsor(control: AgentHostPortfolioSponsorControlPort): void {
-    this.#portfolioSponsor = bindOnce(this.#portfolioSponsor, control, 'Portfolio Sponsor control');
-  }
-
-  bindEffectSponsor(control: AgentHostEffectSponsorControlPort): void {
-    this.#effectSponsor = bindOnce(this.#effectSponsor, control, 'Effect Sponsor control');
-  }
-
-  bindDataLifecycle(control: WorkroomDataLifecycleConsoleControlPort | undefined): void {
-    if (control) this.#dataLifecycle = bindOnce(this.#dataLifecycle, control, 'Data Lifecycle control');
-  }
-
-  resolveDataLifecycle(): WorkroomDataLifecycleConsoleControlPort | undefined {
-    return this.#dataLifecycle;
-  }
-}
-
-function bindOnce<T>(current: T | undefined, value: T, name: string): T {
-  if (current) throw new Error(`${name} is already bound`);
-  return value;
 }

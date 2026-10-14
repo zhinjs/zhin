@@ -406,3 +406,17 @@ describe('zhin agent workroom runs', () => {
     }
   });
 });
+
+describe('optional @zhin.js/workroom loading', () => {
+  it('turns a missing package into an install hint and rethrows other failures', async () => {
+    const { loadWorkroomPackage } = await import('../src/utils/optional-workroom.js');
+    const missing = Object.assign(
+      new Error("Cannot find package '@zhin.js/workroom' imported from /app/x.js"),
+      { code: 'ERR_MODULE_NOT_FOUND' },
+    );
+    await expect(loadWorkroomPackage(async () => { throw missing; }))
+      .rejects.toThrow('pnpm add @zhin.js/workroom');
+    const broken = new SyntaxError('broken');
+    await expect(loadWorkroomPackage(async () => { throw broken; })).rejects.toBe(broken);
+  });
+});

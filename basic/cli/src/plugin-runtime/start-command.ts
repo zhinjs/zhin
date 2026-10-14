@@ -475,10 +475,10 @@ async function loadConfiguredAgentHost(
 ): Promise<ConfiguredAgentHost | undefined> {
   const document = isConfigDocumentPort(config) ? (await config.read()).document : config;
   if (!hasAgentConfiguration(document)) return undefined;
-  const [agentHost, workroom] = await Promise.all([
-    import('./agent/module.js'),
-    import('./workroom/module.js'),
-  ]);
+  const agentHost = await import('./agent/module.js');
+  // Only a missing @zhin.js/workroom package degrades; any other load failure aborts startup.
+  const workroom = await agentHost.loadWorkroomHostModule();
+  if (!workroom) getLogger('runtime').info('Workroom 未安装，仅启用 Agent');
   const { agentHostToken } = await import('@zhin.js/agent/runtime');
   const { createTurnTraceArchive, defaultTurnTraceDir, defaultTurnTraceFile, resolveTraceArchiveOptions } = await import('@zhin.js/agent/trace');
   // Persistent trace archive with retention and a size cap (#728); pruned now and hourly on save.
@@ -495,7 +495,7 @@ async function loadConfiguredAgentHost(
   });
   let snapshotReader: import('@zhin.js/plugin-runtime').SnapshotReader | undefined;
   let localWorkroomDataGovernance: ReturnType<
-    typeof workroom.createLocalWorkroomDataGovernanceAuthority
+    NonNullable<typeof workroom>['createLocalWorkroomDataGovernanceAuthority']
   > | undefined;
   const configured: ConfiguredAgentHost = {
     bindings: (snapshot) => {
@@ -509,13 +509,14 @@ async function loadConfiguredAgentHost(
     },
     install: (options) => {
       if (!snapshotReader) throw new Error('Agent Host Snapshot reader is not attached');
-      localWorkroomDataGovernance ??= workroom.createLocalWorkroomDataGovernanceAuthority({
+      localWorkroomDataGovernance ??= workroom?.createLocalWorkroomDataGovernanceAuthority({
         stateRoot: join(options.projectRoot, '.zhin'),
       });
       return agentHost.installAgentHost({
         ...options,
         runtime,
         snapshots: snapshotReader,
+        workroom,
         workroomStorageMode,
         workroomTrustedPackPublishers: agentHost.resolveWorkroomTrustedPackPublishers(initialAi),
         workroomLocalDataGovernance: localWorkroomDataGovernance,

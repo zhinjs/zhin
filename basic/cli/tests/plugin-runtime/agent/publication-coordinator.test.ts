@@ -16,14 +16,13 @@ describe('AgentHostPublicationCoordinator', () => {
       resources,
       processRuntime: {} as never,
       agent: {} as never,
-      workroom: {} as never,
       bootstrapText: '',
     })).toThrow('generation replaced');
     expect(resources.has(agentHostToken)).toBe(false);
     expect(resources.has(workroomHostToken)).toBe(false);
   });
 
-  it('projects late-bound controls through the already-published Host port', () => {
+  it('publishes only the Agent Host port and no Workroom or late-bound controls', () => {
     const resources = new Scope(rootPluginId());
     const coordinator = new AgentHostPublicationCoordinator({
       projectRoot: process.cwd(),
@@ -56,28 +55,18 @@ describe('AgentHostPublicationCoordinator', () => {
         sessionTreeRuntime: {},
         listBindings: () => [],
       } as never,
-      workroom: {
-        runtime: {},
-        kernel: { controlRun: () => undefined },
-        catalog: {},
-      } as never,
       bootstrapText: '',
     });
-    const control = {} as never;
 
     expect(Object.keys(resources.use(agentHostToken).console).sort()).toEqual(
       ['assistant', 'cancelSession', 'listBindings', 'sessionTree', 'trace'],
     );
-    expect(Object.keys(resources.use(workroomHostToken).console).sort()).toEqual([
-      'dataLifecycle', 'effectSponsor', 'portfolioSponsor', 'workroom', 'workroomCatalog',
-      'workroomControl', 'workroomKnowledge', 'workroomProfiles',
-    ]);
-    expect(resources.use(workroomHostToken).console.workroomProfiles).toBeUndefined();
-    coordinator.bindWorkroomProfiles(control);
-    expect(resources.use(workroomHostToken).console.workroomProfiles).toBe(control);
-    expect(resources.use(agentHostToken).console).not.toHaveProperty('workroomProfiles');
-    expect(() => coordinator.bindWorkroomProfiles(control)).toThrow(
-      'Workroom Profile control is already bound',
-    );
+    expect(resources.has(workroomHostToken)).toBe(false);
+    for (const removed of [
+      'bindWorkroomProfiles', 'bindWorkroomKnowledge', 'bindPortfolioSponsor',
+      'bindEffectSponsor', 'bindDataLifecycle', 'resolveDataLifecycle',
+    ]) {
+      expect(coordinator).not.toHaveProperty(removed);
+    }
   });
 });

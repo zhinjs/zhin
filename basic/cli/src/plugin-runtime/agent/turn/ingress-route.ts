@@ -74,7 +74,7 @@ import {
   runtimeImSessionKey,
   type RuntimeSenderRoles,
 } from './request.js';
-import type { AgentWorkroomPort } from '../workroom-port.js';
+import { NO_WORKROOM_PORT, type AgentWorkroomPort } from '../workroom-port.js';
 import { resolveSandboxTurnPolicy } from './sandbox-policy.js';
 
 const logger = getLogger('agent');
@@ -90,7 +90,8 @@ export interface AgentTurnIngressRouteOptions {
   readonly resolveEndpointTrusted?: (adapterLocalName: string, endpointKey: string) => readonly string[];
   readonly ingress: CapabilityIngress;
   readonly agent: AgentRuntimeFoundation;
-  readonly workroom: AgentWorkroomPort;
+  /** Absent when the optional Workroom package is not installed. */
+  readonly workroom?: AgentWorkroomPort;
   /** Detached task runner (#732); a snapshot-provided `detachedTaskRunnerToken` wins. */
   readonly detachedTasks?: DetachedTaskRunner;
 }
@@ -99,8 +100,11 @@ export interface AgentTurnIngressRouteOptions {
 export class AgentTurnIngressRoute implements IngressRoute {
 
   #admissionGate: TurnAdmissionGate | undefined;
+  private readonly workroomPort: AgentWorkroomPort;
 
-  constructor(private readonly options: AgentTurnIngressRouteOptions) {}
+  constructor(private readonly options: AgentTurnIngressRouteOptions) {
+    this.workroomPort = options.workroom ?? NO_WORKROOM_PORT;
+  }
 
   /**
    * Same-session admission (#725). Created on first use so it reads the
@@ -124,11 +128,11 @@ export class AgentTurnIngressRoute implements IngressRoute {
     _requester: PluginId,
     conversationSequence: number | undefined,
   ): Promise<boolean> {
-    return await this.options.workroom.preRoute(message, conversationSequence);
+    return await this.workroomPort.preRoute(message, conversationSequence);
   }
 
   shouldRouteBeforeDispatch(message: Message): boolean {
-    return this.options.workroom.hasAgentTurn(message)
+    return this.workroomPort.hasAgentTurn(message)
       && resolveRuntimeAgentTrigger(
         message,
         this.options.agent.service.getTriggerConfig(),
@@ -148,7 +152,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
     const traceRuntime = options.agent.traceRuntime;
     const binding = service.getBindingRegistry().requireZhinBinding();
     const ingress = options.ingress;
-    const workroom = options.workroom;
+    const workroom = this.workroomPort;
       const snapshot = lease.value;
       const trigger = service.getTriggerConfig();
       const workroomAgentTurn = workroom.takeAgentTurn(message);

@@ -483,16 +483,57 @@ describe('generation-owned Agent introspection', () => {
     );
   });
 
-  it('returns null when the Workroom Host port is missing', () => {
+  it('returns the Agent console alone when the Workroom Host port is not published', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const agentConsole = { sessionTree: {} };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[agentToken.id, { console: agentConsole }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const view = resolveGenerationAgentConsole(snapshot, agentToken, workroomToken);
+    expect(view).toEqual(agentConsole);
+    expect(view?.workroom).toBeUndefined();
+    expect(view?.workroomCatalog).toBeUndefined();
+  });
+
+  it('returns the Agent console alone when the Workroom token is undefined (not installed)', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const agentConsole = { sessionTree: {} };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[agentToken.id, { console: agentConsole }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const view = resolveGenerationAgentConsole(snapshot, agentToken, undefined);
+    expect(view).toEqual(agentConsole);
+    expect(view?.workroom).toBeUndefined();
+  });
+
+  it('returns null when the Agent Host port is missing', () => {
     const root = rootPluginId();
     const agentToken = { id: tokenId('zhin.host.agent') };
     const workroomToken = { id: tokenId('zhin.host.workroom') };
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[agentToken.id, { console: {} }]])]]),
+      resources: new Map([[root, new Map([[workroomToken.id, { console: { workroom: {} } }]])]]),
     } as unknown as RuntimeSnapshot;
 
     expect(resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toBeNull();
+    expect(resolveGenerationAgentConsole(snapshot, undefined, workroomToken)).toBeNull();
+  });
+
+  it('reports a clear not-installed error from the Workroom catalog RPC without a Workroom port', async () => {
+    const { createWorkroomCatalogRpcContext } = await import(
+      '../../../src/plugin-runtime/console/workroom-catalog-rpc.js'
+    );
+    const agentOnly = { sessionTree: {}, listBindings: () => [] } as never;
+    const context = createWorkroomCatalogRpcContext(agentOnly, undefined, undefined);
+    await expect(context.readWorkroomCatalog()).rejects.toThrow('Workroom 未安装或未就绪');
+    await expect(context.setWorkroomCatalog({}, 'rev')).rejects.toThrow('Workroom 未安装或未就绪');
   });
 });
 
@@ -644,6 +685,49 @@ describe('console REST routes', () => {
     expect((await get('turns?since=not-a-time')).status).toBe(400);
     expect((await get('sessions', 'demo-token')).status).toBe(403);
     expect((await get('turn?turnId=turn-a', 'demo-token')).status).toBe(403);
+  });
+
+  it('answers 503 on every Workroom route when only the Agent port is published', async () => {
+    await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [tokenId('zhin.host.agent'), {
+          console: {
+            sessionTree: {}, assistant: null, listBindings: () => [],
+            trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          },
+        }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+    const headers = { authorization: 'Bearer sponsor-token' };
+    const base = `http://127.0.0.1:${port}/api/agent/workroom`;
+
+    for (const path of [
+      '/runs?projectId=engineering',
+      '/runs/run-1?projectId=engineering',
+      '/readiness?projectId=engineering&runId=run-1',
+      '/portfolio?portfolioId=p1',
+      '/data-lifecycle?projectId=engineering&objectId=o1',
+    ]) {
+      expect((await fetch(`${base}${path}`, { headers })).status, path).toBe(503);
+    }
+    const control = await fetch(`${base}/control`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        version: 1, operationId: 'replan-1', projectId: 'engineering', runId: 'run-1',
+        expectedSequence: 4, action: 'request_replan', reasonCode: 'requirements_changed',
+      }),
+    });
+    expect(control.status).toBe(503);
   });
 
   it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {

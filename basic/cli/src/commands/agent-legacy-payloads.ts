@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
+import { loadWorkroomPackage } from '../utils/optional-workroom.js';
 
 export type LegacyPayloadSourceKind = 'journal' | 'projection' | 'evidence' | 'artifact';
 export type LegacyPayloadStorage = 'file' | 'database';
@@ -26,7 +27,7 @@ export async function executeLegacyPayloadsOfflineCommand(
   }
   const sourceKind = requireSourceKind(options.sourceKind);
   const storage = requireStorage(options.storage);
-  const agent = await import('@zhin.js/workroom');
+  const agent = await loadWorkroomPackage();
   let adapter: import('@zhin.js/workroom').LegacyEmbeddedPayloadReadAdapter;
   if (storage === 'file') {
     adapter = new agent.FileLegacyEmbeddedPayloadReadAdapter([

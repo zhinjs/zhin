@@ -19,6 +19,7 @@ describe('WorkroomHostCoordinator', () => {
       config: {},
       storageMode: 'file',
       im: {} as never,
+      ingress: {} as never,
       foundation: {} as never,
       agent: {} as never,
       publication: {} as never,

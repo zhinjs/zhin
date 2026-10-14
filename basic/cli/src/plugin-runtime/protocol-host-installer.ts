@@ -7,6 +7,7 @@ import {
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import { loadWorkroomPackage } from '../utils/optional-workroom.js';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
@@ -132,7 +133,9 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
-        import('@zhin.js/workroom'),
+        loadWorkroomPackage().catch((error: unknown) => {
+          throw new Error('a2a 需要安装 @zhin.js/workroom', { cause: error });
+        }),
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {

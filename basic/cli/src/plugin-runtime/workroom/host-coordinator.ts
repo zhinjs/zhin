@@ -2,9 +2,7 @@ import { join } from 'node:path';
 import type {
   HumanIngressOrchestratorProposalPort,
 } from '@zhin.js/workroom';
-import {
-  CapabilityIngress,
-} from '@zhin.js/agent/runtime';
+import type { CapabilityIngress } from '@zhin.js/agent/runtime';
 import {
   createSelfDeliveryProjectForHost,
   selfDeliveryProjectToken,
@@ -15,13 +13,13 @@ import type { ImRuntime } from '@zhin.js/core/runtime';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { AgentHostAIConfig, WorkroomStorageMode } from '../agent/config.js';
-import type { AgentHostPublicationCoordinator } from '../agent/publication-coordinator.js';
 import type { AgentRuntimeFoundation } from '../agent/runtime-foundation.js';
-import {
-  resolveWorkroomOrchestratorConversation,
-  type AgentWorkroomPort,
-  type WorkroomTurnContinuation,
+import type {
+  AgentWorkroomPort,
+  WorkroomTurnContinuation,
 } from '../agent/workroom-port.js';
+import { resolveWorkroomOrchestratorConversation } from './orchestrator-conversation.js';
+import type { WorkroomHostPublication } from './publication.js';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-data-governance.js';
 import { WorkroomAcceptanceCoordinator } from './acceptance-coordinator.js';
 import { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';
@@ -54,7 +52,8 @@ export interface WorkroomHostCoordinatorOptions {
   readonly localDataGovernance?: LocalWorkroomDataGovernanceAuthority;
   readonly foundation: WorkroomRuntimeFoundation;
   readonly agent: AgentRuntimeFoundation;
-  readonly publication: AgentHostPublicationCoordinator;
+  readonly ingress: CapabilityIngress;
+  readonly publication: WorkroomHostPublication;
 }
 
 /** Composes one complete Workroom candidate behind a narrow Agent Host seam. */
@@ -192,7 +191,7 @@ export class WorkroomHostCoordinator implements AgentWorkroomPort {
       ephemeralAssignmentContext: knowledge.ephemeralAssignmentContext,
     });
     options.publication.bindEffectSponsor(acceptance.effectSponsorControl);
-    const ingress = new CapabilityIngress();
+    const ingress = options.ingress;
     const execution = new WorkroomExecutionCoordinator({
       projectRoot: options.projectRoot,
       generation,

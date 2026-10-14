@@ -1,6 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { Command } from 'commander';
+import { loadWorkroomPackage } from '../utils/optional-workroom.js';
 
 export interface LegacyRunsOfflineCommandOptions {
   readonly input: string;
@@ -45,7 +46,7 @@ export async function executeLegacyRunsOfflineCommand(
       cause: error,
     });
   }
-  const agent = await import('@zhin.js/workroom');
+  const agent = await loadWorkroomPackage();
   const report = agent.buildLegacyRunOfflineReport(source);
   const value = options.proposal
     ? agent.createLegacyRunMigrationProposal(report, {

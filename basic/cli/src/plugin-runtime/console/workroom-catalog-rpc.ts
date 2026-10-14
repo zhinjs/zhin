@@ -30,7 +30,7 @@ async function readWorkroomCatalog(
   principalId?: string;
 }>> {
   const catalog = agent?.workroomCatalog;
-  if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
+  if (!catalog) throw new Error('Workroom 未安装或未就绪');
   const snapshot = await catalog.read();
   return Object.freeze({
     agents: Object.fromEntries(agent.listBindings().map(binding => [binding.name, Object.freeze({
@@ -51,7 +51,7 @@ async function setWorkroomCatalog(
   expectedRevision: string,
 ): Promise<Readonly<{ revision: string; restartRequired: false }>> {
   const catalog = agent?.workroomCatalog;
-  if (!catalog) throw new Error('Workroom Catalog Runtime 未就绪');
+  if (!catalog) throw new Error('Workroom 未安装或未就绪');
   const { validateWorkroomDefinitions } = await import('@zhin.js/workroom');
   const errors = validateWorkroomDefinitions(
     workrooms,

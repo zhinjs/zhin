@@ -1,19 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import { Command } from 'commander';
-import {
-  isWorkroomRunCancelReasonCode,
-  isWorkroomRunReplanReasonCode,
-  type WorkroomAssignmentState,
-  type WorkroomAssignmentStatus,
-  type WorkroomBlockerKind,
-  type WorkroomExecutionRole,
-  type WorkroomReadinessState,
-  type WorkroomRunStatus,
-  type WorkroomRunCancelReasonCode,
-  type WorkroomRunReplanReasonCode,
-  type WorkroomTaskStatus,
+import type {
+  WorkroomAssignmentState,
+  WorkroomAssignmentStatus,
+  WorkroomBlockerKind,
+  WorkroomExecutionRole,
+  WorkroomReadinessState,
+  WorkroomRunStatus,
+  WorkroomRunCancelReasonCode,
+  WorkroomRunReplanReasonCode,
+  WorkroomTaskStatus,
 } from '@zhin.js/workroom';
 import { hostGet, hostPost, loadHostHttpConfig } from '../utils/host-http.js';
+import { loadWorkroomPackage } from '../utils/optional-workroom.js';
 
 type WorkroomAssignmentOutcome = NonNullable<WorkroomAssignmentState['outcome']>;
 
@@ -178,7 +177,7 @@ export async function executeWorkroomCancelCommand(
   cwd = process.cwd(),
 ): Promise<WorkroomControlOutput> {
   const common = normalizeControlOptions(options);
-  if (!isCancelReasonCode(options.reasonCode)) throw new Error('Cancellation reasonCode 无效');
+  if (!(await loadWorkroomPackage()).isWorkroomRunCancelReasonCode(options.reasonCode)) throw new Error('Cancellation reasonCode 无效');
   const controlDeadline = requireNonNegativeInteger(options.controlDeadline, 'controlDeadline');
   return executeWorkroomControl({
     version: 1,
@@ -194,7 +193,7 @@ export async function executeWorkroomRequestReplanCommand(
   cwd = process.cwd(),
 ): Promise<WorkroomControlOutput> {
   const common = normalizeControlOptions(options);
-  if (!isReplanReasonCode(options.reasonCode)) throw new Error('Replan reasonCode 无效');
+  if (!(await loadWorkroomPackage()).isWorkroomRunReplanReasonCode(options.reasonCode)) throw new Error('Replan reasonCode 无效');
   return executeWorkroomControl({
     version: 1,
     ...common,
@@ -693,10 +692,4 @@ function isBlockerActions(
     && value.every(action => action === 'resolve' || action === 'replan' || action === 'cancel');
 }
 
-function isCancelReasonCode(value: unknown): value is WorkroomRunCancelReasonCode {
-  return isWorkroomRunCancelReasonCode(value);
-}
 
-function isReplanReasonCode(value: unknown): value is WorkroomRunReplanReasonCode {
-  return isWorkroomRunReplanReasonCode(value);
-}
