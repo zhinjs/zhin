@@ -67,7 +67,7 @@ describe('inbound origin classifier', () => {
   it('digest fallback is one-shot and requires at least 4 characters', () => {
     const { ledger, classifier } = setup();
     ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm1' } }, 'hello world');
-    expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'hello world' })).toMatchObject({ origin: 'self', basis: 'ledger' });
+    expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'hello world' })).toMatchObject({ origin: 'peer_bot', basis: 'ledger' });
     expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'hello world' }).origin).toBe('human');
     ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm2' } }, 'ok');
     expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'ok' }).origin).toBe('human');
@@ -77,5 +77,36 @@ describe('inbound origin classifier', () => {
     const { ledger, classifier } = setup();
     ledger.record(conv('e1'), { status: 'sent', message: { conversation: conv('e1'), id: 'm1' } }, 'from bot one');
     expect(classifier.classify({ conversation: conv('e2'), sender: { id: 'x' }, content: 'from bot one' }).origin).toBe('peer_bot');
+  });
+
+  it('known human repeating bot text stays human and does not consume the digest', () => {
+    const { registry, ledger, classifier } = setup();
+    registry.registerEndpoint({}, { endpointId: 'e1' as never, adapter: 'qq', selfUserId: '100' });
+    ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm1' } }, 'hello world');
+    expect(classifier.classify({ conversation: conv(), sender: { id: '999' }, content: 'hello world' })).toMatchObject({ origin: 'human', basis: 'none', ready: true });
+    // Unready endpoint in the same group scope: the digest is still available.
+    expect(classifier.classify({ conversation: conv('e9'), sender: { id: 'x' }, content: 'hello world' }).origin).toBe('peer_bot');
+  });
+
+  it('private conversation never uses digest', () => {
+    const { ledger, classifier } = setup();
+    ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm1' } }, 'hello world');
+    const priv = { ...conv(), kind: 'private' as const };
+    expect(classifier.classify({ conversation: priv, sender: { id: 'x' }, content: 'hello world' }).origin).toBe('human');
+  });
+
+  it('digest hit never maps to self', () => {
+    const { ledger, classifier } = setup();
+    ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm1' } }, 'hello world');
+    expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'hello world' })).toMatchObject({ origin: 'peer_bot', basis: 'ledger' });
+    ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm2' } }, 'second message');
+    expect(classifier.classify({ conversation: conv(), sender: { id: 'x' }, content: 'second message' }, { isMember: () => true })).toMatchObject({ origin: 'member', basis: 'ledger' });
+  });
+
+  it('digest fallback also applies to channel conversations', () => {
+    const { ledger, classifier } = setup();
+    const ch = { ...conv(), kind: 'channel' as const };
+    ledger.record(ch, { status: 'sent', message: { conversation: ch, id: 'm1' } }, 'hello world');
+    expect(classifier.classify({ conversation: ch, sender: { id: 'x' }, content: 'hello world' }).origin).toBe('peer_bot');
   });
 });

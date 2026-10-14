@@ -104,7 +104,6 @@
     "export * from '../../system-event.js';",
     "export * from './contracts.js';",
     "export * from './im-runtime.js';",
-    "export * from './inbound-origin.js';",
     "export * from './ingress-route.js';",
     "export * from './login-assist-host.js';",
     "export * from './message-bus.js';",
@@ -112,8 +111,10 @@
     "export * from './outbound-renderer.js';",
     "export * from './outbound-segments.js';",
     "export type{EndpointRuntimeDetail,EndpointRuntimeSummary,RuntimeEndpointEditInput,RuntimeEndpointMessageInput,RuntimeEndpointReactionInput,RuntimeEndpointRemoveReactionInput,RuntimeEndpointSendInput,RuntimeEndpointTypingInput,}from './endpoint-runtime.js';",
+    "export type{MessageOrigin,RoomMembershipPort}from './inbound-origin.js';",
     "export type{RuntimeMessageEvent,RuntimeMessageEventSource,RuntimeMessageRendering,OutboundFallbackReason,}from './message-events.js';",
-    "export{EndpointRuntime}from './endpoint-runtime.js';"
+    "export{EndpointRuntime}from './endpoint-runtime.js';",
+    "export{isMessageOrigin,roomMembershipToken}from './inbound-origin.js';"
   ],
   "feature-kit": [
     "export * from './adapter-client.js';",

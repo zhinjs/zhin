@@ -68,7 +68,9 @@ sidebar: false
   - 2026-10-14 · 「fix: Peer Registry 在 Endpoint 激活时预留归属序号」· 新增 `PeerRegistry.reserve()`，Endpoint 激活时（直接激活与 admission `onActivate` 两条路径）即取序号，晚上报的旧实例不再覆盖新条目；registry 与真实 bind / activate / retire 两层补测试；OneBot ws / wss 用手动 deferred 让探测在 stop 后 resolve，测到 `#stopped` 判断
 - [x] B1c 入站 `origin` 标签（self / member / peer_bot / human）与发送 ledger 关联兜底；`[sender:...]` 标签增加 origin；`stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造标签（方案 §3.4）
   - 2026-10-14 · 「feat: 入站 origin 标签与发送 ledger 关联兜底」· core 新增 `inbound-origin.ts` / `outbound-ledger.ts`，origin 只依据 Peer Registry、出站 ledger、`roomMembershipToken` 判定，不读 metadata / 正文；self 丢弃，member / peer_bot 只记录不分发；判定出错 fail-closed 为 peer_bot；`[sender:]` 加白名单 origin；伪造标签改为全局转义；changeset 覆盖 core / ai / agent / zhin.js / cli
-- [ ] B1c-1 处理第 21 轮审查意见（涉及正确性，所以新建条目）：`packages/im/core/src/plugin-runtime/im/inbound-origin.ts:538` 的摘要兜底对私聊和非 Room 群也生效，并且优先级高于明确的 human 判定；命中后映射成 `self`，`inbound-runtime.ts:299-306` 直接 return，不分发也不写 `recordIncoming`，真人 30 秒内复读 Bot 文本会被静默丢弃。收窄：只在 group / channel 会话启用；`registry.isReady(endpointId)` 且 `selfOf` 已知、sender 不等于它且不在 Registry 时不走摘要匹配；摘要命中至少映射为 `peer_bot`（只记录）而不是 `self`。补“已知真人复读 Bot 文本仍按 human 处理（或至少被记录）”测试。同时补运行时层测试（`packages/im/core/tests/plugin-runtime/im-runtime.test.ts:3233` 附近）：peer_bot / member 消息在 conversationEvents 中有入站记录、self 回显没有；注入 `lookup` / `selfOf` / `isMember` 抛错时 `receive` 正常返回 `{matched:false}` 且命令 / 路由未被调用。顺带 Nit：`plugin-runtime/im/index.ts:14` 的 `export *` 改为具名导出公开类型（`MessageOrigin`、`isMessageOrigin`、`RoomMembershipPort`、`roomMembershipToken`），classifier 标 `@internal`
+- [x] B1c-1 处理第 21 轮审查意见（涉及正确性，所以新建条目）：`packages/im/core/src/plugin-runtime/im/inbound-origin.ts:538` 的摘要兜底对私聊和非 Room 群也生效，并且优先级高于明确的 human 判定；命中后映射成 `self`，`inbound-runtime.ts:299-306` 直接 return，不分发也不写 `recordIncoming`，真人 30 秒内复读 Bot 文本会被静默丢弃。收窄：只在 group / channel 会话启用；`registry.isReady(endpointId)` 且 `selfOf` 已知、sender 不等于它且不在 Registry 时不走摘要匹配；摘要命中至少映射为 `peer_bot`（只记录）而不是 `self`。补“已知真人复读 Bot 文本仍按 human 处理（或至少被记录）”测试。同时补运行时层测试（`packages/im/core/tests/plugin-runtime/im-runtime.test.ts:3233` 附近）：peer_bot / member 消息在 conversationEvents 中有入站记录、self 回显没有；注入 `lookup` / `selfOf` / `isMember` 抛错时 `receive` 正常返回 `{matched:false}` 且命令 / 路由未被调用。顺带 Nit：`plugin-runtime/im/index.ts:14` 的 `export *` 改为具名导出公开类型（`MessageOrigin`、`isMessageOrigin`、`RoomMembershipPort`、`roomMembershipToken`），classifier 标 `@internal`
+  - 2026-10-14 · 「fix: 收窄入站 origin 摘要兜底并补运行时 fail-closed 测试」· 摘要兜底只在 group / channel 启用，Endpoint 就绪且 `selfOf` 已知、sender 非 self 且不在 Registry 时跳过；命中映射为 `peer_bot` / `member`（只记录）不再是 `self`；补真人复读与运行时层入站记录 / 抛错 fail-closed 测试；`im/index.ts` 改具名导出，classifier 标 `@internal`；patch changeset
+- [ ] B1c-2 处理第 22 轮审查意见（涉及 fail-closed 不变量的测试覆盖，所以新建条目）：`packages/im/core/tests/plugin-runtime/im-runtime.test.ts` 约 3323-3334 行的 `withRegistry` 用 `{ ...createPeerRegistry(), ...override }` 构造 registry，PeerRegistry 是类、方法在原型上，展开后只剩被覆盖的方法，classifier 调 `isReady` 即抛 not a function 被兜底为 `peer_bot`，“lookup 抛错”“selfOf 抛错”两个用例实际测不到对应路径。改为保留真实实例并只 `vi.spyOn` 目标方法；lookup 用例先登记已知 `selfUserId` 的 Endpoint，确保执行确实走到 `lookup`（可加断言 spy 被调用）。顺带 Nit：在 `inbound-origin.ts` 私聊分支加注释或测试，固定“未就绪 Endpoint 的私聊自回显不走摘要兜底、按 human 处理”这一取舍
 - [ ] B2 **入站去重 / 单一入口选举**（审查第 7 条）：群里每个成员 Bot 都会收到同一条人类消息，N 个 Endpoint 会产生 N 个入站事件。按 平台 + 会话 + 平台消息 id 去重，或者每个 Room 选一个入站 Endpoint，保证每条消息只路由一次。同时更新方案 §3.2 / §3.4
 - [ ] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
 - [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
@@ -222,6 +224,12 @@ sidebar: false
 - Nit：origin 联合类型在 core / ai / agent 各写一遍，无编译期关联（可让 agent 复用 ai 导出的 `ConversationActorOrigin`）→ 只记录
 - Nit：转义正则未覆盖 `【` / `〔` 等开括号与同形字母；去掉 `trimStart` 后正文前导空白原样进入历史，无专门测试 → 只记录
 
+### 第 22 轮（2026-10-14，审查 B1c-1）
+
+- 无 Blocking
+- Should fix：运行时层“lookup / selfOf 抛错”用例的 `withRegistry` 用对象展开覆盖类实例，原型方法丢失，用例因 `isReady` 不存在而提前 fail-closed 通过，测不到目标路径 → 涉及 fail-closed 不变量的测试覆盖，新增 B1c-2
+- Nit：私聊不再走摘要兜底，未就绪 Endpoint 的私聊自回显会按 human 处理（按条目要求的取舍，但没有注释或测试固定）→ 并入 B1c-2
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -247,3 +255,4 @@ sidebar: false
 - 2026-10-14 同一次定时运行：完成 B1b-1（4 个 agent，约 4.2 分钟，四包 build / type-check / 413 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，1 个 Should fix 涉及正确性，新增为 B1b-2）
 - 2026-10-14 20:35 定时运行：rebase 到最新 origin/main（23 个提交无冲突），install / build 通过；完成 B1b-2（6 个 agent，约 4.8 分钟，adapter / onebot11 / icqq / sandbox build、type-check、356 个相关测试、check:architecture、API 快照、eslint 通过，审查无 Blocking，1 个 Nit 只记录）。备注：继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 B1c（6 个 agent，约 16.4 分钟，ai / core / agent / cli build、type-check、1042 个相关测试、check:architecture、API 快照、eslint 通过，审查无 Blocking，2 个 Should fix 涉及正确性，新增为 B1c-1）
+- 2026-10-14 21:35 定时运行：rebase 到最新 origin/main（25 个提交；`packages/im/agent/src/turn/index.ts` 与 `basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts` 冲突，main 新增 TurnAdmissionGate 与本分支 workroom port 两边都保留），install / build 通过，cli agent + agent turn 182 个测试通过；完成 B1c-1（6 个 agent，约 5.4 分钟，core build / type-check / 290 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无 Blocking，1 个 Should fix 涉及 fail-closed 测试覆盖，新增为 B1c-2）。备注：继续内联传入 step-workflow.js，内容未改

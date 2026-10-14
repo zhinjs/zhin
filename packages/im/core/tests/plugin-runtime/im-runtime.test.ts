@@ -3238,6 +3238,108 @@ describe('IM Runtime inbound origin routing', () => {
     } finally { await close(f); }
   });
 
+  const groupConversation = (f: OriginFixture) => ({
+    endpoint: { id: String(f.adapter.id), adapter: 'memory' }, kind: 'group' as const, id: 'room-1',
+  });
+  let originMessageSeq = 0;
+  const groupInput = (f: OriginFixture, senderId: string, content = REGISTERED_COMMAND, extra: object = {}) => {
+    const conversation = groupConversation(f);
+    return { conversation, content, sender: { id: senderId }, message: { conversation, id: `origin-msg-${++originMessageSeq}` }, ...extra };
+  };
+  const listInbound = async (f: OriginFixture, senderId?: string) => {
+    const events = await f.conversationEvents.listBetween(groupConversation(f), 0, Number.MAX_SAFE_INTEGER, 50);
+    return events.filter((e) => {
+      const message = (e.event as { type: string; message?: { actor?: { id: string } } });
+      return message.type === 'message.created' && message.message?.actor !== undefined
+        && (senderId === undefined || message.message.actor.id === senderId);
+    });
+  };
+  const commitMembership = (f: OriginFixture, port: unknown) => {
+    const current = f.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root)!, [roomMembershipToken.id, port]]));
+    f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+  };
+
+  it.each(['peer_bot', 'member'] as const)('records %s group messages as history only', async (kind) => {
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    if (kind === 'member') commitMembership(f, { isMember: () => true });
+    try {
+      await expect(receive(f.im, groupInput(f, 'other-bot', 'hello from a peer'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      const records = await listInbound(f, 'other-bot');
+      expect(records).toHaveLength(1);
+      expect(JSON.stringify(records[0]!.event)).toContain('hello from a peer');
+    } finally { await close(f); }
+  });
+
+  it('drops self echoes in groups without recording them', async () => {
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); });
+    try {
+      await expect(receive(f.im, groupInput(f, 'bot-self', 'self echo text'))).resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+    } finally { await close(f); }
+  });
+
+  it('keeps a known human who repeats bot text as human', async () => {
+    const botText = 'bot reply text for repeat';
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); }, {
+      commandResult: () => botText,
+    });
+    try {
+      await expect(receive(f.im, groupInput(f, 'alice'))).resolves.toMatchObject({ matched: true });
+      expect(f.sent).toHaveLength(1);
+      f.route.mockClear();
+      await receive(f.im, groupInput(f, 'alice', botText));
+      expect(f.route).toHaveBeenCalledTimes(1);
+      const records = await listInbound(f, 'alice');
+      expect(JSON.stringify(records.map((r) => r.event))).toContain(botText);
+    } finally { await close(f); }
+  });
+
+  it('records (never drops) a digest hit from an endpoint without a known account', async () => {
+    const botText = 'bot reply text for digest';
+    const f = await originFixture(() => undefined, { commandResult: () => botText });
+    try {
+      await receive(f.im, groupInput(f, 'alice'));
+      f.route.mockClear();
+      await expect(receive(f.im, groupInput(f, 'alice', botText))).resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+      const records = await listInbound(f, 'alice');
+      expect(JSON.stringify(records.map((r) => r.event))).toContain(botText);
+    } finally { await close(f); }
+  });
+
+  describe('fails closed when origin dependencies throw', () => {
+    const boom = () => { throw new Error('boom'); };
+    const expectRecordOnly = async (f: OriginFixture) => {
+      await expect(receive(f.im, groupInput(f, 'someone', 'fail closed text'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f, 'someone')).toHaveLength(1);
+    };
+    const withRegistry = async (override: Partial<PeerRegistry>) => {
+      const real = createPeerRegistry();
+      return originFixture(() => undefined, { peerRegistry: { ...real, ...override } as PeerRegistry });
+    };
+
+    it('lookup throws', async () => {
+      const f = await withRegistry({ lookup: boom as never });
+      try { await expectRecordOnly(f); } finally { await close(f); }
+    });
+    it('selfOf throws', async () => {
+      const f = await withRegistry({ selfOf: boom as never });
+      try { await expectRecordOnly(f); } finally { await close(f); }
+    });
+    it('membership isMember throws', async () => {
+      const f = await originFixture((r) => { r.declareExternal('memory', 'someone'); });
+      commitMembership(f, { isMember: boom });
+      try { await expectRecordOnly(f); } finally { await close(f); }
+    });
+  });
+
   it('keeps human behavior, exposes message.origin and ignores metadata.origin', async () => {
     const seen: Array<string | undefined> = [];
     const f = await originFixture(() => undefined);

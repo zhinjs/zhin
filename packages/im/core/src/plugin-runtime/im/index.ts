@@ -11,7 +11,8 @@ export type {
   RuntimeEndpointTypingInput,
 } from './endpoint-runtime.js';
 export * from './ingress-route.js';
-export * from './inbound-origin.js';
+export { isMessageOrigin, roomMembershipToken } from './inbound-origin.js';
+export type { MessageOrigin, RoomMembershipPort } from './inbound-origin.js';
 export * from './im-runtime.js';
 export * from './login-assist-host.js';
 export * from './message-bus.js';

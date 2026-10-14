@@ -9,6 +9,7 @@ const logger = getLogger('im.inbound.origin');
 /** 入站消息来源。仅 `human` 能触发 agent turn；其余只记录。 */
 export type MessageOrigin = 'self' | 'member' | 'peer_bot' | 'human';
 
+/** @internal */
 export const MESSAGE_ORIGINS: readonly MessageOrigin[] = Object.freeze(['self', 'member', 'peer_bot', 'human']);
 
 export function isMessageOrigin(value: unknown): value is MessageOrigin {
@@ -29,8 +30,10 @@ export interface RoomMembershipPort {
 
 export const roomMembershipToken = createToken<RoomMembershipPort>('zhin.im.room-membership');
 
+/** @internal */
 export type OriginBasis = 'registry' | 'ledger' | 'none' | 'error';
 
+/** @internal */
 export interface InboundOriginInput {
   readonly conversation: ConversationRef;
   readonly sender?: { readonly id?: unknown } | undefined;
@@ -38,6 +41,7 @@ export interface InboundOriginInput {
   readonly content?: string;
 }
 
+/** @internal */
 export interface InboundOriginResult {
   readonly origin: MessageOrigin;
   readonly basis: OriginBasis;
@@ -49,15 +53,18 @@ export interface InboundOriginResult {
   readonly ready: boolean;
 }
 
+/** @internal */
 export interface InboundOriginClassifier {
   classify(input: InboundOriginInput, membership?: RoomMembershipPort): InboundOriginResult;
 }
 
+/** @internal */
 export interface InboundOriginClassifierOptions {
   readonly registry: Pick<PeerRegistry, 'lookup' | 'isReady' | 'selfOf'>;
   readonly ledger: OutboundLedger;
 }
 
+/** @internal */
 export function createInboundOriginClassifier(options: InboundOriginClassifierOptions): InboundOriginClassifier {
   const { registry, ledger } = options;
   return {
@@ -98,9 +105,21 @@ export function createInboundOriginClassifier(options: InboundOriginClassifierOp
           return { origin: isMember ? 'member' : 'peer_bot', basis: 'registry', ready };
         }
 
-        if (typeof input.content === 'string') {
+        // Digest fallback: group/channel only, and only while the endpoint's account is unknown.
+        // Reaching here means the sender is not self and not in the Registry; if the endpoint is
+        // ready with a known account, the sender is a known human, so skip (and keep the one-shot
+        // digest unconsumed). A digest hit is at worst record-only and never maps to `self`.
+        const digestEligible = (conversation.kind === 'group' || conversation.kind === 'channel')
+          && !(ready && registry.selfOf(endpointId) !== undefined);
+        if (digestEligible && typeof input.content === 'string') {
           const byDigest = ledger.matchByDigest(scope, input.content);
-          if (byDigest) return mapForeign(byDigest.endpointId, 'ledger');
+          if (byDigest) {
+            const isMember = membership?.isMember(
+              { adapter, userId: senderId, endpointIds: [byDigest.endpointId as CapabilityId] },
+              conversation,
+            ) === true;
+            return { origin: isMember ? 'member' : 'peer_bot', basis: 'ledger', ready };
+          }
         }
         return { origin: 'human', basis: 'none', ready };
       } catch (error) {
