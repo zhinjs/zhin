@@ -4,6 +4,10 @@ export interface ModelHarnessConfigItem {
   explorationBudget?: number;
   /** Append exploration-discipline guidance (plan first, scope to target files) to the system prompt. */
   explorationGuidance?: boolean;
+  /** Steps added per progress extension (overrides ai.agent.toolBudget.extendBy). */
+  iterationExtension?: number;
+  /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
+  maxTotalIterations?: number;
 }
 
 export interface ModelHarnessConfig {
@@ -17,10 +21,16 @@ export interface ModelHarnessRow {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  /** Steps added per progress extension (overrides ai.agent.toolBudget.extendBy). */
+  iterationExtension?: number;
+  /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
+  maxTotalIterations?: number;
 }
 
 export interface ResolvedModelHarness {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  iterationExtension?: number;
+  maxTotalIterations?: number;
 }

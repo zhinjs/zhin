@@ -1,3 +1,4 @@
+import { DEFAULT_TOOL_BUDGET } from '../core/turn-progress.js';
 import { DEFAULT_CONTEXT_TOKENS, DEFAULT_FOLLOW_UP_MODE, DEFAULT_STEERING_MODE } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import {
@@ -41,6 +42,8 @@ export const DEFAULT_CONFIG = {
   workerExecApprovalMode: 'auto',
   taskExecApprovalMode: 'auto',
   maxSubagentIterations: 25,
+  subagentTurnMode: 'off',
+  toolBudget: { ...DEFAULT_TOOL_BUDGET },
   subagentTools: [],
   subagentTurnWaitMs: 300_000,
   modelSizeHint: '',
