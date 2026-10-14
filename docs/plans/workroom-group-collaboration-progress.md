@@ -76,8 +76,10 @@ sidebar: false
   - 2026-10-14 · 「feat: Room 会话入站去重」· core 新增 `inbound-dedup.ts`，按 adapter + 会话 + 平台消息 id 同步去重；只在 `RoomMembershipPort.hasRoom(conversation) === true` 时生效（目前无实现，行为不变），重复入站只记录不路由；判定抛错 fail-closed（记录并 publish、告警、不路由）；方案 §3.2 / §3.4 更新；顺带修正 inbound-origin 私聊摘要未消耗的断言
 - [x] B2-1 处理第 24 轮审查意见：改写 `.changeset/workroom-inbound-dedup.md`，如实说明 `RoomMembershipPort` 新增可选 `hasRoom(conversation)`，返回 true 时同一会话多 Endpoint 收到的人类消息只路由一次、其余只记录，不实现 `hasRoom` 则行为不变；在方案 §3.2 / §3.4 以及 `inbound-origin.ts` 中 `hasRoom` 的文档注释写明：`hasRoom` 的实现必须与 B2b Room Router 一起上线，Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt（涉及正确性约束，所以新建条目）
   - 2026-10-14 · 「docs: 写明 hasRoom 必须与 Room Router 一起上线」· changeset 改为如实描述可选 `hasRoom` 与“未实现则行为不变”；方案 §3.2 / §3.4 与 `inbound-origin.ts` 注释写明 Router 须对所有成员 Endpoint 解析 @ / 回复与待回答 interaction；确认 `inboundDeduper` 已标 `@internal`；不改运行时行为
-- [ ] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
+- [x] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
   - 2026-10-15 第 1 次执行失败（re-review 仍有 Blocking，改动已回滚，半成品 patch 存在当次会话 scratchpad）。重试时必须先处理“审查记录”第 26 轮列出的问题
+  - 2026-10-15 · 「feat: 新增 Room Router 与 Room Bus」· 第 2 次执行完成，第 26 轮问题全部处理：平台按钮回调（action 段）跳过 Room 路由与去重、由接收 Endpoint 处理；pending 按内容且只计入属于该会话 fallback 的 payload；目标优先 + 2 秒宽限期回退；@alias 用 Unicode 词边界；Room Bus 只经 `OutboundMessageService.send`；生产代码尚未提供 `roomMembershipToken`，运行时行为不变
+- [ ] B2b-1 处理第 27 轮审查意见（涉及“不静默丢消息”的正确性，所以新建条目）：`packages/im/core/src/plugin-runtime/im/inbound-dedup.ts:146` 对不是目标、也不在 `decision.fallbacks` 中的 Endpoint 副本直接判为 `duplicate`，只打 debug 日志（`inbound-runtime.ts:267` 的 `room_non_target_copy`）。`hasRoom` 只按会话匹配（`room-membership.ts:18`，不看 Endpoint），所以同进程中的非成员 Bot、以及 `route` 时未就绪的成员 Endpoint 的副本也会被丢弃；例如 Telegram 隐私模式下 `@X hello` 只有非成员 X 收到，route 却选 coordinator，消息无人处理，且 @ 非成员的消息被强制 `mentioned=true` 交给 coordinator。修复：只对接收 Endpoint 是 Room 成员的副本做路由与去重（`hasRoom` / `route` 检查 `conversation.endpoint.id` 是否在 `room.memberByEndpoint`，或 core 把非成员 Endpoint 当作非 Room 群处理）；成员副本因不在 decision 中被丢弃时改为 warn；补 ImRuntime 测试（只有非成员 Endpoint / 不在 fallbacks 的成员收到的副本不丢失）。顺带 Nit：`packages/im/core/tests/plugin-runtime/im-runtime.test.ts:3784` 测试名写“@A”但消息无 mention 段、答复用序号 `1` 而非标签，改为带 A 的 mention 段（或用真实 `createRoomMembershipPort`）并补标签 `Go` 答复用例，或改名
 - [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
@@ -260,6 +262,12 @@ sidebar: false
 - Should fix：上一轮 Blocking 的修复只有 `resolvesLiveFallback` 单元测试，缺 ImRuntime 层的集成测试（B 有存活键盘时，@A 的消息仍路由给 A，按钮标签答复路由给 B 且只消费一次）
 - Nit：`room-router.ts` 的 `@alias` 边界只按 ASCII 判断，CJK 别名 `研究` 会匹配 `@研究员`；`hasLiveFallback` 注释写“只读”，但会触发 `#pruneFallbacks()`；`pending` 探测在 AdapterIndex 不认识的 Endpoint 上会抛错，导致整条消息 fail-closed、没有成员处理
 
+### 第 27 轮（2026-10-15，审查 B2b，第 2 次执行）
+
+- 无 Blocking，第 26 轮问题已全部处理
+- Should fix：非目标、非 fallback 的 Endpoint 副本（含同进程非成员 Bot、route 时未就绪的成员）直接判 duplicate 且只打 debug，可能静默丢消息；@ 非成员被强制 mentioned 交给 coordinator → 涉及正确性，新增 B2b-1
+- Nit：`im-runtime.test.ts:3784` 测试名与实际验证不符（无 mention 段、答复用序号）→ 并入 B2b-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -290,3 +298,4 @@ sidebar: false
 - 2026-10-14 22:35 定时运行：rebase 到最新 origin/main（无冲突，基线 fc75499c5），install / build 通过；完成 B2（7 个 agent，约 11 分钟，core build / type-check / 153 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过；首轮审查 1 个 Blocking 在条目内修复，复审无 Blocking，1 个 Should fix + 1 个 Nit 新增为 B2-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 B2-1（4 个 agent，约 2.3 分钟，core build / type-check / 133 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无问题）。备注：本次会话内 `scriptPath` 指向会话自己保存的脚本副本可用
 - 2026-10-15 00:00 定时运行：rebase 到最新 origin/main（29 个提交无冲突），install / build 通过；B2b 执行失败（7 个 agent，约 24 分钟。实现与验证都通过，但 Opus 首轮 1 个 Blocking 修复后，复审又发现新的 Blocking：Room 内原生按钮回调被路由到其他成员后丢弃）。按规则把 diff 和未跟踪文件保存到 scratchpad 后回滚，B2b 记第 1 次失败，审查意见写入第 26 轮。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
+- 2026-10-15 00:35 定时运行：rebase 到最新 origin/main（30 个提交无冲突），install / build 通过；B2b 第 2 次执行完成（4 个 agent，约 12.6 分钟，core / workroom build、type-check、405 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 涉及正确性，新增为 B2b-1）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
