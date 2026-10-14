@@ -61,6 +61,28 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
     const missing = run.modelRequests.findIndex((request) => !request.systemPrompt.includes(needle));
     if (missing >= 0) fail('systemPromptContains', `model request ${missing + 1} had no "${needle}" in its system prompt`);
   }
+  for (const needle of expect.systemPromptNotContains ?? []) {
+    const leaked = run.modelRequests.findIndex((request) => request.systemPrompt.includes(needle));
+    if (leaked >= 0) fail('systemPromptNotContains', `model request ${leaked + 1} had "${needle}" in its system prompt`);
+  }
+  if (expect.contextBudget) {
+    const budget = run.traces[0]?.context_budget;
+    const bounds = expect.contextBudget;
+    if (!budget) {
+      fail('contextBudget', 'the first turn recorded no context budget');
+    } else {
+      if (bounds.maxFixedTokens !== undefined && budget.fixed_tokens > bounds.maxFixedTokens) {
+        fail('contextBudget', `fixed context ~${budget.fixed_tokens} tokens exceeds ${bounds.maxFixedTokens}`);
+      }
+      for (const [segment, max] of Object.entries(bounds.maxSegmentTokens ?? {})) {
+        const actual = budget.segments[segment as keyof typeof budget.segments];
+        if (max !== undefined && actual > max) fail('contextBudget', `${segment} ~${actual} tokens exceeds ${max}`);
+      }
+      if (bounds.loadedTools !== undefined && budget.tools.loaded !== bounds.loadedTools) {
+        fail('contextBudget', `expected ${bounds.loadedTools} tools loaded up front, got ${budget.tools.loaded}`);
+      }
+    }
+  }
   for (const needle of expect.modelInputNotContains ?? []) {
     if (modelInput.includes(needle)) fail('modelInputNotContains', `the model received "${needle}"`);
   }

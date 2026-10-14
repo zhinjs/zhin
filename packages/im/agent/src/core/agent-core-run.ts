@@ -53,6 +53,9 @@ import {
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
+import { buildContextBudgetReport } from '../trace/context-budget.js';
+import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
+import type { PromptSectionDebugInfo } from '../prompt/system-prompt.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -511,6 +514,7 @@ export async function* runAgentLoopTextTurnRun(
     return resolveDeferredApiTools(catalog, alwaysLoaded, loaded);
   };
 
+  let promptSections: PromptSectionDebugInfo[] = [];
   if (hasTools) {
     const sections = input.promptProfile.kind === 'interactive'
       ? await describeAgentPathPromptSections(host, {
@@ -522,6 +526,7 @@ export async function* runAgentLoopTextTurnRun(
           runtime: input.promptRuntime,
         })
       : [];
+    promptSections = sections;
     logPromptComposition({
       config: host.promptTraceConfig,
       sessionId,
@@ -554,6 +559,11 @@ export async function* runAgentLoopTextTurnRun(
   if (hasTools && harness.explorationGuidance) {
     systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
   }
+  if (hasTools && !directTools) {
+    const toolIndex = renderDeferredToolIndex(deferredCatalogTools(catalog, agentTools)
+      .map((item) => ({ name: item.name, description: item.brief })));
+    if (toolIndex) systemPrompt = `${systemPrompt}\n\n${toolIndex}`;
+  }
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
@@ -565,6 +575,21 @@ export async function* runAgentLoopTextTurnRun(
         resolveAlwaysLoadedSet(host.config),
         deferredController?.loadedToolNames() ?? [],
       );
+  if (hasTools) {
+    noteTurnTrace(traceTurnId(input.turnContext), {
+      kind: 'context_budget',
+      report: buildContextBudgetReport({
+        systemPrompt,
+        sections: promptSections,
+        bootstrapContext: input.promptRuntime?.bootstrapContext,
+        activeSkillsContext: input.promptRuntime?.activeSkillsContext,
+        loadedTools: agentTools,
+        deferredToolCount: deferredCatalogTools(catalog, agentTools).length,
+        historyMessages: loaded.messages,
+        userMessages: promptMessages,
+      }),
+    });
+  }
   const toolCalls: ToolCallRecord[] = [];
   let iterations = 0;
   let lastAssistantText = '';
@@ -1042,6 +1067,12 @@ async function appendConversationBatches(
 }
 
 /** Turn id for trace notes; context views built outside TurnIngress carry none. */
+/** Catalog tools whose schema is not sent on this request (reachable via load_tool / discover). */
+function deferredCatalogTools(catalog: readonly ToolCatalogItem[], loaded: readonly AgentTool[]): ToolCatalogItem[] {
+  const loadedNames = new Set(loaded.map((tool) => tool.name));
+  return catalog.filter((item) => item.source !== 'meta' && !loadedNames.has(item.name));
+}
+
 function traceTurnId(view: TurnContextView | undefined): string | undefined {
   const identity = (view as { identity?: { turnId?: unknown } } | undefined)?.identity;
   return typeof identity?.turnId === 'string' ? identity.turnId : undefined;

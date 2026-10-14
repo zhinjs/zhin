@@ -26,7 +26,8 @@ import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { SkillDescriptor } from '@zhin.js/skill';
+import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
 export interface EvalToolInvocation {
@@ -126,7 +127,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
         generation: 1,
         owner: rootPluginId(),
         tools: turnTools,
-        skills: [],
+        skills: evalSkills(definition),
         agents: [],
         mcp: [],
         promptSections: promptSections(definition),
@@ -205,7 +206,10 @@ function buildTurn(
     input: { text: message.text },
     session: { key: sessionKey },
     policy,
-    capabilities: { tools: turnTools.map((tool) => tool.name), skills: [] },
+    capabilities: {
+      tools: turnTools.map((tool) => tool.name),
+      skills: evalSkills(definition).map((skill) => skill.qualifiedName),
+    },
     signal: new AbortController().signal,
     ports: {
       journal: createTracingJournal({ append: async () => undefined }, trace),
@@ -223,6 +227,21 @@ function buildTurn(
     },
   });
   return { turn, tools: turnTools };
+}
+
+/** Skills owned by the agent's root plugin, as a loaded SKILL.md would be. */
+function evalSkills(definition: EvalCase): SkillDescriptor[] {
+  return (definition.skills ?? []).map((skill: EvalSkill) => Object.freeze({
+    $feature: 'zhin.skill/1' as const,
+    owner: rootPluginId(),
+    name: skill.name,
+    qualifiedName: skill.name,
+    description: skill.description,
+    instructions: skill.instructions,
+    ...(skill.toolNames ? { toolNames: Object.freeze([...skill.toolNames]) } : {}),
+    ...(skill.keywords ? { keywords: Object.freeze([...skill.keywords]) } : {}),
+    source: `eval:skills/${skill.name}/SKILL.md`,
+  }));
 }
 
 /** Third-party plugin prompt sections, owned by a child plugin so the engine treats them as external_content. */

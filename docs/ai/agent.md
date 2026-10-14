@@ -83,7 +83,18 @@ ai:
 
 工具很多时，把所有工具的参数定义都塞进提示词会占满上下文。Zhin 的做法是**延迟加载**：回合只常驻少量元工具，模型需要时再检索、按名加载。
 
-默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
+默认常驻的核心工具集（`alwaysLoadedTools`）分两组：
+
+- 交互与编排：`ask_user`、`spawn_task`，以及元工具 `discover`、`load_tool`、`load_skill`。
+- 工作区文件：`read_file`、`list_dir`、`glob`、`grep`、`edit_file`、`write_file`。模型最常直接调用它们，常驻可以省掉一次"未知工具"的往返。它们仍然受本回合的工具过滤和执行策略约束，例如群成员发起的回合拿不到写文件工具。
+
+`bash` 不常驻，因为它能不能用取决于本回合的 shell 隔离策略。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
+
+其余工具不发送参数定义，只在系统提示的 `## Deferred tools` 段里列出名称和一句不超过 60 字符的说明，最多 40 个，超出部分提示用 `discover` 检索。模型可以先 `load_tool(name)` 拿到参数定义；直接调用也会自动加载。这份索引只包含本回合有权使用的工具，被策略拿掉的工具（例如没有 shell 权限时的 `bash`）不会出现。
+
+技能采用渐进披露：系统提示只列出技能名称和第一行触发说明（最多 96 字符，最多 40 个），专家 agent 目录同样如此。技能正文在 `load_skill` 之后，或意图匹配自动激活后才进入上下文。
+
+每轮第一次模型请求的上下文开销会按段估算，写进回合追踪的 `context_budget` 字段，`zhin trace last` 会显示：系统提示、工具 schema、按需工具索引、技能目录、专家 agent 目录、已加载技能、记忆、bootstrap、历史消息、本轮输入各占多少 token，以及最大的几个提示段。这是估算值（中日韩字符约 1 字 1 token，其余约 4 字符 1 token），真实用量仍以模型调用记录为准。
 
 | 元工具 | 作用 |
 |--------|------|

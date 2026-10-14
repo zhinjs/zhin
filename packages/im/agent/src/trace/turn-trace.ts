@@ -9,6 +9,7 @@
  */
 import type { TurnEvent } from '../event/turn-event.js';
 import { redactTraceValue } from '../plugin-runtime/agent-trace-runtime.js';
+import type { ContextBudgetReport } from './context-budget.js';
 
 export const TURN_TRACE_VERSION = 1;
 
@@ -88,6 +89,8 @@ export interface TurnTrace {
   readonly duration_ms?: number;
   readonly model_calls: readonly TurnTraceModelCall[];
   readonly usage: Readonly<{ prompt_tokens: number; completion_tokens: number; total_tokens: number }>;
+  /** Estimated prompt cost by segment for the turn's first model request (#729). */
+  readonly context_budget?: ContextBudgetReport;
   readonly tool_calls: readonly TurnTraceToolCall[];
   readonly budget: Readonly<{ extensions: readonly TurnTraceBudgetExtension[]; continuations: number }>;
   readonly subagent_tasks: readonly TurnTraceSubagentTask[];
@@ -102,7 +105,8 @@ export interface TurnTrace {
 /** Facts that are not TurnEvents but belong in the trace. */
 export type TurnTraceNote =
   | Readonly<{ kind: 'budget_extended'; from: number; to: number }>
-  | Readonly<{ kind: 'continuation'; index: number }>;
+  | Readonly<{ kind: 'continuation'; index: number }>
+  | Readonly<{ kind: 'context_budget'; report: ContextBudgetReport }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -140,6 +144,7 @@ export class TurnTraceCollector {
   readonly #toolCalls = new Map<string, MutableToolCall>();
   readonly #extensions: TurnTraceBudgetExtension[] = [];
   #continuations = 0;
+  #contextBudget: ContextBudgetReport | undefined;
   readonly #subagentTasks = new Map<string, TurnTraceSubagentTask>();
   readonly #children = new Map<string, TurnTraceCollector>();
   readonly #timeline: TurnTraceTimelineEntry[] = [];
@@ -193,6 +198,11 @@ export class TurnTraceCollector {
     if (note.kind === 'budget_extended') {
       this.#extensions.push(Object.freeze({ from: note.from, to: note.to, at_ms: at }));
       this.#addTimeline('budget_extended', `${note.from} → ${note.to} steps`);
+    } else if (note.kind === 'context_budget') {
+      // Keep the first request's report: it is the fixed cost of the turn.
+      if (this.#contextBudget) return;
+      this.#contextBudget = note.report;
+      this.#addTimeline('context_budget', `~${note.report.total_tokens} tokens (fixed ~${note.report.fixed_tokens})`);
     } else {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
@@ -331,6 +341,7 @@ export class TurnTraceCollector {
         : {}),
       model_calls: Object.freeze([...this.#modelCalls]),
       usage: Object.freeze(usage),
+      ...(this.#contextBudget ? { context_budget: this.#contextBudget } : {}),
       tool_calls: Object.freeze([...this.#toolCalls.values()].map(tool => Object.freeze({ ...tool }))),
       budget: Object.freeze({
         extensions: Object.freeze([...this.#extensions]),
