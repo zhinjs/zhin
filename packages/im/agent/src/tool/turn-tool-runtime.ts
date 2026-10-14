@@ -2,7 +2,11 @@ import { runTurnToolPolicies } from '../security/policy-facade.js';
 import type { ToolCapability } from '../plugin-runtime/capability-ingress.js';
 import { toolInvocationFromTurn } from '../plugin-runtime/capability-tools.js';
 import type { TurnIngress } from '../turn/turn-ingress.js';
-import { isApprovalPortAvailable } from '../session/approval-port.js';
+import {
+  formatApprovalDenial,
+  isApprovalPortAvailable,
+  requestApprovalOutcome,
+} from '../session/approval-port.js';
 import type { AgentTool, ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
@@ -51,7 +55,7 @@ export class TurnToolRuntime {
       if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
         return this.#deny(name, toolUseId, decision.policy, 'approval required but ApprovalPort unavailable', causedBy);
       }
-      const approved = await this.turn.ports.approval.requestApproval({
+      const approval = await requestApprovalOutcome(this.turn.ports.approval, {
         requestId: `${this.turn.identity.turnId}:${toolUseId}`,
         sessionKey: this.turn.session.key,
         ...(this.turn.origin.kind === 'im'
@@ -69,7 +73,9 @@ export class TurnToolRuntime {
         signal: this.turn.signal,
       });
       if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
-      if (!approved) return this.#deny(name, toolUseId, decision.policy, 'tool execution denied by user', causedBy);
+      if (approval.status !== 'approved') {
+        return this.#deny(name, toolUseId, decision.policy, formatApprovalDenial(approval), causedBy);
+      }
     }
 
     const startedAt = Date.now();

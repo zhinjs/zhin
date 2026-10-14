@@ -78,6 +78,68 @@ describe('standalone loop 延迟加载', () => {
     expect(parentSnapshot.loadedTools).toEqual({});
   });
 
+  it('without a parent shell policy, bash stays unavailable even after load_tool', async () => {
+    const executed: string[] = [];
+    const bashTool: AgentTool = {
+      name: 'bash',
+      description: 'run shell',
+      parameters: { type: 'object', properties: {} },
+      source: 'builtin',
+      execute: async () => {
+        executed.push('bash');
+        return 'bash-ok';
+      },
+    } as unknown as AgentTool;
+    let phase = 0;
+    const llm = wireMockLlmApi({
+      name: 'test',
+      models: ['mock'],
+      responder: () => {
+        phase += 1;
+        if (phase === 1) {
+          return assistantToolCallReply([{ id: 't1', name: 'load_tool', arguments: { name: 'bash' } }]);
+        }
+        if (phase === 2) {
+          return assistantToolCallReply([{ id: 't2', name: 'bash', arguments: {} }]);
+        }
+        return assistantTextReply('done');
+      },
+    });
+    const provider = Object.assign(llm.provider, {
+      capabilities: { input: ['text'], streaming: false, toolCalling: true },
+    }) as unknown as AIProvider;
+
+    const parentSnapshot = { loadedTools: {} as Record<string, number> };
+    const controller = createDeferredTurnController({
+      sessionId: 'parent',
+      catalog: [
+        { name: 'bash', brief: 'shell', fullTool: bashTool, source: 'builtin', deferDefault: true },
+      ],
+      skillRegistry: null,
+      snapshot: { ...parentSnapshot, loadedSkills: [] },
+      maxLoadedPerSession: 12,
+      discoverTopK: 5,
+      persistSnapshot: async () => {},
+      skillInstructions: { read: async (name) => ({ status: 'missing', name }) },
+    });
+    const commMessage = {} as never;
+
+    const result = await runWithDeferredTurnController(controller, () => runAgentLoopStandaloneTurn({
+      provider,
+      llmRuntime: llm.runtime,
+      model: 'mock',
+      systemPrompt: '',
+      tools: [],
+      userInput: '加载并运行 bash',
+      maxIterations: 6,
+      commMessage,
+      turnPolicy: { filesystem: { workspaceRoot: '/workspace', access: 'read-only' } },
+    }));
+
+    expect(executed).toEqual([]);
+    expect(result.toolCalls.map((t) => t.tool)).toEqual(['load_tool']);
+  });
+
   it('releases an aborted caller even when the model provider never settles', async () => {
     const llm = wireMockLlmApi({ name: 'planning-cancel', models: ['mock'] });
     llm.hang();

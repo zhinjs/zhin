@@ -90,4 +90,21 @@ describe('UserInteraction module', () => {
     expect(() => assertUserInteractionRequest({ type: 'number', title: '数量', min: 10, max: 1 }))
       .toThrow('range is invalid');
   });
+
+  it('accepts plain-text aliases for select options and lists them in the prompt', () => {
+    const request = {
+      type: 'select' as const,
+      title: '操作确认',
+      options: [
+        { label: '拒绝', value: 'reject', aliases: ['n', '否'] },
+        { label: '允许一次', value: 'approve-once', aliases: ['y', '同意'], description: '仅执行当前操作' },
+      ],
+    };
+    expect(parseUserInteractionAnswer(request, ' Y ')).toEqual({ ok: true, value: 'approve-once' });
+    expect(parseUserInteractionAnswer(request, '同意')).toEqual({ ok: true, value: 'approve-once' });
+    expect(parseUserInteractionAnswer(request, 'n')).toEqual({ ok: true, value: 'reject' });
+    expect(parseUserInteractionAnswer(request, '拒绝')).toEqual({ ok: true, value: 'reject' });
+    expect(parseUserInteractionAnswer(request, 'maybe')).toMatchObject({ ok: false });
+    expect(JSON.stringify(renderUserInteraction(projectUserInteraction(request)))).toContain('2. 允许一次（y / 同意） — 仅执行当前操作');
+  });
 });

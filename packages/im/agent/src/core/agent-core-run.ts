@@ -14,6 +14,7 @@ import { logPromptComposition } from '../internal/prompt-trace.js';
 import { planToolRun } from '../tool/runtime.js';
 import { sanitizeAssistantReply, unwrapJsonStringLayers } from './text-sanitize.js';
 import { formatToolCallsForUser, type ToolCallRecord } from './tool-calls-user-format.js';
+import { summarizeExhaustedTurn } from './exhausted-turn-reply.js';
 import { shouldSuppressReplyForSpawnDelegation } from './spawn-delegation.js';
 import { logPhase, tokenUsageLogFields, logAgentLoopIterationEnd } from '../internal/phase-trace.js';
 import { buildAgentPromptCacheStreamOptions, resolveSkillInstructionMaxChars } from '../config/index.js';
@@ -36,6 +37,13 @@ import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
+import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
+import { createMissingToolResolver } from './missing-tool-resolver.js';
+import {
+  DEFAULT_EXPLORATION_BUDGET,
+  EXPLORATION_GUIDANCE,
+  ExplorationBudget,
+} from './exploration-budget.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -132,7 +140,11 @@ export interface AgentLoopTurnInput {
   signal?: AbortSignal;
   deferredStats?: string;
   /** Turn-owned deferred selection authority. Required for deferred loading. */
-  deferredController?: Readonly<{ loadedToolNames(): string[] }>;
+  deferredController?: Readonly<{
+    loadedToolNames(): string[];
+    /** Optional: lets the loop auto-load a deferred tool the model called directly. */
+    load?(name: string): Promise<boolean>;
+  }>;
   /** Catalog paired with deferredController for this exact Turn. */
   toolCatalog?: readonly ToolCatalogItem[];
   /** Direct tool sets bypass deferred catalog/snapshot/meta-tool machinery. */
@@ -356,8 +368,6 @@ export async function* runAgentLoopTextTurnRun(
     host,
     sessionId,
     userMessageExtra,
-    allTools,
-    resolvedTools,
     personaEnhanced,
     modelId,
     onChunk,
@@ -366,6 +376,13 @@ export async function* runAgentLoopTextTurnRun(
   } = input;
 
   const repo = host.contextRepository;
+
+  // Bash is only offered when this turn's policy can actually run it, so the
+  // model never burns a step on a tool that is guaranteed to fail. Filtering
+  // the catalog also keeps load_tool / auto-load from re-adding it.
+  const turnPolicy = input.turnContext.policy;
+  const allTools = withoutForbiddenShell(turnPolicy, input.allTools);
+  const resolvedTools = withoutForbiddenShell(turnPolicy, input.resolvedTools);
 
   const providerAlias = host.getTurnProvider().name;
   const llmModel = host.llmRuntime.model(providerAlias, modelId);
@@ -420,7 +437,7 @@ export async function* runAgentLoopTextTurnRun(
     : [];
 
   const deferredController = directTools ? undefined : input.deferredController;
-  const catalog = directTools ? [] : [...(input.toolCatalog ?? [])];
+  const catalog = directTools ? [] : withoutForbiddenShell(turnPolicy, input.toolCatalog ?? []);
   if (!directTools && hasTools && (!deferredController || catalog.length === 0)) {
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
@@ -469,6 +486,12 @@ export async function* runAgentLoopTextTurnRun(
   const maxIterations = hasTools
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
+  const explorationBudget = hasTools
+    ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
+    : undefined;
+  if (hasTools && harness.explorationGuidance) {
+    systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
+  }
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
@@ -488,6 +511,8 @@ export async function* runAgentLoopTextTurnRun(
     messages: AgentMessage[];
     messageExtras: Array<import('@zhin.js/ai').AgentMessageExtra | undefined>;
   }> = [];
+  /** This turn's prompt plus every message the loop produced; used for reply recovery. */
+  let turnTranscript: AgentMessage[] = [];
 
   logPhase(host.phaseConfig, 'agent_loop.turn.start', sessionId, {
     model: modelId,
@@ -633,7 +658,8 @@ export async function* runAgentLoopTextTurnRun(
           }
         }
 
-        const finalText = resultText;
+        const budgetNote = explorationBudget?.record(resolvedName);
+        const finalText = budgetNote ? `${resultText}\n\n${budgetNote}` : resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {
@@ -657,6 +683,16 @@ export async function* runAgentLoopTextTurnRun(
       await loopHooks?.runAfterToolCall({ toolCall, result, sessionId });
     },
     refreshTools: hasTools ? () => rebuildLlmTools() : undefined,
+    // The model called a deferred catalog tool without load_tool: load it and
+    // run the call. The catalog only holds tools this turn may use, and the
+    // rebuilt list re-applies exec policy, so disallowed tools stay rejected.
+    resolveMissingTool: hasTools
+      ? createMissingToolResolver({
+          catalog,
+          load: deferredController?.load?.bind(deferredController),
+          rebuild: rebuildLlmTools,
+        })
+      : undefined,
     shouldRecompleteAfterTool: (result: AgentMessage) => {
       if (result.role !== 'toolResult' || !Array.isArray(result.content)) return false;
       return result.content.some(
@@ -712,6 +748,7 @@ export async function* runAgentLoopTextTurnRun(
       if (signal?.aborted) continue;
       const userBatch = event.userMessages ?? promptMessages;
       const batch = [...userBatch, ...event.messages];
+      turnTranscript = batch;
       const messageExtras = batch.map((msg, i) => (
         msg.role === 'user' && i === 0 ? userMessageExtra : undefined
       ));
@@ -739,10 +776,6 @@ export async function* runAgentLoopTextTurnRun(
     };
   }
 
-  const reply = sanitizeAssistantReply(lastAssistantText, {
-    toolSummary: formatToolCallsForUser(toolCalls),
-  });
-
   const spawnedSubagent = toolCalls.some(tc => tc.tool === 'spawn_task');
   if (spawnedSubagent) {
     await host.getActiveTurnTracker()?.waitForPendingSubagents();
@@ -754,6 +787,38 @@ export async function* runAgentLoopTextTurnRun(
       && typeof tc.result === 'object'
       && typeof (tc.result as Record<string, unknown>).image === 'string',
     );
+
+  // The loop ran tools but never produced visible text (usually maxIterations
+  // was hit mid-exploration). Ask the model for a tools-off summary instead of
+  // showing raw tool output.
+  const needsReplyRecovery = !delegatedOnly
+    && hasTools
+    && (toolCalls.length > 0 || iterations >= maxIterations)
+    && !lastAssistantText.trim();
+
+  let reply: string;
+  if (needsReplyRecovery) {
+    const summary = await summarizeExhaustedTurn({
+      transport: host.llmRuntime,
+      model: llmModel,
+      systemPrompt,
+      messages: [...loaded.messages, ...turnTranscript],
+      maxIterations,
+      sessionId,
+      signal,
+    });
+    const lastBatch = conversationBatches.at(-1);
+    if (summary.assistant && lastBatch) {
+      lastBatch.messages.push(summary.assistant);
+      lastBatch.messageExtras.push(undefined);
+    }
+    reply = summary.reply;
+    onChunk?.(reply, reply);
+  } else {
+    reply = sanitizeAssistantReply(lastAssistantText, {
+      toolSummary: formatToolCallsForUser(toolCalls),
+    });
+  }
   const finalReply = delegatedOnly ? '' : reply;
 
   logPhase(host.phaseConfig, 'agent_loop.turn.end', sessionId, {

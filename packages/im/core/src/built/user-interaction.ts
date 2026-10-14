@@ -213,14 +213,20 @@ function instructionFor(request: UserInteractionRequest): string | undefined {
 }
 
 function renderOptions(options: readonly UserInteractionOption[]): string {
-  return options.map((option, index) => `${index + 1}. ${option.label}${option.description ? ` — ${option.description}` : ''}`).join('\n');
+  return options.map((option, index) => {
+    const aliases = option.aliases?.length ? `（${option.aliases.join(' / ')}）` : '';
+    const description = option.description ? ` — ${option.description}` : '';
+    return `${index + 1}. ${option.label}${aliases}${description}`;
+  }).join('\n');
 }
 
 function resolveOption<V>(options: readonly UserInteractionOption<V>[], raw: string): UserInteractionOption<V> | undefined {
   const index = Number(raw);
   if (Number.isInteger(index) && index >= 1 && index <= options.length) return options[index - 1];
-  const normalized = raw.toLocaleLowerCase();
-  return options.find((option) => option.label.trim().toLocaleLowerCase() === normalized);
+  const normalized = raw.trim().toLocaleLowerCase();
+  const matches = (candidate: string) => candidate.trim().toLocaleLowerCase() === normalized;
+  return options.find((option) => matches(option.label))
+    ?? options.find((option) => option.aliases?.some(matches));
 }
 
 function uniqueOptions<V>(options: readonly (UserInteractionOption<V> | undefined)[]): UserInteractionOption<V>[] {
