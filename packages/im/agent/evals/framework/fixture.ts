@@ -8,7 +8,7 @@ import type { ZhinAgentConfig } from '../../src/config/zhin-agent-config.js';
 import type { TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import type { ScriptStep } from './scripted-model.js';
 
-export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent';
+export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
 
 export interface EvalInboundMessage {
   readonly text: string;
@@ -57,6 +57,8 @@ export interface EvalExpectations {
   /** Fail when any tool's raw result text is echoed verbatim to the user. */
   readonly noRawToolOutput?: boolean;
   readonly approvalRequested?: boolean | readonly string[];
+  /** Every string must appear in at least one approval question (e.g. the provenance chain). */
+  readonly approvalQuestionContains?: readonly string[];
   /** Terminal type of the last turn. Defaults to `turn_end`. */
   readonly termination?: EvalTermination;
   /** Exact number of model requests across the case. */
