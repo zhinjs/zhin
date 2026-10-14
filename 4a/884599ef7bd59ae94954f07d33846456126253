@@ -1,0 +1,19 @@
+docs/plans/workroom-group-collaboration-progress.md
+  s_2c3ced52228a6b::t_b42959ac080de2 79,81-82,265-270,301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4a884599ef7bd59ae94954f07d33846456126253",
+  "prompts": {},
+  "sessions": {
+    "s_2c3ced52228a6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "57968541-64cb-477c-96ba-ef50ba69806c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
