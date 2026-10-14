@@ -1,0 +1,153 @@
+.changeset/agent-context-budget.md
+  s_160584181caae4::t_f8179187d9d0dc 1-6
+.changeset/agent-memory-model.md
+  s_160584181caae4::t_24e8eea9e78bef 1-6
+.changeset/eval-live-seed-cases.md
+  s_160584181caae4::t_33a2a41308a342 1-5
+.changeset/journal-derived-stream-feed.md
+  s_160584181caae4::t_fc99238e325ebb 1-5
+.changeset/restart-during-start.md
+  s_160584181caae4::t_d3fcbbb7950674 1-5
+basic/cli/src/plugin-runtime/start-command.ts
+  s_160584181caae4::t_9b02ac11e2be20 384-393
+basic/cli/tests/plugin-runtime/start/restart-shutdown.test.ts
+  s_160584181caae4::t_613aaa5d71b39d 83-108,110
+docs/ai/agent.md
+  s_160584181caae4::t_ffdce055cbb950 21,93-104,293-314
+docs/en/ai/agent.md
+  s_160584181caae4::t_80670d7a53d86b 21,93-104,217-238
+packages/im/agent/evals/README.md
+  s_160584181caae4::t_e44a9c3aa3ff41 91,185-206,214-215,219-221
+packages/im/agent/evals/agent.eval.ts
+  s_160584181caae4::t_2fe924e95c69f0 5-8,10-12,16-17,26,28-32,35-40
+packages/im/agent/evals/cases/context-deferred-tool-index.case.ts
+  s_160584181caae4::t_299bf9e25e5804 1-29
+packages/im/agent/evals/cases/context-fixed-cost-bounded.case.ts
+  s_160584181caae4::t_4151c6406b463c 1-33
+packages/im/agent/evals/cases/context-skill-catalog-compact.case.ts
+  s_160584181caae4::t_b93f19a12457b4 1-39
+packages/im/agent/evals/cases/context-skill-loaded-on-demand.case.ts
+  s_160584181caae4::t_c6f824dce5762a 1-26
+packages/im/agent/evals/cases/context-tool-index-respects-policy.case.ts
+  s_160584181caae4::t_c328dcce0c9335 1-17
+packages/im/agent/evals/cases/dm-stranger-no-shell.case.ts
+  s_160584181caae4::t_092e28cbf75340 1,16
+packages/im/agent/evals/cases/group-member-no-file-write.case.ts
+  s_160584181caae4::t_01fa8cba47a409 1,16
+packages/im/agent/evals/cases/group-member-no-outbound.case.ts
+  s_160584181caae4::t_e04b8a005e8693 1,15
+packages/im/agent/evals/cases/group-member-no-shell.case.ts
+  s_160584181caae4::t_9d1c208de814f3 1,16
+packages/im/agent/evals/cases/group-member-read-only-lookup.case.ts
+  s_160584181caae4::t_d7ab293cae3b22 1,15
+packages/im/agent/evals/cases/leak-secret-masked.case.ts
+  s_160584181caae4::t_938b23194fcbfa 1,24
+packages/im/agent/evals/cases/memory-group-member-cannot-overwrite-owner.case.ts
+  s_160584181caae4::t_488ce218ea585b 1-47
+packages/im/agent/evals/cases/session-history-carried.case.ts
+  s_160584181caae4::t_1b20d4f1f92ec6 1,22
+packages/im/agent/evals/cases/tool-events-in-stream.case.ts
+  s_160584181caae4::t_374666c5e4d958 1-20
+packages/im/agent/evals/framework/assertions.ts
+  s_160584181caae4::t_c49d33a51fa271 69-72,78-95,99-106
+packages/im/agent/evals/framework/driver.ts
+  s_160584181caae4::t_69ea0ba36487c8 21-22,31-35,82-87,93-94,100-106,111-115,154-156,171,184-189,246-249,252,269-283,404-408,411,414,418-423
+packages/im/agent/evals/framework/fixture.ts
+  s_160584181caae4::t_8f11f195cf7728 10-13,46-58,95-123,144,148-149,168-177,199-203
+packages/im/agent/evals/framework/index.ts
+  s_5a97dd97323603::t_2068203799f319 7,15-18
+packages/im/agent/evals/framework/live-checks.ts
+  s_160584181caae4::t_c845f29a5b5810 1-62
+packages/im/agent/evals/framework/live-model.ts
+  s_160584181caae4::t_dd7a39c8919283 1-82
+packages/im/agent/evals/framework/scripted-model.ts
+  s_160584181caae4::t_3b5e3a32e28795 248,268
+packages/im/agent/evals/nightly/budget.ts
+  s_160584181caae4::t_54d08306ad4b15 23-27,30-31
+packages/im/agent/evals/nightly/matrix-cases.ts
+  s_160584181caae4::t_cf8afe18e01f2b 9-11
+packages/im/agent/evals/nightly/nightly.run.ts
+  s_160584181caae4::t_5ec5e2af3cc498 1,23-26,33,48
+packages/im/agent/evals/nightly/nightly.test.ts
+  s_160584181caae4::t_f90dad9db7e552 7-9,46,123-171
+packages/im/agent/evals/nightly/runner.ts
+  s_160584181caae4::t_2ab178b70f13b0 6,13-14,58-85,100-104
+packages/im/agent/evals/nightly/seed-cases.ts
+  s_160584181caae4::t_711bb436e8555e 1-33
+packages/im/agent/src/core/agent-core-run.ts
+  s_160584181caae4::t_b66b073aabfc84 57-59,519,531,564-568,580-594,1087-1092
+packages/im/agent/src/init/activate-ai-database-storage.ts
+  s_160584181caae4::t_5a1690d9a58911 4-10,57-66
+packages/im/agent/src/memory/memory-write-policy.ts
+  s_160584181caae4::t_0e6cd8d60de2f8 1-80
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_160584181caae4::t_d3f8b3bdb39af5 7,484-486
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_160584181caae4::t_ade183f8f5a171 2,587-589,591-594
+packages/im/agent/src/plugin-runtime/native-semantic-memory-tools.ts
+  s_160584181caae4::t_56c41764fed045 2-3,5-6,19-20,29-37,41-45,60-78,114-115,122,125-126,158,162,215-217,220-228,230,233-238,240,242-243,262-267
+packages/im/agent/src/prompt/system-prompt.ts
+  s_160584181caae4::t_8c57c0d13eb010 26,320-321,498
+packages/im/agent/src/skill/capability-catalog.ts
+  s_160584181caae4::t_ea480d52ea7cc6 1-82
+packages/im/agent/src/trace/context-budget.ts
+  s_160584181caae4::t_89d5008f680ada 1-152
+packages/im/agent/src/trace/index.ts
+  s_160584181caae4::t_9dbacb54864ee1 35-46
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_160584181caae4::t_5e1931732b0b34 3,73-74,109-137
+packages/im/agent/src/trace/turn-trace-registry.ts
+  s_160584181caae4::t_aa5437d0d27bbb 54-58
+packages/im/agent/src/trace/turn-trace.ts
+  s_160584181caae4::t_672180305582eb 12,94-95,111,151,205-209,351
+packages/im/agent/src/turn/execute-agent-turn.ts
+  s_160584181caae4::t_7cd8befcaefc91 6,36-39,51-61,95
+packages/im/agent/src/turn/index.ts
+  s_160584181caae4::t_020323b0371040 9-10
+packages/im/agent/src/turn/journal-feed.ts
+  s_160584181caae4::t_ef50859f201319 1-65
+packages/im/agent/tests/plugin-runtime/native-semantic-memory-tools.test.ts
+  s_160584181caae4::t_d4d764c8885b33 104-173
+packages/im/agent/tests/skill/capability-catalog.test.ts
+  s_160584181caae4::t_d5098bf5c3c2d0 1-47
+packages/im/agent/tests/trace/context-budget.test.ts
+  s_160584181caae4::t_513e9c092cc060 1-70
+packages/im/agent/tests/turn/journal-feed.test.ts
+  s_160584181caae4::t_ddc357172e58cc 1-83
+packages/im/ai/src/index.ts
+  s_160584181caae4::t_b97e21d9cbf2ca 316-318,321-324,328-330,338-339,341
+packages/im/ai/src/llm/agent-loop.ts
+  s_160584181caae4::t_55c7ebed16dbbb 365-367,384,421-422
+packages/im/ai/src/memory/memory-entry-models.ts
+  s_160584181caae4::t_63128bae30666e 3-15,20-38,51,54-61,74-81,93-96,119-176
+packages/im/ai/src/memory/memory-entry-repository.ts
+  s_160584181caae4::t_e00071bd50b533 5-16,28-33,37-38,40-41,58-63,81,92,101-140,145,148,152,161-165,170-176,180-186,193,195-196,200,210-214,224-227,232-267
+packages/im/ai/tests/llm/agent-loop-recomplete.test.ts
+  s_160584181caae4::t_709e64a6a38074 1-95
+packages/im/ai/tests/memory/memory-entry-repository.test.ts
+  s_160584181caae4::t_b9784784fca200 1-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d4c8be65fe7f806b7fcb40be903e1a1d9ac244cd",
+  "prompts": {},
+  "sessions": {
+    "s_160584181caae4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a66622260875d825d",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_5a97dd97323603": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "611a9689-fc93-4e4a-9b7f-2a7ccf1af456",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
