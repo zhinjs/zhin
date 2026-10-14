@@ -1,8 +1,13 @@
 ---
-title: Documentation content insights loop
+title: "Documentation content insights loop"
+description: "Optional anonymous content insights for the docs site: connecting a collector, which events are sent, the weekly review that turns them into doc fixes, and verifying the privacy guarantees"
 ---
 
 # Improve documentation from real questions
+
+::: tip Who this page is for
+People who deploy or maintain the Zhin docs site. If you only build bots with Zhin, you can skip it.
+:::
 
 The Zhin documentation includes a vendor-neutral content-insights client that is disabled by default. It sends anonymous events only when the deployer configures a collector Endpoint, the visitor explicitly gives consent, and the browser does not enable DNT. It uses no cookies or user/device IDs and sends no URL query, fragment, external referrer, IP field, or browser fingerprint.
 
@@ -68,3 +73,7 @@ Preview the site, choose “Allow anonymous insights” in the consent notice, t
 The automated gate `pnpm vitest run tests/docs/docs-insights.test.ts tests/docs/content-insights-loop.test.ts` verifies data minimization, sensitive-query redaction, and the operational contract.
 
 Visitors can use the persistent Privacy control in the lower-right corner to change their choice at any time; denying consent immediately stops subsequent collection. Removing `zhin:docs-insights-consent:v1` from site storage also resets the choice.
+
+## Next steps
+
+- [Docs Writing Guide](../contributing/writing-docs.md): the layout and language rules to follow when rewriting pages after a review
