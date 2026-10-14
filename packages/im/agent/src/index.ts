@@ -624,3 +624,6 @@ export type {
   AgentSurfacePluginInfo,
   AgentSurfaceWorkspaceAgentInfo,
 } from './discovery/agent-surface-info.js';
+
+// Detached background tasks (#731) and interjection / commands (#732)
+export * from './detached-task/index.js';

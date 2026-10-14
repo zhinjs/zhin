@@ -61,6 +61,13 @@ export interface DetachedTaskStep extends AgentStepCheckpoint {
   readonly idempotencyKey?: string;
 }
 
+export interface DetachedTaskSteering {
+  /** Number of steps completed when the steering was applied. */
+  readonly atStep: number;
+  readonly text: string;
+  readonly at: number;
+}
+
 export type DetachedTaskEffectStatus = 'executing' | 'committed' | 'outcome_unknown';
 
 /** Effect ledger entry for a side-effecting call, keyed by its idempotency key. */
@@ -80,6 +87,12 @@ export interface DetachedTaskRecord {
   readonly kind: string;
   readonly goal: string;
   readonly sessionId?: string;
+  /** Principal that created the task; only they (or a master) may stop or redirect it. */
+  readonly createdBy?: string;
+  /** Steering messages queued by the user, applied at the next step boundary (#732). */
+  readonly pendingSteering?: readonly string[];
+  /** Steering already applied, keyed by the step boundary it was applied at (replayed on resume). */
+  readonly steeringLog?: readonly DetachedTaskSteering[];
   readonly status: DetachedTaskStatusName;
   readonly policy: DetachedTaskPolicy;
   readonly delivery?: DetachedTaskChannel;
@@ -108,6 +121,8 @@ export interface DetachedTaskConfig {
   readonly maxSteps?: number;
   /** Max automatic resumes after a restart before failing. Default 3. */
   readonly maxResumeAttempts?: number;
+  /** How long cancel waits for the running executor to settle (ms). Default 5 000. */
+  readonly cancelGraceMs?: number;
 }
 
 export const DEFAULT_DETACHED_TASK_CONFIG: Readonly<Required<DetachedTaskConfig>> = Object.freeze({
@@ -115,4 +130,5 @@ export const DEFAULT_DETACHED_TASK_CONFIG: Readonly<Required<DetachedTaskConfig>
   maxProgressUpdates: 10,
   maxSteps: 50,
   maxResumeAttempts: 3,
+  cancelGraceMs: 5_000,
 });
