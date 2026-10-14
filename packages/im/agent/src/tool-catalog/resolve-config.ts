@@ -10,7 +10,11 @@ export function resolveDeferredToolsConfig(
   mcpServers: NonNullable<DeferredToolsConfig['mcpServers']>;
 } {
   const dt = config.deferredTools ?? {};
-  const alwaysLoaded = dt.alwaysLoadedTools ?? DEFAULT_DEFERRED_TOOLS_CONFIG.alwaysLoadedTools;
+  // Configured tools extend the default resident set; `replace` is the explicit opt-out (#740).
+  const configured = dt.alwaysLoadedTools ?? [];
+  const alwaysLoaded = dt.alwaysLoadedMode === 'replace'
+    ? configured
+    : [...new Set([...DEFAULT_DEFERRED_TOOLS_CONFIG.alwaysLoadedTools, ...configured])];
   return {
     maxLoadedPerSession: dt.maxLoadedPerSession ?? DEFAULT_DEFERRED_TOOLS_CONFIG.maxLoadedPerSession,
     discoverTopK: dt.discoverTopK ?? DEFAULT_DEFERRED_TOOLS_CONFIG.discoverTopK,

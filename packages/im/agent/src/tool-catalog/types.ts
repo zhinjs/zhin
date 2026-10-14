@@ -23,7 +23,13 @@ export interface DiscoverResultItem {
 export interface DeferredToolsConfig {
   maxLoadedPerSession?: number;
   discoverTopK?: number;
+  /** Extra always-loaded tools. Added to the defaults unless `alwaysLoadedMode` is `replace`. */
   alwaysLoadedTools?: string[];
+  /**
+   * `extend` (default): `alwaysLoadedTools` is added to the default resident set.
+   * `replace`: `alwaysLoadedTools` is the complete resident set (opt-out of the defaults).
+   */
+  alwaysLoadedMode?: 'extend' | 'replace';
   mcpServers?: Record<string, { alwaysLoaded?: string[] }>;
 }
 
