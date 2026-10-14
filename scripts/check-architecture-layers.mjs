@@ -11,7 +11,8 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseImports } from './lib/parse-imports.mjs';
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
-import { isAgentForbiddenWorkroomReference, isForbiddenDomainSpecifier } from './lib/workroom-specifier.mjs';
+import { findAgentManifestWorkroomViolations, findAgentWorkroomViolations } from './lib/agent-workroom-boundary.mjs';
+import { isForbiddenDomainSpecifier } from './lib/workroom-specifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -322,15 +323,7 @@ const workroomAllowedDependencies = new Set(workroomAllowedLayers.map(layer => (
 {
   const manifestPath = 'packages/im/agent/package.json';
   const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
-  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies']) {
-    if (Object.hasOwn(manifest[section] ?? {}, '@zhin.js/workroom')) {
-      violations.push({
-        file: manifestPath,
-        import: '@zhin.js/workroom',
-        reason: `@zhin.js/agent must not depend on @zhin.js/workroom (${section}); direction is workroom -> agent`,
-      });
-    }
-  }
+  violations.push(...findAgentManifestWorkroomViolations(manifest, manifestPath));
 }
 
 if (violations.length) {
@@ -510,14 +503,7 @@ const agentSrcFiles = [];
 walkTs(agentSrcRoot, agentSrcFiles);
 for (const file of agentSrcFiles) {
   const content = fs.readFileSync(file, 'utf8');
-  for (const importPath of parseImports(content, { includeTypeOnly: true })) {
-    if (!isAgentForbiddenWorkroomReference(importPath)) continue;
-    agentReexportViolations.push({
-      file: path.relative(repoRoot, file),
-      import: importPath,
-      reason: 'packages/im/agent must not reference @zhin.js/workroom or workroom/portfolio/data-governance/workroom-runtime directories',
-    });
-  }
+  agentReexportViolations.push(...findAgentWorkroomViolations({ file: path.relative(repoRoot, file), content }));
 }
 
 if (agentReexportViolations.length) {

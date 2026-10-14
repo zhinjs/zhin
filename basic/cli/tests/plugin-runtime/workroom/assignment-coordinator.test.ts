@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，aborted 路径无法通过公开接口单独触达（host 先在更靠前的 coordinator 处抛错）。
 import { workroomAssignmentAuthorityGrantRepositoryToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';

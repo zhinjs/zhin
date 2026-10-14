@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造；存储模式、迁移与 prepare 行为无法通过公开接口单独触达。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';

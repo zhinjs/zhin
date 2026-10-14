@@ -1,3 +1,11 @@
+import { execFileSync } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import {
+  findAgentManifestWorkroomViolations,
+  findAgentWorkroomViolations,
+} from './lib/agent-workroom-boundary.mjs';
 import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
 import { findBarrelViolations, parseImports, parseReexports } from './lib/parse-imports.mjs';
 import {
@@ -211,4 +219,77 @@ describe('workroom domain directories stay framework-free', () => {
   ])('allows %s', (s) => {
     expect(isForbiddenDomainSpecifier(s)).toBe(false);
   });
+});
+
+describe('findAgentWorkroomViolations', () => {
+  const file = 'packages/im/agent/src/x.ts';
+  const run = (content: string) => findAgentWorkroomViolations({ file, content });
+
+  it.each([
+    ['bare package', `import { a } from '@zhin.js/workroom';`],
+    ['package subpath', `import { a } from '@zhin.js/workroom/runtime';`],
+    ['export * barrel', `export * from '@zhin.js/workroom';`],
+    ['type-only import', `import type { A } from '@zhin.js/workroom';`],
+    ['type-only re-export', `export type { A } from '@zhin.js/workroom';`],
+    ['dynamic import()', `const m = await import('@zhin.js/workroom');`],
+    ['relative workroom', `import { a } from '../workroom/a.js';`],
+    ['relative portfolio', `import { a } from './portfolio/a.js';`],
+    ['relative data-governance', `export * from '../data-governance/index.js';`],
+    ['relative workroom-runtime', `import { a } from '../../workroom-runtime/a.js';`],
+  ])('reports %s', (_name, content) => {
+    const violations = run(content);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].file).toBe(file);
+    expect(violations[0].reason).toContain('must not reference @zhin.js/workroom');
+  });
+
+  it.each([
+    `import { a } from '@zhin.js/workroomx';`,
+    `import { a } from './workroomish.js';`,
+    `import { a } from '@zhin.js/core';`,
+    `// import { a } from '@zhin.js/workroom';`,
+  ])('allows %s', (content) => {
+    expect(run(content)).toEqual([]);
+  });
+});
+
+describe('findAgentManifestWorkroomViolations', () => {
+  it.each(['dependencies', 'optionalDependencies', 'peerDependencies', 'devDependencies'])(
+    'reports %s',
+    (section) => {
+      const violations = findAgentManifestWorkroomViolations(
+        { [section]: { '@zhin.js/workroom': 'workspace:*' } },
+        'packages/im/agent/package.json',
+      );
+      expect(violations).toEqual([{
+        file: 'packages/im/agent/package.json',
+        import: '@zhin.js/workroom',
+        reason: `@zhin.js/agent must not depend on @zhin.js/workroom (${section}); direction is workroom -> agent`,
+      }]);
+    },
+  );
+
+  it('allows manifests without workroom', () => {
+    expect(findAgentManifestWorkroomViolations(
+      { dependencies: { '@zhin.js/core': 'workspace:*', '@zhin.js/workroomx': '1' } },
+      'p.json',
+    )).toEqual([]);
+  });
+});
+
+describe('check-architecture-layers.mjs wiring', () => {
+  const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+  const scriptPath = path.join(scriptDir, 'check-architecture-layers.mjs');
+
+  it('delegates the agent -> workroom checks to the tested pure functions', () => {
+    const source = fs.readFileSync(scriptPath, 'utf8');
+    expect(source).toContain("from './lib/agent-workroom-boundary.mjs'");
+    expect(source).toMatch(/findAgentWorkroomViolations\(/u);
+    expect(source).toMatch(/findAgentManifestWorkroomViolations\(/u);
+  });
+
+  it('passes against the real repository', () => {
+    const out = execFileSync('node', [scriptPath], { encoding: 'utf8' });
+    expect(out).toContain('Harness Agent -> Workroom reference check: OK.');
+  }, 60_000);
 });

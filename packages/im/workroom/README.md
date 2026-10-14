@@ -11,6 +11,10 @@ Workroom, Portfolio and Data Governance for Zhin.js: the domain code plus the ru
 
 `@zhin.js/workroom` -> `@zhin.js/agent` (+ `@zhin.js/plugin-runtime`, `@zhin.js/tool`, `@zhin.js/skill`, `@zhin.js/ai`, `@zhin.js/core`) -> `@zhin.js/im-contract`
 
+**Exports**: only the package root (`@zhin.js/workroom`). The deep paths (`./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js`) were removed in A4b; there is no transitional subpath export.
+
+**Dependencies**: `@zhin.js/agent` and `@zhin.js/plugin-runtime` stay ordinary `dependencies` on purpose. Moving them to `peerDependencies` needs a `pnpm-lock.yaml` update that cannot be produced/verified offline, and inside the workspace there is a single instance (`workspace:*`). Revisit together with the CLI optional-peer install graph.
+
 `@zhin.js/agent` must never import `@zhin.js/workroom`. The domain directories (`workroom/`,
 `portfolio/`, `data-governance/`) stay free of framework imports (only `@zhin.js/im-contract` and
 Node built-ins); only `workroom-runtime/` may use `@zhin.js/agent`. Inside the package,

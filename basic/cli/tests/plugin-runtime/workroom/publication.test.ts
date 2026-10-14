@@ -1,7 +1,7 @@
 import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
-import { WorkroomHostPublication } from '../../../src/plugin-runtime/workroom/publication.js';
+import { WorkroomHostPublication } from '../../../src/plugin-runtime/workroom/module.js';
 
 function foundation() {
   return {

@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：human-ingress-route 是内部路由辅助，未经 module.ts 公开，只能直接测试。
 import { describe, expect, it, vi } from 'vitest';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { Message } from '@zhin.js/core/runtime';

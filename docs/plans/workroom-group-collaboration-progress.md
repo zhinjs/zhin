@@ -51,7 +51,8 @@ sidebar: false
   - 2026-10-14 · 「refactor: CLI 可选加载 @zhin.js/workroom」· CLI 对 workroom 只剩 `import type`，取值改为动态加载；只有包本身缺失才降级，已安装但加载 / 激活失败仍报错（有测试）；Console 缺 Workroom 端口时只返回 agent console，6 个 Workroom 路由返回 503；新增边界测试防止静态导入回归；快照无变化
 - [x] A4c-1 处理第 13 轮审查 Nit：`basic/cli/src/plugin-runtime/console/agent-console.ts` 解析 `workroomHostToken` 的 `catch {}` 改为用 `isWorkroomPackageMissing` 区分，只有包缺失才降级，其他错误 warn 或置空；两个 import 都完成后再一次性给 `agentModule` 赋值，消除路由短暂返回 503 的窗口；`protocol-host-installer.ts` 的 `.catch` 只在包缺失时包装成 a2a 安装提示，其他错误原样抛出；`optional-workroom-boundary.test.ts` 补副作用导入 `import '@zhin.js/workroom'` 的匹配，并约束 `plugin-runtime/workroom/` 以外的文件只能 `import type` 或动态 `import()` 引用 `workroom/*.js`；顺带清理 basic/cli 中 27 个 `no-duplicate-imports`（`@zhin.js/workroom`）警告和 `agent-workroom.ts` 末尾多余空行
   - 2026-10-14 · 「fix: 区分 Workroom 包缺失与加载失败」· Console 只在包缺失时降级（其他错误 warn），`agentModule` 两个 import 完成后一次赋值；a2a 只在包缺失时给安装提示，其他错误原样抛出；边界测试覆盖副作用导入与目录外 `workroom/*.js` 引用；27 个重复 import 合并
-- [ ] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
+- [x] A5 `check:architecture` 增加规则：`@zhin.js/agent` 禁止导入 `@zhin.js/workroom`。CLI 测试改为通过公开接口测试，不再 import 内部 coordinator。补 changeset。跑通 `pnpm check:all`
+  - 2026-10-14 · 「refactor: 收尾阶段 A 的 Workroom 边界检查与 CLI 测试」· A4b 已有的 agent→workroom 规则原样抽成 `scripts/lib/agent-workroom-boundary.mjs` 并测试接线；5 个 CLI 测试改走公开 `module.js`，其余 17 个保留内部导入并写明原因，由允许清单把关；a2a 补包缺失 / 其他错误两个测试；确认深路径导出已在 A4b 移除，README / changeset 说法统一；workroom 对 agent / plugin-runtime 暂留普通依赖并在 README 说明；`pnpm check:all` 通过
 
 ## 阶段 B：新 Room 核心（在 `@zhin.js/workroom` 内，与旧机制并存）
 
@@ -161,6 +162,14 @@ sidebar: false
 - Nit：`protocol-host-installer.ts:136` 去掉 `.catch` 后，包缺失时报通用的 `WORKROOM_INSTALL_HINT`，不再点名 a2a。可保留一个只在包缺失时包装的 `.catch`，或给 `loadWorkroomPackage` 传上下文参数
 - Nit：a2a 路径没有测试覆盖“包缺失 → 安装提示 / 其他错误 → 原样抛出”的区分（只有 Console 路径补了 `agent-console-load.test.ts`）。可在 A5 改 CLI 测试时顺带补
 
+### 第 15 轮（2026-10-14，审查 A5，阶段 A 收尾）
+
+- 无 Blocking，无 Should fix
+- Nit：`scripts/check-architecture-layers.test.ts:281` 的接线测试只做字符串匹配并对真实仓库跑一遍，证明不了违规会被报出（结果没有并入 `agentReexportViolations` 也能通过），而且会被脚本中无关的检查失败拖红。可让脚本接受源码根目录参数，用 fixture 断言非零退出
+- Nit：`packages/im/workroom/README.md:16` 把 `@zhin.js/agent`、`@zhin.js/plugin-runtime` 留在普通 dependencies 的理由写成“离线无法生成 lockfile”，这是执行环境限制而非设计理由，也没写明第 12 轮的双实例 / Token 身份不匹配风险。**首次对外发布前必须重新评估**（改为 peer，需和 CLI 的 optional-peer 安装图一起设计）
+- Nit：`module-boundary.test.ts:31` allowlist 缩进不一致；a2a 用例缺少导入成功的正向基线
+- 阶段末评估：以上都不影响正确性或 fail-closed，不新建条目；依赖声明一项留给维护者在发版前决定
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -179,3 +188,4 @@ sidebar: false
 - 2026-10-14 14:57 定时运行：rebase 到最新 origin/main（15 个提交无冲突），install / build 通过；完成 A4b-1（4 个 agent，约 3.6 分钟，四包 build / type-check / 1713 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 A4c（4 个 agent，约 12.8 分钟，cli build / type-check / 381 个相关测试 / check:architecture / API 快照 / eslint 0 error（27 个 no-duplicate-imports 警告）通过，审查无 Blocking，4 个 Nit 新增为 A4c-1）
 - 2026-10-14 17:10 定时运行：rebase 到最新 origin/main（17 个提交，`docs/authoring/host-tokens.md` 中英文冲突：main 重写了该页，保留 main 版本并重新加入 `workroomHostToken` 一行，来源改为 `@zhin.js/workroom`），install / build 通过；完成 A4c-1（6 个 agent，约 7.7 分钟，cli build / type-check / 354 个相关测试 / check:architecture / API 快照 / no-duplicate-imports 清零通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
+- 2026-10-14 同一次定时运行：完成 A5（4 个 agent，约 13.7 分钟，workroom / cli build、type-check、95 个架构脚本自测、203 + 2524 个相关测试、check:architecture、API 快照、dependency-policy / feature-peers、**`pnpm check:all`** 通过，审查无 Blocking，4 个 Nit 只记录）。阶段 A 全部完成；下次运行从阶段 B 开始，先从本分支最新提交切出 `feat/workroom-group-collab`

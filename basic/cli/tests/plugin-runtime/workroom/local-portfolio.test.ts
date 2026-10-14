@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：local-portfolio 是内部模块，未经 module.ts 公开，只能直接测试。
 import { createHash } from 'node:crypto';
 import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
 import {

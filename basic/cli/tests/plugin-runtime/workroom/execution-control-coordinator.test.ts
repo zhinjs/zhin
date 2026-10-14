@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，缺少 durable Portfolio 仓库的路径无法通过公开接口单独触达。
 import { workroomSchedulerRuntimeToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
