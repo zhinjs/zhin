@@ -1,0 +1,51 @@
+.changeset/agent-eval-fallback-timeout.md
+  s_c757df74f34330::t_c117d3d03eae17 1-6
+packages/im/agent/evals/README.md
+  s_c757df74f34330::t_74da65c3498f9b 74,88,110-115,144,150-151
+packages/im/agent/evals/cases/provider-5xx-fallback-model.case.ts
+  s_c757df74f34330::t_4046101511d8b2 1-23
+packages/im/agent/evals/cases/provider-timeout-exhausted-polite.case.ts
+  s_c757df74f34330::t_6eaea838f053cf 1-20
+packages/im/agent/evals/cases/provider-timeout-retried.case.ts
+  s_c757df74f34330::t_ae7f38f603759b 1-20
+packages/im/agent/evals/framework/assertions.ts
+  s_c757df74f34330::t_e6f701de18bb2f 76-82,108
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_55f334a3eb5124 30,57-58,68-76,79,85-86,97,176
+packages/im/agent/evals/framework/fake-clock.ts
+  s_c757df74f34330::t_4c4d841dd71eae 1-39
+packages/im/agent/evals/framework/fixture.ts
+  s_c757df74f34330::t_ad3b8648faafa1 64-65,93-97
+packages/im/agent/evals/framework/index.ts
+  s_c757df74f34330::t_90923123e975a9 1-4,10
+packages/im/agent/evals/framework/scripted-model.ts
+  s_c757df74f34330::t_b3a8e15c627108 18,35-37,41-42,44-48,51-52,72-73,89-90,107-126,134,146,153-155,163-164,167-184,186-188,206,212,229
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_c757df74f34330::t_ad8ccf7ce80bc4 5,85-86
+packages/im/agent/src/core/agent-core-run.ts
+  s_c757df74f34330::t_35778d8fbb709d 110
+packages/im/ai/src/index.ts
+  s_c757df74f34330::t_9140383d1c93dd 121
+packages/im/ai/src/llm/index.ts
+  s_c757df74f34330::t_7ae2e14ac8de73 116
+packages/im/ai/src/llm/provider-resilience.ts
+  s_c757df74f34330::t_4f2d719d5b258a 268-278,287-288,319,331,346
+packages/im/ai/tests/llm/provider-resilience.test.ts
+  s_c757df74f34330::t_3c2e767c8f2856 220-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75df1468ee65bf52233a94c4b341074d680fea8c",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
