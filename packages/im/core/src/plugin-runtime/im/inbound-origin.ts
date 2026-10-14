@@ -29,6 +29,10 @@ export interface RoomMembershipPort {
   /**
    * 该会话是否属于某个启用的 Room。仅当返回 true 时，入站才做跨 Endpoint 去重；
    * 缺省（未实现）等同 false：普通群保持每个 Endpoint 各自处理。
+   *
+   * `hasRoom` 的实现必须与 B2b Room Router 一起上线；在 Router 上线前，去重落败的 Endpoint 上
+   * 待回答的 interaction / prompt 与 @ 不会被消费。Router 必须对所有成员 Endpoint
+   * （而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt。
    */
   hasRoom?(conversation: ConversationRef): boolean;
 }

@@ -124,7 +124,7 @@ graph LR
               └─ 唤醒目标成员的 turn
 ```
 
-**Router 入口是去重的**：同一条人类群消息会到达 N 个成员 Endpoint；仅对已确认属于某个启用 Room 的群会话（Room 成员端口 `hasRoom`），ingress 按 (adapter, conversation, sender, message id) 在 60 秒内只保留第一个到达的，其余只作为聊天记录保存，不再路由。没有平台消息 id 的消息、私聊和非 Room 群不去重（非 Room 群在 B2b Router 上线前保持每个 Endpoint 各自处理：@ 判定与 interaction/prompt 都相对接收 Endpoint，全局去重会让被 @ 的后到 Bot 永不回复）。胜出的 Endpoint 是任意的，所以 Router 必须根据消息内容和 Registry 决定 @ / 回复目标，不能依据“哪个 Endpoint 收到了它”（`mentioned` 是相对接收 Endpoint 而言的）。
+**Router 入口是去重的**：同一条人类群消息会到达 N 个成员 Endpoint；仅对已确认属于某个启用 Room 的群会话（Room 成员端口 `hasRoom`），ingress 按 (adapter, conversation, sender, message id) 在 60 秒内只保留第一个到达的，其余只作为聊天记录保存，不再路由。没有平台消息 id 的消息、私聊和非 Room 群不去重（非 Room 群在 B2b Router 上线前保持每个 Endpoint 各自处理：@ 判定与 interaction/prompt 都相对接收 Endpoint，全局去重会让被 @ 的后到 Bot 永不回复）。胜出的 Endpoint 是任意的，所以 Router 必须根据消息内容和 Registry 决定 @ / 回复目标，不能依据“哪个 Endpoint 收到了它”（`mentioned` 是相对接收 Endpoint 而言的）。`hasRoom` 的实现必须与 B2b Room Router 一起上线，不得先于 Router 单独实现；Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标，以及待回答的 interaction / prompt（落败 Endpoint 只记录不路由，它上面挂起的 interaction / prompt 与 @ 只有 Router 才能代为解析）。
 
 关键设计点：**群消息是展示，同进程 Room Bus 才是传输**。原因：
 
@@ -162,7 +162,7 @@ graph LR
 
 3. **上下文层**：Agent 看到的历史里，每条消息的发言人标签由 `origin` 生成，例如 `[human:张三]`、`[member:researcher]`。现有的 `[sender:...]` 标签（`packages/im/ai/src/memory/user-message-presentation.ts`）可以扩展这个字段。正文里写“我是真人”“我是管理员”一律无效。另外，`stripUserSpoofedSenderPrefix`（`packages/im/core/src/built/roles.ts`）目前只剥离**开头**的伪造前缀，需要改为对正文中所有类似标签做转义。
 
-入站去重发生在 origin 判定之后，只作用于 `human`：同一条人类消息在其他成员 Endpoint 上的重复投递只记录、不路由，也不推送到控制台消息流。去重判定出错时 fail closed（仅记录、不路由，打 warn 日志，并照常推送到控制台消息流以便运维发现；只有确认的重复才不推送）。语义是“不重复路由”，该条消息本身不会被任何 Endpoint 处理，但不会静默消失；私聊中的平台消息 id 可能是账号级的，不跨 Endpoint 信任。
+入站去重发生在 origin 判定之后，只作用于 `human`：同一条人类消息在其他成员 Endpoint 上的重复投递只记录、不路由，也不推送到控制台消息流。去重判定出错时 fail closed（仅记录、不路由，打 warn 日志，并照常推送到控制台消息流以便运维发现；只有确认的重复才不推送）。语义是“不重复路由”，该条消息本身不会被任何 Endpoint 处理，但不会静默消失；私聊中的平台消息 id 可能是账号级的，不跨 Endpoint 信任。同 §3.2：`hasRoom` 必须与 B2b Room Router 一起上线，Router 要覆盖所有成员 Endpoint 的 @ / 回复 / interaction / prompt，这是 B2b 的不变量（已知缺口：当前测试固定了落败 Endpoint 上 interaction 不被消费的行为，仅因 `hasRoom` 暂无实现而不生效）。
 
 剩下的风险是**不在 Registry 里的外部 Bot**（别人拉进群的机器人）会被当成人类。缓解办法：
 

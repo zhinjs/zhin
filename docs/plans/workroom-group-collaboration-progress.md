@@ -74,7 +74,8 @@ sidebar: false
   - 2026-10-14 · 「test: 修正 origin 抛错用例的 registry 构造并固定私聊取舍」· 运行时层改用真实 PeerRegistry 实例并只 spy 目标方法，Endpoint 登记 `selfUserId` 后用例确实走到 `lookup` / `selfOf` 且断言 spy 被调用；私聊分支补注释与“未就绪 Endpoint 私聊自回显按 human 处理”classifier 测试；只改测试和注释
 - [x] B2 **入站去重 / 单一入口选举**（审查第 7 条）：群里每个成员 Bot 都会收到同一条人类消息，N 个 Endpoint 会产生 N 个入站事件。按 平台 + 会话 + 平台消息 id 去重，或者每个 Room 选一个入站 Endpoint，保证每条消息只路由一次。同时更新方案 §3.2 / §3.4
   - 2026-10-14 · 「feat: Room 会话入站去重」· core 新增 `inbound-dedup.ts`，按 adapter + 会话 + 平台消息 id 同步去重；只在 `RoomMembershipPort.hasRoom(conversation) === true` 时生效（目前无实现，行为不变），重复入站只记录不路由；判定抛错 fail-closed（记录并 publish、告警、不路由）；方案 §3.2 / §3.4 更新；顺带修正 inbound-origin 私聊摘要未消耗的断言
-- [ ] B2-1 处理第 24 轮审查意见：改写 `.changeset/workroom-inbound-dedup.md`，如实说明 `RoomMembershipPort` 新增可选 `hasRoom(conversation)`，返回 true 时同一会话多 Endpoint 收到的人类消息只路由一次、其余只记录，不实现 `hasRoom` 则行为不变；在方案 §3.2 / §3.4 以及 `inbound-origin.ts` 中 `hasRoom` 的文档注释写明：`hasRoom` 的实现必须与 B2b Room Router 一起上线，Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt（涉及正确性约束，所以新建条目）
+- [x] B2-1 处理第 24 轮审查意见：改写 `.changeset/workroom-inbound-dedup.md`，如实说明 `RoomMembershipPort` 新增可选 `hasRoom(conversation)`，返回 true 时同一会话多 Endpoint 收到的人类消息只路由一次、其余只记录，不实现 `hasRoom` 则行为不变；在方案 §3.2 / §3.4 以及 `inbound-origin.ts` 中 `hasRoom` 的文档注释写明：`hasRoom` 的实现必须与 B2b Room Router 一起上线，Router 必须对所有成员 Endpoint（而不只是去重胜出的 Endpoint）解析 @ / 回复目标以及待回答的 interaction / prompt（涉及正确性约束，所以新建条目）
+  - 2026-10-14 · 「docs: 写明 hasRoom 必须与 Room Router 一起上线」· changeset 改为如实描述可选 `hasRoom` 与“未实现则行为不变”；方案 §3.2 / §3.4 与 `inbound-origin.ts` 注释写明 Router 须对所有成员 Endpoint 解析 @ / 回复与待回答 interaction；确认 `inboundDeduper` 已标 `@internal`；不改运行时行为
 - [ ] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
 - [ ] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
@@ -246,6 +247,10 @@ sidebar: false
 - 第二轮 Should fix：changeset 仍描述全局去重，且未提 `RoomMembershipPort` 新增可选 `hasRoom` → B2-1
 - 第二轮 Nit：测试固定了“Room 内待回答 interaction 在落败 Endpoint 上不会被消费”的已知缺口，方案未要求 Router 跨 Endpoint 解析 interaction / @，也未禁止先于 Router 实现 `hasRoom` → 涉及正确性约束，并入 B2-1
 
+### 第 25 轮（2026-10-14，审查 B2-1）
+
+- 无问题。第 24 轮 Nit 中 `inboundDeduper` 公开选项已确认标 `@internal`
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -274,3 +279,4 @@ sidebar: false
 - 2026-10-14 21:35 定时运行：rebase 到最新 origin/main（25 个提交；`packages/im/agent/src/turn/index.ts` 与 `basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts` 冲突，main 新增 TurnAdmissionGate 与本分支 workroom port 两边都保留），install / build 通过，cli agent + agent turn 182 个测试通过；完成 B1c-1（6 个 agent，约 5.4 分钟，core build / type-check / 290 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无 Blocking，1 个 Should fix 涉及 fail-closed 测试覆盖，新增为 B1c-2）。备注：继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 B1c-2（4 个 agent，约 2.8 分钟，core build / type-check / 136 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无 Blocking，1 个 Should fix（测试注释与实际验证不符）只记录）
 - 2026-10-14 22:35 定时运行：rebase 到最新 origin/main（无冲突，基线 fc75499c5），install / build 通过；完成 B2（7 个 agent，约 11 分钟，core build / type-check / 153 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过；首轮审查 1 个 Blocking 在条目内修复，复审无 Blocking，1 个 Should fix + 1 个 Nit 新增为 B2-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
+- 2026-10-14 同一次定时运行：完成 B2-1（4 个 agent，约 2.3 分钟，core build / type-check / 133 个相关测试 / check:architecture / API 快照 / plugin-runtime API / eslint 通过，审查无问题）。备注：本次会话内 `scriptPath` 指向会话自己保存的脚本副本可用
