@@ -4,6 +4,7 @@ import { defineEvalCase } from '../framework/index.js';
 export default defineEvalCase({
   id: 'subagent-sync-report',
   description: 'Master DM: the parent delegates to a sync sub-agent and relays its report in its own words.',
+  source: '#718 sync sub-agents on the plugin-runtime path',
   tags: ['subagent', 'long-task'],
   inbound: { text: '帮我看看 README 里写的启动命令是什么', sender: { id: 'master', roles: ['master'] } },
   agentConfig: { subagentTurnMode: 'sync' },

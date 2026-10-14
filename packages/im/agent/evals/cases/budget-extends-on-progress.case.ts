@@ -4,6 +4,7 @@ import { defineEvalCase } from '../framework/index.js';
 export default defineEvalCase({
   id: 'budget-extends-on-progress',
   description: 'A five-note edit runs past maxIterations=3 because every step makes new progress.',
+  source: '#718 progress-aware budget (long edits stopped at maxIterations)',
   tags: ['long-task', 'tool-use'],
   inbound: { text: '把 n0 到 n4 五条笔记都写上 x', sender: { id: 'master', roles: ['master'] } },
   agentConfig: {
