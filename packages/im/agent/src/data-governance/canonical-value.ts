@@ -1,3 +1,6 @@
+/**
+ * Workroom 与 Data Governance 共享，名称中的 Workroom 前缀为兼容保留。
+ */
 import { createHash } from 'node:crypto';
 
 /** Locale-independent UTF-16 code-unit order for authoritative identities. */
@@ -6,7 +9,7 @@ export function compareCanonicalWorkroomText(left: string, right: string): numbe
   return left < right ? -1 : 1;
 }
 
-/** Canonical representation used by immutable Workroom domain records. */
+/** Canonical representation shared by Workroom and Data Governance records (Workroom prefix kept for compatibility). */
 export function canonicalWorkroomJson(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonicalWorkroomJson).join(',')}]`;
   if (value && typeof value === 'object') {

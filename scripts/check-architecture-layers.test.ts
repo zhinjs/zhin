@@ -114,6 +114,8 @@ describe('data-governance direction rule', () => {
     ['export * from', `export * from '../workroom/x.js';`],
     ['workroom-runtime', `import { x } from '../workroom-runtime/x.js';`],
     ['portfolio', `import { x } from '../portfolio/x.js';`],
+    ['inline import() type', `export type T = import('../workroom/x.js').X;`],
+    ['export { x } from', `export { x } from '../workroom/x.js';`],
   ])('reports %s', (_n, content) => {
     expect(run(content)).toHaveLength(1);
   });
@@ -123,7 +125,12 @@ describe('data-governance direction rule', () => {
     `import { x } from '../data-governance/x.js';`,
     `import fs from 'node:fs';`,
     `import { x } from '../workroom-extra/x.js';`,
+    `export type T = import('./x.js').X;`,
   ])('does not report %s', content => {
     expect(run(content)).toEqual([]);
+  });
+
+  it.each(['workroom', 'workroom-runtime', 'portfolio'])('exposes the matching root for %s', name => {
+    expect(run(`import { x } from '../${name}/x.js';`)[0].root).toBe(`${src}/${name}`);
   });
 });

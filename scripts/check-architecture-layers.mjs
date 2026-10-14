@@ -422,10 +422,11 @@ walkTs(dataGovernanceRoot, dataGovernanceFiles);
 for (const file of dataGovernanceFiles) {
   const content = fs.readFileSync(file, 'utf8');
   for (const hit of findForbiddenRelativeImports({ file, content, forbiddenRoots: dataGovernanceForbiddenRoots })) {
+    const dir = path.basename(hit.root);
     dataGovernanceViolations.push({
       file: path.relative(repoRoot, file),
       import: hit.import,
-      reason: 'data-governance must not depend on workroom/ (direction is workroom -> data-governance)',
+      reason: `data-governance must not depend on ${dir}/ (data-governance is a lower layer shared by workroom, workroom-runtime and portfolio)`,
     });
   }
 }
