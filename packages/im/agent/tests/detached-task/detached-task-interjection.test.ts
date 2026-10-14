@@ -110,6 +110,34 @@ describe('interjection routing', () => {
   });
 });
 
+describe('concurrent steer vs checkpoint', () => {
+  it('never loses a steer that races a checkpoint write', async () => {
+    const store = new InMemoryDetachedTaskStore();
+    const seen: string[] = [];
+    const executor: DetachedTaskExecutor = {
+      async run(ctx) {
+        for (let i = 0; i < 20; i++) {
+          // Steer lands while this step's checkpoint is being written.
+          const write = ctx.step('noop', async () => i);
+          void runner.steer(ctx.taskId, `s${i}`);
+          await write;
+          seen.push(...(await ctx.takeSteering()));
+        }
+        await new Promise((r) => setTimeout(r, 5));
+        seen.push(...(await ctx.takeSteering()));
+        return { summary: 'ok' };
+      },
+    };
+    const runner = new DetachedTaskRunner({ store, executors: { e: executor } });
+    const task = await runner.create({ kind: 'e', goal: 'g' });
+    const final = await runner.start(task.taskId);
+    expect(final.status).toBe('done');
+    expect(final.steps).toHaveLength(20);
+    expect(seen.sort()).toEqual(Array.from({ length: 20 }, (_, i) => `s${i}`).sort());
+    expect(final.pendingSteering ?? []).toEqual([]);
+  });
+});
+
 describe('/tasks commands', () => {
   it('lists, stops and redirects tasks in the session', async () => {
     const store = new InMemoryDetachedTaskStore();

@@ -1,6 +1,7 @@
 import { AgentStepStatus, createStepId } from '@zhin.js/ai/agent-step-checkpoint';
 import { getLogger, formatCompact } from '@zhin.js/logger';
 import { TurnProgressReporter } from '../core/progress-reporter.js';
+import { KeyedMutex } from '../utils/keyed-mutex.js';
 import type { DetachedTaskStore } from './store.js';
 import {
   DEFAULT_DETACHED_TASK_CONFIG,
@@ -109,6 +110,8 @@ export class DetachedTaskRunner {
   readonly #deps: DetachedTaskRunnerDeps;
   readonly #config: Readonly<Required<DetachedTaskConfig>>;
   readonly #now: () => number;
+  /** Serializes every read-modify-write of one task record (steer vs checkpoint vs transition). */
+  readonly #writes = new KeyedMutex();
   readonly #active = new Map<string, { controller: AbortController; done: Promise<DetachedTaskRecord> }>();
 
   constructor(deps: DetachedTaskRunnerDeps) {
@@ -200,17 +203,19 @@ export class DetachedTaskRunner {
 
   /** Queue a steering message; it is applied at the task's next step boundary. */
   async steer(taskId: string, text: string): Promise<DetachedTaskRecord> {
-    const record = await this.#require(taskId);
-    if (TERMINAL_DETACHED_TASK_STATUSES.has(record.status)) {
-      throw new DetachedTaskTransitionError(taskId, record.status, record.status);
-    }
-    const next: DetachedTaskRecord = {
-      ...record,
-      pendingSteering: [...(record.pendingSteering ?? []), text],
-      updatedAt: this.#now(),
-    };
-    await this.#deps.store.save(next);
-    return next;
+    return this.#writes.run(taskId, async () => {
+      const record = await this.#require(taskId);
+      if (TERMINAL_DETACHED_TASK_STATUSES.has(record.status)) {
+        throw new DetachedTaskTransitionError(taskId, record.status, record.status);
+      }
+      const next: DetachedTaskRecord = {
+        ...record,
+        pendingSteering: [...(record.pendingSteering ?? []), text],
+        updatedAt: this.#now(),
+      };
+      await this.#deps.store.save(next);
+      return next;
+    });
   }
 
   async cancel(taskId: string): Promise<DetachedTaskRecord> {
@@ -244,14 +249,15 @@ export class DetachedTaskRunner {
       summarize: async () => this.#deps.summarize?.(record),
       now: this.#now,
     });
-    const save = async (patch: Partial<DetachedTaskRecord>) => {
-      // steer() writes pendingSteering concurrently; never clobber it.
+    const save = (patch: Partial<DetachedTaskRecord>) => this.#writes.run(taskId, async () => {
+      // steer() writes pendingSteering concurrently; under the lock, re-read it so it is never clobbered.
       const pendingSteering = 'pendingSteering' in patch
         ? patch.pendingSteering
         : (await this.#deps.store.load(taskId))?.pendingSteering ?? record.pendingSteering;
       record = { ...record, ...patch, pendingSteering, updatedAt: this.#now() };
       await this.#deps.store.save(record);
-    };
+    });
+    const steeringReturnedAt = new Set<number>();
     const context: DetachedTaskContext = {
       taskId,
       goal: record.goal,
@@ -292,16 +298,27 @@ export class DetachedTaskRunner {
       saveState: (state) => save({ state }),
       takeSteering: async () => {
         const atStep = cursor;
-        const logged = (record.steeringLog ?? []).filter((s) => s.atStep === atStep);
+        // Logged steering for a boundary is handed out once per run: replayed after a restart,
+        // never duplicated when the executor asks twice at the same live boundary.
+        const logged = steeringReturnedAt.has(atStep)
+          ? []
+          : (record.steeringLog ?? []).filter((s) => s.atStep === atStep);
+        steeringReturnedAt.add(atStep);
         // Replay: this boundary was already reached before a restart.
         if (atStep < record.steps.length) return logged.map((s) => s.text);
-        const latest = (await this.#deps.store.load(taskId)) ?? record;
-        const pending = latest.pendingSteering ?? [];
-        if (pending.length === 0) return logged.map((s) => s.text);
-        const at = this.#now();
-        await save({
-          pendingSteering: [],
-          steeringLog: [...(record.steeringLog ?? []), ...pending.map((text) => ({ atStep, text, at }))],
+        // Read-and-clear atomically so a concurrent steer() is either taken now or kept for later.
+        const pending = await this.#writes.run(taskId, async () => {
+          const taken = (await this.#deps.store.load(taskId))?.pendingSteering ?? [];
+          if (taken.length === 0) return taken;
+          const at = this.#now();
+          record = {
+            ...record,
+            pendingSteering: [],
+            steeringLog: [...(record.steeringLog ?? []), ...taken.map((text) => ({ atStep, text, at }))],
+            updatedAt: at,
+          };
+          await this.#deps.store.save(record);
+          return taken;
         });
         return [...logged.map((s) => s.text), ...pending];
       },
@@ -376,10 +393,12 @@ export class DetachedTaskRunner {
     if (!allowed || TERMINAL_DETACHED_TASK_STATUSES.has(record.status)) {
       throw new DetachedTaskTransitionError(record.taskId, record.status, to);
     }
-    const latest = (await this.#deps.store.load(record.taskId)) ?? record;
-    const next: DetachedTaskRecord = { ...latest, ...patch, status: to, updatedAt: this.#now() };
-    await this.#deps.store.save(next);
-    return next;
+    return this.#writes.run(record.taskId, async () => {
+      const latest = (await this.#deps.store.load(record.taskId)) ?? record;
+      const next: DetachedTaskRecord = { ...latest, ...patch, status: to, updatedAt: this.#now() };
+      await this.#deps.store.save(next);
+      return next;
+    });
   }
 
   async #notify(channel: DetachedTaskChannel | undefined, text: string, task: DetachedTaskRecord, rethrow = false): Promise<void> {
