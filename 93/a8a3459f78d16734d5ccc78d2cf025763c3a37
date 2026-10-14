@@ -1,0 +1,25 @@
+.changeset/agent-event-feed-self-filter.md
+  s_c757df74f34330::t_25b8c7e051a075 1-6
+packages/im/ai/src/llm/types/agent-message.ts
+  s_c757df74f34330::t_a6bfa5432d4977 44-45,47
+packages/im/ai/tests/llm/ai-sdk-messages.test.ts
+  s_c757df74f34330::t_5be6b552613c97 174-184
+packages/im/core/src/plugin-runtime/im/conversation-runtime.ts
+  s_c757df74f34330::t_289f7aca223638 22-27,71-78,80,85-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "93a8a3459f78d16734d5ccc78d2cf025763c3a37",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
