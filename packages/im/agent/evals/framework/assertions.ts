@@ -57,6 +57,10 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
   for (const needle of expect.modelInputContains ?? []) {
     if (!modelInput.includes(needle)) fail('modelInputContains', `the model never received "${needle}"`);
   }
+  for (const needle of expect.systemPromptContains ?? []) {
+    const missing = run.modelRequests.findIndex((request) => !request.systemPrompt.includes(needle));
+    if (missing >= 0) fail('systemPromptContains', `model request ${missing + 1} had no "${needle}" in its system prompt`);
+  }
   for (const needle of expect.modelInputNotContains ?? []) {
     if (modelInput.includes(needle)) fail('modelInputNotContains', `the model received "${needle}"`);
   }

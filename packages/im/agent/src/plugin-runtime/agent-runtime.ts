@@ -1,5 +1,5 @@
 import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
-import { restrictGroupMemberTurn } from '../security/group-member-policy.js';
+import { applyTurnTrust } from '../security/trust-level.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
 import { TurnTraceCollector } from '../trace/turn-trace.js';
@@ -311,25 +311,25 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         selection.agent,
       );
       const referenceCapability = createConversationReferenceCapability(owner, request);
-      // #719: ordinary group members get no shell, file writes or outbound tools.
+      // #726: the initiator's trust level caps the turn (group members: no shell, writes or outbound).
       const allTools = [
         ...discovered.tools,
         ...(referenceCapability ? [referenceCapability] : []),
         ...await expandMcpTools(discovered, selection.mcpServers),
       ];
-      const restriction = restrictGroupMemberTurn(request, allTools);
+      const trust = applyTurnTrust(request, allTools);
       const capabilities = Object.freeze({
         ...discovered,
-        tools: Object.freeze([...restriction.tools]),
+        tools: Object.freeze([...trust.tools]),
       });
-      const turnRequest = restriction.restricted
-        ? Object.freeze({ ...request, policy: restriction.policy })
+      const turnRequest = trust.restricted
+        ? Object.freeze({ ...request, policy: trust.policy })
         : request;
       const trace = this.options.turnTraceStore
         ? new TurnTraceCollector({
           turnId: request.identity.turnId,
           sessionKey: request.session.key,
-          principal: request.principal,
+          principal: { ...request.principal, trustLevel: trust.level },
         })
         : undefined;
       releaseTrace = trace ? registerTurnTrace(trace) : undefined;

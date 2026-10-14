@@ -20,11 +20,11 @@ import type { Message } from '@zhin.js/core';
 import type { ZhinAgentConfig } from '../config/index.js';
 import { checkMemoryWritePath } from '../memory-layers.js';
 import {
-  GROUP_MEMBER_RESTRICTION_POLICY,
-  GROUP_MEMBER_RESTRICTION_REASON,
-  isGroupMemberRestrictedTool,
-  isGroupMemberTurn,
-} from './group-member-policy.js';
+  TRUST_LEVEL_POLICY,
+  TRUST_RESTRICTION_REASON,
+  isToolAboveTrust,
+  resolveTurnTrustLevel,
+} from './trust-level.js';
 import {
   checkFileAccess,
   checkBashCommandSafety,
@@ -126,12 +126,12 @@ export interface TurnToolPolicyInput {
 /** Generic, execution-domain-neutral policy facade for canonical Turn tools. */
 export async function runTurnToolPolicies(input: TurnToolPolicyInput): Promise<TurnToolPolicyDecision> {
   const requesterRole = resolveTurnRequesterRole(input.turn);
-  // Defense in depth for #719: also covers tools that reach a turn later (e.g. deferred loads).
-  if (isGroupMemberTurn(input.turn) && isGroupMemberRestrictedTool(input.tool)) {
+  // Defense in depth for #726: also covers tools that reach a turn later (e.g. deferred loads).
+  if (isToolAboveTrust(input.tool, resolveTurnTrustLevel(input.turn))) {
     return Object.freeze({
       status: 'denied',
-      policy: GROUP_MEMBER_RESTRICTION_POLICY,
-      reason: GROUP_MEMBER_RESTRICTION_REASON,
+      policy: TRUST_LEVEL_POLICY,
+      reason: TRUST_RESTRICTION_REASON,
     });
   }
   const networkDecision = checkTurnNetworkPolicy(input);

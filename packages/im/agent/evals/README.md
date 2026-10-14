@@ -66,6 +66,7 @@ export default defineEvalCase({
 | `tools` | Mocked tools: `name`, `description`, `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
 | `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations`, `toolBudget`, or `subagentTurnMode: 'sync'`. |
+| `promptSections` | Prompt sections from a third-party plugin (`{ plugin, title, content }`). They are owned by a child plugin, so the engine labels them `external_content`. |
 | `source` | Required. The issue, PR or QQ incident the case guards against. |
 | `skip` | Skip with an actionable reason (a known gap or an unmerged dependency). |
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
@@ -84,6 +85,7 @@ export default defineEvalCase({
 | `approvalRequested` | `true`, `false`, or a list of tool names that must have been sent for approval. |
 | `termination` | The last turn's terminal event type: `turn_end` (the default), `error`, `turn_cancelled`, or `budget_exceeded`. |
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
+| `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |
 | `outboundMessages` | The number of reply-port sends. |
 | `modelIds` | The model id of every request, in order (fallback cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
@@ -137,10 +139,12 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `grep-match-all-rejected` | context, tool-use | #716 agent-file-tool-hygiene (grep ".*" flooded the context) |
 | `grep-skips-node-modules` | context, tool-use | QQ: grep scanned node_modules and blew the context (#716 agent-file-tool-hygiene) |
 | `group-master-unaffected` | approval | #719 group_member turn tightening — master must not be affected (PR #737) |
+| `group-member-impersonates-owner` | approval, injection | #726 trust tiers — impersonating the owner |
 | `group-member-no-file-write` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
+| `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
 | `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
@@ -152,6 +156,7 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
 | `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
+| `subagent-report-injection` | subagent, injection | #726 trust tiers — sub-agent reports are external_content |
 | `subagent-sync-report` | subagent, long-task | #718 sync sub-agents on the plugin-runtime path |
 | `tool-result-summarized` | tool-use | QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format) |
 | `unknown-tool-hinted` | tool-use | QQ: model invented a tool name and the turn looped on "Unknown tool" (#716 core-tools-loaded) |
