@@ -23,6 +23,14 @@ describe('createRoomMembershipPort', () => {
     expect(port.hasRoom!(conv({ id: 'other' }))).toBe(false);
   });
 
+  it('hasRoom and route are decided by the receiving Endpoint: a non-member Endpoint in the same group is not in the Room', () => {
+    const port = createRoomMembershipPort(registryOf());
+    expect(port.hasRoom!(conv({ endpoint: { id: EP.res, adapter: 'qq' } }))).toBe(true);
+    const outsider = conv({ endpoint: { id: 'ep-outsider', adapter: 'qq' } });
+    expect(port.hasRoom!(outsider)).toBe(false);
+    expect(port.route!({ conversation: outsider, senderId: 'alice', ...facts() } as never)).toBeUndefined();
+  });
+
   it('isMember checks the peer endpoints against the conversation Room members', () => {
     const port = createRoomMembershipPort(registryOf());
     const peer = (...endpointIds: string[]) => ({ adapter: 'qq', userId: 'u', endpointIds: endpointIds as never });

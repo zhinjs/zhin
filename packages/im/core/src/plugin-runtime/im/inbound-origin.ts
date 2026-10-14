@@ -28,6 +28,8 @@ export interface RoomMembershipPort {
   ): boolean;
   /**
    * 该会话是否属于某个启用的 Room。仅当返回 true 时，入站才做跨 Endpoint 去重 / 路由；
+   * 应按“会话 + 接收 Endpoint（`conversation.endpoint`）”的成员关系判定：同一会话里
+   * 非成员 Endpoint 收到的副本必须返回 false，按普通群自行处理；
    * 缺省（未实现）等同 false：普通群保持每个 Endpoint 各自处理。
    *
    * `hasRoom` 与 `route` 必须成对实现（B2b Room Router 已实现）：去重落败的 Endpoint 上

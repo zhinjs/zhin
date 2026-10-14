@@ -3705,11 +3705,11 @@ describe('IM Runtime inbound origin routing', () => {
 
   describe('Room Router: platform callbacks, pending probes and takeover (3 Endpoints)', () => {
     const THREE = { adapterConfig: { endpoints: [{ id: 'account-a' }, { id: 'account-b' }, { id: 'account-c' }] } };
-    const keyboard = (payload: string) => [{
+    const keyboard = (payload: string, mapKey = '1') => [{
       type: 'keyboard',
       data: {
         rows: [[{ id: 'k1', label: 'Go', payload, mode: 'command', command: { enter: true, reply: false } }]],
-        fallback: { hint: 'reply with the number', map: { '1': payload } },
+        fallback: { hint: 'reply with the number', map: { [mapKey]: payload } },
       },
     }];
     const action = (payload: string) => [{ type: 'action', data: { id: 'k1', payload } }];
@@ -3747,10 +3747,10 @@ describe('IM Runtime inbound origin routing', () => {
           conversation: { endpoint: { id: endpointId, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' }, id: messageId } } : {}),
         ...over,
       });
-      const sendKeyboard = async (endpointId: string, payload = 'rk:go') => {
+      const sendKeyboard = async (endpointId: string, payload = 'rk:go', mapKey = '1') => {
         const receipt = await f.im.send({
           conversation: { endpoint: { id: endpointId, adapter: 'memory' }, kind: 'group', id: 'room-dedup' } as never,
-          requester: rootPluginId(), content: keyboard(payload) as never,
+          requester: rootPluginId(), content: keyboard(payload, mapKey) as never,
         });
         expect(receipt.status).toBe('sent');
       };
@@ -3786,8 +3786,9 @@ describe('IM Runtime inbound origin routing', () => {
       try {
         const [a, b, c] = ids;
         await sendKeyboard(b!);
-        // @A-style plain message: routed to the coordinator A even though B has a live keyboard.
-        await Promise.all([a!, b!, c!].map((id) => receive(f.im, msg(id, 'kb-1', { content: 'look at this' }))));
+        // A message with a mention segment for A's account: routed to A even though B has a live keyboard.
+        const mentionA = [{ type: 'mention', data: { target: 'bot-a' } }] as never;
+        await Promise.all([a!, b!, c!].map((id) => receive(f.im, msg(id, 'kb-1', { content: 'look at this', segments: mentionA }))));
         expect(seen).toEqual([{ id: a, mentioned: true }]);
         // Unrelated chat too.
         await Promise.all([b!, a!].map((id) => receive(f.im, msg(id, 'kb-2', { content: 'unrelated 3' }))));
@@ -3797,6 +3798,17 @@ describe('IM Runtime inbound origin routing', () => {
         await Promise.all([c!, a!, b!].map((id) => receive(f.im, msg(id, 'kb-3', { content: '1' }))));
         expect(clicks).toEqual([b]);
         expect(seen).toHaveLength(2);
+      } finally { await close(f); }
+    });
+
+    it('a live keyboard on B: answering with the button label routes to B and is consumed once', async () => {
+      const { f, ids, seen, clicks, msg, sendKeyboard } = await room();
+      try {
+        const [a, b, c] = ids;
+        await sendKeyboard(b!, 'rk:go', 'Go');
+        await Promise.all([a!, c!, b!].map((id) => receive(f.im, msg(id, 'kb-4', { content: 'Go' }))));
+        expect(clicks).toEqual([b]);
+        expect(seen).toEqual([]);
       } finally { await close(f); }
     });
 
@@ -3827,12 +3839,42 @@ describe('IM Runtime inbound origin routing', () => {
       } finally { await close(f); }
     });
 
-    it('never lets a non-member Endpoint copy take over', async () => {
-      const { f, ids, seen, msg } = await room({ fallbacks: (all, target) => all.filter((id) => id !== target && id !== all[2]) });
+    it('a member copy outside the decision (not in fallbacks) is not lost: it takes over after the grace period, once', async () => {
+      const { f, ids, seen, msg } = await room({ fallbacks: () => [], graceMs: 40 });
+      try {
+        const [a, , c] = ids;
+        const warn = vi.spyOn(getLogger('im.inbound'), 'warn');
+        try {
+          await expect(receive(f.im, msg(c!, 'tk-3'))).resolves.toMatchObject({ matched: true });
+          expect(seen).toEqual([{ id: c, mentioned: true }]);
+          expect(warn.mock.calls.some((call) => String(call[0]).includes('room_unlisted_member_takeover'))).toBe(true);
+        } finally { warn.mockRestore(); }
+        await expect(receive(f.im, msg(a!, 'tk-3'))).resolves.toEqual({ matched: false });
+        expect(seen).toHaveLength(1);
+      } finally { await close(f); }
+    });
+
+    it('an unlisted member copy arriving after the target handled it stays a duplicate', async () => {
+      const { f, ids, seen, msg } = await room({ fallbacks: () => [], graceMs: 5000 });
+      try {
+        const [a, , c] = ids;
+        await expect(receive(f.im, msg(a!, 'tk-4'))).resolves.toMatchObject({ matched: true });
+        await expect(receive(f.im, msg(c!, 'tk-4'))).resolves.toEqual({ matched: false });
+        expect(seen).toEqual([{ id: a, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('a non-member Endpoint copy is handled as a plain group: not routed, not forced mentioned, not lost', async () => {
+      const route = vi.fn<RouteFn>();
+      const { f, ids, seen, msg } = await room({
+        extra: {},
+      });
       try {
         const c = ids[2]!;
-        await expect(receive(f.im, msg(c, 'tk-3'))).resolves.toEqual({ matched: false });
-        expect(seen).toEqual([]);
+        commitMembership(f, { isMember: () => false, hasRoom: (conv) => conv.endpoint.id !== c, route });
+        await expect(receive(f.im, msg(c, 'tk-5', { content: '@bot-c hello' }))).resolves.toMatchObject({ matched: true });
+        expect(seen).toEqual([{ id: c, mentioned: undefined }]);
+        expect(route).not.toHaveBeenCalled();
       } finally { await close(f); }
     });
 

@@ -117,9 +117,22 @@ describe('InboundDeduper', () => {
       await expect(Promise.all([e3.settle(), e2.settle()])).resolves.toEqual(['duplicate', 'handle']);
     });
 
-    it('a non-member Endpoint copy never waits or takes over', () => {
-      const { deduper } = setup();
-      expect(deduper.arbitrate(conv({}, 'outsider'), 'u1', 'm1', compute)).toEqual({ kind: 'duplicate' });
+    it('an Endpoint outside the decision waits as the lowest-priority takeover candidate', async () => {
+      const deduper = new InboundDeduper(Date.now, 10);
+      const outsider = deduper.arbitrate(conv({}, 'outsider'), 'u1', 'm1', compute) as { kind: string; listed: boolean; settle(): Promise<string> };
+      expect(outsider.kind).toBe('wait');
+      expect(outsider.listed).toBe(false);
+      const e3 = deduper.arbitrate(conv({}, 'e3'), 'u1', 'm1', compute) as { listed: boolean; settle(): Promise<string> };
+      expect(e3.listed).toBe(true);
+      await expect(Promise.all([outsider.settle(), e3.settle()])).resolves.toEqual(['duplicate', 'handle']);
+    });
+
+    it('an unlisted Endpoint takes over alone when nobody else shows up, but is a duplicate once the target arrived', async () => {
+      const deduper = new InboundDeduper(Date.now, 10);
+      const alone = deduper.arbitrate(conv({}, 'outsider'), 'u1', 'm1', compute) as { settle(): Promise<string> };
+      await expect(alone.settle()).resolves.toBe('handle');
+      expect(deduper.arbitrate(conv(), 'u1', 'm2', compute)).toEqual({ kind: 'handle', routed: true });
+      expect(deduper.arbitrate(conv({}, 'outsider'), 'u1', 'm2', compute)).toEqual({ kind: 'duplicate' });
     });
 
     it('degrades to claim semantics when there is no decision', () => {

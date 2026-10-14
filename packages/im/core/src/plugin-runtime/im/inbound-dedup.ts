@@ -34,7 +34,13 @@ export type InboundArbitration =
   | { readonly kind: 'handle'; readonly routed: boolean }
   | { readonly kind: 'duplicate' }
   /** Non-target copy that arrived before the target: wait for the target or the grace period. */
-  | { readonly kind: 'wait'; readonly target: string; readonly settle: () => Promise<'handle' | 'duplicate'> };
+  | {
+    readonly kind: 'wait';
+    readonly target: string;
+    /** False when this Endpoint is neither the target nor in `fallbacks` (lowest-priority takeover candidate). */
+    readonly listed: boolean;
+    readonly settle: () => Promise<'handle' | 'duplicate'>;
+  };
 
 interface Waiter {
   readonly endpointId: string;
@@ -97,7 +103,7 @@ export class InboundDeduper {
    * 与 `claim` 同样完全同步（返回的 `settle` 才是异步的），必须在任何 await 之前调用。
    * `compute` 仅在第一个副本到达时调用一次，结果（含 undefined）按消息缓存。
    * `compute` 返回 undefined（无可用成员）时退化为 `claim` 语义：先到先得，同 Endpoint 重投仍处理。
-   * 非成员 Endpoint（不在 target + fallbacks 中）的副本永远只记录，不接管。
+   * decision 之外的 Endpoint 视为最低优先级的接管候选；非成员由 hasRoom 在 core 之外过滤。
    */
   arbitrate(
     conversation: ConversationRef,
@@ -143,7 +149,7 @@ export class InboundDeduper {
     if (entry.takenOverBy !== undefined) {
       return entry.takenOverBy === endpointId ? { kind: 'handle', routed: true } : { kind: 'duplicate' };
     }
-    if (entry.targetSeen || !decision.fallbacks.includes(endpointId)) return { kind: 'duplicate' };
+    if (entry.targetSeen) return { kind: 'duplicate' };
     const target = entry.waiters;
     const settle = new Promise<'handle' | 'duplicate'>((resolve) => {
       target.push({ endpointId, resolve });
@@ -153,7 +159,12 @@ export class InboundDeduper {
       owned.timer = setTimeout(() => this.#takeOver(owned), this.graceMs);
       owned.timer.unref?.();
     }
-    return { kind: 'wait', target: decision.target, settle: () => settle };
+    return {
+      kind: 'wait',
+      target: decision.target,
+      listed: decision.fallbacks.includes(endpointId),
+      settle: () => settle,
+    };
   }
 
   #keyOf(conversation: ConversationRef, senderId: string, messageId: unknown): string | undefined {
@@ -184,7 +195,10 @@ export class InboundDeduper {
       for (const waiter of waiters) waiter.resolve('duplicate');
       return;
     }
-    const rank = (id: string) => decision.fallbacks.indexOf(id);
+    const rank = (id: string) => {
+      const index = decision.fallbacks.indexOf(id);
+      return index === -1 ? decision.fallbacks.length : index;
+    };
     let winner = waiters[0]!;
     for (const waiter of waiters) {
       if (rank(waiter.endpointId) < rank(winner.endpointId)) winner = waiter;

@@ -225,7 +225,7 @@ export class InboundRuntime {
       // is relative to the receiving Endpoint, so the copy is forced to mentioned=true or AI ingress
       // would not trigger.
       let routedTarget = false;
-      let pendingSettle: { readonly target: string; readonly settle: () => Promise<'handle' | 'duplicate'> } | undefined;
+      let pendingSettle: { readonly target: string; readonly listed: boolean; readonly settle: () => Promise<'handle' | 'duplicate'> } | undefined;
       // Action segments are only ever produced by an adapter from a platform callback structure
       // (e.g. Telegram callback_query); a plain text message cannot carry one. Such a callback is
       // delivered only to the Endpoint that sent the keyboard, and only that Endpoint holds the
@@ -297,6 +297,14 @@ export class InboundRuntime {
         const outcome = await pendingSettle.settle();
         if (outcome === 'handle') {
           routedTarget = true;
+          if (!pendingSettle.listed) {
+            logger.warn(formatCompact({
+              op: 'room_unlisted_member_takeover',
+              conv: formatConversationLog(conversation),
+              target: pendingSettle.target,
+              takeover: conversation.endpoint.id,
+            }));
+          }
           logger.debug(formatCompact({
             op: 'room_target_missing_takeover',
             conv: formatConversationLog(conversation),
