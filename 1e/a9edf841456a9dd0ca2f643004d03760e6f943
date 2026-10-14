@@ -1,0 +1,53 @@
+.changeset/agent-progress-aware-tool-budget.md
+  s_c757df74f34330::t_9587aa6be8d0fd 1-7
+docs/configuration/generated.md
+  s_c757df74f34330::t_6dec7731a88d33 87-100
+docs/en/configuration/generated.md
+  s_c757df74f34330::t_1c78fce8a767c3 87-100
+packages/im/agent/src/config/model-harness-runtime.ts
+  s_c757df74f34330::t_d255908895ed4e 64-67
+packages/im/agent/src/config/model-harness.ts
+  s_c757df74f34330::t_4c30e66582cc2f 7-10,24-27,34-35
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_c757df74f34330::t_4090cf877bf67b 1,76-77
+packages/im/agent/src/config/zhin-agent-defaults.ts
+  s_c757df74f34330::t_3c79e95adf9a7e 1,46
+packages/im/agent/src/core/exploration-budget.ts
+  s_c757df74f34330::t_6d70c1cdb791e5 18-19,29,32
+packages/im/agent/src/core/progress-reporter.ts
+  s_c757df74f34330::t_29a46ca1827a41 1-135
+packages/im/agent/src/core/turn-progress.ts
+  s_c757df74f34330::t_23bd53308ee051 1-222
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_c757df74f34330::t_1e40b9b61ea633 29,235,573-590
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  s_c757df74f34330::t_9a052040eb635f 4,210-213
+packages/im/agent/tests/core/progress-budget.test.ts
+  s_c757df74f34330::t_d3e862a5bda1a7 1-354
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  s_c757df74f34330::t_542b57b9f24e6c 255-262,264
+packages/im/ai/src/llm/agent-loop.ts
+  s_c757df74f34330::t_beb25bf4e9e5dc 37-41,260-263
+packages/im/ai/src/types.ts
+  s_c757df74f34330::t_8a2ed37137e9c3 331-334,473-488
+packages/im/core/tests/plugin-runtime/conversation-context-hygiene.test.ts
+  s_c757df74f34330::t_e4b08fb0e30d0c 96-108,110
+packages/im/runtime/src/host-config-schema.json
+  s_c757df74f34330::t_011b09e09e0d7b 148-167
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1ea9edf841456a9dd0ca2f643004d03760e6f943",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
