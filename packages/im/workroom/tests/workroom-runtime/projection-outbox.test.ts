@@ -389,8 +389,10 @@ describe('Workroom Projection Outbox', () => {
       failure = error;
     }
     expect(failure).toBeInstanceOf(Error);
-    expect((failure as Error).message).toContain('offline export then purge');
-    expect((failure as Error).message).not.toContain(secret);
+    const message = (failure as Error).message;
+    expect(message).toContain('no longer supported');
+    expect(message).not.toContain(secret);
+    expect(message).not.toMatch(/offline|export|purge/iu);
   });
 
   it('blocks a stale Manifest before outbound and persists only the common reason code', async () => {

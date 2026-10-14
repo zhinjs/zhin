@@ -560,7 +560,7 @@ export function assertProjectionItem(
   projectionAudience(item);
   if ('content' in item) {
     throw new Error(
-      'Legacy plaintext Workroom Projection snapshot is unsupported; use offline export then purge it',
+      'Legacy plaintext Workroom Projection snapshot is no longer supported; this store format cannot be read',
     );
   }
   if (item.version !== 1 || item.cursorId !== runId

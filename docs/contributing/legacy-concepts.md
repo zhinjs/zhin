@@ -75,7 +75,7 @@ export default defineAdapter<MyConfig>({
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | 不再支持。Remote A2A 已作为标准 `AssignmentExecutorPort` transport 接入，复用 local Assignment 的 lease/fence/report/acceptance，并且只接受持久 Catalog 与 generation-owned authority；不得用旧配置模拟或绕过 Grant。 |
 | `/api/agent/orchestration/runs` / `/console/orchestration` | 改为 Project-scoped `/api/agent/workroom/runs?projectId=...` 与 Workroom Console 页面；它们都是只读 projection。 |
 
-旧 Run 与内嵌 payload 的 Journal 不再受支持，也没有迁移工具；打开旧格式 store 会 fail-closed。旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；如需保留历史信息，只能以带 `legacy_import` provenance 的 untrusted Inbox/Evidence 候选重新规划和验收。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
+旧 Run 与内嵌 payload 的 Journal 不再受支持，也没有迁移工具；打开旧格式 store 会 fail-closed。旧 `completed` 没有 claim-level Acceptance Record，不能当成 `accepted` Project State；旧 Run 不再受支持，也没有迁移工具。如需保留历史信息，请人工整理后作为新任务重新提交，由 Workroom 重新规划和验收。已落地的权威边界见 GitHub 上的 [Agent CONTEXT](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md)。
 
 ## 相关阅读
 

@@ -41,6 +41,39 @@ describe('legacy embedded Workroom payload guard', () => {
     expect(() => assertNoLegacyEmbeddedPayloadRecords(record({ version: 3, events: [] }))).not.toThrow();
   });
 
+  it('rejects subject identifier fields', () => {
+    for (const payload of [{ email: 'x' }, { userId: 'x' }, { phone: 'x' }, { subject: 'u' }]) {
+      expect(() => assertNoLegacyEmbeddedPayloadRecords(record({
+        version: 3, events: [{ payload }],
+      }))).toThrow(LegacyEmbeddedPayloadDetectedError);
+    }
+  });
+
+  it('rejects duplicate recordRef', () => {
+    const clean = { version: 3, events: [] };
+    let failure: unknown;
+    try {
+      assertNoLegacyEmbeddedPayloadRecords([
+        { recordRef: 'journal:dup-secret', value: clean },
+        { recordRef: 'journal:dup-secret', value: clean },
+      ]);
+    } catch (error) {
+      failure = error;
+    }
+    expect(failure).toBeInstanceOf(Error);
+    expect(failure).not.toBeInstanceOf(LegacyEmbeddedPayloadDetectedError);
+    expect((failure as Error).message).toMatch(/duplicate record identity/);
+    expect((failure as Error).message).not.toContain('dup-secret');
+  });
+
+  it('accepts distinct recordRefs with clean values', () => {
+    const clean = { version: 3, events: [] };
+    expect(() => assertNoLegacyEmbeddedPayloadRecords([
+      { recordRef: 'journal:a', value: clean },
+      { recordRef: 'journal:b', value: clean },
+    ])).not.toThrow();
+  });
+
   it('rejects plaintext title and credential fields', () => {
     expect(() => assertNoLegacyEmbeddedPayloadRecords(record({
       version: 3, events: [{ payload: { title: 'private plan' } }],

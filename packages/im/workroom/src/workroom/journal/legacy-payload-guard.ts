@@ -21,11 +21,19 @@ export class LegacyEmbeddedPayloadDetectedError extends Error {
   }
 }
 
-/** Fail-closed gate: any legacy finding denies reading or activating the store. */
+/**
+ * Fail-closed gate: any legacy finding denies reading or activating the store.
+ * Every recordRef must be unique; a duplicate is malformed input, not a legacy finding.
+ */
 export function assertNoLegacyEmbeddedPayloadRecords(
   records: readonly LegacyEmbeddedPayloadGuardRecord[],
 ): void {
+  const seen = new Set<string>();
   for (const record of records) {
+    if (seen.has(record.recordRef)) {
+      throw new Error('Legacy embedded payload journal records contain a duplicate record identity');
+    }
+    seen.add(record.recordRef);
     if (detect(record.value).length > 0) throw new LegacyEmbeddedPayloadDetectedError();
   }
 }
