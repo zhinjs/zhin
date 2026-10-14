@@ -1,0 +1,41 @@
+packages/im/agent/evals/cases/tool-events-in-stream.case.ts
+  s_c757df74f34330::t_2059584c8967c1 1-20
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_bc8cf457f34d6f 28-29,135-140,198
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  s_c757df74f34330::t_8e0bd787571366 7,484-486
+packages/im/agent/src/trace/turn-trace-registry.ts
+  s_c757df74f34330::t_c50de9253009d0 54-58
+packages/im/agent/src/turn/index.ts
+  s_c757df74f34330::t_df16459a5e2c90 9-10
+packages/im/agent/src/turn/journal-feed.ts
+  s_c757df74f34330::t_b1a3a568990872 1-65
+packages/im/agent/src/turn/execute-agent-turn.ts
+  s_0cbd60597bf449::t_94021bb7cb16cf 6,36-39,51-61,95
+packages/im/agent/tests/turn/journal-feed.test.ts
+  s_0cbd60597bf449::t_81043a4be14a61 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f58a13e128d955dd0b3d71fed9fe8e55b12f1d6e",
+  "prompts": {},
+  "sessions": {
+    "s_0cbd60597bf449": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c529742-bf70-4042-b278-ac2679778274",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
