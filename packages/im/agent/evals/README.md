@@ -88,6 +88,7 @@ export default defineEvalCase({
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
 | `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |
 | `outboundMessages` | The number of reply-port sends. |
+| `streamToolEvents` | Tool events (`tool_call:name`, `tool_result:name`, `tool_denied:name`) that stream consumers see, in order. The stream is derived from the turn journal. |
 | `modelIds` | The model id of every request, in order (fallback cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
