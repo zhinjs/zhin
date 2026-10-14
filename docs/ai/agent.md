@@ -310,7 +310,29 @@ ai:
 - `task_state` 一定会过期：默认 24 小时，`ttl_hours` 最多 168 小时；可用 `task_id` 绑定任务，宿主通过 `SemanticMemoryRuntime` 的 `isTaskActive` 告知任务已结束时，这条状态不再被检索到。
 - 文件记忆（`data/memory/**/MEMORY.md`）保持不变，仍可直接阅读；`renderMemoryEntriesMarkdown()` 可把结构化记忆导出为 Markdown。
 
-升级时，旧版 `memory_entries` 表会在启动时自动补齐新列（`ALTER TABLE … ADD COLUMN`），已有数据不变：旧记录视为 `user_fact`，信任级别为空，按信任成员同级保护。检索方式本次不变，BM25 检索见后续版本。
+升级时，旧版 `memory_entries` 表会在启动时自动补齐新列（`ALTER TABLE … ADD COLUMN`），已有数据不变：旧记录视为 `user_fact`，信任级别为空，按信任成员同级保护。
+
+### 检索与按轮召回
+
+`memory_search` 和按轮召回都用 BM25 排序（英文按词、中日韩按单字和双字切分，不依赖分词库）。每轮开始时，Agent 用当前消息在发起人可见的范围（当前会话、自己的 `user`、当前平台、`global`）里检索，把最相关的几条写进回合上下文的 `Relevant memory` 段，标明是数据而不是指令。注入量只取决于 `topK` 和 `maxTokens`，与库里有多少条记忆无关；过期、已删除和别人的 `user` 记忆不会被召回。被召回或检索到的条目会更新 `last_used_at`。
+
+```yaml
+ai:
+  memory:
+    semantic:
+      enabled: true
+      recall:
+        enabled: true    # 默认 true；false 时只保留 memory_search 工具
+        topK: 5          # 每轮最多注入条数，最大 20
+        maxTokens: 400   # 召回段的 token 预算（估算值）
+```
+
+### 查看与遗忘
+
+- 任何用户都可以发 `/memory` 查看关于自己的记忆（自己的 `user` 范围，最多 20 条），发 `/forget <key 或 id>` 遗忘一条，`/forget all` 全部遗忘。只作用于发送者自己的记忆；未启用语义记忆时这两个命令不拦截。
+- 宿主和 Console 通过 `SemanticMemoryRuntime` 的 `list` / `upsert` / `delete` 查看、编辑和删除任意范围的记忆。
+
+Markdown 文件记忆（`MEMORY.md`）仍按原有字符预算整体注入，本次未改。
 
 ## 内置工具
 

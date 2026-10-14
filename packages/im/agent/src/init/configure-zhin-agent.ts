@@ -19,7 +19,7 @@ export type ConfigureZhinAgentTarget = Pick<
   ZhinAgentPrivate,
   | 'config' | 'skillRegistry' | 'skillSystem' | 'resourceHub' | 'agentCore' | 'toolSystem'
   | 'contextSystem' | 'sessionSystem'
-  | 'agentSessionStore' | 'contextRepository'
+  | 'agentSessionStore' | 'contextRepository' | 'semanticMemory'
   | 'modelRegistry' | 'subagentSystem' | 'activeBinding'
   | 'llmRuntime'
   | 'audioTranscriber'
@@ -57,6 +57,7 @@ export function applyZhinAgentConfigure(
   if (deps.eventSystem !== undefined) target.eventSystem = deps.eventSystem;
   if (deps.agentSessionStore !== undefined) target.agentSessionStore = deps.agentSessionStore;
   if (deps.contextRepository !== undefined) target.contextRepository = deps.contextRepository;
+  if (deps.semanticMemory !== undefined) target.semanticMemory = deps.semanticMemory;
   if (deps.modelRegistry !== undefined) {
     target.modelRegistry = deps.modelRegistry;
     target.subagentSystem?.setModelRegistry(deps.modelRegistry);

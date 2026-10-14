@@ -65,6 +65,11 @@ describe('memory entry repository', () => {
     expect(updated.content).toBe('Cebu');
     expect(parseMemoryHistory(updated.history)[0]).toMatchObject({ content: 'Manila', source: 'tool:memory_upsert' });
     expect((await repository.get('legacy-1'))?.trust_level).toBe('owner');
+
+    await repository.delete('legacy-1');
+    expect(await repository.search({ query: 'Cebu' })).toEqual([]);
+    expect(await repository.list({ scope: 'global' })).toEqual([]);
+    expect(await repository.find({ scope: 'global', key: 'owner:city' })).toBeNull();
     await db.stop();
   });
 

@@ -200,6 +200,8 @@ export class AgentTurnIngressRoute implements IngressRoute {
             sessionKey,
             content: message.content,
             senderRoles,
+            semanticMemory: options.agent.semanticMemory,
+            senderId: turnAccess.principal.subjectId,
           });
       if (managementReply != null) {
         await reply(managementReply);

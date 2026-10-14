@@ -122,6 +122,7 @@ export class ContextSystem {
       sdk: llmModel.sdk,
       agentsContext: agentsContext ?? undefined,
       toldLedger: input.toldLedger,
+      relevantMemory: input.relevantMemory,
     });
 
     let userMessages = isScheduleTurn
@@ -162,6 +163,8 @@ export interface TextTurnContextInput {
   activeSkillsContext?: string;
   /** Rendered "already told the user" ledger for this session (#730). */
   toldLedger?: string;
+  /** BM25-recalled semantic memory for this message (#734). */
+  relevantMemory?: string;
 }
 
 export interface TextTurnContextOutput {

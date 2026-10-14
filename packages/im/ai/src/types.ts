@@ -419,6 +419,16 @@ export interface AIConfig {
     semantic?: {
       enabled?: boolean;
       autoConsolidate?: boolean;
+      /**
+       * Per-turn recall (#734): BM25 top-k entries relevant to the current
+       * message are added to the turn context. Default on when semantic memory
+       * is enabled; topK 5, maxTokens 400.
+       */
+      recall?: {
+        enabled?: boolean;
+        topK?: number;
+        maxTokens?: number;
+      };
     };
     budgets?: {
       session?: number;
