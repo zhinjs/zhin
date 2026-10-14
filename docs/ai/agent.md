@@ -89,7 +89,7 @@ ai:
 
 工具很多时，把所有工具的参数定义都塞进提示词会占满上下文。Zhin 的做法是**延迟加载**：回合只常驻少量元工具，模型需要时再检索、按名加载。
 
-默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。
+默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。配置 `alwaysLoadedTools` 会在默认列表上**追加**；如需完全替换默认列表，设置 `alwaysLoadedMode: replace`。
 
 | 元工具 | 作用 |
 |--------|------|

@@ -516,7 +516,10 @@ export interface AIConfig {
     deferredTools?: {
       maxLoadedPerSession?: number;
       discoverTopK?: number;
+      /** 额外常驻工具；默认在内置常驻集合基础上追加 */
       alwaysLoadedTools?: string[];
+      /** `extend`（默认）追加到内置常驻集合；`replace` 完全替换 */
+      alwaysLoadedMode?: 'extend' | 'replace';
       mcpServers?: Record<string, { alwaysLoaded?: string[] }>;
     };
     /** Deferred Worker 基础工具 */
