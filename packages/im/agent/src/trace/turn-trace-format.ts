@@ -1,5 +1,6 @@
 /** Human-readable terminal rendering of a TurnTrace for `zhin trace`. */
 import type { TurnTrace, TurnTraceToolCall } from './turn-trace.js';
+import { CONTEXT_BUDGET_SEGMENTS, type ContextBudgetReport, type ContextBudgetSegment } from './context-budget.js';
 
 const STATUS_LABEL: Record<TurnTrace['termination']['status'], string> = {
   running: '进行中',
@@ -69,6 +70,8 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}`);
   }
 
+  if (trace.context_budget) lines.push(...renderContextBudget(trace.context_budget, indent));
+
   lines.push(`${indent}  工具调用 ${trace.tool_calls.length} 次`);
   for (const tool of trace.tool_calls) {
     const details = [
@@ -100,6 +103,35 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
     }
   }
   if (trace.dropped > 0) lines.push(`${indent}  (有 ${trace.dropped} 条记录因超出上限被省略)`);
+  return lines;
+}
+
+const SEGMENT_LABEL: Record<ContextBudgetSegment, string> = {
+  system: '系统提示',
+  tool_schemas: '工具 schema',
+  tool_index: '按需工具索引',
+  skill_catalog: '技能目录',
+  agent_catalog: '专家 agent 目录',
+  active_skills: '已加载技能',
+  memory: '记忆',
+  bootstrap: 'bootstrap',
+  history: '历史消息',
+  user: '本轮输入',
+};
+
+const TOP_SECTIONS = 5;
+
+/** Estimated prompt cost of the first model request, by segment. */
+function renderContextBudget(budget: ContextBudgetReport, indent: string): string[] {
+  const parts = CONTEXT_BUDGET_SEGMENTS
+    .filter(segment => budget.segments[segment] > 0)
+    .map(segment => `${SEGMENT_LABEL[segment]} ${budget.segments[segment]}`);
+  const lines = [
+    `${indent}  上下文估算 ~${budget.total_tokens} tokens（固定开销 ~${budget.fixed_tokens}；工具 ${budget.tools.loaded} 个常驻 / ${budget.tools.deferred} 个按需）`,
+  ];
+  if (parts.length > 0) lines.push(`${indent}    ${parts.join(' · ')}`);
+  const top = budget.sections.slice(0, TOP_SECTIONS).filter(section => section.tokens > 0);
+  if (top.length > 0) lines.push(`${indent}    最大的提示段: ${top.map(section => `${section.id} ${section.tokens}`).join(', ')}`);
   return lines;
 }
 

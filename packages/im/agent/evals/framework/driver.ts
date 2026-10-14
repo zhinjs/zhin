@@ -18,6 +18,8 @@ import type { AgentTurnExecutionContext } from '../../src/plugin-runtime/agent-r
 import { createFullAgentTurnEngine } from '../../src/plugin-runtime/full-agent-turn-engine.js';
 import { NativeBashToolFeature } from '../../src/plugin-runtime/native-bash-tool.js';
 import { createNativeFileToolFeatures } from '../../src/plugin-runtime/native-file-tools.js';
+import { createNativeSemanticMemoryToolFeatures, SemanticMemoryRuntime } from '../../src/plugin-runtime/native-semantic-memory-tools.js';
+import { InMemoryMemoryEntryRepository } from '@zhin.js/ai';
 import type { ApprovalOutcome, ApprovalOutcomePort } from '../../src/session/approval-port.js';
 import { applyTurnTrust, resolveTurnTrustLevel } from '../../src/security/trust-level.js';
 import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
@@ -26,8 +28,11 @@ import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
 import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
-import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
+import type { SkillDescriptor } from '@zhin.js/skill';
+import { createJournalFeed } from '../../src/turn/journal-feed.js';
+import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import { createScriptedModel, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 
 export interface EvalToolInvocation {
@@ -74,24 +79,40 @@ export interface RunEvalCaseOptions {
    * clock, so no eval waits in real time and timers fire only on `hang` steps.
    */
   readonly clock?: EvalClock;
+  /**
+   * Model source for the case. Defaults to the case's scripted model (PR
+   * gate). The nightly tier passes a factory returning {@link createLiveModel}
+   * so the same case runs against a real provider; the script is then unused.
+   */
+  readonly model?: (definition: EvalCase, clock: EvalClock) => ScriptedModel;
 }
 
 export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOptions = {}): Promise<EvalRunRecord> {
   const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
   try {
-    return await runInWorkspace(definition, workspace, options.clock ?? createFakeClock());
+    const clock = options.clock ?? createFakeClock();
+    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock));
   } finally {
     if (workspace) await rm(workspace, { recursive: true, force: true });
   }
 }
 
-async function runInWorkspace(definition: EvalCase, workspace: string | undefined, clock: EvalClock): Promise<EvalRunRecord> {
-  const model = createScriptedModel(definition.script, {
+async function runInWorkspace(
+  definition: EvalCase,
+  workspace: string | undefined,
+  clock: EvalClock,
+  liveModel: ScriptedModel | undefined,
+): Promise<EvalRunRecord> {
+  const model = liveModel ?? createScriptedModel(definition.script, {
     extraModels: definition.models,
     clock,
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
   });
-  const toolNames = (definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name);
+  const toolNames = [
+    ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
+    // Memory tools stay resident so memory cases exercise the write policy, not discovery.
+    ...(definition.nativeTools ?? []).filter((name) => name.startsWith('memory_')),
+  ];
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.
   const alwaysLoadedTools = [
@@ -130,7 +151,9 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const traces: TurnTrace[] = [];
   const tools = [
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
-    ...nativeCapabilities(definition.nativeTools ?? [], definition.bashOutput ?? '', executedTools, rawToolOutputs),
+    ...await nativeCapabilities(
+      definition.nativeTools ?? [], definition.bashOutput ?? '', definition.memory ?? [], executedTools, rawToolOutputs,
+    ),
   ];
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
 
@@ -145,7 +168,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
         generation: 1,
         owner: rootPluginId(),
         tools: turnTools,
-        skills: [],
+        skills: evalSkills(definition),
         agents: [],
         mcp: [],
         promptSections: promptSections(definition),
@@ -158,18 +181,12 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
       },
     };
     try {
-      const stream = engine.run(context);
-      while (true) {
-        const step = await stream.next();
-        if (step.done) {
-          await step.value?.project();
-          break;
-        }
-        // Like executeAgentTurn, every engine event is committed to the journal.
-        await turn.ports.journal.append(step.value);
-        events.push(step.value);
-        if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
-      }
+      // Same path as AgentRuntime: the journal is the single source and
+      // `events` is the journal-derived feed (includes authority tool events).
+      await executeAgentTurn(turn, () => engine.run(context), (event) => {
+        events.push(event);
+        if (isTurnTerminalEvent(event)) terminals.push(event);
+      });
     } finally {
       releaseTrace();
       trace.finalize();
@@ -226,10 +243,13 @@ function buildTurn(
     input: { text: message.text },
     session: { key: sessionKey },
     policy,
-    capabilities: { tools: turnTools.map((tool) => tool.name), skills: [] },
+    capabilities: {
+      tools: turnTools.map((tool) => tool.name),
+      skills: evalSkills(definition).map((skill) => skill.qualifiedName),
+    },
     signal: new AbortController().signal,
     ports: {
-      journal: createTracingJournal({ append: async () => undefined }, trace),
+      journal: createJournalFeed(createTracingJournal({ append: async () => undefined }, trace), { turnId }),
       reply: {
         send: async (output) => {
           const text = output
@@ -244,6 +264,21 @@ function buildTurn(
     },
   });
   return { turn, tools: turnTools };
+}
+
+/** Skills owned by the agent's root plugin, as a loaded SKILL.md would be. */
+function evalSkills(definition: EvalCase): SkillDescriptor[] {
+  return (definition.skills ?? []).map((skill: EvalSkill) => Object.freeze({
+    $feature: 'zhin.skill/1' as const,
+    owner: rootPluginId(),
+    name: skill.name,
+    qualifiedName: skill.name,
+    description: skill.description,
+    instructions: skill.instructions,
+    ...(skill.toolNames ? { toolNames: Object.freeze([...skill.toolNames]) } : {}),
+    ...(skill.keywords ? { keywords: Object.freeze([...skill.keywords]) } : {}),
+    source: `eval:skills/${skill.name}/SKILL.md`,
+  }));
 }
 
 /** Third-party plugin prompt sections, owned by a child plugin so the engine treats them as external_content. */
@@ -366,17 +401,26 @@ async function createWorkspace(files: Readonly<Record<string, string>>): Promise
   return root;
 }
 
-/** Real native tool definitions, executed through a ToolIndex; bash gets a canned, shell-free port. */
-function nativeCapabilities(
+/**
+ * Real native tool definitions, executed through a ToolIndex; bash gets a
+ * canned, shell-free port and memory tools an in-memory store.
+ */
+async function nativeCapabilities(
   names: readonly EvalNativeTool[],
   bashOutput: string,
+  memory: readonly EvalMemoryEntry[],
   executed: EvalToolInvocation[],
   rawOutputs: string[],
-): ToolCapability[] {
+): Promise<ToolCapability[]> {
   if (names.length === 0) return [];
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
-  const features = [bash, ...createNativeFileToolFeatures()].filter((feature) => names.includes(feature.name as EvalNativeTool));
+  const repository = new InMemoryMemoryEntryRepository();
+  for (const entry of memory) await repository.upsert(entry);
+  const semanticMemory = new SemanticMemoryRuntime();
+  semanticMemory.activate(repository);
+  const features = [bash, ...createNativeFileToolFeatures(), ...createNativeSemanticMemoryToolFeatures(semanticMemory)]
+    .filter((feature) => names.includes(feature.name as EvalNativeTool));
   const slots = features.map((feature) => createCapabilitySlot({
     owner,
     feature: feature.feature,

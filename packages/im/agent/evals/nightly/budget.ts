@@ -20,13 +20,15 @@ export interface NightlyBudget {
 }
 
 /**
- * Conservative defaults: 4 matrix cases × 3 runs × 1 model is 12 requests and,
- * with the long-context case (~12k input tokens), roughly 60k tokens per night.
- * The caps leave headroom for one extra model or the optional judge, no more.
+ * Conservative defaults for one model at 3 runs per case: the 4 matrix cases
+ * are 12 requests (~60k tokens with the long-context case); the 7 live seed
+ * cases are 2–3 harness requests each, ~50 requests and ~300k tokens (the full
+ * agent system prompt rides on every request). The caps leave a little
+ * headroom; anything past them is recorded as skipped, never spent.
  */
 export const DEFAULT_NIGHTLY_BUDGET: Readonly<NightlyBudget> = Object.freeze({
-  maxRequests: 60,
-  maxTotalTokens: 200_000,
+  maxRequests: 120,
+  maxTotalTokens: 600_000,
   maxOutputTokens: 1_024,
   runsPerCase: 3,
   requestTimeoutMs: 120_000,

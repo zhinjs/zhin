@@ -245,7 +245,7 @@ function scriptedUsage(step: ScriptStep): AssistantMessage['usage'] {
   return { ...EMPTY_TOKEN_USAGE, input: tokens, totalTokens: tokens };
 }
 
-function lastUserText(context: Context): string {
+export function lastUserText(context: Context): string {
   const message = [...context.messages].reverse().find((candidate) => candidate.role === 'user');
   const content = (message as { content?: unknown } | undefined)?.content;
   if (typeof content === 'string') return content;
@@ -265,7 +265,7 @@ function blockText(content: unknown): string {
     .join('');
 }
 
-function contextText(context: Context): string {
+export function contextText(context: Context): string {
   return context.messages
     .map((message) => `${message.role}: ${blockText((message as { content?: unknown }).content)}`)
     .join('\n');
