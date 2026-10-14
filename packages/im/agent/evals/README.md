@@ -72,6 +72,7 @@ export default defineEvalCase({
 | `nativeTools` | Real native tools (`bash`, `read_file`, `write_file`, `edit_file`, `list_dir`, `glob`, `grep`) that run against `workspace`. `bash` never runs a shell: it returns `bashOutput`. |
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
+| `models` | Extra model ids registered after the primary `scripted-model`, in fallback order (they become the turn's later `modelCandidates`). A step's optional `model` pins which model must receive that request. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
 
 ### Assertions (`expect`)
@@ -87,6 +88,7 @@ export default defineEvalCase({
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
 | `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |
 | `outboundMessages` | The number of reply-port sends. |
+| `modelIds` | The model id of every request, in order (fallback cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
 A case also fails on any of these, whatever its `expect` block says:
@@ -108,6 +110,12 @@ A case also fails on any of these, whatever its `expect` block says:
   returns an assistant message with no content. A malformed tool call is just
   a `toolCalls` step with odd `args`. These fault steps are generic, for
   provider-resilience cases (#724).
+- `{ fault: { kind: 'hang' } }` never answers. It advances the case's virtual
+  clock (`framework/fake-clock.ts`) until the request is aborted, normally by
+  `providerResilience.requestTimeoutMs`, so timeout cases never wait in real
+  time. With no pending timer it fails at once instead of blocking the suite.
+  `runEvalCase(definition, { clock })` accepts your own clock; by default each
+  case gets a fresh fake clock.
 
 Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 
@@ -138,11 +146,14 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
+| `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
 | `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |
 | `provider-rate-limit-retried` | long-task | #724 provider resilience (rate limit → retry) |
 | `provider-retries-exhausted-polite` | long-task | #724 provider resilience (retries exhausted → friendly feedback) |
+| `provider-timeout-exhausted-polite` | long-task | #724 provider resilience (timeouts exhausted → friendly feedback) |
+| `provider-timeout-retried` | long-task | #724 provider resilience (request timeout → retry) |
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
 | `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
