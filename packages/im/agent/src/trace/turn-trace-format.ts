@@ -48,7 +48,8 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
   lines.push(`${indent}  会话: ${trace.session_key}`);
   if (trace.principal) {
     const name = trace.principal.display_name ? ` (${trace.principal.display_name})` : '';
-    lines.push(`${indent}  发起人: ${trace.principal.subject_id}${name}  角色: ${trace.principal.roles.join(', ') || '-'}`);
+    lines.push(`${indent}  发起人: ${trace.principal.subject_id}${name}  角色: ${trace.principal.roles.join(', ') || '-'}`
+      + (trace.principal.trust_level ? `  信任级别: ${trace.principal.trust_level}` : ''));
   }
   lines.push(`${indent}  开始: ${new Date(trace.started_at).toLocaleString()}  耗时: ${formatDuration(trace.duration_ms)}`);
   if (termination.code || termination.reason) {
