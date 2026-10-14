@@ -8,3 +8,5 @@ export { runEvalCase } from './driver.js';
 export type { EvalRunRecord, EvalToolInvocation } from './driver.js';
 export { evaluateExpectations, formatEvalReport } from './assertions.js';
 export type { EvalFailure } from './assertions.js';
+export { defineIngressEvalCase, runIngressEvalCase, evaluateIngressExpectations } from './ingress.js';
+export type { IngressEvalCase, IngressEvalMessage, IngressEvalRun, IngressEvalTurn, IngressEvalExpectations } from './ingress.js';

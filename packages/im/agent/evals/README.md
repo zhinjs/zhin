@@ -160,3 +160,17 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
   trust tiers), `tool-use`, `approval`, and `subagent`.
 - Every case names its `source`. When a case documents a known gap, keep it
   with `skip` and a linked issue rather than deleting it.
+
+## Multi-message ingress cases (#725)
+
+`ingress-cases/*.case.ts` (run by `ingress.eval.ts`, part of `pnpm eval:agent`) feed several timed messages to one session through the IM admission protocol, the same `TurnAdmissionGate` calls the CLI IM ingress route makes. A cancel intent (`取消`, `/cancel`) calls `gate.stop`, and every other message calls `gate.admit`. Each `run` admission executes one real agent turn with the scripted model and the admitted (possibly merged) text. Time is virtual: `at` is the arrival time, `turnMs` is how long each turn runs, and the same clock drives the queue TTL.
+
+| Expectation | Checks |
+|---|---|
+| `turns` | The turns in start order: `sender`, `text`, `status` (`completed` / `cancelled`), `mergedMessages`, `supersededPrevious`. |
+| `merged` | `sender:text` for each message folded into a queued turn. |
+| `rejected` | `sender:reason` (`queue_full` / `expired` / `stopped`). |
+| `stops` | `sender:result` for each cancel intent (`stopped` / `forbidden` / `not_running`). |
+| `notices` | The notices users receive (queue full, expired, stop confirmation). |
+
+The route lives in `@zhin.js/cli`, which this package cannot import, so `framework/ingress.ts` mirrors its admission steps. Keep the two in sync.
