@@ -1,14 +1,16 @@
 ---
-title: Speech
+title: "Speech"
+description: "Let the bot understand voice messages and reply with voice: installation, speech-to-text (STT), text-to-speech (TTS) and the Agent voice tools"
 ---
 
 # Speech
 
-A voice message arrives in the group chat, the bot understands the content, and can even reply with synthesized speech -- this pipeline is provided by `@zhin.js/speech`. It is an optional package: add a `speech:` section at the top level of `zhin.config.yml` and install the package, then the CLI automatically assembles the Speech Host at startup. Inbound voice messages are automatically transcribed (STT), and the Agent is provided with `voice_stt` / `voice_tts` tools. If the package is not installed, it is simply skipped (only a warning is logged) without affecting other capabilities.
+A voice message arrives in a group, the bot understands it and can even reply with synthesized speech — that is what the optional `@zhin.js/speech` package provides:
 
-```bash
-pnpm add @zhin.js/speech
-```
+- **Incoming voice is transcribed automatically** (STT) and the text goes to the AI;
+- **The AI gets two voice tools**: `voice_stt` (recognize) and `voice_tts` (synthesize).
+
+Without the package, the `speech:` config is skipped with a warning and nothing else is affected.
 
 ```mermaid
 flowchart LR
@@ -16,6 +18,20 @@ flowchart LR
     S -->|Transcribed text| A[ZhinAgent turn]
     A -->|voice_tts tool| T[TTS provider]
     T -->|base64 audio| A
+```
+
+## Quick start
+
+```bash
+pnpm add @zhin.js/speech
+```
+
+Add a `speech:` section at the top level of `zhin.config.yml`; after a restart the CLI assembles the Speech Host automatically:
+
+```yaml
+speech:
+  stt: { provider: openai, model: whisper-1, host: https://api.openai.com, apiKey: ${OPENAI_API_KEY} }
+  tts: { provider: edge, voice: zh-CN-XiaoxiaoNeural }
 ```
 
 ## Configuration
@@ -66,14 +82,6 @@ After the Speech Host is assembled, two tools are registered with the Agent (`so
 | `voice_tts` | `text` (required), `voice` (overrides default), `provider` (`edge` / `openai` / `azure` / `custom`) | `{ audio(base64), format, size }` |
 
 `voice_tts` can temporarily switch providers per call, making it convenient to use multiple voices within a single deployment.
-
-## Complete Example
-
-```yaml
-speech:
-  stt: { provider: openai, model: whisper-1, host: https://api.openai.com, apiKey: ${OPENAI_API_KEY} }
-  tts: { provider: edge, voice: zh-CN-XiaoxiaoNeural }
-```
 
 ## Related
 

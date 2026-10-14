@@ -1,39 +1,28 @@
+---
+title: "能力接缝（Capability Seam）"
+description: "让 Root Host 把远程能力服务或已有的工具注册表接入 Agent：何时该用、服务契约、注册方式，以及它如何与普通 Tool 走同一条权限与审批链"
+---
+
 # 能力接缝（Capability Seam）
 
-Capability Seam 是 Agent Runtime 的 **Advanced / experimental** Provider 扩展口。普通插件仍应优先使用
-`tools/<name>/index.ts`、`skills/<name>/SKILL.md` 或 `addTool` / `addSkill`；这些 Feature 能获得 manifest、
-owner 可见性、Generation HMR 和冲突校验。Seam 用于 Root Host 需要接入远程能力服务、已有能力注册表，
-或不适合落成普通 Feature slot 的 Provider。
+大多数插件**用不到**这一页：写 Tool 和 Skill 请直接用约定目录 `tools/<name>/index.ts`、`skills/<name>/SKILL.md`，或 `addTool` / `addSkill`，它们自带清单、归属、热重载和重名检查。
 
-## 生产执行路径
+Capability Seam 是给 **Root Host**（组装整个运行时的那一层）准备的高级扩展口：当你要把一个远程能力服务、已有的工具注册表，或者不适合写成单个文件的能力提供者接入 Agent 时，才需要它。
 
-```text
-Tool / Skill Feature ─┐
-                      ├─ CapabilityIngress ─ immutable AgentCapabilities
-Root Capability Seam ─┘                         │
-                                                ▼
-                                          TurnIngress
-                                                │
-                                                ▼
-                                        TurnToolRuntime
-                         generation → permission → approval → journal
-                                                │
-                                                ▼
-                                           Provider
-```
+::: warning 实验性
+这是 Advanced / experimental 接口，签名可能随版本调整。
+:::
 
-`CapabilityIngress` 从固定的 Runtime snapshot 读取 Root 的 `capabilitySeamToken`，把服务投影为与
-Tool / Skill Feature 相同的 capability snapshot。Seam Tool 不存在独立的
-`executeTool(name, args)` 执行通道；只有
-`TurnToolRuntime` 可以执行投影后的 Tool。因此：
+## 先判断要不要用
 
-- 当前 generation 退役或 operation 结束后，Provider 不再可执行；
-- `platforms`、`scopes`、`permissions` 和 `hidden` 先经过统一可见性过滤；
-- `requiresApproval` 由 Turn 的 ApprovalPort 执行；无人值守且需要审批时 fail closed；
-- Tool call、denied、failed 和 result 进入同一 Turn Journal；
-- Feature 与 Seam 出现同名 Tool / Skill 时，候选能力快照直接拒绝，而不是静默覆盖。
+| 你的情况 | 用什么 |
+|---|---|
+| 在插件里写普通的 Tool / Skill | 约定目录（`tools/`、`skills/`）或 `addTool` / `addSkill` |
+| 需要清单、归属关系、改文件即热重载 | 同上（Feature） |
+| 在 Root Host 里接入远程能力服务或已有注册表 | **Capability Seam** |
+| 想绕过审批、按名字直接执行工具 | 不支持，任何入口都不行 |
 
-## 服务契约
+## 写一个能力服务
 
 `ToolService` 提供 schema 和最终 Provider 调用。schema 上的策略字段会进入 canonical
 Tool capability；未声明 `requiresApproval` 时默认 `on-risk`。
@@ -100,7 +89,7 @@ export class ResearchSkills implements SkillService {
 }
 ```
 
-## Root 注册与生命周期
+## 注册到 Root
 
 Seam 是显式的 Root Resource。注册返回幂等 disposer；Root Scope 退役时还要释放整个
 `SeamIntegration`。这样 Provider 与候选 Generation 一起 prepare、发布、回滚和释放。
@@ -132,7 +121,34 @@ Provider。动态变化应生成新的 Runtime Generation。
 Capability Seam 只通过 `capabilitySeamToken` 进入 Plugin Runtime Scope。`SeamIntegration` 只负责
 Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直接执行方法。
 
-## 作用域和冲突
+## 它是怎么工作的
+
+Seam 提供的 Tool 和普通 Tool **走同一条执行链**，没有旁路：
+
+```text
+Tool / Skill Feature ─┐
+                      ├─ CapabilityIngress ─ immutable AgentCapabilities
+Root Capability Seam ─┘                         │
+                                                ▼
+                                          TurnIngress
+                                                │
+                                                ▼
+                                        TurnToolRuntime
+                         generation → permission → approval → journal
+                                                │
+                                                ▼
+                                           Provider
+```
+
+`CapabilityIngress` 从固定的运行时快照中读取 Root 的 `capabilitySeamToken`，把服务转换成与普通 Tool / Skill 相同的能力描述。Seam Tool 没有单独的 `executeTool(name, args)` 通道，只能由 `TurnToolRuntime` 在一轮对话中执行。由此得到这些保证：
+
+- **跟随热重载**：所属的 generation 退役或本次操作结束后，Provider 不再能被调用；
+- **同样的可见性过滤**：`platforms`、`scopes`、`permissions`、`hidden` 和普通 Tool 一样生效；
+- **同样的审批**：`requiresApproval` 由这一轮的审批端口处理；无人值守又需要审批时直接拒绝；
+- **同样的记录**：调用、被拒、失败和结果都写进同一份执行日志（Turn Journal）；
+- **重名直接报错**：普通 Tool 与 Seam 出现同名 Tool / Skill 时，新的能力快照会被拒绝，不会悄悄覆盖。
+
+### 作用域和冲突
 
 - `global` Provider 对 Root 下所有 Agent owner 可见；
 - 使用 owner 的字符串 ID 注册时，只对对应 owner 查询可见；
@@ -141,8 +157,7 @@ Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直
 - 可见 Provider 中 Tool / Skill 名重复会在 capability projection 时失败；
 - 每次注册都应保存并调用返回的 disposer，或把整个 Integration 交给 Scope disposer。
 
-## 现有适配器
-
+::: details 现有适配器
 | 类 | 用途 |
 |---|---|
 | `BuiltinToolService` | 把 QuestionPort 的交互能力适配为 ToolService；仅用于自定义 Host 组合 |
@@ -150,15 +165,11 @@ Provider 注册和能力投影，不提供 `executeTool()` / `invokeSkill()` 直
 
 这些适配器不会自动注册。框架内置 Tool / Skill 仍走 Feature projection，避免形成第二套可见性和
 生命周期规则。
+:::
 
-## 选择 Feature 还是 Seam
+## 相关
 
-| 场景 | 推荐入口 |
-|---|---|
-| npm 插件中的普通 Tool / Skill | Feature 约定目录或 `addTool` / `addSkill` |
-| 需要 manifest、owner 关系和文件级 HMR | Feature |
-| Root Host 接入远程 Provider | Capability Seam |
-| 需要绕过审批或直接按名称执行 | 不支持；使用 Turn capability |
-
-相关文档：[插件模型](./plugin-model.md) · [Generation 生命周期](./generation-lifecycle.md) ·
-[Agent Tool 创作](../authoring/agent-tools.md) · [架构概览](./architecture.md)
+- [插件模型](./plugin-model.md)：Feature 与约定目录如何被发现
+- [Generation 与生命周期](./generation-lifecycle.md)：能力如何随热重载准备、发布和退役
+- [Agent 工具与技能](../authoring/agent-tools.md)：普通插件写 Tool / Skill 的方式
+- [分层架构](./architecture.md)：各层职责与依赖方向

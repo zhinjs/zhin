@@ -1,8 +1,13 @@
 ---
-title: 文档内容数据闭环
+title: "文档内容数据闭环"
+description: "文档站可选的匿名内容洞察：如何接入采集端、会发送哪些事件、每周怎样据此改进文档，以及如何验证隐私保护"
 ---
 
 # 用真实问题持续改进文档
+
+::: tip 这页写给谁
+给部署或维护 Zhin 文档站的人。只是使用 Zhin 开发 Bot，不需要读这一页。
+:::
 
 Zhin 文档站内置一个供应商无关、默认关闭的内容洞察客户端。只有部署者配置采集 Endpoint、访问者明确同意且浏览器未开启 DNT 时，它才发送匿名事件。它不使用 Cookie，不创建用户或设备 ID，也不发送 URL 查询参数、fragment、外部 referrer、IP 字段或浏览器指纹。
 
@@ -68,3 +73,7 @@ pnpm docs:build
 自动门禁由 `pnpm vitest run tests/docs/docs-insights.test.ts tests/docs/content-insights-loop.test.ts` 覆盖字段最小化、敏感词脱敏与运维契约。
 
 访问者随时可以点击页面右下角“隐私”重新选择；选择拒绝会立即停止后续采集。也可以删除浏览器站点数据中的 `zhin:docs-insights-consent:v1` 重置选择。
+
+## 下一步
+
+- [文档写作规范](../contributing/writing-docs.md)：根据评审结论改写页面时遵循的版式与语言规则

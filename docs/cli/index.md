@@ -1,18 +1,34 @@
 ---
-title: CLI 参考
+title: "CLI 参考"
+description: "zhin 命令行的全部子命令：启动与停止、配置向导、插件安装与发布、诊断、给运行中的 Bot 发消息、定时任务与系统服务"
 ---
 
 # CLI 参考
 
-起服务、装插件、改配置、给跑着的 bot 发条消息——日常和 zhin.js 打交道，基本就是和 `zhin` 这一个命令打交道。它由 `@zhin.js/cli` 提供；从零新建项目则走 `pnpm create zhin-app`（独立的 `create-zhin-app` 包，不在本页范围）。
+日常和 Zhin 打交道，基本就是和 `zhin` 这一个命令打交道：启动 Bot、改配置、装插件、诊断问题。它由 `@zhin.js/cli` 提供，项目里通过 `npx zhin …` 或 `pnpm exec zhin …` 调用。从零新建项目用的是另一个命令 `npm create zhin-app`。
 
 ```bash
-zhin --help        # 查看全部命令
+npx zhin --help        # 查看全部命令
 ```
 
-命令大致分五组：运行的 `runtime` / `stop`；插件开发的 `new`、`build`、`pub`、`install` / `add`、`uninstall`、`search`、`info`、`packages`；配置与诊断的 `setup`、`onboard`、`config`、`doctor`、`migrate`；面向运行中实例的 `send`、`watch`、`schedule`、`agent`；以及系统服务 `service`。下面逐个展开。
+## 最常用的命令
 
-## runtime：运行与管理项目
+| 我想…… | 命令 |
+| --- | --- |
+| 启动 Bot（开发模式，改代码自动热重载） | `pnpm dev`（即 `zhin runtime start`） |
+| 接入平台、配置 AI 或数据库 | `npx zhin setup`（可加 `--adapters` / `--ai` / `--database`） |
+| 环境或配置有问题 | `npx zhin doctor` |
+| 检查配置文件是否有效 | `npx zhin config check` |
+| 安装一个社区插件 | `npx zhin install <插件名>` |
+| 创建一个新插件 | `npx zhin new my-plugin` |
+| 升级 Zhin | `npx zhin migrate --dry-run`，确认后去掉 `--dry-run` |
+| 安装为开机自启的系统服务 | `npx zhin service install` |
+
+下面按用途分组列出全部命令。
+
+## 运行
+
+### runtime：运行与管理项目
 
 ```bash
 zhin runtime start [--mode production] [--no-watch] [--daemon]
@@ -24,9 +40,15 @@ zhin runtime publish [--execute|--resume] [--tag latest]
 zhin runtime migrate [extract|cutover|status] [--check|--write]
 ```
 
-`start` 是启动 bot 的入口，支持 dev 热重载、production、daemon 守护等模式，详解见 [zhin runtime start](./runtime.md)。其余几个子命令各司其职：`init` / `create` 脚手架约定式 Plugin Runtime 项目与插件/能力包；`inspect` 输出项目结构 JSON（插件清单、构建计划）；`build` / `publish` 按项目图构建、发布，`publish` 默认只打印计划，`--execute` 才执行（支持中断后 `--resume`）；`migrate` 生成并应用项目结构迁移计划，`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告。
+| 子命令 | 作用 |
+| --- | --- |
+| `start` | 启动 Bot。支持开发热重载、生产模式和守护进程，详见 [zhin runtime start](./runtime.md) |
+| `init` / `create` | 生成约定式项目，或新的插件 / 能力包 |
+| `inspect` | 输出项目结构 JSON（插件清单、构建计划） |
+| `build` / `publish` | 按项目结构构建、发布。`publish` 默认只打印计划，加 `--execute` 才执行，中断后可 `--resume` |
+| `migrate` | 生成并应用项目结构迁移计划：`--check` 只看计划，`--write` 原子写入，`status` 输出就绪报告 |
 
-项目里的惯例脚本（由脚手架生成）：
+脚手架生成的项目里已有两个惯例脚本：
 
 ```json
 {
@@ -37,135 +59,43 @@ zhin runtime migrate [extract|cutover|status] [--check|--write]
 }
 ```
 
-## stop：停止 bot
+### stop：停止 bot
 
 ```bash
 zhin stop
 ```
 
-停止当前项目下由 daemon 模式启动的进程（读取 `.zhin.pid`）。没有运行中的进程时只提示、不报错。
+停止当前项目下用 `--daemon` 启动的进程（读取 `.zhin.pid`）。没有运行中的进程时只提示，不报错。
 
-## new：创建插件
-
-```bash
-zhin new [plugin-name] [--type normal|service|adapter] [--is-official] [--skip-install]
-```
-
-在 `plugins/<name>/` 下生成约定式插件包模板，插件名须匹配 `/^[a-z][a-z0-9-]*$/`。不传参数时进入交互式问答（名称、类型）。
-
-## build：构建插件
+### service：系统服务
 
 ```bash
-zhin build [plugin] [--clean] [--production] [--analyze]
+zhin service install [--user]
+zhin service uninstall [--user]
+zhin service status [--user]
 ```
 
-`plugin` 为相对 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根批量构建 `plugins/*`。构建按目录自动编译 `src/`（tsc）与 `client/`（esbuild）；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开）压缩 client 产物。
+安装开机自启 / 守护服务。`--user` 在 Linux 下使用用户级 systemd；`status` 仅支持 Linux 和 macOS。
 
-## pub：发布插件
+## 配置与诊断
 
-```bash
-zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
-```
-
-在含 `plugins/` 目录的项目根运行；不传名字时交互选择可发布的插件。`--dry-run` 只走流程不实际发布。
-
-## install / add：安装插件
-
-```bash
-zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
-zhin add ...          # install 的别名
-```
-
-| 选项 | 说明 |
-| --- | --- |
-| `-S, --save` | 写入 `dependencies`（默认） |
-| `-D, --save-dev` | 写入 `devDependencies` |
-| `-g, --global` | 全局安装（不启用插件） |
-| `--no-enable` | 只装依赖，不改配置 |
-| `--dry-run` | 打印将执行的安装与配置改动，不写入 |
-
-默认行为是 pnpm 安装后自动把插件写入 `zhin.config.yml` 的 `plugins.<instanceKey>`，并挂进 `package.json` 的 `zhin.plugins` 清单。装完适配器后按提示运行 `zhin setup --adapters` 添加 Endpoint。
-
-## uninstall：卸载
-
-```bash
-zhin uninstall plugin <name> [--remove-pkg]
-zhin uninstall adapter <name> [--remove-pkg]
-zhin uninstall service
-```
-
-`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。`uninstall service` 卸载系统服务。
-
-## search / info：发现插件
-
-```bash
-zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--official]
-zhin info <package>
-```
-
-搜索插件市场 / 查看单个插件详情。
-
-## packages：插件状态与技能/扩展包
-
-```bash
-zhin packages install <pkg|npm:skill-pack|git:url> [--local]
-zhin packages remove <name> [--local]
-zhin packages list [--local]
-zhin packages update [source] [--local]
-```
-
-管理 zhin-package 技能/扩展包（ADR 0010）；`--local`（`-l`）安装到项目 `.zhin/packages/` 而非全局。
-
-不带 `npm:` / `git:` 前缀的 npm 插件安装与 `zhin install <包名>`、Console 共用项目安装流程：检查依赖、安装实际包、声明实例并补充最小配置。安装完成不代表已发布到当前 generation，也不代表平台已上线或业务功能已验证。
-
-```bash
-zhin packages status <instanceKey>
-zhin packages status <instanceKey> --live http://127.0.0.1:8068
-zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
-zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
-zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
-  --generation <generation> --project-revision <revision> --check-revision <checkRevision>
-```
-
-实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可用 `--token-env <变量名>` 指定。`verification-plan`、`apply`、`verify` 需要完整权限；不要把 token 写在 URL 或命令参数中。离线 `status` 只提供文件与包解析证据，离线验证计划没有当前 generation 或可执行检查，不会另行启动 Runtime。
-
-携带 token 的远程请求必须使用 HTTPS；HTTP 仅限 `localhost`、`127.0.0.0/8` 和 `::1` 环回地址。自动启用的 Runtime 插件必须安装为生产依赖，`--save-dev` 需同时指定 `--no-enable`；该组合在安装前检查。
-
-状态分别表示 `installed`（包可解析）、`declared`（实例已声明）、`missing-config`（必填配置或环境变量缺失、配置值不符合 schema）、`pending-restart`（当前代尚未应用）、`enabled`（已发布且配置、包版本一致）、`degraded`（声明与实际安装等证据不一致，或依赖检查失败）。`readiness` 独立记录就绪证据：包含适配器但没有平台健康证据时为 `unknown`。`verification` 只表示是否提供业务检查，不把启动成功当作业务通过。
-
-已加载的声明 schema 只适用于同一包版本；更新后改读磁盘上的 `schema.json`。若新版只在 TypeScript 声明配置、没有可读取的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境引用，完整校验须由真正的 Runtime 预检完成。
-
-先查看 `verification-plan` 的作用范围与副作用，再把返回的 `generation`、`projectRevision`、`checkRevision` 传给 `verify`。配置、generation 或检查定义变化会拒绝旧计划。未提供检查的插件返回 `not-configured`；本地检查通过也不意味着平台投递已验证。`apply` 只是申请应用，随后用实时 `status` 确认真正发布。
-
-项目变更使用文件锁与 revision 校验。并发操作或配置漂移会明确失败；安装步骤已经完成时返回部分完成证据，不自动覆盖用户改动。若锁所属进程已经退出，错误会提供锁路径；确认没有安装进程后再删除该锁并重试。
-
-## setup：交互式配置向导
+### setup：交互式配置向导
 
 ```bash
 zhin setup                 # 完整向导
 zhin setup --database      # 仅配置数据库
-zhin setup --adapters      # 仅配置适配器（写 endpoints）
+zhin setup --adapters      # 仅配置适配器（添加账号）
 zhin setup --ai            # 仅配置 AI
-zhin setup --decisions     # 可选 TypeSafe Jev 决策服务（需要已有 AI 配置）
+zhin setup --decisions     # 可选的 TypeSafe Jev 决策服务（需要已有 AI 配置）
 zhin setup --bootstrap     # 仅生成引导文件（SOUL.md / TOOLS.md / AGENTS.md）
 zhin setup --global        # 在 ~/.zhin 初始化全局实例
 ```
 
-向导改动的正是 [`zhin.config.yml`](../configuration/index.md) 的对应段落，并把密钥写入 `.env`。
-网络数据库配置完成后运行 `npx zhin config check`；若连接值只在 `.env.production`，使用
-`npx zhin config check --environment production`。
-选择网络数据库时，CLI 会验证端口范围，把连接字段写成环境变量引用，并在 `.env` 写入实际值；
-完成后运行 `npx zhin config check` 可在启动前发现缺失的数据库变量。
+向导修改的就是 [`zhin.config.yml`](../configuration/index.md) 中对应的部分，密钥写入 `.env`。
 
-## onboard：项目引导
+选择网络数据库时，CLI 会检查端口范围，把连接字段写成环境变量引用，实际值写入 `.env`。完成后运行 `npx zhin config check`，可以在启动前发现缺失的数据库变量；如果连接值只在 `.env.production` 里，使用 `npx zhin config check --environment production`。
 
-```bash
-zhin onboard [--quick] [--flow quickstart|full]
-```
-
-在项目内复用现有配置 / 环境变量 / data，选择保持或重新配置。`--quick`（`-q`）只显示快速开始，不进入向导；`--flow` 默认 `full`，`quickstart` 少问。
-
-## config：读写配置文件
+### config：读写配置文件
 
 ```bash
 zhin config list
@@ -176,44 +106,164 @@ zhin config path                 # 显示配置文件路径
 zhin config check [--fix] [--json] [--strict]
 ```
 
-`config check` 校验配置文件并可自动修复可安全迁移的字段；数据库连接变量缺失本身就是错误，
-其他警告可通过 `--strict` 提升为错误（适合 CI）。
+`config check` 校验配置文件，`--fix` 自动修复可以安全迁移的字段。数据库连接变量缺失本身就是错误；其他警告可以用 `--strict` 提升为错误，适合在 CI 中使用。
 
-## doctor：环境诊断
+### doctor：环境诊断
 
 ```bash
 zhin doctor [--fix] [--upgrade-l4]
 ```
 
-检查系统环境与项目配置；`--fix` 自动修复可修复项；`--upgrade-l4` 诊断 minimal → L4 升级路径（AI 栈 + optional peer）。
+检查 Node、端口、Token、配置等环境问题；`--fix` 自动修复能修复的项；`--upgrade-l4` 诊断从最小项目升级到完整 AI 栈需要补什么。
 
-## migrate：项目升级
+### onboard：项目引导
+
+```bash
+zhin onboard [--quick] [--flow quickstart|full]
+```
+
+在已有项目里复用现有配置、环境变量和数据，选择保留或重新配置。`--quick`（`-q`）只显示快速开始提示，不进入向导；`--flow` 默认 `full`，`quickstart` 问得更少。
+
+### migrate：项目升级
 
 ```bash
 zhin migrate [--dry-run] [--no-install]
 ```
 
-把老版本 Zhin 项目升级到最新（依赖、scripts、目录结构）。`--dry-run` 只打印计划；`--no-install` 跳过最后的 `pnpm install`。
+把旧版本 Zhin 项目升级到最新：依赖、scripts 与目录结构。`--dry-run` 只打印计划；`--no-install` 跳过最后的 `pnpm install`。完整升级流程见 [版本兼容与迁移](../operations/upgrades.md)。
 
-## send：向运行中的 bot 发消息
+## 插件
+
+### new：创建插件
+
+```bash
+zhin new [plugin-name] [--type normal|service|adapter] [--is-official] [--skip-install]
+```
+
+在 `plugins/<name>/` 下生成插件模板。插件名须匹配 `/^[a-z][a-z0-9-]*$/`；不传参数时进入交互式问答。
+
+### install / add：安装插件
+
+```bash
+zhin install <插件名或 git 地址> [--no-enable] [--dry-run]
+zhin add ...          # install 的别名
+```
+
+默认会用 pnpm 安装，再把插件写进 `zhin.config.yml` 的 `plugins.<instanceKey>`，并挂到 `package.json` 的 `zhin.plugins`。安装的是适配器时，按提示运行 `zhin setup --adapters` 添加账号。
+
+| 选项 | 说明 |
+| --- | --- |
+| `-S, --save` | 写入 `dependencies`（默认） |
+| `-D, --save-dev` | 写入 `devDependencies` |
+| `-g, --global` | 全局安装（不启用插件） |
+| `--no-enable` | 只装依赖，不改配置 |
+| `--dry-run` | 打印将执行的安装和配置改动，不实际写入 |
+
+### uninstall：卸载
+
+```bash
+zhin uninstall plugin <name> [--remove-pkg]
+zhin uninstall adapter <name> [--remove-pkg]
+zhin uninstall service
+```
+
+`name` 可以是 npm 包名或 instanceKey；`--remove-pkg` 同时从 `package.json` 移除依赖。`uninstall service` 卸载系统服务。
+
+### search / info：发现插件
+
+```bash
+zhin search [keyword] [-c utility|service|game|adapter|admin|ai] [-l 20] [--official]
+zhin info <package>
+```
+
+搜索插件市场，或查看单个插件的详情。
+
+### build：构建插件
+
+```bash
+zhin build [plugin] [--clean] [--production] [--analyze]
+```
+
+`plugin` 是相对于 `plugins/` 的路径（如 `adapters/icqq`）；省略时在插件目录内构建当前包，或在 workspace 根目录批量构建 `plugins/*`。`src/` 用 tsc 编译，`client/` 用 esbuild 打包；`--clean` 先清理 `lib/` 与 `dist/`；`--production`（默认开启）压缩 client 产物。
+
+### pub：发布插件
+
+```bash
+zhin pub [plugin-name] [--tag latest] [--access public] [--registry <url>] [--dry-run] [--skip-build]
+```
+
+在包含 `plugins/` 目录的项目根目录运行；不传名字时交互选择。`--dry-run` 只走流程，不实际发布。完整发布流程见 [插件完整交付](../authoring/plugin-delivery.md)。
+
+### packages：插件状态与扩展包
+
+**管理技能 / 扩展包**（ADR 0010）：
+
+```bash
+zhin packages install <pkg|npm:skill-pack|git:url> [--local]
+zhin packages remove <name> [--local]
+zhin packages list [--local]
+zhin packages update [source] [--local]
+```
+
+`--local`（`-l`）安装到项目的 `.zhin/packages/`，而不是全局。不带 `npm:` / `git:` 前缀时，与 `zhin install <包名>` 和 Console 使用同一套安装流程。
+
+**查看插件是否真正生效**：安装完成不等于已经加载、平台已上线或功能已验证。用下面的命令查看状态并执行验证：
+
+```bash
+zhin packages status <instanceKey>
+zhin packages status <instanceKey> --live http://127.0.0.1:8068
+zhin packages verification-plan <instanceKey> --live http://127.0.0.1:8068
+zhin packages apply <instanceKey> --live http://127.0.0.1:8068 --project-revision <revision>
+zhin packages verify <instanceKey> <check-id> --live http://127.0.0.1:8068 \
+  --generation <generation> --project-revision <revision> --check-revision <checkRevision>
+```
+
+`status` 返回的状态：
+
+| 状态 | 含义 |
+| --- | --- |
+| `installed` | 包可以解析 |
+| `declared` | 实例已声明 |
+| `missing-config` | 必填配置或环境变量缺失，或配置值不符合 schema |
+| `pending-restart` | 当前运行的版本还没有应用 |
+| `enabled` | 已生效，配置与包版本一致 |
+| `degraded` | 声明与实际安装不一致，或依赖检查失败 |
+
+另外，`readiness` 单独记录就绪证据（包含适配器但没有平台健康证据时为 `unknown`）；`verification` 只表示是否提供了业务检查，**启动成功不等于业务通过**。
+
+::: details 实时请求、验证流程与并发规则
+- **Token**：实时请求从 `ZHIN_CONSOLE_TOKEN` 读取 Console token，也可以用 `--token-env <变量名>` 指定。`verification-plan`、`apply`、`verify` 需要完整权限。不要把 token 写在 URL 或命令参数里。
+- **HTTPS**：携带 token 的远程请求必须使用 HTTPS；HTTP 只允许 `localhost`、`127.0.0.0/8` 和 `::1`。
+- **离线模式**：离线 `status` 只提供文件与包解析证据；离线验证计划没有当前版本或可执行的检查，也不会启动 Runtime。
+- **验证步骤**：先看 `verification-plan` 的作用范围与副作用，再把返回的 `generation`、`projectRevision`、`checkRevision` 传给 `verify`。配置、版本或检查定义变化后，旧计划会被拒绝。未提供检查的插件返回 `not-configured`；本地检查通过不代表平台投递已验证。`apply` 只是申请应用，之后用实时 `status` 确认是否真正生效。
+- **Schema**：已加载的配置 schema 只适用于同一包版本，更新后改读磁盘上的 `schema.json`。如果新版本只在 TypeScript 中声明配置、没有可读的 schema，`validation.schemaAvailable` 为 `false`，此时只检查环境变量引用，完整校验要由真正的 Runtime 预检完成。
+- **生产依赖**：自动启用的插件必须安装为生产依赖；`--save-dev` 必须同时指定 `--no-enable`，这个组合会在安装前检查。
+- **并发**：项目变更使用文件锁和 revision 校验。并发操作或配置漂移会明确失败；安装步骤已经完成时返回部分完成的证据，不会自动覆盖用户改动。如果锁所属的进程已经退出，错误信息会给出锁路径，确认没有其他安装进程后删除该锁再重试。
+:::
+
+## 操作运行中的 Bot
+
+以下命令通过 HTTP 连接正在运行的 Bot，需要先用 `zhin runtime start` 启动并启用 HTTP 服务。
+
+### send：向运行中的 bot 发消息
 
 ```bash
 zhin send <scene_id> [content...] [-s private|group|channel] [-a <adapter>] [-e <endpoint>]
 ```
 
-经 HTTP API 向 daemon 运行中的实例投递消息（需启用 HTTP 服务）。`scene_id` 私聊为用户 ID、群聊为群号；不传 `content` 时从 stdin 读一行。`-a` 默认 `process`；`-e` 指定 Endpoint ID，缺省用该适配器下第一个在线 Endpoint。
+`scene_id` 私聊时是用户 ID，群聊时是群号；不传 `content` 时从标准输入读一行。`-a` 默认 `process`；`-e` 指定账号 ID，省略时用该适配器下第一个在线账号。
 
-## watch：监视运行实例
+### watch：监视运行实例
 
 ```bash
 zhin watch [-i 3] [--once] [--json] [--no-clear]
 ```
 
-轮询 Host API（stats / bots / assistant jobs）刷面板；`--once` 拉一次退出，`--json` 适合脚本。
+在终端里定时刷新状态面板（统计、账号、助手任务）。`--once` 拉取一次后退出，`--json` 适合脚本使用。
 
-## schedule：持久化调度任务
+### schedule：持久化调度任务
 
-任务存于 `data/schedule-jobs.json`，修改后需重启应用生效。
+让 AI 在指定时间执行一段提示词。任务保存在 `data/schedule-jobs.json`，修改后需要重启 Bot 才生效。
 
 ```bash
 zhin schedule list
@@ -225,9 +275,17 @@ zhin schedule pause <id>
 zhin schedule resume <id>
 ```
 
-`add` 选项：`--prompt`（必填，到点发给 AI 的提示词）、`-l/--label`、`--kind`（默认 `solar`）、`--notify-channel im|silent|log`（默认 `silent`）、`--at`（单次 ISO8601）、`--every`（如 `30m`、`1h`、`1d`）。cron 与 `--at`/`--every` 三选一。
+| `add` 选项 | 说明 |
+| --- | --- |
+| `--prompt` | 必填，到时间后发给 AI 的提示词 |
+| `-l, --label` | 任务名称 |
+| `--kind` | `solar`（默认，公历）/ `lunar`（农历）/ `workday`（工作日）/ `freeDay`（休息日） |
+| `--notify-channel` | `im` / `silent`（默认）/ `log` |
+| cron 表达式、`--at`、`--every` | 三选一：六段 cron（秒 分 时 日 月 周）、单次 ISO8601 时间、或间隔（如 `30m`、`1h`、`1d`） |
 
-## agent：Agent 诊断与 Workroom 观察
+### agent：Agent 诊断与 Workroom 观察
+
+需要安装 AI 栈（`@zhin.js/agent` + `zod` + `ai`）。
 
 ```bash
 zhin agent info [--json]
@@ -240,29 +298,18 @@ zhin agent legacy-runs <input> [--output <file>]
 zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [--storage file|database]
 ```
 
-`info` 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等）。`workroom runs/run/readiness` 连接当前项目正在运行的
-Host API，使用配置中的 token-bound principal 读取 content-free Run、Task、Assignment 与 Blocker 状态；
-`cancel` 与 `request-replan` 还要求当前 Project Sponsor 权限，并通过 `expected-sequence` 做 CAS。后者只持久化
-重规划请求并暂停调度，不会伪装成已经生成了新 Plan Revision。以上在线命令需要先运行
-`zhin runtime start`。`legacy-runs` 与
-`legacy-payloads` 仅做离线只读审计，不会启动 Host 或写入新 Workroom Journal。以上命令需安装 AI 栈
-（`@zhin.js/agent` + `zod` + `ai`）。
-
-## service：系统服务
-
-```bash
-zhin service install [--user]
-zhin service uninstall [--user]
-zhin service status [--user]
-```
-
-安装开机自启 / 守护服务；`--user` 在 Linux 下使用用户级 systemd。`status` 仅 Linux/macOS。
+| 命令 | 作用 |
+| --- | --- |
+| `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
+| `workroom runs` / `run` / `readiness` | 连接运行中的 Bot，用配置中的 token 身份读取 Run、Task、Assignment 与 Blocker 的状态（不含内容） |
+| `workroom cancel` / `request-replan` | 需要当前 Project Sponsor 权限，并用 `expected-sequence` 防止并发冲突。`request-replan` 只记录重规划请求并暂停调度，不会假装已经生成了新的计划版本 |
+| `legacy-runs` / `legacy-payloads` | 离线只读审计，不启动 Bot，也不写入新的 Workroom Journal |
 
 ## 退出码
 
 | 退出码 | 含义 |
 | --- | --- |
-| `51` | Console 请求重启（CLI daemon 会自动拉起新进程） |
-| `75` | 运行时报 restartRequired（如 lockfile 变更），daemon 按风暴保护策略重启 |
+| `51` | Console 请求重启（daemon 会自动拉起新进程） |
+| `75` | 运行时要求重启（如 lockfile 变更），daemon 按防风暴策略重启 |
 
-进程模型与热重载语义见 [zhin runtime start 详解](./runtime.md)。
+进程模型与热重载行为见 [zhin runtime start](./runtime.md)。
