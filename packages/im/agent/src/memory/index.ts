@@ -19,5 +19,12 @@ export {
 
 export type { CompactionContextHost, CompactionRuntimeOptions } from './compaction-runtime.js';
 export { AgentCompactionRuntime } from './compaction-runtime.js';
+export {
+  SessionToldLedger,
+  extractToldEntries,
+  normalizeToldText,
+  TOLD_LEDGER_HEADING,
+} from './told-ledger.js';
+export type { ToldEntry, ToldEntryKind, ToldLedgerOptions } from './told-ledger.js';
 
 export type { ContextRepository } from '@zhin.js/ai';

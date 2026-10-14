@@ -334,7 +334,8 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     title: 'Runtime',
     order: 160,
     retention: 'required',
-    content: (ctx) => buildContextSection(ctx.config, ctx.bootstrapContext, ctx.agentNickname, ctx.gitStatus),
+    // Git status changes between turns, so it lives in §12 at the end (#730, cache-friendly order).
+    content: (ctx) => buildContextSection(ctx.config, ctx.bootstrapContext, ctx.agentNickname),
   },
   {
     id: '§1b_critical_rules',
@@ -448,6 +449,15 @@ const DEFAULT_PROMPT_SECTION_DEFINITIONS: DefaultPromptSectionDefinition[] = [
     order: 10,
     retention: 'preferred',
     content: (ctx) => ctx.bootstrapContext?.trim() ? ctx.bootstrapContext : null,
+  },
+  {
+    // Volatile: kept last so the stable prefix above stays cacheable.
+    id: '§12_git_status',
+    layer: 'context',
+    title: 'Git Status',
+    order: 5,
+    retention: 'preferred',
+    content: (ctx) => ctx.gitStatus?.trim() ? `# Git\n- ${ctx.gitStatus.trim()}` : null,
   },
 ];
 

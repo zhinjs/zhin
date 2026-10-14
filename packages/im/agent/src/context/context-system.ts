@@ -121,6 +121,7 @@ export class ContextSystem {
       modelLine: `${providerAlias}/${modelId}`,
       sdk: llmModel.sdk,
       agentsContext: agentsContext ?? undefined,
+      toldLedger: input.toldLedger,
     });
 
     let userMessages = isScheduleTurn
@@ -159,6 +160,8 @@ export interface TextTurnContextInput {
   prebuiltMessages?: AgentMessage[];
   mode?: 'chat' | 'vision';
   activeSkillsContext?: string;
+  /** Rendered "already told the user" ledger for this session (#730). */
+  toldLedger?: string;
 }
 
 export interface TextTurnContextOutput {
