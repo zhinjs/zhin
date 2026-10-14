@@ -359,6 +359,43 @@ describe('Agent CapabilityIngress', () => {
     await store.close();
   });
 
+  it('tightens turns started by ordinary group members (#719) and leaves master turns alone', async () => {
+    const fixture = await createFixture();
+    const seen: import('../../src/turn/turn-ingress.js').TurnIngress[] = [];
+    const store = new SnapshotStore(stateWithEngine(fixture.snapshot, async function* ({ turn }) {
+      seen.push(turn);
+      yield terminalEvent();
+    }));
+    const runtime = new AgentRuntime({ coordinator: new AgentTurnCoordinator() });
+    runtime.attach(store);
+    const request = (roles: string[], turnId: string) => ({
+      identity: { traceId: `trace-${turnId}`, turnId },
+      origin: { kind: 'im' as const, platform: 'icqq', endpoint: 'bot', scope: 'group' as const, sceneId: 'g1', messageId: turnId },
+      principal: { subjectId: `user-${turnId}`, roles },
+      intent: { kind: 'new' as const },
+      input: { text: 'run ls' },
+      session: { key: `im:icqq:bot:group:g1:${turnId}` },
+      policy: {
+        permissions: roles,
+        unattended: false,
+        shell: { security: 'allowlist' as const, execPreset: 'development' as const, approvalMode: 'auto' as const, isolation: 'required' as const },
+        filesystem: { workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' as const },
+      },
+      signal: new AbortController().signal,
+      ports: {},
+    });
+
+    await runtime.execute(fixture.child, request(['user'], 'member'), selection());
+    await runtime.execute(fixture.child, request(['user', 'master'], 'owner'), selection());
+
+    expect(seen[0]?.policy.shell).toBeUndefined();
+    expect(seen[0]?.policy.filesystem?.access).toBe('read-only');
+    expect(seen[1]?.policy.shell).toBeDefined();
+    expect(seen[1]?.policy.filesystem?.access).toBe('workspace-write');
+    await fixture.mcp.stop();
+    await store.close();
+  });
+
   it('routes Alice and Bob through runtime ingress, control arbitration, persistence, and journals', async () => {
     const fixture = await createFixture();
     let release!: () => void;
