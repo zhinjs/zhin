@@ -30,7 +30,7 @@ import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.j
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 
@@ -118,6 +118,9 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   }, undefined, model.runtime);
   agent.activeBinding = { name: 'zhin', providerAlias: model.providerAlias, model: model.modelId, mcpServers: [] };
   agent.markMemoryPersistenceReady();
+  // Semantic memory (seeds and/or memory tools) also drives per-turn recall (#734).
+  const semanticMemory = await createEvalSemanticMemory(definition);
+  if (semanticMemory) agent.configure({ semanticMemory });
   const host = asPrivate(agent);
   const { sessionSystem, contextSystem } = host;
   if (!sessionSystem || !contextSystem) throw new Error('ZhinAgent did not compose its session/context systems');
@@ -139,7 +142,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const tools = [
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
     ...await nativeCapabilities(
-      definition.nativeTools ?? [], definition.bashOutput ?? '', definition.memory ?? [], executedTools, rawToolOutputs,
+      definition.nativeTools ?? [], definition.bashOutput ?? '', semanticMemory, executedTools, rawToolOutputs,
     ),
   ];
   const approval = createApprovalPort(definition.approval ?? 'approve', approvalRequests, approvalQuestions);
@@ -370,6 +373,17 @@ async function createWorkspace(files: Readonly<Record<string, string>>): Promise
   return root;
 }
 
+/** In-memory semantic memory for cases that seed entries or expose memory tools. */
+async function createEvalSemanticMemory(definition: EvalCase): Promise<SemanticMemoryRuntime | null> {
+  const usesTools = (definition.nativeTools ?? []).some((name) => name.startsWith('memory_'));
+  if (!usesTools && !definition.memory?.length) return null;
+  const repository = new InMemoryMemoryEntryRepository();
+  for (const entry of definition.memory ?? []) await repository.upsert(entry);
+  const runtime = new SemanticMemoryRuntime();
+  runtime.activate(repository);
+  return runtime;
+}
+
 /**
  * Real native tool definitions, executed through a ToolIndex; bash gets a
  * canned, shell-free port and memory tools an in-memory store.
@@ -377,18 +391,15 @@ async function createWorkspace(files: Readonly<Record<string, string>>): Promise
 async function nativeCapabilities(
   names: readonly EvalNativeTool[],
   bashOutput: string,
-  memory: readonly EvalMemoryEntry[],
+  semanticMemory: SemanticMemoryRuntime | null,
   executed: EvalToolInvocation[],
   rawOutputs: string[],
 ): Promise<ToolCapability[]> {
   if (names.length === 0) return [];
   const owner = rootPluginId();
   const bash = new NativeBashToolFeature({ execute: async () => ({ stdout: bashOutput, stderr: '' }) });
-  const repository = new InMemoryMemoryEntryRepository();
-  for (const entry of memory) await repository.upsert(entry);
-  const semanticMemory = new SemanticMemoryRuntime();
-  semanticMemory.activate(repository);
-  const features = [bash, ...createNativeFileToolFeatures(), ...createNativeSemanticMemoryToolFeatures(semanticMemory)]
+  const memoryFeatures = semanticMemory ? createNativeSemanticMemoryToolFeatures(semanticMemory) : [];
+  const features = [bash, ...createNativeFileToolFeatures(), ...memoryFeatures]
     .filter((feature) => names.includes(feature.name as EvalNativeTool));
   const slots = features.map((feature) => createCapabilitySlot({
     owner,

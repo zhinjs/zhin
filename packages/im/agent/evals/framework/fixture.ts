@@ -117,7 +117,7 @@ export interface EvalCase {
   readonly nativeTools?: readonly EvalNativeTool[];
   /** Files (relative path → content) written to a temporary workspace that becomes the turn's workspaceRoot. */
   readonly workspace?: Readonly<Record<string, string>>;
-  /** Semantic-memory entries present before the first turn (needs a memory native tool). */
+  /** Semantic-memory entries present before the first turn; they are also recalled per turn (#734). */
   readonly memory?: readonly EvalMemoryEntry[];
   /** Canned stdout for native `bash` (it never runs a real shell in evals). */
   readonly bashOutput?: string;
@@ -160,9 +160,6 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   if (duplicates.length > 0) problems.push(`duplicate tool names: ${[...new Set(duplicates)].join(', ')}`);
   const workspaceTools = (candidate.nativeTools ?? []).filter((name) => !MEMORY_TOOLS.includes(name));
   if (workspaceTools.length && !candidate.workspace) problems.push('file and shell nativeTools need a workspace');
-  if (candidate.memory?.length && !candidate.nativeTools?.some((name) => MEMORY_TOOLS.includes(name))) {
-    problems.push('memory seeds need memory_search or memory_upsert in nativeTools');
-  }
   for (const name of toolNames) {
     if (RESERVED_TOOL_NAMES.includes(name) || RESERVED_TOOL_NAME_PREFIXES.some((prefix) => name.startsWith(prefix))) {
       problems.push(`tool "${name}" uses a reserved built-in name; mocked tools need their own names`);

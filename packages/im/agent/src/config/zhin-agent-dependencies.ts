@@ -1,3 +1,4 @@
+import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
 import type {
   AIProvider,
   AgentSessionRepository,
@@ -40,4 +41,5 @@ export interface ZhinAgentDependencies {
   globalContext: string;
   activeSkillsContext: string;
   skillsSummaryXML: string;
+  semanticMemory: SemanticMemoryRuntime | null;
 }

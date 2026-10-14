@@ -2,12 +2,12 @@
  * MemoryEntryRepository — CRUD + text search for semantic memory (L4).
  */
 import { randomUUID } from 'node:crypto';
+import { rankMemoryEntries } from './memory-bm25.js';
 import {
   appendMemoryHistory,
   MEMORY_ENTRY_ADDED_COLUMNS,
   normalizeMemoryKind,
   normalizeMemoryTrustLevel,
-  parseMemoryTags,
   serializeMemoryTags,
   type MemoryEntryRecord,
   type MemoryEntryScope,
@@ -31,12 +31,21 @@ export interface MemoryEntryLocator {
   key: string;
 }
 
+export interface MemoryEntryListInput {
+  scope: MemoryEntryScope;
+  scope_key?: string;
+  limit?: number;
+}
+
 export interface MemoryEntryRepository {
   upsert(input: MemoryEntryUpsertInput): Promise<MemoryEntryRecord>;
   get(id: string): Promise<MemoryEntryRecord | null>;
   /** The live (non-expired) entry at scope/scope_key/key, if any. */
   find(locator: MemoryEntryLocator): Promise<MemoryEntryRecord | null>;
+  /** BM25-ranked live entries matching `query`. */
   search(input: MemoryEntrySearchInput): Promise<MemoryEntryRecord[]>;
+  /** Live entries in one scope, newest first (management view). */
+  list(input: MemoryEntryListInput): Promise<MemoryEntryRecord[]>;
   /** Records that these entries were recalled (sets `last_used_at`). */
   markUsed(ids: readonly string[], at?: number): Promise<void>;
   delete(id: string): Promise<boolean>;
@@ -64,20 +73,6 @@ function rowToRecord(row: Record<string, unknown>): MemoryEntryRecord {
   };
 }
 
-function matchesQuery(record: MemoryEntryRecord, query: string): number {
-  const q = query.trim().toLowerCase();
-  if (!q) return 0;
-  const tags = parseMemoryTags(record.tags).join(' ').toLowerCase();
-  const hay = `${record.key} ${record.content} ${tags}`.toLowerCase();
-  if (hay.includes(q)) return 10;
-  const tokens = q.split(/\s+/).filter(Boolean);
-  let score = 0;
-  for (const t of tokens) {
-    if (hay.includes(t)) score += 2;
-  }
-  return score;
-}
-
 export function isMemoryEntryExpired(record: MemoryEntryRecord, now = Date.now()): boolean {
   return record.expires_at != null && record.expires_at > 0 && record.expires_at < now;
 }
@@ -88,14 +83,20 @@ function filterAndRank(
 ): MemoryEntryRecord[] {
   const now = Date.now();
   const limit = input.limit ?? 10;
-  const scored = records
+  const visible = records
     .filter((r) => !isMemoryEntryExpired(r, now))
     .filter((r) => (input.scope ? r.scope === input.scope : true))
-    .filter((r) => (input.scope_key ? r.scope_key === input.scope_key : true))
-    .map((r) => ({ record: r, score: matchesQuery(r, input.query) }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score || b.record.updated_at - a.record.updated_at);
-  return scored.slice(0, limit).map((x) => x.record);
+    .filter((r) => (input.scope_key ? r.scope_key === input.scope_key : true));
+  return rankMemoryEntries(visible, input.query).slice(0, limit).map((hit) => hit.item);
+}
+
+function filterListed(records: MemoryEntryRecord[], input: MemoryEntryListInput): MemoryEntryRecord[] {
+  const now = Date.now();
+  return records
+    .filter((r) => !isMemoryEntryExpired(r, now))
+    .filter((r) => r.scope === input.scope && r.scope_key === (input.scope_key ?? ''))
+    .sort((left, right) => right.updated_at - left.updated_at)
+    .slice(0, input.limit ?? 50);
 }
 
 /** Fields replaced on a write to an existing entry; the old content moves to `history`. */
@@ -167,6 +168,10 @@ export class InMemoryMemoryEntryRepository implements MemoryEntryRepository {
     return filterAndRank([...this.entries.values()], input);
   }
 
+  async list(input: MemoryEntryListInput): Promise<MemoryEntryRecord[]> {
+    return filterListed([...this.entries.values()], input);
+  }
+
   async markUsed(ids: readonly string[], at = Date.now()): Promise<void> {
     for (const id of ids) {
       const entry = this.entries.get(id);
@@ -219,6 +224,11 @@ export class DatabaseMemoryEntryRepository implements MemoryEntryRepository {
     const rows = await this.model.select().where(where);
     const records = rows.map(rowToRecord);
     return filterAndRank(records, input);
+  }
+
+  async list(input: MemoryEntryListInput): Promise<MemoryEntryRecord[]> {
+    const rows = await this.model.select().where({ scope: input.scope, scope_key: input.scope_key ?? '' });
+    return filterListed(rows.map(rowToRecord), input);
   }
 
   async markUsed(ids: readonly string[], at = Date.now()): Promise<void> {
