@@ -1,0 +1,58 @@
+.changeset/trace-archive-console.md
+  h_b680f75345178a 1-7
+basic/cli/src/commands/trace.ts
+  h_b680f75345178a 2-4,11,14-33,37,39-44,48,58-83,85-86,94
+basic/cli/src/plugin-runtime/console/agent-routes.ts
+  h_b680f75345178a 6,12-13,151
+basic/cli/src/plugin-runtime/console/api-routes.ts
+  h_b680f75345178a 115
+basic/cli/src/plugin-runtime/console/trace-archive-routes.ts
+  h_b680f75345178a 1-102
+basic/cli/src/plugin-runtime/start-command.ts
+  h_b680f75345178a 483-489,494
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  h_b680f75345178a 551-577
+basic/cli/tests/trace-command.test.ts
+  h_b680f75345178a 1-20
+docs/cli/index.md
+  h_b680f75345178a 308,310,313-318,325-328,332,334,336-351
+examples/full-bot/pages/agent-trace/index.tsx
+  h_b680f75345178a 1-10
+packages/console/client/client/agent-trace/TraceArchivePage.tsx
+  h_b680f75345178a 1-136
+packages/console/client/client/agent-trace/registerAgentTraceConsole.ts
+  h_b680f75345178a 1-17
+packages/console/client/client/agent-trace/traceView.test.ts
+  h_b680f75345178a 1-42
+packages/console/client/client/agent-trace/traceView.ts
+  h_b680f75345178a 1-92
+packages/console/client/client/index.ts
+  h_b680f75345178a 121-123
+packages/im/agent/evals/agent.eval.ts
+  h_b680f75345178a 9-11,16,30
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 146-152,155
+packages/im/agent/evals/framework/index.ts
+  h_b680f75345178a 15
+packages/im/agent/evals/framework/trace-link.test.ts
+  h_b680f75345178a 1-28
+packages/im/agent/evals/framework/trace-link.ts
+  h_b680f75345178a 1-23
+packages/im/agent/src/trace/index.ts
+  h_b680f75345178a 33-47
+packages/im/agent/src/trace/turn-trace-archive.ts
+  h_b680f75345178a 1-246
+packages/im/agent/tests/trace/turn-trace-archive.test.ts
+  h_b680f75345178a 1-105
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f7b96daf0e10fdf84cf7b70d8d4427d9042df8d5",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
