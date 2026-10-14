@@ -275,6 +275,7 @@
     "packages/im/core/src/**/*",
     "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
+    "packages/im/agent/evals/**/*.ts",
     "examples/minimal-bot/plugin.ts",
     "examples/minimal-bot/adapters/**/*",
     "examples/minimal-bot/agents/**/*",
@@ -315,6 +316,7 @@
   ],
   "exclude": [
     "node_modules",
+    "packages/im/agent/evals/vitest.config.ts",
     "**/lib/**",
     "**/dist/**",
     "**/client/**",
