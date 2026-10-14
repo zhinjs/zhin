@@ -1,6 +1,6 @@
 # 后台任务（Detached Task）
 
-> 对应 [#731](https://github.com/zhinjs/zhin/issues/731)（路线图 P5 · M5.1–M5.3）。插话、改向、叫停与 `/tasks` 命令在 #732 中实现。
+> 对应 [#731](https://github.com/zhinjs/zhin/issues/731)（路线图 P5 · M5.1–M5.3）与 [#732](https://github.com/zhinjs/zhin/issues/732)（M5.4–M5.5：插话、改向、叫停与 `/tasks` 命令）。
 
 后台任务是一种能脱离当前回合独立运行的任务：它有自己的 `taskId`、持久化状态机，并且每次工具调用后都会落盘 checkpoint，进程重启后从最后一个 checkpoint 继续执行。
 
@@ -33,8 +33,6 @@
 
 ## 配置
 
-模块目前位于 `packages/im/agent/src/detached-task/`，尚未加入公开 API（接入运行时与 `/tasks` 命令在 #732）。
-
 `new DetachedTaskRunner({ store, executors, deliver, config })`，`config` 默认值：
 
 | 字段 | 默认值 | 说明 |
@@ -45,3 +43,27 @@
 | `maxResumeAttempts` | `3` | 重启后自动恢复的最多次数 |
 
 存储使用 `FileDetachedTaskStore(dir)`（每个任务一个 JSON 文件，原子写入），测试可用 `InMemoryDetachedTaskStore`。
+
+## 接入运行时
+
+模块从 `@zhin.js/agent` 导出。拥有执行器的插件创建 `DetachedTaskRunner`，并以 `detachedTaskRunnerToken` 提供给运行时；IM 入口读到后才启用下面的命令与插话路由。没有提供时，入口行为完全不变。创建任务时请传入 `sessionId`（会话键）与 `createdBy`（创建者），命令和插话只作用于本会话、且只有创建者或主人可以操作。插件启动时应调用 `runner.recover()` 恢复未完成的任务。
+
+## 命令
+
+| 命令 | 说明 |
+| --- | --- |
+| `/tasks` | 列出本会话进行中的后台任务和最近结束的 5 个 |
+| `/task stop <id>` | 叫停任务：中止执行，之后不会再产生新的副作用 |
+| `/task redirect <id> <新要求>` | 改向：新要求在任务的下一个 step 边界注入 |
+
+## 插话、改向、叫停
+
+本会话有进行中的后台任务时，用户的普通消息先做意图判断：
+
+- **叫停**（`取消`、`停止任务`、`stop` 等）：叫停最近的任务。
+- **改向**（以 `改成`、`换成`、`instead` 等开头的明确改向措辞）：作为 steering 排队，任务在下一个 step 边界通过 `ctx.takeSteering()` 取到并调整；记录在 `steeringLog` 中，重启重放时同一边界得到相同内容。
+- **其他消息**：照常开启新回合，不影响任务。
+
+规则刻意保守：只有明确的叫停词和改向措辞会被拦截。产品若提供了 `TurnIntentResolver`（或可信的 `turnIntent` 元数据），以它的结果为准：`steer` 视为改向，`new` / `observe` 视为无关；叫停词始终生效。
+
+`cancelGraceMs`（默认 `5000`）：叫停时最多等待执行器退出的时间；超时后任务仍标记为已取消，且执行器无法再开始新的 step。

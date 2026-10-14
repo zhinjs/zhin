@@ -1,7 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import {
   createAutoApprovalPort,
+  detachedTaskRunnerToken,
+  handleDetachedTaskCommand,
   handleRuntimeManagementCommand,
+  routeTaskInterjection,
+  type DetachedTaskRunner,
   publishOutboundElements,
   type ApprovalPort,
 } from '@zhin.js/agent';
@@ -87,6 +91,8 @@ export interface AgentTurnIngressRouteOptions {
   readonly ingress: CapabilityIngress;
   readonly agent: AgentRuntimeFoundation;
   readonly workroom: AgentWorkroomPort;
+  /** Detached task runner (#732); a snapshot-provided `detachedTaskRunnerToken` wins. */
+  readonly detachedTasks?: DetachedTaskRunner;
 }
 
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
@@ -221,8 +227,36 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
+      // #732: /tasks, /task stop|redirect — only when a detached-task runner is provided.
+      const detachedTasks = workroomAgentTurn ? undefined : resolveSnapshotDetachedTaskRunner(snapshot, requester) ?? options.detachedTasks;
+      const taskActor = { sessionId: sessionKey, senderId: turnAccess.principal.subjectId, isMaster: senderRoles.isMaster };
+      if (detachedTasks) {
+        const taskReply = await handleDetachedTaskCommand(detachedTasks, taskActor, message.content);
+        if (taskReply != null) {
+          await reply(taskReply);
+          logger.info(formatCompact({ op: 'agent_host_task_command', handled: true }));
+          return true;
+        }
+      }
+
       if (!matched) {
         return false;
+      }
+
+      // #732: a message in a session with an active background task may stop
+      // or redirect it; anything else continues as an ordinary new turn.
+      if (detachedTasks) {
+        // Reuse the product TurnIntentResolver (or trusted metadata) when present.
+        const taskIntentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
+        const productIntent = taskIntentResolver || message.metadata?.turnIntent !== undefined
+          ? (await resolveProductTurnIntent(message, senderRoles, undefined, taskIntentResolver).catch(() => undefined))?.kind
+          : undefined;
+        const routedTask = await routeTaskInterjection(detachedTasks, taskActor, matched.content, productIntent);
+        if (routedTask.handled) {
+          if (routedTask.reply) await reply(routedTask.reply);
+          logger.info(formatCompact({ op: 'agent_host_task_interjection', kind: routedTask.kind, task: routedTask.taskId }));
+          return true;
+        }
       }
 
       if (!workroomAgentTurn && isClearCommand(matched.content)) {
@@ -593,4 +627,14 @@ async function readCapabilities(
   isActive: () => boolean,
 ): Promise<AgentCapabilities> {
   return ingress.read(snapshot, requester, isActive, createRuntimeTurnAccess(message, roles));
+}
+
+export function resolveSnapshotDetachedTaskRunner(
+  snapshot: Pick<RuntimeSnapshot, 'resources'>,
+  requester: PluginId,
+): DetachedTaskRunner | undefined {
+  const candidate = snapshot.resources.get(requester)?.get(detachedTaskRunnerToken.id);
+  return candidate && typeof (candidate as DetachedTaskRunner).steer === 'function'
+    ? candidate as DetachedTaskRunner
+    : undefined;
 }
