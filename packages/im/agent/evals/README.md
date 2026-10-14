@@ -133,6 +133,11 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
+| `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
+| `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
+| `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |
+| `provider-rate-limit-retried` | long-task | #724 provider resilience (rate limit → retry) |
+| `provider-retries-exhausted-polite` | long-task | #724 provider resilience (retries exhausted → friendly feedback) |
 | `session-history-carried` | context, memory | QQ: follow-up questions lost the previous turn (baseline for #730 compaction / told-ledger) |
 | `subagent-approval-routed` | subagent, approval | #718 sub-agent approvals routed to the parent requester |
 | `subagent-no-bash-when-parent-cannot` | subagent, tool-use | QQ: sub-agent overreach — child had tools the parent turn could not use (#718 deriveSubagentPolicy) |
