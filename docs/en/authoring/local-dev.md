@@ -92,22 +92,23 @@ Other options compared:
 | Setup | How | Use for | Notes |
 |-------|-----|---------|-------|
 | All npm | Plugins also use published versions (`^x.y.z`) | Daily use, production | Only published APIs and config fields |
-| All local | Prefer `pnpm zhin:local link` (below); or manually use `pnpm.overrides` to point `zhin.js` and every `@zhin.js/*` at the same local checkout (`link:`), and run `pnpm build` there first | Changing framework and plugin together | All zhin packages must come from the **same** checkout; missing one brings back section 1's error |
+| All local | Prefer `pnpm zhin:local link` (writes **one batch of tarball** overrides; see below); or manually use `pnpm.overrides` to `link:` `zhin.js` and every `@zhin.js/*` into the **same** local checkout, and run `pnpm build` there first | Changing framework and plugin together | After `zhin:local`, re-run `link` when source changes; with hand-written `link:`, every package must share one checkout or section 1 returns |
 | Tarball | Run `pnpm pack` in the plugin dir (rewrites `workspace:` to real versions), depend on `file:./vendor/xxx.tgz` | Trying a local plugin with npm framework | Plugin can't use unreleased framework APIs; repack and `pnpm install` after each change |
 
 **For external projects, use the one-click command** instead of hand-written overrides. From the zhin source repo root:
 
 ```bash
-pnpm zhin:local link ../my-bot     # detect zhin.js / @zhin.js/* used by the project, build and pack the full closure, write tarball overrides, run pnpm install
-pnpm zhin:local unlink ../my-bot   # restore package.json and pnpm-lock.yaml exactly, then run pnpm install
+pnpm zhin:local link ../my-bot              # detect zhin.js / @zhin.js/* used by the project, build and pack the full closure, write tarball overrides, run pnpm install
+pnpm zhin:local unlink ../my-bot            # restore package.json and pnpm-lock.yaml exactly, then run pnpm install
+pnpm zhin:local link ../my-bot --no-install # only rewrite the manifest; run pnpm install yourself later (also works with unlink)
 ```
 
-- After changing local source, run `link` again to rebuild and refresh the tarballs (idempotent);
+- **Writes tarball overrides** (`file:./.zhin-local/packs/*.tgz`), not `link:` — unlike the hand-written `link:` fallback in the table; after source changes you must run `link` again to rebuild and refresh (idempotent);
+- Relative paths resolve from the **caller's directory** (pnpm's `INIT_CWD`), not the repo root: `pnpm --dir ../zhin zhin:local link .` from `my-bot` equals `pnpm zhin:local link ../my-bot` from the zhin root;
 - Backups and tarballs live in the project's `.zhin-local/`; `link` adds it to the project's `.gitignore` automatically (created if missing, never duplicated); `unlink` reverts it: restored exactly if untouched, deleted if `link` created it, otherwise only that line is removed;
-- Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency;
-- The command refuses with a clear message if `package.json`/`pnpm-lock.yaml` have uncommitted changes or zhin-related `pnpm.overrides` already exist;
-- If `package.json` was edited after linking, `unlink` refuses by default; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines before restoring the backup;
-- Every zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
+- Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency; `@zhin.js/*` packages **not** in this repo stay on npm with a warning;
+- The command refuses with a clear message when: the target is inside the zhin repo, `package.json`/`pnpm-lock.yaml` have uncommitted changes on first link, zhin-related `pnpm.overrides` already exist, `.zhin-local/` exists without `state.json`, or `package.json` was edited after linking (blocks both refresh and `unlink`; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines first);
+- Every switched zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
 
 If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
 

@@ -92,22 +92,23 @@ cd examples/my-bot && pnpm exec zhin runtime start --once
 | 方案 | 做法 | 适用 | 注意 |
 |------|------|------|------|
 | 全部 npm | 插件也用已发布版本（`^x.y.z`） | 日常运行、生产 | 只能用已发布的 API 与配置字段 |
-| 全部本地 | 推荐 `pnpm zhin:local link`（见下文）；或手动用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 统一指向同一个本地源码仓库（`link:`），并先在源码仓库 `pnpm build` | 同时改框架与插件 | 所有 zhin 包必须来自**同一个**仓库；漏掉一个就会回到第 1 节的错误 |
+| 全部本地 | 推荐 `pnpm zhin:local link`（写入**同一批 tarball** overrides，见下文）；或手动用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 用 `link:` 指向**同一个**本地源码仓库，并先在源码仓库 `pnpm build` | 同时改框架与插件 | `zhin:local` 改源码后需再执行一次 `link`；手写 `link:` 则所有包必须同源，漏一个就会回到第 1 节 |
 | 打包 tarball | 在插件目录 `pnpm pack`（会把 `workspace:` 改写成真实版本），项目里依赖 `file:./vendor/xxx.tgz` | 只想试用本地插件、框架用 npm | 插件不能依赖未发布的框架 API；每次改动需重新打包并 `pnpm install` |
 
 **外部项目推荐用一键命令**代替手写 overrides。在 zhin 源码仓库根目录执行：
 
 ```bash
-pnpm zhin:local link ../my-bot     # 检测项目用到的 zhin.js / @zhin.js/*，构建并打包完整依赖闭包，写入 tarball overrides，执行 pnpm install
-pnpm zhin:local unlink ../my-bot   # 原样恢复 package.json 与 pnpm-lock.yaml，再执行 pnpm install
+pnpm zhin:local link ../my-bot              # 检测项目用到的 zhin.js / @zhin.js/*，构建并打包完整依赖闭包，写入 tarball overrides，执行 pnpm install
+pnpm zhin:local unlink ../my-bot            # 原样恢复 package.json 与 pnpm-lock.yaml，再执行 pnpm install
+pnpm zhin:local link ../my-bot --no-install # 只改清单，稍后自行 pnpm install（unlink 同样支持）
 ```
 
-- 本地源码改动后再次执行 `link` 即可重新构建并刷新 tarball（幂等）；
+- **写入的是 tarball overrides**（`file:./.zhin-local/packs/*.tgz`），不是 `link:`；与表中「手写 `link:`」兜底不同——源码改动后必须再次 `link` 才会重新打包生效（幂等）；
+- 相对路径按**调用时所在目录**解析（pnpm 的 `INIT_CWD`），不是仓库根目录：在 `my-bot` 里执行 `pnpm --dir ../zhin zhin:local link .` 与在 zhin 根目录执行 `pnpm zhin:local link ../my-bot` 等价；
 - 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加）；`unlink` 会撤销这一改动：未再改动则原样恢复，由 link 新建的文件会被删除，若之后另有编辑则只移除这一行；
-- 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；
-- `package.json`/`pnpm-lock.yaml` 有未提交改动、或已有 zhin 相关 `pnpm.overrides` 时，命令会拒绝执行并说明原因；
-- link 后手动改过 `package.json` 时 `unlink` 默认拒绝；确认丢弃这些改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行再恢复备份；
-- 所有 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
+- 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；本仓库不存在的 `@zhin.js/*` 会打印警告并**保持 npm 版本**；
+- 命令在以下情况会拒绝并说明原因：目标位于 zhin 仓库内、首次 link 时 `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、`.zhin-local/` 存在但缺少 `state.json`、或 link 之后 `package.json` 又被改过（刷新与 `unlink` 均拒绝；确认丢弃改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行）；
+- 所有被切换的 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
 
 无法使用该命令时，可手写 `pnpm.overrides`（`link:` 指向同一个源码仓库），但必须覆盖项目依赖闭包中的**全部** zhin 包（含 `@zhin.js/runtime` 等间接依赖）。
 
