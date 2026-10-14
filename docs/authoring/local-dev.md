@@ -62,7 +62,32 @@ npm view zhin.js version
 npm view <插件包名> version peerDependencies
 ```
 
-## 3. 三种可行组合
+## 3. 推荐做法：在 zhin 仓库内开发插件
+
+需要用到**未发布**的框架能力、或同时改框架与插件时，最省心的方式是直接在 zhin 源码仓库（monorepo）里开发：插件放在 `plugins/<分类>/<名字>`，测试 Bot 放在 `examples/<名字>`，所有 zhin 依赖都写 `workspace:*`。整个工作区只有一条解析路径，天然不会出现第 1 节的多副本错误，也不需要维护 overrides 列表。
+
+```bash
+git clone https://github.com/zhinjs/zhin.git && cd zhin
+pnpm install
+# 新插件：plugins/utils/my-plugin（package.json 中 zhin.js、@zhin.js/* 写 "workspace:*"）
+# 测试 Bot：复制 examples/minimal-bot 为 examples/my-bot，在其依赖里加
+#   "@zhin.js/plugin-my-plugin": "workspace:*"
+# 并在 package.json 的 zhin.plugins 与 zhin.config.yml 中声明
+pnpm install
+pnpm build
+cd examples/my-bot && pnpm exec zhin runtime start --once
+```
+
+已在当前 `main` 上验证：`examples/test-bot`、`plugins/utils/calendar` 中的 `@zhin.js/command` 都解析到同一个 `packages/im/command`；`examples/minimal-bot` 在 `pnpm build` 后执行 `zhin runtime start --once` 输出 `"started": true`。
+
+其他方式对比：
+
+- **`pnpm link` / `link:` 单个插件**：不推荐。被链接插件的 `workspace:` 依赖会解析到源码仓库，正是第 1 节错误的成因。
+- **yalc**：本质与 tarball 相同（复制发布产物），不能使用未发布的框架 API，且需额外安装工具；未在本仓库验证。
+- **tarball（见下表）**：适合在**自己的外部项目**里试用本地插件、框架仍用 npm。
+- **`pnpm.overrides` 全部指向本地**：外部项目必须使用本地框架时的兜底方案，需覆盖项目用到的全部 zhin 包。
+
+## 4. 外部项目的三种可行组合
 
 | 方案 | 做法 | 适用 | 注意 |
 |------|------|------|------|
@@ -89,7 +114,7 @@ npm view <插件包名> version peerDependencies
 
 临时停用某个插件时，需要同时移除 `package.json` 的依赖、`zhin.plugins` 中的声明，以及 `zhin.config.yml` 里 `plugins.<instanceKey>` 配置（否则会报 `/plugins must NOT have additional properties`）；可以把配置注释保留以便接回。
 
-## 4. 端口与干净退出
+## 5. 端口与干净退出
 
 控制面默认监听 `http.host`/`http.port`（未配置时为 `127.0.0.1:8086`）。启动报 `EADDRINUSE` 时先找占用者：
 
@@ -109,12 +134,12 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 
 插件自己的定时器、连接要在 dispose 中释放；dispose 永不完成会被 5 秒预算强制结束，并在 `stillStopping` 中显示为 `runtime`。
 
-## 5. 联调检查清单
+## 6. 联调检查清单
 
 - [ ] `grep` 出的 `link:`/`file:`/`workspace:` 依赖都在预期内；
 - [ ] `pnpm why @zhin.js/command`（及 `zhin.js`、`@zhin.js/tool` 等）每个包只有一个实际解析路径；
 - [ ] 本地插件用到的 API 与配置字段在当前安装的 zhin.js 版本中存在；
-- [ ] 选定一种组合（全 npm / 全本地 overrides / tarball），没有混用；
+- [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / 全本地 overrides），没有混用；
 - [ ] 修改依赖后执行了 `pnpm install`，本地源码改动后执行了 `pnpm build`；
 - [ ] 启动前确认端口空闲，旧实例已按 PID 停止；
 - [ ] Ctrl+C 后 5 秒内退出且无 `forcedExit` 输出；若有，按 `stillStopping` 排查对应组件的释放逻辑。

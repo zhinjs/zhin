@@ -187,6 +187,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('Plugin Authoring', [
     { text: 'definePlugin Overview', link: '/en/authoring/define-plugin' },
     { text: 'Complete Plugin Delivery', link: '/en/authoring/plugin-delivery' },
+    { text: 'Local Development Guide', link: '/en/authoring/local-dev' },
     { text: 'Convention Directories', link: '/en/authoring/conventions' },
     { text: 'Adapter Authoring', link: '/en/authoring/adapters' },
     { text: 'Commands', link: '/en/authoring/commands' },
