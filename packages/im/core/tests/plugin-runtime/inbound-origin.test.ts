@@ -95,6 +95,18 @@ describe('inbound origin classifier', () => {
     expect(classifier.classify({ conversation: priv, sender: { id: 'x' }, content: 'hello world' }).origin).toBe('human');
   });
 
+  it('private echo from an unready endpoint is treated as human, not digest-matched (documented trade-off)', () => {
+    const { registry, ledger, classifier } = setup();
+    const priv = { ...conv(), kind: 'private' as const };
+    ledger.record(priv, { status: 'sent', message: { conversation: priv, id: 'm1' } }, 'hello world');
+    expect(registry.isReady('e1')).toBe(false);
+    expect(classifier.classify({ conversation: priv, sender: { id: '100' }, content: 'hello world' }))
+      .toMatchObject({ origin: 'human', basis: 'none', ready: false });
+    // the digest entry stays unconsumed: a later classification by message id still finds it
+    expect(classifier.classify({ conversation: priv, sender: { id: 'x' }, messageId: 'm1' }))
+      .toMatchObject({ origin: 'self', basis: 'ledger' });
+  });
+
   it('digest hit never maps to self', () => {
     const { ledger, classifier } = setup();
     ledger.record(conv(), { status: 'sent', message: { conversation: conv(), id: 'm1' } }, 'hello world');

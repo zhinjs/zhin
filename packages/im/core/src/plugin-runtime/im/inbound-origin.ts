@@ -109,6 +109,11 @@ export function createInboundOriginClassifier(options: InboundOriginClassifierOp
         // Reaching here means the sender is not self and not in the Registry; if the endpoint is
         // ready with a known account, the sender is a known human, so skip (and keep the one-shot
         // digest unconsumed). A digest hit is at worst record-only and never maps to `self`.
+        // Private conversations are excluded on purpose, even when this Endpoint is not ready
+        // (selfUserId unknown): a private echo of our own message is classified `human`
+        // (basis 'none', ready=false) instead of digest-matched. Trade-off: a private chat has one
+        // counterpart and no peer bots, so guessing by digest would risk tagging a real user who
+        // repeats bot text as peer_bot; the echo is only suppressed once the account or ledger id is known.
         const digestEligible = (conversation.kind === 'group' || conversation.kind === 'channel')
           && !(ready && registry.selfOf(endpointId) !== undefined);
         if (digestEligible && typeof input.content === 'string') {

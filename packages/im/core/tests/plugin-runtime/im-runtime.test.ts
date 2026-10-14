@@ -3196,7 +3196,7 @@ const REGISTERED_COMMAND = ['/g', 'h issue list open'].join('');
 
 describe('IM Runtime inbound origin routing', () => {
   async function originFixture(setup: (registry: PeerRegistry, endpointId: string) => void, extra?: Parameters<typeof createFixture>[5]) {
-    const registry = createPeerRegistry();
+    const registry = (extra?.peerRegistry as PeerRegistry | undefined) ?? createPeerRegistry();
     const events: string[] = [];
     const sent: unknown[] = [];
     const executed = vi.fn(() => 'ok');
@@ -3320,18 +3320,30 @@ describe('IM Runtime inbound origin routing', () => {
       expect(f.route).not.toHaveBeenCalled();
       expect(await listInbound(f, 'someone')).toHaveLength(1);
     };
-    const withRegistry = async (override: Partial<PeerRegistry>) => {
+    const withThrowingRegistry = async (method: 'lookup' | 'selfOf') => {
       const real = createPeerRegistry();
-      return originFixture(() => undefined, { peerRegistry: { ...real, ...override } as PeerRegistry });
+      const f = await originFixture(
+        (r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); },
+        { peerRegistry: real },
+      );
+      const spy = vi.spyOn(real, method).mockImplementation(boom as never);
+      return { f, spy, real };
     };
 
     it('lookup throws', async () => {
-      const f = await withRegistry({ lookup: boom as never });
-      try { await expectRecordOnly(f); } finally { await close(f); }
+      const { f, spy, real } = await withThrowingRegistry('lookup');
+      try {
+        await expectRecordOnly(f);
+        expect(spy).toHaveBeenCalled();
+        expect(real.isReady(String(f.adapter.id))).toBe(true);
+      } finally { spy.mockRestore(); await close(f); }
     });
     it('selfOf throws', async () => {
-      const f = await withRegistry({ selfOf: boom as never });
-      try { await expectRecordOnly(f); } finally { await close(f); }
+      const { f, spy } = await withThrowingRegistry('selfOf');
+      try {
+        await expectRecordOnly(f);
+        expect(spy).toHaveBeenCalled();
+      } finally { spy.mockRestore(); await close(f); }
     });
     it('membership isMember throws', async () => {
       const f = await originFixture((r) => { r.declareExternal('memory', 'someone'); });
