@@ -1,0 +1,60 @@
+.changeset/agent-provider-resilience.md
+  h_b680f75345178a 1-6
+.changeset/group-member-turn-tightening.md
+  h_b680f75345178a 1-5
+docs/ai/agent.md
+  h_b680f75345178a 179-190,265-288
+docs/plans/agent-harness-maturity-roadmap.md
+  h_b680f75345178a 1-198
+packages/im/agent/src/config/model-harness-runtime.ts
+  h_b680f75345178a 15-21,77-82
+packages/im/agent/src/config/model-harness.ts
+  h_b680f75345178a 11-14,32-35,44-47
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 5,83-84
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 7,70-72,79-120,612-619,649
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  h_b680f75345178a 2-6,311-317,320-322,324-327
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  h_b680f75345178a 12-16,154-158,161-163
+packages/im/agent/src/security/group-member-policy.ts
+  h_b680f75345178a 1-62
+packages/im/agent/src/security/policy-facade.ts
+  h_b680f75345178a 22-27,129-136
+packages/im/agent/tests/ai/model-harness.test.ts
+  h_b680f75345178a 61-76
+packages/im/agent/tests/core/exploration-budget.test.ts
+  h_b680f75345178a 40,49
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  h_b680f75345178a 362-398
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  h_b680f75345178a 46,51-56,215-223
+packages/im/agent/tests/security/group-member-policy.test.ts
+  h_b680f75345178a 1-102
+packages/im/ai/src/index.ts
+  h_b680f75345178a 105-122
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 287
+packages/im/ai/src/llm/index.ts
+  h_b680f75345178a 100-117
+packages/im/ai/src/llm/llm-api-runtime.ts
+  h_b680f75345178a 27-28
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 1-397
+packages/im/ai/src/types.ts
+  h_b680f75345178a 335-338,509-510
+packages/im/ai/tests/llm/provider-resilience.test.ts
+  h_b680f75345178a 1-219
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "de5c3b88f8aa577ccb2e8c9f17c8e6dc30bd4c30",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
