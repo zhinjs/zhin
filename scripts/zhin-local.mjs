@@ -72,12 +72,34 @@ const defaults = {
 /** 幂等地把 .zhin-local/ 加入目标项目的 .gitignore。 */
 export function ensureGitignore(project, log = () => {}) {
   const file = path.join(project, '.gitignore');
-  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const existed = fs.existsSync(file);
+  const text = existed ? fs.readFileSync(file, 'utf8') : '';
   const lines = text.split(/\r?\n/).map((l) => l.trim());
-  if ([STATE_DIR, `${STATE_DIR}/`, `/${STATE_DIR}`, `/${STATE_DIR}/`].some((v) => lines.includes(v))) return false;
-  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${STATE_DIR}/\n`);
+  if ([STATE_DIR, `${STATE_DIR}/`, `/${STATE_DIR}`, `/${STATE_DIR}/`].some((v) => lines.includes(v))) return { existed, added: false };
+  const next = `${text}${text && !text.endsWith('\n') ? '\n' : ''}${STATE_DIR}/\n`;
+  fs.writeFileSync(file, next);
   log(`已将 ${STATE_DIR}/ 加入 ${file}`);
-  return true;
+  return { existed, added: true, original: text, linked: next };
+}
+
+/** 撤销 ensureGitignore：未被改动则原样恢复，否则只删除添加的那一行。 */
+export function restoreGitignore(project, record, log = () => {}) {
+  if (!record?.added) return;
+  const file = path.join(project, '.gitignore');
+  if (!fs.existsSync(file)) return;
+  const current = fs.readFileSync(file, 'utf8');
+  let next;
+  if (current === record.linked) next = record.original;
+  else {
+    const lines = current.split('\n');
+    const at = lines.lastIndexOf(`${STATE_DIR}/`);
+    if (at === -1) return;
+    lines.splice(at, 1);
+    next = lines.join('\n');
+  }
+  if (!record.existed && next.trim() === '') fs.rmSync(file);
+  else fs.writeFileSync(file, next);
+  log(`已从 ${file} 移除 ${STATE_DIR}/`);
 }
 
 /** 返回相对 link 时内容被删除/新增的行，用于 --force 提示。 */
@@ -125,9 +147,9 @@ export function link(projectArg, opts = {}) {
   const indent = /^\{\n(\s+)/.exec(current)?.[1] ?? '  ';
   const text = JSON.stringify(next, null, indent) + (current.endsWith('\n') ? '\n' : '');
   fs.writeFileSync(pkgFile, text);
-  state = { version: 1, repo: o.repo, roots: known, packages: closure.map((e) => e.name), hadLockfile: state ? state.hadLockfile : fs.existsSync(path.join(backupDir, 'pnpm-lock.yaml')), linkedSha: sha(text), linkedAt: new Date().toISOString() };
   fs.writeFileSync(path.join(stateDir, 'linked-package.json'), text);
-  ensureGitignore(project, o.log);
+  const gitignore = ensureGitignore(project, o.log);
+  state = { version: 1, repo: o.repo, roots: known, packages: closure.map((e) => e.name), hadLockfile: state ? state.hadLockfile : fs.existsSync(path.join(backupDir, 'pnpm-lock.yaml')), linkedSha: sha(text), gitignore: state?.gitignore?.added ? state.gitignore : gitignore, linkedAt: new Date().toISOString() };
   fs.writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2) + '\n');
   if (!o.noInstall) o.install(project);
   o.log(`已 link：${known.join(', ')}（共 ${closure.length} 个 tarball）。恢复：pnpm zhin:local unlink ${projectArg}`);
@@ -157,6 +179,7 @@ export function unlink(projectArg, opts = {}) {
   fs.copyFileSync(path.join(backupDir, 'package.json'), pkgFile);
   if (state.hadLockfile) fs.copyFileSync(path.join(backupDir, 'pnpm-lock.yaml'), lockFile);
   else fs.rmSync(lockFile, { force: true });
+  restoreGitignore(project, state.gitignore, o.log);
   fs.rmSync(stateDir, { recursive: true, force: true });
   if (!o.noInstall) o.install(project);
   o.log('已恢复原始 package.json 与 pnpm-lock.yaml');

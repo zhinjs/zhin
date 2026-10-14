@@ -103,7 +103,7 @@ pnpm zhin:local unlink ../my-bot   # 原样恢复 package.json 与 pnpm-lock.yam
 ```
 
 - 本地源码改动后再次执行 `link` 即可重新构建并刷新 tarball（幂等）；
-- 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加；`unlink` 不会移除这一行）；
+- 备份与 tarball 存放在项目内的 `.zhin-local/`，`link` 会自动把它加入项目的 `.gitignore`（不存在则创建，已存在不重复添加）；`unlink` 会撤销这一改动：未再改动则原样恢复，由 link 新建的文件会被删除，若之后另有编辑则只移除这一行；
 - 除依赖外，`zhin.plugins` 中声明但未写入依赖的 zhin 包若本仓库存在也会一并切换，并打印警告提醒补全依赖；
 - `package.json`/`pnpm-lock.yaml` 有未提交改动、或已有 zhin 相关 `pnpm.overrides` 时，命令会拒绝执行并说明原因；
 - link 后手动改过 `package.json` 时 `unlink` 默认拒绝；确认丢弃这些改动可用 `pnpm zhin:local unlink ../my-bot --force`，会先列出将被丢弃的行再恢复备份；

@@ -123,9 +123,9 @@ describe('zhin:local', () => {
     link(project, opts());
     expect(read('.gitignore')).toBe(`${STATE_DIR}/\n`);
     fs.writeFileSync(path.join(project, '.gitignore'), 'node_modules');
-    expect(ensureGitignore(project)).toBe(true);
+    expect(ensureGitignore(project).added).toBe(true);
     expect(read('.gitignore')).toBe(`node_modules\n${STATE_DIR}/\n`);
-    expect(ensureGitignore(project)).toBe(false);
+    expect(ensureGitignore(project).added).toBe(false);
   });
 
   it('unlink --force discards manual edits with a warning and restores the backup', () => {
@@ -136,5 +136,34 @@ describe('zhin:local', () => {
     expect(unlink(project, { ...opts(), force: true })).toBe(true);
     expect(read('package.json')).toBe(original);
     expect(logs.join('\n')).toMatch(/丢弃[\s\S]*- +"name": "bot"[\s\S]*\+ +"name": "edited"/);
+  });
+
+  it('unlink deletes a .gitignore that link created', () => {
+    link(project, opts());
+    link(project, opts());
+    unlink(project, opts());
+    expect(fs.existsSync(path.join(project, '.gitignore'))).toBe(false);
+  });
+
+  it('unlink restores an existing .gitignore byte-for-byte', () => {
+    fs.writeFileSync(path.join(project, '.gitignore'), 'node_modules');
+    link(project, opts());
+    unlink(project, opts());
+    expect(read('.gitignore')).toBe('node_modules');
+  });
+
+  it('unlink removes only its line when .gitignore was edited after link', () => {
+    fs.writeFileSync(path.join(project, '.gitignore'), 'node_modules\n');
+    link(project, opts());
+    fs.appendFileSync(path.join(project, '.gitignore'), 'dist\n');
+    unlink(project, opts());
+    expect(read('.gitignore')).toBe('node_modules\ndist\n');
+  });
+
+  it('unlink leaves .gitignore alone when the line was already present', () => {
+    fs.writeFileSync(path.join(project, '.gitignore'), `${STATE_DIR}/\n`);
+    link(project, opts());
+    unlink(project, opts());
+    expect(read('.gitignore')).toBe(`${STATE_DIR}/\n`);
   });
 });
