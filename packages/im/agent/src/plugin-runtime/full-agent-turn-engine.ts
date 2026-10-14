@@ -26,6 +26,11 @@ import { buildTextTurnOutbound } from '../turn/turn-complete.js';
 import { createTurnActivityProjector } from '../activity-feedback/turn-event-projector.js';
 import { PromptAssemblyRegistry } from '../prompt/prompt-assembly-registry.js';
 import type { PromptSectionDescriptor } from '@zhin.js/prompt-section';
+import { progressUpdatesAllowed, resolveToolBudget } from '../core/turn-progress.js';
+import {
+  createSubagentTurnCapability,
+  type SubagentModelSelection,
+} from './subagent-turn-capability.js';
 
 export interface FullAgentTurnEngineOptions {
   readonly host: ZhinAgentPrivate;
@@ -94,9 +99,22 @@ async function* runInteractiveTurn(
   }
 
   const snapshot = await host.contextRepository.getDeferredToolSnapshot(prep.sessionId);
+  const subagentModel: { current?: SubagentModelSelection } = {};
+  const subagentCapability = subagentsEnabled(host, context.turn)
+    ? createSubagentTurnCapability({
+      host,
+      core: options.core,
+      parentTurn: context.turn,
+      capabilities: { ...context.capabilities, tools: context.toolCapabilities },
+      loopHooks: options.loopHooks,
+      resolveModel: () => subagentModel.current,
+    })
+    : undefined;
   const projected = {
     ...context.capabilities,
-    tools: context.toolCapabilities,
+    tools: subagentCapability
+      ? Object.freeze([...context.toolCapabilities, subagentCapability])
+      : context.toolCapabilities,
   };
   const primed = await primeSkillsForIntent({
     capabilities: projected,
@@ -165,6 +183,7 @@ async function* runInteractiveTurn(
     contextText ? [createUserMessage(contextText), ...prompt.userMessages] : prompt.userMessages,
     media,
   );
+  subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const toolRuntime = new TurnToolRuntime(context.turn, plan.capabilities);
   const promptRuntime = Object.freeze({
     bootstrapContext: buildCapabilityBootstrap(
@@ -213,6 +232,7 @@ async function* runInteractiveTurn(
       toolCatalog: plan.catalog,
       toolLoading: 'deferred',
       conversationPersistence: 'session',
+      progressSink: createProgressSink(host, context.turn),
       generation: context.turn.identity.generation,
     }),
   });
@@ -539,4 +559,32 @@ function terminal(text: string, usage: Usage): TurnEndEvent {
 
 function zeroUsage(): Usage {
   return { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+}
+
+/**
+ * Sub-agents run inside the parent turn, so they need a live interactive turn:
+ * opt-in via `ai.agent.subagentTurnMode`, never for Workroom assignments.
+ */
+function subagentsEnabled(host: ZhinAgentPrivate, turn: TurnIngress): boolean {
+  if (host.config.subagentTurnMode !== 'sync') return false;
+  return !turn.session.key.startsWith('workroom:')
+    && !turn.principal.roles.includes('workroom_assignment');
+}
+
+/**
+ * Progress updates go out as normal (not auto-recalled) replies next to the
+ * activity indicator. Outbound messages are recorded without an actor, so the
+ * conversation event feed already keeps them out of later background context.
+ */
+function createProgressSink(
+  host: ZhinAgentPrivate,
+  turn: TurnIngress,
+): ((text: string) => Promise<void>) | undefined {
+  const reply = turn.ports.reply;
+  if (!reply || turn.policy.unattended) return undefined;
+  if (!progressUpdatesAllowed(resolveToolBudget(host.config.toolBudget).progressUpdates, turn)) return undefined;
+  return async (text) => {
+    const delivery = await reply.send([{ type: 'text', content: text }]);
+    if (delivery.status !== 'sent') throw new Error(`progress update not sent: ${delivery.status}`);
+  };
 }

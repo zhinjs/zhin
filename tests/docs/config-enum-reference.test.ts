@@ -71,6 +71,7 @@ describe('source-owned configuration enums', () => {
       ['toolExecution', propertyStringLiterals(agentConfigSource, 'toolExecution'), agentSchema.toolExecution.enum],
       ['modelSizeHint', propertyStringLiterals(agentConfigSource, 'modelSizeHint'), agentSchema.modelSizeHint.enum],
       ['promptCacheRetention', propertyStringLiterals(agentConfigSource, 'promptCacheRetention'), agentSchema.promptCacheRetention.enum],
+      ['subagentTurnMode', propertyStringLiterals(agentConfigSource, 'subagentTurnMode'), agentSchema.subagentTurnMode.enum],
       ['steeringMode', stringLiterals(queueModeSource, 'QueueMode'), agentSchema.steeringMode.enum],
       ['followUpMode', stringLiterals(queueModeSource, 'QueueMode'), agentSchema.followUpMode.enum],
     ] as const;
@@ -99,6 +100,7 @@ describe('source-owned configuration enums', () => {
       'execSecurity',
       'execPreset',
       'toolExecution',
+      'subagentTurnMode',
       'modelSizeHint',
       'promptCacheRetention',
       'outputSchema',
