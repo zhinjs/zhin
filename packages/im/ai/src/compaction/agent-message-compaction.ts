@@ -47,6 +47,11 @@ export interface AgentCompactionConfig {
   keepRecentTokens?: number;
   minKeepCount?: number;
   contextWindow?: number;
+  /**
+   * Message tokens above which auto-compaction runs. Defaults to
+   * `contextWindow - AUTOCOMPACT_BUFFER_TOKENS`.
+   */
+  triggerTokens?: number;
 }
 
 export interface AgentCompactionState {
@@ -152,13 +157,14 @@ export function shouldAutoCompactAgentMessages(
   messages: AgentMessage[],
   contextWindow: number,
   state?: AgentCompactionState,
+  triggerTokens?: number,
 ): boolean {
   if (state && state.consecutiveFailures >= MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES) {
     logger.warn(formatCompact({ circuit_breaker: state.consecutiveFailures }));
     return false;
   }
   const totalTokens = estimateAgentMessagesTokens(messages);
-  return totalTokens > contextWindow - AUTOCOMPACT_BUFFER_TOKENS;
+  return totalTokens > (triggerTokens ?? contextWindow - AUTOCOMPACT_BUFFER_TOKENS);
 }
 
 export async function compactAgentMessages(params: {
@@ -240,7 +246,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
   }
 
   const autoEnabled = config.auto !== false;
-  const needsAuto = params.force || (autoEnabled && shouldAutoCompactAgentMessages(messages, contextWindow, state));
+  const needsAuto = params.force || (autoEnabled && shouldAutoCompactAgentMessages(messages, contextWindow, state, config.triggerTokens));
   if (!needsAuto) {
     return {
       wasCompacted: micro.didCompact,

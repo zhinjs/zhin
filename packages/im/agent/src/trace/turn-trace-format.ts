@@ -60,8 +60,13 @@ function renderTrace(trace: TurnTrace, indent: string, withTimeline: boolean): s
   }
 
   lines.push(`${indent}  模型调用 ${trace.model_calls.length} 次，tokens 输入 ${trace.usage.prompt_tokens} / 输出 ${trace.usage.completion_tokens} / 合计 ${trace.usage.total_tokens}`);
+  const cached = trace.model_calls.reduce((sum, call) => sum + (call.cache_read_tokens ?? 0), 0);
+  if (cached > 0 && trace.usage.prompt_tokens > 0) {
+    lines.push(`${indent}  提示缓存命中 ${cached} tokens（占输入 ${Math.round((cached / trace.usage.prompt_tokens) * 100)}%）`);
+  }
   for (const call of trace.model_calls) {
-    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}`);
+    const cache = call.cache_read_tokens ? ` cache=${call.cache_read_tokens}` : '';
+    lines.push(`${indent}    #${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}${cache}`);
   }
 
   lines.push(`${indent}  工具调用 ${trace.tool_calls.length} 次`);
