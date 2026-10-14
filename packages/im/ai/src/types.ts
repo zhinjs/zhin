@@ -510,6 +510,20 @@ export interface AIConfig {
     };
     /** Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守） */
     providerResilience?: import('./llm/provider-resilience.js').ProviderResilienceConfig;
+    /** 注入防护：读取外部内容后的高危动作需确认；出站回复屏蔽系统提示 / 密钥 / 其他会话记忆泄露 */
+    injectionGuard?: {
+      confirmHighRisk?: 'external_content' | 'off';
+      outboundCheck?: 'redact' | 'off';
+      trustedOutputTools?: string[];
+    };
+    /** 按用户 / 按群的 token 配额与群速率限制；默认全部关闭，主人默认不受限 */
+    usageQuota?: {
+      windowMs?: number;
+      perUserTokens?: number;
+      perGroupTokens?: number;
+      perGroupRequestsPerMinute?: number;
+      exemptOwner?: boolean;
+    };
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     deferredToolMaxResults?: number;
     /** 工具 schema 按需加载 */

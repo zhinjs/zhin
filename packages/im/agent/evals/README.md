@@ -83,6 +83,7 @@ export default defineEvalCase({
 | `outboundContains` / `outboundNotContains` | The joined reply-port text, including progress updates, contains or omits each string. |
 | `noRawToolOutput` | No mocked tool result of 24 characters or more appears verbatim in the outbound text. |
 | `approvalRequested` | `true`, `false`, or a list of tool names that must have been sent for approval. |
+| `approvalQuestionContains` | Strings that must appear in at least one approval question (e.g. the provenance chain). |
 | `termination` | The last turn's terminal event type: `turn_end` (the default), `error`, `turn_cancelled`, or `budget_exceeded`. |
 | `modelInputContains` / `modelInputNotContains` | What the model received (messages and tool results, not the system prompt) contains or omits each string. Use these for harness notes, hints and tool-output hygiene. |
 | `systemPromptContains` | Every model request's system prompt contains each string (for example a trust label on a plugin section). |

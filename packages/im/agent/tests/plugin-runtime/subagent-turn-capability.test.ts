@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { UsageQuota } from '../../src/security/usage-quota.js';
 import { createUserMessage, type AgentTool } from '@zhin.js/ai';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { PromptController } from '../../src/turn/prompt-controller.js';
@@ -97,6 +98,7 @@ async function runQqTurn(options: {
       maxParallelSubagents: 2,
     },
     rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(),
     contextRepository: {
       getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
       setDeferredToolSnapshot: async () => undefined,
