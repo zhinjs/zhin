@@ -53,6 +53,11 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       }
     }
   }
+  for (const needle of expect.approvalQuestionContains ?? []) {
+    if (!run.approvalQuestions.some((question) => question.includes(needle))) {
+      fail('approvalQuestionContains', `no approval question contained "${needle}"`);
+    }
+  }
   const modelInput = run.modelRequests.map((request) => request.inputText).join('\n');
   for (const needle of expect.modelInputContains ?? []) {
     if (!modelInput.includes(needle)) fail('modelInputContains', `the model never received "${needle}"`);

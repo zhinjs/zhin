@@ -11,6 +11,19 @@ import type { AgentTool, ToolExecutionCause } from '@zhin.js/ai';
 import type { ToolExecutionAuthority } from '../core/tool-execution-authority.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { NetworkAccessDeniedError } from '../security/network-policy.js';
+import {
+  PROVENANCE_POLICY,
+  PROVENANCE_UNATTENDED_REASON,
+  TurnProvenance,
+  classifyHighRiskAction,
+  formatProvenanceReason,
+  isExternalContentSource,
+  resolveInjectionGuard,
+  type InjectionGuardSettings,
+} from '../security/provenance.js';
+import type { OutboundLeakInspector } from '../security/outbound-leak-guard.js';
+import { resolveTurnTrustLevel } from '../security/trust-level.js';
+import { safeSessionKey } from '../memory-layers.js';
 
 type ToolJournalEvent = Extract<import('../event/turn-event.js').TurnEvent, {
   type: 'tool_call' | 'tool_result' | 'tool_denied' | 'tool_failed' | 'tool_cancelled';
@@ -22,15 +35,32 @@ export type TurnToolOutcome =
   | Readonly<{ status: 'cancelled'; reason: string }>
   | Readonly<{ status: 'failed'; error: string; retryable: boolean }>;
 
+export interface TurnToolRuntimeOptions {
+  /** `ai.agent.injectionGuard`; unset keys use the conservative defaults. */
+  readonly injectionGuard?: Partial<InjectionGuardSettings>;
+  /** Shared with the engine so sources outside tool calls (background events) also count. */
+  readonly provenance?: TurnProvenance;
+  /** Masks leaks in the text arguments of outbound tools and learns other-session memory reads. */
+  readonly leakInspector?: OutboundLeakInspector;
+}
+
 /** Sole execution authority for Tool capabilities within one fixed Turn lease. */
 export class TurnToolRuntime {
   readonly #tools: ReadonlyMap<string, ToolCapability>;
+  readonly #guard: InjectionGuardSettings;
+  readonly #leakInspector?: OutboundLeakInspector;
+  /** Lower-trust sources that reached the model during this turn (#727). */
+  readonly provenance: TurnProvenance;
 
   constructor(
     private readonly turn: TurnIngress,
     tools: readonly ToolCapability[],
+    options: TurnToolRuntimeOptions = {},
   ) {
     this.#tools = new Map(tools.map((tool) => [tool.name, tool]));
+    this.#guard = resolveInjectionGuard(options.injectionGuard);
+    this.provenance = options.provenance ?? new TurnProvenance();
+    this.#leakInspector = this.#guard.outboundCheck === 'redact' ? options.leakInspector : undefined;
   }
 
   async execute(
@@ -51,7 +81,36 @@ export class TurnToolRuntime {
     if (decision.status === 'denied') {
       return this.#deny(name, toolUseId, decision.policy, decision.reason, causedBy);
     }
-    if (decision.status === 'approval_required') {
+    let effectiveInput = decision.input;
+    const highRisk = classifyHighRiskAction(tool);
+    const provenanceGate = highRisk !== undefined
+      && this.#guard.confirmHighRisk === 'external_content'
+      && this.provenance.tainted;
+    if (provenanceGate) {
+      // #727 M3.3: a high-risk action after lower-trust content always asks
+      // first, even when the configured policy would allow it outright.
+      if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
+        return this.#deny(name, toolUseId, PROVENANCE_POLICY, PROVENANCE_UNATTENDED_REASON, causedBy);
+      }
+      const chain = this.provenance.describeChain(resolveTurnTrustLevel(this.turn), name);
+      const approval = await requestApprovalOutcome(this.turn.ports.approval, {
+        requestId: `${this.turn.identity.turnId}:${toolUseId}`,
+        sessionKey: this.turn.session.key,
+        ...(this.turn.origin.kind === 'im'
+          ? { conversationScope: this.turn.origin.scope }
+          : {}),
+        requesterId: this.turn.principal.subjectId,
+        toolName: name,
+        // Never matches a remembered approval: each tainted call is confirmed on its own.
+        scopeKey: `${PROVENANCE_POLICY}:${this.turn.identity.turnId}:${toolUseId}`,
+        question: formatApprovalQuestion(name, formatProvenanceReason(highRisk, chain), effectiveInput),
+        signal: this.turn.signal,
+      });
+      if (this.turn.signal.aborted) return this.#cancel(name, toolUseId, 0, causedBy);
+      if (approval.status !== 'approved') {
+        return this.#deny(name, toolUseId, PROVENANCE_POLICY, formatApprovalDenial(approval), causedBy);
+      }
+    } else if (decision.status === 'approval_required') {
       if (this.turn.policy.unattended || !isApprovalPortAvailable(this.turn.ports.approval)) {
         return this.#deny(name, toolUseId, decision.policy, 'approval required but ApprovalPort unavailable', causedBy);
       }
@@ -78,9 +137,15 @@ export class TurnToolRuntime {
       }
     }
 
+    if (highRisk === 'outbound' && this.#leakInspector) {
+      // #727 M3.4: messages to other conversations go through the same leak check as replies.
+      effectiveInput = this.#leakInspector.inspectArguments(effectiveInput).input;
+    }
+
     const startedAt = Date.now();
     try {
-      const output = await tool.execute(decision.input, toolInvocationFromTurn(this.turn));
+      const output = await tool.execute(effectiveInput, toolInvocationFromTurn(this.turn));
+      this.#observeOutput(tool, effectiveInput, output);
       const durationMs = Date.now() - startedAt;
       // A tool that ignores cancellation may already have committed side effects.
       // Record its real settlement so the audit trail never invites an unsafe retry.
@@ -97,6 +162,18 @@ export class TurnToolRuntime {
       const message = error instanceof Error ? error.message : String(error);
       await this.#append({ type: 'tool_failed', toolName: name, toolUseId, error: message, durationMs }, causedBy);
       return Object.freeze({ status: 'failed', error: message, retryable: false });
+    }
+  }
+
+  /** Records where the result came from, and which parts are another session's memory. */
+  #observeOutput(tool: ToolCapability, input: Readonly<Record<string, unknown>>, output: unknown): void {
+    if (isExternalContentSource(tool, this.#guard)) {
+      this.provenance.record(tool.name === 'spawn_task'
+        ? { kind: 'subagent_report' }
+        : { kind: 'tool_result', toolName: tool.name });
+    }
+    if (this.#leakInspector && readsOtherSessionMemory(input, this.turn.session.key)) {
+      this.#leakInspector.protectOtherSessionMemory(collectText(output));
     }
   }
 
@@ -143,6 +220,23 @@ function formatApprovalQuestion(
     `风险：${reason}`,
     '是否继续？',
   ].filter((line): line is string => Boolean(line)).join('\n');
+}
+
+const SESSION_MEMORY_PATH = /(?:^|[\\/])data[\\/]memory[\\/]sessions[\\/]([^\\/]+)/;
+
+/** True when a file tool's path points into a different session's memory directory. */
+function readsOtherSessionMemory(input: Readonly<Record<string, unknown>>, sessionKey: string): boolean {
+  const path = ['file_path', 'path', 'filePath'].map((key) => input[key]).find((value) => typeof value === 'string') as string | undefined;
+  const match = path ? SESSION_MEMORY_PATH.exec(path) : null;
+  return match !== null && match[1] !== safeSessionKey(sessionKey);
+}
+
+/** Every string inside a tool output, one per line (file tools may return structured results). */
+function collectText(value: unknown, depth = 0): string {
+  if (typeof value === 'string') return value;
+  if (depth > 4 || value === null || typeof value !== 'object') return '';
+  const entries = Array.isArray(value) ? value : Object.values(value as Record<string, unknown>);
+  return entries.map((entry) => collectText(entry, depth + 1)).filter(Boolean).join('\n');
 }
 
 function approvalScopeKey(toolName: string, input: Readonly<Record<string, unknown>>): string {

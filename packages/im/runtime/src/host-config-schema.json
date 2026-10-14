@@ -165,6 +165,28 @@
                 "progressMaxUpdates": { "type": "integer", "minimum": 0, "default": 3, "description": "Maximum progress updates per turn; 0 disables.", "x-descriptionZh": "每回合最多进度更新次数；0 关闭。" }
               }
             },
+            "injectionGuard": {
+              "type": "object",
+              "description": "Prompt-injection defences. After lower-trust content (tool results, web pages, files, sub-agent reports, background messages) enters a turn, high-risk actions (shell, messaging other conversations, config changes, scheduling) need approval; replies are checked for system-prompt, secret and other-session memory leaks.",
+              "x-descriptionZh": "注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。",
+              "properties": {
+                "confirmHighRisk": { "type": "string", "enum": ["external_content", "off"], "default": "external_content", "description": "external_content: high-risk actions after external content always ask for approval (denied in unattended turns). off: disabled.", "x-descriptionZh": "external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。" },
+                "outboundCheck": { "type": "string", "enum": ["redact", "off"], "default": "redact", "description": "redact: mask leaked system-prompt lines, secrets and other sessions' memory in replies and outbound tool messages. off: disabled.", "x-descriptionZh": "redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。" },
+                "trustedOutputTools": { "type": "array", "items": { "type": "string" }, "default": [], "description": "Tools whose results do not count as external content.", "x-descriptionZh": "结果不算外部内容的工具。" }
+              }
+            },
+            "usageQuota": {
+              "type": "object",
+              "description": "Per-user and per-group token quotas and a per-group rate limit. All limits are off (0) by default; the owner is exempt by default. Counters are kept in memory.",
+              "x-descriptionZh": "按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。",
+              "properties": {
+                "windowMs": { "type": "integer", "minimum": 60000, "default": 86400000, "description": "Quota window in ms.", "x-descriptionZh": "配额周期（毫秒）。" },
+                "perUserTokens": { "type": "integer", "minimum": 0, "default": 0, "description": "Tokens one user may use per window; 0 = unlimited.", "x-descriptionZh": "每个用户每周期可用的 token；0 不限。" },
+                "perGroupTokens": { "type": "integer", "minimum": 0, "default": 0, "description": "Tokens one group may use per window; 0 = unlimited.", "x-descriptionZh": "每个群每周期可用的 token；0 不限。" },
+                "perGroupRequestsPerMinute": { "type": "integer", "minimum": 0, "default": 0, "description": "Turns one group may start per minute; 0 = unlimited.", "x-descriptionZh": "每个群每分钟可发起的回合数；0 不限。" },
+                "exemptOwner": { "type": "boolean", "default": true, "description": "The owner is never limited.", "x-descriptionZh": "主人不受限制。" }
+              }
+            },
             "subagentTurnMode": {
               "type": "string",
               "enum": ["off", "sync"],

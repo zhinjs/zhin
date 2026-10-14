@@ -202,6 +202,54 @@ ai:
 
 **白名单配置**：需要放开某个群成员时，把他的用户 ID 加入 `trigger.trusted`，他发起的回合会按 `trusted_member` 处理。没有额外的开关。
 
+## 注入防护与用量配额
+
+信任分级管“谁发起”，这一节管“回合里读到了什么”和“发出去的是什么”。
+
+### 读取外部内容后的高危动作
+
+回合里只要有外部内容进入模型（工具结果、网页、文件、子 agent 报告、群聊背景消息），之后模型发起的高危动作就一律先审批，即使配置策略本来允许直接执行：
+
+| 类别 | 判定 |
+|------|------|
+| 执行命令 | `bash`，或带 `shell` 标签的工具 |
+| 向其他会话发消息 | 名称含 send/forward/notify 等，或带 `outbound` 标签 |
+| 修改配置 | 名称含 config/settings、安装插件等（`get_`/`list_` 等读取类除外），或带 `config` 标签 |
+| 定时任务 | 名称含 schedule/cron/reminder/timer 等（读取类除外），或带 `schedule` 标签 |
+
+审批卡片会写明来源链，例如“来源链：主人的消息 → 工具 fetch_page 的结果 → 本次调用 bash”。这类审批每次单独确认，不会沿用会话里已记住的批准。没有审批通道的回合（定时任务等无人值守回合）会直接拒绝，策略名为 `external-content-confirmation`。
+
+`discover`、`load_tool`、`load_skill`、`ask_user` 这些 harness 自己的工具不算外部内容。第一方插件的工具如果结果可信，可以加 `trusted_output` 标签，或写进 `injectionGuard.trustedOutputTools`。
+
+### 出站检查
+
+回复、进度更新和外发工具的文本参数在发出前都会检查，命中的内容会被替换成提示，其余部分照常发送：
+
+- 系统提示：人设和引导上下文里的整行原文（至少 24 个字符）→ `[已隐藏：系统提示内容]`；
+- 密钥：常见密钥格式（`sk-`、`ghp_`、私钥块等），以及名称含 KEY/TOKEN/SECRET/PASSWORD 的环境变量的值 → `[已隐藏：密钥]`；
+- 其他会话的记忆：本回合从 `data/memory/sessions/<其他会话>/` 读到的内容 → `[已隐藏：其他会话的记忆]`。
+
+检查是回复通道上的一步：处理完后交给原来的发送链，渲染和 `before.sendMessage` 中间件都不受影响。
+
+### 用量配额
+
+按用户、按群限制 token 用量，另外可以限制每个群每分钟的回合数（单个用户的频率仍由 `rateLimit` 控制）。默认全部关闭，主人默认不受限制。超额时回复会说明原因和恢复时间，只影响超额的用户或群：用户超额不影响别人，群超额不影响私聊和其他群。计数保存在内存中，重启后清零。
+
+```yaml
+ai:
+  agent:
+    injectionGuard:
+      confirmHighRisk: external_content   # off 关闭
+      outboundCheck: redact               # off 关闭
+      trustedOutputTools: []
+    usageQuota:
+      windowMs: 86400000                  # 配额周期，默认 24 小时
+      perUserTokens: 200000               # 0 不限（默认）
+      perGroupTokens: 1000000             # 0 不限（默认）
+      perGroupRequestsPerMinute: 20       # 0 不限（默认）
+      exemptOwner: true
+```
+
 ## 内置工具
 
 | 类别 | 工具 |

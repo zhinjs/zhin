@@ -98,6 +98,16 @@ outline: [2, 3]
 | `ai.agent.toolBudget.progressUpdates` | string: `"off"`, `"private"`, `"all"` | 否 | `"private"` | 长回合中的简短进度更新：off 关闭；private 仅私聊；all 包括群聊（群聊需显式开启）。 |
 | `ai.agent.toolBudget.progressMinIntervalMs` | integer | 否 | `45000` | 两次进度更新的最小间隔（毫秒）。 |
 | `ai.agent.toolBudget.progressMaxUpdates` | integer | 否 | `3` | 每回合最多进度更新次数；0 关闭。 |
+| `ai.agent.injectionGuard` | object | 否 | — | 注入防护。外部内容（工具结果、网页、文件、子 agent 报告、群聊背景消息）进入回合后，高危动作（执行命令、向其他会话发消息、改配置、定时任务）必须审批；出站回复检查系统提示、密钥与其他会话记忆泄露。 |
+| `ai.agent.injectionGuard.confirmHighRisk` | string: `"external_content"`, `"off"` | 否 | `"external_content"` | external_content：读取外部内容后的高危动作一律审批（无人值守回合直接拒绝）；off：关闭。 |
+| `ai.agent.injectionGuard.outboundCheck` | string: `"redact"`, `"off"` | 否 | `"redact"` | redact：在回复和外发工具消息中屏蔽泄露的系统提示、密钥和其他会话记忆；off：关闭。 |
+| `ai.agent.injectionGuard.trustedOutputTools` | array&lt;string&gt; | 否 | `[]` | 结果不算外部内容的工具。 |
+| `ai.agent.usageQuota` | object | 否 | — | 按用户 / 按群的 token 配额与群速率限制。默认全部关闭（0），主人默认不受限；计数保存在内存中。 |
+| `ai.agent.usageQuota.windowMs` | integer | 否 | `86400000` | 配额周期（毫秒）。 |
+| `ai.agent.usageQuota.perUserTokens` | integer | 否 | `0` | 每个用户每周期可用的 token；0 不限。 |
+| `ai.agent.usageQuota.perGroupTokens` | integer | 否 | `0` | 每个群每周期可用的 token；0 不限。 |
+| `ai.agent.usageQuota.perGroupRequestsPerMinute` | integer | 否 | `0` | 每个群每分钟可发起的回合数；0 不限。 |
+| `ai.agent.usageQuota.exemptOwner` | boolean | 否 | `true` | 主人不受限制。 |
 | `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | 否 | `"off"` | IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。 |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
 | `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |

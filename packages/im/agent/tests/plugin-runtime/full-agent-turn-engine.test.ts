@@ -1,4 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
+import { UsageQuota } from '../../src/security/usage-quota.js';
 import { createUserMessage } from '@zhin.js/ai';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import { PromptController } from '../../src/turn/prompt-controller.js';
@@ -119,6 +120,7 @@ describe('FullAgentTurnEngine', () => {
       emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(),
       contextRepository: {
         getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
         setDeferredToolSnapshot: async () => undefined,
@@ -234,6 +236,7 @@ describe('FullAgentTurnEngine', () => {
       emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(),
       contextRepository: {
         getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
         setDeferredToolSnapshot: async () => undefined,
@@ -338,6 +341,7 @@ describe('FullAgentTurnEngine', () => {
       emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(),
       contextRepository: {
         getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
         setDeferredToolSnapshot: async () => undefined,
@@ -438,6 +442,7 @@ describe('FullAgentTurnEngine', () => {
       emitter,
       config: { deferredTools: {} },
       rateLimiter: { check: () => ({ allowed: true }) },
+      usageQuota: new UsageQuota(),
       contextRepository: {
         getDeferredToolSnapshot: async () => ({ loadedTools: {}, loadedSkills: [] }),
         setDeferredToolSnapshot: async () => undefined,
