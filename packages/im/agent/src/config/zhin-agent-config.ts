@@ -2,7 +2,7 @@ import type { ToolBudgetSettings } from '../core/turn-progress.js';
 /**
  * ZhinAgent 配置类型 SSOT — 供 host 契约与 zhin-agent 门面共用。
  */
-import type { RateLimitConfig, QueueMode } from '@zhin.js/ai';
+import type { RateLimitConfig, QueueMode, ProviderResilienceConfig } from '@zhin.js/ai';
 import type { DeferredToolsConfig } from '../tool-catalog/types.js';
 import type { ModelHarnessConfig } from './model-harness.js';
 
@@ -80,6 +80,8 @@ export interface ZhinAgentConfig {
   modelSizeHint?: '' | 'small' | 'medium' | 'large';
   skillInstructionMaxChars?: number;
   modelHarness?: ModelHarnessConfig;
+  /** Provider retry / backoff / timeout / fallback; unset keys use DEFAULT_PROVIDER_RESILIENCE. */
+  providerResilience?: ProviderResilienceConfig;
   phaseTrace?: boolean;
   promptTrace?: boolean;
   promptTraceVerbose?: boolean;

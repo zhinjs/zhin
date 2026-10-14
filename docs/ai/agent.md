@@ -262,6 +262,30 @@ ai:
         "openai:gpt-4o": { maxIterations: 9 }
 ```
 
+## Provider 韧性
+
+主回合的每次模型请求都经过统一的重试 / 超时 / 降级层（`createResilientCompletionPort`）：
+
+- **错误分类**：429 限流、超时、5xx、网络错误可重试；鉴权失败、上下文超长、调用方取消不重试，原样上抛（上下文超长仍走压缩重试）。
+- **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待，超过上限则直接降级。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
+- **fallback**：同一模型重试耗尽后，按 `modelCandidates` 顺序切换到下一个模型；每次重试 / 切换 / 放弃都会写一条 `provider_retry` / `provider_fallback` / `provider_give_up` 日志。
+- **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
+
+```yaml
+ai:
+  agent:
+    providerResilience:
+      maxRetries: 2            # 每个模型首次之后的重试次数；0 关闭重试
+      baseDelayMs: 1000        # 首次退避，之后翻倍
+      maxDelayMs: 10000        # 单次退避上限
+      maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，直接 fallback
+      requestTimeoutMs: 180000 # 单次请求（整段流式输出）超时；0 关闭
+      emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
+      fallback: true           # 重试耗尽后是否切换到下一个候选模型
+```
+
+按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`。
+
 ## Workroom Kernel
 
 Workroom 让多个 Agent 在一个群、频道或 GitHub 仓库里**按角色分工**处理多步骤任务：Orchestrator 负责理解需求和分派，Executor 执行，Reviewer 审核。和普通对话不同，它的每一步都记录在只追加的日志里，可审计、可恢复。

@@ -102,6 +102,24 @@ export type {
   LlmCompletionPort,
 } from './llm/index.js';
 export { renderContextMessage } from './llm/index.js';
+export {
+  DEFAULT_PROVIDER_RESILIENCE,
+  ProviderRequestError,
+  classifyProviderError,
+  computeBackoffDelay,
+  createResilientCompletionPort,
+  describeProviderFailure,
+  isProviderFailureMessage,
+  parseRetryAfterMs,
+  resolveProviderResilienceConfig,
+} from './llm/index.js';
+export type {
+  ProviderErrorClassification,
+  ProviderErrorKind,
+  ProviderResilienceConfig,
+  ProviderResilienceEvent,
+  ResilientCompletionOptions,
+} from './llm/index.js';
 
 // ── Core AI Types ──
 export type {

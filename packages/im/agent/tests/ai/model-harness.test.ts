@@ -58,4 +58,20 @@ describe('model harness defaults', () => {
       },
     });
   });
+
+  it('minimax 预设应开启一次空回复重试，且可被覆盖', () => {
+    expect(resolveModelHarness('minimax', 'minimax-m3').emptyReplyRetries).toBe(1);
+    const resolved = resolveModelHarness('minimax', 'minimax-m3', {
+      models: { 'minimax-m3': { emptyReplyRetries: 0, requestTimeoutMs: 60_000 } },
+    });
+    expect(resolved).toMatchObject({ emptyReplyRetries: 0, requestTimeoutMs: 60_000 });
+  });
+
+  it('应丢弃非法的 provider 怪癖值', () => {
+    const resolved = resolveModelHarness('openai', 'gpt-4o', {
+      models: { 'gpt-4o': { emptyReplyRetries: -1, requestTimeoutMs: Number.NaN } },
+    });
+    expect(resolved.emptyReplyRetries).toBeUndefined();
+    expect(resolved.requestTimeoutMs).toBeUndefined();
+  });
 });

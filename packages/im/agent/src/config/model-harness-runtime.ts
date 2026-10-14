@@ -12,7 +12,13 @@ export const MODEL_HARNESS_DEFAULTS: ModelHarnessRow[] = [
   // MiniMax M-series (direct or routed as `minimax/minimax-m3`): strong tool use but
   // prone to long read-only exploration before acting. Keep the configured
   // iteration budget and steer it with guidance plus an earlier exploration nudge.
-  { modelPattern: /(?:^|\/)minimax-m\d/i, explorationBudget: 5, explorationGuidance: true },
+  // It also occasionally ends a step with an empty reply; re-ask once before giving up.
+  {
+    modelPattern: /(?:^|\/)minimax-m\d/i,
+    explorationBudget: 5,
+    explorationGuidance: true,
+    emptyReplyRetries: 1,
+  },
 ];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
@@ -67,6 +73,12 @@ function sanitizeResolvedHarness(input: Record<string, unknown>): ResolvedModelH
   }
   if (typeof input.explorationGuidance === 'boolean') {
     resolved.explorationGuidance = input.explorationGuidance;
+  }
+  for (const key of ['emptyReplyRetries', 'requestTimeoutMs'] as const) {
+    const value = input[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+      resolved[key] = Math.floor(value);
+    }
   }
   return resolved;
 }

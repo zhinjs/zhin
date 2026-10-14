@@ -284,6 +284,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         temperature: options?.temperature,
         maxOutputTokens: options?.maxTokens ?? model.maxTokens,
         abortSignal: options?.signal,
+        ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
         output: buildStructuredOutputSpec(options?.outputSchema),
       });
