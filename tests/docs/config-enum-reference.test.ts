@@ -82,10 +82,11 @@ describe('source-owned configuration enums', () => {
     for (const field of [
       'subagentExecApprovalMode',
       'workerExecApprovalMode',
-      'taskExecApprovalMode',
     ]) {
       expect(agentSchema[field].enum).toEqual(stringLiterals(source, 'ExecApprovalMode'));
     }
+    // #735: deprecated, no runtime effect, removed from the schema.
+    expect(agentSchema.taskExecApprovalMode).toBeUndefined();
     expect(agentSchema.outputSchema.anyOf[1].enum).toEqual(
       propertyStringLiterals(agentConfigSource, 'outputSchema'),
     );

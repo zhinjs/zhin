@@ -58,13 +58,11 @@ ai:
       headers:
         Authorization: "Bearer ${ICQQ_MCP_TOKEN}"
   agent:
-    deferredToolMaxResults: 5
     execSecurity: allowlist
     execPreset: custom
     execApprovalMode: ask
     subagentExecApprovalMode: auto
     workerExecApprovalMode: auto
-    taskExecApprovalMode: auto
     execAllowlist:
       - echo
       - sort

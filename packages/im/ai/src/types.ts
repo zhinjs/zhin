@@ -508,6 +508,7 @@ export interface AIConfig {
     execApprovalMode?: 'ask' | 'auto' | 'bypass';
     subagentExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     workerExecApprovalMode?: 'ask' | 'auto' | 'bypass';
+    /** @deprecated No effect (#735); `zhin config check --fix` removes it. */
     taskExecApprovalMode?: 'ask' | 'auto' | 'bypass';
     /** 观测主回合阶段日志（或通过 ZHIN_AGENT_PHASE_TRACE=1 开启） */
     phaseTrace?: boolean;
@@ -535,6 +536,7 @@ export interface AIConfig {
       exemptOwner?: boolean;
     };
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
+    /** @deprecated No effect (#735); use `deferredTools.discoverTopK`. */
     deferredToolMaxResults?: number;
     /** 工具 schema 按需加载 */
     deferredTools?: {

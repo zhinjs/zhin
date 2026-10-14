@@ -300,6 +300,16 @@ function checkAi(
       fixHint: 'zhin config check --fix',
     });
   }
+  for (const { key, reason } of aiUtils?.findDeprecatedAgentConfigKeys?.(legacy.agent) ?? []) {
+    pushIssue(issues, {
+      severity: 'warn',
+      code: `ai.agent_${key}_deprecated`,
+      path: `ai.agent.${key}`,
+      message: `ai.agent.${key} 已弃用：${reason}`,
+      fixable: true,
+      fixHint: 'zhin config check --fix',
+    });
+  }
   for (const key of ['allowedTools', 'disabledTools', 'toolSearch', 'memoryMcp'] as const) {
     if (key in legacy) {
       pushIssue(issues, {

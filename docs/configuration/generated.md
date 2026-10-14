@@ -114,7 +114,6 @@ outline: [2, 3]
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
 | `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |
 | `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Worker 命令的审批策略。 |
-| `ai.agent.taskExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Task 命令的审批策略。 |
 | `ai.agent.toolExecution` | string: `"parallel"`, `"sequential"`, `"tiered"` | 否 | — | 同一模型步骤中的工具调用调度方式。 |
 | `ai.agent.modelSizeHint` | string: `""`, `"small"`, `"medium"`, `"large"` | 否 | — | 可选模型尺寸提示；空字符串表示清除提示。 |
 | `ai.agent.promptCacheRetention` | string: `"in_memory"`, `"24h"` | 否 | — | Provider Prompt Cache 保留策略。 |
