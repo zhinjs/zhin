@@ -189,9 +189,29 @@ ai:
       auto: true
       keepRecentTokens: 20000   # token budget for recent messages (default 20000)
       minKeepCount: 2           # minimum messages kept (default 2)
+      thresholdRatio: 0.7       # share of the context window that triggers auto-compaction (default 0.7)
 ```
 
-It triggers when estimated tokens exceed `contextWindow × 0.6`, in two steps: a light trim first (dropping redundant tool results and the like), then the model writes a `[Previous conversation summary]` that replaces the old history. After a limit of consecutive failed auto-compactions, auto-compaction stops to avoid repeated cost.
+Compaction has two steps:
+
+1. Above `contextWindow × 0.6` of messages, a light trim drops redundant tool results and the like.
+2. When message tokens exceed `contextWindow × thresholdRatio` minus what the system prompt and tool definitions use, the model writes a `[Previous conversation summary]` that replaces the old history. The trigger is never above the older "window minus 13k buffer" rule and never below `keepRecentTokens × 1.25`. This applies to plugin-runtime sessions such as QQ as well.
+
+The summary keeps unfinished work, user preferences and **the conclusions and commitments already given to the user**. After a limit of consecutive failed auto-compactions, auto-compaction stops to avoid repeated cost.
+
+### "Already told" ledger
+
+Each session remembers what was already sent to the user, up to 8 entries of at most 120 characters each:
+
+- the lead sentence of each final reply is recorded as a conclusion;
+- sentences that promise future action ("I'll…", "我会…", "稍后…") are recorded as commitments;
+- each progress update (#718) is recorded as progress.
+
+Progress updates and final replies share this one record, and a repeated statement keeps only its newest copy. The next turn gets it as a short `[Already told the user]` block inside `[Turn context]`, so the model neither repeats itself nor contradicts what it said, and compaction is told to keep these items in its summary. The ledger is visible only within its own session and lives in process memory; after a restart, the persisted history and its compaction summary carry the same facts.
+
+### Prompt caching
+
+The system prompt is ordered stable-first: the per-turn git status is the last section (`§12_git_status`), and time, session and other volatile details live in the user message's `[Turn context]`. Cache-read tokens reported by the provider are recorded in the turn trace, and `zhin trace last` shows the prompt cache hit count and its share of input tokens.
 
 ## Built-in tools
 

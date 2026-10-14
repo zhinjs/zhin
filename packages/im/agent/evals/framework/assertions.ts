@@ -70,6 +70,11 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
     const leaked = run.modelRequests.findIndex((request) => request.systemPrompt.includes(needle));
     if (leaked >= 0) fail('systemPromptNotContains', `model request ${leaked + 1} had "${needle}" in its system prompt`);
   }
+  for (const needle of expect.anySystemPromptContains ?? []) {
+    if (!run.modelRequests.some((request) => request.systemPrompt.includes(needle))) {
+      fail('anySystemPromptContains', `no model request had "${needle}" in its system prompt`);
+    }
+  }
   if (expect.contextBudget) {
     const budget = run.traces[0]?.context_budget;
     const bounds = expect.contextBudget;

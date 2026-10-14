@@ -52,6 +52,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
+import { estimatePromptTokens } from '../prompt/estimate-tokens.js';
 import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 import { buildContextBudgetReport } from '../trace/context-budget.js';
 import { renderDeferredToolIndex } from '../skill/capability-catalog.js';
@@ -635,6 +636,10 @@ export async function* runAgentLoopTextTurnRun(
   };
 
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
+  // System prompt and tool schemas count against the window too, so the
+  // compaction threshold is measured on what is left for messages (#730).
+  const fixedPromptTokens = () => estimatePromptTokens(systemPrompt)
+    + llmTools.reduce((sum, tool) => sum + estimatePromptTokens(`${tool.name} ${tool.description}`), 0);
   const loopHooks = input.loopHooks;
   const completionPort = createTurnCompletionPort({
     host,
@@ -695,6 +700,8 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
+        reservedTokens: fixedPromptTokens(),
+        toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         loopHooks,
       }) : messages,
@@ -706,6 +713,8 @@ export async function* runAgentLoopTextTurnRun(
         model: llmModel,
         compactionConfig: host.config.compaction,
         contextWindow,
+        reservedTokens: fixedPromptTokens(),
+        toldLedger: host.toldLedger?.render(sessionId),
         mode: 'text',
         force: true,
         loopHooks,
@@ -963,6 +972,13 @@ export async function* runAgentLoopTextTurnRun(
       messages: [...loaded.messages, ...turnTranscript],
       tools: llmTools,
     });
+  }
+
+  // Progress updates already reached the user, finished or not (#730 ledger).
+  if (persistentConversation && reporter) {
+    for (const text of reporter.reported) {
+      host.toldLedger?.record(sessionId, text, 'progress', traceTurnId(input.turnContext));
+    }
   }
 
   if (signal?.aborted) {

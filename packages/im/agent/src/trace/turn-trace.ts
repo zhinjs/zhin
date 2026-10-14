@@ -35,6 +35,8 @@ export interface TurnTraceModelCall {
   readonly prompt_tokens: number;
   readonly completion_tokens: number;
   readonly total_tokens: number;
+  /** Prompt tokens served from the provider cache (#730). */
+  readonly cache_read_tokens?: number;
 }
 
 export interface TurnTraceToolCall {
@@ -228,6 +230,7 @@ export class TurnTraceCollector {
           prompt_tokens: event.usage.promptTokens,
           completion_tokens: event.usage.completionTokens,
           total_tokens: event.usage.totalTokens,
+          ...(event.usage.cacheReadTokens ? { cache_read_tokens: event.usage.cacheReadTokens } : {}),
         });
         this.#modelCalls.push(call);
         this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}`);
