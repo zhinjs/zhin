@@ -1,7 +1,14 @@
+---
+title: "案例：个人生活助手"
+description: "用本地 Ollama 模型搭一个会聊天、记事、查笔记、按时提醒的私人助手，数据不出本机"
+---
+
 # 案例：个人生活助手
 
-> 对应示例：[`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
-> 关键词：本地模型、知识库、三层记忆、定时任务、零云成本
+::: info 案例信息
+- 对应示例：[`examples/life-assistant-bot`](https://github.com/zhinjs/zhin/tree/main/examples/life-assistant-bot)
+- 关键词：本地模型、知识库、三层记忆、定时任务、零云成本
+:::
 
 ## 场景
 
@@ -62,11 +69,17 @@ ai:
    不用自己写；把 `knowledge/` 里大文档拆小，检索命中率明显更好。
 2. **提醒任务想"别烦我"**：assistant 的定时任务默认失败也通知。
    `assistant.defaults.notifyOnFailure: false` 关掉。
-3. **Console 连不上**：Host  token 在 `.env` 的 `HTTP_TOKEN`，
+3. **Console 连不上**：token 就是 `.env` 里的 `HTTP_TOKEN`，
    Console 里填 `http://127.0.0.1:8086` + 该 token 即可，不用配任何账号系统。
 
-## 后续扩展路径
+## 后续扩展方向
 
 - 加 `@zhin.js/adapter-qq` → 同一个助手进 QQ
 - `pnpm add @zhin.js/speech` → 语音输入/播报
 - 换云模型只需改 `ai.providers`，本地/云可并存做分流
+
+## 下一步
+
+- [AI Agent 路径](../paths/ai-agent.md)：一步步给 Bot 加上模型和工具
+- [AI 总览](../ai/index.md)：模型服务、记忆与助手配置
+- [多平台社区 Bot](./community-bot.md)：另一个案例

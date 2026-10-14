@@ -1,13 +1,21 @@
-# 用 Console 管理运行中的 Zhin
+---
+title: "Console 管理路径：在浏览器里管理运行中的 Bot"
+description: "连接 Console，按任务找到对应页面，查看消息和 AI 执行过程，管理 Workroom，并用一条固定顺序排查问题"
+---
 
-目标：不登录服务器，也能确认当前 generation、处理消息、诊断问题和观察 Agent/Workroom。Console 是独立 Web 应用；Host 提供受 token 保护的 API、SSE 和 Sandbox。
+# Console 管理路径：在浏览器里管理运行中的 Bot
 
-## 完成标准
+Console 是 Zhin 的网页管理后台。不用登录服务器，你就能看 Bot 是否在线、收发消息、查看 AI 每一步做了什么、排查报错。
 
-- 能区分“配置期望”与“当前运行态”。
-- 能从 Endpoint 消息定位到 Agent 步骤与日志。
-- 刷新页面后，持久会话和 Workroom Task 仍可恢复。
-- Demo token 只读，full token 才能执行管理操作。
+做完后你会：
+
+- 知道每类任务该去哪个页面；
+- 能从一条消息追到 AI 的执行步骤和日志；
+- 分清只读的 Demo token 和可管理的 Full token。
+
+::: tip Console 和 Bot 是分开的
+Console 是独立的网页应用（[console.zhin.dev](https://console.zhin.dev)），你的 Bot 进程（Host）只提供受 token 保护的接口。所以同一个 Console 可以连接不同机器上的 Bot。
+:::
 
 ## 1. 连接 Host
 
@@ -15,7 +23,7 @@
 2. 打开 [console.zhin.dev](https://console.zhin.dev)。
 3. Token 使用项目 `.env` 中的 `HTTP_TOKEN`。
 
-新脚手架当前默认端口是 `8068`，但 Console 应始终以终端输出或 `http.port` 为准。连接失败先运行 `npx zhin doctor`。
+用脚手架新建的项目默认端口是 `8068`，但请以终端输出或配置里的 `http.port` 为准。连不上时先运行 `npx zhin doctor`。
 
 ## 2. 按任务选择页面
 
@@ -23,52 +31,67 @@
 | --- | --- | --- |
 | 判断系统是否健康 | 工作台 | Endpoint、日志、Agent 与待处理事项摘要 |
 | 收发消息或处理请求 | 渠道与会话 | Endpoint、会话、消息、通知与请求 |
-| 观察一次 Agent 执行 | Agent 概览 | Run、步骤、工具结果、取消与重试入口 |
-| 管理协作项目 | Workroom | Project-scoped Run、Task、Assignment 与 Gate |
-| 核对实际装载能力 | 运行时能力 | 命令、中间件、组件、Tool、Prompt Section 与 MCP |
+| 查看 AI 处理一条消息的过程 | Agent 概览 | 每次执行的步骤、工具结果、取消与重试入口 |
+| 管理多 Agent 协作项目 | Workroom | 项目内的任务、分派、审核与放行关卡 |
+| 确认某个命令或工具真的加载了 | 运行时能力 | 命令、中间件、组件、Tool、Prompt Section 与 MCP |
 | 排查失败 | 日志 | 级别、来源、时间线和详情 |
 | 修改系统 | 配置、环境变量、文件、数据库 | 仅 full scope 开放的管理面 |
 
-不要从配置文件推断能力已经生效。以“运行时能力”中的 generation projection 和具体 Run 为准。
+**配置里写了不等于已经生效。** 判断某个能力是否可用，以“运行时能力”页面显示的当前加载结果为准。
 
-## 3. 验证实时消息与历史恢复
+## 3. 收发消息
 
-“渠道与会话”通过 SSE 接收增量事件，并通过 HTTP RPC 拉取权威历史。断线恢复出现 gap 时，Console 会清空增量投影并重新拉取当前 Endpoint/Channel。
+在“渠道与会话”中选择一个 Endpoint（Bot 在某个平台上登录的账号）和会话，就能查看和发送消息。新消息实时推送；刷新页面后，已保存的历史消息仍在。
 
-刷新页面不应丢失 Host 已持久化的消息。若某适配器不提供历史能力，Console 只能展示 Host 收件箱中已经持久化的部分。
+::: details 为什么有些平台看不到更早的历史？
+页面通过 SSE 接收实时事件，通过 HTTP 拉取历史；断线重连后如果中间有缺口，会重新拉取当前会话。如果某个平台的适配器不提供历史消息接口，Console 只能显示 Bot 运行期间自己保存下来的那部分。
+:::
 
-## 4. 使用 Agent 工作台
+## 4. 查看 AI 的执行过程
 
-Agent Run 以 `runtimeId + turnId` 标识，不能只靠时间或消息文本猜测归属。工作台展示模型步骤、Tool 调用、取消终态和可携带报告。
+“Agent 概览”列出每一次 AI 执行（Run），点开能看到模型的每一步、调用了哪些工具、结果是什么，以及是否被取消。也可以在这里取消正在执行的任务，或导出一份执行报告。
 
-实验会话由 Host 持久化；启动任务时可指定工作目录和安全策略。Prompt Section、Tool 与 MCP 则从该回合固定的 generation snapshot 读取。
+工作台里还可以开实验会话：启动时指定工作目录和安全策略，会话由 Host 保存，刷新后仍在。
 
-## 5. 使用 Workroom 看板
+::: details 怎么确定一次执行对应哪条消息？
+每次执行以 `runtimeId + turnId` 唯一标识，不要靠时间或消息文本去猜。执行开始时用到的工具、Prompt Section 和 MCP 会被固定下来，中途保存代码不会影响这一次执行。
+:::
 
-一个 Workroom 绑定一个完整协作空间：群、频道或 GitHub 仓库。同一个 Bot Endpoint 可以服务多个 Workroom。
+## 5. 管理 Workroom
 
-“Workroom 配置”写入持久 Runtime Catalog，保存立即生效，不修改 `ai.workrooms`，也不要求重启 Host。成员中的 Agent 必须引用当前 `ai.agents` binding。
+Workroom 是多个 Agent 协作完成任务的空间，绑定一个群、频道或 GitHub 仓库；同一个 Bot 账号可以服务多个 Workroom。概念介绍见 [Agent 深入](../ai/agent.md#workroom-kernel)。
 
-看板的 Run、Task、Assignment、Reviewer 与 Sponsor Gate 来自 Workroom Journal 的只读投影。Console 不直接伪造 Task 状态；写操作必须进入受认证的 typed control port。
+- **“Workroom 配置”**：新建或修改 Workroom，保存后立即生效，不用重启。成员里的 Agent 必须是 `ai.agents` 中已经配置的。
+- **看板**：查看任务、分派、审核人和放行关卡的当前状态。
 
-## 6. Full 与 Demo 的权限边界
+::: details 配置存在哪？看板上能直接改任务状态吗？
+Console 里的 Workroom 配置保存在持久化的 Runtime Catalog 中，**不会**写回 `zhin.config.yml` 的 `ai.workrooms`。看板内容是 Workroom Journal（事件日志）的只读视图；Console 不能直接改写任务状态，所有修改都要通过经过认证的控制接口提交。
+:::
 
-- Full token：按 Host 策略开放配置、环境变量、文件、数据库和控制操作。
-- Demo token：只读目录与投影；不读取原始 YAML，也不能发送、渲染或修改资源。
-- Token 是权限凭据，不要放进 URL、截图或公开前端配置。
+## 6. Full token 与 Demo token
 
-远程部署时配置 `http.corsOrigins`，并让反向代理转发 API、SSE、WebSocket 与页面条目。不要只代理普通 HTTP 请求。
+| | Full token | Demo token |
+| --- | --- | --- |
+| 查看状态、能力列表、执行过程 | ✅ | ✅ |
+| 发送消息、修改配置/环境变量/文件/数据库 | ✅（按 Host 策略） | ❌ |
+| 读取原始 YAML 配置 | ✅ | ❌ |
 
-## 7. 一条标准排障链
+Token 就是密码：不要放进 URL、截图或公开的前端配置里。
 
-1. 工作台确认连接和健康状态。
-2. 渠道与会话确认入站是否到达。
-3. 运行时能力确认命令、Tool 或 Prompt Section 是否在当前 generation。
-4. Agent 概览检查执行步骤和终态。
-5. 日志按同一时间段和来源收窄。
+::: details 远程部署时连不上？
+在配置中设置 `http.corsOrigins` 允许 Console 的域名；如果前面有反向代理，要同时转发 API、SSE、WebSocket 和页面资源，只转发普通 HTTP 请求会导致实时消息或页面加载失败。详见 [生产部署与运维](../operations/production.md)。
+:::
+
+## 7. 出问题时按这个顺序查
+
+1. **工作台**：Bot 连上了吗？各 Endpoint 在线吗？
+2. **渠道与会话**：用户的消息到达 Bot 了吗？
+3. **运行时能力**：相关的命令、工具或 Prompt Section 加载了吗？
+4. **Agent 概览**：AI 执行到哪一步、以什么状态结束？
+5. **日志**：按同一时间段和来源筛选，找具体报错。
 
 ## 下一步
 
-- Console 与 Host 的边界：[Console 架构](../console/)
-- Workroom 的事实模型：[Workroom Kernel](../ai/agent.md#workroom-kernel)
-- 多平台生产案例：[多平台社区 Bot](../showcase/community-bot.md)
+- [Console 概览](../console/)：Console 与 Host 如何分工、页面扩展
+- [Agent 深入 · Workroom Kernel](../ai/agent.md#workroom-kernel)：Workroom 的规则与配置
+- [多平台社区 Bot](../showcase/community-bot.md)：一个多平台生产案例

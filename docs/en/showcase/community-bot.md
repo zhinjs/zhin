@@ -1,7 +1,14 @@
+---
+title: "Showcase: multi-platform community bot"
+description: "One process running 5 QQ accounts, a QQ Official bot, Slack, and GitHub: how multi-account config works and what operating it taught us"
+---
+
 # Showcase: Multi-Platform Community Bot
 
-> Corresponding example: [`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) (maintainer kitchen sink, full capability demonstration)
-> Keywords: single instance multi-account, one process five QQ accounts, game plugins, cross-platform AI
+::: info About this story
+- Example: [`examples/test-bot`](https://github.com/zhinjs/zhin/tree/main/examples/test-bot) (the maintainers' full-feature demo project, not a starter template)
+- Keywords: single instance multi-account, one process five QQ accounts, game plugins, cross-platform AI
+:::
 
 ## Scenario
 
@@ -11,7 +18,8 @@ and GitHub repo notifications. Previously each platform had its own process and 
 
 ## Why zhin
 
-The core reason is **single-instance multi-endpoint**: one adapter plugin instance hosts multiple accounts,
+The core reason is **one adapter, many accounts**: in Zhin, each account the bot signs in to on a platform is an Endpoint.
+One adapter plugin instance can host several Endpoints,
 with `endpoints[i]` each having their own credentials while top-level fields are shared. Five icqq accounts
 in the config means one `icqq` plugin + 5 endpoints, not one plugin duplicated five times.
 
@@ -73,3 +81,9 @@ plugins:
 - Logs are viewable directly on the Console "Logs" page (SystemLog persisted to database, with level filtering) -- no need to SSH and dig through files.
 - Scheduled tasks (game session cleanup, lottery pipeline) are managed on the Console "Scheduled Tasks" page -- no config changes or restarts needed.
 - AI uses OpenRouter free models as fallback; expensive models are routed by agent role (`ai.agents.<name>.provider`).
+
+## Next steps
+
+- [Platform adapters](../adapters/index.md): per-platform setup and configuration
+- [Console path](../paths/console.md): manage several accounts in the browser
+- [Production](../operations/production.md): the pre-launch checklist
