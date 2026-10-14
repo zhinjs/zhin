@@ -282,7 +282,8 @@ Tools aren't all stuffed into the prompt. `ai.agent.deferredTools` (`ZhinAgentCo
 | --- | --- | --- |
 | `maxLoadedPerSession` | `12` | Max tools loaded at once per conversation |
 | `discoverTopK` | `5` | Results returned by `discover` |
-| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | Always visible to the model |
+| `alwaysLoadedTools` | `['ask_user', 'spawn_task', 'discover', 'load_tool', 'load_skill']` | Always visible to the model; configured names are added to the defaults |
+| `alwaysLoadedMode` | `'extend'` | `'replace'` makes `alwaysLoadedTools` replace the defaults entirely |
 | `mcpServers` | `{}` | Per-MCP-server overrides of the `alwaysLoaded` list |
 
 ## How it works
