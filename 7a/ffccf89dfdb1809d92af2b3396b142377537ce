@@ -1,0 +1,33 @@
+.changeset/agent-provider-fault-cases.md
+  s_c757df74f34330::t_f27809b95480e3 1-5
+packages/im/agent/evals/README.md
+  s_c757df74f34330::t_1b7e04024c2c2d 136-140
+packages/im/agent/evals/cases/provider-empty-reply-default.case.ts
+  s_c757df74f34330::t_2836111cf70449 1-15
+packages/im/agent/evals/cases/provider-empty-reply-reasked.case.ts
+  s_c757df74f34330::t_8db9041217e26c 1-19
+packages/im/agent/evals/cases/provider-malformed-tool-call.case.ts
+  s_c757df74f34330::t_da5e15fc1d981f 1-22
+packages/im/agent/evals/cases/provider-rate-limit-retried.case.ts
+  s_c757df74f34330::t_7cee7ca6ee5f21 1-21
+packages/im/agent/evals/cases/provider-retries-exhausted-polite.case.ts
+  s_c757df74f34330::t_d12b8e396d1de2 1-20
+packages/im/agent/evals/framework/framework.test.ts
+  s_c757df74f34330::t_dd89ccc0a3e4e0 124-126
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7affccf89dfdb1809d92af2b3396b142377537ce",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
