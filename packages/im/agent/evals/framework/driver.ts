@@ -31,8 +31,8 @@ import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-tr
 import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
-import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
-import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
+import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
+import { createScriptedModel, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 
 export interface EvalToolInvocation {
@@ -79,19 +79,31 @@ export interface RunEvalCaseOptions {
    * clock, so no eval waits in real time and timers fire only on `hang` steps.
    */
   readonly clock?: EvalClock;
+  /**
+   * Model source for the case. Defaults to the case's scripted model (PR
+   * gate). The nightly tier passes a factory returning {@link createLiveModel}
+   * so the same case runs against a real provider; the script is then unused.
+   */
+  readonly model?: (definition: EvalCase, clock: EvalClock) => ScriptedModel;
 }
 
 export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOptions = {}): Promise<EvalRunRecord> {
   const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
   try {
-    return await runInWorkspace(definition, workspace, options.clock ?? createFakeClock());
+    const clock = options.clock ?? createFakeClock();
+    return await runInWorkspace(definition, workspace, clock, options.model?.(definition, clock));
   } finally {
     if (workspace) await rm(workspace, { recursive: true, force: true });
   }
 }
 
-async function runInWorkspace(definition: EvalCase, workspace: string | undefined, clock: EvalClock): Promise<EvalRunRecord> {
-  const model = createScriptedModel(definition.script, {
+async function runInWorkspace(
+  definition: EvalCase,
+  workspace: string | undefined,
+  clock: EvalClock,
+  liveModel: ScriptedModel | undefined,
+): Promise<EvalRunRecord> {
+  const model = liveModel ?? createScriptedModel(definition.script, {
     extraModels: definition.models,
     clock,
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),

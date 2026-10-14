@@ -6,7 +6,9 @@
 import { z, type LlmTool } from '@zhin.js/ai';
 import { semantic, type ModelObservation, type SemanticCheck } from './semantic.js';
 
-export type Capability = 'tool-call-format' | 'parallel-calls' | 'long-context' | 'zh-instruction';
+export type Capability = 'tool-call-format' | 'parallel-calls' | 'long-context' | 'zh-instruction'
+  /** An M0.2 seed case replayed end to end through the eval driver with a real model. */
+  | 'seed-case';
 
 export interface CapabilityCase {
   readonly id: string;
