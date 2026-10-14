@@ -1,0 +1,21 @@
+.changeset/agent-file-tool-hygiene.md
+  s_c757df74f34330::t_8de221979ea7be 1-5
+packages/im/agent/src/plugin-runtime/file-search-scope.ts
+  s_c757df74f34330::t_3901093fb819a0 1-137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "da0efdc029da64fc876d4c2636a9c5996d743535",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
