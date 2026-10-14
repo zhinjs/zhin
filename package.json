@@ -36,6 +36,7 @@
     "pub": "pnpm changeset publish",
     "stop:test": "pnpm --filter test-bot stop",
     "init": "pnpm install",
+    "zhin:local": "node scripts/zhin-local.mjs",
     "prepare:logger": "pnpm --filter @zhin.js/logger build && pnpm --filter @zhin.js/schedule build && pnpm --filter @zhin.js/cli install",
     "prepare:cli": "pnpm --filter @zhin.js/scaffold-wizard build && pnpm --filter @zhin.js/cli build && pnpm install",
     "build": "turbo run build --filter=./basic/** --filter=./packages/** --filter=./plugins/**",

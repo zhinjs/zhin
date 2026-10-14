@@ -85,30 +85,29 @@ Other options compared:
 - **`pnpm link` / `link:` a single plugin**: not recommended. The linked plugin's `workspace:` dependencies resolve into the source repo, which is exactly the cause of section 1.
 - **yalc**: essentially the same as a tarball (copies build output); can't use unreleased framework APIs and needs an extra tool; not verified in this repo.
 - **tarball (see table below)**: for trying a local plugin in **your own external project** while the framework stays on npm.
-- **`pnpm.overrides` pointing everything local**: fallback when an external project must use the local framework; must cover every zhin package the project uses.
+- **`pnpm zhin:local link`**: recommended when an external project needs the local framework (section 4); generates all tarball overrides and restores in one step; hand-written `pnpm.overrides` is the fallback.
 
 ## 4. Three valid setups for external projects
 
 | Setup | How | Use for | Notes |
 |-------|-----|---------|-------|
 | All npm | Plugins also use published versions (`^x.y.z`) | Daily use, production | Only published APIs and config fields |
-| All local | Use `pnpm.overrides` to point `zhin.js` and every `@zhin.js/*` at the same local checkout (`link:`), and run `pnpm build` there first | Changing framework and plugin together | All zhin packages must come from the **same** checkout; missing one brings back section 1's error |
+| All local | Prefer `pnpm zhin:local link` (below); or manually use `pnpm.overrides` to point `zhin.js` and every `@zhin.js/*` at the same local checkout (`link:`), and run `pnpm build` there first | Changing framework and plugin together | All zhin packages must come from the **same** checkout; missing one brings back section 1's error |
 | Tarball | Run `pnpm pack` in the plugin dir (rewrites `workspace:` to real versions), depend on `file:./vendor/xxx.tgz` | Trying a local plugin with npm framework | Plugin can't use unreleased framework APIs; repack and `pnpm install` after each change |
 
-`pnpm.overrides` example (adjust paths; cover every zhin package your project uses):
+**For external projects, use the one-click command** instead of hand-written overrides. From the zhin source repo root:
 
-```json
-{
-  "pnpm": {
-    "overrides": {
-      "zhin.js": "link:../zhin/packages/im/zhin",
-      "@zhin.js/command": "link:../zhin/packages/im/command",
-      "@zhin.js/runtime": "link:../zhin/packages/im/runtime",
-      "@zhin.js/cli": "link:../zhin/basic/cli"
-    }
-  }
-}
+```bash
+pnpm zhin:local link ../my-bot     # detect zhin.js / @zhin.js/* used by the project, build and pack the full closure, write tarball overrides, run pnpm install
+pnpm zhin:local unlink ../my-bot   # restore package.json and pnpm-lock.yaml exactly, then run pnpm install
 ```
+
+- After changing local source, run `link` again to rebuild and refresh the tarballs (idempotent);
+- Backups and tarballs live in the project's `.zhin-local/`; add it to the project's `.gitignore`;
+- The command refuses with a clear message if `package.json`/`pnpm-lock.yaml` have uncommitted changes, zhin-related `pnpm.overrides` already exist, or `package.json` was edited after linking;
+- Every zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
+
+If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
 
 Run `pnpm install` afterwards and use the commands from section 1 to confirm each package has a single resolved path.
 
@@ -139,7 +138,7 @@ Plugins must release their own timers and connections in dispose; a dispose that
 - [ ] Every `link:`/`file:`/`workspace:` dependency found by `grep` is expected;
 - [ ] `pnpm why @zhin.js/command` (and `zhin.js`, `@zhin.js/tool`, ...) shows a single resolved path per package;
 - [ ] APIs and config fields used by local plugins exist in the installed zhin.js version;
-- [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / all-local overrides) without mixing;
+- [ ] Prefer developing inside the zhin repo (all `workspace:*`); for external projects pick one setup (all npm / tarball / `zhin:local link`) without mixing;
 - [ ] Ran `pnpm install` after dependency changes and `pnpm build` after local source changes;
 - [ ] Port is free and old instances were stopped by PID before starting;
 - [ ] Ctrl+C exits within 5 seconds without `forcedExit`; if not, check the release logic of components listed in `stillStopping`.

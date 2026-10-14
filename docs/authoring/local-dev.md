@@ -85,30 +85,29 @@ cd examples/my-bot && pnpm exec zhin runtime start --once
 - **`pnpm link` / `link:` 单个插件**：不推荐。被链接插件的 `workspace:` 依赖会解析到源码仓库，正是第 1 节错误的成因。
 - **yalc**：本质与 tarball 相同（复制发布产物），不能使用未发布的框架 API，且需额外安装工具；未在本仓库验证。
 - **tarball（见下表）**：适合在**自己的外部项目**里试用本地插件、框架仍用 npm。
-- **`pnpm.overrides` 全部指向本地**：外部项目必须使用本地框架时的兜底方案，需覆盖项目用到的全部 zhin 包。
+- **`pnpm zhin:local link`**：外部项目需要使用本地框架时的推荐方式（见第 4 节），自动生成全部 tarball overrides 并可一键恢复；手写 `pnpm.overrides` 作为兜底。
 
 ## 4. 外部项目的三种可行组合
 
 | 方案 | 做法 | 适用 | 注意 |
 |------|------|------|------|
 | 全部 npm | 插件也用已发布版本（`^x.y.z`） | 日常运行、生产 | 只能用已发布的 API 与配置字段 |
-| 全部本地 | 用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 统一指向同一个本地源码仓库（`link:`），并先在源码仓库 `pnpm build` | 同时改框架与插件 | 所有 zhin 包必须来自**同一个**仓库；漏掉一个就会回到第 1 节的错误 |
+| 全部本地 | 推荐 `pnpm zhin:local link`（见下文）；或手动用 `pnpm.overrides` 把 `zhin.js` 及所有 `@zhin.js/*` 统一指向同一个本地源码仓库（`link:`），并先在源码仓库 `pnpm build` | 同时改框架与插件 | 所有 zhin 包必须来自**同一个**仓库；漏掉一个就会回到第 1 节的错误 |
 | 打包 tarball | 在插件目录 `pnpm pack`（会把 `workspace:` 改写成真实版本），项目里依赖 `file:./vendor/xxx.tgz` | 只想试用本地插件、框架用 npm | 插件不能依赖未发布的框架 API；每次改动需重新打包并 `pnpm install` |
 
-`pnpm.overrides` 示例（路径按实际调整，覆盖项目用到的全部 zhin 包）：
+**外部项目推荐用一键命令**代替手写 overrides。在 zhin 源码仓库根目录执行：
 
-```json
-{
-  "pnpm": {
-    "overrides": {
-      "zhin.js": "link:../zhin/packages/im/zhin",
-      "@zhin.js/command": "link:../zhin/packages/im/command",
-      "@zhin.js/runtime": "link:../zhin/packages/im/runtime",
-      "@zhin.js/cli": "link:../zhin/basic/cli"
-    }
-  }
-}
+```bash
+pnpm zhin:local link ../my-bot     # 检测项目用到的 zhin.js / @zhin.js/*，构建并打包完整依赖闭包，写入 tarball overrides，执行 pnpm install
+pnpm zhin:local unlink ../my-bot   # 原样恢复 package.json 与 pnpm-lock.yaml，再执行 pnpm install
 ```
+
+- 本地源码改动后再次执行 `link` 即可重新构建并刷新 tarball（幂等）；
+- 备份与 tarball 存放在项目内的 `.zhin-local/`，建议加入项目的 `.gitignore`；
+- `package.json`/`pnpm-lock.yaml` 有未提交改动、已有 zhin 相关 `pnpm.overrides`、或 link 后 `package.json` 被手动修改时，命令会拒绝执行并说明原因；
+- 所有 zhin 包来自同一份打包产物，不会出现第 1 节的多副本错误。
+
+无法使用该命令时，可手写 `pnpm.overrides`（`link:` 指向同一个源码仓库），但必须覆盖项目依赖闭包中的**全部** zhin 包（含 `@zhin.js/runtime` 等间接依赖）。
 
 修改后执行 `pnpm install`，再用第 1 节的命令确认每个包只有一个解析路径。
 
@@ -139,7 +138,7 @@ lsof -nP -iTCP:<端口> -sTCP:LISTEN
 - [ ] `grep` 出的 `link:`/`file:`/`workspace:` 依赖都在预期内；
 - [ ] `pnpm why @zhin.js/command`（及 `zhin.js`、`@zhin.js/tool` 等）每个包只有一个实际解析路径；
 - [ ] 本地插件用到的 API 与配置字段在当前安装的 zhin.js 版本中存在；
-- [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / 全本地 overrides），没有混用；
+- [ ] 优先在 zhin 仓库内开发（全 `workspace:*`）；外部项目则选定一种组合（全 npm / tarball / `zhin:local link`），没有混用；
 - [ ] 修改依赖后执行了 `pnpm install`，本地源码改动后执行了 `pnpm build`；
 - [ ] 启动前确认端口空闲，旧实例已按 PID 停止；
 - [ ] Ctrl+C 后 5 秒内退出且无 `forcedExit` 输出；若有，按 `stillStopping` 排查对应组件的释放逻辑。
