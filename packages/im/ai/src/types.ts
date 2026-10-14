@@ -449,6 +449,12 @@ export interface AIConfig {
     execSecurity?: 'deny' | 'allowlist' | 'full';
     /** 预设命令白名单模式：readonly / network / development / custom（默认 custom，使用自定义 execAllowlist） */
     execPreset?: 'readonly' | 'network' | 'development' | 'custom';
+    /**
+     * IM 私聊里 master 能否使用 bash。默认 off：IM 会话不提供 bash。
+     * isolated：仅 master 私聊开放，命令在 Docker 容器内执行（工作区可写、默认无网络、
+     * development 白名单、白名单外命令需审批）。宿主没有可用 Docker 时执行会失败，不会降级到宿主机。
+     */
+    masterShell?: 'off' | 'isolated';
     /** allowlist 模式下允许的命令（支持正则字符串，如 "^ls "、"^cat "），与 preset 合并 */
     execAllowlist?: string[];
     /** 审批方式：人工询问、独立审核 Agent，或跳过审批。 */

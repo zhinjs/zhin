@@ -138,6 +138,13 @@
               "description": "Command allowlist preset used outside full mode.",
               "x-descriptionZh": "非 full 模式使用的命令白名单预设。"
             },
+            "masterShell": {
+              "type": "string",
+              "enum": ["off", "isolated"],
+              "default": "off",
+              "description": "Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable.",
+              "x-descriptionZh": "IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。"
+            },
             "execApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for main Agent commands.", "x-descriptionZh": "主 Agent 命令的审批策略。" },
             "subagentExecApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for sub-Agent commands.", "x-descriptionZh": "子 Agent 命令的审批策略。" },
             "workerExecApprovalMode": { "type": "string", "enum": ["ask", "bypass", "auto"], "description": "Approval policy for worker commands.", "x-descriptionZh": "Worker 命令的审批策略。" },

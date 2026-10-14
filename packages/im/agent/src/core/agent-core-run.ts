@@ -37,6 +37,7 @@ import type { ToolExecutionAuthority } from './tool-execution-authority.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
+import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -357,8 +358,6 @@ export async function* runAgentLoopTextTurnRun(
     host,
     sessionId,
     userMessageExtra,
-    allTools,
-    resolvedTools,
     personaEnhanced,
     modelId,
     onChunk,
@@ -367,6 +366,13 @@ export async function* runAgentLoopTextTurnRun(
   } = input;
 
   const repo = host.contextRepository;
+
+  // Bash is only offered when this turn's policy can actually run it, so the
+  // model never burns a step on a tool that is guaranteed to fail. Filtering
+  // the catalog also keeps load_tool / auto-load from re-adding it.
+  const turnPolicy = input.turnContext.policy;
+  const allTools = withoutForbiddenShell(turnPolicy, input.allTools);
+  const resolvedTools = withoutForbiddenShell(turnPolicy, input.resolvedTools);
 
   const providerAlias = host.getTurnProvider().name;
   const llmModel = host.llmRuntime.model(providerAlias, modelId);
@@ -421,7 +427,7 @@ export async function* runAgentLoopTextTurnRun(
     : [];
 
   const deferredController = directTools ? undefined : input.deferredController;
-  const catalog = directTools ? [] : [...(input.toolCatalog ?? [])];
+  const catalog = directTools ? [] : withoutForbiddenShell(turnPolicy, input.toolCatalog ?? []);
   if (!directTools && hasTools && (!deferredController || catalog.length === 0)) {
     throw new Error('Deferred tool loading requires a turn-owned controller and catalog');
   }
