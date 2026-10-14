@@ -31,7 +31,9 @@ sidebar: false
   - 2026-10-13 · 「test: 收紧 Workroom 激活顺序不变量测试」· 先写合法事件再篡改，断言 cause 含 `stored event digest`；方案 §1.2 补兼容层说明
 - [x] A2c 拆分 `plugin-runtime/deferred-capability-plan.ts`：`WorkroomCapabilityRealization`、`bindWorkroomCapabilityRealization`、`createWorkroomDeferredCapabilityPlan` 等 workroom 部分移到 `workroom-runtime/`；通用的 `createDeferredCapabilityPlan` 不能再 import workroom 类型，改为接收一个注入的“能力上限”接口。完成后，`packages/im/agent/src` 中除 `workroom/`、`workroom-runtime/`、`portfolio/`、`data-governance/` 之外，只有 `plugin-runtime/index.ts` 和根 `index.ts` 的 re-export 允许引用这四个目录
   - 2026-10-13 · 「refactor: 拆分 deferred capability plan 的 Workroom 部分」· Workroom 天花板移入 `workroom-runtime/`，通用计划改为注入 `ceiling`；架构检查新增四目录引用约束；导出名不变
-- [ ] A2c-1 处理第 4 轮审查意见：`createDeferredCapabilityPlan` 收到遗留的 `authority` 字段时抛错（fail-closed，补测试）；`check-architecture-layers.mjs` 的四目录引用约束覆盖 `import type` / `export type` / `import()`，白名单 barrel 只放行 `export ... from`（补自测）；顺带：校验 ceiling 返回的是子集；`workroom_` 前缀提成常量并注释说明
+- [x] A2c-1 处理第 4 轮审查意见：`createDeferredCapabilityPlan` 收到遗留的 `authority` 字段时抛错（fail-closed，补测试）；`check-architecture-layers.mjs` 的四目录引用约束覆盖 `import type` / `export type` / `import()`，白名单 barrel 只放行 `export ... from`（补自测）；顺带：校验 ceiling 返回的是子集；`workroom_` 前缀提成常量并注释说明
+  - 2026-10-14 · 「fix: 收紧 deferred capability plan 与四目录引用检查」· 遗留 `authority` 抛错、ceiling 子集校验、引用检查覆盖 type-only 与 `import()`、barrel 只放行 re-export、`RESERVED_CONTROL_TOOL_PREFIX` 常量
+- [ ] A2c-2 处理第 5 轮审查意见：删掉 `scripts/lib/parse-imports.mjs` 中重复的 `export type * from` 正则（会让 barrel 检查把合法的 `export type *` 误报为违规），补 `export type * from` 放行用例和“parseImports 不返回重复项”的测试；`export` 正则支持 `* as ns`，补 `export * as ns` / `export type * as ns` 用例；changeset 补充新导出 `RESERVED_CONTROL_TOOL_PREFIX`（或取消导出）
 - [ ] A3 断开 `data-governance ↔ workroom` 的循环依赖：抽出共享类型，方向固定为 workroom → data-governance
 - [ ] A4a 新建包 `packages/im/workroom`（`@zhin.js/workroom`），参照现有包的 package.json / tsconfig / exports（development 条件）。先把 `workroom/`、`portfolio/`、`data-governance/` 搬过去；agent 侧临时 re-export 保持兼容
 - [ ] A4b 把 `workroom-runtime/` 搬进新包；把 `@zhin.js/agent`、`@zhin.js/agent/runtime` 中的 workroom 导出改为从 `@zhin.js/workroom` 导出，修改所有使用方（basic/cli、packages/host/*、plugins、examples、tests）。agent 包不再依赖 workroom 包
@@ -89,6 +91,12 @@ sidebar: false
 - Should fix：新的引用约束检查复用 `parseImports`，跳过了 type-only import → A2c-1
 - Nit：ceiling 返回值未校验为子集；barrel 整文件豁免而非只放行 re-export；`workroom_` 前缀写死在 generic 层 → 并入 A2c-1
 
+### 第 5 轮（2026-10-14，审查 A2c-1）
+
+- 无 Blocking
+- Should fix：`parse-imports.mjs` 对 `export type * from` 匹配两次，barrel 检查会误报（目前 barrel 未使用该写法，潜伏）→ A2c-2
+- Nit：`export * as ns from` 未被解析，非 barrel 文件可绕过引用检查；`RESERVED_CONTROL_TOOL_PREFIX` 成为公开导出但 changeset 未提 → 并入 A2c-2
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -97,3 +105,4 @@ sidebar: false
 - 2026-10-13 交互会话：用 step-workflow.js 完成 A2b（4 个 agent，约 4 分钟，验证全部通过，审查无 Blocking）
 - 2026-10-13 18:49 定时运行：完成 A2b-1（4 个 agent，约 2.5 分钟，相关测试 / type-check / 架构与 API 快照检查通过，审查无问题）
 - 2026-10-13 定时运行：完成 A2c（4 个 agent，约 5.5 分钟，build / type-check / 436 个 plugin-runtime 测试 / 架构与 API 快照 / workroom-ssot 检查通过，审查无 Blocking，2 个 Should fix 新增为 A2c-1）
+- 2026-10-14 手动触发运行：完成 A2c-1（4 个 agent，约 3.7 分钟，build / type-check / 401 个测试 / 架构与 API 快照检查通过，审查无 Blocking，1 个 Should fix 新增为 A2c-2）

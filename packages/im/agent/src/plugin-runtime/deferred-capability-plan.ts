@@ -28,11 +28,18 @@ export interface DeferredCapabilityCeiling {
 }
 
 /**
+ * Reserved, model-invisible control namespace of the Agent runtime. Control
+ * tools use this prefix and it is always filtered out of model-visible
+ * capabilities. It is a naming convention, not a dependency on Workroom code.
+ */
+export const RESERVED_CONTROL_TOOL_PREFIX = 'workroom_';
+
+/**
  * Reserved model-invisible control namespace; always filtered out of
  * model-visible capabilities.
  */
 export function isReservedControlToolName(name: string): boolean {
-  return (name.split('__').at(-1) ?? name).startsWith('workroom_');
+  return (name.split('__').at(-1) ?? name).startsWith(RESERVED_CONTROL_TOOL_PREFIX);
 }
 
 export interface DeferredCapabilityController {
@@ -51,6 +58,10 @@ export interface DeferredCapabilityPlan {
   readonly controller: DeferredCapabilityController;
 }
 
+/**
+ * The legacy `authority` option no longer exists; passing it at runtime throws
+ * (fail-closed) instead of being silently ignored.
+ */
 export interface DeferredCapabilityPlanOptions {
   readonly capabilities: AgentCapabilities;
   /**
@@ -137,6 +148,9 @@ export async function primeSkillsForIntent(options: Readonly<{
 export function createDeferredCapabilityPlan(
   options: DeferredCapabilityPlanOptions,
 ): DeferredCapabilityPlan {
+  if (options !== null && typeof options === 'object' && 'authority' in options) {
+    throw new Error('createDeferredCapabilityPlan no longer accepts "authority"; use createWorkroomDeferredCapabilityPlan (workroom-runtime) or pass an injected "ceiling"');
+  }
   const config = resolveDeferredToolsConfig(options.config);
   const alwaysLoaded = new Set(config.alwaysLoadedTools);
   const projected = projectCapabilities(options.capabilities, options.ceiling);
@@ -216,7 +230,23 @@ function projectCapabilities(
       skills: capabilities.skills,
     });
   }
-  return Object.freeze(ceiling.project(capabilities));
+  const out = ceiling.project(capabilities);
+  if (!out || !Array.isArray(out.tools) || !Array.isArray(out.skills)) {
+    throw new Error('capability ceiling must return arrays for tools and skills');
+  }
+  const allowedTools = new Set<ToolCapability>(capabilities.tools);
+  const allowedSkills = new Set<SkillDescriptor>(capabilities.skills);
+  for (const tool of out.tools) {
+    if (!allowedTools.has(tool)) {
+      throw new Error(`capability ceiling returned a tool/skill that is not part of the input projection: tool "${tool?.name}"`);
+    }
+  }
+  for (const skill of out.skills) {
+    if (!allowedSkills.has(skill)) {
+      throw new Error(`capability ceiling returned a tool/skill that is not part of the input projection: skill "${skill?.qualifiedName}"`);
+    }
+  }
+  return Object.freeze(out);
 }
 
 function projectSessionSnapshot(

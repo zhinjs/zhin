@@ -6,6 +6,7 @@ import {
   createDeferredCapabilityPlan,
   isReservedControlToolName,
   primeAgentSkillForIntent,
+  RESERVED_CONTROL_TOOL_PREFIX,
 } from '../../src/plugin-runtime/deferred-capability-plan.js';
 import {
   bindWorkroomCapabilityRealization,
@@ -96,6 +97,65 @@ describe('DeferredCapabilityPlan', () => {
     expect(names.length).toBeGreaterThan(3);
     for (const name of names) expect(isReservedControlToolName(name), name).toBe(true);
     expect(isReservedControlToolName('weather')).toBe(false);
+  });
+
+  it('exposes the reserved control prefix constant', () => {
+    expect(RESERVED_CONTROL_TOOL_PREFIX).toBe('workroom_');
+    expect(isReservedControlToolName('workroom_x')).toBe(true);
+    expect(isReservedControlToolName('plugin__workroom_x')).toBe(true);
+    expect(isReservedControlToolName('x_workroom_x')).toBe(false);
+    expect(isReservedControlToolName('weather')).toBe(false);
+  });
+
+  describe('legacy authority option and ceiling validation', () => {
+    const owner = rootPluginId();
+    const alpha = tool(owner, 'alpha', 'Alpha');
+    const beta = tool(owner, 'beta', 'Beta');
+    const s1 = skill(owner, 'one', 'One.');
+    const capabilities = bareCapabilities(owner, [alpha, beta], Object.freeze([s1]));
+    const baseOptions = {
+      capabilities,
+      sessionSnapshot: { loadedTools: {}, loadedSkills: [] },
+      config: { deferredTools: { alwaysLoadedTools: ['alpha', 'beta'] } },
+      persistSnapshot: async () => undefined,
+    };
+    const planWith = (project: (given: AgentCapabilities) => unknown) => createDeferredCapabilityPlan({
+      ...baseOptions,
+      ceiling: { project: project as never },
+    });
+
+    it('rejects the legacy authority option (fail-closed)', () => {
+      expect(() => createDeferredCapabilityPlan({ ...baseOptions, authority: { kind: 'workroom_assignment' } } as any))
+        .toThrow(/authority.*createWorkroomDeferredCapabilityPlan/s);
+      expect(() => createDeferredCapabilityPlan({ ...baseOptions, authority: undefined } as any))
+        .toThrow(/authority/);
+    });
+
+    it('still works without authority', () => {
+      expect(createDeferredCapabilityPlan(baseOptions).capabilities.map(item => item.name)).toContain('alpha');
+    });
+
+    it('rejects ceilings that return cloned or fabricated tools', () => {
+      expect(() => planWith(() => ({ tools: [{ ...alpha }], skills: [] }))).toThrow(/not part of the input projection.*alpha/s);
+      expect(() => planWith(() => ({ tools: [tool(owner, 'ghost', 'Ghost')], skills: [] }))).toThrow(/ghost/);
+    });
+
+    it('rejects ceilings that return extra or cloned skills', () => {
+      expect(() => planWith(() => ({ tools: [], skills: [s1, skill(owner, 'extra', 'Extra.')] }))).toThrow(/extra/);
+      expect(() => planWith(() => ({ tools: [], skills: [{ ...s1 }] }))).toThrow(/not part of the input projection/);
+    });
+
+    it('rejects non-array ceiling results', () => {
+      expect(() => planWith(() => ({ tools: undefined, skills: [] }))).toThrow(/arrays/);
+      expect(() => planWith(() => ({ tools: [], skills: undefined }))).toThrow(/arrays/);
+    });
+
+    it('accepts a strict subset of the same references', () => {
+      const plan = planWith(given => ({ tools: [given.tools[0]], skills: given.skills }));
+      const names = plan.capabilities.map(item => item.name);
+      expect(names).toContain('alpha');
+      expect(names).not.toContain('beta');
+    });
   });
 
   it('loads projected tools and skills without a classic registry or ambient runtime', async () => {
