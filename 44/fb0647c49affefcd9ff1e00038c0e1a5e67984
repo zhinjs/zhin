@@ -1,0 +1,43 @@
+.changeset/agent-compaction-told-ledger.md
+  s_c757df74f34330::t_9d8fa298f4f655 1-11
+docs/ai/agent.md
+  s_c757df74f34330::t_44c668a8f4f821 181,184-203
+docs/en/ai/agent.md
+  s_c757df74f34330::t_f409c5017c14ec 181,184-203
+packages/im/agent/evals/cases/compaction-keeps-told.case.ts
+  s_c757df74f34330::t_df361cea3c4412 1-29
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_c161939bf622be 87-91
+packages/im/agent/evals/framework/fixture.ts
+  s_c757df74f34330::t_676bc21e572e72 74-75,113-114
+packages/im/agent/evals/framework/scripted-model.ts
+  s_c757df74f34330::t_e6b92f3cff3c99 108-109,127-131
+packages/im/agent/src/core/agent-core-run.ts
+  s_c757df74f34330::t_29b874dbdfdba7 55,614-617,678-679,691-692,952-958
+packages/im/agent/src/internal/agent-host.ts
+  s_c757df74f34330::t_c875b599a054be 21,42-43
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_c757df74f34330::t_8aa161711f669e 150,266-268
+packages/im/agent/tests/memory/compaction-trigger.test.ts
+  s_c757df74f34330::t_4128c8114a88c7 1-20
+packages/im/agent/tests/memory/told-ledger.test.ts
+  s_c757df74f34330::t_d18421519b4f93 1-55
+packages/im/agent/tests/trace/turn-trace-cache.test.ts
+  s_c757df74f34330::t_cf7f844d174007 1-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44fb0647c49affefcd9ff1e00038c0e1a5e67984",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
