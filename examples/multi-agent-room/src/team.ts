@@ -37,7 +37,19 @@ import {
   type RoomTaskService,
   type RoomTaskView,
 } from '@zhin.js/workroom';
+import { defineMiddleware } from 'zhin.js/middleware';
 import type { Message, OutboundMessageService } from 'zhin.js/core/runtime';
+
+/**
+ * Type-check anchor for the limiter's middleware form. This example compiles under `tsc --noEmit` (its build
+ * covers src/ and tests/), so passing `limiter.outboundMiddleware()` to the real `defineMiddleware` here keeps the
+ * structural-compatibility check inside the type-checked scope (workroom's own tests are not type-checked).
+ * `@zhin.js/workroom` itself imports `defineMiddleware` from `@zhin.js/core/feature/middleware`, not from
+ * `zhin.js`, because workroom sits below zhin in the dependency direction.
+ */
+export function limiterMiddleware(limiter: RoomSendLimiter) {
+  return defineMiddleware(limiter.outboundMiddleware());
+}
 
 type BusRequester = Parameters<typeof createRoomBus>[0]['requester'];
 
@@ -105,6 +117,8 @@ export interface RoomTeamOptions {
   readonly sensitiveAccounts?: readonly string[];
   /** Overrides for the account-level send limiter (clock, sleep, per-account limits, ...). */
   readonly limiter?: Omit<RoomSendLimiterOptions, 'inner' | 'accountOf'>;
+  /** Extra authorization consulted before the role check (a refusal reason, or undefined to continue). Test seam. */
+  readonly extraAuthorize?: RoomTaskAuthorizer;
   readonly now?: () => number;
   readonly logger?: { warn(message: string): void };
 }
@@ -166,7 +180,9 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     guards,
     actorOf,
     authorizeAssign: createRoomRoleAssignAuthorizer({ room: room.definition, roomId }),
-    next: createRoomRoleAuthorizer({ room: room.definition, roomId, actorOf }),
+    next: ((roleCheck) => (target, command) => options.extraAuthorize?.(target, command) ?? roleCheck(target, command))(
+      createRoomRoleAuthorizer({ room: room.definition, roomId, actorOf }),
+    ),
   });
 
   const journal = new MemoryRoomTaskJournal();
@@ -215,8 +231,10 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     return promise;
   };
 
-  const runMemberTurn = async (agent: string, taskId: string, text: string, signal: AbortSignal): Promise<void> => {
+  const runMemberTurn = async (agent: string, taskId: string, text: string, signal: AbortSignal, wakeId?: string): Promise<void> => {
     signal.throwIfAborted();
+    // A handoff whose projection failed was escalated to the human: the receiver must not run on it.
+    if (wakeId !== undefined && discardedHandoffs.has(wakeId)) return;
     let task = await taskService.get(roomId, taskId);
     if (!task || task.assignee !== agent || (task.status !== 'assigned' && task.status !== 'in_progress')) return;
     if (task.status === 'assigned') {
@@ -274,23 +292,27 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     if (!delivery.projected) {
       const detail = delivery.projectionError ?? delivery.rejection ?? 'handoff projection failed';
       fail({ kind: 'send_rejected', roomId, agent, taskId, detail });
-      await escalateAfterHandoff(agent, next.to, current, detail);
+      await escalateAfterHandoff(agent, next.to, current, detail, handoffEventId);
     }
   };
 
   /**
-   * After a journaled handoff whose projection failed: the new assignee (status `assigned`) is started and
-   * blocked on its behalf (only the assignee may block), then the original speaker asks the human. The woken
-   * turn finds the Task blocked and does nothing. Failures are recorded, never thrown out of the turn.
+   * After a journaled handoff whose projection failed: the pending wake of the receiver is discarded (by handoff
+   * event id; a turn already queued checks the same set), the new assignee (status `assigned`) is started and
+   * blocked on its behalf (only the assignee may block), then the original speaker ALWAYS asks the human, even
+   * when start / block failed. Failures are recorded, never thrown out of the turn.
    */
-  const escalateAfterHandoff = async (from: string, to: string, task: RoomTaskView, detail: string): Promise<void> => {
-    const reason = `handoff projection failed (${detail})`;
+  const escalateAfterHandoff = async (from: string, to: string, task: RoomTaskView, detail: string, handoffEventId: string): Promise<void> => {
+    discardWake(handoffEventId);
+    let reason = `handoff projection failed (${detail})`;
     try {
+      // The `start` is synthesized only so the receiver can block (the state machine requires in_progress first).
       await taskService.execute(roomId, { type: 'start', commandId: nextCommandId(task.id, 'start'), taskId: task.id, by: to });
       await taskService.execute(roomId, { type: 'block', commandId: nextCommandId(task.id, 'block'), taskId: task.id, by: to, reason });
     } catch (error) {
-      fail({ kind: 'turn_error', roomId, agent: to, taskId: task.id, error, detail: error instanceof Error ? error.message : String(error) });
-      return;
+      const message = error instanceof Error ? error.message : String(error);
+      fail({ kind: 'turn_error', roomId, agent: to, taskId: task.id, error, detail: message });
+      reason = `${reason}; could not block ${to}'s task: ${message}`;
     }
     try {
       await askHuman(from, task, reason);
@@ -308,8 +330,8 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     await askHuman(agent, task, `handoff refused (${reason})`);
   };
 
-  const queueTurn = (agent: string, taskId: string, text: string): Promise<void> =>
-    track(guards.runExclusive(roomId, (signal) => runMemberTurn(agent, taskId, text, signal)).catch(async (error: unknown) => {
+  const queueTurn = (agent: string, taskId: string, text: string, wakeId?: string): Promise<void> =>
+    track(guards.runExclusive(roomId, (signal) => runMemberTurn(agent, taskId, text, signal, wakeId)).catch(async (error: unknown) => {
       const rejected = error instanceof RoomGuardRejectedError;
       fail({
         kind: rejected ? 'turn_rejected' : 'turn_error', roomId, agent, taskId, error,
@@ -327,16 +349,24 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
   const sequencer = createRoomEventSequencer<RoomTaskEvent>();
   const releasedHandoffs = new Set<string>();
   const pendingWakes = new Map<string, { to: string; taskRef: string; text: string }>();
+  const discardedHandoffs = new Set<string>();
+  let disposed = false;
+  const discardWake = (id: string): void => {
+    pendingWakes.delete(id);
+    releasedHandoffs.delete(id);
+    discardedHandoffs.add(id);
+  };
   const wake = (id: string): void => {
+    if (disposed || discardedHandoffs.has(id)) return;
     const pending = pendingWakes.get(id);
     if (!pending || !releasedHandoffs.has(id)) return;
     pendingWakes.delete(id);
     releasedHandoffs.delete(id);
-    void queueTurn(pending.to, pending.taskRef, pending.text);
+    void queueTurn(pending.to, pending.taskRef, pending.text, id);
   };
   const unsubscribeTasks = taskService.subscribe((event) => {
     for (const ready of sequencer.accept(event)) {
-      if (ready.type !== 'task.handoff') continue;
+      if (ready.type !== 'task.handoff' || disposed || discardedHandoffs.has(ready.eventId)) continue;
       releasedHandoffs.add(ready.eventId);
       wake(ready.eventId);
     }
@@ -344,7 +374,7 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
   // The Bus subscriber only wakes the receiving member. It never awaits the lane: the woken turn is queued
   // behind the running one (awaiting runExclusive of the same Room from inside a turn would deadlock).
   const unsubscribeBus = bus.subscribe((event) => {
-    if (event.taskRef === undefined) return; // only task.handoff-backed events wake anyone
+    if (event.taskRef === undefined || disposed || discardedHandoffs.has(event.id)) return; // only task.handoff-backed events wake anyone
     pendingWakes.set(event.id, { to: event.to, taskRef: event.taskRef, text: event.text });
     wake(event.id);
   });
@@ -394,6 +424,10 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     },
 
     dispose() {
+      disposed = true;
+      pendingWakes.clear();
+      releasedHandoffs.clear();
+      discardedHandoffs.clear();
       unsubscribeTasks();
       unsubscribeBus();
     },

@@ -197,7 +197,10 @@ describe('createRoomRoleAuthorizer / createRoomRoleAssignAuthorizer', () => {
     const base = { commandId: 'c', taskId: 't', at: 1 } as const;
     expect(authorize('dev', { ...base, type: 'start', by: 'lead' })).toBeUndefined();
     expect(authorize('other', { ...base, type: 'start', by: 'lead' })).toBe('unknown room other');
-    expect(createRoomRoleAssignAuthorizer({ room: entry })('other', { ...base, type: 'assign', by: 'lead', assignee: 'res' })).toBeUndefined();
+    expect(createRoomRoleAssignAuthorizer({ room: entry })('other', { ...base, type: 'assign', by: 'lead', assignee: 'res' })).toBe('unknown room other');
+    expect(createRoomRoleAssignAuthorizer({ room: entry })('dev', { ...base, type: 'assign', by: 'lead', assignee: 'res' })).toBeUndefined();
+    // a command type outside the union (malformed runtime input) is refused
+    expect(authorize('dev', { ...base, type: 'bogus' } as never)).toBe('unsupported command type bogus');
     expect(createRoomRoleAuthorizer({ room: roomDefinition(), roomId: 'r' })('x', { ...base, type: 'start', by: 'lead' })).toBe('unknown room x');
   });
 

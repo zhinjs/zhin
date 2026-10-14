@@ -125,6 +125,7 @@ const isHumanBy = (by: string): boolean => by.startsWith('human:') && by.length 
  * - handoff: `by` and `to` are members and the role of `by` lists the role of `to` in `handoffTo`
  *   (no `handoffTo` means no handoff allowed).
  * - assign / cancel: not checked here (see `createRoomRoleAssignAuthorizer` and the built-in cancel check).
+ * - any other (unknown) command type is refused.
  * Fail-closed: any throw (or a member whose role is missing) is a refusal.
  */
 export function createRoomRoleAuthorizer(options: RoomRoleAuthorizerOptions): RoomTaskAuthorizer {
@@ -154,8 +155,13 @@ export function createRoomRoleAuthorizer(options: RoomRoleAuthorizerOptions): Ro
           if (!index.handoffTo(command.by)?.includes(to)) return `handoff: role ${from} may not hand off to role ${to}`;
           return undefined;
         }
-        default:
-          return undefined;
+        case 'assign':
+        case 'cancel':
+          return undefined; // checked by `authorizeAssign` / the built-in cancel check
+        default: {
+          const unknown: never = command;
+          return `unsupported command type ${String((unknown as { type?: unknown }).type)}`;
+        }
       }
     } catch (error) {
       return `task authorization failed: ${error instanceof Error ? error.message : String(error)}`;
@@ -176,6 +182,7 @@ export function createRoomRoleAssignAuthorizer(
     try {
       const index = indexRoom(room);
       if (roomId !== undefined && target !== roomId) return `unknown room ${target}`;
+      if (roomId === undefined && index.id !== undefined && target !== index.id) return `unknown room ${target}`;
       if (index.roleOf(command.by) === undefined) return `assign: ${command.by} is not a member of room ${target}`;
       if (index.coordinator === undefined || command.by !== index.coordinator) return 'assign: only the coordinator may assign';
       if (index.roleOf(command.assignee) === undefined) return `assign: ${command.assignee} is not a member`;

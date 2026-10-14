@@ -46,8 +46,8 @@ async function setup(options: { room?: ReturnType<typeof buildRoomDefinition>; t
   const switches: {
     rejectWhen?: (request: OutboundRequest) => boolean;
     holdWhen?: (request: OutboundRequest) => boolean;
-    held: ReturnType<typeof deferred>;
-    release: ReturnType<typeof deferred>;
+    held: ReturnType<typeof deferred<void>>;
+    release: ReturnType<typeof deferred<void>>;
   } = { held: deferred(), release: deferred() };
   const outbound: Pick<SandboxImFixture['im'], 'send'> = {
     send: async (request) => {
@@ -362,6 +362,57 @@ describe('Handoff projection failure and mid-speak interrupt', () => {
       expect(last.text).toMatch(/^@alice 需要你介入/);
       expect(researcherRuns).toBe(0);
       expect(s.spoken().some((m) => m.from === 'researcher' || m.from === 'writer')).toBe(false);
+    } finally {
+      await s.close();
+    }
+  });
+
+  for (const failing of ['start', 'block'] as const) {
+    it(`still asks the human and never runs the receiver when the synthetic ${failing} fails`, async () => {
+      let researcherRuns = 0;
+      const s = await setup({
+        team: {
+          scripts: { researcher: () => { researcherRuns += 1; return { reply: 'should not run' }; } },
+          extraAuthorize: (_room, command) => (command.type === failing && command.by === 'researcher' ? `${failing} down` : undefined),
+        },
+      });
+      try {
+        s.switches.rejectWhen = (request) => {
+          const text = payloadText(request.content);
+          return s.nameOf(request.conversation.endpoint.id) === 'coordinator' && text.includes(`@${s.accounts.researcher}`);
+        };
+        await s.say('帮我写一篇关于 X 的简报');
+        await s.team.idle();
+
+        expect(s.team.failures.find((f) => f.kind === 'turn_error')).toMatchObject({
+          agent: 'researcher', taskId: 'task-1', detail: expect.stringContaining(`${failing} down`),
+        });
+        const last = s.spoken().at(-1)!;
+        expect(last.from).toBe('coordinator');
+        expect(last.text).toMatch(/^@alice 需要你介入/);
+        expect(last.text).toContain(`${failing} down`);
+        expect(researcherRuns).toBe(0);
+        expect(s.spoken().some((m) => m.from === 'researcher' || m.from === 'writer')).toBe(false);
+      } finally {
+        await s.close();
+      }
+    });
+  }
+
+  it('queues nothing for a late Bus / Task event after dispose()', async () => {
+    let researcherRuns = 0;
+    const s = await setup({
+      team: { scripts: { researcher: () => { researcherRuns += 1; return { reply: 'should not run' }; } } },
+    });
+    try {
+      s.team.dispose();
+      await s.say('帮我写一篇关于 X 的简报');
+      await s.team.idle();
+      await s.team.bus.handoff({
+        id: 'late-1', room: ROOM_ID, from: 'coordinator', to: 'researcher', text: 'late', taskRef: 'task-1', at: 1,
+      });
+      await s.team.idle();
+      expect(researcherRuns).toBe(0);
     } finally {
       await s.close();
     }

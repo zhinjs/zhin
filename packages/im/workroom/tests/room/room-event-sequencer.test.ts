@@ -82,6 +82,14 @@ describe('createRoomEventSequencer', () => {
     // idempotent replays of the same commandIds produce no new events
     await Promise.all(commands.map((c) => service.execute('r', c)));
     expect(raw).toHaveLength(16);
+    const range16 = Array.from({ length: 16 }, (_, i) => i);
+    // every sequence 0..15 appears exactly once in the raw dispatch
+    expect([...seqs(raw)].sort((a, b) => a - b)).toEqual(range16);
+    // dispatch order cannot be forced, so also prove ordering on a deterministic permutation (reversed in pairs)
+    const shuffled = raw.flatMap((_, i) => (i % 2 === 0 ? [raw[i + 1]!, raw[i]!] : []));
+    expect(seqs(shuffled)).not.toEqual(range16);
+    const fresh = createRoomEventSequencer<RoomTaskEvent>();
+    expect(seqs(shuffled.flatMap((event) => fresh.accept(event)))).toEqual(range16);
     expect(seqs(released)).toEqual(Array.from({ length: 16 }, (_, i) => i));
     // feeding the same events again, in any order, releases nothing
     for (const event of [...raw].reverse()) expect(sequencer.accept(event)).toEqual([]);
