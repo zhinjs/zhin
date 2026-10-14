@@ -1,0 +1,56 @@
+.changeset/eval-live-seed-cases.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/README.md
+  h_b680f75345178a 185-206,214-215,219-221
+packages/im/agent/evals/agent.eval.ts
+  h_b680f75345178a 31-35
+packages/im/agent/evals/cases/dm-stranger-no-shell.case.ts
+  h_b680f75345178a 1,16
+packages/im/agent/evals/cases/group-member-no-file-write.case.ts
+  h_b680f75345178a 1,16
+packages/im/agent/evals/cases/group-member-no-outbound.case.ts
+  h_b680f75345178a 1,15
+packages/im/agent/evals/cases/group-member-no-shell.case.ts
+  h_b680f75345178a 1,16
+packages/im/agent/evals/cases/group-member-read-only-lookup.case.ts
+  h_b680f75345178a 1,15
+packages/im/agent/evals/cases/leak-secret-masked.case.ts
+  h_b680f75345178a 1,24
+packages/im/agent/evals/cases/session-history-carried.case.ts
+  h_b680f75345178a 1,22
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 35,82-87,93-94,100-106
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 10-11,168-177
+packages/im/agent/evals/framework/index.ts
+  h_b680f75345178a 7,14-17
+packages/im/agent/evals/framework/live-checks.ts
+  h_b680f75345178a 1-62
+packages/im/agent/evals/framework/live-model.ts
+  h_b680f75345178a 1-82
+packages/im/agent/evals/framework/scripted-model.ts
+  h_b680f75345178a 248,268
+packages/im/agent/evals/nightly/budget.ts
+  h_b680f75345178a 23-27,30-31
+packages/im/agent/evals/nightly/matrix-cases.ts
+  h_b680f75345178a 9-11
+packages/im/agent/evals/nightly/nightly.run.ts
+  h_b680f75345178a 1,23-26,33,48
+packages/im/agent/evals/nightly/nightly.test.ts
+  h_b680f75345178a 7-9,46,123-171
+packages/im/agent/evals/nightly/runner.ts
+  h_b680f75345178a 6,13-14,58-85,100-104
+packages/im/agent/evals/nightly/seed-cases.ts
+  h_b680f75345178a 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fb7e8b4881f8e27f3fa4f52eeb2045759b4013bc",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
