@@ -1,0 +1,61 @@
+.changeset/workroom-optional-load-errors.md
+  s_2ebbb5e3caac4a::t_326b112822b5cc 1-5
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_2ebbb5e3caac4a::t_83e7c1fbfe3eae 18-20
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_2ebbb5e3caac4a::t_bba707a0eaefa3 7-8,17-20,32-46,48,50,52,54-61,63-70
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_2ebbb5e3caac4a::t_0e9ef58c53d4af 136
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_2ebbb5e3caac4a::t_c52435b5911865 37-39
+basic/cli/src/plugin-runtime/workroom/data-governance-coordinator.ts
+  s_2ebbb5e3caac4a::t_34078dff3ba17b 4
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_2ebbb5e3caac4a::t_4cd3b85cdccc25 2
+basic/cli/src/plugin-runtime/workroom/execution-coordinator.ts
+  s_2ebbb5e3caac4a::t_27a6ecbfa8fe7d 8-10
+basic/cli/src/plugin-runtime/workroom/host-assembly.ts
+  s_2ebbb5e3caac4a::t_ffc7f03f4a36d0 2,6
+basic/cli/src/plugin-runtime/workroom/host-coordinator.ts
+  s_2ebbb5e3caac4a::t_3e9ce9e88fdcbf 3,9
+basic/cli/src/plugin-runtime/workroom/knowledge-coordinator.ts
+  s_2ebbb5e3caac4a::t_6305adc5f66b95 3
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_2ebbb5e3caac4a::t_2b3c6fbcf031bb 23-26
+basic/cli/src/plugin-runtime/workroom/planning-coordinator.ts
+  s_2ebbb5e3caac4a::t_33ceb196adc063 3
+basic/cli/src/plugin-runtime/workroom/portfolio-coordinator.ts
+  s_2ebbb5e3caac4a::t_cb07a1a07822a0 3
+basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts
+  s_2ebbb5e3caac4a::t_55303b4d91ad6d 3-4
+basic/cli/src/plugin-runtime/workroom/projection-coordinator.ts
+  s_2ebbb5e3caac4a::t_97e3bfc332e558 4
+basic/cli/src/plugin-runtime/workroom/projection.ts
+  s_2ebbb5e3caac4a::t_55f5e9298a1553 17
+basic/cli/tests/plugin-runtime/agent/optional-workroom-boundary.test.ts
+  s_2ebbb5e3caac4a::t_77c30c5d188d62 25-44,53,56,65-82
+basic/cli/tests/plugin-runtime/console/agent-console-load.test.ts
+  s_2ebbb5e3caac4a::t_2d50d321703a55 1-37
+docs/authoring/host-tokens.md
+  s_2ebbb5e3caac4a::t_1441a011e49fbf 82
+docs/en/authoring/host-tokens.md
+  s_2ebbb5e3caac4a::t_4bcc4053babc9c 82
+docs/plans/workroom-group-collaboration-progress.md
+  s_2ebbb5e3caac4a::t_d5a12bc5914c45 52-53,158-163,181
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f0463c705a9a3b84259ec392b48a2402e4c8fdaf",
+  "prompts": {},
+  "sessions": {
+    "s_2ebbb5e3caac4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ea2d93-d1b0-4f9c-94d6-f3e31febe303",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
