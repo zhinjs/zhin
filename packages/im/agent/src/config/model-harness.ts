@@ -4,6 +4,10 @@ export interface ModelHarnessConfigItem {
   explorationBudget?: number;
   /** Append exploration-discipline guidance (plan first, scope to target files) to the system prompt. */
   explorationGuidance?: boolean;
+  /** Steps added per progress extension (overrides ai.agent.toolBudget.extendBy). */
+  iterationExtension?: number;
+  /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
+  maxTotalIterations?: number;
   /** Provider quirk: extra attempts when the model returns an empty reply. */
   emptyReplyRetries?: number;
   /** Provider quirk: per-request timeout in ms; 0 disables. */
@@ -21,6 +25,10 @@ export interface ModelHarnessRow {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  /** Steps added per progress extension (overrides ai.agent.toolBudget.extendBy). */
+  iterationExtension?: number;
+  /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
+  maxTotalIterations?: number;
   /** Provider quirk: extra attempts when the model returns an empty reply. */
   emptyReplyRetries?: number;
   /** Provider quirk: per-request timeout in ms; 0 disables. */
@@ -31,6 +39,8 @@ export interface ResolvedModelHarness {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  iterationExtension?: number;
+  maxTotalIterations?: number;
   /** Provider quirk: extra attempts when the model returns an empty reply. */
   emptyReplyRetries?: number;
   /** Provider quirk: per-request timeout in ms; 0 disables. */

@@ -1,14 +1,31 @@
 ---
-title: Agent 深入
+title: "Agent 深入"
+description: "AI 一轮对话是怎么运行的：进度显示与取消、按需加载工具、子 Agent、会话与上下文压缩、内置工具、定时任务、按模型调参，以及 Workroom 多 Agent 协作"
 ---
 
 # Agent 深入
 
-群里发一句 `ai: 查一下明天天气`，几秒后 bot 回了带数据的回答——中间发生了什么？本篇沿着这条路径展开 [AI 总览](./index.md) 的运行时：`ZhinAgent` 的回合流程、deferred tools、子代理与编排、会话持久化与 compaction、Assistant profile 与调度任务。
+群里发一句 `ai: 查一下明天天气`，几秒后 Bot 回了带数据的回答——中间发生了什么？本页沿着这条路径，展开 [AI 总览](./index.md) 没有细讲的运行机制。
 
-## ZhinAgent 回合
+还没启用 AI？先看 [AI 总览](./index.md)。想让 AI 调用你的函数？看 [Agent 工具与技能](../authoring/agent-tools.md)。
 
-触发命中后，Agent Host 调用 `zhinAgent.process(text, commMessage, tools)` 跑一个回合（turn）：
+## 按问题查找
+
+| 我想知道…… | 看这里 |
+| --- | --- |
+| AI 一轮对话是怎么跑的、会迭代几次、多久超时 | [一轮对话是怎么运行的](#一轮对话是怎么运行的) |
+| 让用户看到"思考中"的进度，或中途取消 | [显示进度](#显示进度) · [取消正在执行的回合](#取消正在执行的回合) |
+| 工具很多时怎么不撑爆提示词 | [按需加载工具](#按需加载工具) |
+| 把耗时任务交给后台 | [子 Agent 与 spawn_task](#子-agent-与-spawn-task) |
+| 对话历史存在哪里、怎么重置、上下文太长怎么办 | [会话与会话树](#会话与会话树) · [上下文压缩](#上下文压缩) |
+| AI 自带哪些工具、文件和网络的边界 | [内置工具](#内置工具) |
+| 让 AI 每天定时做事 | [定时任务与助手人设](#定时任务与助手人设) |
+| 给某个模型单独调参数 | [按模型调整参数](#按模型调整参数) |
+| 多个 Agent 在群或仓库里分工协作 | [Workroom Kernel](#workroom-kernel) |
+
+## 一轮对话是怎么运行的
+
+消息满足触发条件后，Agent Host 调用 `zhinAgent.process(text, commMessage, tools)` 运行一个**回合**（turn）：
 
 ```mermaid
 sequenceDiagram
@@ -28,13 +45,19 @@ sequenceDiagram
     H-->>U: IM 回复（追加 ConversationEvent）
 ```
 
-几个值得记住的事实。ZhinAgent、子代理、后台 worker、`AIService.runAgent` 走的是**同一条 agentLoop**，行为可以一致地预期。同会话的消息按 `ai.agent.inboundQueue` 排队（`groupMode: supersede | fifo`），并发回合不会互相覆盖。首选模型失败时按候选链 fallback 到同 provider 的其他可用模型。`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可按 provider/model 经 model harness 覆盖（见下文）。超时有三层：触发侧单回合受 `ai.trigger.timeout` 约束（默认 60000ms），Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`），工具预执行另有 15000ms 上限（`preExecTimeout`）。
+模型可能多次调用工具、再根据结果继续推理，每一次叫做一轮**迭代**。需要记住的几点：
 
-回合产出的工具池 = 插件注册工具 + `ai.mcpServers` 连接工具 + 内置工具 + deferred meta 工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
+- **迭代上限**：`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可以按模型单独调整，见 [按模型调整参数](#按模型调整参数)。
+- **超时有三层**：触发侧单回合受 `ai.trigger.timeout` 限制（默认 60000ms）；Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`）；工具预执行另有 15000ms 上限（`preExecTimeout`）。
+- **同一会话的消息会排队**：按 `ai.agent.inboundQueue` 处理（`groupMode: supersede | fifo`），并发的回合不会互相覆盖。
+- **模型失败会自动切换**：首选模型失败时，按候选链切换到同一 provider 的其他可用模型。
+- **行为一致**：主 Agent、子 Agent、后台 worker、`AIService.runAgent` 走的是同一条 agentLoop。
 
-### Thinking 透明与步骤可视化
+一个回合可用的工具 = 插件注册的工具 + `ai.mcpServers` 连接的工具 + 内置工具 + 按需加载的元工具 + `schedule_*` + `bash` + Host 扩展工具（如 `voice_stt` / `voice_tts`）。
 
-回合执行中，Agent 会通过 Activity Feedback 向 IM 侧推送实时状态。默认行为是发送静态 "思考中…" 占位，但可以开启 **thinking 透明**，将 LLM 实际的 thinking 内容（截断后）作为活动反馈展示给用户：
+### 显示进度
+
+回合执行时，Agent 会通过 [执行状态反馈](../advanced/activity-feedback.md) 向聊天界面推送状态。默认是一句静态的"思考中…"；开启 **thinking 透明**后，用户能看到模型实际思考内容的片段：
 
 ```yaml
 ai:
@@ -43,40 +66,32 @@ ai:
     thinkingPreviewMaxLength: 200  # 展示的最大字符数，默认 200
 ```
 
-开启后，用户在等待 AI 回复时能看到模型的思考过程片段，而不是一成不变的占位文本。
-
-当回合需要多轮工具迭代时（如模型调用工具后继续推理），每一轮迭代会发出 `iteration_start` 事件，Activity Feedback 会更新为 `处理中 [2/15]...` 等进度提示。插件开发者可以监听 `TurnEvent` 流中的 `iteration_start` 事件获取当前迭代进度：
+需要多轮工具迭代时，每轮开始会发出 `iteration_start` 事件，状态更新为 `处理中 [2/15]...` 这样的进度。插件可以监听 `TurnEvent` 流获取进度：
 
 | TurnEvent 类型 | 说明 |
 |----------------|------|
 | `iteration_start` | 新一轮迭代开始，含 `iteration`（当前轮次）和 `maxIterations` |
-| `thinking` | LLM thinking 文本片段（`thinkingPreview` 开启时会持续累积推送） |
+| `thinking` | LLM thinking 文本片段（`thinkingPreview` 开启时持续推送） |
 
 ### 取消正在执行的回合
 
-用户可以在 IM 中发送以下任一消息来**取消正在执行的 Agent 回合**：
+用户在聊天里发送 `取消`、`/cancel` 或 `cancel`，即可中断当前回合：ZhinAgent 通过 `PromptController.cancelSession()` 中止模型调用和工具执行，并回复"已取消"。没有正在执行的回合时，回复"当前没有正在执行的任务"。
 
-- `取消`
-- `/cancel`
-- `cancel`
+在 `TurnEvent` 流中，主动取消表现为 `turn_cancelled`（`code: 'cancelled'`）；超时中断同样是 `turn_cancelled`（`code: 'timeout'`）。
 
-ZhinAgent 收到取消消息后，会通过 `PromptController.cancelSession()` 中断当前回合的 LLM 调用和工具执行，并回复 "已取消"。如果当前没有正在执行的回合，则回复 "当前没有正在执行的任务"。
+## 按需加载工具
 
-取消机制的终止事件在 `TurnEvent` 流中表现为 `turn_cancelled`（`code: 'cancelled'`）。超时（`DEFAULT_CONFIG.timeout`）导致的中断同样表现为 `turn_cancelled`（`code: 'timeout'`）。
+工具很多时，把所有工具的参数定义都塞进提示词会占满上下文。Zhin 的做法是**延迟加载**：回合只常驻少量元工具，模型需要时再检索、按名加载。
 
-## Deferred tools（discover / load_tool / load_skill）
-
-工具数量大时，全量 schema 塞进 prompt 会挤占上下文。Zhin.js 的做法是**延迟加载**：回合只常驻少量元工具，模型按需检索、按名加载。
-
-常驻工具（`alwaysLoadedTools` 默认值）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。
+默认常驻的工具（`alwaysLoadedTools`）：`ask_user`、`spawn_task`、`discover`、`load_tool`、`load_skill`。
 
 | 元工具 | 作用 |
 |--------|------|
-| `discover` | 按 query 检索工具/技能（`kind: tool|skill|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
-| `load_tool` | 按名把工具 schema 载入本会话，之后可直接调用 |
-| `load_skill` | 载入技能说明文本与其声明的工具 |
+| `discover` | 按关键词检索工具 / 技能（`kind: tool|skill|all`，可按 MCP server 过滤），返回 Top-K 摘要 |
+| `load_tool` | 按名把工具定义载入本会话，之后即可调用 |
+| `load_skill` | 载入技能说明全文，并解锁它声明的工具 |
 
-调参（`ai.agent.deferredTools`）：
+调整参数（`ai.agent.deferredTools`）：
 
 ```yaml
 ai:
@@ -89,39 +104,170 @@ ai:
         icqq: { alwaysLoaded: [send_msg] }   # 指定 MCP server 的常驻工具
 ```
 
-保留/内置工具名（`bash`、`read_file`、`spawn_task` 等）不可被插件覆盖；非保留工具同名时后注册覆盖前注册，冲突记 warn。
+`bash`、`read_file`、`spawn_task` 等保留的内置工具名不能被插件覆盖；非保留工具重名时，后注册的覆盖先注册的，并记录 warn。
 
-## 子代理与 spawn_task
+## 子 Agent 与 spawn_task
 
-主 Agent 通过 `spawn_task` 把复杂/耗时任务派给**后台子代理**，主对话不阻塞：
+主 Agent 可以用 `spawn_task` 把复杂或耗时的任务交给**后台子 Agent**，主对话不会被阻塞。
 
 ```yaml
 ai:
   agent:
-    maxParallelSubagents: 5        # 并行子代理硬顶（默认 5）
+    maxParallelSubagents: 5        # 并行子 Agent 上限（默认 5）
     toolExecution: tiered          # parallel | sequential | tiered（默认）
-    subagentAutoContinue: true     # 异步完成后唤醒主 Agent 续聊（默认 true）
-    subagentDirectImDelivery: false # 额外直发子任务摘要到 IM（默认 false）
-    subagentTools: []              # 追加子代理可用工具白名单
+    subagentAutoContinue: true     # 子任务完成后唤醒主 Agent 继续对话（默认 true）
+    subagentDirectImDelivery: false # 额外把子任务摘要直接发到聊天（默认 false）
+    subagentTools: []              # 追加子 Agent 可用的工具
 ```
 
-`spawn_task` 关键参数：
+`spawn_task` 的主要参数：
 
 | 参数 | 说明 |
 |------|------|
-| `task` | 任务描述（目标、范围、期望产出） |
-| `agent` | 子代理名（须在 `ai.agents` 或 `agents/<name>/agent.json` 预设中存在） |
-| `wait` | `true` 时同步等待，结果经 tool result 回到当前回合 |
-| `context` | `fork`（注入父会话近期消息）/ `fresh`（空上下文） |
-| `tools` / `skills` | 声明子任务需要的工具与技能 |
+| `task` | 任务描述：目标、范围、期望产出 |
+| `agent` | 子 Agent 名（须在 `ai.agents` 或 `agents/<name>/agent.json` 中存在） |
+| `wait` | `true` 时同步等待，结果作为工具返回值回到当前回合 |
+| `context` | `fork`（带上父会话最近的消息）/ `fresh`（空上下文） |
+| `tools` / `skills` | 子任务需要的工具与技能 |
 
-行为上有几条约束：同一回合可发起多个 `spawn_task`，独立子任务建议并行；`tiered` 模式下只读工具与 spawn 并行、写/bash 顺序执行。子代理默认使用受限工具集（`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` + deferred meta），不自动继承主会话全部工具，要用 `ai.agent.subagentTools` 显式追加。主 Agent 可见的子代理类型受 `ai.agents.<name>.permission.task`（glob → allow/deny）约束。异步完成后结果**先交还主 Agent**（写入主会话并 auto-continue），用户可见回复由主 Agent 整理发出。子代理预设使用 `agents/<name>/agent.json` 与三个核心 Markdown 文件声明，启动时自动发现注册。
+- 同一回合可以发起多个 `spawn_task`；互相独立的子任务建议并行。`tiered` 模式下，只读工具与 spawn 并行执行，写入和 `bash` 顺序执行。
+- 子 Agent 默认只有受限的工具集：`read_file` / `write_file` / `edit_file` / `list_dir` / `glob` / `grep` / `web_search` / `web_fetch` / `bash` 加上按需加载的元工具，不会继承主会话的全部工具。需要更多时用 `ai.agent.subagentTools` 追加。
+- 主 Agent 能派出哪些子 Agent，由 `ai.agents.<name>.permission.task`（glob → allow / deny）控制。
+- 异步任务完成后，结果**先交还给主 Agent**（写入主会话并自动继续），再由主 Agent 整理成给用户的回复。
+- 子 Agent 用 `agents/<name>/agent.json` 与三个核心 Markdown 文件声明，启动时自动发现。见 [Agent 工具与技能 · 定义子 Agent](../authoring/agent-tools.md#定义子-agent)。
+
+## 会话与会话树
+
+数据库可用时，对话会持久化到下面这些表（没有数据库时使用内存）：
+
+| 表 | 内容 |
+|----|------|
+| `agent_sessions` | Agent 会话元数据（含会话树的 `parent_id` / `active_leaf`） |
+| `agent_messages` | Agent 回合消息 |
+| `conversation_events` | 聊天消息、引用关系与通知（幂等追加） |
+| `conversation_event_cursors` | 各 Agent 会话的未读事件游标 |
+
+设置 `ai.sessions.useDatabase: false` 可强制使用内存。
+
+同一个聊天会话还可以分叉成**会话树**，用聊天命令管理：
+
+| 命令 | 作用 |
+|------|------|
+| `/compact` | 手动压缩当前会话上下文 |
+| `/tree` / `/tree N` | 查看 / 切换会话分支 |
+| `/reset` | 重置会话 |
+| 发送 `clear` / `清空` / `重置` | 归档并清空本会话的 AI 上下文 |
+
+master 或有权限的用户还可以使用：`/models`、`/health`、`/cmd`、`/endpoints`、`/bindings`、`/tools`、`/mcp`。
+
+## 上下文压缩
+
+对话太长、接近模型的上下文窗口时会自动压缩（`ai.agent.compaction`）：
+
+```yaml
+ai:
+  agent:
+    compaction:
+      enabled: true
+      auto: true
+      keepRecentTokens: 20000   # 保留最近消息的 token 预算（默认 20000）
+      minKeepCount: 2           # 至少保留的消息条数（默认 2）
+```
+
+估算的 token 超过 `contextWindow × 0.6` 时触发。压缩分两步：先做轻量裁剪（去掉冗余的工具结果等），再让模型生成一段 `[Previous conversation summary]` 摘要替换旧历史。连续自动压缩失败达到上限后会停止自动压缩，避免反复消耗。
+
+## 内置工具
+
+| 类别 | 工具 |
+|------|------|
+| 执行 | `bash` |
+| 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
+| 网络 | `web_search`、`web_fetch` |
+| 交互 | `ask_user` |
+| 任务 | `spawn_task`、`todo_read`、`todo_write` |
+| 记忆 / 检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
+| 媒体 | `generate_image`；收到的图片直接交给支持视觉的模型 |
+| 元工具 | `discover`、`load_tool`、`load_skill` |
+| 定时 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
+
+**文件边界**：文件工具只能在当前回合授权的项目目录内工作。相对路径以该目录为根；绝对路径必须仍在其中；`~`、`../` 越界以及通过符号链接指向目录外的路径都会被拒绝。通过检查的规范化路径才会交给工具；`glob` / `grep` 不启动 shell 子进程。
+
+**网络边界**：只有 `ai.agent.execPreset: network` 时，网络工具才获得 HTTPS 访问权限，`readonly` 等其他预设不会隐式开放网络。`web_fetch` 对初始 URL 和每一次重定向都重新检查协议、域名和 SSRF；私网、link-local、CGNAT 与组播地址会被拒绝，实际连接固定到已检查的地址。
+
+**待办**：`todo_read` / `todo_write` 只操作当前会话的计划，不接受 `chat_id` 或路径参数。状态原子写入 `.zhin/todos`；`.zhin/` 整体是运行时私有目录，文件工具无法读取或列出。
+
+## 定时任务与助手人设
+
+Assistant 运行时把"定时做事"做成了现成功能：任务持久化在 `data/schedule-jobs.json`，由 `ScheduleJobEngine` 到点执行，并把结果推回聊天。
+
+```yaml
+assistant:
+  enabled: true
+  profile:
+    enabled: true
+    file: assistant.profile.yml   # 相对项目根，默认即此名
+  events:
+    enabled: true                 # 开放 POST /api/assistant/events 外部事件入口
+  defaults:
+    notifyOnFailure: false
+```
+
+`assistant.profile.yml` 声明人设与例行任务（routines），启动时同步为定时任务：
+
+```yaml
+version: 1
+persona:
+  soul: 你是贴心的生活助手。
+routines:
+  heartbeat:
+    enabled: true
+    everyMs: 1800000
+    prompt: 检查待办并汇报。
+  morningBrief:
+    enabled: true
+    scheduleKind: solar      # solar | lunar | workday | freeDay | holiday
+    cron: "0 0 8 * * *"
+    tz: Asia/Shanghai
+    prompt: 生成今日早报。
+```
+
+- 内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可以自定义键名。
+- 中国大陆的"工作日"请用 `workday`（会考虑调休），不要用 solar 的 `1-5`。
+- 用户也可以在聊天里让 AI 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具管理任务；外部系统可通过 `POST /api/assistant/events` 注入事件，用 `GET /api/assistant/jobs` 查询任务。命令行管理见 [CLI · schedule](../cli/index.md#schedule-持久化调度任务)。
+
+## 按模型调整参数
+
+按 provider / model 覆盖执行参数（目前用于 `maxIterations`）。合并顺序：内置默认 → `providerPatterns`（支持 `*` 通配）→ `models` 精确匹配：
+
+```yaml
+ai:
+  agent:
+    modelHarness:
+      providerPatterns:
+        "open*": { maxIterations: 7 }
+      models:
+        "gpt-4o": { maxIterations: 8 }
+        "openai:gpt-4o": { maxIterations: 9 }
+```
 
 ## Workroom Kernel
 
-`WorkroomKernel` 只接受显式 Project-scoped command，并以 versioned append-only Journal 作为 Run / Task / Assignment 的唯一事实源。普通聊天与 `spawn_task` 不会隐式创建 Workroom，也不会发布允许模型伪造 execution/acceptance 的通用 transition 工具。command adapter 必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance port。
+Workroom 让多个 Agent 在一个群、频道或 GitHub 仓库里**按角色分工**处理多步骤任务：Orchestrator 负责理解需求和分派，Executor 执行，Reviewer 审核。和普通对话不同，它的每一步都记录在只追加的日志里，可审计、可恢复。
 
-Console 的 **Workrooms** 菜单用于声明 Project 边界、Agent 成员/角色，以及群、频道或 GitHub 仓库的协作空间。一个 Workroom 绑定一个完整协作空间地址；同一个 Bot/App Endpoint 可以服务多个 Workroom。人类入站先由 Space Router 按完整地址进入 content-free Project Inbox，再由 Orchestrator 仲裁任务；`conversation.agent` 标识该 Inbox 所属的 Orchestrator，但绝不能绕过仲裁把消息直接执行成 Task 状态。普通讨论完成持久化后会以一次性 handoff 继续执行该 Orchestrator Turn，并直接返回 Agent 回复，不再停在“进入项目收件箱”的回执；该 Turn 使用 Project-scoped Session 和可信 Project/Proposal envelope，不读取普通群聊 Session tail、不暴露 `spawn_task`，回复固定经 Catalog Orchestrator Endpoint 的统一出站链路。回复投影卡片或 `@` 具名成员时，只有唯一 active Assignment 才生成精确 TaskInput，否则返回澄清。只有显式 `/work` 才通过受治理的规划入口创建 Run/Task。Workroom 定义写入持久化运行时 Catalog，而不是 `ai` 配置文件；保存立即生效，无需重启 Host。旧 `ai.workrooms` 会明确拒绝并提示迁移。记录键就是 Workroom Kernel 使用的 `projectId`：
+**普通聊天和 `spawn_task` 都不会自动创建 Workroom**，只有显式的 Project 命令（如 `/work`）才会。
+
+### 核心规则
+
+- `WorkroomKernel` 只接受显式的、限定 Project 的命令，用带版本的只追加 Journal 作为 Run / Task / Assignment 的唯一事实来源。
+- 不提供让模型伪造"已执行 / 已验收"的通用状态切换工具。命令适配器必须持有认证后的 Project capability，并分别接入 Scheduler、Executor 与 Acceptance 端口。
+- 人类的消息先按完整空间地址进入 content-free 的 Project Inbox，再由 Orchestrator 仲裁成任务。`conversation.agent` 标识这个 Inbox 所属的 Orchestrator，但**不能**绕过仲裁直接把消息变成 Task 状态。
+- 普通讨论持久化后，以一次性 handoff 继续执行该 Orchestrator 回合，直接返回 Agent 回复。这个回合使用限定 Project 的会话和可信的 Project / Proposal envelope：不读取普通群聊的会话尾部、不暴露 `spawn_task`，回复固定经 Catalog Orchestrator Endpoint 的统一出站链路发出。
+- 回复投影卡片或 `@` 具名成员时，只有在**唯一**一个 active Assignment 时才生成精确的 TaskInput，否则会请求澄清。
+- 只有显式的 `/work` 才会通过受治理的规划入口创建 Run / Task。
+
+### 在 Console 中声明 Workroom
+
+在 Console 的 **Workrooms** 菜单声明 Project 边界、Agent 成员与角色，以及绑定的群、频道或 GitHub 仓库。Workroom 定义保存在**持久化的运行时 Catalog** 中，而不是 `ai` 配置文件；保存立即生效，不需要重启。旧的 `ai.workrooms` 配置会被明确拒绝并提示迁移。记录键就是 Workroom Kernel 使用的 `projectId`：
 
 ```json
 {
@@ -143,9 +289,26 @@ Console 的 **Workrooms** 菜单用于声明 Project 边界、Agent 成员/角�
 }
 ```
 
-`members[].agent` 必须引用 `ai.agents`；角色闭表为 `orchestrator | executor | reviewer | integration`。成员可用 `assignmentRoute: { "kind": "local" }` 固定本地执行，或用 `assignmentRoute: { "kind": "remote", "endpointId": "..." }` 固定唯一 A2A endpoint；未声明时按兼容语义视为本地，远程执行绝不从多个 endpoint 猜测。该路由随 Catalog revision/digest 持久化并在 claim 前复验。成员还可用 `messageRoute: { "adapter": "icqq", "endpoint": "reviewer-bot" }` 选择其在共享群中的 Bot/App 消息出口；省略时复用 `conversation` 的主 Endpoint。配置了消息出口后，从该 Bot 收到的同一群消息会进入相同 Workroom，而该成员的进度、里程碑和结论投影会由该 Bot 发出。`sponsors[]` 保存可执行 typed Project Sponsor control 的 authenticated principal id（例如 `owner:<platform-user-id>`），属于持久 Catalog authority，不读取消息 metadata 自报身份。`conversation` 引用普通 Workroom 空间；可选 `sponsorConversation` 引用独立的 `group | channel` Sponsor Room，承载 typed Sponsor ingress、受治理的 lifecycle/overdue 通知，以及 Project-scoped Portfolio lane/queue/grant/budget/fairness 卡片。多个 Project 可以声明同一个 Sponsor Room 地址，形成 portfolio 级聚合房间，但每条投影仍是独立的 Project delivery view；聚合房间的治理命令可写成 `/control data-lifecycle project <projectId> ...`，Portfolio 命令可写成 `/control portfolio <portfolioId> project <projectId> ...`，或在回复当前单 Project 卡片时省略 Project 段。房间地址本身不暗含 Project authority；显式 Project 与回复卡片不一致、卡片 revision 过期或 Endpoint 代级漂移时只会得到澄清，不会执行命令。两者的 `agent` 都必须是承担 `orchestrator` 角色的 Workroom 成员。启用的 Workroom 至少需要一个 Orchestrator 和普通协作空间；普通 Workroom 地址不可复用，也不能与 Sponsor Room 冲突，Endpoint 本身可以复用。Host 会从持久 Catalog 与当前 Endpoint capability 在启动/扫描时建立 Sponsor delivery binding，因此首次纯出站告警不依赖房间先收到入站消息。
+| 字段 | 规则 |
+| --- | --- |
+| `members[].agent` | 必须引用 `ai.agents` 中的 Agent，且每个角色引用独立的 binding |
+| `members[].role` | `orchestrator | executor | reviewer | integration` 之一 |
+| `members[].assignmentRoute` | `{ "kind": "local" }` 固定本地执行，或 `{ "kind": "remote", "endpointId": "..." }` 固定唯一的 A2A endpoint。省略时视为本地；远程执行绝不会在多个 endpoint 之间猜测。该路由随 Catalog revision / digest 持久化，并在认领前复验 |
+| `members[].messageRoute` | 如 `{ "adapter": "icqq", "endpoint": "reviewer-bot" }`：该成员在共享群里用哪个 Bot 发言。省略时用 `conversation` 的主 Endpoint。配置后，从该 Bot 收到的同群消息也进入同一 Workroom，该成员的进度、里程碑和结论由它发出 |
+| `sponsors[]` | 可以执行 Project Sponsor 控制的认证身份 id（如 `owner:<platform-user-id>`）。属于持久的 Catalog 权限，不读取消息 metadata 中自报的身份 |
+| `conversation` | 普通 Workroom 空间 |
+| `sponsorConversation` | 可选，独立的 `group | channel` Sponsor Room：承载 Sponsor 命令、生命周期 / 超期通知，以及 Portfolio 的 lane / queue / grant / budget / fairness 卡片 |
 
-GitHub 适配器会用 Webhook 的稳定 `repo` 元数据（`owner/repo`）匹配 `repository` Workroom，因此同一仓库下的 Issue/PR 评论通道都归入同一个 Workroom：
+更多约束：
+
+- 两种 conversation 的 `agent` 都必须是承担 `orchestrator` 角色的成员。启用的 Workroom 至少需要一个 Orchestrator 和一个普通协作空间。
+- 一个 Workroom 绑定一个完整空间地址；**同一个 Bot / App Endpoint 可以服务多个 Workroom**，但普通 Workroom 地址不能复用，也不能和 Sponsor Room 冲突。
+- 多个 Project 可以声明同一个 Sponsor Room，形成 Portfolio 级的聚合房间，但每条投影仍是独立的 Project 视图。在聚合房间里写治理命令：`/control data-lifecycle project <projectId> ...`；Portfolio 命令：`/control portfolio <portfolioId> project <projectId> ...`；回复当前单个 Project 的卡片时可以省略 Project 段。房间地址本身不代表 Project 权限：显式 Project 与回复的卡片不一致、卡片 revision 过期或 Endpoint 版本漂移时，只会请求澄清，不会执行命令。
+- Host 在启动或扫描时，根据持久 Catalog 与当前 Endpoint 能力建立 Sponsor 投递绑定，所以第一条纯出站告警不依赖房间先收到消息。
+
+### 把 GitHub 仓库作为 Workroom
+
+GitHub 适配器用 Webhook 中稳定的 `repo` 元数据（`owner/repo`）匹配 `repository` 类型的 Workroom，因此同一仓库下所有 Issue / PR 评论都归入同一个 Workroom：
 
 ```json
 {
@@ -163,13 +326,20 @@ GitHub 适配器会用 Webhook 的稳定 `repo` 元数据（`owner/repo`）匹�
 }
 ```
 
-GitHub Project Item 是 Task 的外部投影/同步目标，不是 Workroom 身份的一部分。当前 Console 的 Task 页仍只读 Journal + Kernel 事实；Project V2 同步需要独立的 Integration Port、幂等 task-key ↔ item-id 映射和冲突策略，不能由 Console 直接改 Task 状态。
+GitHub Project Item 是 Task 的外部投影 / 同步目标，**不是** Workroom 身份的一部分。Console 的 Task 页目前只读 Journal 与 Kernel 事实；同步到 Project V2 需要独立的 Integration Port、幂等的 task-key ↔ item-id 映射和冲突策略，不能由 Console 直接修改 Task 状态。完整方案见 [GitHub 仓库 Workroom](../solutions/github-workroom.md)。
 
-Catalog 与 Run Journal 使用相同的持久化选择：数据库模式写入 `workroom_catalog`，`ai.sessions.useDatabase: false` 时回退到 `.zhin/workroom-catalog.json`。Catalog 保存采用 revision CAS；成员引用仍以当前 generation 的 `ai.agents` 为准，失效引用会被拒绝。已有 Run 的 Journal 事实不会被 Catalog 编辑覆盖。
+### 用 `/work` 规划任务
 
-`/work` 不会回退成固定单 Task。生产入口只有在 composition root 安装受治理的 `HumanIngressPlanningPort` 后才会创建 Run；否则持久化请求并返回 `planning_unavailable` 澄清。推荐使用 `DynamicWorkflowPlanningPort`：模型或 Strategy 只返回不可信的结构化 DAG candidate，Project/Catalog、Profile、Orchestrator、planning policy、预算和 Sponsor Gate authority 全由可信端口注入；候选经过 `WorkflowPlanBuilder` 重新校验 Profile capability ceiling、required/optional、依赖/cycle、Task/attempt budget 与 approval gate 后，只有 `WorkroomKernel.admitWorkflowPlan()` 可以原子写入 Plan/Task facts。Plan Gate 会先物化为 `approval` Blocker，普通 Orchestrator `resolve_blocker` 无法解除；安装 `WorkroomPlanGateAuthorityPort` 后，人类 Sponsor 可用 `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]` 提交 exact、可重放的 typed decision。
+`/work` 不会退化成单个固定任务：
 
-首次启用规划时，在 Console 的 **Workrooms → 规划与披露配置** 输入 `projectId` 并运行诊断。写操作要求使用绑定了 `principalId` 的 full token；同一 principal 还必须同时出现在 Project `sponsors` 与进程固定的共享 Pack 发布者列表中：
+- 只有在 composition root 安装了受治理的 `HumanIngressPlanningPort` 后才会创建 Run；否则持久化请求，并返回 `planning_unavailable` 请求澄清。
+- 推荐使用 `DynamicWorkflowPlanningPort`：模型或 Strategy 只返回**不可信**的结构化 DAG 候选；Project / Catalog、Profile、Orchestrator、规划策略、预算和 Sponsor Gate 权限全部由可信端口注入。
+- 候选经 `WorkflowPlanBuilder` 重新校验 Profile 能力上限、必选 / 可选、依赖与环、Task / 尝试预算和审批门；只有 `WorkroomKernel.admitWorkflowPlan()` 能原子写入 Plan / Task 事实。
+- Plan Gate 会先变成 `approval` Blocker，普通 Orchestrator 的 `resolve_blocker` 无法解除。安装 `WorkroomPlanGateAuthorityPort` 后，人类 Sponsor 可以用 `/control plan-gate <approve|reject|request-changes|cancel> <runId> <taskKey> <gateId> [reason]` 提交精确、可重放的决定。
+
+### 首次启用规划
+
+在 Console 的 **Workrooms → 规划与披露配置** 中输入 `projectId` 并运行诊断。写操作需要绑定了 `principalId` 的 full token，而且同一身份必须同时出现在 Project 的 `sponsors` 和进程固定的共享 Pack 发布者列表中：
 
 ```yaml
 http:
@@ -195,151 +365,29 @@ ai:
           supportsDeletion: REPLACE_WITH_PROVIDER_GUARANTEE
 ```
 
-上面的 `REPLACE_WITH_*` 是故意无效的占位符，不能原样保存。保存真实配置后重启 Host，用该 token 登录 Console，并在 Catalog Project 的 `sponsors` 中加入 `workroom-admin`。`modelProviders` 的键必须是 Orchestrator binding 使用的 `ai.providers` alias；这里的处理地区、训练、日志、保留和删除字段是治理声明，必须与提供商真实策略和账号级强制设置一致。OpenRouter 应同时在其 [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) 中启用零留存，并禁止 data collection。每个 Workroom 角色必须引用一个独立的 `ai.agents` binding；诊断通过后点击“初始化编排能力”，Console 会从当前 generation 的真实 Agent/Tool/Skill digest 发布 Capability Pack、激活首个 Project Profile、发布默认 Planning Policy，并由认证 Sponsor 签发 Project Data Governance authority。自托管 Host 首次签发时生成 mode `0600` 的 `.zhin/workroom-data-governance-root-key.json`，它只用于本机 DEK 包装与 authority 签名；必须纳入加密备份，丢失后既有 Payload Vault 正文不可恢复。成功状态会明确显示 Planning 与 Disclosure 都已就绪，才允许提交 `/work`。
+1. 上面的 `REPLACE_WITH_*` 是故意无效的占位符，不能原样保存。`modelProviders` 的键必须是 Orchestrator 使用的 `ai.providers` 别名；处理地区、训练、日志、保留和删除等字段是治理声明，必须与提供商的真实策略和账号设置一致。使用 OpenRouter 时，还应在其 [Privacy / ZDR](https://openrouter.ai/docs/guides/features/zdr) 中启用零留存并禁止 data collection。
+2. 保存真实配置后重启 Host，用该 token 登录 Console，并在 Catalog Project 的 `sponsors` 中加入 `workroom-admin`。
+3. 诊断通过后点击"初始化编排能力"。Console 会根据当前版本真实的 Agent / Tool / Skill digest 发布 Capability Pack，激活首个 Project Profile，发布默认 Planning Policy，并由认证的 Sponsor 签发 Project Data Governance 权限。
+4. 成功后状态会显示 Planning 与 Disclosure 都已就绪，此时才能提交 `/work`。
 
-Workroom 的 Journal 后端在进程启动时固定：`ai.sessions.useDatabase !== false` 使用 `workroom_events`，Database Root Host 未就绪会使候选 generation 发布失败；显式设为 `false` 时使用 `.zhin/workroom-journal` 的原子文件事件流。热重载不能切换后端，修改该选择必须重启进程，避免旧代 lease 与新代写入两个无 CAS 关系的事实源。Console 的 Run 列表与详情仍是 Project-scoped 只读投影（例如 `GET /api/agent/workroom/runs?projectId=...`），不能直接修改 Task/Assignment。认证 Console 另有彼此隔离的 typed 控制面：Profile 与 Project Knowledge 通过 `workroom.profile.*` / `workroom.knowledge.*` RPC 发布或回滚，Portfolio Sponsor 通过 `POST /api/agent/workroom/portfolio/commands` 提交 exact command，Effect Sponsor 通过 `POST /api/agent/workroom/effects/sponsor-decisions` 只决定绑定 exact Intent 的授权；该命令只接受闭集 `reasonCode`，不持久化任意解释文本。Data Steward/Privacy/Compliance 使用 `/api/agent/workroom/data-lifecycle`、`/overdue` 与 `/commands` 查询 content-free lifecycle projection，并执行 Hold、subject erasure/export、retention purge/reconcile；这些入口只有在 Root-private role authority、当前 Catalog Project 与 P12 Console recipient 同时匹配时发布。它们都从认证 token 重新派生 principal，并重验当前 Catalog/Profile/governance revision；请求体自报身份、approval 或 discussion 不能取得状态写权限。可选 Remote A2A Executor 复用同一 Assignment lease/fence/event 契约；只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint Card/auth/transport 快照全部精确匹配时才允许新 claim，缺项会持久阻塞，旧 `ai.remoteAgents` poller 不再存在。
+::: warning 备份数据治理根密钥
+自托管 Host 首次签发时会生成权限为 `0600` 的 `.zhin/workroom-data-governance-root-key.json`，用于本机的数据密钥包装与权限签名。必须纳入加密备份：**丢失后，既有 Payload Vault 中的正文无法恢复。**
+:::
 
-升级旧数据时，`zhin agent legacy-runs <input>` 只读审计 legacy Run export，`zhin agent legacy-payloads <input> --kind <kind>` 只读扫描遗留内嵌正文；两者只生成 create-only audit/proposal，不会自动写新 Journal、接受旧结果、删除 payload 或执行迁移。详见[旧概念兼容说明](../contributing/legacy-concepts.md)。
+::: details 存储后端、Console 控制面与远程执行
+- **存储后端**：Catalog 与 Run Journal 使用相同的持久化选择。`ai.sessions.useDatabase !== false` 时使用数据库的 `workroom_catalog` / `workroom_events`，Database Root Host 未就绪会使新版本发布失败；显式设为 `false` 时回退到 `.zhin/workroom-catalog.json` 与 `.zhin/workroom-journal` 的原子文件事件流。后端在进程启动时固定，**热重载不能切换**，修改必须重启进程，避免新旧版本写入两个没有 CAS 关系的事实来源。
+- **Catalog 编辑**：保存采用 revision CAS；成员引用以当前版本的 `ai.agents` 为准，失效引用会被拒绝。已有 Run 的 Journal 事实不会被 Catalog 编辑覆盖。
+- **只读投影**：Console 的 Run 列表与详情是限定 Project 的只读投影（例如 `GET /api/agent/workroom/runs?projectId=...`），不能直接修改 Task / Assignment。
+- **类型化控制面**（彼此隔离）：Profile 与 Project Knowledge 通过 `workroom.profile.*` / `workroom.knowledge.*` RPC 发布或回滚；Portfolio Sponsor 通过 `POST /api/agent/workroom/portfolio/commands` 提交精确命令；Effect Sponsor 通过 `POST /api/agent/workroom/effects/sponsor-decisions` 只对绑定了精确 Intent 的授权做决定，只接受闭集 `reasonCode`，不保存任意解释文本；Data Steward / Privacy / Compliance 通过 `/api/agent/workroom/data-lifecycle`、`/overdue` 与 `/commands` 查询生命周期投影，执行 Hold、主体删除 / 导出、保留期清理 / 对账——这些入口只有在 Root 私有角色权限、当前 Catalog Project 与 P12 Console recipient 同时匹配时才会发布。所有入口都从认证 token 重新推导身份，并复验当前 Catalog / Profile / 治理 revision；请求体自报的身份、审批或讨论都不能获得写权限。
+- **远程执行**：可选的 Remote A2A Executor 复用同一套 Assignment lease / fence / event 契约。只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint 的 Card / auth / transport 快照全部精确匹配时才允许新认领，缺项会持久阻塞。旧的 `ai.remoteAgents` poller 已不存在。
+:::
 
-## 会话持久化与会话树
+### 审计旧数据
 
-数据库可用时，Agent Host 落 canonical 会话与 Agent session 表（缺库时使用内存实现）：
-
-| 表 | 内容 |
-|----|------|
-| `agent_sessions` | Agent 会话元数据（含会话树 `parent_id` / `active_leaf`） |
-| `agent_messages` | Agent 回合消息（上下文仓库） |
-| `conversation_events` | canonical IM 消息、引用关系与 notice 事实（幂等追加） |
-| `conversation_event_cursors` | 各 Agent session 的未读会话事件游标 |
-
-设 `ai.sessions.useDatabase: false` 可强制内存模式。
-
-同一 IM 会话内还可以分叉（branch）成会话树，用 IM 命令管理：
-
-| 命令 | 作用 |
-|------|------|
-| `/compact` | 手动压缩当前会话上下文 |
-| `/tree` / `/tree N` | 查看 / 切换会话分支 |
-| `/reset` | 重置会话 |
-| 发送 `clear` / `清空` / `重置` | 归档并清空本会话 AI 多轮上下文 |
-
-其他管理命令（master / 有权限用户）：`/models`、`/health`、`/cmd`、`/endpoints`、`/bindings`、`/tools`、`/mcp`。
-
-## Compaction
-
-上下文接近窗口上限时自动压缩，配置 `ai.agent.compaction`：
-
-```yaml
-ai:
-  agent:
-    compaction:
-      enabled: true
-      auto: true
-      keepRecentTokens: 20000   # 保留最近消息的 token 预算（默认 20000）
-      minKeepCount: 2           # 至少保留的消息条数（默认 2）
-```
-
-估算 token 超过 `contextWindow × 0.6` 触发压缩。压缩分两级：先做 micro-compact（裁剪冗余工具结果等），再由 LLM 生成 `[Previous conversation summary]` 摘要替换旧历史。连续自动压缩失败达到上限后停止自动压缩，避免反复消耗。
-
-## Model harness
-
-按 provider / model 覆盖执行循环参数（当前消费 `maxIterations`），合并顺序：TS 默认表 → `providerPatterns`（支持 `*` 通配）→ `models` 精确键：
-
-```yaml
-ai:
-  agent:
-    modelHarness:
-      providerPatterns:
-        "open*": { maxIterations: 7 }
-      models:
-        "gpt-4o": { maxIterations: 8 }
-        "openai:gpt-4o": { maxIterations: 9 }
-```
-
-## Provider 韧性
-
-主回合的每次模型请求都经过统一的重试 / 超时 / 降级层（`createResilientCompletionPort`）：
-
-- **错误分类**：429 限流、超时、5xx、网络错误可重试；鉴权失败、上下文超长、调用方取消不重试，原样上抛（上下文超长仍走压缩重试）。
-- **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待，超过上限则直接降级。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
-- **fallback**：同一模型重试耗尽后，按 `modelCandidates` 顺序切换到下一个模型；每次重试 / 切换 / 放弃都会写一条 `provider_retry` / `provider_fallback` / `provider_give_up` 日志。
-- **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
-
-```yaml
-ai:
-  agent:
-    providerResilience:
-      maxRetries: 2            # 每个模型首次之后的重试次数；0 关闭重试
-      baseDelayMs: 1000        # 首次退避，之后翻倍
-      maxDelayMs: 10000        # 单次退避上限
-      maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，直接 fallback
-      requestTimeoutMs: 180000 # 单次请求（整段流式输出）超时；0 关闭
-      emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
-      fallback: true           # 重试耗尽后是否切换到下一个候选模型
-```
-
-按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`。
-
-## 内置工具
-
-| 类别 | 工具 |
-|------|------|
-| 执行 | `bash` |
-| 文件 | `read_file`、`write_file`、`edit_file`、`list_dir`、`glob`、`grep` |
-| 网络 | `web_search`、`web_fetch` |
-| 交互 | `ask_user` |
-| 任务 | `spawn_task`、`todo_read`、`todo_write` |
-| 记忆/检索 | `memory_search`、`memory_upsert`、`knowledge_search`、`inspect_conversation_reference` |
-| 媒体 | `generate_image`；入站图片直接进入支持视觉的模型 |
-| 元 | `discover`、`load_tool`、`load_skill` |
-| 调度 | `schedule_list`、`schedule_add`、`schedule_remove`、`schedule_pause`、`schedule_resume`、`schedule_preview` |
-
-文件工具只在当前 Turn 显式授权的项目 workspace 内运行。相对路径以该 workspace 为根；绝对路径必须仍位于其中；`~`、目录逃逸以及经符号链接指向 workspace 外的路径都会在统一策略门面中 fail-closed。策略批准后的 canonical 路径才会传给当前 generation 的 Tool capability，`glob` / `grep` 不启动 shell 子进程。
-
-网络工具仅在 `ai.agent.execPreset: network` 时获得 HTTPS authority。`web_fetch` 的初始 URL 与每个重定向目标都会重新检查协议、域名和 SSRF；DNS 结果中的私网、link-local、CGNAT 与 multicast 地址会被拒绝，实际连接固定到已审核地址。`readonly` 等其他 preset 不会隐式开放网络。
-
-`todo_read` / `todo_write` 只操作当前 canonical session 的计划，调用参数不再接受 `chat_id` 或路径。状态原子写入 `.zhin/todos`，且 `.zhin/` 整体属于 runtime-private state，不能通过文件工具读取或枚举。
-
-## Assistant profile 与调度任务
-
-Assistant 运行时把「定时做事」产品化：持久化任务存 `data/schedule-jobs.json`，由 `ScheduleJobEngine` 到点执行并把结果推回 IM。
-
-```yaml
-assistant:
-  enabled: true
-  profile:
-    enabled: true
-    file: assistant.profile.yml   # 相对项目根，默认即此名
-  events:
-    enabled: true                 # 开放 POST /api/assistant/events 外部事件入口
-  defaults:
-    notifyOnFailure: false
-```
-
-`assistant.profile.yml` 声明人设与例行任务（routines），启动时同步为调度任务：
-
-```yaml
-version: 1
-persona:
-  soul: 你是贴心的生活助手。
-routines:
-  heartbeat:
-    enabled: true
-    everyMs: 1800000
-    prompt: 检查待办并汇报。
-  morningBrief:
-    enabled: true
-    scheduleKind: solar      # solar | lunar | workday | freeDay | holiday
-    cron: "0 0 8 * * *"
-    tz: Asia/Shanghai
-    prompt: 生成今日早报。
-```
-
-内置 routine 有 `heartbeat`（间隔执行）、`morningBrief`（默认 08:00）、`bedtimeCheck`（默认 22:00）、`weatherReport`，也可自定义键。注意中国大陆「工作日」场景用 `workday`（含调休），不要用 solar 的 `1-5`。
-
-用户也可以在 IM 里让 Agent 用 `schedule_add` / `schedule_list` / `schedule_preview` 等工具直接管理任务；外部系统可经 `POST /api/assistant/events` 注入事件、`GET /api/assistant/jobs` 查询任务。
+升级旧数据时，`zhin agent legacy-runs <input>` 只读审计旧版 Run 导出，`zhin agent legacy-payloads <input> --kind <kind>` 只读扫描遗留的内嵌正文。两者只生成 create-only 的审计 / 建议，不会自动写入新 Journal、接受旧结果、删除 payload 或执行迁移。详见 [旧概念兼容说明](../contributing/legacy-concepts.md)。
 
 ## 相关
 
-- [AI 能力总览](./index.md)：安装、providers、触发与安全
-- [语音能力](./speech.md)：语音消息的 STT/TTS
+- [AI 总览](./index.md)：启用 AI、模型、触发规则与安全策略。
+- [Agent 工具与技能](../authoring/agent-tools.md)：编写工具、Skill、Prompt Section 与子 Agent。
+- [语音](./speech.md)：语音识别与语音回复。

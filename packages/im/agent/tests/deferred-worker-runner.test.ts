@@ -141,6 +141,11 @@ describe('DeferredWorkerRunner', () => {
       provider,
       llmRuntime: llm.runtime,
       maxIterations: 5,
+      // bash needs an explicit frozen shell policy snapshot.
+      turnPolicy: {
+        shell: { security: 'allowlist', execPreset: 'development', approvalMode: 'auto', isolation: 'required' },
+        filesystem: { workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' },
+      },
     });
 
     const payload = JSON.parse(result.summary) as { summary: string; status: string };
@@ -180,4 +185,44 @@ describe('DeferredWorkerRunner', () => {
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'start', goal: 'Check stars' }));
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ phase: 'finish', goal: 'Check stars', status: 'ok' }));
   });
+
+  describe('turn policy snapshot', () => {
+    const base = () => {
+      const allByName = new Map<string, AgentTool>([
+        ['github_star', makeTool('github_star', 'star repo')],
+        ['bash', makeTool('bash')],
+        ['read_file', makeTool('read_file')],
+      ]);
+      return {
+        goal: 'Check stars',
+        toolQuery: 'github star',
+        deferredCatalog: [allByName.get('github_star')!],
+        workerBaseTools: [allByName.get('bash')!, allByName.get('read_file')!],
+        allToolsByName: allByName,
+        origin: { platform: 'qq', senderId: 'u1' },
+        maxToolResults: 5,
+        maxIterations: 2,
+      };
+    };
+    const offeredTools = (llm: ReturnType<typeof wireMockLlmApi>) =>
+      (llm.calls[0]?.context.tools ?? []).map(tool => tool.name);
+
+    it('offers no bash when no policy snapshot is given', async () => {
+      const llm = wireMockLlmApi({ models: ['test-model'], responder: () => assistantTextReply('ok') });
+      await new DeferredWorkerRunner().runSync({ ...base(), provider: llm.provider as unknown as AIProvider, llmRuntime: llm.runtime } as never);
+      expect(offeredTools(llm)).not.toContain('bash');
+      expect(offeredTools(llm)).toContain('github_star');
+    });
+
+    it('keeps bash only under a frozen snapshot that allows the shell', async () => {
+      const snapshot = Object.freeze({
+        shell: Object.freeze({ security: 'allowlist' as const, execPreset: 'development' as const, approvalMode: 'auto' as const, isolation: 'required' as const }),
+        filesystem: Object.freeze({ workspaceRoot: '/ws', workingDirectory: '/ws', access: 'workspace-write' as const }),
+      });
+      const llm = wireMockLlmApi({ models: ['test-model'], responder: () => assistantTextReply('ok') });
+      await new DeferredWorkerRunner().runSync({ ...base(), provider: llm.provider as unknown as AIProvider, llmRuntime: llm.runtime, turnPolicy: snapshot } as never);
+      expect(offeredTools(llm)).toContain('bash');
+    });
+  });
 });
+

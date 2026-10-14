@@ -67,6 +67,10 @@ function sanitizeResolvedHarness(input: Record<string, unknown>): ResolvedModelH
     && input.explorationBudget >= 0) {
     resolved.explorationBudget = Math.floor(input.explorationBudget);
   }
+  for (const key of ['iterationExtension', 'maxTotalIterations'] as const) {
+    const value = input[key];
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0) resolved[key] = Math.floor(value);
+  }
   if (typeof input.explorationGuidance === 'boolean') {
     resolved.explorationGuidance = input.explorationGuidance;
   }

@@ -1,33 +1,39 @@
 ---
-title: Governed Business Agent
+title: "Teach an Agent your business without widening its authority"
+description: "Give an Agent internal terms, output rules, and business tools, while separate tool permissions, approvals, and execution policy control what it can do"
 ---
 
-# Give an Agent business context without excess authority
+# Teach an Agent your business without widening its authority
 
-Use this when an Agent needs internal vocabulary, output rules, and business tools. The result is hot-reloadable context, explicit tool authority, risk approval, and replayable runs.
+For teams that want to hand internal vocabulary, output rules, and business tools to an AI. The goal: business context can be hot-updated at any time, while what the AI may call, which operations need a human, and which commands it may run are controlled by separate settings — and every run can be reviewed afterwards.
 
-## Four independent control planes
+## Four settings, one job each
 
-| Plane | Owns | Does not own |
+The key point: **nothing written into a prompt grants the AI any permission.** Permissions are controlled in three other places.
+
+| Setting | Owns | Does not own |
 | --- | --- | --- |
-| Prompt Section | Vocabulary, rules, and tool guidance | Tool or data authority |
-| Tool Feature | Input schema, execution, and model output | Host execution policy |
-| `requiresApproval` | Which calls require a person | Tool visibility |
-| `ai.agent` | Execution preset, allowlist, and iteration limit | Prompt content |
+| Prompt Section | Vocabulary, rules, tool-usage hints | Does not grant tool or data access |
+| Tools (`tools/`) | Input format, execution, result returned to the model | Does not decide command execution policy |
+| `requiresApproval` | Which calls need human confirmation | Does not widen which tools are visible |
+| `ai.agent` | Command execution preset, allowlist, iteration limit | Does not change prompt content |
 
-## Implementation
+## Steps
 
-1. Declare required or optional sections under `prompt-sections/` with explicit budgets.
-2. Expose minimal tools under `tools/` with structured schemas. Side-effecting tools must not bypass approval by default.
-3. Start with `execSecurity: deny` or `allowlist`; permit only required commands in known working directories.
-4. In Console Runtime Capabilities, inspect Prompt Section owner, source, profile, and budget policy.
-5. Run one read-only and one side-effecting task in Agent Studio. Verify approval, cancellation, trace, and artifacts.
+1. Write business context in your plugin's `prompt-sections/`, mark it required (`required`) or optional, and keep it within budget. See [Give the AI business context](../authoring/agent-tools.md#give-the-ai-business-context).
+2. Expose only the tools you need in `tools/`, with structured input schemas; don't set tools that change data to "never needs approval".
+3. Start command execution at `execSecurity: deny` or `allowlist`, and open only the commands you need in known working directories.
+4. After startup, check source, profiles, and budget policy under **Runtime Capabilities → Prompt Sections** in Console.
+5. In the Agent workbench, run one read-only task and one task with side effects, and confirm approval, cancellation, the run record, and outputs behave as expected.
 
-## Acceptance
+## Acceptance checklist
 
-- A failed reload cannot change the fixed Prompt Section snapshot of an active turn.
-- Console proves that a section entered the current generation without exposing content or metadata.
-- A cancelled tool is not projected as a normal completion; side effects remain auditable.
-- Working directory and security policy are explicit run inputs, never elevated from chat text.
+- If a context change fails to hot-reload, conversations in progress keep the content they started with.
+- Console shows the Prompt Section is active without exposing its text.
+- A cancelled tool call is never shown as completed; results with side effects are auditable.
+- Each run explicitly chooses its working directory and security policy; a line of chat text can't escalate them.
 
-See [Agent tools and Prompt Sections](/en/authoring/agent-tools) and [Agent deep dive](/en/ai/agent).
+## Next steps
+
+- [Agent Tools and Skills](../authoring/agent-tools.md): tools, Prompt Sections, and approval in full
+- [Agent deep dive](../ai/agent.md): how a turn runs and how to cancel it

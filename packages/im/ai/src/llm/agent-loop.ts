@@ -34,6 +34,11 @@ export interface AgentLoopConfig {
   model: Model;
   transport: LlmCompletionPort;
   maxIterations?: number;
+  /**
+   * Called before every iteration with the current limit; returns the limit to
+   * use (raise it to extend the budget, return `iteration` to stop now).
+   */
+  nextIterationLimit?: (iteration: number, currentLimit: number) => number;
   reasoning?: ThinkingLevel;
   sessionId?: string;
   toolExecution?: ToolExecutionMode;
@@ -252,7 +257,10 @@ export async function* agentLoop(
 
   yield { type: 'agent_start' };
 
-  for (let iteration = 0; iteration < maxIterations; iteration++) {
+  let iterationLimit = maxIterations;
+  for (let iteration = 0; ; iteration++) {
+    if (config.nextIterationLimit) iterationLimit = config.nextIterationLimit(iteration, iterationLimit);
+    if (iteration >= iterationLimit) break;
     if (signal?.aborted) break;
 
     yield { type: 'turn_start' };
