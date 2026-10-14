@@ -112,6 +112,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
 
     // conversation
     let conversationKey: string | undefined;
+    let convAdapter: string | undefined;
     const conv = own(room, 'conversation');
     if (!isPlainObject(conv)) {
       issues.push(`${rp}.conversation: required object`);
@@ -119,6 +120,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
       const cp = `${rp}.conversation`;
       checkUnknown(conv, CONVERSATION_FIELDS, cp, issues);
       const adapter = checkCleanString(conv, 'adapter', cp, issues);
+      convAdapter = adapter;
       const endpoint = checkCleanString(conv, 'endpoint', cp, issues);
       const id = checkCleanString(conv, 'id', cp, issues);
       const kind = own(conv, 'kind');
@@ -127,7 +129,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
       if (adapter && endpoint && ctx.endpointKeys && !ctx.endpointKeys.has(`${adapter}:${endpoint}`)) {
         issues.push(`${cp}.endpoint: unknown endpoint "${adapter}:${endpoint}"`);
       }
-      if (adapter && endpoint && id && kindOk) conversationKey = `${adapter}:${endpoint}:${kind}:${id}`;
+      if (adapter && id && kindOk) conversationKey = `${adapter}:${kind}:${id}`;
     }
     if (enabled && conversationKey) {
       const prev = conversationOwners.get(conversationKey);
@@ -179,6 +181,7 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
 
     // members
     const memberAgents = new Set<string>();
+    const agentLower = new Map<string, number>();
     const membersRaw = own(room, 'members');
     if (!Array.isArray(membersRaw)) {
       issues.push(`${rp}.members: required array`);
@@ -206,8 +209,14 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
         const agent = checkCleanString(member, 'agent', mp, issues);
         if (agent) {
           if (agentNames && !agentNames.has(agent)) issues.push(`${mp}.agent: unknown agent "${agent}"`);
-          if (memberAgents.has(agent)) issues.push(`${mp}.agent: duplicate agent "${agent}"`);
+          const lower = agent.toLowerCase();
+          if (memberAgents.has(agent)) {
+            issues.push(`${mp}.agent: duplicate agent "${agent}"`);
+          } else if (agentLower.has(lower)) {
+            issues.push(`${mp}.agent: agent "${agent}" conflicts case-insensitively with member ${agentLower.get(lower)}`);
+          }
           memberAgents.add(agent);
+          if (!agentLower.has(lower)) agentLower.set(lower, i);
         }
         const role = checkCleanString(member, 'role', mp, issues);
         if (role && !roleNames.has(role)) issues.push(`${mp}.role: unknown role "${role}"`);
@@ -220,6 +229,9 @@ export function collectRoomDefinitionIssues(raw: unknown, ctx: RoomValidationCon
           checkUnknown(bot, BOT_FIELDS, bp, issues);
           const adapter = checkCleanString(bot, 'adapter', bp, issues);
           const endpoint = checkCleanString(bot, 'endpoint', bp, issues);
+          if (adapter && convAdapter && adapter !== convAdapter) {
+            issues.push(`${bp}.adapter: bot adapter "${adapter}" must match room conversation adapter "${convAdapter}"`);
+          }
           if (adapter && endpoint) {
             const key = `${adapter}:${endpoint}`;
             if (ctx.endpointKeys && !ctx.endpointKeys.has(key)) {

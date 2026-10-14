@@ -6,7 +6,7 @@ import {
   RoomDefinitionError,
   validateRoomDefinitions,
 } from '../../src/room/validate-room.js';
-import { ROOM_MAX_MEMBERS } from '../../src/room/room-definition.js';
+import { ROOM_CONVERSATION_KINDS, ROOM_MAX_MEMBERS, ROOM_RESERVED_NAMES } from '../../src/room/room-definition.js';
 
 const bot = (n: string) => ({ adapter: 'qq', endpoint: n });
 const minimal = (): any => ({
@@ -60,6 +60,65 @@ describe('validateRoomDefinitions', () => {
     expect(Object.isFrozen(out.dev.roles.worker)).toBe(true);
     expect(out.dev).not.toBe(raw.dev);
     expect(JSON.stringify(raw)).toBe(snapshot);
+  });
+
+  it('result is deeply frozen against mutation; public constants are frozen', () => {
+    const out = validateRoomDefinitions(minimal());
+    expect(() => (out.dev.members as any).push({})).toThrow();
+    expect(out.dev.members).toHaveLength(1);
+    expect(() => { (out.dev.roles.worker as any).prompt = 'x'; }).toThrow();
+    expect(out.dev.roles.worker.prompt).toBe('work');
+    expect(() => { (out as any).extra = 1; }).toThrow();
+    expect((out as any).extra).toBeUndefined();
+    expect(Object.isFrozen(ROOM_CONVERSATION_KINDS)).toBe(true);
+    expect(Object.isFrozen(ROOM_RESERVED_NAMES)).toBe(true);
+    expect(() => (ROOM_CONVERSATION_KINDS as any).push('x')).toThrow();
+    expect(() => (ROOM_RESERVED_NAMES as any).push('x')).toThrow();
+  });
+
+  it('rejects non-array members, duplicate accepts, non-string role description', () => {
+    for (const bad of [{}, 'x']) {
+      const a = minimal(); a.dev.members = bad;
+      expectIssue(a, 'rooms.dev.members: required array');
+    }
+    const b = minimal(); b.dev.roles.worker.accepts = ['a', 'a'];
+    expectIssue(b, 'rooms.dev.roles.worker.accepts.1: duplicate');
+    const c = minimal(); c.dev.roles.worker.description = 5;
+    expectIssue(c, 'rooms.dev.roles.worker.description: must be a string');
+  });
+
+  it('conversation ownership ignores endpoint but respects adapter', () => {
+    const one = minimal().dev;
+    const other = minimal().dev;
+    other.conversation.endpoint = 'other';
+    other.members[0].botEndpoint = bot('b2');
+    expectIssue({ one, two: other }, 'already owned by room "one"');
+    const onebot = minimal().dev;
+    onebot.conversation.adapter = 'onebot';
+    onebot.members[0].botEndpoint = { adapter: 'onebot', endpoint: 'b2' };
+    expect(() => validateRoomDefinitions({ one: minimal().dev, two: onebot })).not.toThrow();
+    const disabled = minimal().dev;
+    disabled.enabled = false;
+    expect(() => validateRoomDefinitions({ one: minimal().dev, two: disabled })).not.toThrow();
+  });
+
+  it('member bot adapter must match room conversation adapter', () => {
+    const a = minimal(); a.dev.members[0].botEndpoint = { adapter: 'onebot', endpoint: 'b1' };
+    expectIssue(a, 'rooms.dev.members.0.botEndpoint.adapter: bot adapter "onebot" must match');
+    expect(() => validateRoomDefinitions(minimal())).not.toThrow();
+  });
+
+  it('agent names are unique case-insensitively', () => {
+    const a = minimal();
+    a.dev.members = [
+      { agent: 'Lead', role: 'worker', botEndpoint: bot('b1') },
+      { agent: 'lead', role: 'worker', botEndpoint: bot('b2') },
+    ];
+    expectIssue(a, 'rooms.dev.members.1.agent: agent "lead" conflicts case-insensitively');
+    expect(issuesOf(a).some((i) => i.includes('duplicate agent'))).toBe(false);
+    const b = minimal();
+    b.dev.members.push({ agent: 'a1', role: 'worker', botEndpoint: bot('b2') });
+    expectIssue(b, 'rooms.dev.members.1.agent: duplicate agent "a1"');
   });
 
   it('accepts full room without reviewer, and without coordinator', () => {
@@ -176,7 +235,7 @@ describe('validateRoomDefinitions', () => {
 
   it('cross-room conversation conflicts only among enabled rooms', () => {
     const two = { one: minimal().dev, two: minimal().dev };
-    expectIssue(two, 'rooms.two.conversation: conversation "qq:main:group:100" already owned by room "one"');
+    expectIssue(two, 'rooms.two.conversation: conversation "qq:group:100" already owned by room "one"');
     (two.two as any).enabled = false;
     expect(() => validateRoomDefinitions(two)).not.toThrow();
   });

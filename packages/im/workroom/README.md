@@ -46,4 +46,4 @@ Binding 和持久 Item 必须显式携带 `audience` 与绑定代际 `cursorId`�
 - Room：`conversation`（group/channel 绑定）、`roles`、`members`、可选 `coordinator`。
 - Role：`prompt`；`tools`（上限，省略=不额外授予）；`accepts`（省略=任意类别）；`handoffTo`（省略=不允许交接，不可指向自身）。
 - Member：一个 Agent、一个 Role、独立的 `botEndpoint`（Room 内不得共用）、可选 `aliases`（Room 内唯一，大小写不敏感）。
-- 同一会话只能被一个 enabled Room 拥有；disabled 的 Room 只做结构校验。
+- 会话以 `adapter:kind:id` 标识（不含 endpoint）：同一个群不能经不同 Bot 被两个 enabled Room 认领；disabled 的 Room 只做结构校验。每个成员的 `botEndpoint.adapter` 必须与 Room 会话的 adapter 一致；Room 内 agent 名（及别名）大小写不敏感唯一。公开常量（`ROOM_CONVERSATION_KINDS`、`ROOM_RESERVED_NAMES`）均已冻结。

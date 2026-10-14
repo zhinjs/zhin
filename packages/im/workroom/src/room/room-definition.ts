@@ -13,13 +13,20 @@ export const ROOM_ROLE_NAME_PATTERN = /^[a-z][a-z0-9_-]{0,31}$/;
 export const ROOM_ALIAS_PATTERN = /^[a-z0-9][a-z0-9_-]{0,31}$/;
 /** Maximum number of members in one Room. */
 export const ROOM_MAX_MEMBERS = 16;
-/** Allowed conversation kinds. */
-export const ROOM_CONVERSATION_KINDS = ['group', 'channel'] as const;
-/** Names that can never be used as room id or role name (prototype pollution guard). */
-export const ROOM_RESERVED_NAMES: readonly string[] = ['__proto__', 'constructor', 'prototype'];
+/**
+ * Allowed conversation kinds (frozen). Conversation ownership is global per `adapter:kind:id`;
+ * the endpoint is NOT part of that key.
+ */
+export const ROOM_CONVERSATION_KINDS = Object.freeze(['group', 'channel'] as const);
+/** Names that can never be used as room id or role name (prototype pollution guard; frozen). */
+export const ROOM_RESERVED_NAMES: readonly string[] = Object.freeze(['__proto__', 'constructor', 'prototype']);
 
 export type RoomConversationKind = (typeof ROOM_CONVERSATION_KINDS)[number];
 
+/**
+ * Conversation binding. Ownership is keyed by `adapter:kind:id` (endpoint excluded), so two enabled
+ * Rooms cannot claim the same group through different Bots. `endpoint` is the Bot the Room uses.
+ */
 export interface RoomConversationBinding {
   adapter: string;
   endpoint: string;
@@ -55,9 +62,9 @@ export interface RoomMemberDefinition {
   agent: string;
   /** Key of `roles`. */
   role: string;
-  /** Dedicated Bot account this member speaks with; not shared within a Room. */
+  /** Dedicated Bot account this member speaks with; not shared within a Room; adapter must equal the Room conversation adapter. */
   botEndpoint: RoomMemberBotEndpoint;
-  /** Optional @ aliases; unique within the Room (case-insensitive, including agent names). */
+  /** Optional @ aliases; unique within the Room (case-insensitive, including agent names). Agent names are also unique case-insensitively. */
   aliases?: readonly string[];
 }
 
