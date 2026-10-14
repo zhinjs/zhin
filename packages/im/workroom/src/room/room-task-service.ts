@@ -38,6 +38,10 @@ export interface RoomTaskServiceOptions {
   /**
    * Hook for membership / role checks (done by the caller layer, not the state machine).
    * Return a refusal reason to reject the command; return undefined to allow it.
+   *
+   * authorize MUST restrict who may issue `assign` against an already-assigned or blocked Task: allow only
+   * the lead/coordinator role, because `assign` checks neither `from` nor counts handoffCount. A member who
+   * wants to give up a Task must use `handoff`. The C1 authorize hook has to enforce this.
    */
   readonly authorize?: (roomId: string, command: RoomTaskCommand) => string | undefined;
   readonly logger?: { warn(message: string): void };
@@ -49,12 +53,19 @@ export interface RoomTaskService {
   execute(roomId: string, command: RoomTaskExecuteInput): Promise<RoomTaskExecuteResult>;
   get(roomId: string, taskId: string): Promise<RoomTaskView | undefined>;
   list(roomId: string, filter?: RoomTaskListFilter): Promise<readonly RoomTaskView[]>;
+  /**
+   * Listeners run after the command is persisted and after the Room serial section has finished, in the
+   * order of the caller's own events. Concurrent executes may interleave their dispatches, so subscribers
+   * must order by `event.sequence`. Errors are logged, never propagated.
+   */
   subscribe(listener: (event: RoomTaskEvent) => void | Promise<void>): () => void;
 }
 
 const MAX_ATTEMPTS = 3;
 
 /*
+ * Subscribers are dispatched after the Room serial section (see execute), so re-entrant execute is safe.
+ *
  * Not wired to RoomBus on purpose: the group-visible projection of a handoff stays in room-bus and is
  * composed with this service in C1. Do not project group messages from here in B3.
  */
@@ -107,7 +118,6 @@ export function createRoomTaskService(options: RoomTaskServiceOptions): RoomTask
         const stored = await journal.append(roomId, state.sequence, events);
         const next = replayRoomTasks(roomId, [...history, ...stored]);
         const view = findRoomTask(next, command.taskId) as RoomTaskView;
-        await dispatch(stored);
         return Object.freeze({ events: stored, state: view, replayed: false });
       } catch (error) {
         if (!(error instanceof RoomTaskSequenceConflictError)) throw error;
@@ -119,7 +129,14 @@ export function createRoomTaskService(options: RoomTaskServiceOptions): RoomTask
   };
 
   return Object.freeze({
-    execute: (roomId: string, command: RoomTaskExecuteInput) => serialized(roomId, () => run(roomId, command)),
+    async execute(roomId: string, command: RoomTaskExecuteInput) {
+      const result = await serialized(roomId, () => run(roomId, command));
+      // Dispatch only after the Room serial section has settled, so a subscriber may call execute on the
+      // same Room without deadlocking. The caller still awaits the subscribers (and observes their side
+      // effects); a slow subscriber delays its own caller but no longer blocks other commands.
+      if (!result.replayed) await dispatch(result.events);
+      return result;
+    },
     async get(roomId: string, taskId: string) {
       return findRoomTask((await load(roomId)).state, taskId);
     },

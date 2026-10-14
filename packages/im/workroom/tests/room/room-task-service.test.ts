@@ -77,6 +77,50 @@ describe('Room Task service', () => {
     expect(warn).toHaveBeenCalled();
   });
 
+  it('subscriber that calls execute on the same Room does not deadlock', async () => {
+    const journal = new MemoryRoomTaskJournal();
+    const service = createRoomTaskService(options(journal));
+    let inner: Promise<unknown> | undefined;
+    service.subscribe(event => {
+      if (event.type === 'task.created') {
+        inner = service.execute('r', { type: 'assign', commandId: 'inner', taskId: 't', by: 'lead', assignee: 'dev' });
+        return inner.then(() => undefined);
+      }
+    });
+    const guard = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('deadlock')), 2000));
+    await Promise.race([
+      service.execute('r', { type: 'create', commandId: 'outer', taskId: 't', by: 'lead', title: 'x' }),
+      guard,
+    ]);
+    await Promise.race([inner, guard]);
+    expect((await journal.read('r')).map(event => event.sequence)).toEqual([0, 1]);
+    expect(await service.get('r', 't')).toMatchObject({ status: 'assigned', assignee: 'dev' });
+  });
+
+  it('slow subscriber does not block other commands', async () => {
+    const service = createRoomTaskService(options(new MemoryRoomTaskJournal()));
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    service.subscribe(async event => { if (event.type === 'task.created' && event.taskId === 't') await gate; });
+    const slow = service.execute('r', { type: 'create', commandId: 'c1', taskId: 't', by: 'lead', title: 'x' });
+    await new Promise(resolve => setTimeout(resolve, 10));
+    const second = await service.execute('r', { type: 'create', commandId: 'c2', taskId: 'u', by: 'lead', title: 'y' });
+    expect(second.state.id).toBe('u');
+    release();
+    await slow;
+  });
+
+  it('does not dispatch again on a replayed commandId', async () => {
+    const service = createRoomTaskService(options(new MemoryRoomTaskJournal()));
+    const listener = vi.fn();
+    service.subscribe(listener);
+    const command = { type: 'create', commandId: 'c', taskId: 't', by: 'lead', title: 'x' } as const;
+    await service.execute('r', command);
+    const again = await service.execute('r', command);
+    expect(again.replayed).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+
   it('does not notify for failed or replayed commands', async () => {
     const service = createRoomTaskService(options(new MemoryRoomTaskJournal()));
     const listener = vi.fn();

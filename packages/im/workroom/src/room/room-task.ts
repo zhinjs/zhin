@@ -11,6 +11,9 @@ import { ROOM_RESERVED_NAMES } from './room-definition.js';
  *
  * Handoff semantics: `task.handoff` changes the assignee to `to` and moves the Task back to `assigned`
  * (a task that was `in_progress` must be started again by the new assignee).
+ *
+ * `task.assigned` on an assigned / blocked Task is a lead-only reassignment: it checks neither `from` nor
+ * handoffCount, so the caller's authorize hook MUST restrict it. Assigning to the current assignee is rejected.
  */
 
 export type RoomTaskStatus = 'created' | 'assigned' | 'in_progress' | 'done' | 'blocked' | 'cancelled';
@@ -199,7 +202,13 @@ function step(tasks: MutableTasks, event: RoomTaskEvent): void {
     case 'task.assigned':
       requireStatus('created', 'assigned', 'blocked');
       text(event.by, 'by', ACTOR_MAX);
-      existing.assignee = text(event.assignee, 'assignee', ACTOR_MAX);
+      {
+        const assignee = text(event.assignee, 'assignee', ACTOR_MAX);
+        if (existing.status === 'assigned' && existing.assignee === assignee) {
+          fail('invalid_input', `task is already assigned to ${assignee}; use handoff to change the assignee`);
+        }
+        existing.assignee = assignee;
+      }
       existing.status = 'assigned';
       delete existing.blockedReason;
       return;

@@ -64,7 +64,10 @@ export class DatabaseRoomTaskJournal implements RoomTaskJournal {
   ): Promise<readonly RoomTaskEvent[]> {
     const id = requiredRoom(roomId);
     if (!Number.isSafeInteger(expectedSequence) || expectedSequence < -1) throw new Error('expectedSequence is invalid');
-    if (events.length === 0) return Object.freeze([]);
+    if (events.length === 0) {
+      assertRoomTaskAppend(id, await this.read(id), expectedSequence, []);
+      return Object.freeze([]);
+    }
     const batch = events.map(event => JSON.parse(JSON.stringify(event)) as RoomTaskEvent);
     try {
       return await this.database.transaction(async transaction => {

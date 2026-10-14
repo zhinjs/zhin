@@ -85,7 +85,8 @@ sidebar: false
   - 2026-10-15 · 「fix(workroom): @ 非成员时 Room Router 不交给 coordinator」· mention 都不指向成员时返回无目标，成员副本先到先得、不强制 mentioned；方案 §3 同步 hasRoom 成员关系与 room_unlisted_member_takeover
 - [x] B3 Task 状态机（created → assigned → in_progress → done / blocked / cancelled，加 handoff），使用事件溯源，并用 `@zhin.js/database` 持久化
   - 2026-10-15 · 「feat(workroom): Room Task 状态机与事件溯源持久化」· `room/` 下新增小型 decide / evolve / replay 状态机（6 个状态、handoff 回到 assigned）、每个 Room 一条事件流（CAS 追加、批量原子）、数据库 journal（digest / 损坏行 fail-closed）与内存 journal；未接入运行时
-- [ ] B3-1 处理第 30 轮审查意见：`packages/im/workroom/src/room/room-task-service.ts:110` 的 `dispatch(stored)` 在每个 Room 的串行链内 await 订阅者，订阅者对同一 Room 再次 `execute` 会死锁（C1 把 RoomBus / 工具作为订阅者时容易触发），慢订阅者也会阻塞该 Room 所有命令。改为串行段结束后再分发（serialized 返回已存事件，`execute` 在 run 完成后分发），补“订阅者对同一 Room 调用 execute 不死锁”测试。顺带 Nit：`database-room-task-journal.ts:67` 空批量不校验 `expectedSequence`，与内存 journal 行为不一致，统一并补一个对两种 journal 都跑的契约测试；`room-task.ts:199` 已 `assigned` 时再次 `task.assigned` 会绕过 handoff 的 from 校验且不计 handoffCount，拒绝重派给当前负责人，并在注释或方案中写明 C1 的 authorize 必须限制谁可以对已分配的 Task 重新 assign
+- [x] B3-1 处理第 30 轮审查意见：`packages/im/workroom/src/room/room-task-service.ts:110` 的 `dispatch(stored)` 在每个 Room 的串行链内 await 订阅者，订阅者对同一 Room 再次 `execute` 会死锁（C1 把 RoomBus / 工具作为订阅者时容易触发），慢订阅者也会阻塞该 Room 所有命令。改为串行段结束后再分发（serialized 返回已存事件，`execute` 在 run 完成后分发），补“订阅者对同一 Room 调用 execute 不死锁”测试。顺带 Nit：`database-room-task-journal.ts:67` 空批量不校验 `expectedSequence`，与内存 journal 行为不一致，统一并补一个对两种 journal 都跑的契约测试；`room-task.ts:199` 已 `assigned` 时再次 `task.assigned` 会绕过 handoff 的 from 校验且不计 handoffCount，拒绝重派给当前负责人，并在注释或方案中写明 C1 的 authorize 必须限制谁可以对已分配的 Task 重新 assign
+  - 2026-10-15 · 「fix(workroom): Room Task 订阅者分发移出串行段并收紧重复指派」· 订阅者在串行段结束后分发（重放命令不分发），补重入不死锁 / 慢订阅者不阻塞 / 重放不重复分发测试；DB journal 空批量校验 `expectedSequence`，两种 journal 共用契约测试；`assigned` 时指派给当前负责人被拒绝，C1 authorize 约束写入 JSDoc 与方案
 - [ ] B4 护栏：handoff 深度上限、每分钟 turn 上限、同一 Room 串行发言、人类取消、敏感操作只接受配置的人类账号、**每个账号的发送频率上限**（QQ 个人号有被平台风控封号的风险）
 - [ ] B5 重写 `examples/multi-agent-room`：Sandbox 里 3 个 Bot（coordinator / researcher / writer）在同一个群里协作，作为端到端验收测试。跑通 `pnpm check:all`
 
@@ -292,6 +293,14 @@ sidebar: false
 - Should fix：`room-task-service.ts:110` 订阅者在 Room 串行链内被 await，重入 execute 会死锁 → 新增 B3-1
 - Nit：DB journal 空批量不校验 expectedSequence，与内存实现不一致；已 assigned 时再次 assign 可绕过 handoff 规则 → 并入 B3-1
 
+### 第 31 轮（2026-10-15，审查 B3-1）
+
+- 无 Blocking / Should fix
+- Nit（只记录，C1 参考）：`room-task-service.ts:135` 分发移出串行段后，同一 Room 并发 execute 的订阅者分发可能交错；JSDoc 已要求订阅者按 `event.sequence` 排序，方案未记录。C1 把 RoomBus 投影接成订阅者时须按 sequence 排序或去重
+- Nit（只记录）：`room-task.ts:207` 只在 `assigned` 时拒绝同人指派，`blocked` 时同人 assign 视为解除阻塞；方案 redesign.md:194 与头注释未写明这个例外，可补注释或用例
+- Nit（只记录，C1 参考）：`room-task-service.ts:42` 的 `authorize(roomId, command)` 是同步的、拿不到 Task 当前状态，C1 实际只能按角色限制所有 assign，或需要给 authorize 提供 Task 视图
+- Nit（只记录）：`room-task-service.test.ts:90` 死锁测试的 2 秒 guard 计时器未 clearTimeout
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -326,3 +335,4 @@ sidebar: false
 - 2026-10-15 同一次定时运行：完成 B2b-1（4 个 agent，约 4.4 分钟，core / workroom build、type-check、219 + 348 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix 涉及路由正确性，合并新增为 B2b-2，2 个 Nit 只记录）
 - 2026-10-15 01:35 定时运行：rebase 到最新 origin/main（2 个提交无冲突），install / build 通过；完成 B2b-2（4 个 agent，约 3.7 分钟，core / workroom build、type-check、220 + 1484 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，2 个 Nit 只记录）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B3（4 个 agent，约 7.1 分钟，workroom build、type-check、101 + 940 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 新增为 B3-1，2 个 Nit 并入）。顺带在方案第 131 行补充“非成员账号也包括群内其他人类”
+- 2026-10-15 定时运行：rebase 到最新 origin/main（无冲突），install / build 通过；完成 B3-1（4 个 agent，约 5.4 分钟，workroom build、type-check、117 个 room 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，4 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改

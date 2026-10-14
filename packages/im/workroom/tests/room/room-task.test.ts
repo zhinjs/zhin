@@ -58,6 +58,14 @@ describe('Room Task state machine', () => {
     expect(h.view()?.status).toBe('assigned');
   });
 
+  it('rejects assigning an assigned task to its current assignee; reassigning to another keeps handoffCount', () => {
+    const h = harness();
+    h.run({ type: 'create', taskId: 't1', by: 'lead', title: 'x', assignee: 'dev' } as never);
+    expect(code(() => h.run({ type: 'assign', taskId: 't1', by: 'lead', assignee: 'dev' } as never))).toBe('invalid_input');
+    h.run({ type: 'assign', taskId: 't1', by: 'lead', assignee: 'qa' } as never);
+    expect(h.view()).toMatchObject({ assignee: 'qa', status: 'assigned', handoffCount: 0 });
+  });
+
   it('supports blocked round trips', () => {
     const h = harness();
     h.run({ type: 'create', taskId: 't1', by: 'lead', title: 'x', assignee: 'dev' });

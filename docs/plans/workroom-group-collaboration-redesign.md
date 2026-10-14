@@ -191,6 +191,7 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 
 - 状态 6 个：`created / assigned / in_progress / done / blocked / cancelled`，`done`、`cancelled` 为终态；没有 lease、preempt、acceptance revision、scheduler clock。
 - 转移：`assign` 可用于 created / assigned / blocked（in_progress 必须先 block 或走 handoff）；`start` 仅 assigned / blocked 且为当前 assignee；`block`、`complete` 仅 in_progress 且为 assignee（reason / result 必填）；`cancel` 任何非终态、不限 actor；终态后任何命令都显式报错。
+- `assign` 对 assigned / blocked 的 Task 是仅 lead 可用的重新指派：`authorize` 必须限制；指派给当前负责人会被拒绝。
 - `handoff`：仅 assigned / in_progress / blocked，由当前 assignee 发起，`to !== from`；evolve 后 assignee 变为 `to`，状态**回到 assigned**（原 in_progress 的任务由新负责人重新 start），`handoffCount + 1`。
 - 命令带 `commandId` 幂等键；同 id 同内容重放不产生新事件，同 id 不同内容报冲突。replay 重新校验每条事件的转移合法性，任何违例 fail closed。
 - 一个 Room 一条事件流（sequence 从 0 连续，CAS 追加）；DB 表 `room_task_events`（行含 canonical JSON、event digest 与 row binding digest，损坏行读写都拒绝）。表尚未并入 `defineWorkroomDatabaseModels`，由 C1 接线。
