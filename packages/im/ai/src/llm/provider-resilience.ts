@@ -265,6 +265,17 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** Timer seam for the per-attempt timeout; evals inject a virtual clock. */
+export interface ProviderTimers {
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(handle: unknown): void;
+}
+
+const REAL_TIMERS: ProviderTimers = {
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
 export interface ResilientCompletionOptions {
   readonly config?: ProviderResilienceConfig;
   /** Ordered fallback models tried after the primary model is exhausted. */
@@ -273,6 +284,8 @@ export interface ResilientCompletionOptions {
   /** Injected for tests. */
   readonly sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   readonly random?: () => number;
+  /** Timers for the per-attempt timeout. Defaults to the real `setTimeout`. */
+  readonly timers?: ProviderTimers;
 }
 
 export function resolveProviderResilienceConfig(
@@ -303,6 +316,7 @@ export function createResilientCompletionPort(
 ): LlmCompletionPort {
   const config = resolveProviderResilienceConfig(options.config);
   const wait = options.sleep ?? sleep;
+  const timers = options.timers ?? REAL_TIMERS;
 
   async function attempt(
     call: 'complete' | 'completeSimple',
@@ -314,7 +328,7 @@ export function createResilientCompletionPort(
     const timeoutMs = config.requestTimeoutMs;
     const controller = timeoutMs > 0 ? new AbortController() : undefined;
     const timer = controller
-      ? setTimeout(() => controller.abort(new AttemptTimeoutError(timeoutMs)), timeoutMs)
+      ? timers.setTimeout(() => controller.abort(new AttemptTimeoutError(timeoutMs)), timeoutMs)
       : undefined;
     const signal = controller
       ? (callerSignal ? AbortSignal.any([callerSignal, controller.signal]) : controller.signal)
@@ -329,7 +343,7 @@ export function createResilientCompletionPort(
       if (controller?.signal.aborted && !callerSignal?.aborted) throw controller.signal.reason;
       throw error;
     } finally {
-      if (timer) clearTimeout(timer);
+      if (timer !== undefined) timers.clearTimeout(timer);
     }
   }
 

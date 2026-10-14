@@ -217,3 +217,31 @@ describe('isProviderFailureMessage', () => {
     expect(isProviderFailureMessage('HTTP 500 internal error')).toBe(false);
   });
 });
+
+describe('injected timers', () => {
+  it('arms the per-attempt timeout on the injected timers, not the real clock', async () => {
+    const pending: Array<() => void> = [];
+    const timers = {
+      setTimeout: (fn: () => void) => { pending.push(fn); return pending.length; },
+      clearTimeout: () => {},
+    };
+    let calls = 0;
+    const port: LlmCompletionPort = {
+      complete: (_m, _c, options) => {
+        calls += 1;
+        if (calls > 1) return Promise.resolve(reply('ok'));
+        return new Promise((_, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(options.signal?.reason));
+          queueMicrotask(() => pending.shift()?.());
+        });
+      },
+      completeSimple: () => Promise.reject(new Error('unused')),
+    };
+    const events: ProviderResilienceEvent[] = [];
+    const resilient = createResilientCompletionPort(port, {
+      config: { requestTimeoutMs: 60_000 }, timers, sleep: noSleep, random: () => 0.5, onEvent: (e) => events.push(e),
+    });
+    await expect(resilient.complete(model('a'), ctx)).resolves.toMatchObject({ content: [{ text: 'ok' }] });
+    expect(events[0]).toMatchObject({ type: 'retry', kind: 'timeout' });
+  });
+});

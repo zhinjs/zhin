@@ -28,6 +28,7 @@ import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.j
 import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import type { EvalApprovalBehaviour, EvalCase, EvalPromptSection, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
+import { createFakeClock, type EvalClock } from './fake-clock.js';
 
 export interface EvalToolInvocation {
   readonly name: string;
@@ -54,6 +55,8 @@ export interface EvalRunRecord {
   readonly extraModelRequests: number;
   /** Scripted tool calls naming a tool the harness did not offer on that request. */
   readonly unofferedToolCalls: readonly string[];
+  /** Script steps pinned to a model id that went to a different model. */
+  readonly modelMismatches: readonly string[];
   /** `notOffered` scripted calls that the harness offered after all. */
   readonly unexpectedlyOfferedToolCalls: readonly string[];
   /** One TurnTrace per inbound turn, built exactly as production builds them. */
@@ -63,17 +66,25 @@ export interface EvalRunRecord {
 const ENDPOINT = 'eval-bot';
 const PLATFORM = 'eval';
 
-export async function runEvalCase(definition: EvalCase): Promise<EvalRunRecord> {
+export interface RunEvalCaseOptions {
+  /**
+   * Virtual clock for provider request timeouts. Defaults to a fresh fake
+   * clock, so no eval waits in real time and timers fire only on `hang` steps.
+   */
+  readonly clock?: EvalClock;
+}
+
+export async function runEvalCase(definition: EvalCase, options: RunEvalCaseOptions = {}): Promise<EvalRunRecord> {
   const workspace = definition.workspace ? await createWorkspace(definition.workspace) : undefined;
   try {
-    return await runInWorkspace(definition, workspace);
+    return await runInWorkspace(definition, workspace, options.clock ?? createFakeClock());
   } finally {
     if (workspace) await rm(workspace, { recursive: true, force: true });
   }
 }
 
-async function runInWorkspace(definition: EvalCase, workspace: string | undefined): Promise<EvalRunRecord> {
-  const model = createScriptedModel(definition.script);
+async function runInWorkspace(definition: EvalCase, workspace: string | undefined, clock: EvalClock): Promise<EvalRunRecord> {
+  const model = createScriptedModel(definition.script, { extraModels: definition.models, clock });
   const toolNames = (definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name);
   // Mocked tools are always loaded so scripts can call them without a
   // discover/load_tool round trip; the default always-loaded set is kept.
@@ -84,6 +95,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const agent = new ZhinAgent(model.provider, {
     maxIterations: 6,
     toolExecution: 'sequential',
+    providerTimers: clock,
     ...definition.agentConfig,
     deferredTools: {
       ...definition.agentConfig?.deferredTools,
@@ -170,6 +182,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
     unusedScriptSteps: model.remainingSteps(),
     extraModelRequests: model.exhaustedRequests(),
     unofferedToolCalls: model.unofferedToolCalls,
+    modelMismatches: model.modelMismatches,
     unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
     traces,
   };

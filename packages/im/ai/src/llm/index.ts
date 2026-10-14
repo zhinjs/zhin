@@ -113,6 +113,7 @@ export type {
   ProviderErrorKind,
   ProviderResilienceConfig,
   ProviderResilienceEvent,
+  ProviderTimers,
   ResilientCompletionOptions,
 } from './provider-resilience.js';
 export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';
