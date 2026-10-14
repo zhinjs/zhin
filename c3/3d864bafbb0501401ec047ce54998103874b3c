@@ -1,0 +1,21 @@
+packages/im/agent/evals/framework/scripted-model.ts
+  s_70530ae7b4734d::t_270fdb5584c701 18,35-37,41-42,45-47,49,52-53,73-74,90-91,108-127,135,147,154-156,164-165,168-185,187-189,207,213,230
+packages/im/agent/src/config/zhin-agent-config.ts
+  s_70530ae7b4734d::t_bec9ae0ea3ea7a 7,22-26,96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c33d864bafbb0501401ec047ce54998103874b3c",
+  "prompts": {},
+  "sessions": {
+    "s_70530ae7b4734d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ac0baa40b5989bd14",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
