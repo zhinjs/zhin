@@ -162,6 +162,52 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `tool-result-summarized` | tool-use | QQ: raw tool output (JSON payload) pasted straight to the user (#716 H1 / tool-calls-user-format) |
 | `unknown-tool-hinted` | tool-use | QQ: model invented a tool name and the turn looped on "Unknown tool" (#716 core-tools-loaded) |
 
+## Nightly real-model tier (#723)
+
+`evals/nightly/` runs a **model capability matrix** against real MiniMax models
+once a night (`.github/workflows/nightly-evals.yml`, scheduled plus
+`workflow_dispatch`). It is a trend metric, never a PR gate: it does not run on
+pull requests and low pass rates do not fail the job.
+
+| Case | Capability | Passes when |
+|---|---|---|
+| `matrix-tool-call-format` | tool-call format | `get_weather` is called with a `city` argument naming 上海 |
+| `matrix-parallel-calls` | parallel calls | one response calls `get_weather` for both 北京 and 广州 |
+| `matrix-long-context` | long context | the code buried in ~10k characters of filler is returned |
+| `matrix-zh-instruction` | Chinese instruction following | exactly three `- ` lines, in Chinese, nothing else |
+
+Each case is one request, run `runsPerCase` times per model. Checks are
+semantic (tool names, arguments, key facts, structure), not exact wording.
+`semantic.ts` also exposes an `LlmJudge` interface for open questions; the
+built-in matrix does not use it, so the judge costs nothing by default.
+
+**Budget** (hard caps in `budget.ts`; every request goes through
+`BudgetedCompletionPort`, and once a cap is hit the rest of the run is recorded
+as skipped):
+
+| Setting | Default | Env override |
+|---|---|---|
+| Runs per case per model | 3 | `NIGHTLY_RUNS_PER_CASE` |
+| Max requests per run | 60 | `NIGHTLY_MAX_REQUESTS` |
+| Max total tokens per run | 200,000 | `NIGHTLY_MAX_TOKENS` |
+| Max output tokens per request | 1,024 | `NIGHTLY_MAX_OUTPUT_TOKENS` |
+| Request timeout | 120 s | `NIGHTLY_REQUEST_TIMEOUT_MS` |
+
+The default run (1 model × 4 cases × 3 runs) is 12 requests and roughly 60k
+tokens. Models come from `NIGHTLY_MODELS` (default `minimax-m3`).
+
+**Secrets:** the workflow reads the `MINIMAX_API_KEY` repository secret (and the
+optional `MINIMAX_BASE_URL` env). Without it the job logs a notice and skips.
+The key is passed only as an environment variable and is never printed.
+
+**Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average
+tool calls per model × case), `nightly-diff.json` and `nightly.md` (the diff
+against the previous successful night, with regressions of 20 points or more
+flagged). They are uploaded as the `nightly-eval-report` artifact and the
+Markdown goes to the job summary.
+
+Run it locally with `MINIMAX_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
+
 ## Conventions
 
 - One behaviour per case. Reproduce the bug first, then fix it (see #736).
