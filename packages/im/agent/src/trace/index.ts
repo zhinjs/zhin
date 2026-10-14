@@ -30,6 +30,21 @@ export {
   defaultTurnTraceFile,
 } from './turn-trace-store.js';
 export type { TurnTraceStore } from './turn-trace-store.js';
+export {
+  DEFAULT_TRACE_MAX_BYTES,
+  DEFAULT_TRACE_RETENTION_DAYS,
+  createTurnTraceArchive,
+  dayKey,
+  defaultTurnTraceDir,
+  redactStrings,
+  resolveTraceArchiveOptions,
+} from './turn-trace-archive.js';
+export type {
+  TurnTraceArchive,
+  TurnTraceArchiveOptions,
+  TurnTraceQuery,
+  TurnTraceSessionSummary,
+} from './turn-trace-archive.js';
 export { formatTurnTrace, formatTurnTraceList } from './turn-trace-format.js';
 export type { FormatTurnTraceOptions } from './turn-trace-format.js';
 export {
