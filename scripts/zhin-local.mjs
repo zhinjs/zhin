@@ -24,9 +24,14 @@ const sha = (text) => createHash('sha256').update(text).digest('hex');
 /** 项目直接依赖中的 zhin 包，分为本仓库存在的与未知的。 */
 export function detectZhinPackages(manifest, workspaceNames) {
   const found = new Set();
+  const undeclared = [];
   for (const field of DEP_FIELDS) for (const name of Object.keys(manifest[field] ?? {})) if (isZhinPackage(name)) found.add(name);
+  for (const entry of manifest.zhin?.plugins ?? []) {
+    const name = typeof entry === 'string' ? entry : entry?.package;
+    if (typeof name === 'string' && isZhinPackage(name) && !found.has(name)) { found.add(name); undeclared.push(name); }
+  }
   const all = [...found].sort();
-  return { known: all.filter((n) => workspaceNames.has(n)), unknown: all.filter((n) => !workspaceNames.has(n)) };
+  return { known: all.filter((n) => workspaceNames.has(n)), unknown: all.filter((n) => !workspaceNames.has(n)), undeclared: undeclared.filter((n) => workspaceNames.has(n)).sort() };
 }
 
 function readState(project) {
@@ -64,6 +69,23 @@ const defaults = {
   log: (m) => console.log(m),
 };
 
+/** 幂等地把 .zhin-local/ 加入目标项目的 .gitignore。 */
+export function ensureGitignore(project, log = () => {}) {
+  const file = path.join(project, '.gitignore');
+  const text = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '';
+  const lines = text.split(/\r?\n/).map((l) => l.trim());
+  if ([STATE_DIR, `${STATE_DIR}/`, `/${STATE_DIR}`, `/${STATE_DIR}/`].some((v) => lines.includes(v))) return false;
+  fs.writeFileSync(file, `${text}${text && !text.endsWith('\n') ? '\n' : ''}${STATE_DIR}/\n`);
+  log(`已将 ${STATE_DIR}/ 加入 ${file}`);
+  return true;
+}
+
+/** 返回相对 link 时内容被删除/新增的行，用于 --force 提示。 */
+export function lineChanges(before, after) {
+  const a = before.split('\n'), b = after.split('\n');
+  return { removed: a.filter((l) => !b.includes(l)), added: b.filter((l) => !a.includes(l)) };
+}
+
 export function link(projectArg, opts = {}) {
   const o = { ...defaults, ...opts };
   const project = path.resolve(projectArg);
@@ -81,8 +103,9 @@ export function link(projectArg, opts = {}) {
   }
   const original = state ? JSON.parse(fs.readFileSync(path.join(backupDir, 'package.json'), 'utf8')) : JSON.parse(current);
   const workspace = o.workspace();
-  const { known, unknown } = detectZhinPackages(original, new Set(workspace.map((e) => e.name)));
+  const { known, unknown, undeclared } = detectZhinPackages(original, new Set(workspace.map((e) => e.name)));
   if (known.length === 0) fail('项目未直接依赖 zhin.js 或任何 @zhin.js/* 包');
+  if (undeclared.length) o.log(`警告：以下包在 zhin.plugins 中声明但未写入依赖，已一并使用本地版本：${undeclared.join(', ')}`);
   if (unknown.length) o.log(`警告：以下包不在本仓库中，保持 npm 版本：${unknown.join(', ')}`);
   const preset = Object.keys(original.pnpm?.overrides ?? {}).filter(isZhinPackage);
   if (preset.length) fail(`package.json 已有 zhin 相关 pnpm.overrides（${preset.join(', ')}），请先移除再 link`);
@@ -103,6 +126,8 @@ export function link(projectArg, opts = {}) {
   const text = JSON.stringify(next, null, indent) + (current.endsWith('\n') ? '\n' : '');
   fs.writeFileSync(pkgFile, text);
   state = { version: 1, repo: o.repo, roots: known, packages: closure.map((e) => e.name), hadLockfile: state ? state.hadLockfile : fs.existsSync(path.join(backupDir, 'pnpm-lock.yaml')), linkedSha: sha(text), linkedAt: new Date().toISOString() };
+  fs.writeFileSync(path.join(stateDir, 'linked-package.json'), text);
+  ensureGitignore(project, o.log);
   fs.writeFileSync(path.join(stateDir, 'state.json'), JSON.stringify(state, null, 2) + '\n');
   if (!o.noInstall) o.install(project);
   o.log(`已 link：${known.join(', ')}（共 ${closure.length} 个 tarball）。恢复：pnpm zhin:local unlink ${projectArg}`);
@@ -121,7 +146,13 @@ export function unlink(projectArg, opts = {}) {
     return false;
   }
   const pkgFile = path.join(project, 'package.json'), lockFile = path.join(project, 'pnpm-lock.yaml');
-  if (sha(fs.readFileSync(pkgFile, 'utf8')) !== state.linkedSha) fail(`package.json 在 link 之后被修改过，拒绝覆盖。原始文件在 ${STATE_DIR}/backup/package.json`);
+  const current = fs.readFileSync(pkgFile, 'utf8');
+  if (sha(current) !== state.linkedSha) {
+    if (!o.force) fail(`package.json 在 link 之后被修改过，拒绝覆盖。原始文件在 ${STATE_DIR}/backup/package.json；确认丢弃这些改动请加 --force`);
+    const linkedFile = path.join(stateDir, 'linked-package.json');
+    const { removed, added } = fs.existsSync(linkedFile) ? lineChanges(fs.readFileSync(linkedFile, 'utf8'), current) : { removed: [], added: current.split('\n') };
+    o.log(`警告（--force）：将丢弃 link 之后对 package.json 的手动改动：\n${[...removed.map((l) => `- ${l}`), ...added.map((l) => `+ ${l}`)].join('\n')}`);
+  }
   if (!fs.existsSync(path.join(backupDir, 'package.json'))) fail(`备份缺失：${STATE_DIR}/backup/package.json`);
   fs.copyFileSync(path.join(backupDir, 'package.json'), pkgFile);
   if (state.hadLockfile) fs.copyFileSync(path.join(backupDir, 'pnpm-lock.yaml'), lockFile);
@@ -135,10 +166,11 @@ export function unlink(projectArg, opts = {}) {
 if (process.argv[1] && fs.realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [command, project, ...rest] = process.argv.slice(2);
   const noInstall = rest.includes('--no-install');
+  const force = rest.includes('--force');
   try {
-    if (!project || !['link', 'unlink'].includes(command) || rest.some((a) => a !== '--no-install')) fail('用法：pnpm zhin:local <link|unlink> <项目路径> [--no-install]');
+    if (!project || !['link', 'unlink'].includes(command) || rest.some((a) => !['--no-install', '--force'].includes(a)) || (force && command !== 'unlink')) fail('用法：pnpm zhin:local link <项目路径> [--no-install] | unlink <项目路径> [--force] [--no-install]');
     // pnpm 脚本的 cwd 是仓库根目录；相对路径按调用者所在目录解析
-    (command === 'link' ? link : unlink)(path.resolve(process.env.INIT_CWD ?? process.cwd(), project), { noInstall });
+    (command === 'link' ? link : unlink)(path.resolve(process.env.INIT_CWD ?? process.cwd(), project), { noInstall, force });
   } catch (error) {
     console.error(error.userFacing ? `zhin:local：${error.message}` : error);
     process.exitCode = 1;

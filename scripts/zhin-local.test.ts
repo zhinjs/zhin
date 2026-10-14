@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { detectZhinPackages, link, unlink, STATE_DIR } from './zhin-local.mjs';
+import { detectZhinPackages, ensureGitignore, link, unlink, STATE_DIR } from './zhin-local.mjs';
 
 const workspace = [
   { name: 'zhin.js', dir: '/repo/packages/im/zhin', manifest: { dependencies: { '@zhin.js/runtime': 'workspace:*' } } },
@@ -42,7 +42,7 @@ afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 describe('zhin:local', () => {
   it('detects direct zhin dependencies and separates unknown ones', () => {
     expect(detectZhinPackages(JSON.parse(original), new Set(workspace.map((e) => e.name))))
-      .toEqual({ known: ['@zhin.js/command', 'zhin.js'], unknown: ['@zhin.js/not-here'] });
+      .toEqual({ known: ['@zhin.js/command', 'zhin.js'], unknown: ['@zhin.js/not-here'], undeclared: [] });
   });
 
   it('links the whole closure via tarball overrides and unlinks byte-for-byte', () => {
@@ -104,5 +104,37 @@ describe('zhin:local', () => {
     fs.mkdirSync(inner, { recursive: true });
     fs.writeFileSync(path.join(inner, 'package.json'), original);
     expect(() => link(inner, opts())).toThrow(/zhin 仓库内/);
+  });
+
+  it('includes local packages declared only in zhin.plugins and warns', () => {
+    const m = { dependencies: { 'zhin.js': '^1' }, zhin: { plugins: [{ package: '@zhin.js/command' }, '@zhin.js/gone', { package: 'other' }] } };
+    expect(detectZhinPackages(m, new Set(workspace.map((e) => e.name))))
+      .toEqual({ known: ['@zhin.js/command', 'zhin.js'], unknown: ['@zhin.js/gone'], undeclared: ['@zhin.js/command'] });
+    fs.writeFileSync(path.join(project, 'package.json'), JSON.stringify(m));
+    link(project, opts());
+    expect(logs.join('\n')).toMatch(/zhin.plugins 中声明但未写入依赖.*@zhin.js\/command/);
+    expect(Object.keys(JSON.parse(read('package.json')).pnpm.overrides)).toContain('@zhin.js/command');
+  });
+
+  it('adds .zhin-local/ to .gitignore idempotently', () => {
+    link(project, opts());
+    expect(read('.gitignore')).toBe(`${STATE_DIR}/\n`);
+    expect(logs.join('\n')).toContain('.gitignore');
+    link(project, opts());
+    expect(read('.gitignore')).toBe(`${STATE_DIR}/\n`);
+    fs.writeFileSync(path.join(project, '.gitignore'), 'node_modules');
+    expect(ensureGitignore(project)).toBe(true);
+    expect(read('.gitignore')).toBe(`node_modules\n${STATE_DIR}/\n`);
+    expect(ensureGitignore(project)).toBe(false);
+  });
+
+  it('unlink --force discards manual edits with a warning and restores the backup', () => {
+    link(project, opts());
+    const edited = read('package.json').replace('"name": "bot"', '"name": "edited"');
+    fs.writeFileSync(path.join(project, 'package.json'), edited);
+    expect(() => unlink(project, opts())).toThrow(/--force/);
+    expect(unlink(project, { ...opts(), force: true })).toBe(true);
+    expect(read('package.json')).toBe(original);
+    expect(logs.join('\n')).toMatch(/丢弃[\s\S]*- +"name": "bot"[\s\S]*\+ +"name": "edited"/);
   });
 });

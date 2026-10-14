@@ -103,8 +103,10 @@ pnpm zhin:local unlink ../my-bot   # restore package.json and pnpm-lock.yaml exa
 ```
 
 - After changing local source, run `link` again to rebuild and refresh the tarballs (idempotent);
-- Backups and tarballs live in the project's `.zhin-local/`; add it to the project's `.gitignore`;
-- The command refuses with a clear message if `package.json`/`pnpm-lock.yaml` have uncommitted changes, zhin-related `pnpm.overrides` already exist, or `package.json` was edited after linking;
+- Backups and tarballs live in the project's `.zhin-local/`; `link` adds it to the project's `.gitignore` automatically (created if missing, never duplicated; `unlink` leaves the line in place);
+- Besides dependencies, zhin packages declared in `zhin.plugins` but missing from dependencies are switched too when available locally, with a warning to add the dependency;
+- The command refuses with a clear message if `package.json`/`pnpm-lock.yaml` have uncommitted changes or zhin-related `pnpm.overrides` already exist;
+- If `package.json` was edited after linking, `unlink` refuses by default; to discard those edits run `pnpm zhin:local unlink ../my-bot --force`, which lists the discarded lines before restoring the backup;
 - Every zhin package comes from the same packed build, so section 1's duplicate-copy error cannot occur.
 
 If you can't use the command, hand-write `pnpm.overrides` (`link:` into the same checkout), but cover **every** zhin package in the project's closure (including indirect ones like `@zhin.js/runtime`).
