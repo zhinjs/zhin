@@ -305,27 +305,50 @@ zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [
 | `workroom cancel` / `request-replan` | 需要当前 Project Sponsor 权限，并用 `expected-sequence` 防止并发冲突。`request-replan` 只记录重规划请求并暂停调度，不会假装已经生成了新的计划版本 |
 | `legacy-runs` / `legacy-payloads` | 离线只读审计，不启动 Bot，也不写入新的 Workroom Journal |
 
-### trace：查看最近的 Agent 回合
+### trace：查看 Agent 回合
 
-需要安装 AI 栈。机器人每处理完一次 AI 对话，就把这一回合的 trace 写进 `data/agent-traces/recent.json`（只保留最近 50 条）。排查问题时不用再翻 `bot.db` 和 journal：
+需要安装 AI 栈。机器人每处理完一次 AI 对话，就把这一回合的 trace 追加到 `data/agent-traces/<UTC 日期>.jsonl`（一天一个文件）。排查问题时不用再翻 `bot.db` 和 journal：
 
 ```bash
-zhin trace            # 等同于 zhin trace last，打印最近一次回合
-zhin trace <turnId>   # 指定回合，可以只写 id 前缀
-zhin trace --list     # 列出最近记录的回合
+zhin trace                       # 等同于 zhin trace last，打印最近一次回合
+zhin trace <turnId>              # 指定回合，可以只写 id 前缀
+zhin trace --list                # 列出最近的回合（默认 50 条）
+zhin trace --sessions            # 列出有 trace 的会话
+zhin trace --session qq:bot:private:12345 --since 2h   # 某个会话最近 2 小时的回合
+zhin trace --list --since 2026-10-14 --until 2026-10-15 -n 200
 zhin trace last --json
 ```
 
 | 选项 | 作用 |
 | --- | --- |
 | `-l, --list` | 每个回合一行：时间、结束状态、回合 id、会话、工具次数、token 数 |
+| `--sessions` | 每个会话一行：回合数、最近一次时间与状态、累计 token |
+| `-s, --session <key>` | 只看这个会话（sessionKey），会自动按列表输出 |
+| `--since <time>` / `--until <time>` | 时间范围（`--until` 不含）：`30m`、`2h`、`7d`（多久以前）、ISO 日期/时间或毫秒时间戳 |
+| `-n, --limit <n>` | 最多显示最近 n 条，默认 50 |
 | `--json` | 输出原始 JSON（snake_case 字段） |
 | `--no-timeline` | 不打印逐步时间线 |
 | `--cwd <dir>` | 项目根目录，默认当前目录 |
+| `--dir <dir>` | 直接读某个 trace 目录（评测失败时报告里会给出这个参数） |
 
-一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合，以及结束原因。输出开头会单独标出**首个失败步骤**。
+一条 trace 包含：发起人与角色、会话、每次模型调用的 token、每次工具调用（参数摘要、耗时、结果大小、错误或拒绝策略）、预算延长与自动续跑、嵌套的子 agent 回合、上下文分段开销，以及结束原因。输出开头会单独标出**首个失败步骤**。
 
-trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`。按 prompt 分段统计 token、持久化保留期和 Console 页面在后续 issue（#728）中实现。
+**保留与脱敏。** 默认保留 7 天，总大小上限 64 MB：启动时和之后每小时清理一次，先删过期的日期文件，再从最旧的一天删起直到低于上限（当天的文件不会因大小被删）。用环境变量 `ZHIN_TRACE_RETENTION_DAYS`、`ZHIN_TRACE_MAX_MB` 调整。trace 只存摘要：工具结果只记录长度，不保存内容；参数和错误信息里的 token、密码、`Authorization` 等字段会被替换成 `[redacted]`，写盘前还会再扫一遍内联凭据（`sk-…`、`Bearer …` 等）和环境变量里的密钥值。旧版的 `data/agent-traces/recent.json` 仍会被读取。
+
+**Console 页面。** Console 的「Agent Trace」页（`/console/agent-trace`）读取同一份数据：会话列表 → 回合列表 → 回合详情（模型/工具调用瀑布图、时间线和原始记录），可以按时间筛选，`?turn=<turnId>` 直接打开某个回合。项目里放一个页面即可启用：
+
+```tsx
+// pages/agent-trace/index.tsx
+import { TraceArchivePage } from '@zhin.js/client';
+import { definePage } from '@zhin.js/console-contract';
+
+export const meta = definePage({ title: 'Agent Trace', icon: 'Activity', order: 31 });
+export default TraceArchivePage;
+```
+
+页面背后是只读接口 `GET /api/agent/trace-archive/sessions`、`/turns?sessionKey=&since=&until=&limit=`、`/turn?turnId=`，需要 `full` 权限的 token，demo token 会得到 403。
+
+**评测联动。** `pnpm eval:agent` 里失败的用例会把它的回合 trace 写进 `ZHIN_EVAL_TRACE_DIR`（默认系统临时目录下的 `zhin-eval-traces`），报告里每个回合一行 `↪ zhin trace <turnId> --dir …`，复制运行即可查看。
 
 ## 退出码
 

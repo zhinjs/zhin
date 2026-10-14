@@ -118,6 +118,9 @@ export {
 } from "./bootstrap/loadConsoleEntries.js";
 
 export { registerWorkroomConsole } from "./workroom/registerWorkroomConsole.js";
+export { registerAgentTraceConsole } from "./agent-trace/registerAgentTraceConsole.js";
+export { buildWaterfall } from "./agent-trace/traceView.js";
+export { default as TraceArchivePage } from "./agent-trace/TraceArchivePage.js";
 export { default as WorkroomRunsPage } from "./workroom/WorkroomRunsPage.js";
 
 export {

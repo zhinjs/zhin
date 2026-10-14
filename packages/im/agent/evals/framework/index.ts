@@ -10,6 +10,7 @@ export { runEvalCase } from './driver.js';
 export type { EvalRunRecord, EvalToolInvocation, RunEvalCaseOptions } from './driver.js';
 export { evaluateExpectations, formatEvalReport } from './assertions.js';
 export type { EvalFailure } from './assertions.js';
+export { evalTraceDir, persistEvalTraces } from './trace-link.js';
 export { createLiveModel } from './live-model.js';
 export type { LiveModelOptions } from './live-model.js';
 export { live } from './live-checks.js';
