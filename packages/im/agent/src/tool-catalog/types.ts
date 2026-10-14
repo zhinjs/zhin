@@ -27,12 +27,28 @@ export interface DeferredToolsConfig {
   mcpServers?: Record<string, { alwaysLoaded?: string[] }>;
 }
 
+/**
+ * Workspace file tools the model reaches for without discovery. Keeping them
+ * loaded avoids `Unknown tool` round trips. They are still only exposed when
+ * the turn's tool filters and exec policy allow them. `bash` stays deferred
+ * because its availability depends on the turn's shell isolation policy.
+ */
+export const CORE_WORKSPACE_TOOLS = [
+  'read_file',
+  'list_dir',
+  'glob',
+  'grep',
+  'edit_file',
+  'write_file',
+] as const;
+
 export const DEFAULT_ALWAYS_LOADED_TOOLS = [
   'ask_user',
   'spawn_task',
   'discover',
   'load_tool',
   'load_skill',
+  ...CORE_WORKSPACE_TOOLS,
 ] as const;
 
 export const DEFAULT_DEFERRED_TOOLS_CONFIG: Required<Pick<DeferredToolsConfig, 'maxLoadedPerSession' | 'discoverTopK' | 'alwaysLoadedTools'>> = {

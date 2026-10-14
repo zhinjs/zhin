@@ -5,18 +5,21 @@ import {
 } from '@zhin.js/core';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import type { UserInteraction } from '@zhin.js/interaction';
-import type {
-  AIService,
-  ApprovalDecision,
-  ApprovalDecisionMemory,
-  ApprovalDecisionPort,
-  ApprovalPort,
-  ApprovalRequestInput,
-  DeliveryOutcome,
-  TurnAccessContext,
-  TurnIntent,
-  TurnRequest,
-  TurnRequestPorts,
+import {
+  approvalOutcomeToDecision,
+  type AIService,
+  type ApprovalDecision,
+  type ApprovalDecisionMemory,
+  type ApprovalDecisionPort,
+  type ApprovalOutcome,
+  type ApprovalOutcomePort,
+  type ApprovalPort,
+  type ApprovalRequestInput,
+  type DeliveryOutcome,
+  type TurnAccessContext,
+  type TurnIntent,
+  type TurnRequest,
+  type TurnRequestPorts,
 } from '@zhin.js/agent';
 import {
   turnIntentResolverToken,
@@ -406,25 +409,32 @@ export function createRuntimeApprovalPort(options: {
   readonly isMaster: boolean;
   readonly interaction?: UserInteraction;
   readonly memory?: ApprovalDecisionMemory;
-}): ApprovalDecisionPort {
-  const port: ApprovalDecisionPort = {
+}): ApprovalDecisionPort & ApprovalOutcomePort {
+  const port: ApprovalDecisionPort & ApprovalOutcomePort = {
     available: options.isMaster || options.interaction != null,
-    async requestApprovalDecision(input: ApprovalRequestInput): Promise<ApprovalDecision> {
-      if (options.isMaster) return 'approve-always';
-      if (!options.interaction) return 'reject';
+    async requestApprovalOutcome(input: ApprovalRequestInput): Promise<ApprovalOutcome> {
+      if (options.isMaster) return { status: 'approved', decision: 'approve-always' };
+      if (!options.interaction) {
+        return { status: 'unavailable', reason: 'this conversation cannot show an approval prompt' };
+      }
+      const recalled = options.memory?.recall(input);
+      if (recalled !== undefined) {
+        return recalled
+          ? { status: 'approved', decision: 'approve-always' }
+          : { status: 'denied', by: 'remembered' };
+      }
+      const sharedConversation = input.conversationScope === 'group'
+        || input.conversationScope === 'channel';
       try {
-        const recalled = options.memory?.recall(input);
-        if (recalled !== undefined) return recalled ? 'approve-always' : 'reject';
-        const sharedConversation = input.conversationScope === 'group'
-          || input.conversationScope === 'channel';
+        // No `default`: a timeout must surface as timed_out, not as a silent rejection.
         const selected = await options.interaction.ask({
           type: 'select',
           title: '操作确认',
           description: input.question,
-          tip: '长期决定仅在当前 Host、当前会话和当前发起者范围内复用。',
+          tip: '回复 y / 同意 允许一次，n / 拒绝 拒绝；长期决定仅在当前 Host、当前会话和当前发起者范围内复用。',
           options: [
-            { label: '拒绝', value: 'reject', description: '阻止当前及后续同类操作。' },
-            { label: '允许一次', value: 'approve-once', description: '仅执行当前操作。' },
+            { label: '拒绝', value: 'reject', aliases: ['n', 'no', '否'], description: '阻止当前及后续同类操作。' },
+            { label: '允许一次', value: 'approve-once', aliases: ['y', 'yes', '同意'], description: '仅执行当前操作。' },
             ...(sharedConversation ? [
               { label: '允许此会话', value: 'approve-session', description: '当前会话中，所有发送者的同类操作持续放行。' },
             ] : []),
@@ -434,22 +444,38 @@ export function createRuntimeApprovalPort(options: {
               description: '当前会话中，此发送者的同类操作持续放行。',
             },
           ],
-          default: 'reject',
           ...(input.timeoutMs !== undefined ? { timeout: input.timeoutMs } : {}),
           signal: input.signal,
         });
         const decision = normalizeApprovalDecision(selected, sharedConversation);
         options.memory?.remember(input, decision);
-        return decision;
-      } catch {
-        return 'reject';
+        return decision === 'reject' ? { status: 'denied', by: 'user' } : { status: 'approved', decision };
+      } catch (error) {
+        return approvalOutcomeFromInteractionError(error);
       }
     },
+    async requestApprovalDecision(input: ApprovalRequestInput): Promise<ApprovalDecision> {
+      return approvalOutcomeToDecision(await port.requestApprovalOutcome(input));
+    },
     async requestApproval(input: ApprovalRequestInput) {
-      return (await port.requestApprovalDecision(input)) !== 'reject';
+      return (await port.requestApprovalOutcome(input)).status === 'approved';
     },
   };
   return Object.freeze(port);
+}
+
+function approvalOutcomeFromInteractionError(error: unknown): ApprovalOutcome {
+  const name = error instanceof Error ? error.name : '';
+  switch (name) {
+    case 'UserInteractionTimeoutError':
+      return { status: 'timed_out' };
+    case 'UserInteractionDeliveryError':
+      return { status: 'unavailable', reason: 'the approval prompt could not be delivered' };
+    case 'UserInteractionSupersededError':
+      return { status: 'unavailable', reason: 'the approval prompt was superseded by another question' };
+    default:
+      return { status: 'unavailable', reason: 'the approval prompt failed' };
+  }
 }
 
 function normalizeApprovalDecision(value: unknown, sharedConversation: boolean): ApprovalDecision {

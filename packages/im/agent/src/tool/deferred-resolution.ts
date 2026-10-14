@@ -56,7 +56,7 @@ export async function resolveAgentToolsForTurn(
       sessionSnapshot = addSkillToSnapshot(sessionSnapshot, skill.name);
       sessionSnapshot = touchToolsInSnapshot(
         sessionSnapshot,
-        skill.tools.map(t => t.name),
+        skill.tools.map(t => t.name).filter(name => !alwaysLoaded.has(name)),
         deferredCfg.maxLoadedPerSession,
       );
       touched = true;
@@ -72,6 +72,7 @@ export async function resolveAgentToolsForTurn(
     skillRegistry: agent.skillRegistry,
     snapshot: sessionSnapshot,
     maxLoadedPerSession: deferredCfg.maxLoadedPerSession,
+    pinnedTools: alwaysLoaded,
     discoverTopK: deferredCfg.discoverTopK,
     persistSnapshot: async (snapshot) => {
       agent.deferred.lastSessionSnapshot = snapshot;

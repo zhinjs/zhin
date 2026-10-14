@@ -2,6 +2,12 @@
  * Standalone agentLoop runner (subagent / deferred worker) — isolated memory context.
  */
 import { formatCompact, getLogger } from '@zhin.js/logger';
+import type { ToolInvocationPolicy } from '@zhin.js/tool';
+import {
+  BASH_TOOL_NAME,
+  turnPolicyAllowsShell,
+  withoutForbiddenShell,
+} from '../plugin-runtime/native-bash-tool.js';
 import { type AgentTool, type AIProvider, type Usage, type MediaContentBlock, agentLoop, agentContextFrom, assistantText, createUserMessage, createMemoryContextRepository, agentToolsToLlmTools, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolResultTransform, type StreamOptions } from '@zhin.js/ai';
 import { runWithCommMessage, runWithDirectAgentExecution } from '../security/comm-message-context.js';
 import type { Message } from '../resource-hub/types.js';
@@ -97,6 +103,11 @@ export interface AgentLoopStandaloneInput {
   iterationTrace?: { config: PhaseTraceConfig; sessionId: string; label?: string };
   /** 默认 true：子 agent / worker 在 direct bash 上下文执行 */
   directExecution?: boolean;
+  /**
+   * Parent Turn policy, when the caller has one. Without a shell policy bash is
+   * neither offered nor loadable, matching the main agent loop.
+   */
+  turnPolicy?: Pick<ToolInvocationPolicy, 'shell' | 'filesystem'>;
 }
 
 export interface AgentLoopStandaloneResult {
@@ -135,9 +146,11 @@ export async function runAgentLoopStandaloneTurn(
 
   // 子 agent 持有父 turn controller 的隔离 fork；加载只活在本 loop。
   const childDeferred = getActiveDeferredTurnController()?.fork();
+  const shellAllowed = input.turnPolicy === undefined || turnPolicyAllowsShell(input.turnPolicy);
+  const offered = shellAllowed ? tools : withoutForbiddenShell(input.turnPolicy, tools);
   const initialTools = childDeferred
-    ? [...tools.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
-    : tools;
+    ? [...offered.filter(tool => !childDeferred.tools.some(meta => meta.name === tool.name)), ...childDeferred.tools as unknown as AgentTool[]]
+    : offered;
   const executableTools = new ExecutableToolRegistry(initialTools);
   let llmTools = agentToolsToLlmTools(initialTools);
 
@@ -145,6 +158,7 @@ export async function runAgentLoopStandaloneTurn(
   const reloadDeferredTools = (): void => {
     if (!childDeferred) return;
     for (const name of childDeferred.loadedToolNames()) {
+      if (!shellAllowed && name === BASH_TOOL_NAME) continue;
       const tool = childDeferred.tool(name);
       if (tool) executableTools.addMissing([tool]);
     }

@@ -22,6 +22,8 @@ export interface DeferredTurnControllerOptions {
   readonly skillRegistry: SkillRegistry | null;
   readonly snapshot: DeferredToolSessionSnapshot;
   readonly maxLoadedPerSession: number;
+  /** Always-loaded tools: never recorded in the session snapshot, so they never count against or get evicted by `maxLoadedPerSession`. */
+  readonly pinnedTools?: ReadonlySet<string>;
   readonly discoverTopK: number;
   readonly persistSnapshot: (snapshot: DeferredToolSessionSnapshot) => Promise<void>;
   readonly onSkillLoaded?: (name: string, instructions: string, toolNames: string[]) => void;
@@ -33,6 +35,8 @@ export interface DeferredTurnController {
   snapshot(): DeferredToolSessionSnapshot;
   loadedToolNames(): string[];
   tool(name: string): AgentTool | undefined;
+  /** Load a catalog tool into the session. Returns false when the name is not in this turn's catalog. */
+  load(name: string): Promise<boolean>;
   fork(): DeferredTurnController;
 }
 
@@ -82,6 +86,17 @@ export function createDeferredTurnController(
     await options.persistSnapshot(currentSnapshot);
   };
 
+  const isPinned = (name: string): boolean => options.pinnedTools?.has(name) ?? false;
+
+  const loadTool = async (name: string): Promise<ToolCatalogItem | undefined> => {
+    const item = byName.get(name);
+    if (!item) return undefined;
+    if (!isPinned(name)) {
+      await persist(touchToolInSnapshot(currentSnapshot, name, options.maxLoadedPerSession));
+    }
+    return item;
+  };
+
   const tools: Tool[] = [
     {
       name: 'discover',
@@ -122,9 +137,8 @@ export function createDeferredTurnController(
       source: 'builtin:agent',
       execute: async (args): Promise<ToolResult> => {
         const name = String((args as Record<string, unknown>).name);
-        const item = byName.get(name);
+        const item = await loadTool(name);
         if (!item) return `Tool "${name}" not found in catalog.`;
-        await persist(touchToolInSnapshot(currentSnapshot, name, options.maxLoadedPerSession));
         return `${schemaSummary(item)}\n${TOOLS_MUTATED_MARKER}`;
       },
     },
@@ -144,7 +158,11 @@ export function createDeferredTurnController(
         const { instructions } = result;
         let next = addSkillToSnapshot(currentSnapshot, name);
         const toolNames = options.skillRegistry?.getByName(name)?.tools?.map(tool => tool.name) ?? [];
-        next = touchToolsInSnapshot(next, toolNames, options.maxLoadedPerSession);
+        next = touchToolsInSnapshot(
+          next,
+          toolNames.filter(toolName => !isPinned(toolName)),
+          options.maxLoadedPerSession,
+        );
         await persist(next);
         options.onSkillLoaded?.(name, instructions, toolNames);
         const unlock = toolNames.length > 0 ? `\nUnlocked tools: ${toolNames.join(', ')}` : '';
@@ -158,6 +176,7 @@ export function createDeferredTurnController(
     snapshot: () => currentSnapshot,
     loadedToolNames: () => getLoadedToolNamesFromSnapshot(currentSnapshot),
     tool: (name: string) => byName.get(name)?.fullTool,
+    load: async (name: string) => (await loadTool(name)) !== undefined,
     fork: () => createDeferredTurnController({
       ...options,
       snapshot: currentSnapshot,

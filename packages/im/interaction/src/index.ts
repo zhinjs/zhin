@@ -42,6 +42,8 @@ export interface UserInteractionOption<V = unknown> {
   readonly label: string;
   readonly value: V;
   readonly description?: string;
+  /** Extra plain-text answers that select this option, e.g. `y` / `同意`. */
+  readonly aliases?: readonly string[];
 }
 
 export interface UserInteractionSelectRequest<V = unknown> extends UserInteractionRequestBase {

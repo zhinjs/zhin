@@ -171,4 +171,15 @@ describe('untrusted conversation context', () => {
       content: expect.stringContaining('[Untrusted conversation events'),
     }]);
   });
+
+  it('labels events as background and points the model at the current message', () => {
+    const text = renderContextMessage({
+      role: 'user-context',
+      blocks: [{ type: 'untrusted_conversation_event', eventType: 'message.created', text: 'User (1): #赞我' }],
+    });
+    const lines = text.split('\n');
+    expect(lines[0]).toMatch(/background since your last reply.*Do not answer these events directly/);
+    expect(lines[1]).toBe('- (message.created) User (1): #赞我');
+    expect(lines.at(-1)).toBe('[End of background events. The next user message is the current message to answer.]');
+  });
 });
