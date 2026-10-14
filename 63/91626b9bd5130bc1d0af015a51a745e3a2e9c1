@@ -1,0 +1,97 @@
+.changeset/agent-context-budget.md
+  s_d1be4c5107342e::t_8b40379d550a94 1-6
+packages/im/agent/evals/cases/context-deferred-tool-index.case.ts
+  s_d1be4c5107342e::t_7601b7a42cd3c7 1-29
+packages/im/agent/evals/cases/context-fixed-cost-bounded.case.ts
+  s_d1be4c5107342e::t_b88ca27831a19a 1-33
+packages/im/agent/evals/cases/context-skill-loaded-on-demand.case.ts
+  s_d1be4c5107342e::t_dd0b0f71805047 1-26
+packages/im/agent/evals/framework/driver.ts
+  s_d1be4c5107342e::t_e268ef399d4877 29-30,130,209-212,232-246
+packages/im/agent/evals/framework/fixture.ts
+  s_d1be4c5107342e::t_91dcc7b75e296d 10,75-98,119
+packages/im/agent/src/core/agent-core-run.ts
+  s_c757df74f34330::t_fa481d21c38ffc 56-58,517,529,562-566,578-592,1070-1075
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_c757df74f34330::t_7b995c2b0e2f17 2,542-544,546-549
+packages/im/agent/src/skill/capability-catalog.ts
+  s_d1be4c5107342e::t_8e6458f0824d3d 1-82
+packages/im/ai/src/llm/agent-loop.ts
+  s_c757df74f34330::t_7ffe5d4aa1a2ae 365-367,384,421-422
+docs/ai/agent.md
+  s_c88a0c251a5cc6::t_43411e10e87e69 86-97
+docs/en/ai/agent.md
+  s_c88a0c251a5cc6::t_22542de1dad64f 86-97
+packages/im/agent/evals/agent.eval.ts
+  s_9aec0beb5e570b::t_4cc6f8de58ce88 5-8,10-12,16-17,26,30-35
+packages/im/agent/evals/cases/context-skill-catalog-compact.case.ts
+  s_d1be4c5107342e::t_abca2f5b680749 1-39
+packages/im/agent/evals/cases/context-tool-index-respects-policy.case.ts
+  s_d1be4c5107342e::t_438be891791246 1-17
+packages/im/agent/evals/framework/assertions.ts
+  s_9aec0beb5e570b::t_46549dc6d25da6 64-85
+packages/im/agent/src/prompt/estimate-tokens.ts
+  s_a04db19c73bca9::t_6df83036a5440e 1-11
+packages/im/agent/src/prompt/system-prompt.ts
+  s_a04db19c73bca9::t_09f261d85d9639 26,320-321,488
+packages/im/agent/src/trace/context-budget.ts
+  s_1859af8e1e8728::t_d3ebb4707deea0 1-152
+packages/im/agent/src/trace/turn-trace-format.ts
+  s_1859af8e1e8728::t_1c63b0dafa26f3 3,68-69,104-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6391626b9bd5130bc1d0af015a51a745e3a2e9c1",
+  "prompts": {},
+  "sessions": {
+    "s_1859af8e1e8728": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a402e0954a85174c4",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9aec0beb5e570b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a37e0d6cbc35ae0de",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a04db19c73bca9": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-ab1746dfc8c1184be",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c88a0c251a5cc6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a9ac6634ba56c8a69",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_d1be4c5107342e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9d655f8-1693-4fc6-90dc-820da86e29ca",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
