@@ -320,6 +320,7 @@
   "exclude": [
     "node_modules",
     "packages/im/agent/evals/vitest.config.ts",
+    "packages/im/agent/evals/nightly/vitest.config.ts",
     "**/lib/**",
     "**/dist/**",
     "**/client/**",
