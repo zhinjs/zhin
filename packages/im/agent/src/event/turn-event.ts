@@ -10,6 +10,8 @@ export interface TurnUsage {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  /** Prompt tokens served from the provider's prompt cache, when reported. */
+  cacheReadTokens?: number;
 }
 
 export type TurnEvent =

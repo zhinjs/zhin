@@ -213,6 +213,7 @@ async function generateSummary(
 
   let systemPrompt = `You are a conversation summarization assistant. Compress the following conversation into a concise summary. Keep:
 - Key decisions and conclusions
+- Answers, conclusions and commitments already given to the user
 - Unfinished TODOs and open questions
 - Important user preferences and constraints
 - Core topics discussed

@@ -106,6 +106,8 @@ const PROVIDER_ALIAS = 'eval-scripted';
 const MODEL_ID = 'scripted-model';
 
 export interface ScriptedModelOptions {
+  /** Model context window reported to the harness (drives compaction thresholds). */
+  readonly contextWindow?: number;
   /** Extra model ids registered after the primary `scripted-model`, in candidate (fallback) order. */
   readonly extraModels?: readonly string[];
   /** Virtual clock advanced by `hang` steps. */
@@ -123,7 +125,11 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
   const models = [MODEL_ID, ...(options.extraModels ?? []).filter((id) => id !== MODEL_ID)];
   const provider = new SdkProviderAdapter(PROVIDER_ALIAS, 'openai', { sdk: 'openai', apiKey: 'eval' }, models);
   const runtime = new LlmApiRuntime((alias) => (alias === PROVIDER_ALIAS ? models : []));
-  runtime.registerProvider(PROVIDER_ALIAS, { sdk: 'openai', apiKey: 'eval' }, models);
+  runtime.registerProvider(PROVIDER_ALIAS, {
+    sdk: 'openai',
+    apiKey: 'eval',
+    ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
+  }, models);
   const modelMismatches: string[] = [];
 
   const requests: ScriptedModelRequest[] = [];
