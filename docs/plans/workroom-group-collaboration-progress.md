@@ -111,8 +111,11 @@ sidebar: false
   - 2026-10-15 · 「feat(workroom): Room 角色授权、事件排序 helper 与示例 handoff 失败升级」· 新增 `createRoomRoleAuthorizer` / `createRoomRoleAssignAuthorizer` 与 `room-event-sequencer.ts`（乱序缓冲、重复丢弃），示例 handoff 投影失败改为 block 并 @人类、speak 后复查打断，方案 §3.5 补排序要求，patch changeset；196 个 room / 示例测试通过
 - [x] C1a-1 处理第 36 轮审查意见（涉及 fail-closed，所以新建条目）：`packages/im/workroom/src/room/room-task-authorizer.ts:175` `createRoomRoleAssignAuthorizer` 拿到 RoomEntry 且没有 roomId 时不比对 `entry.id`，对任何 Room 的 assign 放行（与 `createRoomRoleAuthorizer:135` 不一致），改为拒绝 `unknown room` 并修正 `tests/room/room-task-authorizer.test.ts:199`；`examples/multi-agent-room/src/team.ts:289` `escalateAfterHandoff` 中代 `to` 执行 start / block 抛错时只记 `turn_error`，人类没被询问且排队的唤醒仍会让接收者正常跑 turn（handoff 投影失败后链路静默继续），改为失败时仍 `askHuman`，并丢弃该 handoff 的待唤醒或让 `runMemberTurn` 跳过投影失败的 Task，补强制 start / block 失败的用例；`room-send-limiter.test.ts:211` 的类型兼容用例实际不在 type-check 范围内且用 `as never`，把 `defineMiddleware(limiter.outboundMiddleware())` 放到会被类型检查的位置（如示例 src 的 `satisfies`），并注明为何从 `@zhin.js/core/feature/middleware` 子路径导入。顺带 Nit：`createRoomRoleAuthorizer:159` 的 `default` 分支只对 `assign` / `cancel` 返回 undefined，未知命令拒绝；`team.ts:329` `pendingWakes` / `releasedHandoffs` 在 `dispose()` 中清空；`room-event-sequencer.test.ts:84` 断言 raw 中 0..15 各出现一次或强制交错
   - 2026-10-15 · 「fix(workroom): Room 授权 helper 与示例 handoff 升级失败 fail-closed」· assign helper 无 roomId 时比对 `entry.id`、未知命令拒绝；升级时 start / block 失败仍 askHuman，并按 handoff eventId 丢弃待唤醒、`runMemberTurn` 跳过已排队 turn；类型兼容用例移到类型检查范围内；dispose 清空待唤醒集合；patch changeset；198 个 room / 示例测试通过
-- [ ] C2 默认切到新 Room，配置中提供选择开关
-- [ ] C3 删除 legacy 迁移代码（`legacy-*-migration`、`agent-legacy-payloads` 命令），已确认没有线上数据
+- [ ] **阻塞** C2 默认切到新 Room，配置中提供选择开关
+  - 阻塞（2026-10-15 检查）：依赖 C1。新 Room 没有成员 turn 入口（缺 `room` execution profile）和 Room 工具接线，默认切过去后 Room 无法实际运行。C1 解除阻塞（维护者选择 C1 的选项 A 或 C）后再做
+- [x] C3 删除 legacy 迁移代码（`legacy-*-migration`、`agent-legacy-payloads` 命令），已确认没有线上数据
+  - 2026-10-15 · 「refactor(workroom): 删除 legacy 迁移代码与 CLI 命令」· 删除两个 legacy 迁移模块及其公开导出、`zhin agent legacy-payloads` / `legacy-runs` 子命令和测试；读取旧格式的 fail-closed 检测原样移到 `journal/legacy-payload-guard.ts`，报错改为“旧格式不再受支持”且不含正文；中英文文档、agent README、patch changeset 同步；1241 个 workroom 测试 + 638 个 CLI 测试通过
+- [ ] C3-1 处理第 38 轮审查意见：`packages/im/workroom/src/workroom/projection-outbox/projector.ts:563` 旧明文 Projection 快照的报错仍引导用户使用已删除的 offline export / purge 流程，改为“no longer supported”（拒绝行为不变），同步 `tests/workroom-runtime/projection-outbox.test.ts:392` 的断言并继续断言报错不含正文。顺带 Nit：`journal/legacy-payload-guard.ts` 恢复 recordRef 重复检查（旧 `canonicalRecords` 的 duplicate record identity）或补 DatabaseWorkroomJournal 重复 runId+sequence 被拒绝的测试；`legacy-payload-guard.test.ts` 补 subject_identifier 类字段（如 `email`）的检测用例；`docs/contributing/legacy-concepts.md:78` 及英文版删掉 `legacy_import` 候选的说法（生成它的离线工具已删除）
 - [ ] C4 移出主路径：remote dispatch / callback / issuance（冻结，不做 A2A）、portfolio、scheduler / preemption、data-governance、overlay-pack / github / self-delivery；能删就删，不能删就移到可选插件
 - [ ] C5 简化 acceptance：去掉独立的验收引擎，reviewer 改为普通角色
 - [ ] C6 文档：在 `agent-workroom-orchestration-decision-map.md` 中把冲突条目标为 Superseded，新增 ADR，更新 README / 示例文档，补 changeset。跑通 `pnpm check:all`，在本文末尾写总结
@@ -360,6 +363,13 @@ sidebar: false
 - Should fix（只记录，审查后续条目不再新建）：`examples/multi-agent-room/src/team.ts:46` 注释称 workroom 包从 `@zhin.js/core/feature/middleware` 导入 defineMiddleware，与事实不符（应说明 workroom 层级低于 zhin，只能用 core 子路径；示例可用 `zhin.js/middleware`）；新导出的 `limiterMiddleware` 与 `room-collaboration.e2e.test.ts:494` 的类型校验重复，可删除或改为不导出的 `satisfies`
 - Nit（只记录）：`team.ts:352` `discardedHandoffs` 只在 dispose 清空，长跑时会增长；`room-event-sequencer.test.ts:89` `not.toEqual(range16)` 依赖实际派发顺序，理论上可能 flaky；`team.ts:183` `extraAuthorize` 测试接缝的 IIFE 写法可读性差，应提成命名组合函数并注明只能追加拒绝
 
+### 第 38 轮（2026-10-15，审查 C3）
+
+- 无 Blocking；`legacy-runs` 不在编排者列出的文件里，但它是 run-offline 迁移唯一的 CLI 入口，一并删除合理；fail-closed 检测逐行保留；依赖方向不变；api-surface / plugin-runtime-api 快照不含 workroom 入口，无需更新
+- Should fix：`projector.ts:563` 报错仍指向已删除的 export / purge 流程；`projection-outbox.test.ts:392` 断言固定了该旧指引 → C3-1
+- Nit：guard 去掉了 recordRef 重复检查（后续 parseStoredRows 大概率仍 fail-closed，但无测试）；subject_identifier 类字段检测失去测试；`legacy-concepts.md:78`（中英文）仍提 `legacy_import` 候选 → 并入 C3-1
+- 已有问题（非本条目引入）：eslint 在 `journal/event-codec.ts`、`stored-event-projection.ts` 报未使用导入警告，HEAD 上已存在
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -401,3 +411,4 @@ sidebar: false
 - 2026-10-15 定时运行：rebase 到最新 origin/main（40 个本分支提交无冲突，基线 a6ea7b446），install / build 通过；完成 B5（4 个 agent，约 15.7 分钟，workroom / 示例 build、type-check、16 个示例测试 + 163 个 room 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint、**`pnpm check:all`** 通过，审查无 Blocking / Should fix，4 个 Nit 只记录）。阶段 B 全部完成。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改；护栏把从 scheduled-tasks 目录 `cp` 脚本误判为修改外部路径
 - 2026-10-15 05:35 定时运行：origin/main 无新提交，install / build 通过；C1 检查后标为阻塞（缺 Room turn 入口 / execution profile、Room 事件流与 JournalStore 的桥、Room 工具 token 接线，选项见条目），拆出 C1a；完成 C1a（4 个 agent，约 6.5 分钟，workroom build、type-check、196 个 room / 示例测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，3 个 Should fix 涉及 fail-closed / 条目要求，连同 3 个 Nit 新增为 C1a-1）。备注：`scriptPath` 指向本会话 workflows 目录中的脚本副本可用，内容未改
 - 2026-10-15 06:35 定时运行：origin/main 无新提交，install / build 通过；完成 C1a-1（6 个 agent，约 6 分钟，workroom / 示例 build、type-check、198 个 room / 示例测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix + 3 个 Nit 只记录，见第 37 轮）。下一个可做条目为 C2，但它依赖已阻塞的 C1（Room turn 入口），本次未继续。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改
+- 2026-10-15 07:35 定时运行：origin/main 无新提交，install / build 通过；C2 依赖已阻塞的 C1（无 Room turn 入口），标为阻塞；完成 C3（4 个 agent，约 7.5 分钟，workroom / cli build、type-check、1241 个 workroom 测试、638 个 CLI 测试、check:architecture、check:workroom-ssot、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix + 3 个 Nit 新增为 C3-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改

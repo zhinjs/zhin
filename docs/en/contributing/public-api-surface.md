@@ -94,8 +94,6 @@ Three tiers:
 | `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime entry point (composition root) |
 | `zhin setup` | `stable` | `@zhin.js/cli` | Incremental configuration wizard for existing projects |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | Environment/config health check |
-| `zhin agent legacy-runs <input>` | `experimental` | `@zhin.js/cli` | Read-only audit of removed legacy Run exports; file output is create-only and never writes a new Workroom Journal |
-| `zhin agent legacy-payloads <input> --kind <kind>` | `experimental` | `@zhin.js/cli` | Read-only scan of embedded legacy Workroom payloads; emits content-free quarantine audit/proposal data and never deletes or migrates automatically |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | New project scaffold |
 
 ## Internal (Readable but No Stability Guarantee)

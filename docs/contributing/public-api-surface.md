@@ -98,8 +98,6 @@
 | `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime 启动入口（composition root） |
 | `zhin setup` | `stable` | `@zhin.js/cli` | 已有项目增量配置向导 |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | 环境/配置体检 |
-| `zhin agent legacy-runs <input>` | `experimental` | `@zhin.js/cli` | 只读审计已删除的 legacy Run export；输出到文件时仅 create-only，不写新 Workroom Journal |
-| `zhin agent legacy-payloads <input> --kind <kind>` | `experimental` | `@zhin.js/cli` | 只读扫描 legacy 内嵌 Workroom payload；只输出 content-free quarantine audit/proposal，不自动删除或迁移 |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | 新建项目脚手架 |
 
 ## Internal（可读但不承诺不 break）

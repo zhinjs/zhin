@@ -14,9 +14,8 @@ import type {
   GovernedPayloadWriteSagaSnapshot,
 } from '../../data-governance/governed-payload-write-saga.js';
 import {
-  FileLegacyEmbeddedPayloadReadAdapter,
-  assertActiveStoreHasNoLegacyEmbeddedPayload,
-} from '../legacy-embedded-payload-migration.js';
+  assertNoLegacyEmbeddedPayloadFiles,
+} from './legacy-payload-guard.js';
 import {
   WorkroomJournalPayloadAuthorityUnavailableError,
   WorkroomSequenceConflictError,
@@ -240,9 +239,9 @@ export class FileWorkroomJournal implements WorkroomJournal {
     if (unexpected) throw new Error('Invalid Workroom journal segment name');
     const segments = names.filter(isSegmentName).sort();
     if (segments.length === 0) return;
-    await assertActiveStoreHasNoLegacyEmbeddedPayload(new FileLegacyEmbeddedPayloadReadAdapter(
-      segments.map(name => ({ sourceKind: 'journal', path: join(this.#directory, name) })),
-    ));
+    await assertNoLegacyEmbeddedPayloadFiles(
+      segments.map(name => join(this.#directory, name)),
+    );
   }
 
   async #readStoredWithoutPayloads(runId: string): Promise<readonly StoredWorkroomEvent[]> {

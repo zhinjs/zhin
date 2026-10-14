@@ -1,5 +1,5 @@
 import type { WorkroomEvent } from '../kernel-contracts.js';
-import { LegacyEmbeddedPayloadDetectedError } from '../legacy-embedded-payload-migration.js';
+import { LegacyEmbeddedPayloadDetectedError } from './legacy-payload-guard.js';
 import type { GovernedWorkroomJournalPayloadReference } from './contracts.js';
 import { assertAllowedPayloadKeys, isNonEmptyString, isRecord } from './event-validation.js';
 
@@ -58,7 +58,7 @@ export function containsGovernedValue(value: unknown): boolean {
 
 export function legacyJournalPayloadError(): Error {
   return new LegacyEmbeddedPayloadDetectedError(
-    'Legacy embedded Workroom Journal payload is quarantined; use offline export/purge verification before activation',
+    'Legacy embedded Workroom Journal payload is no longer supported; this store format cannot be read or activated',
   );
 }
 

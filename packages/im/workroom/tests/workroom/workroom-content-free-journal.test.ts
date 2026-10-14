@@ -15,7 +15,7 @@ import {
   digestCanonicalWorkroomValue as digest,
 } from '../../src/workroom/canonical-value.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
-import { LegacyEmbeddedPayloadDetectedError } from '../../src/workroom/legacy-embedded-payload-migration.js';
+import { LegacyEmbeddedPayloadDetectedError } from '../../src/workroom/journal/legacy-payload-guard.js';
 import {
   WorkflowPlanBuilder,
   type WorkflowPlanProposal,
@@ -411,7 +411,7 @@ describe('content-free Workroom Journal', () => {
     }
   });
 
-  it('quarantines legacy plaintext segments with a content-free offline export/purge instruction', async () => {
+  it('rejects legacy plaintext segments fail-closed', async () => {
     const root = await mkdtemp(join(tmpdir(), 'zhin-content-free-legacy-'));
     const directory = join(root, 'journal');
     await mkdir(directory);
@@ -438,7 +438,7 @@ describe('content-free Workroom Journal', () => {
         failure = error;
       }
       expect(failure).toBeInstanceOf(LegacyEmbeddedPayloadDetectedError);
-      expect((failure as Error).message).toContain('offline export/purge');
+      expect((failure as Error).message).toContain('no longer supported');
       expect((failure as Error).message).not.toContain(secret);
       await expect(new WorkroomKernel({
         journal: new FileWorkroomJournal(directory, new TestGovernedJournalPayloadPort()),

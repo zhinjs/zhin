@@ -6,7 +6,7 @@ import {
   digestCanonicalWorkroomValue,
 } from '../canonical-value.js';
 import type { WorkroomGovernedPayloadReceipt } from '../workroom-task-report-store.js';
-import type { LegacyEmbeddedPayloadRecord } from '../legacy-embedded-payload-migration.js';
+import type { LegacyEmbeddedPayloadGuardRecord } from './legacy-payload-guard.js';
 import type {
   StoredWorkroomEvent,
   WorkroomAssignmentRoleHeader,
@@ -38,17 +38,15 @@ import { assertStoredEventReceiptBindings } from './payload-governance.js';
 
 export function legacyDatabaseJournalRecords(
   rows: readonly Record<string, unknown>[],
-): readonly LegacyEmbeddedPayloadRecord[] {
+): readonly LegacyEmbeddedPayloadGuardRecord[] {
   return Object.freeze(rows.map(row => {
     let envelope: unknown;
     try {
       envelope = JSON.parse(String(row.payload_json)) as unknown;
     } catch {
-      throw new Error('Legacy Workroom Journal database payload is corrupt or unknown');
+      throw new Error('Legacy Workroom Journal database payload is corrupt or unsupported');
     }
     return Object.freeze({
-      storage: 'database' as const,
-      sourceKind: 'journal' as const,
       recordRef: `workroom-events:${digestCanonicalWorkroomValue({
         runId: String(row.run_id),
         sequence: row.sequence,

@@ -87,7 +87,7 @@ describe('Database Workroom Journal row integrity', () => {
     delete fixture.rows[0]!.stored_event_digest;
     delete fixture.rows[0]!.row_binding_digest;
     await expect(fixture.journal().readStoredHeaders('run-db-integrity'))
-      .rejects.toThrow('offline export/purge');
+      .rejects.toThrow('no longer supported');
 
     const journal = new ActivatableWorkroomJournal();
     const catalog = new ActivatableWorkroomCatalog();
@@ -101,7 +101,7 @@ describe('Database Workroom Journal row integrity', () => {
     await expect(prepareWorkroomDatabaseStorage(
       db,
       fixture.payloads,
-    )).rejects.toThrow('offline export/purge');
+    )).rejects.toThrow('no longer supported');
     expect(journal.active).toBe(false);
   });
 });

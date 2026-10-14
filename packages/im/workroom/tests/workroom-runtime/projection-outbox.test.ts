@@ -358,7 +358,7 @@ describe('Workroom Projection Outbox', () => {
     expect((await fixture.kernel.read('project-1', 'run-1')).sequence).toBe(kernelSequence);
   });
 
-  it('rejects a legacy plaintext snapshot with content-free offline export/purge guidance', async () => {
+  it('rejects a legacy plaintext snapshot with content-free fail-closed error', async () => {
     const fixture = await runningAssignment();
     const root = join(tmpdir(), `workroom-projection-legacy-${crypto.randomUUID()}`);
     temporaryRoots.push(root);

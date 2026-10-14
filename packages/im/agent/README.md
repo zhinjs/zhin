@@ -164,8 +164,6 @@ permission、approval、generation lease 或 Journal。普通 npm 插件继续�
 Feature；Capability Seam 属于 Advanced Root Host 扩展口，详见
 [能力接缝](../../docs/concepts/capability-seams.md)。
 
-升级前的 legacy Run export 可用 `zhin agent legacy-runs <input>` 离线审计，遗留内嵌 payload 可用 `zhin agent legacy-payloads <input> --kind <kind>` 离线扫描。两条命令都只读输入并 create-only 输出 audit/proposal，不会自动写入新 Journal、接受旧结果、删除正文或执行迁移。
-
 **Agent Core**：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；`runTextTurn` 为 collector。组合层经 `composeZhinAgentRuntime` 注入 8 模块 + `createAgentCoreDepsForCompose`。
 
 可选 subpath（`package.json` `exports`）：

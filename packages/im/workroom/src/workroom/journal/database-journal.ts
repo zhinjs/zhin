@@ -4,7 +4,7 @@ import type {
   GovernedPayloadPublicationVerification,
   GovernedPayloadWriteSagaSnapshot,
 } from '../../data-governance/governed-payload-write-saga.js';
-import { assertActiveStoreHasNoLegacyEmbeddedPayload } from '../legacy-embedded-payload-migration.js';
+import { assertNoLegacyEmbeddedPayloadRecords } from './legacy-payload-guard.js';
 import {
   WorkroomJournalPayloadAuthorityUnavailableError,
   WorkroomSequenceConflictError,
@@ -114,9 +114,7 @@ export class DatabaseWorkroomJournal implements WorkroomJournal {
     let headerPublished = false;
     try {
       const allRows = await this.#eventModel.select().where({});
-      await assertActiveStoreHasNoLegacyEmbeddedPayload({
-        read: async () => legacyDatabaseJournalRecords(allRows),
-      });
+      assertNoLegacyEmbeddedPayloadRecords(legacyDatabaseJournalRecords(allRows));
       const current = parseStoredRowGroups(allRows).get(runId) ?? Object.freeze([]);
       if (current.length > 0) {
         await reconcileJournalPayloads(runId, current, this.#requirePayloads());
@@ -137,9 +135,7 @@ export class DatabaseWorkroomJournal implements WorkroomJournal {
       });
       await this.#database.transaction(async transaction => {
         const transactionRows = await transaction.select('workroom_events').where({});
-        await assertActiveStoreHasNoLegacyEmbeddedPayload({
-          read: async () => legacyDatabaseJournalRecords(transactionRows),
-        });
+        assertNoLegacyEmbeddedPayloadRecords(legacyDatabaseJournalRecords(transactionRows));
         const transactionCurrent = parseStoredRowGroups(transactionRows).get(runId)
           ?? Object.freeze([]);
         const transactionSequence = transactionCurrent.at(-1)?.sequence ?? -1;

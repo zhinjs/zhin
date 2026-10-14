@@ -32,7 +32,6 @@ import type {
 import { digestCanonicalWorkroomValue } from '../../src/workroom/canonical-value.js';
 import { MemoryWorkroomJournal } from '../../src/workroom/journal/index.js';
 import type { WorkroomEvent } from '../../src/workroom/kernel-contracts.js';
-import { buildLegacyRunOfflineReport } from '../../src/workroom/legacy-run-offline-migration.js';
 import { materializeWorkroomRemoteAssignment } from '../../src/workroom/remote-assignment-issuance.js';
 import { WORKROOM_A2A_EXTENSION_URI } from '../../src/workroom/remote-dispatch.js';
 import { remoteDisclosureFixture } from '../workroom/remote-disclosure-fixture.js';
@@ -327,31 +326,7 @@ describe('Workroom priority and preemption production composition', () => {
     expect(transportSignal?.aborted).toBe(true);
   });
 
-  it('keeps legacy completed output historical and bounds low-lane starvation under urgent traffic', async () => {
-    const report = buildLegacyRunOfflineReport({
-      orchestration_runs: [{
-        id: 'legacy-completed', session_key: 'session:legacy', status: 'completed', title: 'Old',
-        template: '', source_json: '{"kind":"manual","label":"offline"}',
-        state_json: '{}', state_version: 0,
-        created_at: 1, updated_at: 2,
-      }],
-      orchestration_tasks: [{
-        id: 'legacy-task', run_id: 'legacy-completed', name: 'old', description: '', role: 'worker',
-        goal: 'old', status: 'completed', depends_on: '[]', executor_kind: 'local', assigned_to: '',
-        remote_agent_id: '', remote_task_id: '', priority: 'medium', context_json: '{}',
-        is_writer: 0, phase: '', result_summary: 'legacy done', error: '',
-        created_at: 1, updated_at: 2, started_at: 1, finished_at: 2,
-      }],
-      orchestration_events: [{
-        id: 'legacy-event', run_id: 'legacy-completed', task_id: 'legacy-task',
-        type: 'run.started', seq: 0, payload_json: '{}', created_at: 1,
-      }],
-    });
-    expect(report.runs[0]).toMatchObject({
-      migrationStatus: 'historical_only', accepted: false, allowedActions: ['export'],
-    });
-    expect(JSON.stringify(report)).not.toContain('task.accepted');
-
+  it('bounds low-lane starvation under urgent traffic', async () => {
     const policy = createWorkroomSchedulerPolicySnapshot({
       policyRef: 'scheduler', revision: 1, pinnedAtSequence: 1, capacity: 1,
       agingStepMs: 100, starvationBoundMs: { urgent: 100, high: 200, normal: 300, low: 400 },

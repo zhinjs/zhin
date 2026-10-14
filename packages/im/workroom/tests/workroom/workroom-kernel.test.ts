@@ -771,7 +771,7 @@ describe('WorkroomKernel', () => {
         insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-bad')).rejects.toThrow('offline export/purge');
+    await expect(journal.read('run-bad')).rejects.toThrow('no longer supported');
   });
 
   it.each([
@@ -835,7 +835,7 @@ describe('WorkroomKernel', () => {
         select: () => ({ where: async () => rows }), insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-corrupt-observation')).rejects.toThrow('offline export/purge');
+    await expect(journal.read('run-corrupt-observation')).rejects.toThrow('no longer supported');
   });
 
   it('rejects Assignment observation body drift while materializing a Journal append', async () => {
@@ -889,7 +889,7 @@ describe('WorkroomKernel', () => {
         select: () => ({ where: async () => rows }), insertMany: async () => undefined,
       }),
     }, { select: () => ({ where: async () => rows }) });
-    await expect(journal.read('run-heartbeat-metadata')).rejects.toThrow('offline export/purge');
+    await expect(journal.read('run-heartbeat-metadata')).rejects.toThrow('no longer supported');
   });
 
   it('rejects a persisted acceptance event without a valid policy record', async () => {
@@ -909,7 +909,7 @@ describe('WorkroomKernel', () => {
     }, { select: () => ({ where: async () => rows }) });
 
     await expect(journal.read('run-bad-acceptance'))
-      .rejects.toThrow('offline export/purge');
+      .rejects.toThrow('no longer supported');
   });
 
   it('persists a contiguous journal in one serializable transaction', async () => {
