@@ -8,6 +8,10 @@ export interface ModelHarnessConfigItem {
   iterationExtension?: number;
   /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
   maxTotalIterations?: number;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }
 
 export interface ModelHarnessConfig {
@@ -25,6 +29,10 @@ export interface ModelHarnessRow {
   iterationExtension?: number;
   /** Hard step cap per Turn segment (overrides ai.agent.toolBudget.maxTotalIterations). */
   maxTotalIterations?: number;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }
 
 export interface ResolvedModelHarness {
@@ -33,4 +41,8 @@ export interface ResolvedModelHarness {
   explorationGuidance?: boolean;
   iterationExtension?: number;
   maxTotalIterations?: number;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }
