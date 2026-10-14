@@ -51,6 +51,11 @@ export function createScopedTraceJournal(
   });
 }
 
+/** Turn id a sub-agent journal tagged this event with, if any. */
+export function traceScopeTurnId(event: TurnEvent): string | undefined {
+  return eventScopes.get(event)?.turnId;
+}
+
 /** Makes a root collector reachable for trace notes until the returned release runs. */
 export function registerTurnTrace(collector: TurnTraceCollector): () => void {
   activeCollectors.set(collector.turnId, collector);

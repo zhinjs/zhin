@@ -77,6 +77,11 @@ export interface EvalExpectations {
   readonly anySystemPromptContains?: readonly string[];
   /** Number of reply-port sends across the case (final replies plus progress updates). */
   readonly outboundMessages?: number;
+  /**
+   * Tool events that stream consumers must see, in order, as `type:toolName`
+   * (e.g. `tool_call:get_weather`, `tool_result:get_weather`, `tool_denied:write_file`).
+   */
+  readonly streamToolEvents?: readonly string[];
 }
 
 export interface EvalPromptSection {
