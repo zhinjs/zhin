@@ -323,6 +323,18 @@ export function resolveRuntimeTurnIntent(
   });
 }
 
+/**
+ * True when the message carries only text: no media, quoted message or
+ * forward. Only such messages may be merged into another turn (#725), because
+ * a merged turn keeps the attachments of its first message only.
+ */
+export function isPlainTextRuntimeMessage(message: Message): boolean {
+  if (message.replyTo?.id) return false;
+  const segments = message.segments ? toCanonicalSegments(message.segments) : [];
+  if (segments.some((segment) => segment.type === 'forward')) return false;
+  return collectSegmentMedia(segments).length === 0;
+}
+
 function isGroupOrChannelRuntimeMessage(message: Message): boolean {
   return message.conversation.kind === 'group' || message.conversation.kind === 'channel';
 }
