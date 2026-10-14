@@ -59,8 +59,10 @@ describe('trust tiers (#726)', () => {
     expect(resolveTurnTrustLevel(view('group', ['user', 'trusted']))).toBe('trusted_member');
     expect(resolveTurnTrustLevel(view('group', ['user']))).toBe('group_member');
     expect(resolveTurnTrustLevel(view('channel', ['user', 'admin']))).toBe('group_member');
-    // Unchanged from #719: private chats and non-IM ingress keep their configured policy.
-    expect(resolveTurnTrustLevel(view('private', ['user']))).toBe('trusted_member');
+    // #753: a private chat from a non-owner, untrusted sender is group_member.
+    expect(resolveTurnTrustLevel(view('private', ['user']))).toBe('group_member');
+    expect(resolveTurnTrustLevel(view('private', ['user', 'trusted']))).toBe('trusted_member');
+    // Non-IM ingress keeps its configured policy.
     expect(resolveTurnTrustLevel({ origin: { kind: 'http' }, principal: { roles: [] } })).toBe('trusted_member');
   });
 
