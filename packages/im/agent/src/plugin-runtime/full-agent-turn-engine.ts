@@ -168,6 +168,7 @@ async function* runInteractiveTurn(
   const pendingContext = context.turn.ports.conversationContext
     ? await context.turn.ports.conversationContext.readPending(context.turn.signal)
     : undefined;
+  const relevantMemory = await recallTurnMemory(host, context.turn, prep.turnUser.rawContent);
   const prompt = await contextSystem.buildTextTurnContext({
     host,
     turn: context.turn,
@@ -177,6 +178,7 @@ async function* runInteractiveTurn(
     mode: context.turn.input.media?.some((item) => item.kind === 'image') ? 'vision' : undefined,
     activeSkillsContext,
     toldLedger: host.toldLedger?.render(prep.sessionId),
+    relevantMemory,
   });
   const providerInput = context.turn.input.media?.length
     ? prompt.modelInput
@@ -675,4 +677,29 @@ function labelThirdPartyGuidance(source: string, content: string): string {
 /** #726: loaded skill instructions are labelled per skill as third-party guidance. */
 function labelSkillInstructions(instructions: readonly string[]): string {
   return instructions.map(text => labelThirdPartyGuidance('skill', text)).join('\n\n');
+}
+
+/**
+ * BM25 recall for this turn (#734). Recall is advisory: a failure is logged
+ * and the turn continues without it.
+ */
+async function recallTurnMemory(
+  host: ZhinAgentPrivate,
+  turn: TurnIngress,
+  query: string,
+): Promise<string | undefined> {
+  const runtime = host.semanticMemory;
+  if (!runtime?.active) return undefined;
+  try {
+    const result = await runtime.recall({
+      sessionKey: turn.session.key,
+      subjectId: turn.principal.subjectId,
+      ...(turn.origin.kind === 'im' ? { platform: turn.origin.platform } : {}),
+    }, query, turn.signal);
+    return result?.text;
+  } catch (error) {
+    if (turn.signal.aborted) throw error;
+    logger.warn(`semantic memory recall failed: ${error instanceof Error ? error.message : String(error)}`);
+    return undefined;
+  }
 }
