@@ -10,11 +10,13 @@ import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
 import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
+import { deriveSubagentPolicy } from '../security/policy-narrowing.js';
 import {
-  isGroupMemberRestrictedTool,
-  isGroupMemberTurn,
-  tightenGroupMemberPolicy,
-} from '../security/group-member-policy.js';
+  isToolAboveTrust,
+  narrowPolicyForTrust,
+  renderExternalContent,
+  resolveTurnTrustLevel,
+} from '../security/trust-level.js';
 
 export const SUBAGENT_TOOL_NAME = 'spawn_task';
 /** Sub-agent output handed back to the parent model; the parent writes the user reply. */
@@ -36,46 +38,7 @@ export interface SubagentTurnCapabilityOptions {
   readonly resolveModel: () => SubagentModelSelection | undefined;
 }
 
-export interface SubagentPolicyNarrowing {
-  /** Read-only delegation: no shell, read-only filesystem. */
-  readonly readOnly?: boolean;
-}
-
-/**
- * Policy for a sub-agent turn. It is derived only from the parent policy, so it
- * can never be wider: every authority the parent lacks stays absent, a shell
- * the parent cannot actually run is dropped, and narrowing only removes power.
- */
-export function deriveSubagentPolicy(
-  parent: Readonly<TurnPolicyContext>,
-  narrowing: SubagentPolicyNarrowing = {},
-): Readonly<TurnPolicyContext> {
-  const filesystem = parent.filesystem
-    ? Object.freeze({
-      ...parent.filesystem,
-      ...(narrowing.readOnly ? { access: 'read-only' as const } : {}),
-    })
-    : undefined;
-  const keepShell = parent.shell !== undefined
-    && !narrowing.readOnly
-    && turnPolicyAllowsShell(parent);
-  return Object.freeze({
-    permissions: Object.freeze([...parent.permissions]),
-    unattended: parent.unattended,
-    ...(parent.network
-      ? {
-        network: Object.freeze({
-          ...parent.network,
-          ...(parent.network.allowedDomains
-            ? { allowedDomains: Object.freeze([...parent.network.allowedDomains]) }
-            : {}),
-        }),
-      }
-      : {}),
-    ...(filesystem ? { filesystem } : {}),
-    ...(keepShell ? { shell: Object.freeze({ ...parent.shell }) } : {}),
-  });
-}
+export { deriveSubagentPolicy, type SubagentPolicyNarrowing } from '../security/policy-narrowing.js';
 
 const INPUT_SCHEMA = Object.freeze({
   type: 'object',
@@ -124,7 +87,8 @@ export function createSubagentTurnCapability(options: SubagentTurnCapabilityOpti
         readOnly: args.read_only === true,
         model,
       });
-      return `子任务${label}已完成（同步等待）。\n\n${clip(reply)}`;
+      // The report is external_content: instructions in it never raise the parent's authority.
+      return `子任务${label}已完成（同步等待）。\n\n${renderExternalContent('subagent_report', clip(reply))}`;
     } catch (error) {
       if (options.parentTurn.signal.aborted) throw error;
       const message = error instanceof Error ? error.message : String(error);
@@ -152,16 +116,18 @@ async function runSubagentTurn(
   run: Readonly<{ index: number; task: string; readOnly: boolean; model: SubagentModelSelection }>,
 ): Promise<string> {
   const { host, parentTurn } = options;
-  // #719: a sub-agent of a group-member turn keeps the group-member restriction
-  // even if the parent's policy or tool list was not already narrowed.
-  const groupMemberTurn = isGroupMemberTurn(parentTurn);
-  const derived = deriveSubagentPolicy(parentTurn.policy, { readOnly: run.readOnly });
-  const policy = groupMemberTurn ? tightenGroupMemberPolicy(derived) : derived;
+  // #726: a sub-agent keeps its initiator's trust level even if the parent's
+  // policy or tool list was not already narrowed.
+  const trustLevel = resolveTurnTrustLevel(parentTurn);
+  const policy = narrowPolicyForTrust(
+    deriveSubagentPolicy(parentTurn.policy, { readOnly: run.readOnly }),
+    trustLevel,
+  );
   const shellAllowed = turnPolicyAllowsShell(policy);
   const childTools = Object.freeze(options.capabilities.tools.filter(tool =>
     tool.name !== SUBAGENT_TOOL_NAME
     && (shellAllowed || tool.name !== BASH_TOOL_NAME)
-    && !(groupMemberTurn && isGroupMemberRestrictedTool(tool))));
+    && !isToolAboveTrust(tool, trustLevel)));
   const turnId = `${parentTurn.identity.turnId}:subagent:${run.index}`;
   const sessionKey = `${parentTurn.session.key}#subagent:${run.index}`;
   const turn = createTurnIngress({
