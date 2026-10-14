@@ -176,6 +176,18 @@ ai:
 
 估算的 token 超过 `contextWindow × 0.6` 时触发。压缩分两步：先做轻量裁剪（去掉冗余的工具结果等），再让模型生成一段 `[Previous conversation summary]` 摘要替换旧历史。连续自动压缩失败达到上限后会停止自动压缩，避免反复消耗。
 
+## 群聊成员的权限收紧
+
+在 IM 群聊或频道里，由普通群成员发起的回合会自动收紧权限。普通群成员指既不是主人（master），也不在 `trigger.trusted` 信任名单里的人。收紧内容：
+
+- 不提供 `bash`；
+- 文件只读，不提供写入、编辑类工具；
+- 不提供向其他会话发消息的工具（名称含 send/forward/notify 等，或带 `outbound` 标签的工具）。
+
+模型看不到这些工具。即使工具通过延迟加载等途径出现在回合里，执行时也会被拒绝，并给出明确的拒绝原因，不会静默失败。权限只收窄、不放宽，子 agent 也会继承。主人和信任名单里的成员不受影响，私聊不受影响。
+
+这是 P3 信任分级（#726）落地前的临时方案，没有关闭开关。如果需要放开某个群成员，把他加入 `trigger.trusted`。
+
 ## 内置工具
 
 | 类别 | 工具 |
@@ -249,6 +261,30 @@ ai:
         "gpt-4o": { maxIterations: 8 }
         "openai:gpt-4o": { maxIterations: 9 }
 ```
+
+## Provider 韧性
+
+主回合的每次模型请求都经过统一的重试 / 超时 / 降级层（`createResilientCompletionPort`）：
+
+- **错误分类**：429 限流、超时、5xx、网络错误可重试；鉴权失败、上下文超长、调用方取消不重试，原样上抛（上下文超长仍走压缩重试）。
+- **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待，超过上限则直接降级。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
+- **fallback**：同一模型重试耗尽后，按 `modelCandidates` 顺序切换到下一个模型；每次重试 / 切换 / 放弃都会写一条 `provider_retry` / `provider_fallback` / `provider_give_up` 日志。
+- **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
+
+```yaml
+ai:
+  agent:
+    providerResilience:
+      maxRetries: 2            # 每个模型首次之后的重试次数；0 关闭重试
+      baseDelayMs: 1000        # 首次退避，之后翻倍
+      maxDelayMs: 10000        # 单次退避上限
+      maxRetryAfterMs: 30000   # Retry-After 超过该值时跳过重试，直接 fallback
+      requestTimeoutMs: 180000 # 单次请求（整段流式输出）超时；0 关闭
+      emptyReplyRetries: 0     # 空回复（无文本、无工具调用）额外重试次数
+      fallback: true           # 重试耗尽后是否切换到下一个候选模型
+```
+
+按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`。
 
 ## Workroom Kernel
 

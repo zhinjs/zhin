@@ -9,6 +9,11 @@ import { createTurnIngress, type TurnIngress, type TurnPolicyContext } from '../
 import type { AgentCapabilities, ToolCapability } from './capability-ingress.js';
 import { createDeferredCapabilityPlan } from './deferred-capability-plan.js';
 import { BASH_TOOL_NAME, turnPolicyAllowsShell } from './native-bash-tool.js';
+import {
+  isGroupMemberRestrictedTool,
+  isGroupMemberTurn,
+  tightenGroupMemberPolicy,
+} from '../security/group-member-policy.js';
 
 export const SUBAGENT_TOOL_NAME = 'spawn_task';
 /** Sub-agent output handed back to the parent model; the parent writes the user reply. */
@@ -146,10 +151,16 @@ async function runSubagentTurn(
   run: Readonly<{ index: number; task: string; readOnly: boolean; model: SubagentModelSelection }>,
 ): Promise<string> {
   const { host, parentTurn } = options;
-  const policy = deriveSubagentPolicy(parentTurn.policy, { readOnly: run.readOnly });
+  // #719: a sub-agent of a group-member turn keeps the group-member restriction
+  // even if the parent's policy or tool list was not already narrowed.
+  const groupMemberTurn = isGroupMemberTurn(parentTurn);
+  const derived = deriveSubagentPolicy(parentTurn.policy, { readOnly: run.readOnly });
+  const policy = groupMemberTurn ? tightenGroupMemberPolicy(derived) : derived;
   const shellAllowed = turnPolicyAllowsShell(policy);
   const childTools = Object.freeze(options.capabilities.tools.filter(tool =>
-    tool.name !== SUBAGENT_TOOL_NAME && (shellAllowed || tool.name !== BASH_TOOL_NAME)));
+    tool.name !== SUBAGENT_TOOL_NAME
+    && (shellAllowed || tool.name !== BASH_TOOL_NAME)
+    && !(groupMemberTurn && isGroupMemberRestrictedTool(tool))));
   const turnId = `${parentTurn.identity.turnId}:subagent:${run.index}`;
   const sessionKey = `${parentTurn.session.key}#subagent:${run.index}`;
   const turn = createTurnIngress({

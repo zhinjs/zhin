@@ -1,4 +1,9 @@
 import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } from '@zhin.js/plugin-runtime';
+import {
+  isGroupMemberRestrictedTool,
+  isGroupMemberTurn,
+  tightenGroupMemberPolicy,
+} from '../security/group-member-policy.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
 import { executeAgentTurn, type TurnEventObserver } from '../turn/execute-agent-turn.js';
@@ -303,15 +308,23 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
         selection.agent,
       );
       const referenceCapability = createConversationReferenceCapability(owner, request);
+      // #719: ordinary group members get no shell, file writes or outbound tools.
+      const groupMemberTurn = isGroupMemberTurn(request);
+      const allTools = [
+        ...discovered.tools,
+        ...(referenceCapability ? [referenceCapability] : []),
+        ...await expandMcpTools(discovered, selection.mcpServers),
+      ];
       const capabilities = Object.freeze({
         ...discovered,
-        tools: Object.freeze([
-          ...discovered.tools,
-          ...(referenceCapability ? [referenceCapability] : []),
-          ...await expandMcpTools(discovered, selection.mcpServers),
-        ]),
+        tools: Object.freeze(groupMemberTurn
+          ? allTools.filter(tool => !isGroupMemberRestrictedTool(tool))
+          : allTools),
       });
-      const turn = createIngressTurn(lease.value, request, capabilities);
+      const turnRequest = groupMemberTurn
+        ? Object.freeze({ ...request, policy: tightenGroupMemberPolicy(request.policy) })
+        : request;
+      const turn = createIngressTurn(lease.value, turnRequest, capabilities);
       const catalog = Object.freeze({
         ...capabilities,
         tools: Object.freeze(capabilities.tools.map(({ execute: _execute, ...tool }) => Object.freeze(tool))),
