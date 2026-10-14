@@ -1,0 +1,21 @@
+.changeset/group-member-turn-tightening.md
+  s_c757df74f34330::t_698ce46f0246ee 1-5
+docs/ai/agent.md
+  s_c757df74f34330::t_18ccf3c4aa12e5 259-270
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4c552bd4b63f4e9db253231a3822533fc78fb3b8",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
