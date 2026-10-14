@@ -56,7 +56,9 @@ sidebar: false
 
 ## 阶段 B：新 Room 核心（在 `@zhin.js/workroom` 内，与旧机制并存）
 
-- [ ] B1a Room / Member / Role 定义与校验，从现有 `catalog-definition` 简化而来（见方案 §3.1）
+- [x] B1a Room / Member / Role 定义与校验，从现有 `catalog-definition` 简化而来（见方案 §3.1）
+  - 2026-10-14 · 「feat: 新增 Room / Member / Role 定义与校验」· `@zhin.js/workroom` 新增 `src/room/`，纯定义层、不依赖任何 `@zhin.js/*`；校验收集全部问题后抛 `RoomDefinitionError`，拒绝未知字段与原型污染名，返回深冻结副本；与旧 Catalog 并存；15 个单元测试
+- [ ] B1a-1 处理第 16 轮审查意见：`validate-room.ts` 的会话归属 key 去掉 endpoint，改为 `adapter:kind:id`（QQ / OneBot 群号平台全局唯一，否则两个启用的 Room 可经不同 Bot 认领同一群），补冲突测试；校验成员 `botEndpoint.adapter` 与 Room 会话 adapter 一致，补测试；agent 名大小写不敏感重复时报错（@ 路由会歧义），补测试。顺带 Nit：`ROOM_CONVERSATION_KINDS`、`ROOM_RESERVED_NAMES` 用 `Object.freeze`；测试补对冻结结果的实际修改断言，以及 `members` 非数组、`accepts` 重复、role `description` 非字符串的用例
 - [ ] B1b Endpoint 上报登录后的平台账号 `selfUserId`（先做 ICQQ / OneBot，以及 Sandbox）；进程级 Peer Registry。复用已有实现：`plugins/adapters/icqq/src/icqq-inbound.ts` 的 `isSelf` 过滤、`kook/src/endpoint.ts` 的 `selfId`
 - [ ] B1c 入站 `origin` 标签（self / member / peer_bot / human）与发送 ledger 关联兜底；`[sender:...]` 标签增加 origin；`stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造标签（方案 §3.4）
 - [ ] B2 **入站去重 / 单一入口选举**（审查第 7 条）：群里每个成员 Bot 都会收到同一条人类消息，N 个 Endpoint 会产生 N 个入站事件。按 平台 + 会话 + 平台消息 id 去重，或者每个 Room 选一个入站 Endpoint，保证每条消息只路由一次。同时更新方案 §3.2 / §3.4
@@ -170,6 +172,14 @@ sidebar: false
 - Nit：`module-boundary.test.ts:31` allowlist 缩进不一致；a2a 用例缺少导入成功的正向基线
 - 阶段末评估：以上都不影响正确性或 fail-closed，不新建条目；依赖声明一项留给维护者在发版前决定
 
+### 第 16 轮（2026-10-14，审查 B1a）
+
+- 无 Blocking
+- Should fix：会话归属 key 含 endpoint，两个启用的 Room 可经不同 Bot 认领同一 QQ 群，绕过“一个会话只属于一个启用 Room”不变量 → B1a-1
+- Should fix：未校验成员 Bot 的 adapter 与 Room 会话 adapter 一致 → B1a-1
+- Should fix：agent 名仅大小写不同时被接受，@ 路由会歧义 → B1a-1
+- Nit：公开常量数组运行时可变；测试未实际尝试修改冻结结果，缺少几个类型错误用例 → 并入 B1a-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -189,3 +199,4 @@ sidebar: false
 - 2026-10-14 同一次定时运行：完成 A4c（4 个 agent，约 12.8 分钟，cli build / type-check / 381 个相关测试 / check:architecture / API 快照 / eslint 0 error（27 个 no-duplicate-imports 警告）通过，审查无 Blocking，4 个 Nit 新增为 A4c-1）
 - 2026-10-14 17:10 定时运行：rebase 到最新 origin/main（17 个提交，`docs/authoring/host-tokens.md` 中英文冲突：main 重写了该页，保留 main 版本并重新加入 `workroomHostToken` 一行，来源改为 `@zhin.js/workroom`），install / build 通过；完成 A4c-1（6 个 agent，约 7.7 分钟，cli build / type-check / 354 个相关测试 / check:architecture / API 快照 / no-duplicate-imports 清零通过，审查无 Blocking，2 个 Nit 只记录）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：完成 A5（4 个 agent，约 13.7 分钟，workroom / cli build、type-check、95 个架构脚本自测、203 + 2524 个相关测试、check:architecture、API 快照、dependency-policy / feature-peers、**`pnpm check:all`** 通过，审查无 Blocking，4 个 Nit 只记录）。阶段 A 全部完成；下次运行从阶段 B 开始，先从本分支最新提交切出 `feat/workroom-group-collab`
+- 2026-10-14 17:41 定时运行：rebase 到最新 origin/main（1 个提交无冲突），从阶段 A 最新提交切出 `feat/workroom-group-collab`，install / build 通过；完成 B1a（4 个 agent，约 5 分钟，workroom build / type-check / 15 + 8 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，3 个 Should fix 新增为 B1a-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改

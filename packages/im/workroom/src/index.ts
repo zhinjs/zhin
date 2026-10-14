@@ -211,3 +211,4 @@ export * from './workroom-runtime/workroom-scheduler-portfolio-request-authority
 export * from './workroom-runtime/workroom-scheduler-portfolio-supply.js';
 export * from './workroom-runtime/workroom-scheduler-route-registry.js';
 export * from './workroom-runtime/workroom-scheduler-runtime.js';
+export * from './room/index.js';

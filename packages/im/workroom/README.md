@@ -35,3 +35,15 @@ Binding 和持久 Item 必须显式携带 `audience` 与绑定代际 `cursorId`�
 快照的默认 audience，也不会把旧 Run cursor 在线迁移到新绑定。Repository 只负责 CAS
 状态，Tracer 只把权威事实投影为草稿，Governance 物化可披露内容，Delivery Worker
 负责租约和外部投递，四者通过窄端口协作。
+
+## Room 定义（新核心，B1a）
+
+`src/room/` 提供新的 Room / Member / Role 纯定义层，与旧 Workroom Catalog 并存，不改变旧行为。该目录只依赖 TypeScript 标准库。
+
+- `validateRoomDefinitions(raw, ctx?)`：fail-closed，任何问题抛 `RoomDefinitionError`（`issues` 汇总全部带路径的消息）；成功返回深冻结的拷贝，不修改入参。`raw == null` 视为无 Room（返回 `{}`）。
+- `collectRoomDefinitionIssues(raw, ctx?)`：唯一规则来源，纯函数，不抛。
+- 未知字段一律拒绝，避免拼写错误导致权限静默丢失。
+- Room：`conversation`（group/channel 绑定）、`roles`、`members`、可选 `coordinator`。
+- Role：`prompt`；`tools`（上限，省略=不额外授予）；`accepts`（省略=任意类别）；`handoffTo`（省略=不允许交接，不可指向自身）。
+- Member：一个 Agent、一个 Role、独立的 `botEndpoint`（Room 内不得共用）、可选 `aliases`（Room 内唯一，大小写不敏感）。
+- 同一会话只能被一个 enabled Room 拥有；disabled 的 Room 只做结构校验。
