@@ -16,6 +16,8 @@ import {
   endpointEventGatewayToken,
   type EndpointEvent,
   type EndpointEventGateway,
+  getProcessPeerRegistry,
+  type PeerRegistry,
 } from '@zhin.js/adapter';
 import {
   type ConversationEventStore,
@@ -53,6 +55,8 @@ import {
   failedDeliveryReceipt,
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
+import { OutboundLedger } from './outbound-ledger.js';
+import { createInboundOriginClassifier } from './inbound-origin.js';
 
 /** @public Stable inbound and outbound IM gateway token for Adapter integrations. */
 export const outboundMessageToken = createToken<OutboundMessageService>('zhin.im.outbound-message');
@@ -67,6 +71,8 @@ export interface ImRuntimeOptions {
   readonly conversationEvents?: ConversationEventStore;
   /** Process-root ingress claim (pending interaction, authentication challenge, etc.). */
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /** 覆盖进程级 Peer Registry（测试用，避免污染单例）。 */
+  readonly peerRegistry?: Pick<PeerRegistry, 'lookup' | 'isReady' | 'selfOf'>;
   /**
    * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
    * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
@@ -96,7 +102,13 @@ export class ImRuntime implements OutboundMessageService {
 
   constructor(options: ImRuntimeOptions = {}) {
     this.#conversations = new ConversationRuntime(options.conversationEvents);
+    const ledger = new OutboundLedger();
+    const originClassifier = createInboundOriginClassifier({
+      registry: options.peerRegistry ?? getProcessPeerRegistry(),
+      ledger,
+    });
     this.#outbound = new OutboundDeliveryRuntime({
+      ledger: (conversation, receipt, payload) => ledger.record(conversation, receipt, payload),
       record: (request, receipt) => this.#conversations.recordOutbound(request, receipt),
       rememberFallback: (conversation, generation, map) =>
         this.#interactions.rememberFallback(conversation, generation, map),
@@ -106,6 +118,7 @@ export class ImRuntime implements OutboundMessageService {
     this.#inbound = new InboundRuntime({
       interactions: this.#interactions,
       inboundClaim: options.inboundClaim,
+      originClassifier,
       enrichSender: options.enrichSender,
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),

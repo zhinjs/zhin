@@ -37,6 +37,7 @@ import {
   type RuntimeMessageEvent,
 } from './message-events.js';
 import { resolveIngressRoute } from './ingress-route.js';
+import { roomMembershipToken, type InboundOriginClassifier, type RoomMembershipPort } from './inbound-origin.js';
 
 const logger = getLogger('im.inbound');
 
@@ -48,6 +49,8 @@ type InboundInteractionPort = Pick<
 interface InboundRuntimeContext {
   readonly interactions: InboundInteractionPort;
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+  /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
+  readonly originClassifier?: InboundOriginClassifier;
   readonly enrichSender?: (
     sender: MessageSenderRef | undefined,
     conversation: IncomingMessage['conversation'],
@@ -139,6 +142,23 @@ export class InboundRuntime {
       const enrichedSender = this.context.enrichSender
         ? this.context.enrichSender(input.sender, conversation, lease.value)
         : input.sender;
+      // Origin is decided only from trusted state (Registry / ledger / membership port),
+      // never from payload metadata or message text.
+      const classified = this.context.originClassifier?.classify({
+        conversation,
+        sender: enrichedSender,
+        messageId: input.message?.id,
+        content: input.content,
+      }, resolveRoomMembership(lease.value));
+      const origin = classified?.origin;
+      if (origin === 'self') {
+        logger.debug(formatCompact({
+          op: 'self_echo',
+          conv: formatConversationLog(conversation),
+          basis: classified?.basis,
+        }));
+        return Object.freeze({ matched: false });
+      }
       const message = new RuntimeMessage(
         conversation,
         input.content,
@@ -177,10 +197,29 @@ export class InboundRuntime {
         source.endpoint.adapter,
         { snapshot: lease.value, assertActive: () => {
           if (!active) throw new Error('Message author binding scope has ended');
-        } },
+        }, ...(origin ? { origin } : {}) },
       );
       const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
+      if (origin === 'member' || origin === 'peer_bot') {
+        // Bot-origin messages are recorded as chat history only: no claim, handlers,
+        // commands, middleware or ingress route (prevents bot-to-bot loops).
+        logger.debug(formatCompact({
+          op: 'bot_origin_recorded',
+          conv: formatConversationLog(conversation),
+          origin,
+          basis: classified?.basis,
+        }));
+        this.context.publish({
+          direction: 'inbound',
+          conversation,
+          ...(input.sender !== undefined ? { sender: input.sender } : {}),
+          contentPreview: previewMessageContent(input.content),
+          ...(input.message?.id ? { messageId: input.message.id } : {}),
+          timestamp: receivedAt,
+        });
+        return result;
+      }
       const claimed = await this.context.inboundClaim?.(message) === true;
       if (claimed) {
         result = interactionResult(requester);
@@ -393,6 +432,19 @@ export class InboundRuntime {
     return handled
       ? Object.freeze({ matched: true, command: 'interactive', owner: requester })
       : undefined;
+  }
+}
+
+function resolveRoomMembership(snapshot: RuntimeSnapshot): RoomMembershipPort | undefined {
+  try {
+    const candidate = snapshot.resources.get(snapshot.root)?.get(roomMembershipToken.id);
+    return candidate
+      && typeof candidate === 'object'
+      && typeof (candidate as RoomMembershipPort).isMember === 'function'
+      ? candidate as RoomMembershipPort
+      : undefined;
+  } catch {
+    return undefined;
   }
 }
 

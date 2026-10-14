@@ -31,6 +31,8 @@ import {
   type EndpointEvent,
   type EndpointControl,
   type EndpointManagement,
+  type PeerRegistry,
+  createPeerRegistry,
 } from '@zhin.js/adapter';
 import {
   CommandIndex,
@@ -48,7 +50,7 @@ import {
   middlewareFeatureId,
   type MiddlewareNext,
 } from '@zhin.js/middleware';
-import { bindOperationInput } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
 import {
   HandlerIndex,
   defineHandler,
@@ -58,6 +60,7 @@ import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationA
 import {
   ImRuntime,
   ingressRouteToken,
+  roomMembershipToken,
   Message,
   MessageDispatcher,
   component,
@@ -2793,6 +2796,7 @@ async function createFixture(
     endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
     inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+    peerRegistry?: PeerRegistry;
   },
 ) {
   const root = rootPluginId();
@@ -2925,6 +2929,7 @@ async function createFixture(
   const conversationEvents = new MemoryConversationEventStore();
   const im = new ImRuntime({
     inboundClaim: options?.inboundClaim,
+    ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
     conversationEvents,
   });
   im.attach(store);
@@ -3186,3 +3191,93 @@ function memoryEndpointSlot(owner: ReturnType<typeof rootPluginId>): [Capability
   const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts', definition: {} });
   return [slot.id, slot];
 }
+
+const REGISTERED_COMMAND = ['/g', 'h issue list open'].join('');
+
+describe('IM Runtime inbound origin routing', () => {
+  async function originFixture(setup: (registry: PeerRegistry, endpointId: string) => void, extra?: Parameters<typeof createFixture>[5]) {
+    const registry = createPeerRegistry();
+    const events: string[] = [];
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'ok');
+    const route = vi.fn(async () => true);
+    const fixture = await createFixture(events, sent, undefined, undefined, undefined, {
+      middleware: false, commandResult: executed, peerRegistry: registry, ...extra,
+    });
+    setup(registry, String(fixture.adapter.id));
+    installRoute(fixture, route);
+    return { ...fixture, registry, events, sent, executed, route };
+  }
+  type OriginFixture = Awaited<ReturnType<typeof originFixture>>;
+  const input = (fixture: OriginFixture, senderId: string, extra: object = {}) => ({
+    ...fixtureInput(fixture, REGISTERED_COMMAND), sender: { id: senderId }, ...extra,
+  });
+  const close = async (f: OriginFixture) => { await f.adapters.stop(); await f.store.close(); };
+
+  it('drops self echoes without dispatching or routing', async () => {
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); });
+    try {
+      await expect(receive(f.im, input(f, 'bot-self'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it.each(['peer_bot', 'member'] as const)('does not trigger commands or ingress route for %s messages', async (kind) => {
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    if (kind === 'member') {
+      const current = f.store.current;
+      const resources = new Map(current.resources);
+      resources.set(current.root, new Map([...resources.get(current.root)!, [roomMembershipToken.id, { isMember: () => true }]]));
+      f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    }
+    try {
+      await expect(receive(f.im, input(f, 'other-bot'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it('keeps human behavior, exposes message.origin and ignores metadata.origin', async () => {
+    const seen: Array<string | undefined> = [];
+    const f = await originFixture(() => undefined);
+    installRoute(f, async (m) => { seen.push(m.origin); return true; });
+    try {
+      await receive(f.im, input(f, 'alice', { content: 'chat', metadata: { origin: 'self' } }));
+      expect(seen).toEqual(['human']);
+    } finally { await close(f); }
+    const g = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    try {
+      await receive(g.im, input(g, 'other-bot', { metadata: { origin: 'human' } }));
+      expect(g.route).not.toHaveBeenCalled();
+    } finally { await close(g); }
+  });
+
+  it('classifies the echo of an outbound message by message id', async () => {
+    const f = await originFixture(() => undefined, { endpointSend: () => 'echo-1' });
+    try {
+      await expect(receive(f.im, input(f, 'alice'))).resolves.toMatchObject({ matched: true });
+      expect(f.sent).toHaveLength(1);
+      const conversation = fixtureInput(f, '').conversation;
+      f.route.mockClear();
+      await expect(receive(f.im, { conversation, content: REGISTERED_COMMAND, sender: { id: 'unknown-account' }, message: { conversation, id: 'echo-1' } }))
+        .resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it('preserves origin through the operation input binding', async () => {
+    const f = await originFixture(() => undefined);
+    let seen: [string | undefined, string | undefined] | undefined;
+    installRoute(f, async (m) => {
+      const snapshot = f.store.current;
+      const rebound = (m as unknown as Record<symbol, (o: unknown, s: unknown) => Message>)[operationInputBinding]!(snapshot.root, snapshot);
+      seen = [m.origin, rebound.origin];
+      return true;
+    });
+    try {
+      await receive(f.im, input(f, 'alice', { content: 'chat' }));
+      expect(seen).toEqual(['human', 'human']);
+    } finally { await close(f); }
+  });
+});

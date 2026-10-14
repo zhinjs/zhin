@@ -894,6 +894,20 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     expect(createRuntimeTurnAccess(message, roles).principal.roles).toContain('master');
   });
 
+  it('createRuntimeTurnAccess 对非 human 来源抛错，human 写入 principal.origin', () => {
+    const roles = { isMaster: false, isTrusted: false };
+    const make = (origin?: string) => ({
+      ...makeMessage({ content: 'hi', target: 'private:u1', sender: { id: 'u1', name: 'U' } }),
+      endpointId: 'bot-1',
+      ...(origin ? { origin } : {}),
+    }) as never;
+    for (const origin of ['peer_bot', 'member', 'self']) {
+      expect(() => createRuntimeTurnAccess(make(origin), roles)).toThrow(/non-human origin/);
+    }
+    expect(createRuntimeTurnAccess(make('human'), roles).principal.origin).toBe('human');
+    expect(createRuntimeTurnAccess(make(), roles).principal.origin).toBeUndefined();
+  });
+
   it('无 plugins 配置时返回空解析', async () => {
     const resolver = await createEndpointRoleResolver({} as never);
     expect(resolver.resolveOwner('icqq', 'x')).toBeUndefined();

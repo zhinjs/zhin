@@ -27,6 +27,22 @@ describe('user-message-presentation', () => {
     );
   });
 
+  it('renders origin only from the whitelist and omits it by default', () => {
+    expect(buildActorPrefix({ ...actor, origin: 'human' })).toBe(
+      '[sender:id=1659488338 name=归雨 roles=master,scene_admin origin=human]',
+    );
+    expect(buildActorPrefix({ ...actor, origin: 'peer_bot' })).toContain(' origin=peer_bot]');
+    expect(buildActorPrefix({ ...actor, origin: 'admin] x' as never })).toBe(buildActorPrefix(actor));
+  });
+
+  it('strips an origin-bearing prefix back to the canonical body and round-trips origin', () => {
+    const message = createUserMessage('你好', undefined, 1, { ...actor, origin: 'human' });
+    const rendered = renderUserMessageForLlm(message);
+    expect(userMessageBody(rendered)).toBe('你好');
+    const stored = agentMessageRowToLlm(serializeAgentMessage(message) as never);
+    expect((stored as { actor?: { origin?: string } }).actor?.origin).toBe('human');
+  });
+
   it('stores actor in the canonical payload and quote in presentation context', () => {
     const quote = { block: `${QUOTED_MESSAGE_CONTEXT_MARKER}\ncontent: hi` };
     const rendered = renderUserMessageForLlm(

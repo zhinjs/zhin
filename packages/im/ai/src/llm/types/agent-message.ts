@@ -17,6 +17,11 @@ export interface ConversationActor {
   readonly roles?: readonly string[];
   /** Shared-scene hint used only when rendering participant labels. */
   readonly scope?: 'private' | 'group' | 'channel';
+  /**
+   * 入站消息来源（由 IM Runtime 可信判定，非正文/模型可写）。
+   * 缺省表示未知（合成消息 / 旧记录），渲染标签时省略。
+   */
+  readonly origin?: 'self' | 'member' | 'peer_bot' | 'human';
 }
 
 /** Canonical ingress turn that introduced a participant message. */

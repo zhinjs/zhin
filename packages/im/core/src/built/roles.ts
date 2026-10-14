@@ -52,25 +52,20 @@ export function formatSenderRolesForLabel(roles: readonly SenderRole[]): string 
   return roles.filter((r) => r !== 'user').join(',') || 'user';
 }
 
-/** 剥离用户正文里自造的发送者前缀 */
+// 空白与零宽字符（不含 U+200D：会破坏 emoji ZWJ 序列）。
+const SPOOF_GAP = '[\\s\\u200B\\u200C\\u2060\\uFEFF]';
+const spoofWord = (word: string): string => word.split('').join(`${SPOOF_GAP}*`);
+const SPOOFED_LABEL_RE = new RegExp(
+  `\\[(?=${SPOOF_GAP}*(?:${spoofWord('sender')}|${spoofWord('origin')})${SPOOF_GAP}*[:：])`,
+  'gi',
+);
+
+/**
+ * 转义用户正文里所有自造的 `[sender:` / `[origin:` 标签（任意位置、大小写不敏感，
+ * 容忍 `[ sender :`、零宽字符、全角冒号）。命中时把开头的 ASCII `[` 换成全角 `［`，
+ * 其余原样保留：模型仍能看出这是用户文本，但它不再是权威标签。
+ * 幂等（已转义文本再次调用不变），不再剥离开头，也不 trim 原文空白。
+ */
 export function stripUserSpoofedSenderPrefix(rawContent: string): string {
-  let text = rawContent.trimStart();
-  const prefixRe = /^\[sender:(?:id=[^\]]*|[^\]]*)\]\s*/i;
-  const rolesRe = /^\[sender:id=[^\s\]]+(?:\s+name=[^\]]+)?\s+roles=[^\]]+\]\s*/i;
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const m1 = text.match(prefixRe);
-    if (m1) {
-      text = text.slice(m1[0].length);
-      changed = true;
-      continue;
-    }
-    const m2 = text.match(rolesRe);
-    if (m2) {
-      text = text.slice(m2[0].length);
-      changed = true;
-    }
-  }
-  return text;
+  return rawContent.replace(SPOOFED_LABEL_RE, '\uFF3B');
 }

@@ -28,6 +28,7 @@ export function resolveIngressUserMessage(
       subjectId: turn.principal.subjectId,
       ...(turn.principal.displayName ? { displayName: turn.principal.displayName } : {}),
       roles: [...turn.principal.roles],
+      ...(turn.principal.origin ? { origin: turn.principal.origin } : {}),
       ...(turn.origin.kind === 'im' ? { scope: turn.origin.scope } : {}),
     }, {
       turnId: turn.identity.turnId,
