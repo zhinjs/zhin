@@ -548,6 +548,33 @@ describe('console REST routes', () => {
     expect(demoResponse.status).toBe(403);
   });
 
+  it('serves the persisted trace archive read-only to full-scope tokens only (#728)', async () => {
+    const { createTurnTraceArchive, defaultTurnTraceDir } = await import('@zhin.js/agent/trace');
+    const archive = createTurnTraceArchive(defaultTurnTraceDir(projectRoot), { secrets: [] });
+    const base = {
+      version: 1, principal: undefined, model_calls: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      tool_calls: [], budget: { extensions: [], continuations: 0 }, subagent_tasks: [], subagents: [], timeline: [],
+      termination: { status: 'completed' }, dropped: 0,
+    } as const;
+    await archive.save({ ...base, turn_id: 'turn-a', session_key: 'qq:bot:private:alice', started_at: Date.now() - 1000, duration_ms: 10 } as never);
+    await archive.save({ ...base, turn_id: 'turn-b', session_key: 'qq:bot:group:g1', started_at: Date.now(), duration_ms: 20,
+      timeline: [{ at_ms: 1, kind: 'error', detail: 'token=sk-abcdefghijklmnopqrstu' }] } as never);
+    const { port } = await startHost({ projectRoot, withTokens: true });
+    const get = (path: string, token = 'full-token') => fetch(`http://127.0.0.1:${port}/api/agent/trace-archive/${path}`, { headers: { authorization: `Bearer ${token}` } });
+
+    const sessions = await (await get('sessions')).json() as { data: Array<{ session_key: string }> };
+    expect(sessions.data.map((s) => s.session_key)).toEqual(['qq:bot:group:g1', 'qq:bot:private:alice']);
+    const turns = await (await get('turns?sessionKey=qq%3Abot%3Aprivate%3Aalice')).json() as { data: Array<{ turn_id: string }> };
+    expect(turns.data.map((t) => t.turn_id)).toEqual(['turn-a']);
+    const detail = await get('turn?turnId=turn-b');
+    expect(detail.status).toBe(200);
+    expect(JSON.stringify(await detail.json())).not.toContain('sk-abcdefghijklmnopqrstu');
+    expect((await get('turn?turnId=missing')).status).toBe(404);
+    expect((await get('turns?since=not-a-time')).status).toBe(400);
+    expect((await get('sessions', 'demo-token')).status).toBe(403);
+    expect((await get('turn?turnId=turn-a', 'demo-token')).status).toBe(403);
+  });
+
   it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {
     await import('@zhin.js/agent/runtime');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));

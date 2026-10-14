@@ -143,9 +143,16 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
 }
 
 /** Multi-line report: failures first, then the trace needed to debug them. */
-export function formatEvalReport(definition: EvalCase, run: EvalRunRecord, failures: readonly EvalFailure[]): string {
+export function formatEvalReport(
+  definition: EvalCase,
+  run: EvalRunRecord,
+  failures: readonly EvalFailure[],
+  /** "Open this trace" lines from {@link persistEvalTraces} (#728). */
+  traceLinks: readonly string[] = [],
+): string {
   const lines = [`eval "${definition.id}" failed: ${definition.description}`];
   for (const failure of failures) lines.push(`  ✗ [${failure.assertion}] ${failure.message}`);
+  for (const link of traceLinks) lines.push(`  ↪ ${link}`);
   lines.push('  trace:');
   lines.push(`    model requests: ${run.modelRequests.length}`);
   for (const request of run.modelRequests) {
