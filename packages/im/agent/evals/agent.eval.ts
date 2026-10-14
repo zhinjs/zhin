@@ -25,6 +25,11 @@ describe('agent evals (scripted model)', () => {
       const failures = evaluateExpectations(definition, run);
       contextReport.push({ id: definition.id, passed: failures.length === 0, context_budget: run.traces[0]?.context_budget });
       if (failures.length > 0) throw new Error(formatEvalReport(definition, run, failures));
+      // Real-model semantic checks (#723) must hold for the scripted answer too.
+      const liveFailures = (definition.live?.checks(run) ?? []).filter((check) => !check.pass);
+      if (liveFailures.length > 0) {
+        throw new Error(`live checks fail on the scripted run of ${definition.id}:\n${liveFailures.map((c) => `- ${c.name}: ${c.detail ?? ''}`).join('\n')}`);
+      }
     });
   }
 

@@ -1,4 +1,4 @@
-import { defineEvalCase } from '../framework/index.js';
+import { defineEvalCase, live } from '../framework/index.js';
 
 export default defineEvalCase({
   id: 'group-member-no-outbound',
@@ -12,4 +12,5 @@ export default defineEvalCase({
     { text: '群成员发起的对话暂不支持向其他会话发消息。' },
   ],
   expect: { toolsNotCalled: ['send_private_message'], outboundContains: ['暂不支持向其他会话发消息'], modelSteps: 2 },
+  live: { checks: (run) => [live.notExecuted(run, 'send_private_message'), live.neverOffered(run, 'send_private_message'), live.turnsCompleted(run)] },
 });
