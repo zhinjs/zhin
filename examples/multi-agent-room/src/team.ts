@@ -18,7 +18,10 @@ import {
   RoomGuardRejectedError,
   RoomTaskAuthorizationError,
   createRoomBus,
+  createRoomEventSequencer,
   createRoomGuards,
+  createRoomRoleAssignAuthorizer,
+  createRoomRoleAuthorizer,
   createRoomSendLimiter,
   createRoomTaskAuthorizer,
   createRoomTaskService,
@@ -30,7 +33,7 @@ import {
   type RoomSendLimiter,
   type RoomSendLimiterOptions,
   type RoomTaskAuthorizer,
-  type RoomTaskCommand,
+  type RoomTaskEvent,
   type RoomTaskService,
   type RoomTaskView,
 } from '@zhin.js/workroom';
@@ -162,41 +165,8 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
   const authorizer = createRoomTaskAuthorizer({
     guards,
     actorOf,
-    authorizeAssign: (_room, command) => {
-      const by = room.memberByAgent(command.by);
-      if (!by) return `assign: ${command.by} is not a member of room ${roomId}`;
-      if (by !== room.coordinator) return 'assign: only the coordinator may assign';
-      if (!room.memberByAgent(command.assignee)) return `assign: ${command.assignee} is not a member`;
-      return undefined;
-    },
-    next: (target: string, command: RoomTaskCommand) => {
-      if (target !== roomId) return `unknown room ${target}`;
-      switch (command.type) {
-        case 'create': {
-          if (!actorOf(command.by)) return `create: unknown actor ${command.by}`;
-          if (command.assignee !== undefined && !room.memberByAgent(command.assignee)) {
-            return `create: ${command.assignee} is not a member`;
-          }
-          return undefined;
-        }
-        case 'start':
-        case 'block':
-        case 'complete':
-          return room.memberByAgent(command.by) ? undefined : `${command.type}: ${command.by} is not a member of room ${roomId}`;
-        case 'handoff': {
-          const from = room.memberByAgent(command.by);
-          if (!from) return `handoff: ${command.by} is not a member of room ${roomId}`;
-          const to = room.memberByAgent(command.to);
-          if (!to) return `handoff: ${command.to} is not a member of room ${roomId}`;
-          if (!from.role.handoffTo?.includes(to.roleName)) {
-            return `handoff: role ${from.roleName} may not hand off to role ${to.roleName}`;
-          }
-          return undefined;
-        }
-        default:
-          return undefined; // assign / cancel were checked by the built-ins above
-      }
-    },
+    authorizeAssign: createRoomRoleAssignAuthorizer({ room: room.definition, roomId }),
+    next: createRoomRoleAuthorizer({ room: room.definition, roomId, actorOf }),
   });
 
   const journal = new MemoryRoomTaskJournal();
@@ -258,6 +228,8 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     // A human cancel while the model was running: nothing is said and nothing is handed off.
     if (signal.aborted) return;
     await speak(agent, output.reply, taskId);
+    // A human interrupt while speaking: do not hand off, complete or block.
+    if (signal.aborted) return;
     const next = output.next;
     if (!next) return;
 
@@ -297,9 +269,33 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
     const delivery = await bus.handoff({
       id: handoffEventId, room: roomId, from: agent, to: next.to, text: next.note, taskRef: taskId, at: now(),
     });
-    // The receiving member is woken even when the visible projection failed; the group just does not see it.
+    // The handoff event is already journaled (assignee is next.to). A failed projection means the group never
+    // saw the handoff, so stop the chain and ask the human instead of silently continuing.
     if (!delivery.projected) {
-      fail({ kind: 'send_rejected', roomId, agent, taskId, detail: delivery.projectionError ?? delivery.rejection ?? 'handoff projection failed' });
+      const detail = delivery.projectionError ?? delivery.rejection ?? 'handoff projection failed';
+      fail({ kind: 'send_rejected', roomId, agent, taskId, detail });
+      await escalateAfterHandoff(agent, next.to, current, detail);
+    }
+  };
+
+  /**
+   * After a journaled handoff whose projection failed: the new assignee (status `assigned`) is started and
+   * blocked on its behalf (only the assignee may block), then the original speaker asks the human. The woken
+   * turn finds the Task blocked and does nothing. Failures are recorded, never thrown out of the turn.
+   */
+  const escalateAfterHandoff = async (from: string, to: string, task: RoomTaskView, detail: string): Promise<void> => {
+    const reason = `handoff projection failed (${detail})`;
+    try {
+      await taskService.execute(roomId, { type: 'start', commandId: nextCommandId(task.id, 'start'), taskId: task.id, by: to });
+      await taskService.execute(roomId, { type: 'block', commandId: nextCommandId(task.id, 'block'), taskId: task.id, by: to, reason });
+    } catch (error) {
+      fail({ kind: 'turn_error', roomId, agent: to, taskId: task.id, error, detail: error instanceof Error ? error.message : String(error) });
+      return;
+    }
+    try {
+      await askHuman(from, task, reason);
+    } catch (error) {
+      fail({ kind: 'turn_error', roomId, agent: from, taskId: task.id, error, detail: error instanceof Error ? error.message : String(error) });
     }
   };
 
@@ -325,22 +321,32 @@ export function createRoomTeam(options: RoomTeamOptions): RoomTeam {
       await askHuman(agent, task, `回合未能执行（${error instanceof Error ? error.message : String(error)}）`).catch(() => undefined);
     }));
 
-  // Task events -> sequence of each handoff. Task subscribers are dispatched after the Room serial section and
-  // may interleave, so wake-ups are ordered / de-duplicated by `event.sequence` (review round 31 nit).
-  const sequenceByHandoff = new Map<string, number>();
-  const wokenThrough = new Map<string, number>();
+  // Task subscribers are dispatched after the Room serial section and may interleave, so every Task event of the
+  // Room is fed through a sequencer (ordered, duplicates dropped). A handoff wakes its receiver once it has been
+  // released in order AND its Bus event has arrived; either may come first.
+  const sequencer = createRoomEventSequencer<RoomTaskEvent>();
+  const releasedHandoffs = new Set<string>();
+  const pendingWakes = new Map<string, { to: string; taskRef: string; text: string }>();
+  const wake = (id: string): void => {
+    const pending = pendingWakes.get(id);
+    if (!pending || !releasedHandoffs.has(id)) return;
+    pendingWakes.delete(id);
+    releasedHandoffs.delete(id);
+    void queueTurn(pending.to, pending.taskRef, pending.text);
+  };
   const unsubscribeTasks = taskService.subscribe((event) => {
-    if (event.type === 'task.handoff') sequenceByHandoff.set(event.eventId, event.sequence);
+    for (const ready of sequencer.accept(event)) {
+      if (ready.type !== 'task.handoff') continue;
+      releasedHandoffs.add(ready.eventId);
+      wake(ready.eventId);
+    }
   });
   // The Bus subscriber only wakes the receiving member. It never awaits the lane: the woken turn is queued
   // behind the running one (awaiting runExclusive of the same Room from inside a turn would deadlock).
   const unsubscribeBus = bus.subscribe((event) => {
-    const sequence = sequenceByHandoff.get(event.id);
-    if (sequence === undefined || event.taskRef === undefined) return; // only task.handoff-backed events wake anyone
-    sequenceByHandoff.delete(event.id);
-    if (sequence <= (wokenThrough.get(event.room) ?? -1)) return; // duplicate or stale
-    wokenThrough.set(event.room, sequence);
-    void queueTurn(event.to, event.taskRef, event.text);
+    if (event.taskRef === undefined) return; // only task.handoff-backed events wake anyone
+    pendingWakes.set(event.id, { to: event.to, taskRef: event.taskRef, text: event.text });
+    wake(event.id);
   });
 
   return {

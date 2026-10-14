@@ -16,7 +16,7 @@ import {
 import { defineMiddleware } from 'zhin.js/middleware';
 import { ROOM_ID, buildRoomDefinition } from '../src/room.js';
 import { createRoomTeam, type RoomTeamOptions, type ScriptedMember } from '../src/team.js';
-import { createSandboxImFixture, payloadText } from './support/sandbox-im.js';
+import { createSandboxImFixture, payloadText, type SandboxImFixture } from './support/sandbox-im.js';
 
 /** Fake clock: `sleep` advances time instead of waiting. */
 function createClock(start = 1_000_000) {
@@ -36,14 +36,37 @@ function deferred<T = void>() {
 
 type TeamOverrides = Partial<Omit<RoomTeamOptions, 'registry' | 'roomId' | 'outbound' | 'requester' | 'accountOf'>>;
 
+type OutboundRequest = Parameters<SandboxImFixture['im']['send']>[0];
+
 async function setup(options: { room?: ReturnType<typeof buildRoomDefinition>; team?: TeamOverrides } = {}) {
   const fixture = await createSandboxImFixture(options.room ? { room: options.room } : {});
   const clock = createClock();
+  // Test switches in front of the shared outbound service (the send chain itself is untouched):
+  // `rejectWhen` makes a matching send come back rejected; `holdWhen` blocks a matching send until released.
+  const switches: {
+    rejectWhen?: (request: OutboundRequest) => boolean;
+    holdWhen?: (request: OutboundRequest) => boolean;
+    held: ReturnType<typeof deferred>;
+    release: ReturnType<typeof deferred>;
+  } = { held: deferred(), release: deferred() };
+  const outbound: Pick<SandboxImFixture['im'], 'send'> = {
+    send: async (request) => {
+      if (switches.rejectWhen?.(request)) {
+        return { status: 'rejected', failure: { code: 'test_rejected', message: 'rejected by test', retryable: false } } as never;
+      }
+      if (switches.holdWhen?.(request)) {
+        switches.holdWhen = undefined;
+        switches.held.resolve();
+        await switches.release.promise;
+      }
+      return fixture.im.send(request);
+    },
+  };
   const { limiter: limiterOverrides, ...teamOverrides } = options.team ?? {};
   const team = createRoomTeam({
     registry: fixture.registry,
     roomId: ROOM_ID,
-    outbound: fixture.im,
+    outbound,
     requester: fixture.root,
     accountOf: fixture.accountOf,
     now: clock.now,
@@ -58,7 +81,7 @@ async function setup(options: { room?: ReturnType<typeof buildRoomDefinition>; t
   }));
   const say = (content: string, sender = 'alice') => fixture.deliverAll(undefined, { content, sender });
   const close = async () => { team.dispose(); await fixture.close(); };
-  return { ...fixture, team, clock, spoken, say, close };
+  return { ...fixture, team, clock, spoken, say, close, switches };
 }
 
 const eventTypes = (events: readonly RoomTaskEvent[]) => events.map((event) => event.type);
@@ -311,6 +334,78 @@ describe('Room guards', () => {
   });
 });
 
+describe('Handoff projection failure and mid-speak interrupt', () => {
+  it('escalates to the human when the handoff projection is rejected, and the receiver does nothing', async () => {
+    let researcherRuns = 0;
+    const s = await setup({
+      team: { scripts: { researcher: () => { researcherRuns += 1; return { reply: 'should not run' }; } } },
+    });
+    try {
+      // reject only the coordinator's projection of the handoff (a mention of the researcher)
+      s.switches.rejectWhen = (request) => {
+        const text = payloadText(request.content);
+        return s.nameOf(request.conversation.endpoint.id) === 'coordinator' && text.includes(`@${s.accounts.researcher}`);
+      };
+      await s.say('帮我写一篇关于 X 的简报');
+      await s.team.idle();
+
+      const failure = s.team.failures.find((f) => f.kind === 'send_rejected');
+      expect(failure).toMatchObject({ agent: 'coordinator', taskId: 'task-1', detail: 'test_rejected' });
+      const task = await s.team.taskService.get(ROOM_ID, 'task-1');
+      expect(task).toMatchObject({ status: 'blocked', assignee: 'researcher', handoffCount: 1 });
+      expect(task?.blockedReason).toContain('handoff projection failed');
+      expect(eventTypes(await s.team.journal.read(ROOM_ID))).toEqual([
+        'task.created', 'task.assigned', 'task.started', 'task.handoff', 'task.started', 'task.blocked',
+      ]);
+      const last = s.spoken().at(-1)!;
+      expect(last.from).toBe('coordinator');
+      expect(last.text).toMatch(/^@alice 需要你介入/);
+      expect(researcherRuns).toBe(0);
+      expect(s.spoken().some((m) => m.from === 'researcher' || m.from === 'writer')).toBe(false);
+    } finally {
+      await s.close();
+    }
+  });
+
+  for (const directive of ['handoff', 'complete'] as const) {
+    it(`does not ${directive} when the human interrupts while the reply is being spoken`, async () => {
+      let researcherRuns = 0;
+      const s = await setup({
+        team: {
+          scripts: {
+            coordinator: () => ({
+              reply: '先说一句',
+              next: directive === 'handoff'
+                ? { type: 'handoff', to: 'researcher', note: '请调研' }
+                : { type: 'complete', result: '做完了' },
+            }),
+            researcher: () => { researcherRuns += 1; return { reply: 'should not run' }; },
+          },
+        },
+      });
+      try {
+        s.switches.holdWhen = (request) => s.nameOf(request.conversation.endpoint.id) === 'coordinator';
+        await s.say('帮我写一篇关于 X 的简报');
+        await s.switches.held.promise;
+        const cancelled = await s.team.cancel('task-1', { accountId: 'alice' });
+        expect(cancelled.room.cancelledRunning).toBe(true);
+        s.switches.release.resolve();
+        await s.team.idle();
+
+        const types = eventTypes(await s.team.journal.read(ROOM_ID));
+        expect(types).not.toContain('task.handoff');
+        expect(types).not.toContain('task.completed');
+        expect(researcherRuns).toBe(0);
+        expect(s.spoken().map((m) => m.from)).toEqual(['coordinator']);
+        expect((await s.team.taskService.get(ROOM_ID, 'task-1'))?.status).toBe('in_progress');
+      } finally {
+        s.switches.release.resolve();
+        await s.close();
+      }
+    });
+  }
+});
+
 describe('Account-level send limiting', () => {
   it('counts replies and Bus projections of one account on the same limiter', async () => {
     const s = await setup({
@@ -324,9 +419,11 @@ describe('Account-level send limiting', () => {
       const bySpeaker = (name: string) => s.spoken().filter((m) => m.from === name);
       expect(bySpeaker('researcher')).toHaveLength(1);
       expect(bySpeaker('coordinator')).toHaveLength(2);
-      expect(s.team.failures.filter((f) => f.kind === 'send_rejected' && f.agent === 'researcher')).toHaveLength(1);
-      // the writer is still woken and the Task completes: the group merely misses one projection
-      expect((await s.team.taskService.get(ROOM_ID, 'task-1'))?.status).toBe('done');
+      // the projection is refused, so the chain stops and the Task is blocked; the researcher's Bot is out of
+      // slots, so the follow-up ask to the human is refused too (both recorded, nothing thrown)
+      expect(s.team.failures.filter((f) => f.kind === 'send_rejected' && f.agent === 'researcher')).toHaveLength(2);
+      expect(await s.team.taskService.get(ROOM_ID, 'task-1')).toMatchObject({ status: 'blocked', assignee: 'writer' });
+      expect(bySpeaker('writer')).toHaveLength(0);
     } finally {
       await s.close();
     }

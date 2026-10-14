@@ -1,4 +1,5 @@
 import { rootPluginId } from '@zhin.js/plugin-runtime';
+import { defineMiddleware } from '@zhin.js/core/feature/middleware';
 import { createRateLimitedOutbound, createRoomSendLimiter, RoomSendRateLimitedError } from '../../src/room/room-send-limiter.js';
 import { createRoomBus } from '../../src/room/room-bus.js';
 import { registryOf, ACCOUNTS } from './room-fixtures.js';
@@ -204,6 +205,17 @@ describe('createRoomSendLimiter (shared instance)', () => {
     await def.handle({ input: envelope('e2') }, async () => { calls.push('b'); });
     expect(sleeps).toEqual([1000]);
     expect(calls).toEqual(['a', 'b']);
+  });
+
+  it('outboundMiddleware() is accepted by core defineMiddleware and handles one send', async () => {
+    // Type compatibility is covered by the workroom build / examples compile; tests are not in the type-check scope.
+    const { limiter, sleeps } = shared();
+    const definition = defineMiddleware(limiter.outboundMiddleware());
+    expect(definition.target).toBe('outbound');
+    const calls: string[] = [];
+    await definition.handle({ input: envelope('e1') } as never, async () => { calls.push('next'); });
+    expect(calls).toEqual(['next']);
+    expect(sleeps).toEqual([]);
   });
 
   it('outboundMiddleware() refuses over the limit and does not call next', async () => {

@@ -196,6 +196,7 @@ Task 状态用小型事件溯源：`created → assigned → in_progress → don
 - 命令带 `commandId` 幂等键；同 id 同内容重放不产生新事件，同 id 不同内容报冲突。replay 重新校验每条事件的转移合法性，任何违例 fail closed。
 - 一个 Room 一条事件流（sequence 从 0 连续，CAS 追加）；DB 表 `room_task_events`（行含 canonical JSON、event digest 与 row binding digest，损坏行读写都拒绝）。表尚未并入 `defineWorkroomDatabaseModels`，由 C1 接线。
 - 成员是否在 Room 内、`role.handoffTo` 是否允许等授权不在状态机内，由调用方通过 `authorize` 钩子（C1 工具层 / Bus）负责；B3 也不接 RoomBus、不投影群消息，handoff 的群内可见投影仍由 room-bus 负责，C1 再组合。
+- RoomTaskService 的订阅者在 Room 串行区之外被派发，可能交错；订阅者须按 event.sequence 排序或去重（可复用 createRoomEventSequencer）。
 
 ### 3.6 与 Generation Projection 里程碑的关系
 

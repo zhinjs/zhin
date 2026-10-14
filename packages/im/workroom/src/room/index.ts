@@ -11,3 +11,4 @@ export * from './room-task-service.js';
 export * from './room-guards.js';
 export * from './room-task-authorizer.js';
 export * from './room-send-limiter.js';
+export * from './room-event-sequencer.js';

@@ -98,7 +98,18 @@ sidebar: false
 
 ## 阶段 C：切换与清理
 
-- [ ] C1 检查 Generation Projection / Tool Runtime 里程碑的状态。已经可用的话，把成员 turn 接到 generation 上，把 handoff / task 工具接到 Tool Runtime 上；还不可用的话，标记为 `阻塞` 并写明缺什么，继续做 C2
+- [ ] **阻塞** C1 检查 Generation Projection / Tool Runtime 里程碑的状态。已经可用的话，把成员 turn 接到 generation 上，把 handoff / task 工具接到 Tool Runtime 上；还不可用的话，标记为 `阻塞` 并写明缺什么，继续做 C2
+  - 阻塞（2026-10-15 检查）：部件已有（generation-owned ToolIndex / SkillIndex、CapabilityIngress、AgentRuntime + FullAgentTurnEngine、`TurnToolRuntime`、`turnJournalStoreToken`），但缺三样：① 没有 Room 的 turn 入口——TurnRequest 的 execution profile 只有 IM 与 `schedule`（`full-agent-turn-engine.ts:64/368/424`），需在 agent 包新增 `room` profile（principal / origin / 会话地址、取消信号与 Room 事件绑定），属跨 agent / core 的公开契约变更，方案未定义；② `room_task_events` 独立 journal 与 `turnJournalStoreToken` 的 JournalStore 没有桥接（方案 §3.6 要求 Room 事件流消费同一个持久化 Journal），也未确认存在持久化 JournalStore 实现；③ Room 工具（handoff / block / complete / assign）走 `tools/*.ts` 所需的 Room token（RoomTaskService、RoomBus、guards）与 workroom 的 `definePlugin` 接线尚不存在，`room_task_events` 也未并入 `defineWorkroomDatabaseModels`
+  - 选项：A. 等里程碑收口后再做 C1；B. 先做与里程碑无关的 C1a（已新增，见下）；C. 授权在 agent 包新增 `room` execution profile 并做 Room 事件流 → JournalStore 的桥，作为 C1 的一部分（范围大、改已发布包公开 API，需维护者确认契约）。默认按 A + B 推进
+- [x] C1a C1 中与里程碑无关、现在可做的部分（全部在 `packages/im/workroom` 与 `examples/multi-agent-room` 内）：
+  - `examples/multi-agent-room/src/team.ts:296` `bus.handoff` 返回 rejection（`!delivery.projected`）时改为 escalate：block 该 Task 并 @人类（注意此时 assignee 已是 `next.to`，block 的 `by` 要符合 `room-task.ts` 的转移校验），保留 `send_rejected` 记录；补用例
+  - `team.ts:259` 在 `speak()` 之后、handoff / complete 之前再检查 `signal.aborted`，为真则不再推进；补“speak 期间打断”用例，断言没有 `task.handoff` / `task.completed`，下一个成员未被唤醒
+  - `room-task-authorizer.ts` 新增基于 RoomDefinition 的角色授权 helper（作为 `next`）：start / block / complete 要求 `by` 是成员；handoff 要求 `to` 在 `role.handoffTo` 内且是成员；create 的 assignee 必须是成员；assign 只按角色限制（不改 `authorize` 签名）；抛错视为拒绝；更新头注释与测试
+  - `room-send-limiter.test.ts:198` 补类型兼容用例：`defineMiddleware(limiter.outboundMiddleware())` 能通过类型检查并实际处理一次
+  - 订阅者按 `event.sequence` 排序 / 去重的可复用 helper（乱序缓冲、重复丢弃），示例改用它；方案 §3.5 补一句“订阅者须按 sequence 排序或去重”；补并发 execute 用例
+  - 新增公开导出需 changeset（patch）
+  - 2026-10-15 · 「feat(workroom): Room 角色授权、事件排序 helper 与示例 handoff 失败升级」· 新增 `createRoomRoleAuthorizer` / `createRoomRoleAssignAuthorizer` 与 `room-event-sequencer.ts`（乱序缓冲、重复丢弃），示例 handoff 投影失败改为 block 并 @人类、speak 后复查打断，方案 §3.5 补排序要求，patch changeset；196 个 room / 示例测试通过
+- [ ] C1a-1 处理第 36 轮审查意见（涉及 fail-closed，所以新建条目）：`packages/im/workroom/src/room/room-task-authorizer.ts:175` `createRoomRoleAssignAuthorizer` 拿到 RoomEntry 且没有 roomId 时不比对 `entry.id`，对任何 Room 的 assign 放行（与 `createRoomRoleAuthorizer:135` 不一致），改为拒绝 `unknown room` 并修正 `tests/room/room-task-authorizer.test.ts:199`；`examples/multi-agent-room/src/team.ts:289` `escalateAfterHandoff` 中代 `to` 执行 start / block 抛错时只记 `turn_error`，人类没被询问且排队的唤醒仍会让接收者正常跑 turn（handoff 投影失败后链路静默继续），改为失败时仍 `askHuman`，并丢弃该 handoff 的待唤醒或让 `runMemberTurn` 跳过投影失败的 Task，补强制 start / block 失败的用例；`room-send-limiter.test.ts:211` 的类型兼容用例实际不在 type-check 范围内且用 `as never`，把 `defineMiddleware(limiter.outboundMiddleware())` 放到会被类型检查的位置（如示例 src 的 `satisfies`），并注明为何从 `@zhin.js/core/feature/middleware` 子路径导入。顺带 Nit：`createRoomRoleAuthorizer:159` 的 `default` 分支只对 `assign` / `cancel` 返回 undefined，未知命令拒绝；`team.ts:329` `pendingWakes` / `releasedHandoffs` 在 `dispose()` 中清空；`room-event-sequencer.test.ts:84` 断言 raw 中 0..15 各出现一次或强制交错
 - [ ] C2 默认切到新 Room，配置中提供选择开关
 - [ ] C3 删除 legacy 迁移代码（`legacy-*-migration`、`agent-legacy-payloads` 命令），已确认没有线上数据
 - [ ] C4 移出主路径：remote dispatch / callback / issuance（冻结，不做 A2A）、portfolio、scheduler / preemption、data-governance、overlay-pack / github / self-delivery；能删就删，不能删就移到可选插件
@@ -333,6 +344,15 @@ sidebar: false
 - Nit（只记录）：示例 README 中旧机制路径未写明所属包（应为 `packages/im/workroom/src/...`），且未说明 `pnpm dev` 现在启动三个互相独立的 Bot、协作只能通过测试看到
 - Nit（只记录）：`multi-agent-room-contract.test.ts:25` owner 仍为 `planner-user`
 
+### 第 36 轮（2026-10-15，审查 C1a）
+
+- 无 Blocking
+- Should fix（fail-closed）：`room-task-authorizer.ts:175` assign helper 无 roomId 时不校验 Room → C1a-1
+- Should fix（fail-closed）：`team.ts:289` 升级时 start / block 失败只记 `turn_error`，人类未被询问且排队唤醒仍执行 → C1a-1
+- Should fix：`room-send-limiter.test.ts:211` 类型兼容用例不在 type-check 范围内 → C1a-1
+- Nit：`team.ts:285` 升级时合成的 `task.started` 让 journal 显示接收者开始了 Task，应在 reason 或注释注明是为升级合成（只记录）
+- Nit：`team.ts:329` 待唤醒集合不在 `dispose()` 清空；`room-event-sequencer.test.ts:84` 未证明确实发生了交错；`room-task-authorizer.ts:159` 未知命令放行 → 并入 C1a-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -372,3 +392,4 @@ sidebar: false
 - 2026-10-15 03:35 定时运行：rebase 到最新 origin/main（2 个提交；4 处冲突：`activate-ai-database-storage.ts` 保留 main 的语义记忆激活、去掉已迁出的 Workroom 激活；`api-surface.json` 保留 main 新增的 `detached-task` 导出；`ingress-route.ts` 同时保留可选 `workroom` 与 main 的 `detachedTasks`；`console/api.test.ts` 两个用例都保留），install / build / type-check / 173 个相关测试 / API 快照 / check:architecture 通过；完成 B4-1（4 个 agent，约 5.7 分钟，workroom build、type-check、159 个 room 测试 + 1232 个 workroom 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix 涉及 fail-closed，连同 3 个 Nit 新增为 B4-2）。备注：`scriptPath` 指向本次会话 scratchpad 中的脚本副本，内容未改
 - 2026-10-15 同一次定时运行：完成 B4-2（4 个 agent，约 3.1 分钟，workroom build、type-check、46 个相关测试 + 1236 个 workroom 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，1 个 Nit 只记录）
 - 2026-10-15 定时运行：rebase 到最新 origin/main（40 个本分支提交无冲突，基线 a6ea7b446），install / build 通过；完成 B5（4 个 agent，约 15.7 分钟，workroom / 示例 build、type-check、16 个示例测试 + 163 个 room 测试、check:architecture、check:harness-paths、API 快照、plugin-runtime API、eslint、**`pnpm check:all`** 通过，审查无 Blocking / Should fix，4 个 Nit 只记录）。阶段 B 全部完成。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改；护栏把从 scheduled-tasks 目录 `cp` 脚本误判为修改外部路径
+- 2026-10-15 05:35 定时运行：origin/main 无新提交，install / build 通过；C1 检查后标为阻塞（缺 Room turn 入口 / execution profile、Room 事件流与 JournalStore 的桥、Room 工具 token 接线，选项见条目），拆出 C1a；完成 C1a（4 个 agent，约 6.5 分钟，workroom build、type-check、196 个 room / 示例测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，3 个 Should fix 涉及 fail-closed / 条目要求，连同 3 个 Nit 新增为 C1a-1）。备注：`scriptPath` 指向本会话 workflows 目录中的脚本副本可用，内容未改

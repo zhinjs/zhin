@@ -1,8 +1,9 @@
 import { createRoomGuards, type GuardActor } from '../../src/room/room-guards.js';
-import { createRoomTaskAuthorizer } from '../../src/room/room-task-authorizer.js';
+import { createRoomRoleAssignAuthorizer, createRoomRoleAuthorizer, createRoomTaskAuthorizer } from '../../src/room/room-task-authorizer.js';
 import { MemoryRoomTaskJournal } from '../../src/room/room-task-journal.js';
 import { RoomTaskAuthorizationError, createRoomTaskService } from '../../src/room/room-task-service.js';
 import type { RoomTaskEvent } from '../../src/room/room-task.js';
+import { roomDefinition, registryOf } from './room-fixtures.js';
 
 const actors: Record<string, GuardActor> = {
   owner: { origin: 'human', accountId: 'u-owner' },
@@ -105,5 +106,113 @@ describe('createRoomTaskAuthorizer', () => {
     const sorted = [...sequences].sort((a, b) => a - b);
     expect(sorted).toEqual(sorted.map((_, i) => sorted[0] + i));
     expect(sorted).toHaveLength(4);
+  });
+});
+
+describe('createRoomRoleAuthorizer / createRoomRoleAssignAuthorizer', () => {
+  const human: GuardActor = { origin: 'human', accountId: 'u-owner' };
+  function roleSetup(room = roomDefinition(), extra: { actorOf?: (by: string) => GuardActor | undefined } = {}) {
+    const journal = new MemoryRoomTaskJournal();
+    let ids = 0;
+    const guards = createRoomGuards({ sensitiveAccounts: ['u-owner'] });
+    const service = createRoomTaskService({
+      journal,
+      newId: () => `e${ids++}`,
+      now: () => 1,
+      authorize: createRoomTaskAuthorizer({
+        guards,
+        actorOf: (by) => (by === 'owner' ? human : undefined),
+        authorizeAssign: createRoomRoleAssignAuthorizer({ room, roomId: 'r' }),
+        next: createRoomRoleAuthorizer({ room, roomId: 'r', ...extra }),
+      }),
+    });
+    return { service, journal };
+  }
+  const make = (service: ReturnType<typeof roleSetup>['service'], by = 'human:alice', assignee: string | undefined = 'lead', taskId = 't') =>
+    service.execute('r', { type: 'create', commandId: `c-${taskId}`, taskId, by, title: 'x', ...(assignee !== undefined ? { assignee } : {}) });
+  const refused = (promise: Promise<unknown>) => expect(promise).rejects.toBeInstanceOf(RoomTaskAuthorizationError);
+
+  it('lets members and humans create, and members work and hand off along handoffTo', async () => {
+    const { service } = roleSetup();
+    await make(service);
+    await service.execute('r', { type: 'start', commandId: 's1', taskId: 't', by: 'lead' });
+    await service.execute('r', { type: 'handoff', commandId: 'h1', taskId: 't', by: 'lead', to: 'res' });
+    await service.execute('r', { type: 'start', commandId: 's2', taskId: 't', by: 'res' });
+    await service.execute('r', { type: 'handoff', commandId: 'h2', taskId: 't', by: 'res', to: 'wri' });
+    await service.execute('r', { type: 'start', commandId: 's3', taskId: 't', by: 'wri' });
+    await service.execute('r', { type: 'complete', commandId: 'x1', taskId: 't', by: 'wri', result: 'ok' });
+    expect((await service.get('r', 't'))?.status).toBe('done');
+    await make(service, 'wri', undefined, 't2'); // a member may create as well
+  });
+
+  it('refuses non-members for create / start / block / complete', async () => {
+    const { service, journal } = roleSetup();
+    await refused(make(service, 'mallory', 'lead', 'a'));
+    await refused(make(service, 'human:alice', 'mallory', 'b'));
+    await refused(make(service, 'human:', 'lead', 'c'));
+    await make(service);
+    const before = (await journal.read('r')).length;
+    await refused(service.execute('r', { type: 'start', commandId: 's', taskId: 't', by: 'mallory' }));
+    await service.execute('r', { type: 'start', commandId: 's-ok', taskId: 't', by: 'lead' });
+    await refused(service.execute('r', { type: 'block', commandId: 'b', taskId: 't', by: 'mallory', reason: 'x' }));
+    await refused(service.execute('r', { type: 'complete', commandId: 'k', taskId: 't', by: 'human:alice', result: 'x' }));
+    expect(await journal.read('r')).toHaveLength(before + 1);
+  });
+
+  it('refuses a handoff outside handoffTo, to a non-member, from a role without handoffTo', async () => {
+    const { service, journal } = roleSetup();
+    await make(service, 'human:alice', 'wri');
+    await service.execute('r', { type: 'start', commandId: 's', taskId: 't', by: 'wri' });
+    const before = (await journal.read('r')).length;
+    await refused(service.execute('r', { type: 'handoff', commandId: 'h1', taskId: 't', by: 'wri', to: 'res' })); // writer: no handoffTo
+    await refused(service.execute('r', { type: 'handoff', commandId: 'h2', taskId: 't', by: 'mallory', to: 'res' }));
+    expect(await journal.read('r')).toHaveLength(before);
+
+    const second = roleSetup();
+    await make(second.service, 'human:alice', 'res');
+    await second.service.execute('r', { type: 'start', commandId: 's', taskId: 't', by: 'res' });
+    await refused(second.service.execute('r', { type: 'handoff', commandId: 'h3', taskId: 't', by: 'res', to: 'lead' })); // not in handoffTo
+    await refused(second.service.execute('r', { type: 'handoff', commandId: 'h4', taskId: 't', by: 'res', to: 'mallory' }));
+  });
+
+  it('restricts assign to the coordinator and member assignees; no coordinator refuses all', async () => {
+    const { service } = roleSetup();
+    await make(service);
+    await refused(service.execute('r', { type: 'assign', commandId: 'a1', taskId: 't', by: 'res', assignee: 'wri' }));
+    await refused(service.execute('r', { type: 'assign', commandId: 'a2', taskId: 't', by: 'human:alice', assignee: 'wri' }));
+    await refused(service.execute('r', { type: 'assign', commandId: 'a3', taskId: 't', by: 'lead', assignee: 'mallory' }));
+    await service.execute('r', { type: 'assign', commandId: 'a4', taskId: 't', by: 'lead', assignee: 'res' });
+    expect((await service.get('r', 't'))?.assignee).toBe('res');
+
+    const { service: leaderless } = roleSetup(roomDefinition({ coordinator: undefined }));
+    await make(leaderless);
+    for (const by of ['lead', 'res']) {
+      await refused(leaderless.execute('r', { type: 'assign', commandId: `n-${by}`, taskId: 't', by, assignee: 'wri' }));
+    }
+  });
+
+  it('refuses commands for another room id and accepts a registry entry', async () => {
+    const entry = registryOf(roomDefinition(), 'dev').room('dev')!;
+    const authorize = createRoomRoleAuthorizer({ room: entry });
+    const base = { commandId: 'c', taskId: 't', at: 1 } as const;
+    expect(authorize('dev', { ...base, type: 'start', by: 'lead' })).toBeUndefined();
+    expect(authorize('other', { ...base, type: 'start', by: 'lead' })).toBe('unknown room other');
+    expect(createRoomRoleAssignAuthorizer({ room: entry })('other', { ...base, type: 'assign', by: 'lead', assignee: 'res' })).toBeUndefined();
+    expect(createRoomRoleAuthorizer({ room: roomDefinition(), roomId: 'r' })('x', { ...base, type: 'start', by: 'lead' })).toBe('unknown room x');
+  });
+
+  it('fails closed when the room or actorOf throws, leaving the journal untouched', async () => {
+    const broken = roomDefinition();
+    const { service, journal } = roleSetup(broken);
+    await make(service);
+    const before = (await journal.read('r')).length;
+    Object.defineProperty(broken, 'members', { get() { throw new Error('members down'); } });
+    await refused(service.execute('r', { type: 'start', commandId: 's', taskId: 't', by: 'lead' }));
+    await refused(service.execute('r', { type: 'assign', commandId: 'a', taskId: 't', by: 'lead', assignee: 'res' }));
+    expect(await journal.read('r')).toHaveLength(before);
+
+    const throwing = roleSetup(roomDefinition(), { actorOf: () => { throw new Error('actor down'); } });
+    await refused(make(throwing.service));
+    expect(await throwing.journal.read('r')).toHaveLength(0);
   });
 });
