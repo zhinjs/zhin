@@ -59,6 +59,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('插件创作', [
     { text: 'definePlugin 全景', link: '/authoring/define-plugin' },
     { text: '插件完整交付', link: '/authoring/plugin-delivery' },
+    { text: '本地联调指南', link: '/authoring/local-dev' },
     { text: '约定目录', link: '/authoring/conventions' },
     { text: '适配器开发', link: '/authoring/adapters' },
     { text: '命令', link: '/authoring/commands' },
