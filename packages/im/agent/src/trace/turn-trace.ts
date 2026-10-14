@@ -102,7 +102,9 @@ export interface TurnTrace {
 /** Facts that are not TurnEvents but belong in the trace. */
 export type TurnTraceNote =
   | Readonly<{ kind: 'budget_extended'; from: number; to: number }>
-  | Readonly<{ kind: 'continuation'; index: number }>;
+  | Readonly<{ kind: 'continuation'; index: number }>
+  /** How the turn was admitted behind other turns of its session (#725). */
+  | Readonly<{ kind: 'admission'; queued_ms: number; merged_messages: number; superseded_previous: boolean }>;
 
 export interface TurnTraceInit {
   readonly turnId: string;
@@ -193,9 +195,11 @@ export class TurnTraceCollector {
     if (note.kind === 'budget_extended') {
       this.#extensions.push(Object.freeze({ from: note.from, to: note.to, at_ms: at }));
       this.#addTimeline('budget_extended', `${note.from} → ${note.to} steps`);
-    } else {
+    } else if (note.kind === 'continuation') {
       this.#continuations = Math.max(this.#continuations, note.index);
       this.#addTimeline('continuation', `#${note.index}`);
+    } else {
+      this.#addTimeline('admission', describeAdmission(note));
     }
   }
 
@@ -401,6 +405,13 @@ export class TurnTraceCollector {
 }
 
 /** Redacted, single-line, length-bounded summary of tool arguments. */
+function describeAdmission(note: Extract<TurnTraceNote, { kind: 'admission' }>): string {
+  const parts = [`queued ${Math.round(note.queued_ms)}ms`];
+  if (note.merged_messages > 1) parts.push(`merged ${note.merged_messages} messages`);
+  if (note.superseded_previous) parts.push('replaced the sender\'s unanswered turn');
+  return parts.join(', ');
+}
+
 export function summarizeArgs(args: unknown): string {
   if (args == null) return '';
   const redacted = redactTraceValue(args);
