@@ -80,6 +80,7 @@ const zhUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI 能力（可选）', [
     { text: 'AI 总览与启用', link: '/ai/' },
     { text: 'Agent 深入', link: '/ai/agent' },
+    { text: '默认行为规范', link: '/ai/default-behavior' },
     { text: '结构化决策', link: '/ai/structured-decisions' },
     { text: '后台任务', link: '/ai/detached-tasks' },
     { text: '执行状态反馈', link: '/advanced/activity-feedback' },
@@ -219,6 +220,7 @@ const enUseDocsSidebar: DefaultTheme.SidebarItem[] = [
   sidebarGroup('AI (Optional)', [
     { text: 'Overview & Enabling AI', link: '/en/ai/' },
     { text: 'Agent Deep Dive', link: '/en/ai/agent' },
+    { text: 'Default Behavior', link: '/en/ai/default-behavior' },
     { text: 'Activity Feedback', link: '/en/advanced/activity-feedback' },
     { text: 'Speech', link: '/en/ai/speech' },
   ]),
