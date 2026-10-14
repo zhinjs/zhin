@@ -112,5 +112,5 @@ export function registerConsoleRoutes(options: RegisterConsoleRoutesOptions): vo
     snapshots,
   });
   registerConsoleEventRoutes({ http, base, consoleRuntime, hub: eventHub });
-  registerAgentConsoleRoutes({ http, base, snapshots });
+  registerAgentConsoleRoutes({ http, base, snapshots, projectRoot });
 }

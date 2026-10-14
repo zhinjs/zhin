@@ -12,6 +12,7 @@ export { evaluateExpectations, formatEvalReport } from './assertions.js';
 export type { EvalFailure } from './assertions.js';
 export { defineIngressEvalCase, runIngressEvalCase, evaluateIngressExpectations } from './ingress.js';
 export type { IngressEvalCase, IngressEvalMessage, IngressEvalRun, IngressEvalTurn, IngressEvalExpectations } from './ingress.js';
+export { evalTraceDir, persistEvalTraces } from './trace-link.js';
 export { createLiveModel } from './live-model.js';
 export type { LiveModelOptions } from './live-model.js';
 export { live } from './live-checks.js';
