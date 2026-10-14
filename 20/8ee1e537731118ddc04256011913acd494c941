@@ -1,0 +1,67 @@
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_2f7a280d7c8c1e::t_398750bb06f8c0 2,13,18-37,47,50,52-56
+examples/multi-agent-room/README.md
+  s_2f7a280d7c8c1e::t_4ad09b0a6761f4 3,5-7,9,11,13-17,19,22-55,58-76,78
+.changeset/fix-room-task-execute-input.md
+  s_2f7a280d7c8c1e::t_8a20efff4b4ebc 1-5
+docs/plans/workroom-group-collaboration-progress.md
+  s_2f7a280d7c8c1e::t_2f0bddd20b246e 96-97,328-335,374
+examples/multi-agent-room/agents/coordinator/agent.json
+  s_2f7a280d7c8c1e::t_94d1f7d4226fac 1-14
+examples/multi-agent-room/agents/coordinator/boundaries.md
+  s_2f7a280d7c8c1e::t_48fce11111ff1e 1-6
+examples/multi-agent-room/agents/coordinator/conventions.md
+  s_2f7a280d7c8c1e::t_d7dc5e4223e53b 3-5
+examples/multi-agent-room/agents/coordinator/system.md
+  s_2f7a280d7c8c1e::t_fc8311c8dfafa2 1-7
+examples/multi-agent-room/agents/researcher/agent.json
+  s_2f7a280d7c8c1e::t_325a7555a94f3d 2,4
+examples/multi-agent-room/agents/researcher/boundaries.md
+  s_2f7a280d7c8c1e::t_3f0d374034c829 3-6
+examples/multi-agent-room/agents/researcher/conventions.md
+  s_2f7a280d7c8c1e::t_439b2b24670a29 3-5
+examples/multi-agent-room/agents/researcher/system.md
+  s_2f7a280d7c8c1e::t_1e0c538f792ea9 1,3,5-7
+examples/multi-agent-room/agents/writer/agent.json
+  s_2f7a280d7c8c1e::t_ea87f0644f8c87 2,4
+examples/multi-agent-room/agents/writer/boundaries.md
+  s_2f7a280d7c8c1e::t_a42e464e6f0717 3-6
+examples/multi-agent-room/agents/writer/conventions.md
+  s_2f7a280d7c8c1e::t_f8a38716d5c01f 1-5
+examples/multi-agent-room/agents/writer/system.md
+  s_2f7a280d7c8c1e::t_7e22b3d761e6e2 1-7
+examples/multi-agent-room/package.json
+  s_2f7a280d7c8c1e::t_97f02370687d47 5,17,24-25
+examples/multi-agent-room/src/room.ts
+  s_2f7a280d7c8c1e::t_4a16c19ddc1fe1 1-53
+examples/multi-agent-room/src/team.ts
+  s_2f7a280d7c8c1e::t_e55108c2dca0ae 1-395
+examples/multi-agent-room/tests/room-collaboration.e2e.test.ts
+  s_2f7a280d7c8c1e::t_6be5b4a551e83d 1-361
+examples/multi-agent-room/tests/support/sandbox-im.ts
+  s_2f7a280d7c8c1e::t_f60410e687a0e2 1-215
+examples/multi-agent-room/tsconfig.json
+  s_2f7a280d7c8c1e::t_cd1550883197bd 8
+examples/multi-agent-room/zhin.config.yml
+  s_2f7a280d7c8c1e::t_fb1205ecddfbbd 5-6,10-14,37,43-45
+packages/im/workroom/src/room/room-task-service.ts
+  s_2f7a280d7c8c1e::t_e81fe05521ff5a 51-53
+pnpm-lock.yaml
+  s_2f7a280d7c8c1e::t_cabf77e45365da 513-515,529-534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "208ee1e537731118ddc04256011913acd494c941",
+  "prompts": {},
+  "sessions": {
+    "s_2f7a280d7c8c1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6eb048c-c089-49a6-94d1-05cb763395a1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
