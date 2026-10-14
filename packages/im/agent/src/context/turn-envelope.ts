@@ -17,6 +17,8 @@ export interface TurnContextEnvelopeInput {
   modelLine?: string;
   sdk?: string;
   agentsContext?: string;
+  /** Rendered "already told the user" ledger (#730). */
+  toldLedger?: string;
 }
 
 export function formatSessionContextLine(turn: TurnContextView): string {
@@ -74,6 +76,7 @@ export function buildTurnContextEnvelope(input: TurnContextEnvelopeInput): strin
   if (input.activeSkillsContext?.trim()) lines.push(input.activeSkillsContext.trim());
   if (input.quoteSystemHint?.trim()) lines.push(input.quoteSystemHint.trim());
   if (input.agentsContext?.trim()) lines.push(input.agentsContext.trim());
+  if (input.toldLedger?.trim()) lines.push(input.toldLedger.trim());
 
   return lines.length === 0
     ? null

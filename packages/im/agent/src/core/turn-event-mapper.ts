@@ -40,6 +40,7 @@ export function* mapAgentEventToTurnEvents(
             promptTokens: usage.input,
             completionTokens: usage.output,
             totalTokens: usage.totalTokens,
+            ...(usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {}),
           },
         };
       }
