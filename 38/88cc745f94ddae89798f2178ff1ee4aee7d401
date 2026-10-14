@@ -1,0 +1,60 @@
+.changeset/agent-eval-seed-cases.md
+  h_b680f75345178a 5
+.changeset/agent-minimal-trace.md
+  h_b680f75345178a 1-6
+basic/cli/src/cli.ts
+  h_b680f75345178a 22,58
+basic/cli/src/commands/trace.ts
+  h_b680f75345178a 1-50
+basic/cli/src/plugin-runtime/start-command.ts
+  h_b680f75345178a 138,464,473,476-480
+docs/cli/index.md
+  h_b680f75345178a 308-329
+packages/im/agent/evals/README.md
+  h_b680f75345178a 132-134
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 5,108-111
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 21,26-27,58-59,110,119-121,124-126,132-143,145-148,165,177,183-189,191,199,202,216-236
+packages/im/agent/evals/framework/framework.test.ts
+  h_b680f75345178a 41-59,140,143-144,147
+packages/im/agent/package.json
+  h_b680f75345178a 89-93
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 55,642,932,1043-1048
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  h_b680f75345178a 2,5-7,230-231,302-303,320,323,325-326,328-337,380-381,384-389,463,465-468,483
+packages/im/agent/src/plugin-runtime/agent-trace-runtime.ts
+  h_b680f75345178a 134-141
+packages/im/agent/src/plugin-runtime/subagent-turn-capability.ts
+  h_b680f75345178a 2,182
+packages/im/agent/src/security/group-member-policy.ts
+  h_b680f75345178a 63-80
+packages/im/agent/src/trace/index.ts
+  h_b680f75345178a 1-34
+packages/im/agent/src/trace/turn-trace-format.ts
+  h_b680f75345178a 1-105
+packages/im/agent/src/trace/turn-trace-registry.ts
+  h_b680f75345178a 1-77
+packages/im/agent/src/trace/turn-trace-store.ts
+  h_b680f75345178a 1-85
+packages/im/agent/src/trace/turn-trace.ts
+  h_b680f75345178a 1-437
+packages/im/agent/tests/plugin-runtime/agent-runtime.test.ts
+  h_b680f75345178a 1,362-407
+packages/im/agent/tests/trace/turn-trace.test.ts
+  h_b680f75345178a 1-199
+tsconfig.typecheck.json
+  h_b680f75345178a 53-55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3888cc745f94ddae89798f2178ff1ee4aee7d401",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
