@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createPeerRegistry } from '@zhin.js/adapter';
 import { createInboundOriginClassifier, MESSAGE_ORIGINS } from '../../src/plugin-runtime/im/inbound-origin.js';
-import { OutboundLedger } from '../../src/plugin-runtime/im/outbound-ledger.js';
+import { OutboundLedger, ledgerScopeOf } from '../../src/plugin-runtime/im/outbound-ledger.js';
 
 const conv = (endpointId = 'e1') => ({
   endpoint: { id: endpointId, adapter: 'qq' }, kind: 'group' as const, id: 'g1',
@@ -102,7 +102,9 @@ describe('inbound origin classifier', () => {
     expect(registry.isReady('e1')).toBe(false);
     expect(classifier.classify({ conversation: priv, sender: { id: '100' }, content: 'hello world' }))
       .toMatchObject({ origin: 'human', basis: 'none', ready: false });
-    // the digest entry stays unconsumed: a later classification by message id still finds it
+    // the unready private branch never consumed the digest entry
+    expect(ledger.matchByDigest(ledgerScopeOf(priv), 'hello world')).toBeDefined();
+    // classification by message id still finds the entry
     expect(classifier.classify({ conversation: priv, sender: { id: 'x' }, messageId: 'm1' }))
       .toMatchObject({ origin: 'self', basis: 'ledger' });
   });

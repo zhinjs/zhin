@@ -26,6 +26,11 @@ export interface RoomMembershipPort {
     peer: { adapter: string; userId: string; endpointIds: readonly CapabilityId[] },
     conversation: ConversationRef,
   ): boolean;
+  /**
+   * 该会话是否属于某个启用的 Room。仅当返回 true 时，入站才做跨 Endpoint 去重；
+   * 缺省（未实现）等同 false：普通群保持每个 Endpoint 各自处理。
+   */
+  hasRoom?(conversation: ConversationRef): boolean;
 }
 
 export const roomMembershipToken = createToken<RoomMembershipPort>('zhin.im.room-membership');

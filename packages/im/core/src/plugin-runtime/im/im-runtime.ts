@@ -55,6 +55,7 @@ import {
   failedDeliveryReceipt,
 } from './outbound-delivery-runtime.js';
 import { InboundRuntime } from './inbound-runtime.js';
+import { InboundDeduper } from './inbound-dedup.js';
 import { OutboundLedger } from './outbound-ledger.js';
 import { createInboundOriginClassifier } from './inbound-origin.js';
 
@@ -73,6 +74,8 @@ export interface ImRuntimeOptions {
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** 覆盖进程级 Peer Registry（测试用，避免污染单例）。 */
   readonly peerRegistry?: Pick<PeerRegistry, 'lookup' | 'isReady' | 'selfOf'>;
+  /** @internal 覆盖入站去重器（测试用）；去重仅作用于 Room 会话。 */
+  readonly inboundDeduper?: Pick<InboundDeduper, 'claim'>;
   /**
    * 入站 sender 增强：在构造 Message 前，将框架级角色（master / trusted）
    * 合并到 sender.roles，使整个下游链路（命令分发、agent ingress 等）都能读到完整角色。
@@ -103,6 +106,7 @@ export class ImRuntime implements OutboundMessageService {
   constructor(options: ImRuntimeOptions = {}) {
     this.#conversations = new ConversationRuntime(options.conversationEvents);
     const ledger = new OutboundLedger();
+    const deduper = options.inboundDeduper ?? new InboundDeduper();
     const originClassifier = createInboundOriginClassifier({
       registry: options.peerRegistry ?? getProcessPeerRegistry(),
       ledger,
@@ -119,6 +123,7 @@ export class ImRuntime implements OutboundMessageService {
       interactions: this.#interactions,
       inboundClaim: options.inboundClaim,
       originClassifier,
+      deduper,
       enrichSender: options.enrichSender,
       acquire: () => this.#acquire(),
       release: (lease) => this.#release(lease),

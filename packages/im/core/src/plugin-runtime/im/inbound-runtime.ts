@@ -37,6 +37,7 @@ import {
   type RuntimeMessageEvent,
 } from './message-events.js';
 import { resolveIngressRoute } from './ingress-route.js';
+import type { InboundDeduper } from './inbound-dedup.js';
 import { roomMembershipToken, type InboundOriginClassifier, type RoomMembershipPort } from './inbound-origin.js';
 
 const logger = getLogger('im.inbound');
@@ -51,6 +52,8 @@ interface InboundRuntimeContext {
   readonly inboundClaim?: (message: Message) => boolean | Promise<boolean>;
   /** Trusted origin classifier. Absent: messages carry no origin (legacy behavior). */
   readonly originClassifier?: InboundOriginClassifier;
+  /** Cross-Endpoint dedup of human group messages. Absent: no dedup. */
+  readonly deduper?: Pick<InboundDeduper, 'claim'>;
   readonly enrichSender?: (
     sender: MessageSenderRef | undefined,
     conversation: IncomingMessage['conversation'],
@@ -144,12 +147,13 @@ export class InboundRuntime {
         : input.sender;
       // Origin is decided only from trusted state (Registry / ledger / membership port),
       // never from payload metadata or message text.
+      const roomMembership = resolveRoomMembership(lease.value);
       const classified = this.context.originClassifier?.classify({
         conversation,
         sender: enrichedSender,
         messageId: input.message?.id,
         content: input.content,
-      }, resolveRoomMembership(lease.value));
+      }, roomMembership);
       const origin = classified?.origin;
       if (origin === 'self') {
         logger.debug(formatCompact({
@@ -158,6 +162,28 @@ export class InboundRuntime {
           basis: classified?.basis,
         }));
         return Object.freeze({ matched: false });
+      }
+      // Must stay synchronous and before any await: concurrent arrivals of the same
+      // message from N Endpoints are decided atomically. Only human origin claims,
+      // so bot-origin messages never consume the key. Scoped to Room conversations:
+      // outside a Room each Endpoint keeps handling its own copy (mention / interaction
+      // state is relative to the receiving Endpoint).
+      let recordOnly: 'duplicate' | 'dedup_error' | undefined;
+      if ((origin === 'human' || origin === undefined) && this.context.deduper
+        && (conversation.kind === 'group' || conversation.kind === 'channel')) {
+        try {
+          if (roomMembership?.hasRoom?.(conversation) === true) {
+            const claim = this.context.deduper.claim(conversation, String(enrichedSender?.id ?? ''), input.message?.id);
+            if (claim === 'duplicate') recordOnly = 'duplicate';
+          }
+        } catch (error) {
+          logger.warn(formatCompact({
+            op: 'inbound_dedup_error',
+            conv: formatConversationLog(conversation),
+            error: error instanceof Error ? error.message : String(error),
+          }));
+          recordOnly = 'dedup_error';
+        }
       }
       const message = new RuntimeMessage(
         conversation,
@@ -201,6 +227,29 @@ export class InboundRuntime {
       );
       const conversationSequence = await this.context.recordIncoming(input, enrichedSender);
       let result: MessageDispatchResult = Object.freeze({ matched: false });
+      if (recordOnly === 'duplicate') {
+        // Duplicate of a message already routed via another Endpoint: history only,
+        // no publish (avoids N copies in the console message feed).
+        logger.debug(formatCompact({
+          op: 'inbound_duplicate',
+          conv: formatConversationLog(conversation),
+          basis: recordOnly,
+        }));
+        return result;
+      }
+      if (recordOnly === 'dedup_error') {
+        // Undecidable: record only and never route (no duplicate routing), but publish so
+        // the console feed still shows the message and a persistent failure is visible.
+        this.context.publish({
+          direction: 'inbound',
+          conversation,
+          ...(input.sender !== undefined ? { sender: input.sender } : {}),
+          contentPreview: previewMessageContent(input.content),
+          ...(input.message?.id ? { messageId: input.message.id } : {}),
+          timestamp: receivedAt,
+        });
+        return result;
+      }
       if (origin === 'member' || origin === 'peer_bot') {
         // Bot-origin messages are recorded as chat history only: no claim, handlers,
         // commands, middleware or ingress route (prevents bot-to-bot loops).
