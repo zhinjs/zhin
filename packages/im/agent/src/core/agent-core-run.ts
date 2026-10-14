@@ -151,6 +151,8 @@ export interface AgentLoopTurnInput {
   toolLoading?: 'deferred' | 'direct';
   /** Isolated executions neither load nor append conversational history. */
   conversationPersistence?: 'session' | 'none';
+  /** Explicit iteration cap (e.g. a sub-agent turn); takes precedence over harness/config. */
+  maxIterations?: number;
   /** Tool name aliases: LLM-facing name → actual tool name */
   toolAliases?: Record<string, string>;
   /** Optional TurnEvent tap (processStream / diagnostics) */
@@ -484,7 +486,7 @@ export async function* runAgentLoopTextTurnRun(
 
   const harness = resolveModelHarness(host.getTurnProvider().name, modelId, host.config.modelHarness);
   const maxIterations = hasTools
-    ? (harness.maxIterations ?? host.config.maxIterations)
+    ? (input.maxIterations ?? harness.maxIterations ?? host.config.maxIterations)
     : 1;
   const explorationBudget = hasTools
     ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)

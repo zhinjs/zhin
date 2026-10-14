@@ -41,6 +41,7 @@ export const DEFAULT_CONFIG = {
   workerExecApprovalMode: 'auto',
   taskExecApprovalMode: 'auto',
   maxSubagentIterations: 25,
+  subagentTurnMode: 'off',
   subagentTools: [],
   subagentTurnWaitMs: 300_000,
   modelSizeHint: '',

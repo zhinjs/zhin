@@ -70,6 +70,8 @@ export interface ZhinAgentConfig {
   workerExecApprovalMode?: ExecApprovalMode;
   taskExecApprovalMode?: ExecApprovalMode;
   maxSubagentIterations?: number;
+  /** Plugin-runtime turns: `sync` offers spawn_task as an in-turn sub-agent; `off` (default) hides it. */
+  subagentTurnMode?: 'off' | 'sync';
   subagentTools?: string[];
   subagentTurnWaitMs?: number;
   modelSizeHint?: '' | 'small' | 'medium' | 'large';

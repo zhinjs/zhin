@@ -84,6 +84,7 @@ outline: [2, 3]
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | 否 | — | Shell 命令安全边界。 |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | 否 | — | 非 full 模式使用的命令白名单预设。 |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | 否 | `"off"` | IM 私聊中 master 的 Shell 权限。off：IM 会话不提供 bash；isolated：master 私聊在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、其余命令需审批），宿主无 Docker 时直接失败。 |
+| `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | 否 | `"off"` | IM 回合中的子 Agent。off：不提供 spawn_task；sync：spawn_task 在当前回合内同步运行子 Agent，权限不超过父回合（父回合不能运行 bash 时子 Agent 也没有），审批发往同一会话。 |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 主 Agent 命令的审批策略。 |
 | `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | 子 Agent 命令的审批策略。 |
 | `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | 否 | — | Worker 命令的审批策略。 |

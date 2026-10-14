@@ -84,6 +84,7 @@ The authoritative contract is [`packages/im/runtime/src/host-config-schema.json`
 | `ai.agent.execSecurity` | string: `"deny"`, `"allowlist"`, `"full"` | no | — | Shell command security boundary. |
 | `ai.agent.execPreset` | string: `"readonly"`, `"network"`, `"development"`, `"custom"` | no | — | Command allowlist preset used outside full mode. |
 | `ai.agent.masterShell` | string: `"off"`, `"isolated"` | no | `"off"` | Shell access for the master in IM private chats. off: no bash in IM turns. isolated: master DMs run bash inside a Docker container (workspace writable, no network, development allowlist, approval for anything else); fails closed when Docker is unavailable. |
+| `ai.agent.subagentTurnMode` | string: `"off"`, `"sync"` | no | `"off"` | Sub-agents in IM turns. off: no spawn_task. sync: spawn_task runs a sub-agent inside the current turn with at most the parent's permissions (never wider; no bash unless the parent could run it) and approvals routed to the same conversation. |
 | `ai.agent.execApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for main Agent commands. |
 | `ai.agent.subagentExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for sub-Agent commands. |
 | `ai.agent.workerExecApprovalMode` | string: `"ask"`, `"bypass"`, `"auto"` | no | — | Approval policy for worker commands. |
