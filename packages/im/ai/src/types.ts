@@ -461,6 +461,8 @@ export interface AIConfig {
       groupMode?: 'supersede' | 'fifo';
       ttlMs?: number;
       coalesceWindowMs?: number;
+      /** Turns allowed to wait behind the running turn of one session (default 5). */
+      maxQueuedTurns?: number;
     };
     /** bash 执行策略：deny=禁止执行，allowlist=仅允许列表内命令，full=不限制 */
     execSecurity?: 'deny' | 'allowlist' | 'full';

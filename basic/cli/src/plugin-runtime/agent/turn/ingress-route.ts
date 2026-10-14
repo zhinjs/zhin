@@ -6,6 +6,13 @@ import {
   type ApprovalPort,
 } from '@zhin.js/agent';
 import { DecisionApprovalJudgment } from '@zhin.js/agent/session';
+import { noteTurnTrace } from '@zhin.js/agent/trace';
+import {
+  isCancelIntent,
+  normalizeInboundQueueConfig,
+  TurnAdmissionGate,
+  type TurnAdmission,
+} from '@zhin.js/agent/turn';
 import {
   CapabilityIngress,
   AgentRuntime,
@@ -54,6 +61,7 @@ import {
   createRuntimeTurnRequest,
   deliveryOutcomeFromReceipt,
   interactiveNetworkPolicy,
+  isPlainTextRuntimeMessage,
   resolveOwnerForRuntimeMessage,
   resolveProductTurnIntent,
   resolveRuntimeSenderRoles,
@@ -84,7 +92,25 @@ export interface AgentTurnIngressRouteOptions {
 /** Generation-owned IM ingress adapter for management, approval, and Agent turns. */
 export class AgentTurnIngressRoute implements IngressRoute {
 
+  #admissionGate: TurnAdmissionGate | undefined;
+
   constructor(private readonly options: AgentTurnIngressRouteOptions) {}
+
+  /**
+   * Same-session admission (#725). Created on first use so it reads the
+   * configuration of this generation; one gate per route generation.
+   */
+  #gate(): TurnAdmissionGate {
+    if (!this.#admissionGate) {
+      const queue = normalizeInboundQueueConfig(this.options.agent.service.getAgentConfig()?.inboundQueue);
+      this.#admissionGate = new TurnAdmissionGate({
+        maxQueuedTurns: queue.maxQueuedTurns,
+        queueTtlMs: queue.ttlMs,
+        supersedeSameSender: queue.groupMode === 'supersede',
+      });
+    }
+    return this.#admissionGate;
+  }
 
   async preRoute(
     message: Message,
@@ -203,13 +229,52 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       }
 
+      // #725: ordinary IM turns go through the admission gate. Workroom turns
+      // and products that resolve their own turn intent keep their semantics.
+      const intentResolver = resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent;
+      const gate = workroomAgentTurn || intentResolver || message.metadata?.turnIntent !== undefined
+        ? undefined
+        : this.#gate();
+      const senderId = turnAccess.principal.subjectId;
+      if (gate && isCancelIntent(matched.content)) {
+        const stopped = gate.stop(sessionKey, senderId, senderRoles.isMaster);
+        if (stopped === 'stopped') {
+          await reply('好的，已停止当前回复。');
+          logger.info(formatCompact({ op: 'agent_host_turn_stopped', sessionKey }));
+          return true;
+        }
+        // Nothing of the sender's to stop: handle it as an ordinary message.
+      }
+
       let capabilityActive = true;
+      let admission: Extract<TurnAdmission, { kind: 'run' }> | undefined;
       try {
-        const inbound = await preprocessInboundTurn(
+        const preprocessed = await preprocessInboundTurn(
           message,
           matched.content,
           options.transcribeUrl,
         );
+        let inbound = preprocessed;
+        if (gate) {
+          const admitted = await gate.admit({
+            sessionKey,
+            senderId,
+            text: preprocessed.text,
+            plainText: isPlainTextRuntimeMessage(message),
+          });
+          if (admitted.kind === 'merged') {
+            logger.debug(formatCompact({ op: 'agent_host_turn_merged', sessionKey }));
+            return true;
+          }
+          if (admitted.kind === 'rejected') {
+            logger.info(formatCompact({ op: 'agent_host_turn_rejected', sessionKey, reason: admitted.reason }));
+            const notice = admissionRejectionNotice(admitted.reason);
+            if (notice) await reply(notice);
+            return true;
+          }
+          admission = admitted;
+          inbound = { ...preprocessed, text: admitted.text };
+        }
         const capabilities = restrictWorkroomAgentCapabilities(await readCapabilities(
           ingress,
           snapshot,
@@ -286,7 +351,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
             const request = createRuntimeTurnRequest(message, routed.userText, senderRoles, {
               traceId,
               turnId,
-              signal,
+              signal: admission ? AbortSignal.any([signal, admission.signal]) : signal,
               workspaceRoot: turnPolicy.filesystem.workspaceRoot,
               workingDirectory: turnPolicy.filesystem.workingDirectory,
               filesystemAccess: turnPolicy.filesystem.access,
@@ -304,11 +369,13 @@ export class AgentTurnIngressRoute implements IngressRoute {
                   }),
                 }),
               } : {}),
-              intent: await resolveProductTurnIntent(
+              // The gate already serialized (and, if needed, superseded) this
+              // session, so the coordinator only has to queue behind it.
+              intent: admission ? Object.freeze({ kind: 'new' as const }) : await resolveProductTurnIntent(
                 message,
                 senderRoles,
                 service.getAgentConfig()?.inboundQueue?.groupMode,
-                resolveSnapshotTurnIntentResolver(snapshot, requester) ?? options.resolveTurnIntent,
+                intentResolver,
               ),
               resolveReference: (reference, limits, referenceSignal) =>
                 options.im.resolveConversationReference(lease, reference, {
@@ -364,6 +431,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                     const outcome = deliveryOutcomeFromReceipt(
                       await reply(content),
                     );
+                    if (outcome.status === 'sent') admission?.markDelivered();
                     logger.debug(formatCompact({
                       op: 'replychain_delivery_outcome',
                       status: outcome.status,
@@ -384,7 +452,7 @@ export class AgentTurnIngressRoute implements IngressRoute {
                 mcpServers: binding.mcpServers,
                 agent: routed.agent?.qualifiedName ?? routed.agent?.name,
               },
-              observeAgentTurnTrace(traceRuntime, request),
+              observeWithAdmission(observeAgentTurnTrace(traceRuntime, request), turnId, admission),
             );
           }, {
             disabled: workroomAgentTurn != null,
@@ -427,6 +495,12 @@ export class AgentTurnIngressRoute implements IngressRoute {
         }));
         return true;
       } catch (error) {
+        if (admission?.signal.aborted) {
+          // Superseded by the sender's newer message or stopped on request:
+          // the replacement turn (or the stop notice) is the answer.
+          logger.debug(formatCompact({ op: 'agent_host_turn_replaced', sessionKey }));
+          return true;
+        }
         const detail = error instanceof Error ? error.message : String(error);
         logger.warn(formatCompact({ op: 'agent_host_turn_fail', error: detail }));
         try {
@@ -437,8 +511,38 @@ export class AgentTurnIngressRoute implements IngressRoute {
         return true;
       } finally {
         capabilityActive = false;
+        admission?.release();
       }
   }
+}
+
+function admissionRejectionNotice(reason: 'queue_full' | 'expired' | 'stopped'): string | undefined {
+  if (reason === 'queue_full') return '前面还有几条消息在处理，请稍后再发。';
+  if (reason === 'expired') return '这条消息排队太久，已跳过，需要的话请重新发送。';
+  return undefined;
+}
+
+/** Records how the turn was admitted on its TurnTrace once the trace exists. */
+function observeWithAdmission(
+  observe: ReturnType<typeof observeAgentTurnTrace>,
+  turnId: string,
+  admission: Extract<TurnAdmission, { kind: 'run' }> | undefined,
+): ReturnType<typeof observeAgentTurnTrace> {
+  const facts = admission?.facts;
+  if (!facts || (facts.queuedMs === 0 && facts.mergedMessages <= 1 && !facts.supersededPrevious)) return observe;
+  let noted = false;
+  return (event) => {
+    if (!noted) {
+      noted = true;
+      noteTurnTrace(turnId, {
+        kind: 'admission',
+        queued_ms: facts.queuedMs,
+        merged_messages: facts.mergedMessages,
+        superseded_previous: facts.supersededPrevious,
+      });
+    }
+    observe(event);
+  };
 }
 
 /** Semantic selection only fills the gap left by explicit and platform routing. */
