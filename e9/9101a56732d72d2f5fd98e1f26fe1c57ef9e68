@@ -1,0 +1,36 @@
+.changeset/journal-derived-stream-feed.md
+  h_b680f75345178a 1-5
+packages/im/agent/evals/README.md
+  h_b680f75345178a 91
+packages/im/agent/evals/cases/tool-events-in-stream.case.ts
+  h_b680f75345178a 1-20
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 99-106
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 30-31,164-169,232
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 85-89
+packages/im/agent/src/plugin-runtime/agent-runtime.ts
+  h_b680f75345178a 7,484-486
+packages/im/agent/src/trace/turn-trace-registry.ts
+  h_b680f75345178a 54-58
+packages/im/agent/src/turn/execute-agent-turn.ts
+  h_b680f75345178a 6,36-39,51-61,95
+packages/im/agent/src/turn/index.ts
+  h_b680f75345178a 9-10
+packages/im/agent/src/turn/journal-feed.ts
+  h_b680f75345178a 1-65
+packages/im/agent/tests/turn/journal-feed.test.ts
+  h_b680f75345178a 1-83
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e99101a56732d72d2f5fd98e1f26fe1c57ef9e68",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
