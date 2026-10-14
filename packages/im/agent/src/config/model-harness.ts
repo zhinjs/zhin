@@ -4,6 +4,10 @@ export interface ModelHarnessConfigItem {
   explorationBudget?: number;
   /** Append exploration-discipline guidance (plan first, scope to target files) to the system prompt. */
   explorationGuidance?: boolean;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }
 
 export interface ModelHarnessConfig {
@@ -17,10 +21,18 @@ export interface ModelHarnessRow {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }
 
 export interface ResolvedModelHarness {
   maxIterations?: number;
   explorationBudget?: number;
   explorationGuidance?: boolean;
+  /** Provider quirk: extra attempts when the model returns an empty reply. */
+  emptyReplyRetries?: number;
+  /** Provider quirk: per-request timeout in ms; 0 disables. */
+  requestTimeoutMs?: number;
 }

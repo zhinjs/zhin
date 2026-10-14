@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, createResilientCompletionPort, isProviderFailureMessage, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -59,10 +59,55 @@ function resolveAssistantReplyText(assistant: AssistantMessage): string {
   normalizeAssistantMessageText(assistant);
   const text = assistantText(assistant);
   if (text.trim()) return text;
+  if (assistant.errorMessage && isProviderFailureMessage(assistant.errorMessage)) {
+    return `${assistant.errorMessage}。`;
+  }
   if (assistant.errorMessage) {
     return `模型调用失败：${assistant.errorMessage}。请检查 API 密钥与网络后重试。`;
   }
   return text;
+}
+
+/**
+ * Wrap the turn's completion port with retry / timeout / fallback. Fallback models come
+ * from the already-resolved `modelCandidates`; candidates the provider does not know are
+ * skipped rather than failing the turn.
+ */
+function createTurnCompletionPort(input: {
+  host: ZhinAgentPrivate;
+  providerAlias: string;
+  modelId: string;
+  modelCandidates: readonly string[];
+  harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
+  sessionId: string;
+}): LlmCompletionPort {
+  const { host, providerAlias, modelId, sessionId } = input;
+  const fallbackModels: Model[] = [];
+  for (const candidate of input.modelCandidates) {
+    if (!candidate || candidate === modelId) continue;
+    try {
+      fallbackModels.push(host.llmRuntime.model(providerAlias, candidate));
+    } catch {
+      logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate }));
+    }
+  }
+  const config = resolveProviderResilienceConfig(host.config.providerResilience, {
+    emptyReplyRetries: input.harness.emptyReplyRetries,
+    requestTimeoutMs: input.harness.requestTimeoutMs,
+  });
+  return createResilientCompletionPort(host.llmRuntime, {
+    config,
+    fallbackModels,
+    onEvent: (event) => {
+      const { type, error, ...fields } = event;
+      logger.warn(formatCompact({
+        op: `provider_${type}`,
+        session: sessionId,
+        ...fields,
+        error: truncatePreview(error, 200),
+      }));
+    },
+  });
 }
 
 function logAssistantIterationFailure(
@@ -548,10 +593,18 @@ export async function* runAgentLoopTextTurnRun(
 
   const contextWindow = llmModel.contextWindow ?? host.config.contextTokens;
   const loopHooks = input.loopHooks;
+  const completionPort = createTurnCompletionPort({
+    host,
+    providerAlias,
+    modelId,
+    modelCandidates: input.modelCandidates,
+    harness,
+    sessionId,
+  });
 
   const loopConfig = {
     model: llmModel,
-    transport: host.llmRuntime,
+    transport: completionPort,
     maxIterations,
     sessionId,
     streamOptions: {

@@ -24,6 +24,8 @@ export interface StreamOptions {
   outputSchema?: Record<string, unknown>;
   onPayload?: (payload: unknown) => void;
   onResponse?: (response: unknown) => void;
+  /** Override the AI SDK's built-in retry count (SDK default 2). The resilient port sets 0. */
+  maxRetries?: number;
 }
 
 export type StreamFn = (

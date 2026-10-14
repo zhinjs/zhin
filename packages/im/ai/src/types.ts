@@ -328,6 +328,10 @@ export interface ModelHarnessOverride {
   explorationBudget?: number;
   /** 在系统提示中加入"先规划、限定目标文件"的探索纪律 */
   explorationGuidance?: boolean;
+  /** 空回复（无文本且无工具调用）时额外重试次数；默认 0 */
+  emptyReplyRetries?: number;
+  /** 单次模型请求超时（毫秒）；0 关闭 */
+  requestTimeoutMs?: number;
 }
 
 export interface AIConfig {
@@ -480,6 +484,8 @@ export interface AIConfig {
       /** provider 模式覆盖（支持 * 通配符） */
       providerPatterns?: Record<string, ModelHarnessOverride>;
     };
+    /** Provider 韧性：重试 / 退避 / 超时 / fallback（见 ProviderResilienceConfig，默认保守） */
+    providerResilience?: import('./llm/provider-resilience.js').ProviderResilienceConfig;
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     deferredToolMaxResults?: number;
     /** 工具 schema 按需加载 */
