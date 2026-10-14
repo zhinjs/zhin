@@ -1,4 +1,4 @@
-import { autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
+import { AUTOCOMPACT_BUFFER_TOKENS, autoCompactAgentMessagesIfNeeded, createAgentCompactionState, estimateAgentMessagesTokens, type AgentCompactionConfig, type AgentCompactionState, type ContextRepository, type Model, type AgentMessage, type LlmCompletionPort } from '@zhin.js/ai';
 import type { CompactionConfig } from '../config/zhin-agent-config.js';
 import type { PluginAILoopHookRegistry } from '../plugin-loop-hooks.js';
 import { resolveWorkspacePrompt } from '../prompt/workspace-prompt.js';
@@ -16,13 +16,41 @@ export interface CompactionRuntimeOptions {
   contextWindow: number;
   mode?: 'text' | 'multimodal';
   customInstructions?: string;
+  /** Tokens the system prompt and tool schemas take from the window. */
+  reservedTokens?: number;
+  /** Rendered "already told" ledger; the summary must keep these facts. */
+  toldLedger?: string;
   force?: boolean;
   loopHooks?: PluginAILoopHookRegistry | null;
+}
+
+/** Default share of the context window that triggers auto-compaction (#730). */
+export const DEFAULT_COMPACTION_THRESHOLD_RATIO = 0.7;
+
+/**
+ * Message-token count above which auto-compaction runs: `thresholdRatio` of
+ * the window minus what the system prompt and tools already use. It never
+ * exceeds the older "window minus buffer" rule (when that is positive) and
+ * never drops below 1.25 × keepRecentTokens, so a compaction frees room.
+ */
+export function resolveCompactionTriggerTokens(
+  compaction: CompactionConfig | undefined,
+  contextWindow: number,
+  reservedTokens = 0,
+): number {
+  const ratio = compaction?.thresholdRatio ?? DEFAULT_COMPACTION_THRESHOLD_RATIO;
+  const keepRecent = compaction?.keepRecentTokens ?? 20_000;
+  const target = Math.floor(contextWindow * ratio) - Math.max(0, reservedTokens);
+  const floor = Math.ceil(keepRecent * 1.25);
+  const ceiling = contextWindow - AUTOCOMPACT_BUFFER_TOKENS;
+  const bounded = ceiling > 0 ? Math.min(target, ceiling) : target;
+  return Math.max(bounded, floor);
 }
 
 function resolveAgentCompactionConfig(
   compaction: CompactionConfig | undefined,
   contextWindow: number,
+  reservedTokens?: number,
 ): AgentCompactionConfig {
   return {
     enabled: compaction?.enabled !== false,
@@ -30,8 +58,12 @@ function resolveAgentCompactionConfig(
     keepRecentTokens: compaction?.keepRecentTokens ?? 20_000,
     minKeepCount: compaction?.minKeepCount ?? 2,
     contextWindow,
+    triggerTokens: resolveCompactionTriggerTokens(compaction, contextWindow, reservedTokens),
   };
 }
+
+const TOLD_LEDGER_SUMMARY_INSTRUCTION = 'The user has already been told the following. Keep every item in the summary '
+  + '(under "Already told the user") so later turns neither repeat nor contradict them:';
 
 const MAX_COMPACTION_SESSIONS = 5000;
 
@@ -79,7 +111,7 @@ export class AgentCompactionRuntime {
   ): Promise<AgentMessage[]> {
     if (signal?.aborted) return messages;
 
-    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow);
+    const cfg = resolveAgentCompactionConfig(options.compactionConfig, options.contextWindow, options.reservedTokens);
     if (cfg.enabled === false) return messages;
 
     const state = this.#getState(options.sessionId);
@@ -87,6 +119,7 @@ export class AgentCompactionRuntime {
     const customInstructions = [
       compactionPrompt?.trim(),
       options.customInstructions?.trim(),
+      options.toldLedger?.trim() ? `${TOLD_LEDGER_SUMMARY_INSTRUCTION}\n${options.toldLedger.trim()}` : undefined,
     ].filter(Boolean).join('\n\n') || undefined;
 
     const result = await autoCompactAgentMessagesIfNeeded({
