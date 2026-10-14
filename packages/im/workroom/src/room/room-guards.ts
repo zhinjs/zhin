@@ -81,6 +81,11 @@ export interface RoomCancelResult {
   readonly cancelledRunning: boolean;
   /** Always 0 unless the actor passes `authorizeSensitive('room.cancel_queue')`. */
   readonly cancelledQueued: number;
+  /**
+   * True when queued turns existed but the actor lacks `room.cancel_queue`, so the queue was left intact.
+   * Omitted otherwise.
+   */
+  readonly queueRefused?: boolean;
 }
 
 export interface RoomGuardStats {
@@ -303,7 +308,12 @@ export function createRoomGuards(options: RoomGuardOptions = {}): RoomGuards {
         cancelledRunning = true;
       }
       let cancelledQueued = 0;
-      if (authorizeSensitive('room.cancel_queue', actor) !== undefined) return { cancelledRunning, cancelledQueued };
+      const queueRefusal = authorizeSensitive('room.cancel_queue', actor);
+      if (queueRefusal !== undefined) {
+        if (lane.queued.size === 0) return { cancelledRunning, cancelledQueued };
+        logger?.warn(`room ${roomId} queue left intact: ${queueRefusal}`);
+        return { cancelledRunning, cancelledQueued, queueRefused: true };
+      }
       for (const turn of lane.queued) {
         turn.cancelled = true;
         turn.controller.abort();

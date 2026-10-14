@@ -183,12 +183,38 @@ describe('room guards: human cancel', () => {
     const running = guards.runExclusive('r', async (s) => { signal = s; await gate.promise; return 'done'; });
     const queued = guards.runExclusive('r', async () => { ran.push('queued'); return 'q'; });
     await tick();
-    expect(guards.cancelRoom('r', actor)).toEqual({ cancelledRunning: true, cancelledQueued: 0 });
+    expect(guards.cancelRoom('r', actor)).toEqual({ cancelledRunning: true, cancelledQueued: 0, queueRefused: true });
     expect(signal.aborted).toBe(true);
     gate.resolve();
     expect(await running).toBe('done');
     expect(await queued).toBe('q');
     expect(ran).toEqual(['queued']);
+  });
+
+  it('warns when the queue is left intact for a human without room.cancel_queue', async () => {
+    const logs: string[] = [];
+    const guards = createRoomGuards({ sensitiveAccounts: ['u1'], logger: { warn: (m) => logs.push(m) } });
+    const gate = deferred();
+    const running = guards.runExclusive('r', async () => { await gate.promise; });
+    const queued = guards.runExclusive('r', async () => 'q');
+    await tick();
+    expect(guards.cancelRoom('r', { origin: 'human', accountId: 'nobody' })).toEqual({ cancelledRunning: true, cancelledQueued: 0, queueRefused: true });
+    expect(logs.some((m) => m.includes('queue left intact'))).toBe(true);
+    gate.resolve();
+    await running;
+    expect(await queued).toBe('q');
+  });
+
+  it('omits queueRefused when a refused actor faces an empty queue', async () => {
+    const guards = createRoomGuards({ sensitiveAccounts: ['u1'] });
+    const gate = deferred();
+    const running = guards.runExclusive('r', async () => { await gate.promise; });
+    await tick();
+    const result = guards.cancelRoom('r', { origin: 'human', accountId: 'nobody' });
+    expect(result).toEqual({ cancelledRunning: true, cancelledQueued: 0 });
+    expect('queueRefused' in result).toBe(false);
+    gate.resolve();
+    await running;
   });
 
   it('refuses non-humans and leaves the turn alone', async () => {

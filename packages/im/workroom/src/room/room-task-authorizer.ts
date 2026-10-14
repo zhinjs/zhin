@@ -13,8 +13,9 @@ import type { GuardActor, RoomGuards } from './room-guards.js';
  *   and cannot see the Task's state, so without `authorizeAssign` every `assign` is refused; the first
  *   assignment goes through `create` with an assignee and is not affected.
  *
- * Every other command is passed on to `next` (or allowed when `next` is absent). Membership and `handoffTo`
- * checks are NOT done here: C1 supplies them via `next`. C1 may later give `authorize` a Task view
+ * Every other command is passed on to `next`. C1 MUST supply `next` and perform the role / membership check
+ * for start / block / handoff (and `handoffTo`). Without `next`, those commands are NOT checked by this
+ * authorizer (they pass through unchecked), so this is not a safe default. C1 may later give `authorize` a Task view
  * (an overload) to restrict only assigned / blocked Tasks; that is a C1 option, not part of B4.
  *
  * Notes for C1:
@@ -38,7 +39,10 @@ export interface RoomTaskAuthorizerOptions {
    * Optional, but when absent every `assign` is refused (fail-closed).
    */
   readonly authorizeAssign?: (roomId: string, command: RoomAssignCommand) => string | undefined;
-  /** Composed after the built-in checks pass (membership, handoffTo, ...). */
+  /**
+   * Composed after the built-in checks pass. C1 MUST supply it to enforce the role / membership checks for
+   * start / block / handoff (and `handoffTo`); when absent those commands are not checked here.
+   */
   readonly next?: RoomTaskAuthorizer;
 }
 

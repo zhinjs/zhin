@@ -92,14 +92,6 @@ describe('createRoomTaskAuthorizer', () => {
     expect(seen).toEqual(['create', 'start', 'block']);
   });
 
-  it('still lets start, block and handoff through when next is absent', async () => {
-    const service = setup(() => undefined);
-    await create(service);
-    await service.execute('r', { type: 'start', commandId: 'c1', taskId: 't', by: 'dev' });
-    await service.execute('r', { type: 'block', commandId: 'c2', taskId: 't', by: 'dev', reason: 'need input' });
-    expect((await service.get('r', 't'))?.status).toBe('blocked');
-  });
-
   it('assigns unique contiguous sequences to concurrent executes on one Room', async () => {
     const service = setup(() => undefined);
     const seen: RoomTaskEvent[] = [];

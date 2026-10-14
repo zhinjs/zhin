@@ -194,4 +194,35 @@ describe('createRoomSendLimiter (shared instance)', () => {
     const { limiter } = shared();
     await expect(limiter.middleware({} as never, async () => undefined)).rejects.toBeInstanceOf(RoomSendRateLimitedError);
   });
+
+  it('outboundMiddleware() is an outbound definition reading the envelope from context.input', async () => {
+    const { limiter, sleeps } = shared();
+    const def = limiter.outboundMiddleware();
+    expect(def.target).toBe('outbound');
+    const calls: string[] = [];
+    await def.handle({ input: envelope('e1') }, async () => { calls.push('a'); });
+    await def.handle({ input: envelope('e2') }, async () => { calls.push('b'); });
+    expect(sleeps).toEqual([1000]);
+    expect(calls).toEqual(['a', 'b']);
+  });
+
+  it('outboundMiddleware() refuses over the limit and does not call next', async () => {
+    const { limiter } = shared({ minIntervalMs: 0, maxPerMinute: 1, maxWaitMs: 5000 });
+    const def = limiter.outboundMiddleware();
+    await def.handle({ input: envelope('e1') }, async () => undefined);
+    let called = false;
+    const error = await def.handle({ input: envelope('e1') }, async () => { called = true; }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RoomSendRateLimitedError);
+    expect(error).toMatchObject({ code: 'room_send_rate_limited' });
+    expect(called).toBe(false);
+  });
+
+  it('fails closed when the core context is passed to middleware() as the envelope', async () => {
+    const { limiter } = shared();
+    let called = false;
+    const error = await limiter.middleware({ input: envelope('e1') } as never, async () => { called = true; }).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(RoomSendRateLimitedError);
+    expect(error).toMatchObject({ code: 'room_send_guard_error' });
+    expect(called).toBe(false);
+  });
 });

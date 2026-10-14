@@ -6,7 +6,9 @@ import type { OutboundMessageService } from '@zhin.js/core/runtime';
  * Two forms over ONE shared instance (`createRoomSendLimiter`), both booking into the same per-account map:
  * - `send(request)`: a decorator over `Pick<OutboundMessageService, 'send'>`; once a slot is granted it still
  *   calls the wrapped `send`.
- * - `middleware(envelope, next)`: an outbound middleware; books a slot, sleeps, then `await next()`.
+ * - `outboundMiddleware()`: an outbound middleware definition (`{ target: 'outbound', handle(ctx, next) }`);
+ *   books a slot, sleeps, then `await next()`. Wrap it as `defineMiddleware(limiter.outboundMiddleware())`
+ *   to get the feature brand. `middleware(envelope, next)` is the low-level form underneath it.
  * Either way the normal outbound chain (OutboundRenderer -> outbound middleware -> Endpoint) is never bypassed:
  * the limiter only delays or refuses before `inner.send` / `next()`.
  *
@@ -14,6 +16,10 @@ import type { OutboundMessageService } from '@zhin.js/core/runtime';
  * wrapping the shared OutboundMessageService), keyed by account. Wrapping only RoomBus's `outbound` under-counts
  * `$reply` and generation output of the same account, so the account-level risk-control protection would only
  * be partial. It is not installed globally by B4.
+ *
+ * One outbound path must use exactly ONE form (middleware, OR `send` wrapping the OutboundMessageService).
+ * Using both on the same path books the same send twice and double-counts it. Share the instance across
+ * DIFFERENT paths of the same account, not across two forms of one path.
  */
 
 type DeliveryReceipt = Awaited<ReturnType<OutboundMessageService['send']>>;
@@ -60,10 +66,31 @@ export class RoomSendRateLimitedError extends Error {
   }
 }
 
+/** Structural subset of the core outbound middleware context: the envelope lives in `input`. */
+export interface RoomOutboundMiddlewareContext {
+  readonly input: RoomSendEnvelope;
+}
+
+/** Structural outbound middleware definition; `phase` / `order` default in `defineMiddleware`. */
+export interface RoomOutboundMiddlewareDefinition {
+  readonly target: 'outbound';
+  handle(context: RoomOutboundMiddlewareContext, next: () => Promise<void>): Promise<void>;
+}
+
 export interface RoomSendLimiter {
   send(request: Parameters<OutboundMessageService['send']>[0]): Promise<DeliveryReceipt>;
-  /** Outbound middleware form; throws RoomSendRateLimitedError when refused. */
+  /**
+   * Low-level: takes the ENVELOPE, not the core middleware context. Passing the context makes `reserve` fail
+   * closed on every send. Use `outboundMiddleware()` in plugins. Adaptation by hand:
+   * `handle: (ctx, next) => limiter.middleware(ctx.input, next)`.
+   * Throws RoomSendRateLimitedError when refused.
+   */
   middleware(envelope: RoomSendEnvelope, next: () => Promise<void>): Promise<void>;
+  /**
+   * Outbound middleware definition for plugins: `defineMiddleware(limiter.outboundMiddleware())`.
+   * Do not combine with `send` on the same outbound path (double counting).
+   */
+  outboundMiddleware(): RoomOutboundMiddlewareDefinition;
 }
 
 interface Booking {
@@ -147,6 +174,17 @@ export function createRoomSendLimiter(options: RoomSendLimiterOptions): RoomSend
     }
   };
 
+  const middleware = async (envelope: RoomSendEnvelope, next: () => Promise<void>): Promise<void> => {
+    const wait = reserve(envelope);
+    if (typeof wait !== 'number') {
+      logger?.warn(`room send refused: ${wait.failure?.code ?? wait.status}`);
+      throw new RoomSendRateLimitedError(
+        wait.failure?.code ?? 'room_send_guard_error', wait.failure?.message ?? 'send refused', wait.failure?.retryable ?? false);
+    }
+    if (wait > 0) await sleep(wait);
+    await next();
+  };
+
   return Object.freeze({
     async send(request: Parameters<OutboundMessageService['send']>[0]): Promise<DeliveryReceipt> {
       if (!inner) return rejected('room_send_guard_error', 'send limiter has no inner service', false);
@@ -158,20 +196,17 @@ export function createRoomSendLimiter(options: RoomSendLimiterOptions): RoomSend
       if (wait > 0) await sleep(wait);
       return inner.send(request);
     },
-    async middleware(envelope: RoomSendEnvelope, next: () => Promise<void>): Promise<void> {
-      const wait = reserve(envelope);
-      if (typeof wait !== 'number') {
-        logger?.warn(`room send refused: ${wait.failure?.code ?? wait.status}`);
-        throw new RoomSendRateLimitedError(
-          wait.failure?.code ?? 'room_send_guard_error', wait.failure?.message ?? 'send refused', wait.failure?.retryable ?? false);
-      }
-      if (wait > 0) await sleep(wait);
-      await next();
+    middleware,
+    outboundMiddleware(): RoomOutboundMiddlewareDefinition {
+      return Object.freeze({
+        target: 'outbound' as const,
+        handle: (context: RoomOutboundMiddlewareContext, next: () => Promise<void>) => middleware(context.input, next),
+      });
     },
   });
 }
 
-/** Thin wrapper kept for the `send` form; share one limiter instance via `createRoomSendLimiter` for all outbound. */
+/** Tests / standalone use only. Production (C1) uses the shared `createRoomSendLimiter` instance. */
 export function createRateLimitedOutbound(options: RateLimitedOutboundOptions): Pick<OutboundMessageService, 'send'> {
   const limiter = createRoomSendLimiter(options);
   return Object.freeze({ send: (request: Parameters<OutboundMessageService['send']>[0]) => limiter.send(request) });
