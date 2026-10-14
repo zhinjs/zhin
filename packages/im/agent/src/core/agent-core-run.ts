@@ -39,6 +39,11 @@ import { TurnJournalCommitError } from '../turn/journal-integrity.js';
 import { ExecutableToolRegistry } from '../tool/executable-tool-registry.js';
 import { withoutForbiddenShell } from '../plugin-runtime/native-bash-tool.js';
 import { createMissingToolResolver } from './missing-tool-resolver.js';
+import {
+  DEFAULT_EXPLORATION_BUDGET,
+  EXPLORATION_GUIDANCE,
+  ExplorationBudget,
+} from './exploration-budget.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -481,6 +486,12 @@ export async function* runAgentLoopTextTurnRun(
   const maxIterations = hasTools
     ? (harness.maxIterations ?? host.config.maxIterations)
     : 1;
+  const explorationBudget = hasTools
+    ? new ExplorationBudget(harness.explorationBudget ?? DEFAULT_EXPLORATION_BUDGET)
+    : undefined;
+  if (hasTools && harness.explorationGuidance) {
+    systemPrompt = `${systemPrompt}\n\n${EXPLORATION_GUIDANCE}`;
+  }
 
   const executableTools = new ExecutableToolRegistry(agentTools);
   let llmTools = directTools
@@ -647,7 +658,8 @@ export async function* runAgentLoopTextTurnRun(
           }
         }
 
-        const finalText = resultText;
+        const budgetNote = explorationBudget?.record(resolvedName);
+        const finalText = budgetNote ? `${resultText}\n\n${budgetNote}` : resultText;
         toolCalls.push({ tool: resolvedName, args: effectiveArgs, result: finalText });
         return toolResultToAgentMessage(toolCall, finalText, false);
       } catch (err) {

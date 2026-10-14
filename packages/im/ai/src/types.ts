@@ -321,6 +321,15 @@ export interface AgentBindingConfig {
   nickname?: string;
 }
 
+/** Per-model harness override (ai.agent.modelHarness.models / providerPatterns). */
+export interface ModelHarnessOverride {
+  maxIterations?: number;
+  /** 连续只读探索调用达到该次数时注入提示；0 关闭 */
+  explorationBudget?: number;
+  /** 在系统提示中加入"先规划、限定目标文件"的探索纪律 */
+  explorationGuidance?: boolean;
+}
+
 export interface AIConfig {
   enabled?: boolean;
   /** Optional structured-decision service, selected by exact Plugin Runtime owner. */
@@ -467,9 +476,9 @@ export interface AIConfig {
     /** 按模型 / provider 模式覆盖 model harness */
     modelHarness?: {
       /** 模型级覆盖：支持 "gpt-4o" 或 "openai:gpt-4o" */
-      models?: Record<string, { maxIterations?: number }>;
+      models?: Record<string, ModelHarnessOverride>;
       /** provider 模式覆盖（支持 * 通配符） */
-      providerPatterns?: Record<string, { maxIterations?: number }>;
+      providerPatterns?: Record<string, ModelHarnessOverride>;
     };
     /** Worker 侧 TF-IDF 载入 deferred 工具数量上限 */
     deferredToolMaxResults?: number;
