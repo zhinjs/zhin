@@ -26,9 +26,24 @@ describe('PeerRegistry', () => {
     expect(() => registry.registerEndpoint({}, input('a', '   '))).toThrow(TypeError);
     expect(() => registry.registerEndpoint({}, input('a', undefined as never))).toThrow(TypeError);
     expect(() => registry.registerEndpoint({}, input('a', {} as never))).toThrow(TypeError);
-    expect(() => registry.lookup('icqq', '')).toThrow(TypeError);
     expect(() => registry.declareExternal('icqq', '  ')).toThrow(TypeError);
     expect(registry.isReady('a')).toBe(false);
+  });
+
+  it('returns a miss instead of throwing on the read path', () => {
+    const registry = createPeerRegistry();
+    registry.registerEndpoint({}, input('a', '1'));
+    expect(registry.lookup('icqq', '')).toBeUndefined();
+    expect(registry.lookup('', '1')).toBeUndefined();
+    expect(registry.lookup(undefined as never, '1')).toBeUndefined();
+    expect(registry.lookup('icqq', {} as never)).toBeUndefined();
+    expect(registry.lookup('icqq', null as never)).toBeUndefined();
+    expect(registry.lookup('icqq', NaN as never)).toBeUndefined();
+    for (const bad of ['', undefined, null, {}]) {
+      expect(registry.isReady(bad as never)).toBe(false);
+      expect(registry.selfOf(bad as never)).toBeUndefined();
+    }
+    expect(registry.isReady('undefined')).toBe(false);
   });
 
   it('merges the same account across endpoints', () => {
@@ -49,6 +64,31 @@ describe('PeerRegistry', () => {
     expect(registry.lookup('icqq', '1')).toBeUndefined();
     releaseOld();
     expect(registry.selfOf('a')).toBe('2');
+  });
+
+  it('ignores a stale generation re-reporting after a newer one registered', () => {
+    const registry = createPeerRegistry();
+    const oldOwner = {};
+    const newOwner = {};
+    const releaseOld1 = registry.registerEndpoint(oldOwner, input('a', '1'));
+    const releaseNew = registry.registerEndpoint(newOwner, input('a', '2'));
+    const releaseOld2 = registry.registerEndpoint(oldOwner, input('a', '1'));
+    expect(registry.selfOf('a')).toBe('2');
+    releaseOld1();
+    releaseOld2();
+    expect(registry.selfOf('a')).toBe('2');
+    expect(registry.lookup('icqq', '2')).toBeDefined();
+    releaseNew();
+    expect(registry.isReady('a')).toBe(false);
+  });
+
+  it('lets the same owner replace its own entry', () => {
+    const registry = createPeerRegistry();
+    const owner = {};
+    registry.registerEndpoint(owner, input('a', '1'));
+    registry.registerEndpoint(owner, input('a', '3'));
+    expect(registry.selfOf('a')).toBe('3');
+    expect(registry.lookup('icqq', '1')).toBeUndefined();
   });
 
   it('releases its own entry', () => {

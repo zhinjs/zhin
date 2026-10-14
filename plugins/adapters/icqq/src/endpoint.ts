@@ -591,10 +591,18 @@ export class IcqqEndpoint extends Endpoint<Client> {
       if (this.#retiring) return;
       this.#everOnline = true;
       try {
-        // transport 重连不清除（账号不变）；stop/retire 由基类撤销登记。
-        this.reportSelfUserId(resolveIcqqSelfUserId(this.client));
         this.#resolveStartOnline?.();
         this.#options.loginAssist.cancelOwned(this.#loginAssistOwner, 'online');
+        try {
+          // transport 重连不清除（账号不变）；stop/retire 由基类撤销登记。上报失败不影响上线流程。
+          this.reportSelfUserId(resolveIcqqSelfUserId(this.client));
+        } catch (error) {
+          this.#logger.warn(formatCompact({
+            op: 'icqq_report_self_user_id_failed',
+            endpoint: this.endpointName,
+            error: error instanceof Error ? error.message : String(error),
+          }));
+        }
         this.#logSystemEvent('online', event);
       } catch (error) {
         this.#logger.warn(formatCompact({

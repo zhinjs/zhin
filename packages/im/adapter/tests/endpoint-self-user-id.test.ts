@@ -112,6 +112,22 @@ describe('Endpoint.selfUserId', () => {
     expect(registry.isReady(id)).toBe(false);
   });
 
+  it('ignores an old instance re-reporting after the new one is active', () => {
+    const id = nextId();
+    const oldEndpoint = new TestEndpoint();
+    const newEndpoint = new TestEndpoint();
+    bindEndpoint(oldEndpoint, ctx(id));
+    oldEndpoint.report('1');
+    bindEndpoint(newEndpoint, ctx(id));
+    newEndpoint.report('2');
+    oldEndpoint.report('1');
+    expect(registry.selfOf(id)).toBe('2');
+    retireEndpoint(oldEndpoint);
+    expect(registry.selfOf(id)).toBe('2');
+    retireEndpoint(newEndpoint);
+    expect(registry.isReady(id)).toBe(false);
+  });
+
   it('keeps identity frozen and unchanged', () => {
     const endpoint = new TestEndpoint();
     bindEndpoint(endpoint, ctx(nextId()));

@@ -142,6 +142,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
     rejectAllPending(this.#pending);
     this.#ws = undefined;
     this.#started = false;
+    this.reportSelfUserId(undefined);
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -169,7 +170,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
 
   #admitRaw(ev: OneBot11Event): void {
     const selfId = resolveOnebot11SelfId(ev.self_id);
-    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (!this.#stopped && selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
@@ -212,6 +213,7 @@ export class OneBot11WssEndpoint extends ClientEndpoint<Onebot11Client> {
         error: error instanceof Error ? error.message : String(error),
       }));
     });
+    if (this.#stopped || this.transportState !== 'open') return;
     if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
   }
 

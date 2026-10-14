@@ -29,6 +29,8 @@ export interface RegisterEndpointInput {
 
 interface EndpointEntry {
   readonly owner: object;
+  /** 登记序号：owner 首次登记时分配，单调递增；大者为更新的 generation。 */
+  readonly claim: number;
   readonly endpointId: CapabilityId;
   readonly adapter: string;
   readonly userId: string;
@@ -56,6 +58,40 @@ function normalizeUserId(userId: unknown): string {
   return value;
 }
 
+function tryNormalizeAdapter(adapter: unknown): string | undefined {
+  if (typeof adapter !== 'string') return undefined;
+  const value = adapter.trim().toLowerCase();
+  return value === '' ? undefined : value;
+}
+
+function tryNormalizeUserId(userId: unknown): string | undefined {
+  if (typeof userId === 'number') {
+    if (!Number.isFinite(userId)) return undefined;
+  } else if (typeof userId !== 'string') {
+    return undefined;
+  }
+  const value = String(userId).trim();
+  return value === '' ? undefined : value;
+}
+
+function tryEndpointKey(endpointId: unknown): string | undefined {
+  if (typeof endpointId !== 'string' && typeof endpointId !== 'number') return undefined;
+  const value = String(endpointId);
+  return value === '' ? undefined : value;
+}
+
+let claimCounter = 0;
+const claimOf = new WeakMap<object, number>();
+
+function claimFor(owner: object): number {
+  let claim = claimOf.get(owner);
+  if (claim === undefined) {
+    claim = ++claimCounter;
+    claimOf.set(owner, claim);
+  }
+  return claim;
+}
+
 const keyOf = (adapter: string, userId: string): string => `${adapter}\u0000${userId}`;
 
 export class PeerRegistry {
@@ -63,14 +99,19 @@ export class PeerRegistry {
   readonly #declared: DeclaredEntry[] = [];
 
   /**
-   * 登记一个已 active 的 Endpoint 账号。同 endpointId 的新登记会替换旧条目；
-   * 返回的 release 只在条目仍属于调用方 owner 时生效（热重载新旧实例互不误删）。
+   * 登记一个已 active 的 Endpoint 账号。“新 generation 胜出”：每个 owner 首次登记时获得单调递增的序号，
+   * 同 owner 或更新的 owner 可替换旧条目；旧 generation 在新实例登记后再次上报会被忽略（返回空操作 release）。
+   * 返回的 release 只在条目仍是自己登记的那条时生效（热重载新旧实例互不误删）。
+   * 写路径严格校验，非法输入抛 TypeError。
    */
   registerEndpoint(owner: object, input: RegisterEndpointInput): () => void {
     const adapter = normalizeAdapter(input.adapter);
     const userId = normalizeUserId(input.selfUserId);
     const id = String(input.endpointId);
-    const entry: EndpointEntry = Object.freeze({ owner, endpointId: input.endpointId, adapter, userId });
+    const claim = claimFor(owner);
+    const existing = this.#endpoints.get(id);
+    if (existing && existing.owner !== owner && existing.claim > claim) return () => {};
+    const entry: EndpointEntry = Object.freeze({ owner, claim, endpointId: input.endpointId, adapter, userId });
     this.#endpoints.set(id, entry);
     return () => {
       if (this.#endpoints.get(id) === entry) this.#endpoints.delete(id);
@@ -92,16 +133,20 @@ export class PeerRegistry {
   }
 
   lookup(adapter: string, userId: string): PeerAccount | undefined {
-    const key = keyOf(normalizeAdapter(adapter), normalizeUserId(userId));
-    return this.#build().get(key);
+    const a = tryNormalizeAdapter(adapter);
+    const u = tryNormalizeUserId(userId);
+    if (a === undefined || u === undefined) return undefined;
+    return this.#build().get(keyOf(a, u));
   }
 
   isReady(endpointId: CapabilityId | string): boolean {
-    return this.#endpoints.has(String(endpointId));
+    const id = tryEndpointKey(endpointId);
+    return id !== undefined && this.#endpoints.has(id);
   }
 
   selfOf(endpointId: CapabilityId | string): string | undefined {
-    return this.#endpoints.get(String(endpointId))?.userId;
+    const id = tryEndpointKey(endpointId);
+    return id === undefined ? undefined : this.#endpoints.get(id)?.userId;
   }
 
   snapshot(): readonly PeerAccount[] {

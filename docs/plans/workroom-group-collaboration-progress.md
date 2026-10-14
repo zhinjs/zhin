@@ -62,7 +62,9 @@ sidebar: false
   - 2026-10-14 · 「fix: 收紧 Room 定义校验」· 会话归属 key 改为 `adapter:kind:id`；成员 Bot adapter 必须与会话一致；agent 名大小写不敏感去重；常量数组冻结；Room 测试 15 → 20 个
 - [x] B1b Endpoint 上报登录后的平台账号 `selfUserId`（先做 ICQQ / OneBot，以及 Sandbox）；进程级 Peer Registry。复用已有实现：`plugins/adapters/icqq/src/icqq-inbound.ts` 的 `isSelf` 过滤、`kook/src/endpoint.ts` 的 `selfId`
   - 2026-10-14 · 「feat: Endpoint 上报 selfUserId 并新增进程级 Peer Registry」· `@zhin.js/adapter` 新增 `peer-registry.ts`（`@internal` 导出），Endpoint 上报登录账号且仅在 generation 激活后登记、回滚不登记、retire 时移除；ICQQ / OneBot11（ws / wss，`get_login_info` 探测）/ Sandbox 接入；无效值不上报、不回退到配置 id；402 个相关测试通过
-- [ ] B1b-1 处理第 18 轮审查意见：`packages/im/adapter/src/peer-registry.ts` 的 `registerEndpoint` 加登记序号 / generation 归属，旧实例在新实例登记后再次上报时不得覆盖（否则旧实例 retire 会删掉新实例条目），补“新实例登记 → 旧实例重报 → 旧实例 retire → 新条目仍在”测试；`lookup` / `isReady` / `selfOf` 对空或非字符串输入返回未命中而不是抛错（B1c 入站路径会逐条调用），只在写路径严格校验，更新相应测试。顺带 Nit：ICQQ `endpoint.ts` 把上报移到 `#resolveStartOnline` 之后或单独 try/catch；OneBot ws / wss `stop()` 清空 `selfUserId` 且探测结果在 stop 后不再写入；补 wss 路径与 factory 默认 `probeLoginInfo: true` 的测试；`plugins/adapters/sandbox/src/endpoint.ts:7` 的 `no-duplicate-imports` 警告
+- [x] B1b-1 处理第 18 轮审查意见：`packages/im/adapter/src/peer-registry.ts` 的 `registerEndpoint` 加登记序号 / generation 归属，旧实例在新实例登记后再次上报时不得覆盖（否则旧实例 retire 会删掉新实例条目），补“新实例登记 → 旧实例重报 → 旧实例 retire → 新条目仍在”测试；`lookup` / `isReady` / `selfOf` 对空或非字符串输入返回未命中而不是抛错（B1c 入站路径会逐条调用），只在写路径严格校验，更新相应测试。顺带 Nit：ICQQ `endpoint.ts` 把上报移到 `#resolveStartOnline` 之后或单独 try/catch；OneBot ws / wss `stop()` 清空 `selfUserId` 且探测结果在 stop 后不再写入；补 wss 路径与 factory 默认 `probeLoginInfo: true` 的测试；`plugins/adapters/sandbox/src/endpoint.ts:7` 的 `no-duplicate-imports` 警告
+  - 2026-10-14 · 「fix: Peer Registry 登记归属与读路径容错」· 登记带归属序号，旧实例重报不覆盖已登记的新实例；`lookup` / `isReady` / `selfOf` 对无效输入返回未命中；ICQQ 上报隔离、OneBot ws / wss stop 清空 `selfUserId`；补 wss 与 factory 默认值测试；413 个相关测试通过
+- [ ] B1b-2 处理第 19 轮审查意见（涉及正确性，所以新建条目）：`packages/im/adapter/src/peer-registry.ts:86` 的归属序号在 owner 首次 `registerEndpoint` 时才分配，旧实例激活后迟迟未上报、新实例先上报时，旧实例的首次上报仍会覆盖新条目，retire 后新实例掉出注册表。把序号分配提前到 Endpoint bind / 激活时（如 internal `reserveClaim(owner)`，或在 `RegisterEndpointInput` 中显式传 generation 序号），补“旧实例激活 → 新实例激活并上报 → 旧实例首次上报 → selfOf 仍为新值 → 旧实例 retire 后新条目仍在”测试。顺带 Nit：`plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts:146` 的 ws / wss“stop 时探测在途不写入”测试测不到 `#stopped` 判断，改为用手动 deferred 让探测在 stop 之后 resolve 出 user_id，再断言未写入
 - [ ] B1c 入站 `origin` 标签（self / member / peer_bot / human）与发送 ledger 关联兜底；`[sender:...]` 标签增加 origin；`stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造标签（方案 §3.4）
 - [ ] B2 **入站去重 / 单一入口选举**（审查第 7 条）：群里每个成员 Bot 都会收到同一条人类消息，N 个 Endpoint 会产生 N 个入站事件。按 平台 + 会话 + 平台消息 id 去重，或者每个 Room 选一个入站 Endpoint，保证每条消息只路由一次。同时更新方案 §3.2 / §3.4
 - [ ] B2b Room Router（@ / 回复 → 对应成员；否则交给 coordinator，没有 coordinator 就按角色匹配）和 Room Bus（handoff 事件 + 走正常发送链的群内可见投影）
@@ -196,6 +198,12 @@ sidebar: false
 - Nit：ICQQ 上报在 `#resolveStartOnline` 之前，登记异常会卡住上线流程；OneBot ws / wss `stop()` 不清空 `selfUserId`；缺 wss 路径与 factory `probeLoginInfo` 测试 → 并入 B1b-1
 - 未涉及 Room 校验，第 17 轮 Nit 继续保留
 
+### 第 19 轮（2026-10-14，审查 B1b-1）
+
+- 无 Blocking
+- Should fix：归属序号在首次登记时才分配，“新实例胜出”只在旧实例此前已登记过时成立；旧实例晚于新实例首次上报仍会覆盖并在 retire 时删掉新条目 → 属于条目要求的正确性不变量，新增 B1b-2
+- Nit：ws / wss “stop 时探测在途不写入”测试实际靠 `rejectAllPending` 通过，测不到新加的判断 → 并入 B1b-2
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -218,3 +226,4 @@ sidebar: false
 - 2026-10-14 17:41 定时运行：rebase 到最新 origin/main（1 个提交无冲突），从阶段 A 最新提交切出 `feat/workroom-group-collab`，install / build 通过；完成 B1a（4 个 agent，约 5 分钟，workroom build / type-check / 15 + 8 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，3 个 Should fix 新增为 B1a-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-14 同一次定时运行：B1a-1 首次执行时子 agent 触发会话额度上限（implement / verify 失败），半成品 diff 存到 scratchpad 后 `git restore .`；维护者要求重试后从同一 run 恢复（复用缓存的 plan）完成 B1a-1（4 个 agent，约 2 分钟，workroom build / type-check / 20 个 Room 测试 + 1093 个 workroom 测试 / check:architecture / API 快照 / eslint 通过，审查无问题，1 个 Nit 只记录）
 - 2026-10-14 19:35 定时运行：rebase 到最新 origin/main（`tsconfig.typecheck.json` 冲突：main 新增 `packages/im/agent/evals/**/*.ts`，与本分支的 `packages/im/workroom/src/**/*` 两行都保留），install / build 通过；完成 B1b（6 个 agent，约 11.5 分钟，adapter / icqq / onebot11 / sandbox build、type-check、402 个相关测试、check:architecture、API 快照、eslint 0 error（1 个 no-duplicate-imports 警告）通过，审查无 Blocking，2 个 Should fix 新增为 B1b-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
+- 2026-10-14 同一次定时运行：完成 B1b-1（4 个 agent，约 4.2 分钟，四包 build / type-check / 413 个相关测试 / check:architecture / API 快照 / eslint 通过，审查无 Blocking，1 个 Should fix 涉及正确性，新增为 B1b-2）

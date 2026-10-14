@@ -67,4 +67,26 @@ describe('IcqqEndpoint selfUserId', () => {
     await stopping;
     expect(getProcessPeerRegistry().isReady('test-endpoint')).toBe(false);
   });
+
+  it('still goes online and cancels login assist when reporting throws', async () => {
+    const gateway = { receive: vi.fn(async () => undefined), send: vi.fn(async () => 'sent') };
+    const ports = createIcqqTestPorts();
+    const cancelOwned = vi.spyOn(ports.loginAssist, 'cancelOwned');
+    const endpoint = bindTestEndpoint(new IcqqEndpoint({
+      id: capabilityId(rootPluginId(), featureId('zhin.adapter'), 'icqq'),
+      gateway,
+      config: resolveIcqqConfig({ id: '10001', autoReconnect: false }),
+      ...ports,
+    }), gateway, undefined);
+    const report = vi.spyOn(endpoint as unknown as { reportSelfUserId: () => void }, 'reportSelfUserId')
+      .mockImplementation(() => { throw new Error('registry down'); });
+    const starting = endpoint.start(new AbortController().signal);
+    await vi.waitFor(() => expect(report).toHaveBeenCalled());
+    endpoint.client.emit('system.online');
+    await expect(starting).resolves.toBeUndefined();
+    expect(cancelOwned).toHaveBeenCalledWith(expect.anything(), 'online');
+    expect(endpoint.selfUserId).toBeUndefined();
+    retireEndpoint(endpoint);
+    await endpoint.stop();
+  });
 });

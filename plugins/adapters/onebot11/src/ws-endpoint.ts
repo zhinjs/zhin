@@ -66,6 +66,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
   readonly content;
   readonly #lifecycle: EndpointLifecycle;
   #ws?: OneBot11WsSocket;
+  #stopped = false;
   #requestId = { value: 0 };
   #pending = new Map<string, OneBot11PendingAction>();
 
@@ -104,6 +105,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
 
   async start(): Promise<void> {
     if (this.#lifecycle.started) return;
+    this.#stopped = false;
     try {
       await this.#lifecycle.start((handle) => this.#connect(handle));
       if (this.#options.probeLoginInfo) void this.#probeSelfUserId();
@@ -122,11 +124,13 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
   }
 
   async stop(): Promise<void> {
+    this.#stopped = true;
     this.close();
     // 基座负责：清重连/心跳定时器、强关 ws、唤醒 stop-during-connect 竞态
     await this.#lifecycle.stop();
     rejectAllPending(this.#pending);
     this.#ws = undefined;
+    this.reportSelfUserId(undefined);
   }
 
   async send({ conversation, payload }: EndpointSendRequest): Promise<string> {
@@ -161,7 +165,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
 
   #admitRaw(ev: OneBot11Event): void {
     const selfId = resolveOnebot11SelfId(ev.self_id);
-    if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
+    if (!this.#stopped && selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
     if (!isMessageEvent(ev)) {
       receiveOneBot11SideEvent(
         (name, payload) => this.emit(name, payload),
@@ -205,6 +209,7 @@ export class OneBot11WsEndpoint extends ClientEndpoint<Onebot11Client> {
         error: error instanceof Error ? error.message : String(error),
       }));
     });
+    if (this.#stopped || this.transportState !== 'open') return;
     if (selfId && selfId !== this.selfUserId) this.reportSelfUserId(selfId);
   }
 
