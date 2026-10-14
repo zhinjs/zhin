@@ -23,6 +23,8 @@ import { TurnToolRuntime } from '../../src/tool/turn-tool-runtime.js';
 import { createTurnIngress, type ConversationContextPort, type TurnPolicyContext } from '../../src/turn/turn-ingress.js';
 import { DEFAULT_DEFERRED_TOOLS_CONFIG } from '../../src/tool-catalog/types.js';
 import { ZhinAgent } from '../../src/zhin-agent/index.js';
+import { TurnTraceCollector, type TurnTrace } from '../../src/trace/turn-trace.js';
+import { createTracingJournal, registerTurnTrace } from '../../src/trace/turn-trace-registry.js';
 import type { EvalApprovalBehaviour, EvalCase, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
 import { createScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
 
@@ -53,6 +55,8 @@ export interface EvalRunRecord {
   readonly unofferedToolCalls: readonly string[];
   /** `notOffered` scripted calls that the harness offered after all. */
   readonly unexpectedlyOfferedToolCalls: readonly string[];
+  /** One TurnTrace per inbound turn, built exactly as production builds them. */
+  readonly traces: readonly TurnTrace[];
 }
 
 const ENDPOINT = 'eval-bot';
@@ -103,6 +107,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
   const approvalRequests: string[] = [];
   const events: TurnEvent[] = [];
   const terminals: TurnTerminalEvent[] = [];
+  const traces: TurnTrace[] = [];
   const tools = [
     ...(definition.tools ?? []).map((tool) => toCapability(tool, executedTools, rawToolOutputs)),
     ...nativeCapabilities(definition.nativeTools ?? [], definition.bashOutput ?? '', executedTools, rawToolOutputs),
@@ -111,7 +116,9 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
 
   const inbound = Array.isArray(definition.inbound) ? definition.inbound : [definition.inbound];
   for (const [index, message] of (inbound as readonly EvalInboundMessage[]).entries()) {
-    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, approval, outbound, workspace);
+    const trace = createTurnTrace(definition, message, index);
+    const releaseTrace = registerTurnTrace(trace);
+    const { turn, tools: turnTools } = buildTurn(definition, message, index, tools, approval, outbound, workspace, trace);
     const context: AgentTurnExecutionContext = {
       turn,
       capabilities: { generation: 1, owner: rootPluginId(), tools: turnTools, skills: [], agents: [], mcp: [], promptSections: [] },
@@ -122,15 +129,23 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
         mcpServers: [],
       },
     };
-    const stream = engine.run(context);
-    while (true) {
-      const step = await stream.next();
-      if (step.done) {
-        await step.value?.project();
-        break;
+    try {
+      const stream = engine.run(context);
+      while (true) {
+        const step = await stream.next();
+        if (step.done) {
+          await step.value?.project();
+          break;
+        }
+        // Like executeAgentTurn, every engine event is committed to the journal.
+        await turn.ports.journal.append(step.value);
+        events.push(step.value);
+        if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
       }
-      events.push(step.value);
-      if (isTurnTerminalEvent(step.value)) terminals.push(step.value);
+    } finally {
+      releaseTrace();
+      trace.finalize();
+      traces.push(trace.snapshot());
     }
   }
 
@@ -147,6 +162,7 @@ async function runInWorkspace(definition: EvalCase, workspace: string | undefine
     extraModelRequests: model.exhaustedRequests(),
     unofferedToolCalls: model.unofferedToolCalls,
     unexpectedlyOfferedToolCalls: model.unexpectedlyOfferedToolCalls,
+    traces,
   };
 }
 
@@ -158,12 +174,13 @@ function buildTurn(
   approval: ApprovalOutcomePort | undefined,
   outbound: string[],
   workspace: string | undefined,
+  trace: TurnTraceCollector,
 ) {
   const scope = message.scope ?? 'private';
   const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
   const roles = [...(sender.roles ?? ['user'])];
   const sceneId = scope === 'group' ? 'eval-group' : sender.id;
-  const sessionKey = `im:${PLATFORM}:${ENDPOINT}:${scope}:${sceneId}`;
+  const sessionKey = sessionKeyFor(message);
   const requestedPolicy: TurnPolicyContext = message.policy ?? defaultPolicy(roles, workspace, message.shell === true);
   const origin = { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId } as const;
   // Same #719 rule AgentRuntime applies before a Turn starts (group members lose shell/write/outbound).
@@ -182,7 +199,7 @@ function buildTurn(
     capabilities: { tools: turnTools.map((tool) => tool.name), skills: [] },
     signal: new AbortController().signal,
     ports: {
-      journal: { append: async () => undefined },
+      journal: createTracingJournal({ append: async () => undefined }, trace),
       reply: {
         send: async (output) => {
           const text = output
@@ -197,6 +214,26 @@ function buildTurn(
     },
   });
   return { turn, tools: turnTools };
+}
+
+function sessionKeyFor(message: EvalInboundMessage): string {
+  const scope = message.scope ?? 'private';
+  const senderId = message.sender?.id ?? 'eval-user';
+  const sceneId = scope === 'group' ? 'eval-group' : senderId;
+  return `im:${PLATFORM}:${ENDPOINT}:${scope}:${sceneId}`;
+}
+
+function createTurnTrace(definition: EvalCase, message: EvalInboundMessage, index: number): TurnTraceCollector {
+  const sender = message.sender ?? { id: 'eval-user', roles: ['user'] };
+  return new TurnTraceCollector({
+    turnId: `${definition.id}:turn-${index + 1}`,
+    sessionKey: sessionKeyFor(message),
+    principal: {
+      subjectId: sender.id,
+      ...(sender.name ? { displayName: sender.name } : {}),
+      roles: [...(sender.roles ?? ['user'])],
+    },
+  });
 }
 
 function backgroundContext(texts: readonly string[]): ConversationContextPort {

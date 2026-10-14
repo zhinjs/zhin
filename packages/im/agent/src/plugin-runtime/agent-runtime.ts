@@ -2,6 +2,9 @@ import { createToken, type PluginId, type SnapshotLease, type SnapshotReader } f
 import { restrictGroupMemberTurn } from '../security/group-member-policy.js';
 import type { JournalStore } from '@zhin.js/ai/journal-store';
 import { PersistentTurnJournal } from '../journal/persistent-turn-journal.js';
+import { TurnTraceCollector } from '../trace/turn-trace.js';
+import { createTracingJournal, registerTurnTrace } from '../trace/turn-trace-registry.js';
+import type { TurnTraceStore } from '../trace/turn-trace-store.js';
 import { executeAgentTurn, type TurnEventObserver } from '../turn/execute-agent-turn.js';
 import {
   createTurnIngress,
@@ -224,6 +227,8 @@ export const agentTurnEngineToken = createToken<AgentTurnEngine>(
 export interface AgentRuntimeOptions {
   /** Root-owned queue shared by every AgentRuntime generation of that Root. */
   readonly coordinator: AgentTurnCoordinator;
+  /** Where finished TurnTraces go (`zhin trace`). Omit to disable tracing. */
+  readonly turnTraceStore?: TurnTraceStore;
 }
 
 export interface AgentCapabilitySelection {
@@ -294,6 +299,8 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
     admit: () => void = () => undefined,
   ): Promise<TurnOutcome> {
     let active = true;
+    let activeTrace: TurnTraceCollector | undefined;
+    let releaseTrace: (() => void) | undefined;
     try {
       if (!active) throw new Error('Agent generation operation is not active');
       const discovered = await this.#ingress.read(
@@ -318,7 +325,16 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       const turnRequest = restriction.restricted
         ? Object.freeze({ ...request, policy: restriction.policy })
         : request;
-      const turn = createIngressTurn(lease.value, turnRequest, capabilities);
+      const trace = this.options.turnTraceStore
+        ? new TurnTraceCollector({
+          turnId: request.identity.turnId,
+          sessionKey: request.session.key,
+          principal: request.principal,
+        })
+        : undefined;
+      releaseTrace = trace ? registerTurnTrace(trace) : undefined;
+      activeTrace = trace;
+      const turn = createIngressTurn(lease.value, turnRequest, capabilities, trace);
       const catalog = Object.freeze({
         ...capabilities,
         tools: Object.freeze(capabilities.tools.map(({ execute: _execute, ...tool }) => Object.freeze(tool))),
@@ -361,7 +377,15 @@ export class AgentRuntime extends SnapshotAttachedRuntime {
       ), { disabled });
     } finally {
       active = false;
+      releaseTrace?.();
+      if (activeTrace) this.#saveTrace(activeTrace);
     }
+  }
+
+  #saveTrace(trace: TurnTraceCollector): void {
+    trace.finalize();
+    // Fire-and-forget: a slow or failing trace write must not delay the reply.
+    void this.options.turnTraceStore?.save(trace.snapshot()).catch(() => undefined);
   }
 }
 
@@ -436,7 +460,12 @@ function createIngressTurn(
   snapshot: import('@zhin.js/plugin-runtime').RuntimeSnapshot,
   request: TurnRequest,
   capabilities: AgentCapabilities,
+  trace?: TurnTraceCollector,
 ) {
+  const journal = new PersistentTurnJournal({
+    sessionId: request.session.key,
+    turnId: request.identity.turnId,
+  }, resolveJournalStore(snapshot), request.principal);
   return createTurnIngress({
     ...request,
     identity: {
@@ -451,10 +480,7 @@ function createIngressTurn(
     },
     ports: {
       ...request.ports,
-      journal: new PersistentTurnJournal({
-        sessionId: request.session.key,
-        turnId: request.identity.turnId,
-      }, resolveJournalStore(snapshot), request.principal),
+      journal: trace ? createTracingJournal(journal, trace) : journal,
     },
   });
 }

@@ -52,6 +52,7 @@ import {
   resolveToolBudget,
 } from './turn-progress.js';
 import { TurnProgressReporter, summarizeProgress } from './progress-reporter.js';
+import { noteTurnTrace } from '../trace/turn-trace-registry.js';
 const logger = getLogger('ZhinAgent:AgentLoopTurn');
 
 /** 入库前解开模型误包的 JSON 字符串，避免下一轮历史继续叠转义。 */
@@ -638,6 +639,7 @@ export async function* runAgentLoopTextTurnRun(
     if (!progress.progressedSince(windowStart)) return limit;
     const next = Math.min(segmentHardCap, limit + toolBudget.extendBy);
     extensionPending = true;
+    noteTurnTrace(traceTurnId(input.turnContext), { kind: 'budget_extended', from: limit, to: next });
     logPhase(host.phaseConfig, 'agent_loop.budget.extend', sessionId, { from: limit, to: next });
     return next;
   };
@@ -927,6 +929,7 @@ export async function* runAgentLoopTextTurnRun(
     continuations += 1;
     await reporter?.report('continuation', { steps: iterations, interimText: checkpoint.reply });
     lastReportIteration = iterations;
+    noteTurnTrace(traceTurnId(input.turnContext), { kind: 'continuation', index: continuations });
     logPhase(host.phaseConfig, 'agent_loop.budget.continue', sessionId, { continuation: continuations });
     segmentPrompt = [createUserMessage(buildContinuationInstruction(continuations, toolBudget.maxContinuations, reporter?.reported))];
     segmentContext = agentContextFrom({
@@ -1036,4 +1039,10 @@ async function appendConversationBatches(
   for (const batch of batches) {
     await repo.appendMessages(sessionId, batch.messages, { messageExtras: batch.messageExtras });
   }
+}
+
+/** Turn id for trace notes; context views built outside TurnIngress carry none. */
+function traceTurnId(view: TurnContextView | undefined): string | undefined {
+  const identity = (view as { identity?: { turnId?: unknown } } | undefined)?.identity;
+  return typeof identity?.turnId === 'string' ? identity.turnId : undefined;
 }

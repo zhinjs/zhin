@@ -2,6 +2,7 @@
  * Assertion DSL: turns a case's `expect` block into a list of readable
  * failures against an EvalRunRecord. An empty list means the case passed.
  */
+import { formatTurnTrace } from '../../src/trace/turn-trace-format.js';
 import type { EvalCase, EvalExpectations } from './fixture.js';
 import type { EvalRunRecord } from './driver.js';
 
@@ -104,6 +105,10 @@ export function formatEvalReport(definition: EvalCase, run: EvalRunRecord, failu
   lines.push(`    approvals: [${list(run.approvalRequests)}]`);
   lines.push(`    terminals: [${list(run.terminals.map((event) => event.type))}]`);
   for (const text of run.outbound) lines.push(`    outbound: ${quote(text)}`);
+  for (const trace of run.traces) {
+    lines.push('  turn trace:');
+    lines.push(formatTurnTrace(trace).split('\n').map((line) => `    ${line}`).join('\n'));
+  }
   if (process.env.EVAL_VERBOSE) {
     for (const request of run.modelRequests) {
       lines.push(`    --- model input #${request.index + 1} ---`, request.inputText);

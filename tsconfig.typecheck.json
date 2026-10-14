@@ -50,6 +50,9 @@
       "@zhin.js/agent/runtime": [
         "./packages/im/agent/src/plugin-runtime/index.ts"
       ],
+      "@zhin.js/agent/trace": [
+        "./packages/im/agent/src/trace/index.ts"
+      ],
       "@zhin.js/agent/security": [
         "./packages/im/agent/src/security/index.ts"
       ],
