@@ -1,0 +1,31 @@
+packages/im/agent/evals/cases/subagent-report-injection.case.ts
+  s_c757df74f34330::t_6fa5ef4e2578e1 1-25
+packages/im/agent/evals/framework/assertions.ts
+  s_c757df74f34330::t_c2bdcd98281f12 60-63
+packages/im/agent/evals/framework/driver.ts
+  s_c757df74f34330::t_e6dba3477ff49b 9-10,22,29,125-133,195-198,228-242,259-262
+packages/im/agent/evals/framework/fixture.ts
+  s_c757df74f34330::t_b94c0b9ba10999 70-71,76-82,100-101
+packages/im/agent/tests/decision/deferred-engine.test.ts
+  s_c757df74f34330::t_ecf2d3b485bd8d 65-68
+packages/im/agent/tests/plugin-runtime/subagent-turn-capability.test.ts
+  s_c757df74f34330::t_33fffe602358db 194-204,226
+packages/im/agent/tests/security/trust-level.test.ts
+  s_c757df74f34330::t_806fa3030f99dd 4-11,55-64,67-72,74-77,81-88,91-108,115-116,123-141
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "40f4ab770cbb7c9b59ed7ce79cc4fdc93b1ce3b9",
+  "prompts": {},
+  "sessions": {
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
