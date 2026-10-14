@@ -125,4 +125,46 @@ describe('PeerRegistry', () => {
     expect(getProcessPeerRegistry()).toBeInstanceOf(PeerRegistry);
     expect(createPeerRegistry()).not.toBe(getProcessPeerRegistry());
   });
+
+  it('keeps the newer activation when the older instance reports first after the newer one', () => {
+    const registry = createPeerRegistry();
+    const oldOwner = {};
+    const newOwner = {};
+    registry.reserve(oldOwner);
+    registry.reserve(newOwner);
+    const releaseNew = registry.registerEndpoint(newOwner, input('a', '2'));
+    const releaseOld = registry.registerEndpoint(oldOwner, input('a', '1'));
+    expect(registry.selfOf('a')).toBe('2');
+    expect(registry.lookup('icqq', '1')).toBeUndefined();
+    releaseOld();
+    expect(registry.selfOf('a')).toBe('2');
+    expect(registry.lookup('icqq', '2')).toBeDefined();
+    releaseNew();
+    expect(registry.isReady('a')).toBe(false);
+  });
+
+  it('reserve is idempotent and does not create entries', () => {
+    const registry = createPeerRegistry();
+    const a = {};
+    const b = {};
+    registry.reserve(a);
+    registry.reserve(b);
+    registry.reserve(a);
+    expect(registry.snapshot()).toEqual([]);
+    expect(registry.isReady('a')).toBe(false);
+    registry.registerEndpoint(b, input('a', '2'));
+    registry.registerEndpoint(a, input('a', '1'));
+    expect(registry.selfOf('a')).toBe('2');
+  });
+
+  it('lets a newer reserved owner replace an older one that reported first', () => {
+    const registry = createPeerRegistry();
+    const oldOwner = {};
+    const newOwner = {};
+    registry.reserve(oldOwner);
+    registry.registerEndpoint(oldOwner, input('a', '1'));
+    registry.reserve(newOwner);
+    registry.registerEndpoint(newOwner, input('a', '2'));
+    expect(registry.selfOf('a')).toBe('2');
+  });
 });

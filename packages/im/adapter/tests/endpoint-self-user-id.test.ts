@@ -177,4 +177,23 @@ describe('materialized Endpoint self reporting', () => {
     expect(registry.isReady(id2)).toBe(false);
     retireEndpoint(bad);
   });
+
+  it('newer activation wins even when the older instance reports first after it', () => {
+    const id = nextId();
+    const oldAdmission = fakeAdmission();
+    const newAdmission = fakeAdmission();
+    const oldEndpoint = new TestEndpoint();
+    const newEndpoint = new TestEndpoint();
+    bindEndpoint(oldEndpoint, ctx(id), oldAdmission.gate);
+    bindEndpoint(newEndpoint, ctx(id), newAdmission.gate);
+    oldAdmission.activate();
+    newAdmission.activate();
+    newEndpoint.report('2');
+    oldEndpoint.report('1');
+    expect(registry.selfOf(id)).toBe('2');
+    retireEndpoint(oldEndpoint);
+    expect(registry.selfOf(id)).toBe('2');
+    retireEndpoint(newEndpoint);
+    expect(registry.isReady(id)).toBe(false);
+  });
 });

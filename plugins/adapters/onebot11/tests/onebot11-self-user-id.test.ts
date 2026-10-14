@@ -52,6 +52,16 @@ function createEndpoint(ws: ReturnType<typeof createMockWs>, probeLoginInfo: boo
 
 const registry = getProcessPeerRegistry();
 
+/** 让 get_login_info 探测停在手动 deferred 上，其余 action 透传。 */
+function deferredLoginInfo(endpoint: { client: { call: (...args: any[]) => Promise<any> } }) {
+  let resolve!: (value: unknown) => void;
+  const pending = new Promise<unknown>((r) => { resolve = r; });
+  const original = endpoint.client.call.bind(endpoint.client);
+  const spy = vi.spyOn(endpoint.client, 'call').mockImplementation(((action: string, ...rest: unknown[]) =>
+    action === 'get_login_info' ? pending : original(action, ...rest)) as never);
+  return { spy, resolve };
+}
+
 describe('resolveOnebot11SelfId', () => {
   it('accepts positive ids and rejects empty / zero / invalid values', () => {
     expect(resolveOnebot11SelfId(10001)).toBe('10001');
@@ -145,14 +155,14 @@ describe('OneBot11WsEndpoint selfUserId', () => {
   it('does not write when stopped while get_login_info is in flight', async () => {
     const ws = createMockWs();
     const endpoint = createEndpoint(ws, true);
+    // stop 后 transportState 也不再是 open；固定为 open，使只有 #stopped 判断起作用。
+    vi.spyOn(endpoint, 'transportState', 'get').mockReturnValue('open');
+    const deferred = deferredLoginInfo(endpoint);
     await endpoint.start();
-    await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
-    const request = JSON.parse(ws.sent[0]!) as { echo: string };
+    await vi.waitFor(() => expect(deferred.spy).toHaveBeenCalled());
     endpoint.open();
     await endpoint.stop();
-    ws.emitMessage(JSON.stringify({
-      status: 'ok', retcode: 0, data: { user_id: 30003, nickname: 'bot' }, echo: request.echo,
-    }));
+    deferred.resolve({ status: 'ok', retcode: 0, data: { user_id: 30003, nickname: 'bot' } });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(endpoint.selfUserId).toBeUndefined();
     expect(registry.isReady('test-endpoint')).toBe(false);
@@ -221,16 +231,16 @@ describe('OneBot11WssEndpoint selfUserId', () => {
 
   it('does not write when stopped while get_login_info is in flight', async () => {
     const { endpoint, connect } = createWss(true);
+    // stop 后 transportState 也不再是 open；固定为 open，使只有 #stopped 判断起作用。
+    vi.spyOn(endpoint, 'transportState', 'get').mockReturnValue('open');
+    const deferred = deferredLoginInfo(endpoint);
     const ws = createMockWs();
     await endpoint.start();
     connect(ws);
-    await vi.waitFor(() => expect(ws.sent).toHaveLength(1));
-    const request = JSON.parse(ws.sent[0]!) as { echo: string };
+    await vi.waitFor(() => expect(deferred.spy).toHaveBeenCalled());
     endpoint.open();
     await endpoint.stop();
-    ws.emitMessage(JSON.stringify({
-      status: 'ok', retcode: 0, data: { user_id: 50005, nickname: 'bot' }, echo: request.echo,
-    }));
+    deferred.resolve({ status: 'ok', retcode: 0, data: { user_id: 50005, nickname: 'bot' } });
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(endpoint.selfUserId).toBeUndefined();
     expect(registry.isReady('test-endpoint')).toBe(false);

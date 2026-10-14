@@ -107,6 +107,15 @@ export abstract class Endpoint<TClient = unknown> {
     this.#syncPeerRegistry();
   }
 
+  /** Re-reads the state so TS does not keep a stale narrowing across calls that mutate it. */
+  #isActive(): boolean { return this.#admissionState === 'active'; }
+
+  #activate(): void {
+    this.#admissionState = 'active';
+    getProcessPeerRegistry().reserve(this);
+    this.#syncPeerRegistry();
+  }
+
   #syncPeerRegistry(): void {
     this.#registryRelease?.();
     this.#registryRelease = undefined;
@@ -131,19 +140,17 @@ export abstract class Endpoint<TClient = unknown> {
     const events = context.use(endpointEventGatewayToken);
     this.#events = events;
     if (!admission) {
-      this.#admissionState = 'active';
-      this.#syncPeerRegistry();
+      this.#activate();
       return;
     }
     this.#admissionState = 'pending';
     admission.onActivate(() => {
       if (this.#admissionState !== 'pending') return;
-      this.#admissionState = 'active';
-      this.#syncPeerRegistry();
+      this.#activate();
       admission.onDeactivate(() => this[endpointRetire]());
       const pending = this.#pendingEvents.splice(0);
       for (const entry of pending) {
-        if (this.#admissionState !== 'active') {
+        if (!this.#isActive()) {
           entry.reject?.(new Error('Endpoint generation retired before event admission'));
           continue;
         }

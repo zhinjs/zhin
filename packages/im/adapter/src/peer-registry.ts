@@ -29,7 +29,7 @@ export interface RegisterEndpointInput {
 
 interface EndpointEntry {
   readonly owner: object;
-  /** 登记序号：owner 首次登记时分配，单调递增；大者为更新的 generation。 */
+  /** 登记序号：owner 激活（`reserve`）或首次登记时分配，单调递增；大者为更新的 generation。 */
   readonly claim: number;
   readonly endpointId: CapabilityId;
   readonly adapter: string;
@@ -99,7 +99,15 @@ export class PeerRegistry {
   readonly #declared: DeclaredEntry[] = [];
 
   /**
-   * 登记一个已 active 的 Endpoint 账号。“新 generation 胜出”：每个 owner 首次登记时获得单调递增的序号，
+   * 为 owner 预留登记序号（幂等，不创建条目）。序号按激活顺序单调递增，用于“新 generation 胜出”；
+   * 必须在 Endpoint 激活时调用，晚于首次上报调用则失去保证（旧实例晚到的首次上报会覆盖新条目）。
+   */
+  reserve(owner: object): void {
+    claimFor(owner);
+  }
+
+  /**
+   * 登记一个已 active 的 Endpoint 账号。“新 generation 胜出”：每个 owner 在激活（`reserve`）或首次登记时获得单调递增的序号，
    * 同 owner 或更新的 owner 可替换旧条目；旧 generation 在新实例登记后再次上报会被忽略（返回空操作 release）。
    * 返回的 release 只在条目仍是自己登记的那条时生效（热重载新旧实例互不误删）。
    * 写路径严格校验，非法输入抛 TypeError。
