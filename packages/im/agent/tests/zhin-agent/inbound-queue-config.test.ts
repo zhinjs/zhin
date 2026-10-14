@@ -21,6 +21,7 @@ describe('inbound-queue-config', () => {
       groupMode: 'fifo',
       ttlMs: 60_000,
       coalesceWindowMs: 10_000,
+      maxQueuedTurns: 5,
     });
   });
 

@@ -72,6 +72,15 @@ describe('TurnTraceCollector', () => {
     expect(JSON.stringify(snapshot)).not.toContain('x'.repeat(100));
   });
 
+  it('records how a turn was admitted behind other turns (#725)', () => {
+    const trace = collector();
+    trace.note({ kind: 'admission', queued_ms: 1_200, merged_messages: 3, superseded_previous: true });
+    expect(trace.snapshot().timeline.at(-1)).toMatchObject({
+      kind: 'admission',
+      detail: "queued 1200ms, merged 3 messages, replaced the sender's unanswered turn",
+    });
+  });
+
   it('ignores events after the terminal and closes running tools', () => {
     const trace = collector();
     trace.record({ type: 'tool_call', toolName: 'slow', args: {}, toolUseId: 't1' });

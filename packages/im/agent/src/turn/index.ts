@@ -138,3 +138,14 @@ export type {
   TaskProgress,
   TaskDecomposition,
 } from './task-continuation.js';
+export {
+  DEFAULT_MAX_QUEUED_TURNS,
+  TurnAdmissionGate,
+} from './turn-admission-gate.js';
+export type {
+  TurnAdmission,
+  TurnAdmissionFacts,
+  TurnAdmissionGateOptions,
+  TurnAdmissionRequest,
+  TurnStopResult,
+} from './turn-admission-gate.js';

@@ -49,7 +49,13 @@ sequenceDiagram
 
 - **迭代上限**：`maxIterations` 默认 15（`DEFAULT_CONFIG.maxIterations`），可以按模型单独调整，见 [按模型调整参数](#按模型调整参数)。
 - **超时有三层**：触发侧单回合受 `ai.trigger.timeout` 限制（默认 60000ms）；Agent 回合整体默认 120000ms（`DEFAULT_CONFIG.timeout`）；工具预执行另有 15000ms 上限（`preExecTimeout`）。
-- **同一会话的消息会排队**：按 `ai.agent.inboundQueue` 处理（`groupMode: supersede | fifo`），并发的回合不会互相覆盖。
+- **回合运行中又来了消息**：同一会话同时只跑一个回合，后到的消息按下面的默认规则处理（`ai.agent.inboundQueue`），保证不重复回复、不丢消息、不串回合：
+  - **同一个人追加**：如果当前回合还没回复，就停掉它，把两条消息合在一起重新回答（`groupMode: fifo` 时改为排队）；如果已经回复过，就排到后面。他已经在排队的话，新消息直接并进排队的那一条，不会多一次回复。
+  - **其他人的消息**：一律按到达顺序排队，绝不打断、也不并入别人的回合，所以权限也不会串到别人身上。
+  - **叫停**：发起人（或主人）发送 `取消` / `cancel` / `/cancel` 会停止当前回合，并丢掉他自己排队的消息；其他成员发这个词按普通消息处理。
+  - **上限**：每个会话最多排 `maxQueuedTurns` 条（默认 5），超出时回复“请稍后再发”；排队超过 `ttlMs`（默认 180000ms）的消息会跳过并提示。
+  - 只合并纯文字消息；带图片、文件、引用或转发的消息总是单独成一个回合。排队等待、合并和替换都会记录在 `zhin trace` 的时间线里（`admission`）。
+  - 工作室回合，以及 Host 自定义了 `resolveTurnIntent` 或消息自带 `turnIntent` 的情况，仍按原有的意图处理。
 - **模型失败会自动切换**：首选模型失败时，按候选链切换到同一 provider 的其他可用模型。
 - **行为一致**：主 Agent、子 Agent、后台 worker、`AIService.runAgent` 走的是同一条 agentLoop。
 
