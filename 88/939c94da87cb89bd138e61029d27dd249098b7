@@ -1,0 +1,48 @@
+.changeset/agent-eval-fallback-timeout.md
+  h_b680f75345178a 1-6
+packages/im/agent/evals/README.md
+  h_b680f75345178a 75,91,113-118,149,155-156
+packages/im/agent/evals/cases/provider-5xx-fallback-model.case.ts
+  h_b680f75345178a 1-23
+packages/im/agent/evals/cases/provider-timeout-exhausted-polite.case.ts
+  h_b680f75345178a 1-20
+packages/im/agent/evals/cases/provider-timeout-retried.case.ts
+  h_b680f75345178a 1-20
+packages/im/agent/evals/framework/assertions.ts
+  h_b680f75345178a 88-94,120
+packages/im/agent/evals/framework/driver.ts
+  h_b680f75345178a 33,60-61,71-79,82,88-89,100,181
+packages/im/agent/evals/framework/fake-clock.ts
+  h_b680f75345178a 1-39
+packages/im/agent/evals/framework/fixture.ts
+  h_b680f75345178a 64-65,107-111
+packages/im/agent/evals/framework/framework.test.ts
+  h_b680f75345178a 7,196-242
+packages/im/agent/evals/framework/index.ts
+  h_b680f75345178a 1-4,10
+packages/im/agent/evals/framework/scripted-model.ts
+  h_b680f75345178a 18,35-37,41-42,44-48,51-52,72-73,89-90,107-126,134,146,153-155,163-164,167-184,186-188,206,212,229
+packages/im/agent/src/config/zhin-agent-config.ts
+  h_b680f75345178a 5,90-91
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 110
+packages/im/ai/src/index.ts
+  h_b680f75345178a 121
+packages/im/ai/src/llm/index.ts
+  h_b680f75345178a 116
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 268-278,287-288,319,331,346
+packages/im/ai/tests/llm/provider-resilience.test.ts
+  h_b680f75345178a 220-247
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "88939c94da87cb89bd138e61029d27dd249098b7",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
