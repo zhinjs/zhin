@@ -295,10 +295,27 @@ function checkAi(
       severity: 'warn',
       code: 'ai.routes_deprecated',
       path: 'ai.routes',
-      message: 'ai.routes 已废弃，应使用 ai.agents.<name>.priority/match',
+      message: 'ai.routes 已废弃：入站路由从未生效，IM 消息总是交给 ai.agents.zhin',
       fixable: true,
       fixHint: 'zhin config check --fix',
     });
+  }
+  const agents = legacy.agents;
+  if (agents && typeof agents === 'object' && !Array.isArray(agents)) {
+    for (const [name, binding] of Object.entries(agents as Record<string, unknown>)) {
+      if (!binding || typeof binding !== 'object' || Array.isArray(binding)) continue;
+      for (const key of ['priority', 'match'] as const) {
+        if (!(key in binding)) continue;
+        pushIssue(issues, {
+          severity: 'warn',
+          code: 'ai.agent_routing_deprecated',
+          path: `ai.agents.${name}.${key}`,
+          message: `ai.agents.${name}.${key} 已弃用：入站路由从未生效，IM 消息总是交给 ai.agents.zhin`,
+          fixable: true,
+          fixHint: 'zhin config check --fix',
+        });
+      }
+    }
   }
   for (const { key, reason } of aiUtils?.findDeprecatedAgentConfigKeys?.(legacy.agent) ?? []) {
     pushIssue(issues, {
@@ -375,6 +392,7 @@ function checkAi(
         fixHint: 'zhin setup --ai',
       });
     }
+    checkPerception(aiUtils, validationAi, normalized, issues);
   } catch (error) {
     pushIssue(issues, {
       severity: 'error',
@@ -382,6 +400,30 @@ function checkAi(
       path: 'ai',
       message: error instanceof Error ? error.message : String(error),
       fixHint: 'zhin setup --ai',
+    });
+  }
+}
+
+function checkPerception(
+  aiUtils: AiConfigUtils,
+  ai: unknown,
+  normalized: Record<string, unknown>,
+  issues: ConfigIssue[],
+): void {
+  if (!aiUtils.resolvePerceptionConfig) return;
+  const multimodal = (ai as { multimodal?: { perception?: unknown } } | undefined)?.multimodal;
+  if (multimodal?.perception === undefined) return;
+  const providers = normalized.providers;
+  const aliases = providers && typeof providers === 'object' ? Object.keys(providers) : undefined;
+  try {
+    aiUtils.resolvePerceptionConfig(multimodal.perception, aliases);
+  } catch (error) {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'ai.multimodal_perception_invalid',
+      path: 'ai.multimodal.perception',
+      message: error instanceof Error ? error.message : String(error),
+      fixHint: 'ai.multimodal.perception: { provider: <ai.providers 别名>, model: <支持图片输入的模型> }',
     });
   }
 }

@@ -202,6 +202,7 @@ async function processTextTurnInner(
         signal: extras?.signal,
         providerInput: turnCtx.modelInput,
         transcriber: host.audioTranscriber,
+        perception: host.mediaPerception,
       },
     );
     turnCtx.userMessages = applyInboundMediaInjection(turnCtx.userMessages, inboundMedia);

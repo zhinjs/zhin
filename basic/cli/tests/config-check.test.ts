@@ -62,6 +62,32 @@ database:
     }));
   });
 
+  it('校验 ai.multimodal.perception（provider 必须是 ai.providers 别名）', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+ai:
+  providers:
+    groq:
+      sdk: openai-compatible
+      apiKey: test
+      baseUrl: https://api.groq.com/openai/v1
+  agents:
+    zhin:
+      provider: groq
+      model: openai/gpt-oss-120b
+  multimodal:
+    perception:
+      provider: gemini
+      model: gemini-flash-lite
+`);
+    const result = await runConfigCheck(tmpDir, {});
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'error',
+      code: 'ai.multimodal_perception_invalid',
+      path: 'ai.multimodal.perception',
+      message: expect.stringContaining('"gemini" is not defined in ai.providers'),
+    }));
+  });
+
   it('应检测废弃的 ai.defaultProvider 与 provider driver/api', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:
@@ -235,5 +261,55 @@ ai:
     const issue = result.issues.find((i) => i.code === 'ai.agent_maxSkills_deprecated');
     expect(issue?.severity).toBe('warn');
     expect(issue?.fixable).toBe(true);
+  });
+});
+
+describe('config check: deprecated ai.agents.<name>.priority/match', () => {
+  let tmpDir: string;
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'zhin-config-check-routing-'));
+  });
+  afterEach(async () => {
+    await fs.remove(tmpDir);
+  });
+
+  it('报告可修复的弃用警告，不再报路由错误', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+plugins: {}
+ai:
+  enabled: true
+  providers:
+    p: { sdk: openai, apiKey: k }
+  agents:
+    zhin: { provider: p, model: m, priority: 1 }
+    vision:
+      provider: p
+      model: v
+      match: { hasMedia: [image] }
+`);
+    const result = await runConfigCheck(tmpDir, {});
+    const routing = result.issues.filter((i) => i.code === 'ai.agent_routing_deprecated');
+    expect(routing.map((i) => i.path)).toEqual(['ai.agents.zhin.priority', 'ai.agents.vision.match']);
+    expect(routing.every((i) => i.severity === 'warn' && i.fixable)).toBe(true);
+    expect(result.issues.some((i) => i.code === 'ai.routing_invalid')).toBe(false);
+  });
+
+  it('--fix 删除 priority/match', () => {
+    const { config: fixed, fixes } = applyConfigFixes({
+      plugins: {},
+      ai: {
+        providers: { p: { sdk: 'openai', apiKey: 'k' } },
+        agents: {
+          zhin: { provider: 'p', model: 'm' },
+          vision: { provider: 'p', model: 'v', priority: 10, match: { hasMedia: ['image'] } },
+        },
+      },
+    });
+    expect((fixed.ai as { agents: unknown }).agents).toEqual({
+      zhin: { provider: 'p', model: 'm' },
+      vision: { provider: 'p', model: 'v' },
+    });
+    expect(fixes).toContain('removed deprecated ai.agents.vision.priority');
+    expect(fixes).toContain('removed deprecated ai.agents.vision.match');
   });
 });

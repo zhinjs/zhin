@@ -4,6 +4,7 @@ import type {
   AgentBindingConfig,
   ProviderInstanceConfig,
 } from './types.js';
+import { stripDeprecatedAgentBindingKeys } from './deprecated-agent-binding-keys.js';
 
 const logger = getLogger('AIConfig');
 
@@ -60,7 +61,7 @@ function rejectRemovedAiConfigFields(ai: AIConfig | undefined): void {
   const raw = ai as Record<string, unknown> | undefined;
   if (!raw) return;
   if (raw.routes && typeof raw.routes === 'object' && Object.keys(raw.routes as object).length > 0) {
-    throw new Error('ai.routes removed; set ai.agents.<name>.priority and ai.agents.<name>.match');
+    throw new Error('ai.routes removed; inbound routing never took effect (IM messages always go to ai.agents.zhin) — delete it or run zhin config check --fix');
   }
   if (raw.pipeline && typeof raw.pipeline === 'object' && Object.keys(raw.pipeline as object).length > 0) {
     throw new Error('ai.pipeline removed; use ai.agents.<role>');
@@ -111,7 +112,14 @@ export function normalizeAiRoutingConfig(ai: AIConfig | undefined): NormalizedAi
     }
   }
 
-  const agents = { ...((ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {}) };
+  // priority / match never took effect; keep accepting them but drop them from the effective config.
+  const agents: Record<string, AgentBindingConfig> = {};
+  const rawAgents = (ai as AIConfig & { agents?: Record<string, AgentBindingConfig> })?.agents ?? {};
+  for (const [name, binding] of Object.entries(rawAgents)) {
+    agents[name] = binding && typeof binding === 'object' && !Array.isArray(binding)
+      ? stripDeprecatedAgentBindingKeys(binding)
+      : binding;
+  }
 
   const mcpServerNames = (ai?.mcpServers ?? [])
     .map((server) => typeof server?.name === 'string' ? server.name.trim() : '')

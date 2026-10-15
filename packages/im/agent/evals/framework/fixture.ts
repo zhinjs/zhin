@@ -41,6 +41,12 @@ export interface EvalImage {
   readonly name?: string;
 }
 
+export interface EvalPerception {
+  readonly kinds?: readonly ('image' | 'video' | 'file')[];
+  readonly maxChars?: number;
+  readonly maxItemsPerTurn?: number;
+}
+
 export interface EvalTool {
   readonly name: string;
   readonly description?: string;
@@ -101,6 +107,8 @@ export interface EvalExpectations {
   readonly maxModelSteps?: number;
   /** Strings that must appear in what the model received (messages and tool results, not the system prompt). */
   readonly modelInputContains?: readonly string[];
+  /** Strings that must appear in what one specific model request received (1-based request number → strings). */
+  readonly requestInputContains?: Readonly<Record<number, readonly string[]>>;
   /** Strings that must never appear in what the model received. */
   readonly modelInputNotContains?: readonly string[];
   /** Image blocks the model received, per request in order (multimodal cases). */
@@ -180,6 +188,14 @@ export interface EvalCase {
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
+  /** Per-model input overrides, e.g. `{ 'scripted-fallback': ['text'] }` for a text-only fallback. */
+  readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
+  /**
+   * Enable the `ai.multimodal.perception` pre-pass with a scripted perception
+   * model (`scripted-perception`, image/video/file input). Its requests consume
+   * script steps like any other; pin them with `model: 'scripted-perception'`.
+   */
+  readonly perception?: EvalPerception;
   /** Input modalities of the scripted model (default text only). Multimodal cases add `image`. */
   readonly modelInput?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   readonly script: readonly ScriptStep[];

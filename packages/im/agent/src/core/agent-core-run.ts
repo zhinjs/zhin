@@ -4,7 +4,7 @@
 
 import { aiOutboundJsonSchema, buildAiOutboundPromptHint } from '@zhin.js/core';
 import { formatCompact, truncatePreview, getLogger } from '@zhin.js/logger';
-import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
+import { type AgentTool, type Usage, agentLoop, agentContextFrom, assistantText, createUserMessage, agentToolsToLlmTools, type AgentMessage, type ParsedToolCall, type AssistantMessage, type TokenUsage, type ToolExecutionCause, type LlmCompletionPort, type Model, type ModelInputModality, createResilientCompletionPort, isProviderFailureMessage, resolveProviderConfigResilience, resolveProviderResilienceConfig } from '@zhin.js/ai';
 import type { AgentRunJournal } from '@zhin.js/ai/agent-stream';
 import { tokenUsageToLegacy } from './agent-run-shared.js';
 import { applyExecPolicyToTools } from '../security/exec-policy.js';
@@ -81,10 +81,23 @@ function resolveAssistantReplyText(assistant: AssistantMessage): string {
   return text;
 }
 
+/** Media kinds the turn's prompt carries as real media blocks (accepted by the primary model). */
+export function requiredTurnInputModalities(messages: readonly AgentMessage[]): ModelInputModality[] {
+  const kinds = new Set<ModelInputModality>();
+  for (const message of messages) {
+    if (message.role !== 'user') continue;
+    const media = (message as { media?: ReadonlyArray<{ type: ModelInputModality }> }).media;
+    for (const block of media ?? []) kinds.add(block.type);
+  }
+  return [...kinds];
+}
+
 /**
  * Wrap the turn's completion port with retry / timeout / fallback. Fallback models come
  * from the already-resolved `modelCandidates`; candidates the provider does not know are
- * skipped rather than failing the turn.
+ * skipped rather than failing the turn, and so are candidates that cannot take the
+ * media the turn carries (an accepted image must never silently become a placeholder
+ * on fallback).
  */
 function createTurnCompletionPort(input: {
   host: ZhinAgentPrivate;
@@ -93,16 +106,27 @@ function createTurnCompletionPort(input: {
   modelCandidates: readonly string[];
   harness: Readonly<{ emptyReplyRetries?: number; requestTimeoutMs?: number }>;
   sessionId: string;
+  requiredInput?: readonly ModelInputModality[];
 }): LlmCompletionPort {
   const { host, providerAlias, modelId, sessionId } = input;
+  const requiredInput = input.requiredInput ?? [];
   const fallbackModels: Model[] = [];
   for (const candidate of input.modelCandidates) {
     if (!candidate || candidate === modelId) continue;
+    let model: Model;
     try {
-      fallbackModels.push(host.llmRuntime.model(providerAlias, candidate));
+      model = host.llmRuntime.model(providerAlias, candidate);
     } catch {
       logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate }));
+      continue;
     }
+    const modelInput: readonly string[] = Array.isArray(model.input) ? model.input : ['text'];
+    const missing = requiredInput.filter((kind) => !modelInput.includes(kind));
+    if (missing.length > 0) {
+      logger.debug(formatCompact({ op: 'provider_fallback_skip', model: candidate, reason: 'input_modalities', missing: missing.join(',') }));
+      continue;
+    }
+    fallbackModels.push(model);
   }
   // Precedence: ai.providerResilience < provider `timeout` / `maxRetries` < model harness quirks.
   const providerConfig = host.llmRuntime.providerConfig?.(providerAlias);
@@ -250,6 +274,9 @@ export interface AgentLoopTurnResult {
   projectConversation?: () => Promise<void>;
 }
 
+/** @deprecated No production caller: image turns run through `runText` with media
+ * blocks (plus the perception pre-pass for text-only models). This path has no
+ * provider resilience and no tools. Removed in the next minor. */
 export interface AgentLoopVisionTurnInput {
   host: ZhinAgentPrivate;
   core?: AgentCore;
@@ -263,6 +290,7 @@ export interface AgentLoopVisionTurnInput {
   onTurnEvent?: (event: TurnEvent) => void;
 }
 
+/** @deprecated See {@link AgentLoopVisionTurnInput}; removed in the next minor. */
 export type AgentLoopVisionTurnResult = AgentLoopTurnResult & { path: 'multimodal' };
 
 function turnEndFromLegacyUsage(reply: string, usage: Usage): TurnEvent {
@@ -396,6 +424,11 @@ async function* runAgentLoopVisionTurnOnceRun(
   };
 }
 
+/**
+ * @deprecated No production caller: image turns run through `runText` with media
+ * blocks (plus the perception pre-pass for text-only models). This path has no
+ * provider resilience and no tools. Removed in the next minor.
+ */
 export async function* runAgentLoopVisionTurnRun(
   input: AgentLoopVisionTurnInput,
 ): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
@@ -654,6 +687,7 @@ export async function* runAgentLoopTextTurnRun(
     modelCandidates: input.modelCandidates,
     harness,
     sessionId,
+    requiredInput: requiredTurnInputModalities(promptMessages),
   });
 
   // Progress-aware budget: maxIterations is soft, extended while progressing.

@@ -225,8 +225,6 @@ ai:
     planner:
       provider: openrouter
       model: openrouter/free
-      match:                    # which messages go to it (may be an array)
-        scene: group
       permission:               # which sub-agents it may dispatch
         task: { "researcher": allow, "*": deny }
 ```
@@ -236,8 +234,13 @@ ai:
 | `provider` / `model` | A name from `ai.providers` and a model id (required) |
 | `mcpServers` | Names from `ai.mcpServers` |
 | `nickname` | The AI's self-reference and display name |
-| `match` | Routing conditions: `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` |
 | `permission.task` | glob → `allow` / `deny`, limiting which sub-agents `spawn_task` may dispatch |
+
+IM messages always go to `zhin`; other Agents are only called by name (`spawn_task`, collaboration roles).
+
+::: warning Deprecated: `priority` / `match`
+`ai.agents.<name>.priority` and `match` (including `hasMedia`, `scene`, `adapter` and every other condition) never took effect. They are still accepted, but startup logs a warning, `zhin config check --fix` deletes them, and they will be removed in the next minor release. To let a text-only model understand images, use [`ai.multimodal.perception`](#ai-multimodal-perception).
+:::
 
 ### ai.mcpServers
 
@@ -298,6 +301,51 @@ ai:
 ```
 
 Denied DMs get `denyMessage`; denied groups and channels get no reply.
+
+### ai.multimodal.perception
+
+When the main model cannot see images (for example Groq `gpt-oss` takes text only), an image normally becomes a `[Media unsupported:provider_input: image]` placeholder and the AI does not know what is in it. With `perception` configured, an image-capable model (for example Gemini Flash-Lite) first describes the image in text, and that description goes to the main model:
+
+```yaml
+ai:
+  providers:
+    groq:
+      sdk: openai-compatible
+      baseUrl: https://api.groq.com/openai/v1
+      apiKey: ${GROQ_API_KEY}
+    gemini:
+      sdk: google
+      apiKey: ${GEMINI_API_KEY}
+  agents:
+    zhin:
+      provider: groq
+      model: openai/gpt-oss-120b
+  multimodal:
+    perception:
+      provider: gemini              # required, a name from ai.providers
+      model: gemini-2.5-flash-lite  # required, must declare input for the kinds below
+      kinds: [image]                # optional: image | video | file, default [image]; file means PDF only
+      maxChars: 800                 # optional: description length cap, default 800
+      timeoutMs: 30000              # optional: per-request timeout, default 30000
+      maxItemsPerTurn: 4            # optional: media described per turn, default 4
+```
+
+| Field | Meaning |
+| --- | --- |
+| `provider` / `model` | The model that describes media. `provider` must be a name from `ai.providers`; a wrong value fails startup and `zhin config check` reports it |
+| `kinds` | Kinds to describe. Audio is not here; it keeps using speech-to-text from `ai.multimodal.audio` |
+| `maxChars` | Longer descriptions are cut off |
+| `timeoutMs` | Per-request timeout. A failure is retried at most once, with the same retry, timeout and error classification as the main chat |
+| `maxItemsPerTurn` | Media beyond this count in one turn keep the placeholder |
+
+How it behaves:
+
+- Only media the main model cannot take is described. If the main model can see images, the image goes to it directly and `perception` is not called.
+- A description starts with `[图片描述]` / `[视频描述]` / `[文件描述]` and is marked as **untrusted external content**: text inside an image can carry instructions, so the model treats it as data only. A turn that read a description counts as having seen external content, so running commands, messaging other conversations, changing config or creating scheduled tasks afterwards needs approval, and the approval card lists "图片/媒体的自动描述" (automatic media description) in its source chain.
+- The description is saved with the user message in the session history, so later turns can still ask about "that image". The image itself is not saved.
+- Images with the same content (sha256 of the bytes) are described once, so common stickers and memes do not cost another call.
+- If a description fails, times out or exceeds `maxItemsPerTurn`, the old placeholder is used and the turn carries on. Each media item's result is recorded as a `media_resolution` event in the `zhin trace` timeline; a successful description has `code: media_perception` and names the model used.
+- Without `perception`, behaviour is exactly as before.
 
 ### ai.agent
 

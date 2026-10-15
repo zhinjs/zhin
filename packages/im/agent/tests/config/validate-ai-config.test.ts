@@ -17,27 +17,21 @@ describe('validateAiRoutingConfig', () => {
     expect(() => normalizeAiRoutingConfig(legacy as never)).toThrow(message);
   });
 
-  it('拒绝 agents.zhin 配置 priority/match', () => {
+  it('priority/match 已弃用：仍可通过校验，并从生效配置中移除', () => {
     const cfg = normalizeAiRoutingConfig({
       providers: { p: { sdk: 'openai', apiKey: 'k' } },
       agents: {
         zhin: { provider: 'p', model: 'm', priority: 1, match: { hasMedia: ['image'] } },
-      },
-    } as any);
-    const errors = validateAiRoutingConfig(cfg);
-    expect(errors.some(e => e.includes('agents.zhin') && e.includes('priority'))).toBe(true);
-  });
-
-  it('有 match 时必须提供 priority', () => {
-    const cfg = normalizeAiRoutingConfig({
-      providers: { p: { sdk: 'openai', apiKey: 'k' } },
-      agents: {
-        zhin: { provider: 'p', model: 'm' },
         vision: { provider: 'p', model: 'm2', match: { hasMedia: ['image'] } },
+        reviewer: { provider: 'p', model: 'm3', priority: 100, match: [{}] },
       },
     } as any);
-    const errors = validateAiRoutingConfig(cfg);
-    expect(errors.some(e => e.includes('vision') && e.includes('priority'))).toBe(true);
+    expect(validateAiRoutingConfig(cfg)).toEqual([]);
+    for (const binding of Object.values(cfg.agents)) {
+      expect(binding).not.toHaveProperty('priority');
+      expect(binding).not.toHaveProperty('match');
+    }
+    expect(cfg.agents.vision).toEqual({ provider: 'p', model: 'm2' });
   });
 
   it('拒绝 binding 引用未声明的 MCP server', () => {
@@ -51,38 +45,6 @@ describe('validateAiRoutingConfig', () => {
     expect(validateAiRoutingConfig(cfg)).toContain(
       'ai.agents.zhin: unknown MCP server "missing"',
     );
-  });
-
-  it('agents 内联 priority/match 可通过校验', () => {
-    const cfg = normalizeAiRoutingConfig({
-      providers: { p: { sdk: 'openai', apiKey: 'k' } },
-      agents: {
-        zhin: { provider: 'p', model: 'm' },
-        vision: { provider: 'p', model: 'm2', priority: 10, match: { adapter: 'icqq' } },
-      },
-    } as any);
-    const errors = validateAiRoutingConfig(cfg);
-    expect(errors).toEqual([]);
-    expect(cfg.agents.vision?.priority).toBe(10);
-    const visionMatch = cfg.agents.vision?.match;
-    expect(visionMatch && !Array.isArray(visionMatch) && visionMatch.adapter).toBe('icqq');
-  });
-
-  it('拒绝无约束的 match 数组', () => {
-    const cfg = normalizeAiRoutingConfig({
-      providers: { p: { sdk: 'openai', apiKey: 'k' } },
-      agents: {
-        zhin: { provider: 'p', model: 'm' },
-        reviewer: {
-          provider: 'p',
-          model: 'm2',
-          priority: 100,
-          match: [{}],
-        },
-      },
-    } as any);
-    const errors = validateAiRoutingConfig(cfg);
-    expect(errors.some(e => e.includes('reviewer') && e.includes('no routable constraints'))).toBe(true);
   });
 
   it('providers 缺少 sdk 时报错', () => {

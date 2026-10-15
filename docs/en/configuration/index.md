@@ -301,8 +301,9 @@ ai:
 | `provider` / `model` | Required, the bound provider alias and model |
 | `nickname` | Agent self-reference and UI display name |
 | `mcpServers` | List of MCP Server names visible to this Agent |
-| `priority` / `match` | Inbound routing: `match` can match by `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains`, single or array |
 | `permission.task` | `spawn_task` visible child Agent types (glob -> `allow` / `deny`) |
+
+IM messages always go to `zhin`. `priority` / `match` are deprecated (they never took effect); `zhin config check --fix` deletes them. See [ai.agents](../ai/index.md#ai-agents).
 
 ### mcpServers: External MCP Servers
 
@@ -368,7 +369,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` governs multimodal input and output. `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
+`ai.multimodal` governs multimodal input and output. When the main model cannot see images, `ai.multimodal.perception` lets another model describe them first; see [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception). `knowledge_search` is published only when `ai.knowledge.baseDir` is explicitly configured, and that directory must stay inside the project root.
 
 Remote Agents no longer attach through `ai.remoteAgents`. An optional A2A Executor enters through the persistent Workroom Catalog and generation-owned authority, under Assignment lease/fence and Journal contracts.
 

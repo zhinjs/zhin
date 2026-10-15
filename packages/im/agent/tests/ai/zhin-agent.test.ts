@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentEventBus, SkillRegistry, ZhinAgent } from '@zhin.js/agent';
 import { type AIProvider, type AgentTool, type Tool } from '@zhin.js/core';
+import { getLogger } from '@zhin.js/logger';
 import { wireMockLlmApi, assistantTextReply, type MockLlmApi } from '../helpers/mock-llm-api.js';
 import { mockCommMessage } from '../helpers/mock-comm-message.js';
 
@@ -102,6 +103,21 @@ describe('ZhinAgent', () => {
   });
 
   describe('构造', () => {
+    it('ZhinAgentConfig.visionModel 已弃用：设置时告警', () => {
+      const warn = vi.spyOn(getLogger('ZhinAgent'), 'warn').mockImplementation(() => undefined);
+      try {
+        const legacy = new ZhinAgent(provider, { visionModel: 'legacy-vision' }, undefined, llm.runtime);
+        legacy.dispose();
+        expect(warn.mock.calls.some((call) => String(call[0]).startsWith('ZhinAgentConfig.visionModel 已弃用'))).toBe(true);
+        warn.mockClear();
+        const plain = new ZhinAgent(provider, {}, undefined, llm.runtime);
+        plain.dispose();
+        expect(warn.mock.calls.some((call) => String(call[0]).includes('visionModel'))).toBe(false);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     it('应正确初始化', () => {
       expect(agent).toBeDefined();
     });

@@ -7,6 +7,7 @@ import {
   applyInboundMediaInjection,
   resolveTurnMediaInjection,
 } from '../../src/turn/inbound-media.js';
+import type { MediaPerceptionPort } from '../../src/media/perception.js';
 
 let root: string;
 
@@ -161,6 +162,94 @@ describe('resolveTurnMediaInjection', () => {
       data: { media: { kind: 'base64', mime_type: 'image/png' } },
     });
     expect(injection.outcomes).toEqual([{ kind: 'image', status: 'accepted', code: 'validated_provider_input' }]);
+  });
+});
+
+const PNG_B64 = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).toString('base64');
+
+function fakePerception(
+  describe: MediaPerceptionPort['describe'],
+  overrides: Partial<MediaPerceptionPort> = {},
+): MediaPerceptionPort & { calls: number } {
+  const port = {
+    calls: 0,
+    kinds: ['image'] as const,
+    maxItemsPerTurn: 4,
+    accepts: (payload: { kind: string }) => payload.kind === 'image',
+    describe: async (...args: Parameters<MediaPerceptionPort['describe']>) => {
+      port.calls += 1;
+      return describe(...args);
+    },
+    ...overrides,
+  };
+  return port as MediaPerceptionPort & { calls: number };
+}
+
+describe('resolveTurnMediaInjection — perception pre-pass', () => {
+  const pngTurn = () => ({ kind: 'image' as const, source: { kind: 'base64' as const, value: PNG_B64 }, mimeType: 'image/png' });
+
+  it('text-only model + image → derived description, framed untrusted, with provenance', async () => {
+    const perception = fakePerception(async () => ({ text: '白底红色圆形', provider: 'g', model: 'flash-lite', cached: false }));
+    const injection = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception });
+    expect(injection.blocks).toEqual([]);
+    expect(injection.textAppends).toHaveLength(1);
+    expect(injection.textAppends[0]).toMatch(/^\[图片描述\] \[Untrusted media description/);
+    expect(injection.textAppends[0]).toContain('source=external_content) 白底红色圆形');
+    expect(injection.outcomes).toEqual([{
+      kind: 'image', status: 'derived', code: 'media_perception',
+      provenance: { source: 'media_perception', provider: 'g', model: 'flash-lite', cached: false },
+    }]);
+  });
+
+  it('a model that takes images gets the image itself; perception is not called', async () => {
+    const perception = fakePerception(async () => ({ text: 'x', provider: 'g', model: 'm', cached: false }));
+    const injection = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text', 'image'], perception });
+    expect(injection.outcomes).toEqual([{ kind: 'image', status: 'accepted', code: 'validated_provider_input' }]);
+    expect(perception.calls).toBe(0);
+  });
+
+  it('perception failure (throw or empty) → today\'s placeholder', async () => {
+    const failing = fakePerception(async () => { throw new Error('503'); });
+    const empty = fakePerception(async () => ({ text: '  ', provider: 'g', model: 'm', cached: false }));
+    for (const perception of [failing, empty]) {
+      const injection = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception });
+      expect(injection.textAppends).toEqual(['[Media unsupported:provider_input: image]']);
+      expect(injection.outcomes).toEqual([{ kind: 'image', status: 'unsupported', code: 'provider_input' }]);
+    }
+  });
+
+  it('kinds not accepted by the port keep the placeholder', async () => {
+    const perception = fakePerception(async () => ({ text: 'x', provider: 'g', model: 'm', cached: false }), { accepts: () => false });
+    const injection = await resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception });
+    expect(injection.outcomes[0]).toMatchObject({ status: 'unsupported', code: 'provider_input' });
+    expect(perception.calls).toBe(0);
+  });
+
+  it('maxItemsPerTurn bounds the perception calls; the rest keep placeholders', async () => {
+    const perception = fakePerception(async () => ({ text: '图', provider: 'g', model: 'm', cached: false }), { maxItemsPerTurn: 2 });
+    const injection = await resolveTurnMediaInjection([pngTurn(), pngTurn(), pngTurn()], { providerInput: ['text'], perception });
+    expect(perception.calls).toBe(2);
+    expect(injection.outcomes.map((outcome) => outcome.code)).toEqual(['media_perception', 'media_perception', 'provider_input']);
+  });
+
+  it('audio stays on STT first; perception is never asked for audio', async () => {
+    const perception = fakePerception(async () => ({ text: 'x', provider: 'g', model: 'm', cached: false }), { accepts: () => true });
+    const wav = Buffer.from('RIFF\0\0\0\0WAVEfmt ').toString('base64');
+    const injection = await resolveTurnMediaInjection([
+      { kind: 'audio', source: { kind: 'base64', value: wav }, mimeType: 'audio/wav' },
+    ], { providerInput: ['text'], perception, transcriber: { transcribe: async () => '你好' } });
+    expect(injection.textAppends).toEqual(['[语音转写] 你好']);
+    expect(perception.calls).toBe(0);
+  });
+
+  it('an abort during perception propagates instead of degrading to a placeholder', async () => {
+    const controller = new AbortController();
+    const perception = fakePerception(async () => {
+      controller.abort(new Error('cancelled'));
+      throw new Error('aborted');
+    });
+    await expect(resolveTurnMediaInjection([pngTurn()], { providerInput: ['text'], perception, signal: controller.signal }))
+      .rejects.toThrow('cancelled');
   });
 });
 

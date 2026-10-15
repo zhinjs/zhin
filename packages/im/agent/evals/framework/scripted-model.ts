@@ -117,6 +117,9 @@ export class ScriptExhaustedError extends Error {
 
 const PROVIDER_ALIAS = 'eval-scripted';
 const MODEL_ID = 'scripted-model';
+/** Provider alias / model of the scripted perception model (`EvalCase.perception`). */
+export const PERCEPTION_PROVIDER_ALIAS = 'eval-perception';
+export const PERCEPTION_MODEL_ID = 'scripted-perception';
 
 export interface ScriptedModelOptions {
   /** Model context window reported to the harness (drives compaction thresholds). */
@@ -127,6 +130,10 @@ export interface ScriptedModelOptions {
   readonly extraModels?: readonly string[];
   /** Virtual clock advanced by `hang` steps. */
   readonly clock?: EvalClock;
+  /** Per-model input overrides (e.g. a text-only fallback next to an image-capable primary). */
+  readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
+  /** Also register the media-capable perception model (`eval-perception/scripted-perception`). */
+  readonly perception?: boolean;
 }
 
 export class ScriptedHangError extends Error {
@@ -136,16 +143,41 @@ export class ScriptedHangError extends Error {
   }
 }
 
+/** LlmApiRuntime whose model descriptors can declare per-model input modalities. */
+class ScriptedRuntime extends LlmApiRuntime {
+  constructor(
+    resolveModels: (alias: string) => string[],
+    private readonly modelInputs: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>,
+  ) {
+    super(resolveModels);
+  }
+
+  override model(providerAlias: string, modelId: string): Model {
+    const model = super.model(providerAlias, modelId);
+    const input = this.modelInputs[modelId];
+    return input ? { ...model, input: [...input] } : model;
+  }
+}
+
 export function createScriptedModel(script: readonly ScriptStep[], options: ScriptedModelOptions = {}): ScriptedModel {
   const models = [MODEL_ID, ...(options.extraModels ?? []).filter((id) => id !== MODEL_ID)];
   const provider = new SdkProviderAdapter(PROVIDER_ALIAS, 'openai', { sdk: 'openai', apiKey: 'eval' }, models);
-  const runtime = new LlmApiRuntime((alias) => (alias === PROVIDER_ALIAS ? models : []));
+  const runtime = new ScriptedRuntime((alias) => (
+    alias === PROVIDER_ALIAS ? models : alias === PERCEPTION_PROVIDER_ALIAS ? [PERCEPTION_MODEL_ID] : []
+  ), options.modelInputs ?? {});
   runtime.registerProvider(PROVIDER_ALIAS, {
     sdk: 'openai',
     apiKey: 'eval',
     ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
     ...(options.input?.length ? { input: [...options.input] } : {}),
   }, models);
+  if (options.perception) {
+    runtime.registerProvider(PERCEPTION_PROVIDER_ALIAS, {
+      sdk: 'openai',
+      apiKey: 'eval',
+      input: ['text', 'image', 'video', 'file'],
+    }, [PERCEPTION_MODEL_ID]);
+  }
   const modelMismatches: string[] = [];
 
   const requests: ScriptedModelRequest[] = [];

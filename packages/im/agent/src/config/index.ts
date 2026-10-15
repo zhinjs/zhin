@@ -4,12 +4,19 @@ export {
   type NormalizedAiRoutingConfig,
 } from './normalize-ai-config.js';
 export { validateAiRoutingConfig } from './validate-ai-config.js';
+export { resolvePerceptionConfig } from './perception-config.js';
+export type { PerceptionConfigInput, PerceptionMediaKind, ResolvedPerceptionConfig } from './perception-config.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
 export {
   DEPRECATED_AGENT_CONFIG_KEYS,
   findDeprecatedAgentConfigKeys,
   type DeprecatedAgentConfigKey,
 } from './deprecated-agent-keys.js';
+export {
+  DEPRECATED_AGENT_BINDING_KEYS,
+  findDeprecatedAgentBindingKeys,
+  type DeprecatedAgentBindingKey,
+} from './deprecated-agent-binding-keys.js';
 export { AgentBindingRegistry } from './agent-binding-registry.js';
 export { DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 export type {

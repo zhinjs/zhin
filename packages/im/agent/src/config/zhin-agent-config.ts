@@ -65,6 +65,12 @@ export interface ZhinAgentConfig {
   rateLimit?: RateLimitConfig;
   toneAwareness?: boolean;
   chatModel?: string;
+  /**
+   * @deprecated Programmatic-only leftover of the removed `ai.agent.visionModel`.
+   * Still read as a fallback for image turns (after the bound model) and logs a
+   * warning; removed in the next minor. Use `ai.agents.zhin.model` for the
+   * conversation model and `ai.multimodal.perception` for images.
+   */
   visionModel?: string;
   contextTokens?: number;
   maxHistoryShare?: number;

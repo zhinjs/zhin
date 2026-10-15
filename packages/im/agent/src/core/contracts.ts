@@ -1,7 +1,7 @@
 /**
  * Agent Core — 模块契约（与实现同步，ADR 0009）。
  *
- * 实现：`AgentCore.runText()` / `runVision()` 为 `AsyncGenerator<TurnEvent>` SSOT；
+ * 实现：`AgentCore.runText()` / `runVision()`（@deprecated，下一个 minor 移除）为 `AsyncGenerator<TurnEvent>` SSOT；
  * `runTextTurn` / `runVisionTurn` 为 collector 薄包装。
  * 委托 `agent-core-run` → `@zhin.js/ai` `agentLoop`。
  * `ToolExecutor` / `ContextManager` 供 `composeZhinAgentRuntime` 占位注入；

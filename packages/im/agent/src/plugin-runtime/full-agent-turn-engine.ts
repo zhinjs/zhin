@@ -190,6 +190,7 @@ async function* runInteractiveTurn(
       signal: context.turn.signal,
       providerInput,
       transcriber: host.audioTranscriber,
+      perception: host.mediaPerception,
     },
   );
   for (const [index, outcome] of media.outcomes.entries()) {
@@ -199,6 +200,7 @@ async function* runInteractiveTurn(
       mediaKind: outcome.kind,
       status: outcome.status,
       code: outcome.code,
+      ...(outcome.provenance ? { provenance: { ...outcome.provenance } } : {}),
     });
   }
   const contextText = pendingContext?.blocks.length
@@ -219,6 +221,10 @@ async function* runInteractiveTurn(
   subagentModel.current = { modelId: prompt.modelId, modelCandidates: prompt.modelCandidates };
   const provenance = new TurnProvenance();
   if (contextText) provenance.record({ kind: 'conversation_context' });
+  // Perception descriptions are generated from user media (text in an image is an injection path).
+  if (media.outcomes.some((outcome) => outcome.provenance?.source === 'media_perception')) {
+    provenance.record({ kind: 'media_perception' });
+  }
   const leakInspector = new OutboundLeakInspector({
     promptTexts: [prompt.personaEnhanced, options.bootstrapContext ?? ''],
   });

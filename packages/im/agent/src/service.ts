@@ -6,12 +6,13 @@
 import { type AITriggerConfig, type AIAccessConfig } from '@zhin.js/core';
 import { type AIProvider, type AIConfig, type AgentTool, type Usage, type ImageGenerationDefaults, type ModelRegistry, type ContextConfig, createLlmApiRuntime, sdkEntryFromProvider, type LlmApiRuntime, SdkProviderAdapter } from '@zhin.js/ai';
 import type { AgentRunInput } from './media/media-types.js';
-import { DEFAULT_CONFIG, findDeprecatedAgentConfigKeys } from './config/index.js';
+import { DEFAULT_CONFIG, findDeprecatedAgentBindingKeys, findDeprecatedAgentConfigKeys } from './config/index.js';
 import { getLogger } from '@zhin.js/logger';
 import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
+import { resolvePerceptionConfig, type ResolvedPerceptionConfig } from './config/perception-config.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
   runAgentLoopStandaloneTurn,
@@ -64,12 +65,16 @@ export class AIService {
   private accessConfig: AIAccessConfig;
   private agentConfig: AIConfig['agent'];
   private imageGenerationGlobal?: ImageGenerationDefaults;
+  private perceptionConfig?: ResolvedPerceptionConfig;
   private readonly standaloneTools = new StandaloneToolCatalog();
   private _modelRegistry: ModelRegistry | null = null;
   private llmRuntime!: LlmApiRuntime;
   readonly loopHooks = new PluginAILoopHookRegistry();
 
   constructor(config: AIConfig = {}) {
+    for (const { agent, key, reason } of findDeprecatedAgentBindingKeys((config as { agents?: unknown }).agents)) {
+      logger.warn(`ai.agents.${agent}.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
+    }
     this.routing = normalizeAiRoutingConfig(config);
     const validationErrors = validateAiRoutingConfig(this.routing);
     if (validationErrors.length > 0) {
@@ -93,6 +98,15 @@ export class AIService {
       logger.warn(`ai.agent.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
     this.imageGenerationGlobal = config.imageGeneration;
+    this.perceptionConfig = resolvePerceptionConfig(
+      config.multimodal?.perception,
+      Object.keys(this.routing.providers),
+    );
+  }
+
+  /** Validated `ai.multimodal.perception`, or undefined when the pre-pass is off. */
+  getPerceptionConfig(): ResolvedPerceptionConfig | undefined {
+    return this.perceptionConfig;
   }
 
   getRoutingConfig(): NormalizedAiRoutingConfig {

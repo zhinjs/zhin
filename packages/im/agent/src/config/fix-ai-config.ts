@@ -2,7 +2,7 @@ import type { AIConfig, ProviderConfig } from '@zhin.js/ai';
 import { type AgentBindingConfig, DEFAULT_ZHIN_AGENT_NAME } from './types.js';
 import { normalizeAiRoutingConfig } from './normalize-ai-config.js';
 import { findDeprecatedAgentConfigKeys } from './deprecated-agent-keys.js';
-type LegacyRouteEntry = { priority: number; match: AgentBindingConfig['match'] };
+import { findDeprecatedAgentBindingKeys, stripDeprecatedAgentBindingKeys } from './deprecated-agent-binding-keys.js';
 
 /**
  * 旧 driver 名 → sdk 的迁移映射（一次性升级专用；运行时 normalize 不再识别
@@ -55,21 +55,6 @@ function migrateLegacyProviderDrivers(
   return { providers: out, migrated };
 }
 
-function mergeLegacyRoutesIntoAgents(
-  agents: Record<string, AgentBindingConfig>,
-  routes: Record<string, LegacyRouteEntry>,
-): void {
-  for (const [name, route] of Object.entries(routes)) {
-    const existing = agents[name];
-    if (!existing) continue;
-    agents[name] = {
-      ...existing,
-      priority: existing.priority ?? route.priority,
-      match: existing.match ?? route.match,
-    };
-  }
-}
-
 /**
  * 将旧版 ai 段归一化为当前 schema，并返回已应用的修复说明。
  * 仅用于 `zhin setup` 一次性升级；运行时 `normalizeAiRoutingConfig` 拒绝未迁移字段。
@@ -84,7 +69,7 @@ export function applyAiConfigFixes(
   const fixes: string[] = [];
   const src = { ...ai } as AIConfig & Record<string, unknown>;
   const legacy = src as AIConfig & {
-    routes?: Record<string, LegacyRouteEntry>;
+    routes?: Record<string, unknown>;
     defaultProvider?: string;
     agent?: Record<string, unknown>;
   };
@@ -104,8 +89,16 @@ export function applyAiConfigFixes(
   } as Record<string, AgentBindingConfig>;
 
   if (hadRoutes) {
-    mergeLegacyRoutesIntoAgents(agents, legacy.routes!);
-    fixes.push('merged ai.routes into ai.agents and removed ai.routes');
+    // Routes became priority/match, which never took effect either: drop them.
+    fixes.push('removed ai.routes (inbound routing never took effect)');
+  }
+  for (const { agent, key } of findDeprecatedAgentBindingKeys(agents)) {
+    fixes.push(`removed deprecated ai.agents.${agent}.${key}`);
+  }
+  for (const [name, binding] of Object.entries(agents)) {
+    if (binding && typeof binding === 'object' && !Array.isArray(binding)) {
+      agents[name] = stripDeprecatedAgentBindingKeys(binding);
+    }
   }
   // Synthesize the canonical zhin binding from legacy provider fields.
   if (hadDefaultProvider || hadLegacyAgent) {
@@ -147,12 +140,6 @@ export function applyAiConfigFixes(
 
   const normalized = normalizeAiRoutingConfig(preNormalized);
   const nextAgents = { ...normalized.agents };
-  const zhin = nextAgents[DEFAULT_ZHIN_AGENT_NAME];
-  if (zhin && (zhin.priority != null || zhin.match)) {
-    const { priority: _p, match: _m, ...rest } = zhin;
-    nextAgents[DEFAULT_ZHIN_AGENT_NAME] = rest;
-    fixes.push(`removed ai.agents.${DEFAULT_ZHIN_AGENT_NAME}.priority/match`);
-  }
 
   const next: Record<string, unknown> = {
     ...preNormalized,

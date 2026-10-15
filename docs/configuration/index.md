@@ -297,8 +297,9 @@ ai:
 | `provider` / `model` | 必填，绑定的 provider 别名与模型 |
 | `nickname` | Agent 自称与界面展示名 |
 | `mcpServers` | 该 Agent 可见的 MCP Server 名列表 |
-| `priority` / `match` | 入站路由：`match` 可按 `adapter` / `endpoint` / `scene` / `sceneId` / `hasMedia` / `contentContains` 匹配，单条或数组 |
 | `permission.task` | `spawn_task` 可见子 Agent 类型（glob → `allow` / `deny`） |
+
+IM 消息总是交给 `zhin`。`priority` / `match` 已弃用（从未生效），`zhin config check --fix` 会删除，详见 [ai.agents](../ai/index.md#ai-agents)。
 
 ### mcpServers：外部 MCP Server
 
@@ -364,7 +365,7 @@ ai:
     timeout: 60000
 ```
 
-`ai.multimodal` 管理多模态入出站。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
+`ai.multimodal` 管理多模态入出站；主模型不能看图时可用 `ai.multimodal.perception` 让另一个模型先描述图片，见 [AI · ai.multimodal.perception](../ai/index.md#ai-multimodal-perception)。仅在显式配置 `ai.knowledge.baseDir` 时发布 `knowledge_search`；该目录必须位于项目根目录内。
 
 远程 Agent 不再通过 `ai.remoteAgents` 旁路接入。可选 A2A Executor 只通过持久 Workroom Catalog 和 generation-owned authority 接入，并服从 Assignment lease/fence 与 Journal 契约。
 
