@@ -1,0 +1,18 @@
+.changeset/ai-provider-schemas-reasoning.md
+  h_b680f75345178a 1-10
+docs/ai/index.md
+  h_b680f75345178a 94-95,146-147
+docs/en/ai/index.md
+  h_b680f75345178a 94-95,146-147
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5784d4a0413402fd846381c68d639dd888ee41c4",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
