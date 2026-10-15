@@ -25,6 +25,10 @@ export class AgentCore {
     return runAgentLoopTextTurnRun({ ...input, core: this });
   }
 
+  /**
+   * @deprecated No production caller: image turns use `runText` with media blocks.
+   * No provider resilience, no tools. Removed in the next minor.
+   */
   runVision(input: AgentLoopVisionTurnInput): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {
     return runAgentLoopVisionTurnRun({ ...input, core: this });
   }
@@ -56,6 +60,7 @@ export class AgentCore {
     }
   }
 
+  /** @deprecated Collector over the deprecated `runVision()`; removed in the next minor. */
   async runVisionTurn(input: AgentLoopVisionTurnInput): Promise<AgentLoopVisionTurnResult> {
     const { eventBus } = this.deps;
     await eventBus.emit('agent.turn.start', {

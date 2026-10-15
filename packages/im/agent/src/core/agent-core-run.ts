@@ -274,6 +274,9 @@ export interface AgentLoopTurnResult {
   projectConversation?: () => Promise<void>;
 }
 
+/** @deprecated No production caller: image turns run through `runText` with media
+ * blocks (plus the perception pre-pass for text-only models). This path has no
+ * provider resilience and no tools. Removed in the next minor. */
 export interface AgentLoopVisionTurnInput {
   host: ZhinAgentPrivate;
   core?: AgentCore;
@@ -287,6 +290,7 @@ export interface AgentLoopVisionTurnInput {
   onTurnEvent?: (event: TurnEvent) => void;
 }
 
+/** @deprecated See {@link AgentLoopVisionTurnInput}; removed in the next minor. */
 export type AgentLoopVisionTurnResult = AgentLoopTurnResult & { path: 'multimodal' };
 
 function turnEndFromLegacyUsage(reply: string, usage: Usage): TurnEvent {
@@ -420,6 +424,11 @@ async function* runAgentLoopVisionTurnOnceRun(
   };
 }
 
+/**
+ * @deprecated No production caller: image turns run through `runText` with media
+ * blocks (plus the perception pre-pass for text-only models). This path has no
+ * provider resilience and no tools. Removed in the next minor.
+ */
 export async function* runAgentLoopVisionTurnRun(
   input: AgentLoopVisionTurnInput,
 ): AsyncGenerator<TurnEvent, AgentLoopVisionTurnResult> {

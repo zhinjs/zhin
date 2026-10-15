@@ -18,6 +18,11 @@ export async function runAgentLoopTextTurn(input: AgentLoopTurnInput): Promise<A
   return collectAgentLoopTurnRun(runAgentLoopTextTurnRun(input));
 }
 
+/**
+ * @deprecated No production caller: image turns run through `runText` with media
+ * blocks (plus the perception pre-pass for text-only models). This path has no
+ * provider resilience and no tools. Removed in the next minor.
+ */
 export async function runAgentLoopVisionTurn(
   input: AgentLoopVisionTurnInput,
 ): Promise<AgentLoopVisionTurnResult> {
