@@ -1,0 +1,216 @@
+basic/database/package.json
+  h_b680f75345178a 24
+basic/schedule/package.json
+  h_b680f75345178a 43
+deploy/huggingface/package.json
+  h_b680f75345178a 28
+examples/full-bot/package.json
+  h_b680f75345178a 40
+examples/life-assistant-bot/package.json
+  h_b680f75345178a 28
+examples/minimal-bot/package.json
+  h_b680f75345178a 29
+examples/multi-agent-room/package.json
+  h_b680f75345178a 31
+examples/platform-acceptance-bot/package.json
+  h_b680f75345178a 74
+examples/plugin-runtime-migration-bot/package.json
+  h_b680f75345178a 21
+examples/qq-games-bot/package.json
+  h_b680f75345178a 35
+examples/single-file-bot/package.json
+  h_b680f75345178a 23
+examples/test-bot/package.json
+  h_b680f75345178a 103
+package.json
+  h_b680f75345178a 8
+packages/console/client/package.json
+  h_b680f75345178a 54
+packages/console/contract/package.json
+  h_b680f75345178a 42
+packages/console/layout/package.json
+  h_b680f75345178a 41
+packages/console/page/package.json
+  h_b680f75345178a 41
+packages/console/pagemanager/package.json
+  h_b680f75345178a 75
+packages/console/plugin-contract/package.json
+  h_b680f75345178a 38
+packages/console/protocol/package.json
+  h_b680f75345178a 27
+packages/host/a2a/package.json
+  h_b680f75345178a 72
+packages/host/http-contract/package.json
+  h_b680f75345178a 28
+packages/host/http/package.json
+  h_b680f75345178a 38
+packages/host/mcp/package.json
+  h_b680f75345178a 80
+packages/im/adapter/package.json
+  h_b680f75345178a 43
+packages/im/agent-feature/package.json
+  h_b680f75345178a 40
+packages/im/agent/package.json
+  h_b680f75345178a 165
+packages/im/ai/package.json
+  h_b680f75345178a 122
+packages/im/command/package.json
+  h_b680f75345178a 43
+packages/im/component/package.json
+  h_b680f75345178a 40
+packages/im/config-file/package.json
+  h_b680f75345178a 34
+packages/im/core/package.json
+  h_b680f75345178a 115
+packages/im/feature-kit/package.json
+  h_b680f75345178a 31
+packages/im/handler/package.json
+  h_b680f75345178a 41
+packages/im/im-contract/package.json
+  h_b680f75345178a 28
+packages/im/interaction/package.json
+  h_b680f75345178a 27
+packages/im/isolate/package.json
+  h_b680f75345178a 33
+packages/im/jsx/package.json
+  h_b680f75345178a 44
+packages/im/kernel/package.json
+  h_b680f75345178a 47
+packages/im/mcp-feature/package.json
+  h_b680f75345178a 40
+packages/im/middleware/package.json
+  h_b680f75345178a 40
+packages/im/permission/package.json
+  h_b680f75345178a 32
+packages/im/plugin-runtime/package.json
+  h_b680f75345178a 28
+packages/im/prompt-section/package.json
+  h_b680f75345178a 40
+packages/im/runtime/package.json
+  h_b680f75345178a 59
+packages/im/schedule-feature/package.json
+  h_b680f75345178a 40
+packages/im/skill/package.json
+  h_b680f75345178a 42
+packages/im/tool/package.json
+  h_b680f75345178a 41
+packages/im/workroom/package.json
+  h_b680f75345178a 58
+packages/im/zhin/package.json
+  h_b680f75345178a 148
+packages/toolkit/components/package.json
+  h_b680f75345178a 43
+packages/toolkit/create-zhin/package.json
+  h_b680f75345178a 33
+packages/toolkit/plugin-test-kit/package.json
+  h_b680f75345178a 19
+packages/toolkit/scaffold-wizard/package.json
+  h_b680f75345178a 40
+packages/toolkit/tailwind/package.json
+  h_b680f75345178a 38
+plugins/adapters/dingtalk/package.json
+  h_b680f75345178a 100
+plugins/adapters/discord/package.json
+  h_b680f75345178a 101
+plugins/adapters/email/package.json
+  h_b680f75345178a 89
+plugins/adapters/github/package.json
+  h_b680f75345178a 115
+plugins/adapters/icqq/package.json
+  h_b680f75345178a 109
+plugins/adapters/kook/package.json
+  h_b680f75345178a 100
+plugins/adapters/lark/package.json
+  h_b680f75345178a 102
+plugins/adapters/line/package.json
+  h_b680f75345178a 97
+plugins/adapters/milky/package.json
+  h_b680f75345178a 104
+plugins/adapters/napcat/package.json
+  h_b680f75345178a 104
+plugins/adapters/onebot11/package.json
+  h_b680f75345178a 104
+plugins/adapters/onebot12/package.json
+  h_b680f75345178a 93
+plugins/adapters/qq/package.json
+  h_b680f75345178a 106
+plugins/adapters/sandbox/package.json
+  h_b680f75345178a 99
+plugins/adapters/satori/package.json
+  h_b680f75345178a 88
+plugins/adapters/slack/package.json
+  h_b680f75345178a 100
+plugins/adapters/telegram/package.json
+  h_b680f75345178a 98
+plugins/adapters/wechat-mp/package.json
+  h_b680f75345178a 95
+plugins/adapters/wecom/package.json
+  h_b680f75345178a 100
+plugins/adapters/weixin-ilink/package.json
+  h_b680f75345178a 87
+plugins/features/process-monitor/package.json
+  h_b680f75345178a 59
+plugins/games/blackjack/package.json
+  h_b680f75345178a 53
+plugins/games/dice-duel/package.json
+  h_b680f75345178a 53
+plugins/games/dungeon-expedition/package.json
+  h_b680f75345178a 53
+plugins/games/guess-number/package.json
+  h_b680f75345178a 53
+plugins/games/hub/package.json
+  h_b680f75345178a 51
+plugins/games/idiom-chain/package.json
+  h_b680f75345178a 54
+plugins/games/rps/package.json
+  h_b680f75345178a 53
+plugins/games/text-adventure/package.json
+  h_b680f75345178a 53
+plugins/games/tic-tac-toe/package.json
+  h_b680f75345178a 53
+plugins/games/word-riddle/package.json
+  h_b680f75345178a 55
+plugins/package.json
+  h_b680f75345178a 8
+plugins/services/activity-feedback/package.json
+  h_b680f75345178a 66
+plugins/services/typesafe/package.json
+  h_b680f75345178a 47
+plugins/utils/60s/package.json
+  h_b680f75345178a 89
+plugins/utils/calendar/package.json
+  h_b680f75345178a 86
+plugins/utils/code-runner/package.json
+  h_b680f75345178a 78
+plugins/utils/content-moderation/package.json
+  h_b680f75345178a 67
+plugins/utils/group-suite/package.json
+  h_b680f75345178a 100
+plugins/utils/link-poster/package.json
+  h_b680f75345178a 70
+plugins/utils/lottery/package.json
+  h_b680f75345178a 87
+plugins/utils/music/package.json
+  h_b680f75345178a 94
+plugins/utils/qrcode/package.json
+  h_b680f75345178a 82
+plugins/utils/reminder/package.json
+  h_b680f75345178a 62
+plugins/utils/repeater/package.json
+  h_b680f75345178a 69
+plugins/utils/rss/package.json
+  h_b680f75345178a 85
+plugins/utils/short-url/package.json
+  h_b680f75345178a 76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "45566d25070fc46e916f24faa376785c08f399a6",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
