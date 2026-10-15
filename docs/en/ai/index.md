@@ -134,9 +134,26 @@ ai:
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
-- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name.
+- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
 - `contextWindow`: context window size.
 - `imageGeneration`: defaults for text-to-image.
+- `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        defaultModel: gemini-3.8-flash
+        providerOptions:
+          google:
+            safetySettings:
+              - { category: HARM_CATEGORY_HARASSMENT, threshold: BLOCK_ONLY_HIGH }
+            thinkingConfig: { thinkingLevel: low }
+  ```
+
+  If Gemini refuses on safety grounds (SAFETY, RECITATION and so on), the user sees a refusal that names the reason instead of an empty reply. Gemini uses implicit caching: the system prompt and tool definitions stay unchanged, and cache hits are reported as `cacheRead` in usage and as `cache_read_tokens` in the turn trace. Explicit `cachedContents` is not implemented yet.
 
 ### ai.agents
 

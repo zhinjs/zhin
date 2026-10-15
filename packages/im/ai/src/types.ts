@@ -58,7 +58,7 @@ export interface Usage {
 
 /** Provider 能力声明 */
 export interface ProviderCapabilities {
-  /** Explicit model input modalities. Absence is text-only (fail closed). */
+  /** Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). */
   input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   streaming?: boolean;
   toolCalling?: boolean;

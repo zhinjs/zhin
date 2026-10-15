@@ -134,9 +134,26 @@ ai:
 可选字段：
 
 - `models`：允许使用的模型列表。不写时，启动后会自动从 `/v1/models` 获取（先用上次的缓存，再在后台刷新）。
-- `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。
+- `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。唯一例外是 `sdk: google` 的 Gemini 对话模型（Gemini 原生多模态），默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型仍只按文本处理。
 - `contextWindow`：上下文窗口大小。
 - `imageGeneration`：文生图的默认参数。
+- `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        defaultModel: gemini-3.8-flash
+        providerOptions:
+          google:
+            safetySettings:
+              - { category: HARM_CATEGORY_HARASSMENT, threshold: BLOCK_ONLY_HIGH }
+            thinkingConfig: { thinkingLevel: low }
+  ```
+
+  Gemini 因安全策略（SAFETY、RECITATION 等）拒答时，用户会看到“模型因内容安全策略未生成回复”和原因，而不是一条空回复。Gemini 走隐式缓存：system prompt 和工具定义保持不变，命中的 token 记在 usage 的 `cacheRead` 和 turn trace 的 `cache_read_tokens` 里。显式 `cachedContents` 目前没有实现。
 
 ### ai.agents
 

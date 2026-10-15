@@ -50,7 +50,7 @@ export interface ProviderInstanceConfig {
   headers?: Record<string, string>;
   timeout?: number;
   maxRetries?: number;
-  /** Explicit model input modalities. Absence is text-only (fail closed). */
+  /** Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). */
   input?: readonly ModelInputModality[];
   /** Cloudflare Workers AI */
   accountId?: string;
