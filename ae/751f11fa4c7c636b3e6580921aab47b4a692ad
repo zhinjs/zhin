@@ -1,0 +1,14 @@
+.changeset/node-engines-22-19.md
+  h_b680f75345178a 1-95
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ae751f11fa4c7c636b3e6580921aab47b4a692ad",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
