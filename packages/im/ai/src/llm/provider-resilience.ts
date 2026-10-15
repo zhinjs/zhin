@@ -22,6 +22,7 @@
  *   polite refusal instead (see `bridge/finish-reason.ts`).
  */
 import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
+import { isContextOverflowError } from './context-overflow.js';
 import type { Context } from './types/context.js';
 import type { Model } from './types/model.js';
 import type { AssistantMessage } from './types/agent-message.js';
@@ -155,8 +156,6 @@ const NETWORK_CODES = new Set([
   'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
 ]);
 
-const CONTEXT_OVERFLOW_PATTERN = /context[_ ]length|context window|maximum context|too many tokens|prompt is too long/i;
-
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
 }
@@ -284,7 +283,7 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
 
   if (name === 'AbortError') return { kind: 'aborted', retryable: false, fallbackEligible: false };
   if (name === 'TimeoutError') return { kind: 'timeout', retryable: true, fallbackEligible: true };
-  if (CONTEXT_OVERFLOW_PATTERN.test(message)) {
+  if (isContextOverflowError(inner)) {
     return { kind: 'context_overflow', retryable: false, fallbackEligible: false, status };
   }
   if (status === 429) return { kind: 'rate_limit', retryable: true, fallbackEligible: true, status, retryAfterMs };
