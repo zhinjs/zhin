@@ -32,7 +32,8 @@ import type { SkillDescriptor } from '@zhin.js/skill';
 import { createJournalFeed } from '../../src/turn/journal-feed.js';
 import { executeAgentTurn } from '../../src/turn/execute-agent-turn.js';
 import type { EvalApprovalBehaviour, EvalCase, EvalMemoryEntry, EvalPromptSection, EvalSkill, EvalInboundMessage, EvalNativeTool, EvalTool } from './fixture.js';
-import { createScriptedModel, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
+import { createScriptedModel, PERCEPTION_MODEL_ID, PERCEPTION_PROVIDER_ALIAS, type ScriptedModel, type ScriptedModelRequest } from './scripted-model.js';
+import { createLlmMediaPerceptionPort, resolvePerceptionConfig } from '../../src/media/perception.js';
 import { createFakeClock, type EvalClock } from './fake-clock.js';
 
 export interface EvalToolInvocation {
@@ -108,6 +109,7 @@ async function runInWorkspace(
     clock,
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
     ...(definition.modelInput ? { input: definition.modelInput } : {}),
+    ...(definition.perception ? { perception: true } : {}),
   });
   const toolNames = [
     ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
@@ -135,6 +137,25 @@ async function runInWorkspace(
   // Semantic memory (seeds and/or memory tools) also drives per-turn recall (#734).
   const semanticMemory = await createEvalSemanticMemory(definition);
   if (semanticMemory) agent.configure({ semanticMemory });
+  const perceptionConfig = definition.perception && !liveModel
+    ? resolvePerceptionConfig({
+      provider: PERCEPTION_PROVIDER_ALIAS,
+      model: PERCEPTION_MODEL_ID,
+      ...(definition.perception.kinds ? { kinds: definition.perception.kinds } : {}),
+      ...(definition.perception.maxChars ? { maxChars: definition.perception.maxChars } : {}),
+      ...(definition.perception.maxItemsPerTurn ? { maxItemsPerTurn: definition.perception.maxItemsPerTurn } : {}),
+    })
+    : undefined;
+  if (perceptionConfig) {
+    agent.configure({
+      mediaPerception: createLlmMediaPerceptionPort({
+        runtime: model.runtime,
+        config: perceptionConfig,
+        resilience: definition.agentConfig?.providerResilience,
+        timers: clock,
+      }),
+    });
+  }
   const host = asPrivate(agent);
   const { sessionSystem, contextSystem } = host;
   if (!sessionSystem || !contextSystem) throw new Error('ZhinAgent did not compose its session/context systems');
