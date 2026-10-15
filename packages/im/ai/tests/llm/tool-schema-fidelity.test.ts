@@ -1,17 +1,14 @@
 /**
  * S5: tool JSON Schemas reach the provider as written (enum, anyOf, nullable,
  * integer, format, bounds), and tool-call arguments are validated against the
- * same constraints. Request bodies are captured with a minimal local fetch mock;
- * these can move to the shared mocked-HTTP provider harness once it lands.
+ * same constraints. Request bodies come from the shared provider harness (`h.capture`).
  */
 import { describe, expect, it } from 'vitest';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
-import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import { agentToolToLlmTool, jsonSchemaToZod } from '../../src/llm/tool-bridge.js';
 import { validateToolCall } from '../../src/llm/validate-tool-call.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
 import type { AgentTool, JsonSchema } from '../../src/types.js';
+import { createProviderHarness } from '../helpers/provider-harness/index.js';
 
 const PARAMS: JsonSchema = {
   type: 'object',
@@ -32,24 +29,10 @@ const PARAMS: JsonSchema = {
 
 const agentTool: AgentTool = { name: 'forecast', description: 'Forecast', parameters: PARAMS, execute: async () => 'ok' };
 
-function capture() {
-  const bodies: Array<Record<string, any>> = [];
-  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    bodies.push(JSON.parse(String(init?.body ?? '{}')));
-    return new Response('{"error":{"message":"stop here","type":"invalid_request_error"}}', { status: 400, headers: { 'content-type': 'application/json' } });
-  }) as typeof globalThis.fetch;
-  return { fetch, bodies };
-}
-
 async function requestBody(sdk: ProviderInstanceConfig['sdk'], modelId: string) {
-  const srv = capture();
-  const config: ProviderInstanceConfig = { sdk, apiKey: 'test-key', ...(sdk === 'openai-compatible' ? { baseUrl: 'https://gw.example/v1' } : {}) };
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models: [modelId], fetch: srv.fetch }], () => [modelId]);
-  await runtime.complete(createLlmTransportModel('p', config, modelId), {
-    systemPrompt: 'sys', messages: [createUserMessage('hi')], tools: [agentToolToLlmTool(agentTool)],
-  }, { maxRetries: 0 }).catch(() => undefined);
-  expect(srv.bodies).toHaveLength(1);
-  return srv.bodies[0]!;
+  const h = createProviderHarness({ sdk, model: modelId });
+  const { body } = await h.capture({ system: 'sys', user: 'hi', tools: [agentToolToLlmTool(agentTool)] });
+  return body;
 }
 
 describe('tool schema fidelity (S5)', () => {
@@ -96,12 +79,10 @@ describe('tool schema fidelity (S5)', () => {
   });
 
   it('a tool with no parameters still sends an object schema', async () => {
-    const srv = capture();
-    const config: ProviderInstanceConfig = { sdk: 'openai', apiKey: 'k' };
-    const runtime = createLlmApiRuntime([{ alias: 'p', config, models: ['gpt-5'], fetch: srv.fetch }], () => ['gpt-5']);
+    const h = createProviderHarness({ sdk: 'openai', model: 'gpt-5' });
     const empty = agentToolToLlmTool({ name: 'now', description: 'Time', parameters: { type: 'object' }, execute: async () => '' });
-    await runtime.complete(createLlmTransportModel('p', config, 'gpt-5'), { systemPrompt: 's', messages: [createUserMessage('hi')], tools: [empty] }, { maxRetries: 0 }).catch(() => undefined);
-    expect(srv.bodies[0]!.tools[0].function.parameters).toMatchObject({ type: 'object', properties: {} });
+    const { body } = await h.capture({ system: 's', user: 'hi', tools: [empty] });
+    expect(body.tools[0].function.parameters).toMatchObject({ type: 'object', properties: {} });
   });
 
   it('validation enforces the same constraints the provider was told about', () => {

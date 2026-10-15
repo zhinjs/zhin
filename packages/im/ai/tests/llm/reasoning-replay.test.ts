@@ -1,50 +1,37 @@
 /**
  * S6 / S18: assistant turns replay in stream order with thinking first, and keep
  * their signatures: Anthropic signed thinking ahead of text + tool_use, Gemini
- * thoughtSignature on thought and text parts. Responses come from a minimal local
- * fetch mock; these can move to the shared mocked-HTTP provider harness once it lands.
+ * thoughtSignature on thought and text parts. Requests run on the shared provider
+ * harness; the first turn replays a literal SSE stream, the second is captured.
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
 import { contextToAiSdkPrompt } from '../../src/llm/bridge/ai-sdk-messages.js';
 import { createUserMessage, type AssistantMessage, type ToolResultMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+import { createProviderHarness, type MockResponse } from '../helpers/provider-harness/index.js';
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
 
-function server(first: () => Response) {
-  const bodies: Array<Record<string, any>> = [];
-  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    bodies.push(JSON.parse(String(init?.body ?? '{}')));
-    if (bodies.length === 1) return first();
-    return new Response('{"error":{"message":"stop here"}}', { status: 400, headers: { 'content-type': 'application/json' } });
-  }) as typeof globalThis.fetch;
-  return { fetch, bodies };
-}
-
-function sse(events: Array<[string | undefined, unknown]>): Response {
-  const text = events.map(([event, data]) => `${event ? `event: ${event}\n` : ''}data: ${JSON.stringify(data)}\n\n`).join('');
-  return new Response(text, { status: 200, headers: { 'content-type': 'text/event-stream' } });
+function sse(events: Array<[string | undefined, unknown]>): MockResponse {
+  return { sse: events.map(([event, data]) => (event ? { event, data } : { data })) };
 }
 
 function toolResult(id: string): ToolResultMessage {
   return { role: 'toolResult', toolCallId: id, toolName: 'get_weather', content: [{ type: 'text', text: '晴' }], isError: false, timestamp: Date.now() } as ToolResultMessage;
 }
 
-async function twoTurns(config: ProviderInstanceConfig, modelId: string, first: () => Response) {
-  const srv = server(first);
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models: [modelId], fetch: srv.fetch }], () => [modelId]);
-  const model = createLlmTransportModel('p', config, modelId);
-  const assistant = await runtime.complete(model, { systemPrompt: 's', messages: [createUserMessage('上海天气？')], tools: [weather] }, { maxRetries: 0 });
+async function twoTurns({ sdk, ...config }: ProviderInstanceConfig, modelId: string, first: () => MockResponse) {
+  const h = createProviderHarness({ sdk, model: modelId, config });
+  h.reply(first());
+  const assistant = await h.complete({ system: 's', user: '上海天气？', tools: [weather] }, { maxRetries: 0 });
   const call = assistant.content.find((b) => b.type === 'toolCall') as { id: string } | undefined;
-  await runtime.complete(model, {
-    systemPrompt: 's',
+  const { body: second } = await h.capture({
+    system: 's',
     messages: [createUserMessage('上海天气？'), assistant, ...(call ? [toolResult(call.id)] : [createUserMessage('继续')])],
     tools: [weather],
-  }, { maxRetries: 0 }).catch(() => undefined);
-  return { assistant, second: srv.bodies[1]! };
+  });
+  return { assistant, second };
 }
 
 describe('Anthropic thinking + tool use replay (S6)', () => {
