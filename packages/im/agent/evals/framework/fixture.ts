@@ -10,6 +10,7 @@ import type { ScriptStep } from './scripted-model.js';
 import type { EvalRunRecord } from './driver.js';
 import type { EvalLiveCheck } from './live-checks.js';
 import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
+import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
 export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
@@ -34,6 +35,13 @@ export interface EvalInboundMessage {
 export interface EvalTool {
   readonly name: string;
   readonly description?: string;
+  /**
+   * JSON Schema of the arguments, sent to the model as the tool's parameters.
+   * Without it the model sees a tool with no arguments: scripted runs don't
+   * care, but a real model (nightly) has nothing to fill in. Cases with `live`
+   * checks must declare every argument their script passes.
+   */
+  readonly parameters?: ToolInputJsonObjectSchema;
   /** Mocked tool result. A function receives the model's arguments. */
   readonly result?: unknown | ((args: Record<string, unknown>) => unknown);
   /** Throw this message instead of returning a result. */
@@ -206,6 +214,19 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   candidate.script?.forEach((step, index) => {
     if ('toolCalls' in step && step.toolCalls.length === 0) problems.push(`script step ${index + 1} has an empty toolCalls list`);
   });
+  if (candidate.live) {
+    // A real model only knows the arguments a tool declares; an undeclared one is never filled in.
+    const mocks = new Map((candidate.tools ?? []).map((tool) => [tool.name, tool]));
+    for (const step of candidate.script ?? []) {
+      if (!('toolCalls' in step)) continue;
+      for (const call of step.toolCalls) {
+        const tool = mocks.get(call.name);
+        if (!tool) continue;
+        const missing = Object.keys(call.args ?? {}).filter((arg) => !tool.parameters?.properties[arg]);
+        if (missing.length > 0) problems.push(`live case: tool "${call.name}" must declare parameters for ${missing.join(', ')}`);
+      }
+    }
+  }
   return problems;
 }
 
