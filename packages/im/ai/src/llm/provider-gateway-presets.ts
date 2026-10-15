@@ -4,6 +4,7 @@
  */
 import type { SdkId } from './sdk-registry.js';
 import type { ProviderInstanceConfig } from './types/model.js';
+import { GROQ_ALIASES, GROQ_BASE_URL } from './groq.js';
 
 export interface ProviderGatewayPreset {
   /** Provider alias (exact, case-insensitive) */
@@ -14,6 +15,8 @@ export interface ProviderGatewayPreset {
   contextWindow?: number;
   /** When true, preset sdk overrides yaml sdk when baseUrl matches */
   coerceSdk?: boolean;
+  /** Filled in when the config sets no `baseUrl` (alias match). */
+  baseUrl?: string;
 }
 
 /** Curated gateways; extend when adding first-class proxy docs. */
@@ -37,6 +40,15 @@ export const PROVIDER_GATEWAY_PRESETS: readonly ProviderGatewayPreset[] = [
     sdk: 'openai-compatible',
     contextWindow: 128_000,
     coerceSdk: true,
+  },
+  {
+    // Request fixes (reasoning replay, unsupported fields, GPT-OSS effort) live in groq.ts.
+    // No preset contextWindow: Groq hosts models of different sizes, so it comes from the model id.
+    aliases: GROQ_ALIASES,
+    baseUrlIncludes: ['api.groq.com'],
+    sdk: 'openai-compatible',
+    coerceSdk: true,
+    baseUrl: GROQ_BASE_URL,
   },
 ];
 
@@ -74,6 +86,9 @@ export function applyProviderGatewayPreset(
   }
   if (out.contextWindow == null && preset.contextWindow != null) {
     out.contextWindow = preset.contextWindow;
+  }
+  if (!out.baseUrl?.trim() && preset.baseUrl) {
+    out.baseUrl = preset.baseUrl;
   }
   return out;
 }
@@ -150,6 +165,8 @@ export function resolveTransportContextWindow(
   const preset = resolvePreset('', config.baseUrl);
   if (preset?.contextWindow) return preset.contextWindow;
   const id = modelId.toLowerCase();
+  // gpt-oss-20b / gpt-oss-120b: 131,072 tokens wherever they are hosted (Groq, OpenRouter, ...).
+  if (/(?:^|\/)gpt-oss-/.test(id)) return 131_072;
   if (id.includes('8k')) return 8_192;
   if (id.includes('32k')) return 32_768;
   if (id.includes('128k')) return 128_000;
