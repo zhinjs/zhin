@@ -19,6 +19,16 @@ on:
         description: 'Runs per case per model (empty: vars.NIGHTLY_RUNS_PER_CASE, else 1 for gemini (free tier) / 3 otherwise; budget: see packages/im/agent/evals/README.md)'
         required: false
         default: ''
+      mode:
+        description: 'nightly (default) or quota-probe: list Gemini models and burn quota until the API reports its RPM/RPD limits (evals/nightly/quota-probe.mjs)'
+        required: false
+        type: choice
+        options: [nightly, quota-probe]
+        default: nightly
+      probe_max_requests:
+        description: 'quota-probe only: max generateContent requests (each is tiny)'
+        required: false
+        default: '40'
 
 permissions:
   contents: read
@@ -78,28 +88,38 @@ jobs:
           node-version: 24
           cache: pnpm
       - name: install dependencies
-        if: steps.secret.outputs.present == 'true'
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         run: pnpm install --frozen-lockfile --ignore-scripts --ignore-pnpmfile
         env:
           NPM_TOKEN: ${{ secrets.PERSONAL_TOKEN }}
       - name: run dependency lifecycle scripts without registry credentials
-        if: steps.secret.outputs.present == 'true'
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         run: pnpm rebuild
       - name: build
-        if: steps.secret.outputs.present == 'true'
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         run: pnpm build
       - name: download previous report
-        if: steps.secret.outputs.present == 'true'
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-evals.yml --status success --limit 1 --json databaseId -q '.[0].databaseId')
-          if [ -n "$run_id" ]; then
-            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name nightly-eval-report --dir previous-report
-          fi
+          # The newest successful run that has a nightly report (quota-probe runs have none).
+          for run_id in $(gh run list --repo "$GITHUB_REPOSITORY" --workflow nightly-evals.yml --status success --limit 10 --json databaseId -q '.[].databaseId'); do
+            if gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name nightly-eval-report --dir previous-report 2>/dev/null; then break; fi
+          done
+      - name: quota probe
+        if: steps.secret.outputs.present == 'true' && inputs.mode == 'quota-probe'
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
+          PROBE_MODEL: ${{ inputs.models }}
+          PROBE_MAX_REQUESTS: ${{ inputs.probe_max_requests }}
+          PROBE_MAX_MINUTES: '35'
+          PROBE_REPORT: ${{ github.workspace }}/eval-reports/quota-probe.json
+        run: node packages/im/agent/evals/nightly/quota-probe.mjs
       - name: run nightly evals
-        if: steps.secret.outputs.present == 'true'
+        if: steps.secret.outputs.present == 'true' && inputs.mode != 'quota-probe'
         env:
           # Keys are only passed as env; the eval reads the selected provider's (evals/nightly/providers.ts).
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
@@ -125,7 +145,7 @@ jobs:
         if: steps.secret.outputs.present == 'true' && always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: nightly-eval-report
+          name: ${{ inputs.mode == 'quota-probe' && 'quota-probe-report' || 'nightly-eval-report' }}
           path: eval-reports/
           retention-days: 30
           if-no-files-found: ignore
