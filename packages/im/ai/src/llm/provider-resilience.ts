@@ -27,6 +27,17 @@
  * - Error parts inside a 200 stream (Anthropic `overloaded_error`, OpenAI `server_error`)
  *   keep their type and an inferred status (see `bridge/stream-error.ts`), so they are
  *   classified like the equivalent HTTP error.
+ *
+ * Out of credit (402 Payment Required, OpenAI `insufficient_quota`, Anthropic "credit
+ * balance is too low", DeepSeek "Insufficient Balance", OpenRouter "Insufficient
+ * credits") is classified `billing`: never retried, because nothing changes until
+ * someone pays. Fallback skips every candidate on the *same provider alias*: all models
+ * of one alias share its API key and therefore its account, so asking them would only
+ * repeat the failure (and add latency). A candidate on another alias has its own key
+ * and is still tried. When none is left the user is told the balance ran out instead
+ * of "try again later", which would not help. Distinct aliases that happen to reuse a
+ * key are not detected; that is a configuration choice, and the cost is one extra
+ * failed request.
  */
 import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
 import { isContextOverflowError } from './context-overflow.js';
@@ -46,7 +57,7 @@ export type ProviderErrorKind =
   | 'safety_block'
   /** A quota that will not reset soon (Gemini per-day quota): skip retries, try fallback. */
   | 'quota_exhausted'
-  /** The account is out of credit or its billing quota (OpenAI `insufficient_quota`): never retried. */
+  /** The account is out of credit (402, OpenAI `insufficient_quota`): never retried; other providers only. */
   | 'billing'
   | 'context_overflow'
   | 'auth'
@@ -312,6 +323,27 @@ function providerErrorCodes(error: Record<string, unknown>): Set<string> {
   return codes;
 }
 
+/** Error codes / types that mean "this account cannot pay for the request". */
+const BILLING_CODES = new Set([
+  'insufficient_quota', // OpenAI (HTTP 429)
+  'billing_error', // Anthropic (HTTP 402)
+  'insufficient_balance',
+  'payment_required',
+  'exceeded_current_quota_error', // Moonshot (HTTP 429)
+]);
+
+/**
+ * Provider wording for an empty balance. Deliberately excludes "check your plan and
+ * billing details": Gemini's free-tier rate limit uses that sentence too.
+ */
+const BILLING_MESSAGE_PATTERN = /credit balance is too low|insufficient (?:account )?(?:balance|credits?|funds)|out of credits?|payment required|余额不足|账户已欠费/i;
+
+function isBillingError(status: number | undefined, codes: ReadonlySet<string>, message: string): boolean {
+  if (status === 402) return true;
+  for (const code of codes) if (BILLING_CODES.has(code)) return true;
+  return BILLING_MESSAGE_PATTERN.test(message);
+}
+
 const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
 
 export function classifyProviderError(error: unknown): ProviderErrorClassification {
@@ -347,10 +379,10 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   if (isContextOverflowError(inner)) {
     return { kind: 'context_overflow', retryable: false, fallbackEligible: false, status };
   }
-  // OpenAI answers an exhausted billing quota with 429 too, but no retry can succeed
-  // until someone adds credit. (Gemini's free-tier "exceeded your current quota" has
-  // no such code and stays a rate limit / daily quota.)
-  if (codes.has('insufficient_quota')) return { kind: 'billing', retryable: false, fallbackEligible: true, status };
+  // OpenAI answers an exhausted billing quota with 429 and Anthropic an empty balance
+  // with 400, but no retry can succeed until someone adds credit. (Gemini's free-tier
+  // "exceeded your current quota" has no such code and stays a rate limit / daily quota.)
+  if (isBillingError(status, codes, message)) return { kind: 'billing', retryable: false, fallbackEligible: true, status };
   if (status === 429) return { kind: 'rate_limit', retryable: true, fallbackEligible: true, status, retryAfterMs };
   if (status === 408) return { kind: 'timeout', retryable: true, fallbackEligible: true, status };
   if (status === 401 || status === 403) return { kind: 'auth', retryable: false, fallbackEligible: false, status };
@@ -412,6 +444,20 @@ function inspectReply(message: AssistantMessage): EmptyResponseError | ProviderF
     }
   }
   return hasPayload ? undefined : new EmptyResponseError('empty_response', message);
+}
+
+/**
+ * Index of the fallback candidate to try after `models[current]` failed with `kind`,
+ * or -1. An empty balance belongs to the account behind the provider alias, so for
+ * `billing` every candidate on the same alias (same key) is skipped.
+ */
+function nextCandidateIndex(models: readonly Model[], current: number, kind: ProviderErrorKind): number {
+  const failed = models[current]!;
+  for (let i = current + 1; i < models.length; i++) {
+    if (kind === 'billing' && models[i]!.provider === failed.provider) continue;
+    return i;
+  }
+  return -1;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -557,9 +603,12 @@ export function createResilientCompletionPort(
             continue;
           }
 
-          const next = info.fallbackEligible ? models[m + 1] : undefined;
+          const nextIndex = info.fallbackEligible ? nextCandidateIndex(models, m, info.kind) : -1;
+          const next = nextIndex >= 0 ? models[nextIndex] : undefined;
           if (next) {
             options.onEvent?.({ type: 'fallback', from: model.id, to: next.id, kind: info.kind, error: message });
+            // Skip candidates that cannot succeed (see nextCandidateIndex); the loop adds one.
+            m = nextIndex - 1;
             break;
           }
           // Out of empty-reply retries: hand the reply back so existing recovery paths run.
