@@ -9,9 +9,11 @@ import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, t
 import type { Model } from '../types/model.js';
 import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
+import { streamPartError } from './stream-error.js';
+import { toolCallInput } from './tool-call-input.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
-import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallProviderOptions } from '../types/content-block.js';
+import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallInputError, ToolCallProviderOptions } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
@@ -158,7 +160,13 @@ function resolveThinkingParts(input: {
   return text ? [{ text }] : [];
 }
 
-type CapturedToolCall = { id: string; name: string; arguments: Record<string, unknown>; providerOptions?: ToolCallProviderOptions };
+type CapturedToolCall = {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  inputError?: ToolCallInputError;
+  providerOptions?: ToolCallProviderOptions;
+};
 
 /** Keep the Gemini function-call signature (`providerMetadata.google.thoughtSignature`) for replay. */
 export function toolCallProviderOptions(metadata: unknown): ToolCallProviderOptions | undefined {
@@ -210,6 +218,7 @@ function buildAssistantMessage(
       id: call.id,
       name: call.name,
       arguments: call.arguments,
+      ...(call.inputError ? { inputError: call.inputError } : {}),
       ...(call.providerOptions ? { providerOptions: call.providerOptions } : {}),
     });
   }
@@ -415,22 +424,13 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
           const prev = toolInputBuffers.get(part.id) ?? '';
           toolInputBuffers.set(part.id, prev + part.delta);
         } else if (part.type === 'tool-call') {
-          let args: Record<string, unknown> = {};
-          if ('input' in part && part.input && typeof part.input === 'object') {
-            args = part.input as Record<string, unknown>;
-          } else {
-            const raw = toolInputBuffers.get(part.toolCallId) ?? '{}';
-            try {
-              args = JSON.parse(raw) as Record<string, unknown>;
-            } catch {
-              args = {};
-            }
-          }
+          const { arguments: args, inputError } = toolCallInput(part, toolInputBuffers.get(part.toolCallId));
           const signed = toolCallProviderOptions(part.providerMetadata);
           toolCalls.set(part.toolCallId, {
             id: part.toolCallId,
             name: part.toolName,
             arguments: args,
+            ...(inputError ? { inputError } : {}),
             ...(signed ? { providerOptions: signed } : {}),
           });
           push({
@@ -440,8 +440,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         } else if (part.type === 'raw') {
           rawBlockReason ??= promptBlockReason({ google: part.rawValue });
         } else if (part.type === 'error') {
-          const err = part.error instanceof Error ? part.error : new Error(String(part.error));
-          throw err;
+          throw streamPartError(part.error);
         }
       }
 
@@ -545,10 +544,12 @@ export async function generateTextViaAiSdk(
   const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
   const toolCalls: CapturedToolCall[] = result.toolCalls.map((call) => {
     const signed = toolCallProviderOptions(call.providerMetadata);
+    const { arguments: args, inputError } = toolCallInput(call);
     return {
       id: call.toolCallId,
       name: call.toolName,
-      arguments: ('input' in call ? call.input : {}) as Record<string, unknown>,
+      arguments: args,
+      ...(inputError ? { inputError } : {}),
       ...(signed ? { providerOptions: signed } : {}),
     };
   });

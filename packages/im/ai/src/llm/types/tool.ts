@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { ToolCallInputError } from './content-block.js';
 
 /** Zod tool definition for the LLM engine (ADR 0019). */
 export interface LlmTool {
@@ -22,4 +23,6 @@ export interface ParsedToolCall {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /** Present when the model's arguments did not parse; see {@link ToolCallInputError}. */
+  inputError?: ToolCallInputError;
 }
