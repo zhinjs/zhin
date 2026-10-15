@@ -10,7 +10,7 @@ translation_normalized_body_sha256: fe3f1c124730b6b4dd2949d022de15fdf766883015d2
 :::
 
 ::: danger 已确认勘误
-通过 `create-zhin-app` 创建的新项目要求 Node.js `>=22.19.0`，当前配置的 HTTP 端口为 `8068`。`zhin.js` 库更宽泛的 engine 范围不代表生成的 TypeScript 项目要求。参见[快速开始](/getting-started/)。
+通过 `create-zhin-app` 创建的新项目要求 Node.js `>=22.12.0`，当前配置的 HTTP 端口为 `8068`。`zhin.js` 库更宽泛的 engine 范围不代表生成的 TypeScript 项目要求。参见[快速开始](/getting-started/)。
 :::
 
 ::: details 相关源文件
@@ -143,7 +143,7 @@ sequenceDiagram
 
 正确的环境配置需要特定的运行条件。
 
-*   **Node.js**：`>=22.19.0`（适用于使用 `create-zhin-app` 生成的项目）。
+*   **Node.js**：`>=22.12.0`（适用于使用 `create-zhin-app` 生成的项目）。
 *   **包管理器**：强烈推荐使用 `pnpm 9+` 用于工作区管理。
 *   **操作系统**：Windows 10+、macOS 10.15+ 或现代 Linux 发行版。
 

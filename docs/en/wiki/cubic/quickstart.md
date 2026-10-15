@@ -9,7 +9,7 @@ title: "Quick Start & Setup"
 :::
 
 ::: danger Known correction
-New projects created with `create-zhin-app` require Node.js `>=22.19.0` and currently configure HTTP port `8068`. The broader `zhin.js` library engine range does not describe the generated TypeScript project's requirement. See [Getting Started](/en/getting-started/).
+New projects created with `create-zhin-app` require Node.js `>=22.12.0` and currently configure HTTP port `8068`. The broader `zhin.js` library engine range does not describe the generated TypeScript project's requirement. See [Getting Started](/en/getting-started/).
 :::
 
 ::: details Relevant source files
@@ -142,7 +142,7 @@ Sources: [packages/toolkit/create-zhin/README.md:150-180](https://github.com/zhi
 
 Proper setup requires specific environmental conditions.
 
-*   **Node.js**: `>=22.19.0` for projects generated with `create-zhin-app`.
+*   **Node.js**: `>=22.12.0` for projects generated with `create-zhin-app`.
 *   **Package Manager**: `pnpm 9+` is strongly recommended for workspace management.
 *   **Operating System**: Windows 10+, macOS 10.15+, or modern Linux distributions.
 

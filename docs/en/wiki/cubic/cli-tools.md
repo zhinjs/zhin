@@ -46,7 +46,7 @@ The `create-zhin-app` tool generates a standardized pnpm workspace. This structu
 
 ### Workspace Structure Generation
 When you run the initializer, the `createWorkspace` function performs the following actions:
-1.  **Environment Check**: Verifies that the Node.js version meets the `>=22.19.0` requirement.
+1.  **Environment Check**: Verifies that the Node.js version meets the `>=22.12.0` requirement.
 2.  **File Tree Creation**: Generates directories for `commands`, `components`, `middlewares`, `tools`, `skills`, and `agents`.
 3.  **Dependency Resolution**: Injects necessary packages like `@zhin.js/core` and specific adapters based on user selection.
 4.  **Configuration Scaffolding**: Creates `zhin.config.yml` (or JSON) and `.env` files.
@@ -56,7 +56,7 @@ Sources: [packages/toolkit/create-zhin/src/workspace.ts:110-385](https://github.
 
 ```mermaid
 flowchart TD
-    Start[User Runs create-zhin-app] --> CheckNode[Check Node.js >=22.19.0]
+    Start[User Runs create-zhin-app] --> CheckNode[Check Node.js >=22.12.0]
     CheckNode --> SelectConfig[Select Format YAML/JSON]
     SelectConfig --> GenWorkspace[Generate pnpm-workspace.yaml]
     GenWorkspace --> GenPkg[Generate package.json with Features]

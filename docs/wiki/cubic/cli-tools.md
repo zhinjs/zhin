@@ -47,7 +47,7 @@ CLI 是开发者与 Zhin 框架交互的主要接口，负责项目初始化、�
 
 ### 工作区结构生成
 当你运行初始化器时，`createWorkspace` 函数将执行以下操作：
-1.  **环境检测**：验证 Node.js 版本是否满足 `>=22.19.0` 要求。
+1.  **环境检测**：验证 Node.js 版本是否满足 `>=22.12.0` 要求。
 2.  **文件目录创建**：生成 `commands`、`components`、`middlewares`、`tools`、`skills` 和 `agents` 目录。
 3.  **依赖解析**：根据用户选择注入必要的包，如 `@zhin.js/core` 以及特定适配器。
 4.  **配置文件生成**：创建 `zhin.config.yml`（或 JSON）和 `.env` 文件。
@@ -57,7 +57,7 @@ CLI 是开发者与 Zhin 框架交互的主要接口，负责项目初始化、�
 
 ```mermaid
 flowchart TD
-    Start[User Runs create-zhin-app] --> CheckNode[Check Node.js >=22.19.0]
+    Start[User Runs create-zhin-app] --> CheckNode[Check Node.js >=22.12.0]
     CheckNode --> SelectConfig[Select Format YAML/JSON]
     SelectConfig --> GenWorkspace[Generate pnpm-workspace.yaml]
     GenWorkspace --> GenPkg[Generate package.json with Features]

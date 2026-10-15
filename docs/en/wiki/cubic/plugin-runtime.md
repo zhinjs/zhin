@@ -137,7 +137,7 @@ Sources: [CLAUDE.md:67-70](https://github.com/zhinjs/zhin/blob/368db14caa4aa9131
 
 ## Development Standards
 
-1.  **ESM Only**: The runtime requires `"type": "module"` and target Node.js ≥22.19.0.
+1.  **ESM Only**: The runtime requires `"type": "module"` and target Node.js ≥20.19.0.
 2.  **Import Extensions**: All local TypeScript imports must include the `.js` extension (e.g., `import { foo } from './bar.js'`).
 3.  **Legacy API Prohibition**: APIs such as `usePlugin()`, `getPlugin()`, and `bootstrapNode` have been removed. Using them will cause the `PluginScopeAssembler` to throw errors.
 4.  **Resource Handling**: Shared resources (databases, connections) must be managed via `context.resources.provide` and `context.resources.use` rather than module-level singletons.
