@@ -1,0 +1,29 @@
+.changeset/agent-eval-mock-tool-parameters.md
+  s_b3ab998508f0bb::t_d0f8046b42af5e 1-5
+packages/im/agent/evals/cases/group-member-no-outbound.case.ts
+  s_b3ab998508f0bb::t_a98c043bdaf69d 9-14
+packages/im/agent/evals/cases/group-member-read-only-lookup.case.ts
+  s_b3ab998508f0bb::t_b04a81d87a4237 9-14
+packages/im/agent/evals/framework/driver.ts
+  s_b3ab998508f0bb::t_4d8d068474dd81 353
+packages/im/agent/evals/framework/fixture.ts
+  s_b3ab998508f0bb::t_043198a409ed80 13,47-53,230-242
+packages/im/agent/evals/framework/framework.test.ts
+  s_b3ab998508f0bb::t_6b02c0a99b7310 6-7,10,194-204,257-287
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "83a76a590679fcfb82f3413b184e4d49da101db5",
+  "prompts": {},
+  "sessions": {
+    "s_b3ab998508f0bb": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0be65-9c6d-7623-bdbc-253ca2aa9b78",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
