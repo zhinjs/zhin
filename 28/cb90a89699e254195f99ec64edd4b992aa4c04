@@ -1,0 +1,19 @@
+packages/im/ai/src/llm/sdk-default-models.ts
+  s_c09c25ac8e03c4::t_976627ec899772 34-37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "28cb90a89699e254195f99ec64edd4b992aa4c04",
+  "prompts": {},
+  "sessions": {
+    "s_c09c25ac8e03c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c97d072-4687-40c3-bb5b-7c7caa37aefd",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
