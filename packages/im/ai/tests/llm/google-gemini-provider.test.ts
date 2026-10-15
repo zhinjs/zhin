@@ -9,7 +9,7 @@ import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
-import { isProviderFailureMessage } from '../../src/llm/provider-resilience.js';
+import { classifyProviderError, createResilientCompletionPort, isProviderFailureMessage, type ProviderResilienceEvent } from '../../src/llm/provider-resilience.js';
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -27,7 +27,11 @@ function geminiServer(responses: Array<(body: Record<string, any>) => unknown>) 
     const body = JSON.parse(String(init?.body ?? '{}'));
     captured.push({ url, body });
     const respond = responses[Math.min(captured.length - 1, responses.length - 1)]!;
-    const payload = respond(body) as { __chunks?: unknown[] };
+    const payload = respond(body) as { __chunks?: unknown[]; __status?: number };
+    if (payload && typeof payload.__status === 'number') {
+      const { __status, ...error } = payload;
+      return new Response(JSON.stringify(error), { status: __status, headers: { 'content-type': 'application/json' } });
+    }
     if (payload && Array.isArray(payload.__chunks)) return sse(payload.__chunks);
     return url.includes('streamGenerateContent') ? sse([payload]) : new Response(JSON.stringify(payload), { status: 200, headers: { 'content-type': 'application/json' } });
   }) as typeof globalThis.fetch;
@@ -201,6 +205,65 @@ describe('Gemini provider (google sdk)', () => {
       const message = await ask(finished('STOP', [{ text: 'ok' }]));
       expect(message.stopReason).toBe('stop');
       expect(message.errorMessage).toBeUndefined();
+    });
+  });
+
+  describe('errors and the resilience layer (#724)', () => {
+    const rpcError = (code: number, status: string, details: unknown[] = []) => () => ({
+      __status: code,
+      error: { code, message: `${status} from Gemini`, status, details },
+    });
+    const ok = textReply('好了', { promptTokenCount: 10, candidatesTokenCount: 2, totalTokenCount: 12 });
+
+    async function resilientRun(responses: Array<() => unknown>) {
+      const { runtime, model, captured } = setup(responses);
+      const events: ProviderResilienceEvent[] = [];
+      const delays: number[] = [];
+      const port = createResilientCompletionPort(runtime, {
+        onEvent: (event) => events.push(event),
+        sleep: async (ms) => { delays.push(ms); },
+        random: () => 0.5,
+      });
+      const outcome = await port.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] }).then(
+        (message) => ({ message }),
+        (error: unknown) => ({ error: error as Error & { kind?: string } }),
+      );
+      return { ...outcome, events, delays, requests: captured.length };
+    }
+
+    it('retries 429 RESOURCE_EXHAUSTED after the RetryInfo.retryDelay Gemini sends', async () => {
+      const run = await resilientRun([
+        rpcError(429, 'RESOURCE_EXHAUSTED', [{ '@type': 'type.googleapis.com/google.rpc.RetryInfo', retryDelay: '3s' }]),
+        ok,
+      ]);
+      expect(run.message?.stopReason).toBe('stop');
+      expect(run.requests).toBe(2);
+      expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'rate_limit', delayMs: 3000 });
+    });
+
+    it.each([[500, 'INTERNAL'], [503, 'UNAVAILABLE'], [504, 'DEADLINE_EXCEEDED']])('retries %s %s with backoff', async (code, status) => {
+      const run = await resilientRun([rpcError(code, status), ok]);
+      expect(run.message?.stopReason).toBe('stop');
+      expect(run.events[0]).toMatchObject({ type: 'retry', kind: 'server' });
+    });
+
+    it('treats 400 API_KEY_INVALID as auth: no retry, no fallback', async () => {
+      const run = await resilientRun([rpcError(400, 'INVALID_ARGUMENT', [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason: 'API_KEY_INVALID' }])]);
+      expect(classifyProviderError(run.error)).toMatchObject({ kind: 'auth', retryable: false, fallbackEligible: false });
+      expect(run.requests).toBe(1);
+    });
+
+    it('does not retry an ordinary 400 INVALID_ARGUMENT', async () => {
+      const run = await resilientRun([rpcError(400, 'INVALID_ARGUMENT')]);
+      expect(classifyProviderError(run.error)).toMatchObject({ kind: 'bad_request', retryable: false });
+      expect(run.requests).toBe(1);
+    });
+
+    it('classifies Google RPC statuses on errors without an HTTP status (stream error chunks)', () => {
+      expect(classifyProviderError(new Error('got status: RESOURCE_EXHAUSTED'))).toMatchObject({ kind: 'rate_limit', retryable: true });
+      expect(classifyProviderError(new Error('got status: UNAVAILABLE'))).toMatchObject({ kind: 'server', retryable: true });
+      expect(classifyProviderError(new Error('DEADLINE_EXCEEDED'))).toMatchObject({ kind: 'timeout', retryable: true });
+      expect(classifyProviderError({ name: 'AI_APICallError', message: 'x', data: { error: { status: 'UNAUTHENTICATED' } } })).toMatchObject({ kind: 'auth', retryable: false });
     });
   });
 });

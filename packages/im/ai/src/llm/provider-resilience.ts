@@ -183,6 +183,46 @@ function statusOf(error: Record<string, unknown>): number | undefined {
   return undefined;
 }
 
+interface GoogleRpcError {
+  readonly status?: string;
+  readonly reasons: readonly string[];
+  readonly retryDelayMs?: number;
+}
+
+/**
+ * Google APIs (Gemini) put the useful part of an error in the JSON body:
+ * `error.status` (RESOURCE_EXHAUSTED, UNAVAILABLE, ...), `details[].reason`
+ * (API_KEY_INVALID) and `RetryInfo.retryDelay` ("37s") instead of a
+ * `Retry-After` header. Read it from the AI SDK error's `data` or `responseBody`.
+ */
+export function parseGoogleRpcError(error: Record<string, unknown>): GoogleRpcError | undefined {
+  // Prefer the raw body: the SDK's parsed `data` keeps code/message/status but drops `details`.
+  let body: unknown;
+  if (typeof error.responseBody === 'string') {
+    try {
+      body = JSON.parse(error.responseBody);
+    } catch {
+      body = undefined;
+    }
+  }
+  body = record(body) ?? record(error.data);
+  const inner = record(record(body)?.error);
+  if (!inner) return undefined;
+  const status = typeof inner.status === 'string' ? inner.status : undefined;
+  const reasons: string[] = [];
+  let retryDelayMs: number | undefined;
+  for (const detail of Array.isArray(inner.details) ? inner.details : []) {
+    const rec = record(detail);
+    if (typeof rec?.reason === 'string') reasons.push(rec.reason);
+    const delay = typeof rec?.retryDelay === 'string' ? /^(\d+(?:\.\d+)?)s$/.exec(rec.retryDelay) : null;
+    if (delay) retryDelayMs = Math.round(Number(delay[1]) * 1000);
+  }
+  if (!status && reasons.length === 0 && retryDelayMs === undefined) return undefined;
+  return { ...(status ? { status } : {}), reasons, ...(retryDelayMs !== undefined ? { retryDelayMs } : {}) };
+}
+
+const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
+
 export function classifyProviderError(error: unknown): ProviderErrorClassification {
   const inner = unwrap(error);
   if (inner instanceof EmptyResponseError) {
@@ -197,7 +237,12 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   const name = typeof rec.name === 'string' ? rec.name : '';
   const message = typeof rec.message === 'string' ? rec.message : String(inner ?? '');
   const status = statusOf(rec);
-  const retryAfterMs = parseRetryAfterMs(headerValue(rec.responseHeaders, 'retry-after'));
+  const google = parseGoogleRpcError(rec);
+  const retryAfterMs = parseRetryAfterMs(headerValue(rec.responseHeaders, 'retry-after')) ?? google?.retryDelayMs;
+  // Gemini answers a bad key with 400 INVALID_ARGUMENT + reason API_KEY_INVALID: that is auth, not a model rejection.
+  if (google?.reasons.some((reason) => reason === 'API_KEY_INVALID' || reason === 'API_KEY_EXPIRED')) {
+    return { kind: 'auth', retryable: false, fallbackEligible: false, status };
+  }
 
   if (name === 'AbortError') return { kind: 'aborted', retryable: false, fallbackEligible: false };
   if (name === 'TimeoutError') return { kind: 'timeout', retryable: true, fallbackEligible: true };
@@ -212,6 +257,13 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   }
   // Model-specific rejections (unknown model, unsupported parameter) may succeed elsewhere.
   if (status !== undefined && status >= 400) return { kind: 'bad_request', retryable: false, fallbackEligible: true, status };
+
+  // Errors without an HTTP status (e.g. an error chunk inside a stream) still carry the Google RPC status.
+  const rpcStatus = google?.status ?? GOOGLE_STATUS_PATTERN.exec(message)?.[1];
+  if (rpcStatus === 'RESOURCE_EXHAUSTED') return { kind: 'rate_limit', retryable: true, fallbackEligible: true, retryAfterMs };
+  if (rpcStatus === 'UNAVAILABLE' || rpcStatus === 'INTERNAL') return { kind: 'server', retryable: true, fallbackEligible: true, retryAfterMs };
+  if (rpcStatus === 'DEADLINE_EXCEEDED') return { kind: 'timeout', retryable: true, fallbackEligible: true };
+  if (rpcStatus === 'UNAUTHENTICATED' || rpcStatus === 'PERMISSION_DENIED') return { kind: 'auth', retryable: false, fallbackEligible: false };
 
   const code = typeof rec.code === 'string' ? rec.code : record(rec.cause)?.code;
   if (typeof code === 'string' && NETWORK_CODES.has(code)) {
