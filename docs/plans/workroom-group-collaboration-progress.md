@@ -121,7 +121,8 @@ sidebar: false
   - 2026-10-15 拆分：范围过大（数万行，跨 kernel / runtime / CLI / 插件），按模块拆成 C4a–C4d 逐个推进，全部完成后勾选 C4。每个子条目先确认没有被新 Room 核心或示例引用；被旧 Workroom 默认路径用到、删掉会改变默认行为的部分，移到可选入口而不是删除
 - [x] C4a remote dispatch / callback / assignment / issuance（§6 第 4 条已确认冻结、不做 A2A）：能删就删，不能删就移出默认装配路径
   - 2026-10-15 · 「refactor(workroom): remote dispatch / callback / assignment 移到 ./remote 子路径」· 未删除（旧 Kernel 默认路径仍用到），从 `@zhin.js/workroom` 包根移到 `./remote` 子路径并冻结；新 Room 核心与示例不引用；`remote_dispatch.requested` 校验仍 fail-closed 并补回归测试；workroom / a2a / cli patch changeset；1248 个 workroom 测试 + 502 个 a2a / CLI 测试通过
-- [ ] C4a-1 处理第 40 轮审查意见（文档与代码不符，属正确性）：changeset `.changeset/workroom-remote-subpath.md`、`docs/contributing/public-api-surface.md:118`（英文 :113）、`docs/configuration/index.md:238`（英文 :243）、`packages/im/agent/CONTEXT.md:126`、`packages/host/a2a/README.md:46-50`、`packages/im/workroom/README.md:14` 写着 remote“不在默认装配路径 / 仅在配置 `a2a.workroomCallbacks.enabled` 时加载”，但 `basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts:24/221` 与 `runtime-foundation.ts:28/80` 仍静态导入并无条件创建 remote callback runtime 与 remote assignment authority。按审查建议改正文档：实际是“移出包根导出、冻结”，默认装配仍创建它们（旧 Kernel 路径要用，C2 阻塞），注明留到 C2 之后处理。顺带 Nit：`basic/cli/src/utils/optional-workroom.ts:45` `loadWorkroomRemotePackage` 补两个用例（包未安装给安装提示；子路径不可用原样抛出）；可选：kernel / journal 重放载荷被篡改的 `remote_dispatch.requested` 历史事件时抛错的用例
+- [x] C4a-1 处理第 40 轮审查意见（文档与代码不符，属正确性）：changeset `.changeset/workroom-remote-subpath.md`、`docs/contributing/public-api-surface.md:118`（英文 :113）、`docs/configuration/index.md:238`（英文 :243）、`packages/im/agent/CONTEXT.md:126`、`packages/host/a2a/README.md:46-50`、`packages/im/workroom/README.md:14` 写着 remote“不在默认装配路径 / 仅在配置 `a2a.workroomCallbacks.enabled` 时加载”，但 `basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts:24/221` 与 `runtime-foundation.ts:28/80` 仍静态导入并无条件创建 remote callback runtime 与 remote assignment authority。按审查建议改正文档：实际是“移出包根导出、冻结”，默认装配仍创建它们（旧 Kernel 路径要用，C2 阻塞），注明留到 C2 之后处理。顺带 Nit：`basic/cli/src/utils/optional-workroom.ts:45` `loadWorkroomRemotePackage` 补两个用例（包未安装给安装提示；子路径不可用原样抛出）；可选：kernel / journal 重放载荷被篡改的 `remote_dispatch.requested` 历史事件时抛错的用例
+  - 2026-10-15 · 「docs(workroom): 改正 remote 子路径的装配说明并补加载测试」· changeset 与中英文文档改为“移出包根导出、冻结，默认装配仍创建 Remote Callback Runtime / Remote Assignment Authority，C2 之后处理”；`loadWorkroomRemotePackage` 补未安装提示与子路径不可用原样抛出两个用例；可选的重放篡改用例未加；18 个相关测试通过
 - [ ] C4b portfolio / scheduler / preemption
 - [ ] C4c data-governance、`workroom-data-*`、`workroom-payload-*`（§6 第 1 条已确认移出主路径），作为可选入口
 - [ ] C4d overlay-pack-promotion / github / self-delivery，移到自交付相关的可选插件
@@ -390,6 +391,11 @@ sidebar: false
 - Should fix：changeset 与多处中英文文档称 remote“不在默认装配路径 / 仅在配置时加载”，但 CLI 默认装配仍静态导入并无条件创建 remote callback runtime（会构造三个文件仓库）与 remote assignment authority → C4a-1（选改文档，不改默认装配行为）
 - Nit：`loadWorkroomRemotePackage` 无测试；`remote-event-fail-closed.test.ts` 只测 `validatePayload`，未覆盖重放路径 → 并入 C4a-1
 
+### 第 41 轮（2026-10-15，审查 C4a-1）
+
+- 无 Blocking / Should fix；只改文档、changeset、JSDoc 与两个新测试，运行时行为不变，文档与代码对得上
+- Nit（只记录，C4a-1 是审查后续条目，不再新建）：`protocol-host-installer.ts:150` 注释仍说 remote 模块只在配置时加载（实际只有 transport 接线是条件的）；`packages/host/a2a/README.md:48` 写“callback HTTP transport only”，应为 callback/executor（中英文）；`docs/configuration/index.md:238`（英文 :243）未提 Remote Assignment Authority 与“C2 之后处理”；重放载荷被篡改的 `remote_dispatch.requested` 历史事件抛错的用例仍未补（可在 C4 收尾或 C6 时统一处理）
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -434,3 +440,4 @@ sidebar: false
 - 2026-10-15 07:35 定时运行：origin/main 无新提交，install / build 通过；C2 依赖已阻塞的 C1（无 Room turn 入口），标为阻塞；完成 C3（4 个 agent，约 7.5 分钟，workroom / cli build、type-check、1241 个 workroom 测试、638 个 CLI 测试、check:architecture、check:workroom-ssot、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix + 3 个 Nit 新增为 C3-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-15 同一次定时运行：完成 C3-1（4 个 agent，约 2.6 分钟，workroom build、type-check、1244 个 workroom 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，1 个 Nit 只记录）。剩余可做条目 C4 / C5 / C6；C1、C2 阻塞待维护者决定
 - 2026-10-15 08:35 定时运行：origin/main 无新提交，install / build 通过；C4 范围过大，拆为 C4a–C4d（C4 改为父条目）；完成 C4a（4 个 agent，约 9.3 分钟，workroom / a2a / cli build、type-check、1248 个 workroom 测试、502 个 a2a / CLI 测试、check:architecture、API 快照、plugin-runtime API、check:workroom-ssot、eslint 通过，审查无 Blocking，1 个 Should fix（文档与代码不符）+ 2 个 Nit 新增为 C4a-1）。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改
+- 2026-10-15 同一次定时运行：完成 C4a-1（4 个 agent，约 2.4 分钟，cli build、type-check、18 个相关测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，4 个 Nit 只记录，见第 41 轮）。下一个可做条目为 C4b

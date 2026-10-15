@@ -115,7 +115,7 @@
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.endpoints` 持有的 generation-leased Endpoint 目录、控制与管理边界 |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | `ImRuntime.messageEvents` 暴露的只读消息观察端口；发布权留在 Core |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | generation-owned Host 装配机制；不是插件作者可直接取得 Run 状态写权限的 API |
-| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A 扩展，已冻结；不在包根与默认装配路径，仅 A2A remote transport 使用 |
+| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A 扩展；已移出包根并冻结；默认装配仍创建 Remote Callback Runtime / Remote Assignment Authority（旧 Kernel/runtime 路径依赖，C2 之后处理），仅 A2A transport 接线按配置懒加载 |
 | Workroom / Portfolio / Data Governance domain contracts | `internal` | `@zhin.js/agent` | 领域值对象、策略和持久化端口；不依赖 Agent runtime/config，Host 适配器从 `@zhin.js/agent/runtime` 组合 |
 | Agent Host 装配（`composeZhinAgentRuntime`） | `internal` | `@zhin.js/agent/runtime` | CLI composition root 使用的装配函数；返回显式 `host` 契约，不暴露 `asPrivate` 转换口 |
 | classic `ToolRuntime` / builtin policy resolver | `internal` | `@zhin.js/agent` 包内实现 | 旧独立执行链的内部机制；生产回合只使用 generation-owned `TurnToolRuntime` |

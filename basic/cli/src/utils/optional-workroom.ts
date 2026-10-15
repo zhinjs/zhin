@@ -39,8 +39,10 @@ export async function loadWorkroomPackage(
 export type WorkroomRemotePackage = typeof import('@zhin.js/workroom/remote');
 
 /**
- * Loads the frozen A2A remote extension (`@zhin.js/workroom/remote`). Only
- * called when `a2a.workroomCallbacks.enabled` is configured.
+ * Loads the frozen A2A remote extension (`@zhin.js/workroom/remote`). Used by
+ * protocol-host-installer's A2A transport wiring only when
+ * `a2a.workroomCallbacks.enabled`; the default assembly imports the subpath
+ * statically.
  */
 export async function loadWorkroomRemotePackage(
   importer: () => Promise<WorkroomRemotePackage> = () => import('@zhin.js/workroom/remote'),
