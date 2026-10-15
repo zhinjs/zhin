@@ -13,6 +13,16 @@ export interface NightlyRunInput {
   /** M0.2 seed cases replayed through the eval driver (see seed-cases.ts); run after the matrix. */
   readonly seedCases?: readonly NightlySeedCase[];
   readonly port: BudgetedCompletionPort | (LlmCompletionPort & { usage(): { requests: number; totalTokens: number } });
+  /**
+   * The rate limiter in front of the real API (rate-limit.ts). Once it reports a
+   * fatal error (daily quota exhausted), the rest of the run is not attempted and
+   * the report carries `fatal`, which fails the nightly job.
+   */
+  readonly rateLimiter?: {
+    fatalError(): Error | undefined;
+    stats?(): { requests: number; retries: number; gaveUp: number };
+    readonly policy?: { readonly minIntervalMs: number };
+  };
   readonly budget: NightlyBudget;
   /**
    * Sampling temperature for matrix requests. Omitted when undefined: Gemini 3.6+
@@ -29,12 +39,18 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
   const startedAt = now().toISOString();
   let stoppedByBudget = false;
   const models: ModelSummary[] = [];
+  const fatal = () => input.rateLimiter?.fatalError();
+  const fatalResult = (): CaseRunResult => ({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, error: `not run: ${fatal()?.message}` });
 
   for (const model of input.models) {
     const cases = [];
     for (const definition of input.cases) {
       const results: CaseRunResult[] = [];
       for (let run = 0; run < input.budget.runsPerCase; run++) {
+        if (fatal()) {
+          results.push(fatalResult());
+          continue;
+        }
         if (stoppedByBudget) {
           results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: 'skipped: budget exhausted' });
           continue;
@@ -67,6 +83,10 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
     for (const seed of input.seedCases ?? []) {
       const results: CaseRunResult[] = [];
       for (let run = 0; run < input.budget.runsPerCase; run++) {
+        if (fatal()) {
+          results.push(fatalResult());
+          continue;
+        }
         if (stoppedByBudget || budgetSpent(input)) {
           stoppedByBudget = true;
           results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: 'skipped: budget exhausted' });
@@ -74,8 +94,11 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
         }
         try {
           const result = await seed.run(model, input.port);
-          // The harness turns a budget stop mid-case into a failed turn; don't count that run.
-          if (!result.pass && budgetSpent(input)) {
+          // The harness turns provider errors into a failed turn, so check the limiter too.
+          if (fatal()) {
+            results.push({ ...result, pass: false, error: fatal()?.message });
+          } else if (!result.pass && budgetSpent(input)) {
+            // The harness turns a budget stop mid-case into a failed turn; don't count that run.
             stoppedByBudget = true;
             results.push({ ...result, skipped: true, error: 'skipped: budget exhausted mid-case' });
           } else {
@@ -96,6 +119,8 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
   }
 
   const usage = input.port.usage();
+  const pacing = input.rateLimiter?.stats?.();
+  const fatalError = fatal();
   return {
     version: 1,
     startedAt,
@@ -103,6 +128,8 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
     provider: input.provider,
     budget: { requests: usage.requests, totalTokens: usage.totalTokens, maxRequests: input.budget.maxRequests, maxTotalTokens: input.budget.maxTotalTokens },
     stoppedByBudget,
+    ...(fatalError ? { fatal: fatalError.message } : {}),
+    ...(pacing ? { pacing: { minIntervalMs: input.rateLimiter?.policy?.minIntervalMs ?? 0, ...pacing } } : {}),
     models,
   };
 }

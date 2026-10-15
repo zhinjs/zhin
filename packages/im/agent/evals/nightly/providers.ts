@@ -49,7 +49,8 @@ export function resolveNightlyProvider(env: Env): NightlyProvider {
         apiKey: trimmed(env.GEMINI_API_KEY),
         ...(baseUrl ? { baseUrl } : {}),
         ...(thinkingLevel !== 'off' ? { providerOptions: { google: { thinkingConfig: { thinkingLevel } } } } : {}),
-        maxRetries: 1,
+        // Retries go through the eval rate limiter (rate-limit.ts), never the SDK.
+        maxRetries: 0,
       },
     };
   }
@@ -64,7 +65,8 @@ export function resolveNightlyProvider(env: Env): NightlyProvider {
         sdk: 'minimax',
         apiKey: trimmed(env.MINIMAX_API_KEY),
         ...(baseUrl ? { baseUrl } : {}),
-        maxRetries: 1,
+        // Retries go through the eval rate limiter (rate-limit.ts), never the SDK.
+        maxRetries: 0,
       },
     };
   }

@@ -38,6 +38,10 @@ export interface NightlyReport {
   readonly provider: string;
   readonly budget: Readonly<{ requests: number; totalTokens: number; maxRequests: number; maxTotalTokens: number }>;
   readonly stoppedByBudget: boolean;
+  /** Set when the run had to stop early and must fail (the free-tier daily quota ran out). */
+  readonly fatal?: string;
+  /** Client-side pacing (see rate-limit.ts): spacing, real requests sent, 429 retries. */
+  readonly pacing?: Readonly<{ minIntervalMs: number; requests: number; retries: number; gaveUp: number }>;
   readonly models: readonly ModelSummary[];
 }
 
@@ -112,6 +116,8 @@ export function renderMarkdown(report: NightlyReport, diffs: readonly CaseDiff[]
     `# Nightly model evals — ${report.startedAt.slice(0, 10)}`,
     '',
     `Provider: ${report.provider} · requests ${report.budget.requests}/${report.budget.maxRequests} · tokens ${report.budget.totalTokens}/${report.budget.maxTotalTokens}${report.stoppedByBudget ? ' · **stopped by budget**' : ''}`,
+    ...(report.pacing ? [`Pacing: ≥${report.pacing.minIntervalMs / 1000}s between requests · ${report.pacing.requests} sent · ${report.pacing.retries} 429 retries · ${report.pacing.gaveUp} gave up`] : []),
+    ...(report.fatal ? ['', `**Run failed:** ${report.fatal}`] : []),
     '',
     '| Model | Case | Capability | Pass rate | Δ | Avg tokens | Avg tool calls |',
     '|---|---|---|---|---|---|---|',
