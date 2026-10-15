@@ -7,6 +7,7 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
+import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
 import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ToolCallProviderOptions } from '../types/content-block.js';
@@ -60,14 +61,6 @@ function formatStructuredAsAssistantText(structured: unknown): string {
   return JSON.stringify(structured);
 }
 
-function mapFinishReason(
-  reason: string | undefined,
-  hasToolCalls: boolean,
-): AssistantMessage['stopReason'] {
-  if (hasToolCalls || reason === 'tool-calls') return 'toolCalls';
-  if (reason === 'length') return 'length';
-  return 'stop';
-}
 
 function usageFromAiSdk(usage: {
   inputTokens?: number;
@@ -172,7 +165,7 @@ function buildAssistantMessage(
   text: string,
   thinkingParts: readonly CapturedThinkingPart[],
   toolCalls: CapturedToolCall[],
-  stopReason: AssistantMessage['stopReason'],
+  finish: FinishOutcome,
   usage: AssistantMessage['usage'],
 ): AssistantMessage {
   const content: AssistantMessage['content'] = [];
@@ -213,7 +206,8 @@ function buildAssistantMessage(
     provider: model.provider,
     model: model.id,
     usage,
-    stopReason,
+    stopReason: finish.stopReason,
+    ...(finish.errorMessage ? { errorMessage: finish.errorMessage } : {}),
     timestamp: Date.now(),
   };
 }
@@ -239,6 +233,10 @@ function buildProviderOptions(
   }
 
   return Object.keys(opts).length > 0 ? opts : undefined;
+}
+
+function isGoogleSdk(sdk: string | undefined): boolean {
+  return sdk === 'google';
 }
 
 function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
@@ -301,9 +299,12 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
         output: buildStructuredOutputSpec(options?.outputSchema),
+        // Gemini reports a blocked prompt only in a candidate-less chunk; the SDK drops it.
+        ...(isGoogleSdk(model.sdk) ? { includeRawChunks: true } : {}),
       });
 
       let text = '';
+      let rawBlockReason: string | undefined;
       let thinking = '';
       let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
       const toolCalls = new Map<string, CapturedToolCall>();
@@ -351,6 +352,8 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
             type: 'toolcall_delta',
             toolCall: { id: part.toolCallId, name: part.toolName, arguments: args },
           });
+        } else if (part.type === 'raw') {
+          rawBlockReason ??= promptBlockReason({ google: part.rawValue });
         } else if (part.type === 'error') {
           const err = part.error instanceof Error ? part.error : new Error(String(part.error));
           throw err;
@@ -392,7 +395,15 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         resolvedText,
         thinkingParts,
         calls,
-        mapFinishReason(finishReason, calls.length > 0),
+        resolveFinish({
+          finishReason,
+          rawFinishReason: await Promise.resolve(final.rawFinishReason).catch(() => undefined),
+          providerMetadata: rawBlockReason
+            ? { google: { promptFeedback: { blockReason: rawBlockReason } } }
+            : await Promise.resolve(final.providerMetadata).catch(() => undefined),
+          hasText: Boolean(resolvedText.trim()),
+          hasToolCalls: calls.length > 0,
+        }),
         usageFromAiSdk(finalUsage),
       );
       return assistant;
@@ -449,16 +460,23 @@ export async function generateTextViaAiSdk(
     };
   });
 
+  const text = structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text;
   return buildAssistantMessage(
     model,
-    structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text,
+    text,
     resolveThinkingParts({
       streamedText: '',
       finalText: result.reasoningText ?? '',
       reasoningParts: result.reasoning,
     }),
     toolCalls,
-    mapFinishReason(result.finishReason, toolCalls.length > 0),
+    resolveFinish({
+      finishReason: result.finishReason,
+      rawFinishReason: result.rawFinishReason,
+      providerMetadata: result.providerMetadata,
+      hasText: Boolean(text.trim()),
+      hasToolCalls: toolCalls.length > 0,
+    }),
     usageFromAiSdk(result.usage),
   );
 }

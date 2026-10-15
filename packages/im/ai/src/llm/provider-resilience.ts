@@ -7,6 +7,7 @@
  * worth retrying (auth, bad request, context overflow, caller abort) are re-thrown
  * unchanged so existing handlers such as context-overflow compaction keep working.
  */
+import { isFinishFailureMessage } from './bridge/finish-reason.js';
 import type { Context } from './types/context.js';
 import type { Model } from './types/model.js';
 import type { AssistantMessage } from './types/agent-message.js';
@@ -107,7 +108,7 @@ const PROVIDER_FAILURE_MESSAGES = new Set(Object.values(PROVIDER_FAILURE_TEXT));
 
 /** True when `text` is a {@link ProviderRequestError} message that is safe to show users as-is. */
 export function isProviderFailureMessage(text: string): boolean {
-  return PROVIDER_FAILURE_MESSAGES.has(text);
+  return PROVIDER_FAILURE_MESSAGES.has(text) || isFinishFailureMessage(text);
 }
 
 class EmptyResponseError extends Error {

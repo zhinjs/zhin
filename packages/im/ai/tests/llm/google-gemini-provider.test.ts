@@ -9,6 +9,7 @@ import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+import { isProviderFailureMessage } from '../../src/llm/provider-resilience.js';
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
@@ -155,5 +156,51 @@ describe('Gemini provider (google sdk)', () => {
     });
     const modelTurn = captured[1]!.body.contents.find((c: { role: string }) => c.role === 'model');
     expect(modelTurn.parts).toEqual([expect.objectContaining({ functionCall: expect.objectContaining({ name: 'get_weather' }), thoughtSignature: 'c2lnLWFiYw==' })]);
+  });
+
+  describe('finish reasons', () => {
+    const usageMetadata = { promptTokenCount: 10, candidatesTokenCount: 0, totalTokenCount: 10 };
+    const finished = (finishReason: string, parts: unknown[] = []) => () => ({
+      candidates: [{ content: { role: 'model', parts }, finishReason }],
+      usageMetadata,
+    });
+    const ask = async (respond: () => unknown) => {
+      const { runtime, model } = setup([respond]);
+      return runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] });
+    };
+
+    it.each(['SAFETY', 'RECITATION', 'PROHIBITED_CONTENT', 'BLOCKLIST'])('surfaces %s as a visible refusal, not an empty reply', async (reason) => {
+      const message = await ask(finished(reason));
+      expect(message.stopReason).toBe('error');
+      expect(message.errorMessage).toContain(reason);
+      expect(isProviderFailureMessage(message.errorMessage!)).toBe(true);
+    });
+
+    it('surfaces a blocked prompt (promptFeedback.blockReason, no candidates)', async () => {
+      const message = await ask(() => ({ promptFeedback: { blockReason: 'SAFETY' }, usageMetadata }));
+      expect(message.stopReason).toBe('error');
+      expect(message.errorMessage).toContain('prompt SAFETY');
+    });
+
+    it('keeps partial text on MAX_TOKENS, but reports a reply that is empty because of it', async () => {
+      const partial = await ask(finished('MAX_TOKENS', [{ text: '写到一半' }]));
+      expect(partial.stopReason).toBe('length');
+      expect(partial.errorMessage).toBeUndefined();
+      const empty = await ask(finished('MAX_TOKENS'));
+      expect(empty.stopReason).toBe('error');
+      expect(empty.errorMessage).toContain('MAX_TOKENS');
+    });
+
+    it('reports MALFORMED_FUNCTION_CALL instead of passing an empty reply through', async () => {
+      const message = await ask(finished('MALFORMED_FUNCTION_CALL'));
+      expect(message.stopReason).toBe('error');
+      expect(message.errorMessage).toContain('MALFORMED_FUNCTION_CALL');
+    });
+
+    it('leaves a normal STOP alone', async () => {
+      const message = await ask(finished('STOP', [{ text: 'ok' }]));
+      expect(message.stopReason).toBe('stop');
+      expect(message.errorMessage).toBeUndefined();
+    });
   });
 });
