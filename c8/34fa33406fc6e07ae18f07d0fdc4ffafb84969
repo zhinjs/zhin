@@ -1,0 +1,24 @@
+.github/workflows/ci.yml
+  h_b680f75345178a 251-255
+.github/workflows/publish.yml
+  h_b680f75345178a 82-85
+docs/contributing/publishing.md
+  h_b680f75345178a 46-55
+package.json
+  h_b680f75345178a 145
+scripts/check-pack-imports.mjs
+  h_b680f75345178a 1-222
+scripts/check-pack-imports.test.ts
+  h_b680f75345178a 1-118
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c834fa33406fc6e07ae18f07d0fdc4ffafb84969",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
