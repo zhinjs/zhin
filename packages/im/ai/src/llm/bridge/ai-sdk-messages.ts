@@ -30,7 +30,6 @@ export const TOOL_CALL_REASONING_PLACEHOLDER = '\u200b';
 
 type AiSdkUserPart =
   | { type: 'text'; text: string }
-  | { type: 'image'; image: string }
   | { type: 'file'; data: string; mediaType: string };
 
 export type AiSdkMessageBridgeOptions = {
@@ -68,7 +67,10 @@ function userBlocksToAiContent(
   for (const block of accepted) {
     const inline = mediaRefToInline(block.data.media)!;
     if (block.type === 'image') {
-      parts.push({ type: 'image', image: inline.value });
+      // A file part with the real image/* type (the AI SDK `image` part is deprecated
+      // and drops the MIME type, so providers had to sniff the bytes).
+      const mediaType = inline.mimeType?.startsWith('image/') ? inline.mimeType : 'image';
+      parts.push({ type: 'file', data: inline.value, mediaType });
     } else {
       // AI SDK 原生 file part：@ai-sdk/* 各自映射 provider 原生块
       parts.push({ type: 'file', data: inline.value, mediaType: inline.mimeType });
@@ -135,6 +137,7 @@ function assistantToAiMessage(
       toolCallId: b.id,
       toolName: b.name,
       input: b.arguments,
+      ...(b.providerOptions ? { providerOptions: b.providerOptions } : {}),
     }));
 
   if (

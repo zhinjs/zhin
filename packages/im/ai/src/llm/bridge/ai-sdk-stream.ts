@@ -7,9 +7,10 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
+import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
-import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
+import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ToolCallProviderOptions } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
@@ -60,14 +61,6 @@ function formatStructuredAsAssistantText(structured: unknown): string {
   return JSON.stringify(structured);
 }
 
-function mapFinishReason(
-  reason: string | undefined,
-  hasToolCalls: boolean,
-): AssistantMessage['stopReason'] {
-  if (hasToolCalls || reason === 'tool-calls') return 'toolCalls';
-  if (reason === 'length') return 'length';
-  return 'stop';
-}
 
 function usageFromAiSdk(usage: {
   inputTokens?: number;
@@ -79,6 +72,8 @@ function usageFromAiSdk(usage: {
     cacheWriteTokens?: number;
     noCacheTokens?: number;
   };
+  outputTokenDetails?: { reasoningTokens?: number };
+  reasoningTokens?: number;
 } | undefined): AssistantMessage['usage'] {
   if (!usage) return { ...EMPTY_TOKEN_USAGE };
   const input = usage.inputTokens ?? 0;
@@ -86,12 +81,14 @@ function usageFromAiSdk(usage: {
   const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
   const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0;
   const totalTokens = usage.totalTokens ?? input + output;
+  const reasoning = usage.outputTokenDetails?.reasoningTokens ?? usage.reasoningTokens ?? 0;
   return {
     input,
     output,
     cacheRead,
     cacheWrite,
     totalTokens,
+    ...(reasoning > 0 ? { reasoning } : {}),
     cost: { ...EMPTY_TOKEN_USAGE.cost },
   };
 }
@@ -154,12 +151,25 @@ function resolveThinkingParts(input: {
   return text ? [{ text }] : [];
 }
 
+type CapturedToolCall = { id: string; name: string; arguments: Record<string, unknown>; providerOptions?: ToolCallProviderOptions };
+
+/** Keep the Gemini function-call signature (`providerMetadata.google.thoughtSignature`) for replay. */
+export function toolCallProviderOptions(metadata: unknown): ToolCallProviderOptions | undefined {
+  if (!metadata || typeof metadata !== 'object') return undefined;
+  const out: ToolCallProviderOptions = {};
+  for (const key of ['google', 'vertex']) {
+    const signature = (metadata as Record<string, { thoughtSignature?: unknown } | undefined>)[key]?.thoughtSignature;
+    if (typeof signature === 'string' && signature) out[key] = { thoughtSignature: signature };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 function buildAssistantMessage(
   model: Model,
   text: string,
   thinkingParts: readonly CapturedThinkingPart[],
-  toolCalls: Array<{ id: string; name: string; arguments: Record<string, unknown> }>,
-  stopReason: AssistantMessage['stopReason'],
+  toolCalls: CapturedToolCall[],
+  finish: FinishOutcome,
   usage: AssistantMessage['usage'],
 ): AssistantMessage {
   const content: AssistantMessage['content'] = [];
@@ -190,6 +200,7 @@ function buildAssistantMessage(
       id: call.id,
       name: call.name,
       arguments: call.arguments,
+      ...(call.providerOptions ? { providerOptions: call.providerOptions } : {}),
     });
   }
   return {
@@ -199,7 +210,8 @@ function buildAssistantMessage(
     provider: model.provider,
     model: model.id,
     usage,
-    stopReason,
+    stopReason: finish.stopReason,
+    ...(finish.errorMessage ? { errorMessage: finish.errorMessage } : {}),
     timestamp: Date.now(),
   };
 }
@@ -207,10 +219,11 @@ function buildAssistantMessage(
 type ProviderOpts = Record<string, Record<string, JSONValue>>;
 
 function buildProviderOptions(
-  sdk: string | undefined,
+  model: Pick<Model, 'sdk' | 'providerOptions'>,
   cacheOpts: ProviderOpts | undefined,
   hasDeferredTools: boolean,
 ): ProviderOpts | undefined {
+  const sdk = model.sdk;
   const opts: ProviderOpts = { ...(cacheOpts ?? {}) };
 
   if (hasDeferredTools && sdk === 'anthropic') {
@@ -224,7 +237,16 @@ function buildProviderOptions(
     opts.minimax = { thinking: { type: 'adaptive' } };
   }
 
+  // Provider config (e.g. Gemini safetySettings / thinkingConfig) layers on top, per provider key.
+  for (const [key, value] of Object.entries(model.providerOptions ?? {})) {
+    opts[key] = { ...(opts[key] ?? {}), ...value };
+  }
+
   return Object.keys(opts).length > 0 ? opts : undefined;
+}
+
+function isGoogleSdk(sdk: string | undefined): boolean {
+  return sdk === 'google';
 }
 
 function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
@@ -258,7 +280,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
-      const providerOptions = buildProviderOptions(model.sdk, cacheOpts, hasDeferredTools);
+      const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
 
       llmContextLogger.debug(formatCompact({
         op: 'ai_sdk_request',
@@ -287,12 +309,15 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
         output: buildStructuredOutputSpec(options?.outputSchema),
+        // Gemini reports a blocked prompt only in a candidate-less chunk; the SDK drops it.
+        ...(isGoogleSdk(model.sdk) ? { includeRawChunks: true } : {}),
       });
 
       let text = '';
+      let rawBlockReason: string | undefined;
       let thinking = '';
       let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
-      const toolCalls = new Map<string, { id: string; name: string; arguments: Record<string, unknown> }>();
+      const toolCalls = new Map<string, CapturedToolCall>();
       const toolInputBuffers = new Map<string, string>();
 
       for await (const part of result.fullStream) {
@@ -326,15 +351,19 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
               args = {};
             }
           }
+          const signed = toolCallProviderOptions(part.providerMetadata);
           toolCalls.set(part.toolCallId, {
             id: part.toolCallId,
             name: part.toolName,
             arguments: args,
+            ...(signed ? { providerOptions: signed } : {}),
           });
           push({
             type: 'toolcall_delta',
             toolCall: { id: part.toolCallId, name: part.toolName, arguments: args },
           });
+        } else if (part.type === 'raw') {
+          rawBlockReason ??= promptBlockReason({ google: part.rawValue });
         } else if (part.type === 'error') {
           const err = part.error instanceof Error ? part.error : new Error(String(part.error));
           throw err;
@@ -376,7 +405,15 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         resolvedText,
         thinkingParts,
         calls,
-        mapFinishReason(finishReason, calls.length > 0),
+        resolveFinish({
+          finishReason,
+          rawFinishReason: await Promise.resolve(final.rawFinishReason).catch(() => undefined),
+          providerMetadata: rawBlockReason
+            ? { google: { promptFeedback: { blockReason: rawBlockReason } } }
+            : await Promise.resolve(final.providerMetadata).catch(() => undefined),
+          hasText: Boolean(resolvedText.trim()),
+          hasToolCalls: calls.length > 0,
+        }),
         usageFromAiSdk(finalUsage),
       );
       return assistant;
@@ -407,7 +444,7 @@ export async function generateTextViaAiSdk(
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
-  const providerOptions = buildProviderOptions(model.sdk, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
+  const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
   const result = await generateText({
     model: languageModel,
@@ -423,22 +460,33 @@ export async function generateTextViaAiSdk(
   });
 
   const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
-  const toolCalls = result.toolCalls.map((call) => ({
-    id: call.toolCallId,
-    name: call.toolName,
-    arguments: ('input' in call ? call.input : {}) as Record<string, unknown>,
-  }));
+  const toolCalls: CapturedToolCall[] = result.toolCalls.map((call) => {
+    const signed = toolCallProviderOptions(call.providerMetadata);
+    return {
+      id: call.toolCallId,
+      name: call.toolName,
+      arguments: ('input' in call ? call.input : {}) as Record<string, unknown>,
+      ...(signed ? { providerOptions: signed } : {}),
+    };
+  });
 
+  const text = structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text;
   return buildAssistantMessage(
     model,
-    structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text,
+    text,
     resolveThinkingParts({
       streamedText: '',
       finalText: result.reasoningText ?? '',
       reasoningParts: result.reasoning,
     }),
     toolCalls,
-    mapFinishReason(result.finishReason, toolCalls.length > 0),
+    resolveFinish({
+      finishReason: result.finishReason,
+      rawFinishReason: result.rawFinishReason,
+      providerMetadata: result.providerMetadata,
+      hasText: Boolean(text.trim()),
+      hasToolCalls: toolCalls.length > 0,
+    }),
     usageFromAiSdk(result.usage),
   );
 }

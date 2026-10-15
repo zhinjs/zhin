@@ -5,6 +5,7 @@
 import { createRequire } from 'node:module';
 import type { ImageModel, LanguageModel } from 'ai';
 import type { ProviderInstanceConfig } from './types/model.js';
+import { createGeminiCachingFetch } from './gemini-context-cache.js';
 
 const requirePeer = createRequire(import.meta.url);
 
@@ -150,7 +151,9 @@ export function createLanguageModel(
         apiKey: config.apiKey?.trim(),
         baseURL: normalizeGoogleBaseUrl(config.baseUrl),
         headers,
-        ...transport,
+        ...(config.contextCache?.mode === 'explicit'
+          ? { fetch: createGeminiCachingFetch(config.contextCache, fetchFn) }
+          : transport),
       });
       return google(modelId);
     }

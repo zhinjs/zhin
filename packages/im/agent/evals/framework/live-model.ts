@@ -16,7 +16,7 @@ import {
   type Model,
 } from '@zhin.js/ai';
 import type { ScriptedModel, ScriptedModelRequest } from './scripted-model.js';
-import { contextText, lastUserText } from './scripted-model.js';
+import { contextText, countImages, lastUserText } from './scripted-model.js';
 
 export interface LiveModelOptions {
   /** Real completion port; budgets and timeouts are its responsibility. */
@@ -38,6 +38,8 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
     sdk: 'openai',
     apiKey: 'eval',
     ...(contextWindow ? { contextWindow } : {}),
+    // Declare the real model's modalities so the harness forwards turn images to it.
+    ...(options.model.input?.length ? { input: [...options.model.input] } : {}),
   }, [modelId]);
   const requests: ScriptedModelRequest[] = [];
 
@@ -56,6 +58,7 @@ export function createLiveModel(options: LiveModelOptions): ScriptedModel {
         inputText: contextText(context),
         systemPrompt: context.systemPrompt ?? '',
         model: modelId,
+        images: countImages(context),
       });
       const text = message.content
         .filter((block): block is { type: 'text'; text: string } => block.type === 'text')

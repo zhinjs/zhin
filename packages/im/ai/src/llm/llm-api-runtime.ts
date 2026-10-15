@@ -1,5 +1,5 @@
 import type { Context } from './types/context.js';
-import type { Model, ModelApi, ProviderInstanceConfig } from './types/model.js';
+import type { Model, ModelApi, ModelInputModality, ProviderInstanceConfig } from './types/model.js';
 import type { ThinkingLevel } from './types/agent-event.js';
 import type { AssistantMessage } from './types/agent-message.js';
 import { inferModelReasoning, resolveTransportContextWindow } from './provider-gateway-presets.js';
@@ -66,6 +66,20 @@ function languageModelKey(alias: string, modelId: string): string {
   return `${alias}::${modelId}`;
 }
 
+/**
+ * Input modalities when the provider config does not list `input`. Gemini
+ * models are natively multimodal (image, audio, video, PDF), so the Google SDK
+ * defaults to all of them; without this, images in group messages were
+ * silently replaced by text placeholders. Other SDKs stay text-only unless
+ * configured, because their model lines are mixed.
+ */
+export function defaultModelInput(sdk: string | undefined, modelId: string): readonly ModelInputModality[] {
+  if (sdk === 'google' && /gemini/i.test(modelId) && !/(?:tts|embedding|image|live|transcribe)/i.test(modelId)) {
+    return ['text', 'image', 'audio', 'video', 'file'];
+  }
+  return ['text'];
+}
+
 export function createLlmTransportModel(
   providerAlias: string,
   config: ProviderInstanceConfig,
@@ -79,9 +93,10 @@ export function createLlmTransportModel(
     baseUrl: config.baseUrl,
     compat: config.compat,
     reasoning: inferModelReasoning(modelId),
-    input: config.input?.length ? [...config.input] : ['text'],
+    input: config.input?.length ? [...config.input] : [...defaultModelInput(config.sdk, modelId)],
     contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: 8_192,
+    ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
   };
 }
 

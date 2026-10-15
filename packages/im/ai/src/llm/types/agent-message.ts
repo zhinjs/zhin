@@ -114,6 +114,8 @@ export interface TokenUsage {
   cacheRead: number;
   cacheWrite: number;
   totalTokens: number;
+  /** Of `output`, tokens spent on reasoning (Gemini `thoughtsTokenCount`), when reported. */
+  reasoning?: number;
   cost: TokenCost;
 }
 

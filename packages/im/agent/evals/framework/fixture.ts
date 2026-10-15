@@ -12,7 +12,7 @@ import type { EvalLiveCheck } from './live-checks.js';
 import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
-export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
+export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota' | 'multimodal';
 
 export interface EvalInboundMessage {
   readonly text: string;
@@ -29,6 +29,15 @@ export interface EvalInboundMessage {
   readonly shell?: boolean;
   /** Overrides the default policy derived from the sender (ignores `shell`). */
   readonly policy?: TurnPolicyContext;
+  /** Images attached to the message (see `evalImage()` for committed fixtures). */
+  readonly images?: readonly EvalImage[];
+}
+
+export interface EvalImage {
+  /** Base64 payload without a data: prefix. */
+  readonly base64: string;
+  readonly mimeType: string;
+  readonly name?: string;
 }
 
 export interface EvalTool {
@@ -86,6 +95,8 @@ export interface EvalExpectations {
   readonly modelInputContains?: readonly string[];
   /** Strings that must never appear in what the model received. */
   readonly modelInputNotContains?: readonly string[];
+  /** Image blocks the model received, per request in order (multimodal cases). */
+  readonly modelImages?: readonly number[];
   /** Strings that must appear in the system prompt of every model request. */
   readonly systemPromptContains?: readonly string[];
   /** Strings that must each appear in the system prompt of at least one model request (e.g. a compaction summary request). */
@@ -161,6 +172,8 @@ export interface EvalCase {
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
+  /** Input modalities of the scripted model (default text only). Multimodal cases add `image`. */
+  readonly modelInput?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   readonly script: readonly ScriptStep[];
   /** Unused script steps fail the case unless this is true. */
   readonly allowUnusedSteps?: boolean;

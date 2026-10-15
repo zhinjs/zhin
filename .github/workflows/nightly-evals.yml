@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       models:
-        description: 'Comma-separated MiniMax model ids'
+        description: 'Comma-separated Gemini model ids (empty: vars.NIGHTLY_MODELS, else the default in nightly.run.ts)'
         required: false
-        default: 'minimax-m3'
+        default: ''
       runs_per_case:
         description: 'Runs per case per model (budget: see packages/im/agent/evals/README.md)'
         required: false
@@ -37,10 +37,10 @@ jobs:
       - name: check secret
         id: secret
         env:
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          if [ -z "$MINIMAX_API_KEY" ]; then
-            echo "::notice::MINIMAX_API_KEY secret is not configured; skipping nightly evals."
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::notice::GEMINI_API_KEY secret is not configured; skipping nightly evals."
             echo "present=false" >> "$GITHUB_OUTPUT"
           else
             echo "present=true" >> "$GITHUB_OUTPUT"
@@ -85,8 +85,8 @@ jobs:
       - name: run nightly evals
         if: steps.secret.outputs.present == 'true'
         env:
-          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
-          NIGHTLY_MODELS: ${{ inputs.models || 'minimax-m3' }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
           NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || '3' }}
           NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports
           NIGHTLY_PREVIOUS_REPORT: ${{ github.workspace }}/previous-report/nightly.json

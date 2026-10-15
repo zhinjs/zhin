@@ -11,6 +11,7 @@
 export {
   LlmApiRuntime,
   createLlmTransportModel,
+  defaultModelInput,
   createAssistantMessageEventStream,
   createContext,
   createUserMessage,

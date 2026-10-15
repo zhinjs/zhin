@@ -72,6 +72,8 @@ export interface ScriptedModelRequest {
   readonly systemPrompt: string;
   /** Model id this request was sent to. */
   readonly model: string;
+  /** Image blocks attached to the messages of this request (multimodal cases). */
+  readonly images: number;
 }
 
 export interface ScriptedModel {
@@ -108,6 +110,8 @@ const MODEL_ID = 'scripted-model';
 export interface ScriptedModelOptions {
   /** Model context window reported to the harness (drives compaction thresholds). */
   readonly contextWindow?: number;
+  /** Input modalities the scripted model declares (default text only); `image` lets turn images through. */
+  readonly input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   /** Extra model ids registered after the primary `scripted-model`, in candidate (fallback) order. */
   readonly extraModels?: readonly string[];
   /** Virtual clock advanced by `hang` steps. */
@@ -129,6 +133,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
     sdk: 'openai',
     apiKey: 'eval',
     ...(options.contextWindow ? { contextWindow: options.contextWindow } : {}),
+    ...(options.input?.length ? { input: [...options.input] } : {}),
   }, models);
   const modelMismatches: string[] = [];
 
@@ -151,6 +156,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       inputText: contextText(context),
       systemPrompt: context.systemPrompt ?? '',
       model: model.id,
+      images: countImages(context),
     });
     if (!step) {
       exhausted += 1;
@@ -243,6 +249,14 @@ function toAssistantMessage(step: ScriptStep, index: number, modelId: string): A
 function scriptedUsage(step: ScriptStep): AssistantMessage['usage'] {
   const tokens = 'tokens' in step && typeof step.tokens === 'number' ? step.tokens : 0;
   return { ...EMPTY_TOKEN_USAGE, input: tokens, totalTokens: tokens };
+}
+
+/** Image media blocks across the request's messages. */
+export function countImages(context: Context): number {
+  return context.messages.reduce((sum, message) => {
+    const media = (message as { media?: ReadonlyArray<{ type?: string }> }).media;
+    return sum + (media?.filter((block) => block.type === 'image').length ?? 0);
+  }, 0);
 }
 
 export function lastUserText(context: Context): string {
