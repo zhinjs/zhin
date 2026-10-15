@@ -140,7 +140,7 @@ Optional fields:
 - `input`: content types the model accepts, `text | image | audio | video | file`. When omitted, the default depends on the SDK and model name:
   - Gemini chat models on `sdk: google` are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models are text-only.
   - On `sdk: openai`, GPT-4o, GPT-4.1, GPT-4.5, GPT-5.x, o1, o3 and o4-mini default to `text, image`, and so does every Claude 3+ model on `sdk: anthropic`. The audio, realtime, TTS, search, embedding and image-generation variants, plus o1-mini and o3-mini, are text-only. PDFs and other files are off by default; set `input: [text, image, file]` to send them.
-  - Other SDKs (DeepSeek, MiniMax, Ollama, gateways) are text-only, because one vendor's models differ in what they accept.
+  - Other SDKs (DeepSeek, MiniMax, Ollama, gateways) are text-only, because one vendor's models differ in what they accept. Groq is the exception: Llama 4 Scout / Maverick default to `text, image`, while GPT-OSS and the other models stay text-only.
 
   An explicit `input` always wins.
 - `contextWindow`: context window size. When omitted, most providers assume 128k. `sdk: ollama` is the exception: zhin reads `OLLAMA_CONTEXT_LENGTH` (when zhin and Ollama share a machine) and otherwise assumes 4096. Ollama sizes the context by VRAM (4k below 24 GiB, 32k for 24–48 GiB, 256k above), its OpenAI-compatible API cannot raise it per request, and it **silently drops the start** of a longer prompt, system prompt included. So zhin errs low. Set `contextWindow` to the CONTEXT column of `ollama ps`. Startup prints a hint when it is missing.
@@ -186,6 +186,29 @@ Optional fields:
         headers:                                   # optional
           x-proxy-tag: zhin
   ```
+
+- **Groq (GroqCloud)**: Groq uses `openai-compatible`, and zhin ships a Groq preset. With the alias `groq` (or `groqcloud`) you can omit `sdk` and `baseUrl`. A `baseUrl` on `api.groq.com` is treated as Groq under any alias, and `sdk: openai` is switched to `openai-compatible`:
+
+  ```yaml
+  ai:
+    providers:
+      groq:
+        sdk: openai-compatible
+        baseUrl: https://api.groq.com/openai/v1
+        apiKey: ${GROQ_API_KEY}
+        models:
+          - openai/gpt-oss-120b
+          - openai/gpt-oss-20b
+        # thinkingLevel: medium   # GPT-OSS defaults to low; medium / high also work
+  ```
+
+  Caveats:
+  - Earlier reasoning is sent back as `reasoning`, the field Groq accepts. Groq rejects the SDK's default `reasoning_content`, which made the second step of every tool loop fail with a 400.
+  - Groq rejects `logprobs`, `top_logprobs`, `logit_bias` and an `n` above 1, so zhin never sends them.
+  - `reasoning_effort` goes only to GPT-OSS and Qwen 3. GPT-OSS defaults to `low`, which keeps replies fast and helps you stay under the free tier's 8K tokens per minute. Other models (Llama, for example) never get the field, even with `thinkingLevel` set.
+  - GPT-OSS is text-only. Images are handled the way zhin handles any model without image support, so they never reach Groq. Llama 4 Scout and Maverick default to `text, image`. An explicit `input` always wins.
+  - The context window comes from the model id: 131072 for GPT-OSS and 128k for other models. Override it with `contextWindow`.
+  - Free-tier limits are low: GPT-OSS gets about 8K tokens per minute and 1,000 requests per day (see [Groq rate limits](https://console.groq.com/docs/rate-limits)). A 429 on a per-minute limit (RPM / TPM) is retried after `retry-after`. A per-day limit (RPD / TPD) can't recover until the next day, so zhin skips retries and moves to the next candidate model (limits are per model). If no candidate is left, the user is told today's quota is used up.
 
 ### ai.agents
 
