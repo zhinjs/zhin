@@ -1,0 +1,23 @@
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_0491b9d4752e4a::t_45e8635b6c219e 8-10,93-99,102-103,105,128,138-140,172-198
+docs/plans/workroom-group-collaboration-progress.md
+  s_0491b9d4752e4a::t_d96611593fd0e8 30-31,79-82,89
+docs/plans/workroom-group-collaboration-redesign.md
+  s_0491b9d4752e4a::t_cb3f9bb0dd7b89 61-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e81be9141d71c0d96aeb850bc32786d20c67e374",
+  "prompts": {},
+  "sessions": {
+    "s_0491b9d4752e4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37d27f3b-eb81-4483-ba9c-29c7549e7934",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

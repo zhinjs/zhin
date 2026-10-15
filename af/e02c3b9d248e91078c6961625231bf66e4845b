@@ -1,0 +1,39 @@
+.changeset/workroom-remote-subpath.md
+  s_a7e33dd75d134f::t_fe8bb7325408f8 7
+basic/cli/src/utils/optional-workroom.ts
+  s_a7e33dd75d134f::t_0a307f93103a22 42-45
+basic/cli/tests/agent-workroom.test.ts
+  s_a7e33dd75d134f::t_346be4416fcb9f 422-442
+docs/configuration/index.md
+  s_a7e33dd75d134f::t_e021a804f545a4 238
+docs/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_37e256f1840e49 118
+docs/en/configuration/index.md
+  s_a7e33dd75d134f::t_eb2d3f2cb488c8 243
+docs/en/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_f48fdde6ae2a32 113
+docs/plans/workroom-group-collaboration-progress.md
+  s_a7e33dd75d134f::t_386f392bf1f49c 124-125,394-398,443
+packages/host/a2a/README.md
+  s_a7e33dd75d134f::t_3969e980c28db5 48-53
+packages/im/agent/CONTEXT.md
+  s_a7e33dd75d134f::t_d6747b6eee7ad0 126
+packages/im/workroom/README.md
+  s_a7e33dd75d134f::t_8ff5f6236ac87b 14,16
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "afe02c3b9d248e91078c6961625231bf66e4845b",
+  "prompts": {},
+  "sessions": {
+    "s_a7e33dd75d134f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac1669fd-f923-4a01-a213-7e4fd5af005c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

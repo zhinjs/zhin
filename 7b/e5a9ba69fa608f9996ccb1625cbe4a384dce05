@@ -1,0 +1,35 @@
+.changeset/workroom-b4-fail-closed.md
+  s_ea90e74ad58704::t_e03932a70ee020 1-12
+docs/plans/workroom-group-collaboration-progress.md
+  s_ea90e74ad58704::t_0f039cbdf0e816 92-94,314-320,357
+packages/im/workroom/src/room/room-guards.ts
+  s_ea90e74ad58704::t_e7a2d1a1591116 33,57-62,80,82,96-97,104-108,205-216,227,234-239,306,317
+packages/im/workroom/src/room/room-send-limiter.ts
+  s_ea90e74ad58704::t_bf42e8c9a8cfe2 6-16,29-31,47-68,86,109,152,161-170,173-178
+packages/im/workroom/src/room/room-task-authorizer.ts
+  s_ea90e74ad58704::t_cf32b5ac3aaad9 7-14,16-21,30-31,36-42,46-65,67,69
+packages/im/workroom/src/room/room-task-service.ts
+  s_ea90e74ad58704::t_884b66ee3bb1ce 44-45
+packages/im/workroom/tests/room/room-guards.test.ts
+  s_ea90e74ad58704::t_a6753faf0f8bee 23,44,48-53,66-69,72,74,76,79-80,82,85,88-90,94-101,103,155-156,175-193
+packages/im/workroom/tests/room/room-send-limiter.test.ts
+  s_ea90e74ad58704::t_b75b542534127b 2,146-197
+packages/im/workroom/tests/room/room-task-authorizer.test.ts
+  s_ea90e74ad58704::t_c4c6c8dad91d90 13-16,23,55-95,103,107-115
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7be5a9ba69fa608f9996ccb1625cbe4a384dce05",
+  "prompts": {},
+  "sessions": {
+    "s_ea90e74ad58704": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df53f1c0-f25d-4f37-9714-2a98dedb0f2e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
