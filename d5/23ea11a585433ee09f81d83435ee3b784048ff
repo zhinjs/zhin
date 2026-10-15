@@ -1,0 +1,20 @@
+packages/im/agent/src/core/agent-core-run.ts
+  h_b680f75345178a 277-279,293,427-431
+packages/im/agent/src/core/agent-core.ts
+  h_b680f75345178a 28-31,63
+packages/im/agent/src/core/agent-loop-turn.ts
+  h_b680f75345178a 21-25
+packages/im/agent/src/core/contracts.ts
+  h_b680f75345178a 4
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d523ea11a585433ee09f81d83435ee3b784048ff",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
