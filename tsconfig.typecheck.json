@@ -191,9 +191,6 @@
       "@zhin.js/mcp-feature": [
         "./packages/im/mcp-feature/src/index.ts"
       ],
-      "@zhin.js/mcp/adapter-tools-helper": [
-        "./packages/host/mcp/src/adapter-tools-helper.ts"
-      ],
       "@zhin.js/mcp/runtime": [
         "./packages/host/mcp/src/runtime.ts"
       ],
