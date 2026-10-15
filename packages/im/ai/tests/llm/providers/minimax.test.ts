@@ -40,4 +40,17 @@ describe('minimax provider (baseline)', () => {
     const assistant = h.lastRequest().body.messages.find((m: { role: string }) => m.role === 'assistant');
     expect(assistant.content.map((c: { type: string }) => c.type)).toEqual(['tool_use']);
   });
+
+  it.each([
+    ['https://api.minimaxi.com/anthropic', 'https://api.minimaxi.com/anthropic/v1/messages'],
+    ['https://api.minimaxi.com/anthropic/v1/', 'https://api.minimaxi.com/anthropic/v1/messages'],
+    ['https://api.minimaxi.com', 'https://api.minimaxi.com/anthropic/v1/messages'],
+    ['https://proxy.test/minimax/v1', 'https://proxy.test/minimax/v1/messages'],
+  ])('normalizes baseUrl %s to the Anthropic-protocol endpoint', async (baseUrl, url) => {
+    const h = createProviderHarness({ sdk: 'minimax', config: { baseUrl } });
+    h.reply(anthropicMessages.reply({ text: 'ok' }));
+    await h.complete('hi');
+    expect(h.lastRequest().url).toBe(url);
+  });
 });
+

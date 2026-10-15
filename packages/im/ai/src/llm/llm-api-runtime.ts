@@ -1,10 +1,11 @@
 import type { Context } from './types/context.js';
-import type { Model, ModelApi, ModelInputModality, ProviderInstanceConfig } from './types/model.js';
+import type { Model, ModelApi, ModelInputModality, ModelStreamTimeout, ProviderInstanceConfig } from './types/model.js';
 import type { ThinkingLevel } from './types/agent-event.js';
 import type { AssistantMessage } from './types/agent-message.js';
 import { inferModelReasoning, resolveTransportContextWindow } from './provider-gateway-presets.js';
 import type { LanguageModel } from 'ai';
 import { createLanguageModel } from './sdk-registry.js';
+import type { ProviderResilienceConfig } from './provider-resilience.js';
 
 export interface StreamOptions {
   signal?: AbortSignal;
@@ -80,11 +81,46 @@ export function defaultModelInput(sdk: string | undefined, modelId: string): rea
   return ['text'];
 }
 
+function positiveMs(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
+}
+
+/**
+ * The provider-config layer of the resilience settings: `timeout` → `requestTimeoutMs`,
+ * `maxRetries` → `maxRetries`. Apply it between `ai.providerResilience` and the
+ * model-harness quirks (`resolveProviderResilienceConfig(global, thisLayer, harness)`).
+ */
+export function resolveProviderConfigResilience(
+  config: Pick<ProviderInstanceConfig, 'timeout' | 'maxRetries'> | undefined,
+): ProviderResilienceConfig | undefined {
+  if (!config) return undefined;
+  const layer: ProviderResilienceConfig = {};
+  if (typeof config.timeout === 'number' && Number.isFinite(config.timeout) && config.timeout >= 0) {
+    layer.requestTimeoutMs = Math.floor(config.timeout);
+  }
+  if (typeof config.maxRetries === 'number' && Number.isFinite(config.maxRetries) && config.maxRetries >= 0) {
+    layer.maxRetries = Math.floor(config.maxRetries);
+  }
+  return Object.keys(layer).length > 0 ? layer : undefined;
+}
+
+/** Stream stall timeouts from the provider config; undefined when neither is set. */
+export function resolveModelStreamTimeout(config: ProviderInstanceConfig): ModelStreamTimeout | undefined {
+  const firstChunkMs = positiveMs(config.firstChunkTimeoutMs);
+  const chunkMs = positiveMs(config.chunkTimeoutMs);
+  if (firstChunkMs === undefined && chunkMs === undefined) return undefined;
+  return {
+    ...(firstChunkMs !== undefined ? { firstChunkMs } : {}),
+    ...(chunkMs !== undefined ? { chunkMs } : {}),
+  };
+}
+
 export function createLlmTransportModel(
   providerAlias: string,
   config: ProviderInstanceConfig,
   modelId: string,
 ): Model {
+  const streamTimeout = resolveModelStreamTimeout(config);
   return {
     id: modelId,
     provider: providerAlias,
@@ -97,6 +133,7 @@ export function createLlmTransportModel(
     contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: 8_192,
     ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
+    ...(streamTimeout ? { streamTimeout } : {}),
   };
 }
 
@@ -133,6 +170,11 @@ export class LlmApiRuntime implements LlmCompletionPort {
     }
     this.#providers.set(alias, { config, models: [...models], fetch: fetchFn });
     return this;
+  }
+
+  /** The registered config of a provider alias (read-only view), or undefined. */
+  providerConfig(providerAlias: string): Readonly<ProviderInstanceConfig> | undefined {
+    return this.#providers.get(providerAlias)?.config;
   }
 
   model(providerAlias: string, modelId: string): Model {

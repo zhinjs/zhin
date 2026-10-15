@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { classifyProviderError } from '../../../src/llm/provider-resilience.js';
+import { generateTextViaAiSdk } from '../../../src/llm/bridge/ai-sdk-stream.js';
 import { createProviderHarness, openaiChat, TEST_API_KEY } from '../../helpers/provider-harness/index.js';
 
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
@@ -84,5 +85,94 @@ describe('openai provider (baseline)', () => {
     await h.complete('hi');
     expect(h.lastRequest().url).toBe('https://proxy.test/v1/chat/completions');
     expect(h.lastRequest().headers['x-team']).toBe('zhin');
+  });
+
+  it.each([
+    ['https://proxy.test', 'https://proxy.test/v1/chat/completions'],
+    ['https://proxy.test/api/', 'https://proxy.test/api/v1/chat/completions'],
+    ['https://res.test/openai', 'https://res.test/openai/chat/completions'],
+    ['https://gw.test/api/v3', 'https://gw.test/api/v3/chat/completions'],
+  ])('normalizes baseUrl %s like the other OpenAI-protocol providers', async (baseUrl, url) => {
+    const h = createProviderHarness({ sdk: 'openai', config: { baseUrl } });
+    h.reply(openaiChat.reply({ text: 'ok' }));
+    await h.complete('hi');
+    expect(h.lastRequest().url).toBe(url);
+  });
+
+  it('uses baseUrl as written with compat.appendV1: false', async () => {
+    const h = createProviderHarness({ sdk: 'openai', config: { baseUrl: 'https://proxy.test', compat: { appendV1: false } } });
+    h.reply(openaiChat.reply({ text: 'ok' }));
+    await h.complete('hi');
+    expect(h.lastRequest().url).toBe('https://proxy.test/chat/completions');
+  });
+
+  it.each([
+    ['Token', 'Token test-key'],
+    ['Bearer ', 'Bearer test-key'],
+    ['', 'test-key'],
+  ])('honours authScheme %j on chat requests and model discovery', async (authScheme, header) => {
+    const h = createProviderHarness({ sdk: 'openai', config: { authScheme, baseUrl: 'https://proxy.test/v1' } });
+    h.reply(openaiChat.reply({ text: 'ok' }));
+    await h.complete('hi');
+    expect(h.lastRequest().headers.authorization).toBe(header);
+    h.server.route((req) => req.path.endsWith('/models'), { json: { data: [{ id: 'm1' }] } });
+    await h.adapter().listModels();
+    expect(h.server.requestsTo('/models')[0]?.headers.authorization).toBe(header);
+  });
+
+  it('sends system instead of developer with compat.supportsDeveloperRole: false', async () => {
+    const h = createProviderHarness({ sdk: 'openai', config: { compat: { supportsDeveloperRole: false } } });
+    h.reply(openaiChat.reply({ text: 'ok' }));
+    await h.complete({ system: 'be brief', user: 'hi' });
+    expect(h.lastRequest().body.messages[0]).toEqual({ role: 'system', content: 'be brief' });
+  });
+
+  it('surfaces a streamed refusal instead of an empty reply', async () => {
+    const h = createProviderHarness({ sdk: 'openai' });
+    h.reply(openaiChat.reply({ refusal: "I'm sorry, I can't help with that." }));
+    const message = await h.complete('something disallowed');
+    expect(message.stopReason).toBe('error');
+    expect(message.errorMessage).toContain('内容安全策略');
+    expect(message.errorMessage).toContain("refusal: I'm sorry, I can't help with that.");
+  });
+
+  it('surfaces a refusal on the non-streaming path', async () => {
+    const h = createProviderHarness({ sdk: 'openai' });
+    h.reply(openaiChat.reply({ refusal: 'No.' }));
+    const languageModel = h.runtime.resolveLanguageModel(h.alias, h.modelId)!;
+    const message = await generateTextViaAiSdk(languageModel, h.model, h.context('x'));
+    expect(h.lastRequest().stream).toBe(false);
+    expect(message.stopReason).toBe('error');
+    expect(message.errorMessage).toContain('refusal: No.');
+  });
+
+  it('keeps text when a reply has both text and a refusal field', async () => {
+    const h = createProviderHarness({ sdk: 'openai' });
+    h.reply(openaiChat.reply({ text: 'Here is a safe answer.', refusal: 'partial' }));
+    const message = await h.complete('hi');
+    expect(message.stopReason).toBe('stop');
+    expect(message.errorMessage).toBeUndefined();
+  });
+
+  it('aborts a stream that goes silent (chunkTimeoutMs) as a retryable timeout', async () => {
+    const h = createProviderHarness({ sdk: 'openai', config: { chunkTimeoutMs: 50 } });
+    expect(h.model.streamTimeout).toEqual({ chunkMs: 50 });
+    const stalled = openaiChat.reply({ text: 'partial' }).stream({ body: {} } as never);
+    h.reply({ sse: (stalled.sse ?? []).slice(0, 2), hang: 'after-events' });
+    const error = await h.complete('hi', { maxRetries: 0 }).catch((e: unknown) => e);
+    expect(classifyProviderError(error)).toMatchObject({ kind: 'timeout', retryable: true });
+  });
+
+  it('aborts a request whose first chunk never comes (firstChunkTimeoutMs) and fails over on retry', async () => {
+    const h = createProviderHarness({ sdk: 'openai', config: { firstChunkTimeoutMs: 50 } });
+    h.reply({ hang: 'before-headers' }, openaiChat.reply({ text: '恢复了' }));
+    const error = await h.complete('hi', { maxRetries: 0 }).catch((e: unknown) => e);
+    expect(classifyProviderError(error)).toMatchObject({ kind: 'timeout', retryable: true });
+    const message = await h.resilient({ config: { maxRetries: 1, baseDelayMs: 1, maxDelayMs: 1 } }).complete('again');
+    expect(message.content).toEqual([{ type: 'text', text: '恢复了' }]);
+  });
+
+  it('leaves stall timeouts off by default', () => {
+    expect(createProviderHarness({ sdk: 'openai' }).model.streamTimeout).toBeUndefined();
   });
 });

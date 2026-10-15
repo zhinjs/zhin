@@ -15,7 +15,8 @@ describe('provider-gateway-presets', () => {
     });
     expect(out.sdk).toBe('openai-compatible');
     expect(out.contextWindow).toBe(32_768);
-    expect(out.compat?.supportsReasoningContent).toBe(true);
+    // compat.supportsReasoningContent was a dead flag; presets no longer set it.
+    expect(out.compat).toBeUndefined();
   });
 
   it('preserves explicit contextWindow on gateway preset', () => {

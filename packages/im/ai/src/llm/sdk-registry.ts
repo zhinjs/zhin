@@ -91,6 +91,53 @@ export function resolveOpenAiCompatibleBaseUrl(config: ProviderInstanceConfig): 
   return config.accountId ? resolveCloudflareBaseUrl(config) : undefined;
 }
 
+/**
+ * OpenAI base URL. Unset keeps the SDK default (`https://api.openai.com/v1`). A
+ * proxy root gets `/v1` like the other OpenAI-style providers; a base that already
+ * names a version or ends in `/openai` (Azure-style, Gemini OpenAI-compat) is kept.
+ */
+export function normalizeOpenAiBaseUrl(
+  baseUrl: string | undefined,
+  appendV1?: boolean,
+): string | undefined {
+  const url = trimUrl(baseUrl);
+  return url ? normalizeOpenAiCompatibleBaseUrl(url, appendV1) : undefined;
+}
+
+/**
+ * MiniMax (Anthropic protocol). The SDK posts to `${baseURL}/messages`, so a base
+ * ending in `/anthropic` gets `/v1`, and a bare host gets `/anthropic/v1`
+ * (`https://api.minimaxi.com` → `https://api.minimaxi.com/anthropic/v1`).
+ */
+export function normalizeMiniMaxBaseUrl(baseUrl: string | undefined): string | undefined {
+  const url = trimUrl(baseUrl);
+  if (!url) return undefined;
+  const withoutTrailing = trimTrailingSlashes(url);
+  if (withoutTrailing.endsWith('/anthropic')) return `${withoutTrailing}/v1`;
+  try {
+    const { pathname } = new URL(withoutTrailing);
+    if (pathname === '' || pathname === '/') return `${withoutTrailing}/anthropic/v1`;
+  } catch {
+    // Not an absolute URL; use as written.
+  }
+  return withoutTrailing;
+}
+
+/**
+ * `Authorization` value for a provider `authScheme`: `''` sends the raw key,
+ * `'Bearer'` / `'Bearer '` / `'Token'` send `<scheme> <key>`. Undefined means the
+ * SDK default, so this returns undefined.
+ */
+export function formatAuthorizationHeader(
+  authScheme: string | undefined,
+  apiKey: string | undefined,
+): string | undefined {
+  const key = apiKey?.trim();
+  if (authScheme === undefined || !key) return undefined;
+  const scheme = authScheme.trim();
+  return scheme ? `${scheme} ${key}` : key;
+}
+
 function resolveOllamaBaseUrl(config: ProviderInstanceConfig): string {
   const host = config.host?.trim() || 'http://127.0.0.1:11434';
   const normalized = trimTrailingSlashes(host);
@@ -114,10 +161,35 @@ function trimTrailingSlashes(value: string): string {
 
 function buildHeaders(config: ProviderInstanceConfig): Record<string, string> | undefined {
   const headers = { ...config.headers };
-  if (config.authScheme === '' && config.apiKey) {
-    headers.Authorization = config.apiKey;
-  }
+  const authorization = formatAuthorizationHeader(config.authScheme, config.apiKey);
+  if (authorization) headers.Authorization = authorization;
   return Object.keys(headers).length > 0 ? headers : undefined;
+}
+
+/**
+ * Bound the wait for response headers with the provider's `firstChunkTimeoutMs`.
+ * The AI SDK starts its own first-chunk timer only after headers arrive, so a server
+ * that never answers would otherwise hang until the request timeout. Aborts with a
+ * `TimeoutError`, which the resilience layer classifies as a retryable timeout.
+ */
+export function withResponseHeaderTimeout(
+  fetchFn: typeof globalThis.fetch | undefined,
+  timeoutMs: number | undefined,
+): typeof globalThis.fetch | undefined {
+  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return fetchFn;
+  const ms = Math.floor(timeoutMs);
+  return (async (input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      controller.abort(new DOMException(`No response headers within ${ms}ms`, 'TimeoutError'));
+    }, ms);
+    const signal = init?.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+    try {
+      return await (fetchFn ?? globalThis.fetch)(input, { ...init, signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }) as typeof globalThis.fetch;
 }
 
 function sdkTransportExtras(fetchFn?: typeof globalThis.fetch): { fetch?: typeof globalThis.fetch } {
@@ -136,7 +208,7 @@ function createOpenAiCompatibleProvider(
   return createOpenAICompatible({
     name,
     baseURL,
-    apiKey: config.apiKey ?? '',
+    apiKey: config.apiKey?.trim() ?? '',
     headers: buildHeaders(config),
     // Ask for the final usage chunk (`stream_options.include_usage`); without it
     // OpenAI-style servers stream no usage at all. `compat.includeUsage: false` opts out.
@@ -149,8 +221,9 @@ export function createLanguageModel(
   sdk: SdkId,
   config: ProviderInstanceConfig,
   modelId: string,
-  fetchFn?: typeof globalThis.fetch,
+  transportFetch?: typeof globalThis.fetch,
 ): LanguageModel {
+  const fetchFn = withResponseHeaderTimeout(transportFetch, config.firstChunkTimeoutMs);
   const headers = buildHeaders(config);
   const transport = sdkTransportExtras(fetchFn);
 
@@ -159,7 +232,7 @@ export function createLanguageModel(
       const { createOpenAI } = loadPeer<typeof import('@ai-sdk/openai')>('@ai-sdk/openai');
       const openai = createOpenAI({
         apiKey: config.apiKey?.trim(),
-        baseURL: trimUrl(config.baseUrl),
+        baseURL: normalizeOpenAiBaseUrl(config.baseUrl, config.compat?.appendV1),
         headers,
         ...transport,
       });
@@ -201,7 +274,7 @@ export function createLanguageModel(
       const { createMiniMax } = loadPeer<typeof import('@ai-sdk/minimax')>('@ai-sdk/minimax');
       const minimax = createMiniMax({
         apiKey: config.apiKey?.trim(),
-        baseURL: trimUrl(config.baseUrl),
+        baseURL: normalizeMiniMaxBaseUrl(config.baseUrl),
         headers,
         ...transport,
       });
@@ -249,8 +322,8 @@ export function createImageModel(
     case 'openai': {
       const { createOpenAI } = loadPeer<typeof import('@ai-sdk/openai')>('@ai-sdk/openai');
       const openai = createOpenAI({
-        apiKey: config.apiKey,
-        baseURL: config.baseUrl,
+        apiKey: config.apiKey?.trim(),
+        baseURL: normalizeOpenAiBaseUrl(config.baseUrl, config.compat?.appendV1),
         headers,
         ...transport,
       });
@@ -259,7 +332,7 @@ export function createImageModel(
     case 'google': {
       const { createGoogleGenerativeAI } = loadPeer<typeof import('@ai-sdk/google')>('@ai-sdk/google');
       const google = createGoogleGenerativeAI({
-        apiKey: config.apiKey,
+        apiKey: config.apiKey?.trim(),
         baseURL: normalizeGoogleBaseUrl(config.baseUrl),
         headers,
         ...transport,

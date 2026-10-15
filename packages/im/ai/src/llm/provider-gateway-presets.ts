@@ -75,11 +75,6 @@ export function applyProviderGatewayPreset(
   if (out.contextWindow == null && preset.contextWindow != null) {
     out.contextWindow = preset.contextWindow;
   }
-  if (preset.sdk === 'openai-compatible' && !out.compat) {
-    out.compat = { supportsReasoningContent: true };
-  } else if (preset.sdk === 'openai-compatible' && out.compat && out.compat.supportsReasoningContent == null) {
-    out.compat = { ...out.compat, supportsReasoningContent: true };
-  }
   return out;
 }
 

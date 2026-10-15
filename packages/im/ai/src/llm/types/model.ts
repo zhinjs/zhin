@@ -19,8 +19,18 @@ export interface ModelCostRates {
 }
 
 export interface OpenAiCompatFlags {
+  /**
+   * `sdk: openai`: set false for an OpenAI-protocol endpoint that rejects the
+   * `developer` role. Reasoning models (o-series, gpt-5) then send their
+   * instructions as `system` (`providerOptions.openai.systemMessageMode`).
+   */
   supportsDeveloperRole?: boolean;
+  /**
+   * @deprecated No effect. Reasoning replay is decided per model by the transport
+   * (DeepSeek / MiniMax thinking models, `reasoning_content` on openai-compatible).
+   */
   supportsReasoningContent?: boolean;
+  /** @deprecated No effect; assistant tool calls are always sent in the assistant message. */
   toolCallsInAssistant?: boolean;
   /**
    * `sdk: openai-compatible` / `ollama`: request the streamed usage chunk
@@ -57,6 +67,15 @@ export interface Model {
   cost?: ModelCostRates;
   /** Copied from {@link ProviderInstanceConfig.providerOptions}. */
   providerOptions?: Record<string, Record<string, JSONValue>>;
+  /** Streaming stall timeouts from the provider config (AI SDK `timeout.firstChunkMs` / `chunkMs`). */
+  streamTimeout?: ModelStreamTimeout;
+}
+
+export interface ModelStreamTimeout {
+  /** Abort when no first chunk arrives within this many ms (includes waiting for headers). */
+  firstChunkMs?: number;
+  /** Abort when the stream goes silent for this many ms between chunks. */
+  chunkMs?: number;
 }
 
 export interface ProviderInstanceConfig {
@@ -66,8 +85,21 @@ export interface ProviderInstanceConfig {
   baseUrl?: string;
   compat?: OpenAiCompatFlags;
   headers?: Record<string, string>;
+  /**
+   * Per-request timeout in ms for this provider; overrides
+   * `ai.providerResilience.requestTimeoutMs` (a model-harness `requestTimeoutMs`
+   * still wins). 0 disables.
+   */
   timeout?: number;
+  /** Retries per model for this provider; overrides `ai.providerResilience.maxRetries`. */
   maxRetries?: number;
+  /**
+   * Abort a streamed request when the first chunk takes longer than this (ms).
+   * Default off. Stalls are classified as timeouts and retried / failed over.
+   */
+  firstChunkTimeoutMs?: number;
+  /** Abort a streamed request when it goes silent between chunks for this long (ms). Default off. */
+  chunkTimeoutMs?: number;
   /** Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). */
   input?: readonly ModelInputModality[];
   /** Cloudflare Workers AI */

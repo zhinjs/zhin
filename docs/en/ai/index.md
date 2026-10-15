@@ -124,10 +124,11 @@ ai:
 
 | sdk | Install | Key settings |
 |-----|---------|--------------|
-| `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` |
+| `openai` | `@ai-sdk/openai` | `apiKey`, optional `baseUrl` (a proxy root gets `/v1`, same rule as `openai-compatible`) |
 | `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey` (`/v1` appended when the path has no version, see `compat` below); Cloudflare Workers AI can use `accountId` instead of `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`, optional `baseUrl` (`/v1` appended) |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`, optional `baseUrl` |
+| `minimax` | `@ai-sdk/minimax` | `apiKey`, optional `baseUrl` (default `https://api.minimax.io/anthropic/v1`; for the China site use `https://api.minimaxi.com/anthropic`, `/v1` is appended) |
 | `google` | `@ai-sdk/google` | `apiKey`, optional `baseUrl` (`/v1beta` appended) |
 | `ollama` | `@ai-sdk/openai-compatible` (via the OpenAI-compatible API) | `host` (default `http://127.0.0.1:11434`, `/v1` appended); no `apiKey`; set `contextWindow` (see below) |
 
@@ -140,6 +141,11 @@ Optional fields:
   - `includeUsage`: request streamed usage (`stream_options.include_usage`). Default `true`. Without it most compatible servers stream no token counts. Set `false` for a server that rejects the field.
   - `appendV1`: whether `/v1` is appended to `baseUrl`. Unset: a path that already names a version (`/api/v3`, `/api/paas/v4`, `/v1beta/openai`) or ends in `/openai` is used as written; anything else gets `/v1`, so existing `https://host` and `https://host/api` configs behave as before. `true` always appends (the old behaviour), `false` never does.
   - `promptCacheKey`: send OpenAI's `prompt_cache_key`. Default `false`, because strict gateways reject unknown fields.
+  - `supportsDeveloperRole` (`sdk: openai`): `false` sends the system prompt of reasoning models (o-series, gpt-5) with the `system` role, for OpenAI-protocol endpoints that reject `developer`.
+  - `supportsReasoningContent` and `toolCallsInAssistant` are deprecated and have no effect.
+- `authScheme`: the `Authorization` scheme. Unset uses the SDK default (`Bearer` for OpenAI-style SDKs, `x-api-key` for Anthropic, `x-goog-api-key` for Google). `''` sends `Authorization: <key>`; `Bearer`, `Token` and so on send `Authorization: <scheme> <key>`. Chat and model-list requests use the same rule.
+- `timeout`, `maxRetries`: this provider's per-request timeout (ms, 0 disables) and retries per model. They override `requestTimeoutMs` / `maxRetries` in `ai.providerResilience`; a per-model `modelHarness.requestTimeoutMs` still wins.
+- `firstChunkTimeoutMs`, `chunkTimeoutMs`: streaming stall timeouts (ms), off by default. The first bounds the wait for response headers and the first chunk; the second bounds silence between chunks. A stall counts as a timeout: it is retried, then fails over to a fallback model. This catches a connected-but-silent request well before `timeout`; a few tens of seconds is a good value.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
 

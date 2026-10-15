@@ -65,6 +65,18 @@ A responder can also be a literal `MockResponse` (`{ status, headers, json | sse
 
 `hang: 'before-headers' | 'after-events'` simulates a stuck server. The request then ends only when the caller's `AbortSignal` fires, which makes it the tool for timeout tests.
 
+Stall timeouts come from the provider config, so a stall test is two lines:
+
+```ts
+const h = createProviderHarness({ sdk: 'openai', config: { chunkTimeoutMs: 50 } });
+const partial = openaiChat.reply({ text: 'partial' }).stream({ body: {} } as never);
+h.reply({ sse: (partial.sse ?? []).slice(0, 2), hang: 'after-events' });
+const error = await h.complete('hi', { maxRetries: 0 }).catch((e: unknown) => e);
+expect(classifyProviderError(error)).toMatchObject({ kind: 'timeout' });
+```
+
+`firstChunkTimeoutMs` pairs with `hang: 'before-headers'`.
+
 `createMockFetch().route(match, responder)` adds a persistent responder that is checked before the queue, for example `GET /models` discovery or Ollama `/api/show`.
 
 If a request arrives and nothing is queued, the harness throws `provider-harness: no mocked response queued for …`, so unexpected requests make the test fail.

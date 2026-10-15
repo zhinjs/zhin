@@ -124,10 +124,11 @@ ai:
 
 | sdk | 需要安装 | 关键配置 |
 |-----|-----------|----------|
-| `openai` | `@ai-sdk/openai` | `apiKey`，可选 `baseUrl` |
+| `openai` | `@ai-sdk/openai` | `apiKey`，可选 `baseUrl`（代理根路径自动补 `/v1`，规则同 `openai-compatible`） |
 | `openai-compatible` | `@ai-sdk/openai-compatible` | `baseUrl` + `apiKey`（路径里没有版本号时自动补 `/v1`，见下方 `compat`）；Cloudflare Workers AI 可用 `accountId` 代替 `baseUrl` |
 | `anthropic` | `@ai-sdk/anthropic` | `apiKey`，可选 `baseUrl`（自动补 `/v1`） |
 | `deepseek` | `@ai-sdk/deepseek` | `apiKey`，可选 `baseUrl` |
+| `minimax` | `@ai-sdk/minimax` | `apiKey`，可选 `baseUrl`（默认 `https://api.minimax.io/anthropic/v1`；国内站写 `https://api.minimaxi.com/anthropic`，自动补 `/v1`） |
 | `google` | `@ai-sdk/google` | `apiKey`，可选 `baseUrl`（自动补 `/v1beta`） |
 | `ollama` | `@ai-sdk/openai-compatible`（通过 OpenAI 兼容接口） | `host`（默认 `http://127.0.0.1:11434`，自动补 `/v1`），不需要 `apiKey`；建议写 `contextWindow`（见下方） |
 
@@ -140,6 +141,11 @@ ai:
   - `includeUsage`：是否请求流式 usage（`stream_options.include_usage`），默认 `true`。不写的话大多数兼容服务流式时不返回 token 用量；少数拒绝该字段的服务设为 `false`。
   - `appendV1`：`baseUrl` 是否补 `/v1`。不写时：路径里已有版本段（如 `/api/v3`、`/api/paas/v4`、`/v1beta/openai`）或以 `/openai` 结尾就原样使用，否则补 `/v1`（旧配置 `https://host`、`https://host/api` 行为不变）。`true` 总是补（旧行为），`false` 总是原样。
   - `promptCacheKey`：是否发送 OpenAI 的 `prompt_cache_key`，默认 `false`（严格的网关会拒绝未知字段）。
+  - `supportsDeveloperRole`（`sdk: openai`）：设为 `false` 时推理模型（o 系列、gpt-5）的系统提示用 `system` 角色发送，给不认 `developer` 的 OpenAI 协议端点用。
+  - `supportsReasoningContent`、`toolCallsInAssistant` 已废弃，不起作用。
+- `authScheme`：`Authorization` 头方案。不写时用 SDK 默认（OpenAI 系 `Bearer`，Anthropic `x-api-key`，Google `x-goog-api-key`）；`''` 发送 `Authorization: <key>`；`Bearer`、`Token` 等发送 `Authorization: <scheme> <key>`。对话请求和模型列表请求用同一规则。
+- `timeout`、`maxRetries`：该 provider 的单次请求超时（毫秒，0 关闭）和每个模型的重试次数，覆盖 `ai.providerResilience` 的 `requestTimeoutMs` / `maxRetries`；按模型配置的 `modelHarness.requestTimeoutMs` 仍然优先。
+- `firstChunkTimeoutMs`、`chunkTimeoutMs`：流式卡顿超时（毫秒），默认关闭。前者限制等响应头和第一个 chunk 的时间，后者限制两个 chunk 之间的静默时间。超时按 timeout 处理：重试，用尽后切换备用模型。比 `timeout` 更早发现“连上了但不出字”的请求，建议设成几十秒。
 - `imageGeneration`：文生图的默认参数。
 - `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：
 

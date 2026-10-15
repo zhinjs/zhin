@@ -8,7 +8,14 @@ import type {
   TextCompleteOptions,
 } from './types.js';
 import type { ProviderInstanceConfig } from './llm/types/model.js';
-import { createLanguageModel, normalizeGoogleBaseUrl, resolveOpenAiCompatibleBaseUrl, type SdkId } from './llm/sdk-registry.js';
+import {
+  createLanguageModel,
+  formatAuthorizationHeader,
+  normalizeGoogleBaseUrl,
+  normalizeOpenAiBaseUrl,
+  resolveOpenAiCompatibleBaseUrl,
+  type SdkId,
+} from './llm/sdk-registry.js';
 import {
   resolveSdkProviderModels,
   SDK_SUPPORTS_OPENAI_MODEL_DISCOVERY,
@@ -35,7 +42,11 @@ async function fetchOpenAiCompatibleModels(
 ): Promise<string[]> {
   // openai-compatible chat requests go to the normalized base (see normalizeOpenAiCompatibleBaseUrl);
   // discovery must hit the same `/models` next to `/chat/completions`.
-  let baseUrl = config.sdk === 'openai-compatible' ? resolveOpenAiCompatibleBaseUrl(config) : config.baseUrl?.trim();
+  let baseUrl = config.sdk === 'openai-compatible'
+    ? resolveOpenAiCompatibleBaseUrl(config)
+    : config.sdk === 'openai'
+      ? normalizeOpenAiBaseUrl(config.baseUrl, config.compat?.appendV1)
+      : config.baseUrl?.trim();
   if (!baseUrl && config.host?.trim()) {
     const host = stripTrailingSlashes(config.host);
     baseUrl = host.endsWith('/v1') ? host : `${host}/v1`;
@@ -46,11 +57,9 @@ async function fetchOpenAiCompatibleModels(
   if (!baseUrl) return [];
 
   const headers: Record<string, string> = { ...config.headers };
-  if (config.apiKey) {
-    headers.Authorization = config.authScheme === ''
-      ? config.apiKey
-      : `${config.authScheme ?? 'Bearer '}${config.apiKey}`.trim();
-  }
+  // Same rule as chat requests (sdk-registry buildHeaders), with Bearer as the default scheme.
+  const authorization = formatAuthorizationHeader(config.authScheme ?? 'Bearer', config.apiKey);
+  if (authorization) headers.Authorization = authorization;
 
   const res = await fetchFn(`${stripTrailingSlashes(baseUrl)}/models`, { headers });
   if (!res.ok) return [];

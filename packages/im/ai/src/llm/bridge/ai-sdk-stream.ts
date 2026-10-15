@@ -219,7 +219,7 @@ function buildAssistantMessage(
 type ProviderOpts = Record<string, Record<string, JSONValue>>;
 
 function buildProviderOptions(
-  model: Pick<Model, 'sdk' | 'providerOptions'>,
+  model: Pick<Model, 'sdk' | 'providerOptions' | 'compat'>,
   cacheOpts: ProviderOpts | undefined,
   hasDeferredTools: boolean,
 ): ProviderOpts | undefined {
@@ -237,6 +237,11 @@ function buildProviderOptions(
     opts.minimax = { thinking: { type: 'adaptive' } };
   }
 
+  // OpenAI-protocol endpoints without the `developer` role (reasoning models default to it).
+  if (sdk === 'openai' && model.compat?.supportsDeveloperRole === false) {
+    opts.openai = { ...(opts.openai ?? {}), systemMessageMode: 'system' };
+  }
+
   // Provider config (e.g. Gemini safetySettings / thinkingConfig) layers on top, per provider key.
   for (const [key, value] of Object.entries(model.providerOptions ?? {})) {
     opts[key] = { ...(opts[key] ?? {}), ...value };
@@ -247,6 +252,32 @@ function buildProviderOptions(
 
 function isGoogleSdk(sdk: string | undefined): boolean {
   return sdk === 'google';
+}
+
+/**
+ * OpenAI chat refusal text (`delta.refusal` in a raw stream chunk, `message.refusal`
+ * in a response body). The AI SDK drops it, which turned refusals into empty replies.
+ */
+function openAiRefusalText(raw: unknown): string {
+  if (!raw || typeof raw !== 'object') return '';
+  const choice = (raw as { choices?: Array<{ delta?: { refusal?: unknown }; message?: { refusal?: unknown } } | null> })
+    .choices?.[0];
+  const value = choice?.delta?.refusal ?? choice?.message?.refusal;
+  return typeof value === 'string' ? value : '';
+}
+
+const REFUSAL_REASON_MAX_CHARS = 200;
+
+/** Finish override for a refusal with no text or tool calls: surface it as a content-filter stop. */
+function refusalFinish(
+  refusal: string,
+  hasText: boolean,
+  hasToolCalls: boolean,
+): { finishReason: 'content-filter'; rawFinishReason: string } | undefined {
+  const reason = refusal.trim();
+  if (!reason || hasText || hasToolCalls) return undefined;
+  const clipped = reason.length > REFUSAL_REASON_MAX_CHARS ? `${reason.slice(0, REFUSAL_REASON_MAX_CHARS)}…` : reason;
+  return { finishReason: 'content-filter', rawFinishReason: `refusal: ${clipped}` };
 }
 
 function reasoningDeltaText(part: { text?: unknown; delta?: unknown }): string {
@@ -298,6 +329,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
 
       options?.onPayload?.({ system, messages, tools: tools ? Object.keys(tools) : [] });
 
+      const captureRefusal = model.sdk === 'openai';
       const result = streamText({
         model: languageModel,
         system,
@@ -310,9 +342,13 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
         output: buildStructuredOutputSpec(options?.outputSchema),
-        // Gemini reports a blocked prompt only in a candidate-less chunk; the SDK drops it.
-        ...(isGoogleSdk(model.sdk) ? { includeRawChunks: true } : {}),
+        // Gemini reports a blocked prompt only in a candidate-less chunk, OpenAI a refusal
+        // only in `delta.refusal`; the SDK drops both.
+        ...(isGoogleSdk(model.sdk) || captureRefusal ? { includeRawChunks: true } : {}),
+        // Provider-config stall timeouts (firstChunkTimeoutMs / chunkTimeoutMs); abort as TimeoutError.
+        ...(model.streamTimeout ? { timeout: model.streamTimeout } : {}),
       });
+      let refusal = '';
 
       let text = '';
       let rawBlockReason: string | undefined;
@@ -322,6 +358,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const toolInputBuffers = new Map<string, string>();
 
       for await (const part of result.fullStream) {
+        if (captureRefusal && part.type === 'raw') refusal += openAiRefusalText(part.rawValue);
         if (part.type === 'text-delta') {
           text += part.text;
           push({ type: 'text_delta', text: part.text });
@@ -401,14 +438,16 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
           providerOptions: streamedThinkingOptions,
         }];
       }
+      const refused = refusalFinish(refusal, Boolean(resolvedText.trim()), calls.length > 0);
       const assistant = buildAssistantMessage(
         model,
         resolvedText,
         thinkingParts,
         calls,
         resolveFinish({
-          finishReason,
-          rawFinishReason: await Promise.resolve(final.rawFinishReason).catch(() => undefined),
+          finishReason: refused?.finishReason ?? finishReason,
+          rawFinishReason: refused?.rawFinishReason
+            ?? await Promise.resolve(final.rawFinishReason).catch(() => undefined),
           providerMetadata: rawBlockReason
             ? { google: { promptFeedback: { blockReason: rawBlockReason } } }
             : await Promise.resolve(final.providerMetadata).catch(() => undefined),
@@ -459,6 +498,8 @@ export async function generateTextViaAiSdk(
     abortSignal: options?.signal,
     providerOptions,
     output: buildStructuredOutputSpec(options?.outputSchema),
+    // Keep the raw body so an OpenAI `message.refusal` can be surfaced.
+    ...(model.sdk === 'openai' ? { include: { responseBody: true } } : {}),
   });
 
   const structured = await readStructuredOutput(result, Boolean(options?.outputSchema));
@@ -473,6 +514,9 @@ export async function generateTextViaAiSdk(
   });
 
   const text = structured !== undefined ? formatStructuredAsAssistantText(structured) : result.text;
+  const refused = model.sdk === 'openai'
+    ? refusalFinish(openAiRefusalText(result.response.body), Boolean(text.trim()), toolCalls.length > 0)
+    : undefined;
   return buildAssistantMessage(
     model,
     text,
@@ -483,8 +527,8 @@ export async function generateTextViaAiSdk(
     }),
     toolCalls,
     resolveFinish({
-      finishReason: result.finishReason,
-      rawFinishReason: result.rawFinishReason,
+      finishReason: refused?.finishReason ?? result.finishReason,
+      rawFinishReason: refused?.rawFinishReason ?? result.rawFinishReason,
       providerMetadata: result.providerMetadata,
       hasText: Boolean(text.trim()),
       hasToolCalls: toolCalls.length > 0,
