@@ -1,0 +1,22 @@
+packages/im/ai/src/llm/llm-api-runtime.ts
+  h_b680f75345178a 6,90-91,154-156,227
+packages/im/ai/src/llm/sdk-registry.ts
+  h_b680f75345178a 9,205,218,228-229,307
+packages/im/ai/src/llm/provider-gateway-presets.ts
+  h_b680f75345178a 7,18-19,44-52,90-92,168-169
+packages/im/ai/src/sdk-provider-adapter.ts
+  h_b680f75345178a 216
+packages/im/ai/src/llm/groq.ts
+  h_b680f75345178a 1-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a53a05fa705fee4ffdf31505f86d1ae76c0450e4",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
