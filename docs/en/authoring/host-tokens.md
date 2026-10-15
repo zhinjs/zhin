@@ -79,6 +79,7 @@ export default definePlugin<ReminderConfig>({
 | Token | You get | Main methods |
 | --- | --- | --- |
 | `agentHostToken` (`@zhin.js/agent/runtime`) | Agent Host port | List Agent bindings, submit a `TurnRequest`, read Console / diagnostic projections; doesn't expose ZhinAgent / AIService instances |
+| `workroomHostToken` (`@zhin.js/workroom`) | Workroom Host port | Published by the CLI composition root together with `agentHostToken`; its `console` holds only the Workroom control ports (run control, catalog, profiles / knowledge / sponsor / data lifecycle). For the Console / host-http, not for plugins to inject; the Console view is the key-disjoint merge of the two consoles |
 | `turnIntentResolverToken` (`@zhin.js/agent/runtime`) | A trusted intent resolver provided by the account's owning plugin | Resolves a message to `supersede`, `new`, `steer`, `follow_up` or `observe` by platform / scene; only it may issue `authorizedBy: 'product_policy'` for cross-participant control |
 
 ### Rendering and HTTP

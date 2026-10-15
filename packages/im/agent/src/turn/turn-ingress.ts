@@ -20,10 +20,15 @@ export interface TurnIdentity {
   readonly turnId: string;
 }
 
+/** 入站来源（与 `@zhin.js/core` 的 MessageOrigin 同一联合，此处重复声明以避免新耦合）。 */
+export type TurnPrincipalOrigin = 'self' | 'member' | 'peer_bot' | 'human';
+
 export interface TurnPrincipal {
   readonly subjectId: string;
   readonly displayName?: string;
   readonly roles: readonly string[];
+  /** IM Runtime 可信判定的入站来源；仅 `human` 能构造 turn。缺省表示合成入口。 */
+  readonly origin?: TurnPrincipalOrigin;
 }
 
 export type TurnIntentKind = 'new' | 'steer' | 'follow_up' | 'supersede' | 'observe';

@@ -2,19 +2,12 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AIConfig } from '@zhin.js/ai';
 import { activateAiDatabaseStorage } from '../src/init/activate-ai-database-storage.js';
 import type { AIServiceRefs } from '../src/internal/ai-service-refs.js';
-import { ActivatableWorkroomCatalog } from '../src/workroom/catalog.js';
-import {
-  ActivatableWorkroomJournal,
-  MemoryWorkroomJournalPayloadPort,
-} from '../src/workroom/journal/index.js';
 
 describe('activateAiDatabaseStorage', () => {
   const requiredModels = [
     'agent_sessions',
     'agent_messages',
     'agent_summaries',
-    'workroom_events',
-    'workroom_catalog',
   ];
 
   it.each(requiredModels)(
@@ -30,9 +23,6 @@ describe('activateAiDatabaseStorage', () => {
         { models: new Map(models) },
         refs,
         { sessions: { useDatabase: true } } as AIConfig,
-        new ActivatableWorkroomJournal(),
-        new MemoryWorkroomJournalPayloadPort(),
-        new ActivatableWorkroomCatalog(),
         null,
       )).rejects.toThrow(`requires the ${missingModel} model`);
       expect(configure).not.toHaveBeenCalled();

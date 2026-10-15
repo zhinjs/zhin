@@ -10,21 +10,12 @@ import {
 } from '@zhin.js/ai';
 import { DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT } from '../context/context-tail-limit.js';
 import type { SemanticMemoryRuntime } from '../plugin-runtime/native-semantic-memory-tools.js';
-import {
-  ActivatableWorkroomJournal,
-  DatabaseWorkroomJournal,
-  type WorkroomJournalPayloadPort,
-} from '../workroom/journal/index.js';
-import { ActivatableWorkroomCatalog, DatabaseWorkroomCatalog } from '../workroom/catalog.js';
 import type { AIServiceRefs } from '../internal/ai-service-refs.js';
 
 export async function activateAiDatabaseStorage(
   db: any,
   refs: AIServiceRefs,
   config: AIConfig,
-  workroomJournal: ActivatableWorkroomJournal,
-  workroomJournalPayloads: WorkroomJournalPayloadPort,
-  workroomCatalog: ActivatableWorkroomCatalog,
   semanticMemory: SemanticMemoryRuntime | null,
 ): Promise<void> {
   if (!refs.zhinAgent) throw new Error('Agent database activation requires a ZhinAgent instance');
@@ -41,14 +32,6 @@ export async function activateAiDatabaseStorage(
   const agentSummaryModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseContextRepository>[1]>(
     db,
     'agent_summaries',
-  );
-  const workroomEventModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseWorkroomJournal>[1]>(
-    db,
-    'workroom_events',
-  );
-  const workroomCatalogModel = requireDatabaseModel<ConstructorParameters<typeof DatabaseWorkroomCatalog>[1]>(
-    db,
-    'workroom_catalog',
   );
   const semanticEnabled = config.memory?.semantic?.enabled === true;
   if (semanticEnabled && !semanticMemory) {
@@ -74,14 +57,6 @@ export async function activateAiDatabaseStorage(
     agentSessionStore,
     { tailMessageLimit: config.sessions?.coldStartMaxMessages ?? DEFAULT_CONTEXT_TAIL_MESSAGE_LIMIT },
   );
-  const databaseWorkroomJournal = new DatabaseWorkroomJournal(
-    db,
-    workroomEventModel,
-    workroomJournalPayloads,
-  );
-  // Validate persisted authority before mutating any candidate runtime port.
-  await databaseWorkroomJournal.scanStoredHeaders();
-
   refs.zhinAgent.configure({
     agentSessionStore,
     contextRepository,
@@ -96,9 +71,6 @@ export async function activateAiDatabaseStorage(
     semanticActivation.runtime.activate(semanticActivation.repository);
     refs.zhinAgent.configure({ semanticMemory: semanticActivation.runtime });
   }
-
-  workroomJournal.activate(databaseWorkroomJournal);
-  workroomCatalog.activate(new DatabaseWorkroomCatalog(db, workroomCatalogModel));
 }
 
 function requireDatabaseModel<T>(

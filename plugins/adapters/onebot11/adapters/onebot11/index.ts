@@ -43,11 +43,13 @@ export default defineAdapter<OneBot11EndpointConfig>({
         id: context.id,
         http: context.use(httpHostToken),
         config,
+        probeLoginInfo: true,
       });
     }
     return new OneBot11WsEndpoint({
       id: context.id,
       config,
+      probeLoginInfo: true,
     });
   },
 });

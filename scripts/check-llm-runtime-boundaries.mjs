@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const scanRoots = ['packages/im/agent/src', 'packages/im/zhin/src'];
+const scanRoots = ['packages/im/agent/src', 'packages/im/workroom/src', 'packages/im/zhin/src'];
 const skipDirNames = new Set(['node_modules', 'lib', 'dist', 'coverage', '.git', 'tests', 'init']);
 
 function walkTs(dir, acc) {

@@ -294,8 +294,6 @@ zhin agent workroom run <runId> --project <projectId> [--json]
 zhin agent workroom readiness <runId> --project <projectId> [--json]
 zhin agent workroom cancel <runId> --project <projectId> --expected-sequence <n> --reason-code <code> --control-deadline <timestamp> [--operation-id <id>] [--json]
 zhin agent workroom request-replan <runId> --project <projectId> --expected-sequence <n> --reason-code <code> [--operation-id <id>] [--json]
-zhin agent legacy-runs <input> [--output <file>]
-zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [--storage file|database]
 ```
 
 | 命令 | 作用 |
@@ -303,7 +301,6 @@ zhin agent legacy-payloads <input> --kind journal|projection|evidence|artifact [
 | `info` | 列出发现的 Agent 能力与命名 Agent（Tools、Skills、Hooks 等） |
 | `workroom runs` / `run` / `readiness` | 连接运行中的 Bot，用配置中的 token 身份读取 Run、Task、Assignment 与 Blocker 的状态（不含内容） |
 | `workroom cancel` / `request-replan` | 需要当前 Project Sponsor 权限，并用 `expected-sequence` 防止并发冲突。`request-replan` 只记录重规划请求并暂停调度，不会假装已经生成了新的计划版本 |
-| `legacy-runs` / `legacy-payloads` | 离线只读审计，不启动 Bot，也不写入新的 Workroom Journal |
 
 ### trace：查看 Agent 回合
 

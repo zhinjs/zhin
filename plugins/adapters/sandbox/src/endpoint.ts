@@ -1,10 +1,9 @@
-import { Endpoint } from 'zhin.js/adapter';
+import { Endpoint, type EndpointSendRequest } from 'zhin.js/adapter';
 /**
  * SandboxWsEndpoint — WebSocket lifecycle and OutboundMessageService bridge for /sandbox.
  */
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { type EndpointSendRequest } from 'zhin.js/adapter';
 import type { HttpHost, WsConnection } from '@zhin.js/host-http';
 import { formatCompact, getAdapterLogger } from '@zhin.js/logger';
 import type { CapabilityId } from 'zhin.js';
@@ -179,6 +178,9 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
 
   open(): void {
     this.#open = true;
+    // Synthetic account: Sandbox has no platform login, so its Bot identity is the
+    // configured bot id. Per-connection random names are not Bot accounts.
+    this.reportSelfUserId(this.#options.defaults.id);
   }
 
   close(): void {
@@ -187,6 +189,7 @@ export class SandboxWsEndpoint extends Endpoint<SandboxClient> {
 
   stop(): void {
     this.#open = false;
+    this.reportSelfUserId(undefined);
     this.#wsHandleRelease?.();
     this.#wsHandleRelease = undefined;
     this.#wsPathRelease?.();

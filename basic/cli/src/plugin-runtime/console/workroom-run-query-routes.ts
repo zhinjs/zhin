@@ -28,6 +28,10 @@ export function registerWorkroomRunQueryRoutes(options: WorkroomRouteOptions): v
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
+      if (!workroom) {
+        writeWorkroomUnavailable(response);
+        return;
+      }
       const result = await workroom.listRuns({ projectId, authenticatedPrincipal: principal });
       if (result.status === 'forbidden') {
         writeJson(response, 403, { success: false, error: '无权读取该 Project 的 Workroom Run' });
@@ -60,6 +64,10 @@ export function registerWorkroomRunQueryRoutes(options: WorkroomRouteOptions): v
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
+      if (!workroom) {
+        writeWorkroomUnavailable(response);
+        return;
+      }
       const result = await workroom.getReadiness({ projectId, runId, authenticatedPrincipal: principal });
       if (result.status === 'forbidden') {
         writeJson(response, 403, { success: false, error: '无权读取该 Project 的 Workroom readiness' });
@@ -103,6 +111,10 @@ export function registerWorkroomRunQueryRoutes(options: WorkroomRouteOptions): v
       return;
     }
     const handled = await withGenerationAgentConsole(snapshots, async ({ workroom }) => {
+      if (!workroom) {
+        writeWorkroomUnavailable(response);
+        return;
+      }
       const result = await workroom.getRun({ projectId, runId, authenticatedPrincipal: principal });
       if (result.status === 'forbidden') {
         writeJson(response, 403, { success: false, error: '无权读取该 Project 的 Workroom Run' });

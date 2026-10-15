@@ -11,6 +11,7 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const scanRoots = [
   'packages/im/core/src',
   'packages/im/agent/src',
+  'packages/im/workroom/src',
   'basic/logger/src',
 ];
 const forbidden = [

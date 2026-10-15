@@ -1,17 +1,19 @@
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import type { ActivatableWorkroomJournal } from '@zhin.js/agent';
 import {
+  type ActivatableWorkroomJournal,
   createCatalogGovernedConsoleDisclosureAuthority,
+  createGenerationOwnedWorkroomGovernedOutboundComposition,
+} from '@zhin.js/workroom';
+import {
   createFileWorkroomDataLifecycleRuntime,
   createGenerationOwnedWorkroomDataGovernanceStorage,
-  createGenerationOwnedWorkroomGovernedOutboundComposition,
   installWorkroomDataGovernanceResources,
   resolveWorkroomDataGovernanceRootAuthorities,
   workroomAcceptanceProjectionSourceAuthorityToken,
   type WorkroomAcceptanceProjectionSourceAuthorityPort,
   type WorkroomPayloadLifecycleIndexPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom/data-governance';
 import { rootPluginId } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { LocalWorkroomDataGovernanceAuthority } from './local-data-governance.js';

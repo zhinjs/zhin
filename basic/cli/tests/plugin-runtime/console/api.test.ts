@@ -42,6 +42,24 @@ import {
 const hosts: HttpHost[] = [];
 const tempRoots: string[] = [];
 
+const WORKROOM_CONSOLE_KEYS = new Set([
+  'workroom', 'workroomControl', 'workroomCatalog', 'workroomProfiles',
+  'workroomKnowledge', 'portfolioSponsor', 'effectSponsor', 'dataLifecycle',
+]);
+
+/** Split a combined Console fixture into the Agent and Workroom Host ports the Root publishes. */
+function splitHostPorts(host: { console: Record<string, unknown> } & Record<string, unknown>) {
+  const agentConsole: Record<string, unknown> = {};
+  const workroomConsole: Record<string, unknown> = {};
+  for (const [key, descriptor] of Object.entries(Object.getOwnPropertyDescriptors(host.console))) {
+    Object.defineProperty(WORKROOM_CONSOLE_KEYS.has(key) ? workroomConsole : agentConsole, key, descriptor);
+  }
+  return new Map<unknown, unknown>([
+    [tokenId('zhin.host.agent'), { ...host, console: agentConsole }],
+    [tokenId('zhin.host.workroom'), { console: workroomConsole }],
+  ]);
+}
+
 describe('isKnownConversationSession', () => {
   it('matches the durable inbox using all four canonical session fields', async () => {
     const queries: Record<string, unknown>[] = [];
@@ -410,19 +428,112 @@ describe('generation-owned Agent introspection', () => {
 
   it('reads all Console Agent ports from the same root generation resource', () => {
     const root = rootPluginId();
-    const token = { id: tokenId('zhin.host.agent') };
-    const consolePort = {
-      sessionTree: {},
-      workroom: {},
-      assistant: null,
-      trace: {},
-    };
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const agentConsole = { sessionTree: {}, assistant: null, trace: {} };
+    const workroomConsole = { workroom: {}, workroomCatalog: {} };
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[token.id, { console: consolePort }]])]]),
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: agentConsole }],
+        [workroomToken.id, { console: workroomConsole }],
+      ])]]),
     } as unknown as RuntimeSnapshot;
 
-    expect(resolveGenerationAgentConsole(snapshot, token)).toBe(consolePort);
+    expect(resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toEqual({
+      ...agentConsole,
+      ...workroomConsole,
+    });
+  });
+
+  it('keeps late-bound Workroom getters live after merging the Console view', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    let profiles: object | undefined = undefined;
+    const workroomConsole = { workroom: {}, get workroomProfiles() { return profiles; } };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: { sessionTree: {} } }],
+        [workroomToken.id, { console: workroomConsole }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const merged = resolveGenerationAgentConsole(snapshot, agentToken, workroomToken);
+    expect(merged?.workroomProfiles).toBeUndefined();
+    profiles = {};
+    expect(merged?.workroomProfiles).toBe(profiles);
+  });
+
+  it('rejects Agent and Workroom console ports with overlapping keys', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [agentToken.id, { console: { sessionTree: {}, shared: 1 } }],
+        [workroomToken.id, { console: { workroom: {}, shared: 2 } }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(() => resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toThrow(
+      'must not define overlapping keys: shared',
+    );
+  });
+
+  it('returns the Agent console alone when the Workroom Host port is not published', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const agentConsole = { sessionTree: {} };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[agentToken.id, { console: agentConsole }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const view = resolveGenerationAgentConsole(snapshot, agentToken, workroomToken);
+    expect(view).toEqual(agentConsole);
+    expect(view?.workroom).toBeUndefined();
+    expect(view?.workroomCatalog).toBeUndefined();
+  });
+
+  it('returns the Agent console alone when the Workroom token is undefined (not installed)', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const agentConsole = { sessionTree: {} };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[agentToken.id, { console: agentConsole }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    const view = resolveGenerationAgentConsole(snapshot, agentToken, undefined);
+    expect(view).toEqual(agentConsole);
+    expect(view?.workroom).toBeUndefined();
+  });
+
+  it('returns null when the Agent Host port is missing', () => {
+    const root = rootPluginId();
+    const agentToken = { id: tokenId('zhin.host.agent') };
+    const workroomToken = { id: tokenId('zhin.host.workroom') };
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map([[workroomToken.id, { console: { workroom: {} } }]])]]),
+    } as unknown as RuntimeSnapshot;
+
+    expect(resolveGenerationAgentConsole(snapshot, agentToken, workroomToken)).toBeNull();
+    expect(resolveGenerationAgentConsole(snapshot, undefined, workroomToken)).toBeNull();
+  });
+
+  it('reports a clear not-installed error from the Workroom catalog RPC without a Workroom port', async () => {
+    const { createWorkroomCatalogRpcContext } = await import(
+      '../../../src/plugin-runtime/console/workroom-catalog-rpc.js'
+    );
+    const agentOnly = { sessionTree: {}, listBindings: () => [] } as never;
+    const context = createWorkroomCatalogRpcContext(agentOnly, undefined, undefined);
+    await expect(context.readWorkroomCatalog()).rejects.toThrow('Workroom 未安装或未就绪');
+    await expect(context.setWorkroomCatalog({}, 'rev')).rejects.toThrow('Workroom 未安装或未就绪');
   });
 });
 
@@ -510,6 +621,7 @@ describe('console REST routes', () => {
 
   it('serves the bounded generation-owned Agent Trace projection', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const traceSnapshot = {
@@ -520,14 +632,14 @@ describe('console REST routes', () => {
     };
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {},
           workroom: {},
           assistant: null,
           trace: { list: () => traceSnapshot },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -575,8 +687,52 @@ describe('console REST routes', () => {
     expect((await get('turn?turnId=turn-a', 'demo-token')).status).toBe(403);
   });
 
+  it('answers 503 on every Workroom route when only the Agent port is published', async () => {
+    await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    const root = rootPluginId();
+    const snapshot = {
+      root,
+      resources: new Map([[root, new Map<unknown, unknown>([
+        [tokenId('zhin.host.agent'), {
+          console: {
+            sessionTree: {}, assistant: null, listBindings: () => [],
+            trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
+          },
+        }],
+      ])]]),
+    } as unknown as RuntimeSnapshot;
+    const snapshots = {
+      acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
+    } as unknown as SnapshotReader;
+    const { port } = await startHost({ projectRoot, withTokens: true, snapshots });
+    const headers = { authorization: 'Bearer sponsor-token' };
+    const base = `http://127.0.0.1:${port}/api/agent/workroom`;
+
+    for (const path of [
+      '/runs?projectId=engineering',
+      '/runs/run-1?projectId=engineering',
+      '/readiness?projectId=engineering&runId=run-1',
+      '/portfolio?portfolioId=p1',
+      '/data-lifecycle?projectId=engineering&objectId=o1',
+    ]) {
+      expect((await fetch(`${base}${path}`, { headers })).status, path).toBe(503);
+    }
+    const control = await fetch(`${base}/control`, {
+      method: 'POST',
+      headers: { ...headers, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        version: 1, operationId: 'replan-1', projectId: 'engineering', runId: 'run-1',
+        expectedSequence: 4, action: 'request_replan', reasonCode: 'requirements_changed',
+      }),
+    });
+    expect(control.status).toBe(503);
+  });
+
   it('binds Workroom run reads to a full-scope token principal and never accepts caller identity', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const safeRun = {
@@ -615,13 +771,13 @@ describe('console REST routes', () => {
     }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: { listRuns, getRun, getReadiness },
           workroomControl: { execute: executeControl }, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -727,18 +883,19 @@ describe('console REST routes', () => {
 
   it('cancels an active Agent task through the generation-owned console port', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const cancelSession = vi.fn(() => true);
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           cancelSession,
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -757,6 +914,7 @@ describe('console REST routes', () => {
 
   it('routes authenticated Workroom Profile writes through the generation-owned narrow port', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const publishPack = vi.fn(async (command) => ({ pack: command.pack }));
@@ -767,7 +925,7 @@ describe('console REST routes', () => {
     const publishKnowledge = vi.fn(async () => ({ projectId: 'engineering', revision: 0 }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
@@ -783,7 +941,7 @@ describe('console REST routes', () => {
             read: vi.fn(), publish: publishKnowledge, rollback: vi.fn(),
           },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -864,6 +1022,7 @@ describe('console REST routes', () => {
 
   it('exposes the authenticated principal through the Workroom Catalog read contract', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const readCatalog = vi.fn(async () => ({
@@ -872,14 +1031,14 @@ describe('console REST routes', () => {
     }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           workroomCatalog: { read: readCatalog },
           listBindings: () => [],
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const release = vi.fn();
     const snapshots = {
@@ -910,6 +1069,7 @@ describe('console REST routes', () => {
 
   it('keeps Sponsor controls typed and injects the token principal without accepting forged identity', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const projection = { version: 1, portfolioId: 'portfolio-main', sourceSequence: 4,
@@ -925,14 +1085,14 @@ describe('console REST routes', () => {
     const decideEffect = vi.fn(async command => ({ ...command, principalId: 'human:alice', digest: 'sha256:decision' }));
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           portfolioSponsor: { read, execute },
           effectSponsor: { decide: decideEffect },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),
@@ -1034,6 +1194,7 @@ describe('console REST routes', () => {
 
   it('exposes only token-bound typed Data Lifecycle controls and content-free projections', async () => {
     await import('@zhin.js/agent/runtime');
+    await import('@zhin.js/workroom');
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
     const root = rootPluginId();
     const projection = { version: 1, projectId: 'alpha', objectId: 'object-1', sequence: 3,
@@ -1056,13 +1217,13 @@ describe('console REST routes', () => {
     });
     const snapshot = {
       root,
-      resources: new Map([[root, new Map([[tokenId('zhin.host.agent'), {
+      resources: new Map([[root, splitHostPorts({
         console: {
           sessionTree: {}, workroom: {}, assistant: null,
           trace: { list: () => ({ sessionKey: '', events: [], latestSequence: 0, activeTurnIds: [] }) },
           dataLifecycle: { read, listOverdue, execute },
         },
-      }]])]]),
+      })]]),
     } as unknown as RuntimeSnapshot;
     const snapshots = {
       acquire: () => ({ value: snapshot, active: true, release: () => undefined }),

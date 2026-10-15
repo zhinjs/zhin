@@ -1,6 +1,4 @@
 import { Command } from 'commander';
-import { registerLegacyRunsOfflineCommand } from './agent-legacy-runs.js';
-import { registerLegacyPayloadsOfflineCommand } from './agent-legacy-payloads.js';
 import { registerWorkroomOnlineCommands } from './agent-workroom.js';
 
 export const agentCommand = new Command('agent')
@@ -30,6 +28,4 @@ agentCommand
     console.log(mod.formatAgentSurfaceInfoReport(report));
   });
 
-registerLegacyRunsOfflineCommand(agentCommand);
-registerLegacyPayloadsOfflineCommand(agentCommand);
 registerWorkroomOnlineCommands(agentCommand);

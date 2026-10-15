@@ -1,7 +1,8 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，缺少 SnapshotReader 的路径无法通过公开接口单独触达。
 import {
   ActivatableWorkroomCatalog,
   ActivatableWorkroomJournal,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import { join } from 'node:path';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';

@@ -1,14 +1,20 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造；存储模式、迁移与 prepare 行为无法通过公开接口单独触达。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
+  type AIService,
+} from '@zhin.js/agent';
+import {
   ActivatableWorkroomCatalog,
   FileWorkroomCatalog,
   ActivatableWorkroomJournal,
-  type AIService,
-} from '@zhin.js/agent';
+  DatabaseWorkroomJournal,
+  MemoryWorkroomJournalPayloadPort,
+  WorkroomKernel,
+} from '@zhin.js/workroom';
 import { type ZhinAgent } from '@zhin.js/agent/runtime';
-import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
+import { GenerationHandoffStack, Scope, databaseRootHostToken, rootPluginId } from '@zhin.js/plugin-runtime';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkroomPersistenceCoordinator } from '../../../src/plugin-runtime/workroom/persistence-coordinator.js';
 
@@ -86,6 +92,64 @@ describe('WorkroomPersistenceCoordinator', () => {
     expect((await disk.read()).definitions.local!.enabled).toBe(true); // rejected candidate never rewrites persisted authority
   });
 
+  it('rejects activation on a corrupt Workroom journal before any candidate port is mutated', async () => {
+    const fixture = await legitJournalRows();
+    // Sanity: the stored row is legitimate before tampering, so the later rejection is caused by the tamper alone.
+    await expect(new DatabaseWorkroomJournal(fixture.database, fixture.model, fixture.payloads).scanStoredHeaders())
+      .resolves.toHaveLength(1);
+    const envelope = JSON.parse(String(fixture.rows[0]!.payload_json)) as { eventId: string };
+    envelope.eventId = 'forged-event-id'; // stored_event_digest deliberately not recomputed
+    fixture.rows[0]!.payload_json = JSON.stringify(envelope);
+    const raw = {
+      models: new Map<string, unknown>([
+        ['workroom_events', fixture.model],
+        ['workroom_catalog', { select: () => ({ where: async () => [] }) }],
+      ]),
+      transaction: fixture.database.transaction,
+    };
+    const resources = new Scope(rootPluginId());
+    resources.provide(databaseRootHostToken, { define: vi.fn(), getRawDatabase: () => raw } as never);
+    const agent = {
+      configure: vi.fn(),
+      upgradeProfilesToDatabase: vi.fn(),
+      markMemoryPersistenceReady: vi.fn(),
+    } as unknown as ZhinAgent;
+    const handoff = new GenerationHandoffStack();
+    const journal = new ActivatableWorkroomJournal();
+    const catalog = new ActivatableWorkroomCatalog();
+    const recoverHumanIngress = vi.fn(async () => undefined);
+    const persistence = new WorkroomPersistenceCoordinator({
+      projectRoot: process.cwd(),
+      config: {},
+      fixedStorageMode: 'database',
+      resources,
+      handoff,
+      service: {} as AIService,
+      agent,
+      semanticMemory: null,
+      journal,
+      journalPayloads: fixture.payloads,
+      catalog,
+      listAgentNames: () => [],
+      recoverHumanIngress,
+    });
+
+    await persistence.prepare();
+    handoff.seal();
+    const activation = handoff.activateNext(new AbortController().signal);
+    await expect(activation).rejects.toThrow('Agent database persistence activation failed');
+    await expect(activation).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: expect.stringContaining('stored event digest') }),
+    });
+
+    expect(agent.configure).not.toHaveBeenCalled();
+    expect(agent.upgradeProfilesToDatabase).not.toHaveBeenCalled();
+    expect(journal.active).toBe(false);
+    await expect(Promise.resolve().then(() => catalog.read())).rejects.toThrow('not active');
+    expect(recoverHumanIngress).not.toHaveBeenCalled();
+    expect(agent.markMemoryPersistenceReady).toHaveBeenCalledOnce();
+  });
+
   it('rejects database mode when the process database Host is absent', async () => {
     const persistence = new WorkroomPersistenceCoordinator({
       projectRoot: process.cwd(),
@@ -108,3 +172,30 @@ describe('WorkroomPersistenceCoordinator', () => {
     );
   });
 });
+
+async function legitJournalRows() {
+  const rows: Record<string, unknown>[] = [];
+  const where = async (condition: Record<string, unknown>) => condition.run_id === undefined
+    ? [...rows]
+    : rows.filter(row => row.run_id === condition.run_id);
+  const database = {
+    transaction: async <T>(operation: (transaction: {
+      select(table: string): { where(condition: Record<string, unknown>): Promise<Record<string, unknown>[]> };
+      insertMany(table: string, inserted: Record<string, unknown>[]): Promise<void>;
+    }) => Promise<T>) => await operation({
+      select: () => ({ where }),
+      insertMany: async (_table: string, inserted: Record<string, unknown>[]) => {
+        rows.push(...inserted.map(row => ({ ...row })));
+      },
+    }),
+  };
+  const model = { select: () => ({ where }) };
+  const payloads = new MemoryWorkroomJournalPayloadPort();
+  const kernel = new WorkroomKernel({
+    journal: new DatabaseWorkroomJournal(database, model, payloads),
+    now: () => 100,
+    createId: (() => { let id = 0; return () => `corrupt-activation-${++id}`; })(),
+  });
+  await kernel.createRun({ runId: 'run-corrupt-activation', projectId: 'support', title: 'private title' });
+  return { rows, database, model, payloads };
+}

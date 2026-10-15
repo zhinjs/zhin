@@ -18,6 +18,7 @@ import {
 import type { RuntimeSnapshot } from '@zhin.js/plugin-runtime';
 import type { Message, MessageSenderRef, SendContent, SendRequest } from './contracts.js';
 import { RuntimeInteractiveRouter } from './interactive-router.js';
+import type { Segment } from '../../built/segment-contract/types.js';
 import { isJsxButtonPayload, JsxButtonRegistry, type JsxButtonBatch } from './jsx-button-registry.js';
 
 interface UserInteractionClaim {
@@ -102,6 +103,22 @@ export class RuntimeInteractionCoordinator<Admission = never> {
     if (!claim) return false;
     claim.resolve(payload ?? message.content);
     return true;
+  }
+
+  /**
+   * Probe used by Room routing: is this message the answer to something pending on this exact
+   * (Endpoint-scoped) conversation? True when the sender has a pending conversational claim, or
+   * when the message itself resolves to a button of a live keyboard fallback. A live keyboard
+   * alone does not count. Changes no state.
+   */
+  hasPendingAnswer(
+    conversation: ConversationRef,
+    senderId: string,
+    generation: number,
+    input?: { readonly content: string; readonly segments?: readonly Segment[] },
+  ): boolean {
+    if (this.#claims.has(`${conversationRefKey(conversation)}:${senderId}`)) return true;
+    return input !== undefined && this.#router.resolvesLiveFallback(conversation, generation, input);
   }
 
   createForMessage(

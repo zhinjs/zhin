@@ -1,9 +1,7 @@
 import { join } from 'node:path';
-import type {
-  ActivatableWorkroomCatalog,
-  ActivatableWorkroomJournal,
-} from '@zhin.js/agent';
 import {
+  type ActivatableWorkroomCatalog,
+  type ActivatableWorkroomJournal,
   JournalWorkroomRunProfilePinAuthority,
   KernelPlanAdmissionRunProfilePinWriter,
   PinnedProfileWorkroomAcceptanceProjectionSource,
@@ -11,8 +9,10 @@ import {
   createWorkroomGenerationAuthoritySnapshotFromRuntime,
   createWorkroomProfileGenerationView,
   installWorkroomProfileAuthorityResources,
+} from '@zhin.js/workroom';
+import {
   workroomAcceptanceProjectionSourceAuthorityToken,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom/data-governance';
 import type { SnapshotReader } from '@zhin.js/plugin-runtime';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 

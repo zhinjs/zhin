@@ -158,6 +158,21 @@
       "@zhin.js/html-renderer": [
         "./packages/toolkit/html-renderer/src/index.ts"
       ],
+      "@zhin.js/workroom": [
+        "./packages/im/workroom/src/index.ts"
+      ],
+      "@zhin.js/workroom/remote": [
+        "./packages/im/workroom/src/remote.ts"
+      ],
+      "@zhin.js/workroom/scheduler": [
+        "./packages/im/workroom/src/scheduler.ts"
+      ],
+      "@zhin.js/workroom/portfolio": [
+        "./packages/im/workroom/src/portfolio.ts"
+      ],
+      "@zhin.js/workroom/data-governance": [
+        "./packages/im/workroom/src/data-governance.ts"
+      ],
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],
@@ -279,6 +294,7 @@
     "packages/im/core/tests/public-events.test-d.ts",
     "packages/im/agent/src/**/*",
     "packages/im/agent/evals/**/*.ts",
+    "packages/im/workroom/src/**/*",
     "examples/minimal-bot/plugin.ts",
     "examples/minimal-bot/adapters/**/*",
     "examples/minimal-bot/agents/**/*",

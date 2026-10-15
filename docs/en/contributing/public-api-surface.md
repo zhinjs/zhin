@@ -94,8 +94,6 @@ Three tiers:
 | `zhin runtime start` | `stable` | `@zhin.js/cli` | Plugin Runtime entry point (composition root) |
 | `zhin setup` | `stable` | `@zhin.js/cli` | Incremental configuration wizard for existing projects |
 | `zhin doctor` | `stable` | `@zhin.js/cli` | Environment/config health check |
-| `zhin agent legacy-runs <input>` | `experimental` | `@zhin.js/cli` | Read-only audit of removed legacy Run exports; file output is create-only and never writes a new Workroom Journal |
-| `zhin agent legacy-payloads <input> --kind <kind>` | `experimental` | `@zhin.js/cli` | Read-only scan of embedded legacy Workroom payloads; emits content-free quarantine audit/proposal data and never deletes or migrates automatically |
 | `pnpm create zhin-app` | `stable` | `create-zhin-app` | New project scaffold |
 
 ## Internal (Readable but No Stability Guarantee)
@@ -112,6 +110,10 @@ Three tiers:
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
+| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A extension; moved out of the package root and frozen; default assembly still creates the Remote Callback Runtime / Remote Assignment Authority (legacy Kernel/runtime path, deferred until after C2); only the A2A transport wiring is lazily loaded when configured |
+| `@zhin.js/workroom/scheduler` scheduler / preemption / priority authority | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4b); only the root export was removed, the default (legacy Kernel) assembly still creates the scheduler / preemption runtimes, deferred until after C2 |
+| `@zhin.js/workroom/portfolio` portfolio journal / admission / capacity outbox / sponsor | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4b); only the root export was removed, the default (legacy Kernel) assembly still creates the portfolio runtimes, deferred until after C2 |
+| `@zhin.js/workroom/data-governance` payload vault / disclosure manifest & authority / payload lifecycle / workroom-data-* & workroom-payload-* runtime | `internal` | `@zhin.js/workroom` | Moved out of the package root and frozen (C4c); only the root export was removed, the default (legacy Kernel) assembly still creates the data-governance runtime, deferred until after C2 |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host installers (database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol); assembly details may change at any time |
 

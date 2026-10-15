@@ -17,8 +17,8 @@ if (!process.env.L4_SKIP_PLATFORM) {
 
 /** @type {string[]} */
 const l4CiTestFiles = [
-  'packages/im/agent/tests/workroom/workroom-kernel.test.ts',
-  'packages/im/agent/tests/workroom/assignment-observation-ingress.test.ts',
+  'packages/im/workroom/tests/workroom/workroom-kernel.test.ts',
+  'packages/im/workroom/tests/workroom/assignment-observation-ingress.test.ts',
   'packages/im/agent/tests/memory/memory-system.test.ts',
   'packages/host/mcp/tests/runtime.test.ts',
   'packages/host/a2a/tests/runtime.test.ts',

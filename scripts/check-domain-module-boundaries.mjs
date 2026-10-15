@@ -8,11 +8,11 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..'
 const boundaries = [
   {
     name: 'Workroom Journal',
-    directory: 'packages/im/agent/src/workroom/journal',
+    directory: 'packages/im/workroom/src/workroom/journal',
   },
   {
     name: 'Workroom Projection Outbox',
-    directory: 'packages/im/agent/src/workroom/projection-outbox',
+    directory: 'packages/im/workroom/src/workroom/projection-outbox',
   },
   {
     name: 'Host Extended Console RPC',
