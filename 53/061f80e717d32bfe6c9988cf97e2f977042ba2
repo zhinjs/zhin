@@ -1,0 +1,48 @@
+.changeset/ai-provider-schemas-reasoning.md
+  h_b680f75345178a 1-10
+docs/ai/index.md
+  h_b680f75345178a 94-95,140-145,147-148
+docs/en/ai/index.md
+  h_b680f75345178a 94-95,140-145,147-148
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  h_b680f75345178a 5,8,18,92,95-105,131-132,144-147,168-171,249-270,276
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 10,14,99,102-106,109,125-128,131-137,149,181,183,205-206,263-286,346,378,391-392,400-401,408,410,495,524,538,576,579-587
+packages/im/ai/src/llm/index.ts
+  h_b680f75345178a 6
+packages/im/ai/src/llm/json-schema-zod.ts
+  h_b680f75345178a 1-11,15-45,47-58,60-70,72,78-112,114-147,150-154
+packages/im/ai/src/llm/llm-api-runtime.ts
+  h_b680f75345178a 66-68,73-77,79-88,94-99,153,155
+packages/im/ai/src/llm/tool-bridge.ts
+  h_b680f75345178a 4,6,8-11,17
+packages/im/ai/src/llm/types/content-block.ts
+  h_b680f75345178a 18-22,49-54,58-59
+packages/im/ai/src/llm/types/model.ts
+  h_b680f75345178a 72-73,117-129
+packages/im/ai/src/llm/types/tool.ts
+  h_b680f75345178a 8-14
+packages/im/ai/src/types.ts
+  h_b680f75345178a 90-93
+packages/im/ai/tests/llm/default-model-input.test.ts
+  h_b680f75345178a 1-67
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  h_b680f75345178a 91
+packages/im/ai/tests/llm/reasoning-level.test.ts
+  h_b680f75345178a 1-79
+packages/im/ai/tests/llm/reasoning-replay.test.ts
+  h_b680f75345178a 1-138
+packages/im/ai/tests/llm/tool-schema-fidelity.test.ts
+  h_b680f75345178a 1-128
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "53061f80e717d32bfe6c9988cf97e2f977042ba2",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
