@@ -1,0 +1,35 @@
+packages/im/agent/evals/cases/provider-fallback-keeps-image-input.case.ts
+  s_2104cc474f1ce5::t_1bdf0edafe18c9 1-25
+packages/im/agent/evals/framework/driver.ts
+  s_49d524bba9270d::t_743e73ae0c8600 113
+packages/im/agent/evals/framework/fixture.ts
+  s_49d524bba9270d::t_1110620cfc9def 191-192
+packages/im/agent/evals/framework/scripted-model.ts
+  s_49d524bba9270d::t_48b21ad5ba3900 133-134,146-161,165,167
+packages/im/agent/src/core/agent-core-run.ts
+  s_49d524bba9270d::t_4a3eb868c42f6a 7,84-94,98-100,109,112,116,118,121-127,129,681
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "561c400d1f976705bb0581049030fa474f917106",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_49d524bba9270d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a5355d4bd4c0fc388",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
