@@ -118,6 +118,8 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './provider-resilience.js';
+export { finishFailureKind, resolveFinish } from './bridge/finish-reason.js';
+export type { FinishFailureKind, FinishInput, FinishOutcome } from './bridge/finish-reason.js';
 export { isTieredParallelTool, TIERED_PARALLEL_TOOL_NAMES } from './tiered-tool-buckets.js';
 export type {
   AgentLoopConfig,

@@ -67,6 +67,18 @@ describe('model harness defaults', () => {
     expect(resolved).toMatchObject({ emptyReplyRetries: 0, requestTimeoutMs: 60_000 });
   });
 
+  it('gemini 预设应开启一次空回复 / MALFORMED_FUNCTION_CALL 重问，且不影响探索预算', () => {
+    for (const [provider, model] of [['gemini', 'gemini-3.8-flash'], ['openrouter', 'google/gemini-3.8-pro']] as const) {
+      const resolved = resolveModelHarness(provider, model);
+      expect(resolved.emptyReplyRetries).toBe(1);
+      expect(resolved.explorationGuidance).toBeUndefined();
+    }
+    expect(resolveModelHarness('gemini', 'gemini-3.8-flash', {
+      models: { 'gemini-3.8-flash': { emptyReplyRetries: 0 } },
+    }).emptyReplyRetries).toBe(0);
+    expect(resolveModelHarness('openai', 'gpt-5-gemini-compare').emptyReplyRetries).toBeUndefined();
+  });
+
   it('应丢弃非法的 provider 怪癖值', () => {
     const resolved = resolveModelHarness('openai', 'gpt-4o', {
       models: { 'gpt-4o': { emptyReplyRetries: -1, requestTimeoutMs: Number.NaN } },
