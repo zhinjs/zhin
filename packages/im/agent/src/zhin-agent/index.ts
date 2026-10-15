@@ -232,6 +232,12 @@ export class ZhinAgent implements IAgentTurnProcessor, IAgentSessionManager, IAg
     this.emitter = new ZhinAgentEventEmitter(events);
     const merged = { ...DEFAULT_CONFIG, ...config } as Required<ZhinAgentConfig>;
     this.config = merged;
+    if (typeof merged.visionModel === 'string' && merged.visionModel.trim()) {
+      logger.warn(
+        'ZhinAgentConfig.visionModel 已弃用（下一个 minor 版本移除）：图片轮次仍优先使用绑定的模型，'
+        + '它只作为后备候选。请改用 ai.agents.zhin.model，图片理解用 ai.multimodal.perception。',
+      );
+    }
     this.userProfiles = new UserProfileStore();
     this.rateLimiter = new RateLimiter(this.config.rateLimit);
     this.usageQuota = new UsageQuota(this.config.usageQuota);

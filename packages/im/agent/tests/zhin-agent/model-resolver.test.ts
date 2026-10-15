@@ -43,4 +43,10 @@ describe('resolveModelCandidates', () => {
     const candidates = resolveModelCandidates(['a', 'b'], null, 'p', { chatModel: 'a' }, 'vision', 'b');
     expect(candidates.slice(0, 2)).toEqual(['b', 'a']);
   });
+
+  it('已弃用的 visionModel 仍作为后备候选（排在绑定模型之后），保持兼容', () => {
+    const candidates = resolveModelCandidates(['a', 'v'], null, 'p', { chatModel: 'a', visionModel: 'v' }, 'vision');
+    expect(candidates.slice(0, 2)).toEqual(['a', 'v']);
+    expect(resolveModelCandidates(['a', 'v'], null, 'p', { visionModel: 'v' }, 'vision')[0]).toBe('v');
+  });
 });

@@ -2,6 +2,7 @@ import type { ModelRegistry } from '@zhin.js/ai';
 
 export interface ModelResolverConfig {
   chatModel?: string;
+  /** @deprecated See `ZhinAgentConfig.visionModel`; removed in the next minor. */
   visionModel?: string;
 }
 
