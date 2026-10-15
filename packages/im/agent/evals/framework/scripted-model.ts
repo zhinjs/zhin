@@ -11,6 +11,7 @@ import {
   EMPTY_TOKEN_USAGE,
   LlmApiRuntime,
   SdkProviderAdapter,
+  resolveFinish,
   type AssistantMessage,
   type Context,
   type Model,
@@ -32,14 +33,19 @@ export interface ScriptedToolCall {
  * A provider-level fault instead of a response. Generic on purpose so
  * resilience cases (#724) can model rate limits, timeouts and broken
  * responses: `error` rejects the request with `message` (and an optional
- * HTTP-like `status`); `empty` returns an assistant message with no content;
- * `hang` never answers and instead advances the case's virtual clock until
- * the request is aborted (e.g. by `providerResilience.requestTimeoutMs`).
+ * HTTP-like `status`, plus an optional provider JSON `body` such as a Gemini
+ * `{ error: { status, details } }`); `empty` returns an assistant message with
+ * no content; `hang` never answers and instead advances the case's virtual
+ * clock until the request is aborted (e.g. by `providerResilience.requestTimeoutMs`);
+ * `finish` returns the reply the AI SDK bridge builds for a content-less finish
+ * (e.g. Gemini `finishReason: 'content-filter'` with raw `SAFETY`, a prompt
+ * `blockReason`, or `error` with raw `MALFORMED_FUNCTION_CALL`).
  */
 export type ScriptFault =
-  | Readonly<{ kind: 'error'; message: string; status?: number }>
+  | Readonly<{ kind: 'error'; message: string; status?: number; body?: unknown }>
   | Readonly<{ kind: 'empty' }>
-  | Readonly<{ kind: 'hang' }>;
+  | Readonly<{ kind: 'hang' }>
+  | Readonly<{ kind: 'finish'; finishReason: string; raw?: string; blockReason?: string }>;
 
 /**
  * One model response: a final text answer, one or more tool calls, or a fault.
@@ -53,9 +59,13 @@ export type ScriptStep = (
 ) & Readonly<{ model?: string }>;
 
 export class ScriptedProviderError extends Error {
-  constructor(message: string, readonly status?: number) {
+  /** Raw provider body, as the AI SDK's `APICallError.responseBody` carries it. */
+  readonly responseBody?: string;
+
+  constructor(message: string, readonly status?: number, body?: unknown) {
     super(message);
     this.name = 'ScriptedProviderError';
+    if (body !== undefined) this.responseBody = JSON.stringify(body);
   }
 }
 
@@ -172,7 +182,7 @@ export function createScriptedModel(script: readonly ScriptStep[], options: Scri
       if (call.notOffered && offered) unexpectedlyOfferedToolCalls.push(label);
       if (!call.notOffered && !offered) unofferedToolCalls.push(label);
     }
-    if ('fault' in step && step.fault.kind === 'error') throw new ScriptedProviderError(step.fault.message, step.fault.status);
+    if ('fault' in step && step.fault.kind === 'error') throw new ScriptedProviderError(step.fault.message, step.fault.status, step.fault.body);
     if ('fault' in step && step.fault.kind === 'hang') return step.fault;
     return toAssistantMessage(step, index, model.id);
   };
@@ -234,6 +244,16 @@ function toAssistantMessage(step: ScriptStep, index: number, modelId: string): A
       arguments: { ...(call.args ?? {}) },
     });
   });
+  // A content-less finish goes through the same mapping as the real AI SDK bridge.
+  const finish = 'fault' in step && step.fault.kind === 'finish'
+    ? resolveFinish({
+      finishReason: step.fault.finishReason,
+      rawFinishReason: step.fault.raw,
+      providerMetadata: step.fault.blockReason ? { google: { promptFeedback: { blockReason: step.fault.blockReason } } } : undefined,
+      hasText: false,
+      hasToolCalls: false,
+    })
+    : { stopReason: calls.length > 0 ? 'toolCalls' as const : 'stop' as const };
   return {
     role: 'assistant',
     content,
@@ -241,7 +261,8 @@ function toAssistantMessage(step: ScriptStep, index: number, modelId: string): A
     provider: PROVIDER_ALIAS,
     model: modelId,
     usage: scriptedUsage(step),
-    stopReason: calls.length > 0 ? 'toolCalls' : 'stop',
+    stopReason: finish.stopReason,
+    ...(finish.errorMessage ? { errorMessage: finish.errorMessage } : {}),
     timestamp: 0,
   };
 }
