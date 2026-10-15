@@ -350,6 +350,7 @@ function toCapability(tool: EvalTool, executed: EvalToolInvocation[], rawOutputs
     name: tool.name,
     qualifiedName: tool.name,
     description: tool.description ?? tool.name,
+    ...(tool.parameters ? { inputSchema: tool.parameters } : {}),
     requiresApproval: tool.requiresApproval ?? 'never',
     source: `eval:${tool.name}`,
     execute: (async (input: unknown) => {
