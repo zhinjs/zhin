@@ -11,7 +11,7 @@ import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
-import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ToolCallProviderOptions } from '../types/content-block.js';
+import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallProviderOptions } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
@@ -96,12 +96,17 @@ function usageFromAiSdk(usage: {
 
 type CapturedThinkingPart = {
   text: string;
-  providerOptions?: AnthropicThinkingProviderOptions;
+  providerOptions?: ThinkingProviderOptions;
 };
+
+/** Signatures to keep on a thinking block: Anthropic signature/redactedData and Gemini thoughtSignature. */
+function thinkingOptionsFromProviderMetadata(metadata: unknown): ThinkingProviderOptions | undefined {
+  return mergeThinkingOptions(anthropicOptionsFromProviderMetadata(metadata), toolCallProviderOptions(metadata));
+}
 
 function anthropicOptionsFromProviderMetadata(
   metadata: unknown,
-): AnthropicThinkingProviderOptions | undefined {
+): ThinkingProviderOptions | undefined {
   if (!metadata || typeof metadata !== 'object') return undefined;
   const anthropic = (metadata as { anthropic?: unknown }).anthropic;
   if (!anthropic || typeof anthropic !== 'object') return undefined;
@@ -117,18 +122,19 @@ function anthropicOptionsFromProviderMetadata(
   };
 }
 
-function mergeAnthropicOptions(
-  left: AnthropicThinkingProviderOptions | undefined,
-  right: AnthropicThinkingProviderOptions | undefined,
-): AnthropicThinkingProviderOptions | undefined {
+function mergeThinkingOptions(
+  left: ThinkingProviderOptions | undefined,
+  right: ThinkingProviderOptions | undefined,
+): ThinkingProviderOptions | undefined {
   if (!left) return right;
   if (!right) return left;
-  return {
-    anthropic: {
-      ...left.anthropic,
-      ...right.anthropic,
-    },
-  };
+  const out: Record<string, Record<string, string>> = {};
+  for (const source of [left, right]) {
+    for (const [key, value] of Object.entries(source)) {
+      if (value) out[key] = { ...(out[key] ?? {}), ...(value as Record<string, string>) };
+    }
+  }
+  return out as ThinkingProviderOptions;
 }
 
 /** Prefer AI SDK reasoning parts (with signature metadata); fall back to streamed text. */
@@ -140,7 +146,7 @@ function resolveThinkingParts(input: {
   const fromSdk = (input.reasoningParts ?? [])
     .map((part): CapturedThinkingPart | undefined => {
       const text = typeof part.text === 'string' ? part.text : '';
-      const providerOptions = anthropicOptionsFromProviderMetadata(part.providerMetadata);
+      const providerOptions = thinkingOptionsFromProviderMetadata(part.providerMetadata);
       if (!text && !providerOptions?.anthropic?.redactedData) return undefined;
       return { text, providerOptions };
     })
@@ -172,9 +178,10 @@ function buildAssistantMessage(
   toolCalls: CapturedToolCall[],
   finish: FinishOutcome,
   usage: AssistantMessage['usage'],
+  textOptions?: ToolCallProviderOptions,
 ): AssistantMessage {
+  // Stream order: thinking, then the answer text, then tool calls (S6).
   const content: AssistantMessage['content'] = [];
-  if (text) content.push({ type: 'text', text });
 
   const parts = [...thinkingParts];
   // Persist a placeholder CoT when gateway omitted reasoning on tool_calls (DeepSeek round-trip).
@@ -194,6 +201,8 @@ function buildAssistantMessage(
     if (part.providerOptions) block.providerOptions = part.providerOptions;
     content.push(block);
   }
+
+  if (text) content.push({ type: 'text', text, ...(textOptions ? { providerOptions: textOptions } : {}) });
 
   for (const call of toolCalls) {
     content.push({
@@ -342,23 +351,25 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       let text = '';
       let rawBlockReason: string | undefined;
       let thinking = '';
-      let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
+      let streamedThinkingOptions: ThinkingProviderOptions | undefined;
+      let textSignature: ToolCallProviderOptions | undefined;
       const toolCalls = new Map<string, CapturedToolCall>();
       const toolInputBuffers = new Map<string, string>();
 
       for await (const part of result.fullStream) {
         if (part.type === 'text-delta') {
           text += part.text;
-          push({ type: 'text_delta', text: part.text });
+          textSignature = toolCallProviderOptions(part.providerMetadata) ?? textSignature;
+          if (part.text) push({ type: 'text_delta', text: part.text });
         } else if (part.type === 'reasoning-delta') {
           const chunk = reasoningDeltaText(part);
           if (chunk) {
             thinking += chunk;
             push({ type: 'thinking_delta', thinking: chunk });
           }
-          streamedThinkingOptions = mergeAnthropicOptions(
+          streamedThinkingOptions = mergeThinkingOptions(
             streamedThinkingOptions,
-            anthropicOptionsFromProviderMetadata(part.providerMetadata),
+            thinkingOptionsFromProviderMetadata(part.providerMetadata),
           );
         } else if (part.type === 'tool-input-start') {
           toolInputBuffers.set(part.id, '');
@@ -441,6 +452,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
           hasToolCalls: calls.length > 0,
         }),
         usageFromAiSdk(finalUsage),
+        structured === undefined ? textSignature : undefined,
       );
       return assistant;
     });
@@ -515,5 +527,15 @@ export async function generateTextViaAiSdk(
       hasToolCalls: toolCalls.length > 0,
     }),
     usageFromAiSdk(result.usage),
+    structured === undefined ? textSignatureFromContent(result.content) : undefined,
   );
+}
+
+/** Last Gemini signature on a text part of a generateText result. */
+function textSignatureFromContent(content: ReadonlyArray<{ type: string; providerMetadata?: unknown }> | undefined): ToolCallProviderOptions | undefined {
+  let signed: ToolCallProviderOptions | undefined;
+  for (const part of content ?? []) {
+    if (part.type === 'text') signed = toolCallProviderOptions(part.providerMetadata) ?? signed;
+  }
+  return signed;
 }

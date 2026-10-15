@@ -2,11 +2,10 @@
  * pi Context ↔ AI SDK ModelMessage bridge (ADR 0018).
  */
 
-import { type AssistantContent, type ModelMessage, type ToolSet, type UserModelMessage, jsonSchema, tool } from 'ai';
-import type { JSONSchema7 } from 'ai';
+import { type AssistantContent, type JSONSchema7, type ModelMessage, type ToolSet, type UserModelMessage, jsonSchema, tool } from 'ai';
 import type { Context } from '../types/context.js';
 import { isLlmAgentMessage, type AgentMessage, type AssistantMessage, type ToolResultMessage, type UserMessage } from '../types/agent-message.js';
-import type { AnthropicThinkingProviderOptions, ThinkingContentBlock } from '../types/content-block.js';
+import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ThinkingProviderOptions, ToolCallProviderOptions } from '../types/content-block.js';
 import {
   DEFAULT_PROVIDER_MEDIA,
   filterMediaBlocksForProvider,
@@ -90,8 +89,19 @@ function userBlocksToAiContent(
 type AiSdkReasoningPart = {
   type: 'reasoning';
   text: string;
-  providerOptions?: AnthropicThinkingProviderOptions;
+  providerOptions?: ThinkingProviderOptions;
 };
+
+/** Only the Gemini signature keys of a stored providerOptions (for non-Anthropic replay). */
+function googleSignatures(options: ThinkingProviderOptions | ToolCallProviderOptions | undefined): ToolCallProviderOptions | undefined {
+  if (!options) return undefined;
+  const out: ToolCallProviderOptions = {};
+  for (const key of ['google', 'vertex'] as const) {
+    const signature = (options as Record<string, { thoughtSignature?: string } | undefined>)[key]?.thoughtSignature;
+    if (typeof signature === 'string' && signature) out[key] = { thoughtSignature: signature };
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
 
 function thinkingToReasoningParts(
   message: AssistantMessage,
@@ -118,7 +128,8 @@ function thinkingToReasoningParts(
     const text = block.thinking
       || (options?.ensureToolCallReasoning ? TOOL_CALL_REASONING_PLACEHOLDER : '');
     if (!text) continue;
-    reasoningParts.push({ type: 'reasoning', text });
+    const signed = googleSignatures(block.providerOptions);
+    reasoningParts.push({ type: 'reasoning', text, ...(signed ? { providerOptions: signed } : {}) });
   }
 
   return reasoningParts;
@@ -130,7 +141,10 @@ function assistantToAiMessage(
 ): ModelMessage {
   const textParts = message.content
     .filter((b): b is Extract<typeof b, { type: 'text' }> => b.type === 'text')
-    .map((b) => ({ type: 'text' as const, text: b.text }));
+    .map((b) => {
+      const signed = googleSignatures(b.providerOptions);
+      return { type: 'text' as const, text: b.text, ...(signed ? { providerOptions: signed } : {}) };
+    });
   const reasoningParts = thinkingToReasoningParts(message, options);
   const toolCalls = message.content
     .filter((b): b is Extract<typeof b, { type: 'toolCall' }> => b.type === 'toolCall')
@@ -151,7 +165,10 @@ function assistantToAiMessage(
     reasoningParts.push({ type: 'reasoning', text: TOOL_CALL_REASONING_PLACEHOLDER });
   }
 
-  const content = [...textParts, ...reasoningParts, ...toolCalls];
+  // Reasoning first: Anthropic requires a thinking + tool_use turn to open with the
+  // signed thinking block, and both Anthropic and Gemini stream thoughts before the answer.
+  // Older stored messages kept text before thinking, so order on replay, not only on capture.
+  const content = [...reasoningParts, ...textParts, ...toolCalls];
   return {
     role: 'assistant',
     content: (content.length > 0 ? content : '') as AssistantContent,
