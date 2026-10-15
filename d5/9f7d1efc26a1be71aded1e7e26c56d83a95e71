@@ -1,0 +1,33 @@
+.changeset/nightly-flash-lite-503.md
+  s_2104cc474f1ce5::t_ae2c8becc05578 1-5
+docs/plans/agent-harness-maturity-roadmap.md
+  s_2104cc474f1ce5::t_5697979205f6cc 196
+.github/workflows/nightly-evals.yml
+  s_940f84ed70a558::t_565e11f7afdcbc 135-139,142
+packages/im/agent/evals/README.md
+  s_940f84ed70a558::t_e86c210f68a789 252-254,258-261,266-268,276-318
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d59f7d1efc26a1be71aded1e7e26c56d83a95e71",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_940f84ed70a558": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a92317ebe03574423",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
