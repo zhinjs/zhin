@@ -163,7 +163,7 @@ ai:
             thinkingConfig: { thinkingLevel: low }
   ```
 
-  Gemini 因安全策略（SAFETY、RECITATION 等）拒答时，用户会看到“模型因内容安全策略未生成回复”和原因，而不是一条空回复。Gemini 走隐式缓存：system prompt 和工具定义保持不变，命中的 token 记在 usage 的 `cacheRead` 和 turn trace 的 `cache_read_tokens` 里。如果想要更稳定的折扣，可以开显式缓存：`contextCache: { mode: explicit, ttlSeconds: 600 }`。开启后，框架会给 system prompt 和工具定义建一个 `cachedContents`，在 TTL 内复用；前缀变了就新建一个并删掉旧的，服务端缓存失效时自动退回完整请求，建不了（比如前缀太短）时退回隐式缓存。缓存按存储时长计费。显式缓存只支持 Gemini 3 / 2.5，Gemini 4 Argon 及以后不支持。
+  Gemini 因安全策略（SAFETY、PROHIBITED_CONTENT、RECITATION、提示词被拦截等）拒答时，用户会看到一句礼貌的说明（“抱歉，这条内容触发了模型的内容安全策略，没能生成回复（SAFETY），换个说法再试试吧”），而不是一条空回复。这种拒答不会重试，也不会切换到备用模型：同样的内容再问一次结果相同，换模型绕过拒答等于绕过你配置的 `safetySettings`。Gemini 走隐式缓存：system prompt 和工具定义保持不变，命中的 token 记在 usage 的 `cacheRead` 和 turn trace 的 `cache_read_tokens` 里。如果想要更稳定的折扣，可以开显式缓存：`contextCache: { mode: explicit, ttlSeconds: 600 }`。开启后，框架会给 system prompt 和工具定义建一个 `cachedContents`，在 TTL 内复用；前缀变了就新建一个并删掉旧的，服务端缓存失效时自动退回完整请求，建不了（比如前缀太短）时退回隐式缓存。缓存按存储时长计费。显式缓存只支持 Gemini 3 / 2.5，Gemini 4 Argon 及以后不支持。
 
 ### ai.agents
 

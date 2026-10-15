@@ -19,6 +19,15 @@ export const MODEL_HARNESS_DEFAULTS: ModelHarnessRow[] = [
     explorationGuidance: true,
     emptyReplyRetries: 1,
   },
+  // Gemini (direct `gemini-…` or routed as `google/gemini-…`): function calls
+  // occasionally end with finishReason MALFORMED_FUNCTION_CALL, and some turns
+  // end with STOP but no text. Both are transient (Gemini CLI re-asks on both),
+  // so re-ask once on the same model before showing the failure. Safety blocks
+  // are never re-asked (see provider-resilience.ts).
+  {
+    modelPattern: /(?:^|\/)gemini-/i,
+    emptyReplyRetries: 1,
+  },
 ];
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

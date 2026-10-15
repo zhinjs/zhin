@@ -416,6 +416,7 @@ ai:
 - **退避**：指数退避加抖动；服务端给出 `Retry-After` 时按其等待，超过上限则直接降级。重试由这一层统一负责，AI SDK 自带重试被关闭，避免叠加。
 - **fallback**：同一模型重试耗尽后，按 `modelCandidates` 顺序切换到下一个模型；每次重试 / 切换 / 放弃都会写一条 `provider_retry` / `provider_fallback` / `provider_give_up` 日志。
 - **用户反馈**：全部失败时回复中文说明（如"模型服务当前限流…请稍后再试"），不暴露原始报错。
+- **Gemini**：429 `RESOURCE_EXHAUSTED` 按 `RetryInfo.retryDelay` 重试；按天的配额（`QuotaFailure` 的 `quotaId` 含 `PerDay`）当天重试也没用，直接切换到下一个候选模型（配额按项目和模型分别计算），没有候选时提示"今天的调用额度已用完"。503 `UNAVAILABLE` 退避重试后降级；504 `DEADLINE_EXCEEDED` 按超时处理。安全拦截（finishReason `SAFETY` / `PROHIBITED_CONTENT` / `BLOCKLIST` / `SPII` / `IMAGE_SAFETY` / `RECITATION`，或提示词的 `blockReason`）**不重试、不降级**，直接给用户一句礼貌的拒答，并记一条 `provider_refused` 日志：同样的内容再问一次结果相同，换模型绕过拒答等于绕过运营方配置的 `safetySettings`，还会把被拦截的内容发给更多模型。
 
 ```yaml
 ai:
@@ -430,7 +431,7 @@ ai:
       fallback: true           # 重试耗尽后是否切换到下一个候选模型
 ```
 
-按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`。
+按模型的怪癖通过 `modelHarness` 覆盖 `emptyReplyRetries` 与 `requestTimeoutMs`。内置预设：MiniMax M 系列 `emptyReplyRetries: 1`；Gemini（`gemini-…`、`google/gemini-…`）`emptyReplyRetries: 1`，对空回复和 `MALFORMED_FUNCTION_CALL` 在同一模型上重问一次。
 
 ## Workroom Kernel
 
