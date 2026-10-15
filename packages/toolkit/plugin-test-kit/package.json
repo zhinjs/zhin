@@ -16,7 +16,7 @@
     "@zhin.js/runtime": "workspace:*"
   },
   "devDependencies": { "@types/node": "^26.1.2", "typescript": "^6.0.3", "vitest": "^4.1.10" },
-  "engines": { "node": "^20.19.0 || >=22.12.0" },
+  "engines": { "node": ">=22.19.0" },
   "license": "MIT",
   "repository": { "type": "git", "url": "git+https://github.com/zhinjs/zhin.git", "directory": "packages/toolkit/plugin-test-kit" },
   "publishConfig": { "access": "public", "registry": "https://registry.npmjs.org" }
