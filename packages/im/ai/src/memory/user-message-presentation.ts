@@ -50,13 +50,19 @@ function sanitizeLabelAttribute(value: string | undefined): string {
   return normalized || 'unknown';
 }
 
+const ACTOR_ORIGINS: ReadonlySet<string> = new Set(['self', 'member', 'peer_bot', 'human']);
+
 /** 将共享会话 actor 渲染为模型可见的非权威参与者标签。 */
 export function buildActorPrefix(actor: ConversationActor): string | null {
   if (actor.scope !== 'group' && actor.scope !== 'channel') return null;
   const id = sanitizeLabelAttribute(actor.subjectId);
   const name = sanitizeLabelAttribute(actor.displayName);
   const roles = actor.roles?.filter((role) => role !== 'user').join(',') || 'user';
-  return `[sender:id=${id} name=${name} roles=${roles}]`;
+  // origin 只取白名单字面量，不走自由文本清洗。
+  const origin = typeof actor.origin === 'string' && ACTOR_ORIGINS.has(actor.origin)
+    ? ` origin=${actor.origin}`
+    : '';
+  return `[sender:id=${id} name=${name} roles=${roles}${origin}]`;
 }
 
 export function userMessagePlainText(message: UserMessage): string {

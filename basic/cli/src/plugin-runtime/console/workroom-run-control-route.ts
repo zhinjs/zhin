@@ -1,5 +1,5 @@
 import { readJsonBody } from '@zhin.js/host-http';
-import type { WorkroomRunControlCommand } from '@zhin.js/agent';
+import type { WorkroomRunControlCommand } from '@zhin.js/workroom';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
 import {
@@ -31,7 +31,7 @@ export function registerWorkroomRunControlRoute(options: WorkroomRouteOptions): 
       FORBIDDEN_CONTROL_FIELDS,
       'Workroom control 不能携带身份或权威字段',
     )) return;
-    const agent = await import('@zhin.js/agent').catch(() => undefined);
+    const agent = await import('@zhin.js/workroom').catch(() => undefined);
     if (!agent) {
       writeJson(response, 503, { success: false, error: 'Agent Runtime 尚未安装' });
       return;

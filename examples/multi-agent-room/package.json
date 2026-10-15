@@ -2,7 +2,7 @@
   "name": "multi-agent-room",
   "private": true,
   "version": "0.0.38",
-  "description": "单 Bot 多 Agent 协作示例（Workroom Kernel + Agent bindings）",
+  "description": "3 Bot 同群协作示例（Room 核心端到端验收）",
   "type": "module",
   "scripts": {
     "dev": "zhin runtime start",
@@ -14,12 +14,15 @@
     "@zhin.js/adapter-sandbox": "workspace:*",
     "@zhin.js/agent": "workspace:*",
     "@zhin.js/agent-feature": "workspace:*",
+    "@zhin.js/workroom": "workspace:*",
     "ai": "^6.0.238",
     "zhin.js": "workspace:*",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@zhin.js/cli": "workspace:*",
+    "@zhin.js/im-contract": "workspace:*",
+    "@zhin.js/plugin-runtime": "workspace:*",
     "tsx": "^4.23.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"

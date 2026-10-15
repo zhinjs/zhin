@@ -545,6 +545,11 @@ export function createRuntimeTurnAccess(
   if (!endpoint) throw new TypeError('Runtime IM ingress requires endpoint identity');
   const subjectId = message.sender?.id?.trim();
   if (!subjectId) throw new TypeError('Runtime IM ingress requires authenticated sender identity');
+  // Fail closed: only human-origin messages may construct an agent turn.
+  const messageOrigin = message.origin;
+  if (messageOrigin !== undefined && messageOrigin !== 'human') {
+    throw new TypeError(`Runtime IM ingress rejects non-human origin: ${String(messageOrigin)}`);
+  }
   const scope = message.conversation.kind;
   const trustRole = roles.isMaster ? 'master' : roles.isTrusted ? 'trusted' : 'user';
   const principalRoles = [...new Set([...(message.sender?.roles ?? []), trustRole])];
@@ -561,6 +566,7 @@ export function createRuntimeTurnAccess(
       subjectId,
       ...(message.sender?.name ? { displayName: message.sender.name } : {}),
       roles: Object.freeze(principalRoles),
+      ...(messageOrigin ? { origin: messageOrigin } : {}),
     }),
     policy: Object.freeze({
       permissions: Object.freeze(principalRoles),

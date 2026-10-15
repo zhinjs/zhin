@@ -1,4 +1,5 @@
 import { agentHostToken } from '@zhin.js/agent/runtime';
+import { workroomHostToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { AgentHostPublicationCoordinator } from '../../../src/plugin-runtime/agent/publication-coordinator.js';
@@ -15,13 +16,13 @@ describe('AgentHostPublicationCoordinator', () => {
       resources,
       processRuntime: {} as never,
       agent: {} as never,
-      workroom: {} as never,
       bootstrapText: '',
     })).toThrow('generation replaced');
     expect(resources.has(agentHostToken)).toBe(false);
+    expect(resources.has(workroomHostToken)).toBe(false);
   });
 
-  it('projects late-bound controls through the already-published Host port', () => {
+  it('publishes only the Agent Host port and no Workroom or late-bound controls', () => {
     const resources = new Scope(rootPluginId());
     const coordinator = new AgentHostPublicationCoordinator({
       projectRoot: process.cwd(),
@@ -54,20 +55,18 @@ describe('AgentHostPublicationCoordinator', () => {
         sessionTreeRuntime: {},
         listBindings: () => [],
       } as never,
-      workroom: {
-        runtime: {},
-        kernel: { controlRun: () => undefined },
-        catalog: {},
-      } as never,
       bootstrapText: '',
     });
-    const control = {} as never;
 
-    expect(resources.use(agentHostToken).console.workroomProfiles).toBeUndefined();
-    coordinator.bindWorkroomProfiles(control);
-    expect(resources.use(agentHostToken).console.workroomProfiles).toBe(control);
-    expect(() => coordinator.bindWorkroomProfiles(control)).toThrow(
-      'Workroom Profile control is already bound',
+    expect(Object.keys(resources.use(agentHostToken).console).sort()).toEqual(
+      ['assistant', 'cancelSession', 'listBindings', 'sessionTree', 'trace'],
     );
+    expect(resources.has(workroomHostToken)).toBe(false);
+    for (const removed of [
+      'bindWorkroomProfiles', 'bindWorkroomKnowledge', 'bindPortfolioSponsor',
+      'bindEffectSponsor', 'bindDataLifecycle', 'resolveDataLifecycle',
+    ]) {
+      expect(coordinator).not.toHaveProperty(removed);
+    }
   });
 });

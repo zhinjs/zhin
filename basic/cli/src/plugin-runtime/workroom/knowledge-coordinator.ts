@@ -1,6 +1,6 @@
 import { join } from 'node:path';
-import { ProjectKnowledgeRegistry } from '@zhin.js/agent';
 import {
+  ProjectKnowledgeRegistry,
   WorkroomAssignmentKnowledgeContextProjector,
   createCatalogProjectKnowledgeSourceAuthority,
   createGenerationWorkroomEphemeralAssignmentContext,
@@ -8,7 +8,7 @@ import {
   workroomAssignmentKnowledgeContextToken,
   workroomEphemeralAssignmentContextToken,
   type AgentHostWorkroomKnowledgeControlPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';
 import type { WorkroomPersistenceCoordinator } from './persistence-coordinator.js';

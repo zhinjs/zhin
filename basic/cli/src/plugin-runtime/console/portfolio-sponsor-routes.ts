@@ -1,5 +1,5 @@
 import { readJsonBody } from '@zhin.js/host-http';
-import type { PortfolioSponsorCommand } from '@zhin.js/agent/runtime';
+import type { PortfolioSponsorCommand } from '@zhin.js/workroom/portfolio';
 import { withGenerationAgentConsole } from './agent-console.js';
 import { writeJson } from './http-response.js';
 import {

@@ -1,7 +1,7 @@
-import { workroomEffectRuntimeToken } from '@zhin.js/agent/runtime';
+import { workroomEffectRuntimeToken } from '@zhin.js/workroom';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
-import { WorkroomHostCoordinator } from '../../../src/plugin-runtime/workroom/host-coordinator.js';
+import { WorkroomHostCoordinator } from '../../../src/plugin-runtime/workroom/module.js';
 
 describe('WorkroomHostCoordinator', () => {
   it('rejects an aborted generation before composing Workroom resources', async () => {
@@ -19,6 +19,7 @@ describe('WorkroomHostCoordinator', () => {
       config: {},
       storageMode: 'file',
       im: {} as never,
+      ingress: {} as never,
       foundation: {} as never,
       agent: {} as never,
       publication: {} as never,

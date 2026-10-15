@@ -2,11 +2,16 @@ log_level: 1
 
 plugin: {}
 
-# 用户只面对一个 Endpoint；Agent 间委派不经过 IM。
+# 三个 Bot 账号（Endpoint）同群协作：coordinator / researcher / writer。
+# Room 核心在示例内组装（src/team.ts），默认运行时尚未接入（C1/C2）。
 plugins:
   sandbox:
     endpoints:
-      - id: assistant-bot
+      - id: coordinator-bot
+        owner: planner-user
+      - id: researcher-bot
+        owner: planner-user
+      - id: writer-bot
         owner: planner-user
 
 http:
@@ -29,10 +34,13 @@ ai:
     zhin:
       provider: ollama
       model: qwen3:8b
-    planner:
+    coordinator:
       provider: ollama
       model: qwen3:8b
     researcher:
+      provider: ollama
+      model: qwen3:8b
+    writer:
       provider: ollama
       model: qwen3:8b
   agent:

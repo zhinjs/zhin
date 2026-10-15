@@ -4,10 +4,6 @@ import {
   WorkroomKernel,
   createCatalogWorkroomRunControlAuthority,
   type WorkroomPlanGateAuthorityPort,
-} from '@zhin.js/agent';
-import {
-  CatalogWorkroomPriorityAuthority,
-  GenerationWorkroomPriorityAuthority,
   createCatalogGovernedWorkroomProjectionAuthority,
   createCatalogWorkroomPlanGateAuthority,
   createGenerationOwnedWorkroomJournalPayloadPort,
@@ -15,20 +11,24 @@ import {
   createGenerationWorkroomAcceptancePolicyPort,
   createGenerationWorkroomLocalAssignmentAuthority,
   createGenerationWorkroomPlanGateAuthority,
-  createGenerationWorkroomRemoteAssignmentAuthority,
   createWorkroomRuntime,
-  installWorkroomDataGovernanceResources,
   workroomAcceptanceAuthorityToken,
   workroomAcceptancePolicyDecisionToken,
   workroomDynamicPlanningPolicyToken,
   workroomLocalAssignmentAuthorityToken,
   workroomPlanGateAuthorityToken,
   workroomPlanningDisclosureToken,
-  workroomPriorityAuthorityToken,
-  workroomRemoteAssignmentAuthorityToken,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
+import {
+  installWorkroomDataGovernanceResources,
+} from '@zhin.js/workroom/data-governance';
+import { CatalogWorkroomPriorityAuthority, GenerationWorkroomPriorityAuthority, workroomPriorityAuthorityToken } from '@zhin.js/workroom/scheduler';
+import {
+  createGenerationWorkroomRemoteAssignmentAuthority,
+  workroomRemoteAssignmentAuthorityToken,
+} from '@zhin.js/workroom/remote';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { Token } from '@zhin.js/plugin-runtime';
 

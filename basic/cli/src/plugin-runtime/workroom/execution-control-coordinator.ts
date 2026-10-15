@@ -1,28 +1,9 @@
-import { type WorkroomPreemptionState } from '@zhin.js/agent';
+import { type WorkroomPreemptionState, WorkroomAssignmentCheckpointDelivery, WorkroomPreemptionRuntime, WorkroomSchedulerRuntime, WorkroomSchedulerSupplyUnavailableError, createWorkroomSchedulerKernelCommandPort, workroomCheckpointDeliveryProviderToken, workroomPreemptionRuntimeToken, workroomSchedulerDispatchSupplyToken, workroomSchedulerRuntimeToken, type WorkroomSchedulerPortfolioDispatchResources } from '@zhin.js/workroom/scheduler';
+import { GenerationOwnedPortfolioCapacityRuntime, JournalWorkroomPreemptionCheckpointAckReader, KernelPortfolioGrantAssignmentIssuance, PortfolioGrantAssignmentAuthority, WorkroomPortfolioCheckpointAckAdapter, WorkroomPortfolioGrantAssignmentSaga, installWorkroomPortfolioControlWorker, portfolioControlOutboxRepositoryToken, portfolioJournalRepositoryToken, workroomPortfolioCheckpointAckAdapterToken } from '@zhin.js/workroom/portfolio';
 import {
-  GenerationOwnedPortfolioCapacityRuntime,
-  JournalWorkroomPreemptionCheckpointAckReader,
-  KernelPortfolioGrantAssignmentIssuance,
-  PortfolioGrantAssignmentAuthority,
-  WorkroomAssignmentCheckpointDelivery,
-  WorkroomPortfolioCheckpointAckAdapter,
-  WorkroomPortfolioGrantAssignmentSaga,
-  WorkroomPreemptionRuntime,
-  WorkroomSchedulerRuntime,
-  WorkroomSchedulerSupplyUnavailableError,
   createWorkroomRemoteCallbackRuntime,
-  createWorkroomSchedulerKernelCommandPort,
-  installWorkroomPortfolioControlWorker,
-  portfolioControlOutboxRepositoryToken,
-  portfolioJournalRepositoryToken,
-  workroomCheckpointDeliveryProviderToken,
-  workroomPortfolioCheckpointAckAdapterToken,
-  workroomPreemptionRuntimeToken,
   workroomRemoteCallbackRuntimeToken,
-  workroomSchedulerDispatchSupplyToken,
-  workroomSchedulerRuntimeToken,
-  type WorkroomSchedulerPortfolioDispatchResources,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom/remote';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';

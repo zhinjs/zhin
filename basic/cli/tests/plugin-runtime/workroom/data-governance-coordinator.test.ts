@@ -1,10 +1,11 @@
+// 保留内部 import 的原因：该 coordinator 只在 WorkroomHostCoordinator.create 内部构造，公开接口无法单独触达其构造与 report verifier 绑定行为。
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { GenerationHandoffStack, Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WorkroomDataGovernanceCoordinator } from '../../../src/plugin-runtime/workroom/data-governance-coordinator.js';
-import { WorkroomRuntimeFoundation } from '../../../src/plugin-runtime/workroom/runtime-foundation.js';
+import { WorkroomRuntimeFoundation } from '../../../src/plugin-runtime/workroom/module.js';
 
 const temporaryDirectories: string[] = [];
 

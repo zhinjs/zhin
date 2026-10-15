@@ -1,3 +1,4 @@
+// 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，aborted 路径与 resolveCatalogIngressEndpoint 纯函数均未经 module.ts 公开。
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomHumanIngressCoordinator, resolveCatalogIngressEndpoint } from '../../../src/plugin-runtime/workroom/human-ingress-coordinator.js';

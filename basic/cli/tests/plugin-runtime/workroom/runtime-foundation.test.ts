@@ -1,10 +1,8 @@
-import {
-  workroomPlanGateAuthorityToken,
-  workroomPriorityAuthorityToken,
-} from '@zhin.js/agent/runtime';
+import { workroomPlanGateAuthorityToken } from '@zhin.js/workroom';
+import { workroomPriorityAuthorityToken } from '@zhin.js/workroom/scheduler';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
-import { WorkroomRuntimeFoundation } from '../../../src/plugin-runtime/workroom/runtime-foundation.js';
+import { WorkroomRuntimeFoundation } from '../../../src/plugin-runtime/workroom/module.js';
 
 describe('WorkroomRuntimeFoundation', () => {
   it('owns the generation journal, catalog, Kernel, and default authorities', async () => {

@@ -52,6 +52,8 @@ flowchart BT
   agent --> cli
 ```
 
+`packages/im/workroom`（`@zhin.js/workroom`）承载 Workroom、Portfolio、Data Governance 领域代码，以及把它们接到 Agent 运行时的 `src/workroom-runtime/`；它位于 `agent` 之上（workroom → agent），领域目录（`workroom/`、`portfolio/`、`data-governance/`）仍仅依赖 `im-contract`。
+
 `plugin-runtime`、`im-contract` 与 `interaction` 是底层契约；Feature 包在其上描述单一能力，
 `core` 负责组装 IM 链路。`kernel` 与 `ai` 不含 IM 概念。唯一跨层装配点是
 `basic/cli`，`zhin runtime start` 在这里组合 IM、Agent 与 Console Host。
@@ -60,8 +62,8 @@ flowchart BT
 
 | 领域 | 阅读入口 | 内部职责 |
 | --- | --- | --- |
-| Workroom Journal | `packages/im/agent/src/workroom/journal/index.ts` | 契约、事件校验/编解码、受治理载荷、Memory/File/Database 适配器 |
-| Workroom Projection | `packages/im/agent/src/workroom/projection-outbox/index.ts` | 契约、Repository CAS、投影规则、Tracer、Delivery Worker |
+| Workroom Journal | `packages/im/workroom/src/workroom/journal/index.ts` | 契约、事件校验/编解码、受治理载荷、Memory/File/Database 适配器 |
+| Workroom Projection | `packages/im/workroom/src/workroom/projection-outbox/index.ts` | 契约、Repository CAS、投影规则、Tracer、Delivery Worker |
 | Extended Console RPC | `packages/host/http/src/console-rpc-extended/index.ts` | 薄 Dispatcher、schedule/inbox/login/Endpoint/Workroom RPC 域 |
 
 目录存在的目的不是缩短单个文件，而是让调用方只依赖稳定入口，让状态、策略和 IO
@@ -76,7 +78,7 @@ CODEOWNERS 负责请求审查；是否要求审查通过由 GitHub 分支保护�
 | --- | --- | --- | --- |
 | Plugin Runtime / RootRuntime | `packages/im/plugin-runtime/CONTEXT.md`、`packages/im/runtime/src/root-runtime.ts` | generation、snapshot、资源租约与切换；运行态由所属 Root/generation 持有 | 生命周期与热重载测试、`check:architecture` |
 | IM / Adapter | `packages/im/core/src/plugin-runtime/im/`、`packages/im/adapter/src/adapter-index.ts` | Core 组合消息链路；Endpoint 拥有平台连接；传输契约属于 `im-contract` | 消息链路与端点测试、`check:harness-paths`、`check:adapter-endpoint-boundaries` |
-| Agent / Workroom | `packages/im/agent/README.md`、`packages/im/agent/src/workroom/workroom-kernel.ts` | 领域规则与 IO 端口分开；`plugin-runtime/` 将当前 generation 能力接到端口 | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
+| Agent / Workroom | `packages/im/agent/README.md`、`packages/im/workroom/src/workroom/workroom-kernel.ts` | 领域规则与 IO 端口分开；`workroom-runtime/` 将当前 generation 能力接到端口 | 领域与持久化测试、`check:architecture`、`check:domain-module-boundaries` |
 | HTTP / Console | `packages/host/http/src/http-host.ts`、`packages/console/protocol/` | Host 拥有监听与路由；wire 契约独立；业务资源由 CLI 注入 | Host/RPC 测试、`check:console-protocol-boundaries`、`check:console-contract` |
 | CLI / 脚手架 | `basic/cli/src/plugin-runtime/start-command.ts`、`packages/toolkit/scaffold-wizard/src/` | CLI 是装配点；向导提供配置机制，用户配置文件不由模板覆盖 | CLI/向导测试、`check:created-project` |
 

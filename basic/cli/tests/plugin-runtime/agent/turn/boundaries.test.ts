@@ -25,7 +25,7 @@ import {
   withTriggerTimeout,
   workroomOrchestratorSessionKey,
 } from '../../../../src/plugin-runtime/agent/turn/trigger.js';
-import { resolveWorkroomOrchestratorConversation } from '../../../../src/plugin-runtime/agent/workroom-port.js';
+import { resolveWorkroomOrchestratorConversation } from '../../../../src/plugin-runtime/workroom/orchestrator-conversation.js';
 import {
   createEndpointRoleResolver,
   readConfiguredEndpointKeys,
@@ -892,6 +892,20 @@ describe('缺口 3：createEndpointRoleResolver（plugins.<key>.trusted）', () 
     const roles = resolveRuntimeSenderRoles(message, endpointMaster, [], undefined);
     expect(roles).toEqual({ isMaster: true, isTrusted: false });
     expect(createRuntimeTurnAccess(message, roles).principal.roles).toContain('master');
+  });
+
+  it('createRuntimeTurnAccess 对非 human 来源抛错，human 写入 principal.origin', () => {
+    const roles = { isMaster: false, isTrusted: false };
+    const make = (origin?: string) => ({
+      ...makeMessage({ content: 'hi', target: 'private:u1', sender: { id: 'u1', name: 'U' } }),
+      endpointId: 'bot-1',
+      ...(origin ? { origin } : {}),
+    }) as never;
+    for (const origin of ['peer_bot', 'member', 'self']) {
+      expect(() => createRuntimeTurnAccess(make(origin), roles)).toThrow(/non-human origin/);
+    }
+    expect(createRuntimeTurnAccess(make('human'), roles).principal.origin).toBe('human');
+    expect(createRuntimeTurnAccess(make(), roles).principal.origin).toBeUndefined();
   });
 
   it('无 plugins 配置时返回空解析', async () => {

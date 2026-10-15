@@ -55,6 +55,7 @@ export function buildUserMessageActor(commMessage: Message): ConversationActor {
     displayName: resolveSenderDisplayName(commMessage),
     roles: roleLabels.length > 0 ? roleLabels : ['user'],
     scope: scope === 'group' || scope === 'channel' ? scope : 'private',
+    ...(commMessage.origin ? { origin: commMessage.origin } : {}),
   };
 }
 

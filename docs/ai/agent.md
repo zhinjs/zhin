@@ -569,9 +569,9 @@ ai:
 - **远程执行**：可选的 Remote A2A Executor 复用同一套 Assignment lease / fence / event 契约。只有持久 Profile、Authority Grant、Workspace、Disclosure 与 endpoint 的 Card / auth / transport 快照全部精确匹配时才允许新认领，缺项会持久阻塞。旧的 `ai.remoteAgents` poller 已不存在。
 :::
 
-### 审计旧数据
+### 旧数据
 
-升级旧数据时，`zhin agent legacy-runs <input>` 只读审计旧版 Run 导出，`zhin agent legacy-payloads <input> --kind <kind>` 只读扫描遗留的内嵌正文。两者只生成 create-only 的审计 / 建议，不会自动写入新 Journal、接受旧结果、删除 payload 或执行迁移。详见 [旧概念兼容说明](../contributing/legacy-concepts.md)。
+旧格式（内嵌 payload 的 Journal）以及旧 Run 不再受支持，也没有迁移工具；打开旧格式 store 时会 fail-closed。详见 [旧概念兼容说明](../contributing/legacy-concepts.md)。
 
 ## 相关
 

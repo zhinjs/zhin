@@ -79,6 +79,7 @@ export default definePlugin<ReminderConfig>({
 | Token | 得到 | 主要方法 |
 | --- | --- | --- |
 | `agentHostToken`（`@zhin.js/agent/runtime`） | Agent Host 端口 | 列出 Agent 绑定、提交 `TurnRequest`、读取 Console / 诊断信息；不暴露 ZhinAgent / AIService 实例 |
+| `workroomHostToken`（`@zhin.js/workroom`） | Workroom Host 端口 | 由 CLI 组合根与 `agentHostToken` 一同发布；其 `console` 只含 Workroom 控制端口（run 控制、catalog、profiles / knowledge / sponsor / 数据生命周期）。供 Console / host-http 使用，不供插件注入；Console 视图是两个 console 的 key 不相交合并 |
 | `turnIntentResolverToken`（`@zhin.js/agent/runtime`） | 由账号所属插件提供的可信意图解析器 | 按平台 / 场景把消息解析为 `supersede`、`new`、`steer`、`follow_up` 或 `observe`；只有它能为跨参与者的控制签发 `authorizedBy: 'product_policy'` |
 
 ### 渲染与 HTTP

@@ -16,7 +16,7 @@ import {
   type InteractionSpace,
   type InteractionSpaceBindingRepository,
   type InteractionSpaceRouter,
-} from '@zhin.js/agent';
+} from '@zhin.js/workroom';
 import {
   conversationRefKey,
   messageRefKey,

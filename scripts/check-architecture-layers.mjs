@@ -9,6 +9,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseImports } from './lib/parse-imports.mjs';
+import { findForbiddenRelativeImports } from './lib/find-forbidden-imports.mjs';
+import { findAgentManifestWorkroomViolations, findAgentWorkroomViolations } from './lib/agent-workroom-boundary.mjs';
+import { isForbiddenDomainSpecifier } from './lib/workroom-specifier.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -32,6 +36,15 @@ const providerLayerAllowed = [
   'packages/im/interaction',
   'packages/im/plugin-runtime',
   'packages/im/feature-kit',
+];
+const workroomAllowedLayers = [
+  'packages/im/im-contract',
+  'packages/im/ai',
+  'packages/im/core',
+  'packages/im/plugin-runtime',
+  'packages/im/tool',
+  'packages/im/skill',
+  'packages/im/agent',
 ];
 const layers = {
   // Console wire SSOT must remain zero-dependency so browsers, both Hosts and
@@ -65,6 +78,12 @@ const layers = {
   'packages/im/ai': { level: 2, allowedImports: ['basic', 'packages/im/kernel'] },
   'packages/im/core': { level: 3, allowedImports: ['packages/im/feature-kit', 'packages/im/jsx', 'basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/plugin-runtime', 'packages/im/adapter', 'packages/im/command', 'packages/im/component', 'packages/im/middleware', 'packages/im/handler'] },
   'packages/im/agent': { level: 4, allowedImports: ['basic', 'packages/im/im-contract', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/plugin-runtime', 'packages/im/agent-feature', 'packages/im/mcp-feature', 'packages/im/prompt-section', 'packages/im/skill', 'packages/im/tool'] },
+  // Note: `level` is only an ordering hint. workroom and zhin both sit at 5 but are siblings with no import edge
+  // between them (zhin does not import workroom; workroom does not import zhin), so their relative console
+  // output order is not meaningful.
+  // Workroom (A4b): sits above agent. workroom -> agent, never the reverse. Only src/workroom-runtime may use
+  // agent; the domain directories (workroom/, portfolio/, data-governance/) stay framework-free (see below).
+  'packages/im/workroom': { level: 5, allowedImports: workroomAllowedLayers },
   // define-plugin.ts 是 @zhin.js/plugin-runtime 的门面 re-export（zhin.js/plugin-runtime 子路径），允许。
   'packages/im/zhin': { level: 5, allowedImports: ['packages/im/jsx', 'basic', 'packages/im/kernel', 'packages/im/ai', 'packages/im/core', 'packages/im/agent', 'packages/im/runtime', 'packages/im/plugin-runtime'] },
   // Protocol Hosts consume only the narrow HTTP route contract; they must not
@@ -114,6 +133,7 @@ const packageNameToPath = {
   '@zhin.js/config-file': 'packages/im/config-file',
   '@zhin.js/interaction': 'packages/im/interaction',
   '@zhin.js/im-contract': 'packages/im/im-contract',
+  '@zhin.js/workroom': 'packages/im/workroom',
   '@zhin.js/console-protocol': 'packages/console/protocol',
   '@zhin.js/contract': 'packages/console/contract',
   '@zhin.js/pagemanager': 'packages/console/pagemanager',
@@ -151,103 +171,6 @@ function getLayerForFile(filePath) {
   }
 
   return null;
-}
-
-/**
- * 抹掉注释与模板字符串内容（替换为空格、保留换行），
- * 使后续正则不会匹配到注释里或代码生成模板（如 packages/host/mcp
- * handlers.ts 生成插件源码的模板字符串）里的 "import ... from" 文本。
- * 普通字符串保留原样（模块说明符本身就在字符串里）。
- * @param {string} content
- * @returns {string}
- */
-function maskCommentsAndTemplates(content) {
-  const out = content.split('');
-  // 状态栈：'code' | 'line' | 'block' | 'squote' | 'dquote' | 'template'
-  // template 内的 ${ ... } 以括号深度回到 code 处理（支持嵌套模板）。
-  const stack = [{ mode: 'code', braceDepth: 0 }];
-  const top = () => stack[stack.length - 1];
-  const mask = (i) => { if (out[i] !== '\n') out[i] = ' '; };
-
-  for (let i = 0; i < content.length; i++) {
-    const ch = content[i];
-    const next = content[i + 1];
-    const st = top();
-
-    if (st.mode === 'line') {
-      mask(i);
-      if (ch === '\n') stack.pop();
-      continue;
-    }
-    if (st.mode === 'block') {
-      mask(i);
-      if (ch === '*' && next === '/') { mask(i + 1); i++; stack.pop(); }
-      continue;
-    }
-    if (st.mode === 'squote' || st.mode === 'dquote') {
-      if (ch === '\\') { i++; continue; }
-      if ((st.mode === 'squote' && ch === "'") || (st.mode === 'dquote' && ch === '"')) stack.pop();
-      continue;
-    }
-    if (st.mode === 'template') {
-      if (ch === '\\') { mask(i); mask(i + 1); i++; continue; }
-      if (ch === '`') { mask(i); stack.pop(); continue; }
-      if (ch === '$' && next === '{') {
-        mask(i); mask(i + 1); i++;
-        stack.push({ mode: 'code', braceDepth: 0 });
-        continue;
-      }
-      mask(i);
-      continue;
-    }
-
-    // code 模式
-    if (ch === '/' && next === '/') { mask(i); mask(i + 1); i++; stack.push({ mode: 'line' }); continue; }
-    if (ch === '/' && next === '*') { mask(i); mask(i + 1); i++; stack.push({ mode: 'block' }); continue; }
-    if (ch === "'") { stack.push({ mode: 'squote' }); continue; }
-    if (ch === '"') { stack.push({ mode: 'dquote' }); continue; }
-    if (ch === '`') { mask(i); stack.push({ mode: 'template' }); continue; }
-    if (ch === '{') { st.braceDepth++; continue; }
-    if (ch === '}' && stack.length > 1) {
-      if (st.braceDepth === 0) stack.pop(); // ${ } 结束，回到 template
-      else st.braceDepth--;
-    }
-  }
-  return out.join('');
-}
-
-/**
- * 解析导入语句（忽略注释和模板字符串中的导入）。
- * 覆盖：单行/多行静态 import、bare import（import 'x'）、
- * export ... from '...' 再导出、动态 import('...')、require('...')。
- * 纯类型导入（import type / export type）不产生运行时依赖，跳过。
- * @param {string} content - 文件内容
- * @returns {string[]} - 导入的包名列表
- */
-function parseImports(content) {
-  const imports = [];
-  const masked = maskCommentsAndTemplates(content);
-
-  const patterns = [
-    // 静态 import（含多行 import 块与 bare import），跳过 import type
-    /import\s+(?!type\s)[\s\S]*?\bfrom\s*['"]([^'"]+)['"]/g,
-    /import\s*['"]([^'"]+)['"]/g,
-    // export { ... } from / export * from（含多行），跳过 export type
-    /export\s+(?!type\s)(?:\*|\{[\s\S]*?\})\s*\bfrom\s*['"]([^'"]+)['"]/g,
-    // 动态 import('...')（含 import('x').Type 内联类型；相对路径本就放行）
-    /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-    // require('...')
-    /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  ];
-
-  for (const re of patterns) {
-    let match;
-    while ((match = re.exec(masked)) !== null) {
-      imports.push(match[1]);
-    }
-  }
-
-  return imports;
 }
 
 /**
@@ -378,6 +301,31 @@ for (const contract of zeroRuntimeDependencyContracts) {
   }
 }
 
+// Workroom may depend on the layers it composes (including agent); agent must never
+// declare a manifest dependency on workroom, otherwise the packages form a cycle.
+const workroomAllowedDependencies = new Set(workroomAllowedLayers.map(layer => (
+  Object.entries(packageNameToPath).find(([, target]) => target === layer)?.[0]
+)));
+{
+  const manifestPath = 'packages/im/workroom/package.json';
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
+  for (const section of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    for (const dependency of Object.keys(manifest[section] ?? {})) {
+      if (workroomAllowedDependencies.has(dependency)) continue;
+      violations.push({
+        file: manifestPath,
+        import: dependency,
+        reason: `@zhin.js/workroom may only depend on ${[...workroomAllowedDependencies].join(', ')} (${section})`,
+      });
+    }
+  }
+}
+{
+  const manifestPath = 'packages/im/agent/package.json';
+  const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, manifestPath), 'utf8'));
+  violations.push(...findAgentManifestWorkroomViolations(manifest, manifestPath));
+}
+
 if (violations.length) {
   console.error('Harness architecture layer check: FAILED\n');
   console.error('The following imports violate the architecture layer rules:\n');
@@ -394,7 +342,8 @@ if (violations.length) {
   console.error('  3. packages/im/ai (providers, agents, memory)');
   console.error('  4. packages/im/core (Plugin, Adapter, Endpoint, Command)');
   console.error('  5. packages/im/agent (ZhinAgent, security policies)');
-  console.error('  6. packages/im/zhin (main entry)');
+  console.error('  6. packages/im/workroom (workroom -> agent, never the reverse)');
+  console.error('  7. packages/im/zhin (main entry)');
   console.error('  (parallel) packages/console/{contract,pagemanager,client}\n');
 
   console.error('Each layer can only import from layers below it.');
@@ -465,13 +414,14 @@ console.log('Harness assistant reverse-dependency check: OK.');
 // Runtime composition. Runtime adapters may depend on these domains only in
 // the opposite direction.
 const agentDomainRoots = [
-  'packages/im/agent/src/workroom',
-  'packages/im/agent/src/portfolio',
-  'packages/im/agent/src/data-governance',
+  'packages/im/workroom/src/workroom',
+  'packages/im/workroom/src/portfolio',
+  'packages/im/workroom/src/data-governance',
 ];
 const agentRuntimeRoots = [
   path.join(repoRoot, 'packages/im/agent/src/config'),
   path.join(repoRoot, 'packages/im/agent/src/plugin-runtime'),
+  path.join(repoRoot, 'packages/im/workroom/src/workroom-runtime'),
 ];
 const agentDomainViolations = [];
 
@@ -480,7 +430,15 @@ for (const domainRoot of agentDomainRoots) {
   walkTs(path.join(repoRoot, domainRoot), files);
   for (const file of files) {
     const content = fs.readFileSync(file, 'utf8');
-    for (const importPath of parseImports(content)) {
+    for (const importPath of parseImports(content, { includeTypeOnly: true })) {
+      if (isForbiddenDomainSpecifier(importPath)) {
+        agentDomainViolations.push({
+          file: path.relative(repoRoot, file),
+          import: importPath,
+          reason: `${domainRoot} may only import @zhin.js/im-contract and node: builtins (framework packages belong in workroom-runtime/)`,
+        });
+        continue;
+      }
       if (!importPath.startsWith('.')) continue;
       const target = path.resolve(path.dirname(file), importPath);
       const forbidden = agentRuntimeRoots.find(root => target === root || target.startsWith(`${root}${path.sep}`));
@@ -505,3 +463,57 @@ if (agentDomainViolations.length) {
 }
 
 console.log('Harness Agent domain boundary check: OK.');
+
+// Data Governance direction: workroom -> data-governance only, never the reverse.
+const dataGovernanceRoot = path.join(repoRoot, 'packages/im/workroom/src/data-governance');
+const dataGovernanceForbiddenRoots = ['workroom', 'workroom-runtime', 'portfolio']
+  .map(name => path.join(repoRoot, 'packages/im/workroom/src', name));
+const dataGovernanceViolations = [];
+const dataGovernanceFiles = [];
+walkTs(dataGovernanceRoot, dataGovernanceFiles);
+for (const file of dataGovernanceFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  for (const hit of findForbiddenRelativeImports({ file, content, forbiddenRoots: dataGovernanceForbiddenRoots })) {
+    const dir = path.basename(hit.root);
+    dataGovernanceViolations.push({
+      file: path.relative(repoRoot, file),
+      import: hit.import,
+      reason: `data-governance must not depend on ${dir}/ (data-governance is a lower layer shared by workroom, workroom-runtime and portfolio)`,
+    });
+  }
+}
+
+if (dataGovernanceViolations.length) {
+  console.error('\nHarness Data Governance direction check: FAILED\n');
+  for (const violation of dataGovernanceViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Data Governance direction check: OK.');
+
+// A4b: Agent is generic. No Agent source file (barrels included) may reference the
+// Workroom package or any Workroom-owned directory; the dependency is workroom -> agent.
+const agentSrcRoot = path.join(repoRoot, 'packages/im/agent/src');
+const agentReexportViolations = [];
+const agentSrcFiles = [];
+walkTs(agentSrcRoot, agentSrcFiles);
+for (const file of agentSrcFiles) {
+  const content = fs.readFileSync(file, 'utf8');
+  agentReexportViolations.push(...findAgentWorkroomViolations({ file: path.relative(repoRoot, file), content }));
+}
+
+if (agentReexportViolations.length) {
+  console.error('\nHarness Agent -> Workroom reference check: FAILED\n');
+  for (const violation of agentReexportViolations) {
+    console.error(`  ${violation.file}:`);
+    console.error(`    Import: ${violation.import}`);
+    console.error(`    Reason: ${violation.reason}\n`);
+  }
+  process.exit(1);
+}
+
+console.log('Harness Agent -> Workroom reference check: OK.');

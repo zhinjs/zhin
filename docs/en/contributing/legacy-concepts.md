@@ -75,38 +75,7 @@ The old orchestration stack combined mutable repositories, `AgentDispatcher`, im
 | `ai.remoteAgents` / `remote_mesh` / Remote Agent poller | No longer supported. Remote A2A is attached as a standard `AssignmentExecutorPort` transport using the same lease/fence/report/acceptance contract as local execution, and accepts only persistent Catalog plus generation-owned authority. Do not emulate it with legacy configuration or bypass its Grant. |
 | `/api/agent/orchestration/runs` / `/console/orchestration` | Use the Project-scoped `/api/agent/workroom/runs?projectId=...` endpoint and Workroom Console page. Both are read-only projections. |
 
-Legacy Runs are not automatically resumed or promoted. In particular, an old `completed` record has no claim-level Acceptance Record and cannot become accepted Project State. Historical data may only be exported for offline audit, or reintroduced as an untrusted Inbox/Evidence candidate with `legacy_import` provenance for explicit replanning and acceptance. See the [Agent CONTEXT on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md) for the implemented authority boundary.
-
-The offline tool accepts only two factual legacy surfaces: a repository table export containing the three `orchestration_runs`, `orchestration_tasks`, and `orchestration_events` arrays, or one old read-only API `RunSnapshot` JSON object shaped as `{ run, tasks, events }`. Unknown fields/statuses, corrupt JSON columns, broken references, and event sequence gaps fail closed:
-
-```bash
-# Read-only audit. Output is create-only and never overwrites source/prior evidence.
-zhin agent legacy-runs ./legacy-orchestration.json --output ./legacy-audit.json
-
-# An active legacy Run can only produce proposal data; no Agent starts and no Journal is written.
-zhin agent legacy-runs ./legacy-orchestration.json \
-  --run old-run-id --proposal replan --project target-project \
-  --output ./legacy-replan-proposal.json
-
-zhin agent legacy-runs ./legacy-orchestration.json \
-  --run old-run-id --proposal cancel \
-  --output ./legacy-cancel-proposal.json
-```
-
-`open/running/waiting` becomes `migration_required`, with only `export | cancel_proposal | replan_proposal`; terminal Runs are `historical_only`. Every report fixes `accepted: false`, and every Inbox/Evidence output is `trust: untrusted` with `legacy_import` provenance. A replan proposal requires an explicit target Project and still needs trusted migration admission by the new Kernel; the offline tool never writes `workroom_events` itself.
-
-If an old Workroom Journal, Projection, Evidence/Task Report, or Artifact Header embedded a body, subject identifier, or credential, quarantine it with the offline scanner before a separately approved export/purge operation. The audit contains only normalized field paths, categories, record refs, and record hashes—never values, fragments, or source JSON. Every purge step is `proposal_only`:
-
-```bash
-zhin agent legacy-payloads ./.zhin/workroom-projections \
-  --kind projection --storage file --output ./legacy-payload-audit.json
-
-# Database input must be an explicit versioned read-only row-mapping export.
-zhin agent legacy-payloads ./legacy-workroom-events-export.json \
-  --kind journal --storage database --output ./legacy-journal-payload-audit.json
-```
-
-An active store must run the same fail-closed gate before opening its production writer. Any detected legacy embedded payload denies writer activation; nothing is imported, rewritten, or deleted automatically.
+Legacy Runs and Journals with embedded payloads are no longer supported and have no migration tooling; opening a legacy-format store fails closed. An old `completed` record has no claim-level Acceptance Record and cannot become accepted Project State. Legacy Runs are no longer supported and there is no migration tooling; to keep historical information, curate it by hand and resubmit it as a new task for fresh planning and acceptance. See the [Agent CONTEXT on GitHub](https://github.com/zhinjs/zhin/blob/main/packages/im/agent/CONTEXT.md) for the implemented authority boundary.
 
 ## Related Reading
 

@@ -9,3 +9,8 @@ export {
   resolveWorkroomStorageMode,
   resolveWorkroomTrustedPackPublishers,
 } from './config.js';
+export {
+  isWorkroomPackageMissing,
+  loadWorkroomHostModule,
+  type WorkroomHostModule,
+} from './workroom-loader.js';

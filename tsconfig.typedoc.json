@@ -62,6 +62,21 @@
       "@zhin.js/adapter": [
         "./packages/im/adapter/src/index.ts"
       ],
+      "@zhin.js/workroom": [
+        "./packages/im/workroom/src/index.ts"
+      ],
+      "@zhin.js/workroom/remote": [
+        "./packages/im/workroom/src/remote.ts"
+      ],
+      "@zhin.js/workroom/scheduler": [
+        "./packages/im/workroom/src/scheduler.ts"
+      ],
+      "@zhin.js/workroom/portfolio": [
+        "./packages/im/workroom/src/portfolio.ts"
+      ],
+      "@zhin.js/workroom/data-governance": [
+        "./packages/im/workroom/src/data-governance.ts"
+      ],
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],

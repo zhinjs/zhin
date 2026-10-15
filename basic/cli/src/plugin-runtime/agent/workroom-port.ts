@@ -1,4 +1,3 @@
-import { workroomProjectionBindingKey } from '@zhin.js/agent';
 import type { Message } from '@zhin.js/core/runtime';
 import type { ConversationRef } from '@zhin.js/im-contract';
 
@@ -19,12 +18,10 @@ export interface AgentWorkroomPort {
   ): Promise<ConversationRef | undefined>;
 }
 
-export function resolveWorkroomOrchestratorConversation(
-  bindings: Readonly<Record<string, Readonly<{ conversation: ConversationRef }>>>,
-  continuation: Pick<WorkroomTurnContinuation, 'projectId' | 'space'>,
-): ConversationRef | undefined {
-  return bindings[workroomProjectionBindingKey(
-    continuation.projectId,
-    continuation.space,
-  )]?.conversation;
-}
+/** Null object used when the optional Workroom package is not installed. */
+export const NO_WORKROOM_PORT: AgentWorkroomPort = Object.freeze({
+  preRoute: async () => false,
+  hasAgentTurn: () => false,
+  takeAgentTurn: () => undefined,
+  resolveOrchestratorConversation: async () => undefined,
+});

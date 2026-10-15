@@ -1,15 +1,6 @@
 import { createHash } from 'node:crypto';
-import {
-  createWorkroomSchedulerPolicySnapshot,
-  type WorkroomDefinition,
-  type WorkroomMemberRole,
-} from '@zhin.js/agent';
-import {
-  createCapabilityPackManifest,
-  createWorkroomDynamicPlanningPolicySnapshot,
-  createWorkroomProfileOverlay,
-  type WorkroomGenerationAuthoritySnapshot,
-} from '@zhin.js/agent/runtime';
+import { type WorkroomDefinition, type WorkroomMemberRole, createCapabilityPackManifest, createWorkroomDynamicPlanningPolicySnapshot, createWorkroomProfileOverlay, type WorkroomGenerationAuthoritySnapshot } from '@zhin.js/workroom';
+import { createWorkroomSchedulerPolicySnapshot } from '@zhin.js/workroom/scheduler';
 import { LOCAL_WORKROOM_RESOURCE_REQUIREMENTS } from './local-portfolio.js';
 
 export function createWorkroomPlanningBootstrapArtifacts(input: Readonly<{

@@ -11,26 +11,26 @@ import {
   type AssistantConfig,
   type ApprovalPort,
   type AudioTranscriptionPort,
-  type HumanIngressOrchestratorProposalPort,
-  type WorkroomPlanGateAuthorityPort,
 } from '@zhin.js/agent';
+import type {
+  HumanIngressOrchestratorProposalPort,
+  WorkroomPlanGateAuthorityPort,
+  WorkroomDynamicPlanningPolicyPort,
+  WorkroomPlanningDisclosurePort,
+  SelfDeliveryHostConfiguration,
+} from '@zhin.js/workroom';
 import {
   AgentRuntime,
+  CapabilityIngress,
   agentDecisionConfigToken,
   normalizeAgentDecisionConfig,
   resolveAgentDecisionRuntime,
   type TurnIntentResolver,
-  type WorkroomDynamicPlanningPolicyPort,
-  type WorkroomPlanningDisclosurePort,
-  type SelfDeliveryHostConfiguration,
 } from '@zhin.js/agent/runtime';
 import { AgentTurnIngressRoute } from './turn/ingress-route.js';
 import { AgentHostPublicationCoordinator } from './publication-coordinator.js';
-import {
-  WorkroomHostCoordinator,
-  WorkroomRuntimeFoundation,
-  type LocalWorkroomDataGovernanceAuthority,
-} from '../workroom/module.js';
+import type { LocalWorkroomDataGovernanceAuthority } from '../workroom/module.js';
+import type { WorkroomHostModule } from './workroom-loader.js';
 
 export { AgentRuntime, AgentTurnCoordinator } from '@zhin.js/agent/runtime';
 
@@ -55,6 +55,11 @@ const MAX_BOOTSTRAP_CHARS = 12_000;
 export interface InstallAgentHostOptions {
   /** Root-private self-delivery authentication/integration configuration. Never accepts model-supplied policy. */
   readonly selfDelivery?: SelfDeliveryHostConfiguration;
+  /**
+   * Optional Workroom Host module, loaded once by the caller. Absent when
+   * `@zhin.js/workroom` is not installed; the Agent then runs without Workroom.
+   */
+  readonly workroom?: WorkroomHostModule;
   /** Process-owned execution authority attached to exactly one Root. */
   readonly runtime: AgentRuntime;
   /** Process-owned Snapshot reader; local Assignment operations hold an exact generation lease. */
@@ -147,7 +152,8 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       homeTools,
       assistantEnabled,
     } = agentFoundation;
-    const workroomFoundation = new WorkroomRuntimeFoundation({
+    const ingress = new CapabilityIngress();
+    const assembly = options.workroom?.WorkroomHostAssembly.begin({
       generation,
       signal,
       resources,
@@ -177,30 +183,29 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resources,
       processRuntime: options.runtime,
       agent: agentFoundation,
-      workroom: workroomFoundation,
       bootstrapText,
     });
 
-    const workroom = await WorkroomHostCoordinator.create({
-      projectRoot: options.projectRoot,
-      generation,
-      signal,
-      resources,
-      lifecycle,
-      handoff,
-      snapshots: options.snapshots,
-      config: aiConfig,
-      storageMode: options.workroomStorageMode,
-      im: options.im,
-      selfDelivery: options.selfDelivery,
-      agent: agentFoundation,
-      foundation: workroomFoundation,
-      publication: publicationCoordinator,
-      resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
-      humanIngressPort: options.workroomHumanIngressPort,
-      trustedPackPublishers: options.workroomTrustedPackPublishers,
-      localDataGovernance: options.workroomLocalDataGovernance,
-    });
+    const workroom = assembly
+      ? await assembly.compose({
+        projectRoot: options.projectRoot,
+        lifecycle,
+        handoff,
+        snapshots: options.snapshots,
+        config: aiConfig,
+        storageMode: options.workroomStorageMode,
+        im: options.im,
+        selfDelivery: options.selfDelivery,
+        agent: agentFoundation,
+        ingress,
+        resolveConfiguredEndpointKeys: options.resolveConfiguredEndpointKeys,
+        humanIngressPort: options.workroomHumanIngressPort,
+        trustedPackPublishers: options.workroomTrustedPackPublishers,
+        localDataGovernance: options.workroomLocalDataGovernance,
+      })
+      : undefined;
+    // Without Workroom there is no persistence to prepare; only project preset files are seeded.
+    const presetCount = workroom ? workroom.presetCount : await agentFoundation.seedPresets();
     const binding = service.getBindingRegistry().requireZhinBinding();
 
     resources.provide(ingressRouteToken, new AgentTurnIngressRoute({
@@ -212,9 +217,9 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
       resolveTurnIntent: options.resolveTurnIntent,
       resolveEndpointOwner: options.resolveEndpointOwner,
       resolveEndpointTrusted: options.resolveEndpointTrusted,
-      ingress: workroom.ingress,
+      ingress,
       agent: agentFoundation,
-      workroom,
+      ...(workroom ? { workroom } : {}),
     }));
 
     const providers = service.listProviders();
@@ -230,10 +235,10 @@ export function installAgentHost(options: InstallAgentHostOptions): RootResource
     logger.info(
       `ready | ${binding.name}@${binding.providerAlias}/${binding.model}`
       + ` | providers: ${providers.length}`
-      + ` | presets: ${workroom.presetCount}`
+      + ` | presets: ${presetCount}`
       + ` | mcp: ${mcpEntries.map((entry) => entry.name).join(',') || '-'}`
       + ` | ${features}`
-      + ` | persistence: ${workroom.persistence.pendingActivation ? 'pending_activate' : 'file'}`,
+      + ` | persistence: ${workroom ? (workroom.persistence.pendingActivation ? 'pending_activate' : 'file') : '-'}`,
     );
     logger.debug(
       `ready detail | providers: ${providers.join(',')}`

@@ -1,7 +1,8 @@
+// 保留内部 import 的原因：projection 是内部模块，未经 module.ts 公开，只能直接测试。
 import { describe, expect, it } from 'vitest';
 import { Message } from '@zhin.js/core/runtime';
 import { capabilityId, featureId, rootPluginId } from '@zhin.js/plugin-runtime';
-import { MemoryWorkroomProjectionRepository, workroomProjectionMessageKey } from '@zhin.js/agent';
+import { MemoryWorkroomProjectionRepository, workroomProjectionMessageKey } from '@zhin.js/workroom';
 import {
   assertWorkroomCatalogMatchesGeneration,
   classifyWorkroomIngressSource,

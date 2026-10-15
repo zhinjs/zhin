@@ -10,6 +10,7 @@ import type {
   EndpointSendRequest,
   EndpointTransportState,
 } from './endpoint-contract.js';
+import { getProcessPeerRegistry } from './peer-registry.js';
 import type { EndpointManagement } from './endpoint-management.js';
 import type { EndpointControl } from './endpoint-control.js';
 import type { EndpointContentPort } from './endpoint-content.js';
@@ -48,6 +49,13 @@ const endpointRetire = Symbol.for('zhin.adapter.endpoint-retire/1');
 const PRE_ADMISSION_EVENT_LIMIT = 256;
 const endpointLogger = getLogger('adapter.endpoint');
 
+function normalizeSelfUserId(value: unknown): string | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? normalizeSelfUserId(String(value)) : undefined;
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed === '' ? undefined : trimmed;
+}
+
 /** Minimal Runtime capability needed to bind an Endpoint to one generation. */
 interface EndpointBindingContext {
   readonly id: EndpointIdentity['id'];
@@ -84,6 +92,40 @@ export abstract class Endpoint<TClient = unknown> {
   #pendingEvents: Array<{ event: EndpointEvent; resolve?: (value: unknown) => void; reject?: (error: Error) => void }> = [];
   #droppedEvents = 0;
   #dispatchFailures = 0;
+  #selfUserId?: string;
+  #registryRelease?: () => void;
+
+  /**
+   * 登录后的平台账号 id（运行期事实，不属于不可变的 identity）。
+   * 未上报为 undefined；绝不由配置 id 兜底。
+   */
+  get selfUserId(): string | undefined { return this.#selfUserId; }
+
+  /** Adapter 在登录成功后上报平台账号；undefined / 空 / 非法值表示撤销。 */
+  protected reportSelfUserId(userId: string | undefined): void {
+    this.#selfUserId = normalizeSelfUserId(userId);
+    this.#syncPeerRegistry();
+  }
+
+  /** Re-reads the state so TS does not keep a stale narrowing across calls that mutate it. */
+  #isActive(): boolean { return this.#admissionState === 'active'; }
+
+  #activate(): void {
+    this.#admissionState = 'active';
+    getProcessPeerRegistry().reserve(this);
+    this.#syncPeerRegistry();
+  }
+
+  #syncPeerRegistry(): void {
+    this.#registryRelease?.();
+    this.#registryRelease = undefined;
+    if (this.#admissionState !== 'active' || !this.#selfUserId || !this.#identity) return;
+    this.#registryRelease = getProcessPeerRegistry().registerEndpoint(this, {
+      endpointId: this.#identity.id,
+      adapter: this.#identity.adapter,
+      selfUserId: this.#selfUserId,
+    });
+  }
 
   /** Payload-free counters for bounded candidate buffering and delivery errors. */
   get eventDiagnostics(): Readonly<{ buffered: number; dropped: number; dispatchFailures: number }> {
@@ -98,17 +140,17 @@ export abstract class Endpoint<TClient = unknown> {
     const events = context.use(endpointEventGatewayToken);
     this.#events = events;
     if (!admission) {
-      this.#admissionState = 'active';
+      this.#activate();
       return;
     }
     this.#admissionState = 'pending';
     admission.onActivate(() => {
       if (this.#admissionState !== 'pending') return;
-      this.#admissionState = 'active';
+      this.#activate();
       admission.onDeactivate(() => this[endpointRetire]());
       const pending = this.#pendingEvents.splice(0);
       for (const entry of pending) {
-        if (this.#admissionState !== 'active') {
+        if (!this.#isActive()) {
           entry.reject?.(new Error('Endpoint generation retired before event admission'));
           continue;
         }
@@ -134,6 +176,8 @@ export abstract class Endpoint<TClient = unknown> {
   /** @internal Reject uncommitted reliable events on candidate rollback/retirement. */
   [endpointRetire](): void {
     this.#admissionState = 'retired';
+    this.#registryRelease?.();
+    this.#registryRelease = undefined;
     for (const entry of this.#pendingEvents.splice(0)) {
       entry.reject?.(new Error('Endpoint generation retired before event admission'));
     }

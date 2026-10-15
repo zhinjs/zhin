@@ -4,7 +4,7 @@ import {
   installWorkroomEffectResources,
   type WorkroomEffectBlockerPolicyPort,
   type WorkroomEffectClockPort,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomRuntimeFoundation } from './runtime-foundation.js';
 

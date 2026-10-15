@@ -1,6 +1,7 @@
 import { defaultCommandPrefixResolver } from '../../src/plugin-runtime/im/message-dispatcher.js';
 import { composeSideEventName, sideEventConversation } from '../../src/side-event/base.js';
 import { describe, expect, it, vi } from 'vitest';
+import { getLogger } from '@zhin.js/logger';
 import {
   SnapshotStore,
   capabilityId,
@@ -31,6 +32,8 @@ import {
   type EndpointEvent,
   type EndpointControl,
   type EndpointManagement,
+  type PeerRegistry,
+  createPeerRegistry,
 } from '@zhin.js/adapter';
 import {
   CommandIndex,
@@ -48,16 +51,18 @@ import {
   middlewareFeatureId,
   type MiddlewareNext,
 } from '@zhin.js/middleware';
-import { bindOperationInput } from '@zhin.js/feature-kit';
+import { bindOperationInput, operationInputBinding } from '@zhin.js/feature-kit';
 import {
   HandlerIndex,
   defineHandler,
   handlerFeatureId,
 } from '@zhin.js/handler';
-import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationAddress } from '@zhin.js/im-contract';
+import { EndpointDeliveryError, MemoryConversationEventStore, type ConversationAddress, type ConversationRef } from '@zhin.js/im-contract';
+import type { RoomInboundRouteInput, RoomRouteDecision } from '../../src/plugin-runtime/im/inbound-origin.js';
 import {
   ImRuntime,
   ingressRouteToken,
+  roomMembershipToken,
   Message,
   MessageDispatcher,
   component,
@@ -68,6 +73,7 @@ import {
 } from '../../src/plugin-runtime/im/index.js';
 import { Fragment, Html, jsx } from '../../src/jsx.js';
 import { OutboundRenderer } from '../../src/plugin-runtime/im/outbound-renderer.js';
+import { InboundDeduper } from '../../src/plugin-runtime/im/inbound-dedup.js';
 
 type TestAdapterDefinition<TConfig> = Omit<AdapterDefinition<TConfig>, '$feature' | 'create'> & {
   create(context: AdapterContext<TConfig>): object | Promise<object>;
@@ -2793,6 +2799,9 @@ async function createFixture(
     endpointManagement?: EndpointManagement;
     outboundMiddleware?: (input: OutboundEnvelope, next: () => Promise<void>) => Promise<void> | void;
     inboundClaim?: (message: Message) => boolean | Promise<boolean>;
+    peerRegistry?: PeerRegistry;
+    inboundDeduper?: Pick<InboundDeduper, 'claim'>;
+    inboundClaimPending?: (conversation: ConversationRef, senderId: string) => boolean;
   },
 ) {
   const root = rootPluginId();
@@ -2925,6 +2934,9 @@ async function createFixture(
   const conversationEvents = new MemoryConversationEventStore();
   const im = new ImRuntime({
     inboundClaim: options?.inboundClaim,
+    ...(options?.inboundClaimPending ? { inboundClaimPending: options.inboundClaimPending } : {}),
+    ...(options?.peerRegistry ? { peerRegistry: options.peerRegistry } : {}),
+    ...(options?.inboundDeduper ? { inboundDeduper: options.inboundDeduper as never } : {}),
     conversationEvents,
   });
   im.attach(store);
@@ -3186,3 +3198,779 @@ function memoryEndpointSlot(owner: ReturnType<typeof rootPluginId>): [Capability
   const slot = createCapabilitySlot({ owner, feature: adapterFeatureId, localName: 'memory', source: '/adapters/memory/index.ts', definition: {} });
   return [slot.id, slot];
 }
+
+const REGISTERED_COMMAND = ['/g', 'h issue list open'].join('');
+
+describe('IM Runtime inbound origin routing', () => {
+  async function originFixture(setup: (registry: PeerRegistry, endpointId: string) => void, extra?: Parameters<typeof createFixture>[5]) {
+    const registry = (extra?.peerRegistry as PeerRegistry | undefined) ?? createPeerRegistry();
+    const events: string[] = [];
+    const sent: unknown[] = [];
+    const executed = vi.fn(() => 'ok');
+    const route = vi.fn(async () => true);
+    const fixture = await createFixture(events, sent, undefined, undefined, undefined, {
+      middleware: false, commandResult: executed, peerRegistry: registry, ...extra,
+    });
+    setup(registry, String(fixture.adapter.id));
+    installRoute(fixture, route);
+    return { ...fixture, registry, events, sent, executed, route };
+  }
+  type OriginFixture = Awaited<ReturnType<typeof originFixture>>;
+  const input = (fixture: OriginFixture, senderId: string, extra: object = {}) => ({
+    ...fixtureInput(fixture, REGISTERED_COMMAND), sender: { id: senderId }, ...extra,
+  });
+  const close = async (f: OriginFixture) => { await f.adapters.stop(); await f.store.close(); };
+
+  it('drops self echoes without dispatching or routing', async () => {
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); });
+    try {
+      await expect(receive(f.im, input(f, 'bot-self'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it.each(['peer_bot', 'member'] as const)('does not trigger commands or ingress route for %s messages', async (kind) => {
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    if (kind === 'member') {
+      const current = f.store.current;
+      const resources = new Map(current.resources);
+      resources.set(current.root, new Map([...resources.get(current.root)!, [roomMembershipToken.id, { isMember: () => true }]]));
+      f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+    }
+    try {
+      await expect(receive(f.im, input(f, 'other-bot'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  const groupConversation = (f: OriginFixture) => ({
+    endpoint: { id: String(f.adapter.id), adapter: 'memory' }, kind: 'group' as const, id: 'room-1',
+  });
+  let originMessageSeq = 0;
+  const groupInput = (f: OriginFixture, senderId: string, content = REGISTERED_COMMAND, extra: object = {}) => {
+    const conversation = groupConversation(f);
+    return { conversation, content, sender: { id: senderId }, message: { conversation, id: `origin-msg-${++originMessageSeq}` }, ...extra };
+  };
+  const listInbound = async (f: OriginFixture, senderId?: string) => {
+    const events = await f.conversationEvents.listBetween(groupConversation(f), 0, Number.MAX_SAFE_INTEGER, 50);
+    return events.filter((e) => {
+      const message = (e.event as { type: string; message?: { actor?: { id: string } } });
+      return message.type === 'message.created' && message.message?.actor !== undefined
+        && (senderId === undefined || message.message.actor.id === senderId);
+    });
+  };
+  const commitMembership = (f: OriginFixture, port: unknown) => {
+    const current = f.store.current;
+    const resources = new Map(current.resources);
+    resources.set(current.root, new Map([...resources.get(current.root)!, [roomMembershipToken.id, port]]));
+    f.store.commit(current.generation, { snapshot: { ...snapshotState(current), resources }, dispose: () => undefined });
+  };
+
+  it.each(['peer_bot', 'member'] as const)('records %s group messages as history only', async (kind) => {
+    const f = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    if (kind === 'member') commitMembership(f, { isMember: () => true });
+    try {
+      await expect(receive(f.im, groupInput(f, 'other-bot', 'hello from a peer'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      const records = await listInbound(f, 'other-bot');
+      expect(records).toHaveLength(1);
+      expect(JSON.stringify(records[0]!.event)).toContain('hello from a peer');
+    } finally { await close(f); }
+  });
+
+  it('drops self echoes in groups without recording them', async () => {
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); });
+    try {
+      await expect(receive(f.im, groupInput(f, 'bot-self', 'self echo text'))).resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f)).toHaveLength(0);
+    } finally { await close(f); }
+  });
+
+  it('keeps a known human who repeats bot text as human', async () => {
+    const botText = 'bot reply text for repeat';
+    const f = await originFixture((r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); }, {
+      commandResult: () => botText,
+    });
+    try {
+      await expect(receive(f.im, groupInput(f, 'alice'))).resolves.toMatchObject({ matched: true });
+      expect(f.sent).toHaveLength(1);
+      f.route.mockClear();
+      await receive(f.im, groupInput(f, 'alice', botText));
+      expect(f.route).toHaveBeenCalledTimes(1);
+      const records = await listInbound(f, 'alice');
+      expect(JSON.stringify(records.map((r) => r.event))).toContain(botText);
+    } finally { await close(f); }
+  });
+
+  it('records (never drops) a digest hit from an endpoint without a known account', async () => {
+    const botText = 'bot reply text for digest';
+    const f = await originFixture(() => undefined, { commandResult: () => botText });
+    try {
+      await receive(f.im, groupInput(f, 'alice'));
+      f.route.mockClear();
+      await expect(receive(f.im, groupInput(f, 'alice', botText))).resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+      const records = await listInbound(f, 'alice');
+      expect(JSON.stringify(records.map((r) => r.event))).toContain(botText);
+    } finally { await close(f); }
+  });
+
+  describe('fails closed when origin dependencies throw', () => {
+    const boom = () => { throw new Error('boom'); };
+    const expectRecordOnly = async (f: OriginFixture) => {
+      await expect(receive(f.im, groupInput(f, 'someone', 'fail closed text'))).resolves.toEqual({ matched: false });
+      expect(f.executed).not.toHaveBeenCalled();
+      expect(f.route).not.toHaveBeenCalled();
+      expect(await listInbound(f, 'someone')).toHaveLength(1);
+    };
+    const withThrowingRegistry = async (method: 'lookup' | 'selfOf') => {
+      const real = createPeerRegistry();
+      const f = await originFixture(
+        (r, id) => { r.registerEndpoint({}, { endpointId: id as never, adapter: 'memory', selfUserId: 'bot-self' }); },
+        { peerRegistry: real },
+      );
+      const spy = vi.spyOn(real, method).mockImplementation(boom as never);
+      return { f, spy, real };
+    };
+
+    it('lookup throws', async () => {
+      const { f, spy, real } = await withThrowingRegistry('lookup');
+      try {
+        await expectRecordOnly(f);
+        expect(spy).toHaveBeenCalled();
+        expect(real.isReady(String(f.adapter.id))).toBe(true);
+      } finally { spy.mockRestore(); await close(f); }
+    });
+    it('selfOf throws', async () => {
+      const { f, spy } = await withThrowingRegistry('selfOf');
+      try {
+        await expectRecordOnly(f);
+        expect(spy).toHaveBeenCalled();
+      } finally { spy.mockRestore(); await close(f); }
+    });
+    it('membership isMember throws', async () => {
+      const f = await originFixture((r) => { r.declareExternal('memory', 'someone'); });
+      commitMembership(f, { isMember: boom });
+      try { await expectRecordOnly(f); } finally { await close(f); }
+    });
+  });
+
+  describe('cross-Endpoint dedup', () => {
+    // Dedup is scoped to Room conversations: `inRoom` decides what the membership port reports.
+    const twoEndpoints = async (extra: object = {}, inRoom = true) => {
+      const f = await originFixture(() => undefined, {
+        adapterConfig: { endpoints: [{ id: 'account-a' }, { id: 'account-b' }] }, ...extra,
+      });
+      commitMembership(f, { isMember: () => false, hasRoom: () => inRoom });
+      return f;
+    };
+    const endpointIds = (f: OriginFixture) => f.im.endpoints.list().map((row) => row.endpoint.id);
+    const dedupInput = (
+      f: OriginFixture, endpointId: string, messageId: string | undefined, kind: 'group' | 'private' = 'group',
+      senderId = 'alice', content = 'plain group chat',
+    ) => {
+      const conversation = { endpoint: { id: endpointId, adapter: 'memory' }, kind, id: 'room-dedup' };
+      return { conversation, content, sender: { id: senderId },
+        ...(messageId !== undefined ? { message: { conversation, id: messageId } } : {}) };
+    };
+    const countRecords = async (f: OriginFixture, endpointId: string, kind: 'group' | 'private' = 'group') => {
+      const events = await f.conversationEvents.listBetween(
+        { endpoint: { id: endpointId, adapter: 'memory' }, kind, id: 'room-dedup' }, 0, Number.MAX_SAFE_INTEGER, 50);
+      return events.filter((e) => (e.event as { type: string }).type === 'message.created').length;
+    };
+
+    it('dispatches once, records the duplicate on its own Endpoint, and does not publish it', async () => {
+      const f = await twoEndpoints();
+      const published: unknown[] = [];
+      f.im.messageEvents.subscribe((event) => published.push(event));
+      try {
+        const [a, b] = endpointIds(f);
+        expect(a).not.toBe(b);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-1'))).resolves.toMatchObject({ matched: true, command: 'ai' });
+        await expect(receive(f.im, dedupInput(f, b!, 'dup-1'))).resolves.toEqual({ matched: false });
+        expect(f.route).toHaveBeenCalledTimes(1);
+        expect(await countRecords(f, a!)).toBe(1);
+        expect(await countRecords(f, b!)).toBe(1);
+        expect(published).toHaveLength(1);
+      } finally { await close(f); }
+    });
+
+    it('decides concurrent arrivals atomically', async () => {
+      const f = await twoEndpoints();
+      try {
+        const [a, b] = endpointIds(f);
+        const results = await Promise.all([
+          receive(f.im, dedupInput(f, a!, 'dup-2')),
+          receive(f.im, dedupInput(f, b!, 'dup-2')),
+        ]);
+        expect(results.filter((r) => r.matched)).toHaveLength(1);
+        expect(f.route).toHaveBeenCalledTimes(1);
+      } finally { await close(f); }
+    });
+
+    it('keeps legacy behaviour for same-Endpoint redelivery, private chats and missing ids', async () => {
+      const f = await twoEndpoints();
+      try {
+        const [a, b] = endpointIds(f);
+        await receive(f.im, dedupInput(f, a!, 'dup-3'));
+        await receive(f.im, dedupInput(f, a!, 'dup-3'));
+        expect(f.route).toHaveBeenCalledTimes(2);
+        f.route.mockClear();
+        await receive(f.im, dedupInput(f, a!, 'dup-4', 'private'));
+        await receive(f.im, dedupInput(f, b!, 'dup-4', 'private'));
+        expect(f.route).toHaveBeenCalledTimes(2);
+        f.route.mockClear();
+        await receive(f.im, dedupInput(f, a!, undefined));
+        await receive(f.im, dedupInput(f, b!, undefined));
+        expect(f.route).toHaveBeenCalledTimes(2);
+      } finally { await close(f); }
+    });
+
+    it('fails closed to record-only when the deduper throws', async () => {
+      const f = await twoEndpoints({ inboundDeduper: { claim: () => { throw new Error('boom'); } } });
+      try {
+        const [a] = endpointIds(f);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-5'))).resolves.toEqual({ matched: false });
+        expect(f.route).not.toHaveBeenCalled();
+        expect(await countRecords(f, a!)).toBe(1);
+      } finally { await close(f); }
+    });
+
+    it('warns and still publishes (without routing) when the deduper throws', async () => {
+      const f = await twoEndpoints({ inboundDeduper: { claim: () => { throw new Error('boom'); } } });
+      const published: unknown[] = [];
+      f.im.messageEvents.subscribe((event) => published.push(event));
+      const warn = vi.spyOn(getLogger('im.inbound'), 'warn');
+      try {
+        const [a] = endpointIds(f);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-5b'))).resolves.toEqual({ matched: false });
+        expect(f.route).not.toHaveBeenCalled();
+        expect(published).toHaveLength(1);
+        expect(warn.mock.calls.some((call) => String(call[0]).includes('inbound_dedup_error'))).toBe(true);
+      } finally { warn.mockRestore(); await close(f); }
+    });
+
+    it('does not dedup outside a Room: both Endpoints dispatch, mention on the later Endpoint still triggers', async () => {
+      const f = await twoEndpoints({}, false);
+      const seen: Array<{ id: string; mentioned?: boolean }> = [];
+      installRoute(f, async (m) => { seen.push({ id: m.conversation.endpoint.id, mentioned: m.mentioned }); return true; });
+      try {
+        const [a, b] = endpointIds(f);
+        await receive(f.im, { ...dedupInput(f, a!, 'out-1'), mentioned: false });
+        await receive(f.im, { ...dedupInput(f, b!, 'out-1'), mentioned: true });
+        expect(seen).toEqual([{ id: a, mentioned: false }, { id: b, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('does not dedup without a membership port at all', async () => {
+      const f = await originFixture(() => undefined, {
+        adapterConfig: { endpoints: [{ id: 'account-a' }, { id: 'account-b' }] },
+      });
+      try {
+        const [a, b] = endpointIds(f);
+        await receive(f.im, dedupInput(f, a!, 'out-2'));
+        await receive(f.im, dedupInput(f, b!, 'out-2'));
+        expect(f.route).toHaveBeenCalledTimes(2);
+      } finally { await close(f); }
+    });
+
+    it('calls inboundClaim once, only for the winning Endpoint', async () => {
+      const claimed: string[] = [];
+      const f = await twoEndpoints({ inboundClaim: (m: Message) => { claimed.push(m.conversation.endpoint.id); return false; } });
+      try {
+        const [a, b] = endpointIds(f);
+        await receive(f.im, dedupInput(f, b!, 'claim-1'));
+        await receive(f.im, dedupInput(f, a!, 'claim-1'));
+        expect(claimed).toEqual([b]);
+      } finally { await close(f); }
+    });
+
+    it('without a route port, a pending claim on the losing Endpoint is not consumed by the duplicate; outside a Room it is', async () => {
+      const claimedBy: string[] = [];
+      const pending = (m: Message) => { claimedBy.push(m.conversation.endpoint.id); return m.conversation.endpoint.id.endsWith('account-b'); };
+      const room = await twoEndpoints({ inboundClaim: pending });
+      try {
+        const [a, b] = endpointIds(room);
+        // A wins the key; B's duplicate never reaches the claim, so B's pending prompt is not answered via B.
+        await receive(room.im, dedupInput(room, a!, 'prompt-1'));
+        await receive(room.im, dedupInput(room, b!, 'prompt-1'));
+        expect(claimedBy).toEqual([a]);
+      } finally { await close(room); }
+      claimedBy.length = 0;
+      const plain = await twoEndpoints({ inboundClaim: pending }, false);
+      try {
+        const [a, b] = endpointIds(plain);
+        await receive(plain.im, dedupInput(plain, a!, 'prompt-2'));
+        await receive(plain.im, dedupInput(plain, b!, 'prompt-2'));
+        expect(claimedBy).toEqual([a, b]);
+      } finally { await close(plain); }
+    });
+
+    it('does not let a member or peer_bot message consume the key', async () => {
+      const f = await twoEndpoints();
+      f.registry.declareExternal('memory', 'other-bot');
+      try {
+        const [a, b] = endpointIds(f);
+        await expect(receive(f.im, dedupInput(f, a!, 'dup-6', 'group', 'other-bot'))).resolves.toEqual({ matched: false });
+        await expect(receive(f.im, dedupInput(f, b!, 'dup-6', 'group', 'other-bot'))).resolves.toEqual({ matched: false });
+        // different sender, same message id: human key is independent of the bot's
+        await expect(receive(f.im, dedupInput(f, b!, 'dup-6'))).resolves.toMatchObject({ matched: true, command: 'ai' });
+        expect(f.route).toHaveBeenCalledTimes(1);
+      } finally { await close(f); }
+    });
+
+  describe('Room Router (route port)', () => {
+    type RouteFn = (input: RoomInboundRouteInput) =>
+      (Omit<RoomRouteDecision, 'fallbackEndpointIds'> & Partial<RoomRouteDecision>) | undefined;
+    const roomFixture = async (make: (ids: [string, string]) => RouteFn, extra: object = {}) => {
+      // Short grace period so takeover tests do not wait the production 2s.
+      const f = await twoEndpoints({ inboundDeduper: new InboundDeduper(Date.now, 50), ...extra });
+      const ids = endpointIds(f) as [string, string];
+      const route = make(ids);
+      commitMembership(f, {
+        isMember: () => false,
+        hasRoom: () => true,
+        // The other Endpoint is always the fallback candidate unless a test says otherwise.
+        route: (i: RoomInboundRouteInput) => {
+          const decision = route(i);
+          return decision && { fallbackEndpointIds: ids.filter((id) => id !== decision.endpointId), ...decision };
+        },
+      });
+      const seen: Array<{ id: string; mentioned?: boolean }> = [];
+      installRoute(f, async (m) => { seen.push({ id: m.conversation.endpoint.id, mentioned: m.mentioned }); return true; });
+      return { f, ids, seen };
+    };
+    const mentionBot = { segments: [{ type: 'mention', data: { target: 'bot-b' } }] };
+    const toB = (ids: [string, string]): RouteFn => (i) =>
+      i.mentionTargets.includes('bot-b') ? { endpointId: ids[1], reason: 'mention' } : { endpointId: ids[0], reason: 'coordinator' };
+
+    it.each(['a-first', 'b-first'] as const)('routes an @ to the member on the later Endpoint once, forcing mentioned (%s)', async (order) => {
+      const { f, ids, seen } = await roomFixture(toB);
+      try {
+        const [a, b] = ids;
+        const copies = [
+          { ...dedupInput(f, a, 'rt-1'), mentioned: false, ...mentionBot },
+          { ...dedupInput(f, b, 'rt-1'), mentioned: true, ...mentionBot },
+        ];
+        if (order === 'b-first') copies.reverse();
+        await Promise.all(copies.map((copy) => receive(f.im, copy)));
+        expect(seen).toEqual([{ id: b, mentioned: true }]);
+        expect(await countRecords(f, a)).toBe(1);
+        expect(await countRecords(f, b)).toBe(1);
+      } finally { await close(f); }
+    });
+
+    it('routes a reply to a member Bot message to that Bot even when no copy is mentioned', async () => {
+      const { f, ids, seen } = await roomFixture((ids) => (i) =>
+        ({ endpointId: i.replyToEndpointId ?? ids[0], reason: i.replyToEndpointId ? 'reply' : 'coordinator' }),
+      { endpointSend: () => 'bot-b-msg-1' });
+      try {
+        const [a, b] = ids;
+        const conversation = { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' };
+        await f.im.send({ conversation, requester: rootPluginId(), content: 'hello from b' });
+        await Promise.all([
+          receive(f.im, { ...dedupInput(f, a, 'rt-2'), replyTo: { id: 'bot-b-msg-1' }, mentioned: false }),
+          receive(f.im, { ...dedupInput(f, b, 'rt-2'), replyTo: { id: 'bot-b-msg-1' }, mentioned: false }),
+        ]);
+        expect(seen).toEqual([{ id: b, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it.each(['a-first', 'b-first'] as const)('consumes a pending interaction claim on the losing Endpoint exactly once (%s)', async (order) => {
+      const { f, ids, seen } = await roomFixture((ids) => (i) =>
+        i.pending(ids[1]) ? { endpointId: ids[1], reason: 'pending' } : { endpointId: ids[0], reason: 'coordinator' });
+      try {
+        const [a, b] = ids;
+        const source = {
+          conversation: { endpoint: { id: b, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+          sender: { id: 'alice' },
+          $reply: async () => ({ status: 'sent' as const }),
+        };
+        const answer = f.im.createInteraction(source as never)!.ask({ type: 'text', title: 'Name', timeout: 5000 });
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        const copies = [dedupInput(f, a, 'rt-3', 'group', 'alice', 'my-name'), dedupInput(f, b, 'rt-3', 'group', 'alice', 'my-name')];
+        if (order === 'b-first') copies.reverse();
+        await Promise.all(copies.map((copy) => receive(f.im, copy)));
+        await expect(answer).resolves.toBe('my-name');
+        // The answer is consumed by the claim on B; neither copy reaches AI ingress.
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
+    it('probes inboundClaimPending and runs inboundClaim once on that Endpoint', async () => {
+      const claimedBy: string[] = [];
+      const { f, ids, seen } = await roomFixture((ids) => (i) =>
+        i.pending(ids[1]) ? { endpointId: ids[1], reason: 'pending' } : { endpointId: ids[0], reason: 'coordinator' },
+      {
+        inboundClaim: (m: Message) => { claimedBy.push(m.conversation.endpoint.id); return true; },
+        inboundClaimPending: (c: ConversationRef) => c.endpoint.id.endsWith('account-b'),
+      });
+      try {
+        const [a, b] = ids;
+        await Promise.all([receive(f.im, dedupInput(f, a, 'rt-4')), receive(f.im, dedupInput(f, b, 'rt-4'))]);
+        expect(claimedBy).toEqual([b]);
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
+    it('lets the router degrade past an unavailable Endpoint without losing the message', async () => {
+      const { f, ids, seen } = await roomFixture((ids) => (i) => {
+        const hit = ids.find((id) => i.isAvailable(id));
+        return hit ? { endpointId: hit, reason: 'coordinator' } : undefined;
+      });
+      try {
+        const [a, b] = ids;
+        f.registry.registerEndpoint({}, { endpointId: a as never, adapter: 'memory', selfUserId: 'bot-a' });
+        await Promise.all([receive(f.im, dedupInput(f, b, 'rt-5')), receive(f.im, dedupInput(f, a, 'rt-5'))]);
+        expect(seen).toEqual([{ id: a, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('falls back to first-come dedup when route returns undefined', async () => {
+      const { f, ids, seen } = await roomFixture(() => () => undefined);
+      try {
+        const [a, b] = ids;
+        await receive(f.im, dedupInput(f, b, 'rt-6'));
+        await receive(f.im, dedupInput(f, a, 'rt-6'));
+        expect(seen.map((s) => s.id)).toEqual([b]);
+      } finally { await close(f); }
+    });
+
+    it('degrades to first-come when route throws: the message is still handled exactly once', async () => {
+      const { f, ids, seen } = await roomFixture(() => () => { throw new Error('boom'); });
+      const warn = vi.spyOn(getLogger('im.inbound'), 'warn');
+      try {
+        const [a, b] = ids;
+        await receive(f.im, dedupInput(f, b, 'rt-7'));
+        await receive(f.im, dedupInput(f, a, 'rt-7'));
+        expect(seen).toEqual([{ id: b, mentioned: undefined }]);
+        expect(warn.mock.calls.some((call) => String(call[0]).includes('room_route_error'))).toBe(true);
+        expect(await countRecords(f, a)).toBe(1);
+      } finally { warn.mockRestore(); await close(f); }
+    });
+
+    it('still fails closed (record, publish, warn) when the deduper itself throws', async () => {
+      const { f, ids, seen } = await roomFixture(toB, {
+        inboundDeduper: { claim: () => { throw new Error('boom'); }, arbitrate: () => { throw new Error('boom'); } },
+      });
+      const published: unknown[] = [];
+      f.im.messageEvents.subscribe((event) => published.push(event));
+      const warn = vi.spyOn(getLogger('im.inbound'), 'warn');
+      try {
+        const [a] = ids;
+        await expect(receive(f.im, dedupInput(f, a, 'rt-7b'))).resolves.toEqual({ matched: false });
+        expect(seen).toEqual([]);
+        expect(published).toHaveLength(1);
+        expect(warn.mock.calls.some((call) => String(call[0]).includes('inbound_dedup_error'))).toBe(true);
+      } finally { warn.mockRestore(); await close(f); }
+    });
+
+    it('without a message id (unkeyed) each Endpoint keeps handling its own copy: nothing is dropped', async () => {
+      const { f, ids, seen } = await roomFixture(toB);
+      try {
+        const [a, b] = ids;
+        await receive(f.im, { ...dedupInput(f, a, undefined), ...mentionBot });
+        await receive(f.im, { ...dedupInput(f, b, undefined), ...mentionBot });
+        expect(seen.map((s) => s.id)).toEqual([a, b]);
+      } finally { await close(f); }
+    });
+
+    it('decides concurrent arrivals once', async () => {
+      const { f, ids, seen } = await roomFixture(toB);
+      try {
+        const [a, b] = ids;
+        await Promise.all([
+          receive(f.im, { ...dedupInput(f, a, 'rt-8'), ...mentionBot }),
+          receive(f.im, { ...dedupInput(f, b, 'rt-8'), ...mentionBot }),
+        ]);
+        expect(seen).toEqual([{ id: b, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('computes the decision once per message', async () => {
+      const route = vi.fn<RouteFn>();
+      const { f, ids } = await roomFixture((ids) => { route.mockImplementation(() => ({ endpointId: ids[0], reason: 'coordinator' })); return route; });
+      try {
+        const [a, b] = ids;
+        await receive(f.im, dedupInput(f, a, 'rt-9'));
+        await receive(f.im, dedupInput(f, b, 'rt-9'));
+        expect(route).toHaveBeenCalledTimes(1);
+      } finally { await close(f); }
+    });
+  });
+
+  describe('Room Router: platform callbacks, pending probes and takeover (3 Endpoints)', () => {
+    const THREE = { adapterConfig: { endpoints: [{ id: 'account-a' }, { id: 'account-b' }, { id: 'account-c' }] } };
+    const keyboard = (payload: string, mapKey = '1') => [{
+      type: 'keyboard',
+      data: {
+        rows: [[{ id: 'k1', label: 'Go', payload, mode: 'command', command: { enter: true, reply: false } }]],
+        fallback: { hint: 'reply with the number', map: { [mapKey]: payload } },
+      },
+    }];
+    const action = (payload: string) => [{ type: 'action', data: { id: 'k1', payload } }];
+
+    /** Coordinator is the first Endpoint; B is picked on a bot-b mention or a pending answer. */
+    const room = async (options: {
+      fallbacks?: (ids: string[], target: string) => string[];
+      graceMs?: number;
+      route?: (i: RoomInboundRouteInput, ids: string[]) => RoomRouteDecision | undefined;
+    } = {}) => {
+      const f = await originFixture(() => undefined, {
+        ...THREE, adapterSegments: { interactive: 'text' },
+        inboundDeduper: new InboundDeduper(Date.now, options.graceMs ?? 50),
+      });
+      const ids = f.im.endpoints.list().map((row) => String(row.endpoint.id));
+      const route = vi.fn((i: RoomInboundRouteInput): RoomRouteDecision | undefined => {
+        if (options.route) return options.route(i, ids);
+        const pending = ids.find((id) => i.pending(id));
+        // Mirrors the real router: mention of a member account -> that member; mention of only
+        // non-members -> no target; otherwise the coordinator (first Endpoint).
+        const byAccount: Record<string, string> = { 'bot-a': ids[0]!, 'bot-b': ids[1]!, 'bot-c': ids[2]! };
+        const mentioned = i.mentionTargets.map((t) => byAccount[t]).find((id) => id !== undefined);
+        if (!pending && i.mentionTargets.length > 0 && mentioned === undefined) return undefined;
+        const target = pending ?? mentioned ?? ids[0]!;
+        return {
+          endpointId: target, reason: pending ? 'pending' : mentioned ? 'mention' : 'coordinator',
+          fallbackEndpointIds: options.fallbacks?.(ids, target) ?? ids.filter((id) => id !== target),
+        };
+      });
+      commitMembership(f, { isMember: () => false, hasRoom: () => true, route });
+      const seen: Array<{ id: string; mentioned?: boolean }> = [];
+      installRoute(f, async (m) => { seen.push({ id: m.conversation.endpoint.id, mentioned: m.mentioned }); return true; });
+      const clicks: string[] = [];
+      f.im.registerInteractiveHandler('rk:', (m) => { clicks.push(m.conversation.endpoint.id); return true; });
+      const msg = (endpointId: string, messageId: string | undefined, over: object = {}) => ({
+        conversation: { endpoint: { id: endpointId, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' },
+        content: 'plain group chat', sender: { id: 'alice' },
+        ...(messageId !== undefined ? { message: {
+          conversation: { endpoint: { id: endpointId, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' }, id: messageId } } : {}),
+        ...over,
+      });
+      const sendKeyboard = async (endpointId: string, payload = 'rk:go', mapKey = '1') => {
+        const receipt = await f.im.send({
+          conversation: { endpoint: { id: endpointId, adapter: 'memory' }, kind: 'group', id: 'room-dedup' } as never,
+          requester: rootPluginId(), content: keyboard(payload, mapKey) as never,
+        });
+        expect(receipt.status).toBe('sent');
+      };
+      return { f, ids, route, seen, clicks, msg, sendKeyboard };
+    };
+
+    it('hands a platform callback that only a non-coordinator Endpoint received to that Endpoint, without routing or dedup', async () => {
+      const { f, ids, route, seen, clicks, msg } = await room();
+      try {
+        const [, b] = ids;
+        await expect(receive(f.im, msg(b!, 'cb-1', { content: '', segments: action('rk:go') as never })))
+          .resolves.toMatchObject({ matched: true, command: 'interactive' });
+        expect(clicks).toEqual([b]);
+        expect(route).not.toHaveBeenCalled();
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
+    it('does not swallow a platform callback because another Endpoint handled the same message id', async () => {
+      const { f, ids, route, clicks, msg } = await room();
+      try {
+        const [a, b] = ids;
+        const cb = (id: string) => msg(id, 'cb-2', { content: '', segments: action('rk:go') as never });
+        await expect(receive(f.im, cb(a!))).resolves.toMatchObject({ matched: true, command: 'interactive' });
+        await expect(receive(f.im, cb(b!))).resolves.toMatchObject({ matched: true, command: 'interactive' });
+        expect(clicks).toEqual([a, b]);
+        expect(route).not.toHaveBeenCalled();
+      } finally { await close(f); }
+    });
+
+    it('a live keyboard on B does not capture a message @-ing A or unrelated chat; the number answer goes to B once', async () => {
+      const { f, ids, seen, clicks, msg, sendKeyboard } = await room();
+      try {
+        const [a, b, c] = ids;
+        await sendKeyboard(b!);
+        // A message with a mention segment for A's account: routed to A even though B has a live keyboard.
+        const mentionA = [{ type: 'mention', data: { target: 'bot-a' } }] as never;
+        await Promise.all([a!, b!, c!].map((id) => receive(f.im, msg(id, 'kb-1', { content: 'look at this', segments: mentionA }))));
+        expect(seen).toEqual([{ id: a, mentioned: true }]);
+        // Unrelated chat too.
+        await Promise.all([b!, a!].map((id) => receive(f.im, msg(id, 'kb-2', { content: 'unrelated 3' }))));
+        expect(seen).toEqual([{ id: a, mentioned: true }, { id: a, mentioned: true }]);
+        expect(clicks).toEqual([]);
+        // The answer "1" resolves to B's button: routed to B, consumed exactly once.
+        await Promise.all([c!, a!, b!].map((id) => receive(f.im, msg(id, 'kb-3', { content: '1' }))));
+        expect(clicks).toEqual([b]);
+        expect(seen).toHaveLength(2);
+      } finally { await close(f); }
+    });
+
+    it('a live keyboard on B: answering with the button label routes to B and is consumed once', async () => {
+      const { f, ids, seen, clicks, msg, sendKeyboard } = await room();
+      try {
+        const [a, b, c] = ids;
+        await sendKeyboard(b!, 'rk:go', 'Go');
+        await Promise.all([a!, c!, b!].map((id) => receive(f.im, msg(id, 'kb-4', { content: 'Go' }))));
+        expect(clicks).toEqual([b]);
+        expect(seen).toEqual([]);
+      } finally { await close(f); }
+    });
+
+    it('takes over after the grace period when the target Endpoint never received a copy', async () => {
+      const { f, ids, route, seen, msg } = await room({ graceMs: 40 });
+      try {
+        const [a, b, c] = ids;
+        const started = Date.now();
+        await Promise.all([c!, b!].map((id) => receive(f.im, msg(id, 'tk-1'))));
+        expect(Date.now() - started).toBeGreaterThanOrEqual(35);
+        // Fallback order is [b, c]: B takes over, exactly once, mentioned forced.
+        expect(seen).toEqual([{ id: b, mentioned: true }]);
+        // The target's copy arriving late is history only.
+        await expect(receive(f.im, msg(a!, 'tk-1'))).resolves.toEqual({ matched: false });
+        expect(seen).toHaveLength(1);
+        expect(route).toHaveBeenCalledTimes(1);
+        expect(await countRecords(f, a!)).toBe(1);
+      } finally { await close(f); }
+    });
+
+    it('does not delay when the target copy arrives first', async () => {
+      const { f, ids, seen, msg } = await room({ graceMs: 5000 });
+      try {
+        const [a, b] = ids;
+        await expect(receive(f.im, msg(a!, 'tk-2'))).resolves.toMatchObject({ matched: true });
+        await expect(receive(f.im, msg(b!, 'tk-2'))).resolves.toEqual({ matched: false });
+        expect(seen).toEqual([{ id: a, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('a member copy outside the decision (not in fallbacks) is not lost: it takes over after the grace period, once', async () => {
+      const { f, ids, seen, msg } = await room({ fallbacks: () => [], graceMs: 40 });
+      try {
+        const [a, , c] = ids;
+        const warn = vi.spyOn(getLogger('im.inbound'), 'warn');
+        try {
+          await expect(receive(f.im, msg(c!, 'tk-3'))).resolves.toMatchObject({ matched: true });
+          expect(seen).toEqual([{ id: c, mentioned: true }]);
+          expect(warn.mock.calls.some((call) => String(call[0]).includes('room_unlisted_member_takeover'))).toBe(true);
+        } finally { warn.mockRestore(); }
+        await expect(receive(f.im, msg(a!, 'tk-3'))).resolves.toEqual({ matched: false });
+        expect(seen).toHaveLength(1);
+      } finally { await close(f); }
+    });
+
+    it('an unlisted member copy arriving after the target handled it stays a duplicate', async () => {
+      const { f, ids, seen, msg } = await room({ fallbacks: () => [], graceMs: 5000 });
+      try {
+        const [a, , c] = ids;
+        await expect(receive(f.im, msg(a!, 'tk-4'))).resolves.toMatchObject({ matched: true });
+        await expect(receive(f.im, msg(c!, 'tk-4'))).resolves.toEqual({ matched: false });
+        expect(seen).toEqual([{ id: a, mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('a mention of a non-member Bot is not forced mentioned or handed to the coordinator', async () => {
+      const { f, ids, route, seen, msg } = await room({ graceMs: 60_000 });
+      try {
+        const [a, b, c] = ids;
+        const mentionX = [{ type: 'mention', data: { target: 'bot-x' } }] as never;
+        const over = { content: 'hello', segments: mentionX };
+        await expect(receive(f.im, msg(b!, 'nm-1', over))).resolves.toMatchObject({ matched: true });
+        expect(seen).toEqual([{ id: b, mentioned: undefined }]);
+        expect(route).toHaveBeenCalledTimes(1);
+        expect(route).toHaveReturnedWith(undefined);
+        // Two orders, same message id: first-come, once, no wait, no forced mentioned.
+        const started = Date.now();
+        await expect(receive(f.im, msg(c!, 'nm-2', over))).resolves.toMatchObject({ matched: true });
+        await expect(receive(f.im, msg(a!, 'nm-2', over))).resolves.toEqual({ matched: false });
+        expect(Date.now() - started).toBeLessThan(5000);
+        expect(seen).toEqual([{ id: b, mentioned: undefined }, { id: c, mentioned: undefined }]);
+      } finally { await close(f); }
+    });
+
+    it('a non-member Endpoint copy is handled as a plain group: not routed, not forced mentioned, not lost', async () => {
+      const { f, ids, route, seen, msg } = await room();
+      try {
+        const c = ids[2]!;
+        commitMembership(f, { isMember: () => false, hasRoom: (conv) => conv.endpoint.id !== c, route });
+        const mentionC = [{ type: 'mention', data: { target: 'bot-c' } }] as never;
+        await expect(receive(f.im, msg(c, 'tk-5', { content: '@bot-c hello', segments: mentionC }))).resolves.toMatchObject({ matched: true });
+        expect(seen).toEqual([{ id: c, mentioned: undefined }]);
+        expect(route).not.toHaveBeenCalled();
+      } finally { await close(f); }
+    });
+
+    it('does not fail the whole message closed when a pending probe hits an Endpoint the index does not know', async () => {
+      const probed: boolean[] = [];
+      const { f, ids, seen, msg } = await room({
+        route: (i, all) => {
+          probed.push(i.pending('endpoint-the-index-never-heard-of'));
+          return { endpointId: all[0]!, reason: 'coordinator', fallbackEndpointIds: all.slice(1) };
+        },
+      });
+      try {
+        await receive(f.im, msg(ids[0]!, 'pp-1'));
+        expect(probed).toEqual([false]);
+        expect(seen).toEqual([{ id: ids[0], mentioned: true }]);
+      } finally { await close(f); }
+    });
+
+    it('keeps the pre-Router behavior when only hasRoom is implemented', async () => {
+      const f = await originFixture(() => undefined, { ...THREE, inboundDeduper: new InboundDeduper(Date.now, 50) });
+      commitMembership(f, { isMember: () => false, hasRoom: () => true });
+      const seen: string[] = [];
+      installRoute(f, async (m) => { seen.push(m.conversation.endpoint.id); return true; });
+      try {
+        const ids = f.im.endpoints.list().map((row) => String(row.endpoint.id));
+        const conv = (id: string) => ({ endpoint: { id, adapter: 'memory' }, kind: 'group' as const, id: 'room-dedup' });
+        for (const id of [ids[2]!, ids[0]!]) {
+          await receive(f.im, { conversation: conv(id), content: 'x', sender: { id: 'alice' }, message: { conversation: conv(id), id: 'ho-1' } });
+        }
+        expect(seen).toEqual([ids[2]]);
+      } finally { await close(f); }
+    });
+  });
+  });
+
+  it('keeps human behavior, exposes message.origin and ignores metadata.origin', async () => {
+    const seen: Array<string | undefined> = [];
+    const f = await originFixture(() => undefined);
+    installRoute(f, async (m) => { seen.push(m.origin); return true; });
+    try {
+      await receive(f.im, input(f, 'alice', { content: 'chat', metadata: { origin: 'self' } }));
+      expect(seen).toEqual(['human']);
+    } finally { await close(f); }
+    const g = await originFixture((r) => { r.declareExternal('memory', 'other-bot'); });
+    try {
+      await receive(g.im, input(g, 'other-bot', { metadata: { origin: 'human' } }));
+      expect(g.route).not.toHaveBeenCalled();
+    } finally { await close(g); }
+  });
+
+  it('classifies the echo of an outbound message by message id', async () => {
+    const f = await originFixture(() => undefined, { endpointSend: () => 'echo-1' });
+    try {
+      await expect(receive(f.im, input(f, 'alice'))).resolves.toMatchObject({ matched: true });
+      expect(f.sent).toHaveLength(1);
+      const conversation = fixtureInput(f, '').conversation;
+      f.route.mockClear();
+      await expect(receive(f.im, { conversation, content: REGISTERED_COMMAND, sender: { id: 'unknown-account' }, message: { conversation, id: 'echo-1' } }))
+        .resolves.toEqual({ matched: false });
+      expect(f.route).not.toHaveBeenCalled();
+    } finally { await close(f); }
+  });
+
+  it('preserves origin through the operation input binding', async () => {
+    const f = await originFixture(() => undefined);
+    let seen: [string | undefined, string | undefined] | undefined;
+    installRoute(f, async (m) => {
+      const snapshot = f.store.current;
+      const rebound = (m as unknown as Record<symbol, (o: unknown, s: unknown) => Message>)[operationInputBinding]!(snapshot.root, snapshot);
+      seen = [m.origin, rebound.origin];
+      return true;
+    });
+    try {
+      await receive(f.im, input(f, 'alice', { content: 'chat' }));
+      expect(seen).toEqual(['human', 'human']);
+    } finally { await close(f); }
+  });
+});

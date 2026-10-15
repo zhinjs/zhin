@@ -11,10 +11,12 @@ import { link, open, readFile, stat, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
   digestCanonicalWorkroomValue,
+} from '@zhin.js/workroom';
+import {
   type WorkroomDataGovernancePublicationDecision,
   type WorkroomDataGovernanceRootProviderResolution,
   installWorkroomDataGovernanceResources,
-} from '@zhin.js/agent/runtime';
+} from '@zhin.js/workroom/data-governance';
 
 type CryptographyPort = NonNullable<
 Parameters<typeof installWorkroomDataGovernanceResources>[0]['cryptography']
