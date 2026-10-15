@@ -7,10 +7,11 @@ import { formatCompact, getLogger } from '@zhin.js/logger';
 
 import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, type StreamOptions } from '../llm-api-runtime.js';
 import type { Model } from '../types/model.js';
+import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
-import type { AnthropicThinkingProviderOptions, ThinkingContentBlock, ToolCallProviderOptions } from '../types/content-block.js';
+import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallProviderOptions } from '../types/content-block.js';
 
 import { formatRedactedJson } from '../redact-request-body.js';
 import {
@@ -95,12 +96,17 @@ function usageFromAiSdk(usage: {
 
 type CapturedThinkingPart = {
   text: string;
-  providerOptions?: AnthropicThinkingProviderOptions;
+  providerOptions?: ThinkingProviderOptions;
 };
+
+/** Signatures to keep on a thinking block: Anthropic signature/redactedData and Gemini thoughtSignature. */
+function thinkingOptionsFromProviderMetadata(metadata: unknown): ThinkingProviderOptions | undefined {
+  return mergeThinkingOptions(anthropicOptionsFromProviderMetadata(metadata), toolCallProviderOptions(metadata));
+}
 
 function anthropicOptionsFromProviderMetadata(
   metadata: unknown,
-): AnthropicThinkingProviderOptions | undefined {
+): ThinkingProviderOptions | undefined {
   if (!metadata || typeof metadata !== 'object') return undefined;
   const anthropic = (metadata as { anthropic?: unknown }).anthropic;
   if (!anthropic || typeof anthropic !== 'object') return undefined;
@@ -116,18 +122,19 @@ function anthropicOptionsFromProviderMetadata(
   };
 }
 
-function mergeAnthropicOptions(
-  left: AnthropicThinkingProviderOptions | undefined,
-  right: AnthropicThinkingProviderOptions | undefined,
-): AnthropicThinkingProviderOptions | undefined {
+function mergeThinkingOptions(
+  left: ThinkingProviderOptions | undefined,
+  right: ThinkingProviderOptions | undefined,
+): ThinkingProviderOptions | undefined {
   if (!left) return right;
   if (!right) return left;
-  return {
-    anthropic: {
-      ...left.anthropic,
-      ...right.anthropic,
-    },
-  };
+  const out: Record<string, Record<string, string>> = {};
+  for (const source of [left, right]) {
+    for (const [key, value] of Object.entries(source)) {
+      if (value) out[key] = { ...(out[key] ?? {}), ...(value as Record<string, string>) };
+    }
+  }
+  return out as ThinkingProviderOptions;
 }
 
 /** Prefer AI SDK reasoning parts (with signature metadata); fall back to streamed text. */
@@ -139,7 +146,7 @@ function resolveThinkingParts(input: {
   const fromSdk = (input.reasoningParts ?? [])
     .map((part): CapturedThinkingPart | undefined => {
       const text = typeof part.text === 'string' ? part.text : '';
-      const providerOptions = anthropicOptionsFromProviderMetadata(part.providerMetadata);
+      const providerOptions = thinkingOptionsFromProviderMetadata(part.providerMetadata);
       if (!text && !providerOptions?.anthropic?.redactedData) return undefined;
       return { text, providerOptions };
     })
@@ -171,9 +178,10 @@ function buildAssistantMessage(
   toolCalls: CapturedToolCall[],
   finish: FinishOutcome,
   usage: AssistantMessage['usage'],
+  textOptions?: ToolCallProviderOptions,
 ): AssistantMessage {
+  // Stream order: thinking, then the answer text, then tool calls (S6).
   const content: AssistantMessage['content'] = [];
-  if (text) content.push({ type: 'text', text });
 
   const parts = [...thinkingParts];
   // Persist a placeholder CoT when gateway omitted reasoning on tool_calls (DeepSeek round-trip).
@@ -193,6 +201,8 @@ function buildAssistantMessage(
     if (part.providerOptions) block.providerOptions = part.providerOptions;
     content.push(block);
   }
+
+  if (text) content.push({ type: 'text', text, ...(textOptions ? { providerOptions: textOptions } : {}) });
 
   for (const call of toolCalls) {
     content.push({
@@ -248,6 +258,30 @@ function buildProviderOptions(
   }
 
   return Object.keys(opts).length > 0 ? opts : undefined;
+}
+
+/** providerOptions keys that already pick a reasoning setting for that provider. */
+const EXPLICIT_REASONING_KEYS = ['thinkingConfig', 'thinking', 'reasoningEffort', 'effort'];
+
+/**
+ * StreamOptions.thinkingLevel (or the provider's `thinkingLevel`) → AI SDK `reasoning`.
+ * Skipped for MiniMax (forced adaptive) and when providerOptions already set reasoning.
+ */
+export function resolveReasoningOption(
+  model: Pick<Model, 'sdk' | 'providerOptions' | 'thinkingLevel'>,
+  level: ThinkingLevel | undefined,
+): 'none' | 'low' | 'medium' | 'high' | undefined {
+  const effective = level ?? model.thinkingLevel;
+  if (!effective || model.sdk === 'minimax') return undefined;
+  const explicit = Object.values(model.providerOptions ?? {})
+    .some((options) => EXPLICIT_REASONING_KEYS.some((key) => options?.[key] !== undefined));
+  if (explicit) return undefined;
+  return effective === 'off' ? 'none' : effective;
+}
+
+function withReasoning(model: Model, options: StreamOptions | undefined): { reasoning?: 'none' | 'low' | 'medium' | 'high' } {
+  const reasoning = resolveReasoningOption(model, options?.thinkingLevel);
+  return reasoning ? { reasoning } : {};
 }
 
 function isGoogleSdk(sdk: string | undefined): boolean {
@@ -309,7 +343,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         },
       );
       const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
+      const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
       const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
@@ -341,6 +375,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         abortSignal: options?.signal,
         ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
         providerOptions,
+        ...withReasoning(model, options),
         output: buildStructuredOutputSpec(options?.outputSchema),
         // Gemini reports a blocked prompt only in a candidate-less chunk, OpenAI a refusal
         // only in `delta.refusal`; the SDK drops both.
@@ -353,7 +388,8 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       let text = '';
       let rawBlockReason: string | undefined;
       let thinking = '';
-      let streamedThinkingOptions: AnthropicThinkingProviderOptions | undefined;
+      let streamedThinkingOptions: ThinkingProviderOptions | undefined;
+      let textSignature: ToolCallProviderOptions | undefined;
       const toolCalls = new Map<string, CapturedToolCall>();
       const toolInputBuffers = new Map<string, string>();
 
@@ -361,16 +397,17 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         if (captureRefusal && part.type === 'raw') refusal += openAiRefusalText(part.rawValue);
         if (part.type === 'text-delta') {
           text += part.text;
-          push({ type: 'text_delta', text: part.text });
+          textSignature = toolCallProviderOptions(part.providerMetadata) ?? textSignature;
+          if (part.text) push({ type: 'text_delta', text: part.text });
         } else if (part.type === 'reasoning-delta') {
           const chunk = reasoningDeltaText(part);
           if (chunk) {
             thinking += chunk;
             push({ type: 'thinking_delta', thinking: chunk });
           }
-          streamedThinkingOptions = mergeAnthropicOptions(
+          streamedThinkingOptions = mergeThinkingOptions(
             streamedThinkingOptions,
-            anthropicOptionsFromProviderMetadata(part.providerMetadata),
+            thinkingOptionsFromProviderMetadata(part.providerMetadata),
           );
         } else if (part.type === 'tool-input-start') {
           toolInputBuffers.set(part.id, '');
@@ -455,6 +492,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
           hasToolCalls: calls.length > 0,
         }),
         usageFromAiSdk(finalUsage),
+        structured === undefined ? textSignature : undefined,
       );
       return assistant;
     });
@@ -483,7 +521,7 @@ export async function generateTextViaAiSdk(
     },
   );
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
-  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
+  const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools, { sdk: model.sdk }), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
   const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
@@ -497,6 +535,7 @@ export async function generateTextViaAiSdk(
     maxOutputTokens: options?.maxTokens ?? model.maxTokens,
     abortSignal: options?.signal,
     providerOptions,
+    ...withReasoning(model, options),
     output: buildStructuredOutputSpec(options?.outputSchema),
     // Keep the raw body so an OpenAI `message.refusal` can be surfaced.
     ...(model.sdk === 'openai' ? { include: { responseBody: true } } : {}),
@@ -534,5 +573,15 @@ export async function generateTextViaAiSdk(
       hasToolCalls: toolCalls.length > 0,
     }),
     usageFromAiSdk(result.usage),
+    structured === undefined ? textSignatureFromContent(result.content) : undefined,
   );
+}
+
+/** Last Gemini signature on a text part of a generateText result. */
+function textSignatureFromContent(content: ReadonlyArray<{ type: string; providerMetadata?: unknown }> | undefined): ToolCallProviderOptions | undefined {
+  let signed: ToolCallProviderOptions | undefined;
+  for (const part of content ?? []) {
+    if (part.type === 'text') signed = toolCallProviderOptions(part.providerMetadata) ?? signed;
+  }
+  return signed;
 }

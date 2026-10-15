@@ -87,6 +87,10 @@ export interface ProviderConfig {
   headers?: Record<string, string>;
   /** 上下文窗口大小（token 数），各 Provider 映射到自身参数 */
   contextWindow?: number;
+  /** 每次请求的输出 token 上限，默认 8192；Gemini/Claude 的思考 token 也计入 */
+  maxOutputTokens?: number;
+  /** 思考深度：`off` | `low` | `medium` | `high`；不填用 provider 默认；`providerOptions` 里的思考设置优先 */
+  thinkingLevel?: import('./llm/types/agent-event.js').ThinkingLevel;
   /** Provider 能力声明 */
   capabilities?: ProviderCapabilities;
   /** Explicit model input modalities. Prefer this over inferred provider identity. */

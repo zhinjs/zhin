@@ -91,6 +91,8 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
+A tool's parameter schema reaches the model as written: `enum`, `anyOf`, nullable types, `integer`, `format` and value ranges are kept, for MCP tools too. Arguments the model sends back are checked against the same constraints, and a violation is reported to the model so it can call again. Gemini rejects fields without a type, so those go to Gemini as strings.
+
 Restricting tools, requiring confirmation, packaging procedures as Skills and adding business context are covered in [Agent tools and Skills](../authoring/agent-tools.md).
 
 ## Common adjustments
@@ -135,8 +137,15 @@ ai:
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
-- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
+- `input`: content types the model accepts, `text | image | audio | video | file`. When omitted, the default depends on the SDK and model name:
+  - Gemini chat models on `sdk: google` are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models are text-only.
+  - On `sdk: openai`, GPT-4o, GPT-4.1, GPT-4.5, GPT-5.x, o1, o3 and o4-mini default to `text, image`, and so does every Claude 3+ model on `sdk: anthropic`. The audio, realtime, TTS, search, embedding and image-generation variants, plus o1-mini and o3-mini, are text-only. PDFs and other files are off by default; set `input: [text, image, file]` to send them.
+  - Other SDKs (DeepSeek, MiniMax, Ollama, gateways) are text-only, because one vendor's models differ in what they accept.
+
+  An explicit `input` always wins.
 - `contextWindow`: context window size. When omitted, most providers assume 128k. `sdk: ollama` is the exception: zhin reads `OLLAMA_CONTEXT_LENGTH` (when zhin and Ollama share a machine) and otherwise assumes 4096. Ollama sizes the context by VRAM (4k below 24 GiB, 32k for 24–48 GiB, 256k above), its OpenAI-compatible API cannot raise it per request, and it **silently drops the start** of a longer prompt, system prompt included. So zhin errs low. Set `contextWindow` to the CONTEXT column of `ollama ps`. Startup prints a hint when it is missing.
+- `thinkingLevel`: reasoning depth, `off | low | medium | high`. When omitted, the provider default applies. zhin passes it to each SDK as the AI SDK `reasoning` option, and the SDK maps it to its own setting: Gemini 3 `thinkingLevel` (`off` becomes `minimal`), the Gemini 2.5 thinking budget, the Claude thinking budget, or OpenAI and DeepSeek reasoning effort. A thinking setting already in `providerOptions` (`thinkingConfig`, `thinking`, `reasoningEffort` or `effort`) wins. MiniMax always uses adaptive thinking and ignores it.
+- `maxOutputTokens`: output token cap per request, default `8192`. Gemini and Claude count thinking tokens against it, so raise it with `thinkingLevel: high` to keep replies from being cut off.
 - `compat` (`openai-compatible` / `ollama`):
   - `includeUsage`: request streamed usage (`stream_options.include_usage`). Default `true`. Without it most compatible servers stream no token counts. Set `false` for a server that rejects the field.
   - `appendV1`: whether `/v1` is appended to `baseUrl`. Unset: a path that already names a version (`/api/v3`, `/api/paas/v4`, `/v1beta/openai`) or ends in `/openai` is used as written; anything else gets `/v1`, so existing `https://host` and `https://host/api` configs behave as before. `true` always appends (the old behaviour), `false` never does.

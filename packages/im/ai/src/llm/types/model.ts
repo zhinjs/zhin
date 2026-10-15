@@ -69,6 +69,8 @@ export interface Model {
   providerOptions?: Record<string, Record<string, JSONValue>>;
   /** Streaming stall timeouts from the provider config (AI SDK `timeout.firstChunkMs` / `chunkMs`). */
   streamTimeout?: ModelStreamTimeout;
+  /** Default reasoning level, from {@link ProviderInstanceConfig.thinkingLevel}. */
+  thinkingLevel?: import('./agent-event.js').ThinkingLevel;
 }
 
 export interface ModelStreamTimeout {
@@ -112,6 +114,19 @@ export interface ProviderInstanceConfig {
   defaultModel?: string;
   /** Context window override */
   contextWindow?: number;
+  /**
+   * Output token cap per request. Default 8192. Gemini and Claude count thinking
+   * tokens against it, so raise it with a high `thinkingLevel`.
+   */
+  maxOutputTokens?: number;
+  /**
+   * Reasoning level for every request: `off` | `low` | `medium` | `high`. Sent as the
+   * AI SDK `reasoning` option, which each SDK maps to its own setting (Gemini
+   * thinkingLevel/thinkingBudget, Claude thinking budget/effort, OpenAI and
+   * DeepSeek reasoning effort). Unset leaves the provider default. A thinking
+   * setting in `providerOptions` wins. MiniMax keeps its adaptive thinking.
+   */
+  thinkingLevel?: import('./agent-event.js').ThinkingLevel;
   /**
    * Extra AI SDK `providerOptions`, merged into every request of this provider,
    * keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],
