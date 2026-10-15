@@ -140,7 +140,7 @@ ai:
 - `input`：模型能接收的内容类型，`text | image | audio | video | file`。不写时按 SDK 和模型名取默认值：
   - `sdk: google` 的 Gemini 对话模型原生多模态，默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型只按文本处理。
   - `sdk: openai` 的 GPT-4o、GPT-4.1、GPT-4.5、GPT-5.x 以及 o1、o3、o4-mini，和 `sdk: anthropic` 的 Claude 3 及以后的模型，默认 `text, image`。audio、realtime、TTS、search、embedding、图像生成这些变体，以及 o1-mini、o3-mini，只按文本处理。PDF 等文件不默认开启，需要时写 `input: [text, image, file]`。
-  - 其他 SDK（DeepSeek、MiniMax、Ollama、各类网关）只按文本处理，因为同一家的模型能力不一样。
+  - 其他 SDK（DeepSeek、MiniMax、Ollama、各类网关）只按文本处理，因为同一家的模型能力不一样。Groq 例外：Llama 4 Scout / Maverick 默认 `text, image`，GPT-OSS 等其他模型只按文本处理。
 
   写了 `input` 就以它为准。
 - `contextWindow`：上下文窗口大小。不写时一般按 128k 估算；`sdk: ollama` 例外：先读 `OLLAMA_CONTEXT_LENGTH` 环境变量（zhin 和 Ollama 在同一台机器时有效），否则按 4096 计算。Ollama 按显存分配上下文（24 GiB 以下 4k，24–48 GiB 32k，48 GiB 以上 256k），OpenAI 兼容接口无法逐请求调大，超出部分会被**静默截掉开头**（包括 system prompt），所以框架宁可少估。请把 `contextWindow` 写成 `ollama ps` 里 CONTEXT 列的值；没写时启动会给出提示。
@@ -186,6 +186,29 @@ ai:
         headers:                                   # 可选
           x-proxy-tag: zhin
   ```
+
+- **Groq（GroqCloud）**：走 `openai-compatible`，框架内置了 Groq 预设。别名写 `groq`（或 `groqcloud`）时可以省略 `sdk` 和 `baseUrl`；`baseUrl` 指向 `api.groq.com` 时，无论别名是什么都按 Groq 处理，`sdk: openai` 也会被改成 `openai-compatible`：
+
+  ```yaml
+  ai:
+    providers:
+      groq:
+        sdk: openai-compatible
+        baseUrl: https://api.groq.com/openai/v1
+        apiKey: ${GROQ_API_KEY}
+        models:
+          - openai/gpt-oss-120b
+          - openai/gpt-oss-20b
+        # thinkingLevel: medium   # GPT-OSS 默认 low，可改 medium / high
+  ```
+
+  注意事项：
+  - 之前的思考内容按 Groq 接受的 `reasoning` 字段回传（Groq 拒绝 SDK 默认的 `reasoning_content`，否则工具循环的第二步会 400）。
+  - Groq 不支持 `logprobs`、`top_logprobs`、`logit_bias` 和大于 1 的 `n`，这些字段不会发出去。
+  - `reasoning_effort` 只发给 GPT-OSS 和 Qwen 3；GPT-OSS 默认 `low`，回复快，也更不容易碰到免费档每分钟 8K token 的上限。其他模型（如 Llama）即使配置了 `thinkingLevel` 也不会带这个字段。
+  - GPT-OSS 只收文本，图片会按"模型不支持图片"处理，不会发给 Groq；Llama 4 Scout / Maverick 默认 `text, image`。写了 `input` 以它为准。
+  - 上下文窗口按模型名推断：GPT-OSS 是 131072，其他模型按 128k 估算，可用 `contextWindow` 覆盖。
+  - 免费档限额很低（GPT-OSS 约每分钟 8K token、每天 1000 次请求，见 [Groq 限额](https://console.groq.com/docs/rate-limits)）。每分钟的限额（RPM / TPM）触发 429 时按 `retry-after` 等待后重试；每天的限额（RPD / TPD）当天重试没用，直接切换到下一个候选模型（限额按模型计算），没有候选时提示今天的额度已用完。
 
 ### ai.agents
 

@@ -213,7 +213,7 @@ export class SdkProviderAdapter implements AIProvider {
   #textCompletionPort(): LlmCompletionPort {
     const complete = (model: Model, context: Parameters<LlmCompletionPort['complete']>[1], options?: Parameters<LlmCompletionPort['complete']>[2]) =>
       generateTextViaAiSdk(
-        createLanguageModel(this.sdk, this.config, model.id, this.#transport.fetch),
+        createLanguageModel(this.sdk, this.config, model.id, this.#transport.fetch, this.name),
         model,
         context,
         options,

@@ -3,6 +3,7 @@ import type { Model, ModelApi, ModelInputModality, ModelStreamTimeout, ProviderI
 import type { ThinkingLevel } from './types/agent-event.js';
 import type { AssistantMessage } from './types/agent-message.js';
 import { inferModelReasoning, resolveTransportContextWindow } from './provider-gateway-presets.js';
+import { groqDefaultModelInput, isGroqGateway } from './groq.js';
 import type { LanguageModel } from 'ai';
 import { createLanguageModel } from './sdk-registry.js';
 import type { ProviderResilienceConfig } from './provider-resilience.js';
@@ -86,6 +87,8 @@ const OPENAI_NOT_VISION = /(?:audio|realtime|tts|transcribe|embedding|image|mode
  *   opt-in through `input`, because the `file` modality is not filtered by MIME type.
  * - Everything else (DeepSeek, MiniMax, Ollama, gateways) stays text-only unless
  *   configured, because their model lines are mixed. An explicit `input` always wins.
+ *   Groq is the exception with a known line-up: Llama 4 Scout / Maverick take images,
+ *   GPT-OSS and the rest stay text-only (`groqDefaultModelInput`).
  */
 export function defaultModelInput(sdk: string | undefined, modelId: string): readonly ModelInputModality[] {
   if (sdk === 'google' && /gemini/i.test(modelId) && !/(?:tts|embedding|image|live|transcribe)/i.test(modelId)) {
@@ -148,7 +151,9 @@ export function createLlmTransportModel(
     baseUrl: config.baseUrl,
     compat: config.compat,
     reasoning: inferModelReasoning(modelId),
-    input: config.input?.length ? [...config.input] : [...defaultModelInput(config.sdk, modelId)],
+    input: config.input?.length
+      ? [...config.input]
+      : [...(isGroqGateway(providerAlias, config.baseUrl) ? groqDefaultModelInput(modelId) : defaultModelInput(config.sdk, modelId))],
     contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: config.maxOutputTokens && config.maxOutputTokens > 0 ? config.maxOutputTokens : DEFAULT_MAX_OUTPUT_TOKENS,
     ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
@@ -219,7 +224,7 @@ export class LlmApiRuntime implements LlmCompletionPort {
     if (existing) return existing;
     const entry = this.#providers.get(alias);
     if (!entry) return undefined;
-    const model = createLanguageModel(entry.config.sdk, entry.config, modelId, entry.fetch);
+    const model = createLanguageModel(entry.config.sdk, entry.config, modelId, entry.fetch, alias);
     this.#languageModels.set(key, model);
     return model;
   }
