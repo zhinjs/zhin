@@ -69,6 +69,7 @@ export {
   LlmApiRuntime,
   createLlmTransportModel,
   defaultModelInput,
+  resolveProviderConfigResilience,
   createAssistantMessageEventStream,
 } from './llm-api-runtime.js';
 export {

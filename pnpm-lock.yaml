@@ -1343,6 +1343,9 @@ importers:
       '@ai-sdk/google':
         specifier: ^4.0.29
         version: 4.0.29(zod@4.4.3)
+      '@ai-sdk/minimax':
+        specifier: ^3.0.15
+        version: 3.0.15(zod@4.4.3)
       '@ai-sdk/openai':
         specifier: ^4.0.25
         version: 4.0.25(zod@4.4.3)

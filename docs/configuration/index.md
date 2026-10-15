@@ -268,11 +268,11 @@ ai:
 
 | 字段 | 说明 |
 | --- | --- |
-| `sdk` | 必填，六种之一：`openai`、`anthropic`、`google`、`deepseek`、`ollama`、`openai-compatible` |
+| `sdk` | 必填，七种之一：`openai`、`anthropic`、`google`、`deepseek`、`minimax`、`ollama`、`openai-compatible` |
 | `apiKey` / `baseUrl` / `host` | 凭据与接入点；`ollama` 用 `host`，Cloudflare 另需 `accountId` |
 | `models` | 显式模型列表 |
-| `defaultModel`、`contextWindow`、`timeout`、`maxRetries`、`headers` | 行为微调 |
-| `authScheme` | Authorization 头前缀，默认 `'Bearer '` |
+| `defaultModel`、`contextWindow`、`timeout`、`maxRetries`、`firstChunkTimeoutMs`、`chunkTimeoutMs`、`headers` | 行为微调（见 [AI 文档](../ai/index.md)） |
+| `authScheme` | Authorization 头方案；不写用 SDK 默认，`''` 只发 key，`Bearer` / `Token` 发 `<scheme> <key>` |
 | `imageGeneration` | 文生图默认（支持该能力的 driver，如 `defaultModel`、`defaultSize`、`watermarkEnabled`、`promptSuffix`） |
 
 provider 别名可任意命名；未显式写 `sdk` 时会按别名前缀推断（如 `deepseek-main` → `deepseek`），推断不出则回退 `openai-compatible`。对应 `@ai-sdk/*` 包是 optional peer，按所用 sdk 自行安装。

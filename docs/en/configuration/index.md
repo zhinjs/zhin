@@ -272,11 +272,11 @@ ai:
 
 | Field | Description |
 | --- | --- |
-| `sdk` | Required, one of six: `openai`, `anthropic`, `google`, `deepseek`, `ollama`, `openai-compatible` |
+| `sdk` | Required, one of seven: `openai`, `anthropic`, `google`, `deepseek`, `minimax`, `ollama`, `openai-compatible` |
 | `apiKey` / `baseUrl` / `host` | Credentials and endpoint; `ollama` uses `host`, Cloudflare also requires `accountId` |
 | `models` | Explicit model list |
-| `defaultModel`, `contextWindow`, `timeout`, `maxRetries`, `headers` | Behavior tuning |
-| `authScheme` | Authorization header prefix, default `'Bearer '` |
+| `defaultModel`, `contextWindow`, `timeout`, `maxRetries`, `firstChunkTimeoutMs`, `chunkTimeoutMs`, `headers` | Behavior tuning (see the [AI docs](../ai/index.md)) |
+| `authScheme` | Authorization scheme; unset uses the SDK default, `''` sends the bare key, `Bearer` / `Token` send `<scheme> <key>` |
 | `imageGeneration` | Text-to-image defaults (for drivers that support this capability, e.g., `defaultModel`, `defaultSize`, `watermarkEnabled`, `promptSuffix`) |
 
 Provider aliases can be named arbitrarily; when `sdk` is not explicitly specified, it is inferred from the alias prefix (e.g., `deepseek-main` -> `deepseek`); if inference fails, it falls back to `openai-compatible`. The corresponding `@ai-sdk/*` packages are optional peers and should be installed based on which SDK is used.

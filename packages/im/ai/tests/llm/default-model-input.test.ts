@@ -1,29 +1,23 @@
 /**
  * S7: OpenAI and Anthropic vision models default to image input, so group images
- * reach them instead of the "[Media unavailable]" placeholder. Request bodies are
- * captured with a minimal local fetch mock; these can move to the shared
- * mocked-HTTP provider harness once it lands.
+ * reach them instead of the "[Media unavailable]" placeholder. Request bodies come
+ * from the shared provider harness (`h.capture`).
  */
 import { describe, expect, it } from 'vitest';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel, defaultModelInput } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
+import { createProviderHarness } from '../helpers/provider-harness/index.js';
 
 const PNG_1X1 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
 
-async function requestBody(config: ProviderInstanceConfig, modelId: string) {
-  const bodies: Array<Record<string, any>> = [];
-  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    bodies.push(JSON.parse(String(init?.body ?? '{}')));
-    return new Response('{"error":{"message":"stop here"}}', { status: 400, headers: { 'content-type': 'application/json' } });
-  }) as typeof globalThis.fetch;
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models: [modelId], fetch }], () => [modelId]);
-  await runtime.complete(createLlmTransportModel('p', config, modelId), {
-    systemPrompt: 's',
+async function requestBody({ sdk, ...config }: ProviderInstanceConfig, modelId: string) {
+  const h = createProviderHarness({ sdk, model: modelId, config });
+  const { body } = await h.capture({
+    system: 's',
     messages: [createUserMessage('图里是什么？', [{ type: 'image', data: { media: { kind: 'base64', value: PNG_1X1, mime_type: 'image/png' } } }])],
-  }, { maxRetries: 0 }).catch(() => undefined);
-  return bodies[0]!;
+  });
+  return body;
 }
 
 describe('default model input (S7)', () => {
