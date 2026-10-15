@@ -1,0 +1,24 @@
+.changeset/gemini-base-url-proxy.md
+  h_b680f75345178a 1-5
+.github/workflows/nightly-evals.yml
+  h_b680f75345178a 89
+docs/ai/index.md
+  h_b680f75345178a 158-170
+docs/en/ai/index.md
+  h_b680f75345178a 158-170
+packages/im/agent/evals/README.md
+  h_b680f75345178a 234
+packages/im/ai/tests/llm/google-base-url-proxy.test.ts
+  h_b680f75345178a 1-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3cb1d2972ca899cd08b281f4a9be67c5920dda95",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
