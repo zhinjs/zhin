@@ -16,7 +16,7 @@ import {
 import { ProviderStreamError, streamPartError } from '../../src/llm/bridge/stream-error.js';
 
 /** One scripted HTTP answer: SSE chunks, or a JSON error body with a status. */
-export type Answer =
+type Answer =
   | { chunks: unknown[] }
   | { status: number; body: unknown; headers?: Record<string, string> };
 
@@ -31,7 +31,7 @@ function respond(answer: Answer): Response {
   });
 }
 
-export function setup(sdk: ProviderInstanceConfig['sdk'], answers: Answer[], models = ['primary', 'secondary'], extra: Partial<ProviderInstanceConfig> = {}) {
+function setup(sdk: ProviderInstanceConfig['sdk'], answers: Answer[], models = ['primary', 'secondary'], extra: Partial<ProviderInstanceConfig> = {}) {
   const requests: Array<Record<string, any>> = [];
   const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
     requests.push(JSON.parse(String(init?.body ?? '{}')));
@@ -44,11 +44,11 @@ export function setup(sdk: ProviderInstanceConfig['sdk'], answers: Answer[], mod
   return { runtime, model: primary!, fallbacks: rest, requests };
 }
 
-export const ask = { systemPrompt: '', messages: [createUserMessage('hi')] };
+const ask = { systemPrompt: '', messages: [createUserMessage('hi')] };
 
 const noSleep = async () => {};
 
-export function resilient(runtime: ReturnType<typeof setup>['runtime'], fallbackModels: ReturnType<typeof setup>['fallbacks'] = [], config = {}) {
+function resilient(runtime: ReturnType<typeof setup>['runtime'], fallbackModels: ReturnType<typeof setup>['fallbacks'] = [], config = {}) {
   const events: ProviderResilienceEvent[] = [];
   const port = createResilientCompletionPort(runtime, {
     fallbackModels, sleep: noSleep, random: () => 0, onEvent: (e) => events.push(e), config: { requestTimeoutMs: 0, ...config },
@@ -58,8 +58,8 @@ export function resilient(runtime: ReturnType<typeof setup>['runtime'], fallback
 
 // --- SSE fixtures -------------------------------------------------------------
 
-export const anthropicStart = { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', content: [], model: 'primary', stop_reason: null, usage: { input_tokens: 5, output_tokens: 0 } } };
-export function anthropicText(text: string): unknown[] {
+const anthropicStart = { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', content: [], model: 'primary', stop_reason: null, usage: { input_tokens: 5, output_tokens: 0 } } };
+function anthropicText(text: string): unknown[] {
   return [
     anthropicStart,
     { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
@@ -70,10 +70,10 @@ export function anthropicText(text: string): unknown[] {
   ];
 }
 
-export function chatChunk(delta: Record<string, unknown>, finish: string | null = null) {
+function chatChunk(delta: Record<string, unknown>, finish: string | null = null) {
   return { id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'primary', choices: [{ index: 0, delta, finish_reason: finish }] };
 }
-export function chatText(text: string): unknown[] {
+function chatText(text: string): unknown[] {
   return [chatChunk({ role: 'assistant', content: text }), chatChunk({}, 'stop'), '[DONE]'];
 }
 
