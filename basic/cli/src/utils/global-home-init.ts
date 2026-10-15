@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { globalZhinHome } from './zhin-home.js';
+import { NODE_ENGINES_HINT } from './node-requirements.js';
 
 const GLOBAL_PACKAGE_JSON = {
   name: 'zhin-global',
@@ -22,7 +23,7 @@ const GLOBAL_PACKAGE_JSON = {
     tsx: '^4.22.4',
   },
   engines: {
-    node: '^20.19.0 || >=22.12.0',
+    node: NODE_ENGINES_HINT,
   },
 };
 

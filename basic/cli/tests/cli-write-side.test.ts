@@ -91,7 +91,7 @@ describe('doctor createDefaultConfig', () => {
 });
 
 describe('migrate', () => {
-  it('engines.node 写 ^20.19.0 || >=22.12.0', () => {
+  it('engines.node 写 >=22.19.0', () => {
     const pkgPath = path.join(tmp, 'package.json');
     fs.writeFileSync(pkgPath, JSON.stringify({
       name: 'demo',
@@ -100,7 +100,7 @@ describe('migrate', () => {
     const changed = upgradePackageJson(pkgPath, { toLatest: true, dryRun: false });
     expect(changed).toBe(true);
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-    expect(pkg.engines.node).toBe('^20.19.0 || >=22.12.0');
+    expect(pkg.engines.node).toBe('>=22.19.0');
     expect(pkg.dependencies['zhin.js']).toBe('latest');
   });
 

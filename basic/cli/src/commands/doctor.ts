@@ -131,7 +131,7 @@ export const doctorCommand = new Command('doctor')
       name: 'Node.js 版本',
       status: nodeOk ? 'ok' : 'error',
       message: formatNodeRequirementMessage(nodeVersion),
-      fix: nodeOk ? undefined : '请升级 Node.js（^20.19.0 或 >=22.12.0）: https://nodejs.org 或 nvm install 22',
+      fix: nodeOk ? undefined : '请升级 Node.js（>=22.19.0）: https://nodejs.org 或 nvm install 22',
     });
 
     // 2. 检查 pnpm（可用性与版本，要求 >=9）

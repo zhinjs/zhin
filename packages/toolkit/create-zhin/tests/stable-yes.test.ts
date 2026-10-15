@@ -47,7 +47,7 @@ describe('create-zhin -y Stable 默认值', () => {
       strictPeerDependencies: false,
       allowBuilds: { esbuild: true },
     });
-    expect(manifest.engines.node).toBe('>=22.12.0');
+    expect(manifest.engines.node).toBe('>=22.19.0');
   });
 
   it('Sandbox 实例 + IM-only、无 database', async () => {
