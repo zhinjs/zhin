@@ -6,7 +6,7 @@
 
 ## 开始前
 
-- 本页脚手架生成的 TypeScript 项目需要 Node.js `>=22.12.0`；推荐 `>=22.18`。编译后的 IM 库仍支持 `^20.19.0 || >=22.12.0`。
+- 脚手架项目与编译后的 IM 库都需要 Node.js `>=22.19.0`（`@zhin.js/ai` 依赖的 undici 8 要求该版本）。
 - pnpm 9 或更高版本。
 - 能访问 [Remote Console](https://console.zhin.dev)。
 

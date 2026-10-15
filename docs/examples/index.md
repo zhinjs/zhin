@@ -64,7 +64,7 @@ minimal-bot/
 ```
 
 ::: details Node.js 版本
-要求 Node.js ≥22.6。22.6–22.17 由 CLI 自动加 `--experimental-strip-types` 运行 TypeScript，22.18 起原生支持。
+要求 Node.js ≥22.19（原生运行 TypeScript）。
 :::
 
 ## capabilities-bot：一个插件用到的常见能力
@@ -111,7 +111,7 @@ pnpm install && pnpm build   # 仓库根
 pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 ```
 
-- 要求 Node.js ≥22.18，凭据读该目录的 `.env`（模板见 `.env.example`）；
+- 要求 Node.js ≥22.19，凭据读该目录的 `.env`（模板见 `.env.example`）；
 - Console 的 API Base 填 `http://127.0.0.1:8086`，Token 填 `test-bot-dev-token`；
 - 后台运行：`pnpm daemon`（即 `zhin runtime start --daemon`），`pnpm stop` 停止。
 

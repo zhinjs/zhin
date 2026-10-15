@@ -6,7 +6,7 @@ title: 怎样确认第一个 Bot 跑通？
 
 **看到进程启动还不够。** 在 Remote Console 的 Sandbox 会话发送 `/hello` 并收到回复，才证明新项目的 HTTP Host、鉴权、Endpoint、命令和出站链路连在了一起。
 
-这个检查适合刚创建的 IM 项目，不需要平台账号或模型 Key。脚手架生成的 TypeScript 项目需要 Node.js `>=22.12.0` 和 pnpm 9 或更高版本。
+这个检查适合刚创建的 IM 项目，不需要平台账号或模型 Key。脚手架生成的 TypeScript 项目需要 Node.js `>=22.19.0` 和 pnpm 9 或更高版本。
 
 ## 从空目录开始
 

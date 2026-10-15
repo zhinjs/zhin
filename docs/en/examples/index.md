@@ -64,7 +64,7 @@ minimal-bot/
 ```
 
 ::: details Node.js version
-Requires Node.js >=22.6. On 22.6–22.17 the CLI adds `--experimental-strip-types` to run TypeScript; 22.18+ supports it natively.
+Requires Node.js >=22.19, which runs TypeScript natively.
 :::
 
 ## capabilities-bot: common capabilities in one plugin
@@ -111,7 +111,7 @@ pnpm install && pnpm build   # at the repo root
 pnpm dev:test                # or cd examples/test-bot && pnpm dev
 ```
 
-- Requires Node.js >=22.18; credentials come from that directory's `.env` (template in `.env.example`);
+- Requires Node.js >=22.19; credentials come from that directory's `.env` (template in `.env.example`);
 - in Console, set API Base to `http://127.0.0.1:8086` and Token to `test-bot-dev-token`;
 - to run in the background: `pnpm daemon` (that is, `zhin runtime start --daemon`); `pnpm stop` stops it.
 

@@ -119,6 +119,6 @@
     "url": "https://github.com/lc-cn"
   },
   "engines": {
-    "node": "^20.19.0 || >=22.12.0"
+    "node": ">=22.19.0"
   }
 }

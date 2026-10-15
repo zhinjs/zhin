@@ -8,7 +8,7 @@ tier: Experimental
 本页由 [`plugins/adapters/weixin-ilink/README.md`](https://github.com/zhinjs/zhin/tree/main/plugins/adapters/weixin-ilink/README.md) 自动生成。请修改包内 README 后运行 `pnpm sync:adapter-docs`。
 :::
 
-<!-- sync-adapter-docs:sha256=7510ae8846f8cc8c -->
+<!-- sync-adapter-docs:sha256=9f92255a565da1cf -->
 
 # @zhin.js/adapter-weixin-ilink
 
@@ -30,7 +30,7 @@ tier: Experimental
 ## 前置条件
 
 - 微信客户端需已灰度 **ClawBot** 入口（最新版微信 + 灰度资格）
-- Node.js ^20.19.0 或 >=22.12.0
+- Node.js >=22.19.0
 
 ## 最小配置
 

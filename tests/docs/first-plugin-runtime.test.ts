@@ -51,7 +51,7 @@ describe('first-plugin tutorial through the real Runtime', () => {
       && childConfigSource && rootConfigSource).toBeTruthy();
 
     const pluginPackage = JSON.parse(packageSource!) as TutorialPackage;
-    // The compiled library supports Node 20; source TS follows the CLI's Node 22+ strip-types path.
+    // Without native TypeScript the tutorial runs the compiled entry; otherwise source TS runs directly.
     if (!sourceTypeScript) pluginPackage.zhin.entry = './plugin.js';
     const mount = JSON.parse(mountSource!) as { dependencies: Record<string, string>; zhin: { plugins: unknown[] } };
     const projectRoot = await mkdtemp(join(tmpdir(), 'zhin-first-plugin-doc-'));

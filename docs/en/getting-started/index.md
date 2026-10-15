@@ -6,7 +6,7 @@ This page delivers one result: send `/hello` to a new Bot in the browser Sandbox
 
 ## Before you start
 
-- Scaffolded TypeScript projects on this page require Node.js `>=22.12.0`; `>=22.18` is recommended. The compiled IM library still supports `^20.19.0 || >=22.12.0`.
+- Node.js `>=22.19.0`, for scaffolded projects and the compiled IM library alike (`@zhin.js/ai` depends on undici 8, which needs it).
 - pnpm 9 or newer.
 - Access to [Remote Console](https://console.zhin.dev).
 

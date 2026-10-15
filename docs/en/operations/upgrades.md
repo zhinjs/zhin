@@ -22,7 +22,7 @@ For production, follow the full flow below and take a backup first.
 
 | Boundary | Contract |
 | --- | --- |
-| Node | `^20.19.0 || >=22.12.0` |
+| Node | `>=22.19.0` |
 | Root and plugin | semver in `package.json#zhin.engine` |
 | Feature consumer/provider | `features[].api` and Feature `featureApi` |
 | Zhin package family | one resolved release combination in the lockfile |

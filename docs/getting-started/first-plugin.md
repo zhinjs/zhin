@@ -11,7 +11,7 @@ description: "从零写一个可配置的 /ping 子插件，挂载到你的 Bot 
 
 ::: tip 开始前
 - 已经按 [快速开始](./index.md) 创建并跑通了 `my-bot`（没有的话先运行 `npm create zhin-app my-bot -y`）。
-- Node.js ≥22.12.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
+- Node.js ≥22.19.0、pnpm 9+。`pnpm dev` 会直接运行 TypeScript 源码，不需要先编译。
 :::
 
 ::: details 只想要最少的代码？

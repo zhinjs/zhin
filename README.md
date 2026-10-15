@@ -62,7 +62,7 @@ pnpm dev
 2. Enter the API address printed in the terminal (new projects use `http://127.0.0.1:8068`) and the `HTTP_TOKEN` from `.env`.
 3. Open the **Sandbox** chat and send `/hello`. You should get a reply.
 
-`-y` accepts every default: a browser **Sandbox** (simulated chat) instead of a real platform, and no AI. Requirements: Node.js **≥22.12.0** and pnpm 9+ for scaffolded projects (the compiled library supports `^20.19.0 || >=22.12.0`). Something wrong? Run `npx zhin doctor`.
+`-y` accepts every default: a browser **Sandbox** (simulated chat) instead of a real platform, and no AI. Requirements: Node.js **≥22.19.0** and pnpm 9+. Something wrong? Run `npx zhin doctor`.
 
 Full walkthrough: [Quick start](./docs/en/getting-started/index.md) · Prefer not to install yet? Try the [live demo](https://demo.zhin.dev).
 

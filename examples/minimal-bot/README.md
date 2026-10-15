@@ -6,8 +6,7 @@ Sandbox, Host API, Console or Agent stack.
 
 ## Run
 
-Requires Node.js 22.6 or newer. Node 22.6-22.17 is restarted by the CLI with Node's official
-`--experimental-strip-types` flag; Node 22.18+ runs TypeScript directly without that flag.
+Requires Node.js 22.19 or newer, which runs TypeScript directly.
 
 ```bash
 pnpm install

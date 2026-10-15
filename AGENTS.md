@@ -8,7 +8,7 @@
 
 - 版本：1.1.x 稳定线。默认安装仅 IM 核心（production `node_modules` <10MB），AI 按需加装 `@zhin.js/agent` + `zod` + `ai` + 所选 `@ai-sdk/*`（ADR 0019 安装分层）。
 - 这是 pnpm workspace monorepo（pnpm 9，`pnpm-workspace.yaml` 为准），构建编排用 turbo。
-- Node 版本要求：`^20.19.0` 或 `>=22.12.0`。
+- Node 版本要求：`>=22.19.0`（@zhin.js/ai 依赖的 undici 8 不支持更低版本）。
 - 发布流：changesets（`pnpm release` 记 changeset，`pnpm bump` 升版本，`pnpm pub` 发布）。
 
 ## 先读哪些文件

@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
+import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
@@ -271,7 +272,7 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     ...(Object.keys(peerDependenciesMeta).length > 0 ? { peerDependenciesMeta } : {}),
     devDependencies,
     publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
-    engines: { node: '^20.19.0 || >=22.12.0' },
+    engines: { node: NODE_ENGINES_HINT },
     zhin: {
       protocol: 1,
       type: 'plugin',

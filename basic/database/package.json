@@ -21,7 +21,7 @@
     "clean": "rimraf lib"
   },
   "engines": {
-    "node": ">=22.5.0"
+    "node": ">=22.19.0"
   },
   "dependencies": {
     "@zhin.js/logger": "workspace:*"

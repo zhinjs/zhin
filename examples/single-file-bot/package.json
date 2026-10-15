@@ -20,7 +20,7 @@
     "typescript": "^6.0.3"
   },
   "engines": {
-    "node": ">=22.6.0"
+    "node": ">=22.19.0"
   },
   "zhin": {
     "protocol": 1,

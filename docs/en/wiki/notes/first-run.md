@@ -6,7 +6,7 @@ title: How do I know the first Bot works?
 
 **A running process is only the beginning.** Send `/hello` in a Remote Console Sandbox conversation and receive a reply. That checks the HTTP Host, authentication, Endpoint, command discovery, and outbound path together.
 
-This check is for a newly created IM project. It needs no platform account or model key. Scaffolded TypeScript projects require Node.js `>=22.12.0` and pnpm 9 or newer.
+This check is for a newly created IM project. It needs no platform account or model key. Scaffolded TypeScript projects require Node.js `>=22.19.0` and pnpm 9 or newer.
 
 ## Start from an empty directory
 
