@@ -20,8 +20,9 @@ export interface NightlyBudget {
 }
 
 /**
- * Conservative defaults for one model at 3 runs per case: the 4 matrix cases
- * are 12 requests (~60k tokens with the long-context case); the 7 live seed
+ * Conservative defaults for one model at 3 runs per case: the 5 matrix cases
+ * are 15 requests (~61k tokens with the long-context case; the multimodal
+ * fixture is a 64x64 PNG, a few hundred tokens); the 7 live seed
  * cases are 2–3 harness requests each, ~50 requests and ~300k tokens (the full
  * agent system prompt rides on every request). The caps leave a little
  * headroom; anything past them is recorded as skipped, never spent.
