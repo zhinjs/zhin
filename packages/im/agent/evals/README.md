@@ -163,6 +163,9 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `multimodal-text-only-model-placeholder` | multimodal | #769 Gemini switch — text-only models still never get image bytes |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
 | `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
+| `provider-billing-no-same-provider-fallback` | long-task | #724 provider resilience: 402 / out of credit → no pointless same-key fallback |
+| `provider-deepseek-insufficient-resource-retried` | long-task | #724 provider audit S9: DeepSeek insufficient_system_resource → retry |
+| `provider-gemini-context-overflow-compacted` | context, long-task | #724 provider audit S2: one shared context-overflow detector (Gemini / Vertex / Anthropic wording) |
 | `provider-gemini-daily-quota-fallback` | long-task | #724 provider resilience, Gemini primary (#770): daily quota → fallback without retry |
 | `provider-gemini-deadline-exceeded-polite` | long-task | #724 provider resilience, Gemini primary (#770): 504 DEADLINE_EXCEEDED → timeout |
 | `provider-gemini-malformed-function-call-reasked` | long-task | #724 provider resilience, Gemini primary (#770): MALFORMED_FUNCTION_CALL → re-ask (model-harness preset) |
@@ -173,6 +176,7 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
 | `provider-empty-reply-reasked` | long-task | #724 provider resilience (empty reply, model-harness quirk preset) |
 | `provider-malformed-tool-call` | tool-use | #724 provider resilience (malformed tool call) |
+| `provider-openai-insufficient-quota-not-retried` | long-task | #724 provider audit S19: OpenAI insufficient_quota retried uselessly |
 | `provider-rate-limit-retried` | long-task | #724 provider resilience (rate limit → retry) |
 | `provider-retries-exhausted-polite` | long-task | #724 provider resilience (retries exhausted → friendly feedback) |
 | `provider-timeout-exhausted-polite` | long-task | #724 provider resilience (timeouts exhausted → friendly feedback) |
