@@ -132,13 +132,14 @@ jobs:
           GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
           # CI's Gemini key is on the free tier. The default model, gemini-3.5-flash-lite,
-          # gets 15 requests/minute (429 quotaValue, quota-probe run 38699390939); a full
-          # night is ~63 requests. So a gemini night sends 3 trials per case, ≤100 requests,
-          # 5 s apart (12 RPM, headroom under 15). Repository variables override these; empty
-          # values fall back to budget.ts / rate-limit.ts (3 trials, 120 requests, 4 s).
+          # gets 15 requests/minute and 500/day (429 quotaValue, quota-probe runs 38699390939
+          # and 38700947142); a full night is ~82 requests (run 38699654531). So a gemini night
+          # sends 3 trials per case, ≤120 requests (24% of the RPD), 5 s apart (12 RPM).
+          # Repository variables override these; empty values fall back to budget.ts /
+          # rate-limit.ts (3 trials, 120 requests, 4 s).
           # gemini-3.8-flash (5 RPM / 20 RPD on this key) needs 1 trial, 20 requests, 12 s.
           NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || vars.NIGHTLY_RUNS_PER_CASE || '3' }}
-          NIGHTLY_MAX_REQUESTS: ${{ vars.NIGHTLY_MAX_REQUESTS || (env.NIGHTLY_PROVIDER == 'gemini' && '100' || '') }}
+          NIGHTLY_MAX_REQUESTS: ${{ vars.NIGHTLY_MAX_REQUESTS }}
           NIGHTLY_MIN_REQUEST_INTERVAL_MS: ${{ vars.NIGHTLY_MIN_REQUEST_INTERVAL_MS || (env.NIGHTLY_PROVIDER == 'gemini' && '5000' || '') }}
           NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports
           NIGHTLY_PREVIOUS_REPORT: ${{ github.workspace }}/previous-report/nightly.json
