@@ -185,14 +185,22 @@ flowchart LR
   action -->|"main merges version PR"| pub["pnpm pub<br/>Publish to npm"]
 ```
 
+npm authentication tries trusted publishing (OIDC) first and falls back to the npm token for packages that have no trusted publisher yet. Every publish carries provenance. The setup steps and the per-package npmjs.com checklist are in [npm publishing and trusted publishing](/contributing/publishing) (Chinese).
+
 ### First publish for new packages
 
-npm no longer allows this pipeline to create a package name for the first time. Maintainers must publish once with a token; later versions go through changesets.
+npm trusted publishing cannot create a new package name. A maintainer must publish once by hand and add the trusted publisher on npmjs.com; later versions go through changesets.
 
 ```bash
 pnpm check:unpublished
 pnpm build
 (cd path/to/pkg && npm publish --access public)
+```
+
+Then add the trusted publisher (npm >= 11.15.0):
+
+```bash
+npm trust github <package> --repo zhinjs/zhin --file publish.yml --env npm-production --allow-publish --yes
 ```
 
 Then re-run **Build and Publish** (push `main` or workflow_dispatch).
