@@ -166,3 +166,33 @@ describe('provider-side error finishes (DeepSeek insufficient_system_resource)',
     expect(events.map((e) => e.type)).toEqual(['retry', 'give_up']);
   });
 });
+
+describe('OpenAI 429s: retry-after-ms and insufficient_quota', () => {
+  const quotaBody = { error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', param: null, code: 'insufficient_quota' } };
+  const rateBody = { error: { message: 'Rate limit reached for gpt-4o on requests per min (RPM): Limit 3, Used 3, Requested 1.', type: 'requests', param: null, code: 'rate_limit_exceeded' } };
+
+  it('waits the millisecond-precise retry-after-ms instead of the rounded retry-after', async () => {
+    const { runtime, model } = setup('openai', [
+      { status: 429, body: rateBody, headers: { 'retry-after-ms': '1250', 'retry-after': '2' } },
+      { chunks: chatText('ok') },
+    ]);
+    const { port, events } = resilient(runtime);
+    await port.complete(model, ask);
+    expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'rate_limit', delayMs: 1250 })]);
+    expect(classifyProviderError(Object.assign(new Error('x'), { statusCode: 429, responseHeaders: { 'retry-after': '3' } })).retryAfterMs).toBe(3000);
+  });
+
+  it('does not retry insufficient_quota and shows the billing text', async () => {
+    const { runtime, model, requests } = setup('openai', [{ status: 429, body: quotaBody }], ['primary']);
+    const { port, events } = resilient(runtime);
+    const failure = await port.complete(model, ask).catch((e: unknown) => e);
+    expect(requests).toHaveLength(1);
+    expect(failure).toBeInstanceOf(ProviderRequestError);
+    expect(failure).toMatchObject({ kind: 'billing', message: describeProviderFailure('billing') });
+    expect(events).toEqual([expect.objectContaining({ type: 'give_up', kind: 'billing' })]);
+  });
+
+  it('recognises insufficient_quota from a stream error part too', () => {
+    expect(classifyProviderError(streamPartError({ type: 'error', code: 'insufficient_quota', message: 'quota' }))).toMatchObject({ kind: 'billing', retryable: false });
+  });
+});

@@ -46,6 +46,8 @@ export type ProviderErrorKind =
   | 'safety_block'
   /** A quota that will not reset soon (Gemini per-day quota): skip retries, try fallback. */
   | 'quota_exhausted'
+  /** The account is out of credit or its billing quota (OpenAI `insufficient_quota`): never retried. */
+  | 'billing'
   | 'context_overflow'
   | 'auth'
   | 'bad_request'
@@ -123,6 +125,7 @@ const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   malformed_tool_call: '模型返回了无法解析的工具调用，已自动重试仍未成功，请稍后再试',
   safety_block: SAFETY_BLOCK_TEXT,
   quota_exhausted: '模型服务今天的调用额度已用完，请稍后再试或联系管理员更换模型',
+  billing: '模型服务账户余额不足或额度已用完，请联系管理员充值或检查账单',
   context_overflow: '对话内容超出模型上下文长度',
   auth: '模型服务鉴权失败，请检查 API 密钥配置',
   bad_request: '模型服务拒绝了请求',
@@ -202,6 +205,17 @@ function headerValue(headers: unknown, name: string): string | undefined {
   return undefined;
 }
 
+/**
+ * Server-requested delay. OpenAI (and Azure OpenAI) send `retry-after-ms` with
+ * millisecond precision next to the whole-second `retry-after`; prefer it.
+ */
+function retryAfterFromHeaders(headers: unknown): number | undefined {
+  const msHeader = headerValue(headers, 'retry-after-ms')?.trim();
+  const ms = msHeader ? Number(msHeader) : Number.NaN;
+  if (Number.isFinite(ms) && ms >= 0) return Math.round(ms);
+  return parseRetryAfterMs(headerValue(headers, 'retry-after'));
+}
+
 export function parseRetryAfterMs(value: string | undefined, now = Date.now()): number | undefined {
   if (!value) return undefined;
   const seconds = Number(value);
@@ -270,6 +284,34 @@ function isDailyQuota(google: GoogleRpcError | undefined): boolean {
   return google?.quotaIds.some((id) => /PerDay/i.test(id)) ?? false;
 }
 
+/**
+ * Machine-readable error codes / types from an AI SDK error: `code` on the error
+ * itself (stream errors), `data.error.code` / `.type` (parsed body) or the raw
+ * `responseBody` (OpenAI: `{ "error": { "code": "insufficient_quota", ... } }`).
+ */
+function providerErrorCodes(error: Record<string, unknown>): Set<string> {
+  const codes = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value) codes.add(value);
+  };
+  add(error.code);
+  add(error.type);
+  let body: unknown;
+  if (typeof error.responseBody === 'string') {
+    try {
+      body = JSON.parse(error.responseBody);
+    } catch {
+      body = undefined;
+    }
+  }
+  for (const source of [record(error.data), record(body)]) {
+    const inner = record(source?.error) ?? source;
+    add(inner?.code);
+    add(inner?.type);
+  }
+  return codes;
+}
+
 const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
 
 export function classifyProviderError(error: unknown): ProviderErrorClassification {
@@ -290,7 +332,8 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   const message = typeof rec.message === 'string' ? rec.message : String(inner ?? '');
   const status = statusOf(rec);
   const google = parseGoogleRpcError(rec);
-  const retryAfterMs = parseRetryAfterMs(headerValue(rec.responseHeaders, 'retry-after')) ?? google?.retryDelayMs;
+  const retryAfterMs = retryAfterFromHeaders(rec.responseHeaders) ?? google?.retryDelayMs;
+  const codes = providerErrorCodes(rec);
   // Gemini answers a bad key with 400 INVALID_ARGUMENT + reason API_KEY_INVALID: that is auth, not a model rejection.
   if (google?.reasons.some((reason) => reason === 'API_KEY_INVALID' || reason === 'API_KEY_EXPIRED')) {
     return { kind: 'auth', retryable: false, fallbackEligible: false, status };
@@ -304,6 +347,10 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   if (isContextOverflowError(inner)) {
     return { kind: 'context_overflow', retryable: false, fallbackEligible: false, status };
   }
+  // OpenAI answers an exhausted billing quota with 429 too, but no retry can succeed
+  // until someone adds credit. (Gemini's free-tier "exceeded your current quota" has
+  // no such code and stays a rate limit / daily quota.)
+  if (codes.has('insufficient_quota')) return { kind: 'billing', retryable: false, fallbackEligible: true, status };
   if (status === 429) return { kind: 'rate_limit', retryable: true, fallbackEligible: true, status, retryAfterMs };
   if (status === 408) return { kind: 'timeout', retryable: true, fallbackEligible: true, status };
   if (status === 401 || status === 403) return { kind: 'auth', retryable: false, fallbackEligible: false, status };
@@ -519,8 +566,8 @@ export function createResilientCompletionPort(
           if (isEmpty) return error.reply;
           options.onEvent?.({ type: 'give_up', model: model.id, kind: info.kind, error: message });
           // Non-retryable errors keep their original identity for upstream handlers,
-          // except an exhausted quota, which has nothing to handle and a polite message.
-          if (!info.retryable && info.kind !== 'quota_exhausted') throw error;
+          // except an exhausted quota or balance, which has nothing to handle and a polite message.
+          if (!info.retryable && info.kind !== 'quota_exhausted' && info.kind !== 'billing') throw error;
           throw new ProviderRequestError(info.kind, attempts, error);
         }
       }
