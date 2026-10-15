@@ -137,10 +137,16 @@ Upgrades an older Zhin project to the latest: dependencies, scripts and folder s
 ### new: Create a Plugin
 
 ```bash
-zhin new [plugin-name] [--type normal|service|adapter] [--is-official] [--skip-install]
+zhin new [plugin-name] [--type normal|service|adapter] [--package-name <npm-name>] [--is-official] [--skip-install]
 ```
 
 Generates a plugin template under `plugins/<name>/`. The name must match `/^[a-z][a-z0-9-]*$/`; without arguments it asks interactively.
+
+- The package name defaults to `zhin.js-<name>`. Use `--package-name` for your own name or scope (for example `@me/zhin-plugin-x`). The `@zhin.js/` scope is reserved for official plugins (`--is-official`).
+- `zhin.js` and the capability packages (`@zhin.js/command`, `@zhin.js/skill`, and so on) are peerDependencies with a `^x.y.z` range derived from the installed versions. The same versions go into devDependencies for local tests and type checks.
+- `zhin.entry` is `./plugin.js`. The local runtime falls back to `plugin.ts`; `pnpm build` (run automatically before `pnpm pack` / `pnpm publish`) compiles `plugin.ts` and the convention directories into sibling `.js` files, so npm receives JavaScript. See [definePlugin · Development entry vs. npm entry](../authoring/define-plugin.md#development-entry-vs-npm-entry).
+- The generated `pnpm test` (Vitest) and `pnpm typecheck` (`tsc --noEmit`) work as is; no `NODE_ENV` setting is needed.
+- `--skip-install` skips `pnpm install` in both the plugin directory and the project root.
 
 ### install / add: Install a Plugin
 

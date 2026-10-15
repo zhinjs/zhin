@@ -1,19 +1,28 @@
 import { Command } from 'commander';
 import { formatCompact } from '@zhin.js/logger';
 import { logger } from '../utils/logger.js';
-import { NODE_ENGINES_HINT } from '../utils/node-requirements.js';
 import fs from 'fs-extra';
 import path from 'path';
 import inquirer from 'inquirer';
 import { execSync } from 'node:child_process';
+import {
+  createPluginManifest,
+  createPluginTsconfigs,
+  resolvePluginPackageName,
+  resolvePluginStackRanges,
+  sourceDirectories,
+  workspaceStackRanges,
+  type PluginKind,
+} from './new-plugin-manifest.js';
 
 interface NewPluginOptions {
   skipInstall?: boolean;
   isOfficial?: boolean;
-  type?: 'normal' | 'service' | 'adapter';
+  packageName?: string;
+  type?: PluginKind;
 }
 
-type PluginKind = 'normal' | 'service' | 'adapter';
+const PLUGIN_KINDS: readonly PluginKind[] = ['normal', 'service', 'adapter'];
 
 /**
  * Plugin identity 约束（见 packages/im/plugin-runtime/src/plugin.ts 的 definePlugin
@@ -30,45 +39,12 @@ function toCapitalizedName(pluginName: string): string {
   );
 }
 
-/**
- * 在本仓库等「含 packages/im/zhin 的 pnpm workspace」根执行 zhin new 时，对齐 workspace 协议依赖。
- * 仅有 pnpm-workspace.yaml 但无 packages/im/zhin 时不启用，避免误写 workspace:* 导致 pnpm install 失败。
- */
-function tryZhinWorkspaceDevDependencies(): Record<string, string> | null {
-  const root = process.cwd();
-  if (!fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) return null;
-  if (!fs.existsSync(path.join(root, 'packages/im/zhin/package.json'))) return null;
-  const pkgPath = path.join(root, 'package.json');
-  if (!fs.existsSync(pkgPath)) return null;
-  try {
-    const pkg = fs.readJsonSync(pkgPath) as {
-      dependencies?: Record<string, string>;
-      devDependencies?: Record<string, string>;
-      peerDependencies?: Record<string, string>;
-    };
-    const hasZhin =
-      pkg.dependencies?.['zhin.js'] ||
-      pkg.devDependencies?.['zhin.js'] ||
-      pkg.peerDependencies?.['zhin.js'];
-    if (!hasZhin) return null;
-    return {
-      'zhin.js': 'workspace:*',
-      '@zhin.js/cli': 'workspace:*',
-      '@zhin.js/command': 'workspace:*',
-      '@zhin.js/adapter': 'workspace:*',
-      '@zhin.js/core': 'workspace:*',
-      '@zhin.js/skill': 'workspace:*',
-    };
-  } catch {
-    return null;
-  }
-}
-
 export const newCommand = new Command('new')
   .description('创建约定式插件包模板（Plugin Runtime）')
   .argument('[plugin-name]', '插件名称（如: my-plugin，需匹配 /^[a-z][a-z0-9-]*$/）')
-  .option('--is-official', '是否为官方插件', false)
-  .option('--skip-install', '跳过依赖安装', false)
+  .option('--is-official', '官方插件（包名使用 @zhin.js/ 作用域，仅限本仓库）', false)
+  .option('--package-name <name>', 'npm 包名（默认 zhin.js-<插件名>；也可用自己的 scope，如 @me/zhin-plugin-x）')
+  .option('--skip-install', '跳过依赖安装（插件目录与 app 根都不运行 pnpm install）', false)
   .option('--type <type>', '插件类型 (normal|service|adapter)')
   .action(async (pluginName: string, options: NewPluginOptions) => {
     try {
@@ -98,6 +74,11 @@ export const newCommand = new Command('new')
         logger.error(PLUGIN_NAME_HINT);
         process.exit(1);
       }
+      if (options.type && !PLUGIN_KINDS.includes(options.type)) {
+        logger.error(`未知的插件类型: ${options.type}（可选 ${PLUGIN_KINDS.join(' | ')}）`);
+        process.exit(1);
+      }
+      const packageName = resolvePluginPackageName(name, options);
 
       // 确定插件目录
       const pluginDir = path.resolve(process.cwd(), 'plugins', name);
@@ -113,7 +94,8 @@ export const newCommand = new Command('new')
       if (!options.type) {
         const { type } = await inquirer.prompt([
           {
-            type: 'list',
+            // inquirer ≥ 10 removed the `list` alias; `select` is the single-choice prompt.
+            type: 'select',
             name: 'type',
             message: '请选择插件类型:',
             choices: [
@@ -132,12 +114,10 @@ export const newCommand = new Command('new')
       logger.info(formatCompact( { cmd: 'new', op: 'create', type: typeLabel, name }));
 
       // 创建插件包结构
-      await createPluginPackage(pluginDir, name, options);
+      await createPluginPackage(pluginDir, name, packageName, options);
 
       // 自动添加到 app/package.json 并提示挂载方式
-      await addPluginToApp(name, options.isOfficial);
-
-      const packageName = options.isOfficial ? `@zhin.js/${name}` : `zhin.js-${name}`;
+      await addPluginToApp(name, packageName, options.skipInstall);
 
       logger.success(`✓ 插件包 ${name} 创建成功！`);
       logger.log('');
@@ -164,10 +144,14 @@ export const newCommand = new Command('new')
     }
   });
 
-async function createPluginPackage(pluginDir: string, pluginName: string, options: NewPluginOptions) {
+async function createPluginPackage(
+  pluginDir: string,
+  pluginName: string,
+  packageName: string,
+  options: NewPluginOptions,
+) {
   const kind: PluginKind = options.type ?? 'normal';
   const capitalizedName = toCapitalizedName(pluginName);
-  const packageName = options.isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
 
   await fs.ensureDir(pluginDir);
   await fs.ensureDir(path.join(pluginDir, 'tests'));
@@ -179,16 +163,12 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
     await fs.ensureDir(path.join(pluginDir, 'adapters'));
   }
 
-  const zhinStack =
-    tryZhinWorkspaceDevDependencies() ??
-    ({
-      'zhin.js': 'latest',
-      '@zhin.js/cli': 'latest',
-      '@zhin.js/command': 'latest',
-      '@zhin.js/adapter': 'latest',
-      '@zhin.js/core': 'latest',
-      '@zhin.js/skill': 'latest',
-    } satisfies Record<string, string>);
+  // 在本仓库根执行时用 workspace 协议；否则从已安装版本推导 ^x.y.z（不再写 latest）
+  const workspace = workspaceStackRanges(process.cwd());
+  const stack = workspace ?? (() => {
+    const ranges = resolvePluginStackRanges(process.cwd());
+    return { peer: ranges, dev: ranges };
+  })();
 
   const description =
     kind === 'adapter'
@@ -204,85 +184,15 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
         ? (['zhin.js', 'service', pluginName] as string[])
         : (['zhin.js', 'plugin', pluginName] as string[]);
 
-  // 作者 import 走 zhin.js 门面；zhin.features 引用须在 peer/deps 声明（runtime 解析门禁）。
-  // Stable Feature 用 optional peer，由 Root 的 zhin.js/@zhin.js/core 提供，勿装进 dependencies。
-  const dependencies: Record<string, string> = {};
-  dependencies['@zhin.js/skill'] = zhinStack['@zhin.js/skill'];
-  if (kind === 'adapter') {
-    dependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
-    dependencies['@zhin.js/core'] = zhinStack['@zhin.js/core'];
-  }
-
-  const peerDependencies: Record<string, string> = {
-    'zhin.js': zhinStack['zhin.js'],
-  };
-  const peerDependenciesMeta: Record<string, { optional: true }> = {};
-
-  const features: Array<{ package: string; api: string }> = [
-    { package: '@zhin.js/skill', api: '^1.0.0' },
-  ];
-  if (kind === 'normal') {
-    features.push({ package: '@zhin.js/command', api: '^1.0.0' });
-    peerDependencies['@zhin.js/command'] = zhinStack['@zhin.js/command'];
-    peerDependenciesMeta['@zhin.js/command'] = { optional: true };
-  }
-  if (kind === 'adapter') {
-    features.push({ package: '@zhin.js/adapter', api: '^1.0.0' });
-    peerDependencies['@zhin.js/adapter'] = zhinStack['@zhin.js/adapter'];
-  }
-
-  const devDependencies: Record<string, string> = {
-    '@types/node': 'latest',
-    typescript: 'latest',
-    vitest: 'latest',
-    rimraf: 'latest',
-    'zhin.js': zhinStack['zhin.js'],
-    '@zhin.js/cli': zhinStack['@zhin.js/cli'],
-  };
-
-  const scripts: Record<string, string> = {
-    build: 'tsc',
-    clean: 'rimraf lib',
-    test: 'vitest run',
-    'test:watch': 'vitest',
-    // 插件能力目录发布前必须构建（见 pnpm check:plugin-capability-publish）
-    prepublishOnly: 'pnpm run build',
-  };
-
-  const files = ['plugin.ts', 'schema.json'];
-  if (kind === 'normal') files.push('commands');
-  if (kind === 'adapter') files.push('adapters');
-  files.push('src', 'skills', 'README.md', 'CHANGELOG.md');
-
-  const packageJson: Record<string, unknown> = {
-    name: packageName,
-    version: '0.1.0',
+  const packageJson = createPluginManifest({
+    pluginName,
+    packageName,
+    kind,
     description,
-    type: 'module',
-    exports: {
-      './package.json': './package.json',
-    },
-    files,
-    scripts,
     keywords,
-    author: '',
-    license: 'MIT',
-    dependencies,
-    peerDependencies,
-    ...(Object.keys(peerDependenciesMeta).length > 0 ? { peerDependenciesMeta } : {}),
-    devDependencies,
-    publishConfig: { access: 'public', registry: 'https://registry.npmjs.org' },
-    engines: { node: NODE_ENGINES_HINT },
-    zhin: {
-      protocol: 1,
-      type: 'plugin',
-      entry: './plugin.ts',
-      engine: '^1.0.0',
-      runtime: 'trusted',
-      features,
-      plugins: [],
-    },
-  };
+    peerRanges: stack.peer,
+    devRanges: stack.dev,
+  });
 
   await fs.writeJson(path.join(pluginDir, 'package.json'), packageJson, { spaces: 2 });
 
@@ -304,34 +214,10 @@ async function createPluginPackage(pluginDir: string, pluginName: string, option
   };
   await fs.writeJson(path.join(pluginDir, 'schema.json'), schemaJson, { spaces: 2 });
 
-  // tsconfig.json：约定目录（commands/adapters/middlewares）由运行时直接加载，
-  // 无需 tsc 编译产物，但纳入 include 以便类型检查。
-  const tsConfig = {
-    compilerOptions: {
-      target: 'ES2022',
-      module: 'ESNext',
-      moduleResolution: 'bundler',
-      outDir: './lib',
-      strict: true,
-      esModuleInterop: true,
-      skipLibCheck: true,
-      forceConsistentCasingInFileNames: true,
-      resolveJsonModule: true,
-      isolatedModules: true,
-      declaration: true,
-      declarationMap: true,
-      sourceMap: true,
-      types: ['node'],
-    },
-    include: [
-      'src/**/*',
-      'plugin.ts',
-      ...(kind === 'normal' ? ['commands/**/*'] : []),
-      ...(kind === 'adapter' ? ['adapters/**/*'] : []),
-    ],
-    exclude: ['lib', 'node_modules', 'tests'],
-  };
-  await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsConfig, { spaces: 2 });
+  // tsconfig.json 负责类型检查（含 tests）；tsconfig.build.json 把 plugin.ts 与约定目录编译成同目录 .js
+  const tsconfigs = createPluginTsconfigs(kind);
+  await fs.writeJson(path.join(pluginDir, 'tsconfig.json'), tsconfigs.tsconfig, { spaces: 2 });
+  await fs.writeJson(path.join(pluginDir, 'tsconfig.build.json'), tsconfigs.build, { spaces: 2 });
 
   // Vitest：与 tests/ 目录配套
   const vitestConfig = `import { defineConfig } from 'vitest/config';
@@ -570,7 +456,7 @@ ${readmeUse}
 
 ## 目录约定
 
-- \`plugin.ts\`：插件入口（\`definePlugin\`，package.json \`zhin.entry\` 指向它）
+- \`plugin.ts\`：插件入口（\`definePlugin\`）。\`zhin.entry\` 写的是 \`./plugin.js\`：本地运行时自动回退到 \`plugin.ts\`，npm 包里是构建出的 \`plugin.js\`
 - \`schema.json\`：实例配置（\`plugins.<instanceKey>\`）的 JSON Schema
 ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`），目录段 `[name]` 声明动态参数（类型在 `params` 中定义）\n' : ''}${kind === 'adapter' ? '- `adapters/<name>/index.ts`：适配器入口（`defineAdapter`），`create(context)` 返回 Endpoint 实例\n' : ''}- \`skills/<name>/SKILL.md\`：AI 技能包，可附带参考资料与脚本（随 npm 包发布）
 - \`tests/\`：Vitest 运行时契约测试
@@ -583,11 +469,14 @@ ${kind === 'normal' ? '- `commands/**/index.ts`：命令入口（`defineCommand`
 
 \`\`\`bash
 pnpm install
-pnpm build   # tsc（src/ 与 plugin.ts；约定目录由运行时直接加载）
-pnpm test    # vitest
+pnpm test        # vitest
+pnpm typecheck   # tsc --noEmit（含 tests）
+pnpm build       # 把 plugin.ts 与约定目录编译成同目录 .js（pnpm pack / publish 前自动执行）
 \`\`\`
 
-在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/im/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会将 \`zhin.js\` / \`@zhin.js/*\` 依赖写为 \`workspace:*\`。
+\`zhin.js\` 与能力包（\`@zhin.js/command\` 等）是 peerDependencies：发布后由宿主 Bot 提供同一份；devDependencies 里的副本只用于本地测试和类型检查。
+
+在 **本仓库** 根执行 \`zhin new\` 时：若存在 \`pnpm-workspace.yaml\`、\`packages/im/zhin/package.json\`，且根 \`package.json\` 声明了 \`zhin.js\`，模板会把 peer 写为 \`workspace:^\`、devDependencies 写为 \`workspace:*\`。
 
 ## 许可证
 
@@ -626,16 +515,19 @@ tools: []
   await fs.writeFile(path.join(pluginDir, 'CHANGELOG.md'), changelogContent);
 
   // 创建 .gitignore
+  const generatedJs = ['plugin.js', ...sourceDirectories(kind).map((dir) => `${dir}/**/*.js`)];
   const gitignoreContent = `node_modules/
 lib/
 coverage/
 *.log
 .DS_Store
+# pnpm build / prepack 生成的 JavaScript（随 npm 包发布，不进仓库）
+${generatedJs.join('\n')}
 `;
 
   await fs.writeFile(path.join(pluginDir, '.gitignore'), gitignoreContent);
 
-  await generateTestFile(pluginDir, pluginName, capitalizedName, kind);
+  await generateTestFile(pluginDir, pluginName, packageName, kind);
 
   // 安装依赖
   if (!options.skipInstall) {
@@ -658,19 +550,20 @@ coverage/
 async function generateTestFile(
   pluginDir: string,
   pluginName: string,
-  capitalizedName: string,
+  packageName: string,
   kind: PluginKind,
 ) {
   const testsDir = path.join(pluginDir, 'tests');
   let testContent: string;
 
   if (kind === 'adapter') {
+    const capitalizedName = toCapitalizedName(pluginName);
     testContent = `import { describe, expect, it } from 'vitest';
 import { parseAdapterDefinition } from 'zhin.js/adapter';
 import plugin from '../plugin.ts';
-import adapter from '../adapters/${pluginName}/index.ts';
+import adapter, { ${capitalizedName}Endpoint } from '../adapters/${pluginName}/index.ts';
 
-describe('zhin.js-${pluginName}', () => {
+describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('${pluginName}');
   });
@@ -679,7 +572,7 @@ describe('zhin.js-${pluginName}', () => {
     expect(parseAdapterDefinition(adapter)).toBe(adapter);
   });
 
-  it('creates an endpoint skeleton with lifecycle methods', async () => {
+  it('creates an endpoint that starts, sends and stops', async () => {
     const endpoint = await adapter.create({
       id: 'root/${pluginName}' as never,
       name: '${pluginName}',
@@ -689,15 +582,18 @@ describe('zhin.js-${pluginName}', () => {
         send: async () => undefined,
       }),
     } as never);
-    expect(typeof endpoint.start).toBe('function');
-    expect(typeof endpoint.open).toBe('function');
-    expect(typeof endpoint.stop).toBe('function');
-    expect(typeof endpoint.send).toBe('function');
+    expect(endpoint).toBeInstanceOf(${capitalizedName}Endpoint);
+    const typed = endpoint as ${capitalizedName}Endpoint;
 
-    await endpoint.start?.();
-    endpoint.open?.();
-    await expect(endpoint.send?.({ target: 'c1', payload: 'hi' })).resolves.toBeTruthy();
-    await endpoint.stop?.();
+    await typed.start(new AbortController().signal);
+    typed.open();
+    const conversation = {
+      endpoint: { adapter: '${pluginName}', id: 'test-bot' },
+      kind: 'private',
+      id: 'c1',
+    } as const;
+    await expect(typed.send({ conversation, payload: 'hi' })).resolves.toBeTruthy();
+    await typed.stop();
   });
 });
 `;
@@ -705,7 +601,7 @@ describe('zhin.js-${pluginName}', () => {
     testContent = `import { describe, expect, it } from 'vitest';
 import plugin from '../plugin.ts';
 
-describe('zhin.js-${pluginName}', () => {
+describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('${pluginName}');
   });
@@ -738,7 +634,7 @@ import plugin from '../plugin.ts';
 import mainCommand from '../commands/${pluginName}/index.ts';
 import echoCommand from '../commands/${pluginName}-echo/[text]/index.ts';
 
-describe('zhin.js-${pluginName}', () => {
+describe('${packageName}', () => {
   it('defines a valid Plugin Runtime entry', () => {
     expect(plugin.name).toBe('${pluginName}');
   });
@@ -769,7 +665,7 @@ describe('zhin.js-${pluginName}', () => {
   logger.success('✓ 测试文件已生成');
 }
 
-async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
+async function addPluginToApp(pluginName: string, packageName: string, skipInstall?: boolean) {
   try {
     const rootPackageJsonPath = path.resolve(process.cwd(), 'package.json');
 
@@ -780,7 +676,6 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
     }
 
     const packageJson = await fs.readJson(rootPackageJsonPath);
-    const packageName = isOfficial ? `@zhin.js/${pluginName}` : `zhin.js-${pluginName}`;
 
     // 初始化 dependencies
     if (!packageJson.dependencies) {
@@ -797,6 +692,11 @@ async function addPluginToApp(pluginName: string, isOfficial?: boolean) {
     logger.log('  挂载方式：在 app package.json 的 "zhin.plugins" 数组中添加：');
     logger.log(`    { "package": "${packageName}", "instanceKey": "${pluginName}" }`);
     logger.log('  （约定式运行时不再读取 zhin.config.yml 的插件列表，请手动添加挂载项）');
+
+    if (skipInstall) {
+      logger.log('  已跳过依赖安装，稍后在项目根运行 pnpm install');
+      return;
+    }
 
     // 重新安装依赖
     logger.info(formatCompact( { cmd: 'new', op: 'update_deps' }));

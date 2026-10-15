@@ -73,5 +73,14 @@
     "runtime": "trusted",
     "features": [],
     "plugins": []
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./package.json": "./package.json"
+    }
   }
 }

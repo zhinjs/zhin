@@ -64,7 +64,29 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./remote": {
+        "types": "./lib/remote.d.ts",
+        "import": "./lib/remote.js"
+      },
+      "./scheduler": {
+        "types": "./lib/scheduler.d.ts",
+        "import": "./lib/scheduler.js"
+      },
+      "./portfolio": {
+        "types": "./lib/portfolio.d.ts",
+        "import": "./lib/portfolio.js"
+      },
+      "./data-governance": {
+        "types": "./lib/data-governance.d.ts",
+        "import": "./lib/data-governance.js"
+      }
+    }
   },
   "license": "MIT",
   "private": false

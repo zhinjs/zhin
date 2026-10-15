@@ -50,7 +50,21 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./jsx-runtime": {
+        "types": "./lib/jsx-runtime.d.ts",
+        "import": "./lib/jsx-runtime.js"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./lib/jsx-dev-runtime.d.ts",
+        "import": "./lib/jsx-dev-runtime.js"
+      }
+    }
   },
   "license": "MIT",
   "private": false

@@ -13,8 +13,10 @@
  * `npm pack --dry-run --json --ignore-scripts`, and checks:
  *   - relative import / export / dynamic import() / require() specifiers in
  *     packed .js/.mjs/.cjs files resolve to a packed file;
- *   - main / module / bin / exports targets are packed (the `development`
- *     condition is skipped: it points at workspace sources on purpose).
+ *   - main / module / bin / exports targets of the *published* manifest are
+ *     packed, every condition included. pnpm publish applies publishConfig
+ *     overrides first, so the source-only `development` condition (stripped
+ *     via publishConfig.exports, see sync-publish-exports.mjs) must not appear.
  *
  * Extensionless specifiers that only a bundler can resolve (for example
  * `./types` next to `types.js` in a browser-only Console package) are
@@ -64,7 +66,7 @@ export async function findBrokenPackImports({ files, manifest, readFile: read })
   const errors = [];
   const warnings = [];
 
-  for (const [field, target] of entryTargets(manifest)) {
+  for (const [field, target] of entryTargets(publishedManifest(manifest))) {
     const file = normalizePacked(target);
     if (!packed.has(file)) errors.push(`${field} -> ${target} is not in the tarball`);
   }
@@ -98,6 +100,20 @@ export async function findBrokenPackImports({ files, manifest, readFile: read })
   return { errors, warnings };
 }
 
+/** Fields pnpm publish replaces with their publishConfig value when packing. */
+const PUBLISH_CONFIG_OVERRIDES = ['main', 'module', 'types', 'typings', 'bin', 'exports', 'browser'];
+
+/** The manifest as `pnpm publish` writes it into the tarball. */
+export function publishedManifest(manifest) {
+  const publishConfig = manifest.publishConfig;
+  if (!publishConfig || typeof publishConfig !== 'object') return manifest;
+  const overrides = {};
+  for (const field of PUBLISH_CONFIG_OVERRIDES) {
+    if (publishConfig[field] !== undefined) overrides[field] = publishConfig[field];
+  }
+  return { ...manifest, ...overrides };
+}
+
 /** main / module / bin / exports string targets (no wildcard patterns). */
 export function entryTargets(manifest) {
   const targets = [];
@@ -117,7 +133,7 @@ export function entryTargets(manifest) {
       value.forEach((entry, index) => visit(entry, `${trail}[${index}]`));
     } else if (value && typeof value === 'object') {
       for (const [key, entry] of Object.entries(value)) {
-        if (key !== 'development') visit(entry, `${trail}["${key}"]`);
+        visit(entry, `${trail}["${key}"]`);
       }
     }
   };

@@ -136,7 +136,72 @@
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org"
+    "registry": "https://registry.npmjs.org",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "import": "./lib/index.js"
+      },
+      "./agent": {
+        "types": "./lib/agent.d.ts",
+        "import": "./lib/agent.js"
+      },
+      "./ai": {
+        "types": "./lib/ai.d.ts",
+        "import": "./lib/ai.js"
+      },
+      "./jsx": {
+        "types": "./lib/jsx.d.ts",
+        "import": "./lib/jsx.js"
+      },
+      "./jsx-runtime": {
+        "types": "./lib/jsx-runtime.d.ts",
+        "import": "./lib/jsx-runtime.js"
+      },
+      "./qrcode": {
+        "types": "./lib/qrcode.d.ts",
+        "import": "./lib/qrcode.js"
+      },
+      "./jsx-dev-runtime": {
+        "types": "./lib/jsx-dev-runtime.d.ts",
+        "import": "./lib/jsx-dev-runtime.js"
+      },
+      "./contexts": {
+        "types": "./lib/zhin-contexts.d.ts"
+      },
+      "./runtime": {
+        "types": "./lib/plugin-runtime.d.ts",
+        "import": "./lib/plugin-runtime.js"
+      },
+      "./plugin-runtime": {
+        "types": "./lib/define-plugin.d.ts",
+        "import": "./lib/define-plugin.js"
+      },
+      "./command": {
+        "types": "./lib/command.d.ts",
+        "import": "./lib/command.js"
+      },
+      "./adapter": {
+        "types": "./lib/adapter.d.ts",
+        "import": "./lib/adapter.js"
+      },
+      "./component": {
+        "types": "./lib/component.d.ts",
+        "import": "./lib/component.js"
+      },
+      "./middleware": {
+        "types": "./lib/middleware.d.ts",
+        "import": "./lib/middleware.js"
+      },
+      "./handler": {
+        "types": "./lib/handler.d.ts",
+        "import": "./lib/handler.js"
+      },
+      "./core/runtime": {
+        "types": "./lib/core-runtime.d.ts",
+        "import": "./lib/core-runtime.js"
+      }
+    }
   },
   "license": "MIT",
   "author": {

@@ -59,17 +59,19 @@ describe('CLI new command integration', () => {
     expect(await fs.pathExists(packageJsonPath)).toBe(true)
     const packageJson = await fs.readJson(packageJsonPath)
     expect(packageJson.name).toBe(`zhin.js-${pluginName}`)
-    expect(packageJson.scripts.build).toBe('tsc')
+    expect(packageJson.scripts.build).toBe('tsc -p tsconfig.build.json')
+    expect(packageJson.scripts.typecheck).toBe('tsc --noEmit')
     expect(packageJson.scripts.test).toBe('vitest run')
-    expect(packageJson.scripts.prepublishOnly).toBe('pnpm run build')
-    expect(packageJson.files).toContain('plugin.ts')
+    expect(packageJson.scripts.prepack).toBe('pnpm run build')
+    expect(packageJson.files).toContain('plugin.js')
+    expect(packageJson.files).not.toContain('plugin.ts')
     expect(packageJson.files).toContain('schema.json')
     expect(packageJson.files).toContain('commands')
     expect(packageJson.files).toContain('skills')
     expect(packageJson.zhin).toMatchObject({
       protocol: 1,
       type: 'plugin',
-      entry: './plugin.ts',
+      entry: './plugin.js',
       engine: '^1.0.0',
       runtime: 'trusted',
     })
@@ -77,12 +79,14 @@ describe('CLI new command integration', () => {
       { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/command', api: '^1.0.0' },
     ])
-    expect(packageJson.dependencies?.['@zhin.js/skill']).toBeDefined()
-    expect(packageJson.peerDependencies?.['zhin.js'] ?? packageJson.devDependencies?.['zhin.js']).toBeDefined()
+    expect(packageJson.dependencies).toBeUndefined()
+    expect(packageJson.peerDependencies?.['@zhin.js/skill']).toBeDefined()
+    expect(packageJson.peerDependenciesMeta?.['@zhin.js/skill']?.optional).toBe(true)
+    expect(packageJson.peerDependencies?.['zhin.js']).toMatch(/^\^\d+\.\d+\.\d+$/)
+    expect(JSON.stringify(packageJson)).not.toContain('"latest"')
     expect(packageJson.peerDependencies?.['@zhin.js/command']).toBeDefined()
     expect(packageJson.peerDependenciesMeta?.['@zhin.js/command']?.optional).toBe(true)
-    expect(packageJson.dependencies?.['@zhin.js/command']).toBeUndefined()
-    expect(packageJson.dependencies?.['@zhin.js/plugin-runtime']).toBeUndefined()
+    expect(packageJson.devDependencies?.['@zhin.js/command']).toBe(packageJson.peerDependencies['@zhin.js/command'])
 
     // Check tsconfig.json（include 覆盖 plugin.ts 与约定目录）
     const tsconfigPath = path.join(pluginDir, 'tsconfig.json')
@@ -92,6 +96,11 @@ describe('CLI new command integration', () => {
     expect(tsconfig.include).toContain('plugin.ts')
     expect(tsconfig.include).toContain('src/**/*')
     expect(tsconfig.include).toContain('commands/**/*')
+    expect(tsconfig.include).toContain('tests/**/*')
+    const buildTsconfig = await fs.readJson(path.join(pluginDir, 'tsconfig.build.json'))
+    expect(buildTsconfig.compilerOptions.noEmit).toBe(false)
+    expect(buildTsconfig.compilerOptions.outDir).toBeUndefined()
+    expect(buildTsconfig.include).not.toContain('tests/**/*')
 
     // Check plugin.ts（definePlugin 裸定义）
     const pluginTs = await fs.readFile(path.join(pluginDir, 'plugin.ts'), 'utf-8')
@@ -138,6 +147,8 @@ describe('CLI new command integration', () => {
     const gitignore = await fs.readFile(path.join(pluginDir, '.gitignore'), 'utf-8')
     expect(gitignore).toContain('node_modules/')
     expect(gitignore).toContain('lib/')
+    expect(gitignore).toContain('plugin.js')
+    expect(gitignore).toContain('commands/**/*.js')
     expect(await fs.pathExists(path.join(pluginDir, 'CHANGELOG.md'))).toBe(true)
 
     const skillPath = path.join(pluginDir, 'skills', pluginName, 'SKILL.md')
@@ -231,9 +242,10 @@ describe('CLI new command integration', () => {
       { package: '@zhin.js/skill', api: '^1.0.0' },
       { package: '@zhin.js/adapter', api: '^1.0.0' },
     ])
-    expect(packageJson.dependencies['@zhin.js/skill']).toBeDefined()
-    expect(packageJson.dependencies['@zhin.js/adapter']).toBeDefined()
-    expect(packageJson.dependencies['@zhin.js/core']).toBeDefined()
+    expect(packageJson.dependencies).toBeUndefined()
+    expect(packageJson.peerDependencies['@zhin.js/adapter']).toBeDefined()
+    expect(packageJson.peerDependenciesMeta['@zhin.js/adapter']).toEqual({ optional: true })
+    expect(packageJson.peerDependencies['@zhin.js/core']).toBeUndefined()
     expect(packageJson.files).toContain('adapters')
 
     const testFilePath = path.join(pluginDir, 'tests', `${adapterName}-runtime.test.ts`)
