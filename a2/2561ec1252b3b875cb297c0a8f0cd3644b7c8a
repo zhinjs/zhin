@@ -1,0 +1,29 @@
+.github/workflows/nightly-evals.yml
+  s_f21319594bee88::t_0defa65d6426b9 19,21,109-116
+packages/im/agent/evals/README.md
+  s_364cb894392bc1::t_5aa271251c8caa 271-282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a22561ec1252b3b875cb297c0a8f0cd3644b7c8a",
+  "prompts": {},
+  "sessions": {
+    "s_364cb894392bc1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a8548c86813b5959c",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
