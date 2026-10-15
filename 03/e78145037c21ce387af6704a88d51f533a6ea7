@@ -1,0 +1,14 @@
+.changeset/agent-perception-prepass.md
+  h_b680f75345178a 10-14
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "03e78145037c21ce387af6704a88d51f533a6ea7",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
