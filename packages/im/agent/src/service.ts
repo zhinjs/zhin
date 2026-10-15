@@ -12,6 +12,7 @@ import { registerProviderInstances } from './config/provider-instance.js';
 import { normalizeAiRoutingConfig, type NormalizedAiRoutingConfig } from './config/normalize-ai-config.js';
 import { validateAiRoutingConfig } from './config/validate-ai-config.js';
 import { AgentBindingRegistry } from './config/agent-binding-registry.js';
+import { resolvePerceptionConfig, type ResolvedPerceptionConfig } from './config/perception-config.js';
 import { DEFAULT_ZHIN_AGENT_NAME } from './config/types.js';
 import {
   runAgentLoopStandaloneTurn,
@@ -64,6 +65,7 @@ export class AIService {
   private accessConfig: AIAccessConfig;
   private agentConfig: AIConfig['agent'];
   private imageGenerationGlobal?: ImageGenerationDefaults;
+  private perceptionConfig?: ResolvedPerceptionConfig;
   private readonly standaloneTools = new StandaloneToolCatalog();
   private _modelRegistry: ModelRegistry | null = null;
   private llmRuntime!: LlmApiRuntime;
@@ -93,6 +95,15 @@ export class AIService {
       logger.warn(`ai.agent.${key} 已弃用，${reason} 运行 zhin config check --fix 可移除。`);
     }
     this.imageGenerationGlobal = config.imageGeneration;
+    this.perceptionConfig = resolvePerceptionConfig(
+      config.multimodal?.perception,
+      Object.keys(this.routing.providers),
+    );
+  }
+
+  /** Validated `ai.multimodal.perception`, or undefined when the pre-pass is off. */
+  getPerceptionConfig(): ResolvedPerceptionConfig | undefined {
+    return this.perceptionConfig;
   }
 
   getRoutingConfig(): NormalizedAiRoutingConfig {

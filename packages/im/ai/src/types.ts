@@ -438,6 +438,24 @@ export interface AIConfig {
     audio?: { strategy?: 'transcribe' | 'mcp' | 'text-only' };
     video?: { strategy?: 'mcp' | 'text-only'; mcpServer?: string; maxFrames?: number };
     outbound?: { splitMessages?: 'auto' | 'single' | 'always_split' };
+    /**
+     * Perception pre-pass: when the turn's model cannot take an image / video / PDF,
+     * this media-capable model describes it and the description is injected as
+     * untrusted text (`[图片描述] …`). Unset = off (placeholders as before).
+     */
+    perception?: {
+      /** `ai.providers` alias of the perception model. */
+      provider: string;
+      model: string;
+      /** Kinds to describe. Default `['image']`; `file` covers PDFs only. */
+      kinds?: Array<'image' | 'video' | 'file'>;
+      /** Description length cap in characters. Default 800. */
+      maxChars?: number;
+      /** Per-attempt timeout in ms. Default 30000. */
+      timeoutMs?: number;
+      /** Media described per turn; the rest keep the placeholder. Default 4. */
+      maxItemsPerTurn?: number;
+    };
   };
   /**
    * 三层 Markdown 文件记忆（global / platform / session）。

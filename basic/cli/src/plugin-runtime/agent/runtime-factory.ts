@@ -4,6 +4,7 @@ import {
   AIService,
   AgentEventBus,
   AgentResourceHub,
+  createLlmMediaPerceptionPort,
   discoverWorkspaceAgents,
   publishOutboundElements,
   type ApprovalPort,
@@ -61,6 +62,7 @@ export function createRuntimeZhinAgent(
     chatModel: binding.model,
   }, events, service.getLlmRuntime());
   const composed = composeZhinAgentRuntime(agent, provider, createRuntimeProactiveOutbound(im));
+  const mediaPerception = createRuntimeMediaPerception(service);
   composed.host.approvalPort = approvalPort;
   const resourceHub = new AgentResourceHub();
   agent.configure({
@@ -74,6 +76,7 @@ export function createRuntimeZhinAgent(
     providerResolver: (alias) => service.getProvider(alias),
     llmRuntime: service.getLlmRuntime(),
     audioTranscriber,
+    ...(mediaPerception ? { mediaPerception } : {}),
     activeBinding: binding,
     deferredResultSender: composed.deliverOutbound,
     subagentSender: composed.deliverOutbound,
@@ -99,6 +102,30 @@ export function createRuntimeZhinAgent(
     runtime: composed,
     seedPresets: () => seedResourceHubAgentPresets(resourceHub, projectRoot),
   };
+}
+
+/**
+ * `ai.multimodal.perception` → perception port on the service-owned LLM runtime
+ * (same transport and resilience layer as turns). Unset → undefined (no pre-pass).
+ */
+function createRuntimeMediaPerception(service: AIService) {
+  const config = service.getPerceptionConfig();
+  if (!config) return undefined;
+  logger.info(formatCompact({
+    op: 'media_perception_enabled',
+    provider: config.provider,
+    model: config.model,
+    kinds: config.kinds.join(','),
+  }));
+  return createLlmMediaPerceptionPort({
+    runtime: service.getLlmRuntime(),
+    config,
+    resilience: service.getAgentConfig()?.providerResilience,
+    onEvent: (event) => {
+      const { type, ...fields } = event;
+      logger.warn(formatCompact({ op: `media_perception_${type}`, ...fields }));
+    },
+  });
 }
 
 /**

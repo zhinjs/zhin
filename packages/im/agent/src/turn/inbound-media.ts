@@ -5,6 +5,10 @@
  * 策略（`ai.multimodal`）：
  * 每个输入媒体必须产生 accepted / derived / unsupported / rejected / failed
  * 之一；失败不得伪装成已经被模型识别的媒体占位。
+ *
+ * 当前模型收不了的媒体：音频先走 STT（`[语音转写]`）；配置了
+ * `ai.multimodal.perception` 时，图片 / 视频 / PDF 由感知模型描述后以
+ * untrusted 文本注入（`[图片描述]` 等），失败或超出单回合上限时保持原占位。
  */
 import { isMediaBlockRef, type MediaContentBlock, type MediaBlockRef, type ModelInputModality } from '@zhin.js/ai';
 import { formatCompact, getLogger } from '@zhin.js/logger';
@@ -14,6 +18,7 @@ import {
 import type { AudioTranscriptionPort, MediaBinaryPayload } from '../media/media-types.js';
 import { transcribeAudioPayload } from '../media/media-router.js';
 import { resolveMultimodalConfig } from '../media/resolve-config.js';
+import { renderPerceptionCaption, type MediaPerceptionPort } from '../media/perception.js';
 import type { ReferencePort, TurnMedia } from './turn-ingress.js';
 
 const logger = getLogger('ZhinAgent');
@@ -31,6 +36,15 @@ export interface InboundMediaOutcome {
   readonly kind: TurnMedia['kind'];
   readonly status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
   readonly code: string;
+  /** Where derived text came from (perception pre-pass); the text is untrusted external content. */
+  readonly provenance?: InboundMediaProvenance;
+}
+
+export interface InboundMediaProvenance {
+  readonly source: 'media_perception';
+  readonly provider: string;
+  readonly model: string;
+  readonly cached: boolean;
 }
 
 export interface ResolveTurnMediaOptions {
@@ -38,6 +52,8 @@ export interface ResolveTurnMediaOptions {
   readonly signal?: AbortSignal;
   readonly providerInput?: readonly ModelInputModality[];
   readonly transcriber?: AudioTranscriptionPort;
+  /** `ai.multimodal.perception`: describes media the turn's model cannot take. Absent = placeholders. */
+  readonly perception?: MediaPerceptionPort;
 }
 
 const EMPTY_INJECTION: InboundMediaInjection = Object.freeze({
@@ -79,6 +95,7 @@ export async function resolveTurnMediaInjection(
     signal = new AbortController().signal,
     providerInput,
     transcriber,
+    perception,
   } = options;
   const refs = (turnMedia ?? []).map((entry) => ({
     entry,
@@ -97,6 +114,7 @@ export async function resolveTurnMediaInjection(
   const blocks: MediaContentBlock[] = [];
   const textAppends: string[] = [];
   const outcomes: InboundMediaOutcome[] = [];
+  let perceived = 0;
 
   for (const { entry, type, media: initialMedia } of refs) {
     let media = initialMedia;
@@ -161,6 +179,38 @@ export async function resolveTurnMediaInjection(
     }
 
     if (!supportedInput.has(type)) {
+      if (perception?.accepts(payload)) {
+        if (perceived >= perception.maxItemsPerTurn) {
+          logger.warn(formatCompact({ op: 'inbound_perception_skipped', type, reason: 'max_items_per_turn' }));
+        } else {
+          perceived += 1;
+          try {
+            const result = await perception.describe(payload, signal);
+            if (result?.text.trim()) {
+              textAppends.push(renderPerceptionCaption(type, result.text));
+              outcomes.push({
+                kind: type,
+                status: 'derived',
+                code: 'media_perception',
+                provenance: Object.freeze({
+                  source: 'media_perception' as const,
+                  provider: result.provider,
+                  model: result.model,
+                  cached: result.cached,
+                }),
+              });
+              continue;
+            }
+          } catch (error) {
+            signal.throwIfAborted();
+            logger.warn(formatCompact({
+              op: 'inbound_perception_failed',
+              type,
+              error: error instanceof Error ? error.message : String(error),
+            }));
+          }
+        }
+      }
       textAppends.push(failureText(type, 'unsupported:provider_input', media));
       outcomes.push({ kind: type, status: 'unsupported', code: 'provider_input' });
       continue;

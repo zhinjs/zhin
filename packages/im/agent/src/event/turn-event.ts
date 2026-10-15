@@ -83,6 +83,13 @@ export interface MediaResolutionEvent {
   mediaKind: 'image' | 'audio' | 'video' | 'file';
   status: 'accepted' | 'derived' | 'unsupported' | 'rejected' | 'failed';
   code: string;
+  /** Set when the text came from the perception pre-pass (`code: 'media_perception'`). */
+  provenance?: {
+    source: 'media_perception';
+    provider: string;
+    model: string;
+    cached: boolean;
+  };
 }
 
 export interface ToolCallEvent {

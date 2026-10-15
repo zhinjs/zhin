@@ -17,6 +17,7 @@ import type { SkillRegistry } from '../resource-hub/skill-registry.js';
 import type { SubagentResultSender } from '../subagent/index.js';
 import type { ResolvedAgentBinding } from './types.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
+import type { MediaPerceptionPort } from '../media/perception.js';
 
 /** ZhinAgent 运行依赖（通过 configure() 注入） */
 export interface ZhinAgentDependencies {
@@ -33,6 +34,8 @@ export interface ZhinAgentDependencies {
   modelRegistry: ModelRegistry;
   llmRuntime: LlmApiRuntime;
   audioTranscriber: AudioTranscriptionPort;
+  /** `ai.multimodal.perception` pre-pass for media the turn's model cannot take. */
+  mediaPerception: MediaPerceptionPort;
   providerResolver: (alias: string) => AIProvider;
   activeBinding: ResolvedAgentBinding;
   subagentSender: SubagentResultSender;

@@ -4,6 +4,8 @@ export {
   type NormalizedAiRoutingConfig,
 } from './normalize-ai-config.js';
 export { validateAiRoutingConfig } from './validate-ai-config.js';
+export { resolvePerceptionConfig } from './perception-config.js';
+export type { PerceptionConfigInput, PerceptionMediaKind, ResolvedPerceptionConfig } from './perception-config.js';
 export { applyAiConfigFixes } from './fix-ai-config.js';
 export {
   DEPRECATED_AGENT_CONFIG_KEYS,

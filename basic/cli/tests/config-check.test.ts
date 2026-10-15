@@ -62,6 +62,32 @@ database:
     }));
   });
 
+  it('校验 ai.multimodal.perception（provider 必须是 ai.providers 别名）', async () => {
+    await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
+ai:
+  providers:
+    groq:
+      sdk: openai-compatible
+      apiKey: test
+      baseUrl: https://api.groq.com/openai/v1
+  agents:
+    zhin:
+      provider: groq
+      model: openai/gpt-oss-120b
+  multimodal:
+    perception:
+      provider: gemini
+      model: gemini-flash-lite
+`);
+    const result = await runConfigCheck(tmpDir, {});
+    expect(result.issues).toContainEqual(expect.objectContaining({
+      severity: 'error',
+      code: 'ai.multimodal_perception_invalid',
+      path: 'ai.multimodal.perception',
+      message: expect.stringContaining('"gemini" is not defined in ai.providers'),
+    }));
+  });
+
   it('应检测废弃的 ai.defaultProvider 与 provider driver/api', async () => {
     await fs.writeFile(path.join(tmpDir, 'zhin.config.yml'), `
 plugins:

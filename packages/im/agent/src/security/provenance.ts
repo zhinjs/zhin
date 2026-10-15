@@ -83,7 +83,9 @@ export function isExternalContentSource(tool: ToolView, settings: InjectionGuard
 export type ProvenanceSource =
   | Readonly<{ kind: 'tool_result'; toolName: string }>
   | Readonly<{ kind: 'subagent_report' }>
-  | Readonly<{ kind: 'conversation_context' }>;
+  | Readonly<{ kind: 'conversation_context' }>
+  /** A perception-model description of user media (`ai.multimodal.perception`). */
+  | Readonly<{ kind: 'media_perception' }>;
 
 const MAX_CHAIN_SOURCES = 5;
 
@@ -147,6 +149,7 @@ function describeSource(source: ProvenanceSource): string {
     case 'tool_result': return `工具 ${source.toolName} 的结果`;
     case 'subagent_report': return '子 agent 的报告';
     case 'conversation_context': return '群聊背景消息';
+    case 'media_perception': return '图片/媒体的自动描述';
   }
 }
 

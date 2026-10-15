@@ -375,6 +375,7 @@ function checkAi(
         fixHint: 'zhin setup --ai',
       });
     }
+    checkPerception(aiUtils, validationAi, normalized, issues);
   } catch (error) {
     pushIssue(issues, {
       severity: 'error',
@@ -382,6 +383,30 @@ function checkAi(
       path: 'ai',
       message: error instanceof Error ? error.message : String(error),
       fixHint: 'zhin setup --ai',
+    });
+  }
+}
+
+function checkPerception(
+  aiUtils: AiConfigUtils,
+  ai: unknown,
+  normalized: Record<string, unknown>,
+  issues: ConfigIssue[],
+): void {
+  if (!aiUtils.resolvePerceptionConfig) return;
+  const multimodal = (ai as { multimodal?: { perception?: unknown } } | undefined)?.multimodal;
+  if (multimodal?.perception === undefined) return;
+  const providers = normalized.providers;
+  const aliases = providers && typeof providers === 'object' ? Object.keys(providers) : undefined;
+  try {
+    aiUtils.resolvePerceptionConfig(multimodal.perception, aliases);
+  } catch (error) {
+    pushIssue(issues, {
+      severity: 'error',
+      code: 'ai.multimodal_perception_invalid',
+      path: 'ai.multimodal.perception',
+      message: error instanceof Error ? error.message : String(error),
+      fixHint: 'ai.multimodal.perception: { provider: <ai.providers 别名>, model: <支持图片输入的模型> }',
     });
   }
 }

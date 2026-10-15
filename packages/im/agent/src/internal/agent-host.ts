@@ -23,6 +23,7 @@ import type { SessionToldLedger } from '../memory/told-ledger.js';
 import type { OwnerApprovalRuntime } from '../security/owner-approval-runtime.js';
 import type { SessionCompactInfo } from '../event/session-events.js';
 import type { AudioTranscriptionPort } from '../media/media-types.js';
+import type { MediaPerceptionPort } from '../media/perception.js';
 import type {
   HostEventEmitter,
   HostPhaseTraceConfig,
@@ -100,6 +101,8 @@ export interface ZhinAgentPrivate
   activeBinding: ResolvedAgentBinding | null;
   llmRuntime: LlmApiRuntime;
   audioTranscriber?: AudioTranscriptionPort;
+  /** `ai.multimodal.perception` pre-pass; absent when not configured. */
+  mediaPerception?: MediaPerceptionPort;
   getTurnProvider(): AIProvider;
   skillRegistry: SkillRegistry | null;
   skillSystem: SkillSystem | null;
