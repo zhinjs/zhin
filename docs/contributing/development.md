@@ -14,7 +14,7 @@ title: 开发流程
 
 ## 环境准备
 
-- Node.js `^20.19.0` 或 `>=22.12.0`
+- Node.js `>=22.19.0`
 - pnpm 9（仓库锁定 `packageManager: pnpm@9.0.2`）
 
 ```bash

@@ -22,7 +22,7 @@ npx zhin runtime start --once --mode test  # 装配冒烟
 
 | 边界 | 兼容依据 |
 | --- | --- |
-| Node | `^20.19.0 || >=22.12.0` |
+| Node | `>=22.19.0` |
 | Root 与插件 | `package.json#zhin.engine` 的 semver |
 | Feature consumer/provider | `features[].api` 与 Feature `featureApi` |
 | Zhin 包族 | lockfile 中解析出的同一发布组合 |

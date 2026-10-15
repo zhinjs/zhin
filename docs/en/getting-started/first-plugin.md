@@ -11,7 +11,7 @@ By the end you will know the four building blocks of a plugin — manifest, entr
 
 ::: tip Before you start
 - You have created and run `my-bot` from the [Quick start](./index.md) (if not, run `npm create zhin-app my-bot -y`).
-- Node.js ≥22.12.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
+- Node.js ≥22.19.0 and pnpm 9+. `pnpm dev` runs TypeScript source directly — no build step.
 :::
 
 ::: details Just want the least code possible?

@@ -5,7 +5,7 @@
 
 ## 前置条件
 
-- Node.js `^20.19.0` 或 `>=22.12.0`
+- Node.js `>=22.19.0`
 - 一个可公网访问的 HTTPS 域名
 - 微信公众号的 AppID、AppSecret、回调 Token
 - 安装 `@zhin.js/adapter-wechat-mp`

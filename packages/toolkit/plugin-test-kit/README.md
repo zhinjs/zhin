@@ -74,7 +74,7 @@ separate, explicitly authorized test with an adapter account and harmless target
 
 ## SQLite fixture compatibility
 
-The kit itself supports Node 20.19+ and does not require SQLite. Its base native integration test
+The kit itself requires Node 22.19+ (its `engines`) and does not require SQLite. Its base native integration test
 runs without importing `node:sqlite`. SQLite-specific repository acceptance requires Node 22.5+;
 Node 22.5–22.12 child processes include `--experimental-sqlite`, and Node 20 explicitly skips those
 optional persistence cases. They never substitute memory storage while claiming durable persistence.

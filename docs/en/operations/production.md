@@ -21,8 +21,7 @@ Use `/pub/health` and `/pub/ready` for health checks; see [6. Monitoring and ale
 
 ## 1. Release baseline
 
-- Use Node `>=22.12.0` for scaffolded TypeScript projects and commit the lockfile.
-- The compiled IM library still supports `^20.19.0 || >=22.12.0`; its minimum version is not the minimum for a source TypeScript project.
+- Use Node `>=22.19.0` (projects and the compiled IM library) and commit the lockfile.
 - Run `zhin doctor`, `pnpm build`, and project tests.
 - Run `zhin runtime start --once --mode test` to prove assembly without a long-lived supervisor.
 - Record the commit, lockfile hash, configuration version, and data restore point.

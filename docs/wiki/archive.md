@@ -16,7 +16,7 @@ title: Cubic Wiki 资料存档
 
 | 快照主题 | 当前行为 | 维护中的文档 |
 | --- | --- | --- |
-| [快速开始](./cubic/quickstart) | 新项目要求 Node.js `>=22.12.0`，目前配置的 HTTP 端口为 `8068`；`8086` 是未配置时的 Runtime 回退端口。 | [入门指南](/getting-started/) |
+| [快速开始](./cubic/quickstart) | 新项目要求 Node.js `>=22.19.0`，目前配置的 HTTP 端口为 `8068`；`8086` 是未配置时的 Runtime 回退端口。 | [入门指南](/getting-started/) |
 | [插件 Runtime](./cubic/plugin-runtime)、[命令](./cubic/commands) | 命令入口为 `commands/**/index.ts`；Handler 使用 `handlers/<name>/index.ts`。 | [约定目录](/authoring/conventions) |
 | [MCP](./cubic/mcp) | 可选 Runtime Host 只有在顶层配置 `mcp:` 时才注册 Tool；`ai.mcpServers` 配置的是 Agent 客户端。 | [Runtime 源码](https://github.com/zhinjs/zhin/blob/main/packages/host/mcp/src/runtime.ts)、[文档修正](https://github.com/zhinjs/zhin/pull/684) |
 | [安全与沙箱](./cubic/security-sandbox) | `execApprovalMode` 为 `ask | auto | bypass`；Tool 的 `requiresApproval` 是另一组选项：`never | on-risk | once | always`。 | [Agent 配置](/ai/)、[工具开发](/authoring/agent-tools) |

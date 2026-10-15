@@ -62,7 +62,7 @@ pnpm dev
 2. 填入终端打印的 API 地址（新项目默认 `http://127.0.0.1:8068`）和 `.env` 里的 `HTTP_TOKEN`。
 3. 打开 **Sandbox** 会话，发送 `/hello`，收到回复即成功。
 
-`-y` 表示全部使用默认选项：用浏览器里的 **Sandbox**（模拟聊天窗口）代替真实平台，不启用 AI。环境要求：脚手架项目需要 Node.js **≥22.12.0** 与 pnpm 9+（编译后的库支持 `^20.19.0 || >=22.12.0`）。遇到问题先运行 `npx zhin doctor`。
+`-y` 表示全部使用默认选项：用浏览器里的 **Sandbox**（模拟聊天窗口）代替真实平台，不启用 AI。环境要求：Node.js **≥22.19.0** 与 pnpm 9+。遇到问题先运行 `npx zhin doctor`。
 
 完整步骤：[快速开始](./docs/getting-started/index.md) · 暂时不想安装？试试 [在线 Demo](https://demo.zhin.dev)。
 

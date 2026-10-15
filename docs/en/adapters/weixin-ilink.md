@@ -30,7 +30,7 @@ Can be **enabled simultaneously** with `@zhin.js/adapter-wechat-mp`.
 ## Prerequisites
 
 - The WeChat client must have grayscale access to **ClawBot** (latest WeChat version + grayscale eligibility)
-- Node.js ^20.19.0 or >=22.12.0
+- Node.js >=22.19.0
 
 ## Minimal Configuration
 

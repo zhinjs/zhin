@@ -357,7 +357,7 @@ pnpm stop
 
 3. **Node.js 版本问题**
    ```bash
-   # 检查 Node.js 版本（生成的 TypeScript 项目需要 >=22.12.0）
+   # 检查 Node.js 版本（生成的 TypeScript 项目需要 >=22.19.0）
    node --version
    
    # 升级 Node.js
@@ -366,7 +366,7 @@ pnpm stop
 
 ## 环境要求
 
-- **Node.js**: >=22.12.0（创建目录前会检查）
+- **Node.js**: >=22.19.0（创建目录前会检查）
 - **npm**: >= 8.0.0 (或对应版本的 yarn/pnpm)
 - **操作系统**: Windows 10+, macOS 10.15+, Linux (现代发行版)
 

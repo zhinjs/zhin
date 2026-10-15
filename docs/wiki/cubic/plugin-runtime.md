@@ -138,7 +138,7 @@ sequenceDiagram
 
 ## 开发规范
 
-1. **仅支持 ESM**：运行时要求 `"type": "module"` 且目标 Node.js 版本 ≥20.19.0。
+1. **仅支持 ESM**：运行时要求 `"type": "module"` 且目标 Node.js 版本 ≥22.19.0。
 2. **导入扩展**：所有本地 TypeScript 导入必须包含 `.js` 扩展（例如，`import { foo } from './bar.js'`）。
 3. **禁用旧版 API**：如 `usePlugin()`、`getPlugin()` 和 `bootstrapNode` 等 API 已被移除，使用这些 API 将导致 `PluginScopeAssembler` 抛出错误。
 4. **资源管理**：共享资源（数据库、连接等）必须通过 `context.resources.provide` 和 `context.resources.use` 进行管理，而非使用模块级别的单例。

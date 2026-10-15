@@ -21,8 +21,7 @@ description: "把 Bot 部署成可恢复的服务：发布前检查、反向代�
 
 ## 1. 发布前基线
 
-- 脚手架生成的 TypeScript 项目使用 Node `>=22.12.0`，依赖由 lockfile 固定。
-- 编译后的 IM 库支持范围仍为 `^20.19.0 || >=22.12.0`，不要将库的最低版本当作源码项目的运行要求。
+- 使用 Node `>=22.19.0`（脚手架项目与编译后的 IM 库相同），依赖由 lockfile 固定。
 - 执行 `zhin doctor`、`pnpm build` 与项目测试。
 - 用 `zhin runtime start --once --mode test` 验证装配，不连接长期 supervisor。
 - 记录当前提交、lockfile hash、配置版本与数据备份点。

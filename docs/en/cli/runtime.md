@@ -46,7 +46,7 @@ Unknown options cause an immediate error before startup (fail fast), and will no
 
 ## Native TypeScript (strip-types)
 
-Runtime does not compile the project before startup. Node executes plugin source directly. Supported versions match repository `engines`: `^20.19.0 || >=22.12.0`; unsupported versions fail immediately.
+Runtime does not compile the project before startup. Node executes plugin source directly. Supported versions match repository `engines`: `>=22.19.0`; unsupported versions fail immediately.
 
 Foreground mode selects a wrapper based on Node's TypeScript support. Daemon mode always uses the supervisor -> child-process structure described below.
 

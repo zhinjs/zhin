@@ -29,7 +29,7 @@ pnpm install && pnpm build   # 仓库根
 pnpm dev:test                # 或 cd examples/test-bot && pnpm dev
 ```
 
-Node `>=22.18.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`，Token `test-bot-dev-token`。
+Node `>=22.19.0`（Plugin Runtime 依赖 Node 原生 TypeScript）。依赖本目录 `.env`（与 legacy 相同变量）。Console：https://console.zhin.dev → `http://127.0.0.1:8086`，Token `test-bot-dev-token`。
 
 **ICQQ 协议库**：`@icqqjs/icqq` 是 `@zhin.js/adapter-icqq` 的可选对等依赖。启用 `icqq` endpoint 时在本目录安装：
 

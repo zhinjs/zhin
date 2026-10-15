@@ -46,7 +46,7 @@ zhin runtime start --once --mode test
 
 ## 原生 TypeScript（strip-types）
 
-运行时不经过项目编译步骤，插件源码由 Node 直接执行。支持版本与仓库 `engines` 一致：`^20.19.0 || >=22.12.0`，不满足时直接报错。
+运行时不经过项目编译步骤，插件源码由 Node 直接执行。支持版本与仓库 `engines` 一致：`>=22.19.0`，不满足时直接报错。
 
 前台模式会按 Node 的 TypeScript 支持能力决定是否需要 wrapper。daemon 模式始终使用 supervisor → 子进程两层结构，见下文进程管理。
 
