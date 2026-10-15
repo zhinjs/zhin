@@ -1,5 +1,12 @@
 # @zhin.js/process-monitor
 
+## 1.1.5
+
+### Patch Changes
+
+- @zhin.js/skill@1.1.5
+- @zhin.js/tool@1.1.5
+
 ## 1.1.4
 
 ### Patch Changes

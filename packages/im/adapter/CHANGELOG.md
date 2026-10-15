@@ -1,5 +1,30 @@
 # @zhin.js/adapter
 
+## 1.1.18
+
+### Patch Changes
+
+- 9891e66: Endpoint 新增运行期 `selfUserId` 访问器与受保护的 `reportSelfUserId()`（`EndpointImplementation` 另可声明 `selfUserId`，`EndpointActivationContext` 提供 `reportSelfUserId`），并新增进程级 Peer Registry（`getProcessPeerRegistry()` / `createPeerRegistry()`）。账号仅在 generation active 后登记，回滚 / retire / stop 后移除；`EndpointIdentity` 保持不可变。ICQQ 在 `system.online` 上报 uin；OneBot11 ws/wss 从事件 `self_id` 与 `get_login_info` 上报；Sandbox 以配置的 bot id 作为合成账号。未上报的旧 Endpoint 不进入 Registry（fail closed），不会用配置 id 兜底。OneBot12 / napcat / milky 等其余适配器留待后续。
+
+  Peer Registry 使用登记序号（新 generation 胜出），旧实例在新实例登记后再次上报不会覆盖新条目；空值或非字符串的读取查询返回未命中而不抛错；OneBot11 在 stop 时清空 `selfUserId`。
+
+  登记序号在 Endpoint 激活时通过 `PeerRegistry.reserve()` 分配，新实例先上报、旧实例晚到的首次上报不会覆盖新条目。
+
+- 4778587: 补齐 Console 安装配置闭环所需的精确配置路径、端点身份、平台就绪与验证计划失效语义，并保存历史消息的方向及实际投递诊断。
+
+  修复真实 ICQQ 入站目标保存了插件 owner 而非平台标识、导致提醒投递被身份校验拒绝的问题；无关插件配置变更保留原有适配器连接。
+
+  保证候选事件在当前代快照发布后准入，并避免安装过程中依赖文件变动提前中断插件管理操作。
+
+  明确 Adapter/MCP 客户端创建仅提供所属 owner 的配置与资源，跨 Feature 查询由当前 operation 上下文负责；入站诊断记录接收时刻，避免慢指令的回复在历史中先于指令。
+
+- Updated dependencies [386150d]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/feature-kit@1.1.4
+
 ## 1.1.17
 
 ### Patch Changes

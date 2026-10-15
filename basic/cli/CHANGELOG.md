@@ -1,5 +1,173 @@
 # @zhin.js/cli
 
+## 1.1.10
+
+### Patch Changes
+
+- bf52b40: 修复 IM 审批静默拒绝：审批结果区分「用户拒绝 / 审核器拒绝 / 超时 / 无审批通道」，并以不诱导重试的文案返回给模型；审批提示支持回复 y/同意、n/拒绝；超时不再被当作用户拒绝记忆；owner 读取工作区内 package.json、锁文件等非机密项目文件不再需要确认（.env、密钥等仍需确认，写入审批不变）。
+- bf52b40: fix(agent): 本轮策略无法执行 Shell 时不再向模型提供 bash（工具列表与目录同时过滤，load_tool 也无法再加载），万一触发会返回明确、不可重试的错误。新增 `ai.agent.masterShell`（默认 `off`）：设为 `isolated` 时，仅 IM 私聊中的 master 可在 Docker 容器内执行 bash（工作区可写、无网络、development 白名单、白名单外命令需审批），宿主无 Docker 时直接失败、不降级到宿主机。
+- e4fbfb2: Semantic memory retrieval uses BM25 (#734). `memory_search` ranks with BM25 (word tokens plus CJK bigrams), and each turn now recalls the top-k entries relevant to the current message from the initiator's visible scopes into the turn context, bounded by `ai.memory.semantic.recall` (`topK` 5, `maxTokens` 400 by default), so memory cost per turn no longer grows with the number of entries. Users can view and forget memory about themselves with `/memory` and `/forget`; `SemanticMemoryRuntime` gains `list` / `delete` for management surfaces.
+- 4ce55db: Add a minimal per-turn trace: `TurnTrace` collector (model calls and tokens, redacted tool-call summaries with duration and result size, denials, budget extensions and auto-continuations, nested sub-agent turns, termination) fed from the turn journal, the last 50 traces kept in `data/agent-traces/recent.json`, a new `zhin trace <turnId|last>` command, and traces attached to failing eval reports.
+- 56bafda: feat(agent): 多模态感知预处理 `ai.multimodal.perception`。主模型收不了的图片 / 视频 / PDF，由配置的感知模型（如 Gemini Flash-Lite）经 provider 韧性层描述后，以 `[图片描述]` 等不可信外部内容注入，并写入会话历史；按字节 sha256 缓存，每回合有上限，失败回到原占位。描述会让回合进入“已接触外部内容”状态（高危动作需审批），`media_resolution` 事件带上来源模型。不配置时行为不变；配置错误时启动失败，`zhin config check` 同样报错。
+
+  fix(agent): 模型 fallback 跳过不支持本回合媒体类型的候选（已接收的图片不会在 fallback 时悄悄变成占位）；带图片的回合仍以绑定的模型（`ai.agents.<name>.model`）为第一候选。
+
+  deprecate（仍兼容，下一个 minor 移除）：
+
+  - `ai.agents.<name>.priority` / `match`（含 `hasMedia` 等全部条件）从未生效：IM 消息总是交给 `ai.agents.zhin`。仍接受，启动时告警，不再因此校验报错；`zhin config check` 报 `ai.agent_routing_deprecated`，`--fix` 自动删除。`ai.routes` 的 `--fix` 改为直接删除。删除未导出的 `routing/route-matcher` / `match-rules`；`RouteMatchConfig` 与相关字段标记 `@deprecated`。
+  - `ZhinAgentConfig.visionModel`（仅代码可设置的残留）：仍作为图片回合的后备候选，设置时告警。
+  - `AgentCore.runVision` / `runVisionTurn`、`runAgentLoopVisionTurn` / `runAgentLoopVisionTurnRun` 及其类型：无生产调用方，标记 `@deprecated`。
+
+- dbc1456: feat(agent): 后台任务插话、改向与叫停，`/tasks`、`/task stop|redirect` 命令，并从 `@zhin.js/agent` 导出后台任务模块（#732）
+- a62acca: Ordinary IM turns now have a clear policy for messages that arrive while a turn is running (#725). A sender's follow-up replaces their own unanswered turn and is answered together with the earlier text, or merges into their queued turn. Other members' messages always queue and never interrupt or merge into someone else's turn. The initiator or master can stop a turn with `取消` / `cancel`. Queues are bounded by the new `ai.agent.inboundQueue.maxQueuedTurns` (default 5) and `ttlMs`, and queue waits and merges are recorded on the TurnTrace.
+- 4778587: 重启与 Ctrl+C 退出时完整停止并释放端口/资源：Console 重启只设置退出码 75 后自然退出；停止流程幂等；SIGINT/SIGTERM 超过 5 秒未停完时输出仍在停止的组件并以 130/143 强制退出，停止期间再次收到信号立即退出。
+- 386150d: Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root. Reject inline configuration in isolated plugins inside their own realm; isolated configuration uses schema.json.
+
+  Reject ambiguous optional/rest routes and undefined dynamic defaults, preserve optional parameter types and help handling, and validate Console edits with the Runtime configuration engine. Keep unrelated plugin entries cached during helper reloads, expose initial configuration metadata before login completes, and drain admitted Host operations while rejecting retired or failed-generation access.
+
+  Keep schedule activation and hot reload atomic, preserving published jobs when a candidate fails; preserve immutable database query branches and path-only command parameters. Report background unhandled rejections for the Runtime Process Host, observe ICQQ heartbeat and reconnect login failures through the SDK reconnect policy, and normalize inline image data URLs before ICQQ file or base64 delivery.
+
+- 8e26cf1: 配置面收敛（#735）：弃用运行时未读取的 `ai.agent.maxSkills`、`policyDenialStopAfter`、`deferredToolMaxResults`、`taskExecApprovalMode`（启动告警，`zhin config check --fix` 可移除），新增《默认行为规范》权威文档与开关清单门禁。
+- 9891e66: 入站消息 `origin` 标签（self / member / peer_bot / human）与出站 ledger 兜底：
+
+  - 新增 `Message.origin`（仅由 InboundRuntime 经 Peer Registry、出站 ledger 与 `roomMembershipToken` 端口可信判定，绝不读取正文或 metadata）。
+  - self / member / peer_bot 来源的消息只记录（self 不重复记录），不触发命令、handlers、middleware、ingressRoute 或 agent turn；无法判定时 fail closed 为 peer_bot。
+  - `[sender:...]` 标签增加 `origin=`（缺省时输出不变）；`createRuntimeTurnAccess` 对非 human 来源抛错。
+  - `stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造的 `[sender:` / `[origin:` 标签（全角 `［`），不再剥离开头。
+  - 新增 `roomMembershipToken` 端口；Room 成员端口的实现、“Registry 未就绪的 Room 不开始协作”以及背景上下文块中 peer_bot 消息的标签留给后续条目（Room 激活 / Room Bus）。
+
+- 9891e66: Move the Workroom runtime composition (`workroom-runtime`) from `@zhin.js/agent` into `@zhin.js/workroom`; the dependency direction is now `@zhin.js/workroom` -> `@zhin.js/agent`.
+
+  - Workroom exports were removed from `@zhin.js/agent`, `@zhin.js/agent/runtime` and `zhin.js/agent`; the `zhin.js/agent` re-export surface shrank, so users who imported Workroom exports through `zhin.js/agent` must import them from `@zhin.js/workroom` instead (the export names are unchanged). `@zhin.js/agent` no longer depends on `@zhin.js/workroom`.
+  - The `Local*` assignment authority types declared by the authority provider module (`WorkroomLocalAssignmentAuthorityInput`, `WorkroomLocalAssignmentResolvedAuthority`, `WorkroomLocalAssignmentAuthorityPort`) clash with the domain contracts of the same name in a single barrel; the provider variants are exported with a `WorkroomProvider` prefix.
+  - Compatibility stubs at the old internal agent paths and the `./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js` deep exports of `@zhin.js/workroom` are removed. Use the package root.
+  - `@zhin.js/agent` gains three narrow host-integration exports: `collectAgentLoopTurnRun` and type `ZhinAgentPrivate` (`@zhin.js/agent/core`; `ZhinAgentPrivate` is an internal host-integration type, not a stable API), and `runWithAgentTurnConfiguration` (`@zhin.js/agent/turn`).
+  - `@zhin.js/cli` and `@zhin.js/a2a` declare `@zhin.js/workroom` as an optional/dev + peer dependency (like `@zhin.js/agent`), so installing the core no longer pulls in agent/workroom.
+
+- 9891e66: The CLI now loads `@zhin.js/workroom` optionally. Without it, `zhin runtime start` still starts the Agent and the Console Workroom endpoints return 503. A Workroom that is installed but fails to load or activate (for example a corrupt journal) still refuses startup. `zhin agent workroom|legacy-*` print an install hint when the package is missing.
+- 4778587: 补齐 Console 安装配置闭环所需的精确配置路径、端点身份、平台就绪与验证计划失效语义，并保存历史消息的方向及实际投递诊断。
+
+  修复真实 ICQQ 入站目标保存了插件 owner 而非平台标识、导致提醒投递被身份校验拒绝的问题；无关插件配置变更保留原有适配器连接。
+
+  保证候选事件在当前代快照发布后准入，并避免安装过程中依赖文件变动提前中断插件管理操作。
+
+  明确 Adapter/MCP 客户端创建仅提供所属 owner 的配置与资源，跨 Feature 查询由当前 operation 上下文负责；入站诊断记录接收时刻，避免慢指令的回复在历史中先于指令。
+
+- 40537e3: 修正 Console 配置 Schema 的本地包、实例别名和嵌套插件解析，按 Runtime 的包解析规则定位；合并继承插件后检查重复实例。缺失 Schema 与非法 Schema 分别反馈。校验 required 元数据，递归拒绝插件文件中表单不支持的引用、组合、动态字段与 JSON Schema 元组，避免丢弃约束后展示不完整表单。内置 Host 配置保留既有字段投影，复杂配置仍可使用配置文件或源码编辑器；不将该投影视为完整 JSON Schema 编辑器。
+
+  业务 Outbound Host 发送会拒绝失败、拦截、不支持或结果未知的投递，避免转为成功的空消息 ID；回执保留明确的平台拒绝状态与未知状态，不凭错误码覆盖投递证据。可选状态提示仍由调用方处理发送失败。
+
+  RSS 从公开 Message 字段提取会话，以端点隔离订阅，拒绝缺失或不支持的父频道/线程地址，避免改投其他会话。无效来源的 extractChannelInfo 返回 null，移除伪造会话的 SMOKE_CHANNEL 导出。修正实用插件的安装命令与实例配置示例。
+
+- 681abf3: 补齐 ScheduleContext，保留命名目录定时任务并使用现有持久状态保存业务数据。
+
+  新增持久提醒与公开插件测试夹具，完善群运营的关键词、欢迎和状态卡片；统一 CLI 与 Console Host 的安装状态、应用计划和显式业务验证。
+
+  增加目标端点渲染预览、实际出站降级诊断与过期交互反馈，修复已加载插件入口变更被误判为进程重启的问题。
+
+  收紧验证计划与 Console 凭据的访问边界，修复插件安装计划、更新校验、handler 打包、跨进程配置锁及预览取消；完善流式测试载荷、词库容量、线程查询和重叠统计刷新回归。
+
+- 9891e66: 删除 legacy 迁移代码：移除 `zhin agent legacy-runs` / `legacy-payloads` 子命令，以及 `@zhin.js/workroom` 导出的 `scanLegacyEmbeddedPayloads`、`buildLegacyRunOfflineReport`、`createLegacyRunMigrationProposal` 及相关类型。旧格式 Journal 在读取和激活时仍然 fail-closed，报错信息改为说明旧格式不再受支持。
+
+  Projector 遇到旧明文 Projection 快照时的报错同步改为‘不再受支持’，不再引导 offline export / purge；Journal legacy guard 恢复 recordRef 重复检查。
+
+- 0f59e70: Fix a startup race (#742): a Console restart or a signal that arrives after HTTP is listening but before the first generation finishes starting no longer crashes the process with an unhandled `Root lifecycle is stopping` error (exit code 1). The aborted start is now treated as part of the requested shutdown, so the process exits with the restart code (75) or the signal code as intended.
+- 9891e66: Separate Workroom runtime code from the generic Agent runtime (`src/workroom-runtime/`) and remove Agent-core reverse dependencies on Workroom.
+
+  Migration notes:
+
+  - `validateWorkroomDefinitions` is no longer exported from `@zhin.js/agent/config`; import it from `@zhin.js/workroom`.
+  - Workroom console fields (`workroom`, `workroomCatalog`, `workroomControl`, `workroomProfiles`, `workroomKnowledge`, `portfolioSponsor`, `effectSponsor`, `dataLifecycle`) moved from `AgentHostConsolePort` to the new `workroomHostToken` (`@zhin.js/workroom`).
+  - `defineAiDatabaseModels` now registers only Agent tables; call `defineWorkroomDatabaseModels` for Workroom tables. `activateAiDatabaseStorage` no longer activates the Workroom journal/catalog; use `prepareWorkroomDatabaseStorage` (validates persisted journal headers) before it and `.activate(...)` after.
+  - `plugin-runtime/deferred-capability-plan.ts` is now Workroom-free: the Workroom realization/authority code moved to `workroom-runtime/workroom-capability-realization.ts` (exported from `@zhin.js/workroom`); `createDeferredCapabilityPlan` takes an injected `ceiling` (`DeferredCapabilityCeiling`) instead of `authority`, and `isReservedControlToolName` is exported.
+  - `createDeferredCapabilityPlan` now throws if the legacy `authority` option is passed (it used to be silently ignored; use `createWorkroomDeferredCapabilityPlan`), and it throws if the injected `ceiling` returns tools or skills that are not a subset of its input (by reference).
+  - `RESERVED_CONTROL_TOOL_PREFIX` ('workroom\_') is exported from `@zhin.js/agent/runtime` next to `isReservedControlToolName`.
+
+- b3fea8c: Agent turn traces are now persisted in `data/agent-traces/<day>.jsonl`, kept for 7 days with a 64 MB size cap (`ZHIN_TRACE_RETENTION_DAYS`, `ZHIN_TRACE_MAX_MB`), and redacted again when written. `zhin trace` can filter by session and time (`--sessions`, `--session`, `--since`, `--until`). A new read-only host API (`/api/agent/trace-archive/*`, full scope) backs the Console Agent Trace page (`TraceArchivePage`), which goes from sessions to turns to a turn detail with a waterfall and the raw record. Failing agent evals print a `zhin trace` command that opens the failing case's trace (#728).
+- 9891e66: Harden the `@zhin.js/agent` -> `@zhin.js/workroom` boundary and tidy Workroom packaging (no runtime behavior change).
+
+  - The architecture check now delegates the agent -> workroom source and manifest rules to pure functions (`scripts/lib/agent-workroom-boundary.mjs`) with unit tests covering bare/sub-path specifiers, barrels, type-only and dynamic imports, relative paths into Workroom directories, and all four manifest dependency sections.
+  - CLI Workroom tests use the public `module.js` entry where it is reachable; the remaining internal-coordinator tests are kept (with a documented reason each) and guarded by an allowlist in `module-boundary.test.ts`. The a2a path now has tests for "package missing -> install hint with `cause`" and "other errors rethrown unchanged".
+  - `@zhin.js/workroom` keeps `@zhin.js/agent` and `@zhin.js/plugin-runtime` as regular dependencies (single workspace instance; a peer-dependency move needs a lockfile update to be evaluated with the CLI peer graph).
+  - The `@zhin.js/workroom` deep-path exports were fully removed in A4b; only the package root is exported.
+
+- 9891e66: data-governance（payload vault、disclosure manifest/authority、payload lifecycle）与 `workroom-data-*`、`workroom-payload-*` 运行时装配导出从 `@zhin.js/workroom` 包根移到冻结的 `./data-governance` 子路径（C4c）。这是仅移出包根导出：默认 Workroom 装配（旧 Kernel 路径）仍然创建它们，行为不变，留到 C2 之后处理；新 Room 核心不依赖它们。`LegacyEmbeddedPayloadDetectedError` 与明文载荷拒绝（journal payload composition）仍在包根且行为不变。`@zhin.js/cli` 的导入方改为从子路径导入；没有新增可选加载器（`workroom/*` 目录外只有 type 导入）。
+- 9891e66: Workroom optional-load errors: Console and a2a now degrade only when the package is truly missing; other errors surface; Console agent module assigned atomically; boundary test hardened.
+- 9891e66: remote dispatch / callback / assignment 导出从 `@zhin.js/workroom` 包根移到 `@zhin.js/workroom/remote` 子路径并冻结（A2A 扩展）。默认 Workroom 装配仍会创建 Remote Callback Runtime 与 Remote Assignment Authority（旧 Kernel/runtime 路径依赖），留到 C2 之后处理；仅 A2A callback/executor HTTP transport 接线在配置 `a2a.workroomCallbacks.enabled` 时懒加载该子路径。内核事件格式与历史事件校验（fail-closed）不变。
+- 9891e66: 合并 Agent 与 Workroom Console 端口时断言 key 不重叠，并补充持久化激活顺序不变量测试、架构检查与 Host token 文档。
+- 9891e66: scheduler / preemption / priority authority 与 portfolio（journal、admission、capacity control outbox、sponsor、runtime 装配）导出从 `@zhin.js/workroom` 包根移到 `./scheduler`、`./portfolio` 子路径并冻结（C4b）。这是仅移出包根导出：默认 Workroom 装配（旧 Kernel 路径）仍然创建它们，行为不变，留到 C2 之后处理；新 Room 核心不依赖它们。`@zhin.js/cli` 的导入方改为从子路径导入，并新增 `loadWorkroomSchedulerPackage`。
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [c829031]
+- Updated dependencies [0c17e0b]
+- Updated dependencies [bf52b40]
+- Updated dependencies [55811d1]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [fc75499]
+- Updated dependencies [2a9d08b]
+- Updated dependencies [e4fbfb2]
+- Updated dependencies [56bafda]
+- Updated dependencies [7d2263c]
+- Updated dependencies [27da0e8]
+- Updated dependencies [7d2263c]
+- Updated dependencies [d91d21a]
+- Updated dependencies [a62acca]
+- Updated dependencies [9ab9ffb]
+- Updated dependencies [1280631]
+- Updated dependencies [bd78a94]
+- Updated dependencies [acfaaef]
+- Updated dependencies [57ea5f7]
+- Updated dependencies [6e035e5]
+- Updated dependencies [57ea5f7]
+- Updated dependencies [55db42d]
+- Updated dependencies [f48ba72]
+- Updated dependencies [386150d]
+- Updated dependencies [9891e66]
+- Updated dependencies [3237f63]
+- Updated dependencies [8e26cf1]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/workroom@0.0.1
+  - @zhin.js/ai@1.1.38
+  - @zhin.js/core@1.1.43
+  - @zhin.js/interaction@1.1.1
+  - @zhin.js/runtime@1.1.6
+  - @zhin.js/command@1.1.6
+  - @zhin.js/middleware@1.1.5
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/console-protocol@1.1.8
+  - @zhin.js/host-http@1.1.5
+  - @zhin.js/config-file@1.1.5
+  - @zhin.js/pagemanager@1.1.6
+  - @zhin.js/component@1.1.5
+  - @zhin.js/prompt-section@1.1.4
+  - @zhin.js/scaffold-wizard@1.1.4
+
 ## 1.1.9
 
 ### Patch Changes

@@ -1,5 +1,28 @@
 # @zhin.js/adapter-wechat-mp
 
+## 1.1.8
+
+### Patch Changes
+
+- 2dfe5fa: 修复 ScheduleEngine every/at 任务回调异常未被捕获、超长延时被 Node 截断立即触发、at 回调内同 id 重注册被误删；修复微信公众号 access_token 并发刷新互相顶掉、expires_in 缺失时永不过期。
+- Updated dependencies [9891e66]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/core@1.1.43
+  - @zhin.js/host-http@1.1.5
+  - @zhin.js/feature-kit@1.1.4
+  - @zhin.js/skill@1.1.5
+
 ## 1.1.7
 
 ### Patch Changes

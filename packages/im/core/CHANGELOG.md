@@ -1,5 +1,75 @@
 # @zhin.js/core
 
+## 1.1.43
+
+### Patch Changes
+
+- bf52b40: 修复 IM 会话事件背景污染当前回复：机器人撤回自己发出的消息（如活动指示「正在处理中...」的 autoRemove）不再进入下一轮的会话事件上下文；超过 30 分钟的积压消息不再注入；事件块明确标注为背景、不要直接回答，并提示下一条用户消息才是需要回复的当前消息。
+- bf52b40: Harness 组合修复：直接调用被策略移除的 bash 不再被自动加载进会话；standalone 子 loop 支持传入父 turn 策略以同样隐藏 bash；交互提示的回答（如审批回复 y）不再作为背景事件进入下一轮上下文。
+- bf52b40: 修复 IM 审批静默拒绝：审批结果区分「用户拒绝 / 审核器拒绝 / 超时 / 无审批通道」，并以不诱导重试的文案返回给模型；审批提示支持回复 y/同意、n/拒绝；超时不再被当作用户拒绝记忆；owner 读取工作区内 package.json、锁文件等非机密项目文件不再需要确认（.env、密钥等仍需确认，写入审批不变）。
+- 386150d: Unify command parameters, options, validation and help; provide IM middleware defaults, exact persistent delivery targets and owner-scoped atomic state. Derive plugin configuration types, defaults, validation and Console metadata from one declaration, preserve plugin ownership and generation admission, and keep process database, scheduler and outbound resources private to the root. Reject inline configuration in isolated plugins inside their own realm; isolated configuration uses schema.json.
+
+  Reject ambiguous optional/rest routes and undefined dynamic defaults, preserve optional parameter types and help handling, and validate Console edits with the Runtime configuration engine. Keep unrelated plugin entries cached during helper reloads, expose initial configuration metadata before login completes, and drain admitted Host operations while rejecting retired or failed-generation access.
+
+  Keep schedule activation and hot reload atomic, preserving published jobs when a candidate fails; preserve immutable database query branches and path-only command parameters. Report background unhandled rejections for the Runtime Process Host, observe ICQQ heartbeat and reconnect login failures through the SDK reconnect policy, and normalize inline image data URLs before ICQQ file or base64 delivery.
+
+- 9891e66: 入站消息 `origin` 标签（self / member / peer_bot / human）与出站 ledger 兜底：
+
+  - 新增 `Message.origin`（仅由 InboundRuntime 经 Peer Registry、出站 ledger 与 `roomMembershipToken` 端口可信判定，绝不读取正文或 metadata）。
+  - self / member / peer_bot 来源的消息只记录（self 不重复记录），不触发命令、handlers、middleware、ingressRoute 或 agent turn；无法判定时 fail closed 为 peer_bot。
+  - `[sender:...]` 标签增加 `origin=`（缺省时输出不变）；`createRuntimeTurnAccess` 对非 human 来源抛错。
+  - `stripUserSpoofedSenderPrefix` 改为转义正文中所有伪造的 `[sender:` / `[origin:` 标签（全角 `［`），不再剥离开头。
+  - 新增 `roomMembershipToken` 端口；Room 成员端口的实现、“Registry 未就绪的 Room 不开始协作”以及背景上下文块中 peer_bot 消息的标签留给后续条目（Room 激活 / Room Bus）。
+
+- 9891e66: 入站来源判定的摘要兜底仅用于 group/channel 会话；Registry 就绪且账号已知的发送者不再走摘要匹配；摘要命中最多映射为 peer_bot / member（只记录），不再映射为被丢弃的 self，修复真人复读 Bot 文本被静默丢弃。plugin-runtime/im 入口改为具名导出 MessageOrigin、isMessageOrigin、RoomMembershipPort、roomMembershipToken，来源分类器实现细节标 @internal。
+- 4778587: 补齐 Console 安装配置闭环所需的精确配置路径、端点身份、平台就绪与验证计划失效语义，并保存历史消息的方向及实际投递诊断。
+
+  修复真实 ICQQ 入站目标保存了插件 owner 而非平台标识、导致提醒投递被身份校验拒绝的问题；无关插件配置变更保留原有适配器连接。
+
+  保证候选事件在当前代快照发布后准入，并避免安装过程中依赖文件变动提前中断插件管理操作。
+
+  明确 Adapter/MCP 客户端创建仅提供所属 owner 的配置与资源，跨 Feature 查询由当前 operation 上下文负责；入站诊断记录接收时刻，避免慢指令的回复在历史中先于指令。
+
+- 40537e3: 修正 Console 配置 Schema 的本地包、实例别名和嵌套插件解析，按 Runtime 的包解析规则定位；合并继承插件后检查重复实例。缺失 Schema 与非法 Schema 分别反馈。校验 required 元数据，递归拒绝插件文件中表单不支持的引用、组合、动态字段与 JSON Schema 元组，避免丢弃约束后展示不完整表单。内置 Host 配置保留既有字段投影，复杂配置仍可使用配置文件或源码编辑器；不将该投影视为完整 JSON Schema 编辑器。
+
+  业务 Outbound Host 发送会拒绝失败、拦截、不支持或结果未知的投递，避免转为成功的空消息 ID；回执保留明确的平台拒绝状态与未知状态，不凭错误码覆盖投递证据。可选状态提示仍由调用方处理发送失败。
+
+  RSS 从公开 Message 字段提取会话，以端点隔离订阅，拒绝缺失或不支持的父频道/线程地址，避免改投其他会话。无效来源的 extractChannelInfo 返回 null，移除伪造会话的 SMOKE_CHANNEL 导出。修正实用插件的安装命令与实例配置示例。
+
+- 681abf3: 补齐 ScheduleContext，保留命名目录定时任务并使用现有持久状态保存业务数据。
+
+  新增持久提醒与公开插件测试夹具，完善群运营的关键词、欢迎和状态卡片；统一 CLI 与 Console Host 的安装状态、应用计划和显式业务验证。
+
+  增加目标端点渲染预览、实际出站降级诊断与过期交互反馈，修复已加载插件入口变更被误判为进程重启的问题。
+
+  收紧验证计划与 Console 凭据的访问边界，修复插件安装计划、更新校验、handler 打包、跨进程配置锁及预览取消；完善流式测试载荷、词库容量、线程查询和重叠统计刷新回归。
+
+- 9891e66: `RoomMembershipPort` 新增可选 `hasRoom(conversation)`：返回 true 时，同一会话的多个 Endpoint 收到的同一条人类消息（按平台+会话+发送者+消息 id）只路由一次，其余只记录；不实现 `hasRoom`（目前没有实现）则行为不变，普通群、私聊、无消息 id 的消息仍由每个 Endpoint 各自处理。去重判定出错时 fail-closed：记录并 publish、告警、不路由。
+- 9891e66: Room Router 与 Room Bus（B2b）。`@zhin.js/core`：`RoomMembershipPort` 新增可选 `route(input)`，必须与 `hasRoom` 成对实现（同步、无副作用，按消息缓存决策，返回目标 Endpoint 与按优先级排序的 `fallbackEndpointIds`）；Room 会话中处理消息的目标 Endpoint 改由 Router 决定，目标副本强制 `mentioned=true`，其余副本只记录。core 无法预知哪个 Endpoint 会收到副本（例如隐私模式），目标没收到副本时，非目标成员副本在宽限期（默认 2s）后按 fallback 优先级接管，保证消息恰好处理一次、不静默丢失；`route` 抛错退化为先到先得。带 action 段的平台按钮回调只由接收它的 Endpoint 处理，绕过 Room 路由和去重；无消息 id / 无发送者 / 私聊（unkeyed）保持逐 Endpoint 处理；待回答探测仅在本条消息能解析到该 Endpoint 的按钮或有该发送者的待回答 claim 时为 true。没有 `route` 时保持 B2 的先到先得去重。`ImRuntimeOptions` 新增 `inboundClaimPending`。`@zhin.js/workroom`：新增 Room Registry、Room Router（待回答 > @ > 回复 > coordinator > 按角色匹配，@alias 使用 Unicode 边界）、`createRoomMembershipPort`、Room Bus（handoff 事件 + 经正常发送链的群内可见投影）。
+
+  `hasRoom` 按“会话 + 接收 Endpoint”判定，只对成员 Endpoint 的副本为 true，非成员 Bot 按普通群处理（不 claim、不强制 mentioned）；decision 之外已投递副本的成员作为最低优先级接管候选（带 `room_unlisted_member_takeover` 告警），不再静默丢弃。
+
+- Updated dependencies [9891e66]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [2dfe5fa]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/interaction@1.1.1
+  - @zhin.js/schema@1.1.2
+  - @zhin.js/command@1.1.6
+  - @zhin.js/middleware@1.1.5
+  - @zhin.js/permission@1.1.5
+  - @zhin.js/plugin-runtime@1.1.13
+  - @zhin.js/schedule-feature@1.1.4
+  - @zhin.js/kernel@1.1.3
+  - @zhin.js/feature-kit@1.1.4
+  - @zhin.js/handler@1.1.4
+  - @zhin.js/component@1.1.5
+
 ## 1.1.42
 
 ### Patch Changes
