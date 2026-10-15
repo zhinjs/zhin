@@ -1,39 +1,6 @@
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import {
-  JournalWorkroomAssignmentGrantClaimPreview,
-  WorkroomPlanningClarificationError,
-  createAssignmentExecutionEnvelope,
-  createDurableWorkroomAssignmentAuthorityGrantProvider,
-  createWorkroomRoleCapabilitySnapshot,
-  DurableReportLocalModelExecutionPort,
-  GenerationOwnedWorkroomAssignmentAuthorityProvider,
-  LocalAssignmentExecutor,
-  PinnedProfileCatalogLocalAssignmentRoute,
-  WorkroomLocalAssignmentRuntime,
-  bindWorkroomCapabilityRealization,
-  createAgentCoreWorkroomLocalTurnPort,
-  createGenerationOwnedDynamicPlanningProvider,
-  createSelfDeliveryAssignmentExecutor,
-  createWorkroomDynamicPlanningGenerationSnapshot,
-  createWorkroomGenerationAuthoritySnapshotFromRuntime,
-  installWorkroomSchedulerPortfolioDispatchResources,
-  structuredTaskReportPrompt,
-  workroomAssignmentAuthorityGrantRepositoryToken,
-  workroomAssignmentAuthorityGrantToken,
-  workroomAssignmentGrantClaimPreviewToken,
-  workroomDynamicPlanningPolicyToken,
-  workroomEvidencePayloadWriterToken,
-  workroomHumanIngressPlanningToken,
-  workroomLocalAssignmentAuthorityToken,
-  workroomLocalAssignmentRuntimeToken,
-  workroomPlanningDisclosureToken,
-  workroomProjectProfileRegistryToken,
-  workroomTaskReportPayloadToken,
-  type SelfDeliveryHostConfiguration,
-  type WorkroomEvidencePayloadWriteInput,
-  type WorkroomSchedulerPortfolioDispatchResources,
-  type WorkroomStructuredDagModelInput,
-} from '@zhin.js/workroom';
+import { JournalWorkroomAssignmentGrantClaimPreview, WorkroomPlanningClarificationError, createAssignmentExecutionEnvelope, createDurableWorkroomAssignmentAuthorityGrantProvider, createWorkroomRoleCapabilitySnapshot, DurableReportLocalModelExecutionPort, GenerationOwnedWorkroomAssignmentAuthorityProvider, LocalAssignmentExecutor, PinnedProfileCatalogLocalAssignmentRoute, WorkroomLocalAssignmentRuntime, bindWorkroomCapabilityRealization, createAgentCoreWorkroomLocalTurnPort, createGenerationOwnedDynamicPlanningProvider, createSelfDeliveryAssignmentExecutor, createWorkroomDynamicPlanningGenerationSnapshot, createWorkroomGenerationAuthoritySnapshotFromRuntime, structuredTaskReportPrompt, workroomAssignmentAuthorityGrantRepositoryToken, workroomAssignmentAuthorityGrantToken, workroomAssignmentGrantClaimPreviewToken, workroomDynamicPlanningPolicyToken, workroomEvidencePayloadWriterToken, workroomHumanIngressPlanningToken, workroomLocalAssignmentAuthorityToken, workroomLocalAssignmentRuntimeToken, workroomPlanningDisclosureToken, workroomProjectProfileRegistryToken, workroomTaskReportPayloadToken, type SelfDeliveryHostConfiguration, type WorkroomEvidencePayloadWriteInput, type WorkroomStructuredDagModelInput } from '@zhin.js/workroom';
+import { installWorkroomSchedulerPortfolioDispatchResources, type WorkroomSchedulerPortfolioDispatchResources } from '@zhin.js/workroom/scheduler';
 import {
   type CapabilityIngress,
 } from '@zhin.js/agent/runtime';

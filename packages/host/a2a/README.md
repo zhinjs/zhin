@@ -46,9 +46,9 @@ calls. Production requires one of these tokens.
 > A2A extension, frozen. The remote dispatch / callback / assignment code is
 > imported from `@zhin.js/workroom/remote` (no longer the package root) and is
 > wired by the CLI (lazy load) only when `a2a.workroomCallbacks.enabled` is
-> configured; this covers the callback HTTP transport only. The default assembly
+> configured; this covers the callback/executor HTTP transport wiring only. The default assembly
 > still instantiates the remote runtime/authority until after C2.
-> A2A 扩展，已冻结：相关代码来自 `@zhin.js/workroom/remote`；callback HTTP
+> A2A 扩展，已冻结：相关代码来自 `@zhin.js/workroom/remote`；callback/executor HTTP
 > transport 仅在配置 `a2a.workroomCallbacks.enabled` 时由 CLI 懒加载接线，
 > 默认装配仍会实例化 remote runtime/authority，C2 之后处理。
 

@@ -11,13 +11,8 @@ import { httpHostToken } from '@zhin.js/host-http';
 import {
   agentHostToken,
 } from '@zhin.js/agent/runtime';
-import {
-  workroomHostToken,
-  workroomSchedulerAssignmentRouteRegistryToken,
-  workroomAssignmentAuthorityGrantRepositoryToken,
-  workroomAssignmentGrantClaimPreviewToken,
-  MemoryAssignmentAuthorityGrantRepository,
-} from '@zhin.js/workroom';
+import { workroomHostToken, workroomAssignmentAuthorityGrantRepositoryToken, workroomAssignmentGrantClaimPreviewToken, MemoryAssignmentAuthorityGrantRepository } from '@zhin.js/workroom';
+import { workroomSchedulerAssignmentRouteRegistryToken } from '@zhin.js/workroom/scheduler';
 import {
   remoteAssignmentDispatchServiceToken,
   remoteAssignmentDispatchSchedulerToken,

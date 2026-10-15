@@ -1,22 +1,9 @@
 // 保留内部 import 的原因：local-portfolio 是内部模块，未经 module.ts 公开，只能直接测试。
 import { createHash } from 'node:crypto';
 import { rootPluginId, Scope } from '@zhin.js/plugin-runtime';
-import {
-  createDurableWorkroomAssignmentAuthorityGrantProvider,
-  createWorkroomSchedulerPolicySnapshot,
-  decideWorkroomSchedule,
-  MemoryAssignmentAuthorityGrantRepository,
-  MemoryWorkroomJournal,
-  WorkflowPlanBuilder,
-  WorkroomKernel,
-  workroomLocalAssignmentId,
-  type WorkroomCatalogSnapshot,
-  digestWorkroomCatalogProjectBinding,
-  portfolioAtomicBundleAuthorityToken,
-  portfolioKernelCommandAuthorityToken,
-  portfolioPolicyAuthorityToken,
-  workroomSchedulerPortfolioScopeAuthorityToken,
-} from '@zhin.js/workroom';
+import { createDurableWorkroomAssignmentAuthorityGrantProvider, MemoryAssignmentAuthorityGrantRepository, MemoryWorkroomJournal, WorkflowPlanBuilder, WorkroomKernel, workroomLocalAssignmentId, type WorkroomCatalogSnapshot, digestWorkroomCatalogProjectBinding } from '@zhin.js/workroom';
+import { createWorkroomSchedulerPolicySnapshot, decideWorkroomSchedule, workroomSchedulerPortfolioScopeAuthorityToken } from '@zhin.js/workroom/scheduler';
+import { portfolioAtomicBundleAuthorityToken, portfolioKernelCommandAuthorityToken, portfolioPolicyAuthorityToken } from '@zhin.js/workroom/portfolio';
 import {
   createLocalWorkroomAssignmentGrantProvider,
   installLocalWorkroomPortfolioAuthorities,

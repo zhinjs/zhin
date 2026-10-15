@@ -1,30 +1,5 @@
-import {
-  ActivatableWorkroomCatalog,
-  ActivatableWorkroomJournal,
-  WorkroomKernel,
-  createCatalogWorkroomRunControlAuthority,
-  type WorkroomPlanGateAuthorityPort,
-  CatalogWorkroomPriorityAuthority,
-  GenerationWorkroomPriorityAuthority,
-  createCatalogGovernedWorkroomProjectionAuthority,
-  createCatalogWorkroomPlanGateAuthority,
-  createGenerationOwnedWorkroomJournalPayloadPort,
-  createGenerationWorkroomAcceptanceAuthority,
-  createGenerationWorkroomAcceptancePolicyPort,
-  createGenerationWorkroomLocalAssignmentAuthority,
-  createGenerationWorkroomPlanGateAuthority,
-  createWorkroomRuntime,
-  installWorkroomDataGovernanceResources,
-  workroomAcceptanceAuthorityToken,
-  workroomAcceptancePolicyDecisionToken,
-  workroomDynamicPlanningPolicyToken,
-  workroomLocalAssignmentAuthorityToken,
-  workroomPlanGateAuthorityToken,
-  workroomPlanningDisclosureToken,
-  workroomPriorityAuthorityToken,
-  type WorkroomDynamicPlanningPolicyPort,
-  type WorkroomPlanningDisclosurePort,
-} from '@zhin.js/workroom';
+import { ActivatableWorkroomCatalog, ActivatableWorkroomJournal, WorkroomKernel, createCatalogWorkroomRunControlAuthority, type WorkroomPlanGateAuthorityPort, createCatalogGovernedWorkroomProjectionAuthority, createCatalogWorkroomPlanGateAuthority, createGenerationOwnedWorkroomJournalPayloadPort, createGenerationWorkroomAcceptanceAuthority, createGenerationWorkroomAcceptancePolicyPort, createGenerationWorkroomLocalAssignmentAuthority, createGenerationWorkroomPlanGateAuthority, createWorkroomRuntime, installWorkroomDataGovernanceResources, workroomAcceptanceAuthorityToken, workroomAcceptancePolicyDecisionToken, workroomDynamicPlanningPolicyToken, workroomLocalAssignmentAuthorityToken, workroomPlanGateAuthorityToken, workroomPlanningDisclosureToken, type WorkroomDynamicPlanningPolicyPort, type WorkroomPlanningDisclosurePort } from '@zhin.js/workroom';
+import { CatalogWorkroomPriorityAuthority, GenerationWorkroomPriorityAuthority, workroomPriorityAuthorityToken } from '@zhin.js/workroom/scheduler';
 import {
   createGenerationWorkroomRemoteAssignmentAuthority,
   workroomRemoteAssignmentAuthorityToken,

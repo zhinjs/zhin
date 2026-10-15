@@ -56,3 +56,23 @@ export async function loadWorkroomRemotePackage(
     throw error;
   }
 }
+
+export type WorkroomSchedulerPackage = typeof import('@zhin.js/workroom/scheduler');
+
+/**
+ * Loads the scheduler / preemption / priority-authority exports
+ * (`@zhin.js/workroom/scheduler`). Frozen subpath (moved out of the package
+ * root); the default assembly still creates these modules.
+ */
+export async function loadWorkroomSchedulerPackage(
+  importer: () => Promise<WorkroomSchedulerPackage> = () => import('@zhin.js/workroom/scheduler'),
+): Promise<WorkroomSchedulerPackage> {
+  try {
+    return await importer();
+  } catch (error) {
+    if (isWorkroomPackageMissing(error)) {
+      throw new Error(WORKROOM_INSTALL_HINT, { cause: error });
+    }
+    throw error;
+  }
+}

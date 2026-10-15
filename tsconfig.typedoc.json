@@ -68,6 +68,12 @@
       "@zhin.js/workroom/remote": [
         "./packages/im/workroom/src/remote.ts"
       ],
+      "@zhin.js/workroom/scheduler": [
+        "./packages/im/workroom/src/scheduler.ts"
+      ],
+      "@zhin.js/workroom/portfolio": [
+        "./packages/im/workroom/src/portfolio.ts"
+      ],
       "@zhin.js/im-contract": [
         "./packages/im/im-contract/src/index.ts"
       ],

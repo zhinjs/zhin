@@ -1,27 +1,7 @@
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
-import {
-  ConversationEventHumanIngressSourceReader,
-  FileHumanIngressApplicationRepository,
-  FileHumanIngressProposalRepository,
-  FileInteractionSpaceBindingRepository,
-  HumanIngressApplicationService,
-  InteractionSpaceRouter,
-  ProductionHumanIngressOrchestratorPort,
-  createPlanGateHumanIngressControlPort,
-  resolveWorkroomBotIdentity,
-  workroomProjectionBindingKey,
-  type HumanIngressOrchestratorProposalPort,
-  digestWorkroomCatalogProjectBinding,
-  createGenerationHumanIngressPlanningPort,
-  createPortfolioSponsorHumanIngressControlPort,
-  createProjectionHumanIngressTargetResolver,
-  createWorkroomDataLifecycleHumanIngressControlPort,
-  portfolioSponsorCommandToken,
-  workroomHumanIngressPlanningToken,
-  workroomProjectionCatalogBindingDigest,
-  type WorkroomDataLifecycleConsoleControlPort,
-} from '@zhin.js/workroom';
+import { ConversationEventHumanIngressSourceReader, FileHumanIngressApplicationRepository, FileHumanIngressProposalRepository, FileInteractionSpaceBindingRepository, HumanIngressApplicationService, InteractionSpaceRouter, ProductionHumanIngressOrchestratorPort, createPlanGateHumanIngressControlPort, resolveWorkroomBotIdentity, workroomProjectionBindingKey, type HumanIngressOrchestratorProposalPort, digestWorkroomCatalogProjectBinding, createGenerationHumanIngressPlanningPort, createProjectionHumanIngressTargetResolver, createWorkroomDataLifecycleHumanIngressControlPort, workroomHumanIngressPlanningToken, workroomProjectionCatalogBindingDigest, type WorkroomDataLifecycleConsoleControlPort } from '@zhin.js/workroom';
+import { createPortfolioSponsorHumanIngressControlPort, portfolioSponsorCommandToken } from '@zhin.js/workroom/portfolio';
 import type { ImRuntime, Message } from '@zhin.js/core/runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { conversationRefKey } from '@zhin.js/im-contract';

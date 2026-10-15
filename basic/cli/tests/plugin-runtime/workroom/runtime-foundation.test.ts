@@ -1,7 +1,5 @@
-import {
-  workroomPlanGateAuthorityToken,
-  workroomPriorityAuthorityToken,
-} from '@zhin.js/workroom';
+import { workroomPlanGateAuthorityToken } from '@zhin.js/workroom';
+import { workroomPriorityAuthorityToken } from '@zhin.js/workroom/scheduler';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomRuntimeFoundation } from '../../../src/plugin-runtime/workroom/module.js';

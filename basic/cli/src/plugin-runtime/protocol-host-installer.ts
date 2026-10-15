@@ -7,7 +7,7 @@ import {
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { loadWorkroomPackage, loadWorkroomRemotePackage } from '../utils/optional-workroom.js';
+import { loadWorkroomPackage, loadWorkroomRemotePackage, loadWorkroomSchedulerPackage } from '../utils/optional-workroom.js';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
@@ -121,12 +121,14 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         workroomAssignmentAuthorityGrantApplicationToken,
         workroomProjectProfileRegistryToken,
         workroomRemoteEndpointAuthorityToken,
-        workroomSchedulerAssignmentRouteRegistryToken,
         workroomHostToken,
+      }, {
+        workroomSchedulerAssignmentRouteRegistryToken,
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
         loadWorkroomPackage(),
+        loadWorkroomSchedulerPackage(),
       ]);
       if (resolved.a2a.enabled !== false) {
         if (!resources.has(agentHostToken)) {
@@ -147,8 +149,9 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         throw new Error('a2a.workroomRemoteExecutors.enabled requires workroomCallbacks.enabled');
       }
       if (callbacks?.enabled === true) {
-        // A2A extension (frozen): the remote module is loaded only when
-        // `a2a.workroomCallbacks.enabled` is configured.
+        // A2A extension (frozen subpath). Only this transport wiring is
+        // conditional on `a2a.workroomCallbacks.enabled`; the default Workroom
+        // assembly still imports the remote subpath statically (revisit after C2).
         const {
           remoteAssignmentDispatchCommandServiceToken,
           remoteAssignmentDispatchSchedulerToken,

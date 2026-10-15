@@ -3,16 +3,8 @@ import type {
   ConsoleWorkroomKnowledgeControlPort,
   ConsoleWorkroomProfileControlPort,
 } from '@zhin.js/host-http';
-import type {
-  PortfolioSponsorProjection,
-  WorkroomDefinition,
-  AgentHostWorkroomRunControlPort,
-  PortfolioSponsorCommand,
-  WorkroomDataLifecycleConsoleControlPort,
-  WorkroomEffectSponsorDecisionCommand,
-  WorkroomEffectSponsorDecisionRecord,
-  WorkroomRuntimeHandle,
-} from '@zhin.js/workroom';
+import type { WorkroomDefinition, AgentHostWorkroomRunControlPort, WorkroomDataLifecycleConsoleControlPort, WorkroomEffectSponsorDecisionCommand, WorkroomEffectSponsorDecisionRecord, WorkroomRuntimeHandle } from '@zhin.js/workroom';
+import type { PortfolioSponsorProjection, PortfolioSponsorCommand } from '@zhin.js/workroom/portfolio';
 import type { RuntimeSnapshot, SnapshotReader, TokenId } from '@zhin.js/plugin-runtime';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import { isWorkroomPackageMissing } from '../../utils/optional-workroom.js';

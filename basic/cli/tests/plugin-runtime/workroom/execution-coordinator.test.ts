@@ -1,6 +1,6 @@
 // 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，缺少 outbound message port 的路径无法通过公开接口单独触达。
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
-import { portfolioJournalRepositoryToken } from '@zhin.js/workroom';
+import { portfolioJournalRepositoryToken } from '@zhin.js/workroom/portfolio';
 import { describe, expect, it, vi } from 'vitest';
 import { WorkroomExecutionCoordinator } from '../../../src/plugin-runtime/workroom/execution-coordinator.js';
 

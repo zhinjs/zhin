@@ -15,6 +15,16 @@
       "types": "./lib/remote.d.ts",
       "development": "./src/remote.ts",
       "import": "./lib/remote.js"
+    },
+    "./scheduler": {
+      "types": "./lib/scheduler.d.ts",
+      "development": "./src/scheduler.ts",
+      "import": "./lib/scheduler.js"
+    },
+    "./portfolio": {
+      "types": "./lib/portfolio.d.ts",
+      "development": "./src/portfolio.ts",
+      "import": "./lib/portfolio.js"
     }
   },
   "files": [

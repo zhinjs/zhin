@@ -3,7 +3,7 @@
 Workroom, Portfolio and Data Governance for Zhin.js: the domain code plus the runtime composition that wires it to the Agent runtime.
 
 - `src/workroom/` - Workroom kernel, journals, assignments, ingress, executors
-- `src/portfolio/` - Portfolio admission, capacity control, sponsor projection
+- `src/portfolio/` - Portfolio admission, capacity control, sponsor projection (exported via the frozen `./portfolio` subpath, not the package root)
 - `src/data-governance/` - payload vaults, disclosure manifests, governance authority
 - `src/workroom-runtime/` - runtime composition (Plugin Runtime tokens, Agent Core adapter, providers)
 
@@ -11,7 +11,9 @@ Workroom, Portfolio and Data Governance for Zhin.js: the domain code plus the ru
 
 `@zhin.js/workroom` -> `@zhin.js/agent` (+ `@zhin.js/plugin-runtime`, `@zhin.js/tool`, `@zhin.js/skill`, `@zhin.js/ai`, `@zhin.js/core`) -> `@zhin.js/im-contract`
 
-**Exports**: the package root (`@zhin.js/workroom`) plus `./remote` (`@zhin.js/workroom/remote`). The deep paths (`./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js`) were removed in A4b. `./remote` is the single exception, reversing the A4b "no subpath" decision only to freeze the remote dispatch / callback / assignment modules: it is an A2A extension, removed from the package root and frozen; the default assembly still creates one Remote Callback Runtime and Remote Assignment Authority (legacy Kernel/runtime dependency, C2 blocks), to be handled after C2. The root entry no longer exports those symbols; the CLI lazy-loads `./remote` for the A2A callback/executor transport only when `a2a.workroomCallbacks.enabled` is configured (the default assembly imports it statically and constructs three file repositories). They are not deleted because the Kernel, Scheduler, authority grants, data governance and acceptance still reference remote types; full removal is left to C5/C6 after C4b-C4d.
+**Exports**: the package root (`@zhin.js/workroom`) plus the frozen subpaths `./remote`, `./scheduler` and `./portfolio`. The deep paths (`./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js`) were removed in A4b. These three subpaths are the only exceptions, reversing the A4b "no subpath" decision only to freeze moved-out modules. `./remote` freezes the remote dispatch / callback / assignment modules: it is an A2A extension, removed from the package root and frozen; the default assembly still creates one Remote Callback Runtime and Remote Assignment Authority (legacy Kernel/runtime dependency, C2 blocks), to be handled after C2. The root entry no longer exports those symbols; the CLI lazy-loads `./remote` for the A2A callback/executor transport only when `a2a.workroomCallbacks.enabled` is configured (the default assembly imports it statically and constructs three file repositories). They are not deleted because the Kernel, Scheduler, authority grants, data governance and acceptance still reference remote types; full removal is left to C5/C6 after C4b-C4d.
+
+`./scheduler` (scheduler, preemption, priority authority, scheduler/portfolio route registry and runtime) and `./portfolio` (portfolio journal, admission, capacity control outbox, sponsor projection, resource bundle, portfolio control runtime) were moved out of the package root in C4b and frozen the same way. This only removes them from the root exports: the default (legacy Kernel) assembly in `@zhin.js/cli` still statically imports and creates these runtimes, so default behavior is unchanged and handling is deferred until after C2. The new Room core does not depend on them; new code must not either.
 
 包根之外新增 `./remote` 子路径：remote dispatch / callback / assignment 已冻结为 A2A 扩展并移出包根；默认装配仍会创建 Remote Callback Runtime 与 Remote Assignment Authority（旧 Kernel/runtime 路径依赖，C2 阻塞），留到 C2 之后处理。
 

@@ -440,4 +440,25 @@ describe('optional @zhin.js/workroom loading', () => {
     const broken = new SyntaxError('broken');
     await expect(loadWorkroomRemotePackage(async () => { throw broken; })).rejects.toBe(broken);
   });
+
+  it('loadWorkroomSchedulerPackage turns a missing package into an install hint', async () => {
+    const { loadWorkroomSchedulerPackage } = await import('../src/utils/optional-workroom.js');
+    const missing = Object.assign(
+      new Error("Cannot find package '@zhin.js/workroom' imported from /app/x.js"),
+      { code: 'ERR_MODULE_NOT_FOUND' },
+    );
+    await expect(loadWorkroomSchedulerPackage(async () => { throw missing; }))
+      .rejects.toThrow('pnpm add @zhin.js/workroom');
+  });
+
+  it('loadWorkroomSchedulerPackage fails closed when the ./scheduler subpath is unavailable', async () => {
+    const { loadWorkroomSchedulerPackage } = await import('../src/utils/optional-workroom.js');
+    const notExported = Object.assign(
+      new Error('Package subpath \'./scheduler\' is not defined by "exports" in /app/node_modules/@zhin.js/workroom/package.json'),
+      { code: 'ERR_PACKAGE_PATH_NOT_EXPORTED' },
+    );
+    await expect(loadWorkroomSchedulerPackage(async () => { throw notExported; })).rejects.toBe(notExported);
+    const broken = new SyntaxError('broken');
+    await expect(loadWorkroomSchedulerPackage(async () => { throw broken; })).rejects.toBe(broken);
+  });
 });

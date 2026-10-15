@@ -1,9 +1,5 @@
 // 保留内部 import 的原因：该 coordinator 只在 Host 内部构造，跨 generation Capacity 的拒绝路径无法通过公开接口单独触达。
-import {
-  GenerationOwnedPortfolioCapacityRuntime,
-  portfolioCapacityRuntimeToken,
-  portfolioJournalRepositoryToken,
-} from '@zhin.js/workroom';
+import { GenerationOwnedPortfolioCapacityRuntime, portfolioCapacityRuntimeToken, portfolioJournalRepositoryToken } from '@zhin.js/workroom/portfolio';
 import { Scope, rootPluginId } from '@zhin.js/plugin-runtime';
 import { describe, expect, it } from 'vitest';
 import { WorkroomPortfolioCoordinator } from '../../../src/plugin-runtime/workroom/portfolio-coordinator.js';
