@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage, type LlmCompletionPort, type Model } from '@zhin.js/ai';
 import { BudgetExceededError, BudgetedCompletionPort, DEFAULT_NIGHTLY_BUDGET, resolveNightlyBudget } from './budget.js';
 import { CAPABILITY_MATRIX, buildHaystack } from './matrix-cases.js';
+import { DEFAULT_NIGHTLY_MODEL, resolveNightlyModels, resolveNightlyProvider } from './providers.js';
 import { diffReports, renderMarkdown, summarizeCase, type NightlyReport } from './report.js';
 import { runNightlyMatrix } from './runner.js';
 import { liveSeedCases } from './seed-cases.js';
@@ -10,6 +11,7 @@ import sessionHistoryCarried from '../cases/session-history-carried.case.js';
 import { observe, semantic } from './semantic.js';
 
 const model = { id: 'm1', provider: 'minimax', api: 'ai-sdk', sdk: 'minimax', input: ['text'], reasoning: false, maxTokens: 1000, contextWindow: 100_000 } as unknown as Model;
+const visionModel = { ...model, id: 'g1', provider: 'gemini', sdk: 'google', input: ['text', 'image'] } as unknown as Model;
 
 function message(content: AssistantMessage['content'], totalTokens = 100): AssistantMessage {
   return {
@@ -26,10 +28,14 @@ function userText(message: unknown): string {
   return Array.isArray(content) ? content.map((block: { text?: string }) => block.text ?? '').join('') : '';
 }
 
-/** Fake provider answering each matrix case by its user prompt. */
-function fakePort(answer: (user: string) => AssistantMessage): LlmCompletionPort {
+/** Fake provider answering each matrix case by its user prompt; records request options and image counts. */
+function fakePort(answer: (user: string) => AssistantMessage, seen: Array<{ temperature?: number; images: number }> = []): LlmCompletionPort {
   return {
-    complete: async (_m, ctx) => answer(userText(ctx.messages[0])),
+    complete: async (_m, ctx, options) => {
+      const media = (ctx.messages[0] as { media?: Array<{ type: string; data: { media: { mime_type?: string } } }> }).media ?? [];
+      seen.push({ temperature: options?.temperature, images: media.filter((b) => b.type === 'image' && b.data.media.mime_type === 'image/png').length });
+      return answer(userText(ctx.messages[0]));
+    },
     completeSimple: async () => { throw new Error('unused'); },
   };
 }
@@ -38,6 +44,7 @@ const perfect = (user: string) => {
   if (user.includes('上海现在天气')) return calls('上海');
   if (user.includes('北京和广州')) return calls('北京', '广州');
   if (user.includes('暗号是什么')) return text('青柠-4721');
+  if (user.includes('颜色的什么形状')) return text('红色圆形');
   return text('- 精神更好\n- 皮肤更好\n- 记忆力更强');
 };
 
@@ -62,6 +69,25 @@ describe('nightly budget', () => {
   });
 });
 
+describe('nightly provider selection', () => {
+  it('defaults to Gemini with its key, thinking level and no temperature', () => {
+    const gemini = resolveNightlyProvider({ GEMINI_API_KEY: ' k ' });
+    expect(gemini).toMatchObject({ id: 'gemini', keyEnv: 'GEMINI_API_KEY', temperature: undefined });
+    expect(gemini.config).toMatchObject({ sdk: 'google', apiKey: 'k', providerOptions: { google: { thinkingConfig: { thinkingLevel: 'low' } } } });
+    expect(resolveNightlyModels({}, gemini)).toEqual([DEFAULT_NIGHTLY_MODEL]);
+    expect(resolveNightlyModels({ NIGHTLY_MODELS: 'a, b,' }, gemini)).toEqual(['a', 'b']);
+    expect(resolveNightlyProvider({ NIGHTLY_THINKING_LEVEL: 'off' }).config.providerOptions).toBeUndefined();
+  });
+
+  it('keeps MiniMax available and rejects unknown providers', () => {
+    const minimax = resolveNightlyProvider({ NIGHTLY_PROVIDER: 'minimax', MINIMAX_API_KEY: 'k', GEMINI_API_KEY: 'g' });
+    expect(minimax).toMatchObject({ id: 'minimax', keyEnv: 'MINIMAX_API_KEY', temperature: 0.2, config: { sdk: 'minimax', apiKey: 'k' } });
+    expect(resolveNightlyModels({}, minimax)).toEqual(['minimax-m3']);
+    expect(resolveNightlyProvider({ NIGHTLY_PROVIDER: 'gemini' }).config.apiKey).toBeUndefined();
+    expect(() => resolveNightlyProvider({ NIGHTLY_PROVIDER: 'openai' })).toThrow(/Unknown NIGHTLY_PROVIDER/);
+  });
+});
+
 describe('semantic checks', () => {
   it('judge tool calls, facts, language and format', () => {
     expect(semantic.toolArgsCover(observe(calls('北京', '广州')), 'get_weather', 'city', [/北京/, /广州/]).pass).toBe(true);
@@ -82,13 +108,34 @@ describe('matrix runner and report', () => {
   const clock = () => new Date('2026-10-14T00:00:00Z');
 
   it('passes every capability with ideal answers and reports averages', async () => {
-    const port = new BudgetedCompletionPort(fakePort(perfect), budget);
-    const report = await runNightlyMatrix({ provider: 'minimax', models: [model], cases: CAPABILITY_MATRIX, port, budget, now: clock });
+    const seen: Array<{ temperature?: number; images: number }> = [];
+    const port = new BudgetedCompletionPort(fakePort(perfect, seen), budget);
+    const report = await runNightlyMatrix({ provider: 'gemini', models: [visionModel], cases: CAPABILITY_MATRIX, port, budget, now: clock });
     const cases = report.models[0]!.cases;
-    expect(cases.map((c) => c.capability)).toEqual(['tool-call-format', 'parallel-calls', 'long-context', 'zh-instruction']);
+    expect(cases.map((c) => c.capability)).toEqual(['tool-call-format', 'parallel-calls', 'long-context', 'zh-instruction', 'multimodal']);
     expect(cases.every((c) => c.passRate === 1)).toBe(true);
     expect(cases.find((c) => c.id === 'matrix-parallel-calls')?.avgToolCalls).toBe(2);
+    expect(report.budget.requests).toBe(10);
+    // The image rides on the multimodal case only; no temperature unless the provider asks for one.
+    expect(seen.map((s) => s.images)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 1, 1]);
+    expect(seen.every((s) => s.temperature === undefined)).toBe(true);
+  });
+
+  it('skips the multimodal column for text-only models without spending a request', async () => {
+    const seen: Array<{ temperature?: number; images: number }> = [];
+    const port = new BudgetedCompletionPort(fakePort(perfect, seen), budget);
+    const report = await runNightlyMatrix({ provider: 'minimax', models: [model], cases: CAPABILITY_MATRIX, port, budget, now: clock, temperature: 0.2 });
+    const multimodal = report.models[0]!.cases.find((c) => c.capability === 'multimodal');
+    expect(multimodal).toMatchObject({ skipped: 2, passRate: null });
     expect(report.budget.requests).toBe(8);
+    expect(seen.every((s) => s.temperature === 0.2)).toBe(true);
+  });
+
+  it('fails the multimodal case when the answer misses the colour or shape', async () => {
+    const port = new BudgetedCompletionPort(fakePort(() => text('蓝色正方形')), budget);
+    const multimodalCase = CAPABILITY_MATRIX.filter((c) => c.capability === 'multimodal');
+    const report = await runNightlyMatrix({ provider: 'gemini', models: [visionModel], cases: multimodalCase, port, budget, now: clock });
+    expect(report.models[0]!.cases[0]).toMatchObject({ passRate: 0 });
   });
 
   it('marks the remainder skipped once the budget is exhausted', async () => {

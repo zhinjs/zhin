@@ -124,6 +124,8 @@ export type {
   ProviderTimers,
   ResilientCompletionOptions,
 } from './llm/index.js';
+export { finishFailureKind, resolveFinish } from './llm/index.js';
+export type { FinishFailureKind, FinishInput, FinishOutcome } from './llm/index.js';
 
 // ── Core AI Types ──
 export type {
