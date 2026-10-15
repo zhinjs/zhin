@@ -1,85 +1,40 @@
 /**
- * Mid-stream provider errors, finish reasons and tool-call parsing over the real
- * AI SDK transports with a mocked HTTP endpoint (no network). The shared mocked-HTTP
- * harness from #784 is not on main yet, so this file keeps a small local server.
+ * Mid-stream provider errors, finish reasons, 429 handling and tool-call parsing over
+ * the real AI SDK transports, using the shared mocked-HTTP provider harness (#784).
  */
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
-import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
-import { createUserMessage } from '../../src/llm/types/agent-message.js';
-import type { ProviderInstanceConfig } from '../../src/llm/types/model.js';
 import {
+  anthropicMessages,
+  createProviderHarness,
+  openaiChat,
+  type ProviderHarness,
+} from '../helpers/provider-harness/index.js';
+import {
+  ProviderRequestError,
   classifyProviderError,
-  createResilientCompletionPort,
+  describeProviderFailure,
+  isProviderFailureMessage,
   type ProviderResilienceEvent,
 } from '../../src/llm/provider-resilience.js';
+import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
 import { ProviderStreamError, streamPartError } from '../../src/llm/bridge/stream-error.js';
 import { finishFailureKind, resolveFinish } from '../../src/llm/bridge/finish-reason.js';
 import { toolCallInput } from '../../src/llm/bridge/tool-call-input.js';
 import { ToolCallValidationError, validateToolCall } from '../../src/llm/validate-tool-call.js';
-import { ProviderRequestError, describeProviderFailure, isProviderFailureMessage } from '../../src/llm/provider-resilience.js';
 
-/** One scripted HTTP answer: SSE chunks, or a JSON error body with a status. */
-type Answer =
-  | { chunks: unknown[] }
-  | { status: number; body: unknown; headers?: Record<string, string> };
-
-function respond(answer: Answer): Response {
-  if ('chunks' in answer) {
-    const text = answer.chunks.map((chunk) => `data: ${typeof chunk === 'string' ? chunk : JSON.stringify(chunk)}\n\n`).join('');
-    return new Response(text, { status: 200, headers: { 'content-type': 'text/event-stream' } });
-  }
-  return new Response(JSON.stringify(answer.body), {
-    status: answer.status,
-    headers: { 'content-type': 'application/json', ...answer.headers },
-  });
-}
-
-function setup(sdk: ProviderInstanceConfig['sdk'], answers: Answer[], models = ['primary', 'secondary'], extra: Partial<ProviderInstanceConfig> = {}) {
-  const requests: Array<Record<string, any>> = [];
-  const fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
-    requests.push(JSON.parse(String(init?.body ?? '{}')));
-    const answer = answers[Math.min(requests.length - 1, answers.length - 1)]!;
-    return respond(answer);
-  }) as typeof globalThis.fetch;
-  const config: ProviderInstanceConfig = { sdk, apiKey: 'test-key', baseUrl: 'https://llm.test/v1', ...extra };
-  const runtime = createLlmApiRuntime([{ alias: 'p', config, models, fetch }], () => models);
-  const [primary, ...rest] = models.map((id) => createLlmTransportModel('p', config, id));
-  return { runtime, model: primary!, fallbacks: rest, requests };
-}
-
-const ask = { systemPrompt: '', messages: [createUserMessage('hi')] };
-
-const noSleep = async () => {};
-
-function resilient(runtime: ReturnType<typeof setup>['runtime'], fallbackModels: ReturnType<typeof setup>['fallbacks'] = [], config = {}) {
+/** The harness's resilience wrapper with no real waiting; records retry / fallback events. */
+function resilient(h: ProviderHarness, config = {}, fallbackModelIds: string[] = []) {
   const events: ProviderResilienceEvent[] = [];
-  const port = createResilientCompletionPort(runtime, {
-    fallbackModels, sleep: noSleep, random: () => 0, onEvent: (e) => events.push(e), config: { requestTimeoutMs: 0, ...config },
+  const port = h.resilient({
+    // Fallback candidates on the same alias: the harness registers one model, so describe the rest directly.
+    fallbackModels: fallbackModelIds.map((id) => createLlmTransportModel(h.alias, h.config, id)),
+    sleep: async () => {},
+    random: () => 0,
+    onEvent: (e) => events.push(e),
+    config: { requestTimeoutMs: 0, ...config },
   });
   return { port, events };
-}
-
-// --- SSE fixtures -------------------------------------------------------------
-
-const anthropicStart = { type: 'message_start', message: { id: 'msg_1', type: 'message', role: 'assistant', content: [], model: 'primary', stop_reason: null, usage: { input_tokens: 5, output_tokens: 0 } } };
-function anthropicText(text: string): unknown[] {
-  return [
-    anthropicStart,
-    { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } },
-    { type: 'content_block_delta', index: 0, delta: { type: 'text_delta', text } },
-    { type: 'content_block_stop', index: 0 },
-    { type: 'message_delta', delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } },
-    { type: 'message_stop' },
-  ];
-}
-
-function chatChunk(delta: Record<string, unknown>, finish: string | null = null) {
-  return { id: 'c1', object: 'chat.completion.chunk', created: 1, model: 'primary', choices: [{ index: 0, delta, finish_reason: finish }] };
-}
-function chatText(text: string): unknown[] {
-  return [chatChunk({ role: 'assistant', content: text }), chatChunk({}, 'stop'), '[DONE]'];
 }
 
 describe('streamPartError', () => {
@@ -117,23 +72,23 @@ describe('streamPartError', () => {
 
 describe('mid-stream errors over real transports', () => {
   it('retries an Anthropic overloaded_error that arrives inside a 200 stream', async () => {
-    const { runtime, model } = setup('anthropic', [
-      { chunks: [anthropicStart, { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }] },
-      { chunks: anthropicText('你好') },
-    ]);
-    const { port, events } = resilient(runtime);
-    const reply = await port.complete(model, ask);
+    const h = createProviderHarness({ sdk: 'anthropic' }).reply(
+      anthropicMessages.streamError({ type: 'overloaded_error', message: 'Overloaded' }),
+      anthropicMessages.reply({ text: '你好' }),
+    );
+    const { port, events } = resilient(h);
+    const reply = await port.complete('hi');
     expect(reply.content).toEqual([expect.objectContaining({ type: 'text', text: '你好' })]);
     expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'server', error: 'Overloaded' })]);
   });
 
   it('falls back after an OpenAI server_error chunk keeps failing on the primary', async () => {
-    const failing: Answer = { chunks: [chatChunk({ role: 'assistant', content: '' }), { error: { message: 'The server had an error while processing your request.', type: 'server_error', param: null, code: null } }] };
-    const { runtime, model, fallbacks, requests } = setup('openai', [failing, failing, { chunks: chatText('ok') }]);
-    const { port, events } = resilient(runtime, fallbacks, { maxRetries: 1 });
-    const reply = await port.complete(model, ask);
+    const failing = () => openaiChat.streamError({ message: 'The server had an error while processing your request.', type: 'server_error' }, '');
+    const h = createProviderHarness({ sdk: 'openai', model: 'primary' }).reply(failing(), failing(), openaiChat.reply({ text: 'ok' }));
+    const { port, events } = resilient(h, { maxRetries: 1 }, ['secondary']);
+    const reply = await port.complete('hi');
     expect(reply.content).toEqual([expect.objectContaining({ text: 'ok' })]);
-    expect(requests.map((r) => r.model)).toEqual(['primary', 'primary', 'secondary']);
+    expect(h.requests.map((r) => r.body.model)).toEqual(['primary', 'primary', 'secondary']);
     expect(events.map((e) => e.type)).toEqual(['retry', 'fallback']);
     expect(events[0]).toMatchObject({ kind: 'server', error: expect.stringContaining('The server had an error') });
   });
@@ -149,21 +104,21 @@ describe('provider-side error finishes (DeepSeek insufficient_system_resource)',
     expect(isProviderFailureMessage(finish('insufficient_system_resource').errorMessage!)).toBe(true);
   });
 
-  const exhausted = { chunks: [chatChunk({ role: 'assistant', content: '' }), chatChunk({}, 'insufficient_system_resource'), '[DONE]'] };
+  const exhausted = () => openaiChat.reply({ text: '', finishReason: 'insufficient_system_resource' });
 
   it('retries the request with backoff instead of reporting a malformed tool call', async () => {
-    const { runtime, model, requests } = setup('deepseek', [exhausted, { chunks: chatText('好的') }]);
-    const { port, events } = resilient(runtime);
-    const reply = await port.complete(model, ask);
+    const h = createProviderHarness({ sdk: 'deepseek' }).reply(exhausted(), openaiChat.reply({ text: '好的' }));
+    const { port, events } = resilient(h);
+    const reply = await port.complete('hi');
     expect(reply.content).toEqual([expect.objectContaining({ text: '好的' })]);
-    expect(requests).toHaveLength(2);
+    expect(h.requests).toHaveLength(2);
     expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'server', error: expect.stringContaining('insufficient_system_resource') })]);
   });
 
   it('gives the user the polite outage text once retries are exhausted', async () => {
-    const { runtime, model } = setup('deepseek', [exhausted]);
-    const { port, events } = resilient(runtime, [], { maxRetries: 1 });
-    const failure = await port.complete(model, ask).catch((e: unknown) => e);
+    const h = createProviderHarness({ sdk: 'deepseek' }).reply(exhausted(), exhausted());
+    const { port, events } = resilient(h, { maxRetries: 1 });
+    const failure = await port.complete('hi').catch((e: unknown) => e);
     expect(failure).toBeInstanceOf(ProviderRequestError);
     expect((failure as Error).message).toBe(describeProviderFailure('server'));
     expect(events.map((e) => e.type)).toEqual(['retry', 'give_up']);
@@ -171,25 +126,25 @@ describe('provider-side error finishes (DeepSeek insufficient_system_resource)',
 });
 
 describe('OpenAI 429s: retry-after-ms and insufficient_quota', () => {
-  const quotaBody = { error: { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', param: null, code: 'insufficient_quota' } };
-  const rateBody = { error: { message: 'Rate limit reached for gpt-4o on requests per min (RPM): Limit 3, Used 3, Requested 1.', type: 'requests', param: null, code: 'rate_limit_exceeded' } };
+  const quota = { message: 'You exceeded your current quota, please check your plan and billing details.', type: 'insufficient_quota', code: 'insufficient_quota' };
+  const rate = { message: 'Rate limit reached for gpt-4o on requests per min (RPM): Limit 3, Used 3, Requested 1.', type: 'requests', code: 'rate_limit_exceeded' };
 
   it('waits the millisecond-precise retry-after-ms instead of the rounded retry-after', async () => {
-    const { runtime, model } = setup('openai', [
-      { status: 429, body: rateBody, headers: { 'retry-after-ms': '1250', 'retry-after': '2' } },
-      { chunks: chatText('ok') },
-    ]);
-    const { port, events } = resilient(runtime);
-    await port.complete(model, ask);
+    const h = createProviderHarness({ sdk: 'openai' }).reply(
+      openaiChat.error(429, rate, { 'retry-after-ms': '1250', 'retry-after': '2' }),
+      openaiChat.reply({ text: 'ok' }),
+    );
+    const { port, events } = resilient(h);
+    await port.complete('hi');
     expect(events).toEqual([expect.objectContaining({ type: 'retry', kind: 'rate_limit', delayMs: 1250 })]);
     expect(classifyProviderError(Object.assign(new Error('x'), { statusCode: 429, responseHeaders: { 'retry-after': '3' } })).retryAfterMs).toBe(3000);
   });
 
   it('does not retry insufficient_quota and shows the billing text', async () => {
-    const { runtime, model, requests } = setup('openai', [{ status: 429, body: quotaBody }], ['primary']);
-    const { port, events } = resilient(runtime);
-    const failure = await port.complete(model, ask).catch((e: unknown) => e);
-    expect(requests).toHaveLength(1);
+    const h = createProviderHarness({ sdk: 'openai' }).reply(openaiChat.error(429, quota));
+    const { port, events } = resilient(h);
+    const failure = await port.complete('hi').catch((e: unknown) => e);
+    expect(h.requests).toHaveLength(1);
     expect(failure).toBeInstanceOf(ProviderRequestError);
     expect(failure).toMatchObject({ kind: 'billing', message: describeProviderFailure('billing') });
     expect(events).toEqual([expect.objectContaining({ type: 'give_up', kind: 'billing' })]);
@@ -224,14 +179,9 @@ describe('invalid tool-call arguments keep the raw input', () => {
   });
 
   it('surfaces a truncated OpenAI tool call with its raw text instead of {}', async () => {
-    const toolCallChunks = [
-      chatChunk({ role: 'assistant', content: null, tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '' } }] }),
-      chatChunk({ tool_calls: [{ index: 0, function: { arguments: '{"city": "Par' } }] }),
-      chatChunk({}, 'tool_calls'),
-      '[DONE]',
-    ];
-    const { runtime, model } = setup('openai', [{ chunks: toolCallChunks }]);
-    const reply = await runtime.complete(model, { ...ask, tools: [weather] });
+    // A string `arguments` is sent verbatim by the harness: here, truncated JSON.
+    const h = createProviderHarness({ sdk: 'openai' }).reply(openaiChat.reply({ toolCalls: [{ id: 'call_1', name: 'get_weather', arguments: '{"city": "Par' }] }));
+    const reply = await h.complete({ user: 'hi', tools: [weather] });
     const call = reply.content.find((b) => b.type === 'toolCall');
     expect(call).toMatchObject({ type: 'toolCall', name: 'get_weather', arguments: {}, inputError: { raw: '{"city": "Par' } });
     // Replayed to the provider as an empty object, never as the error record.
