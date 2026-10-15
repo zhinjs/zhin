@@ -250,6 +250,31 @@ default per ai.google.dev; see `DEFAULT_NIGHTLY_MODEL` in `nightly.run.ts`).
 Requests go through the `google` SDK, so seed cases exercise the same Gemini
 provider as production, including images and implicit prompt caching.
 
+**Rate limits** (`rate-limit.ts`; CI's key is on the Gemini free tier, 15 RPM
+plus a daily request quota (RPD) per project, which resets at midnight Pacific; see
+https://ai.google.dev/gemini-api/docs/rate-limits and the project's limits in AI Studio):
+
+- Everything is serial: one workflow run at a time (`concurrency: nightly-evals`, no
+  matrix), one test file and test at a time (`fileParallelism: false`,
+  `maxConcurrency: 1`), and one request at a time through `RateLimitedCompletionPort`.
+- Request starts are at least 4 s apart (`NIGHTLY_MIN_REQUEST_INTERVAL_MS`), counting
+  every multi-turn and tool step, retries included, so a run stays at or under 15 RPM.
+- A per-minute 429 is retried after 2 s, 4 s, then 8 s, or after Google's `RetryInfo`
+  `retryDelay` / `Retry-After` when that is longer. After 3 retries the request fails
+  (that trial fails). The SDK's own retries are off (`maxRetries: 0`), and production
+  provider defaults are unchanged.
+- A daily-quota 429 (`PerDay` / RPD) is never retried. The run stops, every remaining
+  trial is recorded as failed ("not run"), the report's `fatal` says the free-tier daily
+  quota is exhausted, and the job fails. It never passes or skips.
+- Only 429s are retried. Every other error and every failed check stays a failure.
+
+A default run sends about 63 requests (5 matrix cases × 3, plus ~48 seed-case
+requests, tool steps included), so with 4 s spacing it takes at least ~4.2 min.
+At the 120-request cap it takes at least 8 min plus any backoff, well inside the
+30 min test and 45 min job timeouts. If the project's RPD is below that, lower
+`NIGHTLY_RUNS_PER_CASE` / `NIGHTLY_MAX_REQUESTS` (repository variable) or pick a model
+with a higher daily quota via `NIGHTLY_MODELS`.
+
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
 optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.

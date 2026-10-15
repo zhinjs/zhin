@@ -24,6 +24,10 @@ permissions:
   contents: read
   actions: read # download the previous night's report for the diff
 
+# One nightly at a time: CI's Gemini key is on the free tier (15 RPM, a daily request
+# quota per project), so a dispatched run must queue behind the scheduled one instead
+# of sharing the minute. There is no job matrix; inside the run, requests are serialized
+# and paced ≥4 s apart (evals/nightly/rate-limit.ts).
 concurrency:
   group: nightly-evals
   cancel-in-progress: false
@@ -103,6 +107,10 @@ jobs:
           GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
           NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || '3' }}
+          # Optional repository variables; empty means the defaults in budget.ts / rate-limit.ts
+          # (120 requests per run, 4000 ms between requests = 15 RPM).
+          NIGHTLY_MAX_REQUESTS: ${{ vars.NIGHTLY_MAX_REQUESTS }}
+          NIGHTLY_MIN_REQUEST_INTERVAL_MS: ${{ vars.NIGHTLY_MIN_REQUEST_INTERVAL_MS }}
           NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports
           NIGHTLY_PREVIOUS_REPORT: ${{ github.workspace }}/previous-report/nightly.json
         run: pnpm eval:nightly
