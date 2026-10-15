@@ -117,7 +117,7 @@ export const pubCommand = new Command('pub')
         } else {
           const { plugin } = await inquirer.prompt([
             {
-              type: 'list',
+              type: 'select',
               name: 'plugin',
               message: '请选择要发布的插件:',
               choices: candidates.map((c) => ({

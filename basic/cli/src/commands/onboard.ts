@@ -220,7 +220,7 @@ async function runInProject(_checks: ReturnType<typeof checkEnvironment>): Promi
   if (hasExistingConfig) {
     const { choice } = await inquirer.prompt([
       {
-        type: 'list',
+        type: 'select',
         name: 'choice',
         message: '选择操作（重新运行向导不会自动覆盖，除非选择重置）:',
         choices: [
@@ -280,7 +280,7 @@ async function runOutsideProject(checks: ReturnType<typeof checkEnvironment>): P
 
   const { choice } = await inquirer.prompt([
     {
-      type: 'list',
+      type: 'select',
       name: 'choice',
       message: '选择操作:',
       choices: [
