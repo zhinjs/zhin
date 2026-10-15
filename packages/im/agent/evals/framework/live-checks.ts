@@ -55,6 +55,11 @@ export const live = {
     return check(label, !pattern.test(text), `reply: ${text.slice(0, 200)}`);
   },
   /** Every turn ended normally (no error / budget termination). */
+  /** The first model request carried `count` image blocks (the image reached the real model). */
+  imagesSent(run: EvalRunRecord, count: number): EvalLiveCheck {
+    const seen = run.modelRequests[0]?.images ?? 0;
+    return check(`first request carried ${count} image(s)`, seen === count, `images per request: [${run.modelRequests.map((r) => r.images).join(', ')}]`);
+  },
   turnsCompleted(run: EvalRunRecord): EvalLiveCheck {
     const bad = run.terminals.filter((event) => event.type !== 'turn_end').map((event) => event.type);
     return check('turns completed', bad.length === 0 && run.terminals.length > 0, `terminals: [${run.terminals.map((e) => e.type).join(', ')}]`);

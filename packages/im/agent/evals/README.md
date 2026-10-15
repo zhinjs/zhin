@@ -62,8 +62,8 @@ export default defineEvalCase({
 
 | Field | Meaning |
 |---|---|
-| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), and an optional `policy` override. |
-| `tools` | Mocked tools: `name`, `description`, `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
+| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. |
+| `tools` | Mocked tools: `name`, `description`, `parameters` (JSON Schema of the arguments, sent to the model), `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Cases with `live` checks must declare every argument their script passes, or a real model has nothing to fill in. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
 | `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations`, `toolBudget`, or `subagentTurnMode: 'sync'`. |
 | `promptSections` | Prompt sections from a third-party plugin (`{ plugin, title, content }`). They are owned by a child plugin, so the engine labels them `external_content`. |
@@ -73,6 +73,7 @@ export default defineEvalCase({
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
 | `models` | Extra model ids registered after the primary `scripted-model`, in fallback order (they become the turn's later `modelCandidates`). A step's optional `model` pins which model must receive that request. |
+| `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
 
 ### Assertions (`expect`)
@@ -90,6 +91,7 @@ export default defineEvalCase({
 | `outboundMessages` | The number of reply-port sends. |
 | `streamToolEvents` | Tool events (`tool_call:name`, `tool_result:name`, `tool_denied:name`) that stream consumers see, in order. The stream is derived from the turn journal. |
 | `modelIds` | The model id of every request, in order (fallback cases). |
+| `modelImages` | Image blocks the model received in each request, in order (multimodal cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
 A case also fails on any of these, whatever its `expect` block says:
@@ -146,6 +148,10 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
+| `multimodal-group-image-described` | multimodal | #769 Gemini switch — group images were replaced by a text placeholder |
+| `multimodal-image-question-answered` | multimodal | #769 Gemini switch — image + question in one message |
+| `multimodal-text-follow-up` | multimodal, memory | #769 Gemini switch — text follow-up about an earlier image |
+| `multimodal-text-only-model-placeholder` | multimodal | #769 Gemini switch — text-only models still never get image bytes |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
 | `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |
@@ -165,7 +171,7 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 
 ## Nightly real-model tier (#723)
 
-`evals/nightly/` runs a **model capability matrix** against real MiniMax models
+`evals/nightly/` runs a **model capability matrix** against real Gemini models
 once a night (`.github/workflows/nightly-evals.yml`, scheduled plus
 `workflow_dispatch`). It is a trend metric, never a PR gate: it does not run on
 pull requests and low pass rates do not fail the job.
@@ -218,10 +224,14 @@ as skipped):
 
 The default run (1 model, 3 runs per case) is about 12 matrix requests (~60k
 tokens) plus about 50 seed-case requests (~300k tokens, since each carries the
-full agent system prompt). Models come from `NIGHTLY_MODELS` (default `minimax-m3`).
+full agent system prompt). Models come from `NIGHTLY_MODELS` (workflow input, else the
+`NIGHTLY_MODELS` repository variable, else `gemini-3.8-flash`, the stable
+default per ai.google.dev; see `DEFAULT_NIGHTLY_MODEL` in `nightly.run.ts`).
+Requests go through the `google` SDK, so seed cases exercise the same Gemini
+provider as production, including images and implicit prompt caching.
 
-**Secrets:** the workflow reads the `MINIMAX_API_KEY` repository secret (and the
-optional `MINIMAX_BASE_URL` env). Without it the job logs a notice and skips.
+**Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
+optional `GEMINI_BASE_URL` env for a proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.
 
 **Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average
@@ -230,7 +240,7 @@ against the previous successful night, with regressions of 20 points or more
 flagged). They are uploaded as the `nightly-eval-report` artifact and the
 Markdown goes to the job summary.
 
-Run it locally with `MINIMAX_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
+Run it locally with `GEMINI_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
 
 ## Conventions
 

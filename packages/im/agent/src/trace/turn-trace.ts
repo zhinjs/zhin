@@ -37,6 +37,8 @@ export interface TurnTraceModelCall {
   readonly total_tokens: number;
   /** Prompt tokens served from the provider cache (#730). */
   readonly cache_read_tokens?: number;
+  /** Completion tokens spent on reasoning (e.g. Gemini thoughtsTokenCount). */
+  readonly reasoning_tokens?: number;
 }
 
 export interface TurnTraceToolCall {
@@ -231,6 +233,7 @@ export class TurnTraceCollector {
           completion_tokens: event.usage.completionTokens,
           total_tokens: event.usage.totalTokens,
           ...(event.usage.cacheReadTokens ? { cache_read_tokens: event.usage.cacheReadTokens } : {}),
+          ...(event.usage.reasoningTokens ? { reasoning_tokens: event.usage.reasoningTokens } : {}),
         });
         this.#modelCalls.push(call);
         this.#addTimeline('model_call', `#${call.index} in=${call.prompt_tokens} out=${call.completion_tokens}`);

@@ -10,9 +10,10 @@ import type { ScriptStep } from './scripted-model.js';
 import type { EvalRunRecord } from './driver.js';
 import type { EvalLiveCheck } from './live-checks.js';
 import type { MemoryEntryUpsertInput } from '@zhin.js/ai';
+import type { ToolInputJsonObjectSchema } from '@zhin.js/tool';
 import type { ContextBudgetSegment } from '../../src/trace/context-budget.js';
 
-export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota';
+export type EvalTag = 'long-task' | 'context' | 'memory' | 'injection' | 'tool-use' | 'approval' | 'subagent' | 'quota' | 'multimodal';
 
 export interface EvalInboundMessage {
   readonly text: string;
@@ -29,11 +30,27 @@ export interface EvalInboundMessage {
   readonly shell?: boolean;
   /** Overrides the default policy derived from the sender (ignores `shell`). */
   readonly policy?: TurnPolicyContext;
+  /** Images attached to the message (see `evalImage()` for committed fixtures). */
+  readonly images?: readonly EvalImage[];
+}
+
+export interface EvalImage {
+  /** Base64 payload without a data: prefix. */
+  readonly base64: string;
+  readonly mimeType: string;
+  readonly name?: string;
 }
 
 export interface EvalTool {
   readonly name: string;
   readonly description?: string;
+  /**
+   * JSON Schema of the arguments, sent to the model as the tool's parameters.
+   * Without it the model sees a tool with no arguments: scripted runs don't
+   * care, but a real model (nightly) has nothing to fill in. Cases with `live`
+   * checks must declare every argument their script passes.
+   */
+  readonly parameters?: ToolInputJsonObjectSchema;
   /** Mocked tool result. A function receives the model's arguments. */
   readonly result?: unknown | ((args: Record<string, unknown>) => unknown);
   /** Throw this message instead of returning a result. */
@@ -86,6 +103,8 @@ export interface EvalExpectations {
   readonly modelInputContains?: readonly string[];
   /** Strings that must never appear in what the model received. */
   readonly modelInputNotContains?: readonly string[];
+  /** Image blocks the model received, per request in order (multimodal cases). */
+  readonly modelImages?: readonly number[];
   /** Strings that must appear in the system prompt of every model request. */
   readonly systemPromptContains?: readonly string[];
   /** Strings that must each appear in the system prompt of at least one model request (e.g. a compaction summary request). */
@@ -161,6 +180,8 @@ export interface EvalCase {
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
+  /** Input modalities of the scripted model (default text only). Multimodal cases add `image`. */
+  readonly modelInput?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   readonly script: readonly ScriptStep[];
   /** Unused script steps fail the case unless this is true. */
   readonly allowUnusedSteps?: boolean;
@@ -206,6 +227,19 @@ export function validateEvalCase(candidate: EvalCase): string[] {
   candidate.script?.forEach((step, index) => {
     if ('toolCalls' in step && step.toolCalls.length === 0) problems.push(`script step ${index + 1} has an empty toolCalls list`);
   });
+  if (candidate.live) {
+    // A real model only knows the arguments a tool declares; an undeclared one is never filled in.
+    const mocks = new Map((candidate.tools ?? []).map((tool) => [tool.name, tool]));
+    for (const step of candidate.script ?? []) {
+      if (!('toolCalls' in step)) continue;
+      for (const call of step.toolCalls) {
+        const tool = mocks.get(call.name);
+        if (!tool) continue;
+        const missing = Object.keys(call.args ?? {}).filter((arg) => !tool.parameters?.properties[arg]);
+        if (missing.length > 0) problems.push(`live case: tool "${call.name}" must declare parameters for ${missing.join(', ')}`);
+      }
+    }
+  }
   return problems;
 }
 

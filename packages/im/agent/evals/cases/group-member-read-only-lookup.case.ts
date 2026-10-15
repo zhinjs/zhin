@@ -6,7 +6,12 @@ export default defineEvalCase({
   source: '#719 group_member turn tightening — only shell/write/outbound are removed (PR #737)',
   tags: ['tool-use'],
   inbound: { text: '@bot 北京天气怎么样', scope: 'group', sender: { id: 'bob', roles: ['user'] } },
-  tools: [{ name: 'get_weather', result: 'Beijing: sunny, 22°C' }],
+  tools: [{
+    name: 'get_weather',
+    description: 'Look up current weather for a city.',
+    parameters: { type: 'object', properties: { city: { type: 'string', description: 'City name, e.g. Beijing' } }, required: ['city'] },
+    result: 'Beijing: sunny, 22°C',
+  }],
   script: [
     { toolCalls: [{ name: 'get_weather', args: { city: 'Beijing' } }] },
     { text: '北京晴，22°C。' },

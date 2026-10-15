@@ -31,7 +31,10 @@ export const SDK_DEFAULT_MODELS: Readonly<Record<SdkId, readonly string[]>> = {
     'claude-opus-4-5-20251101',
   ],
   google: [
-    'gemini-3.5-flash',
+    // ai.google.dev/gemini-api/docs/models (2026-10-13): 3.8 Flash is the recommended stable default.
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
     'gemini-3.1-pro-preview',
     'gemini-3.1-flash-lite',
     'gemini-3-flash-preview',

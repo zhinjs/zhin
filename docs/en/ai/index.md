@@ -134,9 +134,26 @@ ai:
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
-- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name.
+- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
 - `contextWindow`: context window size.
 - `imageGeneration`: defaults for text-to-image.
+- `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        defaultModel: gemini-3.8-flash
+        providerOptions:
+          google:
+            safetySettings:
+              - { category: HARM_CATEGORY_HARASSMENT, threshold: BLOCK_ONLY_HIGH }
+            thinkingConfig: { thinkingLevel: low }
+  ```
+
+  If Gemini refuses on safety grounds (SAFETY, RECITATION and so on), the user sees a refusal that names the reason instead of an empty reply. Gemini uses implicit caching: the system prompt and tool definitions stay unchanged, and cache hits are reported as `cacheRead` in usage and as `cache_read_tokens` in the turn trace. For a steadier discount, turn on explicit caching with `contextCache: { mode: explicit, ttlSeconds: 600 }`. zhin then creates a `cachedContents` entry for the system prompt and tool definitions and reuses it within the TTL. A changed prefix gets a new cache and the old one is deleted. If the server has dropped the cache, zhin resends the full request. If a cache can't be created (for example, the prefix is too short), it falls back to implicit caching. Cache storage is billed by the hour. Explicit caching works on Gemini 3 and 2.5 only; Gemini 4 Argon and later don't support it.
 
 ### ai.agents
 
