@@ -50,4 +50,12 @@ describe('provider harness', () => {
     setTimeout(() => controller.abort(new Error('stop')), 20);
     await expect(h.complete('hi', { signal: controller.signal, maxRetries: 0 })).rejects.toThrow('stop');
   });
+
+  it.each(['openai', 'anthropic', 'google'] as const)('capture() returns the %s request after a protocol 400', async (sdk) => {
+    const h = createProviderHarness({ sdk });
+    const req = await h.capture({ system: 's', user: 'hi' });
+    expect(req.method).toBe('POST');
+    expect(req.body).toBeTypeOf('object');
+    expect(h.requests).toHaveLength(1);
+  });
 });

@@ -24,7 +24,8 @@ import {
 } from '../../../src/llm/provider-resilience.js';
 import { AiHttpTransport } from '../../../src/llm/http-transport.js';
 import { SdkProviderAdapter } from '../../../src/sdk-provider-adapter.js';
-import { createMockFetch, type MockFetch, type RecordedRequest, type Responder } from './mock-fetch.js';
+import { createMockFetch, type MockFetch, type MockResponse, type RecordedRequest, type Responder } from './mock-fetch.js';
+import { anthropicMessages, geminiGenerate, openaiChat } from './protocols.js';
 
 export * from './mock-fetch.js';
 export * from './protocols.js';
@@ -104,6 +105,24 @@ export interface ProviderHarness {
   adapter(): SdkProviderAdapter;
   /** Build the `Context` that `complete()` would send. */
   context(input: HarnessInput): Context;
+  /**
+   * Request-shape tests: answer one request with a protocol-correct 400, swallow the
+   * error and return what the SDK sent. `options.maxRetries` defaults to 0.
+   */
+  capture(input: HarnessInput, options?: StreamOptions): Promise<RecordedRequest>;
+}
+
+/** A 400 in the wire format of `sdk`, used by `capture()`. */
+function stopHereError(sdk: SdkId): MockResponse {
+  const message = 'provider-harness: stop here';
+  switch (PROVIDER_PROTOCOL[sdk]) {
+    case 'anthropic-messages':
+      return anthropicMessages.error(400, { type: 'invalid_request_error', message });
+    case 'gemini':
+      return geminiGenerate.error(400, { message, status: 'INVALID_ARGUMENT' });
+    default:
+      return openaiChat.error(400, { message, type: 'invalid_request_error' });
+  }
 }
 
 export function createProviderHarness(options: ProviderHarnessOptions): ProviderHarness {
@@ -156,6 +175,15 @@ export function createProviderHarness(options: ProviderHarnessOptions): Provider
     },
     adapter: () => new SdkProviderAdapter(alias, options.sdk, config, [modelId], new AiHttpTransport({ fetch: server.fetch })),
     context,
+    async capture(input, streamOptions) {
+      const before = server.requests.length;
+      server.enqueue(stopHereError(options.sdk));
+      await runtime.complete(model, context(input), { maxRetries: 0, ...streamOptions }).catch(() => undefined);
+      if (server.requests.length !== before + 1) {
+        throw new Error(`provider-harness: capture() expected 1 request, got ${server.requests.length - before}`);
+      }
+      return server.requests.at(-1)!;
+    },
   };
   return harness;
 }

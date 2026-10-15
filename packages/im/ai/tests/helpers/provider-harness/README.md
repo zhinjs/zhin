@@ -29,6 +29,7 @@ The returned harness provides:
 - `complete(input, streamOptions?)` runs the agent path (`LlmApiRuntime.complete`, streamed) and returns the `AssistantMessage`.
 - `events(input, streamOptions?)` sends the same request and returns every stream event (`text_delta`, `thinking_delta`, `toolcall_delta`, `done`, `error`).
 - `resilient(resilienceOptions?).complete(input)` wraps the same runtime in the #724 resilience layer (retry, timeout, fallback). Pass `sleep`, `timers` and `random` to keep it deterministic.
+- `capture(input, streamOptions?)` is for request-shape tests: it answers one request with a protocol-correct 400, swallows the error and returns the `RecordedRequest` (`maxRetries` defaults to 0). `const { body } = await h.capture({ user: 'hi', tools })`.
 - `adapter()` returns an `SdkProviderAdapter` on the same fetch, for `completeText` (non-streamed `generateText`) and `listModels`.
 - `requests`, `lastRequest()` and `server.requestsTo('/chat/completions')` give you what the SDK sent: `{ method, url, path, headers (lower-case), body (parsed JSON), rawBody, stream }`.
 - `model` is the transport `Model` descriptor (`input`, `contextWindow`, `providerOptions`), and `runtime`, `config` and `context(input)` are also exposed.
