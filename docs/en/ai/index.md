@@ -91,6 +91,8 @@ export default defineAgentTool<{ city: string }>({
 });
 ```
 
+A tool's parameter schema reaches the model as written: `enum`, `anyOf`, nullable types, `integer`, `format` and value ranges are kept, for MCP tools too. Arguments the model sends back are checked against the same constraints, and a violation is reported to the model so it can call again. Gemini rejects fields without a type, so those go to Gemini as strings.
+
 Restricting tools, requiring confirmation, packaging procedures as Skills and adding business context are covered in [Agent tools and Skills](../authoring/agent-tools.md).
 
 ## Common adjustments
@@ -141,6 +143,8 @@ Optional fields:
 
   An explicit `input` always wins.
 - `contextWindow`: context window size.
+- `thinkingLevel`: reasoning depth, `off | low | medium | high`. When omitted, the provider default applies. zhin passes it to each SDK as the AI SDK `reasoning` option, and the SDK maps it to its own setting: Gemini 3 `thinkingLevel` (`off` becomes `minimal`), the Gemini 2.5 thinking budget, the Claude thinking budget, or OpenAI and DeepSeek reasoning effort. A thinking setting already in `providerOptions` (`thinkingConfig`, `thinking`, `reasoningEffort` or `effort`) wins. MiniMax always uses adaptive thinking and ignores it.
+- `maxOutputTokens`: output token cap per request, default `8192`. Gemini and Claude count thinking tokens against it, so raise it with `thinkingLevel: high` to keep replies from being cut off.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
 
