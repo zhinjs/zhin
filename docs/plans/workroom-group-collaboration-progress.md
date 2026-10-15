@@ -117,7 +117,14 @@ sidebar: false
   - 2026-10-15 · 「refactor(workroom): 删除 legacy 迁移代码与 CLI 命令」· 删除两个 legacy 迁移模块及其公开导出、`zhin agent legacy-payloads` / `legacy-runs` 子命令和测试；读取旧格式的 fail-closed 检测原样移到 `journal/legacy-payload-guard.ts`，报错改为“旧格式不再受支持”且不含正文；中英文文档、agent README、patch changeset 同步；1241 个 workroom 测试 + 638 个 CLI 测试通过
 - [x] C3-1 处理第 38 轮审查意见：`packages/im/workroom/src/workroom/projection-outbox/projector.ts:563` 旧明文 Projection 快照的报错仍引导用户使用已删除的 offline export / purge 流程，改为“no longer supported”（拒绝行为不变），同步 `tests/workroom-runtime/projection-outbox.test.ts:392` 的断言并继续断言报错不含正文。顺带 Nit：`journal/legacy-payload-guard.ts` 恢复 recordRef 重复检查（旧 `canonicalRecords` 的 duplicate record identity）或补 DatabaseWorkroomJournal 重复 runId+sequence 被拒绝的测试；`legacy-payload-guard.test.ts` 补 subject_identifier 类字段（如 `email`）的检测用例；`docs/contributing/legacy-concepts.md:78` 及英文版删掉 `legacy_import` 候选的说法（生成它的离线工具已删除）
   - 2026-10-15 · 「fix(workroom): legacy 旧格式报错不再指向已删除工具」· projector 旧明文快照报错改为 no longer supported（仍 fail-closed、不含正文，断言不再提 export / purge）；guard 恢复 recordRef 重复检查；补 subject_identifier 与重复 recordRef 用例；legacy-concepts 中英文删掉 `legacy_import` 说法；changeset 补一句；1244 个 workroom 测试通过
-- [ ] C4 移出主路径：remote dispatch / callback / issuance（冻结，不做 A2A）、portfolio、scheduler / preemption、data-governance、overlay-pack / github / self-delivery；能删就删，不能删就移到可选插件
+- C4（父条目，拆为 C4a–C4d，不直接执行；子条目全部完成后改为 [x]）移出主路径：remote dispatch / callback / issuance（冻结，不做 A2A）、portfolio、scheduler / preemption、data-governance、overlay-pack / github / self-delivery；能删就删，不能删就移到可选插件
+  - 2026-10-15 拆分：范围过大（数万行，跨 kernel / runtime / CLI / 插件），按模块拆成 C4a–C4d 逐个推进，全部完成后勾选 C4。每个子条目先确认没有被新 Room 核心或示例引用；被旧 Workroom 默认路径用到、删掉会改变默认行为的部分，移到可选入口而不是删除
+- [x] C4a remote dispatch / callback / assignment / issuance（§6 第 4 条已确认冻结、不做 A2A）：能删就删，不能删就移出默认装配路径
+  - 2026-10-15 · 「refactor(workroom): remote dispatch / callback / assignment 移到 ./remote 子路径」· 未删除（旧 Kernel 默认路径仍用到），从 `@zhin.js/workroom` 包根移到 `./remote` 子路径并冻结；新 Room 核心与示例不引用；`remote_dispatch.requested` 校验仍 fail-closed 并补回归测试；workroom / a2a / cli patch changeset；1248 个 workroom 测试 + 502 个 a2a / CLI 测试通过
+- [ ] C4a-1 处理第 40 轮审查意见（文档与代码不符，属正确性）：changeset `.changeset/workroom-remote-subpath.md`、`docs/contributing/public-api-surface.md:118`（英文 :113）、`docs/configuration/index.md:238`（英文 :243）、`packages/im/agent/CONTEXT.md:126`、`packages/host/a2a/README.md:46-50`、`packages/im/workroom/README.md:14` 写着 remote“不在默认装配路径 / 仅在配置 `a2a.workroomCallbacks.enabled` 时加载”，但 `basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts:24/221` 与 `runtime-foundation.ts:28/80` 仍静态导入并无条件创建 remote callback runtime 与 remote assignment authority。按审查建议改正文档：实际是“移出包根导出、冻结”，默认装配仍创建它们（旧 Kernel 路径要用，C2 阻塞），注明留到 C2 之后处理。顺带 Nit：`basic/cli/src/utils/optional-workroom.ts:45` `loadWorkroomRemotePackage` 补两个用例（包未安装给安装提示；子路径不可用原样抛出）；可选：kernel / journal 重放载荷被篡改的 `remote_dispatch.requested` 历史事件时抛错的用例
+- [ ] C4b portfolio / scheduler / preemption
+- [ ] C4c data-governance、`workroom-data-*`、`workroom-payload-*`（§6 第 1 条已确认移出主路径），作为可选入口
+- [ ] C4d overlay-pack-promotion / github / self-delivery，移到自交付相关的可选插件
 - [ ] C5 简化 acceptance：去掉独立的验收引擎，reviewer 改为普通角色
 - [ ] C6 文档：在 `agent-workroom-orchestration-decision-map.md` 中把冲突条目标为 Superseded，新增 ADR，更新 README / 示例文档，补 changeset。跑通 `pnpm check:all`，在本文末尾写总结
 
@@ -377,6 +384,12 @@ sidebar: false
 - Nit（只记录）：`docs/contributing/legacy-concepts.md:78` 及英文版同一段把“旧 Run 不再受支持、没有迁移工具”说了两次，可删掉第二处
 - 已有问题：eslint 在 `projection-outbox/projector.ts` 报未使用导入与非空断言警告（非本条目引入）
 
+### 第 40 轮（2026-10-15，审查 C4a）
+
+- 无 Blocking；remote 代码未删除，仅从包根移到 `./remote` 子路径，行为不变；62 个导入 `@zhin.js/workroom` 的文件逐个核对，无人再从包根导入 remote 符号；依赖方向不变（remote 只被 basic/cli 与 host/a2a 引用）；api-surface 快照不覆盖 workroom
+- Should fix：changeset 与多处中英文文档称 remote“不在默认装配路径 / 仅在配置时加载”，但 CLI 默认装配仍静态导入并无条件创建 remote callback runtime（会构造三个文件仓库）与 remote assignment authority → C4a-1（选改文档，不改默认装配行为）
+- Nit：`loadWorkroomRemotePackage` 无测试；`remote-event-fail-closed.test.ts` 只测 `validatePayload`，未覆盖重放路径 → 并入 C4a-1
+
 ## 运行日志
 
 （每次运行追加一行：时间、做了哪个条目、结果或阻塞原因）
@@ -420,3 +433,4 @@ sidebar: false
 - 2026-10-15 06:35 定时运行：origin/main 无新提交，install / build 通过；完成 C1a-1（6 个 agent，约 6 分钟，workroom / 示例 build、type-check、198 个 room / 示例测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，1 个 Should fix + 3 个 Nit 只记录，见第 37 轮）。下一个可做条目为 C2，但它依赖已阻塞的 C1（Room turn 入口），本次未继续。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改
 - 2026-10-15 07:35 定时运行：origin/main 无新提交，install / build 通过；C2 依赖已阻塞的 C1（无 Room turn 入口），标为阻塞；完成 C3（4 个 agent，约 7.5 分钟，workroom / cli build、type-check、1241 个 workroom 测试、638 个 CLI 测试、check:architecture、check:workroom-ssot、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking，2 个 Should fix + 3 个 Nit 新增为 C3-1）。备注：`scriptPath` 仍被拒绝，继续内联传入 step-workflow.js，内容未改
 - 2026-10-15 同一次定时运行：完成 C3-1（4 个 agent，约 2.6 分钟，workroom build、type-check、1244 个 workroom 测试、check:architecture、API 快照、plugin-runtime API、eslint 通过，审查无 Blocking / Should fix，1 个 Nit 只记录）。剩余可做条目 C4 / C5 / C6；C1、C2 阻塞待维护者决定
+- 2026-10-15 08:35 定时运行：origin/main 无新提交，install / build 通过；C4 范围过大，拆为 C4a–C4d（C4 改为父条目）；完成 C4a（4 个 agent，约 9.3 分钟，workroom / a2a / cli build、type-check、1248 个 workroom 测试、502 个 a2a / CLI 测试、check:architecture、API 快照、plugin-runtime API、check:workroom-ssot、eslint 通过，审查无 Blocking，1 个 Should fix（文档与代码不符）+ 2 个 Nit 新增为 C4a-1）。备注：`scriptPath` 仍被拒绝（即使先 Read 过），继续内联传入 step-workflow.js，内容未改

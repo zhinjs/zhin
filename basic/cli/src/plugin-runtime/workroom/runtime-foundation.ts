@@ -13,7 +13,6 @@ import {
   createGenerationWorkroomAcceptancePolicyPort,
   createGenerationWorkroomLocalAssignmentAuthority,
   createGenerationWorkroomPlanGateAuthority,
-  createGenerationWorkroomRemoteAssignmentAuthority,
   createWorkroomRuntime,
   installWorkroomDataGovernanceResources,
   workroomAcceptanceAuthorityToken,
@@ -23,10 +22,13 @@ import {
   workroomPlanGateAuthorityToken,
   workroomPlanningDisclosureToken,
   workroomPriorityAuthorityToken,
-  workroomRemoteAssignmentAuthorityToken,
   type WorkroomDynamicPlanningPolicyPort,
   type WorkroomPlanningDisclosurePort,
 } from '@zhin.js/workroom';
+import {
+  createGenerationWorkroomRemoteAssignmentAuthority,
+  workroomRemoteAssignmentAuthorityToken,
+} from '@zhin.js/workroom/remote';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { Token } from '@zhin.js/plugin-runtime';
 

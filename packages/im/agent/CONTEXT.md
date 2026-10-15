@@ -123,6 +123,7 @@ _避免使用_：subagent id、spawn id、job item
 _避免使用_：worker、handler、直接改 task status
 
 **Remote Executor**:
+（已冻结：A2A 扩展，经 `@zhin.js/workroom/remote` 提供，不在默认路径。）
 通过 A2A 执行 Assignment 的 transport adapter，遵守与 local 相同的 lease、heartbeat、checkpoint、Task Report 与 terminal event 契约。endpoint/Card/auth/extension capability 随 Assignment 固定；只有支持 idempotent dispatch、typed Completion Envelope 与允许 Workspace Provider 的端点可 claim。共同工作空间通过版本化 Workspace/Artifact Reference 表达，不假设共享本地文件系统；Kernel、Scheduler 与 Project Memory 不因远程拓扑改变状态模型。
 _避免使用_：远程专用 Task 状态机、共享 host path、text-only A2A completed 直接完成 Task、A2A 绕过 Kernel
 

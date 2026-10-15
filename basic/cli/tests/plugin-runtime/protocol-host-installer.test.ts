@@ -13,18 +13,20 @@ import {
 } from '@zhin.js/agent/runtime';
 import {
   workroomHostToken,
+  workroomSchedulerAssignmentRouteRegistryToken,
+  workroomAssignmentAuthorityGrantRepositoryToken,
+  workroomAssignmentGrantClaimPreviewToken,
+  MemoryAssignmentAuthorityGrantRepository,
+} from '@zhin.js/workroom';
+import {
   remoteAssignmentDispatchServiceToken,
   remoteAssignmentDispatchSchedulerToken,
   remoteAssignmentDispatchCommandServiceToken,
   workroomRemoteAssignmentAuthorityToken,
   workroomRemoteCallbackRuntimeToken,
   workroomRemoteExecutorToken,
-  workroomSchedulerAssignmentRouteRegistryToken,
-  workroomAssignmentAuthorityGrantRepositoryToken,
-  workroomAssignmentGrantClaimPreviewToken,
-  MemoryAssignmentAuthorityGrantRepository,
   WORKROOM_A2A_EXTENSION_URI,
-} from '@zhin.js/workroom';
+} from '@zhin.js/workroom/remote';
 import type { RootResourceContext } from '@zhin.js/runtime';
 import { installProtocolHosts } from '../../src/plugin-runtime/protocol-host-installer.js';
 

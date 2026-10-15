@@ -110,6 +110,7 @@ Three tiers:
 | `MessageDispatcher` | `internal` | `@zhin.js/core/runtime` | Generation-owned message dispatcher held by `InboundRuntime` |
 | `EndpointRuntime` | `internal` | `@zhin.js/core/runtime` | Generation-leased Endpoint directory, control, and management boundary exposed as `ImRuntime.endpoints` |
 | `RuntimeMessageEventSource` | `internal` | `@zhin.js/core/runtime` | Read-only message observation port exposed as `ImRuntime.messageEvents`; publication remains inside Core |
+| `@zhin.js/workroom/remote` remote dispatch / callback / assignment | `internal` | `@zhin.js/workroom` | A2A extension, frozen; not in the package root or default assembly path, used only by the A2A remote transport |
 | `@zhin.js/agent/runtime` Workroom tokens / composition ports | `internal` | `@zhin.js/agent` | Generation-owned Host assembly mechanisms, not plugin-author APIs for obtaining Run state-writing authority |
 | `basic/cli/src/plugin-runtime/*-installer.ts` | `internal` | `@zhin.js/cli` | Root Host installers (database / schedule / outbound / inbox / http / console / agent / speech / html-renderer / protocol); assembly details may change at any time |
 

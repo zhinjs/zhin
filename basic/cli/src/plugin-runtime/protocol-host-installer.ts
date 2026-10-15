@@ -7,14 +7,14 @@ import {
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { formatCompact, getLogger } from '@zhin.js/logger';
-import { loadWorkroomPackage } from '../utils/optional-workroom.js';
+import { loadWorkroomPackage, loadWorkroomRemotePackage } from '../utils/optional-workroom.js';
 import type { HttpHostOptions } from '@zhin.js/host-http';
 import type { RuntimeMcpConfig } from '@zhin.js/mcp/runtime';
 import type { RuntimeA2aConfig } from '@zhin.js/a2a/runtime';
 import type {
   WorkroomRemoteAssignmentAuthorityInput,
   WorkroomRemoteAssignmentResolvedAuthority,
-} from '@zhin.js/workroom';
+} from '@zhin.js/workroom/remote';
 import {
   expandEnvironmentValue,
   type RootResourceInstaller,
@@ -108,9 +108,6 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
       }, {
         agentHostToken,
       }, {
-        remoteAssignmentDispatchCommandServiceToken,
-        remoteAssignmentDispatchSchedulerToken,
-        remoteAssignmentDispatchServiceToken,
         createWorkroomGenerationAuthoritySnapshotFromRuntime,
         GenerationOwnedWorkroomAssignmentAuthorityProvider,
         GrantAwareRemoteAssignmentDispatchCommandService,
@@ -124,12 +121,8 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         workroomAssignmentAuthorityGrantApplicationToken,
         workroomProjectProfileRegistryToken,
         workroomRemoteEndpointAuthorityToken,
-        workroomRemoteAssignmentAuthorityToken,
-        workroomRemoteCallbackRuntimeToken,
-        workroomRemoteExecutorToken,
         workroomSchedulerAssignmentRouteRegistryToken,
         workroomHostToken,
-        WorkroomRemoteCallbackGateway,
       }] = await Promise.all([
         import('@zhin.js/a2a/runtime'),
         import('@zhin.js/agent/runtime'),
@@ -154,6 +147,17 @@ export function installProtocolHosts(options: InstallProtocolHostsOptions): Root
         throw new Error('a2a.workroomRemoteExecutors.enabled requires workroomCallbacks.enabled');
       }
       if (callbacks?.enabled === true) {
+        // A2A extension (frozen): the remote module is loaded only when
+        // `a2a.workroomCallbacks.enabled` is configured.
+        const {
+          remoteAssignmentDispatchCommandServiceToken,
+          remoteAssignmentDispatchSchedulerToken,
+          remoteAssignmentDispatchServiceToken,
+          workroomRemoteAssignmentAuthorityToken,
+          workroomRemoteCallbackRuntimeToken,
+          workroomRemoteExecutorToken,
+          WorkroomRemoteCallbackGateway,
+        } = await loadWorkroomRemotePackage();
         if (!resources.has(workroomRemoteCallbackRuntimeToken)) {
           throw new Error('a2a.workroomCallbacks.enabled requires the Workroom Agent runtime');
         }

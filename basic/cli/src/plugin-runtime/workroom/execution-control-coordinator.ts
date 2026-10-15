@@ -10,7 +10,6 @@ import {
   WorkroomPreemptionRuntime,
   WorkroomSchedulerRuntime,
   WorkroomSchedulerSupplyUnavailableError,
-  createWorkroomRemoteCallbackRuntime,
   createWorkroomSchedulerKernelCommandPort,
   installWorkroomPortfolioControlWorker,
   portfolioControlOutboxRepositoryToken,
@@ -18,11 +17,14 @@ import {
   workroomCheckpointDeliveryProviderToken,
   workroomPortfolioCheckpointAckAdapterToken,
   workroomPreemptionRuntimeToken,
-  workroomRemoteCallbackRuntimeToken,
   workroomSchedulerDispatchSupplyToken,
   workroomSchedulerRuntimeToken,
   type WorkroomSchedulerPortfolioDispatchResources,
 } from '@zhin.js/workroom';
+import {
+  createWorkroomRemoteCallbackRuntime,
+  workroomRemoteCallbackRuntimeToken,
+} from '@zhin.js/workroom/remote';
 import { formatCompact, getLogger } from '@zhin.js/logger';
 import type { RootResourceInstaller } from '@zhin.js/runtime';
 import type { WorkroomDataGovernanceCoordinator } from './data-governance-coordinator.js';

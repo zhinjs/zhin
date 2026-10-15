@@ -4,7 +4,7 @@ import {
   createWorkroomRemoteDispatchOutboxItem,
   digestRemoteCallbackPollSnapshot,
   WORKROOM_A2A_EXTENSION_URI,
-} from '@zhin.js/workroom';
+} from '@zhin.js/workroom/remote';
 import { WorkroomA2aAuthRegistry } from '../src/workroom-auth-registry.js';
 import { WorkroomA2aHttpRemoteTransport } from '../src/workroom-remote-transport.js';
 import { remoteDisclosureFixture } from '../../../im/workroom/tests/workroom/remote-disclosure-fixture.js';

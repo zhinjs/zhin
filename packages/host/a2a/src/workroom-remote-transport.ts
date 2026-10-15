@@ -4,12 +4,12 @@ import type {
   RemoteCallbackPollSnapshot,
   WORKROOM_A2A_EXTENSION_URI,
   WorkroomRemoteDispatchOutboxItem,
-} from '@zhin.js/workroom';
+  WorkroomRemoteDispatchObservation,
+  WorkroomRemoteExecutorPort,
+} from '@zhin.js/workroom/remote';
 import type {
   WorkroomRemoteEndpointAuthority,
   WorkroomRemoteEndpointAuthorityPort,
-  WorkroomRemoteDispatchObservation,
-  WorkroomRemoteExecutorPort,
 } from '@zhin.js/workroom';
 import { createHash } from 'node:crypto';
 import { lookup } from 'node:dns/promises';

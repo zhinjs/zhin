@@ -11,7 +11,9 @@ Workroom, Portfolio and Data Governance for Zhin.js: the domain code plus the ru
 
 `@zhin.js/workroom` -> `@zhin.js/agent` (+ `@zhin.js/plugin-runtime`, `@zhin.js/tool`, `@zhin.js/skill`, `@zhin.js/ai`, `@zhin.js/core`) -> `@zhin.js/im-contract`
 
-**Exports**: only the package root (`@zhin.js/workroom`). The deep paths (`./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js`) were removed in A4b; there is no transitional subpath export.
+**Exports**: the package root (`@zhin.js/workroom`) plus `./remote` (`@zhin.js/workroom/remote`). The deep paths (`./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js`) were removed in A4b. `./remote` is the single exception, reversing the A4b "no subpath" decision only to freeze the remote dispatch / callback / assignment modules: it is an A2A extension, frozen, and not part of the default assembly path. The root entry no longer exports those symbols; the CLI loads `./remote` only when `a2a.workroomCallbacks.enabled` is configured (the default path still carries one inert Remote Callback Runtime placeholder). They are not deleted because the Kernel, Scheduler, authority grants, data governance and acceptance still reference remote types; full removal is left to C5/C6 after C4b-C4d.
+
+包根之外新增 `./remote` 子路径：remote dispatch / callback / assignment 已冻结为 A2A 扩展，不在默认装配路径，也不再从包根导出。
 
 **Dependencies**: `@zhin.js/agent` and `@zhin.js/plugin-runtime` stay ordinary `dependencies` on purpose. Moving them to `peerDependencies` needs a `pnpm-lock.yaml` update that cannot be produced/verified offline, and inside the workspace there is a single instance (`workspace:*`). Revisit together with the CLI optional-peer install graph.
 

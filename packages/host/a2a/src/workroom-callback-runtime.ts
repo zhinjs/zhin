@@ -6,7 +6,7 @@ import type {
   WorkroomCallbackAuthRegistry,
   WorkroomRemoteCallbackGatewayResult,
   WorkroomRemoteCallbackRequest,
-} from '@zhin.js/workroom';
+} from '@zhin.js/workroom/remote';
 import { WorkroomA2aAuthenticationError } from './workroom-auth-registry.js';
 
 export interface RuntimeWorkroomCallbackDependencies {

@@ -43,6 +43,12 @@ calls. Production requires one of these tokens.
 
 ## Workroom execution callbacks
 
+> A2A extension, frozen. The remote dispatch / callback / assignment code is
+> imported from `@zhin.js/workroom/remote` (no longer the package root) and is
+> loaded by the CLI only when `a2a.workroomCallbacks.enabled` is configured.
+> A2A 扩展，已冻结：相关代码来自 `@zhin.js/workroom/remote`，仅在配置
+> `a2a.workroomCallbacks.enabled` 时由 CLI 加载。
+
 Authoritative remote-execution observations use a separate exact route and a
 separate credential registry. They never enter the ordinary Agent Card / JSON-RPC
 handler and cannot directly change Task state:
