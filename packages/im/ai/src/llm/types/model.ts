@@ -1,5 +1,6 @@
 /** LLM Model descriptor (ADR 0009 D1 / ADR 0018 transport). */
 
+import type { JSONValue } from 'ai';
 import type { SdkId } from '../sdk-registry.js';
 
 /**
@@ -36,6 +37,8 @@ export interface Model {
   contextWindow: number;
   maxTokens: number;
   cost?: ModelCostRates;
+  /** Copied from {@link ProviderInstanceConfig.providerOptions}. */
+  providerOptions?: Record<string, Record<string, JSONValue>>;
 }
 
 export interface ProviderInstanceConfig {
@@ -59,6 +62,12 @@ export interface ProviderInstanceConfig {
   defaultModel?: string;
   /** Context window override */
   contextWindow?: number;
+  /**
+   * Extra AI SDK `providerOptions`, merged into every request of this provider,
+   * keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],
+   * thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings.
+   */
+  providerOptions?: Record<string, Record<string, JSONValue>>;
   /** Inherited from ProviderConfig — image defaults */
   imageGeneration?: import('../../image-generation.js').ImageGenerationDefaults;
 }

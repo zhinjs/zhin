@@ -84,6 +84,12 @@ export interface ProviderConfig {
   capabilities?: ProviderCapabilities;
   /** Explicit model input modalities. Prefer this over inferred provider identity. */
   input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
+  /**
+   * Extra AI SDK `providerOptions`, merged into every request of this provider,
+   * keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],
+   * thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings.
+   */
+  providerOptions?: Record<string, Record<string, import('ai').JSONValue>>;
   /** 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） */
   imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }

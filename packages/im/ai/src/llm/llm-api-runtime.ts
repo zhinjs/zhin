@@ -96,6 +96,7 @@ export function createLlmTransportModel(
     input: config.input?.length ? [...config.input] : [...defaultModelInput(config.sdk, modelId)],
     contextWindow: resolveTransportContextWindow(config, modelId),
     maxTokens: 8_192,
+    ...(config.providerOptions ? { providerOptions: config.providerOptions } : {}),
   };
 }
 

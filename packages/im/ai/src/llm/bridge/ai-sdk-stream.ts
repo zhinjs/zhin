@@ -215,10 +215,11 @@ function buildAssistantMessage(
 type ProviderOpts = Record<string, Record<string, JSONValue>>;
 
 function buildProviderOptions(
-  sdk: string | undefined,
+  model: Pick<Model, 'sdk' | 'providerOptions'>,
   cacheOpts: ProviderOpts | undefined,
   hasDeferredTools: boolean,
 ): ProviderOpts | undefined {
+  const sdk = model.sdk;
   const opts: ProviderOpts = { ...(cacheOpts ?? {}) };
 
   if (hasDeferredTools && sdk === 'anthropic') {
@@ -230,6 +231,11 @@ function buildProviderOptions(
 
   if (sdk === 'minimax') {
     opts.minimax = { thinking: { type: 'adaptive' } };
+  }
+
+  // Provider config (e.g. Gemini safetySettings / thinkingConfig) layers on top, per provider key.
+  for (const [key, value] of Object.entries(model.providerOptions ?? {})) {
+    opts[key] = { ...(opts[key] ?? {}), ...value };
   }
 
   return Object.keys(opts).length > 0 ? opts : undefined;
@@ -270,7 +276,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
       const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
       const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
       const cacheOpts = buildPromptCacheProviderOptions(cacheCtx);
-      const providerOptions = buildProviderOptions(model.sdk, cacheOpts, hasDeferredTools);
+      const providerOptions = buildProviderOptions(model, cacheOpts, hasDeferredTools);
 
       llmContextLogger.debug(formatCompact({
         op: 'ai_sdk_request',
@@ -434,7 +440,7 @@ export async function generateTextViaAiSdk(
   const system: string | SystemModelMessage | undefined = wrapSystemForPromptCache(systemText, cacheCtx);
   const tools = applyPromptCacheToTools(llmToolsToAiSdk(context.tools), cacheCtx);
   const hasDeferredTools = context.tools?.some(t => t.deferLoading) === true;
-  const providerOptions = buildProviderOptions(model.sdk, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
+  const providerOptions = buildProviderOptions(model, buildPromptCacheProviderOptions(cacheCtx), hasDeferredTools);
 
   const result = await generateText({
     model: languageModel,

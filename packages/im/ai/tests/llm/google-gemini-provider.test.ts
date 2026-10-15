@@ -43,9 +43,9 @@ const textReply = (text: string, usage: Record<string, number>) => () => ({
   usageMetadata: usage,
 });
 
-function setup(responses: Array<(body: Record<string, any>) => unknown>) {
+function setup(responses: Array<(body: Record<string, any>) => unknown>, extra: Partial<ProviderInstanceConfig> = {}) {
   const server = geminiServer(responses);
-  const config: ProviderInstanceConfig = { sdk: 'google', apiKey: 'test-key' };
+  const config: ProviderInstanceConfig = { sdk: 'google', apiKey: 'test-key', ...extra };
   const runtime = createLlmApiRuntime([{ alias: 'gemini', config, models: ['gemini-3.8-flash'], fetch: server.fetch }], () => ['gemini-3.8-flash']);
   const model = createLlmTransportModel('gemini', config, 'gemini-3.8-flash');
   return { runtime, model, captured: server.captured };
@@ -265,5 +265,16 @@ describe('Gemini provider (google sdk)', () => {
       expect(classifyProviderError(new Error('DEADLINE_EXCEEDED'))).toMatchObject({ kind: 'timeout', retryable: true });
       expect(classifyProviderError({ name: 'AI_APICallError', message: 'x', data: { error: { status: 'UNAUTHENTICATED' } } })).toMatchObject({ kind: 'auth', retryable: false });
     });
+  });
+
+  it('applies provider-config safetySettings and thinkingConfig to every request', async () => {
+    const safetySettings = [{ category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' }];
+    const { runtime, model, captured } = setup(
+      [textReply('ok', { promptTokenCount: 5, candidatesTokenCount: 1, totalTokenCount: 6 })],
+      { providerOptions: { google: { safetySettings, thinkingConfig: { thinkingLevel: 'low' } } } },
+    );
+    await runtime.complete(model, { systemPrompt: SYSTEM, messages: [createUserMessage('hi')] });
+    expect(captured[0]!.body.safetySettings).toEqual(safetySettings);
+    expect(captured[0]!.body.generationConfig.thinkingConfig).toMatchObject({ thinkingLevel: 'low' });
   });
 });
