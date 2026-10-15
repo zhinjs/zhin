@@ -231,7 +231,7 @@ Requests go through the `google` SDK, so seed cases exercise the same Gemini
 provider as production, including images and implicit prompt caching.
 
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
-optional `GEMINI_BASE_URL` env for a proxy). Without it the job logs a notice and skips.
+optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.
 
 **Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average

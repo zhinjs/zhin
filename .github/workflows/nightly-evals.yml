@@ -86,6 +86,7 @@ jobs:
         if: steps.secret.outputs.present == 'true'
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
           NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || '3' }}
           NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports

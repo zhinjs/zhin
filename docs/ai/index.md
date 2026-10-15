@@ -155,6 +155,19 @@ ai:
 
   Gemini 因安全策略（SAFETY、RECITATION 等）拒答时，用户会看到“模型因内容安全策略未生成回复”和原因，而不是一条空回复。Gemini 走隐式缓存：system prompt 和工具定义保持不变，命中的 token 记在 usage 的 `cacheRead` 和 turn trace 的 `cache_read_tokens` 里。如果想要更稳定的折扣，可以开显式缓存：`contextCache: { mode: explicit, ttlSeconds: 600 }`。开启后，框架会给 system prompt 和工具定义建一个 `cachedContents`，在 TTL 内复用；前缀变了就新建一个并删掉旧的，服务端缓存失效时自动退回完整请求，建不了（比如前缀太短）时退回隐式缓存。缓存按存储时长计费。显式缓存只支持 Gemini 3 / 2.5，Gemini 4 Argon 及以后不支持。
 
+- **Gemini 走自己的代理**：如果代理只是原样转发（请求、`x-goog-api-key` 鉴权和响应都和官方一致，只是域名不同），把 `baseUrl` 指到代理即可。写到根路径或带 `/v1beta` 都行，结尾的 `/` 会被去掉，不会出现重复的 `/v1beta`。不写时默认 `https://generativelanguage.googleapis.com`。`generateContent`、流式的 `streamGenerateContent`、显式缓存的 `cachedContents`（创建和删除）以及模型列表都会走这个地址。代理需要额外请求头时可以加 `headers`，所有请求都会带上，可不填：
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        baseUrl: https://gemini-proxy.example.com   # 等价于 https://gemini-proxy.example.com/v1beta
+        headers:                                   # 可选
+          x-proxy-tag: zhin
+  ```
+
 ### ai.agents
 
 把 Agent 名字绑定到 `provider + model`。`zhin` 是主 Agent，必须存在：
