@@ -1,0 +1,19 @@
+packages/im/agent/evals/nightly/report.ts
+  s_f21319594bee88::t_decfdc9152c9c7 12,14-18,27-31,54-61,65-79,85-87,89-90,97-99,156,158-159,161-162,169,173-174,177-195
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eb9081d0905ad4302c6d8fa7fb9d65b78a0ada7d",
+  "prompts": {},
+  "sessions": {
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
