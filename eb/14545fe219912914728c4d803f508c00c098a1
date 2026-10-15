@@ -1,0 +1,25 @@
+packages/im/agent/evals/nightly/rate-limit.test.ts
+  s_f21319594bee88::t_1a8609f4a37611 213
+packages/im/agent/evals/nightly/rate-limit.ts
+  s_f21319594bee88::t_bfc533f2262e57 150,153,155,166,241
+packages/im/agent/evals/nightly/report.ts
+  s_f21319594bee88::t_f8bac25e8e2c83 54,156
+packages/im/agent/evals/nightly/runner.ts
+  s_f21319594bee88::t_4d8a43b1625d8b 24
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "eb14545fe219912914728c4d803f508c00c098a1",
+  "prompts": {},
+  "sessions": {
+    "s_f21319594bee88": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a03291-207e-7d10-a69e-0838833440c1",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
