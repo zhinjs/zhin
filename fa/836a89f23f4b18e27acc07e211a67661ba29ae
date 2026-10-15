@@ -1,0 +1,16 @@
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  h_b680f75345178a 70-73
+packages/im/ai/tests/llm/ai-sdk-messages.test.ts
+  h_b680f75345178a 154-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa836a89f23f4b18e27acc07e211a67661ba29ae",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
