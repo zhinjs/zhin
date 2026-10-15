@@ -75,10 +75,6 @@
         "types": "./lib/index.d.ts",
         "import": "./lib/index.js"
       },
-      "./adapter-tools-helper": {
-        "types": "./lib/adapter-tools-helper.d.ts",
-        "import": "./lib/adapter-tools-helper.js"
-      },
       "./runtime": {
         "types": "./lib/runtime.d.ts",
         "import": "./lib/runtime.js"

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   entryTargets,
   findBrokenPackImports,
+  publishedManifest,
   relativeSpecifiers,
 } from './check-pack-imports.mjs';
 
@@ -83,13 +84,13 @@ describe('check-pack-imports', () => {
     ]);
   });
 
-  it('requires main, bin and exports targets to be packed, skipping development and wildcard targets', async () => {
+  it('requires main, bin and exports targets to be packed, skipping wildcard targets', async () => {
     const manifest = {
       type: 'module',
       main: './lib/index.js',
       bin: { tool: './bin/tool.js' },
       exports: {
-        '.': { types: './lib/index.d.ts', development: './src/index.ts', import: './lib/index.js' },
+        '.': { types: './lib/index.d.ts', import: './lib/index.js' },
         './helper': { import: './lib/helper.js' },
         './features/*': './lib/features/*.js',
       },
@@ -105,6 +106,23 @@ describe('check-pack-imports', () => {
     expect(result.errors).toEqual([
       'exports["."]["types"] -> ./lib/index.d.ts is not in the tarball',
       'exports["./helper"]["import"] -> ./lib/helper.js is not in the tarball',
+    ]);
+  });
+
+  it('checks the published manifest: publishConfig.exports wins, a leaked development condition fails', async () => {
+    const exports = { '.': { development: './src/index.ts', import: './lib/index.js' } };
+    expect(publishedManifest({ exports, publishConfig: { access: 'public' } }).exports).toBe(exports);
+
+    const stripped = await check({ 'lib/index.js': '' }, {
+      type: 'module',
+      exports,
+      publishConfig: { access: 'public', exports: { '.': { import: './lib/index.js' } } },
+    });
+    expect(stripped.errors).toEqual([]);
+
+    const leaked = await check({ 'lib/index.js': '' }, { type: 'module', exports });
+    expect(leaked.errors).toEqual([
+      'exports["."]["development"] -> ./src/index.ts is not in the tarball',
     ]);
   });
 

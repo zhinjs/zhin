@@ -133,6 +133,7 @@ Workspace packages declare a `"development": "./src/*.ts"` export condition so V
 
 - Every publishable package has `publishConfig.exports` equal to `exports` without `development`. `pnpm publish` (and therefore `changeset publish`) swaps it in when packing, so local development is unaffected.
 - After changing `exports`, run `pnpm sync:publish-exports`. `scripts/sync-publish-exports.test.ts` fails on drift, on a published manifest that still has `development`, or on an export target outside `files`.
+- `pnpm check:pack-imports` checks each package as `pnpm publish` sees it (with `publishConfig` applied): every `exports` condition, `development` included, must point at a file in the tarball.
 - `pnpm check:plugin-scaffold` packs the `zhin.js` dependency closure, checks no packed manifest still has `development`, then runs `zhin new` from the locally built CLI, installs against those tarballs, and runs the generated Vitest, `tsc`, and `pnpm pack`.
 - Publish with `pnpm publish` only: `npm publish` ignores `publishConfig.exports` and does not rewrite `workspace:` protocols.
 
