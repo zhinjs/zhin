@@ -1,5 +1,49 @@
 # @zhin.js/a2a
 
+## 1.1.8
+
+### Patch Changes
+
+- 9891e66: Move the Workroom runtime composition (`workroom-runtime`) from `@zhin.js/agent` into `@zhin.js/workroom`; the dependency direction is now `@zhin.js/workroom` -> `@zhin.js/agent`.
+
+  - Workroom exports were removed from `@zhin.js/agent`, `@zhin.js/agent/runtime` and `zhin.js/agent`; the `zhin.js/agent` re-export surface shrank, so users who imported Workroom exports through `zhin.js/agent` must import them from `@zhin.js/workroom` instead (the export names are unchanged). `@zhin.js/agent` no longer depends on `@zhin.js/workroom`.
+  - The `Local*` assignment authority types declared by the authority provider module (`WorkroomLocalAssignmentAuthorityInput`, `WorkroomLocalAssignmentResolvedAuthority`, `WorkroomLocalAssignmentAuthorityPort`) clash with the domain contracts of the same name in a single barrel; the provider variants are exported with a `WorkroomProvider` prefix.
+  - Compatibility stubs at the old internal agent paths and the `./workroom/*.js`, `./portfolio/*.js`, `./data-governance/*.js` deep exports of `@zhin.js/workroom` are removed. Use the package root.
+  - `@zhin.js/agent` gains three narrow host-integration exports: `collectAgentLoopTurnRun` and type `ZhinAgentPrivate` (`@zhin.js/agent/core`; `ZhinAgentPrivate` is an internal host-integration type, not a stable API), and `runWithAgentTurnConfiguration` (`@zhin.js/agent/turn`).
+  - `@zhin.js/cli` and `@zhin.js/a2a` declare `@zhin.js/workroom` as an optional/dev + peer dependency (like `@zhin.js/agent`), so installing the core no longer pulls in agent/workroom.
+
+- 9891e66: remote dispatch / callback / assignment 导出从 `@zhin.js/workroom` 包根移到 `@zhin.js/workroom/remote` 子路径并冻结（A2A 扩展）。默认 Workroom 装配仍会创建 Remote Callback Runtime 与 Remote Assignment Authority（旧 Kernel/runtime 路径依赖），留到 C2 之后处理；仅 A2A callback/executor HTTP transport 接线在配置 `a2a.workroomCallbacks.enabled` 时懒加载该子路径。内核事件格式与历史事件校验（fail-closed）不变。
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/workroom@0.0.1
+  - @zhin.js/core@1.1.43
+
 ## 1.1.7
 
 ### Patch Changes

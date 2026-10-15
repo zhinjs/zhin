@@ -1,5 +1,56 @@
 # @zhin.js/service-activity-feedback
 
+## 1.1.9
+
+### Patch Changes
+
+- Updated dependencies [9891e66]
+- Updated dependencies [c829031]
+- Updated dependencies [0c17e0b]
+- Updated dependencies [bf52b40]
+- Updated dependencies [1f24fbf]
+- Updated dependencies [55811d1]
+- Updated dependencies [9b8b586]
+- Updated dependencies [a6ea7b4]
+- Updated dependencies [9486586]
+- Updated dependencies [2b5e5ae]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [fc75499]
+- Updated dependencies [bf52b40]
+- Updated dependencies [2a9d08b]
+- Updated dependencies [e4fbfb2]
+- Updated dependencies [4ce55db]
+- Updated dependencies [ba56e74]
+- Updated dependencies [56bafda]
+- Updated dependencies [7d2263c]
+- Updated dependencies [1ea299a]
+- Updated dependencies [27da0e8]
+- Updated dependencies [7d2263c]
+- Updated dependencies [dbc1456]
+- Updated dependencies [d91d21a]
+- Updated dependencies [a62acca]
+- Updated dependencies [9ab9ffb]
+- Updated dependencies [1280631]
+- Updated dependencies [bd78a94]
+- Updated dependencies [57ea5f7]
+- Updated dependencies [f48ba72]
+- Updated dependencies [417ec5b]
+- Updated dependencies [7f0f8ca]
+- Updated dependencies [d38d38c]
+- Updated dependencies [8e26cf1]
+- Updated dependencies [9891e66]
+- Updated dependencies [f768296]
+- Updated dependencies [9891e66]
+- Updated dependencies [bc09928]
+- Updated dependencies [779750f]
+- Updated dependencies [9891e66]
+- Updated dependencies [b3fea8c]
+  - @zhin.js/agent@1.1.32
+
 ## 1.1.8
 
 ### Patch Changes

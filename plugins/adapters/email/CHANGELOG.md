@@ -1,5 +1,26 @@
 # @zhin.js/adapter-email
 
+## 1.1.8
+
+### Patch Changes
+
+- Updated dependencies [9891e66]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [bf52b40]
+- Updated dependencies [386150d]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+- Updated dependencies [4778587]
+- Updated dependencies [40537e3]
+- Updated dependencies [681abf3]
+- Updated dependencies [9891e66]
+- Updated dependencies [9891e66]
+  - @zhin.js/adapter@1.1.18
+  - @zhin.js/core@1.1.43
+  - @zhin.js/feature-kit@1.1.4
+  - @zhin.js/skill@1.1.5
+
 ## 1.1.7
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @zhin.js/kernel
 
+## 1.1.3
+
+### Patch Changes
+
+- 2dfe5fa: 修复 ScheduleEngine every/at 任务回调异常未被捕获、超长延时被 Node 截断立即触发、at 回调内同 id 重注册被误删；修复微信公众号 access_token 并发刷新互相顶掉、expires_in 缺失时永不过期。
+- 2dfe5fa: ScheduleEngine 的 pause/resume 现在同样作用于 every/at 任务（暂停期间不触发、恢复后按原周期继续、不补发）；飞书长连接重复 connect() 时清理旧的健康检查定时器。
+
 ## 1.1.2
 
 ### Patch Changes
