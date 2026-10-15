@@ -134,7 +134,12 @@ ai:
 可选字段：
 
 - `models`：允许使用的模型列表。不写时，启动后会自动从 `/v1/models` 获取（先用上次的缓存，再在后台刷新）。
-- `input`：模型能接收的内容类型，`text | image | audio | video | file`。**不写时只按文本处理**，框架不会根据模型名猜测它能否看图。唯一例外是 `sdk: google` 的 Gemini 对话模型（Gemini 原生多模态），默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型仍只按文本处理。
+- `input`：模型能接收的内容类型，`text | image | audio | video | file`。不写时按 SDK 和模型名取默认值：
+  - `sdk: google` 的 Gemini 对话模型原生多模态，默认 `text, image, audio, video, file`；TTS、embedding、图像生成和 Live 模型只按文本处理。
+  - `sdk: openai` 的 GPT-4o、GPT-4.1、GPT-4.5、GPT-5.x 以及 o1、o3、o4-mini，和 `sdk: anthropic` 的 Claude 3 及以后的模型，默认 `text, image`。audio、realtime、TTS、search、embedding、图像生成这些变体，以及 o1-mini、o3-mini，只按文本处理。PDF 等文件不默认开启，需要时写 `input: [text, image, file]`。
+  - 其他 SDK（DeepSeek、MiniMax、Ollama、各类网关）只按文本处理，因为同一家的模型能力不一样。
+
+  写了 `input` 就以它为准。
 - `contextWindow`：上下文窗口大小。
 - `imageGeneration`：文生图的默认参数。
 - `providerOptions`：按 SDK 名分组的 AI SDK `providerOptions`，每次请求都会合并进去。Gemini 常用的是安全设置和思考深度：

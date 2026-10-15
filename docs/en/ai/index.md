@@ -134,7 +134,12 @@ ai:
 Optional fields:
 
 - `models`: the models allowed. When omitted, they are fetched from `/v1/models` after startup (last cache first, then refreshed in the background).
-- `input`: content types the model accepts, `text | image | audio | video | file`. **Omitted means text only** — the framework never guesses vision support from a model name. The one exception is Gemini chat models on `sdk: google`, which are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models stay text-only.
+- `input`: content types the model accepts, `text | image | audio | video | file`. When omitted, the default depends on the SDK and model name:
+  - Gemini chat models on `sdk: google` are natively multimodal and default to `text, image, audio, video, file`. TTS, embedding, image-generation and Live models are text-only.
+  - On `sdk: openai`, GPT-4o, GPT-4.1, GPT-4.5, GPT-5.x, o1, o3 and o4-mini default to `text, image`, and so does every Claude 3+ model on `sdk: anthropic`. The audio, realtime, TTS, search, embedding and image-generation variants, plus o1-mini and o3-mini, are text-only. PDFs and other files are off by default; set `input: [text, image, file]` to send them.
+  - Other SDKs (DeepSeek, MiniMax, Ollama, gateways) are text-only, because one vendor's models differ in what they accept.
+
+  An explicit `input` always wins.
 - `contextWindow`: context window size.
 - `imageGeneration`: defaults for text-to-image.
 - `providerOptions`: AI SDK `providerOptions` keyed by SDK name, merged into every request. For Gemini, this is where safety settings and thinking depth go:
