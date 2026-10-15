@@ -165,7 +165,7 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 
 ## Nightly real-model tier (#723)
 
-`evals/nightly/` runs a **model capability matrix** against real MiniMax models
+`evals/nightly/` runs a **model capability matrix** against real Gemini models
 once a night (`.github/workflows/nightly-evals.yml`, scheduled plus
 `workflow_dispatch`). It is a trend metric, never a PR gate: it does not run on
 pull requests and low pass rates do not fail the job.
@@ -218,10 +218,14 @@ as skipped):
 
 The default run (1 model, 3 runs per case) is about 12 matrix requests (~60k
 tokens) plus about 50 seed-case requests (~300k tokens, since each carries the
-full agent system prompt). Models come from `NIGHTLY_MODELS` (default `minimax-m3`).
+full agent system prompt). Models come from `NIGHTLY_MODELS` (workflow input, else the
+`NIGHTLY_MODELS` repository variable, else `gemini-3.8-flash`, the stable
+default per ai.google.dev; see `DEFAULT_NIGHTLY_MODEL` in `nightly.run.ts`).
+Requests go through the `google` SDK, so seed cases exercise the same Gemini
+provider as production, including images and implicit prompt caching.
 
-**Secrets:** the workflow reads the `MINIMAX_API_KEY` repository secret (and the
-optional `MINIMAX_BASE_URL` env). Without it the job logs a notice and skips.
+**Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
+optional `GEMINI_BASE_URL` env for a proxy). Without it the job logs a notice and skips.
 The key is passed only as an environment variable and is never printed.
 
 **Reports:** `eval-reports/nightly.json` (pass rate, average tokens and average
@@ -230,7 +234,7 @@ against the previous successful night, with regressions of 20 points or more
 flagged). They are uploaded as the `nightly-eval-report` artifact and the
 Markdown goes to the job summary.
 
-Run it locally with `MINIMAX_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
+Run it locally with `GEMINI_API_KEY=… pnpm eval:nightly` (after `pnpm build`).
 
 ## Conventions
 
