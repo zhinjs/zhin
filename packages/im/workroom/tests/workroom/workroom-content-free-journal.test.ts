@@ -7,6 +7,7 @@ import {
   createWorkroomJournalPayloadObjectId,
   DatabaseWorkroomJournal,
   FileWorkroomJournal,
+  LegacyEmbeddedPayloadDetectedError,
   MemoryWorkroomJournal,
   type WorkroomJournalPayloadPort,
 } from '../../src/workroom/journal/index.js';
@@ -15,7 +16,6 @@ import {
   digestCanonicalWorkroomValue as digest,
 } from '../../src/workroom/canonical-value.js';
 import { WorkroomKernel } from '../../src/workroom/workroom-kernel.js';
-import { LegacyEmbeddedPayloadDetectedError } from '../../src/workroom/journal/legacy-payload-guard.js';
 import {
   WorkflowPlanBuilder,
   type WorkflowPlanProposal,

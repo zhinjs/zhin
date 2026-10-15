@@ -52,7 +52,7 @@ export * from './workroom/file-effect-ledger.js';
 export * from './workroom/git-workspace-gateway.js';
 export * from './workroom/effect-blocker-repository.js';
 export * from './workroom/role-capability-snapshot.js';
-export { LegacyEmbeddedPayloadDetectedError } from './workroom/journal/legacy-payload-guard.js';
+export { LegacyEmbeddedPayloadDetectedError } from './workroom/journal/index.js';
 export * from './workroom/assignment-authority-grant-application.js';
 export * from './workroom/assignment-authority-grant-repository.js';
 export type {

@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, symlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import * as guard from '../../src/workroom/journal/legacy-payload-guard.js';
+import * as guard from '../../src/workroom/journal/index.js';
 import * as workroom from '../../src/index.js';
 
 const {

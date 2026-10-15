@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isWorkroomEventType,
   validatePayload,
-} from '../../src/workroom/journal/event-validation.js';
+} from '../../src/workroom/journal/index.js';
 
 /**
  * C4a: remote dispatch is frozen (A2A extension) but the Kernel still owns the

@@ -21,3 +21,10 @@ export {
   digestWorkroomEventRowBinding,
 } from './event-codec.js';
 export { createWorkroomJournalPayloadObjectId } from './payload-governance.js';
+export {
+  LegacyEmbeddedPayloadDetectedError,
+  assertNoLegacyEmbeddedPayloadFiles,
+  assertNoLegacyEmbeddedPayloadRecords,
+} from './legacy-payload-guard.js';
+export type { LegacyEmbeddedPayloadGuardRecord } from './legacy-payload-guard.js';
+export { isWorkroomEventType, validatePayload } from './event-validation.js';
