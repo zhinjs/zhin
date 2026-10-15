@@ -1,0 +1,20 @@
+packages/im/ai/tests/compaction.test.ts
+  h_b680f75345178a 392-430
+packages/im/ai/tests/compaction/agent-message-compaction.test.ts
+  h_b680f75345178a 172-213
+packages/im/ai/tests/complete-text-resilience.test.ts
+  h_b680f75345178a 1-163
+packages/im/ai/tests/llm/assistant-text.test.ts
+  h_b680f75345178a 2,36-54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "301b2d316bd16187217dd48b68b99a91dde21224",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
