@@ -534,6 +534,7 @@ export async function generateTextViaAiSdk(
     temperature: options?.temperature,
     maxOutputTokens: options?.maxTokens ?? model.maxTokens,
     abortSignal: options?.signal,
+    ...(options?.maxRetries !== undefined ? { maxRetries: options.maxRetries } : {}),
     providerOptions,
     ...withReasoning(model, options),
     output: buildStructuredOutputSpec(options?.outputSchema),

@@ -169,3 +169,45 @@ describe('agent-message-compaction 失败语义', () => {
     expect(serialized).toContain('authority-sensitive');
   });
 });
+
+describe('agent-message-compaction 取消信号（S13）', () => {
+  beforeEach(() => {
+    completeSimpleMock.mockReset();
+  });
+
+  it('把 signal 透传给摘要请求', async () => {
+    completeSimpleMock.mockResolvedValue(assistantOf('真实摘要'));
+    const controller = new AbortController();
+    await autoCompactAgentMessagesIfNeeded({
+      transport,
+      model,
+      messages: makeMessages(),
+      force: true,
+      config: { keepRecentTokens: 5, minKeepCount: 1 },
+      signal: controller.signal,
+    });
+    expect(completeSimpleMock).toHaveBeenCalledTimes(1);
+    expect(completeSimpleMock.mock.calls[0]![2]).toMatchObject({ signal: controller.signal });
+  });
+
+  it('调用方取消不计入熔断失败数', async () => {
+    const controller = new AbortController();
+    completeSimpleMock.mockImplementation(async () => {
+      controller.abort();
+      throw new Error('aborted');
+    });
+    const state = createAgentCompactionState();
+    const messages = makeMessages();
+    const result = await autoCompactAgentMessagesIfNeeded({
+      transport,
+      model,
+      messages,
+      state,
+      force: true,
+      config: { keepRecentTokens: 5, minKeepCount: 1 },
+      signal: controller.signal,
+    });
+    expect(state.consecutiveFailures).toBe(0);
+    expect(result.messages).toEqual(messages);
+  });
+});

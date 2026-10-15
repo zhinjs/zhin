@@ -131,7 +131,7 @@ export type {
   ToolExecutionCause,
 } from './agent-loop.js';
 
-export { assistantText } from './convert/openai-bridge.js';
+export { assistantText, assistantAnswerText, CompletionFailureError } from './convert/openai-bridge.js';
 
 export {
   createLlmApiRuntime,

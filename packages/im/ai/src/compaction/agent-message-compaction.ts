@@ -109,6 +109,7 @@ async function summarizeAgentMessages(
   messages: AgentMessage[],
   previousSummary?: string,
   customInstructions?: string,
+  signal?: AbortSignal,
 ): Promise<string> {
   if (messages.length === 0) {
     return previousSummary ?? DEFAULT_SUMMARY_FALLBACK;
@@ -130,6 +131,7 @@ async function summarizeAgentMessages(
     const assistant = await transport.completeSimple(
       model,
       createContext(systemPrompt, [createUserMessage(userContent)]),
+      signal ? { signal } : undefined,
     );
     const text = assistant.content
       .filter(b => b.type === 'text')
@@ -175,6 +177,7 @@ export async function compactAgentMessages(params: {
   keepRecentTokens?: number;
   minKeepCount?: number;
   customInstructions?: string;
+  signal?: AbortSignal;
 }): Promise<{
   summary: string;
   keptMessages: AgentMessage[];
@@ -201,6 +204,7 @@ export async function compactAgentMessages(params: {
     toCompact,
     undefined,
     params.customInstructions,
+    params.signal,
   );
 
   const summaryTokens = estimateAgentMessageTokens(summaryAsAgentUserMessage(summary));
@@ -220,6 +224,8 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
   state?: AgentCompactionState;
   force?: boolean;
   customInstructions?: string;
+  /** 取消信号：透传给摘要请求；取消不计入熔断失败数。 */
+  signal?: AbortSignal;
 }): Promise<AgentCompactResult> {
   const config = params.config ?? {};
   if (config.enabled === false) {
@@ -266,6 +272,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       keepRecentTokens: config.keepRecentTokens,
       minKeepCount: config.minKeepCount,
       customInstructions: params.customInstructions,
+      signal: params.signal,
     });
 
     const compactedMessages: AgentMessage[] = [];
@@ -285,7 +292,7 @@ export async function autoCompactAgentMessagesIfNeeded(params: {
       summary: result.summary,
     };
   } catch (error: unknown) {
-    if (state) state.consecutiveFailures += 1;
+    if (state && !params.signal?.aborted) state.consecutiveFailures += 1;
     const message = error instanceof Error ? error.message : String(error);
     logger.error(`Auto-compact failed: ${message}`);
     return {
