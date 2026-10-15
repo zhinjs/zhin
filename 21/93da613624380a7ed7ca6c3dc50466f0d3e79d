@@ -1,0 +1,16 @@
+packages/im/ai/src/llm/provider-gateway-presets.ts
+  h_b680f75345178a 7,14-18,52-53,65
+packages/im/ai/tests/llm/providers/groq.test.ts
+  h_b680f75345178a 57-79
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2193da613624380a7ed7ca6c3dc50466f0d3e79d",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
