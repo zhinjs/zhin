@@ -147,10 +147,12 @@ export type RateLimitEvent =
 export interface RateLimitStats {
   /** Real requests sent, retries included. */
   readonly requests: number;
+  /** Retries after a per-minute 429. */
   readonly retries: number;
   readonly gaveUp: number;
-  /** 503 UNAVAILABLE answers seen, and requests that stayed 503 after their retry. */
+  /** 503 UNAVAILABLE answers seen, retries after one, and requests that stayed 503 after their retry. */
   readonly unavailable503: number;
+  readonly unavailableRetries: number;
   readonly providerUnavailable: number;
 }
 
@@ -161,7 +163,7 @@ export class RateLimitedCompletionPort implements LlmCompletionPort {
   readonly #clock: RateLimitClock;
   #queue: Promise<unknown> = Promise.resolve();
   #fatal: DailyQuotaExhaustedError | undefined;
-  #stats = { requests: 0, retries: 0, gaveUp: 0, unavailable503: 0, providerUnavailable: 0 };
+  #stats = { requests: 0, retries: 0, gaveUp: 0, unavailable503: 0, unavailableRetries: 0, providerUnavailable: 0 };
 
   constructor(
     private readonly base: UsagePort,
@@ -236,7 +238,7 @@ export class RateLimitedCompletionPort implements LlmCompletionPort {
           const [min, max] = this.policy.unavailableBackoffMs ?? [8_000, 15_000];
           const jitter = Math.round(min + (max - min) * (this.#clock.random?.() ?? Math.random()));
           const delayMs = Math.max(jitter, signal.retryAfterMs ?? 0);
-          this.#stats.retries += 1;
+          this.#stats.unavailableRetries += 1;
           this.options.onEvent?.({ type: 'unavailable_retry', model: model.id, delayMs });
           await this.#clock.sleep(delayMs);
           continue;

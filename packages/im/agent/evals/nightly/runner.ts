@@ -21,7 +21,7 @@ export interface NightlyRunInput {
    */
   readonly rateLimiter?: {
     fatalError(): Error | undefined;
-    stats?(): { requests: number; retries: number; gaveUp: number; unavailable503?: number; providerUnavailable?: number };
+    stats?(): { requests: number; retries: number; gaveUp: number; unavailable503?: number; unavailableRetries?: number; providerUnavailable?: number };
     readonly policy?: { readonly minIntervalMs: number };
   };
   readonly budget: NightlyBudget;

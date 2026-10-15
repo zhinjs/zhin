@@ -51,7 +51,7 @@ export interface NightlyReport {
   /** Set when the run had to stop early and must fail (the free-tier daily quota ran out). */
   readonly fatal?: string;
   /** Client-side pacing (see rate-limit.ts): spacing, real requests sent, 429 retries. */
-  readonly pacing?: Readonly<{ minIntervalMs: number; requests: number; retries: number; gaveUp: number; unavailable503?: number; providerUnavailable?: number }>;
+  readonly pacing?: Readonly<{ minIntervalMs: number; requests: number; retries: number; gaveUp: number; unavailable503?: number; unavailableRetries?: number; providerUnavailable?: number }>;
   /**
    * Provider health. `flaky` when most attempted (non-skipped) runs were
    * provider-unavailable: the pass rates then say nothing about model quality, and
@@ -153,7 +153,7 @@ export function renderMarkdown(report: NightlyReport, diffs: readonly CaseDiff[]
     '',
     `Provider: ${report.provider} · requests ${report.budget.requests}/${report.budget.maxRequests} · tokens ${report.budget.totalTokens}/${report.budget.maxTotalTokens}${report.stoppedByBudget ? ' · **stopped by budget**' : ''}`,
     ...(report.pacing ? [`Pacing: ≥${report.pacing.minIntervalMs / 1000}s between requests · ${report.pacing.requests} sent · ${report.pacing.retries} 429 retries · ${report.pacing.gaveUp} gave up`] : []),
-    ...(report.pacing?.unavailable503 ? [`503 UNAVAILABLE: ${report.pacing.unavailable503} answers · ${report.pacing.providerUnavailable ?? 0} requests still 503 after retry`] : []),
+    ...(report.pacing?.unavailable503 ? [`503 UNAVAILABLE: ${report.pacing.unavailable503} answers · ${report.pacing.unavailableRetries ?? 0} retried · ${report.pacing.providerUnavailable ?? 0} requests still 503 after retry (runs marked provider-unavailable only when they failed)`] : []),
     ...(report.fatal ? ['', `**Run failed:** ${report.fatal}`] : []),
     ...(report.infra?.flaky ? ['', `**Infra-flaky:** ${report.infra.providerUnavailable} of ${report.infra.attempted} attempted runs were provider-unavailable (503). Pass rates and regressions below are not a quality signal; the job fails as infra-flaky.`] : []),
     ...budgetSkipLines(report),

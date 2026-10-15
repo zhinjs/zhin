@@ -210,7 +210,7 @@ describe('503 UNAVAILABLE', () => {
     expect(value?.content).toEqual([expect.objectContaining({ text: 'back' })]);
     expect(s.events.filter((e) => e.type === 'unavailable_retry')).toEqual([expect.objectContaining({ delayMs: 11_500 })]);
     expect(s.starts()).toEqual([0, 11_500]);
-    expect(s.port.stats()).toMatchObject({ requests: 2, retries: 1, unavailable503: 1, providerUnavailable: 0 });
+    expect(s.port.stats()).toMatchObject({ requests: 2, retries: 0, unavailable503: 1, unavailableRetries: 1, providerUnavailable: 0 });
   });
 
   it('keeps the wait inside 8–15 s and honours a longer Retry-After', async () => {
