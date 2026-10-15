@@ -1,0 +1,1531 @@
+docs/plans/workroom-group-collaboration-redesign.md
+  s_99b3f2eaf04135::t_7964d60aa6d00e 334
+  s_99b3f2eaf04135::t_136fcfa8f5491e 1-6,8-23,26-29,31-58,59-60,63-65,67-73,78-79,81-126,140-141,143-152,154,185-189,191,204-210,298-323,326-329,331-333,336-347,355
+  s_99b3f2eaf04135::t_534d9216a9958e 155-175,178-184
+  s_99b3f2eaf04135::t_10f799b63f2427 348-356
+  s_99b3f2eaf04135::t_178255a51376c2 7,24-25,30,66,74-77,80,142,201,203,324-325,330
+  s_0491b9d4752e4a::t_cb3f9bb0dd7b89 61-62
+  s_897373218c2e80::t_cc1524f9f920f2 139,177,335
+  s_2c3ced52228a6b::t_10714a712caa7c 129-130,132,134-139,176
+  s_5a97dd97323603::t_bdbdb76936ed3d 127,133
+  s_5a97dd97323603::t_9baad71da86ab8 131,190-193,195-198,200
+  s_6a32d03e636516::t_608a7a4f203e91 194
+  s_802ef64c9cfabc::t_1456bdc3188213 199
+  s_9477e63ef5cee5::t_172466bac037a3 212,214,216,224-230,233-236,253,254-255,289,291,293,297
+  s_9477e63ef5cee5::t_694724e41b2d03 153,211,213,215,217-223,231-232,237-252,256-288,290,292,294-296
+packages/im/workroom/tests/workroom-runtime/workroom-local-assignment-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 7
+packages/im/workroom/tests/workroom-runtime/workroom-risk-acceptance-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-provider-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 14-15
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-capacity.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-control-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-scheduler-route-registry.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-sponsor.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-governed-dispatch-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5,8
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-control-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 3-4,12
+packages/im/workroom/tests/workroom-runtime/workroom-projection-outbound.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-run-profile-pin-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 11
+packages/im/workroom/tests/workroom-runtime/workroom-scheduler-portfolio-request-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5,10
+packages/im/workroom/tests/workroom-runtime/projection-governance-fixture.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-data-lifecycle-human-ingress.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4-5
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 9-11,15-17
+packages/im/workroom/tests/workroom-runtime/workroom-remote-executor.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-root-provider.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 7
+packages/im/workroom/tests/workroom-runtime/workroom-effect-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 16
+packages/im/workroom/src/workroom-runtime/workroom-local-assignment-executor.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 1-10,12-13,14-15,17-311
+  s_0491b9d4752e4a::t_52fd7851fe4d8a 16
+  s_12c06fe024f38d::t_aea99fb0c59260 11
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-production-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 9,13,16,19,23,27,31,35
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-fact-providers.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 15,21
+packages/im/workroom/tests/workroom-runtime/workroom-local-agent-loop.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+  s_12c06fe024f38d::t_5d55dbd69db527 7
+packages/im/workroom/tests/workroom-runtime/workroom-profile-authority-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 13,15-17
+packages/im/workroom/tests/workroom-runtime/workroom-data-lifecycle-console.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-delivery-gateway.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 7,11
+packages/im/workroom/tests/workroom-runtime/workroom-effect-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 13,17
+packages/im/workroom/tests/workroom-runtime/workroom-overlay-pack-promotion.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8,13
+packages/im/workroom/tests/workroom-runtime/github-exact-merge-gateway.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 1
+packages/im/workroom/tests/workroom-runtime/workroom-journal-payload-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4
+packages/im/workroom/tests/workroom-runtime/workroom-projection-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 16
+  s_12c06fe024f38d::t_80630207b6f225 17
+packages/im/workroom/tests/workroom-runtime/self-delivery-project.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8,10
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-sponsor-projection.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/local-assignment-executor.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 15
+  s_0491b9d4752e4a::t_5b09f562da4496 4
+  s_12c06fe024f38d::t_add6dae5e4c049 3
+packages/im/workroom/tests/workroom-runtime/workroom-data-lifecycle-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-checkpoint-ack.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4
+packages/im/workroom/tests/workroom-runtime/workroom-local-assignment-supply.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5
+packages/im/workroom/tests/workroom-runtime/workroom-effect-production.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 11
+packages/im/workroom/tests/workroom-runtime/workroom-assignment-knowledge-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 10
+packages/im/workroom/tests/workroom-runtime/workroom-dynamic-planning-provider.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 11
+packages/im/workroom/tests/workroom-runtime/workroom-scheduler-portfolio-supply.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5,10,14,17
+packages/im/workroom/tests/workroom-runtime/workroom-priority-preemption-production.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 13,18-19,23-24
+  s_0491b9d4752e4a::t_fda9dfa495d4c3 9
+  s_12c06fe024f38d::t_14284f37964711 4-5
+  s_95fad6ad5888ed::t_ac53b562fe1a47 329
+packages/im/workroom/src/workroom-runtime/workroom-local-agent-loop.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 1,3-430
+  s_12c06fe024f38d::t_8563b965865798 2
+packages/im/workroom/tests/workroom-runtime/database-overlay-pack-promotion-repository.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8,12,16,42
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-grant-assignment.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 10,15
+  s_19275fe2d72d97::t_61841a210ed707 34
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-policy.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/workroom-portfolio-kernel-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 1,18
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-storage.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 13,16
+packages/im/workroom/tests/workroom-runtime/workroom-accepted-source-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8
+packages/im/workroom/tests/workroom-runtime/portfolio-production.e2e.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 27
+packages/im/workroom/tests/workroom-runtime/workroom-scheduler-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8
+packages/im/workroom/tests/workroom-runtime/workroom-scheduler-portfolio-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5,8,11,14,17,22
+packages/im/workroom/tests/workroom-runtime/workroom-plan-gate-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-bootstrap.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 11,14
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-internal-providers.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 9,16
+packages/im/workroom/tests/workroom-runtime/workroom-reviewer-authority-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/github-workroom-capability.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 2-3
+packages/im/workroom/tests/workroom-runtime/workroom-host-local-agent-execution.e2e.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6-7,18
+  s_0491b9d4752e4a::t_aae74dc29700e3 5
+  s_12c06fe024f38d::t_a0c0adf6864752 2,8-10
+packages/im/workroom/tests/workroom-runtime/workroom-remote-assignment-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 4
+packages/im/workroom/tests/workroom-runtime/workroom-profile-authority-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 12,17
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-authority-writer.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 15
+packages/im/workroom/tests/workroom-runtime/github-actions-delivery-provider.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 5-6
+packages/im/workroom/tests/workroom-runtime/workroom-acceptance-authority.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 6
+packages/im/workroom/tests/workroom-runtime/workroom-payload-processor-recall.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8
+packages/im/workroom/tests/workroom-runtime/workroom-data-governance-runtime.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 28-29,33
+packages/im/workroom/tests/workroom-runtime/workroom-delivery-composition.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8-9,15
+packages/im/workroom/tests/workroom-runtime/workroom-assignment-authority-provider.test.ts
+  s_99b3f2eaf04135::t_3dcde2af89e443 8
+basic/cli/tests/plugin-runtime/agent/publication-coordinator.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 22
+  s_99b3f2eaf04135::t_536a56c5f0756f 61-63
+  s_12c06fe024f38d::t_a3369d600efff9 1-2
+  s_a2b49f2b1fdbd1::t_785c8080511a49 25,64-70
+packages/im/workroom/src/workroom-runtime/workroom-database-models.ts
+  s_99b3f2eaf04135::t_30f087dc3f126e 1-19,21-42
+  s_12c06fe024f38d::t_957f98fdbb6ef7 20
+basic/cli/src/plugin-runtime/protocol-host-installer.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 124,241,263
+  s_12c06fe024f38d::t_ea078e7966c3e6 110
+  s_2ebbb5e3caac4a::t_0e9ef58c53d4af 130
+  s_a7e33dd75d134f::t_a674987cec6d17 17,155-163
+  s_b2903366e10f0d::t_7e4d1df350a8f2 10,125-126,131,152-154
+packages/im/workroom/tests/workroom-runtime/database-journal-integrity.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 11,101
+  s_95fad6ad5888ed::t_102de48a24f66a 90,104
+basic/cli/tests/plugin-runtime/protocol-host-installer.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 61
+  s_12c06fe024f38d::t_42a720ce015bad 13,16
+  s_a7e33dd75d134f::t_25185f3de82497 16,24
+  s_b2903366e10f0d::t_8dceae44bf771e 14-15
+packages/im/workroom/src/workroom-runtime/workroom-bot-identity.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 1-78
+basic/cli/src/plugin-runtime/agent/publication-coordinator.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 58-63
+  s_12c06fe024f38d::t_9e966727bb5f88 9-10
+  s_a2b49f2b1fdbd1::t_7b785413dbb4ad 26,30
+packages/im/workroom/tests/workroom-runtime/workroom-bot-route.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 2
+packages/im/workroom/src/workroom-runtime/workroom-host-port.ts
+  s_99b3f2eaf04135::t_0b474d756b2664 1-141
+packages/im/agent/src/init/define-ai-database-models.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 26
+basic/cli/src/plugin-runtime/console/agent-console.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 30,145-148,151,155-156,172-175,187-191
+  s_99b3f2eaf04135::t_b9c6cc79de270e 165-171
+  s_12c06fe024f38d::t_3803a6d6ce175c 12
+  s_a2b49f2b1fdbd1::t_b864cc47c97d37 48,50,52,54,63,91,94,152,154,157-164
+  s_2ebbb5e3caac4a::t_bba707a0eaefa3 7,18-21,33-47,49,51,53,55-62,64-71
+  s_b2903366e10f0d::t_82f0e6a655b422 16
+  s_b2903366e10f0d::t_c80822065a1514 6-15
+packages/im/agent/tests/define-ai-database-models.test.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 3-12,15-17,23-26
+basic/cli/tests/plugin-runtime/console/api.test.ts
+  s_99b3f2eaf04135::t_0e3fd2e4b473df 431-452,454-468,470-472,525
+  s_99b3f2eaf04135::t_bde94f0e3d2ff3 453
+  s_99b3f2eaf04135::t_1aef82308538a0 642,780,898,944,1041,1095,1226
+  s_99b3f2eaf04135::t_9fdeb67a9717a5 45-62,635,774,892,928,1034,1088,1220
+  s_99b3f2eaf04135::t_5a87789f1de254 469-485
+  s_12c06fe024f38d::t_1fad8a69fa8b30 624,735,886,917,1025,1072,1197
+  s_a2b49f2b1fdbd1::t_da53af50e0456a 486,490,493-522,526-536,690-732
+packages/im/workroom/src/workroom-runtime/workroom-database-storage.ts
+  s_99b3f2eaf04135::t_0fefd6048f7cd3 1-54
+basic/cli/src/plugin-runtime/workroom/persistence-coordinator.ts
+  s_99b3f2eaf04135::t_1aef82308538a0 44,134,136-137,145
+  s_99b3f2eaf04135::t_c294f1efc27443 146,153
+  s_12c06fe024f38d::t_426c7cf68ae165 3-5,22
+  s_2ebbb5e3caac4a::t_2b3c6fbcf031bb 20-21
+  s_b2903366e10f0d::t_53950d50e32489 26
+  s_b2903366e10f0d::t_2eb1b89b1fcb79 6-25
+.changeset/split-workroom-runtime.md
+  s_99b3f2eaf04135::t_a52a4c52701fe9 1-8,11
+  s_0491b9d4752e4a::t_5163c160ac9435 13
+  s_12c06fe024f38d::t_759d01365d6c01 9-10,12,14
+docs/plans/workroom-group-collaboration-progress.md
+  s_99b3f2eaf04135::t_789ebdfa15086b 1-11,12,13-15,18-25,27-30,58-60,100-102,136,153-157
+  s_99b3f2eaf04135::t_db2b680b233430 158-169,440-444
+  s_99b3f2eaf04135::t_528b136f412ca2 26,31,170-175,445
+  s_0491b9d4752e4a::t_d96611593fd0e8 32-33,176-179,446
+  s_0491b9d4752e4a::t_9e04f3d78c59a5 34-35,180-186,447
+  s_0491b9d4752e4a::t_c84a2bcd0ee2de 36-37,187-192,448
+  s_481b32855cdf2b::t_58e1423ca266b0 38-39,193-196,449
+  s_481b32855cdf2b::t_46bb4bc8f05ef6 40-41,197-201,450
+  s_19275fe2d72d97::t_0a1b171d7d11b0 42-43,202-205,451
+  s_19275fe2d72d97::t_70269b02e26569 44-45,206-211,452
+  s_12c06fe024f38d::t_6a14219f31a7c2 212-217
+  s_12c06fe024f38d::t_587c05ac0846cf 46-47
+  s_12c06fe024f38d::t_0f2e886c208419 453
+  s_12c06fe024f38d::t_c94fafe140b84f 48-49,218-225,454
+  s_a2b49f2b1fdbd1::t_559d66d97c6bbc 50-51,226-231,455
+  s_a2b49f2b1fdbd1::t_d5c859a897288f 52-53,232-237,456
+  s_2ebbb5e3caac4a::t_d5a12bc5914c45 54-55,238-243,457
+  s_2ebbb5e3caac4a::t_10850f969b5414 56-57,244-251,458
+  s_0cbd60597bf449::t_1d2d6a4e64c397 61-62,252-259,459
+  s_0cbd60597bf449::t_e2e53f4f07a7df 63-64,260-264,460
+  s_18b2877d46eac6::t_d21e7b6001f471 65-66,265-272,461
+  s_18b2877d46eac6::t_16b112c26fd39f 67-68,273-278,462
+  s_d1be4c5107342e::t_2f7667b403c9da 69-70,279-284,463
+  s_d1be4c5107342e::t_7035c2ed820b65 71-72,285-293,464
+  s_075ce75953323e::t_d78e7694c6265b 73-74,294-299,465
+  s_075ce75953323e::t_54af345e08bc60 75-76,300-304,466
+  s_897373218c2e80::t_0fac518e3e72da 77-78,305-312,467
+  s_897373218c2e80::t_c146e1ee33af31 79-80,313-316,468
+  s_57b63e8df44177::t_d2060b0854407e 82,317-324,469
+  s_2c3ced52228a6b::t_b42959ac080de2 81,83,325-330,470
+  s_2c3ced52228a6b::t_2cc876750b5558 84-85,331-337,471
+  s_5a97dd97323603::t_d3eda11d4b044d 86-87,338-343,472
+  s_5a97dd97323603::t_0a7994f948964e 88-89,344-349,473
+  s_6a32d03e636516::t_1f2325bd8a35e9 90-91,350-357,474
+  s_6a32d03e636516::t_3d2f0622b0b162 92-93,358-363,475
+  s_ea90e74ad58704::t_0f039cbdf0e816 94-95,364-370,476
+  s_ea90e74ad58704::t_388aaa309cb620 96-97,371-375,477
+  s_2f7a280d7c8c1e::t_2f0bddd20b246e 98-99,376-383,478
+  s_802ef64c9cfabc::t_2ce38612794333 104-105,107-114,384-392,479
+  s_941b0f2d4c8e63::t_999de0f7bf79c2 115-116,393-398,480
+  s_95fad6ad5888ed::t_025eb1ac732780 138-139,399-405,481
+  s_95fad6ad5888ed::t_a960abdf6b78c6 140-141,406-411,482
+  s_a7e33dd75d134f::t_ed3ea93c789536 142-145,152,412-417,483
+  s_a7e33dd75d134f::t_386f392bf1f49c 146-147,418-422,484
+  s_b2903366e10f0d::t_4f4c91d6ae1dbf 148-149,423-427,485
+  s_b2903366e10f0d::t_e726c0e304a04d 150-151,428-432,486
+  s_9477e63ef5cee5::t_d37015bf23dd6e 103,106,136,487
+  s_9477e63ef5cee5::t_9927412d0d4dd4 16-17,120-135,137,488
+  s_c09c25ac8e03c4::t_62ef84b29c8093 117-119,433-439,489
+.changeset/workroom-review-fixes.md
+  s_99b3f2eaf04135::t_c3fae4401a40b3 1-5
+basic/cli/tests/plugin-runtime/workroom/persistence-coordinator.test.ts
+  s_99b3f2eaf04135::t_74a8f872ccd100 17,95,103-104,107,109-130,132-140,144-152
+  s_0491b9d4752e4a::t_45e8635b6c219e 12-14,96-102,105-106,108,131,141-143,175-201
+  s_12c06fe024f38d::t_a4856b92625ca9 5-7,15
+  s_2ebbb5e3caac4a::t_21fd8f2704b3ad 1
+packages/im/agent/src/plugin-runtime/deferred-capability-plan.ts
+  s_0491b9d4752e4a::t_e6cce5b4146bd5 22-29,37-41,43,68-69,71,156,160,225,227,229
+  s_0491b9d4752e4a::t_26343ab2e6f1a8 30-36,42,61-64,151,153,233-249
+  s_12c06fe024f38d::t_8d9a278216f2ed 152
+packages/im/workroom/src/workroom-runtime/workroom-capability-realization.ts
+  s_0491b9d4752e4a::t_ac7f91de5ace8c 1-2,4-7,9-157
+  s_12c06fe024f38d::t_695a9afd7ae5cd 3,8
+packages/im/agent/tests/plugin-runtime/deferred-capability-plan.test.ts
+  s_0491b9d4752e4a::t_4c6a0838f5e9bc 7,13-74,80-82
+  s_0491b9d4752e4a::t_5ac901ac036f98 9,75-133
+scripts/check-architecture-layers.mjs
+  s_0491b9d4752e4a::t_bbe6344e75a3e8 466,500,501-504,505,507-509,511-518
+  s_0491b9d4752e4a::t_d38fdefe5d8ad3 433
+  s_481b32855cdf2b::t_528c70be07b145 13,467,469,471-476,478-480,482-497
+  s_19275fe2d72d97::t_58fe5e47143b4f 477,481
+  s_19275fe2d72d97::t_3691691261fb31 136,309-317,319-322,328,417-419,424,468,470
+  s_12c06fe024f38d::t_d4a5d1acd0d2dd 12,40-48,80,84-86,304-308,318-325,345-346,434-441,498-499,510,519
+  s_a2b49f2b1fdbd1::t_72497dd0bf5852 81-83
+  s_2ebbb5e3caac4a::t_383c35fab4add3 14-15,326,506
+scripts/check-architecture-layers.test.ts
+  s_0491b9d4752e4a::t_a7bb9fbc5b99d0 10,16-29,32-40,58-74,76,78-88,102-116
+  s_481b32855cdf2b::t_57b633840f8db1 30-31,41-57,75,77,89-101
+  s_481b32855cdf2b::t_fa9e46ba788bd9 9,117-129,132-140,142-144,295
+  s_19275fe2d72d97::t_3178e590b8e14e 130-131,141,145-148
+  s_12c06fe024f38d::t_b88b7357f84b46 150-169,178,187-189,197,199,210,295
+  s_12c06fe024f38d::t_8ee5ae77947968 11-15,170-177,179-186,190-196,198,200-220
+  s_2ebbb5e3caac4a::t_fe5784f7d3c254 1-8,223-295
+scripts/lib/parse-imports.mjs
+  s_0491b9d4752e4a::t_29493d5acb0a92 1-68,70-80,85-88,93,95-145
+  s_481b32855cdf2b::t_8dbfa7dcc1fa9b 69,83,91-92
+  s_12c06fe024f38d::t_e954841dac4caf 81-82,84,89-90,94
+packages/im/workroom/src/data-governance/canonical-value.ts
+  s_481b32855cdf2b::t_e1523fe73cb511 4-11,13-35
+  s_19275fe2d72d97::t_a70c2c7b3b254b 1-3,12
+  s_19275fe2d72d97::t_21f343f7e52155 1-35
+packages/im/workroom/src/data-governance/data-governance.ts
+  s_481b32855cdf2b::t_167a7c8e822c34 2
+  s_19275fe2d72d97::t_345f06d847d58f 1-1048
+packages/im/workroom/src/data-governance/database-payload-lifecycle-repository.ts
+  s_481b32855cdf2b::t_17d0eca68771ef 6
+  s_19275fe2d72d97::t_c19383cecc87ed 1-316
+packages/im/workroom/src/data-governance/disclosure-manifest.ts
+  s_481b32855cdf2b::t_d1f79f5efac7a0 21
+  s_19275fe2d72d97::t_68c44b22efe135 1-474
+packages/im/workroom/src/data-governance/durable-file-store.ts
+  s_481b32855cdf2b::t_8cf4050c641d28 1-163
+  s_19275fe2d72d97::t_44b67476cef164 1-163
+packages/im/workroom/src/data-governance/encrypted-database-payload-vault.ts
+  s_481b32855cdf2b::t_38316ab6d45279 5
+  s_19275fe2d72d97::t_51e46dafcaef3f 1-323
+packages/im/workroom/src/data-governance/encrypted-file-payload-vault.ts
+  s_481b32855cdf2b::t_1eccceb0e7eb0f 24-25
+  s_19275fe2d72d97::t_597deaa413202c 1-691
+packages/im/workroom/src/data-governance/file-payload-lifecycle-repository.ts
+  s_481b32855cdf2b::t_3ec359417d3c7a 8,13
+  s_19275fe2d72d97::t_fc5b03e230d73a 1-234
+packages/im/workroom/src/data-governance/governance-authority-repository.ts
+  s_481b32855cdf2b::t_5069f55220b948 25-26
+  s_19275fe2d72d97::t_75314c9fa436a3 1-653
+packages/im/workroom/src/data-governance/governed-payload-write-saga.ts
+  s_481b32855cdf2b::t_b7c322be0ce4a3 8-9
+  s_19275fe2d72d97::t_796c1488c9c2cf 1-657
+packages/im/workroom/src/data-governance/payload-hold-overdue-projection.ts
+  s_481b32855cdf2b::t_e212f0b90c8565 10
+  s_19275fe2d72d97::t_280b8c0462286c 1-135
+packages/im/workroom/src/data-governance/payload-lifecycle.ts
+  s_481b32855cdf2b::t_230f2a6e65985a 7
+  s_19275fe2d72d97::t_f9a97c60eac8af 1-1393
+packages/im/workroom/src/data-governance/payload-vault-storage-handoff.ts
+  s_481b32855cdf2b::t_fe58b7b71ecfde 11
+  s_19275fe2d72d97::t_3645051af07d10 1-693
+packages/im/workroom/src/workroom/canonical-value.ts
+  s_481b32855cdf2b::t_ea7e437bcf339a 1
+  s_19275fe2d72d97::t_a74b0e209389f2 1
+packages/im/workroom/src/workroom/durable-file-store.ts
+  s_481b32855cdf2b::t_02b29f843811af 1
+  s_19275fe2d72d97::t_aa316df805156b 1
+packages/im/workroom/tests/data-governance/shim-identity.test.ts
+  s_481b32855cdf2b::t_de72a84d8395ee 1-16
+scripts/lib/find-forbidden-imports.mjs
+  s_481b32855cdf2b::t_939e18fa5f7bab 1-19
+.changeset/add-workroom-package.md
+  s_19275fe2d72d97::t_c977309bcd1fbd 1-5
+  s_2ebbb5e3caac4a::t_b1c3a6b9a09aee 6
+docs/contributing/repo-structure.md
+  s_19275fe2d72d97::t_974affd66412d1 56,65-66
+  s_12c06fe024f38d::t_c4b59b7fccc67e 55,81
+package.json
+  s_19275fe2d72d97::t_c297e526b31b5e 94
+packages/im/workroom/README.md
+  s_19275fe2d72d97::t_175a3685db6579 1-2,4-5,9-11,13,15,17
+  s_12c06fe024f38d::t_9d741ece5f7dbc 3,8,12,24-27,29
+  s_a2b49f2b1fdbd1::t_57f6264a26496f 30-43
+  s_2ebbb5e3caac4a::t_5740606ca8a01b 21-23
+  s_0cbd60597bf449::t_4ba6524ff402c4 44-54
+  s_0cbd60597bf449::t_6942c6d88e0ccf 55
+  s_a7e33dd75d134f::t_bd1b6098e4e778 15
+  s_a7e33dd75d134f::t_8ff5f6236ac87b 20
+  s_b2903366e10f0d::t_7c043ef700b925 6,15-16
+  s_b2903366e10f0d::t_fc8b4ea8c1bebe 7,14,18-19
+packages/im/workroom/package.json
+  s_19275fe2d72d97::t_d05edd103f510b 1-13,18,23,33-43,51-71
+  s_12c06fe024f38d::t_4789e8d004c960 44-50
+  s_a7e33dd75d134f::t_50a72fab0d7555 13-17
+  s_b2903366e10f0d::t_8ce1d1a2aa1015 18-27
+  s_b2903366e10f0d::t_6defae7bc5fbd1 28-32
+packages/im/workroom/src/data-governance/disclosure-authority.ts
+  s_481b32855cdf2b::t_d9877669c867ae 1-53
+packages/im/workroom/src/index.ts
+  s_19275fe2d72d97::t_b2fbb9b66f86bc 1,4-35,36-45,46-49,50-54,56-72,73-77
+  s_12c06fe024f38d::t_28a46a801253d4 78-132,133-148,149,150-153,154-156
+  s_0cbd60597bf449::t_452691df6f440d 157
+  s_b2903366e10f0d::t_18113f589710eb 2-3
+packages/im/workroom/src/portfolio/capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_9a212a7056622a 1-471
+packages/im/workroom/src/portfolio/database-capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_c3eed64033e71e 1-221
+packages/im/workroom/src/portfolio/file-capacity-control-outbox.ts
+  s_99b3f2eaf04135::t_829fb87b9395b1 1-128
+packages/im/workroom/src/portfolio/file-portfolio-journal.ts
+  s_99b3f2eaf04135::t_3452b2cc15af35 1-241
+packages/im/workroom/src/portfolio/portfolio-admission.ts
+  s_99b3f2eaf04135::t_e304f75320a20e 1-1248
+packages/im/workroom/src/portfolio/portfolio-journal.ts
+  s_99b3f2eaf04135::t_82d603d78ca2c6 1-1186
+packages/im/workroom/src/portfolio/resource-bundle.ts
+  s_99b3f2eaf04135::t_6fd99d6d441a91 1-629
+packages/im/workroom/src/portfolio/sponsor-projection.ts
+  s_99b3f2eaf04135::t_def72972c89db0 1-199
+packages/im/workroom/src/workroom/acceptance-control.ts
+  s_99b3f2eaf04135::t_25e30c9226c79d 1-504
+packages/im/workroom/src/workroom/acceptance-policy.ts
+  s_99b3f2eaf04135::t_603040ab02f1ca 1-827
+packages/im/workroom/src/workroom/accepted-source-memory-application.ts
+  s_99b3f2eaf04135::t_168e632b1ae756 1-499
+packages/im/workroom/src/workroom/accepted-source-projector.ts
+  s_99b3f2eaf04135::t_6f72236f99806f 1-407
+packages/im/workroom/src/workroom/assignment-authority-grant-application.ts
+  s_99b3f2eaf04135::t_f3b34025e16a3e 1-483
+packages/im/workroom/src/workroom/assignment-authority-grant-repository.ts
+  s_99b3f2eaf04135::t_05e611f3a11e6f 1-509
+packages/im/workroom/src/workroom/assignment-authority.ts
+  s_99b3f2eaf04135::t_57036f6581ab3e 1-274
+packages/im/workroom/src/workroom/assignment-executor.ts
+  s_99b3f2eaf04135::t_9f7d7a09cfa365 1-508
+packages/im/workroom/src/workroom/assignment-observation-ingress.ts
+  s_99b3f2eaf04135::t_9614746797df2f 1-56
+packages/im/workroom/src/workroom/catalog-definition.ts
+  s_99b3f2eaf04135::t_e76c163b6ecb37 1-59
+packages/im/workroom/src/workroom/catalog.ts
+  s_99b3f2eaf04135::t_2b2bd5b1a835ec 1-439
+packages/im/workroom/src/workroom/coding-assignment-executor.ts
+  s_99b3f2eaf04135::t_aa89b9ab9e16c9 1-252
+packages/im/workroom/src/workroom/coding-git-objects.ts
+  s_99b3f2eaf04135::t_3f62ebc01142c3 1-66
+packages/im/workroom/src/workroom/database-project-knowledge-journal.ts
+  s_99b3f2eaf04135::t_cf1b10ef9f4ef3 1-196
+packages/im/workroom/src/workroom/dynamic-workflow-planner.ts
+  s_99b3f2eaf04135::t_c7fa8593a93bd6 1-362
+packages/im/workroom/src/workroom/effect-blocker-repository.ts
+  s_99b3f2eaf04135::t_58ff77f0badb66 1-219
+packages/im/workroom/src/workroom/effect-ledger.ts
+  s_99b3f2eaf04135::t_156ca6b3c28d94 1-691
+packages/im/workroom/src/workroom/file-accepted-source-memory-repository.ts
+  s_99b3f2eaf04135::t_0f37a0ddb5583f 1-179
+packages/im/workroom/src/workroom/file-coding-execution-store.ts
+  s_99b3f2eaf04135::t_849302d89b2b62 1-112
+packages/im/workroom/src/workroom/file-effect-ledger.ts
+  s_99b3f2eaf04135::t_26b9a49802c1ba 1-152
+packages/im/workroom/src/workroom/file-human-ingress-application.ts
+  s_99b3f2eaf04135::t_8a622657e9ef52 1-215
+packages/im/workroom/src/workroom/file-human-ingress.ts
+  s_99b3f2eaf04135::t_2b1bb0474a34d7 1-307
+packages/im/workroom/src/workroom/file-interaction-space-binding-repository.ts
+  s_99b3f2eaf04135::t_e1e5dc99560c9e 1-366
+packages/im/workroom/src/workroom/file-profile-journal.ts
+  s_99b3f2eaf04135::t_5c0504ad727ab1 1-394
+packages/im/workroom/src/workroom/git-workspace-gateway.ts
+  s_99b3f2eaf04135::t_322121c4153e43 1-411
+packages/im/workroom/src/workroom/github-workspace-transport.ts
+  s_99b3f2eaf04135::t_cf228db767fffd 1-225
+packages/im/workroom/src/workroom/governed-dispatch-reasons.ts
+  s_99b3f2eaf04135::t_e1e1de4eefc695 1-40
+packages/im/workroom/src/workroom/human-ingress-application.ts
+  s_99b3f2eaf04135::t_2178ba0e3f37f6 1-593
+packages/im/workroom/src/workroom/human-ingress-orchestrator.ts
+  s_99b3f2eaf04135::t_3a00d31a78170d 1-367
+packages/im/workroom/src/workroom/human-ingress-source-reader.ts
+  s_99b3f2eaf04135::t_5ffd493b79e11b 1-163
+packages/im/workroom/src/workroom/human-ingress.ts
+  s_99b3f2eaf04135::t_b276a7d8b557d5 1-778
+packages/im/workroom/src/workroom/interaction-space-binding-service.ts
+  s_99b3f2eaf04135::t_559a37264b3223 1-279
+packages/im/workroom/src/workroom/interaction-space-router.ts
+  s_99b3f2eaf04135::t_8c3882c7891191 1-337
+packages/im/workroom/src/workroom/journal-model.ts
+  s_99b3f2eaf04135::t_f453206e7220fb 1-11
+packages/im/workroom/src/workroom/journal/activatable-journal.ts
+  s_99b3f2eaf04135::t_617432d40dde9a 1-54
+packages/im/workroom/src/workroom/journal/contracts.ts
+  s_99b3f2eaf04135::t_a7ecdbda9ad1ed 1-174
+packages/im/workroom/src/workroom/journal/database-journal.ts
+  s_99b3f2eaf04135::t_2063bbbf6f2ad1 1-6,8-116,118-137,139-183
+  s_95fad6ad5888ed::t_43f8ad6461aef3 7,117,138
+packages/im/workroom/src/workroom/journal/event-codec.ts
+  s_99b3f2eaf04135::t_a711c6d58c8ff2 1-8,10-40,42-46,48-49,50-296
+  s_95fad6ad5888ed::t_aabf3e1356ddce 9,41,47
+packages/im/workroom/src/workroom/journal/event-validation.ts
+  s_99b3f2eaf04135::t_ddb2f63b0dfc09 1-633
+packages/im/workroom/src/workroom/journal/file-journal.ts
+  s_99b3f2eaf04135::t_c10a50773ed17f 1-16,19-241,245-333
+  s_95fad6ad5888ed::t_725e36d9055503 17-18,242-244
+packages/im/workroom/src/workroom/journal/index.ts
+  s_99b3f2eaf04135::t_26a444daf205f5 1-23
+packages/im/workroom/src/workroom/journal/memory-journal.ts
+  s_99b3f2eaf04135::t_dc2c392a09a974 1-145
+packages/im/workroom/src/workroom/journal/payload-governance.ts
+  s_99b3f2eaf04135::t_8eef1dcc2550c2 1-372
+packages/im/workroom/src/workroom/journal/payload-reference.ts
+  s_99b3f2eaf04135::t_d006df69906eef 1,3-60,62-67
+  s_95fad6ad5888ed::t_61fafc645a5153 2,61
+packages/im/workroom/src/workroom/journal/stored-event-projection.ts
+  s_99b3f2eaf04135::t_43bd44356f212c 1-307
+packages/im/workroom/src/workroom/kernel-contracts.ts
+  s_99b3f2eaf04135::t_e11c30db0e681f 1-231
+packages/im/workroom/src/workroom/kernel-state.ts
+  s_99b3f2eaf04135::t_fc9a6a2ff8c96a 1-951
+packages/im/workroom/src/workroom/local-assignment-issuance.ts
+  s_99b3f2eaf04135::t_9245a581053eeb 1-217
+packages/im/workroom/src/workroom/plan-approval-control.ts
+  s_99b3f2eaf04135::t_3368a4ca3aae2f 1-60
+packages/im/workroom/src/workroom/plan-revision.ts
+  s_99b3f2eaf04135::t_c12c8a29640b4c 1-200
+packages/im/workroom/src/workroom/profile-compiler.ts
+  s_99b3f2eaf04135::t_5b08f7116bf230 1-573
+packages/im/workroom/src/workroom/profile-registry.ts
+  s_99b3f2eaf04135::t_ad1d42aedf8e9a 1-981
+packages/im/workroom/src/workroom/project-knowledge-registry.ts
+  s_99b3f2eaf04135::t_06295840e52f03 1-522
+packages/im/workroom/src/workroom/projection-outbox/contracts.ts
+  s_99b3f2eaf04135::t_93b0983942d2e8 1-234
+packages/im/workroom/src/workroom/projection-outbox/delivery-worker.ts
+  s_99b3f2eaf04135::t_d4d6db236be220 1-130
+packages/im/workroom/src/workroom/projection-outbox/file-repository.ts
+  s_99b3f2eaf04135::t_1745c2136317d8 1-137
+packages/im/workroom/src/workroom/projection-outbox/index.ts
+  s_99b3f2eaf04135::t_d2ac836d322631 1-17
+packages/im/workroom/src/workroom/projection-outbox/memory-repository.ts
+  s_99b3f2eaf04135::t_3e6fb65732f76e 1-70
+packages/im/workroom/src/workroom/projection-outbox/projector.ts
+  s_99b3f2eaf04135::t_6930bed659b21a 1-562,564-657
+  s_95fad6ad5888ed::t_322008dc5af979 563
+packages/im/workroom/src/workroom/projection-outbox/repository-state.ts
+  s_99b3f2eaf04135::t_f8826af558be14 1-419
+packages/im/workroom/src/workroom/projection-outbox/tracer.ts
+  s_99b3f2eaf04135::t_3f640e7f8c80b4 1-250
+packages/im/workroom/src/workroom/remote-assignment-dispatch-command.ts
+  s_99b3f2eaf04135::t_019a963056525e 1-103
+packages/im/workroom/src/workroom/remote-assignment-issuance.ts
+  s_99b3f2eaf04135::t_a5f0d767cfbf7c 1-331
+packages/im/workroom/src/workroom/remote-callback-application.ts
+  s_99b3f2eaf04135::t_1267eb961838fc 1-820
+packages/im/workroom/src/workroom/remote-callback-gateway.ts
+  s_99b3f2eaf04135::t_22a53f13e1790f 1-263
+packages/im/workroom/src/workroom/remote-callback-inbox.ts
+  s_99b3f2eaf04135::t_04d2d5d7b10936 1-1475
+packages/im/workroom/src/workroom/remote-callback-reconciliation-worker.ts
+  s_99b3f2eaf04135::t_df07d76b4a269b 1-303
+packages/im/workroom/src/workroom/remote-dispatch-admission.ts
+  s_99b3f2eaf04135::t_deeb719d6dbf93 1-269
+packages/im/workroom/src/workroom/remote-dispatch-outbox.ts
+  s_99b3f2eaf04135::t_798f1ccd113207 1-1087
+packages/im/workroom/src/workroom/remote-dispatch-scheduler.ts
+  s_99b3f2eaf04135::t_c1f37e0b4fd6f1 1-166
+packages/im/workroom/src/workroom/remote-dispatch-worker.ts
+  s_99b3f2eaf04135::t_49df5918883226 1-162
+packages/im/workroom/src/workroom/remote-dispatch.ts
+  s_99b3f2eaf04135::t_d9a5cccf4dc59f 1-308
+packages/im/workroom/src/workroom/remote-executor.ts
+  s_99b3f2eaf04135::t_701ca423b6f69e 1-43
+packages/im/workroom/src/workroom/role-capability-snapshot.ts
+  s_99b3f2eaf04135::t_aec86dca44c123 1-675
+packages/im/workroom/src/workroom/runtime.ts
+  s_99b3f2eaf04135::t_b814d5450311c7 1-748
+packages/im/workroom/src/workroom/scheduler-priority-control.ts
+  s_99b3f2eaf04135::t_b57521cdab3d0a 1-41
+packages/im/workroom/src/workroom/software-delivery-plan.ts
+  s_99b3f2eaf04135::t_0a12ba6da93e15 1-76
+packages/im/workroom/src/workroom/validate-catalog.ts
+  s_99b3f2eaf04135::t_4ade105a81b028 1-233
+packages/im/workroom/src/workroom/workflow-plan-builder.ts
+  s_99b3f2eaf04135::t_eecbd9dae4d94f 1-333
+packages/im/workroom/src/workroom/workroom-assignment-knowledge-context.ts
+  s_99b3f2eaf04135::t_951aa2282aea82 1-216
+packages/im/workroom/src/workroom/workroom-kernel.ts
+  s_99b3f2eaf04135::t_aadcc4b41d10a8 1-1857
+packages/im/workroom/src/workroom/workroom-preemption.ts
+  s_99b3f2eaf04135::t_bb7e80b6a2f848 1-279
+packages/im/workroom/src/workroom/workroom-run-control.ts
+  s_99b3f2eaf04135::t_4f9fe7090b43e8 1-232
+packages/im/workroom/src/workroom/workroom-scheduler-application.ts
+  s_99b3f2eaf04135::t_66301f3195febf 1-117
+packages/im/workroom/src/workroom/workroom-scheduler.ts
+  s_99b3f2eaf04135::t_7cbd0a1e47944c 1-824
+packages/im/workroom/src/workroom/workroom-task-report-store.ts
+  s_99b3f2eaf04135::t_56b7e7da37d14f 1-768
+packages/im/workroom/tests/portfolio/capacity-control-outbox-fixture.ts
+  s_19275fe2d72d97::t_b196f77da79f68 1-46
+packages/im/workroom/tests/portfolio/capacity-control-outbox.test.ts
+  s_19275fe2d72d97::t_ada7fbdc516e79 9
+packages/im/workroom/tests/workroom/remote-disclosure-fixture.ts
+  s_19275fe2d72d97::t_ae318d8e10cd9e 1-73
+packages/im/workroom/tsconfig.json
+  s_19275fe2d72d97::t_876fe119233a50 1-10
+pnpm-lock.yaml
+  s_19275fe2d72d97::t_b7b1dff07b514e 1814-1815,1825-1827,1837-1847
+  s_12c06fe024f38d::t_103e032a575201 670-672,1816-1824,1828-1836
+  s_a2b49f2b1fdbd1::t_a33aae36075c49 243-245,1154-1156
+  s_2f7a280d7c8c1e::t_cabf77e45365da 513-515,529-534
+scripts/check-adapter-endpoint-boundaries.mjs
+  s_19275fe2d72d97::t_db3b0ab4cc29f3 113
+scripts/check-domain-module-boundaries.mjs
+  s_19275fe2d72d97::t_40b4c1b40f63ab 11,15-16
+scripts/check-im-send-bypass.mjs
+  s_19275fe2d72d97::t_bdd9f20e1d131e 16
+scripts/check-im-session-ssot.mjs
+  s_19275fe2d72d97::t_33cadeb2d9ae19 19
+scripts/check-llm-runtime-boundaries.mjs
+  s_19275fe2d72d97::t_f6718aba5ba7f4 11
+scripts/check-production-config.js
+  s_19275fe2d72d97::t_2372ff22fc854a 55
+scripts/check-speech-runtime-boundaries.mjs
+  s_19275fe2d72d97::t_2b29cc4aea7d6c 14
+scripts/check-workroom-ssot.mjs
+  s_19275fe2d72d97::t_ece52c4249ae98 38,102-104,106-112
+  s_95fad6ad5888ed::t_b0d9c1d7bfdc2f 71,73,79,94,120
+scripts/run-l4-check.mjs
+  s_19275fe2d72d97::t_7c8c33f536dae1 19-20
+scripts/run-l4-ci-check.mjs
+  s_19275fe2d72d97::t_8cbab27a3f24ca 20-21
+tsconfig.typecheck.json
+  s_19275fe2d72d97::t_efc23ade0ac848 161-163,175
+  s_12c06fe024f38d::t_e2d09b7e815670 297
+  s_a7e33dd75d134f::t_9c52c416dc9738 164-166
+  s_b2903366e10f0d::t_09c47316b909cc 167-172
+  s_b2903366e10f0d::t_8ba1546e73a66b 173-175
+tsconfig.typedoc.json
+  s_19275fe2d72d97::t_09d0fa6609cc51 65-67,79
+  s_a7e33dd75d134f::t_cd7ad2638e6d9f 68-70
+  s_b2903366e10f0d::t_79c08ac9d1bdf2 71-76
+  s_b2903366e10f0d::t_40aaac7efe4b66 77-79
+scripts/lib/workroom-specifier.mjs
+  s_12c06fe024f38d::t_e403c08d5bda10 1-7
+  s_12c06fe024f38d::t_dc3e36f8709462 8-29
+.changeset/move-workroom-runtime.md
+  s_12c06fe024f38d::t_1cb828a90401c2 4-6,9-10,12-13
+  s_a2b49f2b1fdbd1::t_17fc0aa4c4bea3 2,11,14
+  s_a2b49f2b1fdbd1::t_f893ee7235ea7e 15
+AGENTS.md
+  s_12c06fe024f38d::t_814e2f167e528f 61
+basic/cli/package.json
+  s_12c06fe024f38d::t_4efb48a5c967a7 41
+  s_a2b49f2b1fdbd1::t_ae4a0a583ebacd 67,81-83,92
+basic/cli/src/commands/agent-workroom.ts
+  s_12c06fe024f38d::t_42f2d0d981a9b3 13
+  s_a2b49f2b1fdbd1::t_b66cb27900dd47 3-12,15,180,196
+basic/cli/src/plugin-runtime/agent/config.ts
+  s_12c06fe024f38d::t_7fec0ff5118b05 6-8
+basic/cli/src/plugin-runtime/agent/host-installer.ts
+  s_12c06fe024f38d::t_a889015e63055b 14,21,29
+  s_a2b49f2b1fdbd1::t_44c78e79079447 15-17,24,32-33,58-62,155-156,189-208,220,222,238,241
+  s_2ebbb5e3caac4a::t_83e7c1fbfe3eae 18-20
+basic/cli/src/plugin-runtime/console/effect-sponsor-routes.ts
+  s_12c06fe024f38d::t_8877168daf8b8c 2
+basic/cli/src/plugin-runtime/console/workroom-catalog-rpc.ts
+  s_12c06fe024f38d::t_53279cef715f4e 3,55
+  s_a2b49f2b1fdbd1::t_736d6fc8a1fdf6 33,54
+basic/cli/src/plugin-runtime/console/workroom-run-control-route.ts
+  s_12c06fe024f38d::t_f749fdf584dfec 2,34
+basic/cli/src/plugin-runtime/workroom/acceptance-coordinator.ts
+  s_12c06fe024f38d::t_4eb14dc0d0bb68 39
+  s_b2903366e10f0d::t_70c9ffdba2001f 40-42
+basic/cli/src/plugin-runtime/workroom/assignment-coordinator.ts
+  s_12c06fe024f38d::t_44852bc8012bdc 4-6
+  s_2ebbb5e3caac4a::t_c52435b5911865 4-6
+  s_b2903366e10f0d::t_3868568abddea2 2-3
+basic/cli/src/plugin-runtime/workroom/effect-coordinator.ts
+  s_12c06fe024f38d::t_44d214be56384a 7
+basic/cli/src/plugin-runtime/workroom/execution-coordinator.ts
+  s_12c06fe024f38d::t_f8d681a29ffad1 7
+  s_2ebbb5e3caac4a::t_27a6ecbfa8fe7d 8-10
+basic/cli/src/plugin-runtime/workroom/host-coordinator.ts
+  s_12c06fe024f38d::t_a116a8e2c585f8 2,8
+  s_a2b49f2b1fdbd1::t_b85e62633d2212 15-17,19-20,53-54,192
+  s_2ebbb5e3caac4a::t_3e9ce9e88fdcbf 3,9
+basic/cli/src/plugin-runtime/workroom/human-ingress-coordinator.ts
+  s_12c06fe024f38d::t_d7ac01a189f736 15,20
+  s_b2903366e10f0d::t_cc8cc847fede97 25
+  s_b2903366e10f0d::t_8df80358007df0 3-24
+basic/cli/src/plugin-runtime/workroom/human-ingress-route.ts
+  s_12c06fe024f38d::t_45a80475f8797f 19
+basic/cli/src/plugin-runtime/workroom/knowledge-coordinator.ts
+  s_12c06fe024f38d::t_77cfe728a4a73a 11
+  s_2ebbb5e3caac4a::t_6305adc5f66b95 3
+basic/cli/src/plugin-runtime/workroom/planning-coordinator.ts
+  s_12c06fe024f38d::t_7b13575ecceba9 1,2,4,14
+  s_2ebbb5e3caac4a::t_33ceb196adc063 3
+  s_b2903366e10f0d::t_f005c8da0ba2a4 15-19
+basic/cli/src/plugin-runtime/workroom/profile-coordinator.ts
+  s_12c06fe024f38d::t_6a0d3949d43300 12
+  s_2ebbb5e3caac4a::t_55303b4d91ad6d 3-4
+  s_b2903366e10f0d::t_9b91fd4aa61634 13-15
+basic/cli/src/plugin-runtime/workroom/projection.ts
+  s_12c06fe024f38d::t_4ec1a82daf8c8c 18
+  s_2ebbb5e3caac4a::t_55f5e9298a1553 17
+basic/cli/src/plugin-runtime/workroom/runtime-foundation.ts
+  s_12c06fe024f38d::t_cfd701504c137a 23
+  s_a7e33dd75d134f::t_c314457c6688b7 28-31
+  s_b2903366e10f0d::t_3ed5b4b44cfb81 27
+  s_b2903366e10f0d::t_0cee0db995fa26 1-26
+basic/cli/tests/plugin-runtime/workroom/assignment-coordinator.test.ts
+  s_12c06fe024f38d::t_3891223b6fb386 2
+  s_2ebbb5e3caac4a::t_fbc322cc0efe71 1
+basic/cli/tests/plugin-runtime/workroom/effect-coordinator.test.ts
+  s_12c06fe024f38d::t_1d3c3204560b9c 2
+  s_2ebbb5e3caac4a::t_af668507d2c9a0 1
+basic/cli/tests/plugin-runtime/workroom/host-coordinator.test.ts
+  s_12c06fe024f38d::t_aceea241efe5c0 1
+  s_a2b49f2b1fdbd1::t_75b90411ca473f 22
+  s_2ebbb5e3caac4a::t_316bacf6508bc8 4
+basic/cli/tests/plugin-runtime/workroom/human-ingress-route.test.ts
+  s_12c06fe024f38d::t_58bb97cb298404 12
+  s_2ebbb5e3caac4a::t_48ee87bbbbc4a3 1
+basic/cli/tests/plugin-runtime/workroom/knowledge-coordinator.test.ts
+  s_12c06fe024f38d::t_e38e8ca0a1214a 5
+  s_2ebbb5e3caac4a::t_a7357e8dea3f9e 1
+basic/cli/tests/plugin-runtime/workroom/planning-bootstrap.test.ts
+  s_12c06fe024f38d::t_e2de8b5b48e1c8 3
+  s_2ebbb5e3caac4a::t_e769a22c7d50b8 1
+basic/cli/tests/plugin-runtime/workroom/planning-coordinator.test.ts
+  s_12c06fe024f38d::t_6297500c3751ce 2
+  s_2ebbb5e3caac4a::t_91535995589936 1
+basic/cli/tests/plugin-runtime/workroom/profile-coordinator.test.ts
+  s_12c06fe024f38d::t_28df6b6ae699c8 5
+  s_2ebbb5e3caac4a::t_dccf4df8660ba1 1
+basic/cli/tests/plugin-runtime/workroom/projection.test.ts
+  s_12c06fe024f38d::t_4931adb729f243 5
+  s_2ebbb5e3caac4a::t_17f12f37362a88 1
+docs/concepts/architecture.md
+  s_12c06fe024f38d::t_e7ce7ed3d6b02c 97,153
+examples/self-delivery-bot/commands/delivery/[issue]/index.ts
+  s_12c06fe024f38d::t_96be55c200a91d 2
+examples/self-delivery-bot/commands/delivery/doctor/index.ts
+  s_12c06fe024f38d::t_35451879d9b7bf 2
+examples/self-delivery-bot/package.json
+  s_12c06fe024f38d::t_ea63237dbbcf7f 13-14
+examples/self-delivery-bot/plugin.ts
+  s_12c06fe024f38d::t_6bfece5a27bac1 3
+examples/self-delivery-bot/tests/runtime.test.ts
+  s_12c06fe024f38d::t_70718fd5469a20 6
+packages/host/a2a/src/workroom-remote-transport.ts
+  s_12c06fe024f38d::t_dd4af6dce96d33 13
+  s_a7e33dd75d134f::t_d7dead1e5e85b5 7-9
+packages/host/a2a/tests/workroom-remote-transport.test.ts
+  s_12c06fe024f38d::t_4796e26078d19b 10
+  s_a7e33dd75d134f::t_d7cdfc5ee09c08 7
+packages/im/agent/src/core/index.ts
+  s_12c06fe024f38d::t_01b04571d84351 50-52,54
+  s_a2b49f2b1fdbd1::t_d9f03467cf5974 53
+packages/im/agent/src/turn/index.ts
+  s_12c06fe024f38d::t_6d90bf6eb186f4 154-156
+packages/im/workroom/src/workroom-runtime/workroom-assignment-authority-provider.ts
+  s_12c06fe024f38d::t_b8951b2eb1c27b 4
+packages/im/workroom/src/workroom-runtime/workroom-local-agent-core-adapter.ts
+  s_12c06fe024f38d::t_78a0a240fed94b 2-7
+packages/im/workroom/tests/workroom-runtime/public-surface.test.ts
+  s_12c06fe024f38d::t_36ba74a5eea046 1-2,5-21,29
+  s_a7e33dd75d134f::t_2687447ad4febe 3,22-28
+packages/im/workroom/tests/workroom-runtime/workroom-database-storage-models.test.ts
+  s_12c06fe024f38d::t_78e7a9cc3b512b 1-5,7-14,17-33,36-37,39,41-53
+packages/im/workroom/tests/workroom-runtime/workroom-deferred-capability-plan.test.ts
+  s_12c06fe024f38d::t_692dee78d4ebff 1-323
+packages/im/workroom/tests/workroom/validate-catalog.test.ts
+  s_12c06fe024f38d::t_9f1e97d54c01bf 1-143
+tests/snapshots/api-surface.json
+  s_12c06fe024f38d::t_9630e5415ebee0 123
+  s_c09c25ac8e03c4::t_72347ecaccf87b 19
+tests/snapshots/plugin-runtime-api.json
+  s_12c06fe024f38d::t_78a06f6938be4c 59
+  s_18b2877d46eac6::t_80f92fbf15b6b5 14
+  s_075ce75953323e::t_567c4517a9e7f6 116-117
+  s_2c3ced52228a6b::t_1ccc09d4a2eb8c 114
+packages/host/a2a/package.json
+  s_a2b49f2b1fdbd1::t_74de4f5dcdbcdd 45,49,56
+packages/im/agent/README.md
+  s_a2b49f2b1fdbd1::t_9bf051a0dd54ce 128,148,150,268,366
+basic/cli/src/utils/optional-workroom.ts
+  s_a2b49f2b1fdbd1::t_8bf5414c0035f1 1-37
+  s_a7e33dd75d134f::t_39926ba476bbab 38-41,46-58
+  s_a7e33dd75d134f::t_0a307f93103a22 42-45
+  s_b2903366e10f0d::t_102ce4cf15cc8f 59-78
+basic/cli/src/plugin-runtime/agent/workroom-loader.ts
+  s_a2b49f2b1fdbd1::t_fa421619991c8d 1-21
+.changeset/optional-workroom-loading.md
+  s_a2b49f2b1fdbd1::t_7de079d226d551 1-5
+basic/cli/src/plugin-runtime/agent/module.ts
+  s_a2b49f2b1fdbd1::t_a88e247c2a08f8 12-16
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_a2b49f2b1fdbd1::t_14ede88e3fc004 77,93-94,103-107,131,135,155
+basic/cli/src/plugin-runtime/agent/workroom-port.ts
+  s_a2b49f2b1fdbd1::t_a67958a65b30a0 21-27
+basic/cli/src/plugin-runtime/console/workroom-run-query-routes.ts
+  s_a2b49f2b1fdbd1::t_245b8762040ebb 31-34,67-70,114-117
+basic/cli/src/plugin-runtime/start-command.ts
+  s_a2b49f2b1fdbd1::t_13a8617d8109d6 478-481,498,512,519
+basic/cli/src/plugin-runtime/workroom/host-assembly.ts
+  s_a2b49f2b1fdbd1::t_421f08d0dee6ea 1,3-5,7-11,12-99
+  s_2ebbb5e3caac4a::t_ffc7f03f4a36d0 2,6
+basic/cli/src/plugin-runtime/workroom/module.ts
+  s_a2b49f2b1fdbd1::t_a406f390105093 13-21
+basic/cli/src/plugin-runtime/workroom/orchestrator-conversation.ts
+  s_a2b49f2b1fdbd1::t_279bfce03de816 1-13
+basic/cli/src/plugin-runtime/workroom/publication.ts
+  s_a2b49f2b1fdbd1::t_3bd2aceda3bb64 1-6,7-8,12-86
+  s_b2903366e10f0d::t_e3476e5b03c0b7 9-11
+basic/cli/tests/agent-workroom.test.ts
+  s_a2b49f2b1fdbd1::t_e962557e61b9b3 409-421,464
+  s_a7e33dd75d134f::t_346be4416fcb9f 422-442
+  s_b2903366e10f0d::t_029f133aefc7a2 443-463
+basic/cli/tests/plugin-runtime/agent/host-installer.test.ts
+  s_a2b49f2b1fdbd1::t_6008aed651a6d4 1-90
+basic/cli/tests/plugin-runtime/agent/optional-workroom-boundary.test.ts
+  s_a2b49f2b1fdbd1::t_61439cccc3e7da 1-24,45-52,54-55,57-64,83
+  s_2ebbb5e3caac4a::t_77c30c5d188d62 25-44,53,56,65-82
+basic/cli/tests/plugin-runtime/agent/turn/boundaries.test.ts
+  s_a2b49f2b1fdbd1::t_cb766ec851985a 28
+  s_d1be4c5107342e::t_29b394cafd3df6 897-910
+basic/cli/tests/plugin-runtime/agent/turn/ingress-route.test.ts
+  s_a2b49f2b1fdbd1::t_69f005b9d1aa43 24-37
+basic/cli/tests/plugin-runtime/agent/workroom-loader.test.ts
+  s_a2b49f2b1fdbd1::t_ddf7bf9da54a05 1-52
+basic/cli/tests/plugin-runtime/workroom/publication.test.ts
+  s_a2b49f2b1fdbd1::t_c790cafd371c0e 1-3,5-65
+  s_2ebbb5e3caac4a::t_5f3ec5841b914a 4
+.changeset/workroom-optional-load-errors.md
+  s_2ebbb5e3caac4a::t_326b112822b5cc 1-5
+basic/cli/src/plugin-runtime/workroom/data-governance-coordinator.ts
+  s_2ebbb5e3caac4a::t_34078dff3ba17b 4
+  s_b2903366e10f0d::t_2e8b7031f49e06 6-8,16
+basic/cli/tests/plugin-runtime/console/agent-console-load.test.ts
+  s_2ebbb5e3caac4a::t_2d50d321703a55 1-37
+docs/authoring/host-tokens.md
+  s_2ebbb5e3caac4a::t_1441a011e49fbf 82
+docs/en/authoring/host-tokens.md
+  s_2ebbb5e3caac4a::t_4bcc4053babc9c 82
+.changeset/workroom-boundary-hardening.md
+  s_2ebbb5e3caac4a::t_14d30e93e288ab 1-11
+basic/cli/tests/plugin-runtime/protocol-host-installer-a2a-workroom.test.ts
+  s_2ebbb5e3caac4a::t_ba880f3c329762 1-75
+basic/cli/tests/plugin-runtime/workroom/acceptance-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_6b4a973150cd62 1
+basic/cli/tests/plugin-runtime/workroom/data-governance-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_ac4379b7500e97 1,8
+basic/cli/tests/plugin-runtime/workroom/execution-control-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_e3b89ead2f2d78 1
+  s_b2903366e10f0d::t_837595c9618406 2
+basic/cli/tests/plugin-runtime/workroom/execution-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_eb408b5ddefe62 1
+  s_b2903366e10f0d::t_9156051917c3df 3
+basic/cli/tests/plugin-runtime/workroom/human-ingress-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_7b0bae3c2e6583 1
+basic/cli/tests/plugin-runtime/workroom/local-data-governance.test.ts
+  s_2ebbb5e3caac4a::t_a89a82134ea90f 7
+basic/cli/tests/plugin-runtime/workroom/local-portfolio.test.ts
+  s_2ebbb5e3caac4a::t_e8f8cdb85de081 1
+  s_b2903366e10f0d::t_878c94e44fe01e 4-6
+basic/cli/tests/plugin-runtime/workroom/module-boundary.test.ts
+  s_2ebbb5e3caac4a::t_c82a6b625e8c29 26-62
+basic/cli/tests/plugin-runtime/workroom/portfolio-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_c409155896c6dc 1
+  s_b2903366e10f0d::t_f0a1d69309d477 2
+basic/cli/tests/plugin-runtime/workroom/projection-coordinator.test.ts
+  s_2ebbb5e3caac4a::t_c3248b9f98127b 1
+basic/cli/tests/plugin-runtime/workroom/runtime-foundation.test.ts
+  s_2ebbb5e3caac4a::t_abc516abe03ee2 5
+  s_b2903366e10f0d::t_735bc93dab30c3 1-2
+scripts/lib/agent-workroom-boundary.mjs
+  s_2ebbb5e3caac4a::t_494e85ffd66a05 1-43
+packages/im/workroom/src/room/index.ts
+  s_0cbd60597bf449::t_048aca7ebfca71 1-2
+  s_57b63e8df44177::t_f61cc890352457 3-6
+  s_5a97dd97323603::t_84bab81235bdca 7-10
+  s_6a32d03e636516::t_36528665002d0c 11-13
+  s_802ef64c9cfabc::t_a139845039cd21 14
+packages/im/workroom/src/room/validate-room.ts
+  s_0cbd60597bf449::t_326ecabd4bd9a0 1-114,116-122,124-131,133-183,185-198,200-211,218,220-231,235-257,259-309
+  s_0cbd60597bf449::t_e958081594ef98 115,123,132,184,212-215,217,219,232-234
+  s_2c3ced52228a6b::t_9a69da7e6515bd 199,216,258
+.changeset/add-room-definition.md
+  s_0cbd60597bf449::t_77462e52104e9d 1-5
+  s_0cbd60597bf449::t_05ee951bc2af08 6-7
+packages/im/workroom/tests/room/validate-room.test.ts
+  s_0cbd60597bf449::t_b299dde075d00d 1-8,10-64,124-201,203-237,239-256,258,265-266,278-280
+  s_0cbd60597bf449::t_d7b251212952ee 9,65-116,118-123,238
+  s_2c3ced52228a6b::t_f3dbbb768da1dc 117,202,257,260-262,264,267-274
+  s_5a97dd97323603::t_9965e84f5f4927 275-277
+  s_6a32d03e636516::t_790b0686e2ac1f 263
+  s_08b1f47ab5f586::t_d93ca3a23ceded 259
+packages/im/workroom/src/room/room-definition.ts
+  s_0cbd60597bf449::t_e6f8ecd0846ffb 1-15,23-25,30-64,66,68-81
+  s_0cbd60597bf449::t_d850a755a23dfd 16-22,26-29,65,67
+.changeset/add-endpoint-self-user-id.md
+  s_18b2877d46eac6::t_7fa3233b1bbc7a 1-8
+  s_18b2877d46eac6::t_80e24641f6d670 9-10
+  s_d1be4c5107342e::t_89aefb11f3484c 11-12
+packages/im/adapter/src/endpoint-contract.ts
+  s_18b2877d46eac6::t_a28dfe5d53ed90 86-90,109-110
+packages/im/adapter/src/endpoint.ts
+  s_18b2877d46eac6::t_1e630b11faa8f1 13,52-58,95-109,119-128,179-180
+  s_d1be4c5107342e::t_c2fcb4c740688b 110-118,143,149,153
+packages/im/adapter/src/index.ts
+  s_18b2877d46eac6::t_be50ca2393eb57 11-12
+packages/im/adapter/src/managed-endpoint.ts
+  s_18b2877d46eac6::t_123c61bd020e09 75,124-134
+packages/im/adapter/src/peer-registry.ts
+  s_18b2877d46eac6::t_17191851acf7f9 1-31,34-60,95-101,114-118,123-143,148-150,153-155,158-205
+  s_18b2877d46eac6::t_62368e6b063906 33,61-94,111-113,119-122,144-147,151-152,156-157
+  s_d1be4c5107342e::t_eb4dbc70dbfe2b 32,102-110
+packages/im/adapter/tests/endpoint-self-user-id.test.ts
+  s_18b2877d46eac6::t_9a1e06fe4fe6fe 1-114,131-179,199
+  s_18b2877d46eac6::t_91f47440dc42cb 109-124
+  s_d1be4c5107342e::t_3db68315bbf59b 180-198
+packages/im/adapter/tests/peer-registry.test.ts
+  s_18b2877d46eac6::t_8e9a1ff58f857d 1-28,29-32,49-68,94-127,170
+  s_18b2877d46eac6::t_e85854c030f5f1 33-48,69-93
+  s_d1be4c5107342e::t_9d15bf8dba8615 128-169
+plugins/adapters/icqq/src/endpoint.ts
+  s_18b2877d46eac6::t_1218c7633bdde3 37
+  s_18b2877d46eac6::t_5fbbeab233add2 596-605
+plugins/adapters/icqq/src/icqq-inbound.ts
+  s_18b2877d46eac6::t_6114e70d3d9533 285-293
+plugins/adapters/icqq/tests/icqq-self-user-id.test.ts
+  s_18b2877d46eac6::t_7bae0f1f511048 1-69,92
+  s_18b2877d46eac6::t_9091498757b687 70-91
+plugins/adapters/onebot11/adapters/onebot11/index.ts
+  s_18b2877d46eac6::t_a3bb5f2ff38bcd 46,52
+plugins/adapters/onebot11/src/self-id.ts
+  s_18b2877d46eac6::t_6774ef8a4302f9 1-28
+plugins/adapters/onebot11/src/ws-endpoint.ts
+  s_18b2877d46eac6::t_f913e34cc6094b 45,50-51,111,167,204-211,213-215
+  s_18b2877d46eac6::t_3f6f28a369264b 69,108,127,133,168,212
+plugins/adapters/onebot11/src/wss-endpoint.ts
+  s_18b2877d46eac6::t_02253ee8f0a980 44,49-50,172,208-215,217-219,284
+  s_18b2877d46eac6::t_d51bbd0b194482 145,173,216
+plugins/adapters/onebot11/tests/onebot11-self-user-id.test.ts
+  s_18b2877d46eac6::t_62a77191a7bd2e 1-5,7-54,65-138,249
+  s_18b2877d46eac6::t_82ac23b2be6aca 6,139-157,161,163-164,166-233,237-239,241-242,244-248
+  s_d1be4c5107342e::t_10e5d63a9c9014 55-64,158-160,162,165,234-236,240,243
+plugins/adapters/sandbox/src/endpoint.ts
+  s_18b2877d46eac6::t_df869b9eef7cd3 181-183,192
+  s_18b2877d46eac6::t_60b39975e23c68 1
+plugins/adapters/sandbox/tests/sandbox-runtime.test.ts
+  s_18b2877d46eac6::t_60524026f8c96d 8,36-59
+plugins/adapters/onebot11/tests/onebot11-factory-defaults.test.ts
+  s_18b2877d46eac6::t_eefbcee90d46cd 1-36
+.changeset/inbound-origin-labels.md
+  s_d1be4c5107342e::t_66900e150c802f 1-15
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_d1be4c5107342e::t_16cdba7aec3c78 548-552,569
+packages/im/agent/src/session/session-io.ts
+  s_d1be4c5107342e::t_daf11bb1a113cf 58
+packages/im/agent/src/session/turn-ingress-session.ts
+  s_d1be4c5107342e::t_c12d6a1441f552 31
+packages/im/agent/src/turn/turn-ingress.ts
+  s_d1be4c5107342e::t_964b1701ef1c65 23-25,30-31
+  s_c09c25ac8e03c4::t_ddba3fa7375f9a 122-146,149,310-316,343-394
+packages/im/agent/tests/session-io.test.ts
+  s_d1be4c5107342e::t_ecb18dfb69d0ac 16-24,71
+packages/im/agent/tests/session/turn-ingress-session.test.ts
+  s_d1be4c5107342e::t_e4de06aa4c0310 57,79-90
+packages/im/ai/src/llm/types/agent-message.ts
+  s_c757df74f34330::t_826ad15866ae90 20-24
+packages/im/ai/src/memory/user-message-presentation.ts
+  s_c757df74f34330::t_6c86db28dd0e6d 53-54,61-65
+packages/im/ai/tests/memory/user-message-presentation.test.ts
+  s_d1be4c5107342e::t_95d6af2cbfdbc7 30-45
+packages/im/core/src/built/roles.ts
+  s_d1be4c5107342e::t_214096c14d9446 55-68,70
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_d1be4c5107342e::t_897a451a88aeff 5,165-169,192,216-221,223,276
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_d1be4c5107342e::t_c25d9d11f5f3da 19-20,60,81-82,114,117,119-120,122,132
+  s_897373218c2e80::t_54085e8b0ad8ae 58,83,115,133
+  s_2c3ced52228a6b::t_83ddda15c0482b 59,75-80,84,116,118,134-136
+packages/im/core/src/plugin-runtime/im/inbound-origin.ts
+  s_d1be4c5107342e::t_06b86bb9b93c15 1-11,13-28,77-80,82-83,85-91,93-103,105-108,110-114,116-155,168,176-187
+  s_075ce75953323e::t_29f40b78eb649f 12,81,84,92,104,109,115,156-159,165-167,169-175
+  s_075ce75953323e::t_7a7f715cee9405 160-164
+  s_897373218c2e80::t_5c7e0661867127 29,33,41-42
+  s_897373218c2e80::t_41f455536fc979 34
+  s_2c3ced52228a6b::t_5576724af50e94 30,35-40,43-76
+  s_2c3ced52228a6b::t_edc0feccd978be 31-32
+packages/im/core/src/plugin-runtime/im/inbound-runtime.ts
+  s_d1be4c5107342e::t_cd93b372912be2 60-61,200-201,203-207,209-217,357,384-402,618-630
+  s_897373218c2e80::t_283ec6b1c59108 40,62,202,208,218-223,236-238,283-292,361-383
+  s_2c3ced52228a6b::t_ec10932641a456 8,41-48,55,63-69,133-171,224-227,229-235,239-282,293-299,308-318,339,348
+  s_2c3ced52228a6b::t_a94e3b8e2103cf 228
+  s_335052366a8d57::t_0eed2d9bbb9ad8 300-307
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_d1be4c5107342e::t_0347ec5bfdd3bb 22-23,140-144
+packages/im/core/src/plugin-runtime/im/outbound-ledger.ts
+  s_d1be4c5107342e::t_37ad3e413dd954 1-126
+packages/im/core/tests/built/roles.test.ts
+  s_d1be4c5107342e::t_2bc8940dd50843 42-63,66-70
+packages/im/core/tests/plugin-runtime/im-runtime.test.ts
+  s_d1be4c5107342e::t_8e3ab31e1b7a5b 35-36,54,65,2802,2938,3201-3205,3207-3247,3934-3976
+  s_075ce75953323e::t_2a74f6728c31d4 3248-3329,3331,3338-3340,3347-3348,3354-3361
+  s_075ce75953323e::t_faa98a1bb1ec00 3206,3330,3332-3337,3341-3346,3349-3353
+  s_897373218c2e80::t_3f02a056921c98 4,2803,2939,3362-3491,3493-3524,3932-3933
+  s_2c3ced52228a6b::t_09ebabb6088702 60-61,76,2804,2937,3492,3525-3707,3709-3711,3713-3721,3722-3724,3726-3730,3737,3739-3753,3755-3756,3758-3792,3796-3807,3819-3845,3892-3893,3899-3931
+  s_2c3ced52228a6b::t_f97495276c708a 3708,3712,3754,3757,3793-3795,3808-3818,3846-3870,3890,3894,3897-3898
+  s_5a97dd97323603::t_811383dd654238 3725,3731-3736,3738,3871-3889,3891,3895-3896
+packages/im/core/tests/plugin-runtime/inbound-origin.test.ts
+  s_d1be4c5107342e::t_25c73e84766757 1-3,5-69,71-80,126
+  s_075ce75953323e::t_fa791af87bfa85 70,81-97,112-125
+  s_075ce75953323e::t_0fc6208438fed3 98-104,108-111
+  s_897373218c2e80::t_e6783b6ee3c2cf 4,105-107
+packages/im/core/tests/plugin-runtime/outbound-ledger.test.ts
+  s_d1be4c5107342e::t_d1f85feccacd49 1-57
+scripts/check-api-docs-surface.mjs
+  s_d1be4c5107342e::t_c851fc43cd9e30 110
+.changeset/narrow-origin-digest-fallback.md
+  s_075ce75953323e::t_8559ddbf2eeb71 1-4
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_075ce75953323e::t_2a96845444a9a9 14
+  s_2c3ced52228a6b::t_985aa6af0fd444 15-20
+.changeset/workroom-inbound-dedup.md
+  s_897373218c2e80::t_5f716406d937ab 1-4
+  s_897373218c2e80::t_c48ba88666eb81 5
+packages/im/core/src/plugin-runtime/im/inbound-dedup.ts
+  s_897373218c2e80::t_ceba780e859a99 1-22,63-64,66,71-80,83-97,217,222-227
+  s_2c3ced52228a6b::t_75720d20707557 23-36,44-62,65,67-70,81-82,98-105,107-151,153-161,168-197,202-216,218-221
+  s_2c3ced52228a6b::t_b91c565d1b40b8 37-43,106,152,162-167,198-201
+packages/im/core/tests/plugin-runtime/inbound-dedup.test.ts
+  s_897373218c2e80::t_a2fcef7a784e4b 2-72,201
+  s_2c3ced52228a6b::t_2c1ec62d9e97d6 1,73-119,136-200
+  s_2c3ced52228a6b::t_45e612f40265e3 120-135
+packages/im/workroom/src/room/room-router.ts
+  s_57b63e8df44177::t_3c2271ab0692ff 1-75,78-92
+  s_2c3ced52228a6b::t_9b5d3b333a8abd 93-102,105-111,116-123
+  s_5a97dd97323603::t_cda2611970081a 76-77,103-104,112-115
+packages/im/workroom/tests/room/room-im-fixture.ts
+  s_57b63e8df44177::t_354b5748efd02b 1-153
+  s_2c3ced52228a6b::t_8eb77ab9c12d3a 154-161
+packages/im/workroom/tests/room/room-bus.test.ts
+  s_57b63e8df44177::t_343b90069e88b2 1-134,136-137
+  s_57b63e8df44177::t_5fcc78dccb7fe9 135,138-139
+packages/im/workroom/tests/room/room-membership.test.ts
+  s_57b63e8df44177::t_790ed6db011787 1-25,34-136
+  s_2c3ced52228a6b::t_51fec7f56cd81c 137-160
+  s_2c3ced52228a6b::t_aee01f1a9813f3 26-33
+packages/im/workroom/src/room/room-bus.ts
+  s_57b63e8df44177::t_99f08003c59cd1 1-114
+packages/im/workroom/tests/room/room-fixtures.ts
+  s_57b63e8df44177::t_a41256b58065f7 1-43
+packages/im/workroom/src/room/room-registry.ts
+  s_57b63e8df44177::t_f558a876689b14 1-119
+packages/im/workroom/tests/room/room-registry.test.ts
+  s_57b63e8df44177::t_27e2b7ed665322 1-58
+packages/im/workroom/src/room/room-membership.ts
+  s_57b63e8df44177::t_d961e0744e7aaf 1-9,15-23,26-28,31-33
+  s_57b63e8df44177::t_104c34be51829b 34
+  s_2c3ced52228a6b::t_4325250dcf212d 10-14,24-25,29-30
+packages/im/workroom/tests/room/room-router.test.ts
+  s_57b63e8df44177::t_c5cea3f2997ada 1-70,85-122
+  s_2c3ced52228a6b::t_da59264a525096 123-162
+  s_5a97dd97323603::t_7cd078e803b962 71-84
+.changeset/workroom-room-router-bus.md
+  s_2c3ced52228a6b::t_3546c9c4df5561 1-6
+  s_2c3ced52228a6b::t_fa4cb86e1ea01e 7-8
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_2c3ced52228a6b::t_84bdd9a37a34e4 21,108-123
+packages/im/core/src/plugin-runtime/im/interactive-router.ts
+  s_2c3ced52228a6b::t_f324d72966fcb7 83-108,182-183
+packages/im/core/tests/plugin-runtime/interactive-router.test.ts
+  s_2c3ced52228a6b::t_c625bcaea4b919 1,63-111
+.changeset/workroom-mention-nonmember.md
+  s_5a97dd97323603::t_fa7ca34ddebd83 1-5
+.changeset/workroom-room-task-state.md
+  s_5a97dd97323603::t_468330035e7c00 1-7
+packages/im/workroom/src/room/database-room-task-journal.ts
+  s_5a97dd97323603::t_51a230f5ac3918 1-66,71-175
+  s_6a32d03e636516::t_42c4311df8a7b3 67-70
+packages/im/workroom/src/room/room-task-journal.ts
+  s_5a97dd97323603::t_a62ce6f7fadb89 1-64
+packages/im/workroom/src/room/room-task-service.ts
+  s_5a97dd97323603::t_b9748ec22c17b6 1-40,46-50,54-58,64-69,72-123,124-134,143-157
+  s_6a32d03e636516::t_ffbc668163ceaa 41-43,59-63,70-71,135-142
+  s_ea90e74ad58704::t_884b66ee3bb1ce 44-45
+  s_2f7a280d7c8c1e::t_e81fe05521ff5a 51-53
+packages/im/workroom/src/room/room-task.ts
+  s_5a97dd97323603::t_bc19f12d8feea9 1-13,17-204,212-413
+  s_6a32d03e636516::t_de341134bf5b65 14-16,205-211
+packages/im/workroom/tests/room/database-room-task-journal.test.ts
+  s_5a97dd97323603::t_cea883f6f8b38b 1-4,5,7-19,20-103
+  s_6a32d03e636516::t_c487b30ebeeaf9 6
+packages/im/workroom/tests/room/room-task-journal.test.ts
+  s_5a97dd97323603::t_62293d5e38ee2e 1-65
+packages/im/workroom/tests/room/room-task-service.test.ts
+  s_5a97dd97323603::t_1ca99bedc57285 1-79,124-163
+  s_6a32d03e636516::t_00494c61cd1624 80-123
+packages/im/workroom/tests/room/room-task.test.ts
+  s_5a97dd97323603::t_28bdfdc99b0ccd 1-60,69-181
+  s_6a32d03e636516::t_87712a62e51d2a 61-68
+.changeset/workroom-task-service-dispatch-after-serial.md
+  s_6a32d03e636516::t_1f3eae760da556 1-5
+packages/im/workroom/tests/room/room-task-journal-contract.test.ts
+  s_6a32d03e636516::t_e3971d9351b1b1 1-50
+packages/im/workroom/tests/room/room-task-journal-fixtures.ts
+  s_6a32d03e636516::t_7fd0cd0bd8bdd5 1-25
+packages/im/workroom/tests/room/room-guards.test.ts
+  s_6a32d03e636516::t_dbead0ede522fc 1-22,24-43,45-47,54-65,70-71,73,75,77-78,81,83-84,86-87,91-93,102,104-154,157-174,220-265
+  s_ea90e74ad58704::t_a6753faf0f8bee 23,44,48-53,66-69,72,74,76,79-80,82,85,88-90,94-101,103,155-156,175-185,187-193
+  s_ea90e74ad58704::t_e5836a5c6db475 186,194-219
+packages/im/workroom/src/room/room-guards.ts
+  s_6a32d03e636516::t_bc47edb20b79e7 197,249,255,259,264,301,308,321
+  s_6a32d03e636516::t_054b9b46e7d008 1-32,34-56,63-79,81,83,89-99,100,103-108,114-196,198-209,222-231,233-238,245-248,250-252,253-254,256-258,260-263,265-300,302-307,309-310,317-320,322-326,328-333
+  s_ea90e74ad58704::t_e7a2d1a1591116 33,57-62,80,82,101-102,109-113,210-221,232,239-244,327
+  s_ea90e74ad58704::t_ea607b9fe0f01f 84-88,311-316
+packages/im/workroom/tests/room/room-task-authorizer.test.ts
+  s_6a32d03e636516::t_d572cc16e87574 1,3-5,7-13,18-23,25-55,58,67-69,97-99,220-221
+  s_ea90e74ad58704::t_c4c6c8dad91d90 14-17,24,56-95,96,100-108
+  s_802ef64c9cfabc::t_2611180f4f9018 2,6,111-199,204-221
+  s_941b0f2d4c8e63::t_4f5f870923753e 200-203
+packages/im/workroom/tests/room/room-send-limiter.test.ts
+  s_6a32d03e636516::t_329cf463a845f8 1,5-147
+  s_ea90e74ad58704::t_b75b542534127b 4,148-198,230
+  s_ea90e74ad58704::t_7813dab41d8fa7 199-229
+  s_941b0f2d4c8e63::t_8cf7bc0f3a66df 2-3
+.changeset/workroom-room-guards.md
+  s_6a32d03e636516::t_92914a0b3e2246 1-5
+packages/im/workroom/src/room/room-send-limiter.ts
+  s_6a32d03e636516::t_fa0007a2d517fe 1-5,23-34,38-52,96-112,114-135,137-176,188-189,191-198,206-207
+  s_ea90e74ad58704::t_bf42e8c9a8cfe2 6-8,12-18,35-37,53-68,80-81,88,94-95,113,136,190,205,208,210-213
+  s_ea90e74ad58704::t_78bfd5845b600d 9-11,19-22,69-79,82-87,89-93,177-187,199-204,209
+packages/im/workroom/src/room/room-task-authorizer.ts
+  s_6a32d03e636516::t_4d01938489b27e 1-2,5-8,17,26-33,36-39,51-53,182,190,192-194
+  s_ea90e74ad58704::t_cf32b5ac3aaad9 9-16,22-25,34-35,40-44,50,54-73,75,77
+  s_ea90e74ad58704::t_709ef346a60329 45,49
+  s_802ef64c9cfabc::t_9e84da190c3319 3-4,18-21,46-48,81-127,129-157,165-184,186-194
+  s_941b0f2d4c8e63::t_e444693b70037a 128,158-164,185
+.changeset/workroom-b4-fail-closed.md
+  s_ea90e74ad58704::t_e03932a70ee020 1-12
+.changeset/workroom-b4-review-followup.md
+  s_ea90e74ad58704::t_211c506ea4c1a1 1-11
+examples/multi-agent-room/tests/multi-agent-room-contract.test.ts
+  s_2f7a280d7c8c1e::t_398750bb06f8c0 2,13,18-37,47,50,52-56
+examples/multi-agent-room/README.md
+  s_2f7a280d7c8c1e::t_4ad09b0a6761f4 3,5-7,9,11,13-17,19,22-55,58-76,78
+.changeset/fix-room-task-execute-input.md
+  s_2f7a280d7c8c1e::t_8a20efff4b4ebc 1-5
+examples/multi-agent-room/agents/coordinator/agent.json
+  s_2f7a280d7c8c1e::t_94d1f7d4226fac 1-14
+examples/multi-agent-room/agents/coordinator/boundaries.md
+  s_2f7a280d7c8c1e::t_48fce11111ff1e 1-6
+examples/multi-agent-room/agents/coordinator/conventions.md
+  s_2f7a280d7c8c1e::t_d7dc5e4223e53b 3-5
+examples/multi-agent-room/agents/coordinator/system.md
+  s_2f7a280d7c8c1e::t_fc8311c8dfafa2 1-7
+examples/multi-agent-room/agents/researcher/agent.json
+  s_2f7a280d7c8c1e::t_325a7555a94f3d 2,4
+examples/multi-agent-room/agents/researcher/boundaries.md
+  s_2f7a280d7c8c1e::t_3f0d374034c829 3-6
+examples/multi-agent-room/agents/researcher/conventions.md
+  s_2f7a280d7c8c1e::t_439b2b24670a29 3-5
+examples/multi-agent-room/agents/researcher/system.md
+  s_2f7a280d7c8c1e::t_1e0c538f792ea9 1,3,5-7
+examples/multi-agent-room/agents/writer/agent.json
+  s_2f7a280d7c8c1e::t_ea87f0644f8c87 2,4
+examples/multi-agent-room/agents/writer/boundaries.md
+  s_2f7a280d7c8c1e::t_a42e464e6f0717 3-6
+examples/multi-agent-room/agents/writer/conventions.md
+  s_2f7a280d7c8c1e::t_f8a38716d5c01f 1-5
+examples/multi-agent-room/agents/writer/system.md
+  s_2f7a280d7c8c1e::t_7e22b3d761e6e2 1-7
+examples/multi-agent-room/package.json
+  s_2f7a280d7c8c1e::t_97f02370687d47 5,17,24-25
+examples/multi-agent-room/src/room.ts
+  s_2f7a280d7c8c1e::t_4a16c19ddc1fe1 1-53
+examples/multi-agent-room/src/team.ts
+  s_2f7a280d7c8c1e::t_e55108c2dca0ae 1-20,22,25-35,37-39,41-42,54-119,122-181,186-233,235,238-248,251-289,292,321-332,335-345,367,373-376,380-426,431-435
+  s_802ef64c9cfabc::t_2eef0ee0dda522 21,23-24,36,182,249-250,290-291,293-294,296-299,304,308,310-312,316-320,346-351,359,361-364,366,368,370-372,378-379
+  s_941b0f2d4c8e63::t_6ba8eaba116253 40,43-53,120-121,183-185,234,236-237,295,300-303,305-307,309,313-315,333-334,352-358,360,365,369,377,427-430
+examples/multi-agent-room/tests/room-collaboration.e2e.test.ts
+  s_2f7a280d7c8c1e::t_6be5b4a551e83d 1-18,20-38,41-43,65-68,70-83,85-336,460-472,478-509
+  s_802ef64c9cfabc::t_478ee2482face2 19,39-40,44-48,51-64,69,84,337-369,421-459,473-477
+  s_941b0f2d4c8e63::t_0112a3ff5975ff 49-50,370-420
+examples/multi-agent-room/tests/support/sandbox-im.ts
+  s_2f7a280d7c8c1e::t_f60410e687a0e2 1-215
+examples/multi-agent-room/tsconfig.json
+  s_2f7a280d7c8c1e::t_cd1550883197bd 8
+examples/multi-agent-room/zhin.config.yml
+  s_2f7a280d7c8c1e::t_fb1205ecddfbbd 5-6,10-14,37,43-45
+.changeset/workroom-role-authorizer-sequencer.md
+  s_802ef64c9cfabc::t_1c48e3d30c0ac5 1-5
+packages/im/workroom/src/room/room-event-sequencer.ts
+  s_802ef64c9cfabc::t_6097b9bf1c077b 1-76
+packages/im/workroom/tests/room/room-event-sequencer.test.ts
+  s_802ef64c9cfabc::t_678b3e0e5232c5 1-84,93-98
+  s_941b0f2d4c8e63::t_678a305035807c 85-92
+.changeset/room-authorizer-fail-closed.md
+  s_941b0f2d4c8e63::t_aba3418f4d72dd 1-5
+packages/im/workroom/src/workroom/journal/legacy-payload-guard.ts
+  s_95fad6ad5888ed::t_81498b85068b55 1-23,28-30,32,37-180
+  s_95fad6ad5888ed::t_2672e99a5cb319 24-27,31,33-36
+.changeset/remove-legacy-migration-tools.md
+  s_95fad6ad5888ed::t_a418aae520843d 1-6
+  s_95fad6ad5888ed::t_3bafa47915bd10 7-8
+basic/cli/tests/agent-command.test.ts
+  s_95fad6ad5888ed::t_49cc5069f0da90 1-12
+docs/ai/agent.md
+  s_95fad6ad5888ed::t_0533c8d22c764b 573,575
+docs/en/ai/agent.md
+  s_95fad6ad5888ed::t_127a927ac6d2c0 467,469
+packages/im/workroom/tests/workroom-runtime/projection-outbox.test.ts
+  s_95fad6ad5888ed::t_90b2147d331494 361
+  s_95fad6ad5888ed::t_d3a42401713e46 392-395
+packages/im/workroom/tests/workroom/legacy-payload-guard.test.ts
+  s_95fad6ad5888ed::t_4d0086a3f6e386 1,3-4,6,8-12,14-30,32,34-42,77-83,86-90,92-103,106-120,122-126
+  s_95fad6ad5888ed::t_087e4d95e6db08 44-76
+packages/im/workroom/tests/workroom/workroom-content-free-journal.test.ts
+  s_95fad6ad5888ed::t_f9e998e463f46b 414,441
+packages/im/workroom/tests/workroom/workroom-kernel.test.ts
+  s_95fad6ad5888ed::t_429b665eebe853 774,838,892,912
+docs/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_061ab3b6d7c330 78
+docs/en/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_e8bea98301b875 78
+.changeset/workroom-remote-subpath.md
+  s_a7e33dd75d134f::t_f2ebebd70b9daa 1-6
+  s_a7e33dd75d134f::t_fe8bb7325408f8 7
+basic/cli/src/plugin-runtime/workroom/execution-control-coordinator.ts
+  s_a7e33dd75d134f::t_22624cbc5d5652 3-6
+  s_b2903366e10f0d::t_bcfbe087ebf1a7 1-2
+packages/host/a2a/README.md
+  s_a7e33dd75d134f::t_51185034a480a5 46-47,54
+  s_a7e33dd75d134f::t_3969e980c28db5 48,50,52-53
+  s_b2903366e10f0d::t_5bf3a0141debe7 49,51
+packages/host/a2a/src/workroom-callback-runtime.ts
+  s_a7e33dd75d134f::t_2cd90abc919acd 9
+packages/im/workroom/src/remote.ts
+  s_a7e33dd75d134f::t_e4272f31421fb8 1-22
+packages/im/workroom/tests/workroom/remote-event-fail-closed.test.ts
+  s_a7e33dd75d134f::t_3e53d3cd61d5ff 1-4,6-26
+docs/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_37e256f1840e49 118
+  s_b2903366e10f0d::t_1b8280e45f3e84 119-120
+  s_b2903366e10f0d::t_50c6ba830adce6 121
+docs/en/contributing/public-api-surface.md
+  s_a7e33dd75d134f::t_f48fdde6ae2a32 113
+  s_b2903366e10f0d::t_c2f20278cafd7d 114-115
+  s_b2903366e10f0d::t_e7b57030748884 116
+packages/im/agent/CONTEXT.md
+  s_a7e33dd75d134f::t_d6747b6eee7ad0 126
+  s_b2903366e10f0d::t_bf794c653f56ee 179,183,247
+.changeset/workroom-scheduler-portfolio-subpath.md
+  s_b2903366e10f0d::t_dc0d83efd271ce 1-6
+basic/cli/src/plugin-runtime/console/portfolio-sponsor-routes.ts
+  s_b2903366e10f0d::t_e3547e604a92e9 2
+basic/cli/src/plugin-runtime/workroom/local-portfolio.ts
+  s_b2903366e10f0d::t_5b76766ad2bf7c 3-5
+basic/cli/src/plugin-runtime/workroom/planning-bootstrap.ts
+  s_b2903366e10f0d::t_ad05b69f43b5ec 2-3
+basic/cli/src/plugin-runtime/workroom/portfolio-coordinator.ts
+  s_b2903366e10f0d::t_6dbec04145490a 2-3
+basic/cli/src/plugin-runtime/workroom/projection-coordinator.ts
+  s_b2903366e10f0d::t_7e17c554cad97d 3-4
+docs/configuration/index.md
+  s_b2903366e10f0d::t_dccd7e916f4d9c 238
+docs/en/configuration/index.md
+  s_b2903366e10f0d::t_f50c7a32df31fc 243
+packages/im/workroom/src/portfolio.ts
+  s_b2903366e10f0d::t_fdb7ef5153d234 1-23
+packages/im/workroom/src/scheduler.ts
+  s_b2903366e10f0d::t_eb3cb0bf09a920 1-19
+packages/im/workroom/tests/package-exports.test.ts
+  s_b2903366e10f0d::t_f6d576cabcfd90 1-5,7,9-26,53,55-63
+  s_b2903366e10f0d::t_e3a17fd10d9bcb 6,8,27-52,54
+.changeset/workroom-data-governance-subpath.md
+  s_b2903366e10f0d::t_83d5d258482181 1-6
+basic/cli/src/plugin-runtime/console/data-lifecycle-routes.ts
+  s_b2903366e10f0d::t_24a11c3915fc8b 2-4
+basic/cli/src/plugin-runtime/workroom/local-data-governance.ts
+  s_b2903366e10f0d::t_fe044f8a1f7b53 14-15,19
+packages/im/workroom/src/data-governance.ts
+  s_b2903366e10f0d::t_ba690ddcbd0038 1-25
+.changeset/add-room-turn-execution-mode.md
+  s_c09c25ac8e03c4::t_46d19bec3ea023 1-12
+packages/im/agent/src/context/turn-envelope.ts
+  s_c09c25ac8e03c4::t_bfc85ce1f19387 34-36
+packages/im/agent/src/index.ts
+  s_c09c25ac8e03c4::t_67bd1bb0ef670d 78
+packages/im/agent/src/plugin-runtime/full-agent-turn-engine.ts
+  s_c09c25ac8e03c4::t_fe8a2bd5242d2c 25,33,67-69,85-142,146,148,151,195,214,234-237,241-242,289,298-305,326-327,384-385,403,539-545,744-745
+packages/im/agent/src/security/trust-level.ts
+  s_c09c25ac8e03c4::t_18290a2043171b 11-12,65-71,74-75,87,96-123
+packages/im/agent/tests/plugin-runtime/full-agent-turn-engine.test.ts
+  s_c09c25ac8e03c4::t_e5e5c73fca6b02 612-765
+packages/im/agent/tests/security/trust-level.test.ts
+  s_c09c25ac8e03c4::t_2d31ab4dda1f66 151-258
+packages/im/agent/tests/turn/turn-ingress.test.ts
+  s_c09c25ac8e03c4::t_15209f1e14b247 128-197
+packages/im/agent/tests/zhin-agent/turn-context-envelope.test.ts
+  s_c09c25ac8e03c4::t_4db7be9d4437f5 122-132
+packages/im/tool/src/definition.ts
+  s_c09c25ac8e03c4::t_2328a275b1686a 75
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3aa65f8c93c749085230bb051552d4c600b29eb6",
+  "prompts": {},
+  "sessions": {
+    "s_0491b9d4752e4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "37d27f3b-eb81-4483-ba9c-29c7549e7934",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_075ce75953323e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c755d550-1f55-4e64-94c4-98f9df272110",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_08b1f47ab5f586": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a7230c546214504a4",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_0cbd60597bf449": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c529742-bf70-4042-b278-ac2679778274",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_12c06fe024f38d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b7615080-10c5-4c34-b628-09f855c0d1e1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_18b2877d46eac6": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9bdd7343-433a-42ad-8926-f428279e6858",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_19275fe2d72d97": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7fe3370b-af33-4233-87b5-7d12fe2a0044",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2c3ced52228a6b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "57968541-64cb-477c-96ba-ef50ba69806c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2ebbb5e3caac4a": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "01ea2d93-d1b0-4f9c-94d6-f3e31febe303",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_2f7a280d7c8c1e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "c6eb048c-c089-49a6-94d1-05cb763395a1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_335052366a8d57": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "agent-a0bf38f122fe36f4e",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_481b32855cdf2b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f50e6f97-94be-4f20-948b-bd9478e8f839",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_57b63e8df44177": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f22179cf-d9dd-444c-a5e2-695bd0beb715",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_5a97dd97323603": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "611a9689-fc93-4e4a-9b7f-2a7ccf1af456",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_6a32d03e636516": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7cbf46f1-9ede-436b-9d0f-8feea9bda0f1",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_802ef64c9cfabc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a624db53-fc7c-41af-bde9-718c172c446b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_897373218c2e80": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "66a91264-5fd8-4038-a6b6-1b9a6a4fb614",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_941b0f2d4c8e63": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "47f8740a-473f-425f-adb4-f599dd805f76",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_95fad6ad5888ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d623a4c-bfdc-449c-902b-15089adf8d59",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_99b3f2eaf04135": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "bdf2548b-703f-42e3-bb9c-56b34bffa7e9",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a2b49f2b1fdbd1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "514b15a7-aa87-41f1-a461-1c086e958315",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_a7e33dd75d134f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "ac1669fd-f923-4a01-a213-7e4fd5af005c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_b2903366e10f0d": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "21126ec6-b8bb-4ee7-aaf7-cbf37a8404af",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c09c25ac8e03c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c97d072-4687-40c3-bb5b-7c7caa37aefd",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_c757df74f34330": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a12dff-8ae7-74d0-a196-b18b1c903d7a",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_d1be4c5107342e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "f9d655f8-1693-4fc6-90dc-820da86e29ca",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    },
+    "s_ea90e74ad58704": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "df53f1c0-f25d-4f37-9714-2a98dedb0f2e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

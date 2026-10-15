@@ -1,0 +1,88 @@
+packages/im/agent/src/trace/turn-trace.ts
+  s_937b6c28be4d40::t_8a2ab23ab9fffa 115-124
+  s_937b6c28be4d40::t_90f7cab3f46a47 224-225
+  s_937b6c28be4d40::t_42323ab3b6a796 443-449
+packages/im/agent/tests/trace/turn-trace.test.ts
+  s_937b6c28be4d40::t_0be1714dd95afd 84-94
+packages/im/workroom/src/room/room-human-routing.ts
+  s_937b6c28be4d40::t_778d9c90c6c5f0 1-275
+  s_937b6c28be4d40::t_6fda3496062f0d 276-277
+basic/cli/src/plugin-runtime/agent/room-relation-judge.ts
+  s_937b6c28be4d40::t_662307a758e449 1-110
+.changeset/room-human-task-routing.md
+  s_937b6c28be4d40::t_6a719ee4b7069b 1-13
+basic/cli/src/plugin-runtime/agent/room-port.ts
+  s_937b6c28be4d40::t_f71cc2823707e2 6-8,12,32-33,38,46,59,62-64,96
+basic/cli/src/plugin-runtime/agent/turn/ingress-route.ts
+  s_937b6c28be4d40::t_51f56d7a5116de 14,66,81,618-623,654-693,698,716,718,797-799,807,823-833,870-885
+basic/cli/src/plugin-runtime/agent/turn/request.ts
+  s_937b6c28be4d40::t_15ef409cab2cc4 6,377-401
+basic/cli/tests/plugin-runtime/agent/room-relation-judge.test.ts
+  s_937b6c28be4d40::t_64ae0d51015069 1-105
+basic/cli/tests/plugin-runtime/agent/turn/room-ingress.test.ts
+  s_937b6c28be4d40::t_20186c8053dcde 9-10,30-35,46,62-64,79,83,86-88,120-125,127,170,282-406
+docs/configuration/index.md
+  s_937b6c28be4d40::t_11ea915da2ecf1 374-385
+docs/en/configuration/index.md
+  s_937b6c28be4d40::t_58fd911de99b4d 377-388
+docs/plans/workroom-group-collaboration-progress.md
+  s_937b6c28be4d40::t_35d3cc09f52b9e 133-135,501-507,568
+docs/plans/workroom-group-collaboration-redesign.md
+  s_937b6c28be4d40::t_9636b25ba862f2 316
+packages/im/core/src/plugin-runtime/im/contracts.ts
+  s_937b6c28be4d40::t_ce8f6f07f15670 114-118
+packages/im/core/src/plugin-runtime/im/im-runtime.ts
+  s_937b6c28be4d40::t_fdbf41cc3465b0 42,109-110,117,125,291-306
+packages/im/core/src/plugin-runtime/im/index.ts
+  s_937b6c28be4d40::t_4fdc3e4688c38b 22
+packages/im/core/src/plugin-runtime/im/interaction-runtime.ts
+  s_937b6c28be4d40::t_6e9c840d8d40b2 28,142-147,151,234,241-248,257,259-263,273,275,284-289
+packages/im/core/src/plugin-runtime/im/outbound-delivery-runtime.ts
+  s_937b6c28be4d40::t_5514ce04c2fe43 23,141
+packages/im/core/src/plugin-runtime/im/outbound-ledger.ts
+  s_937b6c28be4d40::t_b91223fd3eb744 23,73,86,106-121
+packages/im/core/tests/plugin-runtime/interaction-runtime.test.ts
+  s_937b6c28be4d40::t_c85bb197032efe 715-728,760-817
+packages/im/core/tests/plugin-runtime/outbound-ledger.test.ts
+  s_937b6c28be4d40::t_9d3abdf3c637ec 57-82
+packages/im/workroom/README.md
+  s_937b6c28be4d40::t_2476b26b148e76 89-97
+packages/im/workroom/plugin.ts
+  s_937b6c28be4d40::t_7c43e641637213 21,27-28,108
+packages/im/workroom/schema.json
+  s_937b6c28be4d40::t_3c2de0bdc49bb8 192-213
+packages/im/workroom/src/room/index.ts
+  s_937b6c28be4d40::t_47acc9600f037b 18
+packages/im/workroom/src/room/room-bus.ts
+  s_937b6c28be4d40::t_07411a35343af8 3,89
+packages/im/workroom/src/room/room-runtime.ts
+  s_937b6c28be4d40::t_82af4ce4e4d8ee 5,133
+packages/im/workroom/src/room/room-task.ts
+  s_937b6c28be4d40::t_93ff66c04b99ef 136-137,220,231
+packages/im/workroom/src/room/room-turn-coordinator.ts
+  s_937b6c28be4d40::t_4c6141b323fce1 7-17,57-60,83,120-121,128-129,153-159,161-162,185-186,212-214,258,263,297-302,311,315-322,415,534-544,553-556,558-597,608,679
+packages/im/workroom/tests/room/room-task.test.ts
+  s_937b6c28be4d40::t_7f7f570ac52ff6 54-66
+packages/im/workroom/tests/room/room-turn-coordinator.test.ts
+  s_937b6c28be4d40::t_82c55a2a115d21 14,36-37,41,49-54,115-116,513-810
+tests/docs/config-enum-reference.test.ts
+  s_937b6c28be4d40::t_3f1f33f4beb2c3 189-220
+tests/snapshots/plugin-runtime-api.json
+  s_937b6c28be4d40::t_40d242732648c3 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "64b4cafde910234b099da012b2d7f85578c6a4e9",
+  "prompts": {},
+  "sessions": {
+    "s_937b6c28be4d40": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "9fab2bb0-dcbd-46cf-8365-1ca1614bed3a",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
