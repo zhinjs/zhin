@@ -4,9 +4,13 @@
  * semantic checks, so results compare across models and across nights.
  */
 import { z, type LlmTool } from '@zhin.js/ai';
+import { RED_CIRCLE_PNG } from '../fixtures/images.js';
+import type { EvalImage } from '../framework/index.js';
 import { semantic, type ModelObservation, type SemanticCheck } from './semantic.js';
 
 export type Capability = 'tool-call-format' | 'parallel-calls' | 'long-context' | 'zh-instruction'
+  /** Image + text in one user message (group chat on Gemini, #770). */
+  | 'multimodal'
   /** An M0.2 seed case replayed end to end through the eval driver with a real model. */
   | 'seed-case';
 
@@ -16,6 +20,11 @@ export interface CapabilityCase {
   readonly description: string;
   readonly systemPrompt: string;
   readonly user: string;
+  /**
+   * Images attached to the user message. Models that do not declare image
+   * input skip the case (recorded as skipped, no request is spent).
+   */
+  readonly images?: readonly EvalImage[];
   readonly tools?: readonly LlmTool[];
   readonly checks: (observation: ModelObservation) => readonly SemanticCheck[];
 }
@@ -78,5 +87,14 @@ export const CAPABILITY_MATRIX: readonly CapabilityCase[] = [
     systemPrompt: '严格遵守用户的格式要求。',
     user: '用中文给出三条早睡的好处。要求：恰好三行，每行以「- 」开头，不要标题、不要总结、不要英文。',
     checks: (o) => [semantic.bulletLines(o, '- ', 3), semantic.textIsChinese(o)],
+  },
+  {
+    id: 'matrix-multimodal-image',
+    capability: 'multimodal',
+    description: 'Reads a committed 64x64 fixture (a red circle on white) and names its colour and shape.',
+    systemPrompt: '根据用户发的图片回答问题，只输出答案本身。',
+    user: '图片里画的是什么颜色的什么形状？只用“颜色+形状”回答，例如“蓝色正方形”。',
+    images: [RED_CIRCLE_PNG],
+    checks: (o) => [semantic.textMatches(o, /红|red/i, 'names the colour red'), semantic.textMatches(o, /圆|circle/i, 'names the shape circle')],
   },
 ];

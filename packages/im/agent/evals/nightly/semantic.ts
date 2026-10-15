@@ -63,6 +63,10 @@ export const semantic = {
   textIncludes(o: ModelObservation, needle: string): SemanticCheck {
     return check(`text includes "${needle}"`, o.text.includes(needle), `text: ${o.text.slice(0, 200)}`);
   },
+  /** The text matches `pattern` (for facts with more than one valid wording, e.g. 红 / red). */
+  textMatches(o: ModelObservation, pattern: RegExp, label: string): SemanticCheck {
+    return check(label, pattern.test(o.text), `text: ${o.text.slice(0, 200)}`);
+  },
   /** Mostly Chinese: CJK characters dominate letters, ignoring code and numbers. */
   textIsChinese(o: ModelObservation): SemanticCheck {
     const cjk = (o.text.match(/[\u4e00-\u9fff]/g) ?? []).length;
