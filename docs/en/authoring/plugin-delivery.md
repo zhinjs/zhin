@@ -81,3 +81,4 @@ Before publishing, check `files`, the ESM entry, peer dependencies, the generate
 - [definePlugin](./define-plugin.md): everything the entry can do.
 - [Convention directories](./conventions.md): where each capability goes.
 - [Console pages](./console-pages.md): add a management page to your plugin.
+- [Local development guide](./local-dev.md): try local plugins and framework in an external project before publishing.

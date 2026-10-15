@@ -16,6 +16,7 @@ Start from the symptom. Change one condition at a time and retain startup logs, 
 - [Endpoint remains offline](#endpoint-offline)
 - [Messages or notices are missing after refresh](#messages-missing-after-refresh)
 - [Configuration is rejected at startup](#configuration-rejected)
+- [Multiple package locations for one package](#multiple-package-locations)
 - [Agent has no available model or provider](#agent-provider-unavailable)
 - [Tool is awaiting approval or denied by policy](#tool-approval-stuck)
 - [A chat, channel, or repository does not route to a Workroom](#workroom-not-routing)
@@ -138,6 +139,30 @@ Startup reports `Invalid Plugin config`, an unknown top-level field, or environm
 ### Verification
 
 - `npx zhin doctor` should pass, followed by `npx zhin runtime start` without validation errors.
+
+</section>
+
+<section id="multiple-package-locations">
+
+## Multiple package locations for one package
+
+### Symptom
+
+Startup fails with `Multiple package locations for @zhin.js/... are not supported in one generation`.
+
+### Cause
+
+- The project mixes npm dependencies with a `link:`/`workspace:` plugin from a zhin source checkout, so one zhin package resolves to two directories.
+- Hand-written `pnpm.overrides` cover only some zhin packages.
+
+### Action
+
+- Diagnose with the [local development guide](/en/authoring/local-dev): find both resolved paths with `pnpm why` and `readlink -f`.
+- Switch the external project consistently with `pnpm zhin:local link <project-path>`, or move everything back to npm versions.
+
+### Verification
+
+- After `pnpm install`, each zhin package has a single resolved path and `zhin runtime start --once` prints `"started": true`.
 
 </section>
 
