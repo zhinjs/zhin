@@ -2,7 +2,8 @@
 import { createUserMessage, type LlmCompletionPort, type MediaContentBlock, type Model } from '@zhin.js/ai';
 import { BudgetExceededError, type BudgetedCompletionPort, type NightlyBudget } from './budget.js';
 import type { CapabilityCase } from './matrix-cases.js';
-import { summarizeCase, type CaseRunResult, type ModelSummary, type NightlyReport } from './report.js';
+import { isProviderUnavailable } from './rate-limit.js';
+import { infraHealth, summarizeCase, type CaseRunResult, type ModelSummary, type NightlyReport } from './report.js';
 import type { NightlySeedCase } from './seed-cases.js';
 import { observe, type LlmJudge } from './semantic.js';
 
@@ -20,7 +21,7 @@ export interface NightlyRunInput {
    */
   readonly rateLimiter?: {
     fatalError(): Error | undefined;
-    stats?(): { requests: number; retries: number; gaveUp: number };
+    stats?(): { requests: number; retries: number; gaveUp: number; unavailable503?: number; unavailableRetries?: number; providerUnavailable?: number };
     readonly policy?: { readonly minIntervalMs: number };
   };
   readonly budget: NightlyBudget;
@@ -40,6 +41,7 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
   let stoppedByBudget = false;
   const models: ModelSummary[] = [];
   const fatal = () => input.rateLimiter?.fatalError();
+  const unavailableCount = () => input.rateLimiter?.stats?.().providerUnavailable ?? 0;
   const fatalResult = (): CaseRunResult => ({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, error: `not run: ${fatal()?.message}` });
 
   for (const model of input.models) {
@@ -75,6 +77,10 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
             results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, skipped: true, error: error.message });
             continue;
           }
+          if (isProviderUnavailable(error)) {
+            results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, unavailable: true, error: error.message });
+            continue;
+          }
           results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, error: `provider error: ${error instanceof Error ? error.message.slice(0, 200) : String(error)}` });
         }
       }
@@ -93,10 +99,14 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
           continue;
         }
         try {
+          const unavailableBefore = unavailableCount();
           const result = await seed.run(model, input.port);
           // The harness turns provider errors into a failed turn, so check the limiter too.
           if (fatal()) {
             results.push({ ...result, pass: false, error: fatal()?.message });
+          } else if (!result.pass && unavailableCount() > unavailableBefore) {
+            // A turn hit 503 twice: the run failed because the provider was down, not the model.
+            results.push({ ...result, pass: false, unavailable: true, error: 'provider-unavailable: 503 UNAVAILABLE after retry during this run' });
           } else if (!result.pass && budgetSpent(input)) {
             // The harness turns a budget stop mid-case into a failed turn; don't count that run.
             stoppedByBudget = true;
@@ -105,6 +115,10 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
             results.push(result);
           }
         } catch (error) {
+          if (isProviderUnavailable(error)) {
+            results.push({ pass: false, checks: [], totalTokens: 0, toolCalls: 0, unavailable: true, error: error.message });
+            continue;
+          }
           if (error instanceof BudgetExceededError) stoppedByBudget = true;
           results.push({
             pass: false, checks: [], totalTokens: 0, toolCalls: 0,
@@ -130,6 +144,7 @@ export async function runNightlyMatrix(input: NightlyRunInput): Promise<NightlyR
     stoppedByBudget,
     ...(fatalError ? { fatal: fatalError.message } : {}),
     ...(pacing ? { pacing: { minIntervalMs: input.rateLimiter?.policy?.minIntervalMs ?? 0, ...pacing } } : {}),
+    infra: infraHealth(models),
     models,
   };
 }

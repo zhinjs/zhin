@@ -249,20 +249,23 @@ as skipped):
 The default run (1 model, 3 runs per case) is about 15 matrix requests (~61k
 tokens) plus about 50 seed-case requests (~300k tokens, since each carries the
 full agent system prompt). Models come from `NIGHTLY_MODELS` (workflow input, else the
-`NIGHTLY_MODELS` repository variable, else `gemini-3.8-flash`, the stable
-default per ai.google.dev; see `DEFAULT_NIGHTLY_MODEL` in `nightly.run.ts`).
+`NIGHTLY_MODELS` repository variable, else `gemini-3.5-flash-lite`, the current
+stable Flash-Lite per ai.google.dev and the API's model list; see `DEFAULT_NIGHTLY_MODEL`
+in `providers.ts`).
 Requests go through the `google` SDK, so seed cases exercise the same Gemini
 provider as production, including images and implicit prompt caching.
 
-**Rate limits** (`rate-limit.ts`; CI's key is on the Gemini free tier, 15 RPM
-plus a daily request quota (RPD) per project, which resets at midnight Pacific; see
-https://ai.google.dev/gemini-api/docs/rate-limits and the project's limits in AI Studio):
+**Rate limits** (`rate-limit.ts`; CI's key is on the Gemini free tier, which has a
+per-minute (RPM) and a daily (RPD) request quota per project and model. RPD resets at
+midnight Pacific. See https://ai.google.dev/gemini-api/docs/rate-limits and the
+project's limits in AI Studio):
 
 - Everything is serial: one workflow run at a time (`concurrency: nightly-evals`, no
   matrix), one test file and test at a time (`fileParallelism: false`,
   `maxConcurrency: 1`), and one request at a time through `RateLimitedCompletionPort`.
-- Request starts are at least 4 s apart (`NIGHTLY_MIN_REQUEST_INTERVAL_MS`), counting
-  every multi-turn and tool step, retries included, so a run stays at or under 15 RPM.
+- Request starts are at least `NIGHTLY_MIN_REQUEST_INTERVAL_MS` apart (code default
+  4 s = 15 RPM; CI's gemini default 5 s = 12 RPM), counting every multi-turn and tool
+  step, retries included.
 - A per-minute 429 is retried after 2 s, 4 s, then 8 s, or after Google's `RetryInfo`
   `retryDelay` / `Retry-After` when that is longer. After 3 retries the request fails
   (that trial fails). The SDK's own retries are off (`maxRetries: 0`), and production
@@ -270,20 +273,49 @@ https://ai.google.dev/gemini-api/docs/rate-limits and the project's limits in AI
 - A daily-quota 429 (`PerDay` / RPD) is never retried. The run stops, every remaining
   trial is recorded as failed ("not run"), the report's `fatal` says the free-tier daily
   quota is exhausted, and the job fails. It never passes or skips.
-- Only 429s are retried. Every other error and every failed check stays a failure.
+- A 503 UNAVAILABLE ("model is currently experiencing high demand") is retried once,
+  after a jittered 8–15 s wait or a longer `Retry-After` / `retryDelay`. If the retry is
+  503 too, that run is recorded as **provider-unavailable**. It is shown in the
+  "Not counted" column, left out of the pass rate, and is not a model failure. For a
+  seed case, the run is provider-unavailable when it failed and one of its turns stayed 503.
+- Retries are real requests. They go through the pacer and count against
+  `NIGHTLY_MAX_REQUESTS`, so a retry never exceeds the budget. A retry the budget
+  refuses makes that run budget-skipped.
+- **Infra-flaky:** when more than half of the attempted (non-skipped) runs are
+  provider-unavailable, the report says so (`infra.flaky`, an **Infra-flaky** banner,
+  regressions marked untrusted) and the job **fails** with an `infra-flaky: …` message.
+  Such a night carries no quality signal, and failing keeps it from becoming the next
+  night's diff baseline (the baseline is the last *successful* run). Below that line the
+  job behaves as before: low pass rates never fail it.
+- Nothing else is retried or reclassified (500, 400, timeouts, failed checks). A run whose
+  answer failed a check stays a failure even when other runs were 503s.
+- Budget-skipped runs are listed in a **Budget-skipped** line and in the "Not counted"
+  column, so a short night is visible at a glance.
 
-A full run at 3 trials sends about 63 requests (5 matrix cases × 3, plus ~48
-seed-case requests, tool steps included). With 4 s spacing that takes at least
-~4.2 min, and at the 120-request cap at least 8 min plus any backoff.
+A full run at 3 trials sends about 82 requests on `gemini-3.5-flash-lite`: 15 matrix
+requests plus ~67 seed-case requests (tool steps included), and a few 503 retries.
 
-CI's actual free-tier limits for `gemini-3.8-flash` are lower: its 429s report
-**5 RPM and 20 RPD** per project. So for `gemini` the workflow defaults to 1 trial
-per case, `NIGHTLY_MAX_REQUESTS=20` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS=12000`,
-which works out to about 21 requests, of which ≤20 are sent. That is ≥4 min at 12 s
-spacing, and the last seed case may be budget-skipped. Set the `NIGHTLY_RUNS_PER_CASE`,
-`NIGHTLY_MAX_REQUESTS` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS` repository variables to
-restore 3 trials on a paid key. A manual dispatch on a day the scheduled run already
-used the quota fails with the daily-quota message.
+Measured free-tier limits on CI's key (from the API's own 429 quota metadata, via the
+workflow's `quota-probe` mode):
+
+| Model | RPM | RPD |
+|---|---|---|
+| `gemini-3.5-flash-lite` (default) | 15 | 500 |
+| `gemini-3.8-flash` | 5 | 20 |
+
+So for `gemini` the workflow defaults to 3 trials, `NIGHTLY_MAX_REQUESTS=120` (24% of
+the 500 RPD, which leaves room for a few manual dispatches a day) and
+`NIGHTLY_MIN_REQUEST_INTERVAL_MS=5000` (12 RPM, 80% of the limit). That is ≥7 min
+(7.8 min observed), and ≥10 min at the cap. The repository variables `NIGHTLY_RUNS_PER_CASE`,
+`NIGHTLY_MAX_REQUESTS` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS`, and the `runs_per_case` /
+`models` dispatch inputs, override them. For `gemini-3.8-flash` use 1 trial, 20 requests
+and 12000 ms.
+
+**Quota probe:** dispatch the workflow with `mode: quota-probe` (plus `models`,
+`probe_max_requests`, `probe_concurrency`). It lists the models the key can see and sends
+tiny requests until the API's 429s reveal the RPM (`…PerMinute…` `quotaValue`) and, if
+reached, the RPD (`…PerDay…`). It burns quota on purpose. The key is never printed, and
+its artifact (`quota-probe-report`) is never used as a nightly baseline.
 
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
 optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
