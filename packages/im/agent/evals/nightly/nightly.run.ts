@@ -3,9 +3,11 @@
  * Nightly real-model eval entry (`pnpm eval:nightly`). Not part of the PR gate.
  *
  * Env:
- *   MINIMAX_API_KEY            required; the run is skipped when it is absent. Never logged.
- *   MINIMAX_BASE_URL           optional provider base URL override.
- *   NIGHTLY_MODELS             comma-separated model ids (default: minimax-m3).
+ *   GEMINI_API_KEY             required; the run is skipped when it is absent. Never logged.
+ *   GEMINI_BASE_URL            optional Gemini API base URL override (proxy).
+ *   NIGHTLY_MODELS             comma-separated Gemini model ids (default: DEFAULT_NIGHTLY_MODEL).
+ *   NIGHTLY_THINKING_LEVEL     Gemini thinkingLevel (default: low; `off` sends none). Thinking
+ *                              tokens count against the per-request output cap.
  *   NIGHTLY_RUNS_PER_CASE, NIGHTLY_MAX_REQUESTS, NIGHTLY_MAX_TOKENS,
  *   NIGHTLY_MAX_OUTPUT_TOKENS, NIGHTLY_REQUEST_TIMEOUT_MS   budget overrides (see budget.ts).
  *   NIGHTLY_REPORT_DIR         output directory (default: eval-reports).
@@ -25,18 +27,25 @@ import { loadEvalCases, type EvalCase } from '../framework/index.js';
 
 const seedCases = liveSeedCases(loadEvalCases(import.meta.glob<{ default: EvalCase }>('../cases/*.case.ts', { eager: true })));
 
-const PROVIDER = 'minimax';
+const PROVIDER = 'gemini';
+/**
+ * Stable Gemini default (ai.google.dev/gemini-api/docs/models, checked 2026-10-13):
+ * multimodal, function calling, implicit caching. Override with NIGHTLY_MODELS.
+ */
+export const DEFAULT_NIGHTLY_MODEL = 'gemini-3.8-flash';
 const env = process.env;
-const apiKey = env.MINIMAX_API_KEY?.trim();
+const apiKey = env.GEMINI_API_KEY?.trim();
 
 describe('nightly real-model evals', () => {
-  it.skipIf(!apiKey)('capability matrix + seed cases (skipped without MINIMAX_API_KEY)', async () => {
+  it.skipIf(!apiKey)('capability matrix + seed cases (skipped without GEMINI_API_KEY)', async () => {
     const budget = resolveNightlyBudget(env);
-    const modelIds = (env.NIGHTLY_MODELS ?? 'minimax-m3').split(',').map((id) => id.trim()).filter(Boolean);
+    const thinkingLevel = env.NIGHTLY_THINKING_LEVEL?.trim() || 'low';
+    const modelIds = (env.NIGHTLY_MODELS?.trim() || DEFAULT_NIGHTLY_MODEL).split(',').map((id) => id.trim()).filter(Boolean);
     const config: ProviderInstanceConfig = {
-      sdk: 'minimax',
+      sdk: 'google',
       apiKey,
-      ...(env.MINIMAX_BASE_URL ? { baseUrl: env.MINIMAX_BASE_URL } : {}),
+      ...(env.GEMINI_BASE_URL ? { baseUrl: env.GEMINI_BASE_URL } : {}),
+      ...(thinkingLevel !== 'off' ? { providerOptions: { google: { thinkingConfig: { thinkingLevel } } } } : {}),
       maxRetries: 1,
     };
     const runtime = createLlmApiRuntime([{ alias: PROVIDER, config, models: modelIds, fetch: globalThis.fetch }], () => modelIds);

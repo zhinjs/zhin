@@ -58,7 +58,7 @@ export interface Usage {
 
 /** Provider 能力声明 */
 export interface ProviderCapabilities {
-  /** Explicit model input modalities. Absence is text-only (fail closed). */
+  /** Explicit model input modalities. Absence is text-only (fail closed), except Gemini chat models on `sdk: google` (see `defaultModelInput`). */
   input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
   streaming?: boolean;
   toolCalling?: boolean;
@@ -84,6 +84,14 @@ export interface ProviderConfig {
   capabilities?: ProviderCapabilities;
   /** Explicit model input modalities. Prefer this over inferred provider identity. */
   input?: readonly ('text' | 'image' | 'audio' | 'video' | 'file')[];
+  /**
+   * Extra AI SDK `providerOptions`, merged into every request of this provider,
+   * keyed by SDK provider id. For Gemini: `{ google: { safetySettings: [...],
+   * thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings.
+   */
+  providerOptions?: Record<string, Record<string, import('ai').JSONValue>>;
+  /** Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit. */
+  contextCache?: import('./llm/gemini-context-cache.js').GeminiContextCacheConfig;
   /** 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） */
   imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }

@@ -41,6 +41,7 @@ export function* mapAgentEventToTurnEvents(
             completionTokens: usage.output,
             totalTokens: usage.totalTokens,
             ...(usage.cacheRead > 0 ? { cacheReadTokens: usage.cacheRead } : {}),
+            ...(usage.reasoning ? { reasoningTokens: usage.reasoning } : {}),
           },
         };
       }

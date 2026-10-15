@@ -53,7 +53,16 @@ export interface ToolCallContentBlock {
   id: string;
   name: string;
   arguments: Record<string, unknown>;
+  /**
+   * Provider metadata that must be sent back with this call on the next request.
+   * Gemini 3 signs function calls (`google.thoughtSignature`); dropping the
+   * signature degrades multi-step tool use, so it round-trips with the history.
+   */
+  providerOptions?: ToolCallProviderOptions;
 }
+
+/** Signed-call metadata keyed by AI SDK provider id (only `google` / `vertex` today). */
+export type ToolCallProviderOptions = Record<string, { thoughtSignature?: string }>;
 
 export type ContentBlock =
   | TextContentBlock

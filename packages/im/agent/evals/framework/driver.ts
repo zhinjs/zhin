@@ -107,6 +107,7 @@ async function runInWorkspace(
     extraModels: definition.models,
     clock,
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
+    ...(definition.modelInput ? { input: definition.modelInput } : {}),
   });
   const toolNames = [
     ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),
@@ -243,7 +244,12 @@ function buildTurn(
     identity: { rootId: 'root', generation: 1, traceId: turnId, turnId },
     origin: { kind: 'im', platform: PLATFORM, endpoint: ENDPOINT, scope, sceneId, messageId: `${turnId}:message` },
     principal: { subjectId: sender.id, ...(sender.name ? { displayName: sender.name } : {}), roles },
-    input: { text: message.text },
+    input: {
+      text: message.text,
+      ...(message.images?.length
+        ? { media: message.images.map((image) => ({ kind: 'image' as const, source: { kind: 'base64' as const, value: image.base64 }, mimeType: image.mimeType, ...(image.name ? { name: image.name } : {}) })) }
+        : {}),
+    },
     session: { key: sessionKey },
     policy,
     capabilities: {

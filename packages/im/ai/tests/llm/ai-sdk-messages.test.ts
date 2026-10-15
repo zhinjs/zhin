@@ -151,7 +151,9 @@ describe('agentMessagesToAiSdk media capabilities', () => {
     const converted = agentMessagesToAiSdk([message], ['image', 'audio', 'video', 'file']);
     const user = converted[0];
     if (user?.role !== 'user' || !Array.isArray(user.content)) throw new Error('expected user parts');
-    expect(user.content.map((part) => part.type)).toEqual(['text', 'image', 'file', 'file', 'file']);
+    expect(user.content.map((part) => part.type)).toEqual(['text', 'file', 'file', 'file', 'file']);
+    // Images go out as file parts that keep their image/* media type.
+    expect((user.content[1] as { mediaType?: string }).mediaType).toMatch(/^image/);
   });
 });
 

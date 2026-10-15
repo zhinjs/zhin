@@ -12,6 +12,8 @@ export interface TurnUsage {
   totalTokens: number;
   /** Prompt tokens served from the provider's prompt cache, when reported. */
   cacheReadTokens?: number;
+  /** Completion tokens spent on reasoning (e.g. Gemini thoughts), when reported. */
+  reasoningTokens?: number;
 }
 
 export type TurnEvent =
