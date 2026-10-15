@@ -68,6 +68,11 @@ export interface ProviderInstanceConfig {
    * thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings.
    */
   providerOptions?: Record<string, Record<string, JSONValue>>;
+  /**
+   * Gemini (`sdk: google`) context caching. Default implicit (no code path). `explicit`
+   * creates `cachedContents` for the stable system + tools prefix; see gemini-context-cache.ts.
+   */
+  contextCache?: import('../gemini-context-cache.js').GeminiContextCacheConfig;
   /** Inherited from ProviderConfig — image defaults */
   imageGeneration?: import('../../image-generation.js').ImageGenerationDefaults;
 }

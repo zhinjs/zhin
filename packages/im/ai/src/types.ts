@@ -90,6 +90,8 @@ export interface ProviderConfig {
    * thinkingConfig: { thinkingLevel: 'low' } } }`. See ai.google.dev safety settings.
    */
   providerOptions?: Record<string, Record<string, import('ai').JSONValue>>;
+  /** Gemini context caching (`sdk: google`): `{ mode: 'explicit', ttlSeconds }`. Default implicit. */
+  contextCache?: import('./llm/gemini-context-cache.js').GeminiContextCacheConfig;
   /** 文生图默认（zhipu / cloudflare 等支持 generateImage 的 driver） */
   imageGeneration?: import('./image-generation.js').ImageGenerationDefaults;
 }
