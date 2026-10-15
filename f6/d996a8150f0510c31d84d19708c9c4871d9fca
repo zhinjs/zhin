@@ -1,0 +1,16 @@
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 186-225,240-245,261-267
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  h_b680f75345178a 12,30-34,210-268
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f6d996a8150f0510c31d84d19708c9c4871d9fca",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
