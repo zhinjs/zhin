@@ -62,7 +62,7 @@ export default defineEvalCase({
 
 | Field | Meaning |
 |---|---|
-| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), and an optional `policy` override. |
+| `inbound` | One message, or an array run as consecutive turns in the same session. Each message has `text`, an optional `scope` (`private` or `group`), an optional `sender` (`id`, `name`, `roles`), optional `backgroundEvents` (rendered as untrusted conversation events), optional `images` (`{ base64, mimeType, name? }`, see `fixtures/images.ts`), and an optional `policy` override. |
 | `tools` | Mocked tools: `name`, `description`, `result` (a value or `(args) => value`), `error`, and `requiresApproval`. Built-in reserved names such as `read_file` or `bash` are rejected, so give mocks their own names. |
 | `approval` | How the fake approval channel answers: `approve` (the default), `deny`, or `unavailable` (no channel). |
 | `agentConfig` | Partial `ZhinAgentConfig`, for example `maxIterations`, `toolBudget`, or `subagentTurnMode: 'sync'`. |
@@ -73,6 +73,7 @@ export default defineEvalCase({
 | `workspace` | Files (relative path → content) written to a temporary directory. That directory becomes the turn's `workspaceRoot` with workspace-write access. Set `shell: true` on an inbound message to grant the isolated shell policy. |
 | `script` | Ordered steps. Each is `{ text }`, `{ toolCalls: [{ name, args, notOffered? }], text? }`, or `{ fault }`. |
 | `models` | Extra model ids registered after the primary `scripted-model`, in fallback order (they become the turn's later `modelCandidates`). A step's optional `model` pins which model must receive that request. |
+| `modelInput` | Input modalities the scripted model declares (default `['text']`). Add `'image'` so turn images reach it. |
 | `allowUnusedSteps` | Set it to allow trailing script steps the harness never requested. Off by default. |
 
 ### Assertions (`expect`)
@@ -90,6 +91,7 @@ export default defineEvalCase({
 | `outboundMessages` | The number of reply-port sends. |
 | `streamToolEvents` | Tool events (`tool_call:name`, `tool_result:name`, `tool_denied:name`) that stream consumers see, in order. The stream is derived from the turn journal. |
 | `modelIds` | The model id of every request, in order (fallback cases). |
+| `modelImages` | Image blocks the model received in each request, in order (multimodal cases). |
 | `modelSteps` / `maxModelSteps` | The exact count, or the upper bound, of model requests across the case. |
 
 A case also fails on any of these, whatever its `expect` block says:
@@ -146,6 +148,10 @@ Set `EVAL_VERBOSE=1` to include every model input in failure reports.
 | `group-member-no-outbound` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-no-shell` | approval, injection | #719 group_member turn tightening (PR #737) |
 | `group-member-read-only-lookup` | tool-use | #719 group_member turn tightening — only shell/write/outbound are removed (PR #737) |
+| `multimodal-group-image-described` | multimodal | #769 Gemini switch — group images were replaced by a text placeholder |
+| `multimodal-image-question-answered` | multimodal | #769 Gemini switch — image + question in one message |
+| `multimodal-text-follow-up` | multimodal, memory | #769 Gemini switch — text follow-up about an earlier image |
+| `multimodal-text-only-model-placeholder` | multimodal | #769 Gemini switch — text-only models still never get image bytes |
 | `plugin-prompt-injection` | injection | #726 trust tiers — plugin / skill prompt injection |
 | `provider-5xx-fallback-model` | long-task | #724 provider resilience (5xx → fallback model) |
 | `provider-empty-reply-default` | long-task | #724 provider resilience (empty reply, default emptyReplyRetries: 0) |

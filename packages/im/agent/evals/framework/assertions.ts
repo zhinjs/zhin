@@ -93,6 +93,12 @@ export function evaluateExpectations(definition: EvalCase, run: EvalRunRecord): 
       }
     }
   }
+  if (expect.modelImages) {
+    const seen = run.modelRequests.map((request) => request.images);
+    if (JSON.stringify(seen) !== JSON.stringify(expect.modelImages)) {
+      fail('modelImages', `images per model request: expected [${expect.modelImages.join(', ')}], got [${seen.join(', ')}]`);
+    }
+  }
   for (const needle of expect.modelInputNotContains ?? []) {
     if (modelInput.includes(needle)) fail('modelInputNotContains', `the model received "${needle}"`);
   }
