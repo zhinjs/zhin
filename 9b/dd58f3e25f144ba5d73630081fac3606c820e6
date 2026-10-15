@@ -1,0 +1,355 @@
+basic/cli/CHANGELOG.md
+  s_2104cc474f1ce5::t_24c7fb71d986e7 3-170
+basic/cli/package.json
+  s_2104cc474f1ce5::t_03513b0015c858 3
+basic/schema/CHANGELOG.md
+  s_2104cc474f1ce5::t_e2bdc667792624 3-12
+basic/schema/package.json
+  s_2104cc474f1ce5::t_2ab922d90ed171 3
+packages/console/client/CHANGELOG.md
+  s_2104cc474f1ce5::t_b456cf1b84bd21 3-12
+packages/console/client/package.json
+  s_2104cc474f1ce5::t_a118df8d596263 3
+packages/console/contract/CHANGELOG.md
+  s_2104cc474f1ce5::t_69363d8916fc97 3-39
+packages/console/contract/package.json
+  s_2104cc474f1ce5::t_7346c903a8c5fa 3
+packages/console/layout/CHANGELOG.md
+  s_2104cc474f1ce5::t_551cc0e0e6ae8c 3-13
+packages/console/layout/package.json
+  s_2104cc474f1ce5::t_2b9634ca03ba61 3
+packages/console/page/CHANGELOG.md
+  s_2104cc474f1ce5::t_29b3faf96f0636 3-13
+packages/console/page/package.json
+  s_2104cc474f1ce5::t_4dbaca2804d85c 3
+packages/console/pagemanager/CHANGELOG.md
+  s_2104cc474f1ce5::t_43f4190c672b34 3-15
+packages/console/pagemanager/package.json
+  s_2104cc474f1ce5::t_e8b74565112a85 3
+packages/console/protocol/CHANGELOG.md
+  s_2104cc474f1ce5::t_193cda498ae8be 3-22
+packages/console/protocol/package.json
+  s_2104cc474f1ce5::t_79447a8d23150d 3
+packages/game-kit/CHANGELOG.md
+  s_2104cc474f1ce5::t_5c874846319775 3-22
+packages/game-kit/package.json
+  s_2104cc474f1ce5::t_3785de94bdfc2a 3
+packages/host/a2a/CHANGELOG.md
+  s_2104cc474f1ce5::t_85338a4426fe8b 3-46
+packages/host/a2a/package.json
+  s_2104cc474f1ce5::t_0df1a753eaf56b 3
+packages/host/http/CHANGELOG.md
+  s_2104cc474f1ce5::t_f18d66f81eb0c2 3-29
+packages/host/http/package.json
+  s_2104cc474f1ce5::t_1361b6c6f9c0a5 3
+packages/host/mcp/CHANGELOG.md
+  s_2104cc474f1ce5::t_dfa4012076f7b3 3-20
+packages/host/mcp/package.json
+  s_2104cc474f1ce5::t_6ff941b4a86a9c 3
+packages/im/adapter/CHANGELOG.md
+  s_2104cc474f1ce5::t_5e9cd59d130f98 3-27
+packages/im/adapter/package.json
+  s_2104cc474f1ce5::t_c30e125db99fa3 3
+packages/im/agent-feature/CHANGELOG.md
+  s_2104cc474f1ce5::t_6bf6005baed635 3-13
+packages/im/agent-feature/package.json
+  s_2104cc474f1ce5::t_77ac4cbe11f257 3
+packages/im/agent/CHANGELOG.md
+  s_2104cc474f1ce5::t_ae72fca97c1935 3-145
+packages/im/agent/package.json
+  s_2104cc474f1ce5::t_701e7001e6625c 3
+packages/im/ai/CHANGELOG.md
+  s_2104cc474f1ce5::t_123df1b7bea2cd 3-65
+packages/im/ai/package.json
+  s_2104cc474f1ce5::t_3e382b206c4895 3
+packages/im/command/CHANGELOG.md
+  s_2104cc474f1ce5::t_a129b3c1d42bda 3-22
+packages/im/command/package.json
+  s_2104cc474f1ce5::t_546e7592300e8b 3
+packages/im/component/CHANGELOG.md
+  s_2104cc474f1ce5::t_c5cfd94d669c5e 3-13
+packages/im/component/package.json
+  s_2104cc474f1ce5::t_956ab83c1140f6 3
+packages/im/config-file/CHANGELOG.md
+  s_2104cc474f1ce5::t_41e63f98ecfb3e 3-20
+packages/im/config-file/package.json
+  s_2104cc474f1ce5::t_c3fcdb576893ad 3
+packages/im/core/CHANGELOG.md
+  s_2104cc474f1ce5::t_4f95d6af31e582 3-72
+packages/im/core/package.json
+  s_2104cc474f1ce5::t_0d30d200f8f42c 3
+packages/im/feature-kit/CHANGELOG.md
+  s_2104cc474f1ce5::t_5ce0d5ac8b715a 3-20
+packages/im/feature-kit/package.json
+  s_2104cc474f1ce5::t_527e48c2cb64d4 3
+packages/im/handler/CHANGELOG.md
+  s_2104cc474f1ce5::t_4e80cc11cee515 3-23
+packages/im/handler/package.json
+  s_2104cc474f1ce5::t_5c00e4ec0a1925 3
+packages/im/interaction/CHANGELOG.md
+  s_2104cc474f1ce5::t_15c45173694e37 3-8
+packages/im/interaction/package.json
+  s_2104cc474f1ce5::t_2c5fadf5f9ccbf 3
+packages/im/isolate/CHANGELOG.md
+  s_2104cc474f1ce5::t_4be7a6bb72d650 3-25
+packages/im/isolate/package.json
+  s_2104cc474f1ce5::t_54c3c81c355f43 3
+packages/im/kernel/CHANGELOG.md
+  s_2104cc474f1ce5::t_c885d3785be3eb 3-9
+packages/im/kernel/package.json
+  s_2104cc474f1ce5::t_a7cb4a569d54ad 3
+packages/im/mcp-feature/CHANGELOG.md
+  s_2104cc474f1ce5::t_91d27cf8f81b50 3-21
+packages/im/mcp-feature/package.json
+  s_2104cc474f1ce5::t_2af845722310d8 3
+packages/im/middleware/CHANGELOG.md
+  s_2104cc474f1ce5::t_2fb609f5db9b0f 3-19
+packages/im/middleware/package.json
+  s_2104cc474f1ce5::t_386cc28389fdfb 3
+packages/im/permission/CHANGELOG.md
+  s_2104cc474f1ce5::t_b038ce0ac500ed 3-18
+packages/im/permission/package.json
+  s_2104cc474f1ce5::t_a714f093293e61 3
+packages/im/plugin-runtime/CHANGELOG.md
+  s_2104cc474f1ce5::t_0bb849234bea3b 3-34
+packages/im/plugin-runtime/package.json
+  s_2104cc474f1ce5::t_7cad1c2b176ce3 3
+packages/im/prompt-section/CHANGELOG.md
+  s_2104cc474f1ce5::t_f3c9e1228edc85 3-13
+packages/im/prompt-section/package.json
+  s_2104cc474f1ce5::t_409da2b7ae7796 3
+packages/im/runtime/CHANGELOG.md
+  s_2104cc474f1ce5::t_4489ad269e3074 3-41
+packages/im/runtime/package.json
+  s_2104cc474f1ce5::t_eb788c078ab68b 3
+packages/im/schedule-feature/CHANGELOG.md
+  s_2104cc474f1ce5::t_6a36072f0558c0 3-27
+packages/im/schedule-feature/package.json
+  s_2104cc474f1ce5::t_9b0bf164b79f46 3
+packages/im/skill/CHANGELOG.md
+  s_2104cc474f1ce5::t_a10db4a43b7d6e 3-13
+packages/im/skill/package.json
+  s_2104cc474f1ce5::t_d89ba5b9533ef2 3
+packages/im/tool/CHANGELOG.md
+  s_2104cc474f1ce5::t_c5ee821d29eae0 3-13
+packages/im/tool/package.json
+  s_2104cc474f1ce5::t_8fedc125f7705a 3
+packages/im/workroom/CHANGELOG.md
+  s_2104cc474f1ce5::t_a40d813fb8356f 1-128
+packages/im/workroom/package.json
+  s_2104cc474f1ce5::t_3c2b38f12d21cb 3
+packages/im/zhin/CHANGELOG.md
+  s_2104cc474f1ce5::t_46bb89d5d918b4 3-43
+packages/im/zhin/package.json
+  s_2104cc474f1ce5::t_a44109feb57c83 3
+packages/toolkit/create-zhin/CHANGELOG.md
+  s_2104cc474f1ce5::t_80bf08f43a33ef 3-8
+packages/toolkit/create-zhin/package.json
+  s_2104cc474f1ce5::t_57a10318d54175 3
+packages/toolkit/plugin-test-kit/CHANGELOG.md
+  s_2104cc474f1ce5::t_f9b381ae429c9d 1-36
+packages/toolkit/scaffold-wizard/CHANGELOG.md
+  s_2104cc474f1ce5::t_7125cb0872d14f 3-12
+packages/toolkit/scaffold-wizard/package.json
+  s_2104cc474f1ce5::t_9fcf59b5248d56 3
+plugins/adapters/dingtalk/CHANGELOG.md
+  s_2104cc474f1ce5::t_bb10bb36fa4eab 3-26
+plugins/adapters/dingtalk/package.json
+  s_2104cc474f1ce5::t_1555c73bb16604 3
+plugins/adapters/discord/CHANGELOG.md
+  s_2104cc474f1ce5::t_2584d484549d5b 3-27
+plugins/adapters/discord/package.json
+  s_2104cc474f1ce5::t_475a9933f1a175 3
+plugins/adapters/email/CHANGELOG.md
+  s_2104cc474f1ce5::t_828c9e6bad1080 3-23
+plugins/adapters/email/package.json
+  s_2104cc474f1ce5::t_37648a20640d1a 3
+plugins/adapters/github/CHANGELOG.md
+  s_2104cc474f1ce5::t_27725a14aa04a6 3-26
+plugins/adapters/github/package.json
+  s_2104cc474f1ce5::t_243d3ba44397f8 3
+plugins/adapters/icqq/CHANGELOG.md
+  s_2104cc474f1ce5::t_45bffbe1765849 3-46
+plugins/adapters/icqq/package.json
+  s_2104cc474f1ce5::t_c49711aee41cb5 3
+plugins/adapters/kook/CHANGELOG.md
+  s_2104cc474f1ce5::t_0a34534650affc 3-27
+plugins/adapters/kook/package.json
+  s_2104cc474f1ce5::t_dfade91fe9b260 3
+plugins/adapters/lark/CHANGELOG.md
+  s_2104cc474f1ce5::t_a0ada903d81bd9 3-27
+plugins/adapters/lark/package.json
+  s_2104cc474f1ce5::t_41f012b074d382 3
+plugins/adapters/line/CHANGELOG.md
+  s_2104cc474f1ce5::t_440d9e0b832312 3-26
+plugins/adapters/line/package.json
+  s_2104cc474f1ce5::t_986455f3cd0be6 3
+plugins/adapters/milky/CHANGELOG.md
+  s_2104cc474f1ce5::t_a1e02520aeba8f 3-24
+plugins/adapters/milky/package.json
+  s_2104cc474f1ce5::t_9d39a2a8c9ab8f 3
+plugins/adapters/napcat/CHANGELOG.md
+  s_2104cc474f1ce5::t_767684a7d4b4ab 3-27
+plugins/adapters/napcat/package.json
+  s_2104cc474f1ce5::t_d2f362137be0b6 3
+plugins/adapters/onebot11/CHANGELOG.md
+  s_2104cc474f1ce5::t_f77486ad44c17f 3-33
+plugins/adapters/onebot11/package.json
+  s_2104cc474f1ce5::t_ec5c30e2654d99 3
+plugins/adapters/onebot12/CHANGELOG.md
+  s_2104cc474f1ce5::t_a6751dd03c6fea 3-24
+plugins/adapters/onebot12/package.json
+  s_2104cc474f1ce5::t_fa138ab7e3a4d9 3
+plugins/adapters/qq/CHANGELOG.md
+  s_2104cc474f1ce5::t_ebb3bb8e1a5116 3-27
+plugins/adapters/qq/package.json
+  s_2104cc474f1ce5::t_7c5395e330e036 3
+plugins/adapters/sandbox/CHANGELOG.md
+  s_2104cc474f1ce5::t_2031a506822528 3-33
+plugins/adapters/sandbox/package.json
+  s_2104cc474f1ce5::t_45e4fbe639e063 3
+plugins/adapters/satori/CHANGELOG.md
+  s_2104cc474f1ce5::t_7edd5e5576723a 3-24
+plugins/adapters/satori/package.json
+  s_2104cc474f1ce5::t_da6f9adc9a98d5 3
+plugins/adapters/slack/CHANGELOG.md
+  s_2104cc474f1ce5::t_35219ee4fe24c3 3-26
+plugins/adapters/slack/package.json
+  s_2104cc474f1ce5::t_04def2f9dc2137 3
+plugins/adapters/telegram/CHANGELOG.md
+  s_2104cc474f1ce5::t_74d216c98f1e06 3-26
+plugins/adapters/telegram/package.json
+  s_2104cc474f1ce5::t_5e6a3336ce9c1f 3
+plugins/adapters/wechat-mp/CHANGELOG.md
+  s_2104cc474f1ce5::t_406a2cbb0fe165 3-25
+plugins/adapters/wechat-mp/package.json
+  s_2104cc474f1ce5::t_e9ff9098972998 3
+plugins/adapters/wecom/CHANGELOG.md
+  s_2104cc474f1ce5::t_61978a4f825183 3-26
+plugins/adapters/wecom/package.json
+  s_2104cc474f1ce5::t_3ff554db78c6e5 3
+plugins/adapters/weixin-ilink/CHANGELOG.md
+  s_2104cc474f1ce5::t_040cb13ae633be 3-22
+plugins/adapters/weixin-ilink/package.json
+  s_2104cc474f1ce5::t_c7b1bf58bb845d 3
+plugins/features/process-monitor/CHANGELOG.md
+  s_2104cc474f1ce5::t_f0e4bc69124028 3-9
+plugins/features/process-monitor/package.json
+  s_2104cc474f1ce5::t_3ea1107fb575ed 3
+plugins/games/blackjack/CHANGELOG.md
+  s_2104cc474f1ce5::t_1032994a968c98 3-20
+plugins/games/blackjack/package.json
+  s_2104cc474f1ce5::t_655a5d32dd0e38 3
+plugins/games/dice-duel/CHANGELOG.md
+  s_2104cc474f1ce5::t_ccae2bae14ac65 3-20
+plugins/games/dice-duel/package.json
+  s_2104cc474f1ce5::t_2e34a9f73ca1c2 3
+plugins/games/dungeon-expedition/CHANGELOG.md
+  s_2104cc474f1ce5::t_0bfa5ec9e1540e 3-20
+plugins/games/dungeon-expedition/package.json
+  s_2104cc474f1ce5::t_1b4fc26934af7f 3
+plugins/games/guess-number/CHANGELOG.md
+  s_2104cc474f1ce5::t_78ce5704390f38 3-20
+plugins/games/guess-number/package.json
+  s_2104cc474f1ce5::t_d14629be19d442 3
+plugins/games/hub/CHANGELOG.md
+  s_2104cc474f1ce5::t_45b072558972db 3-8
+plugins/games/hub/package.json
+  s_2104cc474f1ce5::t_75d63699fe19f1 3
+plugins/games/idiom-chain/CHANGELOG.md
+  s_2104cc474f1ce5::t_2fb05efe1ff91c 3-20
+plugins/games/idiom-chain/package.json
+  s_2104cc474f1ce5::t_a99c20150760cb 3
+plugins/games/rps/CHANGELOG.md
+  s_2104cc474f1ce5::t_f125c1398a2917 3-20
+plugins/games/rps/package.json
+  s_2104cc474f1ce5::t_074dbf4dbcf770 3
+plugins/games/text-adventure/CHANGELOG.md
+  s_2104cc474f1ce5::t_872c1a462785f4 3-20
+plugins/games/text-adventure/package.json
+  s_2104cc474f1ce5::t_37746cac56b0b0 3
+plugins/games/tic-tac-toe/CHANGELOG.md
+  s_2104cc474f1ce5::t_f771cbdffd02e8 3-20
+plugins/games/tic-tac-toe/package.json
+  s_2104cc474f1ce5::t_f648839df756a3 3
+plugins/games/word-riddle/CHANGELOG.md
+  s_2104cc474f1ce5::t_bc328ee0bbaa49 3-20
+plugins/games/word-riddle/package.json
+  s_2104cc474f1ce5::t_2f8e7853aeddf1 3
+plugins/services/activity-feedback/CHANGELOG.md
+  s_2104cc474f1ce5::t_0357fcf7167e0e 3-53
+plugins/services/activity-feedback/package.json
+  s_2104cc474f1ce5::t_83fb8f940241d4 3
+plugins/services/typesafe/CHANGELOG.md
+  s_2104cc474f1ce5::t_8c31d2521bf450 3-36
+plugins/services/typesafe/package.json
+  s_2104cc474f1ce5::t_d55a342d3ec717 3
+plugins/utils/60s/CHANGELOG.md
+  s_2104cc474f1ce5::t_0694ec936f28f3 3-15
+plugins/utils/60s/package.json
+  s_2104cc474f1ce5::t_3c54db186b8aaf 3
+plugins/utils/calendar/CHANGELOG.md
+  s_2104cc474f1ce5::t_d2bf5f7cc7c3c2 1-14
+plugins/utils/calendar/package.json
+  s_2104cc474f1ce5::t_ac20fae276278d 3
+plugins/utils/code-runner/CHANGELOG.md
+  s_2104cc474f1ce5::t_e5c6d3f28c72a0 3-21
+plugins/utils/code-runner/package.json
+  s_2104cc474f1ce5::t_b33b93e11ca1cd 3
+plugins/utils/content-moderation/CHANGELOG.md
+  s_2104cc474f1ce5::t_660e2fa90e5cb2 3-25
+plugins/utils/content-moderation/package.json
+  s_2104cc474f1ce5::t_0dce338e35513a 3
+plugins/utils/group-suite/CHANGELOG.md
+  s_2104cc474f1ce5::t_74a00e78ef16d2 3-35
+plugins/utils/group-suite/package.json
+  s_2104cc474f1ce5::t_a5fcd96f03694a 3
+plugins/utils/link-poster/CHANGELOG.md
+  s_2104cc474f1ce5::t_08f7b14b4aa75a 3-27
+plugins/utils/link-poster/package.json
+  s_2104cc474f1ce5::t_770ce568eade67 3
+plugins/utils/lottery/CHANGELOG.md
+  s_2104cc474f1ce5::t_94d18749ffba98 3-15
+plugins/utils/lottery/package.json
+  s_2104cc474f1ce5::t_af51c5852dc3fe 3
+plugins/utils/music/CHANGELOG.md
+  s_2104cc474f1ce5::t_a94a03e309f208 3-21
+plugins/utils/music/package.json
+  s_2104cc474f1ce5::t_c5296a44503c07 3
+plugins/utils/qrcode/CHANGELOG.md
+  s_2104cc474f1ce5::t_58765577d01fce 3-33
+plugins/utils/qrcode/package.json
+  s_2104cc474f1ce5::t_c656270bb29e25 3
+plugins/utils/reminder/CHANGELOG.md
+  s_2104cc474f1ce5::t_24f952e492bb97 1-17
+plugins/utils/reminder/package.json
+  s_2104cc474f1ce5::t_379647a6e094fa 3
+plugins/utils/repeater/CHANGELOG.md
+  s_2104cc474f1ce5::t_744699cba5dc83 3-32
+plugins/utils/repeater/package.json
+  s_2104cc474f1ce5::t_c05d1146d2eabe 3
+plugins/utils/rss/CHANGELOG.md
+  s_2104cc474f1ce5::t_af92d819815dad 3-15
+plugins/utils/rss/package.json
+  s_2104cc474f1ce5::t_cea13d1c43d3e3 3
+plugins/utils/short-url/CHANGELOG.md
+  s_2104cc474f1ce5::t_4f1ee272333037 3-21
+plugins/utils/short-url/package.json
+  s_2104cc474f1ce5::t_49cf6e1f07cd78 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9bdd58f3e25f144ba5d73630081fac3606c820e6",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
