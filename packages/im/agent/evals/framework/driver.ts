@@ -110,6 +110,7 @@ async function runInWorkspace(
     ...(definition.contextWindow ? { contextWindow: definition.contextWindow } : {}),
     ...(definition.modelInput ? { input: definition.modelInput } : {}),
     ...(definition.perception ? { perception: true } : {}),
+    ...(definition.modelInputs ? { modelInputs: definition.modelInputs } : {}),
   });
   const toolNames = [
     ...(definition.tools ?? []).filter((tool) => !tool.deferred).map((tool) => tool.name),

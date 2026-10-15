@@ -188,6 +188,8 @@ export interface EvalCase {
   readonly agentConfig?: Partial<ZhinAgentConfig>;
   /** Context window of the scripted model (default: the provider preset), for compaction cases. */
   readonly contextWindow?: number;
+  /** Per-model input overrides, e.g. `{ 'scripted-fallback': ['text'] }` for a text-only fallback. */
+  readonly modelInputs?: Readonly<Record<string, readonly ('text' | 'image' | 'audio' | 'video' | 'file')[]>>;
   /**
    * Enable the `ai.multimodal.perception` pre-pass with a scripted perception
    * model (`scripted-perception`, image/video/file input). Its requests consume
