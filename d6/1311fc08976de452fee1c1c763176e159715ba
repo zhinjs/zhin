@@ -1,0 +1,14 @@
+.changeset/ai-gemini-provider.md
+  h_b680f75345178a 1-6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d61311fc08976de452fee1c1c763176e159715ba",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
