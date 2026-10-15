@@ -1,0 +1,19 @@
+packages/im/ai/src/llm/provider-resilience.ts
+  s_2104cc474f1ce5::t_3dda25d3d1ad43 30-40,60,326-346,382-385,449-462,606-607,610-611
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c2a689d066450223c98f839c99fc44fc44d3d19",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
