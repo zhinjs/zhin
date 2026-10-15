@@ -1,0 +1,35 @@
+basic/cli/src/utils/config-check.ts
+  s_2104cc474f1ce5::t_fc7f01ef57945f 298,303-319
+basic/cli/tests/config-check.test.ts
+  s_2104cc474f1ce5::t_ee2e2410ed67af 266-315
+packages/im/agent/src/config/deprecated-agent-binding-keys.ts
+  s_2104cc474f1ce5::t_5dab8109c72eda 1-40
+packages/im/agent/src/config/fix-ai-config.ts
+  s_2104cc474f1ce5::t_7bc38eb2db7003 5,72,92-101
+packages/im/agent/src/config/index.ts
+  s_2104cc474f1ce5::t_3d2226ef59ab93 15-19
+packages/im/agent/src/config/normalize-ai-config.ts
+  s_2104cc474f1ce5::t_b8c2415ad35bf7 7,64,115-122
+packages/im/agent/src/config/types.ts
+  s_2104cc474f1ce5::t_f6000e3bf0437e 11-14,34-37,39-43
+packages/im/agent/src/service.ts
+  s_2104cc474f1ce5::t_b773943f539526 9,75-77
+packages/im/ai/src/types.ts
+  s_2104cc474f1ce5::t_64dc0c4e2d0547 334-337,350,352,400
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "df01de97c224d8f791c223d73159e008988e48db",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
