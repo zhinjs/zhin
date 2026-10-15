@@ -1,0 +1,21 @@
+packages/im/ai/tests/helpers/provider-harness/README.md
+  s_2104cc474f1ce5::t_f1872e0299e12d 32
+packages/im/ai/tests/helpers/provider-harness/index.ts
+  s_2104cc474f1ce5::t_b32d2dc55a4932 27-28,108-125,178-186
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "533ea65121ff05ab1e6af91f33cc3760f4cac5e9",
+  "prompts": {},
+  "sessions": {
+    "s_2104cc474f1ce5": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a0f05b-a8e3-78c1-a6c8-abbfc887b55a",
+        "model": "gpt-6-astra"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
