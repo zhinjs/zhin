@@ -1,0 +1,14 @@
+packages/im/ai/src/llm/provider-resilience.ts
+  h_b680f75345178a 31-34,351-353,383-389
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a5db2d6eb4c0023d289c6ff8f98de3bdc5106972",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
