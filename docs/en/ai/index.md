@@ -174,6 +174,19 @@ Optional fields:
 
   If Gemini refuses on safety grounds (SAFETY, PROHIBITED_CONTENT, RECITATION, a blocked prompt and so on), the user sees a polite refusal that names the reason instead of an empty reply. Such a refusal is neither retried nor sent to a fallback model: the same content gets the same verdict, and switching models to get past it would bypass your `safetySettings`. Gemini uses implicit caching: the system prompt and tool definitions stay unchanged, and cache hits are reported as `cacheRead` in usage and as `cache_read_tokens` in the turn trace. For a steadier discount, turn on explicit caching with `contextCache: { mode: explicit, ttlSeconds: 600 }`. zhin then creates a `cachedContents` entry for the system prompt and tool definitions and reuses it within the TTL. A changed prefix gets a new cache and the old one is deleted. If the server has dropped the cache, zhin resends the full request. If a cache can't be created (for example, the prefix is too short), it falls back to implicit caching. Cache storage is billed by the hour. Explicit caching works on Gemini 3 and 2.5 only; Gemini 4 Argon and later don't support it.
 
+- **Gemini through your own proxy**: if the proxy simply forwards requests (same requests, same `x-goog-api-key` auth, same responses; only the host differs), point `baseUrl` at it. Both the root and a URL ending in `/v1beta` work; a trailing `/` is dropped and `/v1beta` is never doubled. The default is `https://generativelanguage.googleapis.com`. `generateContent`, streaming `streamGenerateContent`, explicit-cache `cachedContents` (create and delete) and the model list all use this URL. If the proxy needs extra request headers, add the optional `headers`; they are sent on every request:
+
+  ```yaml
+  ai:
+    providers:
+      gemini:
+        sdk: google
+        apiKey: ${GEMINI_API_KEY}
+        baseUrl: https://gemini-proxy.example.com   # same as https://gemini-proxy.example.com/v1beta
+        headers:                                   # optional
+          x-proxy-tag: zhin
+  ```
+
 ### ai.agents
 
 Bind Agent names to `provider + model`. `zhin` is the main Agent and must exist:
