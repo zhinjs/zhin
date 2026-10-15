@@ -65,11 +65,23 @@ export interface ToolCallContentBlock {
   name: string;
   arguments: Record<string, unknown>;
   /**
+   * Set when the model's arguments were not a JSON object; `arguments` is then `{}`.
+   * Tool validation quotes `raw` back to the model so it can resend a valid call.
+   */
+  inputError?: ToolCallInputError;
+  /**
    * Provider metadata that must be sent back with this call on the next request.
    * Gemini 3 signs function calls (`google.thoughtSignature`); dropping the
    * signature degrades multi-step tool use, so it round-trips with the history.
    */
   providerOptions?: ToolCallProviderOptions;
+}
+
+/** Arguments the model sent that could not be used, with the parse error. */
+export interface ToolCallInputError {
+  /** The text exactly as the model sent it. */
+  raw: string;
+  message: string;
 }
 
 /** Signed-call metadata keyed by AI SDK provider id (only `google` / `vertex` today). */

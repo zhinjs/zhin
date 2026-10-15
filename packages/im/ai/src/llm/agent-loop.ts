@@ -96,6 +96,7 @@ function extractToolCalls(message: AssistantMessage): ParsedToolCall[] {
       id: block.id,
       name: block.name,
       arguments: block.arguments,
+      ...(block.inputError ? { inputError: block.inputError } : {}),
     }));
 }
 

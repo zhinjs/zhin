@@ -6,6 +6,7 @@ export type {
   ThinkingProviderOptions,
   ThinkingContentBlock,
   ToolCallContentBlock,
+  ToolCallInputError,
   ContentBlock,
   UserContentBlock,
   ToolResultContentBlock,

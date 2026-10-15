@@ -4,6 +4,7 @@
  * harness from #784 is not on main yet, so this file keeps a small local server.
  */
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 import { createLlmApiRuntime } from '../../src/llm/llm-runtime-factory.js';
 import { createLlmTransportModel } from '../../src/llm/llm-api-runtime.js';
 import { createUserMessage } from '../../src/llm/types/agent-message.js';
@@ -15,6 +16,8 @@ import {
 } from '../../src/llm/provider-resilience.js';
 import { ProviderStreamError, streamPartError } from '../../src/llm/bridge/stream-error.js';
 import { finishFailureKind, resolveFinish } from '../../src/llm/bridge/finish-reason.js';
+import { toolCallInput } from '../../src/llm/bridge/tool-call-input.js';
+import { ToolCallValidationError, validateToolCall } from '../../src/llm/validate-tool-call.js';
 import { ProviderRequestError, describeProviderFailure, isProviderFailureMessage } from '../../src/llm/provider-resilience.js';
 
 /** One scripted HTTP answer: SSE chunks, or a JSON error body with a status. */
@@ -194,5 +197,44 @@ describe('OpenAI 429s: retry-after-ms and insufficient_quota', () => {
 
   it('recognises insufficient_quota from a stream error part too', () => {
     expect(classifyProviderError(streamPartError({ type: 'error', code: 'insufficient_quota', message: 'quota' }))).toMatchObject({ kind: 'billing', retryable: false });
+  });
+});
+
+describe('invalid tool-call arguments keep the raw input', () => {
+  const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
+
+  it('passes objects through and parses streamed JSON', () => {
+    expect(toolCallInput({ input: { city: 'Paris' } })).toEqual({ arguments: { city: 'Paris' } });
+    expect(toolCallInput({}, '{"city":"Rome"}')).toEqual({ arguments: { city: 'Rome' } });
+    expect(toolCallInput({}, '')).toEqual({ arguments: {} });
+  });
+
+  it('keeps unparseable or non-object input with the parse error', () => {
+    const broken = toolCallInput({ input: '{"city": "Par', invalid: true, error: new Error('Invalid input for tool get_weather: JSON parsing failed') });
+    expect(broken).toEqual({ arguments: {}, inputError: { raw: '{"city": "Par', message: 'Invalid input for tool get_weather: JSON parsing failed' } });
+    expect(toolCallInput({ input: '"Paris"' })).toMatchObject({ arguments: {}, inputError: { raw: '"Paris"', message: 'arguments must be a JSON object' } });
+  });
+
+  it('validation quotes the raw input back to the model (truncated when long)', () => {
+    const call = { id: 'c1', name: 'get_weather', arguments: {}, inputError: { raw: '{"city": "Par', message: 'Unexpected end of JSON input' } };
+    expect(() => validateToolCall([weather], call)).toThrow(ToolCallValidationError);
+    expect(() => validateToolCall([weather], call)).toThrow(/not a valid JSON object \(Unexpected end of JSON input\)\. Received: \{"city": "Par\./);
+    const long = { ...call, inputError: { raw: 'x'.repeat(2_000), message: 'bad' } };
+    expect(() => validateToolCall([weather], long)).toThrow(/x{500}… \(truncated, 2000 chars\)/);
+  });
+
+  it('surfaces a truncated OpenAI tool call with its raw text instead of {}', async () => {
+    const toolCallChunks = [
+      chatChunk({ role: 'assistant', content: null, tool_calls: [{ index: 0, id: 'call_1', type: 'function', function: { name: 'get_weather', arguments: '' } }] }),
+      chatChunk({ tool_calls: [{ index: 0, function: { arguments: '{"city": "Par' } }] }),
+      chatChunk({}, 'tool_calls'),
+      '[DONE]',
+    ];
+    const { runtime, model } = setup('openai', [{ chunks: toolCallChunks }]);
+    const reply = await runtime.complete(model, { ...ask, tools: [weather] });
+    const call = reply.content.find((b) => b.type === 'toolCall');
+    expect(call).toMatchObject({ type: 'toolCall', name: 'get_weather', arguments: {}, inputError: { raw: '{"city": "Par' } });
+    // Replayed to the provider as an empty object, never as the error record.
+    expect(JSON.stringify(call && 'arguments' in call ? call.arguments : null)).toBe('{}');
   });
 });
