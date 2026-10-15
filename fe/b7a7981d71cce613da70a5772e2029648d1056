@@ -1,0 +1,90 @@
+AGENTS.md
+  h_b680f75345178a 11
+CLAUDE.md
+  h_b680f75345178a 9
+README.md
+  h_b680f75345178a 65
+README.zh-CN.md
+  h_b680f75345178a 65
+docs/adapters/weixin-ilink.md
+  h_b680f75345178a 33
+docs/cli/runtime.md
+  h_b680f75345178a 49
+docs/contributing/development.md
+  h_b680f75345178a 17
+docs/contributing/repo-structure.md
+  h_b680f75345178a 99
+docs/en/adapters/weixin-ilink.md
+  h_b680f75345178a 33
+docs/en/cli/runtime.md
+  h_b680f75345178a 49
+docs/en/contributing/development.md
+  h_b680f75345178a 15
+docs/en/contributing/repo-structure.md
+  h_b680f75345178a 59
+docs/en/examples/index.md
+  h_b680f75345178a 67,114
+docs/en/getting-started/first-plugin.md
+  h_b680f75345178a 14
+docs/en/getting-started/index.md
+  h_b680f75345178a 9
+docs/en/operations/production.md
+  h_b680f75345178a 24
+docs/en/operations/upgrades.md
+  h_b680f75345178a 25
+docs/en/wiki/archive.md
+  h_b680f75345178a 23
+docs/en/wiki/cubic/cli-tools.md
+  h_b680f75345178a 49,59
+docs/en/wiki/cubic/plugin-runtime.md
+  h_b680f75345178a 140
+docs/en/wiki/cubic/quickstart.md
+  h_b680f75345178a 12,145
+docs/en/wiki/notes/first-run.md
+  h_b680f75345178a 9
+docs/examples/index.md
+  h_b680f75345178a 67,114
+docs/getting-started/first-plugin.md
+  h_b680f75345178a 14
+docs/getting-started/index.md
+  h_b680f75345178a 9
+docs/operations/production.md
+  h_b680f75345178a 24
+docs/operations/upgrades.md
+  h_b680f75345178a 25
+docs/wiki/archive.md
+  h_b680f75345178a 19
+docs/wiki/cubic/cli-tools.md
+  h_b680f75345178a 50,60
+docs/wiki/cubic/plugin-runtime.md
+  h_b680f75345178a 141
+docs/wiki/cubic/quickstart.md
+  h_b680f75345178a 13,146
+docs/wiki/notes/first-run.md
+  h_b680f75345178a 9
+examples/minimal-bot/README.md
+  h_b680f75345178a 9
+examples/test-bot/README.md
+  h_b680f75345178a 32
+packages/toolkit/create-zhin/README.md
+  h_b680f75345178a 360,369
+packages/toolkit/plugin-test-kit/README.md
+  h_b680f75345178a 77
+plugins/adapters/wechat-mp/deploy.md
+  h_b680f75345178a 8
+plugins/adapters/weixin-ilink/README.md
+  h_b680f75345178a 21
+tests/docs/first-plugin-runtime.test.ts
+  h_b680f75345178a 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "feb7a7981d71cce613da70a5772e2029648d1056",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
