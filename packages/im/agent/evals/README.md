@@ -268,12 +268,18 @@ https://ai.google.dev/gemini-api/docs/rate-limits and the project's limits in AI
   quota is exhausted, and the job fails. It never passes or skips.
 - Only 429s are retried. Every other error and every failed check stays a failure.
 
-A default run sends about 63 requests (5 matrix cases × 3, plus ~48 seed-case
-requests, tool steps included), so with 4 s spacing it takes at least ~4.2 min.
-At the 120-request cap it takes at least 8 min plus any backoff, well inside the
-30 min test and 45 min job timeouts. If the project's RPD is below that, lower
-`NIGHTLY_RUNS_PER_CASE` / `NIGHTLY_MAX_REQUESTS` (repository variable) or pick a model
-with a higher daily quota via `NIGHTLY_MODELS`.
+A full run at 3 trials sends about 63 requests (5 matrix cases × 3, plus ~48
+seed-case requests, tool steps included). With 4 s spacing that takes at least
+~4.2 min, and at the 120-request cap at least 8 min plus any backoff.
+
+CI's actual free-tier limits for `gemini-3.8-flash` are lower: its 429s report
+**5 RPM and 20 RPD** per project. So for `gemini` the workflow defaults to 1 trial
+per case, `NIGHTLY_MAX_REQUESTS=20` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS=12000`,
+which works out to about 21 requests, of which ≤20 are sent. That is ≥4 min at 12 s
+spacing, and the last seed case may be budget-skipped. Set the `NIGHTLY_RUNS_PER_CASE`,
+`NIGHTLY_MAX_REQUESTS` and `NIGHTLY_MIN_REQUEST_INTERVAL_MS` repository variables to
+restore 3 trials on a paid key. A manual dispatch on a day the scheduled run already
+used the quota fails with the daily-quota message.
 
 **Secrets:** the workflow reads the `GEMINI_API_KEY` repository secret (and the
 optional `GEMINI_BASE_URL` repository variable for a pass-through proxy). Without it the job logs a notice and skips.
