@@ -1,0 +1,57 @@
+packages/im/workroom/src/workroom/journal/legacy-payload-guard.ts
+  s_95fad6ad5888ed::t_81498b85068b55 1-172
+.changeset/remove-legacy-migration-tools.md
+  s_95fad6ad5888ed::t_a418aae520843d 1-6
+basic/cli/tests/agent-command.test.ts
+  s_95fad6ad5888ed::t_49cc5069f0da90 1-12
+docs/ai/agent.md
+  s_95fad6ad5888ed::t_0533c8d22c764b 567,569
+docs/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_3f0d41d3630035 78
+docs/en/ai/agent.md
+  s_95fad6ad5888ed::t_127a927ac6d2c0 467,469
+docs/en/contributing/legacy-concepts.md
+  s_95fad6ad5888ed::t_9328f892747f2f 78
+docs/plans/workroom-group-collaboration-progress.md
+  s_95fad6ad5888ed::t_025eb1ac732780 114-118,366-372,414
+packages/im/workroom/src/index.ts
+  s_95fad6ad5888ed::t_ab5fc8374e32fe 68
+packages/im/workroom/src/workroom/journal/database-journal.ts
+  s_95fad6ad5888ed::t_43f8ad6461aef3 7,117,138
+packages/im/workroom/src/workroom/journal/event-codec.ts
+  s_95fad6ad5888ed::t_aabf3e1356ddce 9,41,47
+packages/im/workroom/src/workroom/journal/file-journal.ts
+  s_95fad6ad5888ed::t_725e36d9055503 17-18,242-244
+packages/im/workroom/src/workroom/journal/payload-reference.ts
+  s_95fad6ad5888ed::t_61fafc645a5153 2,61
+packages/im/workroom/tests/workroom-runtime/database-journal-integrity.test.ts
+  s_95fad6ad5888ed::t_102de48a24f66a 90,104
+packages/im/workroom/tests/workroom-runtime/projection-outbox.test.ts
+  s_95fad6ad5888ed::t_90b2147d331494 361
+packages/im/workroom/tests/workroom-runtime/workroom-priority-preemption-production.test.ts
+  s_95fad6ad5888ed::t_ac53b562fe1a47 329
+packages/im/workroom/tests/workroom/legacy-payload-guard.test.ts
+  s_95fad6ad5888ed::t_4d0086a3f6e386 1,3-6,8-12,14-30,32,34-42,44-50,53-57,59-70,73-87,89-93
+packages/im/workroom/tests/workroom/workroom-content-free-journal.test.ts
+  s_95fad6ad5888ed::t_f9e998e463f46b 18,414,441
+packages/im/workroom/tests/workroom/workroom-kernel.test.ts
+  s_95fad6ad5888ed::t_429b665eebe853 774,838,892,912
+scripts/check-workroom-ssot.mjs
+  s_95fad6ad5888ed::t_b0d9c1d7bfdc2f 71,73,79,94,120
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "74709f0b77206a4a91da0808cdcd3358d9b47422",
+  "prompts": {},
+  "sessions": {
+    "s_95fad6ad5888ed": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2d623a4c-bfdc-449c-902b-15089adf8d59",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}

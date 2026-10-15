@@ -1,0 +1,29 @@
+.changeset/add-room-definition.md
+  s_0cbd60597bf449::t_05ee951bc2af08 6-7
+docs/plans/workroom-group-collaboration-progress.md
+  s_0cbd60597bf449::t_e2e53f4f07a7df 61-62,184-188,209
+packages/im/workroom/README.md
+  s_0cbd60597bf449::t_6942c6d88e0ccf 49
+packages/im/workroom/src/room/room-definition.ts
+  s_0cbd60597bf449::t_d850a755a23dfd 16-22,26-29,65,67
+packages/im/workroom/src/room/validate-room.ts
+  s_0cbd60597bf449::t_e958081594ef98 115,123,132,184,212-217,219,232-234
+packages/im/workroom/tests/room/validate-room.test.ts
+  s_0cbd60597bf449::t_d7b251212952ee 9,65-123,238
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2db7f7b3cde7c4968eb179abf2fa2e22cdc09e20",
+  "prompts": {},
+  "sessions": {
+    "s_0cbd60597bf449": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6c529742-bf70-4042-b278-ac2679778274",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
