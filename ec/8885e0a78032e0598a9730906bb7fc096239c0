@@ -1,0 +1,25 @@
+docs/ai/index.md
+  s_b5a23dafcbf81f::t_90796f923e6fd6 137,140-156
+docs/en/ai/index.md
+  s_b5a23dafcbf81f::t_5dab245519638c 137,140-156
+packages/im/ai/src/llm/types/model.ts
+  s_b5a23dafcbf81f::t_502b79df6c52b1 53
+packages/im/ai/src/types.ts
+  s_b5a23dafcbf81f::t_90c19779e0a448 61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ec8885e0a78032e0598a9730906bb7fc096239c0",
+  "prompts": {},
+  "sessions": {
+    "s_b5a23dafcbf81f": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "dd2241d8-9cb9-44d8-87cf-f4eccbabc49a",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
