@@ -1,0 +1,28 @@
+packages/im/ai/src/llm/sdk-default-models.ts
+  s_c09c25ac8e03c4::t_976627ec899772 34-37
+packages/im/ai/src/llm/bridge/ai-sdk-messages.ts
+  h_b680f75345178a 70-73
+packages/im/ai/tests/llm/ai-sdk-messages.test.ts
+  h_b680f75345178a 154-156
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "91b67a2a7c517d6cc026f4695004b7a942574857",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  },
+  "sessions": {
+    "s_c09c25ac8e03c4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7c97d072-4687-40c3-bb5b-7c7caa37aefd",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
