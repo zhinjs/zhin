@@ -13,7 +13,7 @@ import { createUserMessage } from '../../../src/llm/types/agent-message.js';
 import type { ProviderInstanceConfig } from '../../../src/llm/types/model.js';
 
 const apiKey = process.env.GROQ_API_KEY?.trim();
-const MODEL = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b';
+const MODEL = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-120b';
 const weather = { name: 'get_weather', description: 'Weather for one city.', parameters: z.object({ city: z.string() }) };
 
 describe.skipIf(!apiKey)('Groq live smoke (GROQ_API_KEY)', () => {
