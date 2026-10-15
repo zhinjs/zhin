@@ -67,6 +67,7 @@ export { DEFAULT_STEERING_MODE, DEFAULT_FOLLOW_UP_MODE } from './types/queue-mod
 export {
   LlmApiRuntime,
   createLlmTransportModel,
+  defaultModelInput,
   createAssistantMessageEventStream,
 } from './llm-api-runtime.js';
 export {
