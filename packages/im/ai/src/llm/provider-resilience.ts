@@ -28,6 +28,10 @@
  *   keep their type and an inferred status (see `bridge/stream-error.ts`), so they are
  *   classified like the equivalent HTTP error.
  *
+ * Groq: a 429 is retried after `retry-after` (seconds, only sent on a 429) when a
+ * per-minute window (RPM / TPM) ran out; a per-day window (RPD / TPD, named in the
+ * message) is `quota_exhausted` and falls back like the Gemini PerDay quota.
+ *
  * Out of credit (402 Payment Required, OpenAI `insufficient_quota`, Anthropic "credit
  * balance is too low", DeepSeek "Insufficient Balance", OpenRouter "Insufficient
  * credits") is classified `billing`: never retried, because nothing changes until
@@ -344,6 +348,9 @@ function isBillingError(status: number | undefined, codes: ReadonlySet<string>, 
   return BILLING_MESSAGE_PATTERN.test(message);
 }
 
+/** A 429 naming a per-day window: `requests per day (RPD)` / `tokens per day (TPD)`. */
+const PER_DAY_LIMIT_PATTERN = /\bper day \((?:RPD|TPD)\)/i;
+
 const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
 
 export function classifyProviderError(error: unknown): ProviderErrorClassification {
@@ -373,6 +380,13 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   // Gemini answers a server-side deadline with 504 DEADLINE_EXCEEDED: a timeout, not an outage.
   if (google?.status === 'DEADLINE_EXCEEDED') return { kind: 'timeout', retryable: true, fallbackEligible: true, status };
   if (isDailyQuota(google)) return { kind: 'quota_exhausted', retryable: false, fallbackEligible: true, status };
+  // Groq (and OpenAI) name the exhausted window in the 429 message: "... on requests per
+  // day (RPD): Limit 1000, Used 1000, Requested 1. Please try again in 1m26s". A daily
+  // window does not reopen within any sensible retry; Groq limits are per model, so
+  // another candidate may still answer. Per-minute windows (RPM / TPM) stay rate limits.
+  if (status === 429 && PER_DAY_LIMIT_PATTERN.test(message)) {
+    return { kind: 'quota_exhausted', retryable: false, fallbackEligible: true, status };
+  }
 
   if (name === 'AbortError') return { kind: 'aborted', retryable: false, fallbackEligible: false };
   if (name === 'TimeoutError') return { kind: 'timeout', retryable: true, fallbackEligible: true };
