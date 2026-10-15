@@ -71,10 +71,8 @@ export function createAgentCompactionState(): AgentCompactionState {
   return { consecutiveFailures: 0 };
 }
 
-export function isContextOverflowError(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return /context.?length|maximum.?context|too.?many.?tokens|token.?limit|context.?window|exceed.*limit|request too large/i.test(msg);
-}
+/** Shared with the resilience layer; see `llm/context-overflow.ts`. */
+export { isContextOverflowError } from '../llm/context-overflow.js';
 
 function textBlocks(message: AgentMessage): string {
   if (!('content' in message) || !Array.isArray(message.content)) return '';

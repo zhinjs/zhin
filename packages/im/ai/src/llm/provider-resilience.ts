@@ -20,8 +20,27 @@
  *   answer; switching models to get past a refusal would bypass the operator's
  *   safety settings and resend flagged content to more models. The user gets a
  *   polite refusal instead (see `bridge/finish-reason.ts`).
+ *
+ * Other providers:
+ * - An `error` finish that is not a malformed tool call (DeepSeek
+ *   `insufficient_system_resource`) is retried with backoff like a 5xx, then falls back.
+ * - Error parts inside a 200 stream (Anthropic `overloaded_error`, OpenAI `server_error`)
+ *   keep their type and an inferred status (see `bridge/stream-error.ts`), so they are
+ *   classified like the equivalent HTTP error.
+ *
+ * Out of credit (402 Payment Required, OpenAI `insufficient_quota`, Anthropic "credit
+ * balance is too low", DeepSeek "Insufficient Balance", OpenRouter "Insufficient
+ * credits") is classified `billing`: never retried, because nothing changes until
+ * someone pays. Fallback skips every candidate on the *same provider alias*: all models
+ * of one alias share its API key and therefore its account, so asking them would only
+ * repeat the failure (and add latency). A candidate on another alias has its own key
+ * and is still tried. When none is left the user is told the balance ran out instead
+ * of "try again later", which would not help. Distinct aliases that happen to reuse a
+ * key are not detected; that is a configuration choice, and the cost is one extra
+ * failed request.
  */
 import { SAFETY_BLOCK_TEXT, finishFailureKind, isFinishFailureMessage } from './bridge/finish-reason.js';
+import { isContextOverflowError } from './context-overflow.js';
 import type { Context } from './types/context.js';
 import type { Model } from './types/model.js';
 import type { AssistantMessage } from './types/agent-message.js';
@@ -38,6 +57,8 @@ export type ProviderErrorKind =
   | 'safety_block'
   /** A quota that will not reset soon (Gemini per-day quota): skip retries, try fallback. */
   | 'quota_exhausted'
+  /** The account is out of credit (402, OpenAI `insufficient_quota`): never retried; other providers only. */
+  | 'billing'
   | 'context_overflow'
   | 'auth'
   | 'bad_request'
@@ -115,6 +136,7 @@ const PROVIDER_FAILURE_TEXT: Record<ProviderErrorKind, string> = {
   malformed_tool_call: '模型返回了无法解析的工具调用，已自动重试仍未成功，请稍后再试',
   safety_block: SAFETY_BLOCK_TEXT,
   quota_exhausted: '模型服务今天的调用额度已用完，请稍后再试或联系管理员更换模型',
+  billing: '模型服务账户余额不足或额度已用完，请联系管理员充值或检查账单',
   context_overflow: '对话内容超出模型上下文长度',
   auth: '模型服务鉴权失败，请检查 API 密钥配置',
   bad_request: '模型服务拒绝了请求',
@@ -143,6 +165,14 @@ class EmptyResponseError extends Error {
   }
 }
 
+/** The provider ended the stream with an `error` finish (not a malformed tool call). */
+class ProviderFinishError extends Error {
+  constructor(readonly reply: AssistantMessage) {
+    super(reply.errorMessage ?? 'Provider ended the response with an error');
+    this.name = 'ProviderFinishError';
+  }
+}
+
 class AttemptTimeoutError extends Error {
   constructor(ms: number) {
     super(`Provider request timed out after ${ms}ms`);
@@ -154,8 +184,6 @@ const NETWORK_CODES = new Set([
   'ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'EPIPE', 'ENOTFOUND', 'EAI_AGAIN',
   'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_HEADERS_TIMEOUT', 'UND_ERR_BODY_TIMEOUT',
 ]);
-
-const CONTEXT_OVERFLOW_PATTERN = /context[_ ]length|context window|maximum context|too many tokens|prompt is too long/i;
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' ? value as Record<string, unknown> : undefined;
@@ -186,6 +214,17 @@ function headerValue(headers: unknown, name: string): string | undefined {
     if (key.toLowerCase() === name && typeof value === 'string') return value;
   }
   return undefined;
+}
+
+/**
+ * Server-requested delay. OpenAI (and Azure OpenAI) send `retry-after-ms` with
+ * millisecond precision next to the whole-second `retry-after`; prefer it.
+ */
+function retryAfterFromHeaders(headers: unknown): number | undefined {
+  const msHeader = headerValue(headers, 'retry-after-ms')?.trim();
+  const ms = msHeader ? Number(msHeader) : Number.NaN;
+  if (Number.isFinite(ms) && ms >= 0) return Math.round(ms);
+  return parseRetryAfterMs(headerValue(headers, 'retry-after'));
 }
 
 export function parseRetryAfterMs(value: string | undefined, now = Date.now()): number | undefined {
@@ -256,6 +295,55 @@ function isDailyQuota(google: GoogleRpcError | undefined): boolean {
   return google?.quotaIds.some((id) => /PerDay/i.test(id)) ?? false;
 }
 
+/**
+ * Machine-readable error codes / types from an AI SDK error: `code` on the error
+ * itself (stream errors), `data.error.code` / `.type` (parsed body) or the raw
+ * `responseBody` (OpenAI: `{ "error": { "code": "insufficient_quota", ... } }`).
+ */
+function providerErrorCodes(error: Record<string, unknown>): Set<string> {
+  const codes = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value === 'string' && value) codes.add(value);
+  };
+  add(error.code);
+  add(error.type);
+  let body: unknown;
+  if (typeof error.responseBody === 'string') {
+    try {
+      body = JSON.parse(error.responseBody);
+    } catch {
+      body = undefined;
+    }
+  }
+  for (const source of [record(error.data), record(body)]) {
+    const inner = record(source?.error) ?? source;
+    add(inner?.code);
+    add(inner?.type);
+  }
+  return codes;
+}
+
+/** Error codes / types that mean "this account cannot pay for the request". */
+const BILLING_CODES = new Set([
+  'insufficient_quota', // OpenAI (HTTP 429)
+  'billing_error', // Anthropic (HTTP 402)
+  'insufficient_balance',
+  'payment_required',
+  'exceeded_current_quota_error', // Moonshot (HTTP 429)
+]);
+
+/**
+ * Provider wording for an empty balance. Deliberately excludes "check your plan and
+ * billing details": Gemini's free-tier rate limit uses that sentence too.
+ */
+const BILLING_MESSAGE_PATTERN = /credit balance is too low|insufficient (?:account )?(?:balance|credits?|funds)|out of credits?|payment required|余额不足|账户已欠费/i;
+
+function isBillingError(status: number | undefined, codes: ReadonlySet<string>, message: string): boolean {
+  if (status === 402) return true;
+  for (const code of codes) if (BILLING_CODES.has(code)) return true;
+  return BILLING_MESSAGE_PATTERN.test(message);
+}
+
 const GOOGLE_STATUS_PATTERN = /\b(RESOURCE_EXHAUSTED|UNAVAILABLE|INTERNAL|DEADLINE_EXCEEDED|UNAUTHENTICATED|PERMISSION_DENIED)\b/;
 
 export function classifyProviderError(error: unknown): ProviderErrorClassification {
@@ -268,12 +356,16 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
   if (inner instanceof AttemptTimeoutError) {
     return { kind: 'timeout', retryable: true, fallbackEligible: true };
   }
+  if (inner instanceof ProviderFinishError) {
+    return { kind: 'server', retryable: true, fallbackEligible: true };
+  }
   const rec = record(inner) ?? {};
   const name = typeof rec.name === 'string' ? rec.name : '';
   const message = typeof rec.message === 'string' ? rec.message : String(inner ?? '');
   const status = statusOf(rec);
   const google = parseGoogleRpcError(rec);
-  const retryAfterMs = parseRetryAfterMs(headerValue(rec.responseHeaders, 'retry-after')) ?? google?.retryDelayMs;
+  const retryAfterMs = retryAfterFromHeaders(rec.responseHeaders) ?? google?.retryDelayMs;
+  const codes = providerErrorCodes(rec);
   // Gemini answers a bad key with 400 INVALID_ARGUMENT + reason API_KEY_INVALID: that is auth, not a model rejection.
   if (google?.reasons.some((reason) => reason === 'API_KEY_INVALID' || reason === 'API_KEY_EXPIRED')) {
     return { kind: 'auth', retryable: false, fallbackEligible: false, status };
@@ -284,9 +376,13 @@ export function classifyProviderError(error: unknown): ProviderErrorClassificati
 
   if (name === 'AbortError') return { kind: 'aborted', retryable: false, fallbackEligible: false };
   if (name === 'TimeoutError') return { kind: 'timeout', retryable: true, fallbackEligible: true };
-  if (CONTEXT_OVERFLOW_PATTERN.test(message)) {
+  if (isContextOverflowError(inner)) {
     return { kind: 'context_overflow', retryable: false, fallbackEligible: false, status };
   }
+  // OpenAI answers an exhausted billing quota with 429 and Anthropic an empty balance
+  // with 400, but no retry can succeed until someone adds credit. (Gemini's free-tier
+  // "exceeded your current quota" has no such code and stays a rate limit / daily quota.)
+  if (isBillingError(status, codes, message)) return { kind: 'billing', retryable: false, fallbackEligible: true, status };
   if (status === 429) return { kind: 'rate_limit', retryable: true, fallbackEligible: true, status, retryAfterMs };
   if (status === 408) return { kind: 'timeout', retryable: true, fallbackEligible: true, status };
   if (status === 401 || status === 403) return { kind: 'auth', retryable: false, fallbackEligible: false, status };
@@ -328,11 +424,14 @@ export function computeBackoffDelay(
 /**
  * Detect a reply that carries nothing usable, or a broken tool call: a call with no
  * name, or Gemini's MALFORMED_FUNCTION_CALL finish (surfaced by the bridge as an
- * error reply). Other error replies (safety blocks included) pass through unchanged.
+ * error reply), or a provider-side `error` finish. Other error replies (safety
+ * blocks included) pass through unchanged.
  */
-function inspectReply(message: AssistantMessage): EmptyResponseError | undefined {
-  if (message.stopReason === 'error' && finishFailureKind(message.errorMessage) === 'malformed_tool_call') {
-    return new EmptyResponseError('malformed_tool_call', message);
+function inspectReply(message: AssistantMessage): EmptyResponseError | ProviderFinishError | undefined {
+  if (message.stopReason === 'error') {
+    const finish = finishFailureKind(message.errorMessage);
+    if (finish === 'malformed_tool_call') return new EmptyResponseError('malformed_tool_call', message);
+    if (finish === 'provider_error') return new ProviderFinishError(message);
   }
   if (message.stopReason === 'error' || message.stopReason === 'aborted') return undefined;
   let hasPayload = false;
@@ -345,6 +444,20 @@ function inspectReply(message: AssistantMessage): EmptyResponseError | undefined
     }
   }
   return hasPayload ? undefined : new EmptyResponseError('empty_response', message);
+}
+
+/**
+ * Index of the fallback candidate to try after `models[current]` failed with `kind`,
+ * or -1. An empty balance belongs to the account behind the provider alias, so for
+ * `billing` every candidate on the same alias (same key) is skipped.
+ */
+function nextCandidateIndex(models: readonly Model[], current: number, kind: ProviderErrorKind): number {
+  const failed = models[current]!;
+  for (let i = current + 1; i < models.length; i++) {
+    if (kind === 'billing' && models[i]!.provider === failed.provider) continue;
+    return i;
+  }
+  return -1;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -490,17 +603,20 @@ export function createResilientCompletionPort(
             continue;
           }
 
-          const next = info.fallbackEligible ? models[m + 1] : undefined;
+          const nextIndex = info.fallbackEligible ? nextCandidateIndex(models, m, info.kind) : -1;
+          const next = nextIndex >= 0 ? models[nextIndex] : undefined;
           if (next) {
             options.onEvent?.({ type: 'fallback', from: model.id, to: next.id, kind: info.kind, error: message });
+            // Skip candidates that cannot succeed (see nextCandidateIndex); the loop adds one.
+            m = nextIndex - 1;
             break;
           }
           // Out of empty-reply retries: hand the reply back so existing recovery paths run.
           if (isEmpty) return error.reply;
           options.onEvent?.({ type: 'give_up', model: model.id, kind: info.kind, error: message });
           // Non-retryable errors keep their original identity for upstream handlers,
-          // except an exhausted quota, which has nothing to handle and a polite message.
-          if (!info.retryable && info.kind !== 'quota_exhausted') throw error;
+          // except an exhausted quota or balance, which has nothing to handle and a polite message.
+          if (!info.retryable && info.kind !== 'quota_exhausted' && info.kind !== 'billing') throw error;
           throw new ProviderRequestError(info.kind, attempts, error);
         }
       }

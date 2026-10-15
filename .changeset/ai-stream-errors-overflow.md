@@ -1,0 +1,5 @@
+---
+'@zhin.js/ai': patch
+---
+
+Provider error handling fixes from the provider audit (#724). Error parts inside a 200 stream (Anthropic `overloaded_error`, OpenAI `server_error`, Responses `rate_limit_exceeded`) keep their message, type and code instead of becoming "[object Object]", so they are retried and re-routed like the HTTP error they stand for. One shared context-overflow detector now serves both the resilience layer and compaction, and recognises the Gemini, Vertex and Anthropic wordings. A DeepSeek `insufficient_system_resource` finish is retried rather than reported as a malformed tool call. OpenAI's `retry-after-ms` header is honoured. Out-of-credit errors (402, OpenAI `insufficient_quota`, "credit balance is too low", "Insufficient Balance") are no longer retried, skip fallback candidates on the same provider alias (same key, same account), and tell the user the balance ran out. Tool-call arguments that are not valid JSON keep their raw text, and validation quotes it back to the model instead of reporting missing fields against `{}`.

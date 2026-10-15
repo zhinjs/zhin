@@ -39,7 +39,8 @@ export interface ScriptedToolCall {
  * clock until the request is aborted (e.g. by `providerResilience.requestTimeoutMs`);
  * `finish` returns the reply the AI SDK bridge builds for a content-less finish
  * (e.g. Gemini `finishReason: 'content-filter'` with raw `SAFETY`, a prompt
- * `blockReason`, or `error` with raw `MALFORMED_FUNCTION_CALL`).
+ * `blockReason`, `error` with raw `MALFORMED_FUNCTION_CALL`, or DeepSeek's
+ * `error` with raw `insufficient_system_resource`).
  */
 export type ScriptFault =
   | Readonly<{ kind: 'error'; message: string; status?: number; body?: unknown }>
