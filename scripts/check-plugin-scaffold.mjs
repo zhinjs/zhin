@@ -5,8 +5,8 @@
  *   → install against locally packed tarballs (simulates npm)
  *   → generated vitest + tsc → `pnpm pack` ships plugin.js.
  *
- * Also asserts every packed @zhin.js/* manifest only exposes files that are in
- * its tarball (no `development` → ./src/*.ts condition).
+ * Also asserts no packed @zhin.js/* manifest still has the source-only
+ * `development` → ./src/*.ts condition.
  *
  * Usage: node scripts/check-plugin-scaffold.mjs [--no-build] [--keep]
  */
@@ -18,7 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readWorkspaceGraph } from './lib/workspace-graph.mjs';
 import { resolveWorkspacePackClosure, withWorkspaceTarballOverrides } from './workspace-pack-closure.mjs';
-import { exportTargets, hasSourceConditions } from './sync-publish-exports.mjs';
+import { hasSourceConditions } from './sync-publish-exports.mjs';
 
 const runFile = promisify(execFile);
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -55,17 +55,12 @@ async function tarball(file) {
   return { files, manifest: JSON.parse(manifest) };
 }
 
-/** Published manifest must not point anywhere outside its own tarball. */
-function publishProblems(name, { files, manifest }) {
-  const problems = [];
-  if (hasSourceConditions(manifest.exports)) problems.push(`${name}: exports still has a development condition`);
-  const targets = [...exportTargets(manifest.exports), manifest.main, manifest.types].filter(Boolean);
-  for (const target of targets) {
-    if (target.includes('*')) continue;
-    const rel = target.replace(/^\.\//u, '');
-    if (!files.has(rel)) problems.push(`${name}: ${target} is not in the tarball`);
-  }
-  return problems;
+/**
+ * Only the source-only condition is asserted here; packed relative imports and
+ * main/bin/exports targets are covered by scripts/check-pack-imports.mjs (#800).
+ */
+function publishProblems(name, { manifest }) {
+  return hasSourceConditions(manifest.exports) ? [`${name}: exports still has a development condition`] : [];
 }
 
 const temp = await mkdtemp(path.join(tmpdir(), 'zhin-plugin-scaffold-'));
@@ -96,7 +91,7 @@ try {
     packed.set(entry.name, { tarball: file });
     problems.push(...publishProblems(entry.name, await tarball(file)));
   }
-  if (problems.length > 0) throw new Error(`Packed manifests expose missing files:\n  ${problems.join('\n  ')}`);
+  if (problems.length > 0) throw new Error(`Packed manifests still publish source-only conditions:\n  ${problems.join('\n  ')}`);
 
   // Host workspace = an author's repo: plugins/* are scaffolded by the built CLI.
   await writeFile(path.join(host, 'package.json'), `${JSON.stringify({ name: 'scaffold-host', private: true, type: 'module' }, null, 2)}\n`);
@@ -134,7 +129,7 @@ try {
       throw new Error(`${plugin.name}: zhin.entry ${packedManifest.zhin.entry} is not in the tarball`);
     }
   }
-  console.log(`PASS: built CLI → zhin new (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js; ${closure.length} packed manifests expose only shipped files.`);
+  console.log(`PASS: built CLI → zhin new (${PLUGINS.map((plugin) => plugin.type).join('/')}) → packed tarballs → vitest + tsc → pnpm pack ships plugin.js; no development condition in ${closure.length} packed manifests.`);
 } finally {
   if (keep) console.log(`kept ${temp}`);
   else await rm(temp, { recursive: true, force: true });

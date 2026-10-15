@@ -162,7 +162,7 @@ workspace 包的 `exports` 带 `"development": "./src/*.ts"` 条件，仓库内�
 
 - 每个可发布包的 `publishConfig.exports` 等于去掉 `development` 后的 `exports`。`pnpm publish`（也就是 `changeset publish`）打包时会用它替换 `exports`，本地开发不受影响。
 - 修改 `exports` 后运行 `pnpm sync:publish-exports` 重新生成；`scripts/sync-publish-exports.test.ts` 在漂移、发布清单仍带 `development` 或导出目标不在 `files` 里时失败。
-- `pnpm check:plugin-scaffold` 打包 `zhin.js` 的依赖闭包，确认每个包的 `exports` 目标都在 tarball 里，再用本地构建的 CLI 跑 `zhin new`，对这些 tarball 安装后执行生成的 Vitest、`tsc` 和 `pnpm pack`。
+- `pnpm check:plugin-scaffold` 打包 `zhin.js` 的依赖闭包，确认打包后的清单都不再带 `development`，再用本地构建的 CLI 跑 `zhin new`，对这些 tarball 安装后执行生成的 Vitest、`tsc` 和 `pnpm pack`。
 - 只用 `pnpm publish` 发布：`npm publish` 不认 `publishConfig.exports`，也不会替换 `workspace:` 协议。
 
 ## changeset 工作流
