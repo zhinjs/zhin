@@ -16,6 +16,7 @@ outline: [2, 3]
 - [Endpoint 一直离线](#endpoint-offline)
 - [刷新后消息或通知缺失](#messages-missing-after-refresh)
 - [配置启动时被拒绝](#configuration-rejected)
+- [同一个包出现多个安装位置](#multiple-package-locations)
 - [Agent 无模型或 Provider 不可用](#agent-provider-unavailable)
 - [工具等待审批或被策略拒绝](#tool-approval-stuck)
 - [群、频道或仓库没有路由到 Workroom](#workroom-not-routing)
@@ -138,6 +139,30 @@ Console 持续显示离线或重连中，页面数据不再更新。
 ### 验证
 
 - `npx zhin doctor` 应通过，随后 `npx zhin runtime start` 不再出现配置校验错误。
+
+</section>
+
+<section id="multiple-package-locations">
+
+## 同一个包出现多个安装位置
+
+### 症状
+
+启动时报 `Multiple package locations for @zhin.js/... are not supported in one generation`。
+
+### 原因
+
+- 项目混用了 npm 依赖与指向 zhin 源码仓库的 `link:`/`workspace:` 插件，同一个 zhin 包被解析到两个目录。
+- 手写的 `pnpm.overrides` 只覆盖了部分 zhin 包。
+
+### 操作
+
+- 按[本地联调指南](/authoring/local-dev)诊断：用 `pnpm why` 与 `readlink -f` 找出两个解析路径。
+- 外部项目改用 `pnpm zhin:local link <项目路径>` 统一切换到本地源码，或全部改回 npm 版本。
+
+### 验证
+
+- 重新 `pnpm install` 后，每个 zhin 包只有一个实际解析路径，`zhin runtime start --once` 输出 `"started": true`。
 
 </section>
 

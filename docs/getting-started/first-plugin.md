@@ -278,3 +278,4 @@ pnpm dev
 - [约定目录](../authoring/conventions.md)：了解中间件、组件、定时任务等其他能力放在哪里。
 - [definePlugin 全景](../authoring/define-plugin.md)：在 `setup` 里使用数据库、定时器、主动发消息。
 - [插件完整交付](../authoring/plugin-delivery.md)：给插件写测试并发布到 npm。
+- [本地联调指南](../authoring/local-dev.md)：在自己的 Bot 项目里联调本地插件或 zhin 源码。

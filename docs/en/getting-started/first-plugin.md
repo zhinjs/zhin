@@ -278,3 +278,4 @@ pnpm dev
 - [Convention directories](../authoring/conventions.md): where middleware, components, schedules and other capabilities go.
 - [definePlugin overview](../authoring/define-plugin.md): use databases, timers and proactive messages in `setup`.
 - [Complete plugin delivery](../authoring/plugin-delivery.md): test your plugin and publish it to npm.
+- [Local development guide](../authoring/local-dev.md): develop local plugins or zhin source against your own bot project.
