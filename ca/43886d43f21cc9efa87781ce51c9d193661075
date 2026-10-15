@@ -1,0 +1,26 @@
+docs/authoring/plugin-delivery.md
+  h_b680f75345178a 84
+docs/en/authoring/plugin-delivery.md
+  h_b680f75345178a 84
+docs/en/getting-started/first-plugin.md
+  h_b680f75345178a 281
+docs/en/troubleshooting/index.md
+  h_b680f75345178a 19,145-168
+docs/getting-started/first-plugin.md
+  h_b680f75345178a 281
+docs/troubleshooting/catalog.json
+  h_b680f75345178a 84-99
+docs/troubleshooting/index.md
+  h_b680f75345178a 19,145-168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ca43886d43f21cc9efa87781ce51c9d193661075",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
