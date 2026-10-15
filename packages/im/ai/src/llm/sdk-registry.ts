@@ -6,6 +6,7 @@ import { createRequire } from 'node:module';
 import type { ImageModel, LanguageModel } from 'ai';
 import type { ProviderInstanceConfig } from './types/model.js';
 import { createGeminiCachingFetch } from './gemini-context-cache.js';
+import { isGroqGateway, transformGroqRequestBody } from './groq.js';
 
 const requirePeer = createRequire(import.meta.url);
 
@@ -201,6 +202,7 @@ function createOpenAiCompatibleProvider(
   baseURL: string,
   name: string,
   fetchFn?: typeof globalThis.fetch,
+  transformRequestBody?: (body: Record<string, any>) => Record<string, any>,
 ) {
   const { createOpenAICompatible } = loadPeer<typeof import('@ai-sdk/openai-compatible')>(
     '@ai-sdk/openai-compatible',
@@ -213,6 +215,7 @@ function createOpenAiCompatibleProvider(
     // Ask for the final usage chunk (`stream_options.include_usage`); without it
     // OpenAI-style servers stream no usage at all. `compat.includeUsage: false` opts out.
     includeUsage: config.compat?.includeUsage !== false,
+    ...(transformRequestBody ? { transformRequestBody } : {}),
     ...sdkTransportExtras(fetchFn),
   });
 }
@@ -222,6 +225,8 @@ export function createLanguageModel(
   config: ProviderInstanceConfig,
   modelId: string,
   transportFetch?: typeof globalThis.fetch,
+  /** Provider alias; selects gateway request fixes (e.g. Groq) for `openai-compatible`. */
+  alias?: string,
 ): LanguageModel {
   const fetchFn = withResponseHeaderTimeout(transportFetch, config.firstChunkTimeoutMs);
   const headers = buildHeaders(config);
@@ -299,6 +304,7 @@ export function createLanguageModel(
         baseURL,
         'openai-compatible',
         fetchFn,
+        isGroqGateway(alias, baseURL) ? transformGroqRequestBody : undefined,
       );
       return compat(modelId);
     }
