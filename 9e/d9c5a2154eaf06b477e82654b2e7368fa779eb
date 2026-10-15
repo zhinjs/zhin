@@ -1,0 +1,22 @@
+packages/im/ai/src/llm/bridge/ai-sdk-stream.ts
+  h_b680f75345178a 218,222,236-240,279,443
+packages/im/ai/src/llm/llm-api-runtime.ts
+  h_b680f75345178a 99
+packages/im/ai/src/llm/types/model.ts
+  h_b680f75345178a 3,40-41,65-70
+packages/im/ai/src/types.ts
+  h_b680f75345178a 87-92
+packages/im/ai/tests/llm/google-gemini-provider.test.ts
+  h_b680f75345178a 46,48,269-279
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "9ed9c5a2154eaf06b477e82654b2e7368fa779eb",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
