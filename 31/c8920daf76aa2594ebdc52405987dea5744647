@@ -1,0 +1,20 @@
+.github/workflows/ci.yml
+  h_b680f75345178a 262-263
+docs/contributing/development.md
+  h_b680f75345178a 165
+docs/en/contributing/development.md
+  h_b680f75345178a 136
+scripts/check-plugin-scaffold.mjs
+  h_b680f75345178a 8-9,21,58-63,94,132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "31c8920daf76aa2594ebdc52405987dea5744647",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
