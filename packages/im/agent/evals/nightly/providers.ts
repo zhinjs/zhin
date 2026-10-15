@@ -21,10 +21,12 @@ export interface NightlyProvider {
 export const DEFAULT_NIGHTLY_PROVIDER: NightlyProviderId = 'gemini';
 
 /**
- * Stable Gemini default (ai.google.dev/gemini-api/docs/models, checked 2026-10-13):
- * multimodal, function calling, implicit caching. Override with NIGHTLY_MODELS.
+ * Current stable Gemini Flash-Lite (ai.google.dev/gemini-api/docs/models and the
+ * API's /models list, checked 2026-10-15): multimodal input, function calling,
+ * thinking, caching. Chosen for the nightly because CI's free-tier key gets 15 RPM
+ * on it (gemini-3.8-flash: 5 RPM / 20 RPD). Override with NIGHTLY_MODELS.
  */
-export const DEFAULT_NIGHTLY_MODEL = 'gemini-3.8-flash';
+export const DEFAULT_NIGHTLY_MODEL = 'gemini-3.5-flash-lite';
 
 type Env = Readonly<Record<string, string | undefined>>;
 
