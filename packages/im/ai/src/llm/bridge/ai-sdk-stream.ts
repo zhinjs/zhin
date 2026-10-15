@@ -9,6 +9,7 @@ import { createAssistantMessageEventStream, type LlmApiRuntime, type StreamFn, t
 import type { Model } from '../types/model.js';
 import type { ThinkingLevel } from '../types/agent-event.js';
 import { promptBlockReason, resolveFinish, type FinishOutcome } from './finish-reason.js';
+import { streamPartError } from './stream-error.js';
 import type { Context } from '../types/context.js';
 import { EMPTY_TOKEN_USAGE, type AssistantMessage } from '../types/agent-message.js';
 import type { ThinkingContentBlock, ThinkingProviderOptions, ToolCallProviderOptions } from '../types/content-block.js';
@@ -402,8 +403,7 @@ export function createAiSdkStreamFn(runtime: LlmApiRuntime): StreamFn {
         } else if (part.type === 'raw') {
           rawBlockReason ??= promptBlockReason({ google: part.rawValue });
         } else if (part.type === 'error') {
-          const err = part.error instanceof Error ? part.error : new Error(String(part.error));
-          throw err;
+          throw streamPartError(part.error);
         }
       }
 
