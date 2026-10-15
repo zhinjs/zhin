@@ -1,0 +1,32 @@
+basic/cli/src/commands/doctor.ts
+  h_b680f75345178a 134
+basic/cli/src/commands/new.ts
+  h_b680f75345178a 4,275
+basic/cli/src/utils/global-home-init.ts
+  h_b680f75345178a 6,26
+basic/cli/src/utils/node-requirements.ts
+  h_b680f75345178a 1-5,13
+basic/cli/tests/cli-write-side.test.ts
+  h_b680f75345178a 94,103
+basic/cli/tests/node-requirements.test.ts
+  h_b680f75345178a 5-6,8,14,16
+packages/toolkit/create-zhin/src/node-requirement.ts
+  h_b680f75345178a 1-5,9
+packages/toolkit/create-zhin/tests/node-requirement.test.ts
+  h_b680f75345178a 5-6,8
+packages/toolkit/create-zhin/tests/stable-yes.test.ts
+  h_b680f75345178a 50
+packages/toolkit/create-zhin/tests/workspace.test.ts
+  h_b680f75345178a 98
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "5844f597238703c504a54c78f28e225262a5adee",
+  "prompts": {},
+  "humans": {
+    "h_b680f75345178a": {
+      "author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
