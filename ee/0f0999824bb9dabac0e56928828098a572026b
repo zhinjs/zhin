@@ -1,0 +1,21 @@
+docs/ai/index.md
+  s_9477e63ef5cee5::t_442ad3e4f50b10 137-142
+docs/en/ai/index.md
+  s_9477e63ef5cee5::t_d5930d1e0c92d9 137-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ee0f0999824bb9dabac0e56928828098a572026b",
+  "prompts": {},
+  "sessions": {
+    "s_9477e63ef5cee5": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "4e622535-6dd6-4e23-9811-302f91a2903b",
+        "model": "unknown"
+      },
+      "human_author": "凉菜 <admin@liucl.cn>"
+    }
+  }
+}
