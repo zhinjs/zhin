@@ -100,6 +100,7 @@ jobs:
           # Keys are only passed as env; the eval reads the selected provider's (evals/nightly/providers.ts).
           MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_BASE_URL: ${{ vars.GEMINI_BASE_URL }}
           NIGHTLY_MODELS: ${{ inputs.models || vars.NIGHTLY_MODELS }}
           NIGHTLY_RUNS_PER_CASE: ${{ inputs.runs_per_case || '3' }}
           NIGHTLY_REPORT_DIR: ${{ github.workspace }}/eval-reports
